@@ -156,6 +156,7 @@ RtlIcon(FluentIcons.chevron_right_24_regular)     // in _fluentMirrorMap
 - `book_24_regular`, `book_24_filled`
 - `book_information_24_regular`
 - `text_align_distributed_24_regular`
+- `list_24_regular`
 
 **If you need to flip an icon that is NOT yet registered:**
 Add it to the appropriate set/map in `lib/widgets/misc/rtl_icon.dart`, then use `RtlIcon`. Do NOT add manual `Transform.flip`/`Transform.scale` in feature files.

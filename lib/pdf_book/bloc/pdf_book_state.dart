@@ -284,7 +284,7 @@ class PdfBookLoaded extends PdfBookState {
         pdfHeadings,
         links
             .map((l) =>
-                '${l.index1}|${l.path2}|${l.index2}|${l.connectionType}|${l.heRef}|${l.start}|${l.end}|${l.targetCategoryId}|${l.targetFileType}')
+                '${l.index1}|${l.path2}|${l.index2}|${l.index2End}|${l.connectionType}|${l.heRef}|${l.start}|${l.end}|${l.targetCategoryId}|${l.targetFileType}')
             .toList(growable: false),
         outline?.map(_outlineNodeSignature).toList(growable: false),
         documentRef,

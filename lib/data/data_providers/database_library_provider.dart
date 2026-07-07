@@ -14,6 +14,7 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
+import 'package:otzaria/models/book_version.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -22,6 +23,7 @@ import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/book.dart' as db_models;
 import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import 'package:otzaria/utils/file/file_hidden_utils.dart';
+import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -271,6 +273,8 @@ void _flattenRawRecursive(
 
 /// טוען קישורי "מקור" (SOURCE וירטואלי) לספר כ-target: הופך source↔target כדי
 /// שספר מפרש יציג את מקורו. ב-v3 הקישור נשמר בכיוון קנוני אחד בלבד.
+/// שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (link_coverage,
+/// side=1) — כך קישור שהצד התלוי שלו משתרע על כמה שורות מופיע בכל שורה בטווח.
 List<Map<String, dynamic>> _loadInverseSourceRows(
   sqlite3.Database db,
   int bookId, {
@@ -282,22 +286,43 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final hasRange = startLineIndex != null && endLineIndex != null;
   // בשאילתה ההפוכה השורה המוצגת היא צד היעד של הקישור השמור.
   final hasLinkAnchor = _hasLinkAnchorTable(db);
+  final hasLinkRanges = _hasLinkRangeTables(db);
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
   final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
+  // בפאנל של תצוגת המקור מוצג צד ה-source של הקישור (side=0).
+  final rangeEndSelect = _rangeEndSelectColumns(hasLinkRanges);
+  final rangeEndJoin = _rangeEndJoinClause(hasLinkRanges, panelSide: 0);
 
   if (hasRange) {
     // כשיש טווח: מוצאים תחילה את ה-line IDs בטווח דרך idx_line_book_index,
     // ואז מחפשים links לפי targetLineId דרך idx_link_target_line — הרבה יותר
     // יעיל מאשר לסרוק את כל ה-links של הספר (עשרות אלפים לספרי בסיס כגון
     // תורה / ש"ס) ולסנן לפי lineIndex בדיעבד.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          WHERE lc.side = 1 AND lc.lineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )'''
+        : '';
     final params = <Object?>[
       bookId,
       startLineIndex,
       endLineIndex,
       bookId,
+      if (hasLinkRanges) ...[bookId, startLineIndex, endLineIndex],
       ...types,
     ];
     return db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT l.id, l.targetLineId FROM link l
+          WHERE l.targetLineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )
+            AND l.targetBookId = ?
+          $coverageArm
+        )
         SELECT
           tl.lineIndex as sourceLineIndex,
           sl.lineIndex as targetLineIndex,
@@ -305,26 +330,40 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
           sb.title as targetBookTitle,
           sb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          $rangeEndSelect
           $anchorSelect
           'SOURCE' as connectionTypeName
-        FROM link l
-        JOIN line tl ON l.targetLineId = tl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line tl ON tl.id = a.anchorLineId
         JOIN line sl ON l.sourceLineId = sl.id
         JOIN book sb ON l.sourceBookId = sb.id
         JOIN connection_type ct ON l.connectionTypeId = ct.id
+        $rangeEndJoin
         $anchorJoin
-        WHERE l.targetLineId IN (
-          SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
-        )
-          AND l.targetBookId = ?
-          AND ct.name IN ($typePlaceholders)
+        WHERE ct.name IN ($typePlaceholders)
           AND l.sourceBookId != l.targetBookId
         ORDER BY tl.lineIndex
       ''', params).toMapList();
   }
 
-  final params = <Object?>[bookId, ...types];
+  final coverageArm = hasLinkRanges
+      ? '''
+        UNION ALL
+        SELECT lc.linkId, lc.lineId FROM link_coverage lc
+        JOIN link cl ON cl.id = lc.linkId
+        WHERE lc.side = 1 AND cl.targetBookId = ?'''
+      : '';
+  final params = <Object?>[
+    bookId,
+    if (hasLinkRanges) bookId,
+    ...types,
+  ];
   return db.select('''
+      WITH anchors(linkId, anchorLineId) AS (
+        SELECT id, targetLineId FROM link WHERE targetBookId = ?
+        $coverageArm
+      )
       SELECT
         tl.lineIndex as sourceLineIndex,
         sl.lineIndex as targetLineIndex,
@@ -332,16 +371,18 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         sb.title as targetBookTitle,
         sb.categoryId as targetCategoryId,
         NULL as targetFileType,
+        $rangeEndSelect
         $anchorSelect
         'SOURCE' as connectionTypeName
-      FROM link l
-      JOIN line tl ON l.targetLineId = tl.id
+      FROM anchors a
+      JOIN link l ON l.id = a.linkId
+      JOIN line tl ON tl.id = a.anchorLineId
       JOIN line sl ON l.sourceLineId = sl.id
       JOIN book sb ON l.sourceBookId = sb.id
       JOIN connection_type ct ON l.connectionTypeId = ct.id
+      $rangeEndJoin
       $anchorJoin
-      WHERE l.targetBookId = ?
-        AND ct.name IN ($typePlaceholders)
+      WHERE ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
       ORDER BY tl.lineIndex
     ''', params).toMapList();
@@ -356,6 +397,39 @@ bool _hasLinkAnchorTable(sqlite3.Database db) => db
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_anchor' LIMIT 1",
     )
     .isNotEmpty;
+
+/// קישורי-טווח (link_range/link_coverage) — קיימים רק במסדים חדשים; במסד ישן
+/// השאילתות חוזרות לעמודות NULL ולשורת העוגן הראשונה בלבד. שתי הטבלאות
+/// נשלחות יחד, לכן די בבדיקת link_coverage.
+bool _hasLinkRangeTables(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_coverage' LIMIT 1",
+    )
+    .isNotEmpty;
+
+/// מהדורות ספרים (book_version/version_line) — קיימות רק במסדים חדשים; במסד
+/// ישן רשימת הגרסאות ריקה ופתיחת גרסה נכשלת בשקט. שתי הטבלאות נשלחות יחד,
+/// לכן די בבדיקת book_version.
+bool _hasBookVersionTables(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='book_version' LIMIT 1",
+    )
+    .isNotEmpty;
+
+/// עמודות קצה-הטווח של צד-הפאנל: heRef של השורה האחרונה בטווח + האינדקס שלה
+/// (0-based), או NULL כשאין טווח / כשהמסד ישן.
+String _rangeEndSelectColumns(bool hasLinkRanges) => hasLinkRanges
+    ? '''rl.heRef as targetRangeEndHeRef,
+          lr.endLineIndex as targetRangeEndLineIndex,'''
+    : '''NULL as targetRangeEndHeRef,
+          NULL as targetRangeEndLineIndex,''';
+
+/// JOIN לקצה-הטווח של צד-הפאנל (`panelSide`: 0 = צד המקור השמור, 1 = היעד).
+String _rangeEndJoinClause(bool hasLinkRanges, {required int panelSide}) =>
+    hasLinkRanges
+        ? '''LEFT JOIN link_range lr ON lr.linkId = l.id AND lr.side = $panelSide
+        LEFT JOIN line rl ON rl.id = lr.endLineId'''
+        : '';
 
 String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
     ? '''la.charStart as anchorCharStart,
@@ -377,18 +451,24 @@ String _anchorSelectColumns(bool hasLinkAnchor) => hasLinkAnchor
 /// דטרמיניזם: charEnd/label הלא-אגרגטיביים מגיעים לפי חוזה SQLite משורת
 /// ה-MIN, ושורת ה-MIN יחידה — (linkId, side, charStart) הוא ה-PK של
 /// link_anchor, כך שאין שני עוגנים לאותו קישור/צד עם אותו charStart.
-String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) =>
-    hasLinkAnchor
-        ? '''LEFT JOIN (
+/// ה-la מוצמד רק לשורת העוגן המקורית של הקישור (a.anchorLineId = שורת הצד
+/// המוצג): אופסטי העוגן חושבו מול הטקסט של אותה שורה, ובקישור-טווח אסור
+/// שידלפו לשורות coverage. ה-lal (הצד המקושר, קטע-הפאנל) נשאר לפי linkId —
+/// שורת הפאנל היא תמיד שורת ההתחלה של הקישור.
+String _anchorJoinClause(bool hasLinkAnchor, {required int displayedSide}) {
+  if (!hasLinkAnchor) return '';
+  final displayedSideLine =
+      displayedSide == 0 ? 'l.sourceLineId' : 'l.targetLineId';
+  return '''LEFT JOIN (
           SELECT linkId, MIN(charStart) AS charStart, charEnd, label,
                  GROUP_CONCAT(charStart || ':' || COALESCE(charEnd, '') || ':' || COALESCE(label, ''), ';') AS spans
           FROM link_anchor WHERE side = $displayedSide GROUP BY linkId
-        ) la ON la.linkId = l.id
+        ) la ON la.linkId = l.id AND a.anchorLineId = $displayedSideLine
         LEFT JOIN (
           SELECT linkId, MIN(charStart) AS charStart, charEnd
           FROM link_anchor WHERE side = ${1 - displayedSide} GROUP BY linkId
-        ) lal ON lal.linkId = l.id'''
-        : '';
+        ) lal ON lal.linkId = l.id''';
+}
 
 /// מפענח את מחרוזת ה-spans מהשאילתה לרשימת עוגנים ממוינת לפי מיקום.
 List<LinkAnchorSpan> _parseAnchorSpans(String? spans) {
@@ -431,8 +511,22 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
 
     final bookId = bookResults.first['id'] as int;
     final hasLinkAnchor = _hasLinkAnchorTable(db);
+    final hasLinkRanges = _hasLinkRangeTables(db);
 
+    // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0), כך
+    // שקישור שהמקור שלו משתרע על כמה שורות מופיע בכל שורה שהוא מכסה.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          JOIN link cl ON cl.id = lc.linkId
+          WHERE lc.side = 0 AND cl.sourceBookId = ?'''
+        : '';
     final forwardRows = db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT id, sourceLineId FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
         SELECT
           l.sourceLineId,
           l.targetLineId,
@@ -442,21 +536,121 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
-        FROM link l
-        JOIN line sl ON l.sourceLineId = sl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line sl ON sl.id = a.anchorLineId
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_rangeEndJoinClause(hasLinkRanges, panelSide: 1)}
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
-        WHERE l.sourceBookId = ?
         ORDER BY sl.lineIndex
-      ''', [bookId]).toMapList();
+      ''', [bookId, if (hasLinkRanges) bookId]).toMapList();
     return [...forwardRows, ..._loadInverseSourceRows(db, bookId)];
   } finally {
     db?.close();
   }
+}
+
+/// Top-level worker לסיכום קישורי ספר לפי (ספר-יעד, סוג חיבור) — שאילתת
+/// GROUP BY זולה במקום למשוך עשרות אלפי שורות קישורים לדארט.
+({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})
+    _loadBookLinkTargetsSummaryRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
+    ).toMapList();
+    if (bookResults.isEmpty) {
+      return (rows: const [], maxSourceLineIndex: null);
+    }
+
+    final bookId = bookResults.first['id'] as int;
+    final hasLinkRanges = _hasLinkRangeTables(db);
+
+    // קישור-טווח נספר פעם לכל שורה מכוסה — כמו בטעינת הקישורים המלאה, כדי
+    // שסיווג "מפרש נדיר" לפי הספירה יישאר שקול.
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId FROM link_coverage lc
+          JOIN link cl ON cl.id = lc.linkId
+          WHERE lc.side = 0 AND cl.sourceBookId = ?'''
+        : '';
+    final forwardRows = db.select('''
+        WITH anchors(linkId) AS (
+          SELECT id FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
+        SELECT tb.title as targetBookTitle,
+               ct.name as connectionTypeName,
+               COUNT(*) as linkCount
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN book tb ON l.targetBookId = tb.id
+        LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        GROUP BY tb.title, ct.name
+      ''', [bookId, if (hasLinkRanges) bookId]).toMapList();
+
+    // הזרוע ההפוכה — מפרשים ששמורים כקישור מהם אל הספר הזה (מוצגים כ-SOURCE),
+    // כמו ב-_loadInverseSourceRows.
+    final depTypes = LinkTypes.dependentTextTypes.toList();
+    final typePlaceholders = List.filled(depTypes.length, '?').join(', ');
+    final inverseRows = db.select('''
+        SELECT sb.title as targetBookTitle,
+               'SOURCE' as connectionTypeName,
+               COUNT(*) as linkCount
+        FROM link l
+        JOIN book sb ON l.sourceBookId = sb.id
+        JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE l.targetBookId = ?
+          AND ct.name IN ($typePlaceholders)
+          AND l.sourceBookId != l.targetBookId
+        GROUP BY sb.title
+      ''', [bookId, ...depTypes]).toMapList();
+
+    final maxRows = db.select(
+      'SELECT MAX(sl.lineIndex) as maxIdx FROM link l '
+      'JOIN line sl ON sl.id = l.sourceLineId WHERE l.sourceBookId = ?',
+      [bookId],
+    ).toMapList();
+    final maxSourceLineIndex =
+        maxRows.isEmpty ? null : maxRows.first['maxIdx'] as int?;
+
+    return (
+      rows: [...forwardRows, ...inverseRows],
+      maxSourceLineIndex: maxSourceLineIndex,
+    );
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור סיכום קישורי ספר ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})>
+    _runBookLinkTargetsSummaryInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  return Isolate.run(
+    () => _loadBookLinkTargetsSummaryRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    ),
+  );
 }
 
 List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
@@ -482,9 +676,12 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     }
 
     final bookId = bookResults.first['id'] as int;
+    final hasLinkAnchor = _hasLinkAnchorTable(db);
+    final hasLinkRanges = _hasLinkRangeTables(db);
 
     final parameters = <Object?>[
       bookId,
+      if (hasLinkRanges) ...[bookId, startLineIndex, endLineIndex],
       startLineIndex,
       endLineIndex,
     ];
@@ -511,8 +708,24 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
             ? 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn) OR tb.title IN ($targetBookPlaceholders))'
             : 'AND (ct.name IS NULL OR ct.name NOT IN ($depTypesIn))';
 
-    final hasLinkAnchor = _hasLinkAnchorTable(db);
+    // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0). הזרוע
+    // מסוננת לחלון כבר כאן דרך ה-PK של link_coverage (lineId ראשון) — שורות
+    // coverage של side=0 הן תמיד שורות ספר-המקור עצמו, כך שסינון לפי שורות
+    // הספר בחלון מייתר JOIN ל-link (ספרי בסיס גדולים נושאים מאות אלפי שורות
+    // coverage, וסריקה מלאה שלהן בכל חלון גלילה יקרה מדי).
+    final coverageArm = hasLinkRanges
+        ? '''
+          UNION ALL
+          SELECT lc.linkId, lc.lineId FROM link_coverage lc
+          WHERE lc.side = 0 AND lc.lineId IN (
+            SELECT id FROM line WHERE bookId = ? AND lineIndex BETWEEN ? AND ?
+          )'''
+        : '';
     final rows = db.select('''
+        WITH anchors(linkId, anchorLineId) AS (
+          SELECT id, sourceLineId FROM link WHERE sourceBookId = ?
+          $coverageArm
+        )
         SELECT
           sl.lineIndex as sourceLineIndex,
           tl.lineIndex as targetLineIndex,
@@ -520,16 +733,18 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
           NULL as targetFileType,
+          ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
           ct.name as connectionTypeName
-        FROM link l
-        JOIN line sl ON l.sourceLineId = sl.id
+        FROM anchors a
+        JOIN link l ON l.id = a.linkId
+        JOIN line sl ON sl.id = a.anchorLineId
         JOIN line tl ON l.targetLineId = tl.id
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        ${_rangeEndJoinClause(hasLinkRanges, panelSide: 1)}
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
-        WHERE l.sourceBookId = ?
-          AND sl.lineIndex BETWEEN ? AND ?
+        WHERE sl.lineIndex BETWEEN ? AND ?
           $commentaryFilterClause
         ORDER BY sl.lineIndex, tb.orderIndex
       ''', parameters).toMapList();
@@ -643,6 +858,7 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
   required String fileType,
   required int startLine,
   required int endLine,
+  String? versionTitle,
 }) {
   sqlite3.Database? db;
   try {
@@ -665,10 +881,32 @@ Future<List<Map<String, Object?>>> _runBookLinksInRangeInIsolate({
     final normalizedStart = startLine.clamp(0, totalLines - 1);
     final normalizedEnd = endLine.clamp(normalizedStart, totalLines - 1);
 
-    final rows = db.select(
-      'SELECT content FROM line WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ? ORDER BY lineIndex',
-      [bookId, normalizedStart, normalizedEnd],
-    ).toMapList();
+    final List<Map<String, dynamic>> rows;
+    if (versionTitle != null) {
+      if (!_hasBookVersionTables(db)) return null;
+      final versionRows = db.select(
+        'SELECT id FROM book_version WHERE bookId = ? AND versionTitle = ? LIMIT 1',
+        [bookId, versionTitle],
+      ).toMapList();
+      if (versionRows.isEmpty) return null;
+      final versionId = versionRows.first['id'] as int;
+      // מהדורה חלופית: שורות מבנה (heRef NULL — כותרות/מחברים) נשארות מהשלד;
+      // שורת תוכן מקבלת את נוסח המהדורה, וסגמנט שחסר בה מוצג ריק — לעולם לא
+      // נופלים בשקט לנוסח הממוזג.
+      rows = db.select('''
+        SELECT CASE WHEN l.heRef IS NULL THEN l.content
+                    ELSE COALESCE(vl.content, '') END AS content
+        FROM line l
+        LEFT JOIN version_line vl ON vl.versionId = ? AND vl.lineId = l.id
+        WHERE l.bookId = ? AND l.lineIndex >= ? AND l.lineIndex <= ?
+        ORDER BY l.lineIndex
+      ''', [versionId, bookId, normalizedStart, normalizedEnd]).toMapList();
+    } else {
+      rows = db.select(
+        'SELECT content FROM line WHERE bookId = ? AND lineIndex >= ? AND lineIndex <= ? ORDER BY lineIndex',
+        [bookId, normalizedStart, normalizedEnd],
+      ).toMapList();
+    }
     if (rows.isEmpty) {
       return null;
     }
@@ -695,6 +933,7 @@ Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
   required String fileType,
   required int startLine,
   required int endLine,
+  String? versionTitle,
 }) {
   return Isolate.run(
     () => _loadBookTextRangeRowsInIsolate(
@@ -704,7 +943,88 @@ Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
       fileType: fileType,
       startLine: startLine,
       endLine: endLine,
+      versionTitle: versionTitle,
     ),
+  );
+}
+
+/// Top-level worker לרשימת המהדורות (book_version) של ספר. רשימה ריקה כשה-DB
+/// ישן (אין טבלה) או כשאין לספר מידע גרסאות.
+List<Map<String, dynamic>> _loadBookVersionsRowsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    if (!_hasBookVersionTables(db)) return const [];
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
+      [title, categoryId],
+    ).toMapList();
+    if (bookResults.isEmpty) return const [];
+    final bookId = bookResults.first['id'] as int;
+
+    return db.select('''
+      SELECT versionTitle, heVersionTitle, versionSource, priority, license,
+             versionNotes, heVersionNotes, hasContent
+      FROM book_version
+      WHERE bookId = ?
+      ORDER BY hasContent DESC, priority DESC, versionTitle
+    ''', [bookId]).toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור רשימת מהדורות ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<List<Map<String, dynamic>>> _runBookVersionsInIsolate({
+  required String dbPath,
+  required String title,
+  required int categoryId,
+}) {
+  return Isolate.run(
+    () => _loadBookVersionsRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    ),
+  );
+}
+
+/// (title, categoryId) של ספרים שיש להם מהדורה לבחירה: 2+ גרסאות, או גרסה
+/// יחידה עם טקסט שמור. גרסה יחידה מטא-דאטה בלבד = הנוסח המוצג עצמו, ואינה
+/// נכללת. נטען פעם אחת ומשמש לקביעת הצגת תפריט 'גרסאות'.
+List<Map<String, dynamic>> _loadSelectableVersionKeysInIsolate({
+  required String dbPath,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    if (!_hasBookVersionTables(db)) return const [];
+
+    return db.select('''
+      SELECT b.title, b.categoryId
+      FROM book b
+      WHERE b.id IN (
+        SELECT bookId FROM book_version
+        GROUP BY bookId
+        HAVING COUNT(*) >= 2 OR MAX(hasContent) = 1
+      )
+    ''').toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
+Future<List<Map<String, dynamic>>> _runSelectableVersionKeysInIsolate({
+  required String dbPath,
+}) {
+  return Isolate.run(
+    () => _loadSelectableVersionKeysInIsolate(dbPath: dbPath),
   );
 }
 
@@ -776,6 +1096,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
   bool _titlesCached = false;
   String? _bundledTalmudBavliPathCache;
   bool? _bundledTalmudBavliExistsCache;
+
+  /// מפתחות "title categoryId" של ספרים שראוי להציג להם תפריט 'גרסאות'.
+  /// ממוזמז — נטען פעם אחת ל-DB; מנוקה ב-[clearCache].
+  Future<Set<String>>? _selectableVersionKeysFuture;
 
   /// IDs **טבעיים** (native AUTOINCREMENT) של קטגוריות ב-`user_books.db`
   /// שצורפו ל-Library. שימושי כדי לדעת לאיזה DB לפנות בקריאות
@@ -877,6 +1201,55 @@ class DatabaseLibraryProvider implements LibraryProvider {
       startLineIndex: startLineIndex,
       endLineIndex: endLineIndex,
       targetBookTitles: targetBookTitles,
+    );
+  }
+
+  @visibleForTesting
+  static ({List<Map<String, dynamic>> rows, int? maxSourceLineIndex})
+      loadBookLinkTargetsSummaryRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+  }) {
+    return _loadBookLinkTargetsSummaryRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    );
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> loadBookVersionsRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+  }) {
+    return _loadBookVersionsRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+    );
+  }
+
+  @visibleForTesting
+  static ({int startLine, int endLine, int totalLines, List<String> lines})?
+      loadBookTextRangeRowsForTesting({
+    required String dbPath,
+    required String title,
+    required int categoryId,
+    required String fileType,
+    required int startLine,
+    required int endLine,
+    String? versionTitle,
+  }) {
+    return _loadBookTextRangeRowsInIsolate(
+      dbPath: dbPath,
+      title: title,
+      categoryId: categoryId,
+      fileType: fileType,
+      startLine: startLine,
+      endLine: endLine,
+      versionTitle: versionTitle,
     );
   }
 
@@ -1431,7 +1804,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
                 file.path.toLowerCase().endsWith('.docx')) {
               return await convertDocxWithCache(file, title);
             }
-            return await file.readAsString();
+            // קבצים אישיים ישנים עשויים להיות ב-Windows-1255/UTF-16 ולא UTF-8.
+            return await readTextFileSmart(file);
           }
         }
         // נופל לטעינה מתוך ה-DB עצמו (טבלת `line`).
@@ -1454,7 +1828,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             if ((book.fileType ?? '').toLowerCase() == 'docx') {
               return await convertDocxWithCache(file, title);
             }
-            return await file.readAsString();
+            return await readTextFileSmart(file);
           }
         }
         // If not external or file not found, try DB text
@@ -1623,6 +1997,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     _titlesCached = false;
     _bundledTalmudBavliPathCache = null;
     _bundledTalmudBavliExistsCache = null;
+    _selectableVersionKeysFuture = null;
     debugPrint('💾 Database cache cleared');
   }
 
@@ -2578,6 +2953,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
           anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
+          heRefEnd:
+              (row['targetRangeEndHeRef'] as String?)?.trim().isNotEmpty == true
+                  ? (row['targetRangeEndHeRef'] as String).trim()
+                  : null,
+          index2End: row['targetRangeEndLineIndex'] != null
+              ? (row['targetRangeEndLineIndex'] as int) + 1
+              : null,
         );
       }).toList();
 
@@ -2643,6 +3025,13 @@ class DatabaseLibraryProvider implements LibraryProvider {
           linkedAnchorStart: row['anchorLinkedCharStart'] as int?,
           linkedAnchorEnd: row['anchorLinkedCharEnd'] as int?,
           anchorSpans: _parseAnchorSpans(row['anchorSpans'] as String?),
+          heRefEnd:
+              (row['targetRangeEndHeRef'] as String?)?.trim().isNotEmpty == true
+                  ? (row['targetRangeEndHeRef'] as String).trim()
+                  : null,
+          index2End: row['targetRangeEndLineIndex'] != null
+              ? (row['targetRangeEndLineIndex'] as int) + 1
+              : null,
         );
       }).toList();
       return links;
@@ -2652,8 +3041,46 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
   }
 
+  /// סיכום קישורי הספר לפי (ספר-יעד, סוג חיבור), בתוספת השורה הגבוהה ביותר
+  /// שיש עליה קישור (1-based, כמו [Link.index1]; 0 אם אין קישורים).
+  /// מיועד לבניית רשימת המפרשים של ספר בלי לטעון את כל הקישורים לזיכרון.
+  /// מחזיר null אם המסד לא זמין או שהשאילתה נכשלה.
+  Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+      getBookLinkTargetsSummary(String title, int categoryId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return null;
+    }
+
+    // ראה הערה ב-_runAlternativeStructuresInIsolate.
+    final dbPath = _sqliteProvider.dbPath;
+
+    try {
+      final result = await _runBookLinkTargetsSummaryInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+      );
+      return (
+        targets: [
+          for (final row in result.rows)
+            LinkTargetSummary(
+              targetTitle: row['targetBookTitle'] as String,
+              connectionType:
+                  row['connectionTypeName'] as String? ?? 'reference',
+              linkCount: (row['linkCount'] as int?) ?? 0,
+            ),
+        ],
+        maxSourceLine: (result.maxSourceLineIndex ?? -1) + 1,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Error in getBookLinkTargetsSummary "$title": $e');
+      return null;
+    }
+  }
+
   /// טוען טווח שורות תוכן ב-isolate נפרד (כמו [getLinksForBookRange]), כדי
-  /// שהשאילתה וה-split לא יחסמו את ה-UI thread בזמן גלילה.
+  /// שהשאילתה וה-split לא יחסמו את ה-UI thread בזמן גלילה. כש-[versionTitle]
+  /// לא null נטען נוסח המהדורה הזו (version_line) על שלד שורות הספר.
   Future<({int startLine, int endLine, int totalLines, List<String> lines})?>
       getBookTextRange(
     String title,
@@ -2661,6 +3088,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     String fileType, {
     required int startLine,
     required int endLine,
+    String? versionTitle,
   }) async {
     if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
       return null;
@@ -2677,10 +3105,58 @@ class DatabaseLibraryProvider implements LibraryProvider {
         fileType: fileType,
         startLine: startLine,
         endLine: endLine,
+        versionTitle: versionTitle,
       );
     } catch (e) {
       debugPrint('⚠️ Error in getBookTextRange "$title": $e');
       return null;
+    }
+  }
+
+  /// רשימת המהדורות (book_version) של ספר, מהדורות עם טקסט מלא תחילה.
+  /// רשימה ריקה כשה-DB ישן או כשאין לספר מידע גרסאות.
+  Future<List<BookVersionInfo>> getBookVersions(
+    String title,
+    int categoryId,
+  ) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return const [];
+    }
+
+    final dbPath = _sqliteProvider.dbPath;
+    try {
+      final rows = await _runBookVersionsInIsolate(
+        dbPath: dbPath,
+        title: title,
+        categoryId: categoryId,
+      );
+      return rows.map(BookVersionInfo.fromDbRow).toList();
+    } catch (e) {
+      debugPrint('⚠️ Error in getBookVersions "$title": $e');
+      return const [];
+    }
+  }
+
+  /// האם להציג לספר תפריט 'גרסאות' — כלומר יש מהדורה לבחירה (2+ גרסאות, או
+  /// גרסה יחידה עם טקסט). גרסה יחידה מטא-דאטה בלבד = הנוסח המוצג, ולכן false.
+  Future<bool> hasSelectableBookVersions(String title, int categoryId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return false;
+    }
+    final keys =
+        await (_selectableVersionKeysFuture ??= _loadSelectableVersionKeys());
+    return keys.contains('$title $categoryId');
+  }
+
+  Future<Set<String>> _loadSelectableVersionKeys() async {
+    try {
+      final rows = await _runSelectableVersionKeysInIsolate(
+          dbPath: _sqliteProvider.dbPath);
+      return rows.map((r) => '${r['title']} ${r['categoryId']}').toSet();
+    } catch (e) {
+      debugPrint('⚠️ Error loading selectable version keys: $e');
+      _selectableVersionKeysFuture = null; // אפשר ניסיון חוזר בטעינה הבאה
+      return const <String>{};
     }
   }
 
@@ -2708,7 +3184,14 @@ class DatabaseLibraryProvider implements LibraryProvider {
           .getLineByIndex(resolvedBook.book.id, link.index2 - 1);
       if (line == null) return 'שגיאה: אינדקס מחוץ לטווח';
 
-      return line.content;
+      // קישור-טווח: מצרפים את כל שורות הטווח עד index2End (1-based, כולל)
+      // בשאילתת טווח אחת במקום שאילתה פר-שורה.
+      final end0 = (link.index2End ?? link.index2) - 1;
+      if (end0 <= link.index2 - 1) return line.content;
+      final rangeLines = await resolvedBook.repository
+          .getLines(resolvedBook.book.id, link.index2 - 1, end0);
+      if (rangeLines.isEmpty) return line.content;
+      return rangeLines.map((l) => l.content).join('<br>');
     } catch (e) {
       debugPrint('⚠️ Error in getLinkContent: $e');
       return 'שגיאה בטעינת תוכן המפרש';

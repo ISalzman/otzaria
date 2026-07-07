@@ -1,0 +1,86 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
+
+void main() {
+  const baseStyle = TextStyle(fontSize: 20);
+
+  group('SimpleInlineHtml.tryParse — מסלול מהיר', () {
+    test('טקסט פשוט ללא תגים מוחזר כ-span יחיד עם כיווץ רווחים', () {
+      final span = SimpleInlineHtml.tryParse('  שלום   עולם ', baseStyle);
+      expect(span, isNotNull);
+      expect(span!.toPlainText(), 'שלום עולם');
+    });
+
+    test('תגי b/strong מקבלים משקל bold', () {
+      final span =
+          SimpleInlineHtml.tryParse('<b>דיבור המתחיל</b> ביאור', baseStyle);
+      expect(span, isNotNull);
+      expect(span!.toPlainText(), 'דיבור המתחיל ביאור');
+
+      final children = span.children!.cast<TextSpan>();
+      expect(children.first.text, 'דיבור המתחיל');
+      expect(children.first.style?.fontWeight, FontWeight.bold);
+      expect(children.last.style?.fontWeight, isNull);
+    });
+
+    test('קינון b+i משלב bold ו-italic', () {
+      final span = SimpleInlineHtml.tryParse('<b><i>אב</i></b>', baseStyle);
+      final child = span!.children!.first as TextSpan;
+      expect(child.style?.fontWeight, FontWeight.bold);
+      expect(child.style?.fontStyle, FontStyle.italic);
+    });
+
+    test('big ו-small משנים גודל גופן יחסית לבסיס', () {
+      final bigSpan = SimpleInlineHtml.tryParse('<big>אב</big>', baseStyle);
+      final bigChild = bigSpan!.children!.first as TextSpan;
+      expect(bigChild.style?.fontSize, closeTo(24, 0.01));
+
+      final smallSpan =
+          SimpleInlineHtml.tryParse('<small>(הגהה)</small>', baseStyle);
+      final smallChild = smallSpan!.children!.first as TextSpan;
+      expect(smallChild.style?.fontSize, closeTo(16, 0.01));
+    });
+
+    test('br הופך לשורה חדשה ובולע רווחים צמודים', () {
+      final span = SimpleInlineHtml.tryParse('שורה א <br> שורה ב', baseStyle);
+      expect(span!.toPlainText(), 'שורה א\nשורה ב');
+    });
+
+    test('תג סוגר עודף לא מפיל את הפרסור', () {
+      final span = SimpleInlineHtml.tryParse('אב</b> גד', baseStyle);
+      expect(span, isNotNull);
+      expect(span!.toPlainText(), 'אב גד');
+    });
+
+    test('טקסט ריק מחזיר span ריק (לא null)', () {
+      final span = SimpleInlineHtml.tryParse('   ', baseStyle);
+      expect(span, isNotNull);
+      expect(span!.toPlainText(), isEmpty);
+    });
+
+    test('אמפרסנד חשוף בטקסט אינו נחשב entity', () {
+      final span = SimpleInlineHtml.tryParse('א & ב', baseStyle);
+      expect(span, isNotNull);
+      expect(span!.toPlainText(), 'א & ב');
+    });
+
+    group('נפילה ל-HtmlWidget (מחזיר null)', () {
+      final cases = <String, String>{
+        'תג עם attributes': '<span class="footnote-marker-number">א</span>',
+        'קישור': '<a href="x">קישור</a>',
+        'כותרת': '<h2>כותרת</h2>',
+        'הדגשת חיפוש': 'לפני <span style="background-color:yellow">מילה</span>',
+        'HTML entity': 'א&nbsp;ב',
+        'entity מספרי': 'א&#1488;ב',
+        'תג לא מוכר': '<sup>1</sup>',
+      };
+
+      cases.forEach((description, html) {
+        test(description, () {
+          expect(SimpleInlineHtml.tryParse(html, baseStyle), isNull);
+        });
+      });
+    });
+  });
+}

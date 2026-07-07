@@ -548,9 +548,14 @@ class FindRefRepository {
     // תקרה על קריאות ה-TOC היקרות (שאילתת DB / outline לכל ספר). ה-limit הגבוה
     // מאפשר לטוקן ראשון רחב ("ראש") להתאים מאות ספרים; ה-suppress מסנן את רובם
     // בחינם, אך כשאין טוקן-ספר הבא (אין suppress) התקרה מונעת הצפת שאילתות.
-    // הספרים מסודרים לפי דירוג ה-search, כך שהתקרה חותכת את הזנב הפחות-רלוונטי.
     var tocLookups = 0;
     const maxTocLookups = 50;
+
+    // כשהטוקן הראשון תפס ספרים רבים (כמו "ראש") בלי אקרוניום שמצמצם, הספר
+    // המכוון עלול לשבת עמוק ברשימה ולהיחתך ע"י התקרה (למשל "ראש בבא בתרא"
+    // בלי אקרוניום → הרא"ש על ב"ב במקום ~138). ממיינים כך שספרים שכותרתם
+    // מכסה יותר מטוקני-השאילתה (מעבר לאותיות-מיקום בודדות) ייבדקו קודם.
+    bookHits = _prioritizeByTitleCoverage(bookHits, queryTokens, maxTocLookups);
 
     for (final hit in bookHits) {
       final bookId = hit.bookId;
@@ -602,13 +607,24 @@ class FindRefRepository {
         final outlineEntries = await outlineFn(hit.filePath);
         final normalizedBookTitle = _normalizeForMatch(title);
 
+        // ציטוט דף: התאמה מיקומית (מספר מול מספר, עמוד מול עמוד) — כדי ש-"ב"
+        // בודד לא ייתפס ע"י סימון צד ע"ב ("דף ג:") של כל דף ב-outline.
+        final cite = parseDafCitation(remainingTokens);
+
         // Mirror regular book: add ALL matching outline entries (not just first).
         for (final (normChapter, origChapter, pageNumber) in outlineEntries) {
           if (normChapter == normalizedBookTitle) continue;
           final chapterWords = _tokenize(normChapter);
-          final matches = remainingTokens.every(
-            (t) => chapterWords.any((w) => w.startsWith(t)),
-          );
+          bool matches;
+          final dafMatch =
+              cite == null ? null : matchDafCitation(chapterWords, cite);
+          if (dafMatch != null) {
+            matches = dafMatch;
+          } else {
+            matches = remainingTokens.every(
+              (t) => chapterWords.any((w) => w.startsWith(t)),
+            );
+          }
           if (!matches) continue;
           results.add(DbReferenceResult(
             title: title,
@@ -1016,6 +1032,45 @@ class FindRefRepository {
         isUserBook: r.isUserBook,
       );
     }).toList();
+  }
+
+  /// ממיין את [hits] כך שספרים שכותרתם מכסה יותר טוקני-שאילתה משמעותיים
+  /// (אורך >= 2, כלומר לא אותיות-מיקום בודדות) יופיעו קודם — כדי שהספר המכוון
+  /// ייכנס לתוך [maxTocLookups] גם כשטוקן ראשון רחב תפס מאות ספרים.
+  ///
+  /// לא-אופרטיבי כשיש מעט hits או שאין טוקן-מסנן מעבר לשם הספר — מוחזרת אז
+  /// אותה רשימה. המיון יציב: שובר-השוויון הוא סדר ה-search המקורי (matchRank).
+  List<ReferenceBookHit> _prioritizeByTitleCoverage(
+    List<ReferenceBookHit> hits,
+    List<String> queryTokens,
+    int maxTocLookups,
+  ) {
+    final significant =
+        queryTokens.where((t) => t.length >= 2).toList(growable: false);
+    if (hits.length <= maxTocLookups || significant.length < 2) return hits;
+
+    int coverage(ReferenceBookHit hit) {
+      final titleTokens = _tokenize(hit.normalizedTitle);
+      var score = 0;
+      for (final qt in significant) {
+        // התאמת טוקן שלם, כולל ה' הידיעה בכותרת ("הרא"ש" מול "ראש") — כמו
+        // ב-[_getRemainingTokens].
+        final inTitle = titleTokens.any((tt) =>
+            tt == qt ||
+            (tt.length >= 3 && tt.startsWith('ה') && tt.substring(1) == qt));
+        if (inTitle) score++;
+      }
+      return score;
+    }
+
+    final indexed = [
+      for (var i = 0; i < hits.length; i++)
+        (index: i, hit: hits[i], score: coverage(hits[i]))
+    ]..sort((a, b) {
+        final c = b.score.compareTo(a.score);
+        return c != 0 ? c : a.index.compareTo(b.index);
+      });
+    return [for (final e in indexed) e.hit];
   }
 
   List<String> _getRemainingTokens(

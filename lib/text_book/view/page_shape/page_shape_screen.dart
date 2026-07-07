@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -307,10 +309,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
           _resolveCommentatorNames(config, state.availableCommentators);
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators = await DefaultCommentators.getDefaults(
+      final defaults = await DefaultCommentators.getPageShapeDefaults(
         state.book,
         availableCommentators: state.availableCommentators,
       );
+      commentators = defaults.commentators;
+      for (final entry in defaults.visibility.entries) {
+        if (!entry.value) _columnVisibility[entry.key] = false;
+      }
     }
 
     if (mounted) {
@@ -1361,8 +1367,30 @@ class _LoadedCommentaryData {
 
 class _CommentaryPaneState extends State<_CommentaryPane> {
   static const int _quickPreviewPaddingLines = 10;
-  static final Map<String, Future<_LoadedCommentaryData?>>
-      _fullCommentaryCache = {};
+
+  // המטמון מחזיק ספרי מפרשים שלמים — בלי חסם LRU כל מפרש שהוצג אי-פעם
+  // בצורת הדף היה נשאר ב-RAM עד סגירת האפליקציה. LinkedHashMap במפורש:
+  // פינוי ה-LRU מסתמך על סדר ההכנסה.
+  static final LinkedHashMap<String, Future<_LoadedCommentaryData?>>
+      _fullCommentaryCache =
+      LinkedHashMap<String, Future<_LoadedCommentaryData?>>();
+  static const int _maxFullCommentaryCacheEntries = 8;
+
+  /// שליפה/יצירה עם התנהגות LRU: גישה מקדמת את הרשומה לסוף, וחריגה מהחסם
+  /// מפנה את הישנה ביותר. עתיד שפונה מהמטמון נשאר חי אצל חלונית שכבר
+  /// מחזיקה בו — רק הכניסה במטמון נמחקת.
+  static Future<_LoadedCommentaryData?> _getOrLoadFullCommentary(
+    String cacheKey,
+    Future<_LoadedCommentaryData?> Function() load,
+  ) {
+    final cached = _fullCommentaryCache.remove(cacheKey);
+    final future = cached ?? load();
+    _fullCommentaryCache[cacheKey] = future;
+    while (_fullCommentaryCache.length > _maxFullCommentaryCacheEntries) {
+      _fullCommentaryCache.remove(_fullCommentaryCache.keys.first);
+    }
+    return future;
+  }
 
   List<String>? _content;
   TextBook? _reportBook;
@@ -1738,7 +1766,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           bookLocation.book != null &&
           bookLocation.categoryId != null;
       final requestedCommentatorName = widget.commentatorName;
-      final fullCommentaryFuture = _fullCommentaryCache.putIfAbsent(
+      final fullCommentaryFuture = _getOrLoadFullCommentary(
         _commentaryCacheKey(book, preferDatabase: useDatabaseSource),
         () => _fetchFullCommentaryData(
           book,

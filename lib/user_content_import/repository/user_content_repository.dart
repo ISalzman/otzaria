@@ -1,4 +1,5 @@
 import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/user_content_import/models/user_import_models.dart';
 
 /// גישת כתיבה/קריאה לנתוני-המשתמש ב-user_books.db: דור הספר (book_generation)
@@ -66,32 +67,37 @@ class UserContentRepository {
   // ---- קישורי-משתמש ----
 
   /// מוסיף קישור-משתמש, או דורס קישור זהה אם כבר קיים. שני קישורים נחשבים
-  /// "זהים" כשכל שדות הזיהוי שווים (מקור, שורת-מקור, יעד ומיקומו); רק
-  /// [UserLinkRecord.connectionType] מתעדכן. כך ייבוא חוזר מצטבר ואינו מכפיל.
+  /// "זהים" כשכל שדות הזיהוי שווים (מקור, שורת-מקור, יעד ומיקומו) — targetRef
+  /// הוא תצוגה בלבד ואינו חלק מהזהות. כך ייבוא חוזר מצטבר ואינו מכפיל.
   Future<void> upsertUserLink(UserLinkRecord link) async {
     final db = await _db.database;
     // השוואת השדות ב-IS (ולא =) כדי ש-NULL ישווה ל-NULL — אחרת קישור עם
-    // targetRef/targetLineIndex ריק לא היה נדרס בייבוא חוזר.
+    // targetLineIndex ריק לא היה נדרס בייבוא חוזר.
     db.execute(
-      'DELETE FROM user_link WHERE sourceBookId = ? AND sourceLineIndex = ? '
+      'DELETE FROM user_link WHERE sourceTitle = ? AND sourceIsUserBook = ? '
+      'AND sourceCategoryId IS ? AND sourceLineIndex = ? '
       'AND targetTitle = ? AND targetIsUserBook = ? AND targetCategoryId IS ? '
-      'AND targetRef IS ? AND targetLineIndex IS ?',
+      'AND targetLineIndex IS ?',
       [
-        link.sourceBookId,
+        link.sourceTitle,
+        link.sourceIsUserBook ? 1 : 0,
+        link.sourceCategoryId,
         link.sourceLineIndex,
         link.targetTitle,
         link.targetIsUserBook ? 1 : 0,
         link.targetCategoryId,
-        link.targetRef,
         link.targetLineIndex,
       ],
     );
     db.execute(
-      'INSERT INTO user_link (sourceBookId, sourceLineIndex, targetTitle, '
-      'targetCategoryId, targetIsUserBook, targetRef, targetLineIndex, '
-      'connectionType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO user_link (sourceTitle, sourceCategoryId, sourceIsUserBook, '
+      'sourceLineIndex, targetTitle, targetCategoryId, targetIsUserBook, '
+      'targetRef, targetLineIndex, connectionType) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        link.sourceBookId,
+        link.sourceTitle,
+        link.sourceCategoryId,
+        link.sourceIsUserBook ? 1 : 0,
         link.sourceLineIndex,
         link.targetTitle,
         link.targetCategoryId,
@@ -103,19 +109,30 @@ class UserContentRepository {
     );
   }
 
-  /// קישורי-משתמש *יוצאים* מספר מקור, בטווח שורות (0-based, כולל).
+  /// קישורי-משתמש *יוצאים* מספר מקור (לפי כותרת+דגל), בטווח שורות (0-based,
+  /// כולל). כשידועה קטגוריית המקור מסננים גם לפיה; שורות בלי קטגוריה עוברות.
   Future<List<UserLinkRecord>> forwardUserLinks(
-    int sourceBookId, {
+    String sourceTitle, {
+    required bool sourceIsUserBook,
+    int? sourceCategoryId,
     int? startLineIndex,
     int? endLineIndex,
   }) async {
     final db = await _db.database;
+    final categoryClause = sourceCategoryId != null
+        ? 'AND (sourceCategoryId IS NULL OR sourceCategoryId = ?)'
+        : '';
     final hasRange = startLineIndex != null && endLineIndex != null;
+    final rangeClause = hasRange ? 'AND sourceLineIndex BETWEEN ? AND ?' : '';
     final rows = db.select(
-      'SELECT * FROM user_link WHERE sourceBookId = ?'
-      '${hasRange ? ' AND sourceLineIndex BETWEEN ? AND ?' : ''} '
-      'ORDER BY sourceLineIndex',
-      hasRange ? [sourceBookId, startLineIndex, endLineIndex] : [sourceBookId],
+      'SELECT * FROM user_link WHERE sourceTitle = ? AND sourceIsUserBook = ? '
+      '$categoryClause $rangeClause ORDER BY sourceLineIndex',
+      [
+        sourceTitle,
+        sourceIsUserBook ? 1 : 0,
+        if (sourceCategoryId != null) sourceCategoryId,
+        if (hasRange) ...[startLineIndex, endLineIndex],
+      ],
     );
     return rows.map(_fromRow).toList();
   }
@@ -139,9 +156,7 @@ class UserContentRepository {
     final rangeClause =
         hasRange ? 'AND ul.targetLineIndex BETWEEN ? AND ?' : '';
     final rows = db.select(
-      'SELECT ul.*, b.title AS sourceTitle, b.categoryId AS sourceCategoryId '
-      'FROM user_link ul '
-      'JOIN book b ON b.id = ul.sourceBookId '
+      'SELECT ul.* FROM user_link ul '
       'WHERE ul.targetTitle = ? AND ul.targetIsUserBook = ? '
       '$categoryClause $rangeClause '
       'ORDER BY ul.targetLineIndex',
@@ -155,8 +170,35 @@ class UserContentRepository {
     return rows.map(_fromRow).toList();
   }
 
+  /// כותרות המפרשים מקישורי-משתמש של ספר בסיס: יעדי הקישורים תלויי-הטקסט
+  /// היוצאים ממנו (הכיוון הקנוני באחסון הוא בסיס→מפרש, כמו seforim.db).
+  Future<List<String>> userCommentatorTitles(
+    String sourceTitle, {
+    required bool sourceIsUserBook,
+    int? sourceCategoryId,
+  }) async {
+    final db = await _db.database;
+    final depIn = LinkTypes.dependentTextTypes.map((t) => "'$t'").join(', ');
+    final categoryClause = sourceCategoryId != null
+        ? 'AND (sourceCategoryId IS NULL OR sourceCategoryId = ?)'
+        : '';
+    final rows = db.select(
+      'SELECT DISTINCT targetTitle FROM user_link '
+      'WHERE sourceTitle = ? AND sourceIsUserBook = ? $categoryClause '
+      'AND UPPER(connectionType) IN ($depIn)',
+      [
+        sourceTitle,
+        sourceIsUserBook ? 1 : 0,
+        if (sourceCategoryId != null) sourceCategoryId,
+      ],
+    );
+    return rows.map((r) => r['targetTitle'] as String).toList();
+  }
+
   UserLinkRecord _fromRow(Map<String, Object?> row) => UserLinkRecord(
-        sourceBookId: row['sourceBookId'] as int,
+        sourceTitle: row['sourceTitle'] as String,
+        sourceCategoryId: row['sourceCategoryId'] as int?,
+        sourceIsUserBook: (row['sourceIsUserBook'] as int? ?? 0) == 1,
         sourceLineIndex: row['sourceLineIndex'] as int,
         targetTitle: row['targetTitle'] as String,
         targetCategoryId: row['targetCategoryId'] as int?,
@@ -164,7 +206,5 @@ class UserContentRepository {
         targetRef: row['targetRef'] as String?,
         targetLineIndex: row['targetLineIndex'] as int?,
         connectionType: row['connectionType'] as String,
-        sourceTitle: row['sourceTitle'] as String?,
-        sourceCategoryId: row['sourceCategoryId'] as int?,
       );
 }

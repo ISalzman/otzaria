@@ -556,41 +556,29 @@ class UserContentImportTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return BlocBuilder<CustomFoldersBloc, CustomFoldersState>(
       buildWhen: (p, c) => p.isSyncing != c.isSyncing,
       builder: (context, state) {
         final isSyncing =
             state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy;
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'בחר קובצי "דורות.csv" או "<שם הספר>.links.csv" והם ייקלטו '
-                'לצמיתות. ייבוא חוזר מעדכן ערכים קיימים ומוסיף חדשים.',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ActionButton.recommended(
-                    text: 'ייבוא דורות וקישורים',
-                    icon: FluentIcons.arrow_import_24_regular,
-                    onPressed: isSyncing ? null : () => _import(context),
-                    isLoading: isSyncing,
-                  ),
-                  ActionButton.warning(
-                    text: 'נקה הכל',
-                    onPressed: isSyncing ? null : () => _clear(context),
-                  ),
-                ],
-              ),
-            ],
-          ),
+        return SettingsActionTile.text(
+          icon: FluentIcons.arrow_import_24_regular,
+          title: 'ייבוא דורות וקישורים',
+          subtitle: 'בחר קובצי "דורות.csv", "<שם הספר>.links.csv" או קובצי קישורים '
+                'של אוצריא ("<שם הספר>_links.json") והם ייקלטו לצמיתות. '
+                'ייבוא חוזר מעדכן ערכים קיימים ומוסיף חדשים.',
+          actions: [
+            ActionButton.warning(
+              text: 'נקה הכל',
+              onPressed: isSyncing ? null : () => _clear(context),
+            ),
+            ActionButton.recommended(
+              text: 'ייבוא דורות וקישורים',
+              icon: FluentIcons.arrow_import_24_regular,
+              onPressed: isSyncing ? null : () => _import(context),
+              isLoading: isSyncing,
+            ),
+          ],
         );
       },
     );

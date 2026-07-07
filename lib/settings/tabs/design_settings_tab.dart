@@ -145,15 +145,23 @@ class DesignSettingsTab extends StatelessWidget {
                     SettingsActionTile.segmentedTile<_ThemeMode>(
                       icon: FluentIcons.weather_sunny_24_regular,
                       title: 'מצב ערכת נושא',
-                      subtitle: state.followSystemTheme
-                          ? 'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה'
-                          : state.isDarkMode
-                              ? 'התוכנה תשתמש בצבעים כהים'
-                              : 'התוכנה תשתמש בצבעים בהירים',
                       options: const [
-                        SegmentOption(value: _ThemeMode.light, label: 'בהיר'),
-                        SegmentOption(value: _ThemeMode.system, label: 'מערכת'),
-                        SegmentOption(value: _ThemeMode.dark, label: 'כהה'),
+                        SegmentOption(
+                          value: _ThemeMode.light,
+                          label: 'בהיר',
+                          subtitle: 'התוכנה תשתמש בצבעים בהירים',
+                        ),
+                        SegmentOption(
+                          value: _ThemeMode.system,
+                          label: 'מערכת',
+                          subtitle:
+                              'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה',
+                        ),
+                        SegmentOption(
+                          value: _ThemeMode.dark,
+                          label: 'כהה',
+                          subtitle: 'התוכנה תשתמש בצבעים כהים',
+                        ),
                       ],
                       currentValue: state.followSystemTheme
                           ? _ThemeMode.system
@@ -195,9 +203,9 @@ class DesignSettingsTab extends StatelessWidget {
                           context
                               .read<SettingsBloc>()
                               .add(UpdateSeedColor(color));
-                          }
-                        },
-                      ),
+                        }
+                      },
+                    ),
                   ],
                 ),
 
@@ -212,12 +220,17 @@ class DesignSettingsTab extends StatelessWidget {
                       SettingsActionTile.segmentedTile<bool>(
                         icon: FluentIcons.column_triple_24_regular,
                         title: 'צפיפות ממשק',
-                        subtitle: state.compactMenuMode
-                            ? 'הצג יותר תוכן על ידי הקטנת המרווחים'
-                            : 'הצג פריטים במרווחים נוחים ללחיצה',
                         options: const [
-                          SegmentOption(value: false, label: 'רחב'),
-                          SegmentOption(value: true, label: 'קומפקטי'),
+                          SegmentOption(
+                            value: false,
+                            label: 'רחב',
+                            subtitle: 'הצג פריטים במרווחים נוחים ללחיצה',
+                          ),
+                          SegmentOption(
+                            value: true,
+                            label: 'קומפקטי',
+                            subtitle: 'הצג יותר תוכן על ידי הקטנת המרווחים',
+                          ),
                         ],
                         currentValue: state.compactMenuMode,
                         onChanged: (value) {
@@ -264,19 +277,23 @@ class DesignSettingsTab extends StatelessWidget {
                   children: [
                     SettingsActionTile.segmentedTile<_SidebarMode>(
                       title: 'חלונית ניווט בין כותרות',
-                      subtitle: state.pinSidebar
-                          ? 'החלונית תוצג באופן קבוע'
-                          : state.defaultSidebarOpen
-                              ? 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה'
-                              : 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
                       rtlIcon: FluentIcons.panel_left_24_regular,
                       options: const [
                         SegmentOption(
-                            value: _SidebarMode.pinned, label: 'הצגה'),
+                          value: _SidebarMode.pinned,
+                          label: 'הצגה',
+                          subtitle: 'החלונית תוצג באופן קבוע',
+                        ),
                         SegmentOption(
-                            value: _SidebarMode.openOnBook, label: 'אוטומטי'),
+                          value: _SidebarMode.openOnBook,
+                          label: 'אוטומטי',
+                          subtitle: 'החלונית תוצג בפתיחת ספר ותיסגר בעת גלילה',
+                        ),
                         SegmentOption(
-                            value: _SidebarMode.closed, label: 'הסתרה'),
+                          value: _SidebarMode.closed,
+                          label: 'הסתרה',
+                          subtitle: 'החלונית לא תוצג אוטומטית עם פתיחת הספר',
+                        ),
                       ],
                       currentValue: state.pinSidebar
                           ? _SidebarMode.pinned

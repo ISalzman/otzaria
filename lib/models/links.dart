@@ -8,6 +8,25 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
+/// שורת סיכום של קישורי ספר לפי ספר-יעד וסוג חיבור — תחליף קל-משקל לטעינת
+/// כל הקישורים כשנדרשת רק רשימת המפרשים/היעדים של הספר (פאנל מפרשים ב-PDF).
+class LinkTargetSummary {
+  /// שם ספר היעד (שקול ל-[Link.path2]).
+  final String targetTitle;
+
+  /// שם סוג החיבור (שקול ל-[Link.connectionType]).
+  final String connectionType;
+
+  /// מספר הקישורים מסוג זה אל ספר היעד.
+  final int linkCount;
+
+  const LinkTargetSummary({
+    required this.targetTitle,
+    required this.connectionType,
+    required this.linkCount,
+  });
+}
+
 /// עוגן-מילה בודד של קישור בשורה המוצגת. קישור יכול לשאת כמה עוגנים
 /// (למשל הערה אחת שמסומנת בשני מקומות בשורה).
 class LinkAnchorSpan {
@@ -21,7 +40,13 @@ class LinkAnchorSpan {
 /// Represents a link between two books in the library.
 class Link {
   static const int _maxContentCacheEntries = 400;
-  static final Map<String, Future<String>> _displayReferenceCache = {};
+
+  // חסום כמו _contentCache — בלי חסם המפה גדלה ללא גבול לאורך session
+  // עם הרבה מפרשים (דליפה רכה). LinkedHashMap במפורש: פינוי ה-LRU מסתמך
+  // על סדר ההכנסה.
+  static const int _maxDisplayReferenceCacheEntries = 1000;
+  static final LinkedHashMap<String, Future<String>> _displayReferenceCache =
+      LinkedHashMap<String, Future<String>>();
 
   /// The Hebrew reference of the link.
   final String heRef;
@@ -74,6 +99,13 @@ class Link {
   /// הם הראשון שבהם (לתאימות ולאות שבפאנל); ההזרקה לטקסט עוברת על כולם.
   final List<LinkAnchorSpan> anchorSpans;
 
+  /// קישור-טווח: ה-heRef של השורה האחרונה בטווח בצד המקושר (path2), או null
+  /// לקישור לשורה בודדת.
+  final String? heRefEnd;
+
+  /// קישור-טווח: אינדקס (1-based) של השורה האחרונה בטווח בצד המקושר, או null.
+  final int? index2End;
+
   /// Creates a new instance of [Link] with the provided parameters.
   Link({
     required this.heRef,
@@ -92,6 +124,8 @@ class Link {
     this.linkedAnchorStart,
     this.linkedAnchorEnd,
     this.anchorSpans = const [],
+    this.heRefEnd,
+    this.index2End,
   });
 
   static final LinkedHashMap<String, Future<String>> _contentCache =
@@ -107,7 +141,8 @@ class Link {
     }
     // המפתח כולל את זהות היעד (אישי/רשמי+קטגוריה) כדי ששני קישורים לאותה
     // כותרת ואינדקס — אחד אישי ואחד רשמי — לא יחזירו זה את תוכן זה.
-    final key = '$path2:$index2:${targetIsUserBook ? 'u' : 'o'}:'
+    final key =
+        '$path2:$index2:${index2End ?? ''}:${targetIsUserBook ? 'u' : 'o'}:'
         '${targetCategoryId ?? ''}';
     final cached = _contentCache.remove(key);
     if (cached != null) {
@@ -123,53 +158,87 @@ class Link {
     return future;
   }
 
+  /// סיומת טווח לכתובת התצוגה: לקישור-טווח מוסיפה "–<קצה>" כשרק הרכיב האחרון
+  /// שונה (למשל "יח, י, ב–ג"), או " – <כתובת מלאה>" כשהכתובות שונות לגמרי.
+  String get _rangeDisplaySuffix {
+    final end = heRefEnd?.trim();
+    if (end == null || end.isEmpty || end == heRef.trim()) return '';
+    final startSegs = heRef.trim().split(', ');
+    final endSegs = end.split(', ');
+    var common = 0;
+    while (common < startSegs.length - 1 &&
+        common < endSegs.length - 1 &&
+        startSegs[common] == endSegs[common]) {
+      common++;
+    }
+    final tail = endSegs.sublist(common).join(', ');
+    return common > 0 ? '–$tail' : ' – $tail';
+  }
+
   /// מחזירה כתובת תצוגה בטוחה גם כאשר לא ניתן לחשב TOC מלא.
   String get fallbackDisplayReference {
     final targetTitle = utils.getTitleFromPath(path2);
     return formatDisplayReference(
-      bookTitle: targetTitle,
-      fallbackRef: heRef,
-    );
+          bookTitle: targetTitle,
+          fallbackRef: heRef,
+        ) +
+        _rangeDisplaySuffix;
   }
 
-  /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון לפי ספר ואינדקס.
+  /// מחזירה כתובת תצוגה מלאה של ספר היעד, עם מטמון LRU לפי ספר ואינדקס.
   Future<String> get displayReference {
-    final cacheKey = '${path2}_${index2}_${targetIsUserBook ? 'u' : 'o'}_'
+    final cacheKey = '${path2}_${index2}_${index2End ?? ''}_'
+        '${targetIsUserBook ? 'u' : 'o'}_'
         '${targetCategoryId ?? ''}';
-    return _displayReferenceCache.putIfAbsent(cacheKey, () async {
-      final targetTitle = utils.getTitleFromPath(path2);
-      final targetFileType = _resolveTargetFileType();
-      if (index2 <= 0) {
-        return formatDisplayReference(
-          bookTitle: targetTitle,
-          fallbackRef: heRef,
-        );
-      }
+    final cached = _displayReferenceCache.remove(cacheKey);
+    if (cached != null) {
+      _displayReferenceCache[cacheKey] = cached;
+      return cached;
+    }
+    final future = _computeDisplayReference();
+    _displayReferenceCache[cacheKey] = future;
+    if (_displayReferenceCache.length > _maxDisplayReferenceCacheEntries) {
+      _displayReferenceCache.remove(_displayReferenceCache.keys.first);
+    }
+    return future;
+  }
 
-      try {
-        final resolvedRef = await refFromIndex(
-          index2 - 1,
-          LibraryProviderManager.instance
-              .getBookToc(
-                targetTitle,
-                categoryId: targetCategoryId,
-                fileType: targetFileType,
-                preferUserBooks: targetIsUserBook,
-              )
-              .then((toc) => toc ?? const <TocEntry>[]),
-        );
-        return formatDisplayReference(
-          bookTitle: targetTitle,
-          resolvedRef: resolvedRef,
-          fallbackRef: heRef,
-        );
-      } catch (_) {
-        return formatDisplayReference(
-          bookTitle: targetTitle,
-          fallbackRef: heRef,
-        );
-      }
-    });
+  Future<String> _computeDisplayReference() async {
+    final targetTitle = utils.getTitleFromPath(path2);
+    final targetFileType = _resolveTargetFileType();
+    if (index2 <= 0) {
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    }
+
+    try {
+      final resolvedRef = await refFromIndex(
+        index2 - 1,
+        LibraryProviderManager.instance
+            .getBookToc(
+              targetTitle,
+              categoryId: targetCategoryId,
+              fileType: targetFileType,
+              preferUserBooks: targetIsUserBook,
+            )
+            .then((toc) => toc ?? const <TocEntry>[]),
+      );
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            resolvedRef: resolvedRef,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    } catch (_) {
+      return formatDisplayReference(
+            bookTitle: targetTitle,
+            fallbackRef: heRef,
+          ) +
+          _rangeDisplaySuffix;
+    }
   }
 
   String? _resolveTargetFileType() {
@@ -220,7 +289,10 @@ class Link {
         anchorLabel = null,
         linkedAnchorStart = null,
         linkedAnchorEnd = null,
-        anchorSpans = const [];
+        anchorSpans = const [],
+        // קישורי-טווח מגיעים רק ממסד הנתונים (link_range), לא מקבצי JSON.
+        heRefEnd = null,
+        index2End = null;
 }
 
 /// Retrieves a list of [Link] objects for the given list of [indexes] and the [links] to be processed.

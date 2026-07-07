@@ -334,7 +334,10 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       }
     }
 
-    if (tab.links.isEmpty) {
+    // הכרטיסייה זקוקה לכל קישורי הספר (ניווט חופשי בין כותרות + מפרשים
+    // נדירים), בעוד מסך ה-PDF ממלא את tab.links בחלון סביב המיקום בלבד —
+    // לכן משדרגים לרשימה המלאה גם כשהחלון כבר מולא.
+    if (!tab.linksAreComplete) {
       try {
         final library = await DataRepository.instance.library;
         final textBook =
@@ -344,6 +347,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             ..sort((a, b) => a.index1.compareTo(b.index1));
           if (!mounted) return;
           tab.links = loaded;
+          tab.linksAreComplete = true;
         }
       } catch (e) {
         debugPrint('שגיאה בטעינת links לכרטיסיית מפרשים: $e');

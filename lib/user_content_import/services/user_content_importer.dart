@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/user_content_import/models/user_import_models.dart';
 import 'package:otzaria/user_content_import/repository/user_content_repository.dart';
 import 'package:otzaria/user_content_import/services/user_import_parser.dart';
@@ -34,6 +35,8 @@ class UserImportResult {
 /// - `דורות.csv` / `generations.csv` — דורות (עמודות: ספר, דור).
 /// - `קישורים.csv|json` / `links.csv|json` — קישורים רוחביים (עם ספר_מקור).
 /// - `<שם הספר>.links.csv` / `<שם הספר>.links.json` — קישורים לספר בודד.
+/// - `<שם הספר>_links.json` — פורמט ה-native של אוצריא (תיקיית links);
+///   שם הספר בקובץ הוא ספר הבסיס (path_1), והצדדים מאותרים אוטומטית.
 ///
 /// קובץ קישורים ב-JSON הוא מערך אובייקטים באותה סמנטיקה כמו ה-CSV
 /// (ראה [UserImportParser.parseLinksJson]).
@@ -54,6 +57,8 @@ class UserContentImporter {
     Iterable<String> filePaths,
     MyDatabase userDb, {
     UserLinkRefResolver resolveRef = resolveUserLinkTargetLine,
+    UserLinkSourceChecker sourceExists = userLinkSourceBookExists,
+    UserLinkBookLocator locateBook = locateUserLinkBook,
   }) async {
     final repo = UserContentRepository(userDb);
     final errors = <String>[];
@@ -74,15 +79,25 @@ class UserContentImporter {
         await _ingestGenerations(file, repo, generationByBook, errors);
       } else if (_folderLinkFileNames.contains(name)) {
         await _ingestLinks(file, repo, links, errors,
-            bookTitleFromFile: null, resolveRef: resolveRef);
+            bookTitleFromFile: null,
+            resolveRef: resolveRef,
+            sourceExists: sourceExists);
       } else if (lower.endsWith('.links.csv')) {
         final bookTitle = name.substring(0, name.length - '.links.csv'.length);
         await _ingestLinks(file, repo, links, errors,
-            bookTitleFromFile: bookTitle, resolveRef: resolveRef);
+            bookTitleFromFile: bookTitle,
+            resolveRef: resolveRef,
+            sourceExists: sourceExists);
       } else if (lower.endsWith('.links.json')) {
         final bookTitle = name.substring(0, name.length - '.links.json'.length);
         await _ingestLinks(file, repo, links, errors,
-            bookTitleFromFile: bookTitle, resolveRef: resolveRef);
+            bookTitleFromFile: bookTitle,
+            resolveRef: resolveRef,
+            sourceExists: sourceExists);
+      } else if (lower.endsWith('_links.json')) {
+        final baseTitle = name.substring(0, name.length - '_links.json'.length);
+        await _ingestNativeLinks(file, links, errors,
+            baseTitle: baseTitle, locateBook: locateBook);
       } else {
         errors.add(
             '$name: קובץ לא מזוהה (צפוי "דורות.csv" או "<ספר>.links.csv")');
@@ -96,14 +111,39 @@ class UserContentImporter {
     for (final entry in generationByBook.entries) {
       await repo.setBookGeneration(entry.key, entry.value);
     }
+    // איחוד רשומות זהות מכל הקבצים (למשל שני צדי צמד דו-כיווני שנורמלו
+    // לאותו כיוון) — עדיפות לרשומה עם targetRef להצגה.
+    final unique = <String, UserLinkRecord>{};
     for (final link in links) {
+      final key = [
+        link.sourceIsUserBook,
+        link.sourceCategoryId,
+        link.sourceTitle,
+        link.sourceLineIndex,
+        link.targetIsUserBook,
+        link.targetCategoryId,
+        link.targetTitle,
+        link.targetLineIndex,
+        link.connectionType,
+      ].join('|');
+      final existing = unique[key];
+      if (existing == null ||
+          (existing.targetRef == null && link.targetRef != null)) {
+        unique[key] = link;
+      }
+    }
+    for (final link in unique.values) {
       await repo.upsertUserLink(link);
     }
 
     return UserImportResult(
       generationsApplied: generationByBook.length,
-      linksApplied: links.length,
-      booksWithLinks: links.map((l) => l.sourceBookId).toSet().length,
+      linksApplied: unique.length,
+      booksWithLinks: unique.values
+          .map((l) => '${l.sourceIsUserBook}|${l.sourceCategoryId}|'
+              '${l.sourceTitle}')
+          .toSet()
+          .length,
       errors: errors,
     );
   }
@@ -143,6 +183,7 @@ class UserContentImporter {
     List<String> errors, {
     required String? bookTitleFromFile,
     required UserLinkRefResolver resolveRef,
+    required UserLinkSourceChecker sourceExists,
   }) async {
     final fileName = _baseName(file.path);
     final ParseResult<ParsedUserLink> parsed;
@@ -164,14 +205,107 @@ class UserContentImporter {
         errors.add('$fileName: חסר ספר מקור (עמודת "ספר_מקור")');
         continue;
       }
-      final sourceId = await repo.bookIdByTitle(sourceTitle);
-      if (sourceId == null) {
+      // מקור אישי מאומת מול user_books.db הנתון (כמו קודם); מקור רשמי מול
+      // seforim.db דרך [sourceExists] — כדי לחסום כותרת שגויה שתיצור קישור מת.
+      final bool found;
+      if (row.sourceIsUserBook) {
+        found = await repo.bookIdByTitle(sourceTitle,
+                categoryId: row.sourceCategoryId) !=
+            null;
+      } else {
+        found = await sourceExists(
+            title: sourceTitle,
+            categoryId: row.sourceCategoryId,
+            isUserBook: false);
+      }
+      if (!found) {
         errors.add('$fileName: ספר המקור "$sourceTitle" לא נמצא');
         continue;
       }
       final record =
-          await _resolveRecord(sourceId, row, resolveRef, fileName, errors);
+          await _resolveRecord(sourceTitle, row, resolveRef, fileName, errors);
       if (record != null) out.add(record);
+    }
+  }
+
+  /// קולט קובץ בפורמט ה-native (`<ספר>_links.json`): ספר הבסיס נגזר משם
+  /// הקובץ, שני הצדדים מאותרים אוטומטית (אישי קודם), ואינדקסי השורות
+  /// הגולמיים מאומתים מול totalLines של כל ספר — אין פתירת ref.
+  static Future<void> _ingestNativeLinks(
+    File file,
+    List<UserLinkRecord> out,
+    List<String> errors, {
+    required String baseTitle,
+    required UserLinkBookLocator locateBook,
+  }) async {
+    final fileName = _baseName(file.path);
+    final ParseResult<ParsedNativeLink> parsed;
+    try {
+      parsed = UserImportParser.parseNativeLinksJson(await file.readAsString());
+    } catch (e) {
+      errors.add('$fileName: קריאת הקובץ נכשלה ($e)');
+      return;
+    }
+    for (final err in parsed.errors) {
+      errors.add('$fileName ${err.message} (שורה ${err.lineNumber})');
+    }
+
+    final source = await locateBook(baseTitle);
+    if (source == null) {
+      errors.add('$fileName: ספר הבסיס "$baseTitle" לא נמצא בספרייה');
+      return;
+    }
+
+    final targetCache =
+        <String, ({bool isUserBook, int? categoryId, int totalLines})?>{};
+    for (final row in parsed.rows) {
+      if (!targetCache.containsKey(row.targetTitle)) {
+        targetCache[row.targetTitle] = await locateBook(row.targetTitle);
+      }
+      final target = targetCache[row.targetTitle];
+      if (target == null) {
+        errors.add('$fileName: ספר היעד "${row.targetTitle}" לא נמצא בספרייה');
+        continue;
+      }
+      if (source.totalLines > 0 && row.sourceLineNumber > source.totalLines) {
+        errors.add('$fileName: שורה ${row.sourceLineNumber} חורגת מגבולות '
+            '"$baseTitle" (${source.totalLines} שורות)');
+        continue;
+      }
+      if (target.totalLines > 0 && row.targetLineNumber > target.totalLines) {
+        errors.add('$fileName: שורה ${row.targetLineNumber} חורגת מגבולות '
+            '"${row.targetTitle}" (${target.totalLines} שורות)');
+        continue;
+      }
+      // צמד קבצים דו-כיווני של הכלי מייצר גם רשומת מפרש→בסיס; מנרמלים אותה
+      // לכיוון הקנוני (בסיס→מפרש) כך שהיא מתלכדת עם הרשומה מהקובץ של הבסיס.
+      final flip = LinkTypes.isDependentTextLink(row.connectionType) &&
+          source.isUserBook &&
+          !target.isUserBook;
+      out.add(flip
+          ? UserLinkRecord(
+              sourceTitle: row.targetTitle,
+              sourceCategoryId: target.categoryId,
+              sourceIsUserBook: target.isUserBook,
+              sourceLineIndex: row.targetLineNumber - 1,
+              targetTitle: baseTitle,
+              targetCategoryId: source.categoryId,
+              targetIsUserBook: source.isUserBook,
+              targetLineIndex: row.sourceLineNumber - 1,
+              connectionType: row.connectionType,
+            )
+          : UserLinkRecord(
+              sourceTitle: baseTitle,
+              sourceCategoryId: source.categoryId,
+              sourceIsUserBook: source.isUserBook,
+              sourceLineIndex: row.sourceLineNumber - 1,
+              targetTitle: row.targetTitle,
+              targetCategoryId: target.categoryId,
+              targetIsUserBook: target.isUserBook,
+              targetRef: row.targetRef,
+              targetLineIndex: row.targetLineNumber - 1,
+              connectionType: row.connectionType,
+            ));
     }
   }
 
@@ -179,7 +313,7 @@ class UserContentImporter {
   /// ישיר (1-based); אחרת זו כתובת טקסטואלית שנפתרת לשורה דרך [resolveRef].
   /// מחזיר null (ומוסיף שגיאה) אם חסרה כתובת או שהכתובת לא נפתרה.
   static Future<UserLinkRecord?> _resolveRecord(
-    int sourceBookId,
+    String sourceTitle,
     ParsedUserLink row,
     UserLinkRefResolver resolveRef,
     String fileName,
@@ -212,8 +346,26 @@ class UserContentImporter {
       }
       targetLineIndex = resolved;
     }
+    // קישור תלוי-טקסט (פירוש/תרגום) נשמר בכיוון הקנוני של seforim.db —
+    // הבסיס הוא המקור. בפורמט ה-CSV עמודת המקור היא המפרש, לכן הופכים:
+    // כך המפרש מוצג בפאנל המפרשים של הבסיס, והבסיס כ'מקור' בפאנל הקישורים.
+    if (LinkTypes.isDependentTextLink(row.connectionType)) {
+      return UserLinkRecord(
+        sourceTitle: row.targetTitle,
+        sourceCategoryId: row.targetCategoryId,
+        sourceIsUserBook: row.targetIsUserBook,
+        sourceLineIndex: targetLineIndex,
+        targetTitle: sourceTitle,
+        targetCategoryId: row.sourceCategoryId,
+        targetIsUserBook: row.sourceIsUserBook,
+        targetLineIndex: row.sourceLineNumber - 1,
+        connectionType: row.connectionType,
+      );
+    }
     return UserLinkRecord(
-      sourceBookId: sourceBookId,
+      sourceTitle: sourceTitle,
+      sourceCategoryId: row.sourceCategoryId,
+      sourceIsUserBook: row.sourceIsUserBook,
       sourceLineIndex: row.sourceLineNumber - 1,
       targetTitle: row.targetTitle,
       targetCategoryId: row.targetCategoryId,

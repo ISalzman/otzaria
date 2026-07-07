@@ -405,6 +405,50 @@ void main() {
       },
     );
 
+    test(
+      'בצורת הדף ApplyMarkHighlight טוען קישורים לחלון היעד גם כשה-controller לא מחובר',
+      () async {
+        // רגרסיה: קישור deep-link לטאב ברקע נבלע ב-position listener (הגלילה
+        // מדולגת כי ה-controller לא מחובר), ואז חלוניות המפרשים נשארו על החלון
+        // הקודם. הטעינה הישירה של קישורי היעד מבטיחה סנכרון נכון.
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: true,
+          initialIndex: 10,
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 1,
+          description: 'getBookLinksInRangeCalls >= 1',
+        );
+
+        bloc.add(const ApplyMarkHighlight(
+          permanentHighlightLine: 1801,
+          scrollToIndex: 1801,
+        ));
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 2,
+          description: 'getBookLinksInRangeCalls >= 2',
+        );
+
+        expect(repository.lastStartIndex, 1741);
+        expect(repository.lastEndIndex, 1941);
+
+        await bloc.close();
+      },
+    );
+
     test('בצורת הדף טוען קישורים רק למפרשים שנבחרו בחלוניות', () async {
       final repository = _FakeTextBookRepository();
       await PageShapeSettingsManager.saveConfiguration(
@@ -842,6 +886,88 @@ void main() {
           (bloc.state as TextBookLoaded).removeNikud,
           isFalse,
           reason: 'שינוי הגדרות ניקוד גלובלי חייב להחיל את הערך החדש',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'LoadContent(preserveRemovePunctuation:true) שומר פיסוק שהמשתמש הסתיר',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect((bloc.state as TextBookLoaded).removePunctuation, isFalse);
+
+        // המשתמש מסתיר פיסוק ידנית
+        bloc.add(const TogglePunctuation(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).removePunctuation, isTrue);
+
+        // רענון בגין שינוי גופן – מצפה שהסתרת הפיסוק תישמר
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          preserveState: true,
+          preserveRemoveNikud: true,
+          preserveRemovePunctuation: true,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).removePunctuation,
+          isTrue,
+          reason: 'שינוי גופן לא אמור להחזיר פיסוק שהמשתמש הסתיר',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'LoadContent ללא preserveRemovePunctuation מאפס את הסתרת הפיסוק',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc =
+            _createBloc(repository: repository, showPageShapeView: false);
+
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const TogglePunctuation(true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect((bloc.state as TextBookLoaded).removePunctuation, isTrue);
+
+        // המסלול של _resetPerBookSettings – בלי הדגל, הפיסוק חוזר לברירת מחדל
+        bloc.add(const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          preserveState: true,
+          loadCommentators: false,
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(
+          (bloc.state as TextBookLoaded).removePunctuation,
+          isFalse,
+          reason: 'איפוס הגדרות פר-ספר חייב להחזיר את הפיסוק לברירת המחדל',
         );
 
         await bloc.close();

@@ -3,11 +3,13 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
+import 'package:otzaria/library/view/book_versions_dialog.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
@@ -99,7 +101,7 @@ bool _textOverflows({
 Decoration _libraryTooltipDecoration(BuildContext context) {
   final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
-    color: cs.surfaceContainerHigh,
+    color: cs.inverseSurface,
     borderRadius: AppTokens.borderRadiusAll,
   );
 }
@@ -107,7 +109,7 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
 TextStyle _libraryTooltipTextStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
-    color: theme.colorScheme.onSurface,
+    color: theme.colorScheme.onInverseSurface,
     fontSize: 14,
     height: 1.3,
   );
@@ -548,17 +550,54 @@ class _BookGridActionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db);
+    // תפריט 'גרסאות' מוצג רק כשיש בפועל מהדורה לבחירה (נבדק ב-FutureBuilder).
+    final versionsEligible =
+        book is TextBook && !book.isUserBook && book.categoryId != null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FutureBuilder<bool>(
-          future: _canDeleteBookFromLibrary(book),
+        if ((book.heShortDesc ?? '').isNotEmpty)
+          Tooltip(
+            message: book.heShortDesc ?? '',
+            waitDuration: const Duration(milliseconds: 400),
+            textAlign: TextAlign.right,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            margin: const EdgeInsets.all(12),
+            constraints: const BoxConstraints(maxWidth: 320),
+            textStyle: _libraryTooltipTextStyle(context),
+            decoration: _libraryTooltipDecoration(context),
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                FluentIcons.info_24_regular,
+                size: 15,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        FutureBuilder<List<bool>>(
+          future: Future.wait([
+            _canDeleteBookFromLibrary(book),
+            versionsEligible
+                ? DatabaseLibraryProvider.instance
+                    .hasSelectableBookVersions(book.title, book.categoryId!)
+                : Future.value(false),
+          ]),
           builder: (context, snapshot) {
             // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
             // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
             // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
-            if (snapshot.data != true) {
+            final canDelete = snapshot.data?[0] ?? false;
+            final showVersions = snapshot.data?[1] ?? false;
+            if (!canDelete && !showVersions) {
               return const SizedBox.shrink();
             }
 
@@ -581,15 +620,24 @@ class _BookGridActionColumn extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'delete') {
                     _showDeleteBookDialog(context, book, onBookDeleted);
+                  } else if (value == 'versions') {
+                    showBookVersionsDialog(context, book as TextBook);
                   }
                 },
-                entries: const [
-                  AppMenuEntry<String>(
-                    value: 'delete',
-                    label: 'מחק מהספרייה',
-                    icon: FluentIcons.delete_24_regular,
-                    isDestructive: true,
-                  ),
+                entries: [
+                  if (showVersions)
+                    const AppMenuEntry<String>(
+                      value: 'versions',
+                      label: 'גרסאות',
+                      icon: FluentIcons.stack_24_regular,
+                    ),
+                  if (canDelete)
+                    const AppMenuEntry<String>(
+                      value: 'delete',
+                      label: 'מחק מהספרייה',
+                      icon: FluentIcons.delete_24_regular,
+                      isDestructive: true,
+                    ),
                 ],
               ),
             );

@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -59,24 +61,23 @@ class AcronymsCache {
         'SELECT bookId, term FROM book_acronym ORDER BY bookId',
       );
 
-      // בונים למפה מקומית — ה-cache החי לא נוגע עד ה-swap בסוף.
-      // נורמליזציה של regex היא היקרה כאן (כל ראש-תיבות) — יציאה ל-event
-      // loop כל chunk כדי לא לחסום את ה-UI thread.
-      final local = <int, List<String>>{};
-      const yieldBatch = 1000;
-      var i = 0;
-      for (final row in acrRows) {
-        final bookId = row['bookId'] as int;
-        final term = (row['term'] as String?) ?? '';
-        if (term.isEmpty) continue;
-        final normalized = normalizeForFindRefMatch(term);
-        if (normalized.isEmpty) continue;
-        local.putIfAbsent(bookId, () => <String>[]).add(normalized);
-        if (++i % yieldBatch == 0) {
-          await Future<void>.delayed(Duration.zero);
-          if (myGen != _generation) return; // הופסק על ידי clear()
+      // רק שליפת השורות חייבת לרוץ כאן (החיבור חי על ה-isolate הזה);
+      // נורמליזציית ה-regex — החלק היקר, על עשרות אלפי מונחים — עוברת
+      // ל-isolate נפרד כדי לא להתחרות ב-UI בזמן חלון החימומים.
+      final rawPairs = <(int, String)>[
+        for (final row in acrRows)
+          (row['bookId'] as int, (row['term'] as String?) ?? ''),
+      ];
+      final local = await Isolate.run(() {
+        final result = <int, List<String>>{};
+        for (final (bookId, term) in rawPairs) {
+          if (term.isEmpty) continue;
+          final normalized = normalizeForFindRefMatch(term);
+          if (normalized.isEmpty) continue;
+          result.putIfAbsent(bookId, () => <String>[]).add(normalized);
         }
-      }
+        return result;
+      });
 
       if (myGen != _generation) return;
       _acronymsByBookId

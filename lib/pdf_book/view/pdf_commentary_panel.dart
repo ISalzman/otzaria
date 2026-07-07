@@ -8,6 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -62,6 +64,68 @@ bool pdfLinkInVisibleScope(
 /// משתמש ב-CommentaryService
 List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
   return CommentaryService.groupConsecutiveLinks(links);
+}
+
+/// תוצאת סיווג יעדי הקישורים לבניית קבוצות המפרשים: מפרשים (סוגים תלויי-טקסט)
+/// עם ספירה פר-מפרש לזיהוי "מפרש נדיר", יעדים שאינם מפרשים (ל-preload דורות),
+/// והשורה הגבוהה ביותר עם קישור (אומדן גיבוי למספר שורות הספר).
+typedef LinkTargetsAggregation = ({
+  Set<String> commentators,
+  Map<String, int> linkCountByTitle,
+  Set<String> nonCommentaryTitles,
+  int maxSourceLine,
+});
+
+/// סיווג מתוך רשימת קישורים טעונה — הרשימה המלאה, או חלון הקישורים
+/// כ-fallback כששאילתת הסיכום נכשלת.
+@visibleForTesting
+LinkTargetsAggregation aggregateLinkTargetsFromLinks(Iterable<Link> links) {
+  final commentators = <String>{};
+  final linkCountByTitle = <String, int>{};
+  final nonCommentaryTitles = <String>{};
+  var maxSourceLine = 0;
+  for (final link in links) {
+    if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
+    final title = utils.getTitleFromPath(link.path2);
+    if (LinkTypes.isDependentTextLink(link.connectionType)) {
+      commentators.add(title);
+      linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
+    } else {
+      nonCommentaryTitles.add(title);
+    }
+  }
+  return (
+    commentators: commentators,
+    linkCountByTitle: linkCountByTitle,
+    nonCommentaryTitles: nonCommentaryTitles,
+    maxSourceLine: maxSourceLine,
+  );
+}
+
+/// סיווג מתוך סיכום המסד (getBookLinkTargetsSummary) — אותם כללים בדיוק
+/// כמו [aggregateLinkTargetsFromLinks], בלי לטעון את הקישורים עצמם.
+@visibleForTesting
+LinkTargetsAggregation aggregateLinkTargetsFromSummary(
+    List<LinkTargetSummary> targets, int maxSourceLine) {
+  final commentators = <String>{};
+  final linkCountByTitle = <String, int>{};
+  final nonCommentaryTitles = <String>{};
+  for (final target in targets) {
+    final title = utils.getTitleFromPath(target.targetTitle);
+    if (LinkTypes.isDependentTextLink(target.connectionType)) {
+      commentators.add(title);
+      linkCountByTitle[title] =
+          (linkCountByTitle[title] ?? 0) + target.linkCount;
+    } else {
+      nonCommentaryTitles.add(title);
+    }
+  }
+  return (
+    commentators: commentators,
+    linkCountByTitle: linkCountByTitle,
+    nonCommentaryTitles: nonCommentaryTitles,
+    maxSourceLine: maxSourceLine,
+  );
 }
 
 /// Widget שמציג מפרשים וקישורים עבור PDF
@@ -333,34 +397,53 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
   }
 
-  Future<void> _loadCommentatorGroups() async {
-    final commentatorsSet = <String>{};
-    final linkCountByTitle = <String, int>{};
-    // אומדן גיבוי למספר השורות (השורה הגבוהה ביותר עם קישור) — משמש רק אם
-    // מספר השורות האמיתי לא נשלף מה-DB.
-    var maxSourceLine = 0;
-    for (final link in widget.tab.links) {
-      if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
-      if (LinkTypes.isDependentTextLink(link.connectionType)) {
-        final title = utils.getTitleFromPath(link.path2);
-        commentatorsSet.add(title);
-        linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
-      }
+  /// סיכום קישורי הספר (יעדים + ספירות) מהמסד — תחליף קל לסריקת כל הקישורים
+  /// כש-tab.links מחזיק רק חלון סביב המיקום הנוכחי.
+  Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+      _loadLinkTargetsSummary() async {
+    try {
+      final library = await DataRepository.instance.library;
+      final companion =
+          library.getCompanionBook(widget.tab.book, TextBook) as TextBook?;
+      if (companion == null || companion.categoryId == null) return null;
+      final provider = LibraryProviderManager.instance.getProviderForBook(
+        companion.title,
+        categoryId: companion.categoryId,
+        fileType: companion.fileType ?? 'txt',
+      );
+      if (provider is! DatabaseLibraryProvider) return null;
+      return provider.getBookLinkTargetsSummary(
+          companion.title, companion.categoryId!);
+    } catch (_) {
+      return null;
     }
-    final availableCommentators = commentatorsSet.toList();
+  }
+
+  Future<void> _loadCommentatorGroups() async {
+    LinkTargetsAggregation aggregation;
+    if (widget.tab.linksAreComplete) {
+      aggregation = aggregateLinkTargetsFromLinks(widget.tab.links);
+    } else {
+      final summary = await _loadLinkTargetsSummary();
+      aggregation = summary != null
+          ? aggregateLinkTargetsFromSummary(
+              summary.targets, summary.maxSourceLine)
+          // הסיכום נכשל — נבנה לפחות מחלון הקישורים הטעון (חלקי, עדיף מריק).
+          : aggregateLinkTargetsFromLinks(widget.tab.links);
+    }
+    final linkCountByTitle = aggregation.linkCountByTitle;
+    final nonCommentaryTitles = aggregation.nonCommentaryTitles;
+
+    final availableCommentators = aggregation.commentators.toList();
     final rare = computeRareCommentators(
-      bookTotalLines: await _resolveSourceBookTotalLines() ?? maxSourceLine,
+      bookTotalLines:
+          await _resolveSourceBookTotalLines() ?? aggregation.maxSourceLine,
       linkCountByCommentator: linkCountByTitle,
     );
 
     // טעינת דורות הקישורים הרגילים (לא מפרשים) מראש - fire-and-forget כדי לא
     // לחסום את בניית קבוצות המפרשים. כשתסתיים, מאפסים את מטמון התוכן הנראה
     // ומרעננים, כדי שסדר fallback (אלפבתי) שאולי נקבע מוקדם לא יישאר תקוע.
-    final nonCommentaryTitles = <String>{
-      for (final link in widget.tab.links)
-        if (!LinkTypes.isDependentTextLink(link.connectionType))
-          utils.getTitleFromPath(link.path2),
-    };
     if (nonCommentaryTitles.isNotEmpty) {
       CommentaryService.preloadEras(nonCommentaryTitles).then((_) {
         if (mounted) {
@@ -433,8 +516,12 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       _loadCommentatorGroups();
     } else if (oldWidget.linksCount != widget.linksCount) {
       _visibleContentCache = null;
-      _commentatorGroups = [];
-      _loadCommentatorGroups();
+      // בחלון-קישורים linksCount משתנה בכל דפדוף, אבל רשימת המפרשים של
+      // הספר קבועה — אין לבנות אותה מחדש (ולירות שאילתת סיכום) בכל רענון.
+      if (_commentatorGroups.isEmpty || widget.tab.linksAreComplete) {
+        _commentatorGroups = [];
+        _loadCommentatorGroups();
+      }
     }
   }
 
