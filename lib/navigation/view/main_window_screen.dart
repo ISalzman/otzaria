@@ -2760,6 +2760,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
               bottomColor: AppSurfaces.panelBackground(context),
               child: KeyboardShortcuts(
                 onFindRefRequested: () => _handleFindRefOpen(context),
+                onNewSearchRequested: () => _handleSearchTabOpen(context),
                 child: MyUpdatWidget(
                   child: Scaffold(
                     resizeToAvoidBottomInset: false,
@@ -3112,6 +3113,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
+  /// סוגר כל דיאלוג/תפריט פתוח מעל מסך הבית, כדי שחלוניות לא ייערמו זו על זו.
+  void _closeRootOverlayRoutes(BuildContext context) {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+  }
+
   void _handleSearchTabOpen(BuildContext context, {bool closeIfOpen = true}) {
     if (_isSearchOpen) {
       if (closeIfOpen) {
@@ -3120,6 +3129,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
+    _closeRootOverlayRoutes(context);
     final navigationBloc = context.read<NavigationBloc>();
     setState(() => _isSearchOpen = true);
 
@@ -3151,6 +3161,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
+    _closeRootOverlayRoutes(context);
     final navigationBloc = context.read<NavigationBloc>();
     setState(() => _isFindRefOpen = true);
 
