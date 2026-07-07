@@ -995,6 +995,39 @@ Future<List<Map<String, dynamic>>> _runBookVersionsInIsolate({
   );
 }
 
+/// (title, categoryId) של ספרים שיש להם מהדורה לבחירה: 2+ גרסאות, או גרסה
+/// יחידה עם טקסט שמור. גרסה יחידה מטא-דאטה בלבד = הנוסח המוצג עצמו, ואינה
+/// נכללת. נטען פעם אחת ומשמש לקביעת הצגת תפריט 'גרסאות'.
+List<Map<String, dynamic>> _loadSelectableVersionKeysInIsolate({
+  required String dbPath,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+    if (!_hasBookVersionTables(db)) return const [];
+
+    return db.select('''
+      SELECT b.title, b.categoryId
+      FROM book b
+      WHERE b.id IN (
+        SELECT bookId FROM book_version
+        GROUP BY bookId
+        HAVING COUNT(*) >= 2 OR MAX(hasContent) = 1
+      )
+    ''').toMapList();
+  } finally {
+    db?.close();
+  }
+}
+
+Future<List<Map<String, dynamic>>> _runSelectableVersionKeysInIsolate({
+  required String dbPath,
+}) {
+  return Isolate.run(
+    () => _loadSelectableVersionKeysInIsolate(dbPath: dbPath),
+  );
+}
+
 /// מתאם כל פעולות הכתיבה לספרים האישיים: add-folder scan, rescan, toggle, remove.
 ///
 /// תור סריאלי יחיד עם ספירת עסוקות נצפית.
@@ -1063,6 +1096,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
   bool _titlesCached = false;
   String? _bundledTalmudBavliPathCache;
   bool? _bundledTalmudBavliExistsCache;
+
+  /// מפתחות "title categoryId" של ספרים שראוי להציג להם תפריט 'גרסאות'.
+  /// ממוזמז — נטען פעם אחת ל-DB; מנוקה ב-[clearCache].
+  Future<Set<String>>? _selectableVersionKeysFuture;
 
   /// IDs **טבעיים** (native AUTOINCREMENT) של קטגוריות ב-`user_books.db`
   /// שצורפו ל-Library. שימושי כדי לדעת לאיזה DB לפנות בקריאות
@@ -1960,6 +1997,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     _titlesCached = false;
     _bundledTalmudBavliPathCache = null;
     _bundledTalmudBavliExistsCache = null;
+    _selectableVersionKeysFuture = null;
     debugPrint('💾 Database cache cleared');
   }
 
@@ -3096,6 +3134,29 @@ class DatabaseLibraryProvider implements LibraryProvider {
     } catch (e) {
       debugPrint('⚠️ Error in getBookVersions "$title": $e');
       return const [];
+    }
+  }
+
+  /// האם להציג לספר תפריט 'גרסאות' — כלומר יש מהדורה לבחירה (2+ גרסאות, או
+  /// גרסה יחידה עם טקסט). גרסה יחידה מטא-דאטה בלבד = הנוסח המוצג, ולכן false.
+  Future<bool> hasSelectableBookVersions(String title, int categoryId) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return false;
+    }
+    final keys =
+        await (_selectableVersionKeysFuture ??= _loadSelectableVersionKeys());
+    return keys.contains('$title $categoryId');
+  }
+
+  Future<Set<String>> _loadSelectableVersionKeys() async {
+    try {
+      final rows = await _runSelectableVersionKeysInIsolate(
+          dbPath: _sqliteProvider.dbPath);
+      return rows.map((r) => '${r['title']} ${r['categoryId']}').toSet();
+    } catch (e) {
+      debugPrint('⚠️ Error loading selectable version keys: $e');
+      _selectableVersionKeysFuture = null; // אפשר ניסיון חוזר בטעינה הבאה
+      return const <String>{};
     }
   }
 
