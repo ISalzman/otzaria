@@ -68,8 +68,8 @@ class SearchModeToggle extends StatelessWidget {
                   newMode = SearchMode.advanced;
               }
               context.read<SearchBloc>().add(SetSearchMode(newMode));
-              // מצב החיפוש נשמר לסשן הנוכחי בלבד; חיפוש חדש בהפעלה
-              // הבאה נפתח שוב בברירת המחדל (חיפוש רגיל).
+              // מעבר ידני נשמר לסשן הנוכחי; בהפעלה הבאה חיפוש חדש נפתח
+              // שוב בברירת המחדל (חיפוש רגיל).
               SearchDefaults.rememberSessionMode(newMode);
             },
           ),

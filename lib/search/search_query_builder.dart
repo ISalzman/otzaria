@@ -233,14 +233,36 @@ class SearchQueryBuilder {
     return perWordOptions;
   }
 
+  /// מצמצם את פרמטרי החיפוש למה שהמצב הנבחר תומך בו:
+  /// - מתקדם — הכל (אפשרויות, מילים חלופיות, מרווחים ידניים);
+  /// - רגיל (מדויק) — אפשרויות המילה בלבד (שגיאות כתיב, קידומות/סיומות,
+  ///   כתיב מלא/חסר, חלק ממילה); בקשה עם אפשרויות פעילות רצה בפועל דרך
+  ///   המסלול המתקדם של המנוע (ראה gateway);
+  /// - מקורב — ללא פרמטרים (המרחק שם הוא מרחק עריכה).
   static SearchModeScopedParameters normalizeParametersForMode(
     SearchMode searchMode, {
     Map<String, String>? customSpacing,
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
   }) {
-    if (!usesAdvancedParameters(searchMode)) {
+    if (searchMode == SearchMode.fuzzy) {
       return const SearchModeScopedParameters();
+    }
+    if (searchMode == SearchMode.exact) {
+      // רק שבע אפשרויות המילה; "ניקוד"/"טעמים" נתמכים כרגע במצב המתקדם
+      // בלבד (ברירת מחדל שמורה עם ניקוד לא תהפוך חיפוש רגיל למנוקד).
+      final wordOptionsOnly = <String, Map<String, bool>>{};
+      for (final entry in _normalizeSearchOptions(searchOptions).entries) {
+        final kept = <String, bool>{
+          for (final option in entry.value.entries)
+            if (availableWordOptionKeys.contains(option.key))
+              option.key: option.value,
+        };
+        if (kept.isNotEmpty) {
+          wordOptionsOnly[entry.key] = kept;
+        }
+      }
+      return SearchModeScopedParameters(searchOptions: wordOptionsOnly);
     }
 
     final normalizedSpacing = <String, String>{};
@@ -266,6 +288,17 @@ class SearchQueryBuilder {
       }
     }
 
+    return SearchModeScopedParameters(
+      customSpacing: normalizedSpacing,
+      alternativeWords: normalizedAlternatives,
+      searchOptions: _normalizeSearchOptions(searchOptions),
+    );
+  }
+
+  /// משאיר רק אפשרויות מסומנות; מילה בלי אף אפשרות פעילה נשמטת מהמפה.
+  static Map<String, Map<String, bool>> _normalizeSearchOptions(
+    Map<String, Map<String, bool>>? searchOptions,
+  ) {
     final normalizedOptions = <String, Map<String, bool>>{};
     if (searchOptions != null) {
       for (final entry in searchOptions.entries) {
@@ -280,12 +313,7 @@ class SearchQueryBuilder {
         }
       }
     }
-
-    return SearchModeScopedParameters(
-      customSpacing: normalizedSpacing,
-      alternativeWords: normalizedAlternatives,
-      searchOptions: normalizedOptions,
-    );
+    return normalizedOptions;
   }
 
   /// ניקוי שאילתה מתווים מיוחדים שיכולים להפריע לחיפוש. מאציל למנוע ה-Rust

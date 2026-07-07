@@ -153,16 +153,29 @@ Future<void> main() async {
         'חכמה_0': {'קידומות': true},
       });
 
+      // מצב רגיל (מדויק): אפשרויות המילה נתמכות ועוברות; מילים חלופיות
+      // ומרווחים ידניים נשארים בלעדיים למצב המתקדם. מפתחות "ניקוד"/"טעמים"
+      // מסוננים — נתמכים כרגע במתקדם בלבד.
       final exact = SearchQueryBuilder.normalizeParametersForMode(
         SearchMode.exact,
         customSpacing: advanced.customSpacing,
         alternativeWords: advanced.alternativeWords,
-        searchOptions: advanced.searchOptions,
+        searchOptions: const {
+          'חכמה_0': {'קידומות': true, 'ניקוד': true},
+        },
       );
 
       expect(exact.customSpacing, isEmpty);
       expect(exact.alternativeWords, isEmpty);
-      expect(exact.searchOptions, isEmpty);
+      expect(exact.searchOptions, {
+        'חכמה_0': {'קידומות': true},
+      });
+
+      final fuzzy = SearchQueryBuilder.normalizeParametersForMode(
+        SearchMode.fuzzy,
+        searchOptions: advanced.searchOptions,
+      );
+      expect(fuzzy.searchOptions, isEmpty);
     });
   });
 

@@ -22,6 +22,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import '../test_helpers/memory_cache_provider.dart';
@@ -162,6 +163,8 @@ void main() {
     tab.searchOptions.addAll({
       'חכמה_0': {'קידומות': true}
     });
+    // אפשרויות פר-מילה נלקחות בחשבון רק כשמצב האפשרויות אינו גלובלי
+    tab.useGlobalSearchOptions.value = false;
     tab.alternativeWords.addAll({
       0: ['דעת']
     });
@@ -226,7 +229,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(capturedSearchMode, SearchMode.exact);
-    expect(capturedSearchOptions, isEmpty);
+    // אפשרויות המילה נתמכות גם בחיפוש הרגיל ולכן עוברות; מילים חלופיות
+    // ומרווחים ידניים נשארים בלעדיים למצב המתקדם.
+    expect(capturedSearchOptions, {
+      'חכמה_0': {'קידומות': true},
+    });
     expect(capturedAlternativeWords, isEmpty);
     expect(capturedSpacingValues, isEmpty);
   });
@@ -572,5 +579,83 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('סימון אפשרות בחיפוש רגיל נשמר לסשן ומוצג בפתיחה מחדש',
+      (WidgetTester tester) async {
+    final historyBloc = MockHistoryBloc();
+    final indexingBloc = MockIndexingBloc();
+    final navigationBloc = MockNavigationBloc();
+    final theme = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
+    );
+
+    whenListen(
+      historyBloc,
+      const Stream<HistoryState>.empty(),
+      initialState: HistoryLoaded([]),
+    );
+    whenListen(
+      indexingBloc,
+      const Stream<IndexingState>.empty(),
+      initialState: IndexingInitial(),
+    );
+    whenListen(
+      navigationBloc,
+      const Stream<NavigationState>.empty(),
+      initialState: const NavigationState(currentScreen: Screen.search),
+    );
+
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      await historyBloc.close();
+      await indexingBloc.close();
+      await navigationBloc.close();
+    });
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+
+    final typoChipFinder = find.byWidgetPredicate((widget) =>
+        widget is FilterChip && (widget.label as Text).data == 'שגיאות כתיב');
+    FilterChip typoChip() => tester.widget<FilterChip>(typoChipFinder);
+
+    // דיאלוג ראשון: מצב מדויק (ברירת המחדל), מסמנים "שגיאות כתיב" וסוגרים.
+    await tester.pumpWidget(_buildDialogHarness(
+      theme: theme,
+      historyBloc: historyBloc,
+      indexingBloc: indexingBloc,
+      navigationBloc: navigationBloc,
+      dialog: const SearchDialog(),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(typoChip().selected, isFalse);
+    await tester.ensureVisible(typoChipFinder);
+    await tester.tap(typoChipFinder);
+    await tester.pumpAndSettle();
+    expect(typoChip().selected, isTrue);
+
+    // סגירת הדיאלוג (unmount ⇒ dispose ⇒ זכירת סשן)
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    // הזכירה עצמה: הסשן חייב להכיל את האפשרות שסומנה.
+    expect(SearchDefaults.initialExactOptionsForNewSearch()['שגיאות כתיב'],
+        isTrue,
+        reason: 'סגירת הדיאלוג צריכה לזכור את האפשרויות לסשן');
+
+    // דיאלוג שני: הסימון מהסשן צריך להופיע מסומן.
+    await tester.pumpWidget(_buildDialogHarness(
+      theme: theme,
+      historyBloc: historyBloc,
+      indexingBloc: indexingBloc,
+      navigationBloc: navigationBloc,
+      dialog: const SearchDialog(),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(typoChip().selected, isTrue,
+        reason: 'אפשרות שסומנה בסשן הנוכחי צריכה להישאר מסומנת בדיאלוג חדש');
   });
 }

@@ -200,18 +200,26 @@ class RustSearchEngineOperations implements SearchEngineOperations {
 
   const RustSearchEngineOperations(this._engine);
 
-  /// חיפוש מדויק עם מרווח בין מילים: ל-API המדויק של המנוע אין פרמטר
-  /// distance, אבל המסלול המתקדם ללא שום אפשרויות מתנוון בדיוק לחיפוש
-  /// מדויק (המילים כלשונן, בסדרן) בתוספת אכיפת מרווח לכל זוג מילים —
-  /// לכן בקשה מדויקת עם מרווח מנותבת אליו. שאר הפרמטרים המתקדמים
-  /// מרוקנים במפורש, כדי ששאריות ממצב מתקדם קודם (אפשרויות פר-מילה,
-  /// מילים חלופיות, מרווחים ידניים, שאילתה שלילית) לא יזלגו פנימה.
+  /// חיפוש רגיל (מדויק) עם פרמטרים: ל-API המדויק של המנוע אין מרווח בין
+  /// מילים ולא אפשרויות מילה, אבל המסלול המתקדם עם אותם פרמטרים בלבד
+  /// מתנוון בדיוק לחיפוש הרגיל המורחב — המילים בסדרן, אכיפת מרווח לכל
+  /// זוג, ואפשרויות המילה (שגיאות כתיב, קידומות/סיומות, כתיב מלא/חסר,
+  /// חלק ממילה) — לכן בקשה מדויקת שנושאת אותם מנותבת אליו. הפרמטרים
+  /// שהחיפוש הרגיל אינו תומך בהם (מילים חלופיות, מרווחים ידניים,
+  /// שאילתה שלילית, scope) מרוקנים במפורש, כדי ששאריות ממצב מתקדם קודם
+  /// לא יזלגו פנימה.
   ///
-  /// מחזיר null כשאין מה לנתב (מרווח 0 — המסלול המדויק המהיר נשאר).
-  static SearchEngineRequest? _exactWithDistanceAsAdvanced(
+  /// מחזיר null כשאין מה לנתב (מרווח 0 ובלי אפשרויות — המסלול המדויק
+  /// המהיר נשאר).
+  static SearchEngineRequest? _exactWithParametersAsAdvanced(
     SearchEngineRequest request,
   ) {
-    if (request.searchMode != SearchMode.exact || request.distance <= 0) {
+    if (request.searchMode != SearchMode.exact) {
+      return null;
+    }
+    final hasOptions = request.searchOptions.values
+        .any((options) => options.values.any((enabled) => enabled));
+    if (request.distance <= 0 && !hasOptions) {
       return null;
     }
     return request.copyWith(
@@ -224,14 +232,13 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       negativeCustomSpacing: const {},
       alternativeWords: const {},
       negativeAlternativeWords: const {},
-      searchOptions: const {},
       negativeSearchOptions: const {},
     );
   }
 
   @override
   Future<List<SearchResult>> searchExact(SearchEngineRequest request) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) return searchAdvanced(gapped);
     return _engine.searchExact(
       query: request.query,
@@ -284,7 +291,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
 
   @override
   Future<SearchPageResult> searchAndCountExact(SearchEngineRequest request) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) return searchAndCountAdvanced(gapped);
     return _engine.searchAndCountExact(
       query: request.query,
@@ -342,7 +349,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
     SearchEngineRequest request, {
     required int chunkSize,
   }) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) {
       return searchAdvancedStream(gapped, chunkSize: chunkSize);
     }
@@ -406,7 +413,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
 
   @override
   Future<int> countExact(SearchEngineRequest request) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) return countAdvanced(gapped);
     return _engine.countExact(
       query: request.query,
@@ -450,7 +457,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
 
   @override
   Future<Map<String, int>> countByBookExact(SearchEngineRequest request) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) return countByBookAdvanced(gapped);
     return _engine.countByBookExact(
       query: request.query,
@@ -497,7 +504,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
     SearchEngineRequest request, {
     required String facetPrefix,
   }) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) {
       return getFacetCountsAdvanced(gapped, facetPrefix: facetPrefix);
     }
@@ -557,7 +564,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
     SearchEngineRequest request, {
     required int chunkSize,
   }) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) {
       return searchStreamWithCounts(gapped, chunkSize: chunkSize);
     }
@@ -624,7 +631,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
   /// צריכה לשאת את אותו מרווח — לכן הוא מוזן כבקשה מתקדמת.
   @override
   void primeHighlightPattern(SearchEngineRequest request) {
-    final gapped = _exactWithDistanceAsAdvanced(request);
+    final gapped = _exactWithParametersAsAdvanced(request);
     if (gapped != null) return primeHighlightPattern(gapped);
     if (request.query.trim().isEmpty ||
         request.searchMode == SearchMode.exact) {

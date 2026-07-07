@@ -116,8 +116,10 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
     _detachTabListeners(widget.tab);
     _keyboardListenerFocusNode.dispose();
     _textFieldKeyboardListenerFocusNode.dispose();
-    widget.tab.searchOptions.clear();
-    widget.tab.globalSearchOptions.clear();
+    // בכוונה לא מנקים כאן את אפשרויות הטאב: הטאב שייך לבעליו (דיאלוג
+    // החיפוש או טאב תוצאות חי), וה-dispose של השדה רץ לפני זה של הדיאלוג
+    // — ניקוי כאן היה מרוקן את האפשרויות רגע לפני שהדיאלוג זוכר אותן
+    // לסשן, ובטאב חי היה מוחק אפשרויות של חיפוש פעיל.
     super.dispose();
   }
 
@@ -125,10 +127,12 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
     final bool drawerWasOpen = _searchOptionsOverlay != null;
     final text = widget.tab.queryController.text;
 
-    // אם שדה החיפוש התרוקן, נקה הכל ונסגור את המגירה
+    // אם שדה החיפוש התרוקן, נקה את האפשרויות הפר-מיליות (המפתחות שלהן
+    // נגזרים ממילים שכבר אינן) ונסגור את המגירה. האפשרויות הגלובליות
+    // אינן תלויות בשאילתה ונשארות — הן נזרעות מברירת המחדל/הסשן ומחיקתן
+    // כאן הייתה מוחקת את הסימונים בכל התרוקנות של השדה.
     if (text.trim().isEmpty) {
       widget.tab.searchOptions.clear();
-      widget.tab.globalSearchOptions.clear();
       if (drawerWasOpen) {
         _hideSearchOptionsOverlay();
         _notifyDropdownClosed();
