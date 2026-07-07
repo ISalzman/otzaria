@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -25,9 +24,9 @@ void main() {
       await _saveFolders([oldFolder]);
 
       final syncedFolders = <List<CustomFolder>>[];
-      final libraryBloc = _RecordingLibraryBloc();
+      final recordedEvents = <LibraryEvent>[];
       final bloc = CustomFoldersBloc(
-        libraryBloc: libraryBloc,
+        addLibraryEvent: recordedEvents.add,
         syncFolders: (folders) async {
           syncedFolders.add(List<CustomFolder>.from(folders));
           return const FileSyncResult();
@@ -50,12 +49,11 @@ void main() {
       expect(syncedFolders.single, [newFolder]);
       expect(bloc.state.folders, [newFolder]);
       expect(
-        libraryBloc.recordedEvents.whereType<RefreshLibrary>(),
+        recordedEvents.whereType<RefreshLibrary>(),
         hasLength(1),
       );
 
       await bloc.close();
-      await libraryBloc.close();
     });
 
     test(
@@ -68,9 +66,8 @@ void main() {
       // משהים את הסנכרון כדי לבדוק את ה-state בזמן הטעינה.
       final syncStarted = Completer<void>();
       final releaseSync = Completer<void>();
-      final libraryBloc = _RecordingLibraryBloc();
       final bloc = CustomFoldersBloc(
-        libraryBloc: libraryBloc,
+        addLibraryEvent: (_) {},
         syncFolders: (folders) async {
           syncStarted.complete();
           await releaseSync.future;
@@ -94,7 +91,6 @@ void main() {
       expect(bloc.state.activePath, isNull);
 
       await bloc.close();
-      await libraryBloc.close();
     });
 
     test('RescanCustomFolders אינו מסמן activePath (פעולה גלובלית)', () async {
@@ -103,9 +99,8 @@ void main() {
 
       final syncStarted = Completer<void>();
       final releaseSync = Completer<void>();
-      final libraryBloc = _RecordingLibraryBloc();
       final bloc = CustomFoldersBloc(
-        libraryBloc: libraryBloc,
+        addLibraryEvent: (_) {},
         syncFolders: (folders) async {
           syncStarted.complete();
           await releaseSync.future;
@@ -125,16 +120,15 @@ void main() {
       await bloc.stream.firstWhere((state) => !state.isSyncing);
 
       await bloc.close();
-      await libraryBloc.close();
     });
 
     test('RemoveCustomFolder מאפס isSyncing כשמחיקה מה-DB נכשלת', () async {
       final folder = _folder('C:/folder-to-remove');
       await _saveFolders([folder]);
 
-      final libraryBloc = _RecordingLibraryBloc();
+      final recordedEvents = <LibraryEvent>[];
       final bloc = CustomFoldersBloc(
-        libraryBloc: libraryBloc,
+        addLibraryEvent: recordedEvents.add,
         deleteFolderFromDb: (_) async {
           throw Exception('db failed');
         },
@@ -155,10 +149,9 @@ void main() {
         ),
         isEmpty,
       );
-      expect(libraryBloc.recordedEvents, isEmpty);
+      expect(recordedEvents, isEmpty);
 
       await bloc.close();
-      await libraryBloc.close();
     });
   });
 }
@@ -176,15 +169,6 @@ Future<void> _saveFolders(List<CustomFolder> folders) {
     SettingsRepository.keyCustomFolders,
     CustomFoldersManager.saveFolders(folders),
   );
-}
-
-class _RecordingLibraryBloc extends LibraryBloc {
-  final List<LibraryEvent> recordedEvents = [];
-
-  @override
-  void add(LibraryEvent event) {
-    recordedEvents.add(event);
-  }
 }
 
 class _MemoryCacheProvider extends CacheProvider {

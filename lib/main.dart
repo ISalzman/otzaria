@@ -999,7 +999,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(
-              libraryBloc: context.read<LibraryBloc>(),
+              addLibraryEvent: (event) =>
+                  context.read<LibraryBloc>().add(event),
             )..add(const LoadCustomFolders()),
           ),
           BlocProvider<IndexingBloc>(

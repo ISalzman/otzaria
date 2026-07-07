@@ -165,6 +165,14 @@ class AppPaths {
     return p.join(await getDataRootPath(), 'books');
   }
 
+  /// תיקיית הספרים האישיים המיובאים במובייל.
+  ///
+  /// באנדרואיד/iOS אין לאפליקציה גישה קבועה לתיקיות שהמשתמש בוחר (Scoped
+  /// Storage), ולכן קבצים שנבחרו דרך בורר המערכת מועתקים לתיקייה קבועה זו
+  /// בתוך אחסון האפליקציה, והיא נרשמת כתיקייה מותאמת אישית רגילה.
+  static Future<String> getPersonalBooksImportPath() async =>
+      p.join(await getDataRootPath(), 'הספרים שלי');
+
   /// מזהה תיקיית ספרייה מצורפת ליד ה-executable עבור חבילות FULL.
   ///
   ///   Linux:  bundle/app/otzaria             → bundle/אוצריא/
