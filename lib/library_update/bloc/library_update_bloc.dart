@@ -37,6 +37,10 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
   // ביטול בשלב הזה פולט אותו — אחרת hasUpdate אובד והריענון/אינדוקס לא רצים.
   LibraryUpdateState? _pendingCompleted;
 
+  // שינוי נלווים שריצה מבוטלת לא יכלה לדווח כי ריצה חדשה כבר busy —
+  // הריצה החדשה תדווח אותו, אחרת הריענון/אינדוקס אובדים.
+  bool _unreportedAssetsChange = false;
+
   LibraryUpdateBloc({
     required this.repository,
     required this.isOfflineMode,
@@ -50,6 +54,13 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     on<CancelLibraryUpdate>(_onCancel);
     on<ResetLibraryUpdate>(_onReset);
     on<_LibraryUpdateProgressed>(_onProgressed);
+  }
+
+  @override
+  void onChange(Change<LibraryUpdateState> change) {
+    super.onChange(change);
+    // hasUpdate נפלט ⇒ ה-UI מריץ ריענון/אינדוקס שמכסים גם שינוי נלווים שמור.
+    if (change.nextState.hasUpdate) _unreportedAssetsChange = false;
   }
 
   Future<void> _onStart(
@@ -80,11 +91,16 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       if (_isStale(opId)) return;
       switch (plan.kind) {
         case LibraryUpdatePlanKind.none:
-          final assetsChanged = await _runCompanionAssets(emit, opId);
+          final assetsChanged =
+              await _runCompanionAssets(emit, opId) || _unreportedAssetsChange;
           // ביטול בזמן הנלווים אחרי שתלמוד/קטלוג כבר שונו: בלי completed עם
           // hasUpdate הריענון והאינדוקס לא ירוצו עד הפעלה מחדש. state.isBusy
-          // מגן מדריסת ריצה חדשה שכבר התחילה.
-          if (_isStale(opId) && (!assetsChanged || state.isBusy)) return;
+          // מגן מדריסת ריצה חדשה שכבר התחילה — במקרה כזה השינוי נשמר לדיווח
+          // ע"י הריצה החדשה.
+          if (_isStale(opId) && (!assetsChanged || state.isBusy)) {
+            _unreportedAssetsChange = assetsChanged;
+            return;
+          }
           // תלמוד/קטלוג שהותקנו משנים את תוכן הספרייה — hasUpdate מפעיל
           // ריענון ואינדוקס ב-UI גם כשה-DB עצמו לא עודכן.
           emit(LibraryUpdateState(
