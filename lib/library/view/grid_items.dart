@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
@@ -549,8 +550,9 @@ class _BookGridActionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db).
-    final showVersions =
+    // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db);
+    // תפריט 'גרסאות' מוצג רק כשיש בפועל מהדורה לבחירה (נבדק ב-FutureBuilder).
+    final versionsEligible =
         book is TextBook && !book.isUserBook && book.categoryId != null;
 
     return Column(
@@ -581,13 +583,20 @@ class _BookGridActionColumn extends StatelessWidget {
               ),
             ),
           ),
-        FutureBuilder<bool>(
-          future: _canDeleteBookFromLibrary(book),
+        FutureBuilder<List<bool>>(
+          future: Future.wait([
+            _canDeleteBookFromLibrary(book),
+            versionsEligible
+                ? DatabaseLibraryProvider.instance
+                    .hasSelectableBookVersions(book.title, book.categoryId!)
+                : Future.value(false),
+          ]),
           builder: (context, snapshot) {
             // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
             // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
             // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
-            final canDelete = snapshot.data == true;
+            final canDelete = snapshot.data?[0] ?? false;
+            final showVersions = snapshot.data?[1] ?? false;
             if (!canDelete && !showVersions) {
               return const SizedBox.shrink();
             }
