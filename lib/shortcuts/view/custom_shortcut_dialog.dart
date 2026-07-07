@@ -30,7 +30,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
     with DialogFocusRestorerMixin<CustomShortcutDialog> {
   final Set<LogicalKeyboardKey> _pressedKeys = {};
   final FocusNode _focusNode = FocusNode();
-  String _displayText = 'לחץ על המקשים...';
+  String _displayText = 'לא הוגדר קיצור';
   bool _isRecording = false;
 
   @override
@@ -184,6 +184,9 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
                   onPressed: () {
                     setState(() {
                       _isRecording = false;
+                      if (_pressedKeys.isEmpty) {
+                        _displayText = 'לא הוגדר קיצור';
+                      }
                     });
                   },
                   icon: FluentIcons.stop_24_regular,
