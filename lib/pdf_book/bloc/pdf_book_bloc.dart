@@ -394,7 +394,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
 
     emit(current.copyWith(
       pdfHeadings: event.headings,
-      links: event.links,
+      links: event.links.isEmpty ? null : event.links,
     ));
   }
 

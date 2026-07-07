@@ -18,6 +18,16 @@ import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
+/// צילום קלטי ספירת ה-facets ברגע בניית החתימה. אירועי *WithoutSearch יכולים
+/// לשנות את ה-state בזמן שהספירה רצה ברקע — הספירה חייבת לרוץ בדיוק עם
+/// הערכים שנחתמו, אחרת ספירה של state חדש נשמרת תחת חתימה ישנה.
+typedef _FacetRecountInputs = ({
+  List<String> scopeFacets,
+  bool fuzzy,
+  int distance,
+  SearchMode searchMode,
+});
+
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository;
   int _searchRequestId = 0;
@@ -32,7 +42,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
   @visibleForTesting
   String facetRecountSignatureForTesting(UpdateSearchQuery event) =>
-      _facetRecountSignature(event.query, event);
+      _facetRecountSignature(event.query, event, _currentFacetRecountInputs());
 
   @visibleForTesting
   String? get facetCountsSignatureForTesting => _facetCountsSignature;
@@ -119,7 +129,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final requestedFacets = List<String>.from(state.currentFacets);
     final shouldPreserveFacetCounts =
         state.searchQuery == query && state.facetCounts.isNotEmpty;
-    final recountSignature = _facetRecountSignature(query, event);
+    // הצילום והחתימה נבנים באותו בלוק סינכרוני — בלי await ביניהם — כדי
+    // שהספירה שתרוץ ברקע תתאים תמיד לחתימה שתישמר איתה.
+    final recountInputs = _currentFacetRecountInputs();
+    final recountSignature =
+        _facetRecountSignature(query, event, recountInputs);
     final shouldSkipFacetRecount = state.facetCounts.isNotEmpty &&
         recountSignature == _facetCountsSignature;
 
@@ -147,8 +161,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // התחל לבנות את עץ ה-facets המלא במקביל כבר מתחילת החיפוש —
       // אלא אם הספירות שב-state כבר חושבו עבור בדיוק אותה חתימה.
       if (!shouldSkipFacetRecount) {
-        unawaited(
-            _refreshFacetCountsForAllBooks(event, requestId, recountSignature));
+        unawaited(_refreshFacetCountsForAllBooks(
+            event, requestId, recountSignature, recountInputs));
       }
 
       // שימוש ב-streaming לתוצאות מהירות יותר
@@ -252,15 +266,26 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
   }
 
+  /// צילום סינכרוני של קלטי הספירה מתוך ה-state הנוכחי.
+  _FacetRecountInputs _currentFacetRecountInputs() {
+    return (
+      scopeFacets: List<String>.from(state.searchScopeFacets),
+      fuzzy: state.fuzzy,
+      distance: state.distance,
+      searchMode: state.configuration.searchMode,
+    );
+  }
+
   /// חתימה של כל הקלטים שמשפיעים על תוצאת countByBook. חוסר-התאמה גורר
   /// לכל היותר ספירה מיותרת (הכיוון הבטוח), לכן הצפנת ה-JSON אינה ממוינת.
-  String _facetRecountSignature(String query, UpdateSearchQuery event) {
+  String _facetRecountSignature(
+      String query, UpdateSearchQuery event, _FacetRecountInputs inputs) {
     return [
       query,
-      state.configuration.searchMode.name,
-      state.fuzzy,
-      state.distance,
-      state.searchScopeFacets.join(','),
+      inputs.searchMode.name,
+      inputs.fuzzy,
+      inputs.distance,
+      inputs.scopeFacets.join(','),
       jsonEncode(event.customSpacing ?? const <String, String>{}),
       jsonEncode((event.alternativeWords ?? const <int, List<String>>{})
           .map((k, v) => MapEntry(k.toString(), v))),
@@ -268,8 +293,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ].join('|');
   }
 
-  Future<void> _refreshFacetCountsForAllBooks(
-      UpdateSearchQuery event, int requestId, String signature) async {
+  Future<void> _refreshFacetCountsForAllBooks(UpdateSearchQuery event,
+      int requestId, String signature, _FacetRecountInputs inputs) async {
     final query = event.query;
     if (query.isEmpty) return;
     if (requestId != _searchRequestId) return;
@@ -279,15 +304,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final bookByIndexedFilePath = _buildBooksByIndexedFilePath(library);
 
     // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
-    final activeFacets = List<String>.from(state.searchScopeFacets);
+    // הקלטים מגיעים מהצילום שנלקח עם החתימה — לא מ-state שאולי השתנה מאז.
     final Map<String, int> bookCounts;
     try {
       bookCounts = await TantivyDataProvider.instance.countByBook(
         SearchQueryBuilder.sanitizeQuery(query),
-        activeFacets,
-        fuzzy: state.fuzzy,
-        distance: state.distance,
-        searchMode: state.configuration.searchMode,
+        inputs.scopeFacets,
+        fuzzy: inputs.fuzzy,
+        distance: inputs.distance,
+        searchMode: inputs.searchMode,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,

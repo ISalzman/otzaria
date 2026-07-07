@@ -66,6 +66,68 @@ List<CommentaryGroup> _groupConsecutiveLinks(List<Link> links) {
   return CommentaryService.groupConsecutiveLinks(links);
 }
 
+/// תוצאת סיווג יעדי הקישורים לבניית קבוצות המפרשים: מפרשים (סוגים תלויי-טקסט)
+/// עם ספירה פר-מפרש לזיהוי "מפרש נדיר", יעדים שאינם מפרשים (ל-preload דורות),
+/// והשורה הגבוהה ביותר עם קישור (אומדן גיבוי למספר שורות הספר).
+typedef LinkTargetsAggregation = ({
+  Set<String> commentators,
+  Map<String, int> linkCountByTitle,
+  Set<String> nonCommentaryTitles,
+  int maxSourceLine,
+});
+
+/// סיווג מתוך רשימת קישורים טעונה — הרשימה המלאה, או חלון הקישורים
+/// כ-fallback כששאילתת הסיכום נכשלת.
+@visibleForTesting
+LinkTargetsAggregation aggregateLinkTargetsFromLinks(Iterable<Link> links) {
+  final commentators = <String>{};
+  final linkCountByTitle = <String, int>{};
+  final nonCommentaryTitles = <String>{};
+  var maxSourceLine = 0;
+  for (final link in links) {
+    if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
+    final title = utils.getTitleFromPath(link.path2);
+    if (LinkTypes.isDependentTextLink(link.connectionType)) {
+      commentators.add(title);
+      linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
+    } else {
+      nonCommentaryTitles.add(title);
+    }
+  }
+  return (
+    commentators: commentators,
+    linkCountByTitle: linkCountByTitle,
+    nonCommentaryTitles: nonCommentaryTitles,
+    maxSourceLine: maxSourceLine,
+  );
+}
+
+/// סיווג מתוך סיכום המסד (getBookLinkTargetsSummary) — אותם כללים בדיוק
+/// כמו [aggregateLinkTargetsFromLinks], בלי לטעון את הקישורים עצמם.
+@visibleForTesting
+LinkTargetsAggregation aggregateLinkTargetsFromSummary(
+    List<LinkTargetSummary> targets, int maxSourceLine) {
+  final commentators = <String>{};
+  final linkCountByTitle = <String, int>{};
+  final nonCommentaryTitles = <String>{};
+  for (final target in targets) {
+    final title = utils.getTitleFromPath(target.targetTitle);
+    if (LinkTypes.isDependentTextLink(target.connectionType)) {
+      commentators.add(title);
+      linkCountByTitle[title] =
+          (linkCountByTitle[title] ?? 0) + target.linkCount;
+    } else {
+      nonCommentaryTitles.add(title);
+    }
+  }
+  return (
+    commentators: commentators,
+    linkCountByTitle: linkCountByTitle,
+    nonCommentaryTitles: nonCommentaryTitles,
+    maxSourceLine: maxSourceLine,
+  );
+}
+
 /// Widget שמציג מפרשים וקישורים עבור PDF
 class PdfCommentaryPanel extends StatefulWidget {
   final PdfBookTab tab;
@@ -358,44 +420,24 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   }
 
   Future<void> _loadCommentatorGroups() async {
-    final commentatorsSet = <String>{};
-    final linkCountByTitle = <String, int>{};
-    final nonCommentaryTitles = <String>{};
-    // אומדן גיבוי למספר השורות (השורה הגבוהה ביותר עם קישור) — משמש רק אם
-    // מספר השורות האמיתי לא נשלף מה-DB.
-    var maxSourceLine = 0;
-
+    LinkTargetsAggregation aggregation;
     if (widget.tab.linksAreComplete) {
-      for (final link in widget.tab.links) {
-        if (link.index1 > maxSourceLine) maxSourceLine = link.index1;
-        final title = utils.getTitleFromPath(link.path2);
-        if (LinkTypes.isDependentTextLink(link.connectionType)) {
-          commentatorsSet.add(title);
-          linkCountByTitle[title] = (linkCountByTitle[title] ?? 0) + 1;
-        } else {
-          nonCommentaryTitles.add(title);
-        }
-      }
+      aggregation = aggregateLinkTargetsFromLinks(widget.tab.links);
     } else {
       final summary = await _loadLinkTargetsSummary();
-      if (summary != null) {
-        maxSourceLine = summary.maxSourceLine;
-        for (final target in summary.targets) {
-          final title = utils.getTitleFromPath(target.targetTitle);
-          if (LinkTypes.isDependentTextLink(target.connectionType)) {
-            commentatorsSet.add(title);
-            linkCountByTitle[title] =
-                (linkCountByTitle[title] ?? 0) + target.linkCount;
-          } else {
-            nonCommentaryTitles.add(title);
-          }
-        }
-      }
+      aggregation = summary != null
+          ? aggregateLinkTargetsFromSummary(
+              summary.targets, summary.maxSourceLine)
+          // הסיכום נכשל — נבנה לפחות מחלון הקישורים הטעון (חלקי, עדיף מריק).
+          : aggregateLinkTargetsFromLinks(widget.tab.links);
     }
+    final linkCountByTitle = aggregation.linkCountByTitle;
+    final nonCommentaryTitles = aggregation.nonCommentaryTitles;
 
-    final availableCommentators = commentatorsSet.toList();
+    final availableCommentators = aggregation.commentators.toList();
     final rare = computeRareCommentators(
-      bookTotalLines: await _resolveSourceBookTotalLines() ?? maxSourceLine,
+      bookTotalLines:
+          await _resolveSourceBookTotalLines() ?? aggregation.maxSourceLine,
       linkCountByCommentator: linkCountByTitle,
     );
 
