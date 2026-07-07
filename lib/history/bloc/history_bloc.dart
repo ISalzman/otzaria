@@ -8,6 +8,7 @@ import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -86,6 +87,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   Future<Bookmark?> _bookmarkFromTab(
     OpenedTab tab, {
     List<String>? scopeFacetsOverride,
+    SearchScope? proximityScopeOverride,
   }) async {
     final workspaceName = _currentWorkspaceName;
 
@@ -111,10 +113,18 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
         searchOptions: searchingTab.effectiveSearchOptions(query: text),
         alternativeWords: searchingTab.alternativeWords,
         spacingValues: searchingTab.spacingValues,
+        negativeSearchText: searchingTab.negativeQueryController.text,
+        negativeSearchOptions: searchingTab.effectiveNegativeSearchOptions(
+          query: searchingTab.negativeQueryController.text,
+        ),
+        negativeAlternativeWords: searchingTab.negativeAlternativeWords,
+        negativeSpacingValues: searchingTab.negativeSpacingValues,
         workspaceName: workspaceName,
         searchScopeFacets:
             nonRootScopeFacets.isNotEmpty ? nonRootScopeFacets : null,
         searchMode: searchState.configuration.searchMode,
+        proximityScope: proximityScopeOverride ??
+            searchState.configuration.proximityScope,
       );
     }
 
@@ -300,7 +310,9 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       }
     }
 
-    return result;
+    final negativeText = tab.negativeQueryController.text.trim();
+    if (negativeText.isEmpty) return result;
+    return '$result ללא $negativeText';
   }
 
   Future<void> _onCaptureStateForHistory(
@@ -351,6 +363,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       final bookmark = await _bookmarkFromTab(
         event.tab,
         scopeFacetsOverride: event.scopeFacets,
+        proximityScopeOverride: event.proximityScope,
       );
       if (bookmark == null) return;
       add(BulkAddHistory([bookmark]));

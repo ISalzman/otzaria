@@ -76,9 +76,12 @@ class SearchOptionsRow extends StatefulWidget {
 }
 
 class _SearchOptionsRowState extends State<SearchOptionsRow> {
-  // רשימת האפשרויות הזמינות
-  static const List<String> _availableOptions =
-      SearchQueryBuilder.availableWordOptionKeys;
+  // רשימת האפשרויות הזמינות — כולל "ניקוד"/"טעמים": השדה הזה חי בטאב
+  // תוצאות, שתמיד מריץ חיפוש אינדקס (ראה supportsVocalized בדיאלוג).
+  static const List<String> _availableOptions = [
+    ...SearchQueryBuilder.availableWordOptionKeys,
+    ...SearchQueryBuilder.vocalizedWordOptionKeys,
+  ];
 
   Map<String, bool> _getCurrentWordOptions() {
     final currentWord = widget.currentWord;
@@ -127,8 +130,9 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
                     SearchQueryBuilder.disabledWordOptionsTemplate();
               }
 
-              // עדכן את האפשרות
-              wordOptions[key]![option] = !wordOptions[key]![option]!;
+              // עדכן את האפשרות. גישה סלחנית: מפה פר-מילה שנוצרה בדיאלוג
+              // מכילה רק אפשרויות שהודלקו, לא את התבנית המלאה.
+              wordOptions[key]![option] = !(wordOptions[key]![option] ?? false);
 
               // קרא לקולבק
               widget.onOptionsChanged?.call();
@@ -146,7 +150,7 @@ class _SearchOptionsRowState extends State<SearchOptionsRow> {
             children: [
               IgnorePointer(
                 child: Checkbox(
-                  value: currentOptions[option]!,
+                  value: currentOptions[option] ?? false,
                   onChanged: (_) {},
                   visualDensity: VisualDensity.compact,
                   side: BorderSide(color: colorScheme.outline),

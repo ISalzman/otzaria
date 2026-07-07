@@ -142,6 +142,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             searchOptions: widget.tab.effectiveSearchOptions(
               query: context.read<SearchBloc>().state.searchQuery,
             ),
+            negativeCustomSpacing: widget.tab.negativeSpacingValues,
+            negativeAlternativeWords: widget.tab.negativeAlternativeWords,
+            negativeSearchOptions: widget.tab.effectiveNegativeSearchOptions(
+              query: context.read<SearchBloc>().state.negativeQuery,
+            ),
           ),
         );
   }
@@ -320,6 +325,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                             customSpacing: widget.tab.spacingValues,
                             alternativeWords: widget.tab.alternativeWords,
                             searchOptions: effectiveOptions,
+                            negativeCustomSpacing:
+                                widget.tab.negativeSpacingValues,
+                            negativeAlternativeWords:
+                                widget.tab.negativeAlternativeWords,
+                            negativeSearchOptions:
+                                widget.tab.effectiveNegativeSearchOptions(
+                              query: state.negativeQuery,
+                            ),
                           ),
                         );
                   },

@@ -1,5 +1,6 @@
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 abstract class HistoryEvent {}
 
@@ -18,7 +19,11 @@ class AddHistory extends HistoryEvent {
   /// שהיסטוריית החיפוש כבר נלכדה — ואז ה-scope היה נאבד.
   final List<String>? scopeFacets;
 
-  AddHistory(this.tab, {this.scopeFacets});
+  /// טווח קרבה מפורש, מאותה סיבה: UpdateProximityScopeWithoutSearch מעבד
+  /// את ה-state אסינכרונית, ובלי override ההיסטוריה עלולה לצלם טווח ישן.
+  final SearchScope? proximityScope;
+
+  AddHistory(this.tab, {this.scopeFacets, this.proximityScope});
 }
 
 class CaptureStateForHistory extends HistoryEvent {

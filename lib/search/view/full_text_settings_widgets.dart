@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
@@ -68,12 +68,9 @@ class SearchModeToggle extends StatelessWidget {
                   newMode = SearchMode.advanced;
               }
               context.read<SearchBloc>().add(SetSearchMode(newMode));
-              final modeString = switch (newMode) {
-                SearchMode.advanced => 'advanced',
-                SearchMode.exact => 'exact',
-                SearchMode.fuzzy => 'fuzzy',
-              };
-              Settings.setValue<String>('key-last-search-mode', modeString);
+              // מצב החיפוש נשמר לסשן הנוכחי בלבד; חיפוש חדש בהפעלה
+              // הבאה נפתח שוב בברירת המחדל (חיפוש רגיל).
+              SearchDefaults.rememberSessionMode(newMode);
             },
           ),
         );
@@ -131,52 +128,127 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
   Widget build(BuildContext context) {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
+        // טווח קרבה "פסקה"/"כותרת" מייתר את מגבלת המרווח — השדה מושבת
+        // ומציג את שם הטווח במקומה.
+        final scope = state.proximityScope;
+        final scopeOverridesDistance = state.isAdvancedSearchEnabled &&
+            scope != SearchScope.wordDistance;
         // בדיקה אם יש מרווחים מותאמים אישית
         final hasCustomSpacing = state.isAdvancedSearchEnabled &&
-            widget.tab.spacingValues.isNotEmpty;
-        final isEnabled = !hasCustomSpacing;
+            widget.tab.spacingValues.isNotEmpty &&
+            !scopeOverridesDistance;
+        final isEnabled = !hasCustomSpacing && !scopeOverridesDistance;
 
-        return SizedBox(
-          width: 140,
-          child: Tooltip(
-            message:
-                'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
-            child: Focus(
-              focusNode: _focusNode,
-              child: SpinBox(
-                enabled: isEnabled,
-                decoration: InputDecoration(
-                  labelText: hasCustomSpacing
-                      ? 'מרווח בין מילים (מושבת)'
-                      : 'מרווח בין מילים',
-                  labelStyle: TextStyle(
-                    color: hasCustomSpacing
-                        ? Theme.of(context).colorScheme.onSurfaceVariant
-                        : null,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: AppTokens.borderRadiusAll,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 16.0,
-                  ),
+        final String label;
+        if (scopeOverridesDistance) {
+          label = scope.label;
+        } else if (hasCustomSpacing) {
+          label = 'מרווח בין מילים (מושבת)';
+        } else {
+          label = 'מרווח בין מילים';
+        }
+
+        final spinBox = Tooltip(
+          message: scopeOverridesDistance
+              ? scope.tooltip
+              : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+          child: Focus(
+            focusNode: _focusNode,
+            child: SpinBox(
+              enabled: isEnabled,
+              decoration: InputDecoration(
+                labelText: label,
+                labelStyle: TextStyle(
+                  color: hasCustomSpacing || scopeOverridesDistance
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : null,
                 ),
-                min: 0,
-                max: 30,
-                value: state.distance.toDouble(),
-                onChanged: isEnabled
-                    ? (value) => context.read<SearchBloc>().add(
-                          widget.triggerSearch
-                              ? UpdateDistance(value.toInt())
-                              : UpdateDistanceWithoutSearch(value.toInt()),
-                        )
-                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: AppTokens.borderRadiusAll,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 16.0,
+                ),
               ),
+              min: 0,
+              max: 30,
+              value: state.distance.toDouble(),
+              onChanged: isEnabled
+                  ? (value) => context.read<SearchBloc>().add(
+                        widget.triggerSearch
+                            ? UpdateDistance(value.toInt())
+                            : UpdateDistanceWithoutSearch(value.toInt()),
+                      )
+                  : null,
             ),
           ),
         );
+
+        // בורר הטווח רלוונטי רק לחיפוש המתקדם: במדויק אין קרבה כלל,
+        // ובמקורב המרווח משמש כמרחק עריכה.
+        if (!state.isAdvancedSearchEnabled) {
+          return SizedBox(width: 140, child: spinBox);
+        }
+
+        return SizedBox(
+          width: 184,
+          child: Row(
+            children: [
+              _ProximityScopeMenu(
+                scope: scope,
+                onSelected: (selected) => context.read<SearchBloc>().add(
+                      widget.triggerSearch
+                          ? UpdateProximityScope(selected)
+                          : UpdateProximityScopeWithoutSearch(selected),
+                    ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(child: spinBox),
+            ],
+          ),
+        );
       },
+    );
+  }
+}
+
+/// תפריט בחירת טווח הקרבה בין מילות החיפוש: מרווח מילים (ברירת המחדל),
+/// באותה פסקה, או תחת אותה כותרת.
+class _ProximityScopeMenu extends StatelessWidget {
+  const _ProximityScopeMenu({
+    required this.scope,
+    required this.onSelected,
+  });
+
+  final SearchScope scope;
+  final ValueChanged<SearchScope> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDefault = scope == SearchScope.wordDistance;
+    return Tooltip(
+      message: 'טווח הקרבה בין מילות החיפוש: ${scope.label}',
+      child: PopupMenuButton<SearchScope>(
+        initialValue: scope,
+        onSelected: onSelected,
+        icon: Icon(
+          Icons.view_agenda_outlined,
+          color: isDefault ? null : colorScheme.primary,
+        ),
+        itemBuilder: (context) => [
+          for (final option in SearchScope.values)
+            CheckedPopupMenuItem<SearchScope>(
+              value: option,
+              checked: option == scope,
+              child: Tooltip(
+                message: option.tooltip,
+                child: Text(option.label),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -532,6 +604,7 @@ class OrderOfResults extends StatelessWidget {
   static const _entries = [
     AppMenuEntry(value: ResultsOrder.relevance, label: 'לפי רלוונטיות'),
     AppMenuEntry(value: ResultsOrder.catalogue, label: 'לפי סדר קטלוגי'),
+    AppMenuEntry(value: ResultsOrder.generation, label: 'לפי סדר הדורות'),
   ];
 
   @override
