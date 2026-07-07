@@ -5,7 +5,9 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
@@ -560,12 +562,18 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   Future<void> _handleNoteLinkTap(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
-    if (uri.scheme != 'otzaria') {
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) UiSnack.showError('לא ניתן לפתוח את הקישור: $url');
+      return;
+    }
+    if (uri.scheme != 'otzaria' && uri.scheme != 'zayit') {
       UiSnack.show('קישור חיצוני: $url');
       return;
     }
 
-    switch (uri.host) {
+    switch (uri.scheme == 'otzaria' ? uri.host : '') {
       case 'book':
         final bookId = uri.queryParameters['bookId'] ?? '';
         final line = int.tryParse(uri.queryParameters['line'] ?? '');
@@ -608,6 +616,11 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         );
         return;
       default:
+        // קישור עמוק (otzaria://open/... או zayit://) — מנותב למסך הראשי.
+        final handled = await mainWindowScreenKey.currentState
+                ?.handleInternalDeepLink(url) ??
+            false;
+        if (!handled) UiSnack.showError('קישור לא נתמך: $url');
         return;
     }
   }
