@@ -160,8 +160,10 @@ void main() {
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
     );
     final tab = SearchingTab('חיפוש', 'חכמה בינה');
+    // "קידומות דקדוקיות" נתמכת ברגיל ועוברת; "קידומות" הכללית בלעדית
+    // למתקדם ומסוננת.
     tab.searchOptions.addAll({
-      'חכמה_0': {'קידומות': true}
+      'חכמה_0': {'קידומות דקדוקיות': true, 'קידומות': true}
     });
     // אפשרויות פר-מילה נלקחות בחשבון רק כשמצב האפשרויות אינו גלובלי
     tab.useGlobalSearchOptions.value = false;
@@ -229,10 +231,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(capturedSearchMode, SearchMode.exact);
-    // אפשרויות המילה נתמכות גם בחיפוש הרגיל ולכן עוברות; מילים חלופיות
-    // ומרווחים ידניים נשארים בלעדיים למצב המתקדם.
+    // רק אפשרויות המילה של המצב הרגיל (exactWordOptionKeys) עוברות;
+    // "קידומות" הכללית, מילים חלופיות ומרווחים ידניים נשארים בלעדיים
+    // למצב המתקדם.
     expect(capturedSearchOptions, {
-      'חכמה_0': {'קידומות': true},
+      'חכמה_0': {'קידומות דקדוקיות': true},
     });
     expect(capturedAlternativeWords, isEmpty);
     expect(capturedSpacingValues, isEmpty);
@@ -641,8 +644,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // הזכירה עצמה: הסשן חייב להכיל את האפשרות שסומנה.
-    expect(SearchDefaults.initialExactOptionsForNewSearch()['שגיאות כתיב'],
-        isTrue,
+    expect(
+        SearchDefaults.initialExactOptionsForNewSearch()['שגיאות כתיב'], isTrue,
         reason: 'סגירת הדיאלוג צריכה לזכור את האפשרויות לסשן');
 
     // דיאלוג שני: הסימון מהסשן צריך להופיע מסומן.
@@ -657,5 +660,59 @@ void main() {
 
     expect(typoChip().selected, isTrue,
         reason: 'אפשרות שסומנה בסשן הנוכחי צריכה להישאר מסומנת בדיאלוג חדש');
+  });
+
+  testWidgets('חיפוש רגיל מציג רק קידומות/סיומות דקדוקיות',
+      (WidgetTester tester) async {
+    final historyBloc = MockHistoryBloc();
+    final indexingBloc = MockIndexingBloc();
+    final navigationBloc = MockNavigationBloc();
+    final theme = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
+    );
+
+    whenListen(
+      historyBloc,
+      const Stream<HistoryState>.empty(),
+      initialState: HistoryLoaded([]),
+    );
+    whenListen(
+      indexingBloc,
+      const Stream<IndexingState>.empty(),
+      initialState: IndexingInitial(),
+    );
+    whenListen(
+      navigationBloc,
+      const Stream<NavigationState>.empty(),
+      initialState: const NavigationState(currentScreen: Screen.search),
+    );
+
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      await historyBloc.close();
+      await indexingBloc.close();
+      await navigationBloc.close();
+    });
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(_buildDialogHarness(
+      theme: theme,
+      historyBloc: historyBloc,
+      indexingBloc: indexingBloc,
+      navigationBloc: navigationBloc,
+      dialog: const SearchDialog(),
+    ));
+    await tester.pumpAndSettle();
+
+    Finder chip(String label) => find.byWidgetPredicate((widget) =>
+        widget is FilterChip && (widget.label as Text).data == label);
+
+    expect(chip('קידומות דקדוקיות'), findsOneWidget);
+    expect(chip('סיומות דקדוקיות'), findsOneWidget);
+    expect(chip('קידומות'), findsNothing,
+        reason: 'קידומות כלליות בלעדיות למצב המתקדם');
+    expect(chip('סיומות'), findsNothing,
+        reason: 'סיומות כלליות בלעדיות למצב המתקדם');
   });
 }

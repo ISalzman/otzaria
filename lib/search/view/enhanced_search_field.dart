@@ -347,6 +347,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       currentWord: wordInfo['word'],
       wordIndex: wordInfo['index'],
       wordOptions: widget.tab.searchOptions,
+      showAdvancedOnlyOptions:
+          widget.tab.searchBloc.state.configuration.searchMode ==
+              SearchMode.advanced,
       onOptionsChanged: _onSearchOptionsChanged,
       key: ValueKey(
         '${wordInfo['word']}_${wordInfo['index']}',

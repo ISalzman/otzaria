@@ -152,8 +152,7 @@ class _SearchDialogState extends State<SearchDialog> {
 
       // חיפוש חדש נפתח עם אפשרויות ברירת המחדל של המצב שבו הוא נפתח
       // (או מצב הסשן הנוכחי) — לכל מצב חיפוש ברירות מחדל משלו
-      _searchTab.globalSearchOptions
-          .addAll(_initialOptionsForMode(searchMode));
+      _searchTab.globalSearchOptions.addAll(_initialOptionsForMode(searchMode));
     }
 
     final persisted = SearchScopePreferences.load();
@@ -213,10 +212,10 @@ class _SearchDialogState extends State<SearchDialog> {
     );
   }
 
-  /// אפשרויות המילה של החיפוש הרגיל (מדויק): שגיאות כתיב, קידומות/סיומות,
-  /// כתיב מלא/חסר וחלק ממילה — אותן אפשרויות שהמצב המתקדם מציע, מוחלות
-  /// גלובלית על כל מילות השאילתה. בקשה עם אפשרות פעילה רצה בפועל דרך
-  /// המסלול המתקדם של המנוע (ראה gateway), כך שאין צורך בשינוי מנוע.
+  /// אפשרויות המילה של החיפוש הרגיל (מדויק): שגיאות כתיב, קידומות/סיומות
+  /// דקדוקיות, כתיב מלא/חסר וחלק ממילה — מוחלות גלובלית על כל מילות
+  /// השאילתה. בקשה עם אפשרות פעילה רצה בפועל דרך המסלול המתקדם של המנוע
+  /// (ראה gateway), כך שאין צורך בשינוי מנוע.
   Widget _buildExactOptionsRow() {
     return Align(
       alignment: AlignmentDirectional.centerStart,
@@ -224,7 +223,7 @@ class _SearchDialogState extends State<SearchDialog> {
         spacing: 6,
         runSpacing: 4,
         children: [
-          for (final key in SearchQueryBuilder.availableWordOptionKeys)
+          for (final key in SearchQueryBuilder.exactWordOptionKeys)
             FilterChip(
               label: Text(key),
               visualDensity: VisualDensity.compact,
@@ -245,7 +244,7 @@ class _SearchDialogState extends State<SearchDialog> {
 
   /// ברירות המחדל של החיפוש הרגיל (מדויק) — תפריט נפתח כמו במצב המתקדם,
   /// אבל עצמאי לחלוטין: קובע רק את ברירות המחדל של החיפוש הרגיל, ורק
-  /// לפרמטרים הקיימים בו (שבע אפשרויות המילה והמרווח בין מילים). ברירות
+  /// לפרמטרים הקיימים בו (חמש אפשרויות המילה והמרווח בין מילים). ברירות
   /// המחדל של המצב המתקדם נקבעות בתפריט המקביל שבמסך המתקדם.
   Widget _buildExactDefaultsRow(SearchState state) {
     final defaults = SearchDefaults.loadExactDefaults();
@@ -257,7 +256,7 @@ class _SearchDialogState extends State<SearchDialog> {
         children: [
           MenuAnchor(
             menuChildren: [
-              for (final key in SearchQueryBuilder.availableWordOptionKeys)
+              for (final key in SearchQueryBuilder.exactWordOptionKeys)
                 CheckboxMenuButton(
                   value: defaults[key] ?? false,
                   closeOnActivate: false,

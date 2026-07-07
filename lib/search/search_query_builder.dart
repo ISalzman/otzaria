@@ -49,6 +49,31 @@ class SearchQueryBuilder {
     typoToleranceOptionKey,
   ];
 
+  /// אפשרויות המילה המוצגות בחיפוש הרגיל (מדויק) — ללא "קידומות"/"סיומות"
+  /// הכלליות, שנשארות בלעדיות למצב המתקדם.
+  static const List<String> exactWordOptionKeys = [
+    'קידומות דקדוקיות',
+    'סיומות דקדוקיות',
+    'כתיב מלא/חסר',
+    'חלק ממילה',
+    typoToleranceOptionKey,
+  ];
+
+  /// אפשרויות המילה הבלעדיות למצב המתקדם — הרחבות מבוססות-מילון/אינדקס
+  /// של המנוע שאינן מוצעות בחיפוש הרגיל. המחרוזות חייבות להיות זהות
+  /// תו-בתו לקבועי ה-Rust (`OPT_ARAMAIC_PREFIX` / `OPT_ARAMAIC_SUFFIX` /
+  /// `OPT_IGNORE_QUOTES` / `OPT_TRANSLATION` / `OPT_ACRONYM`
+  /// ב-hebrew_query.rs). בכוונה אינן חלק מ-[availableWordOptionKeys]:
+  /// סינון המצב הרגיל ([normalizeParametersForMode]) נשען על רשימות
+  /// המפתחות, ואלו חייבות להישאר במתקדם בלבד.
+  static const List<String> advancedOnlyWordOptionKeys = [
+    'קידומות ארמיות',
+    'סיומות ארמיות',
+    'התעלם מגרשיים',
+    'תרגום ארמי',
+    'ראשי תיבות',
+  ];
+
   static const String matchNikudOptionKey = 'ניקוד';
   static const String matchTaamimOptionKey = 'טעמים';
 
@@ -64,8 +89,7 @@ class SearchQueryBuilder {
 
   /// האם אפשרויות פר-מילה מבקשות חיפוש מנוקד (מפתח ניקוד/טעמים דלוק
   /// באחת המילים). קובע אם מותר למחוק ניקוד מהשאילתה לפני החיפוש.
-  static bool optionsRequestVocalized(
-      Map<String, Map<String, bool>> options) {
+  static bool optionsRequestVocalized(Map<String, Map<String, bool>> options) {
     return options.values.any(
       (map) => vocalizedWordOptionKeys.any((key) => map[key] == true),
     );
@@ -249,13 +273,15 @@ class SearchQueryBuilder {
       return const SearchModeScopedParameters();
     }
     if (searchMode == SearchMode.exact) {
-      // רק שבע אפשרויות המילה; "ניקוד"/"טעמים" נתמכים כרגע במצב המתקדם
-      // בלבד (ברירת מחדל שמורה עם ניקוד לא תהפוך חיפוש רגיל למנוקד).
+      // רק חמש אפשרויות המילה של המצב הרגיל ([exactWordOptionKeys]);
+      // "ניקוד"/"טעמים", קידומות/סיומות כלליות והאפשרויות הבלעדיות למתקדם
+      // מסוננים — גם כשהם מגיעים ממצב משוחזר/קונפיגורציה קיימת שה-UI
+      // כבר לא מציג (ברירת מחדל שמורה עם ניקוד לא תהפוך חיפוש רגיל למנוקד).
       final wordOptionsOnly = <String, Map<String, bool>>{};
       for (final entry in _normalizeSearchOptions(searchOptions).entries) {
         final kept = <String, bool>{
           for (final option in entry.value.entries)
-            if (availableWordOptionKeys.contains(option.key))
+            if (exactWordOptionKeys.contains(option.key))
               option.key: option.value,
         };
         if (kept.isNotEmpty) {

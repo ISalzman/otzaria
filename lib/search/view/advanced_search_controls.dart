@@ -418,6 +418,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               // כברירת מחדל הן מגבילות כל חיפוש חדש לטקסטים מנוקדים בלבד.
               for (final key in [
                 ...SearchQueryBuilder.availableWordOptionKeys,
+                ...SearchQueryBuilder.advancedOnlyWordOptionKeys,
                 if (widget.supportsVocalized)
                   ...SearchQueryBuilder.vocalizedWordOptionKeys,
               ])
@@ -741,11 +742,17 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         'התאמת ניקוד: ניקוד שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מנוקדים.',
     SearchQueryBuilder.matchTaamimOptionKey:
         'התאמת טעמי המקרא: טעם שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מוטעמים.',
+    'קידומות ארמיות': 'קידומות ארמיות (ד/כד/מד/אד...) לפני המילה: מלכא ימצא גם דמלכא, כדמלכא.',
+    'סיומות ארמיות': 'שקילות אות סופית ארמית: ה↔א (מלכה↔מלכא) ו-ם↔ן (חכמים↔חכמין).',
+    'התעלם מגרשיים': 'גרש/גרשיים שהוקלדו במילה לא יידרשו בטקסט: רמב"ם ימצא גם רמבם, ולהפך.',
+    'תרגום ארמי': 'הרחבת המילה בתרגומיה מהמילון הארמי-עברי, בשני הכיוונים (איתא↔יש).',
+    'ראשי תיבות': 'פענוח ראשי-תיבות בשני הכיוונים: רמב"ם ימצא גם "רבי משה בן מיימון", ולהפך. פועל כשהשאילתה היא ראשי-התיבות או הפענוח בשלמותו.',
   };
 
   Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
     final options = [
       ...SearchQueryBuilder.availableWordOptionKeys,
+      ...SearchQueryBuilder.advancedOnlyWordOptionKeys,
       if (widget.supportsVocalized)
         ...SearchQueryBuilder.vocalizedWordOptionKeys,
     ];
