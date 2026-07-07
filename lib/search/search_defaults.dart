@@ -4,40 +4,44 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
-/// ברירות מחדל לחיפוש: אפשרויות החיפוש המתקדם (7 תיבות הסימון), המרווח
-/// בין מילים של החיפוש הרגיל, ומצב החיפוש שבו נפתח הדיאלוג.
+/// ברירות מחדל לחיפוש, נפרדות לכל מצב: אפשרויות החיפוש המתקדם (7 תיבות
+/// הסימון + ניקוד/טעמים), אפשרויות החיפוש הרגיל (7 תיבות הסימון בלבד)
+/// והמרווח בין מילים שלו, ומצב החיפוש שבו נפתח הדיאלוג.
 /// חיפוש חדש נפתח לפי ברירת המחדל השמורה; שינוי בחלונית נשמר לסשן
 /// הנוכחי בלבד וחוזר לברירת המחדל בהפעלה הבאה של התוכנה.
 class SearchDefaults {
   static const _settingsKey = 'key-search-default-options';
+  static const _exactSettingsKey = 'key-search-default-options-exact';
   static const _distanceKey = 'key-search-default-distance';
 
-  // מטמון הסשן: מצב האפשרויות כפי שהמשתמש השאיר אותן בדיאלוג האחרון.
+  // מטמון הסשן: מצב האפשרויות כפי שהמשתמש השאיר אותן בדיאלוג האחרון,
+  // לכל מצב חיפוש בנפרד.
   static Map<String, bool>? _sessionOptions;
+  static Map<String, bool>? _sessionExactOptions;
 
   // מטמון הסשן: מצב החיפוש והמרווח כפי שהמשתמש השאיר אותם בדיאלוג
-  // האחרון. בהפעלה הבאה חוזרים לברירת המחדל (מדויק / המרווח השמור).
+  // האחרון. בהפעלה הבאה חוזרים לברירת המחדל (חיפוש רגיל / המרווח השמור).
   static SearchMode? _sessionMode;
   static int? _sessionDistance;
 
   SearchDefaults._();
 
-  /// כלל המפתחות שמותר לשמור כברירת מחדל: 7 האפשרויות + "ניקוד"/"טעמים".
+  /// המפתחות שמותר לשמור כברירת מחדל למצב המתקדם: 7 האפשרויות +
+  /// "ניקוד"/"טעמים".
   static const List<String> _allowedOptionKeys = [
     ...SearchQueryBuilder.availableWordOptionKeys,
     ...SearchQueryBuilder.vocalizedWordOptionKeys,
   ];
 
-  /// ברירת המחדל השמורה (בין הפעלות). מפתחות לא-מוכרים מסוננים.
-  static Map<String, bool> loadDefaults() {
-    final raw = Settings.getValue<String>(_settingsKey);
+  static Map<String, bool> _loadOptions(String key, List<String> allowedKeys) {
+    final raw = Settings.getValue<String>(key);
     if (raw == null || raw.isEmpty) return {};
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return {};
       return {
         for (final entry in decoded.entries)
-          if (_allowedOptionKeys.contains(entry.key.toString()))
+          if (allowedKeys.contains(entry.key.toString()))
             entry.key.toString(): entry.value == true,
       };
     } catch (_) {
@@ -45,31 +49,67 @@ class SearchDefaults {
     }
   }
 
-  /// שומר את [options] כברירת המחדל לחיפושים חדשים.
+  // ── חיפוש מתקדם ────────────────────────────────────────────────────
+
+  /// ברירת המחדל השמורה (בין הפעלות) למצב המתקדם. מפתחות לא-מוכרים מסוננים.
+  static Map<String, bool> loadDefaults() {
+    return _loadOptions(_settingsKey, _allowedOptionKeys);
+  }
+
+  /// שומר את [options] כברירת המחדל לחיפושים מתקדמים חדשים.
   static void saveDefaults(Map<String, bool> options) {
     Settings.setValue<String>(_settingsKey, jsonEncode(options));
     _sessionOptions = Map<String, bool>.from(options);
   }
 
-  /// האפשרויות שאיתן ייפתח חיפוש חדש: מצב הסשן אם קיים, אחרת ברירת המחדל.
+  /// האפשרויות שאיתן ייפתח חיפוש מתקדם חדש: מצב הסשן אם קיים, אחרת
+  /// ברירת המחדל.
   static Map<String, bool> initialOptionsForNewSearch() {
     return Map<String, bool>.from(_sessionOptions ?? loadDefaults());
   }
 
-  /// משמר את מצב האפשרויות להמשך הסשן (נקרא בסגירת דיאלוג החיפוש).
+  /// משמר את מצב האפשרויות של המצב המתקדם להמשך הסשן.
   static void rememberSessionOptions(Map<String, bool> options) {
     _sessionOptions = Map<String, bool>.from(options);
   }
 
+  // ── חיפוש רגיל (מדויק) ─────────────────────────────────────────────
+
+  /// ברירת המחדל השמורה (בין הפעלות) למצב הרגיל — רק שבע אפשרויות המילה
+  /// (ניקוד/טעמים אינם נתמכים בחיפוש הרגיל), באחסון נפרד לחלוטין מזה
+  /// של המצב המתקדם.
+  static Map<String, bool> loadExactDefaults() {
+    return _loadOptions(
+        _exactSettingsKey, SearchQueryBuilder.availableWordOptionKeys);
+  }
+
+  /// שומר את [options] כברירת המחדל לחיפושים רגילים חדשים.
+  static void saveExactDefaults(Map<String, bool> options) {
+    Settings.setValue<String>(_exactSettingsKey, jsonEncode(options));
+    _sessionExactOptions = Map<String, bool>.from(options);
+  }
+
+  /// האפשרויות שאיתן ייפתח חיפוש רגיל חדש: מצב הסשן אם קיים, אחרת
+  /// ברירת המחדל.
+  static Map<String, bool> initialExactOptionsForNewSearch() {
+    return Map<String, bool>.from(_sessionExactOptions ?? loadExactDefaults());
+  }
+
+  /// משמר את מצב האפשרויות של המצב הרגיל להמשך הסשן.
+  static void rememberSessionExactOptions(Map<String, bool> options) {
+    _sessionExactOptions = Map<String, bool>.from(options);
+  }
+
   // ── מצב החיפוש ──────────────────────────────────────────────────────
 
-  /// מצב החיפוש שבו נפתח חיפוש חדש: מצב הסשן אם קיים, אחרת חיפוש רגיל
-  /// (מדויק) — ברירת המחדל של פתיחת החיפוש.
+  /// מצב החיפוש שבו נפתח חיפוש חדש: מצב הסשן אם קיים (מעבר ידני למצב
+  /// אחר נשמר עד הפעלה מחדש), אחרת חיפוש רגיל (מדויק) — ברירת המחדל
+  /// של פתיחת החיפוש בכל הפעלה טרייה.
   static SearchMode initialModeForNewSearch() {
     return _sessionMode ?? SearchMode.exact;
   }
 
-  /// משמר את מצב החיפוש להמשך הסשן.
+  /// משמר את מצב החיפוש להמשך הסשן (עד הפעלה מחדש של התוכנה).
   static void rememberSessionMode(SearchMode mode) {
     _sessionMode = mode;
   }

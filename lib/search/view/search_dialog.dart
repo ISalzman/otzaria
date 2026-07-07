@@ -150,9 +150,10 @@ class _SearchDialogState extends State<SearchDialog> {
         ),
       );
 
-      // חיפוש חדש נפתח עם אפשרויות ברירת המחדל (או מצב הסשן הנוכחי)
+      // חיפוש חדש נפתח עם אפשרויות ברירת המחדל של המצב שבו הוא נפתח
+      // (או מצב הסשן הנוכחי) — לכל מצב חיפוש ברירות מחדל משלו
       _searchTab.globalSearchOptions
-          .addAll(SearchDefaults.initialOptionsForNewSearch());
+          .addAll(_initialOptionsForMode(searchMode));
     }
 
     final persisted = SearchScopePreferences.load();
@@ -212,39 +213,108 @@ class _SearchDialogState extends State<SearchDialog> {
     );
   }
 
-  /// ברירות המחדל של החיפוש הרגיל (מדויק) — מקבילה ל"ברירת מחדל לחיפוש
-  /// חדש" של המצב המתקדם: שמירת המרווח הנוכחי בין מילים כברירת מחדל
-  /// לחיפושים חדשים, ואיפוס המרווח הנוכחי לברירת המחדל השמורה.
+  /// אפשרויות המילה של החיפוש הרגיל (מדויק): שגיאות כתיב, קידומות/סיומות,
+  /// כתיב מלא/חסר וחלק ממילה — אותן אפשרויות שהמצב המתקדם מציע, מוחלות
+  /// גלובלית על כל מילות השאילתה. בקשה עם אפשרות פעילה רצה בפועל דרך
+  /// המסלול המתקדם של המנוע (ראה gateway), כך שאין צורך בשינוי מנוע.
+  Widget _buildExactOptionsRow() {
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          for (final key in SearchQueryBuilder.availableWordOptionKeys)
+            FilterChip(
+              label: Text(key),
+              visualDensity: VisualDensity.compact,
+              selected: _searchTab.globalSearchOptions[key] ?? false,
+              onSelected: (selected) {
+                setState(() {
+                  _searchTab.globalSearchOptions[key] = selected;
+                  // במצב הרגיל אין עורך פר-מילה — הסימון תמיד גלובלי.
+                  _searchTab.useGlobalSearchOptions.value = true;
+                });
+                _searchTab.searchOptionsChanged.value++;
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// ברירות המחדל של החיפוש הרגיל (מדויק) — תפריט נפתח כמו במצב המתקדם,
+  /// אבל עצמאי לחלוטין: קובע רק את ברירות המחדל של החיפוש הרגיל, ורק
+  /// לפרמטרים הקיימים בו (שבע אפשרויות המילה והמרווח בין מילים). ברירות
+  /// המחדל של המצב המתקדם נקבעות בתפריט המקביל שבמסך המתקדם.
   Widget _buildExactDefaultsRow(SearchState state) {
-    final savedDefault = SearchDefaults.loadDistanceDefault();
+    final defaults = SearchDefaults.loadExactDefaults();
+    final savedDistance = SearchDefaults.loadDistanceDefault();
     return Align(
       alignment: AlignmentDirectional.centerStart,
       child: Wrap(
         spacing: 4,
         children: [
-          Tooltip(
-            message:
-                'המרווח הנוכחי בין מילים (${state.distance}) יופעל אוטומטית בכל חיפוש חדש',
-            child: ActionButton.ghost(
-              text: 'קבע מרווח כברירת מחדל',
-              icon: FluentIcons.options_24_regular,
-              onPressed: () {
-                SearchDefaults.saveDistanceDefault(state.distance);
-                UiSnack.show(
-                    'מרווח ${state.distance} נקבע כברירת מחדל לחיפוש חדש');
-              },
+          MenuAnchor(
+            menuChildren: [
+              for (final key in SearchQueryBuilder.availableWordOptionKeys)
+                CheckboxMenuButton(
+                  value: defaults[key] ?? false,
+                  closeOnActivate: false,
+                  onChanged: (checked) {
+                    setState(() {
+                      SearchDefaults.saveExactDefaults(
+                          {...defaults, key: checked ?? false});
+                      // שינוי ברירת מחדל מוחל מיד גם על התיבה בחלונית הפתוחה
+                      _searchTab.globalSearchOptions[key] = checked ?? false;
+                      _searchTab.useGlobalSearchOptions.value = true;
+                    });
+                    _searchTab.searchOptionsChanged.value++;
+                  },
+                  child: Text(key),
+                ),
+              const Divider(height: 8),
+              MenuItemButton(
+                closeOnActivate: false,
+                onPressed: () {
+                  setState(() {
+                    SearchDefaults.saveDistanceDefault(state.distance);
+                  });
+                  UiSnack.show(
+                      'מרווח ${state.distance} נקבע כברירת מחדל לחיפוש רגיל');
+                },
+                child: Text(
+                    'קבע את המרווח הנוכחי (${state.distance}) כברירת מחדל'),
+              ),
+            ],
+            builder: (context, controller, _) => Tooltip(
+              message:
+                  'סמן אילו אפשרויות ואיזה מרווח יופעלו אוטומטית בכל חיפוש רגיל חדש',
+              child: ActionButton.ghost(
+                text: 'קביעת ברירת מחדל לחיפוש רגיל',
+                icon: FluentIcons.options_24_regular,
+                onPressed: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+              ),
             ),
           ),
           Tooltip(
-            message: 'החזרת המרווח לברירת המחדל השמורה ($savedDefault)',
+            message:
+                'החזרת האפשרויות והמרווח ($savedDistance) לברירת המחדל השמורה',
             child: ActionButton.ghost(
               text: 'חזרה לברירת מחדל',
               icon: FluentIcons.arrow_reset_24_regular,
               onPressed: () {
+                setState(() {
+                  _searchTab.globalSearchOptions
+                    ..clear()
+                    ..addAll(SearchDefaults.loadExactDefaults());
+                });
+                _searchTab.searchOptionsChanged.value++;
                 _searchTab.searchBloc.add(
                   _usesStagedSubmit
-                      ? UpdateDistanceWithoutSearch(savedDefault)
-                      : UpdateDistance(savedDefault),
+                      ? UpdateDistanceWithoutSearch(savedDistance)
+                      : UpdateDistance(savedDistance),
                 );
               },
             ),
@@ -378,10 +448,10 @@ class _SearchDialogState extends State<SearchDialog> {
     _advancedControlsHasFocus.dispose();
     if (_ownsSearchTab) {
       if (widget.editTab == null) {
-        // מצב האפשרויות, מצב החיפוש והמרווח נשמרים לסשן הנוכחי; בהפעלה
-        // הבאה חוזרים לברירת המחדל
-        SearchDefaults.rememberSessionOptions(_searchTab.globalSearchOptions);
+        // מצב החיפוש והפרמטרים (אפשרויות לפי מצב + מרווח) נשמרים לסשן
+        // הנוכחי; בהפעלה הבאה חוזרים לברירת המחדל (חיפוש רגיל).
         final config = _searchTab.searchBloc.state.configuration;
+        _rememberSessionOptionsForMode(config.searchMode);
         SearchDefaults.rememberSessionMode(config.searchMode);
         if (config.searchMode != SearchMode.fuzzy) {
           SearchDefaults.rememberSessionDistance(config.distance);
@@ -390,6 +460,52 @@ class _SearchDialogState extends State<SearchDialog> {
       _searchTab.dispose();
     }
     super.dispose();
+  }
+
+  /// האפשרויות הגלובליות שאיתן נפתח חיפוש חדש במצב [mode] — לכל מצב
+  /// ברירות מחדל וזיכרון-סשן משלו (במקורב אין אפשרויות מילה).
+  Map<String, bool> _initialOptionsForMode(SearchMode mode) {
+    return switch (mode) {
+      SearchMode.advanced => SearchDefaults.initialOptionsForNewSearch(),
+      SearchMode.exact => SearchDefaults.initialExactOptionsForNewSearch(),
+      SearchMode.fuzzy => const {},
+    };
+  }
+
+  /// משמר את האפשרויות הגלובליות הנוכחיות לזיכרון-הסשן של [mode].
+  void _rememberSessionOptionsForMode(SearchMode mode) {
+    switch (mode) {
+      case SearchMode.advanced:
+        SearchDefaults.rememberSessionOptions(_searchTab.globalSearchOptions);
+      case SearchMode.exact:
+        SearchDefaults.rememberSessionExactOptions(
+            _searchTab.globalSearchOptions);
+      case SearchMode.fuzzy:
+        break;
+    }
+  }
+
+  /// מעבר מצב בדיאלוג של חיפוש חדש: האפשרויות הגלובליות של המצב הישן
+  /// נשמרות לסשן שלו, ואלו של המצב החדש נטענות במקומן — כך שלכל מצב
+  /// סט אפשרויות עצמאי. בעריכת טאב קיים האפשרויות שייכות לטאב ולא מוחלפות.
+  void _swapGlobalOptionsForModeChange(SearchMode oldMode, SearchMode newMode) {
+    if (!_ownsSearchTab || widget.editTab != null || oldMode == newMode) {
+      return;
+    }
+    _rememberSessionOptionsForMode(oldMode);
+    if (newMode == SearchMode.fuzzy) {
+      return; // אין אפשרויות מילה במקורב; המפה תוחלף בכניסה למצב הבא
+    }
+    setState(() {
+      _searchTab.globalSearchOptions
+        ..clear()
+        ..addAll(_initialOptionsForMode(newMode));
+      if (newMode == SearchMode.exact) {
+        // במצב הרגיל אין עורך פר-מילה — הסימון תמיד גלובלי.
+        _searchTab.useGlobalSearchOptions.value = true;
+      }
+    });
+    _searchTab.searchOptionsChanged.value++;
   }
 
   void _performSearch() {
@@ -480,10 +596,6 @@ class _SearchDialogState extends State<SearchDialog> {
       alternativeWords: _searchTab.negativeAlternativeWords,
       searchOptions: effectiveNegativeOptions,
     );
-    if (widget.editTab == null) {
-      SearchDefaults.rememberSessionMode(currentMode);
-    }
-
     if (widget.returnResultOnSubmit) {
       Navigator.of(context).pop(
         SearchDialogResult(
@@ -776,11 +888,14 @@ class _SearchDialogState extends State<SearchDialog> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
+            final oldMode =
+                _searchTab.searchBloc.state.configuration.searchMode;
             context.read<SearchBloc>().add(
                   !_usesStagedSubmit
                       ? SetSearchMode(mode)
                       : SetSearchModeWithoutSearch(mode),
                 );
+            _swapGlobalOptionsForModeChange(oldMode, mode);
             _searchTab.searchFieldFocusNode.requestFocus();
           },
           borderRadius: AppTokens.borderRadiusAll,
@@ -1189,17 +1304,30 @@ class _SearchDialogState extends State<SearchDialog> {
                                           !_searchAllCategories &&
                                               widget.bookTitle == null;
 
-                                      // מצב לא-מתקדם: שורת ברירות המחדל של
-                                      // החיפוש הרגיל (במדויק בלבד) + עץ קטגוריות
+                                      // מצב לא-מתקדם: אפשרויות המילה ושורת
+                                      // ברירות המחדל של החיפוש הרגיל (במדויק
+                                      // בלבד) + עץ קטגוריות
                                       if (!state.isAdvancedSearchEnabled) {
-                                        final defaultsRow =
+                                        final isExact =
                                             state.configuration.searchMode ==
-                                                    SearchMode.exact
-                                                ? _buildExactDefaultsRow(state)
-                                                : null;
+                                                SearchMode.exact;
+                                        final exactControls = isExact
+                                            ? Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  _buildExactOptionsRow(),
+                                                  const SizedBox(height: 4),
+                                                  _buildExactDefaultsRow(state),
+                                                ],
+                                              )
+                                            : null;
                                         if (!showCategory) {
-                                          return defaultsRow ??
-                                              const SizedBox.shrink();
+                                          return exactControls == null
+                                              ? const SizedBox.shrink()
+                                              : SingleChildScrollView(
+                                                  child: exactControls,
+                                                );
                                         }
                                         final categoryTree =
                                             CategoryTreeSelector(
@@ -1207,14 +1335,21 @@ class _SearchDialogState extends State<SearchDialog> {
                                           onSelectionChanged:
                                               _onManualFacetsChanged,
                                         );
-                                        if (defaultsRow == null) {
+                                        if (exactControls == null) {
                                           return categoryTree;
                                         }
                                         return Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
                                           children: [
-                                            defaultsRow,
+                                            // בדיאלוג צר התיבות נשברות לכמה
+                                            // שורות — גלילה פנימית במקום גלישה.
+                                            Flexible(
+                                              fit: FlexFit.loose,
+                                              child: SingleChildScrollView(
+                                                child: exactControls,
+                                              ),
+                                            ),
                                             const SizedBox(height: 8),
                                             Expanded(child: categoryTree),
                                           ],
