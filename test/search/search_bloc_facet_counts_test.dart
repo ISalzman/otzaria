@@ -494,10 +494,19 @@ class _FakeSearchRepository extends SearchRepository {
     ResultsOrder order = ResultsOrder.relevance,
     bool fuzzy = false,
     int distance = 0,
+    String negativeQuery = '',
+    int? negativeDistance,
+    SearchScope scope = SearchScope.wordDistance,
+    SearchScope? negativeScope,
     SearchMode searchMode = SearchMode.exact,
+    bool matchNikud = false,
+    bool matchTaamim = false,
     Map<String, String>? customSpacing,
+    Map<String, String>? negativeCustomSpacing,
     Map<int, List<String>>? alternativeWords,
+    Map<int, List<String>>? negativeAlternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
   }) async {
     searchCalls++;
     lastQuery = query;

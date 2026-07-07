@@ -25,6 +25,8 @@ typedef _FacetRecountInputs = ({
   bool fuzzy,
   int distance,
   SearchMode searchMode,
+  String negativeQuery,
+  SearchScope proximityScope,
 });
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
@@ -73,6 +75,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<UpdateDistance>(_onUpdateDistance);
     on<UpdateDistanceWithoutSearch>(_onUpdateDistanceWithoutSearch);
+    on<UpdateProximityScope>(_onUpdateProximityScope);
+    on<UpdateProximityScopeWithoutSearch>(_onUpdateProximityScopeWithoutSearch);
     on<ToggleSearchMode>(_onToggleSearchMode);
     on<SetSearchMode>(_onSetSearchMode);
     on<SetSearchModeWithoutSearch>(_onSetSearchModeWithoutSearch);
@@ -104,9 +108,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) async {
     final requestId = ++_searchRequestId;
     final query = event.query;
+    final negativeQuery = event.negativeQuery ?? state.negativeQuery;
     if (event.query.isEmpty) {
       emit(state.copyWith(
         searchQuery: event.query,
+        negativeQuery: negativeQuery,
         results: [],
         totalResults: 0,
         facetCounts: const {},
@@ -117,6 +123,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     if (state.currentFacets.isEmpty) {
       emit(state.copyWith(
         searchQuery: event.query,
+        negativeQuery: negativeQuery,
         results: [],
         totalResults: 0,
         isLoading: false,
@@ -141,6 +148,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     emit(state.copyWith(
       searchQuery: query,
+      negativeQuery: negativeQuery,
       isLoading: true,
       facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
       // איפוס שגיאה קודמת בתחילת חיפוש חדש, אחרת הודעת שגיאה ישנה הייתה
@@ -179,11 +187,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         chunkSize: 50, // 50 תוצאות בכל chunk
         fuzzy: state.fuzzy,
         distance: state.distance,
+        negativeQuery: SearchQueryBuilder.sanitizeQuery(negativeQuery),
+        negativeDistance: state.distance,
+        scope: state.proximityScope,
+        negativeScope: state.proximityScope,
         searchMode: state.configuration.searchMode,
         order: state.sortBy,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,
+        negativeCustomSpacing: event.negativeCustomSpacing,
+        negativeAlternativeWords: event.negativeAlternativeWords,
+        negativeSearchOptions: event.negativeSearchOptions,
       );
 
       final allResults = <SearchResult>[];
@@ -272,6 +287,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       fuzzy: state.fuzzy,
       distance: state.distance,
       searchMode: state.configuration.searchMode,
+      negativeQuery: state.negativeQuery,
+      proximityScope: state.proximityScope,
     );
   }
 
@@ -285,16 +302,24 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       inputs.fuzzy,
       inputs.distance,
       inputs.scopeFacets.join(','),
+      event.negativeQuery ?? inputs.negativeQuery,
+      inputs.proximityScope.name,
       jsonEncode(event.customSpacing ?? const <String, String>{}),
       jsonEncode((event.alternativeWords ?? const <int, List<String>>{})
           .map((k, v) => MapEntry(k.toString(), v))),
       jsonEncode(event.searchOptions ?? const <String, Map<String, bool>>{}),
+      jsonEncode(event.negativeCustomSpacing ?? const <String, String>{}),
+      jsonEncode((event.negativeAlternativeWords ?? const <int, List<String>>{})
+          .map((k, v) => MapEntry(k.toString(), v))),
+      jsonEncode(
+          event.negativeSearchOptions ?? const <String, Map<String, bool>>{}),
     ].join('|');
   }
 
   Future<void> _refreshFacetCountsForAllBooks(UpdateSearchQuery event,
       int requestId, String signature, _FacetRecountInputs inputs) async {
     final query = event.query;
+    final negativeQuery = event.negativeQuery ?? inputs.negativeQuery;
     if (query.isEmpty) return;
     if (requestId != _searchRequestId) return;
 
@@ -311,10 +336,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         inputs.scopeFacets,
         fuzzy: inputs.fuzzy,
         distance: inputs.distance,
+        negativeQuery: SearchQueryBuilder.sanitizeQuery(negativeQuery),
+        negativeDistance: inputs.distance,
+        scope: inputs.proximityScope,
+        negativeScope: inputs.proximityScope,
         searchMode: inputs.searchMode,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,
+        negativeCustomSpacing: event.negativeCustomSpacing,
+        negativeAlternativeWords: event.negativeAlternativeWords,
+        negativeSearchOptions: event.negativeSearchOptions,
       );
     } catch (e, stackTrace) {
       // עדכון ה-facets רץ ב-fire-and-forget (unawaited). המנוע דוחה שאילתה
@@ -398,6 +430,36 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     _updateDistanceConfiguration(event.distance, emit);
+  }
+
+  void _onUpdateProximityScope(
+    UpdateProximityScope event,
+    Emitter<SearchState> emit,
+  ) {
+    if (!_updateProximityScopeConfiguration(event.scope, emit)) {
+      return;
+    }
+    add(UpdateSearchQuery(state.searchQuery));
+  }
+
+  void _onUpdateProximityScopeWithoutSearch(
+    UpdateProximityScopeWithoutSearch event,
+    Emitter<SearchState> emit,
+  ) {
+    _updateProximityScopeConfiguration(event.scope, emit);
+  }
+
+  bool _updateProximityScopeConfiguration(
+    SearchScope scope,
+    Emitter<SearchState> emit,
+  ) {
+    final newConfig = state.configuration.copyWith(proximityScope: scope);
+    if (newConfig == state.configuration) {
+      return false;
+    }
+
+    emit(state.copyWith(configuration: newConfig));
+    return true;
   }
 
   void _onToggleSearchMode(
@@ -675,6 +737,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Map<String, String>? customSpacing,
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
+    Map<String, String>? negativeCustomSpacing,
+    Map<int, List<String>>? negativeAlternativeWords,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
   }) async {
     if (state.searchQuery.isEmpty || state.currentFacets.isEmpty) {
       return 0;
@@ -696,10 +761,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       [facet],
       fuzzy: state.fuzzy,
       distance: state.distance,
+      negativeQuery: SearchQueryBuilder.sanitizeQuery(state.negativeQuery),
+      negativeDistance: state.distance,
+      scope: state.proximityScope,
+      negativeScope: state.proximityScope,
       searchMode: state.configuration.searchMode,
       customSpacing: customSpacing,
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
+      negativeCustomSpacing: negativeCustomSpacing,
+      negativeAlternativeWords: negativeAlternativeWords,
+      negativeSearchOptions: negativeSearchOptions,
     );
     debugPrint('🔢 Count result for $facet: $result');
     return result;
@@ -711,6 +783,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Map<String, String>? customSpacing,
     Map<int, List<String>>? alternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
+    Map<String, String>? negativeCustomSpacing,
+    Map<int, List<String>>? negativeAlternativeWords,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
   }) async {
     if (state.searchQuery.isEmpty || state.currentFacets.isEmpty) {
       return {for (final facet in facets) facet: 0};
@@ -737,10 +812,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         missingFacets,
         fuzzy: state.fuzzy,
         distance: state.distance,
+        negativeQuery: SearchQueryBuilder.sanitizeQuery(state.negativeQuery),
+        negativeDistance: state.distance,
+        scope: state.proximityScope,
+        negativeScope: state.proximityScope,
         searchMode: state.configuration.searchMode,
         customSpacing: customSpacing,
         alternativeWords: alternativeWords,
         searchOptions: searchOptions,
+        negativeCustomSpacing: negativeCustomSpacing,
+        negativeAlternativeWords: negativeAlternativeWords,
+        negativeSearchOptions: negativeSearchOptions,
       );
       results.addAll(missingResults);
     }
@@ -862,11 +944,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         offset: state.results.length,
         fuzzy: state.fuzzy,
         distance: state.distance,
+        negativeQuery: SearchQueryBuilder.sanitizeQuery(state.negativeQuery),
+        negativeDistance: state.distance,
+        scope: state.proximityScope,
+        negativeScope: state.proximityScope,
         searchMode: state.configuration.searchMode,
         order: state.sortBy,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,
+        negativeCustomSpacing: event.negativeCustomSpacing,
+        negativeAlternativeWords: event.negativeAlternativeWords,
+        negativeSearchOptions: event.negativeSearchOptions,
       );
 
       final combined = [...state.results, ...nextResults];

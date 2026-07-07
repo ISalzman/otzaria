@@ -17,12 +17,40 @@ class AdvancedSearchControls extends StatefulWidget {
   final VoidCallback? onEmptySubmit;
   final ValueNotifier<bool>? inputFocusNotifier;
 
+  /// האם להציג את תיבות "ניקוד"/"טעמים" — רק במסלולים שמריצים חיפוש
+  /// אינדקס. חיפוש בתוך ספר פתוח רץ מקומית ואינו תומך בהתאמת ניקוד,
+  /// והצגת הפקד שם הייתה בחירה שנבלעת בלי השפעה.
+  final bool supportsVocalized;
+  final TextEditingController? queryController;
+  final FocusNode? searchFieldFocusNode;
+  final Map<String, Map<String, bool>>? searchOptions;
+  final Map<String, bool>? globalSearchOptions;
+  final ValueNotifier<bool>? useGlobalSearchOptions;
+  final Map<int, List<String>>? alternativeWords;
+  final Map<String, String>? spacingValues;
+  final ValueNotifier<int>? searchOptionsChanged;
+  final ValueNotifier<int>? alternativeWordsChanged;
+  final ValueNotifier<int>? spacingValuesChanged;
+  final bool enableSavedAlternatives;
+
   const AdvancedSearchControls({
     super.key,
     required this.tab,
     this.compactMode = false,
     this.onEmptySubmit,
     this.inputFocusNotifier,
+    this.supportsVocalized = false,
+    this.queryController,
+    this.searchFieldFocusNode,
+    this.searchOptions,
+    this.globalSearchOptions,
+    this.useGlobalSearchOptions,
+    this.alternativeWords,
+    this.spacingValues,
+    this.searchOptionsChanged,
+    this.alternativeWordsChanged,
+    this.spacingValuesChanged,
+    this.enableSavedAlternatives = true,
   });
 
   @override
@@ -41,21 +69,42 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   int? _wordIndex;
   List<String> _words = [];
 
+  TextEditingController get _queryController =>
+      widget.queryController ?? widget.tab.queryController;
+  FocusNode get _searchFieldFocusNode =>
+      widget.searchFieldFocusNode ?? widget.tab.searchFieldFocusNode;
+  Map<String, Map<String, bool>> get _searchOptions =>
+      widget.searchOptions ?? widget.tab.searchOptions;
+  Map<String, bool> get _globalSearchOptions =>
+      widget.globalSearchOptions ?? widget.tab.globalSearchOptions;
+  ValueNotifier<bool> get _useGlobalSearchOptions =>
+      widget.useGlobalSearchOptions ?? widget.tab.useGlobalSearchOptions;
+  Map<int, List<String>> get _alternativeWords =>
+      widget.alternativeWords ?? widget.tab.alternativeWords;
+  Map<String, String> get _spacingValues =>
+      widget.spacingValues ?? widget.tab.spacingValues;
+  ValueNotifier<int> get _searchOptionsChanged =>
+      widget.searchOptionsChanged ?? widget.tab.searchOptionsChanged;
+  ValueNotifier<int> get _alternativeWordsChanged =>
+      widget.alternativeWordsChanged ?? widget.tab.alternativeWordsChanged;
+  ValueNotifier<int> get _spacingValuesChanged =>
+      widget.spacingValuesChanged ?? widget.tab.spacingValuesChanged;
+
   @override
   void initState() {
     super.initState();
-    widget.tab.queryController.addListener(_onQueryChanged);
-    widget.tab.searchFieldFocusNode.addListener(_onFocusChanged);
-    widget.tab.useGlobalSearchOptions.addListener(_onGlobalModeChanged);
+    _queryController.addListener(_onQueryChanged);
+    _searchFieldFocusNode.addListener(_onFocusChanged);
+    _useGlobalSearchOptions.addListener(_onGlobalModeChanged);
     _alternativeWordFocusNode.addListener(_updateInputFocusState);
     _analyzeCurrentWord();
   }
 
   @override
   void dispose() {
-    widget.tab.queryController.removeListener(_onQueryChanged);
-    widget.tab.searchFieldFocusNode.removeListener(_onFocusChanged);
-    widget.tab.useGlobalSearchOptions.removeListener(_onGlobalModeChanged);
+    _queryController.removeListener(_onQueryChanged);
+    _searchFieldFocusNode.removeListener(_onFocusChanged);
+    _useGlobalSearchOptions.removeListener(_onGlobalModeChanged);
     _alternativeWordFocusNode.removeListener(_updateInputFocusState);
     _alternativeWordController.dispose();
     _alternativeWordFocusNode.dispose();
@@ -89,8 +138,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   }
 
   void _analyzeCurrentWord() {
-    final text = widget.tab.queryController.text;
-    final selection = widget.tab.queryController.selection;
+    final text = _queryController.text;
+    final selection = _queryController.selection;
 
     if (text.isEmpty || selection.baseOffset < 0) {
       if (_currentWord != null) {
@@ -140,12 +189,14 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     }
 
     _currentAlternatives.clear();
-    final alts = widget.tab.alternativeWords[index];
+    final alts = _alternativeWords[index];
     if (alts != null) {
       _currentAlternatives.addAll(alts);
     }
     // כשהמתג דלוק — החלופות השמורות של המילה מוצגות ברשימה כרגילות
-    if (widget.tab.useSavedAlternatives && index < _words.length) {
+    if (widget.enableSavedAlternatives &&
+        widget.tab.useSavedAlternatives &&
+        index < _words.length) {
       final word = _words[index];
       for (final alt in SavedAlternativesStore.alternativesFor(word)) {
         if (alt != word && !_currentAlternatives.contains(alt)) {
@@ -157,7 +208,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     final wordsCount = _words.where((w) => w.isNotEmpty).length;
     if (index < wordsCount - 1) {
       final key = '$index-${index + 1}';
-      final spacing = widget.tab.spacingValues[key] ?? '';
+      final spacing = _spacingValues[key] ?? '';
       _getSpacingController(index, index + 1).text = spacing;
     }
   }
@@ -183,11 +234,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     // שאינה ניתנת לאיתור מדויק (נורמליזציה משנת-אורך) מקבלת את גבולות
     // המקטע שלה — הצבת הסמן באמצע הטווח נכונה בשני המקרים.
     final spans = SearchQueryBuilder.queryWordSpans(
-      widget.tab.queryController.text,
+      _queryController.text,
     );
     if (newIndex >= spans.length) return;
     final span = spans[newIndex];
-    widget.tab.queryController.selection = TextSelection.collapsed(
+    _queryController.selection = TextSelection.collapsed(
       offset: span.start + (span.end - span.start) ~/ 2,
     );
   }
@@ -195,7 +246,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   @override
   Widget build(BuildContext context) {
     final isWordSelected = _currentWord != null && _wordIndex != null;
-    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+    final useGlobal = _useGlobalSearchOptions.value;
     // הצ'קבוקסים פעילים אם במצב גלובלי או אם נבחרה מילה
     final checkboxesEnabled = useGlobal || isWordSelected;
     // ההגדרות הפר-מיליות (מילים חילופיות + מרווח) תמיד פר-מילה
@@ -306,7 +357,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   /// מתג הרחבת החיפוש בחלופות השמורות — כבוי בכל חיפוש חדש.
   Widget _buildSavedAlternativesToggle() {
     final colorScheme = Theme.of(context).colorScheme;
-    final enabled = widget.tab.useSavedAlternatives;
+    final enabled =
+        widget.enableSavedAlternatives && widget.tab.useSavedAlternatives;
 
     return Tooltip(
       message: enabled
@@ -362,7 +414,13 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         children: [
           MenuAnchor(
             menuChildren: [
-              for (final key in SearchQueryBuilder.availableWordOptionKeys)
+              // "ניקוד"/"טעמים" מוצעות רק במסלולים שתומכים בחיפוש מנוקד —
+              // כברירת מחדל הן מגבילות כל חיפוש חדש לטקסטים מנוקדים בלבד.
+              for (final key in [
+                ...SearchQueryBuilder.availableWordOptionKeys,
+                if (widget.supportsVocalized)
+                  ...SearchQueryBuilder.vocalizedWordOptionKeys,
+              ])
                 CheckboxMenuButton(
                   value: defaults[key] ?? false,
                   closeOnActivate: false,
@@ -371,9 +429,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                       SearchDefaults.saveDefaults(
                           {...defaults, key: checked ?? false});
                       // שינוי ברירת מחדל מוחל מיד גם על הריבוע בחלונית הפתוחה
-                      widget.tab.globalSearchOptions[key] = checked ?? false;
+                      _globalSearchOptions[key] = checked ?? false;
                     });
-                    widget.tab.searchOptionsChanged.value++;
+                    _searchOptionsChanged.value++;
                   },
                   child: Text(key),
                 ),
@@ -395,12 +453,12 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               icon: FluentIcons.arrow_reset_24_regular,
               onPressed: () {
                 setState(() {
-                  widget.tab.globalSearchOptions
+                  _globalSearchOptions
                     ..clear()
                     ..addAll(SearchDefaults.loadDefaults());
-                  widget.tab.searchOptions.clear();
+                  _searchOptions.clear();
                 });
-                widget.tab.searchOptionsChanged.value++;
+                _searchOptionsChanged.value++;
               },
             ),
           ),
@@ -412,7 +470,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   /// מתג קומפקטי לבחירת היקף ההגדרות: גלובלי לכל המילים או פר-מילה.
   Widget _buildScopeToggle() {
     final colorScheme = Theme.of(context).colorScheme;
-    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+    final useGlobal = _useGlobalSearchOptions.value;
 
     return Tooltip(
       message: useGlobal
@@ -443,8 +501,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               child: Switch(
                 value: useGlobal,
                 onChanged: (value) {
-                  widget.tab.useGlobalSearchOptions.value = value;
-                  widget.tab.searchOptionsChanged.value++;
+                  _useGlobalSearchOptions.value = value;
+                  _searchOptionsChanged.value++;
                 },
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -530,8 +588,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                       onPressed: isEnabled && _wordIndex != null
                           ? () {
                               final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                              widget.tab.spacingValues.remove(key);
-                              widget.tab.spacingValuesChanged.value++;
+                              _spacingValues.remove(key);
+                              _spacingValuesChanged.value++;
                               _getSpacingController(
                                       _wordIndex!, _wordIndex! + 1)
                                   .clear();
@@ -553,15 +611,15 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                         _wordIndex != null &&
                         text.trim().isNotEmpty) {
                       final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                      widget.tab.spacingValues[key] = text.trim();
-                      widget.tab.spacingValuesChanged.value++;
+                      _spacingValues[key] = text.trim();
+                      _spacingValuesChanged.value++;
                     }
                   },
                   onSubmitted: (text) {
                     if (text.trim().isNotEmpty && _wordIndex != null) {
                       final key = '${_wordIndex!}-${_wordIndex! + 1}';
-                      widget.tab.spacingValues[key] = text.trim();
-                      widget.tab.spacingValuesChanged.value++;
+                      _spacingValues[key] = text.trim();
+                      _spacingValuesChanged.value++;
                       widget.onEmptySubmit?.call();
                     } else {
                       widget.onEmptySubmit?.call();
@@ -648,11 +706,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       }
     });
 
-    widget.tab.alternativeWords.putIfAbsent(_wordIndex!, () => []);
-    if (!widget.tab.alternativeWords[_wordIndex!]!.contains(text)) {
-      widget.tab.alternativeWords[_wordIndex!]!.add(text);
+    _alternativeWords.putIfAbsent(_wordIndex!, () => []);
+    if (!_alternativeWords[_wordIndex!]!.contains(text)) {
+      _alternativeWords[_wordIndex!]!.add(text);
     }
-    widget.tab.alternativeWordsChanged.value++;
+    _alternativeWordsChanged.value++;
     // כל חלופה שנוספת נשמרת גם במאגר הגלובלי עבור המילה הנוכחית
     SavedAlternativesStore.addAlternative(_currentWord!, text);
     _alternativeWordController.clear();
@@ -666,49 +724,62 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       _currentAlternatives.removeAt(index);
     });
 
-    widget.tab.alternativeWords[_wordIndex!]?.remove(word);
-    if (widget.tab.alternativeWords[_wordIndex!]?.isEmpty ?? false) {
-      widget.tab.alternativeWords.remove(_wordIndex!);
+    _alternativeWords[_wordIndex!]?.remove(word);
+    if (_alternativeWords[_wordIndex!]?.isEmpty ?? false) {
+      _alternativeWords.remove(_wordIndex!);
     }
-    widget.tab.alternativeWordsChanged.value++;
+    _alternativeWordsChanged.value++;
     // הסרה מוחקת את החלופה גם מהמאגר הגלובלי של המילה הנוכחית
     if (_currentWord != null) {
       SavedAlternativesStore.removeAlternative(_currentWord!, word);
     }
   }
 
-  Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
-    const options = SearchQueryBuilder.availableWordOptionKeys;
+  /// הסברים לאפשרויות שהמשמעות שלהן אינה מובנת מהשם לבדו.
+  static const Map<String, String> _optionTooltips = {
+    SearchQueryBuilder.matchNikudOptionKey:
+        'התאמת ניקוד: ניקוד שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מנוקדים.',
+    SearchQueryBuilder.matchTaamimOptionKey:
+        'התאמת טעמי המקרא: טעם שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מוטעמים.',
+  };
 
-    final useGlobal = widget.tab.useGlobalSearchOptions.value;
+  Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
+    final options = [
+      ...SearchQueryBuilder.availableWordOptionKeys,
+      if (widget.supportsVocalized)
+        ...SearchQueryBuilder.vocalizedWordOptionKeys,
+    ];
+
+    final useGlobal = _useGlobalSearchOptions.value;
 
     Widget buildCheckbox(String option) {
       final colorScheme = Theme.of(context).colorScheme;
       bool isChecked = false;
       if (isEnabled) {
         if (useGlobal) {
-          isChecked = widget.tab.globalSearchOptions[option] ?? false;
+          isChecked = _globalSearchOptions[option] ?? false;
         } else {
           final key = '${_currentWord}_$_wordIndex';
-          isChecked = widget.tab.searchOptions[key]?[option] ?? false;
+          isChecked = _searchOptions[key]?[option] ?? false;
         }
       }
 
-      return Opacity(
+      final tooltip = _optionTooltips[option];
+      final checkbox = Opacity(
         opacity: isEnabled ? 1.0 : 0.5,
         child: InkWell(
           onTap: isEnabled
               ? () {
                   setState(() {
                     if (useGlobal) {
-                      widget.tab.globalSearchOptions[option] = !isChecked;
+                      _globalSearchOptions[option] = !isChecked;
                     } else {
                       final key = '${_currentWord}_$_wordIndex';
-                      widget.tab.searchOptions.putIfAbsent(key, () => {});
-                      widget.tab.searchOptions[key]![option] = !isChecked;
+                      _searchOptions.putIfAbsent(key, () => {});
+                      _searchOptions[key]![option] = !isChecked;
                     }
                   });
-                  widget.tab.searchOptionsChanged.value++;
+                  _searchOptionsChanged.value++;
                 }
               : null,
           borderRadius: AppTokens.borderRadiusAll,
@@ -744,6 +815,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           ),
         ),
       );
+      return tooltip == null
+          ? checkbox
+          : Tooltip(message: tooltip, child: checkbox);
     }
 
     if (!compactMode) {
@@ -770,35 +844,18 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(child: buildCheckbox(options[0])),
-                const SizedBox(width: 8),
-                Expanded(child: buildCheckbox(options[1])),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: buildCheckbox(options[2])),
-                const SizedBox(width: 8),
-                Expanded(child: buildCheckbox(options[3])),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: buildCheckbox(options[4])),
-                const SizedBox(width: 8),
-                Expanded(child: buildCheckbox(options[5])),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: buildCheckbox(options[6])),
-              ],
-            ),
+            for (var i = 0; i < options.length; i += 2) ...[
+              if (i > 0) const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: buildCheckbox(options[i])),
+                  if (i + 1 < options.length) ...[
+                    const SizedBox(width: 8),
+                    Expanded(child: buildCheckbox(options[i + 1])),
+                  ],
+                ],
+              ),
+            ],
           ],
         );
       },

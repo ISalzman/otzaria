@@ -14,6 +14,7 @@ class SearchState {
   final Set<Book> booksToSearch;
   final bool isLoading;
   final String searchQuery;
+  final String negativeQuery;
   final int totalResults;
 
   // מידע על ספירות לכל facet - מתעדכן עם כל חיפוש
@@ -39,6 +40,7 @@ class SearchState {
     this.booksToSearch = const {},
     this.isLoading = false,
     this.searchQuery = '',
+    this.negativeQuery = '',
     this.totalResults = 0,
     this.filterQuery,
     this.filteredBooks,
@@ -53,6 +55,7 @@ class SearchState {
     Set<Book>? booksToSearch,
     bool? isLoading,
     String? searchQuery,
+    String? negativeQuery,
     int? totalResults,
     String? filterQuery,
     List<Book>? filteredBooks,
@@ -66,6 +69,7 @@ class SearchState {
       booksToSearch: booksToSearch ?? this.booksToSearch,
       isLoading: isLoading ?? this.isLoading,
       searchQuery: searchQuery ?? this.searchQuery,
+      negativeQuery: negativeQuery ?? this.negativeQuery,
       totalResults: totalResults ?? this.totalResults,
       filterQuery: filterQuery,
       filteredBooks: filteredBooks,
@@ -80,6 +84,7 @@ class SearchState {
 
   // Getters לנוחות גישה להגדרות (backward compatibility)
   int get distance => configuration.distance;
+  SearchScope get proximityScope => configuration.proximityScope;
   bool get fuzzy => configuration.fuzzy;
   bool get isAdvancedSearchEnabled => configuration.isAdvancedSearchEnabled;
   List<String> get currentFacets => configuration.currentFacets;

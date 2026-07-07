@@ -24,11 +24,32 @@ extension SearchModePresentation on SearchMode {
       };
 }
 
+extension SearchScopePresentation on SearchScope {
+  String get label => switch (this) {
+        SearchScope.wordDistance => 'מרווח בין מילים',
+        SearchScope.sameParagraph => 'באותה פסקה',
+        SearchScope.sameSection => 'תחת אותה כותרת',
+      };
+
+  String get tooltip => switch (this) {
+        SearchScope.wordDistance =>
+          'המילים מופיעות לפי הסדר, עם מגבלת מילים ביניהן.',
+        SearchScope.sameParagraph =>
+          'כל מילות החיפוש נמצאות באותה פסקה, בכל סדר ובכל מרחק.',
+        SearchScope.sameSection =>
+          'כל מילות החיפוש נמצאות תחת אותה כותרת (סעיף/פרק), גם בפסקאות שונות.',
+      };
+}
+
 /// מחלקה שמרכזת את כל הגדרות החיפוש במקום אחד
 /// כוללת הגדרות קיימות והגדרות עתידיות לרגקס
 class SearchConfiguration {
   // הגדרות חיפוש קיימות
   final int distance;
+
+  /// טווח הקרבה בין מילות החיפוש במצב מתקדם: מרווח מילים (ברירת מחדל),
+  /// כל המילים באותה פסקה, או כל המילים תחת אותה כותרת (סעיף/פרק).
+  final SearchScope proximityScope;
   final SearchMode searchMode;
   final ResultsOrder sortBy;
   final int numResults;
@@ -37,6 +58,10 @@ class SearchConfiguration {
   /// טווח החיפוש המקורי שנקבע בדיאלוג (לא משתנה ע"י לחיצה בעץ התוצאות)
   /// משמש לספירת facets ולבאנר חיווי
   final List<String> searchScopeFacets;
+
+  // חיפוש מנוקד (ניקוד/טעמים) אינו דגל גלובלי: הוא אפשרות פר-מילה במפות
+  // searchOptions של הטאב, כמו שאר אפשרויות החיפוש המתקדם — ראה
+  // SearchQueryBuilder.vocalizedWordOptionKeys.
 
   // הגדרות רגקס עתידיות (מוכנות להרחבה)
   final bool regexEnabled;
@@ -48,6 +73,7 @@ class SearchConfiguration {
   const SearchConfiguration({
     // ערכי ברירת מחדל קיימים
     this.distance = 0,
+    this.proximityScope = SearchScope.wordDistance,
     this.searchMode = SearchMode.advanced,
     this.sortBy = ResultsOrder.catalogue,
     this.numResults = 100,
@@ -64,6 +90,7 @@ class SearchConfiguration {
   /// יוצר עותק עם שינויים
   SearchConfiguration copyWith({
     int? distance,
+    SearchScope? proximityScope,
     SearchMode? searchMode,
     ResultsOrder? sortBy,
     int? numResults,
@@ -77,6 +104,7 @@ class SearchConfiguration {
   }) {
     return SearchConfiguration(
       distance: distance ?? this.distance,
+      proximityScope: proximityScope ?? this.proximityScope,
       searchMode: searchMode ?? this.searchMode,
       sortBy: sortBy ?? this.sortBy,
       numResults: numResults ?? this.numResults,
@@ -94,6 +122,7 @@ class SearchConfiguration {
   Map<String, dynamic> toMap() {
     return {
       'distance': distance,
+      'proximityScope': proximityScope.index,
       'searchMode': searchMode.index,
       'sortBy': sortBy.index,
       'numResults': numResults,
@@ -114,8 +143,15 @@ class SearchConfiguration {
         ? SearchMode.advanced
         : SearchMode.values[rawSearchModeIndex];
 
+    final rawProximityScopeIndex = map['proximityScope'] as int? ?? 0;
+    final normalizedProximityScope =
+        rawProximityScopeIndex >= SearchScope.values.length
+            ? SearchScope.wordDistance
+            : SearchScope.values[rawProximityScopeIndex];
+
     return SearchConfiguration(
       distance: map['distance'] ?? 0,
+      proximityScope: normalizedProximityScope,
       searchMode: normalizedSearchMode,
       sortBy: ResultsOrder.values[map['sortBy'] ?? 0],
       numResults: map['numResults'] ?? 100,
@@ -151,6 +187,7 @@ class SearchConfiguration {
     if (identical(this, other)) return true;
     return other is SearchConfiguration &&
         other.distance == distance &&
+        other.proximityScope == proximityScope &&
         other.searchMode == searchMode &&
         other.sortBy == sortBy &&
         other.numResults == numResults &&
@@ -167,6 +204,7 @@ class SearchConfiguration {
   int get hashCode {
     return Object.hash(
       distance,
+      proximityScope,
       searchMode,
       sortBy,
       numResults,
@@ -184,6 +222,7 @@ class SearchConfiguration {
   String toString() {
     return 'SearchConfiguration('
         'distance: $distance, '
+        'proximityScope: $proximityScope, '
         'searchMode: $searchMode, '
         'sortBy: $sortBy, '
         'numResults: $numResults, '

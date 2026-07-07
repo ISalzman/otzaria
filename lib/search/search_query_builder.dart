@@ -49,10 +49,37 @@ class SearchQueryBuilder {
     typoToleranceOptionKey,
   ];
 
+  static const String matchNikudOptionKey = 'ניקוד';
+  static const String matchTaamimOptionKey = 'טעמים';
+
+  /// מפתחות "ניקוד"/"טעמים": תיבות סימון כמו שאר האפשרויות (גלובלי או
+  /// פר-מילה), אך סימון שלהן מעביר את החיפוש לשדה המנוקד במנוע ומחייב את
+  /// הסימנים שהוקלדו במילים המסומנות (המנוע מפרש את המפתחות פר-מילה).
+  /// אינן חלק מ-[availableWordOptionKeys] כי הן מוצגות רק במסלולים שמריצים
+  /// חיפוש אינדקס — חיפוש בתוך ספר פתוח אינו תומך בהתאמת ניקוד.
+  static const List<String> vocalizedWordOptionKeys = [
+    matchNikudOptionKey,
+    matchTaamimOptionKey,
+  ];
+
+  /// האם אפשרויות פר-מילה מבקשות חיפוש מנוקד (מפתח ניקוד/טעמים דלוק
+  /// באחת המילים). קובע אם מותר למחוק ניקוד מהשאילתה לפני החיפוש.
+  static bool optionsRequestVocalized(
+      Map<String, Map<String, bool>> options) {
+    return options.values.any(
+      (map) => vocalizedWordOptionKeys.any((key) => map[key] == true),
+    );
+  }
+
+  /// כמו [optionsRequestVocalized] עבור מפת האפשרויות הגלובלית.
+  static bool globalOptionsRequestVocalized(Map<String, bool> options) =>
+      vocalizedWordOptionKeys.any((key) => options[key] == true);
+
   static String buildWordKey(String word, int index) => '${word}_$index';
 
   static Map<String, bool> disabledWordOptionsTemplate() => {
         for (final option in availableWordOptionKeys) option: false,
+        for (final option in vocalizedWordOptionKeys) option: false,
       };
 
   /// פיצול שאילתה למילות חיפוש. מאציל למנוע ה-Rust

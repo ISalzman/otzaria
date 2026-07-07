@@ -17,11 +17,21 @@ class ClearFilter extends SearchEvent {
 
 class UpdateSearchQuery extends SearchEvent {
   final String query;
+  final String? negativeQuery;
   final Map<String, String>? customSpacing;
   final Map<int, List<String>>? alternativeWords;
   final Map<String, Map<String, bool>>? searchOptions;
+  final Map<String, String>? negativeCustomSpacing;
+  final Map<int, List<String>>? negativeAlternativeWords;
+  final Map<String, Map<String, bool>>? negativeSearchOptions;
   UpdateSearchQuery(this.query,
-      {this.customSpacing, this.alternativeWords, this.searchOptions});
+      {this.negativeQuery,
+      this.customSpacing,
+      this.alternativeWords,
+      this.searchOptions,
+      this.negativeCustomSpacing,
+      this.negativeAlternativeWords,
+      this.negativeSearchOptions});
 }
 
 class UpdateDistance extends SearchEvent {
@@ -32,6 +42,17 @@ class UpdateDistance extends SearchEvent {
 class UpdateDistanceWithoutSearch extends SearchEvent {
   final int distance;
   UpdateDistanceWithoutSearch(this.distance);
+}
+
+/// עדכון טווח הקרבה בין מילות החיפוש (מרווח מילים / פסקה / כותרת).
+class UpdateProximityScope extends SearchEvent {
+  final SearchScope scope;
+  UpdateProximityScope(this.scope);
+}
+
+class UpdateProximityScopeWithoutSearch extends SearchEvent {
+  final SearchScope scope;
+  UpdateProximityScopeWithoutSearch(this.scope);
 }
 
 class ToggleSearchMode extends SearchEvent {}
@@ -124,6 +145,14 @@ class LoadMoreResults extends SearchEvent {
   final Map<String, String>? customSpacing;
   final Map<int, List<String>>? alternativeWords;
   final Map<String, Map<String, bool>>? searchOptions;
+  final Map<String, String>? negativeCustomSpacing;
+  final Map<int, List<String>>? negativeAlternativeWords;
+  final Map<String, Map<String, bool>>? negativeSearchOptions;
   LoadMoreResults(
-      {this.customSpacing, this.alternativeWords, this.searchOptions});
+      {this.customSpacing,
+      this.alternativeWords,
+      this.searchOptions,
+      this.negativeCustomSpacing,
+      this.negativeAlternativeWords,
+      this.negativeSearchOptions});
 }

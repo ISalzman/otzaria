@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/search/view/tantivy_full_text_search.dart';
@@ -403,8 +404,18 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         );
       }
 
-      // החיפוש עובד תמיד על טקסט ללא ניקוד.
-      if (utils.hasNikud(query)) {
+      // חיפוש רגיל עובד על טקסט ללא ניקוד; כשאפשרות "ניקוד"/"טעמים" מסומנת
+      // (במצב מתקדם, גלובלית או פר-מילה) הסימנים שהוקלדו הם חלק מהשאילתה —
+      // המנוע דורש אותם — ואסור למחוק. הבדיקה על מפות המקור, כי האפשרויות
+      // האפקטיביות נבנות מהשאילתה אחרי המחיקה.
+      final fieldConfig = widget.tab.searchBloc.state.configuration;
+      final vocalizedSearch = fieldConfig.searchMode == SearchMode.advanced &&
+          (widget.tab.useGlobalSearchOptions.value
+              ? SearchQueryBuilder.globalOptionsRequestVocalized(
+                  widget.tab.globalSearchOptions)
+              : SearchQueryBuilder.optionsRequestVocalized(
+                  widget.tab.searchOptions));
+      if (!vocalizedSearch && utils.hasNikud(query)) {
         query = utils.removeVolwels(query);
       }
 
@@ -415,6 +426,15 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         customSpacing: widget.tab.spacingValues,
         alternativeWords: widget.tab.alternativeWords,
         searchOptions: widget.tab.effectiveSearchOptions(query: query),
+      );
+      final normalizedNegativeParameters =
+          SearchQueryBuilder.normalizeParametersForMode(
+        searchMode,
+        customSpacing: widget.tab.negativeSpacingValues,
+        alternativeWords: widget.tab.negativeAlternativeWords,
+        searchOptions: widget.tab.effectiveNegativeSearchOptions(
+          query: widget.tab.negativeQueryController.text,
+        ),
       );
 
       widget.tab.updateTitleFromAppliedQuery(query);
@@ -433,9 +453,14 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
       context.read<SearchBloc>().add(
             UpdateSearchQuery(
               query,
+              negativeQuery: widget.tab.negativeQueryController.text,
               customSpacing: normalizedParameters.customSpacing,
               alternativeWords: normalizedParameters.alternativeWords,
               searchOptions: normalizedParameters.searchOptions,
+              negativeCustomSpacing: normalizedNegativeParameters.customSpacing,
+              negativeAlternativeWords:
+                  normalizedNegativeParameters.alternativeWords,
+              negativeSearchOptions: normalizedNegativeParameters.searchOptions,
             ),
           );
       widget.tab.isLeftPaneOpen.value = false;
