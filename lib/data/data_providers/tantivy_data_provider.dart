@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path/path.dart' as p;
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_engine_gateway.dart';
@@ -141,6 +143,66 @@ class TantivyDataProvider {
   Future<bool> get hasMagicDictionary async =>
       (await engine).hasMagicDictionary();
 
+  /// טוען אל המנוע את מילוני ההרחבה של החיפוש המתקדם — מילון התרגום
+  /// הארמי-עברי (אפשרות "תרגום ארמי") ומילון ראשי-התיבות (אפשרות
+  /// "ראשי תיבות"). המילונים הם assets מוטמעים, אך המנוע קורא רק מנתיב
+  /// קובץ — לכן הם מחולצים לדיסק תחילה. best-effort: כשל אינו שובר את
+  /// אתחול המנוע, האפשרות פשוט לא תרחיב דבר.
+  Future<void> _attachSearchLexicons(SearchEngine engine) async {
+    final translationPath = await _materializeBundledAsset(
+        'assets/dictionary.json', 'dictionary.json');
+    if (translationPath != null) {
+      final loaded =
+          engine.setTranslationDictionaryPath(path: translationPath);
+      debugPrint(loaded
+          ? '🔤 מילון תרגום ארמי נטען: $translationPath'
+          : '⚠️ מילון התרגום הארמי לא נטען ($translationPath)');
+    }
+    final acronymsPath =
+        await _materializeBundledAsset('assets/Acronyms.json', 'Acronyms.json');
+    if (acronymsPath != null) {
+      final loaded = engine.setAcronymsDictionaryPath(path: acronymsPath);
+      debugPrint(loaded
+          ? '🔤 מילון ראשי-תיבות נטען: $acronymsPath'
+          : '⚠️ מילון ראשי-התיבות לא נטען ($acronymsPath)');
+    }
+  }
+
+  /// מחלץ asset מוטמע לקובץ בדיסק ומחזיר את נתיבו, או null בכשל.
+  /// נכתב מחדש כשהתוכן בדיסק שונה מה-asset — השוואת בייטים מלאה, לא רק
+  /// גודל: עדכון מילון ששומר על אותו אורך (תיקון ערך בודד) חייב להתפיס.
+  /// הקריאה החוזרת זולה יחסית (המילונים 1-3MB, פעם אחת באתחול).
+  Future<String?> _materializeBundledAsset(
+      String assetKey, String fileName) async {
+    try {
+      final data = await rootBundle.load(assetKey);
+      final bytes =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final dir =
+          Directory(p.join(await AppPaths.getDataRootPath(), 'dictionaries'));
+      await dir.create(recursive: true);
+      final file = File(p.join(dir.path, fileName));
+      final upToDate = await file.exists() &&
+          await file.length() == bytes.length &&
+          _bytesEqual(await file.readAsBytes(), bytes);
+      if (!upToDate) {
+        await file.writeAsBytes(bytes, flush: true);
+      }
+      return file.path;
+    } catch (e) {
+      debugPrint('⚠️ חילוץ $assetKey נכשל: $e');
+      return null;
+    }
+  }
+
+  static bool _bytesEqual(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   /// מוריד את מילון המורפולוגיה האחרון (אם חסר/ישן) וטוען אותו אל המנוע
   /// החי, כך שהחיפוש המקורב יתחיל להשתמש בו מיד — בלי הפעלה מחדש.
   ///
@@ -240,6 +302,9 @@ class TantivyDataProvider {
 
       // טעינת מילון מורפולוגי לחיפוש המקורב (best-effort, לא חוסם).
       await _attachMagicDictionary(engine);
+
+      // מילוני החיפוש המתקדם: תרגום ארמי + ראשי-תיבות (best-effort).
+      await _attachSearchLexicons(engine);
 
       // If we got here, success! Remove sentinel.
       try {
