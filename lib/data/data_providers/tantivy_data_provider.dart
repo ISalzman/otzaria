@@ -359,13 +359,22 @@ class TantivyDataProvider {
   Future<int> countTexts(String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
       int distance = 0,
+      String negativeQuery = '',
+      int? negativeDistance,
+      SearchScope scope = SearchScope.wordDistance,
+      SearchScope? negativeScope,
       SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
+      Map<String, String>? negativeCustomSpacing,
       Map<int, List<String>>? alternativeWords,
-      Map<String, Map<String, bool>>? searchOptions}) async {
+      Map<int, List<String>>? negativeAlternativeWords,
+      Map<String, Map<String, bool>>? searchOptions,
+      Map<String, Map<String, bool>>? negativeSearchOptions,
+      bool matchNikud = false,
+      bool matchTaamim = false}) async {
     // Global cache check
     final cacheKey =
-        '$query|${facets.join(',')}|$fuzzy|$searchMode|$distance|${customSpacing.toString()}|${alternativeWords.toString()}|${searchOptions.toString()}';
+        '$query|not=$negativeQuery|${facets.join(',')}|$fuzzy|$searchMode|$distance|${negativeDistance ?? distance}|$scope|${negativeScope ?? scope}|${customSpacing.toString()}|${negativeCustomSpacing.toString()}|${alternativeWords.toString()}|${negativeAlternativeWords.toString()}|${searchOptions.toString()}|${negativeSearchOptions.toString()}|$matchNikud|$matchTaamim';
 
     if (_lastCachedQuery == query && _globalFacetCache.containsKey(cacheKey)) {
       debugPrint(
@@ -389,9 +398,18 @@ class TantivyDataProvider {
           facets: facets,
           searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
           distance: distance,
+          negativeQuery: negativeQuery,
+          negativeDistance: negativeDistance ?? distance,
+          scope: scope,
+          negativeScope: negativeScope ?? scope,
           customSpacing: customSpacing ?? const {},
+          negativeCustomSpacing: negativeCustomSpacing ?? const {},
           alternativeWords: alternativeWords ?? const {},
+          negativeAlternativeWords: negativeAlternativeWords ?? const {},
           searchOptions: searchOptions ?? const {},
+          negativeSearchOptions: negativeSearchOptions ?? const {},
+          matchNikud: matchNikud,
+          matchTaamim: matchTaamim,
         ),
       );
 
@@ -446,10 +464,19 @@ class TantivyDataProvider {
     List<String> facets, {
     bool fuzzy = false,
     int distance = 0,
+    String negativeQuery = '',
+    int? negativeDistance,
+    SearchScope scope = SearchScope.wordDistance,
+    SearchScope? negativeScope,
     SearchMode searchMode = SearchMode.exact,
     Map<String, String>? customSpacing,
+    Map<String, String>? negativeCustomSpacing,
     Map<int, List<String>>? alternativeWords,
+    Map<int, List<String>>? negativeAlternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
+    bool matchNikud = false,
+    bool matchTaamim = false,
   }) async {
     final results = await _searchGateway.countByBook(
       RustSearchEngineOperations(await engine),
@@ -458,9 +485,18 @@ class TantivyDataProvider {
         facets: facets,
         searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
         distance: distance,
+        negativeQuery: negativeQuery,
+        negativeDistance: negativeDistance ?? distance,
+        scope: scope,
+        negativeScope: negativeScope ?? scope,
         customSpacing: customSpacing ?? const {},
+        negativeCustomSpacing: negativeCustomSpacing ?? const {},
         alternativeWords: alternativeWords ?? const {},
+        negativeAlternativeWords: negativeAlternativeWords ?? const {},
         searchOptions: searchOptions ?? const {},
+        negativeSearchOptions: negativeSearchOptions ?? const {},
+        matchNikud: matchNikud,
+        matchTaamim: matchTaamim,
       ),
     );
 
@@ -496,10 +532,19 @@ class TantivyDataProvider {
       String query, List<String> books, List<String> facets,
       {bool fuzzy = false,
       int distance = 0,
+      String negativeQuery = '',
+      int? negativeDistance,
+      SearchScope scope = SearchScope.wordDistance,
+      SearchScope? negativeScope,
       SearchMode searchMode = SearchMode.exact,
       Map<String, String>? customSpacing,
+      Map<String, String>? negativeCustomSpacing,
       Map<int, List<String>>? alternativeWords,
+      Map<int, List<String>>? negativeAlternativeWords,
       Map<String, Map<String, bool>>? searchOptions,
+      Map<String, Map<String, bool>>? negativeSearchOptions,
+      bool matchNikud = false,
+      bool matchTaamim = false,
       bool allowEarlyStop = true}) async {
     debugPrint(
         '🔍 TantivyDataProvider: Starting batch count for ${facets.length} facets');
@@ -512,9 +557,18 @@ class TantivyDataProvider {
       facets: facets,
       searchMode: fuzzy ? SearchMode.fuzzy : searchMode,
       distance: distance,
+      negativeQuery: negativeQuery,
+      negativeDistance: negativeDistance ?? distance,
+      scope: scope,
+      negativeScope: negativeScope ?? scope,
       customSpacing: customSpacing ?? const {},
+      negativeCustomSpacing: negativeCustomSpacing ?? const {},
       alternativeWords: alternativeWords ?? const {},
+      negativeAlternativeWords: negativeAlternativeWords ?? const {},
       searchOptions: searchOptions ?? const {},
+      negativeSearchOptions: negativeSearchOptions ?? const {},
+      matchNikud: matchNikud,
+      matchTaamim: matchTaamim,
     );
 
     // קיבוץ facets לפי parent prefix כדי לחסוך קריאות FFI
