@@ -1518,20 +1518,7 @@ class _CombinedViewState extends State<CombinedView> {
                         return null;
                       },
                     ),
-                    ClearSelectionIntent: CallbackAction<ClearSelectionIntent>(
-                      onInvoke: (_) {
-                        _selectionManager.exitSelectionMode();
-                        // ניקוי הבחירה ב-SelectionArea
-                        _savedSelectedText.value = null;
-                        _savedSelectedIndex.value = null;
-                        _currentSelectedIndex.value = null;
-                        _selectionLineStart = null;
-                        _selectionLineEnd = null;
-                        _selectionStartColumn = null;
-                        widget.onSelectedTextChanged?.call(null, null, null);
-                        return null;
-                      },
-                    ),
+                    ClearSelectionIntent: _ClearSelectionAction(this),
                   },
                   child: widget.isPreviewMode
                       ? Scrollbar(
@@ -2424,4 +2411,30 @@ class _CommentarySearchNavBar extends StatelessWidget {
 
 class _CopySelectedTextIntent extends Intent {
   const _CopySelectedTextIntent();
+}
+
+/// פעיל רק כשקיימת בחירה — אחרת ESC מחלחל הלאה (למשל יציאה ממסך מלא
+/// ב-KeyboardShortcuts הגלובלי) במקום להיבלע כאן.
+class _ClearSelectionAction extends Action<ClearSelectionIntent> {
+  _ClearSelectionAction(this._view);
+
+  final _CombinedViewState _view;
+
+  @override
+  bool get isActionEnabled =>
+      _view._selectionManager.isInSelectionMode ||
+      _view._savedSelectedText.value != null;
+
+  @override
+  Object? invoke(ClearSelectionIntent intent) {
+    _view._selectionManager.exitSelectionMode();
+    _view._savedSelectedText.value = null;
+    _view._savedSelectedIndex.value = null;
+    _view._currentSelectedIndex.value = null;
+    _view._selectionLineStart = null;
+    _view._selectionLineEnd = null;
+    _view._selectionStartColumn = null;
+    _view.widget.onSelectedTextChanged?.call(null, null, null);
+    return null;
+  }
 }
