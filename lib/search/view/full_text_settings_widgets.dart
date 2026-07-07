@@ -365,10 +365,15 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
       'סיומות דקדוקיות': 'סד',
       'כתיב מלא/חסר': 'מח',
       'חלק ממילה': 'ש',
+      'קידומות ארמיות': 'קא',
+      'סיומות ארמיות': 'סא',
+      'התעלם מגרשיים': 'גר',
+      'תרגום ארמי': 'תא',
+      'ראשי תיבות': 'רת',
     };
 
     // אפשרויות שמופיעות אחרי המילה (סיומות)
-    const Set<String> suffixOptions = {'סיומות', 'סיומות דקדוקיות'};
+    const Set<String> suffixOptions = {'סיומות', 'סיומות דקדוקיות', 'סיומות ארמיות'};
 
     for (int i = 0; i < words.length; i++) {
       final word = words[i];

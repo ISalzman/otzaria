@@ -5,7 +5,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
 /// ברירות מחדל לחיפוש, נפרדות לכל מצב: אפשרויות החיפוש המתקדם (7 תיבות
-/// הסימון + ניקוד/טעמים), אפשרויות החיפוש הרגיל (7 תיבות הסימון בלבד)
+/// הסימון + ניקוד/טעמים), אפשרויות החיפוש הרגיל (5 תיבות סימון בלבד)
 /// והמרווח בין מילים שלו, ומצב החיפוש שבו נפתח הדיאלוג.
 /// חיפוש חדש נפתח לפי ברירת המחדל השמורה; שינוי בחלונית נשמר לסשן
 /// הנוכחי בלבד וחוזר לברירת המחדל בהפעלה הבאה של התוכנה.
@@ -27,9 +27,11 @@ class SearchDefaults {
   SearchDefaults._();
 
   /// המפתחות שמותר לשמור כברירת מחדל למצב המתקדם: 7 האפשרויות +
+  /// האפשרויות הבלעדיות למתקדם (ארמית, גרשיים, תרגום, ר"ת) +
   /// "ניקוד"/"טעמים".
   static const List<String> _allowedOptionKeys = [
     ...SearchQueryBuilder.availableWordOptionKeys,
+    ...SearchQueryBuilder.advancedOnlyWordOptionKeys,
     ...SearchQueryBuilder.vocalizedWordOptionKeys,
   ];
 
@@ -75,12 +77,12 @@ class SearchDefaults {
 
   // ── חיפוש רגיל (מדויק) ─────────────────────────────────────────────
 
-  /// ברירת המחדל השמורה (בין הפעלות) למצב הרגיל — רק שבע אפשרויות המילה
-  /// (ניקוד/טעמים אינם נתמכים בחיפוש הרגיל), באחסון נפרד לחלוטין מזה
-  /// של המצב המתקדם.
+  /// ברירת המחדל השמורה (בין הפעלות) למצב הרגיל — רק חמש אפשרויות המילה
+  /// שלו (ניקוד/טעמים וקידומות/סיומות כלליות אינם נתמכים בחיפוש הרגיל),
+  /// באחסון נפרד לחלוטין מזה של המצב המתקדם.
   static Map<String, bool> loadExactDefaults() {
     return _loadOptions(
-        _exactSettingsKey, SearchQueryBuilder.availableWordOptionKeys);
+        _exactSettingsKey, SearchQueryBuilder.exactWordOptionKeys);
   }
 
   /// שומר את [options] כברירת המחדל לחיפושים רגילים חדשים.

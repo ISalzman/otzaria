@@ -153,22 +153,28 @@ Future<void> main() async {
         'חכמה_0': {'קידומות': true},
       });
 
-      // מצב רגיל (מדויק): אפשרויות המילה נתמכות ועוברות; מילים חלופיות
-      // ומרווחים ידניים נשארים בלעדיים למצב המתקדם. מפתחות "ניקוד"/"טעמים"
-      // מסוננים — נתמכים כרגע במתקדם בלבד.
+      // מצב רגיל (מדויק): רק חמש אפשרויות המילה שלו (exactWordOptionKeys)
+      // עוברות; מילים חלופיות ומרווחים ידניים נשארים בלעדיים למצב המתקדם.
+      // "ניקוד"/"טעמים", קידומות/סיומות כלליות והאפשרויות הבלעדיות למתקדם
+      // מסוננים — גם כשהם מגיעים ממצב משוחזר שה-UI כבר לא מציג.
       final exact = SearchQueryBuilder.normalizeParametersForMode(
         SearchMode.exact,
         customSpacing: advanced.customSpacing,
         alternativeWords: advanced.alternativeWords,
         searchOptions: const {
-          'חכמה_0': {'קידומות': true, 'ניקוד': true},
+          'חכמה_0': {
+            'קידומות דקדוקיות': true,
+            'קידומות': true,
+            'ניקוד': true,
+            'ראשי תיבות': true,
+          },
         },
       );
 
       expect(exact.customSpacing, isEmpty);
       expect(exact.alternativeWords, isEmpty);
       expect(exact.searchOptions, {
-        'חכמה_0': {'קידומות': true},
+        'חכמה_0': {'קידומות דקדוקיות': true},
       });
 
       final fuzzy = SearchQueryBuilder.normalizeParametersForMode(
