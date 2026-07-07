@@ -2866,27 +2866,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           categoryId: textBook.categoryId,
           fileType: textBook.fileType ?? 'txt',
         );
-        final Set<String> commentators;
+        ({
+          List<otz_links.LinkTargetSummary> targets,
+          int maxSourceLine
+        })? summary;
         if (provider is DatabaseLibraryProvider &&
             textBook.categoryId != null) {
-          _linksTextBook = textBook;
-          final summary = await provider.getBookLinkTargetsSummary(
+          summary = await provider.getBookLinkTargetsSummary(
               textBook.title, textBook.categoryId!);
-          final targets =
-              summary?.targets ?? const <otz_links.LinkTargetSummary>[];
+        }
+        final Set<String> commentators;
+        if (summary != null) {
+          _linksTextBook = textBook;
           // טעינת דורות מראש כדי שמיון הקישורים לפי דורות יעבוד סינכרונית
           // (תפריט הקשר + פאנל קישורים)
           CommentaryService.preloadEras({
-            for (final target in targets)
+            for (final target in summary.targets)
               if (!LinkTypes.isDependentTextLink(target.connectionType))
                 utils.getTitleFromPath(target.targetTitle),
           });
           commentators = {
-            for (final target in targets)
+            for (final target in summary.targets)
               if (LinkTypes.isDependentTextLink(target.connectionType))
                 utils.getTitleFromPath(target.targetTitle),
           };
         } else {
+          // ספר שאינו במסד, או ששאילתת הסיכום נכשלה — הטעינה המלאה הישנה,
+          // כדי שכשל נקודתי לא ייראה כמו ספר בלי מפרשים.
           final loadedLinks = await textBook.links
             ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
