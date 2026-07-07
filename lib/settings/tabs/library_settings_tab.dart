@@ -395,6 +395,20 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     LibrarySettingsPanel(
                         hebrewBooksPathWidget: hebrewPathWidget),
 
+                    // ייבוא ספרים אישיים (רק במובייל — בדסקטופ יש תיקיות
+                    // מותאמות אישית עם גישה ישירה למערכת הקבצים)
+                    if (Platform.isAndroid || Platform.isIOS) ...[
+                      kSettingsCardSpacing,
+                      SettingsCard(
+                        cardId: 'library.personal_books_import',
+                        title: 'ספרים אישיים',
+                        subtitle: 'ייבוא ספרים משלך אל תוך הספרייה',
+                        children: const [
+                          PersonalBooksImportPanel(),
+                        ],
+                      ),
+                    ],
+
                     // תיקיות מותאמות אישית (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[
                       kSettingsCardSpacing,
