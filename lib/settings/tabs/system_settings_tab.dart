@@ -39,6 +39,7 @@ import 'package:otzaria/widgets/dialogs/error_report_sender_email_dialog.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -379,7 +380,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     }
   }
 
-  String? _buildBackupSubtitle() {
+  String? _buildAutoBackupSubtitle(String frequency) {
     final status = _backupStatus;
     if (status == null) return null;
 
@@ -387,15 +388,29 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       return 'לא נמצא קובץ גיבוי במערכת. מומלץ ליצור גיבוי כדי לשמור על הנתונים שלך.';
     }
 
-    final d = status.lastBackupDate!;
-    final dateStr = getHebrewDateFormattedAsString(d);
-    final timeStr =
-        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
-    if (!status.hasSignificantChanges) {
-      return 'הנתונים שמורים. הגיבוי האחרון נוצר ב$dateStr בשעה $timeStr.';
+    if (frequency == 'none') {
+      final dateStr = getHebrewDateFormattedAsString(status.lastBackupDate!);
+      return 'גיבוי אוטומטי מושבת. הגיבוי האחרון נוצר ב$dateStr.';
     }
-    return 'הגיבוי האחרון מ-$dateStr. ואינו מעודכן, מומלץ ליצור גיבוי ולהגדיר מצב שבועי.';
+
+    if (frequency == 'daily') {
+      return 'הגיבוי מתבצע כל יום.';
+    }
+
+    final thresholdDays = frequency == 'weekly' ? 7 : 30;
+    final isUpToDate =
+        DateTime.now().difference(status.lastBackupDate!).inDays <=
+            thresholdDays;
+    final unitLabel = frequency == 'weekly' ? 'שבוע' : 'חודש';
+
+    if (isUpToDate) {
+      return 'הגיבוי מתבצע כל $unitLabel, ומעודכן לשינויים האחרונים.';
+    }
+    if (!status.hasSignificantChanges) {
+      return 'העדכון מתבצע כל $unitLabel, ואינו מעודכן לשינויים האחרונים - לא קרו הרבה שינויים.';
+    }
+    final recommendedUnitLabel = frequency == 'weekly' ? 'יומי' : 'שבועי';
+    return 'העדכון מתבצע כל $unitLabel ואינו מעודכן, מומלץ להגדיר גיבוי $recommendedUnitLabel.';
   }
 
   bool _shouldInclude(String key) =>
@@ -1355,18 +1370,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        lockParentWindow: true);
-    final filePath = result?.files.single.path;
-    if (filePath == null) return;
+    final backups = await BackupService.getAvailableBackups();
+    if (backups.isEmpty) {
+      if (!mounted) return;
+      UiSnack.showError('לא נמצא קובץ גיבוי בתיקיית הגיבוי');
+      return;
+    }
+    final filePath = backups.first.path;
     if (!mounted) return;
 
     final confirmed = await showWarningDialog(
       context: context,
       title: 'שחזור מגיבוי?',
-      content: 'פעולה זו תחליף את הנתונים הקיימים בנתונים מהגיבוי.',
+      content:
+          'פעולה זו תחליף את הנתונים הקיימים בנתונים מקובץ הגיבוי העדכני ביותר שנמצא בתיקיית הגיבוי.',
       subtitle: 'פעולה זו אינה הפיכה!',
       cancelText: 'ביטול',
       confirmText: 'שחזר',
@@ -1487,12 +1504,62 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       cardId: 'system.advanced',
       title: 'מתקדם',
       children: [
+        // ── צור/שחזר גיבוי ──
+        SettingsActionTile.text(
+          icon: FluentIcons.arrow_sync_24_regular,
+          title: 'גיבוי ושחזור',
+          subtitle: 'צור גיבוי או שחזר את הגיבוי מהקובץ האחרון שנוצר',
+          actions: [
+            ActionButton.recommended(
+              icon: FluentIcons.arrow_upload_24_regular,
+              text: 'צור כעת',
+              onPressed: _createBackup,
+            ),
+            ActionButton.neutral(
+              icon: FluentIcons.arrow_download_24_regular,
+              text: 'שחזור',
+              onPressed: _restoreBackup,
+            ),
+          ],
+        ),
+
         // ── גיבוי אוטומטי ──
         ExpandableSection(
           headerKey: tourBackupSettingsTargetKey,
           icon: FluentIcons.calendar_clock_24_regular,
-          title: 'גיבוי הגדרות ונתונים אישיים',
-          subtitle: _buildBackupSubtitle(),
+          title: 'גיבוי אוטומטי',
+          subtitle: _buildAutoBackupSubtitle(autoFrequency),
+          trailing: AppDropdownField<String>(
+            value: autoFrequency,
+            entries: const [
+              AppMenuEntry(
+                value: 'none',
+                label: 'ללא',
+                subtitle: 'גיבוי אוטומטי מושבת',
+              ),
+              AppMenuEntry(
+                value: 'daily',
+                label: 'יומי',
+                subtitle: 'יתבצע גיבוי בכל יום',
+              ),
+              AppMenuEntry(
+                value: 'weekly',
+                label: 'שבועי',
+                subtitle: 'יתבצע גיבוי כל שבוע',
+              ),
+              AppMenuEntry(
+                value: 'monthly',
+                label: 'חודשי',
+                subtitle: 'יתבצע גיבוי כל חודש',
+              ),
+            ],
+            onSelected: (value) {
+              if (value == null) return;
+              Settings.setValue<String>(_keyAutoBackupFrequency, value);
+              setState(() {});
+            },
+            isExpanded: false,
+          ),
           onTap: () => setState(() => _isBackupExpanded = !_isBackupExpanded),
           isExpanded: _isBackupExpanded,
           children: [
@@ -1545,41 +1612,10 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 _loadResolvedBackupPath();
               },
             ),
-            SettingsActionTile.dropdownTile<String>(
-              icon: FluentIcons.calendar_clock_24_regular,
-              title: 'גיבוי אוטומטי',
-              value: autoFrequency,
-              entries: const [
-                AppMenuEntry(
-                  value: 'none',
-                  label: 'ללא',
-                  subtitle: 'גיבוי אוטומטי מושבת',
-                ),
-                AppMenuEntry(
-                  value: 'daily',
-                  label: 'יומי',
-                  subtitle: 'יתבצע גיבוי בכל יום',
-                ),
-                AppMenuEntry(
-                  value: 'weekly',
-                  label: 'שבועי',
-                  subtitle: 'יתבצע גיבוי כל שבוע',
-                ),
-                AppMenuEntry(
-                  value: 'monthly',
-                  label: 'חודשי',
-                  subtitle: 'יתבצע גיבוי כל חודש',
-                ),
-              ],
-              onSelected: (value) {
-                if (value == null) return;
-                Settings.setValue<String>(_keyAutoBackupFrequency, value);
-                setState(() {});
-              },
-            ),
             SettingsActionTile.segmentedTile<_BackupMode>(
               icon: FluentIcons.options_24_regular,
               title: 'מצב גיבוי',
+              subtitle: 'בחר האם לגבות את כל הנתונים או רק חלק מהם',
               options: const [
                 SegmentOption<_BackupMode>(
                   value: _BackupMode.all,
@@ -1652,28 +1688,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 onChanged: () => setState(() {}),
               ),
             ],
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ActionButton.recommended(
-                      icon: FluentIcons.arrow_upload_24_regular,
-                      text: 'צור גיבוי עכשיו',
-                      onPressed: _createBackup,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ActionButton.neutral(
-                      icon: FluentIcons.arrow_download_24_regular,
-                      text: 'שחזר מגיבוי',
-                      onPressed: _restoreBackup,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
 
