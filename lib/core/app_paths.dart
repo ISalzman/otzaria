@@ -107,6 +107,28 @@ class AppPaths {
 
   static String? get cachedDataRootPath => _cachedDataRootPath;
 
+  /// שורש הספרייה שבחר המשתמש ב-Android (כרטיס SD), אם קיים ונגיש כרגע.
+  /// משפיע רק על מיקום הספרייה (ספרים/אינדקס/מסדי נתונים) — לא על שורש הנתונים
+  /// הכללי (Hive, תוספים, גיבויים) שנשאר תמיד באחסון הפנימי.
+  static Future<String?> _androidLibraryRootOverride() async {
+    if (!Platform.isAndroid) return null;
+    final override =
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot);
+    if (override != null &&
+        override.isNotEmpty &&
+        await Directory(override).exists()) {
+      return override;
+    }
+    return null;
+  }
+
+  /// שומר את שורש הספרייה לבחירת המשתמש ב-Android (או מנקה לחזרה לאחסון
+  /// הפנימי כש-[path] ריק/null).
+  static Future<void> setAndroidLibraryRoot(String? path) async {
+    await Settings.setValue<String>(
+        SettingsRepository.keyAndroidLibraryRoot, path ?? '');
+  }
+
   /// מזהה אם ההתקנה מערכתית (כמנהל) או התקנת משתמש.
   static Future<InstallMode> detectInstallMode() async {
     // מצב נייד לעולם אינו התקנה מערכתית — הנתונים יושבים ליד ה-executable
@@ -155,6 +177,13 @@ class AppPaths {
     final bundled = await _detectBundledLibraryPath();
     if (bundled != null) {
       return bundled;
+    }
+
+    // Android: אם המשתמש בחר לשמור את הספרייה על כרטיס SD, מיקום ברירת המחדל
+    // של הספרייה יושב שם. שאר נתוני האפליקציה נשארים באחסון הפנימי.
+    final androidLibraryRoot = await _androidLibraryRootOverride();
+    if (androidLibraryRoot != null) {
+      return p.join(androidLibraryRoot, 'books');
     }
 
     final systemWideRoot = await _getSystemWideLibraryRootIfNeeded();

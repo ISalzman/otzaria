@@ -634,6 +634,44 @@ void main() {
       expect(await AppPaths.detectInstallMode(), InstallMode.perUser);
     });
 
+    test('setAndroidLibraryRoot שומר את שורש הספרייה לבחירת המשתמש', () async {
+      const sdRoot = '/storage/ABCD-1234/Android/data/pkg/files';
+      await AppPaths.setAndroidLibraryRoot(sdRoot);
+
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+    });
+
+    test('setAndroidLibraryRoot עם null מנקה את המפתח לאחסון פנימי', () async {
+      await AppPaths.setAndroidLibraryRoot('/some/sd/path');
+      await AppPaths.setAndroidLibraryRoot(null);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        '',
+      );
+    });
+
+    test(
+        'getDefaultLibraryPath מתעלם מ-override של Android כשלא רצים על Android',
+        () async {
+      // ה-override תקף רק ב-Android; על מארח אחר הוא לא משנה את ברירת המחדל.
+      if (Platform.isAndroid) return;
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await AppPaths.setAndroidLibraryRoot('/storage/ABCD-1234/x');
+
+      expect(await AppPaths.getDefaultLibraryPath(),
+          p.join(dataRoot.path, 'books'));
+    });
+
     test('getStaleDefaultIndexPaths מחזיר נתיבים מנורמלים וללא הנתיב הפעיל',
         () async {
       final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');

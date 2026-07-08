@@ -26,6 +26,7 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
+import 'package:otzaria/settings/tabs/widgets/android_storage_location_card.dart';
 import 'package:path/path.dart' as p;
 
 /// טאב הגדרות ספרייה
@@ -394,6 +395,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
                     LibrarySettingsPanel(
                         hebrewBooksPathWidget: hebrewPathWidget),
+
+                    // בחירת מיקום אחסון (Android בלבד) — מוצג רק כשקיים
+                    // כרטיס SD; הרכיב עצמו מסתיר את עצמו אחרת.
+                    if (Platform.isAndroid) const AndroidStorageLocationCard(),
 
                     // ייבוא ספרים אישיים (רק במובייל — בדסקטופ יש תיקיות
                     // מותאמות אישית עם גישה ישירה למערכת הקבצים)

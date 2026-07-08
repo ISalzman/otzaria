@@ -24,6 +24,18 @@ class DownloadLibraryRequested extends EmptyLibraryEvent {}
 /// נשלח בעת טעינת המסך.
 class CheckDiskSpaceRequested extends EmptyLibraryEvent {}
 
+/// בחירת מיקום אחסון הספרייה ב-Android (אחסון פנימי או כרטיס SD).
+/// [libraryRoot] ריק/null => אחסון פנימי. הבחירה נשמרת ובדיקת המקום הפנוי
+/// מורצת מחדש עבור היעד החדש.
+class StorageLocationSelected extends EmptyLibraryEvent {
+  final String? libraryRoot;
+
+  StorageLocationSelected(this.libraryRoot);
+
+  @override
+  List<Object?> get props => [libraryRoot];
+}
+
 class DeleteZipAnswered extends EmptyLibraryEvent {
   final bool shouldDelete;
   final String zipPath;
