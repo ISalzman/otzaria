@@ -274,30 +274,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   List<TocEntry>? _cachedToc;
 
   /// Check if book is already being tracked in Shamor Zachor
-  bool _isBookTrackedInShamorZachor(String bookTitle) {
+  /// שמור וזכור נשען על מזהי seforim.db בלבד; ספר אישי/חיצוני מחזיק מזהה
+  /// ממרחב אחר שעלול להתנגש עם ספר רשמי אקראי, ולכן אינו נתמך.
+  bool _isOfficialSeforimBook(Book book) =>
+      book.id != null &&
+      !book.isUserBook &&
+      (book.externalLibraryId == null || book.externalLibraryId!.isEmpty);
+
+  bool _isBookTrackedInShamorZachor(Book book) {
+    if (!_isOfficialSeforimBook(book)) return false;
     try {
       final dataProvider = context.read<ShamorZachorDataProvider>();
-      if (!dataProvider.hasData) {
-        return false;
-      }
-
-      // Extract clean book name
-      String cleanBookName = bookTitle;
-      if (bookTitle.contains(' - ')) {
-        final parts = bookTitle.split(' - ');
-        cleanBookName = parts.last.trim();
-      }
-
-      // Search for the book
-
-      // Legacy: Search for the book
-      final searchResults = dataProvider.searchBooks(cleanBookName);
-
-      // If found in existing categories, it's tracked
-      return searchResults.any((result) =>
-          result.bookName == cleanBookName ||
-          result.bookName.contains(cleanBookName) ||
-          cleanBookName.contains(result.bookName));
+      if (!dataProvider.hasData) return false;
+      return dataProvider.getBookById(book.id!) != null;
     } catch (e) {
       debugPrint('Error checking if book is tracked: $e');
       return false;
@@ -1650,14 +1639,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 3) שמור וזכור - סמן כנלמד או הוסף למעקב
       ActionButtonData(
         widget: _buildShamorZachorButton(context, state),
-        icon: _isBookTrackedInShamorZachor(state.book.title)
+        icon: _isBookTrackedInShamorZachor(state.book)
             ? FluentIcons.checkmark_circle_24_regular
             : FluentIcons.add_circle_24_regular,
-        tooltip: _isBookTrackedInShamorZachor(state.book.title)
+        tooltip: _isBookTrackedInShamorZachor(state.book)
             ? 'סמן קטע פתוח כנלמד בשמור וזכור'
             : 'הוסף למעקב לימוד בשמור וזכור',
         onPressed: () {
-          if (_isBookTrackedInShamorZachor(state.book.title)) {
+          if (_isBookTrackedInShamorZachor(state.book)) {
             _markShamorZachorProgress(state.book.title);
           } else {
             _addBookToShamorZachorTracking(state.book);
@@ -2244,7 +2233,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildShamorZachorButton(BuildContext context, TextBookLoaded state) {
-    final isTracked = _isBookTrackedInShamorZachor(state.book.title);
+    final isTracked = _isBookTrackedInShamorZachor(state.book);
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     final iconSize = isCompact ? 16.0 : 20.0;
     return ToolbarActionButton(
@@ -2274,6 +2263,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// Add book to Shamor Zachor tracking
   Future<void> _addBookToShamorZachorTracking(Book book) async {
+    if (!_isOfficialSeforimBook(book)) {
+      UiSnack.showError('רק ספרים מהספרייה הרשמית נתמכים במעקב בשמור וזכור');
+      return;
+    }
     try {
       final dataProvider = context.read<ShamorZachorDataProvider>();
 
@@ -2350,6 +2343,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 4. Add book via provider (only needs book name)
       await dataProvider.addCustomBook(
         bookName: cleanBookName,
+        bookId: book.id,
         categoryId: book.categoryId,
       );
 
