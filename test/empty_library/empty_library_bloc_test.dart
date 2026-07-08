@@ -499,6 +499,30 @@ void main() {
       );
       expect(downloading.last.progress, closeTo(1.0, 1e-9));
     });
+
+    test('StorageLocationSelected שומר את שורש הספרייה ומרענן מצב התחלה',
+        () async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+
+      final bloc = EmptyLibraryBloc();
+      addTearDown(bloc.close);
+
+      const sdRoot = '/storage/ABCD-1234/Android/data/pkg/files';
+      final done = bloc.stream
+          .where((s) =>
+              s is EmptyLibraryInitial &&
+              Settings.getValue<String>(
+                      SettingsRepository.keyAndroidLibraryRoot) ==
+                  sdRoot)
+          .first;
+      bloc.add(StorageLocationSelected(sdRoot));
+      await done.timeout(const Duration(seconds: 5));
+
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+    });
   });
 }
 

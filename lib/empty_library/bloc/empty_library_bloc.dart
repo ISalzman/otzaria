@@ -42,6 +42,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     on<DeleteZipAnswered>(_onDeleteZipAnswered);
     on<PickDbFileRequested>(_onPickDbFileRequested);
     on<CheckDiskSpaceRequested>(_onCheckDiskSpaceRequested);
+    on<StorageLocationSelected>(_onStorageLocationSelected);
     // בדיקת מקום פנוי מתבצעת מיד — כפתור ההורדה מושבת עד להשלמתה
     add(CheckDiskSpaceRequested());
   }
@@ -351,6 +352,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onCheckDiskSpaceRequested(
       CheckDiskSpaceRequested event, Emitter<EmptyLibraryState> emit) async {
+    _downloadDisabledReason = await _checkSpaceForDownload();
+    emit(EmptyLibraryInitial(downloadDisabledReason: _downloadDisabledReason));
+  }
+
+  /// שומר את מיקום האחסון שנבחר ומריץ מחדש את בדיקת המקום הפנוי עבור היעד
+  /// החדש (הורדה וחילוץ ינותבו לשם דרך getDefaultLibraryPath).
+  Future<void> _onStorageLocationSelected(
+      StorageLocationSelected event, Emitter<EmptyLibraryState> emit) async {
+    await AppPaths.setAndroidLibraryRoot(event.libraryRoot);
     _downloadDisabledReason = await _checkSpaceForDownload();
     emit(EmptyLibraryInitial(downloadDisabledReason: _downloadDisabledReason));
   }

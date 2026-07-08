@@ -62,6 +62,11 @@ class SettingsRepository {
   /// Android only: nתיב ה-DB שנגיש ל-sqlite3 native (override ל-getDatabasePath).
   /// נוצר כאשר המשתמש בחר ספרייה באחסון חיצוני ו-DB הועתק/הועבר פנימה.
   static const String keyDbEffectivePath = 'key-db-effective-path';
+
+  /// Android only: שורש הספרייה שבחר המשתמש (למשל תיקיית האפליקציה על כרטיס
+  /// SD). משפיע רק על מיקום הספרייה (ספרים/אינדקס/מסדי נתונים); שאר נתוני
+  /// האפליקציה (Hive, תוספים, גיבויים) נשארים באחסון הפנימי. כשריק — הכל פנימי.
+  static const String keyAndroidLibraryRoot = 'key-android-library-root';
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
   static const String keyCustomFolders = 'key-custom-folders';

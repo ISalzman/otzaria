@@ -203,6 +203,7 @@ Future<void> _restoreMoveSettings({
   required String? dbEffectivePath,
   required String? indexPath,
   required String? databasesPath,
+  required String? androidLibraryRoot,
 }) async {
   await Settings.setValue<String?>(
       SettingsRepository.keyLibraryPath, libraryPath);
@@ -213,6 +214,10 @@ Future<void> _restoreMoveSettings({
   await Settings.setValue<String?>(SettingsRepository.keyIndexPath, indexPath);
   await Settings.setValue<String?>(
       SettingsRepository.keyDatabasesPath, databasesPath);
+  if (Platform.isAndroid) {
+    await Settings.setValue<String?>(
+        SettingsRepository.keyAndroidLibraryRoot, androidLibraryRoot);
+  }
 }
 
 Future<void> _cleanupCreatedMoveTargets({
@@ -339,6 +344,10 @@ Future<void> performLibraryMove({
       Settings.getValue<String>(SettingsRepository.keyIndexPath);
   final previousDatabasesPath =
       Settings.getValue<String>(SettingsRepository.keyDatabasesPath);
+  // Android: שורש הספרייה נע ליעד החדש (למשל כרטיס SD) כך שברירת המחדל של
+  // הספרייה תישאר עקבית. שאר נתוני האפליקציה נשארים באחסון הפנימי.
+  final previousAndroidLibraryRoot =
+      Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot);
 
   String? stagingRoot;
   var finalLibraryCreated = false;
@@ -400,6 +409,10 @@ Future<void> performLibraryMove({
     }
     await Settings.setValue<String>(
         SettingsRepository.keyDatabasesPath, newDatabases);
+    if (Platform.isAndroid) {
+      await Settings.setValue<String>(
+          SettingsRepository.keyAndroidLibraryRoot, to);
+    }
     settingsUpdated = true;
     // 4. מיפוי נתיבי הספרים הפתוחים *בזיכרון* (לא רק ב-Hive), אחרת שמירת
     //    הטאבים בעת הרענון תדרוס את המיפוי וה-PDF ייפתח מהנתיב הישן.
@@ -440,6 +453,7 @@ Future<void> performLibraryMove({
         dbEffectivePath: previousDbEffectivePath,
         indexPath: previousIndexPath,
         databasesPath: previousDatabasesPath,
+        androidLibraryRoot: previousAndroidLibraryRoot,
       );
     }
     await _cleanupCreatedMoveTargets(
