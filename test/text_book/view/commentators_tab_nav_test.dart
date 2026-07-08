@@ -330,4 +330,76 @@ void main() {
           equals(const CommentatorsVerseStep(1, 2)));
     });
   });
+
+  group('resolveOpenedVerseIdx — בחירת הקטע בפתיחת הטאב', () {
+    test('פרק עם תת-פרקים — נבחר הפסוק שזוהה (posVerseIdx נשמר)', () {
+      expect(
+        resolveOpenedVerseIdx(
+          posVerseIdx: 2,
+          lineIndex: 12,
+          chapterIndex: 10,
+          hasChildren: true,
+          selectableParagraphOffsets: const [],
+        ),
+        equals(2),
+      );
+    });
+
+    test('פרק עם תת-פרקים ו-posVerseIdx=-1 — נשאר "כל הפרק"', () {
+      // כשלא זוהה פסוק ספציפי בפרק שיש בו תת-פרקים, לא גוזרים היסט פסקה.
+      expect(
+        resolveOpenedVerseIdx(
+          posVerseIdx: -1,
+          lineIndex: 12,
+          chapterIndex: 10,
+          hasChildren: true,
+          selectableParagraphOffsets: const [],
+        ),
+        equals(-1),
+      );
+    });
+
+    test('פרק ללא תת-פרקים — נגזר היסט הפסקה שנפתחה כשהוא ניתן לבחירה', () {
+      // הפער שנסגר: פתיחה על שורה ספציפית בפרק-פסקאות בוחרת את הפסקה,
+      // ולא "כל הפרק" — כך ש'קטע קודם' מיד אחרי הפתיחה עובד.
+      expect(
+        resolveOpenedVerseIdx(
+          posVerseIdx: -1,
+          lineIndex: 13,
+          chapterIndex: 10,
+          hasChildren: false,
+          selectableParagraphOffsets: const [0, 1, 2, 3],
+        ),
+        equals(3),
+      );
+    });
+
+    test('פרק ללא תת-פרקים — היסט מסונן נשאר "כל הפרק" (לא נתקע)', () {
+      // הרגרסיה שנמנעה: לו היינו בוחרים היסט שמסונן מרשימת ה-selectable,
+      // ניווט 'קטע קודם' היה מקבל indexOf==-1 ונתקע.
+      expect(
+        resolveOpenedVerseIdx(
+          posVerseIdx: -1,
+          lineIndex: 10,
+          chapterIndex: 10,
+          hasChildren: false,
+          selectableParagraphOffsets: const [1, 2, 3], // 0 מסונן (כותרת)
+        ),
+        equals(-1),
+      );
+    });
+
+    test('פרק ללא תת-פרקים — הקטע הראשון (היסט 0) נבחר כשהוא ניתן לבחירה', () {
+      expect(
+        resolveOpenedVerseIdx(
+          posVerseIdx: -1,
+          lineIndex: 10,
+          chapterIndex: 10,
+          hasChildren: false,
+          selectableParagraphOffsets: const [0, 1, 2],
+        ),
+        equals(0),
+      );
+    });
+  });
 }
