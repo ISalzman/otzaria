@@ -104,9 +104,14 @@ jobs:
             exit $first_exit
           fi
 
-          # חילוץ קבצי הטסט שכללו לפחות טסט שנכשל
+          # חילוץ קבצי הטסט שכללו לפחות טסט שנכשל.
+          # ממפים דרך suiteID→suite.path כי .test.url מצביע על widget_tester.dart
+          # כשטסט testWidgets נכשל בתוך קוד async של ה-framework.
           failed_files=$(jq -rs '
-            (map(select(.type == "testStart"))
+            (map(select(.type == "suite"))
+              | map({(.suite.id | tostring): .suite.path})
+              | add) as $suites
+            | (map(select(.type == "testStart"))
               | map({(.test.id | tostring): .test})
               | add) as $tests
             | map(select(
@@ -114,9 +119,8 @@ jobs:
                 and (.result == "failure" or .result == "error")
                 and (.hidden | not)
               ))
-            | map($tests[.testID | tostring].url // empty)
+            | map($suites[($tests[.testID | tostring].suiteID) | tostring] // empty)
             | map(select(. != ""))
-            | map(ltrimstr("file://"))
             | unique
             | .[]
           ' test-results.json)
@@ -156,7 +160,10 @@ jobs:
 
           # ריצה שנייה נכשלה גם - מדפיסים בדיוק מה נכשל
           final_failed=$(jq -rs '
-            (map(select(.type == "testStart"))
+            (map(select(.type == "suite"))
+              | map({(.suite.id | tostring): .suite.path})
+              | add) as $suites
+            | (map(select(.type == "testStart"))
               | map({(.test.id | tostring): .test})
               | add) as $tests
             | map(select(
@@ -165,7 +172,7 @@ jobs:
                 and (.hidden | not)
               ))
             | map($tests[.testID | tostring])
-            | map("- " + (.url // "unknown") + " :: " + .name)
+            | map("- " + ($suites[.suiteID | tostring] // "unknown") + " :: " + .name)
             | .[]
           ' retry-results.json)
 
