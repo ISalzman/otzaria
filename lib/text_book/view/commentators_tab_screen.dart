@@ -154,6 +154,88 @@ CommentatorsNavSelection reduceSubItemTap(
   );
 }
 
+/// קובע את הקטע שייבחר בפתיחת טאב המפרשים על [lineIndex].
+///
+/// [posVerseIdx] — התוצאה של איתור המיקום (`_findPos`): אינדקס הפסוק בפרק,
+/// או [_kAllChapter] כשלא זוהה קטע ספציפי (למשל בפרק ללא תת-פרקים).
+/// [chapterIndex] — אינדקס תחילת הפרק בתוכן. [hasChildren] — האם לפרק
+/// יש תת-פרקים. [selectableParagraphOffsets] — היסטי הפסקאות הניתנים לבחירה.
+///
+/// בפרק ללא תת-פרקים גוזר את היסט הפסקה שנפתחה, אך רק אם הוא ניתן לבחירה —
+/// כך שניווט 'קטע קודם' יתחיל מהקטע הנוכחי ולא ייתקע על היסט מסונן.
+@visibleForTesting
+int resolveOpenedVerseIdx({
+  required int posVerseIdx,
+  required int lineIndex,
+  required int chapterIndex,
+  required bool hasChildren,
+  required List<int> selectableParagraphOffsets,
+}) {
+  if (posVerseIdx != _kAllChapter || hasChildren) return posVerseIdx;
+  final paraIdx = lineIndex - chapterIndex;
+  return selectableParagraphOffsets.contains(paraIdx) ? paraIdx : _kAllChapter;
+}
+
+/// יעד ניווט 'קטע קודם/הבא': אינדקס הפרק ברשימת הפרקים והקטע בתוכו
+/// ([verseIdx] = [_kAllChapter] כשהפרק השכן ריק מקטעים ניתנים לבחירה).
+@immutable
+@visibleForTesting
+class CommentatorsVerseStep {
+  final int chapterIndex;
+  final int verseIdx;
+  const CommentatorsVerseStep(this.chapterIndex, this.verseIdx);
+
+  @override
+  bool operator ==(Object other) =>
+      other is CommentatorsVerseStep &&
+      other.chapterIndex == chapterIndex &&
+      other.verseIdx == verseIdx;
+
+  @override
+  int get hashCode => Object.hash(chapterIndex, verseIdx);
+}
+
+/// חישוב טהור של יעד 'קטע קודם' (forward=false) או 'קטע הבא' (forward=true).
+///
+/// [selectablePerChapter] — הקטעים הניתנים לבחירה בכל פרק (לפי סדר הפרקים).
+/// [chapterIndex]/[verseIdx] — המיקום הנוכחי. הניווט חוצה גבולות פרקים:
+/// מתחילת פרק ל'קטע האחרון' של הפרק הקודם, ומסופו ל'קטע הראשון' של הבא.
+/// מחזיר null כשאין יעד (קצה הספר).
+@visibleForTesting
+CommentatorsVerseStep? computeVerseStep(
+  List<List<int>> selectablePerChapter,
+  int chapterIndex,
+  int verseIdx, {
+  required bool forward,
+}) {
+  if (chapterIndex < 0 || chapterIndex >= selectablePerChapter.length) {
+    return null;
+  }
+  final selectable = selectablePerChapter[chapterIndex];
+  // "כל הפרק" ממוקם לפני הקטע הראשון (קדימה) ואחרי האחרון (אחורה).
+  final pos = verseIdx == _kAllChapter
+      ? (forward ? -1 : selectable.length)
+      : selectable.indexOf(verseIdx);
+  if (verseIdx != _kAllChapter && pos < 0) return null;
+
+  final target = forward ? pos + 1 : pos - 1;
+  if (target >= 0 && target < selectable.length) {
+    return CommentatorsVerseStep(chapterIndex, selectable[target]);
+  }
+
+  // חצייה לפרק השכן.
+  final neighborIndex = forward ? chapterIndex + 1 : chapterIndex - 1;
+  if (neighborIndex < 0 || neighborIndex >= selectablePerChapter.length) {
+    return null;
+  }
+  final neighbor = selectablePerChapter[neighborIndex];
+  if (neighbor.isEmpty) {
+    return CommentatorsVerseStep(neighborIndex, _kAllChapter);
+  }
+  return CommentatorsVerseStep(
+      neighborIndex, forward ? neighbor.first : neighbor.last);
+}
+
 class CommentatorsTabScreen extends StatefulWidget {
   final CommentatorsTab tab;
   final Function(OpenedTab) openBookCallback;
@@ -492,7 +574,21 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     if (pos.chapter == null) return;
 
     _initialChapterResolved = true;
-    _onChapterSelected(pos.chapter!, chapters);
+    final chapter = pos.chapter!;
+    final verseIdx = resolveOpenedVerseIdx(
+      posVerseIdx: pos.verseIdx,
+      lineIndex: lineIndex,
+      chapterIndex: chapter.index,
+      hasChildren: chapter.children.isNotEmpty,
+      selectableParagraphOffsets: chapter.children.isEmpty
+          ? _selectableParagraphOffsets(chapters, chapter, state.content)
+          : const [],
+    );
+    if (verseIdx == _kAllChapter) {
+      _onChapterSelected(chapter, chapters);
+    } else {
+      _selectInChapter(verseIdx, chapter, chapters);
+    }
   }
 
   /// גוללת את רשימת הניווט לפרק הנבחר. נקראת בעת פתיחת הפאנל ומעבר
@@ -713,18 +809,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     );
   }
 
-  void _selectVerseAndLoad(int verseIdx, List<TocEntry> chapters) {
-    final chapter = _selectedChapter;
-    if (chapter == null) return;
-    _selectVerseInChapter(verseIdx, chapter, chapters);
-  }
-
-  void _selectParaAndLoad(int paraIdx, List<TocEntry> chapters) {
-    final chapter = _selectedChapter;
-    if (chapter == null) return;
-    _selectParaInChapter(paraIdx, chapter, chapters);
-  }
-
   // ── ניווט בין פרקים ────────────────────────────────────────────────────────
 
   void _navigateToPrevChapter(List<TocEntry> chapters) {
@@ -741,69 +825,57 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     }
   }
 
-  void _navigateToPrevVerse(List<TocEntry> chapters) {
-    if (_selectedChapter == null) return;
-    final currentState = widget.tab.bloc.state;
-    final content = currentState is TextBookLoaded
-        ? currentState.content
-        : const <String>[];
-    final hasVerses = _selectedChapter?.children.isNotEmpty ?? false;
-    if (hasVerses) {
-      final selectable = _selectableVerseIndices(_selectedChapter!, content);
-      final currentPos = _selectedVerseIdx == _kAllChapter
-          ? -1
-          : selectable.indexOf(_selectedVerseIdx);
-      if (currentPos <= -1) return;
-      if (currentPos == 0) {
-        _selectVerseAndLoad(_kAllChapter, chapters);
-        return;
-      }
-      _selectVerseAndLoad(selectable[currentPos - 1], chapters);
+  /// הקטעים הניתנים לבחירה בפרק (פסוקים אם יש children, אחרת היסטי פסקאות).
+  List<int> _selectableForChapter(
+      TocEntry chapter, List<TocEntry> chapters, List<String> content) {
+    return chapter.children.isNotEmpty
+        ? _selectableVerseIndices(chapter, content)
+        : _selectableParagraphOffsets(chapters, chapter, content);
+  }
+
+  /// בוחר קטע (פסוק/פסקה) בפרק כלשהו, בהתאם לסוג הפרק.
+  void _selectInChapter(int idx, TocEntry chapter, List<TocEntry> chapters) {
+    if (chapter.children.isNotEmpty) {
+      _selectVerseInChapter(idx, chapter, chapters);
     } else {
-      final selectable =
-          _selectableParagraphOffsets(chapters, _selectedChapter!, content);
-      final currentPos = _selectedVerseIdx == _kAllChapter
-          ? -1
-          : selectable.indexOf(_selectedVerseIdx);
-      if (currentPos <= -1) return;
-      if (currentPos == 0) {
-        _selectParaAndLoad(_kAllChapter, chapters);
-        return;
-      }
-      _selectParaAndLoad(selectable[currentPos - 1], chapters);
+      _selectParaInChapter(idx, chapter, chapters);
     }
   }
 
-  void _navigateToNextVerse(List<TocEntry> chapters) {
-    if (_selectedChapter == null) return;
+  void _navigateVerse(List<TocEntry> chapters, {required bool forward}) {
+    final chapter = _selectedChapter;
+    if (chapter == null) return;
+    final ci = chapters.indexOf(chapter);
+    if (ci < 0) return;
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
         : const <String>[];
-    final hasVerses = _selectedChapter?.children.isNotEmpty ?? false;
-    if (hasVerses) {
-      final selectable = _selectableVerseIndices(_selectedChapter!, content);
-      if (selectable.isEmpty) return;
-      if (_selectedVerseIdx == _kAllChapter) {
-        _selectVerseAndLoad(selectable.first, chapters);
-        return;
-      }
-      final currentPos = selectable.indexOf(_selectedVerseIdx);
-      if (currentPos < 0 || currentPos + 1 >= selectable.length) return;
-      _selectVerseAndLoad(selectable[currentPos + 1], chapters);
+    // computeVerseStep נוגע רק בפרק הנוכחי ובשכן בכיוון — שאר הפרקים ריקים
+    // כדי לא לחשב selectable לכל הספר בכל לחיצה (חוסך O(N) בספרים גדולים).
+    final neighborIndex = forward ? ci + 1 : ci - 1;
+    final selectablePerChapter = List<List<int>>.generate(
+      chapters.length,
+      (i) => (i == ci || i == neighborIndex)
+          ? _selectableForChapter(chapters[i], chapters, content)
+          : const [],
+    );
+    final step = computeVerseStep(selectablePerChapter, ci, _selectedVerseIdx,
+        forward: forward);
+    if (step == null) return;
+    final target = chapters[step.chapterIndex];
+    if (step.verseIdx == _kAllChapter) {
+      _onChapterSelected(target, chapters);
     } else {
-      final selectable =
-          _selectableParagraphOffsets(chapters, _selectedChapter!, content);
-      if (selectable.isEmpty) return;
-      if (_selectedVerseIdx == _kAllChapter) {
-        _selectParaAndLoad(selectable.first, chapters);
-        return;
-      }
-      final currentPos = selectable.indexOf(_selectedVerseIdx);
-      if (currentPos < 0 || currentPos + 1 >= selectable.length) return;
-      _selectParaAndLoad(selectable[currentPos + 1], chapters);
+      _selectInChapter(step.verseIdx, target, chapters);
     }
   }
+
+  void _navigateToPrevVerse(List<TocEntry> chapters) =>
+      _navigateVerse(chapters, forward: false);
+
+  void _navigateToNextVerse(List<TocEntry> chapters) =>
+      _navigateVerse(chapters, forward: true);
 
   void _openSearchPane() {
     setState(() => _navPaneOpen = true);
