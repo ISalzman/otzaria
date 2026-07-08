@@ -16,6 +16,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/text_book/view/sibling_commentaries_menu.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -241,6 +242,9 @@ class _CombinedViewState extends State<CombinedView> {
   // שמירת reference ל-BLoC לשימוש ב-listeners
   late final TextBookBloc _textBookBloc;
 
+  // תת-התפריט "מפרשים נוספים על הדף" (רק בספרי מפרש).
+  late final SiblingCommentariesController _siblingController;
+
   bool _hasScrolledToInitialPosition = false;
 
   // הקצאת וריאנט טיפוגרפי קבוע לכל מפרש עם עוגני-מילה. ממוזכר לפי זהות
@@ -446,6 +450,20 @@ class _CombinedViewState extends State<CombinedView> {
     // שמירת ה-BLoC מראש
     _textBookBloc = context.read<TextBookBloc>();
 
+    _siblingController = SiblingCommentariesController(
+      loadSiblings: (sourceLink) {
+        final state = _textBookBloc.state;
+        if (state is! TextBookLoaded) return Future.value(const <Link>[]);
+        return _textBookBloc.repository.getSiblingCommentaries(
+          sourceBookTitle: utils.getTitleFromPath(sourceLink.path2),
+          sourceCategoryId: sourceLink.targetCategoryId,
+          sourceLineIndex: sourceLink.index2 - 1,
+          currentBookTitle: state.book.title,
+          currentCategoryId: state.book.categoryId,
+        );
+      },
+    );
+
     _loadSourceBanner();
 
     // אתחול מנהל הבחירה
@@ -526,6 +544,9 @@ class _CombinedViewState extends State<CombinedView> {
     }
     if (!sameSourceIdentity(oldWidget.tab.book, widget.tab.book)) {
       _loadSourceBanner();
+      // ה-State עלול להישמר במעבר ספר — מטמון ה"מפרשים הנוספים" ממופה לפי
+      // שורה בלבד, ולכן חייב להתאפס כדי לא להחזיר מפרשים של הספר הקודם.
+      _siblingController.clear();
     }
   }
 
@@ -555,6 +576,7 @@ class _CombinedViewState extends State<CombinedView> {
         ?.removeListener(_handleExternalSelectionChange);
     _selectionManager.removeListener(_onSelectionModeChanged);
     _selectionManager.dispose();
+    _siblingController.dispose();
     super.dispose();
   }
 
@@ -1035,6 +1057,32 @@ class _CombinedViewState extends State<CombinedView> {
         enabled: paragraphLinks.isNotEmpty,
         childrenBuilder: buildLinkChildren,
       ),
+      ...() {
+        final sourceLink = _siblingController.sourceLinkForLine(
+            state.linksByLine, paragraphIndex + 1);
+        final entry = _siblingController.buildEntry(
+          lineIndex: paragraphIndex,
+          sourceLink: sourceLink,
+          onNavigate: (link) => widget.openBookCallback(
+            TextBookTab(
+              book: TextBook(
+                title: utils.getTitleFromPath(link.path2),
+                isUserBook: link.targetIsUserBook,
+                categoryId: link.targetCategoryId,
+                fileType: link.targetFileType,
+              ),
+              index: link.index2 - 1,
+              openLeftPane:
+                  (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+                      (Settings.getValue<bool>('key-default-sidebar-open') ??
+                          false),
+            ),
+          ),
+        );
+        return entry == null
+            ? const <AppContextMenuEntry>[]
+            : <AppContextMenuEntry>[entry];
+      }(),
       ...(() {
         final dictionaryText = (selectedText?.trim().isNotEmpty == true)
             ? selectedText

@@ -2522,6 +2522,41 @@ extension BookAcronymRepository on SeforimRepository {
         .selectCommentatorsByLineRange(bookId, startIdx, endIdx);
   }
 
+  /// מחזיר את כל **המפרשים על הקטע** שבו יושבת שורת מקור שרירותית [lineIndex]
+  /// בספר [bookId] — לפיצ'ר "מפרשים נוספים על הדף". הקטע נקבע לפי הכותרת
+  /// העמוקה ביותר שמכילה את השורה (segment <= lineIndex) ועד הכותרת הבאה ברמתה.
+  /// [excludeBookId] הוא ספר המפרש הפתוח (מוחרג). כשלספר אין TOC — כל הספר.
+  Future<List<Map<String, dynamic>>> getSiblingCommentaryLinkRowsForLine({
+    required int bookId,
+    required String bookTitle,
+    required int lineIndex,
+    required int excludeBookId,
+    bool isAltToc = false,
+  }) async {
+    final cache = isAltToc
+        ? await _buildAltTocCacheForBook(bookId, bookTitle)
+        : await _buildTocCacheForBook(bookId, bookTitle);
+
+    // הכותרת המכילה: העמוקה ביותר מבין אלו שה-segment שלהן <= lineIndex.
+    _CachedTocEntry? containing;
+    for (final e in cache.all) {
+      if (e.segment > lineIndex) continue;
+      if (containing == null ||
+          e.segment > containing.segment ||
+          (e.segment == containing.segment && e.level > containing.level)) {
+        containing = e;
+      }
+    }
+
+    final startIdx = containing?.segment ?? 0;
+    final endIdx = containing == null
+        ? 0x7fffffff
+        : _nextHeadingLineIndex(cache, startIdx, containing.level);
+
+    return _database.linkDao.selectCommentaryLinksByLineRange(
+        bookId, startIdx, endIdx, excludeBookId, lineIndex);
+  }
+
   /// מחזיר את ה-`segment` (=lineIndex) של ערך ה-TOC הבא **ברמה <= [level]**
   /// אחרי [afterLineIndex], או 0x7fffffff אם אין כזה (=עד סוף הספר).
   /// הכותרת הבאה באותה רמה או רדודה יותר חוסמת את הקטע, בעוד תת-כותרות
