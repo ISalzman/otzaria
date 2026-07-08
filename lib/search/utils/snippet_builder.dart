@@ -86,6 +86,49 @@ class SnippetBuilder {
     }
   }
 
+  /// מחלץ טקסט גולמי מ-HTML של המנוע (מסיר תגים ומנרמל רווחים), לצורך
+  /// הדגשה-מחדש בצד האפליקציה בעקביות עם פאנל הקריאה.
+  static String htmlToPlainText(String html) {
+    final body = html_parser.parse(html).body;
+    return (body?.text ?? '').replaceAll(_whitespace, ' ').trim();
+  }
+
+  /// בונה [InlineSpan] מטקסט גולמי [plainText] וטווחי הדגשה [ranges]
+  /// (זוגות [start, end]). משמש להדגשה עקבית עם פאנל הקריאה בסרגל התוצאות.
+  static List<InlineSpan> spansFromRanges({
+    required String plainText,
+    required List<List<int>> ranges,
+    required TextStyle defaultStyle,
+    required TextStyle highlightStyle,
+  }) {
+    if (plainText.isEmpty || ranges.isEmpty) {
+      return [TextSpan(text: plainText, style: defaultStyle)];
+    }
+    final spans = <InlineSpan>[];
+    var position = 0;
+    for (final range in ranges) {
+      final start = range[0];
+      final end = range[1];
+      if (start < position || start >= end || end > plainText.length) continue;
+      if (start > position) {
+        spans.add(TextSpan(
+          text: plainText.substring(position, start),
+          style: defaultStyle,
+        ));
+      }
+      spans.add(TextSpan(
+        text: plainText.substring(start, end),
+        style: highlightStyle,
+      ));
+      position = end;
+    }
+    if (position < plainText.length) {
+      spans.add(
+          TextSpan(text: plainText.substring(position), style: defaultStyle));
+    }
+    return spans;
+  }
+
   /// מדגיש הופעות ליטרליות של [query] בטקסט מקומי [plainText].
   ///
   /// ההתאמה סובלנית לניקוד/טעמים ולחילופי גרשיים עבריים/לועזיים, ומכבדת

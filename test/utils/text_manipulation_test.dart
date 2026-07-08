@@ -533,6 +533,64 @@ Future<void> main() async {
       final advancedRender = highLight('ויקח מסה', query);
       expect(advancedRender, contains('<span style="color: red">מסה</span>'));
     });
+
+    test('קידומת בתוך ההתאמה אינה פוסלת הדגשה — "מיעוט" ב"במיעוט"', () async {
+      const query = 'מיעוט';
+      await primeHighlightPattern(
+        searchQuery: query,
+        searchOptions: const {},
+        alternativeWords: const {},
+        spacingValues: const {},
+        searchDistance: 0,
+        isFuzzy: false,
+        fetch: () async => const HighlightPattern(
+          combinedPattern: '(?:[בכלמהוש])?מיעוט',
+          wordPatterns: ['מיעוט'],
+          wordBoundaryEligible: [true],
+        ),
+      );
+
+      final result = highLight('ראה במיעוט גדול', query);
+      // רק "מיעוט" מודגש; ה"ב" של הקידומת נשאר מחוץ להדגשה.
+      expect(result, contains('ב<span style="color: red">מיעוט</span>'));
+    });
+
+    test('תת-מחרוזת אקראית עדיין נדחית — "מיעוט" ב"שמיעוטי" לא מודגש',
+        () async {
+      const query = 'זריזות';
+      await primeHighlightPattern(
+        searchQuery: query,
+        searchOptions: const {},
+        alternativeWords: const {},
+        spacingValues: const {},
+        searchDistance: 0,
+        isFuzzy: false,
+        fetch: () async => const HighlightPattern(
+          combinedPattern: 'מיעוט',
+          wordPatterns: ['מיעוט'],
+          wordBoundaryEligible: [true],
+        ),
+      );
+
+      // התבנית מתאימה את "מיעוט" בתוך "שמיעוטי", אך הגבול בקצה ההתאמה נכשל
+      // (לפניו "ש", אחריו "י") — אין הדגשה.
+      final result = highLight('ראה שמיעוטי כאן', query);
+      expect(result, isNot(contains('<span')));
+    });
+
+    test('הזנת תבנית חדשה מעדכנת את גרסת ההדגשה לרינדור-מחדש', () async {
+      final before = highlightPatternRevision.value;
+      await primeHighlightPattern(
+        searchQuery: 'דוד המלך',
+        searchOptions: const {},
+        alternativeWords: const {},
+        spacingValues: const {},
+        searchDistance: 0,
+        isFuzzy: false,
+        fetch: () async => primedPattern,
+      );
+      expect(highlightPatternRevision.value, greaterThan(before));
+    });
   }, skip: engineReady ? false : searchEngineSkipReason);
 
   group('גבולות מילה מול מפרידים עבריים', () {
