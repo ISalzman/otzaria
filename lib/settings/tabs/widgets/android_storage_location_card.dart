@@ -103,8 +103,23 @@ class _AndroidStorageLocationCardState
     final freeText = option.freeBytes >= 0
         ? '${(option.freeBytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB פנוי'
         : null;
+    final subtitle = option.supportsLargeFiles
+        ? freeText
+        : 'לא נתמך — הכרטיס מפורמט ב-FAT32 (מגבלת 4GB לקובץ)';
+
+    Widget? trailing;
+    if (isCurrent) {
+      trailing = Text('בשימוש',
+          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600));
+    } else if (option.supportsLargeFiles) {
+      trailing = ActionButton.recommended(
+        text: 'העבר לכאן',
+        onPressed: () => _changeLocation(option, view),
+      );
+    }
 
     return ListTile(
+      enabled: option.supportsLargeFiles,
       hoverColor: Colors.transparent,
       leading: Icon(
         option.isRemovable
@@ -119,14 +134,8 @@ class _AndroidStorageLocationCardState
           fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
-      subtitle: freeText == null ? null : Text(freeText),
-      trailing: isCurrent
-          ? Text('בשימוש',
-              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600))
-          : ActionButton.recommended(
-              text: 'העבר לכאן',
-              onPressed: () => _changeLocation(option, view),
-            ),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      trailing: trailing,
     );
   }
 }
