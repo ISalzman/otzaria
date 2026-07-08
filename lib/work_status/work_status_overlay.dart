@@ -124,29 +124,32 @@ class _PrimaryItemRow extends StatelessWidget {
           SizedBox(
             width: 64,
             height: 64,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 6,
-                    backgroundColor: colorScheme.surfaceContainerHighest,
-                    color: item.kind == WorkStatusKind.failed
-                        ? colorScheme.error
-                        : null,
-                  ),
-                ),
-                Text(
-                  percentLabel,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
+            child: item.kind == WorkStatusKind.failed
+                ? Icon(
+                    FluentIcons.error_circle_24_regular,
+                    size: 44,
+                    color: colorScheme.error,
+                  )
+                : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox.expand(
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 6,
+                          backgroundColor: colorScheme.surfaceContainerHighest,
+                        ),
                       ),
-                  textDirection: TextDirection.ltr,
-                ),
-              ],
-            ),
+                      Text(
+                        percentLabel,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ],
+                  ),
           ),
           const SizedBox(width: 16),
           Flexible(
@@ -208,11 +211,17 @@ class _SecondaryItemRow extends StatelessWidget {
             SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(
-                value: progress,
-                strokeWidth: 3,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-              ),
+              child: item.kind == WorkStatusKind.failed
+                  ? Icon(
+                      FluentIcons.error_circle_24_regular,
+                      size: 18,
+                      color: colorScheme.error,
+                    )
+                  : CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 3,
+                      backgroundColor: colorScheme.surfaceContainerHighest,
+                    ),
             ),
             const SizedBox(width: 10),
             Flexible(
