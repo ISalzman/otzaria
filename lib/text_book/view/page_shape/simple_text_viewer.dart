@@ -349,8 +349,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   FocusNode? _keyboardFocusNode;
   bool _shouldPreserveKeyboardFocus = false;
 
-  // האם להציג את שורת "יד הרמב"ם" מעל השורה הראשונה (נטען פעם אחת לכל ספר).
-  bool _showSourceBanner = false;
+  // באנר קרדיט מקור המוצג מעל השורה הראשונה (נטען פעם אחת לכל ספר), אם קיים.
+  BookSourceBannerKind? _sourceBannerKind;
   bool _pendingKeyboardFocusRestore = false;
   bool _wasMenuFocused = false;
   String? _savedSelectedText;
@@ -666,9 +666,16 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   Future<void> _loadSourceBanner() async {
     final tab = widget.tab;
     if (tab is! TextBookTab) return;
-    final show = await isBookFromNationalLibrary(tab.book);
-    if (mounted && show != _showSourceBanner) {
-      setState(() => _showSourceBanner = show);
+    final book = tab.book;
+    final kind = await resolveBookSourceBannerKind(book);
+    // מעבר מהיר בין ספרים עלול לסיים await זה אחרי שכבר עברנו לספר אחר -
+    // יש לוודא שהספר עדיין הנוכחי לפני שדורסים את _sourceBannerKind.
+    final currentTab = widget.tab;
+    if (mounted &&
+        currentTab is TextBookTab &&
+        sameSourceIdentity(book, currentTab.book) &&
+        kind != _sourceBannerKind) {
+      setState(() => _sourceBannerKind = kind);
     }
   }
 
@@ -1964,7 +1971,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     );
   }
 
-  /// עוטף את [_buildLine]; מוסיף את שורת "יד הרמב"ם" מעל השורה הראשונה.
+  /// עוטף את [_buildLine]; מוסיף את באנר קרדיט מקור הספר מעל השורה הראשונה.
   Widget _buildLineItem(
     BuildContext context,
     int index,
@@ -1981,10 +1988,18 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       segments.isNotEmpty && index < segments.length ? segments[index] : null,
       continuous,
     );
-    if (index == 0 && _showSourceBanner) {
+    final sourceBannerKind = _sourceBannerKind;
+    if (index == 0 && sourceBannerKind != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [BookSourceBanner(fontSize: widget.fontSize), line],
+        children: [
+          BookSourceBanner(
+            kind: sourceBannerKind,
+            bookTitle: state.book.title,
+            fontSize: widget.fontSize,
+          ),
+          line,
+        ],
       );
     }
     return line;

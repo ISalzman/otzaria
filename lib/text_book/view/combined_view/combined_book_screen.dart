@@ -396,8 +396,8 @@ class _CombinedViewState extends State<CombinedView> {
   // מצב הרצף האחרון שנצפה — לזיהוי החלפת מצב שמחייבת שחזור מיקום.
   bool? _lastContinuousReadingMode;
 
-  // האם להציג את שורת "יד הרמב"ם" מעל השורה הראשונה (נטען פעם אחת לכל ספר).
-  bool _showSourceBanner = false;
+  // באנר קרדיט מקור המוצג מעל השורה הראשונה (נטען פעם אחת לכל ספר), אם קיים.
+  BookSourceBannerKind? _sourceBannerKind;
 
   // מנהל בחירת טקסט משופר
   late final TextSelectionManager _selectionManager;
@@ -551,9 +551,14 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   Future<void> _loadSourceBanner() async {
-    final show = await isBookFromNationalLibrary(widget.tab.book);
-    if (mounted && show != _showSourceBanner) {
-      setState(() => _showSourceBanner = show);
+    final book = widget.tab.book;
+    final kind = await resolveBookSourceBannerKind(book);
+    // מעבר מהיר בין ספרים עלול לסיים await זה אחרי שכבר עברנו לספר אחר -
+    // יש לוודא שהספר עדיין הנוכחי לפני שדורסים את _sourceBannerKind.
+    if (mounted &&
+        sameSourceIdentity(book, widget.tab.book) &&
+        kind != _sourceBannerKind) {
+      setState(() => _sourceBannerKind = kind);
     }
   }
 
@@ -1691,10 +1696,18 @@ class _CombinedViewState extends State<CombinedView> {
             noteMap,
           ),
         );
-        if (index == 0 && _showSourceBanner) {
+        final sourceBannerKind = _sourceBannerKind;
+        if (index == 0 && sourceBannerKind != null) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [BookSourceBanner(fontSize: widget.textSize), tile],
+            children: [
+              BookSourceBanner(
+                kind: sourceBannerKind,
+                bookTitle: widget.tab.book.title,
+                fontSize: widget.textSize,
+              ),
+              tile,
+            ],
           );
         }
         return tile;
