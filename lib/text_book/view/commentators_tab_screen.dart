@@ -154,6 +154,28 @@ CommentatorsNavSelection reduceSubItemTap(
   );
 }
 
+/// קובע את הקטע שייבחר בפתיחת טאב המפרשים על [lineIndex].
+///
+/// [posVerseIdx] — התוצאה של איתור המיקום (`_findPos`): אינדקס הפסוק בפרק,
+/// או [_kAllChapter] כשלא זוהה קטע ספציפי (למשל בפרק ללא תת-פרקים).
+/// [chapterIndex] — אינדקס תחילת הפרק בתוכן. [hasChildren] — האם לפרק
+/// יש תת-פרקים. [selectableParagraphOffsets] — היסטי הפסקאות הניתנים לבחירה.
+///
+/// בפרק ללא תת-פרקים גוזר את היסט הפסקה שנפתחה, אך רק אם הוא ניתן לבחירה —
+/// כך שניווט 'קטע קודם' יתחיל מהקטע הנוכחי ולא ייתקע על היסט מסונן.
+@visibleForTesting
+int resolveOpenedVerseIdx({
+  required int posVerseIdx,
+  required int lineIndex,
+  required int chapterIndex,
+  required bool hasChildren,
+  required List<int> selectableParagraphOffsets,
+}) {
+  if (posVerseIdx != _kAllChapter || hasChildren) return posVerseIdx;
+  final paraIdx = lineIndex - chapterIndex;
+  return selectableParagraphOffsets.contains(paraIdx) ? paraIdx : _kAllChapter;
+}
+
 /// יעד ניווט 'קטע קודם/הבא': אינדקס הפרק ברשימת הפרקים והקטע בתוכו
 /// ([verseIdx] = [_kAllChapter] כשהפרק השכן ריק מקטעים ניתנים לבחירה).
 @immutable
@@ -552,20 +574,16 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     if (pos.chapter == null) return;
 
     _initialChapterResolved = true;
-    // בחירת הקטע הספציפי שנפתח (ולא "כל הפרק"), כדי שניווט 'קטע קודם'
-    // יתחיל מהקטע הנוכחי ולא מקצה הפרק.
     final chapter = pos.chapter!;
-    var verseIdx = pos.verseIdx;
-    // בפרק ללא תת-פרקים _findPos מחזיר תמיד "כל הפרק"; נגזור את היסט הפסקה
-    // הנפתחת, אך רק אם הוא ניתן לבחירה (אחרת נשאר "כל הפרק").
-    if (verseIdx == _kAllChapter && chapter.children.isEmpty) {
-      final content = state.content;
-      final paraIdx = lineIndex - chapter.index;
-      if (_selectableParagraphOffsets(chapters, chapter, content)
-          .contains(paraIdx)) {
-        verseIdx = paraIdx;
-      }
-    }
+    final verseIdx = resolveOpenedVerseIdx(
+      posVerseIdx: pos.verseIdx,
+      lineIndex: lineIndex,
+      chapterIndex: chapter.index,
+      hasChildren: chapter.children.isNotEmpty,
+      selectableParagraphOffsets: chapter.children.isEmpty
+          ? _selectableParagraphOffsets(chapters, chapter, state.content)
+          : const [],
+    );
     if (verseIdx == _kAllChapter) {
       _onChapterSelected(chapter, chapters);
     } else {
