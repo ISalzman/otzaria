@@ -405,29 +405,28 @@ String changelogBetweenVersionsForUpdateDialog({
   return result;
 }
 
+/// האם בדיקת עדכונים חסומה כרגע (מצב מנותק או שעדכוני תוכנה כובו בהגדרות).
+bool updateCheckBlocked({
+  required bool isOfflineMode,
+  required bool updatesEnabled,
+}) =>
+    isOfflineMode || !updatesEnabled;
+
 class MyUpdatWidget extends StatelessWidget {
   const MyUpdatWidget({super.key, required this.child});
 
   final Widget child;
   @override
   Widget build(BuildContext context) {
-    if (!supportsManagedUpdatePlatform(
-      isWeb: kIsWeb,
-      operatingSystem: Platform.operatingSystem,
-    )) {
+    // אסור שצורת העץ תלויה בהגדרות משתנות (מנותק/עדכונים) — החלפת העוטף
+    // בזמן ריצה בונה מחדש את כל תת-העץ וה-PageView מאבד את העמוד הפעיל.
+    if (kDebugMode ||
+        !supportsManagedUpdatePlatform(
+          isWeb: kIsWeb,
+          operatingSystem: Platform.operatingSystem,
+        )) {
       return child;
     }
-    final isOfflineMode =
-        Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
-    final softwareAndBookUpdatesEnabled = Settings.getValue<bool>(
-          SettingsRepository.keySoftwareAndBookUpdatesEnabled,
-          defaultValue: true,
-        ) ??
-        true;
-    if (kDebugMode || isOfflineMode || !softwareAndBookUpdatesEnabled) {
-      return child;
-    }
-
     return _ManagedUpdatWidget(child: child);
   }
 }
@@ -564,6 +563,21 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   Future<void> _checkForUpdate() async {
+    if (updateCheckBlocked(
+      isOfflineMode:
+          Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false,
+      updatesEnabled: Settings.getValue<bool>(
+            SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+            defaultValue: true,
+          ) ??
+          true,
+    )) {
+      setState(() {
+        _status = UpdatStatus.upToDate;
+      });
+      return;
+    }
+
     setState(() {
       _status = UpdatStatus.checking;
     });
