@@ -41,6 +41,9 @@ class LibraryUpdateState extends Equatable {
   final int? bytesDownloaded;
   final int? bytesTotal;
 
+  /// יחס התקדמות (0..1) בתוך שלב אימות ה-hash; null בשאר שלבי ה-apply.
+  final double? applyProgress;
+
   /// התוכנית שנבחרה — זמינה במצב [LibraryUpdateStatus.needsFullConfirmation].
   final LibraryUpdatePlan? plan;
 
@@ -54,6 +57,7 @@ class LibraryUpdateState extends Equatable {
     this.totalSteps = 0,
     this.bytesDownloaded,
     this.bytesTotal,
+    this.applyProgress,
     this.plan,
     this.errorMessage,
   });
@@ -64,6 +68,15 @@ class LibraryUpdateState extends Equatable {
       status == LibraryUpdateStatus.applying ||
       status == LibraryUpdateStatus.refreshing;
 
+  /// שינוי המשפיע על ריענון הספרייה. hasUpdate נבדק בנפרד מ-status כי ריצה
+  /// שבוטלה יכולה להפוך אותו ל-true בזמן ש-status כבר completed.
+  static bool hasRefreshRelevantChange(
+          LibraryUpdateState previous, LibraryUpdateState current) =>
+      previous.status != current.status ||
+      previous.hasUpdate != current.hasUpdate;
+
+  static const _sentinel = Object();
+
   LibraryUpdateState copyWith({
     LibraryUpdateStatus? status,
     String? message,
@@ -72,6 +85,9 @@ class LibraryUpdateState extends Equatable {
     int? totalSteps,
     int? bytesDownloaded,
     int? bytesTotal,
+    // sentinel ולא ??: null חייב *לנקות* ערך ישן, אחרת אירועי stage בלי מדידה
+    // משאירים אחוז שאריתי מהאימות הקודם (למשל בין צעדי דלתא).
+    Object? applyProgress = _sentinel,
     LibraryUpdatePlan? plan,
     String? errorMessage,
   }) {
@@ -83,6 +99,9 @@ class LibraryUpdateState extends Equatable {
       totalSteps: totalSteps ?? this.totalSteps,
       bytesDownloaded: bytesDownloaded ?? this.bytesDownloaded,
       bytesTotal: bytesTotal ?? this.bytesTotal,
+      applyProgress: identical(applyProgress, _sentinel)
+          ? this.applyProgress
+          : applyProgress as double?,
       plan: plan ?? this.plan,
       errorMessage: errorMessage ?? this.errorMessage,
     );
@@ -97,6 +116,7 @@ class LibraryUpdateState extends Equatable {
         totalSteps,
         bytesDownloaded,
         bytesTotal,
+        applyProgress,
         plan,
         errorMessage,
       ];

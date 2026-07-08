@@ -1263,7 +1263,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     for (final candidatePath in candidatePaths) {
       final exists = await Directory(candidatePath).exists();
-      if (exists) {
+      // חילוץ שנקטע משאיר תיקייה עם PDF חלקי וסימון-ביניים; מתעלמים ממנה עד
+      // שההתקנה תושלם, אחרת הספרייה תציג מסכתות עם קבצים חסרים.
+      if (exists &&
+          !DatabaseConstants.isTalmudBavliInstallInProgress(candidatePath)) {
         _bundledTalmudBavliPathCache = candidatePath;
         _bundledTalmudBavliExistsCache = true;
         return true;

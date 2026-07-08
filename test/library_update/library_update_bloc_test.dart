@@ -4,6 +4,7 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
+import 'package:otzaria/library_update/services/companion_assets_service.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 
 class _FakeService implements LibraryUpdateService {
@@ -83,6 +84,48 @@ class _GatedAtApplyService implements LibraryUpdateService {
   }) async {}
 }
 
+/// שירות שמדמה רצף apply אמיתי: מדידת אימות ואז תת-שלב בלי מדידה — לבדיקת
+/// ניקוי applyProgress שאריתי.
+class _VerifyThenCommitService implements LibraryUpdateService {
+  final LibraryUpdatePlan plan;
+  _VerifyThenCommitService(this.plan);
+
+  @override
+  Future<RecoveryResult> recoverIfNeeded() async =>
+      const RecoveryResult(RecoveryAction.none);
+
+  @override
+  Future<LibraryUpdatePlan> checkForUpdate(
+          {required bool allowPrerelease}) async =>
+      plan;
+
+  @override
+  Future<void> applyDeltaPlan(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    onProgress?.call(const LibraryUpdateProgress(
+      phase: LibraryUpdatePhase.applying,
+      stage: 'verifyToHash',
+      applyProgress: 0.5,
+    ));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    onProgress?.call(const LibraryUpdateProgress(
+      phase: LibraryUpdatePhase.applying,
+      stage: 'commit',
+    ));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    bool Function()? isCancelled,
+  }) async {}
+}
+
 /// שירות שבו applyDeltaPlan נחסם עד שמשחררים את ה-gate — לבדיקת race של ביטול.
 class _GatedService implements LibraryUpdateService {
   final LibraryUpdatePlan plan;
@@ -115,17 +158,84 @@ class _GatedService implements LibraryUpdateService {
   }) async {}
 }
 
+/// שירות נלווים מזויף — רושם קריאות, ואופציונלית זורק או מדווח על שינוי.
+class _FakeCompanionService extends CompanionAssetsService {
+  _FakeCompanionService({this.throwOnRun = false, this.changed = false});
+  final bool throwOnRun;
+  final bool changed;
+  int calls = 0;
+
+  @override
+  Future<bool> verifyAndUpdate({
+    void Function(String message)? onStatus,
+    void Function(int received, int? total)? onDownloadProgress,
+    bool Function()? isCancelled,
+  }) async {
+    calls++;
+    if (throwOnRun) throw Exception('companion failed');
+    onStatus?.call('בודק את התלמוד הבבלי');
+    return changed;
+  }
+}
+
+/// שירות נלווים שנחסם עד שחרור ה-gate — לבדיקת ביטול במהלך הריצה שלו.
+class _GatedCompanionService extends CompanionAssetsService {
+  _GatedCompanionService(this.gate, {this.changed = false});
+  final Completer<void> gate;
+
+  /// מדמה תלמוד/קטלוג שכבר שונו לפני שהביטול נקלט — הדגל המצטבר מוחזר.
+  final bool changed;
+
+  @override
+  Future<bool> verifyAndUpdate({
+    void Function(String message)? onStatus,
+    void Function(int received, int? total)? onDownloadProgress,
+    bool Function()? isCancelled,
+  }) async {
+    onStatus?.call('מוריד את התלמוד הבבלי');
+    await gate.future;
+    return changed;
+  }
+}
+
+/// נלווים לתרחיש race: הקריאה הראשונה נחסמת ומחזירה שינוי (הנכס הוחלף לפני
+/// הביטול); השנייה נחסמת ומחזירה false (הנכס כבר מעודכן).
+class _RaceCompanionService extends CompanionAssetsService {
+  _RaceCompanionService(this.firstGate, this.secondGate);
+  final Completer<void> firstGate;
+  final Completer<void> secondGate;
+  int calls = 0;
+
+  @override
+  Future<bool> verifyAndUpdate({
+    void Function(String message)? onStatus,
+    void Function(int received, int? total)? onDownloadProgress,
+    bool Function()? isCancelled,
+  }) async {
+    calls++;
+    if (calls == 1) {
+      onStatus?.call('מוריד את התלמוד הבבלי');
+      await firstGate.future;
+      return true;
+    }
+    await secondGate.future;
+    return false;
+  }
+}
+
 LibraryUpdateBloc _bloc(
   LibraryUpdateService service, {
   bool offline = false,
   bool updatesEnabled = true,
   bool prerelease = false,
+  CompanionAssetsService? companionAssets,
 }) =>
     LibraryUpdateBloc(
       repository: service,
       isOfflineMode: () => offline,
       areUpdatesEnabled: () => updatesEnabled,
       allowPrerelease: () => prerelease,
+      companionAssets: companionAssets,
     );
 
 void main() {
@@ -307,6 +417,197 @@ void main() {
           reason: 'עדכון שהושלם חייב להפעיל ריענון ספרייה/אינדוקס');
       expect(seen.contains(LibraryUpdateStatus.idle), isFalse,
           reason: 'ביטול שנחסם לא אמור להחזיר ל-idle');
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'הקבצים הנלווים נבדקים אחרי עדכון דלתא, לפני completed',
+      build: () => _bloc(_FakeService(deltaPlan),
+          companionAssets: _FakeCompanionService()),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      verify: (b) =>
+          expect((b.companionAssets as _FakeCompanionService).calls, 1),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.checking),
+        isA<LibraryUpdateState>()
+            .having((s) => s.message, 'message', 'בודק את התלמוד הבבלי'),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'הקבצים הנלווים נבדקים גם כשאין עדכון (plan none)',
+      build: () => _bloc(_FakeService(nonePlan),
+          companionAssets: _FakeCompanionService()),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      verify: (b) =>
+          expect((b.companionAssets as _FakeCompanionService).calls, 1),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.checking),
+        isA<LibraryUpdateState>()
+            .having((s) => s.message, 'message', 'בודק את התלמוד הבבלי'),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'plan none אך הנלווים עדכנו בפועל → completed עם hasUpdate (ריענון)',
+      build: () => _bloc(_FakeService(nonePlan),
+          companionAssets: _FakeCompanionService(changed: true)),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.checking),
+        isA<LibraryUpdateState>()
+            .having((s) => s.message, 'message', 'בודק את התלמוד הבבלי'),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+      ],
+    );
+
+    test(
+        'plan none: ביטול בזמן הנלווים שכבר שינו את הספרייה → completed עם hasUpdate',
+        () async {
+      final gate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _GatedCompanionService(gate, changed: true));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'מוריד את התלמוד הבבלי');
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'העדכון בוטל');
+
+      // השירות מחזיר את הדגל המצטבר — תלמוד/קטלוג כבר שונו לפני הביטול.
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      expect(bloc.state.hasUpdate, isTrue,
+          reason: 'הספרייה כבר השתנתה — ביטול לא יכול לאבד את הריענון/אינדוקס');
+      await bloc.close();
+    });
+
+    test(
+        'plan none: ביטול והתחלה מיידית של ריצה חדשה → השינוי מהריצה שבוטלה מדווח',
+        () async {
+      final firstGate = Completer<void>();
+      final secondGate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _RaceCompanionService(firstGate, secondGate));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'מוריד את התלמוד הבבלי');
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.message, 'העדכון בוטל');
+
+      // המשתמש לוחץ שוב "עדכון" לפני שהריצה הישנה חזרה — הריצה החדשה busy.
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.isBusy, isTrue);
+
+      // הריצה הישנה חוזרת עם שינוי, אך לא פולטת כי הריצה החדשה busy.
+      firstGate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.isBusy, isTrue);
+
+      // הריצה החדשה רואה את הנכס כבר מעודכן — אך חייבת לדווח את השינוי השמור.
+      secondGate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      expect(bloc.state.hasUpdate, isTrue,
+          reason:
+              'הספרייה השתנתה בריצה שבוטלה — הריענון/אינדוקס לא יכולים ללכת לאיבוד');
+      await bloc.close();
+    });
+
+    test(
+        'plan none: ביטול בזמן נלווים שלא שינו דבר → נשאר מבוטל, בלי completed',
+        () async {
+      final gate = Completer<void>();
+      final bloc = _bloc(_FakeService(nonePlan),
+          companionAssets: _GatedCompanionService(gate));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.status, LibraryUpdateStatus.idle);
+      expect(bloc.state.message, 'העדכון בוטל',
+          reason: 'שום דבר לא השתנה — אין לפלוט completed מריצה שבוטלה');
+      await bloc.close();
+    });
+
+    test('ביטול בשלב הנלווים אחרי עדכון דלתא → עדיין completed עם hasUpdate',
+        () async {
+      final gate = Completer<void>();
+      final bloc = _bloc(_FakeService(deltaPlan),
+          companionAssets: _GatedCompanionService(gate));
+      final seen = <LibraryUpdateStatus>[];
+      final sub = bloc.stream.listen((s) => seen.add(s.status));
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // ה-DB כבר עודכן; הריצה תקועה בהורדת הנלווים והמשתמש מבטל.
+      expect(bloc.state.message, 'מוריד את התלמוד הבבלי');
+      bloc.add(const CancelLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      expect(bloc.state.hasUpdate, isTrue,
+          reason: 'ה-DB הוחלף — ביטול הנלווים לא יכול לאבד את הריענון/אינדוקס');
+      expect(seen.contains(LibraryUpdateStatus.idle), isFalse);
+
+      gate.complete(); // הריצה הישנה מסתיימת — לא דורסת את ה-state
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, LibraryUpdateStatus.completed);
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל בקבצים הנלווים לא מפיל את העדכון — עדיין completed',
+      build: () => _bloc(_FakeService(deltaPlan),
+          companionAssets: _FakeCompanionService(throwOnRun: true)),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.checking),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+      ],
+    );
+
+    test('אירוע stage בלי מדידה מנקה applyProgress שאריתי מהאימות', () async {
+      final bloc = _bloc(_VerifyThenCommitService(deltaPlan));
+      final seen = <LibraryUpdateState>[];
+      final sub = bloc.stream.listen(seen.add);
+
+      bloc.add(const StartLibraryUpdate());
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final applying =
+          seen.where((s) => s.status == LibraryUpdateStatus.applying).toList();
+      expect(applying, hasLength(2));
+      expect(applying[0].applyProgress, 0.5);
+      expect(applying[1].applyProgress, isNull,
+          reason: 'commit ללא מדידה חייב לנקות את אחוז האימות הקודם, '
+              'אחרת המד מציג ערך שאריתי');
       await sub.cancel();
       await bloc.close();
     });

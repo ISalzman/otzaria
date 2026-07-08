@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -156,6 +157,47 @@ void main() {
       await tester.tap(find.text('אינדוקס ספרים'));
       await tester.pump();
       expect(indexingTapped, isTrue);
+      cubit.close();
+    });
+
+    testWidgets('פריט כושל מוצג עם אייקון שגיאה ולא עם ספינר', (tester) async {
+      final cubit = WorkStatusCubit();
+      cubit.upsert(const WorkStatusItem(
+        id: 'library_update',
+        title: 'עדכון ספרייה',
+        message: 'שגיאה בהחלת העדכון',
+        detail: 'לחץ לניסיון חוזר',
+        kind: WorkStatusKind.failed,
+      ));
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      expect(find.text('שגיאה בהחלת העדכון'), findsOneWidget);
+      expect(find.text('לחץ לניסיון חוזר'), findsOneWidget);
+      expect(find.byIcon(FluentIcons.error_circle_24_regular), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      cubit.close();
+    });
+
+    testWidgets('לחיצה על פריט כושל מפעילה ניסיון חוזר', (tester) async {
+      final cubit = WorkStatusCubit();
+      var retried = false;
+      cubit.upsert(WorkStatusItem(
+        id: 'library_update',
+        title: 'עדכון ספרייה',
+        message: 'שגיאה בהחלת העדכון',
+        kind: WorkStatusKind.failed,
+        onTap: () => retried = true,
+      ));
+
+      await tester.pumpWidget(_wrap(const WorkStatusOverlay(), cubit));
+      await tester.pump();
+
+      await tester.tap(find.text('עדכון ספרייה'));
+      await tester.pump();
+
+      expect(retried, isTrue);
       cubit.close();
     });
 

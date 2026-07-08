@@ -2299,8 +2299,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           // ריענון הספרייה אחרי עדכון, ואישור הורדה מלאה. מוגדר כאן (לא
           // ב-LibraryBrowser) כדי שיהיה mounted גם כשנפתחים למסך אחר.
           BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
-            listenWhen: (previous, current) =>
-                previous.status != current.status,
+            listenWhen: LibraryUpdateState.hasRefreshRelevantChange,
             listener: (context, state) {
               if (state.status == LibraryUpdateStatus.completed &&
                   state.hasUpdate) {
@@ -2392,19 +2391,41 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listenWhen: (previous, current) =>
                 previous.status != current.status ||
                 previous.message != current.message ||
-                previous.bytesDownloaded != current.bytesDownloaded,
+                previous.bytesDownloaded != current.bytesDownloaded ||
+                previous.applyProgress != current.applyProgress,
             listener: (context, state) {
               final cubit = context.read<WorkStatusCubit>();
               if (state.isBusy) {
-                final total = state.bytesTotal ?? 0;
-                final progress = total > 0
-                    ? ((state.bytesDownloaded ?? 0) / total).clamp(0.0, 1.0)
-                    : null;
+                // מד הבתים תקף רק בזמן ההורדה — בשלבים הבאים הוא שארית דבוקה
+                // על 100%. ב-apply המדד הוא applyProgress (null = אין מדידה).
+                final double? progress;
+                switch (state.status) {
+                  case LibraryUpdateStatus.downloading:
+                    final total = state.bytesTotal ?? 0;
+                    progress = total > 0
+                        ? ((state.bytesDownloaded ?? 0) / total).clamp(0.0, 1.0)
+                        : null;
+                  case LibraryUpdateStatus.applying:
+                    progress = state.applyProgress;
+                  default:
+                    progress = null;
+                }
                 cubit.upsert(WorkStatusItem(
                   id: 'library_update',
                   title: 'עדכון ספרייה',
                   message: state.message,
                   progress: progress,
+                ));
+              } else if (state.status == LibraryUpdateStatus.error) {
+                cubit.upsert(WorkStatusItem(
+                  id: 'library_update',
+                  title: 'עדכון ספרייה',
+                  message: state.message,
+                  detail: 'לחץ לניסיון חוזר',
+                  kind: WorkStatusKind.failed,
+                  onTap: () => context
+                      .read<LibraryUpdateBloc>()
+                      .add(const StartLibraryUpdate()),
                 ));
               } else {
                 cubit.remove('library_update');
