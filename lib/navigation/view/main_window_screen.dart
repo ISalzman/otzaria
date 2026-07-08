@@ -2299,8 +2299,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           // ריענון הספרייה אחרי עדכון, ואישור הורדה מלאה. מוגדר כאן (לא
           // ב-LibraryBrowser) כדי שיהיה mounted גם כשנפתחים למסך אחר.
           BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
-            listenWhen: (previous, current) =>
-                previous.status != current.status,
+            listenWhen: LibraryUpdateState.hasRefreshRelevantChange,
             listener: (context, state) {
               if (state.status == LibraryUpdateStatus.completed &&
                   state.hasUpdate) {

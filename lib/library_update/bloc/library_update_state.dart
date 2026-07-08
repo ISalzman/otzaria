@@ -68,6 +68,13 @@ class LibraryUpdateState extends Equatable {
       status == LibraryUpdateStatus.applying ||
       status == LibraryUpdateStatus.refreshing;
 
+  /// שינוי המשפיע על ריענון הספרייה. hasUpdate נבדק בנפרד מ-status כי ריצה
+  /// שבוטלה יכולה להפוך אותו ל-true בזמן ש-status כבר completed.
+  static bool hasRefreshRelevantChange(
+          LibraryUpdateState previous, LibraryUpdateState current) =>
+      previous.status != current.status ||
+      previous.hasUpdate != current.hasUpdate;
+
   static const _sentinel = Object();
 
   LibraryUpdateState copyWith({
