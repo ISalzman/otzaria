@@ -15,11 +15,16 @@ class AndroidStorageOption {
   final int freeBytes;
   final bool isRemovable;
 
+  /// false = הכרך מפורמט ב-FAT32 (מגבלת 4GB לקובץ) ולא יכול להכיל את
+  /// seforim.db; ה-UI מציג את המיקום כלא-נתמך.
+  final bool supportsLargeFiles;
+
   const AndroidStorageOption({
     required this.label,
     required this.libraryRoot,
     required this.freeBytes,
     required this.isRemovable,
+    this.supportsLargeFiles = true,
   });
 }
 
@@ -55,9 +60,53 @@ class AndroidStorageService {
         libraryRoot: dir.path,
         freeBytes: await _freeBytes(dir.path),
         isRemovable: true,
+        supportsLargeFiles: await volumeSupportsLargeFiles(dir.path),
       ));
     }
     return options;
+  }
+
+  /// האם הכרך שעליו יושב [dirPath] תומך בקבצים מעל 4GB (seforim.db גדול מכך).
+  /// fail-open: כשלא ניתן לקבוע מחזיר true — הכשל האמיתי יעלה בכתיבה עצמה.
+  static Future<bool> volumeSupportsLargeFiles(String dirPath) async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final mounts = await File('/proc/mounts').readAsString();
+      return largeFileSupportFromMounts(mounts, dirPath) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// מפענח את /proc/mounts וקובע תמיכה בקבצים גדולים עבור [dirPath].
+  /// מחזיר null כשלא ניתן לקבוע (הכרך אינו מופיע, או שנראית רק שכבת
+  /// ה-FUSE/sdcardfs ולא מערכת הקבצים האמיתית).
+  @visibleForTesting
+  static bool? largeFileSupportFromMounts(String mounts, String dirPath) {
+    final volume =
+        RegExp(r'^/storage/([^/]+)/').firstMatch('$dirPath/')?.group(1);
+    // אחסון פנימי (או נתיב שאינו תחת /storage) — ext4/f2fs, תומך תמיד.
+    if (volume == null || volume == 'emulated' || volume == 'self') {
+      return true;
+    }
+
+    String? fsTypeAt(String mountPoint) {
+      for (final line in mounts.split('\n')) {
+        final parts = line.split(' ');
+        if (parts.length >= 3 && parts[1] == mountPoint) return parts[2];
+      }
+      return null;
+    }
+
+    // /storage/<VOL> הוא שכבת FUSE/sdcardfs; מערכת הקבצים האמיתית של הכרטיס
+    // נמצאת במאונט התחתון /mnt/media_rw/<VOL>.
+    final fsType =
+        fsTypeAt('/mnt/media_rw/$volume') ?? fsTypeAt('/storage/$volume');
+    if (fsType == null) return null;
+    final lower = fsType.toLowerCase();
+    if (const {'vfat', 'msdos', 'fat'}.contains(lower)) return false;
+    if (const {'fuse', 'sdcardfs', 'esdfs'}.contains(lower)) return null;
+    return true;
   }
 
   /// מקום פנוי בבייטים לנתיב נתון, או -1 אם לא ניתן לקבוע. משתמש ב-df,

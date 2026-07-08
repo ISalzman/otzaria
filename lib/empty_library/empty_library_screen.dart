@@ -471,7 +471,11 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
     final freeText = option.freeBytes >= 0
         ? '${(option.freeBytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB פנוי'
         : null;
+    final subtitle = option.supportsLargeFiles
+        ? freeText
+        : 'לא נתמך — הכרטיס מפורמט ב-FAT32 (מגבלת 4GB לקובץ)';
     return ListTile(
+      enabled: option.supportsLargeFiles,
       onTap: () {
         setState(() => _selectedLibraryRoot = option.libraryRoot);
         BlocProvider.of<EmptyLibraryBloc>(context)
@@ -492,7 +496,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
-      subtitle: freeText == null ? null : Text(freeText),
+      subtitle: subtitle == null ? null : Text(subtitle),
       trailing: selected
           ? Icon(FluentIcons.checkmark_circle_24_filled, color: cs.primary)
           : null,
