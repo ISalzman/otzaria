@@ -50,6 +50,29 @@ void main() {
     });
   });
 
+  group('updateCheckBlocked', () {
+    // מצב מנותק חוסם את *בדיקת* העדכון בלבד — אסור שישנה את צורת עץ
+    // הווידג'טים, אחרת ה-PageView הראשי נבנה מחדש ומציג מסך שגוי.
+    test('blocked when offline or when updates are disabled', () {
+      expect(
+        updateCheckBlocked(isOfflineMode: true, updatesEnabled: true),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: false, updatesEnabled: false),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: true, updatesEnabled: false),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: false, updatesEnabled: true),
+        isFalse,
+      );
+    });
+  });
+
   group('shouldLaunchInstallerOnExit', () {
     test('requires installer file and a completed download state', () {
       expect(
