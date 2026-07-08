@@ -4239,7 +4239,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (outline != null && outline.isNotEmpty) {
       final heading = _findHeadingForPage(outline, index);
       if (heading != null) {
-        ref = '${widget.tab.title} $heading';
+        ref = '${widget.tab.title} $heading — עמוד $index';
       } else {
         ref = '${widget.tab.title} עמוד $index';
       }
