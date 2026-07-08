@@ -165,4 +165,56 @@ void main() {
       expect(excerpt.length, lessThan(fullText.trim().length));
     });
   });
+
+  group('htmlToPlainText - חילוץ טקסט גולמי', () {
+    test('מסיר תגי הדגשה של המנוע ומנרמל רווחים', () {
+      final plain = SnippetBuilder.htmlToPlainText(
+        'בראשית <font color="red">ברא</font>   אלהים',
+      );
+      expect(plain, 'בראשית ברא אלהים');
+    });
+  });
+
+  group('spansFromRanges - הדגשת חלק מטוקן בסרגל התוצאות', () {
+    test('מדגיש רק את הטווח שהתקבל ולא את המילה השלמה', () {
+      const text = 'דכוותי כוונתו';
+      // "כוו" בתוך "דכוותי" (אופסט 1) ובתוך "כוונתו" (אופסט 7)
+      final spans = SnippetBuilder.spansFromRanges(
+        plainText: text,
+        ranges: const [
+          [1, 4],
+          [7, 10],
+        ],
+        defaultStyle: _defaultStyle,
+        highlightStyle: _highlightStyle,
+      );
+
+      expect(_highlighted(spans), 'כווכוו');
+      expect(_allText(spans), text);
+    });
+
+    test('רשימת טווחים ריקה משאירה את הטקסט ללא הדגשה', () {
+      final spans = SnippetBuilder.spansFromRanges(
+        plainText: 'טקסט בלי התאמה',
+        ranges: const [],
+        defaultStyle: _defaultStyle,
+        highlightStyle: _highlightStyle,
+      );
+      expect(_highlighted(spans), isEmpty);
+      expect(_allText(spans), 'טקסט בלי התאמה');
+    });
+
+    test('מתעלם מטווח חורג מגבולות הטקסט', () {
+      const text = 'קצר';
+      final spans = SnippetBuilder.spansFromRanges(
+        plainText: text,
+        ranges: const [
+          [0, 99],
+        ],
+        defaultStyle: _defaultStyle,
+        highlightStyle: _highlightStyle,
+      );
+      expect(_allText(spans), text);
+    });
+  });
 }

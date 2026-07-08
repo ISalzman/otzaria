@@ -272,6 +272,13 @@ final LinkedHashMap<String, _CompiledHighlightPattern?> _primedHighlightCache =
 const int _maxPrimedHighlightEntries = 8;
 final Set<String> _primedHighlightInFlight = <String>{};
 
+final ValueNotifier<int> _highlightPatternRevision = ValueNotifier<int>(0);
+
+/// מתעדכן כשתבנית הדגשה מבוססת-אינדקס חדשה נכנסת למטמון. הרינדור שכבר צויר
+/// עם ה-fallback (צורת-השאילתה בלבד) מאזין לזה ומתרנדר מחדש עם התבנית
+/// המדויקת — אחרת התאמות קידומת/וריאנט נשארות ללא הדגשה עד גלילה.
+ValueListenable<int> get highlightPatternRevision => _highlightPatternRevision;
+
 /// מקמפל את תבניות ה-RegExp שהמנוע החזיר. כל הלוגיקה של בניית התבניות חיה
 /// ב-Rust; כאן קומפילציה בלבד.
 _CompiledHighlightPattern? _compileHighlightPattern(HighlightPattern? pattern) {
@@ -313,9 +320,14 @@ Future<void> primeHighlightPattern({
   }
   try {
     final pattern = await fetch();
-    _primedHighlightCache[key] = _compileHighlightPattern(pattern);
+    final compiled = _compileHighlightPattern(pattern);
+    _primedHighlightCache[key] = compiled;
     while (_primedHighlightCache.length > _maxPrimedHighlightEntries) {
       _primedHighlightCache.remove(_primedHighlightCache.keys.first);
+    }
+    // תבנית מדויקת חדשה זמינה — מאותת לרינדור להתרנן מחדש.
+    if (compiled != null) {
+      _highlightPatternRevision.value++;
     }
   } catch (error) {
     debugPrint('primeHighlightPattern failed: $error');
@@ -492,12 +504,17 @@ List<_HighlightRange>? _collectMatchedSearchWordRanges(
 
     final wordStart = searchOffset + wordMatch.start;
     final wordEnd = searchOffset + wordMatch.end;
-    final absoluteStart = matchStart + wordStart;
-    final absoluteEnd = matchStart + wordEnd;
 
+    // הגבול נבדק בקצוות ההתאמה כולה, לא בקצה טווח-המילה: קידומת/סיומת שבתוך
+    // ההתאמה (כמו "ב" ב"במיעוט") היא חלק מהטוקן ואומתה בתבנית המנוע — אין
+    // לפסול בגללה. גבולות פנימיים בין מילים מאומתים אף הם בתבנית.
+    final isFirst = i == 0;
+    final isLast = i == wordRegexes.length - 1;
     if (requireTokenBoundaries[i] &&
-        (!_hasTokenBoundaryBefore(fullText, absoluteStart) ||
-            !_hasTokenBoundaryAfter(fullText, absoluteEnd))) {
+        ((isFirst && !_hasTokenBoundaryBefore(fullText, matchStart)) ||
+            (isLast &&
+                !_hasTokenBoundaryAfter(
+                    fullText, matchStart + matchedText.length)))) {
       return null;
     }
 
@@ -673,6 +690,44 @@ String highLight(
   }
 
   return result;
+}
+
+/// מחזיר את טווחי ההדגשה (offsets גולמיים) של מילות החיפוש ב-[data], באותה
+/// התאמה בדיוק כמו [highLight] — לבניית InlineSpans (סרגל תוצאות) בעקביות
+/// מלאה עם הדגשת פאנל הקריאה. כל טווח הוא זוג [start, end].
+List<List<int>> computeHighlightRanges(
+  String data,
+  String searchQuery, {
+  Map<String, Map<String, bool>> searchOptions = const {},
+  Map<int, List<String>> alternativeWords = const {},
+  Map<String, String> spacingValues = const {},
+  bool isFuzzy = false,
+  int searchDistance = 0,
+  bool partialWordMatch = false,
+}) {
+  if (searchQuery.isEmpty || data.isEmpty) return const [];
+  final compiled = _resolveHighlightPattern(
+    searchQuery,
+    searchOptions,
+    alternativeWords,
+    spacingValues,
+    searchDistance,
+    isFuzzy,
+  );
+  if (compiled == null) return const [];
+  final requireTokenBoundaries = [
+    for (final eligible in compiled.boundaryEligible)
+      eligible && !partialWordMatch,
+  ];
+  final matches = _findHighlightMatches(data, compiled, requireTokenBoundaries);
+  final ranges = <List<int>>[];
+  for (final highlightMatch in matches) {
+    final base = highlightMatch.match.start;
+    for (final range in highlightMatch.ranges) {
+      ranges.add([base + range.start, base + range.end]);
+    }
+  }
+  return ranges;
 }
 
 String getTitleFromPath(String path) {

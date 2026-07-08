@@ -150,6 +150,73 @@ void main() {
     expect(find.text('משה'), findsWidgets);
   });
 
+  testWidgets(
+      'פתיחה מחדש בתוך ספר: אפשרות פר-מילה משוחזרת מוצגת מסומנת במצב מתקדם',
+      (WidgetTester tester) async {
+    final historyBloc = MockHistoryBloc();
+    final indexingBloc = MockIndexingBloc();
+    final navigationBloc = MockNavigationBloc();
+    final theme = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
+    );
+    // מדמה את ה-tempTab שבונה מסך החיפוש בתוך הספר בפתיחה חוזרת: מפת פר-מילה
+    // עם האפשרות שנבחרה, ו-useGlobalSearchOptions=false (התיקון).
+    final tab = SearchingTab('חיפוש', 'חכמה');
+    tab.searchOptions.addAll({
+      'חכמה_0': {'קידומות דקדוקיות': true},
+    });
+    tab.useGlobalSearchOptions.value = false;
+    tab.searchBloc.add(SetSearchMode(SearchMode.advanced));
+
+    whenListen(
+      historyBloc,
+      const Stream<HistoryState>.empty(),
+      initialState: HistoryLoaded([]),
+    );
+    whenListen(
+      indexingBloc,
+      const Stream<IndexingState>.empty(),
+      initialState: IndexingInitial(),
+    );
+    whenListen(
+      navigationBloc,
+      const Stream<NavigationState>.empty(),
+      initialState: const NavigationState(currentScreen: Screen.search),
+    );
+
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tab.dispose();
+      await historyBloc.close();
+      await indexingBloc.close();
+      await navigationBloc.close();
+    });
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(_buildDialogHarness(
+      theme: theme,
+      historyBloc: historyBloc,
+      indexingBloc: indexingBloc,
+      navigationBloc: navigationBloc,
+      dialog: SearchDialog(
+        existingTab: tab,
+        bookTitle: 'ספר',
+        returnResultOnSubmit: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final labelFinder = find.text('קידומות דקדוקיות');
+    expect(labelFinder, findsOneWidget);
+    final checkbox = tester.widget<Checkbox>(find.descendant(
+      of: find.ancestor(of: labelFinder, matching: find.byType(Row)).first,
+      matching: find.byType(Checkbox),
+    ));
+    expect(checkbox.value, isTrue,
+        reason: 'אפשרות פר-מילה משוחזרת חייבת להופיע מסומנת בפתיחה מחדש');
+  });
+
   testWidgets('onSearch לא מעביר פרמטרים מתקדמים במצב exact',
       (WidgetTester tester) async {
     final historyBloc = MockHistoryBloc();
