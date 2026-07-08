@@ -42,6 +42,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/widgets/book_source_banner.dart';
+import 'package:otzaria/text_book/view/sibling_commentaries_menu.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
@@ -367,6 +368,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   final Map<String, Future<bool>> _removeNikudCache = {};
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
+
+  // תת-התפריט "מפרשים נוספים על הדף" — רק בטקסט הראשי (ספר המפרש הנקרא).
+  SiblingCommentariesController? _siblingController;
   final Object _selectionOwner = Object();
   final GlobalKey<SelectableRegionState> _selectionRegionKey = GlobalKey();
   late final FocusNode _selectionFocusNode;
@@ -528,6 +532,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
     if (widget.isMainText) {
+      final bloc = context.read<TextBookBloc>();
+      _siblingController = SiblingCommentariesController(
+        loadSiblings: (sourceLink) {
+          final state = bloc.state;
+          if (state is! TextBookLoaded) return Future.value(const <Link>[]);
+          return bloc.repository.getSiblingCommentaries(
+            sourceBookTitle: utils.getTitleFromPath(sourceLink.path2),
+            sourceCategoryId: sourceLink.targetCategoryId,
+            sourceLineIndex: sourceLink.index2 - 1,
+            currentBookTitle: state.book.title,
+            currentCategoryId: state.book.categoryId,
+          );
+        },
+      );
       _loadSourceBanner();
       FocusManager.instance.addListener(_handleGlobalFocusChange);
       // רישום למנגנון הפוקוס הפר-טאבי כדי שמעבר *חזרה* לטאב צורת-הדף ימקד את
@@ -618,6 +636,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
     _selectionFocusNode.dispose();
     _keyboardFocusNode?.dispose();
+    _siblingController?.dispose();
     super.dispose();
   }
 
@@ -638,6 +657,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         newTab is TextBookTab &&
         !sameSourceIdentity(oldTab.book, newTab.book)) {
       _loadSourceBanner();
+      // ה-State עלול להישמר במעבר ספר — מטמון ה"מפרשים הנוספים" ממופה לפי
+      // שורה בלבד, ולכן חייב להתאפס כדי לא להחזיר מפרשים של הספר הקודם.
+      _siblingController?.clear();
     }
   }
 
@@ -1330,6 +1352,30 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       enabled: hasLinkItems,
       childrenBuilder: buildLinksItems,
     ));
+
+    if (widget.isMainText && _siblingController != null) {
+      final sourceLink =
+          _siblingController!.sourceLinkForLine(state.linksByLine, index + 1);
+      final siblingEntry = _siblingController!.buildEntry(
+        lineIndex: index,
+        sourceLink: sourceLink,
+        onNavigate: (link) => widget.openBookCallback(
+          TextBookTab(
+            book: TextBook(
+              title: utils.getTitleFromPath(link.path2),
+              isUserBook: link.targetIsUserBook,
+              categoryId: link.targetCategoryId,
+              fileType: link.targetFileType,
+            ),
+            index: link.index2 - 1,
+            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
+                    false) ||
+                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+          ),
+        ),
+      );
+      if (siblingEntry != null) entries.add(siblingEntry);
+    }
 
     final dictionaryText = (capturedText?.trim().isNotEmpty == true)
         ? capturedText
