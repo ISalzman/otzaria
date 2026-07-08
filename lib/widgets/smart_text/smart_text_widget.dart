@@ -64,11 +64,17 @@ class SmartTextWidget extends StatelessWidget {
         if (simpleSpan.toPlainText().isEmpty) {
           return const SizedBox.shrink();
         }
-        return Text.rich(
-          simpleSpan,
+        // רוחב מלא כמו <div> בלוק ב-HtmlWidget - אחרת מסכים שעוטפים שורה
+        // ב-Center (הגבלת רוחב קריאה) ימרכזו שורות קצרות בטעות.
+        return SizedBox(
           key: widgetKey,
-          style: textStyle,
-          textAlign: settings.justifyText ? TextAlign.justify : TextAlign.right,
+          width: double.infinity,
+          child: Text.rich(
+            simpleSpan,
+            style: textStyle,
+            textAlign:
+                settings.justifyText ? TextAlign.justify : TextAlign.right,
+          ),
         );
       }
     }
