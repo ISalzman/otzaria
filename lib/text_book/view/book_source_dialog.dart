@@ -78,6 +78,15 @@ bool isNationalLibrarySource(String? sourceFolder) {
   return normalized.contains('nationallibrary');
 }
 
+/// בודק האם מקור הספר הוא "אוצר הספרים היהודי השיתופי"
+/// (המקור wikiJewishBooksToOtzaria ב-DB). מנורמל כמו [isTashmaSource].
+bool isWikiJewishBooksSource(String? sourceFolder) {
+  final normalized = (sourceFolder ?? '')
+      .toLowerCase()
+      .replaceAll(_sourceNormalizationRegex, '');
+  return normalized.contains('wikijewishbooks');
+}
+
 /// הצגת דיאלוג אודות הספר
 Future<void> showBookSourceDialog(
   BuildContext context,
