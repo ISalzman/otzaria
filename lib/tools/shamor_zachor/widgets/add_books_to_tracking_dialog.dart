@@ -56,8 +56,15 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
   bool _isTracked(Book book) =>
       book.id != null && widget.dataProvider.isBookTrackedById(book.id!);
 
+  /// שמור וזכור נשען על מזהי seforim.db בלבד; ספר אישי/חיצוני מחזיק מזהה
+  /// ממרחב אחר שעלול להתנגש עם ספר רשמי אקראי, ולכן אינו נתמך.
+  bool _isOfficialSeforimBook(Book book) =>
+      book.id != null &&
+      !book.isUserBook &&
+      (book.externalLibraryId == null || book.externalLibraryId!.isEmpty);
+
   void _toggleBook(Book book, bool selected) {
-    if (book.id == null) return;
+    if (!_isOfficialSeforimBook(book)) return;
     setState(() {
       if (selected) {
         _selectedBooks[book.id!] = book;
@@ -78,7 +85,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
     try {
       final result = await widget.dataProvider.addCustomBooks(
         _selectedBooks.values
-            .map((b) => (bookName: b.title, categoryId: b.categoryId))
+            .map((b) => (id: b.id, bookName: b.title, categoryId: b.categoryId))
             .toList(),
       );
 
@@ -301,15 +308,26 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
   }
 
   Widget _buildBookTile(Book book, ColorScheme colorScheme, int level) {
-    final alreadyTracked = _isTracked(book);
-    final isSelected = book.id != null && _selectedBooks.containsKey(book.id);
+    final isSelectable = _isOfficialSeforimBook(book);
+    final alreadyTracked = isSelectable && _isTracked(book);
+    final isSelected = isSelectable && _selectedBooks.containsKey(book.id);
+    final disabledReason = isSelectable
+        ? null
+        : book.isUserBook
+            ? 'ספר אישי — לא נתמך במעקב'
+            : (book.externalLibraryId != null &&
+                    book.externalLibraryId!.isNotEmpty)
+                ? 'ספר חיצוני — לא נתמך במעקב'
+                : 'ספר ללא מזהה — לא נתמך במעקב';
 
     return Padding(
       padding: EdgeInsets.only(right: level * 16.0),
       child: CheckboxListTile(
         dense: true,
         value: alreadyTracked || isSelected,
-        onChanged: alreadyTracked ? null : (v) => _toggleBook(book, v ?? false),
+        onChanged: alreadyTracked || !isSelectable
+            ? null
+            : (v) => _toggleBook(book, v ?? false),
         controlAffinity: ListTileControlAffinity.leading,
         title: Text(
           book.title,
@@ -317,9 +335,9 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: colorScheme.onSurface),
         ),
-        subtitle: alreadyTracked
+        subtitle: alreadyTracked || disabledReason != null
             ? Text(
-                'כבר במעקב',
+                alreadyTracked ? 'כבר במעקב' : disabledReason!,
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               )
             : null,
