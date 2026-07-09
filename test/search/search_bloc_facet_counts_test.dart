@@ -10,6 +10,27 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  group('סינון צד-לקוח בלחיצת קטגוריה — פונקציות ההכלה', () {
+    test('facetContains: שורש מכיל הכל, נתיב מכיל תת-נתיב ואת עצמו', () {
+      expect(SearchBloc.facetContains('/', '/תנך/תורה'), isTrue);
+      expect(SearchBloc.facetContains('/תנך', '/תנך/תורה'), isTrue);
+      expect(SearchBloc.facetContains('/תנך', '/תנך'), isTrue);
+      expect(SearchBloc.facetContains('/תנך', '/תנך-אחר'), isFalse);
+      expect(SearchBloc.facetContains('/תנך/תורה', '/תנך'), isFalse);
+    });
+
+    test('isFacetNarrowing: צמצום בלבד מול הרחבה', () {
+      expect(SearchBloc.isFacetNarrowing(['/'], ['/תנך']), isTrue);
+      expect(SearchBloc.isFacetNarrowing(['/תנך'], ['/תנך/תורה']), isTrue);
+      // הסרת facet מרשימה = תת-קבוצה של ההיקף הקודם
+      expect(SearchBloc.isFacetNarrowing(['/תנך', '/הלכה'], ['/תנך']), isTrue);
+      // הרחבה: facet מחוץ להיקף
+      expect(SearchBloc.isFacetNarrowing(['/תנך'], ['/הלכה']), isFalse);
+      expect(SearchBloc.isFacetNarrowing(['/תנך/תורה'], ['/תנך']), isFalse);
+      expect(SearchBloc.isFacetNarrowing(['/'], []), isFalse);
+    });
+  });
+
   group('SearchBloc facet counts', () {
     blocTest<SearchBloc, SearchState>(
       'SetSearchMode מעדכן את מצב החיפוש ומפעיל ריענון שאילתה',
