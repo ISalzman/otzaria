@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:logging/logging.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import '../../../utils/text/text_manipulation.dart';
 import '../../models/author.dart';
@@ -862,29 +863,36 @@ class SeforimRepository {
     double orderIndex = 999,
     bool isPersonal = false,
     List<TocEntry>? tocEntries,
+    int? sourceId,
   }) async {
     // Get or create a source for external content books
-    final sourceId = await insertSource('external', -1);
+    final resolvedSourceId = sourceId ?? await insertSource('external', -1);
 
-    final bookId = await _database.bookDao.insertBook(
-      categoryId,
-      sourceId,
-      title,
-      heShortDesc,
-      orderIndex,
-      0,
-      false,
-      isPersonal: isPersonal,
-      filePath: filePath,
-      fileType: fileType,
-      fileSize: fileSize,
-      lastModified: lastModified,
-    );
+    // הכנסת הספר וכל רשומות ה-TOC שלו בטרנזקציה אחת — commit נפרד לכל
+    // רשומה מאט דרמטית ספרים עם outline גדול.
+    final db = await _database.database;
+    late final int bookId;
+    withTransaction(db, () {
+      bookId = _database.bookDao.insertBookSync(
+        db,
+        categoryId,
+        resolvedSourceId,
+        title,
+        heShortDesc,
+        orderIndex,
+        0,
+        false,
+        isPersonal: isPersonal,
+        filePath: filePath,
+        fileType: fileType,
+        fileSize: fileSize,
+        lastModified: lastModified,
+      );
 
-    // Insert TOC entries if provided
-    if (tocEntries != null && tocEntries.isNotEmpty) {
-      await _insertTocEntriesForExternalBook(bookId, tocEntries);
-    }
+      if (tocEntries != null && tocEntries.isNotEmpty) {
+        _insertTocEntriesForExternalBookSync(db, bookId, tocEntries);
+      }
+    });
 
     return bookId;
   }
@@ -943,13 +951,25 @@ class SeforimRepository {
   /// Creates toc_text entries and toc_entry entries.
   Future<void> _insertTocEntriesForExternalBook(
       int bookId, List<TocEntry> entries) async {
+    final db = await _database.database;
+    withTransaction(db, () {
+      _insertTocEntriesForExternalBookSync(db, bookId, entries);
+    });
+  }
+
+  /// גרעין סינכרוני של [_insertTocEntriesForExternalBook] — רץ בתוך
+  /// טרנזקציה פתוחה, עם קאש מקומי של tocText למניעת שאילתות כפולות.
+  void _insertTocEntriesForExternalBookSync(
+      sqlite3.Database db, int bookId, List<TocEntry> entries) {
     _invalidateTocCache(bookId: bookId);
     _logger.fine(
         'Inserting ${entries.length} TOC entries for external book $bookId');
     final localToActualIds = <int, int>{};
+    final tocTextIdCache = <String, int>{};
 
     for (final entry in entries) {
-      final textId = await _getOrCreateTocText(entry.text);
+      final textId = tocTextIdCache[entry.text] ??=
+          _database.tocTextDao.getOrCreateIdSync(db, entry.text);
       final actualParentId =
           entry.parentId == null ? null : localToActualIds[entry.parentId];
 
@@ -972,7 +992,7 @@ class SeforimRepository {
         hasChildren: entry.hasChildren,
       );
 
-      final actualTocId = await _database.tocDao.insertTocEntry(tocEntry);
+      final actualTocId = _database.tocDao.insertTocEntrySync(db, tocEntry);
 
       if (entry.id != 0) {
         localToActualIds[entry.id] = actualTocId;

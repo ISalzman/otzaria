@@ -29,7 +29,8 @@ void main() {
         ),
       ],
       saveFolders: (_) async {},
-      syncFolders: (_) async => const FileSyncResult(),
+      syncFolders: (_, {String? onlyFolderPath}) async =>
+          const FileSyncResult(),
       deleteFolderFromDb: (_) async {},
     )..add(const LoadCustomFolders());
   }

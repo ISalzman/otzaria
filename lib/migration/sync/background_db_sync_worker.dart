@@ -43,6 +43,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
   required String libraryPath,
   required List<CustomFolder> customFolders,
   String folderName = '',
+  String? onlyFolderPath,
   Future<void> Function()? prepareForWrite,
   Future<void> Function()? restoreAfterWrite,
 }) async {
@@ -59,6 +60,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
         'customFolders': customFolders.map((f) => f.toJson()).toList(),
         'syncFolders': syncFolders,
         'syncLinks': syncLinks,
+        'onlyFolderPath': onlyFolderPath,
       };
 
   // שלב 1 — כתיבת הספרים האישיים ל-user_books.db. seforim.db נפתח RO (רק
@@ -262,6 +264,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
   final folderName = (payload['folderName'] as String?) ?? '';
   final syncFolders = (payload['syncFolders'] as bool?) ?? true;
   final syncLinks = (payload['syncLinks'] as bool?) ?? true;
+  final onlyFolderPath = payload['onlyFolderPath'] as String?;
   final rawFolders =
       (payload['customFolders'] as List).cast<Map<String, dynamic>>();
   final customFolders = rawFolders.map(CustomFolder.fromJson).toList();
@@ -289,6 +292,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
       folderName: folderName,
       syncFolders: syncFolders,
       syncLinks: syncLinks,
+      onlyFolderPath: onlyFolderPath,
     );
     return {
       'addedBooks': result.addedBooks,
