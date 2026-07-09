@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -22,6 +23,8 @@ import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/utils/tab_swipe_direction.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
+import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
@@ -363,24 +366,32 @@ class _ReadingScreenState extends State<ReadingScreen>
       return BlocProvider.value(
           key: ValueKey(tab),
           value: tab.bloc,
-          child: TextBookViewerBloc(
-            openBookCallback: (tab, {int index = 1}) {
-              context
-                  .read<TabsBloc>()
-                  .add(OpenOrFocusTab(tab, insertAdjacent: true));
-            },
-            tab: tab,
-            enableTourTargets: enableTourTargets,
+          child: _TabVisibilityBridge(
+            bloc: tab.bloc,
+            child: TextBookViewerBloc(
+              openBookCallback: (tab, {int index = 1}) {
+                context
+                    .read<TabsBloc>()
+                    .add(OpenOrFocusTab(tab, insertAdjacent: true));
+              },
+              tab: tab,
+              enableTourTargets: enableTourTargets,
+            ),
           ));
     } else if (tab is SearchingTab) {
       return FullTextSearchScreen(key: ValueKey(tab), tab: tab);
     } else if (tab is CommentatorsTab) {
-      return CommentatorsTabScreen(
+      return _TabVisibilityBridge(
         key: ValueKey(tab),
-        tab: tab,
-        openBookCallback: (t, {int index = 1}) {
-          context.read<TabsBloc>().add(OpenOrFocusTab(t, insertAdjacent: true));
-        },
+        bloc: tab.bloc,
+        child: CommentatorsTabScreen(
+          tab: tab,
+          openBookCallback: (t, {int index = 1}) {
+            context
+                .read<TabsBloc>()
+                .add(OpenOrFocusTab(t, insertAdjacent: true));
+          },
+        ),
       );
     } else if (tab is PdfCommentatorsTab) {
       return PdfCommentatorsTabScreen(
@@ -418,25 +429,33 @@ class _ReadingScreenState extends State<ReadingScreen>
     } else if (tab is TextBookTab) {
       return BlocProvider.value(
           value: tab.bloc,
-          child: TextBookViewerBloc(
-            openBookCallback: (tab, {int index = 1}) {
-              context
-                  .read<TabsBloc>()
-                  .add(OpenOrFocusTab(tab, insertAdjacent: true));
-            },
-            tab: tab,
-            isInCombinedView: isInCombinedView,
-            enableTourTargets: false,
+          child: _TabVisibilityBridge(
+            bloc: tab.bloc,
+            child: TextBookViewerBloc(
+              openBookCallback: (tab, {int index = 1}) {
+                context
+                    .read<TabsBloc>()
+                    .add(OpenOrFocusTab(tab, insertAdjacent: true));
+              },
+              tab: tab,
+              isInCombinedView: isInCombinedView,
+              enableTourTargets: false,
+            ),
           ));
     } else if (tab is SearchingTab) {
       return FullTextSearchScreen(tab: tab);
     } else if (tab is CommentatorsTab) {
-      return CommentatorsTabScreen(
+      return _TabVisibilityBridge(
         key: ValueKey(tab),
-        tab: tab,
-        openBookCallback: (t, {int index = 1}) {
-          context.read<TabsBloc>().add(OpenOrFocusTab(t, insertAdjacent: true));
-        },
+        bloc: tab.bloc,
+        child: CommentatorsTabScreen(
+          tab: tab,
+          openBookCallback: (t, {int index = 1}) {
+            context
+                .read<TabsBloc>()
+                .add(OpenOrFocusTab(t, insertAdjacent: true));
+          },
+        ),
       );
     } else if (tab is PdfCommentatorsTab) {
       return PdfCommentatorsTabScreen(
@@ -546,4 +565,65 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
       },
     );
   }
+}
+
+/// מדווח ל-bloc של טאב טקסט על שינויי נראות דרך [TickerMode] — שכבר משקף
+/// "האם זה הטאב הפעיל" (ראו עטיפת ילדי ה-PageView). טאב רקע משחרר תוכן
+/// ומשהה חימום; טאב שנחשף חוזר ונטען.
+class _TabVisibilityBridge extends StatefulWidget {
+  final TextBookBloc bloc;
+  final Widget child;
+
+  const _TabVisibilityBridge({
+    super.key,
+    required this.bloc,
+    required this.child,
+  });
+
+  @override
+  State<_TabVisibilityBridge> createState() => _TabVisibilityBridgeState();
+}
+
+class _TabVisibilityBridgeState extends State<_TabVisibilityBridge> {
+  ValueListenable<TickerModeData>? _tickerModeNotifier;
+  bool? _lastReported;
+
+  void _report() {
+    final visible = _tickerModeNotifier?.value.enabled ?? true;
+    if (_lastReported == visible || widget.bloc.isClosed) {
+      return;
+    }
+    _lastReported = visible;
+    widget.bloc.add(SetTabVisibility(visible));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final notifier = TickerMode.getValuesNotifier(context);
+    if (!identical(notifier, _tickerModeNotifier)) {
+      _tickerModeNotifier?.removeListener(_report);
+      _tickerModeNotifier = notifier;
+      notifier.addListener(_report);
+    }
+    _report();
+  }
+
+  @override
+  void didUpdateWidget(_TabVisibilityBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bloc, widget.bloc)) {
+      _lastReported = null;
+      _report();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tickerModeNotifier?.removeListener(_report);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

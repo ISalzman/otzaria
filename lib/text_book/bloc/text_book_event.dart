@@ -296,6 +296,17 @@ class ApplyBookContentRanges extends TextBookEvent {
   List<Object?> get props => [bookTitle, ranges];
 }
 
+/// דיווח נראות הטאב (מוצג/ברקע). טאב רקע משחרר את תוכן הספר לחלון סביב
+/// המיקום הנוכחי ומשהה את חימום הרקע; טאב שנחשף שוב חוזר ונטען.
+class SetTabVisibility extends TextBookEvent {
+  final bool visible;
+
+  const SetTabVisibility(this.visible);
+
+  @override
+  List<Object?> get props => [visible];
+}
+
 class CreateNoteFromToolbar extends TextBookEvent {
   const CreateNoteFromToolbar();
 

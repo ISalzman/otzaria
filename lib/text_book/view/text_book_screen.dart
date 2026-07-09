@@ -69,6 +69,8 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/utils/link_helpers.dart';
+import 'package:otzaria/text_book/utils/link_processing.dart'
+    show splitContentLines;
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -592,7 +594,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       context: context,
       barrierDismissible: false,
       builder: (context) => PrintingScreen(
-        data: Future.value(state.content.join('\n')),
+        // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
+        data:
+            context.read<TextBookBloc>().repository.getBookContent(state.book),
         bookId: state.book.title,
         book: state.book,
         links: state.links,
@@ -2214,7 +2218,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           context: context,
           barrierDismissible: false,
           builder: (context) => PrintingScreen(
-            data: Future.value(state.content.join('\n')),
+            // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
+            data: context
+                .read<TextBookBloc>()
+                .repository
+                .getBookContent(state.book),
             bookId: state.book.title,
             book: state.book,
             links: state.links,
@@ -2609,9 +2617,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildSearchView(BuildContext context, TextBookLoaded state) {
+    final repository = context.read<TextBookBloc>().repository;
     return TextBookSearchView(
       focusNode: textSearchFocusNode,
-      data: state.content.join('\n'),
+      contentLoader: () async =>
+          splitContentLines(await repository.getBookContent(state.book)),
       scrollControler: state.scrollController,
       // הוא מעביר את טקסט החיפוש מה-state הנוכחי אל תוך רכיב החיפוש
       initialQuery: state.searchText,
@@ -2774,7 +2784,9 @@ bool _handleGlobalKeyEvent(
       context: context,
       barrierDismissible: false,
       builder: (context) => PrintingScreen(
-        data: Future.value(state.content.join('\n')),
+        // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
+        data:
+            context.read<TextBookBloc>().repository.getBookContent(state.book),
         bookId: state.book.title,
         book: state.book,
         links: state.links,

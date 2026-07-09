@@ -41,6 +41,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _contentLookAheadLines = 260;
   static const int _contentWarmChunkLines = 640;
   static const int _warmFlushChunkCount = 8;
+
+  /// ספר קצר מזה לא משוחרר במעבר לרקע — הרווח זניח והשחרור גורר rebuild.
+  static const int _releaseContentMinLines = 2000;
   static const int _contentReloadThresholdLines = 60;
   static const Duration _visibleIndicesDebounceDuration =
       Duration(milliseconds: 160);
@@ -78,6 +81,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   List<String>? _cachedPageShapeTargetBookTitles;
   bool _isLoadingLinks = false;
   bool _pendingLinksReload = false;
+
+  /// האם הטאב שמציג את ה-bloc נראה כרגע (ראו [SetTabVisibility]).
+  bool _isTabVisible = true;
+
+  /// true רק אחרי שטעינת-טווחים הוכחה כעובדת לספר. ספרי מסלול preview/קובץ
+  /// אינם ניתנים לשחזור אחרי שחרור — אסור לשחרר את תוכנם.
+  bool _supportsContentRangeLoading = false;
   List<int>? _pendingForceLoadIndices;
   bool _pendingForceLoadAll = false;
   bool _awaitingInitialPageShapeVisibleSync = false;
@@ -158,6 +168,83 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
     on<RefreshLinksForCurrentWindow>(_onRefreshLinksForCurrentWindow);
     on<LoadAllLinksForIndices>(_onLoadAllLinksForIndices);
+    on<SetTabVisibility>(_onSetTabVisibility);
+  }
+
+  void _onSetTabVisibility(
+    SetTabVisibility event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (_isTabVisible == event.visible) {
+      return;
+    }
+    _isTabVisible = event.visible;
+
+    final currentState = state;
+    if (currentState is! TextBookLoaded) {
+      return;
+    }
+
+    if (event.visible) {
+      _loadContentRangeInBackground(
+          currentState.book, currentState.visibleIndices);
+      _warmContentCacheInBackground(currentState.book);
+    } else {
+      _releaseContentOutsideWindow(currentState, emit);
+    }
+  }
+
+  /// משחרר את תוכן הספר של טאב רקע ומשאיר רק חלון סביב המיקום הנוכחי.
+  /// אורך הרשימה נשמר (placeholders ריקים) כדי שאינדקסי שורות יישארו תקפים.
+  void _releaseContentOutsideWindow(
+    TextBookLoaded currentState,
+    Emitter<TextBookState> emit,
+  ) {
+    final content = currentState.content;
+    if (!_supportsContentRangeLoading ||
+        content.length < _releaseContentMinLines) {
+      return;
+    }
+
+    final window = _calculateContentWindow(currentState.visibleIndices);
+    final keepStart = window.startLine.clamp(0, content.length - 1);
+    final keepEnd = window.endLine.clamp(0, content.length - 1);
+
+    final flags = _loadedContentFlags;
+    var hasLoadedOutsideWindow = false;
+    for (var i = 0; i < content.length; i++) {
+      if (i >= keepStart && i <= keepEnd) {
+        continue;
+      }
+      if (content[i].isNotEmpty) {
+        hasLoadedOutsideWindow = true;
+        break;
+      }
+    }
+    if (!hasLoadedOutsideWindow) {
+      return;
+    }
+
+    final nextContent = List<String>.filled(content.length, '');
+    final nextFlags = List<bool>.filled(content.length, false);
+    for (var i = keepStart; i <= keepEnd; i++) {
+      nextContent[i] = content[i];
+      nextFlags[i] = i < flags.length ? flags[i] : content[i].isNotEmpty;
+    }
+
+    _loadedContentRanges = const [];
+    _setLoadedContentFlags(currentState.book, nextFlags);
+    _markLoadedContentRange(currentState.book, keepStart, keepEnd);
+
+    emit(currentState.copyWith(
+      content: nextContent,
+      contentVersion: currentState.contentVersion + 1,
+      readingSegments: buildReadingSegments(
+        nextContent,
+        continuous: currentState.continuousReadingMode,
+        loadedLineFlags: nextFlags,
+      ),
+    ));
   }
 
   /// מחזירה את הערך האפקטיבי של מצב הרצף לאחר אירוע
@@ -562,6 +649,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             initialRange.endLine,
             totalLines: initialRange.totalLines,
           );
+          _supportsContentRangeLoading = true;
         } else {
           final preview = await _quickPreviewLoader(
             book.title,
@@ -1666,6 +1754,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     ApplyBookContentRanges event,
     Emitter<TextBookState> emit,
   ) {
+    // אצוות חימום שהוכנסו לתור לפני שהטאב הוסתר — החלתן הייתה מחזירה
+    // לזיכרון תוכן שזה עתה שוחרר.
+    if (!_isTabVisible) {
+      return;
+    }
     _applyContentRanges(event.bookTitle, event.ranges, emit);
   }
 
@@ -1683,6 +1776,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (currentState.book.title != bookTitle || applicable.isEmpty) {
       return;
     }
+
+    // טווח שהוחל בפועל = טעינת-טווחים עובדת לספר הזה (תנאי לשחרור תוכן).
+    _ensureLoadedContentTrackingBook(currentState.book);
+    _supportsContentRangeLoading = true;
 
     final nextContent = List<String>.of(currentState.content);
     final nextLoadedFlags = List<bool>.of(_loadedContentFlags);
@@ -1940,6 +2037,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _loadedContentRanges = const [];
     _loadedContentFlags = const [];
     _loadedContentTotalLines = null;
+    _supportsContentRangeLoading = false;
   }
 
   void _setLoadedContentFlags(TextBook book, List<bool> loadedFlags) {
@@ -2060,6 +2158,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (pendingChunks.isEmpty || isClosed) {
         return;
       }
+      // טאב שהוסתר בינתיים: אין טעם להחיל chunks שישוחררו מיד —
+      // _loadedContentRanges מתעדכן רק בהחלה, כך שהוויתור בטוח.
+      if (!_isTabVisible) {
+        pendingChunks.clear();
+        return;
+      }
       add(ApplyBookContentRanges(
         bookTitle: book.title,
         ranges: List.of(pendingChunks),
@@ -2073,6 +2177,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final currentState = state;
         if (currentState is! TextBookLoaded ||
             currentState.book.title != book.title) {
+          return;
+        }
+
+        // טאב רקע לא מחמם — החימום מתחדש ב-SetTabVisibility(true).
+        if (!_isTabVisible) {
           return;
         }
 

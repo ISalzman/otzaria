@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -39,7 +40,9 @@ class _GroupedResultItem {
 }
 
 class TextBookSearchView extends StatefulWidget {
-  final String data;
+  /// טוען את תוכן הספר המלא (שורות) לפי דרישה — רק כשחיפוש פשוט רץ בפועל.
+  /// כך החיפוש אינו תלוי ב-state.content, שיכול להיות חלקי או משוחרר.
+  final Future<List<String>> Function() contentLoader;
   final ItemScrollController scrollControler;
   final FocusNode focusNode;
   final void Function() closeLeftPaneCallback;
@@ -56,7 +59,7 @@ class TextBookSearchView extends StatefulWidget {
 
   const TextBookSearchView({
     super.key,
-    required this.data,
+    required this.contentLoader,
     required this.scrollControler,
     required this.focusNode,
     required this.closeLeftPaneCallback,
@@ -80,7 +83,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   List<TextSearchResult> searchResults = [];
   late ItemScrollController scrollControler;
   bool _isSearching = false;
-  List<String> _content = [];
+  List<String>? _content;
+  Future<List<String>>? _contentFuture;
   String? _bookPath;
   String? _bookTitle;
   bool _forceSearchEngine = false;
@@ -186,8 +190,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   @override
   void initState() {
     super.initState();
-    _content = widget.data.split('\n');
-
     searchTextController.text = widget.initialQuery;
     _syncSearchConfigurationFromWidget();
     _syncBlocSearchTextState();
@@ -203,10 +205,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   @override
   void didUpdateWidget(TextBookSearchView oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (widget.data != oldWidget.data) {
-      _content = widget.data.split('\n');
-    }
 
     // עדכון שדה החיפוש אם initialQuery השתנה
     final queryChanged = widget.initialQuery != oldWidget.initialQuery;
@@ -289,6 +287,27 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _searchTextUpdated();
   }
 
+  /// טוען את תוכן הספר פעם אחת ושומר אותו לחיי החלונית. כישלון מאפס את
+  /// ה-Future כדי לאפשר ניסיון חוזר בחיפוש הבא.
+  Future<List<String>> _ensureContent() async {
+    final existing = _contentFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final future = widget.contentLoader();
+    _contentFuture = future;
+    try {
+      final lines = await future;
+      _content = lines;
+      return lines;
+    } catch (_) {
+      if (identical(_contentFuture, future)) {
+        _contentFuture = null;
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _searchTextUpdated() async {
     final requestId = ++_activeSearchRequestId;
     String query = searchTextController.text.trim();
@@ -310,10 +329,28 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     });
 
     if (_isSimpleSearch) {
+      List<String> content;
+      try {
+        content = await _ensureContent();
+      } catch (e) {
+        debugPrint('טעינת תוכן הספר לחיפוש נכשלה: $e');
+        if (mounted && requestId == _activeSearchRequestId) {
+          UiSnack.showError('טעינת תוכן הספר לחיפוש נכשלה');
+          setState(() {
+            searchResults = [];
+            _isSearching = false;
+          });
+        }
+        return;
+      }
+      if (!mounted || requestId != _activeSearchRequestId) {
+        return;
+      }
+
       final effectiveResults = widget.simpleSearchRunner != null
-          ? await widget.simpleSearchRunner!(_content, query)
+          ? await widget.simpleSearchRunner!(content, query)
           : await searchInContent(
-              content: _content,
+              content: content,
               query: query,
             );
 
@@ -526,10 +563,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     if (loadedState is! TextBookLoaded) {
       return;
     }
+    final lineText = _lineTextAt(result.index, loadedState);
     final intraLineFraction =
-        (result.index >= 0 && result.index < _content.length)
-            ? matchFractionInLine(_content[result.index], result.query)
-            : 0.0;
+        lineText == null ? 0.0 : matchFractionInLine(lineText, result.query);
     final navigation = scrollToSourceLine(
       scrollController: widget.scrollControler,
       scrollOffsetController: loadedState.scrollOffsetController,
@@ -572,12 +608,33 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _scrollResultsToIndex(nextIndex, onlyIfNotVisible: true);
   }
 
+  /// טקסט השורה לצורך דיוק גלילה אל המילה: קודם התוכן שנטען לחיפוש, ואם
+  /// אינו זמין — התוכן שב-state (מלא בטאב פעיל אחרי חימום). null אם השורה
+  /// לא זמינה — ואז נופלים לגלילה לתחילת השורה.
+  String? _lineTextAt(int index, TextBookLoaded loadedState) {
+    if (index < 0) {
+      return null;
+    }
+    final content = _content;
+    if (content != null && index < content.length) {
+      return content[index];
+    }
+    if (index < loadedState.content.length) {
+      return loadedState.content[index];
+    }
+    return null;
+  }
+
   List<TextSearchResult> _convertSearchResults(List<SearchResult> results) {
+    final state = context.read<TextBookBloc>().state;
+    final int? contentLength = _content?.length ??
+        (state is TextBookLoaded ? state.content.length : null);
     final List<TextSearchResult> converted = [];
     for (final result in results) {
       try {
         final lineNumber = result.segment.toInt();
-        if (lineNumber >= 0 && lineNumber < _content.length) {
+        if (lineNumber >= 0 &&
+            (contentLength == null || lineNumber < contentLength)) {
           converted.add(TextSearchResult(
             index: lineNumber,
             snippet: result.text,
