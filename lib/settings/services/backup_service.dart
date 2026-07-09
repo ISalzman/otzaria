@@ -667,10 +667,17 @@ class BackupService {
     Map<String, dynamic> files,
     List<BackupStore> stores,
   ) async {
-    // כל התוכן נקרא לפני מחיקת התיקייה הקיימת — store חסר/פגום מכשיל
-    // את השחזור בלי להשאיר את המשתמש גם בלי ההתקנה הקודמת.
+    // כל התוכן נקרא וכל הנתיבים מאומתים לפני מחיקת התיקייה הקיימת —
+    // store חסר/פגום או נתיב לא בטוח (path traversal, רכיבי `..` בגיבוי
+    // פגום/זדוני) מכשילים את השחזור בלי להשאיר את המשתמש בלי ההתקנה הקודמת.
+    final normalizedRoot = p.normalize(dirPath);
     final resolved = <String, List<int>>{};
     for (final fileEntry in files.entries) {
+      final targetPath =
+          p.normalize(p.joinAll([dirPath, ...fileEntry.key.split('/')]));
+      if (!p.isWithin(normalizedRoot, targetPath)) {
+        throw Exception('נתיב לא בטוח בגיבוי התוסף: ${fileEntry.key}');
+      }
       final value = fileEntry.value as String;
       List<int>? bytes;
       if (BackupStore.isHashRef(value)) {
@@ -684,7 +691,7 @@ class BackupService {
       } else {
         bytes = base64Decode(value);
       }
-      resolved[fileEntry.key] = bytes;
+      resolved[targetPath] = bytes;
     }
 
     final dir = Directory(dirPath);
@@ -694,21 +701,11 @@ class BackupService {
     if (resolved.isEmpty) return;
     await dir.create(recursive: true);
 
-    final normalizedRoot = p.normalize(dirPath);
     for (final fileEntry in resolved.entries) {
-      final bytes = fileEntry.value;
       try {
-        final segments = fileEntry.key.split('/');
-        final targetPath = p.normalize(p.joinAll([dirPath, ...segments]));
-        // הגנה מ-path traversal: דילוג על נתיבים שחורגים מתיקיית היעד
-        // (גיבוי פגום/זדוני עם רכיבי `..` עלול לכתוב מחוץ לתיקיית התוסף).
-        if (!p.isWithin(normalizedRoot, targetPath)) {
-          _logger.warning('Skipping unsafe plugin file path: ${fileEntry.key}');
-          continue;
-        }
-        final file = File(targetPath);
+        final file = File(fileEntry.key);
         await file.parent.create(recursive: true);
-        await file.writeAsBytes(bytes);
+        await file.writeAsBytes(fileEntry.value);
       } catch (e) {
         _logger.warning('Failed to restore plugin file ${fileEntry.key}: $e');
       }

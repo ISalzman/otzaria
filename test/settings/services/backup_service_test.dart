@@ -566,7 +566,7 @@ void main() {
           [7, 7, 7]);
     });
 
-    test('שחזור מתעלם מנתיבי קבצים החורגים מתיקיית התוסף (path traversal)',
+    test('נתיב path traversal מכשיל את שחזור התוסף לפני מחיקת ההתקנה הקיימת',
         () async {
       final db = PluginSystemDatabase.instance;
       const pluginId = 'evil.plugin';
@@ -589,9 +589,10 @@ void main() {
       (pluginEntry['files'] as Map)['../evil.txt'] = base64Encode([6, 6, 6]);
       await backupFile.writeAsString(jsonEncode(backupJson));
 
-      await BackupService.restoreFromBackup(backup.path);
+      final skipped = await BackupService.restoreFromBackup(backup.path);
 
-      // הקובץ התקין שוחזר, אך הקובץ החורג לא נכתב מחוץ לתיקיית ההתקנה.
+      // שחזור התוסף נכשל, ההתקנה הקיימת שרדה והקובץ החורג לא נכתב.
+      expect(skipped, contains('plugins'));
       expect(
           await File(p.join(installPath, 'index.html')).readAsString(), 'safe');
       final escaped = File(p.normalize(p.join(installPath, '..', 'evil.txt')));

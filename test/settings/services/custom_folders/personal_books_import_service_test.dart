@@ -70,6 +70,18 @@ void main() {
       );
     });
 
+    test('ייבוא קובץ שכבר נמצא בתיקיית הייבוא לא מרוקן אותו', () async {
+      final txt = await createSourceFile('ספר.txt', 'תוכן');
+      await service.copyFiles([txt]);
+      final imported = p.join(importPath, 'ספר.txt');
+
+      final result = await service.copyFiles([imported]);
+
+      expect(result.copied, 1);
+      expect(result.errors, isEmpty);
+      expect(File(imported).readAsStringSync(), 'תוכן');
+    });
+
     test('קובץ מקור חסר נרשם כשגיאה בלי להפיל את השאר', () async {
       final txt = await createSourceFile('ספר.txt', 'תוכן');
       final missing = p.join(sourceDir.path, 'לא-קיים.txt');
