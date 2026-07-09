@@ -63,7 +63,7 @@ void main() {
               outerSetState = setState;
               return Scaffold(
                 body: TextBookSearchView(
-                  data: 'אב אברהם',
+                  contentLoader: () async => ['אב אברהם'],
                   scrollControler: ItemScrollController(),
                   focusNode: focusNode,
                   closeLeftPaneCallback: () {},
@@ -144,7 +144,7 @@ void main() {
               outerSetState = setState;
               return Scaffold(
                 body: TextBookSearchView(
-                  data: 'אב אברהם',
+                  contentLoader: () async => ['אב אברהם'],
                   scrollControler: ItemScrollController(),
                   focusNode: focusNode,
                   closeLeftPaneCallback: () {},
@@ -223,7 +223,7 @@ void main() {
           ],
           child: Scaffold(
             body: TextBookSearchView(
-              data: 'אב אברהם',
+              contentLoader: () async => ['אב אברהם'],
               scrollControler: ItemScrollController(),
               focusNode: focusNode,
               closeLeftPaneCallback: () {},
@@ -287,7 +287,7 @@ void main() {
           ],
           child: Scaffold(
             body: TextBookSearchView(
-              data: 'שורה',
+              contentLoader: () async => ['שורה'],
               scrollControler: ItemScrollController(),
               focusNode: focusNode,
               closeLeftPaneCallback: () {},
@@ -421,7 +421,7 @@ void main() {
             ],
             child: Scaffold(
               body: TextBookSearchView(
-                data: 'שורה',
+                contentLoader: () async => ['שורה'],
                 scrollControler: ItemScrollController(),
                 focusNode: focusNode,
                 closeLeftPaneCallback: () {},
@@ -589,7 +589,7 @@ void main() {
             ],
             child: Scaffold(
               body: TextBookSearchView(
-                data: 'שורה',
+                contentLoader: () async => ['שורה'],
                 scrollControler: ItemScrollController(),
                 focusNode: focusNode,
                 closeLeftPaneCallback: () {},
