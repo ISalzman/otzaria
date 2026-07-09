@@ -29,6 +29,10 @@ class SmartTextWidget extends StatelessWidget {
   /// מקבל את אינדקס השורה (0-based) שעליה ההערה.
   final void Function(int lineIndex)? onNoteTap;
 
+  /// callback ללחיצה על עוגן-מילה (`otzaria://anchor`). מקבל את ה-URL המלא;
+  /// מזהה את הקישור ומקפיץ תצוגה מקדימה של המפרש.
+  final void Function(String url)? onAnchorTap;
+
   /// מפתח ייחודי לווידג'ט (לאופטימיזציה)
   final Key? widgetKey;
 
@@ -41,6 +45,7 @@ class SmartTextWidget extends StatelessWidget {
     required this.settings,
     this.onOpenBook,
     this.onNoteTap,
+    this.onAnchorTap,
     this.widgetKey,
     this.renderMode = RenderMode.column,
   });
@@ -79,6 +84,16 @@ class SmartTextWidget extends StatelessWidget {
       }
     }
 
+    // עוגן-מילה נפלט כ-<a> לחיץ; fwfh צובע <a> בצבע primary. מחזירים לצבע
+    // הטקסט הסביבתי בערך מפורש (inherit לא נתמך בפרסר הצבעים של fwfh).
+    final colorScheme = Theme.of(context).colorScheme;
+    String toCssHex(Color color) =>
+        '#${(color.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0')}';
+    final anchorColorCss = toCssHex(
+        DefaultTextStyle.of(context).style.color ?? colorScheme.onSurface);
+    final anchorActiveColorCss = toCssHex(colorScheme.primary);
+    final anchorActiveBgCss = toCssHex(colorScheme.primaryContainer);
+
     return HtmlWidget(
       TextRendererService.wrapWithRtlDiv(processedHtml,
           justifyText: settings.justifyText),
@@ -97,16 +112,26 @@ class SmartTextWidget extends StatelessWidget {
         }
         // סמני עוגן-מילה (link_anchor): אות קטנה מורמת (עוגן-נקודה) או קו
         // תחתון על טווח מצוטט (עוגן-טווח), עם וריאנט טיפוגרפי קבוע לכל מפרש
-        // (ראו anchorStyleIndexByCommentator).
-        if (element.localName == 'span' &&
+        // (ראו anchorStyleIndexByCommentator). כ-<a> לחיץ — מנטרלים את עיצוב
+        // הקישור המובנה (צבע/קו) כדי שהמראה יישאר זהה לסמן הלא-לחיץ.
+        if ((element.localName == 'span' || element.localName == 'a') &&
             element.classes.contains('link-anchor')) {
-          return <String, String>{
+          final style = <String, String>{
             'font-size': '0.7em',
             'position': 'relative',
             'top': '-0.55em',
             'white-space': 'nowrap',
+            'color': anchorColorCss,
+            'text-decoration': 'none',
             ..._linkAnchorVariantStyle(element),
           };
+          // האות שחלונית התצוגה שלה פתוחה — מודגשת (צבע primary + רקע + מודגש).
+          if (element.classes.contains('link-anchor-active')) {
+            style['color'] = anchorActiveColorCss;
+            style['background-color'] = anchorActiveBgCss;
+            style['font-weight'] = 'bold';
+          }
+          return style;
         }
         if (element.localName == 'span' &&
             element.classes.contains('link-anchor-range')) {
@@ -117,8 +142,13 @@ class SmartTextWidget extends StatelessWidget {
         }
         return null;
       },
-      onTapUrl: (onOpenBook != null || onNoteTap != null)
+      onTapUrl: (onOpenBook != null || onNoteTap != null || onAnchorTap != null)
           ? (url) async {
+              // עוגן-מילה — תצוגה מקדימה של המפרש, לפני שאר הקישורים.
+              if (url.startsWith('otzaria://anchor') && onAnchorTap != null) {
+                onAnchorTap!(url);
+                return true;
+              }
               // סימון הערה אישית inline — נטפל לפני שאר הקישורים.
               if (url.startsWith('otzaria://note')) {
                 final lineIndex =

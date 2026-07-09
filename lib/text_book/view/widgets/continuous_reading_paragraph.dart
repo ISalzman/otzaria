@@ -250,11 +250,18 @@ List<InlineSpan> _nodeToSpans(
     final href = node.attributes['href'];
     if (href != null && href.isNotEmpty) {
       final childStyle = _styleForElement(node, style);
-      // fallback ללא צבע קשיח: קו תחתון בלבד, הצבע יורש מהטקסט — כמו
-      // ההתנהגות במצב הרגיל. צבע theme (primary) מוזרם דרך linkStyle.
-      final effectiveLinkStyle = linkStyle == null
-          ? childStyle.copyWith(decoration: TextDecoration.underline)
-          : childStyle.merge(linkStyle);
+      // עוגן-מילה לחיץ שומר על מראה הסמן (צבע טקסט יורש, בלי קו תחתון), ובמצב
+      // active מודגש בצבע primary; שאר הקישורים — קו תחתון + צבע theme.
+      final effectiveLinkStyle = node.classes.contains('link-anchor')
+          ? (node.classes.contains('link-anchor-active')
+              ? childStyle.merge(linkStyle).copyWith(
+                    decoration: TextDecoration.none,
+                    fontWeight: FontWeight.bold,
+                  )
+              : childStyle)
+          : linkStyle == null
+              ? childStyle.copyWith(decoration: TextDecoration.underline)
+              : childStyle.merge(linkStyle);
       final children = _nodesToSpans(
         node.nodes,
         effectiveLinkStyle,

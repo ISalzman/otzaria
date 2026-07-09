@@ -51,14 +51,20 @@ Map<String, int> anchorStyleIndexByCommentator(Iterable<Link> links) {
 ///  - עוגן-טווח (end != null, ציטוטים מ-charLevelData): עטיפת הטווח דרך
 ///    [wrapHtmlRanges] — שסוגר/פותח סביב תגים לא-מאוזנים כדי לשמור קינון
 ///    תקין — באותו וריאנט סגנון של המפרש.
+/// [lineIndex] (0-based) — כשמסופק, סמן הנקודה נפלט כ-`<a>` עם href
+/// `otzaria://anchor?ref=<line>_<i>` (i = מיקום הקישור ב-[anchorLinks]), כדי
+/// שלחיצה תזהה את הקישור. בלעדיו הסמן נשאר `<span>` לא-אינטראקטיבי.
 String injectLinkAnchorMarkers({
   required String rawLine,
   required List<Link> anchorLinks,
   required Map<String, int> styleIndexByCommentator,
+  int? lineIndex,
+  int? activeIndex,
 }) {
   final points = <({int at, int order, String html})>[];
   final ranges = <HtmlWrapRange>[];
-  for (final link in anchorLinks) {
+  for (var linkIndex = 0; linkIndex < anchorLinks.length; linkIndex++) {
+    final link = anchorLinks[linkIndex];
     final spans = link.anchorSpans.isNotEmpty
         ? link.anchorSpans
         : [
@@ -87,13 +93,19 @@ String injectLinkAnchorMarkers({
       } else {
         final letter = _letterFor(link, span.label);
         if (letter == null) continue;
-        // span ולא sup: HtmlWidget מממש sup כ-WidgetSpan, ושניים+ בפסקת RTL
-        // מוצגים בסדר תוכן הפוך. ההגבהה נעשית ב-CSS (customStylesBuilder).
+        // a/span ולא sup: HtmlWidget מממש sup כ-WidgetSpan, ושניים+ בפסקת RTL
+        // מוצגים בסדר תוכן הפוך. a נותר TextSpan (recognizer) — סדר RTL נשמר.
+        final tag = lineIndex == null ? 'span' : 'a';
+        final href = lineIndex == null
+            ? ''
+            : ' href="otzaria://anchor?ref=${lineIndex}_$linkIndex"';
+        final activeClass =
+            linkIndex == activeIndex ? ' link-anchor-active' : '';
         points.add((
           at: span.start,
           order: 1,
           html:
-              '<span class="link-anchor link-anchor-$styleIndex">($letter)</span>',
+              '<$tag class="link-anchor link-anchor-$styleIndex$activeClass"$href>($letter)</$tag>',
         ));
       }
     }

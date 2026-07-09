@@ -99,6 +99,64 @@ void main() {
       expect(between.replaceAll(RegExp(r'<[^>]*>'), ''), isEmpty);
     });
 
+    test('עם lineIndex הסמן נפלט כ-<a> עם href של line_index', () {
+      final bhg = _anchorLink(
+        heRef: 'באר הגולה על שולחן ערוך אורח חיים א, א',
+        path2: 'באר הגולה על שולחן ערוך אורח חיים',
+        anchorStart: 35,
+        anchorLabel: 'א',
+      );
+      final baerHetev = _anchorLink(
+        heRef: 'באר היטב אורח חיים א, א',
+        path2: 'באר היטב אורח חיים',
+        anchorStart: 41,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: saLine,
+        anchorLinks: [bhg, baerHetev],
+        styleIndexByCommentator: const {
+          'באר הגולה על שולחן ערוך אורח חיים': 0,
+          'באר היטב אורח חיים': 1,
+        },
+        lineIndex: 7,
+      );
+      // הקישור הראשון (i=0) והשני (i=1) בשורה 7 — href מקודד line_index.
+      expect(
+        result,
+        contains(
+            '<a class="link-anchor link-anchor-0" href="otzaria://anchor?ref=7_0">(א)</a>'),
+      );
+      expect(result, contains('href="otzaria://anchor?ref=7_1"'));
+      expect(result, isNot(contains('<span class="link-anchor')));
+    });
+
+    test('activeIndex מסמן את העוגן הפעיל במחלקת link-anchor-active', () {
+      final bhg = _anchorLink(
+        heRef: 'באר הגולה על שולחן ערוך אורח חיים א, א',
+        path2: 'באר הגולה על שולחן ערוך אורח חיים',
+        anchorStart: 35,
+        anchorLabel: 'א',
+      );
+      final baerHetev = _anchorLink(
+        heRef: 'באר היטב אורח חיים א, א',
+        path2: 'באר היטב אורח חיים',
+        anchorStart: 41,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: saLine,
+        anchorLinks: [bhg, baerHetev],
+        styleIndexByCommentator: const {
+          'באר הגולה על שולחן ערוך אורח חיים': 0,
+          'באר היטב אורח חיים': 1,
+        },
+        lineIndex: 7,
+        activeIndex: 1,
+      );
+      // רק העוגן השני (i=1) מקבל link-anchor-active.
+      expect(result, contains('link-anchor-1 link-anchor-active'));
+      expect(result, isNot(contains('link-anchor-0 link-anchor-active')));
+    });
+
     test('כמה מפרשים באותה שורה — סגנון שונה לכל אחד', () {
       final bhg = _anchorLink(
         heRef: 'באר הגולה על שולחן ערוך אורח חיים א, א',
