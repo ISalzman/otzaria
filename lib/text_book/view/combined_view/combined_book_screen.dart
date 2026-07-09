@@ -56,6 +56,7 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
     as inline_notes;
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
+import 'package:otzaria/text_book/view/combined_view/link_preview_overlay.dart';
 import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
@@ -246,6 +247,14 @@ class _CombinedViewState extends State<CombinedView> {
   List<Link>? _anchorStyleSourceLinks;
   Map<String, int> _anchorStyleCache = const {};
 
+  /// מיקום ההקשה האחרון — למיקום חלונית תצוגת העוגן (onTapUrl אינו מספק מיקום).
+  Offset? _lastPointerDownGlobal;
+
+  /// העוגן שחלונית התצוגה שלו פתוחה כעת (שורה + אינדקס בשורה) — מודגש בטקסט.
+  int? _activeAnchorLine;
+  int? _activeAnchorIndex;
+  bool _disposed = false;
+
   Map<String, int> _anchorStyles(TextBookLoaded state) {
     if (!identical(_anchorStyleSourceLinks, state.links)) {
       _anchorStyleSourceLinks = state.links;
@@ -272,7 +281,44 @@ class _CombinedViewState extends State<CombinedView> {
       rawLine: rawLine,
       anchorLinks: anchorLinks,
       styleIndexByCommentator: _anchorStyles(state),
+      lineIndex: lineIndex0,
+      activeIndex: lineIndex0 == _activeAnchorLine ? _activeAnchorIndex : null,
     );
+  }
+
+  /// לחיצה על עוגן-מילה (`otzaria://anchor?ref=<line>_<i>`) — מזהה את הקישור
+  /// ומקפיץ תצוגה מקדימה של המפרש ליד נקודת ההקשה.
+  bool _handleAnchorTap(String url) {
+    final ref = Uri.tryParse(url)?.queryParameters['ref'];
+    final parts = ref?.split('_');
+    if (parts == null || parts.length != 2) return false;
+    final line = int.tryParse(parts[0]);
+    final i = int.tryParse(parts[1]);
+    if (line == null || i == null) return false;
+    final state = _textBookBloc.state;
+    if (state is! TextBookLoaded) return false;
+    final anchorLinks = (state.linksByLine[line + 1] ?? const <Link>[])
+        .where((link) => link.anchorStart != null)
+        .toList();
+    if (i < 0 || i >= anchorLinks.length) return false;
+    LinkPreviewOverlay.show(
+      context,
+      link: anchorLinks[i],
+      globalPosition: _lastPointerDownGlobal ??
+          MediaQuery.of(context).size.center(Offset.zero),
+      onDismissed: () {
+        if (_disposed || !mounted) return;
+        setState(() {
+          _activeAnchorLine = null;
+          _activeAnchorIndex = null;
+        });
+      },
+    );
+    setState(() {
+      _activeAnchorLine = line;
+      _activeAnchorIndex = i;
+    });
+    return true;
   }
 
   // מצב הרצף האחרון שנצפה — לזיהוי החלפת מצב שמחייבת שחזור מיקום.
@@ -414,6 +460,8 @@ class _CombinedViewState extends State<CombinedView> {
 
   @override
   void dispose() {
+    _disposed = true;
+    LinkPreviewOverlay.dismiss();
     _previewScrollController?.dispose();
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
@@ -1818,6 +1866,7 @@ class _CombinedViewState extends State<CombinedView> {
                           onNoteTap: notesForLine.isEmpty
                               ? null
                               : (line) => _onInlineNoteTap(line),
+                          onAnchorTap: _handleAnchorTap,
                         );
 
                         final constrainedText = textMaxWidth > 0
@@ -1907,6 +1956,9 @@ class _CombinedViewState extends State<CombinedView> {
         decoration: TextDecoration.underline,
       ),
       onTapUrl: (url) async {
+        if (url.startsWith('otzaria://anchor')) {
+          return _handleAnchorTap(url);
+        }
         await HtmlLinkHandler.handleLink(
           context,
           url,
@@ -2052,7 +2104,11 @@ class _CombinedViewState extends State<CombinedView> {
 
   @override
   Widget build(BuildContext context) {
-    return buildKeyboardListener();
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (event) => _lastPointerDownGlobal = event.position,
+      child: buildKeyboardListener(),
+    );
   }
 
   // [EDITING DISABLED]

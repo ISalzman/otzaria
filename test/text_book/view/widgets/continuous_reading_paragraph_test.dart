@@ -153,6 +153,29 @@ void main() {
       }
     });
 
+    test('עוגן-מילה (a.link-anchor) שומר על צבע הטקסט ובלי קו תחתון', () {
+      final recognizers = <TapGestureRecognizer>[];
+      final spans = buildInlineHtmlSpans(
+        'לפני <a class="link-anchor link-anchor-0" '
+        'href="otzaria://anchor?ref=3_0">(א)</a> אחרי',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+        onTapUrl: (_) async => true,
+        linkStyle: const TextStyle(
+          color: Color(0xFF6750A4),
+          decoration: TextDecoration.underline,
+        ),
+        recognizerSink: recognizers,
+      );
+      final link = _findLinkSpan(spans);
+      expect(link, isNotNull);
+      // לא נצבע ב-primary ולא מקבל קו תחתון — צבע הטקסט נשמר.
+      expect(link!.style?.color, const Color(0xFF111111));
+      expect(link.style?.decoration, isNot(TextDecoration.underline));
+      for (final r in recognizers) {
+        r.dispose();
+      }
+    });
+
     test('בלי linkStyle — קו תחתון בלבד, הצבע יורש מהטקסט (לא כחול קשיח)', () {
       final recognizers = <TapGestureRecognizer>[];
       final spans = buildInlineHtmlSpans(
