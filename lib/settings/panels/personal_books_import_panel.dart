@@ -113,7 +113,8 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
       final alreadyRegistered =
           bloc.state.folders.any((f) => f.path == folderPath);
       bloc.add(alreadyRegistered
-          ? const RescanCustomFolders(showNoChangesMessage: false)
+          ? RescanCustomFolders(
+              showNoChangesMessage: false, onlyFolderPath: folderPath)
           : AddCustomFolder(folderPath));
     } finally {
       if (mounted) setState(() => _isCopying = false);
@@ -140,7 +141,10 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
     }
     await _refreshFileList();
     // הסריקה מסירה מה-DB ספרים שקובצם נמחק (prune) ומרעננת את הספרייה.
-    bloc.add(const RescanCustomFolders(showNoChangesMessage: false));
+    bloc.add(RescanCustomFolders(
+      showNoChangesMessage: false,
+      onlyFolderPath: await _service.getFolderPath(),
+    ));
     UiSnack.show('הספר "$title" נמחק');
   }
 

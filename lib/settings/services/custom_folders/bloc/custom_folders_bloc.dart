@@ -24,8 +24,9 @@ part 'custom_folders_state.dart';
 typedef LoadCustomFoldersFn = List<CustomFolder> Function();
 typedef SaveCustomFoldersFn = Future<void> Function(List<CustomFolder> folders);
 typedef SyncCustomFoldersFn = Future<FileSyncResult> Function(
-  List<CustomFolder> folders,
-);
+  List<CustomFolder> folders, {
+  String? onlyFolderPath,
+});
 typedef DeleteCustomFolderFromDbFn = Future<void> Function(CustomFolder folder);
 
 class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
@@ -201,7 +202,10 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       error: null,
     ));
     try {
-      final result = await _syncCustomFolders(currentFolders);
+      final result = await _syncCustomFolders(
+        currentFolders,
+        onlyFolderPath: event.onlyFolderPath,
+      );
       final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
       final message = hasChanges
           ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
@@ -304,13 +308,16 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     return CustomFoldersManager.loadFolders(jsonString);
   }
 
-  Future<FileSyncResult> _syncCustomFolders(List<CustomFolder> folders) {
+  Future<FileSyncResult> _syncCustomFolders(
+    List<CustomFolder> folders, {
+    String? onlyFolderPath,
+  }) {
     final override = _syncFoldersOverride;
     if (override != null) {
-      return override(folders);
+      return override(folders, onlyFolderPath: onlyFolderPath);
     }
 
-    return _runSync(folders);
+    return _runSync(folders, onlyFolderPath: onlyFolderPath);
   }
 
   Future<void> _deleteFolderFromDb(CustomFolder folder) {
@@ -322,7 +329,10 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     return _deleteFromDatabase(folder);
   }
 
-  Future<FileSyncResult> _runSync(List<CustomFolder> folders) async {
+  Future<FileSyncResult> _runSync(
+    List<CustomFolder> folders, {
+    String? onlyFolderPath,
+  }) async {
     final sqliteProvider = SqliteDataProvider.instance;
     if (!sqliteProvider.isInitialized) await sqliteProvider.initialize();
     if (!sqliteProvider.isInitialized) throw Exception('מסד הנתונים לא זמין');
@@ -348,6 +358,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       libraryPath: libraryPath,
       customFolders: folders,
       folderName: folderName,
+      onlyFolderPath: onlyFolderPath,
       prepareForWrite: sqliteProvider.closeForExternalWrite,
       restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
     );

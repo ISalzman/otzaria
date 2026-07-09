@@ -85,7 +85,7 @@ void main() {
         folders = newFolders;
         saveCalls?.add(newFolders);
       },
-      syncFolders: (syncedFolders) async {
+      syncFolders: (syncedFolders, {String? onlyFolderPath}) async {
         syncCalls.add(syncedFolders);
         return const FileSyncResult();
       },

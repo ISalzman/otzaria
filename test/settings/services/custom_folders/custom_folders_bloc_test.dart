@@ -27,7 +27,7 @@ void main() {
       final recordedEvents = <LibraryEvent>[];
       final bloc = CustomFoldersBloc(
         addLibraryEvent: recordedEvents.add,
-        syncFolders: (folders) async {
+        syncFolders: (folders, {String? onlyFolderPath}) async {
           syncedFolders.add(List<CustomFolder>.from(folders));
           return const FileSyncResult();
         },
@@ -56,6 +56,33 @@ void main() {
       await bloc.close();
     });
 
+    test('RescanCustomFolders מעביר onlyFolderPath לסנכרון (סריקה ממוקדת)',
+        () async {
+      final folder = _folder('C:/personal-books');
+      await _saveFolders([folder]);
+
+      final scopedPaths = <String?>[];
+      final bloc = CustomFoldersBloc(
+        addLibraryEvent: (_) {},
+        syncFolders: (folders, {String? onlyFolderPath}) async {
+          scopedPaths.add(onlyFolderPath);
+          return const FileSyncResult();
+        },
+      )..add(const LoadCustomFolders());
+
+      await bloc.stream.firstWhere((state) => state.folders.isNotEmpty);
+
+      bloc.add(const RescanCustomFolders(
+        showNoChangesMessage: false,
+        onlyFolderPath: 'C:/personal-books',
+      ));
+      await bloc.stream.firstWhere((state) => !state.isSyncing);
+
+      expect(scopedPaths, ['C:/personal-books']);
+
+      await bloc.close();
+    });
+
     test(
         'ToggleAddToDatabase מסמן activePath לתיקייה הנטענת בלבד '
         'ומאפס בסיום', () async {
@@ -68,7 +95,7 @@ void main() {
       final releaseSync = Completer<void>();
       final bloc = CustomFoldersBloc(
         addLibraryEvent: (_) {},
-        syncFolders: (folders) async {
+        syncFolders: (folders, {String? onlyFolderPath}) async {
           syncStarted.complete();
           await releaseSync.future;
           return const FileSyncResult();
@@ -101,7 +128,7 @@ void main() {
       final releaseSync = Completer<void>();
       final bloc = CustomFoldersBloc(
         addLibraryEvent: (_) {},
-        syncFolders: (folders) async {
+        syncFolders: (folders, {String? onlyFolderPath}) async {
           syncStarted.complete();
           await releaseSync.future;
           return const FileSyncResult();
