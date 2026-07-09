@@ -115,7 +115,7 @@ void main() {
     });
 
     test('טווחי תוכן טעונים נשמרים כרשימת טווחים ממוזגת ללא הנחת רציפות', () {
-      final merged = TextBookBloc.mergeLoadedContentRangesForTesting(
+      final merged = TextBookBloc.mergeLoadedContentRanges(
         const [
           (startLine: 0, endLine: 100),
           (startLine: 500, endLine: 700),
@@ -137,7 +137,7 @@ void main() {
       ];
 
       expect(
-        TextBookBloc.isContentWindowSufficientForTesting(
+        TextBookBloc.isContentWindowSufficient(
           loadedRanges: loadedRanges,
           startLine: 300,
           endLine: 340,
@@ -147,7 +147,7 @@ void main() {
       );
 
       expect(
-        TextBookBloc.isContentWindowSufficientForTesting(
+        TextBookBloc.isContentWindowSufficient(
           loadedRanges: loadedRanges,
           startLine: 560,
           endLine: 600,

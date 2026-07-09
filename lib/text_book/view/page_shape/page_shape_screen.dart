@@ -1366,7 +1366,9 @@ class _LoadedCommentaryData {
 }
 
 class _CommentaryPaneState extends State<_CommentaryPane> {
-  static const int _quickPreviewPaddingLines = 10;
+  static const int _windowLookBehindLines = 120;
+  static const int _windowLookAheadLines = 260;
+  static const int _windowReloadThresholdLines = 60;
 
   // המטמון מחזיק ספרי מפרשים שלמים — בלי חסם LRU כל מפרש שהוצג אי-פעם
   // בצורת הדף היה נשאר ב-RAM עד סגירת האפליקציה. LinkedHashMap במפורש:
@@ -1394,6 +1396,14 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   List<String>? _content;
   TextBook? _reportBook;
+
+  // טעינת-חלונות לספרי DB: _content באורך הספר המלא עם placeholders ריקים,
+  // ורק חלונות סביב יעד הסנכרון/הגלילה נטענים בפועל.
+  bool _useWindowedLoading = false;
+  TextBook? _rangeBook;
+  List<({int startLine, int endLine})> _loadedRanges = const [];
+  bool _isLoadingRange = false;
+  bool _pendingRangeReload = false;
   // תוכן העניינים של ספר המפרש — לתווית היעד בריחוף על סרגל הגלילה. null
   // עד שנטען; אינדקסי התוכן של המפרש מתיישרים עם מספרי השורות שלו, ולכן
   // המיפוי ישיר (refFromTocList) בלי המרת סגמנטים.
@@ -1413,6 +1423,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   @override
   void initState() {
     super.initState();
+    _positionsListener.itemPositions.addListener(_onPanePositionsChanged);
     // דוחה את הטעינה כדי לוודא שכל ה-providers מוכנים וה-bloc זמין
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1420,6 +1431,152 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         _setupBlocListener();
       }
     });
+  }
+
+  /// גלילה בתוך חלונית המפרש — טוען חלון חדש כשמתקרבים לקצה הטעון.
+  void _onPanePositionsChanged() {
+    if (!_useWindowedLoading || _content == null || !mounted) {
+      return;
+    }
+    final positions = _positionsListener.itemPositions.value;
+    if (positions.isEmpty) {
+      return;
+    }
+    var first = positions.first.index;
+    var last = first;
+    for (final position in positions) {
+      if (position.index < first) first = position.index;
+      if (position.index > last) last = position.index;
+    }
+    unawaited(_ensureWindowLoaded(first, last));
+  }
+
+  /// האם ה-viewport ‏[first]..[last] בתוך טווח טעון עם שולי ביטחון —
+  /// בקצות הספר אין מה לטעון מעבר, ולכן השוליים שם מוותרים.
+  bool _isWindowLoaded(int first, int last) {
+    final content = _content;
+    if (content == null) {
+      return false;
+    }
+    final lastBookLine = content.length - 1;
+    for (final range in _loadedRanges) {
+      final startOk = range.startLine == 0
+          ? first >= range.startLine
+          : first >= range.startLine + _windowReloadThresholdLines;
+      final endOk = range.endLine >= lastBookLine
+          ? last <= range.endLine
+          : last <= range.endLine - _windowReloadThresholdLines;
+      if (startOk && endOk) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// מוודא שחלון סביב [first]..[last] טעון; טוען את החסר מה-DB.
+  Future<void> _ensureWindowLoaded(int first, int last) async {
+    if (_isWindowLoaded(first, last)) {
+      return;
+    }
+
+    if (_isLoadingRange) {
+      _pendingRangeReload = true;
+      return;
+    }
+    _isLoadingRange = true;
+    try {
+      final book = _rangeBook;
+      final content = _content;
+      if (book == null || content == null) {
+        return;
+      }
+      final range = await SqliteDataProvider.instance.getBookTextRangeFromDb(
+        book.title,
+        startLine: first - _windowLookBehindLines,
+        endLine: last + _windowLookAheadLines,
+        categoryId: book.categoryId,
+        fileType: book.fileType,
+      );
+      if (!mounted ||
+          range == null ||
+          !_useWindowedLoading ||
+          !identical(content, _content) ||
+          range.totalLines != content.length) {
+        return;
+      }
+
+      _loadedRanges = TextBookBloc.mergeLoadedContentRanges(
+        _loadedRanges,
+        startLine: range.startLine,
+        endLine: range.endLine,
+      );
+
+      final lines = range.text.split('\n');
+      var changed = false;
+      for (var offset = 0; offset < lines.length; offset++) {
+        final target = range.startLine + offset;
+        if (target < content.length && content[target] != lines[offset]) {
+          content[target] = lines[offset];
+          changed = true;
+        }
+      }
+      if (changed) {
+        setState(() {});
+      }
+    } finally {
+      _isLoadingRange = false;
+      if (_pendingRangeReload && mounted) {
+        _pendingRangeReload = false;
+        _onPanePositionsChanged();
+      }
+    }
+  }
+
+  /// טוען חלון ראשוני סביב [targetIndex] ומפעיל מצב טעינת-חלונות.
+  /// מחזיר false כשאין לספר טעינת-טווחים — הקורא נופל לטעינה מלאה.
+  Future<bool> _loadInitialWindow(
+    TextBook book,
+    int targetIndex,
+    String requestedCommentatorName,
+  ) async {
+    final range = await SqliteDataProvider.instance.getBookTextRangeFromDb(
+      book.title,
+      startLine: targetIndex - _windowLookBehindLines,
+      endLine: targetIndex + _windowLookAheadLines,
+      categoryId: book.categoryId,
+      fileType: book.fileType,
+    );
+    if (!mounted || widget.commentatorName != requestedCommentatorName) {
+      return true; // הבקשה התיישנה — אין טעם גם בטעינה מלאה
+    }
+    if (range == null || range.totalLines <= 0) {
+      return false;
+    }
+
+    final lines = range.text.split('\n');
+    final content = List<String>.filled(range.totalLines, '');
+    for (var offset = 0; offset < lines.length; offset++) {
+      final target = range.startLine + offset;
+      if (target < content.length) {
+        content[target] = lines[offset];
+      }
+    }
+
+    _useWindowedLoading = true;
+    _rangeBook = book;
+    _loadedRanges = TextBookBloc.mergeLoadedContentRanges(
+      const [],
+      startLine: range.startLine,
+      endLine: range.endLine,
+    );
+    setState(() {
+      _reportBook = book;
+      _content = content;
+      _isLoading = false;
+      _lastSyncedIndex = null;
+    });
+    _scheduleInitialSync();
+    return true;
   }
 
   @override
@@ -1445,6 +1602,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   @override
   void dispose() {
+    _positionsListener.itemPositions.removeListener(_onPanePositionsChanged);
     _blocSubscription?.cancel();
     super.dispose();
   }
@@ -1495,16 +1653,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
   String _commentaryCacheKey(TextBook book, {required bool preferDatabase}) {
     return '${book.title}|${book.categoryId}|${book.categoryPath ?? ''}|$preferDatabase';
-  }
-
-  List<String> _buildPreviewLines(String previewContent, int previewStartLine) {
-    final previewLines = previewContent.split('\n');
-    if (previewStartLine <= 0) {
-      return previewLines;
-    }
-
-    return List<String>.filled(previewStartLine, '', growable: true)
-      ..addAll(previewLines);
   }
 
   /// נקודת הייחוס לסנכרון — כשליש מגובה ה-viewport מלמעלה (לא במרכז ולא
@@ -1683,6 +1831,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       _commentaryToc = null;
     });
     _lastLinks = null;
+    _useWindowedLoading = false;
+    _rangeBook = null;
+    _loadedRanges = const [];
 
     try {
       // המתנה לכך שה-state יהיה TextBookLoaded
@@ -1761,11 +1912,25 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       // טעינת תוכן העניינים של המפרש ברקע — עבור תווית היעד בריחוף על הסרגל.
       unawaited(_loadCommentaryToc(book));
 
-      // טעינת הטקסט ישירות מה-provider המתאים
       final useDatabaseSource = bookLocation != null &&
           bookLocation.book != null &&
           bookLocation.categoryId != null;
       final requestedCommentatorName = widget.commentatorName;
+
+      // ספרי DB נטענים בחלונות סביב יעד הסנכרון — לא כל ספר המפרש לזיכרון.
+      final currentState = state;
+      if (useDatabaseSource && currentState is TextBookLoaded) {
+        final targetIndex =
+            _resolveInitialCommentaryTargetIndex(currentState) ?? 0;
+        if (await _loadInitialWindow(
+            book, targetIndex, requestedCommentatorName)) {
+          return;
+        }
+        if (!mounted || widget.commentatorName != requestedCommentatorName) {
+          return;
+        }
+      }
+
       final fullCommentaryFuture = _getOrLoadFullCommentary(
         _commentaryCacheKey(book, preferDatabase: useDatabaseSource),
         () => _fetchFullCommentaryData(
@@ -1773,52 +1938,6 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
           preferDatabase: useDatabaseSource,
         ),
       );
-
-      var previewLoaded = false;
-      final currentState = state;
-      if (useDatabaseSource && currentState is TextBookLoaded) {
-        final previewTargetIndex =
-            _resolveInitialCommentaryTargetIndex(currentState) ?? 0;
-        final previewContent =
-            await SqliteDataProvider.instance.getBookQuickPreview(
-          widget.commentatorName,
-          previewTargetIndex,
-          categoryId: book.categoryId,
-          fileType: book.fileType,
-        );
-
-        if (!mounted || widget.commentatorName != requestedCommentatorName) {
-          return;
-        }
-
-        if (previewContent != null && previewContent.isNotEmpty) {
-          final previewStartLine =
-              (previewTargetIndex - _quickPreviewPaddingLines).clamp(
-            0,
-            previewTargetIndex,
-          );
-          setState(() {
-            _reportBook = book;
-            _content = _buildPreviewLines(previewContent, previewStartLine);
-            _isLoading = false;
-            _lastSyncedIndex = null;
-          });
-          previewLoaded = true;
-
-          _scheduleInitialSync();
-        }
-      }
-
-      if (previewLoaded) {
-        unawaited(
-          _applyFullCommentaryData(
-            fullCommentaryFuture,
-            requestedCommentatorName,
-          ),
-        );
-        return;
-      }
-
       await _applyFullCommentaryData(
         fullCommentaryFuture,
         requestedCommentatorName,
@@ -1926,6 +2045,11 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
+      // במצב טעינת-חלונות: מזניק טעינה סביב היעד כדי שהשורות ימולאו
+      // מיד אחרי הקפיצה (מאזין המיקומים ישלים חלונות בהמשך הגלילה).
+      if (_useWindowedLoading) {
+        unawaited(_ensureWindowLoaded(targetIndex, targetIndex));
+      }
       // סנכרון מגלילה רציפה (או ראשוני) — קפיצה מיידית כדי שהמפרש יעקוב
       // צמוד אחר הטקסט הראשי. אנימציה כאן הייתה יוצרת פיגור והתנגשות בין
       // אנימציות עוקבות, וגם בונה אלפי פריטים בזמן אנימציה (תקיעה).

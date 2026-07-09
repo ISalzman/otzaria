@@ -330,9 +330,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         bounds.max < expectedIndex - _initialVisibleSyncTolerance;
   }
 
-  @visibleForTesting
-  static List<({int startLine, int endLine})>
-      mergeLoadedContentRangesForTesting(
+  static List<({int startLine, int endLine})> mergeLoadedContentRanges(
     List<({int startLine, int endLine})> ranges, {
     required int startLine,
     required int endLine,
@@ -369,8 +367,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return List<({int startLine, int endLine})>.unmodifiable(merged);
   }
 
-  @visibleForTesting
-  static bool isContentWindowSufficientForTesting({
+  static bool isContentWindowSufficient({
     required List<({int startLine, int endLine})> loadedRanges,
     required int startLine,
     required int endLine,
@@ -1839,7 +1836,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // טווח, ואצוות חימום הן כמעט תמיד רצף אחד — כך נשארת העתקה אחת לאצווה.
     var mergedRanges = const <({int startLine, int endLine})>[];
     for (final range in applicable) {
-      mergedRanges = mergeLoadedContentRangesForTesting(
+      mergedRanges = mergeLoadedContentRanges(
         mergedRanges,
         startLine: range.startLine,
         endLine: range.startLine + range.lines.length - 1,
@@ -2054,7 +2051,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _ensureLoadedContentTrackingBook(book);
 
     _loadedContentTotalLines = totalLines ?? _loadedContentTotalLines;
-    _loadedContentRanges = mergeLoadedContentRangesForTesting(
+    _loadedContentRanges = mergeLoadedContentRanges(
       _loadedContentRanges,
       startLine: startLine,
       endLine: endLine,
@@ -2066,7 +2063,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return false;
     }
 
-    return isContentWindowSufficientForTesting(
+    return isContentWindowSufficient(
       loadedRanges: _loadedContentRanges,
       startLine: startLine,
       endLine: endLine,
@@ -2200,7 +2197,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         var effectiveRanges = _loadedContentRanges;
         for (final range in warmedRanges) {
-          effectiveRanges = mergeLoadedContentRangesForTesting(
+          effectiveRanges = mergeLoadedContentRanges(
             effectiveRanges,
             startLine: range.startLine,
             endLine: range.endLine,
@@ -2234,7 +2231,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           totalLines: range.totalLines,
           lines: range.lines,
         ));
-        warmedRanges = mergeLoadedContentRangesForTesting(
+        warmedRanges = mergeLoadedContentRanges(
           warmedRanges,
           startLine: range.startLine,
           endLine: range.startLine + range.lines.length - 1,
