@@ -412,6 +412,16 @@ bool updateCheckBlocked({
 }) =>
     isOfflineMode || !updatesEnabled;
 
+/// האם להריץ בדיקת עדכון מחדש לאחר שינוי הגדרות: רק במעבר מחסימה לזמינות,
+/// וכשאין בדיקה/הורדה/התקנה בעיצומן (upToDate הוא גם המצב שנקבע בעת חסימה).
+@visibleForTesting
+bool shouldRecheckAfterUnblock({
+  required bool wasBlocked,
+  required bool isBlocked,
+  required UpdatStatus status,
+}) =>
+    wasBlocked && !isBlocked && status == UpdatStatus.upToDate;
+
 class MyUpdatWidget extends StatelessWidget {
   const MyUpdatWidget({super.key, required this.child});
 
@@ -459,15 +469,38 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// מסמן שהבדיקה האוטומטית הראשונית כבר הופעלה, כדי שלא תופעל פעמיים.
   bool _initialCheckTriggered = false;
 
+  StreamSubscription<SettingsState>? _settingsSubscription;
+  late bool _updateCheckWasBlocked;
+
   @override
   void initState() {
     super.initState();
     _installWindowCloseHook();
+    _listenForUpdateUnblock();
     // דוחים את הבדיקה הראשונית ל-post-frame כדי שהסיור המודרך (שמופעל אף הוא
     // ב-post-frame, מוקדם יותר באותו פריים) יספיק לעדכן את מצבו לפני שנחליט.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _startInitialUpdateCheckRespectingTour();
+    });
+  }
+
+  /// כשהבדיקה נחסמה (מנותק/עדכונים כבויים) המצב נקבע ל-upToDate ואיש לא
+  /// יבדוק שוב — לכן מאזינים ל-SettingsBloc ובודקים מחדש במעבר לזמינות.
+  void _listenForUpdateUnblock() {
+    final settingsBloc = context.read<SettingsBloc>();
+    _updateCheckWasBlocked = !settingsBloc.state.canUseSoftwareAndBookUpdates;
+    _settingsSubscription = settingsBloc.stream.listen((settingsState) {
+      final isBlocked = !settingsState.canUseSoftwareAndBookUpdates;
+      final shouldRecheck = shouldRecheckAfterUnblock(
+        wasBlocked: _updateCheckWasBlocked,
+        isBlocked: isBlocked,
+        status: _status,
+      );
+      _updateCheckWasBlocked = isBlocked;
+      if (shouldRecheck && _initialCheckTriggered && mounted) {
+        _checkForUpdate();
+      }
     });
   }
 
@@ -493,6 +526,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   @override
   void dispose() {
     _tourSubscription?.cancel();
+    _settingsSubscription?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;

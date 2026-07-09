@@ -62,6 +62,11 @@ class PersonalBooksImportService {
       final fileName = p.basename(sourcePath);
       try {
         final targetPath = p.join(folderPath, fileName);
+        // העתקת קובץ על עצמו (openRead+openWrite לאותו נתיב) מרוקנת אותו.
+        if (p.equals(sourcePath, targetPath)) {
+          copied++;
+          continue;
+        }
         // העתקה בזרימה — קבצי PDF עלולים להיות גדולים מהזיכרון הפנוי.
         await File(sourcePath).openRead().pipe(File(targetPath).openWrite());
         copied++;
