@@ -567,9 +567,8 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
   }
 }
 
-/// מדווח ל-bloc של טאב טקסט על שינויי נראות דרך [TickerMode] — שכבר משקף
-/// "האם זה הטאב הפעיל" (ראו עטיפת ילדי ה-PageView). טאב רקע משחרר תוכן
-/// ומשהה חימום; טאב שנחשף חוזר ונטען.
+/// מדווח ל-bloc של טאב טקסט על שינויי נראות דרך [TickerMode] (שכבר משקף
+/// "האם זה הטאב הפעיל") — טאב רקע משחרר תוכן ומשהה חימום.
 class _TabVisibilityBridge extends StatefulWidget {
   final TextBookBloc bloc;
   final Widget child;
