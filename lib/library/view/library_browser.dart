@@ -59,12 +59,13 @@ const int _kLibraryTreeFlattenThreshold = 500;
 /// מכסת הספרים המוצגים לקטגוריה; מעבר לה מופיעה שורת "הצג עוד".
 const int _kCategoryBooksCap = 500;
 
-enum _FlatLibraryRowKind { categoryHeader, book, rootBook, showMore }
+enum FlatLibraryRowKind { categoryHeader, book, rootBook, showMore }
 
 /// שורה בעץ הספרייה המשוטח. דגלי הקצוות משחזרים את מראה הכרטיס של
 /// [ExpandableCard] ברמה העליונה (פינות מעוגלות ורווח בין קבוצות).
-class _FlatLibraryRow {
-  final _FlatLibraryRowKind kind;
+@visibleForTesting
+class FlatLibraryRow {
+  final FlatLibraryRowKind kind;
   final Category? category;
   final Book? book;
   final List<Book>? showMoreBooks;
@@ -75,7 +76,7 @@ class _FlatLibraryRow {
   final bool isGroupStart;
   bool isGroupEnd = false;
 
-  _FlatLibraryRow({
+  FlatLibraryRow({
     required this.kind,
     required this.level,
     required this.parentPath,
@@ -84,6 +85,68 @@ class _FlatLibraryRow {
     this.showMoreBooks,
     this.isGroupStart = false,
   });
+}
+
+/// משטח את הצמתים הנראים בעץ הספרייה (לפי [expandedPaths]) לרשימת שורות —
+/// אותו סדר ואותם גבולות (מכסה + "הצג עוד") כמו העץ המקונן.
+@visibleForTesting
+List<FlatLibraryRow> buildFlatLibraryRows({
+  required Category category,
+  required Set<String> expandedPaths,
+  required int Function(Category) topCategoryOrder,
+  required int Function(int) normalizeOrder,
+}) {
+  final rows = <FlatLibraryRow>[];
+
+  void collect(Category current, int level) {
+    final books = current.books.toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    final subs = current.subCategories.where((c) => c.hasBooks).toList();
+    if (current is Library) {
+      subs.sort((a, b) => topCategoryOrder(a).compareTo(topCategoryOrder(b)));
+    } else {
+      subs.sort(
+        (a, b) => normalizeOrder(a.order).compareTo(normalizeOrder(b.order)),
+      );
+    }
+
+    for (final sub in subs) {
+      rows.add(FlatLibraryRow(
+        kind: FlatLibraryRowKind.categoryHeader,
+        category: sub,
+        level: level,
+        parentPath: current.path,
+        isGroupStart: level == 0,
+      ));
+      if (expandedPaths.contains(sub.path)) {
+        collect(sub, level + 1);
+      }
+      if (level == 0) {
+        rows.last.isGroupEnd = true;
+      }
+    }
+
+    for (int i = 0; i < books.length && i < _kCategoryBooksCap; i++) {
+      rows.add(FlatLibraryRow(
+        kind:
+            level == 0 ? FlatLibraryRowKind.rootBook : FlatLibraryRowKind.book,
+        book: books[i],
+        level: level,
+        parentPath: current.path,
+      ));
+    }
+    if (books.length > _kCategoryBooksCap) {
+      rows.add(FlatLibraryRow(
+        kind: FlatLibraryRowKind.showMore,
+        showMoreBooks: books,
+        level: level,
+        parentPath: current.path,
+      ));
+    }
+  }
+
+  collect(category, 0);
+  return rows;
 }
 
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
@@ -1256,86 +1319,33 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  /// משטח את הצמתים הנראים (לפי מצב ההרחבה) לרשימת שורות — אותו סדר
-  /// ואותם גבולות (מכסת 500 + "הצג עוד") כמו [_buildCategoryTree].
-  List<_FlatLibraryRow> _buildFlatTreeRows(Category category) {
-    final rows = <_FlatLibraryRow>[];
+  List<FlatLibraryRow> _buildFlatTreeRows(Category category) =>
+      buildFlatLibraryRows(
+        category: category,
+        expandedPaths: _expandedCategories,
+        topCategoryOrder: _getTopCategoryOrder,
+        normalizeOrder: _normalizeOrder,
+      );
 
-    void collect(Category current, int level) {
-      final books = current.books.toList()
-        ..sort((a, b) => a.order.compareTo(b.order));
-      final subs = current.subCategories.where((c) => c.hasBooks).toList();
-      if (current is Library) {
-        subs.sort(
-          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)),
-        );
-      } else {
-        subs.sort(
-          (a, b) =>
-              _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)),
-        );
-      }
-
-      for (final sub in subs) {
-        final isExpanded = _expandedCategories.contains(sub.path);
-        rows.add(_FlatLibraryRow(
-          kind: _FlatLibraryRowKind.categoryHeader,
-          category: sub,
-          level: level,
-          parentPath: current.path,
-          isGroupStart: level == 0,
-        ));
-        if (isExpanded) {
-          collect(sub, level + 1);
-        }
-        if (level == 0) {
-          rows.last.isGroupEnd = true;
-        }
-      }
-
-      for (int i = 0; i < books.length && i < _kCategoryBooksCap; i++) {
-        rows.add(_FlatLibraryRow(
-          kind: level == 0
-              ? _FlatLibraryRowKind.rootBook
-              : _FlatLibraryRowKind.book,
-          book: books[i],
-          level: level,
-          parentPath: current.path,
-        ));
-      }
-      if (books.length > _kCategoryBooksCap) {
-        rows.add(_FlatLibraryRow(
-          kind: _FlatLibraryRowKind.showMore,
-          showMoreBooks: books,
-          level: level,
-          parentPath: current.path,
-        ));
-      }
-    }
-
-    collect(category, 0);
-    return rows;
-  }
+  /// Key יציב לשורה — בלעדיו אנימציית השברון ומצב hover "זולגים" בין
+  /// שורות כשההרחבה מזיזה אינדקסים ב-ListView.builder.
+  Key _flatRowKey(FlatLibraryRow row) => switch (row.kind) {
+        FlatLibraryRowKind.categoryHeader => ValueKey(row.category!.path),
+        // ObjectKey ולא title — מהדורות חיצוניות וצמדי טקסט/PDF יכולים
+        // לשאת אותו title תחת אותו הורה.
+        FlatLibraryRowKind.book ||
+        FlatLibraryRowKind.rootBook =>
+          ObjectKey(row.book!),
+        FlatLibraryRowKind.showMore => ValueKey('more:${row.parentPath}'),
+      };
 
   /// בונה שורה משוטחת בסגנון הכרטיס של העץ המקונן: רקע כרטיס, מפריד בין
   /// שורות, פינות מעוגלות ורווח אנכי בקצות כל קבוצה עליונה.
-  /// Key יציב לשורה — בלעדיו אנימציית השברון ומצב hover "זולגים" בין
-  /// שורות כשההרחבה מזיזה אינדקסים ב-ListView.builder.
-  Key _flatRowKey(_FlatLibraryRow row) => switch (row.kind) {
-        _FlatLibraryRowKind.categoryHeader => ValueKey(row.category!.path),
-        // ObjectKey ולא title — מהדורות חיצוניות וצמדי טקסט/PDF יכולים
-        // לשאת אותו title תחת אותו הורה.
-        _FlatLibraryRowKind.book ||
-        _FlatLibraryRowKind.rootBook =>
-          ObjectKey(row.book!),
-        _FlatLibraryRowKind.showMore => ValueKey('more:${row.parentPath}'),
-      };
-
-  Widget _buildFlatTreeRow(BuildContext context, _FlatLibraryRow row) {
+  Widget _buildFlatTreeRow(BuildContext context, FlatLibraryRow row) {
     final isExpanded = row.category != null &&
         _expandedCategories.contains(row.category!.path);
 
-    if (row.kind == _FlatLibraryRowKind.rootBook) {
+    if (row.kind == FlatLibraryRowKind.rootBook) {
       return KeyedSubtree(
         key: _flatRowKey(row),
         child: _buildListBookItem(
@@ -1347,7 +1357,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     // "הצג עוד" ברמה 0 מוצג חשוף גם בעץ המקונן — בלי עטיפת כרטיס.
-    if (row.kind == _FlatLibraryRowKind.showMore && row.level == 0) {
+    if (row.kind == FlatLibraryRowKind.showMore && row.level == 0) {
       return KeyedSubtree(
         key: _flatRowKey(row),
         child: _buildShowMoreRow(row.showMoreBooks!, row.level),
@@ -1355,16 +1365,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     final Widget child = switch (row.kind) {
-      _FlatLibraryRowKind.categoryHeader =>
+      FlatLibraryRowKind.categoryHeader =>
         _buildCategoryHeaderRow(row.category!, row.level, isExpanded),
-      _FlatLibraryRowKind.book => _buildListBookItem(
+      FlatLibraryRowKind.book => _buildListBookItem(
           row.book!,
           row.level,
           itemStyle: _LibraryListItemStyle.grouped,
         ),
-      _FlatLibraryRowKind.showMore =>
+      FlatLibraryRowKind.showMore =>
         _buildShowMoreRow(row.showMoreBooks!, row.level),
-      _FlatLibraryRowKind.rootBook => throw StateError('unreachable'),
+      FlatLibraryRowKind.rootBook => throw StateError('unreachable'),
     };
 
     const radius = Radius.circular(AppTokens.radius);
