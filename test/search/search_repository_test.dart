@@ -314,12 +314,13 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
 
 SearchResult _result({required int id, required String text}) {
   return SearchResult(
-    id: BigInt.from(id),
-    title: 'ספר',
-    reference: 'סימן',
-    text: text,
-    segment: BigInt.from(id),
-    isPdf: false,
-    filePath: 'book.txt',
-  );
+      id: BigInt.from(id),
+      title: 'ספר',
+      reference: 'סימן',
+      text: text,
+      segment: BigInt.from(id),
+      isPdf: false,
+      filePath: 'book.txt',
+      mergedCount: 1,
+      merged: const []);
 }

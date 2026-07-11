@@ -4,7 +4,7 @@ class FoundationalBookClassifier {
   static int? classify(String? categoryPath, String title) {
     if (categoryPath == null || categoryPath.isEmpty) return null;
 
-    final parts = categoryPath.split(', ');
+    final parts = _splitCategoryPath(categoryPath);
     if (parts.isEmpty) return null;
 
     const commentaryMarkers = {
@@ -85,6 +85,21 @@ class FoundationalBookClassifier {
     }
 
     return null;
+  }
+
+  /// נתיב קטגוריה מגיע בשני פורמטים: "תנ\"ך, תורה" (join בפסיק —
+  /// _categoryPathForBook / ReferenceBooksCache) או "/תנ\"ך/תורה"
+  /// (Category.path עם slash). פיצול לפי הפורמט בפועל, אחרת הסיווג
+  /// נכשל בשקט ומחזיר null לספרי יסוד אמיתיים.
+  static List<String> _splitCategoryPath(String categoryPath) {
+    final normalized = categoryPath.trim();
+    final parts = normalized.contains(', ')
+        ? normalized.split(', ')
+        : normalized.split('/');
+    return [
+      for (final part in parts)
+        if (part.trim().isNotEmpty) part.trim(),
+    ];
   }
 
   static bool _titleSuggestsCommentary(String title) {

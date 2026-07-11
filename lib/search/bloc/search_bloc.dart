@@ -12,6 +12,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:flutter/foundation.dart';
@@ -86,6 +87,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<SetFacet>(_onSetFacet);
     on<SetFacetsWithoutSearch>(_onSetFacetsWithoutSearch);
     on<UpdateSortOrder>(_onUpdateSortOrder);
+    on<UpdateResultGrouping>(_onUpdateResultGrouping);
     on<UpdateNumResults>(_onUpdateNumResults);
     on<ResetSearch>(_onResetSearch);
     on<UpdateFilterQuery>(_onUpdateFilterQuery);
@@ -115,6 +117,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeQuery: negativeQuery,
         results: [],
         totalResults: 0,
+        totalGroups: null,
         facetCounts: const {},
       ));
       return;
@@ -126,6 +129,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeQuery: negativeQuery,
         results: [],
         totalResults: 0,
+        totalGroups: null,
         isLoading: false,
         facetCounts: const {},
       ));
@@ -199,6 +203,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeCustomSpacing: event.negativeCustomSpacing,
         negativeAlternativeWords: event.negativeAlternativeWords,
         negativeSearchOptions: event.negativeSearchOptions,
+        grouping: state.configuration.resultGrouping.engineGrouping,
       );
 
       final allResults = <SearchResult>[];
@@ -226,6 +231,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
           }
           emit(state.copyWith(
             totalResults: update.totalCount,
+            // מספר הקבוצות כשהאיחוד פעיל; null בחיפוש שטוח — ואז הרשימה
+            // נמדדת ב-totalResults כרגיל.
+            totalGroups: update.groupCount,
             // null משאיר את הספירות הקיימות (למשל כשהעץ מתעדכן בנפרד
             // דרך ReplaceFacetCounts במקרה של תת-בחירה).
             facetCounts: aggregated,
@@ -254,14 +262,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // אך המנוע החזיר פחות ממה שספר (מסמך שנספר אבל נכשל בשליפה מה-store,
       // נרשם ביומן המנוע), המונה הגולמי היה מצייר "3/4 תוצאות" עם כפתור
       // "טען עוד" שלעולם לא מספק. מיישרים את הספירה למה שבאמת ניתן להצגה.
-      final reconciledTotal = (state.totalResults <= state.numResults &&
-              allResults.length < state.totalResults)
+      // במצב איחוד הרשימה נמדדת בקבוצות — היישוב חל על מונה הקבוצות.
+      final effectiveTotal = state.displayTotal;
+      final reconciledTotal = (effectiveTotal <= state.numResults &&
+              allResults.length < effectiveTotal)
           ? allResults.length
-          : state.totalResults;
+          : effectiveTotal;
 
       emit(state.copyWith(
         results: allResults,
-        totalResults: reconciledTotal,
+        totalResults:
+            state.totalGroups == null ? reconciledTotal : state.totalResults,
+        totalGroups: state.totalGroups == null ? null : reconciledTotal,
         isLoading: false,
       ));
     } catch (e, stackTrace) {
@@ -274,6 +286,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       emit(state.copyWith(
         results: [],
         totalResults: 0,
+        totalGroups: null,
         isLoading: false,
         errorMessage: 'אירעה שגיאה בעת החיפוש',
       ));
@@ -637,11 +650,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) async {
     // הסט שבידינו שלם רק כשהמנוע החזיר פחות מהמכסה — אחרת התוצאות חתוכות
     // וסינון מקומי היה מאבד התאמות שמעבר להן.
+    //
+    // איחוד תוצאות פוסל את המסלול המקומי משתי סיבות: (1) הנציג של קבוצה
+    // (במיוחד ב-identicalText) עשוי להיות מספר אחד בעוד חברות הקבוצה
+    // (merged) מספרים אחרים — סינון לפי ספר-הנציג בלבד היה מפיל/משאיר
+    // קבוצות שלא כדין; (2) totalGroups לא היה מתעדכן כאן והדפדוף היה
+    // נשבר. במקום זה החיפוש חוזר למנוע, שמקבץ מחדש בתוך הסינון.
     if (state.searchQuery.isEmpty ||
         state.isLoading ||
         state.errorMessage != null ||
         state.currentFacets.isEmpty ||
-        state.results.length >= state.numResults) {
+        state.results.length >= state.numResults ||
+        state.configuration.resultGrouping != ResultGroupingMode.none) {
       return false;
     }
 
@@ -711,6 +731,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) {
     final newConfig = state.configuration.copyWith(sortBy: event.order);
     emit(state.copyWith(configuration: newConfig));
+    add(UpdateSearchQuery(state.searchQuery));
+  }
+
+  void _onUpdateResultGrouping(
+    UpdateResultGrouping event,
+    Emitter<SearchState> emit,
+  ) {
+    if (event.grouping == state.configuration.resultGrouping) return;
+    final newConfig =
+        state.configuration.copyWith(resultGrouping: event.grouping);
+    emit(state.copyWith(configuration: newConfig, totalGroups: null));
     add(UpdateSearchQuery(state.searchQuery));
   }
 
@@ -927,7 +958,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return;
     }
 
-    final canLoadMore = state.results.length < state.totalResults;
+    // במצב איחוד הרשימה והדפדוף נספרים בקבוצות (displayTotal מחזיר את
+    // מונה הקבוצות כשהוא קיים).
+    final canLoadMore = state.results.length < state.displayTotal;
 
     if (!canLoadMore) {
       return;
@@ -956,15 +989,23 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeCustomSpacing: event.negativeCustomSpacing,
         negativeAlternativeWords: event.negativeAlternativeWords,
         negativeSearchOptions: event.negativeSearchOptions,
+        grouping: state.configuration.resultGrouping.engineGrouping,
       );
 
       final combined = [...state.results, ...nextResults];
+      final exhausted = nextResults.isEmpty;
       emit(state.copyWith(
         results: combined,
-        // עמוד ריק למרות ש-totalResults מבטיח עוד: ההיטים הנותרים נספרו אך
+        // עמוד ריק למרות שהמונה מבטיח עוד: ההיטים הנותרים נספרו אך
         // אינם ניתנים לשליפה (ראה יומן המנוע). בלי היישור הזה הכפתור היה
         // מציג "טען תוצאות נוספות (N)" לנצח ומסתובב בלי להביא כלום.
-        totalResults: nextResults.isEmpty ? combined.length : null,
+        // היישור חל על המונה שהרשימה נמדדת בו: קבוצות במצב איחוד.
+        totalResults: exhausted && state.totalGroups == null
+            ? combined.length
+            : null,
+        totalGroups: exhausted && state.totalGroups != null
+            ? combined.length
+            : state.totalGroups,
         isLoading: false,
       ));
     } catch (e, stackTrace) {
@@ -972,6 +1013,23 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       UiSnack.showError('אירעה שגיאה בטעינת תוצאות נוספות');
       emit(state.copyWith(isLoading: false));
     }
+  }
+
+  /// ממפה סדר-קטלוג (כפי שמקודד ב-id של מסמכי האינדקס) לספר — אותו סדר
+  /// שהאינדוקס בונה ב-buildKeyOrderMap עם catalogueOrderKey.
+  Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
+    final keyOrder = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (book) => IndexingRepository.catalogueOrderKey(book as Book),
+    );
+    final booksByOrder = <int, Book>{};
+    for (final book in library.getAllBooks()) {
+      final order = keyOrder[IndexingRepository.catalogueOrderKey(book)];
+      if (order != null) {
+        booksByOrder.putIfAbsent(order, () => book);
+      }
+    }
+    return booksByOrder;
   }
 
   Map<String, Book> _buildBooksByIndexedFilePath(Library library) {

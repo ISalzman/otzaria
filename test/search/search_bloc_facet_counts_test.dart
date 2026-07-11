@@ -453,14 +453,15 @@ void main() {
 
 SearchResult _searchResult({required int id, required String text}) {
   return SearchResult(
-    id: BigInt.from(id),
-    title: 'ספר',
-    reference: 'סימן',
-    text: text,
-    segment: BigInt.from(id),
-    isPdf: false,
-    filePath: 'book.txt',
-  );
+      id: BigInt.from(id),
+      title: 'ספר',
+      reference: 'סימן',
+      text: text,
+      segment: BigInt.from(id),
+      isPdf: false,
+      filePath: 'book.txt',
+      mergedCount: 1,
+      merged: const []);
 }
 
 class _FakeSearchRepository extends SearchRepository {
@@ -507,6 +508,7 @@ class _FakeSearchRepository extends SearchRepository {
     Map<int, List<String>>? negativeAlternativeWords,
     Map<String, Map<String, bool>>? searchOptions,
     Map<String, Map<String, bool>>? negativeSearchOptions,
+    ResultGrouping? grouping,
   }) async {
     searchCalls++;
     lastQuery = query;

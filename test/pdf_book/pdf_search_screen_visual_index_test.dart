@@ -156,14 +156,15 @@ Widget _buildTile({
       child: Scaffold(
         body: SearchResultTile(
           result: SearchResult(
-            id: BigInt.one,
-            title: 'ספר',
-            reference: 'עמוד א',
-            text: text,
-            segment: BigInt.zero,
-            isPdf: true,
-            filePath: 'book.pdf',
-          ),
+              id: BigInt.one,
+              title: 'ספר',
+              reference: 'עמוד א',
+              text: text,
+              segment: BigInt.zero,
+              isPdf: true,
+              filePath: 'book.pdf',
+              mergedCount: 1,
+              merged: const []),
           onTap: () {},
           height: 50,
           query: query,

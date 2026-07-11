@@ -5,6 +5,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
+import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -164,6 +165,7 @@ class IndexingRepository {
       await Future.wait([
         GenerationCache.instance.warmUp(),
         ReferenceBooksCache.instance.warmUp(),
+        BookFacetMetadataCache.instance.warmUp(),
       ]);
 
       int processedBooks = 0;
@@ -405,6 +407,7 @@ class IndexingRepository {
           catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
       final generationOrder = chronologicalOrderForBook(book);
       final engineStopwatch = Stopwatch()..start();
+      final extraFacets = _bookExtraFacets(book);
       final added = hasBytes
           ? await engine.addTextBookBytes(
               title: title,
@@ -413,6 +416,7 @@ class IndexingRepository {
               catalogueOrder: catalogueOrder,
               generationOrder: generationOrder,
               text: bytes,
+              extraFacets: extraFacets,
             )
           : await engine.addTextBook(
               title: title,
@@ -421,6 +425,7 @@ class IndexingRepository {
               catalogueOrder: catalogueOrder,
               generationOrder: generationOrder,
               text: text!,
+              extraFacets: extraFacets,
             );
       engineStopwatch.stop();
       final size =
@@ -528,6 +533,7 @@ class IndexingRepository {
       catalogueOrder:
           catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
       generationOrder: chronologicalOrderForBook(book),
+      extraFacets: _bookExtraFacets(book),
       pages: [
         for (final page in pages)
           PdfPageInput(
@@ -726,6 +732,17 @@ class IndexingRepository {
     return text;
   }
 
+  /// ממדי ה-facet הנוספים של הספר (מחבר/תקופה/ספר-יסוד) — משותף לכל
+  /// מסלולי הכתיבה, כמו [_bookTopics]. null כשאין ממדים (המנוע מקבל
+  /// `extraFacets: null` ולא רשימה ריקה — אותה משמעות, פחות העברה).
+  List<String>? _bookExtraFacets(Book book) {
+    final facets = BookFacetMetadataCache.instance.extraFacetsForBook(
+      book,
+      isFoundational: foundationalTierForBook(book) != null,
+    );
+    return facets.isEmpty ? null : facets;
+  }
+
   /// נתיב ה-facet של הספר — משותף לכל מסלולי הכתיבה (טקסט, PDF, סמן-ריק),
   /// כדי שהמסלולים לא יסטו זה מזה.
   String _bookTopics(Book book) => BookFacet.buildFacetPath(
@@ -846,6 +863,7 @@ class IndexingRepository {
     await Future.wait([
       GenerationCache.instance.warmUp(),
       ReferenceBooksCache.instance.warmUp(),
+      BookFacetMetadataCache.instance.warmUp(),
     ]);
 
     final totalBooks = books.length;

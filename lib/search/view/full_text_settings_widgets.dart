@@ -677,3 +677,92 @@ class OrderOfResults extends StatelessWidget {
     );
   }
 }
+
+/// בורר מצב איחוד תוצאות — מקביל ויזואלית ל-[OrderOfResults]:
+/// dropdown במסך רחב וכפתור תפריט קומפקטי במסך צר.
+class GroupingOfResults extends StatelessWidget {
+  const GroupingOfResults({super.key, this.compact = false});
+
+  /// במצב קומפקטי מוצג כפתור "איחוד" שפותח תפריט נפתח במקום dropdown רגיל.
+  final bool compact;
+
+  static final _entries = [
+    for (final mode in ResultGroupingMode.values)
+      AppMenuEntry(
+        value: mode,
+        label: mode.label,
+        labelWidget: Tooltip(
+          message: mode.tooltip,
+          child: Text(mode.label),
+        ),
+      ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SearchBloc, SearchState>(
+      builder: (context, state) {
+        if (compact) {
+          return AppPopupMenuButton<ResultGroupingMode>(
+            tooltip: 'איחוד תוצאות',
+            initialValue: state.resultGrouping,
+            entries: _entries,
+            onSelected: (value) {
+              context.read<SearchBloc>().add(UpdateResultGrouping(value));
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                borderRadius: AppTokens.borderRadiusAll,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'איחוד',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    FluentIcons.chevron_down_12_regular,
+                    size: 12,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return SizedBox(
+          width: 183,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: Tooltip(
+              message: state.resultGrouping.tooltip,
+              child: AppDropdownField<ResultGroupingMode>(
+                value: state.resultGrouping,
+                decoration: const InputDecoration(
+                  labelText: 'איחוד תוצאות',
+                  border: OutlineInputBorder(),
+                ),
+                entries: _entries,
+                onSelected: (value) {
+                  if (value != null) {
+                    context.read<SearchBloc>().add(UpdateResultGrouping(value));
+                  }
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
