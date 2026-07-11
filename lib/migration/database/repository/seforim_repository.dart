@@ -506,6 +506,28 @@ class SeforimRepository {
     return result.map((row) => PubDate.fromJson(row)).toList();
   }
 
+  /// חיפוש קל-משקל של שמות מחברים לפי מחרוזת חלקית — להשלמה אוטומטית
+  /// בסינון "לפי ממדים" של החיפוש. מחזיר שמות בלבד, בלי לטעון ספרים.
+  Future<List<String>> searchAuthorNames(String prefix, {int limit = 20}) async {
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty || limit <= 0) {
+      return const [];
+    }
+    final db = await _database.database;
+    final escaped = trimmed
+        .replaceAll('\\', '\\\\')
+        .replaceAll('%', '\\%')
+        .replaceAll('_', '\\_');
+    final result = db.select(
+      "SELECT name FROM author WHERE name LIKE ? ESCAPE '\\' ORDER BY name LIMIT ?",
+      ['%$escaped%', limit],
+    ).toMapList();
+    return [
+      for (final row in result)
+        if (row['name'] is String) row['name'] as String,
+    ];
+  }
+
   // Get an author by name, returns null if not found
   Future<Author?> getAuthorByName(String name) async {
     return await _database.authorDao.getAuthorByName(name);

@@ -6,6 +6,50 @@ import 'package:otzaria/search/book_facet.dart';
 class FacetHelper {
   FacetHelper._();
 
+  // --- Dimension facets (ממדי סינון) ---
+  //
+  // האינדקס מטביע לכל ספר, לצד נתיב הקטגוריה, ערכי facet ממדיים תחת
+  // שורשים שמורים באנגלית: `/author/<שם>`, `/era/<שם תקופה>`, `/base`.
+  // הם רוכבים על אותה רשימת facets שנשלחת למנוע — OR בתוך ממד, AND בין
+  // ממדים ומול קבוצת הקטגוריות. לוגיקת עץ הקטגוריות באפליקציה חייבת
+  // להתעלם מהם (הם אינם נתיבי קטגוריה) אך לשמר אותם בכל כתיבה של הרשימה.
+
+  /// facet של "ספרי יסוד בלבד".
+  static const String baseDimensionFacet = '/base';
+
+  /// שורש ממד התקופה. הערכים: CommentaryEra.hebrewName.
+  static const String eraDimensionPrefix = '/era/';
+
+  /// שורש ממד המחבר. הערכים: author.name מ-seforim.db (אחרי סניטציה).
+  static const String authorDimensionPrefix = '/author/';
+
+  /// האם [facet] הוא facet ממדי (ולא נתיב קטגוריה/ספר).
+  static bool isDimensionFacet(String facet) =>
+      facet == baseDimensionFacet ||
+      facet.startsWith(eraDimensionPrefix) ||
+      facet.startsWith(authorDimensionPrefix);
+
+  /// רק נתיבי הקטגוריות/ספרים מתוך [facets] — הקלט ללוגיקת עץ הקטגוריות.
+  static List<String> categoryFacetsOf(Iterable<String> facets) =>
+      facets.where((facet) => !isDimensionFacet(facet)).toList();
+
+  /// רק ה-facets הממדיים מתוך [facets] — לשימור בכל כתיבה מחדש של הרשימה.
+  static List<String> dimensionFacetsOf(Iterable<String> facets) =>
+      facets.where(isDimensionFacet).toList();
+
+  /// '/' הוא מפריד הרמות של facet — שם שמכיל אותו היה נקרא כהיררכיה.
+  /// אותה סניטציה שמבוצעת בזמן האינדוקס (BookFacetMetadataCache).
+  static String sanitizeDimensionSegment(String value) =>
+      value.replaceAll('/', '־').trim();
+
+  /// בונה facet של מחבר: `/author/<שם מסונטז>`.
+  static String buildAuthorFacet(String authorName) =>
+      '$authorDimensionPrefix${sanitizeDimensionSegment(authorName)}';
+
+  /// בונה facet של תקופה: `/era/<שם מסונטז>`.
+  static String buildEraFacet(String eraName) =>
+      '$eraDimensionPrefix${sanitizeDimensionSegment(eraName)}';
+
   /// Resolves the category path for a book
   static String? resolveCategoryPath(Book book) {
     if (book.category?.path != null && book.category!.path.isNotEmpty) {

@@ -102,6 +102,13 @@ class UpdateSortOrder extends SearchEvent {
   UpdateSortOrder(this.order);
 }
 
+/// שינוי מצב איחוד התוצאות (ללא / לפי סעיף / טקסט זהה) — מריץ את החיפוש
+/// מחדש, כי הקיבוץ מתבצע במנוע.
+class UpdateResultGrouping extends SearchEvent {
+  final ResultGroupingMode grouping;
+  UpdateResultGrouping(this.grouping);
+}
+
 class UpdateNumResults extends SearchEvent {
   final int numResults;
   UpdateNumResults(this.numResults);

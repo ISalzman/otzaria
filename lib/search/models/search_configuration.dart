@@ -41,6 +41,37 @@ extension SearchScopePresentation on SearchScope {
       };
 }
 
+/// מצב איחוד תוצאות (עטיפת אפליקציה ל-[ResultGrouping] של המנוע,
+/// עם ערך "ללא" שאינו קיים שם).
+enum ResultGroupingMode {
+  none, // רשימה שטוחה — ההתנהגות הרגילה
+  sameSection, // איחוד תוצאות מאותו סעיף/כותרת עם מונה "בטווח"
+  identicalText, // איחוד שורות זהות גם בין ספרים שונים
+}
+
+extension ResultGroupingModePresentation on ResultGroupingMode {
+  String get label => switch (this) {
+        ResultGroupingMode.none => 'ללא איחוד',
+        ResultGroupingMode.sameSection => 'לפי טווח (סעיף)',
+        ResultGroupingMode.identicalText => 'טקסט זהה',
+      };
+
+  String get tooltip => switch (this) {
+        ResultGroupingMode.none => 'כל תוצאה מוצגת בנפרד.',
+        ResultGroupingMode.sameSection =>
+          'תוצאות מאותו סעיף (תחת אותה כותרת) מתאחדות לכרטיס אחד עם מונה.',
+        ResultGroupingMode.identicalText =>
+          'קטעים זהים שמופיעים בכמה ספרים מתאחדים לתוצאה אחת.',
+      };
+
+  /// ערך המנוע המקביל; null במצב "ללא".
+  ResultGrouping? get engineGrouping => switch (this) {
+        ResultGroupingMode.none => null,
+        ResultGroupingMode.sameSection => ResultGrouping.sameSection,
+        ResultGroupingMode.identicalText => ResultGrouping.identicalText,
+      };
+}
+
 /// מחלקה שמרכזת את כל הגדרות החיפוש במקום אחד
 /// כוללת הגדרות קיימות והגדרות עתידיות לרגקס
 class SearchConfiguration {
@@ -58,6 +89,9 @@ class SearchConfiguration {
   /// טווח החיפוש המקורי שנקבע בדיאלוג (לא משתנה ע"י לחיצה בעץ התוצאות)
   /// משמש לספירת facets ולבאנר חיווי
   final List<String> searchScopeFacets;
+
+  /// איחוד תוצאות: ללא / לפי סעיף ("נמצאו X תוצאות בטווח") / טקסט זהה.
+  final ResultGroupingMode resultGrouping;
 
   // חיפוש מנוקד (ניקוד/טעמים) אינו דגל גלובלי: הוא אפשרות פר-מילה במפות
   // searchOptions של הטאב, כמו שאר אפשרויות החיפוש המתקדם — ראה
@@ -79,6 +113,7 @@ class SearchConfiguration {
     this.numResults = 100,
     this.currentFacets = const ["/"],
     this.searchScopeFacets = const ["/"],
+    this.resultGrouping = ResultGroupingMode.none,
     // ערכי ברירת מחדל לרגקס
     this.regexEnabled = false,
     this.caseSensitive = false,
@@ -96,6 +131,7 @@ class SearchConfiguration {
     int? numResults,
     List<String>? currentFacets,
     List<String>? searchScopeFacets,
+    ResultGroupingMode? resultGrouping,
     bool? regexEnabled,
     bool? caseSensitive,
     bool? multiline,
@@ -110,6 +146,7 @@ class SearchConfiguration {
       numResults: numResults ?? this.numResults,
       currentFacets: currentFacets ?? this.currentFacets,
       searchScopeFacets: searchScopeFacets ?? this.searchScopeFacets,
+      resultGrouping: resultGrouping ?? this.resultGrouping,
       regexEnabled: regexEnabled ?? this.regexEnabled,
       caseSensitive: caseSensitive ?? this.caseSensitive,
       multiline: multiline ?? this.multiline,
@@ -128,6 +165,7 @@ class SearchConfiguration {
       'numResults': numResults,
       'currentFacets': currentFacets,
       'searchScopeFacets': searchScopeFacets,
+      'resultGrouping': resultGrouping.index,
       'regexEnabled': regexEnabled,
       'caseSensitive': caseSensitive,
       'multiline': multiline,
@@ -157,6 +195,11 @@ class SearchConfiguration {
       numResults: map['numResults'] ?? 100,
       currentFacets: List<String>.from(map['currentFacets'] ?? ["/"]),
       searchScopeFacets: List<String>.from(map['searchScopeFacets'] ?? ["/"]),
+      resultGrouping: switch (map['resultGrouping'] as int?) {
+        final i? when i < ResultGroupingMode.values.length =>
+          ResultGroupingMode.values[i],
+        _ => ResultGroupingMode.none,
+      },
       regexEnabled: map['regexEnabled'] ?? false,
       caseSensitive: map['caseSensitive'] ?? false,
       multiline: map['multiline'] ?? false,
@@ -193,6 +236,7 @@ class SearchConfiguration {
         other.numResults == numResults &&
         other.currentFacets.toString() == currentFacets.toString() &&
         other.searchScopeFacets.toString() == searchScopeFacets.toString() &&
+        other.resultGrouping == resultGrouping &&
         other.regexEnabled == regexEnabled &&
         other.caseSensitive == caseSensitive &&
         other.multiline == multiline &&
@@ -210,6 +254,7 @@ class SearchConfiguration {
       numResults,
       currentFacets,
       searchScopeFacets,
+      resultGrouping,
       regexEnabled,
       caseSensitive,
       multiline,

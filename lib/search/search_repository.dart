@@ -53,7 +53,8 @@ class SearchRepository {
       Map<String, Map<String, bool>>? searchOptions,
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
-      bool matchTaamim = false}) async {
+      bool matchTaamim = false,
+      ResultGrouping? grouping}) async {
     return _gateway.search(
       await _engine(),
       SearchEngineRequest(
@@ -76,6 +77,7 @@ class SearchRepository {
         negativeSearchOptions: negativeSearchOptions ?? const {},
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
+        grouping: grouping,
       ),
     );
   }
@@ -107,7 +109,8 @@ class SearchRepository {
       Map<String, Map<String, bool>>? searchOptions,
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
-      bool matchTaamim = false}) async {
+      bool matchTaamim = false,
+      ResultGrouping? grouping}) async {
     return _gateway.searchAndCount(
       await _engine(),
       SearchEngineRequest(
@@ -130,6 +133,7 @@ class SearchRepository {
         negativeSearchOptions: negativeSearchOptions ?? const {},
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
+        grouping: grouping,
       ),
     );
   }
@@ -169,7 +173,8 @@ class SearchRepository {
       Map<String, Map<String, bool>>? searchOptions,
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
-      bool matchTaamim = false}) async* {
+      bool matchTaamim = false,
+      ResultGrouping? grouping}) async* {
     yield* _gateway.searchStream(
       await _engine(),
       SearchEngineRequest(
@@ -192,6 +197,7 @@ class SearchRepository {
         negativeSearchOptions: negativeSearchOptions ?? const {},
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
+        grouping: grouping,
       ),
       chunkSize: chunkSize,
     );
@@ -219,7 +225,8 @@ class SearchRepository {
       Map<String, Map<String, bool>>? searchOptions,
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
-      bool matchTaamim = false}) async* {
+      bool matchTaamim = false,
+      ResultGrouping? grouping}) async* {
     yield* _gateway.searchStreamWithCounts(
       await _engine(),
       SearchEngineRequest(
@@ -242,6 +249,7 @@ class SearchRepository {
         negativeSearchOptions: negativeSearchOptions ?? const {},
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
+        grouping: grouping,
       ),
       chunkSize: chunkSize,
     );

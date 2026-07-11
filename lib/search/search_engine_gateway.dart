@@ -4,6 +4,10 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
+/// סנטינל ל-copyWith: מבדיל בין "פרמטר לא הועבר" לבין "אפס במפורש ל-null"
+/// עבור שדות nullable (ראה [SearchEngineRequest.copyWith]).
+const Object _unset = Object();
+
 /// בקשת חיפוש אחידה שמגיעה משכבת האפליקציה אל מנוע החיפוש.
 ///
 /// המחלקה מכילה את בחירות ה-UI והניווט בלבד. מנוע החיפוש אחראי לכל
@@ -38,6 +42,12 @@ class SearchEngineRequest {
   /// כמו [matchNikud] עבור טעמי המקרא.
   final bool matchTaamim;
 
+  /// איחוד תוצאות במנוע: `null` = רשימה שטוחה (ההתנהגות הרגילה);
+  /// [ResultGrouping.sameSection] = כרטיס אחד לכל סעיף עם מונה "נמצאו X
+  /// תוצאות בטווח"; [ResultGrouping.identicalText] = איחוד שורות זהות
+  /// חוצה-ספרים. limit/offset נספרים בקבוצות כשהאיחוד פעיל.
+  final ResultGrouping? grouping;
+
   const SearchEngineRequest({
     required this.query,
     required this.facets,
@@ -58,6 +68,7 @@ class SearchEngineRequest {
     this.negativeSearchOptions = const {},
     this.matchNikud = false,
     this.matchTaamim = false,
+    this.grouping,
   });
 
   SearchEngineRequest copyWith({
@@ -80,6 +91,7 @@ class SearchEngineRequest {
     Map<String, Map<String, bool>>? negativeSearchOptions,
     bool? matchNikud,
     bool? matchTaamim,
+    Object? grouping = _unset,
   }) {
     return SearchEngineRequest(
       query: query ?? this.query,
@@ -104,6 +116,9 @@ class SearchEngineRequest {
           negativeSearchOptions ?? this.negativeSearchOptions,
       matchNikud: matchNikud ?? this.matchNikud,
       matchTaamim: matchTaamim ?? this.matchTaamim,
+      grouping: identical(grouping, _unset)
+          ? this.grouping
+          : grouping as ResultGrouping?,
     );
   }
 }
@@ -248,6 +263,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       order: request.order,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -272,6 +288,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      grouping: request.grouping,
     );
   }
 
@@ -286,6 +303,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       order: request.order,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -301,6 +319,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       order: request.order,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -327,6 +346,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      grouping: request.grouping,
     );
   }
 
@@ -341,6 +361,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       order: request.order,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -362,6 +383,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       chunkSize: chunkSize,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -390,6 +412,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      grouping: request.grouping,
     );
   }
 
@@ -408,6 +431,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       chunkSize: chunkSize,
       matchNikud: request.matchNikud,
       matchTaamim: request.matchTaamim,
+      grouping: request.grouping,
     );
   }
 
@@ -579,6 +603,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
           chunkSize: chunkSize,
           matchNikud: request.matchNikud,
           matchTaamim: request.matchTaamim,
+          grouping: request.grouping,
         );
       case SearchMode.advanced:
         return _engine.searchAdvancedStreamWithCounts(
@@ -601,6 +626,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
           matchTaamim: request.matchTaamim,
           scope: request.scope,
           negativeScope: request.negativeScope,
+          grouping: request.grouping,
         );
       case SearchMode.fuzzy:
         return _engine.searchFuzzyStreamWithCounts(
@@ -613,6 +639,7 @@ class RustSearchEngineOperations implements SearchEngineOperations {
           chunkSize: chunkSize,
           matchNikud: request.matchNikud,
           matchTaamim: request.matchTaamim,
+          grouping: request.grouping,
         );
     }
   }

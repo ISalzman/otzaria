@@ -17,6 +17,11 @@ class SearchState {
   final String negativeQuery;
   final int totalResults;
 
+  /// מספר הקבוצות כשהחיפוש רץ עם איחוד תוצאות (group_count מהמנוע);
+  /// null בחיפוש שטוח. במצב מאוחד הרשימה והדפדוף נספרים בקבוצות, בעוד
+  /// [totalResults] נשאר ספירת התוצאות הגולמית.
+  final int? totalGroups;
+
   // מידע על ספירות לכל facet - מתעדכן עם כל חיפוש
   final Map<String, int> facetCounts;
 
@@ -42,6 +47,7 @@ class SearchState {
     this.searchQuery = '',
     this.negativeQuery = '',
     this.totalResults = 0,
+    this.totalGroups,
     this.filterQuery,
     this.filteredBooks,
     this.facetCounts = const {},
@@ -57,6 +63,7 @@ class SearchState {
     String? searchQuery,
     String? negativeQuery,
     int? totalResults,
+    Object? totalGroups = _unset,
     String? filterQuery,
     List<Book>? filteredBooks,
     Map<String, int>? facetCounts,
@@ -71,6 +78,8 @@ class SearchState {
       searchQuery: searchQuery ?? this.searchQuery,
       negativeQuery: negativeQuery ?? this.negativeQuery,
       totalResults: totalResults ?? this.totalResults,
+      totalGroups:
+          identical(totalGroups, _unset) ? this.totalGroups : totalGroups as int?,
       filterQuery: filterQuery,
       filteredBooks: filteredBooks,
       facetCounts: facetCounts ?? this.facetCounts,
@@ -94,6 +103,10 @@ class SearchState {
       searchScopeFacets.isNotEmpty && !searchScopeFacets.contains('/');
   ResultsOrder get sortBy => configuration.sortBy;
   int get numResults => configuration.numResults;
+  ResultGroupingMode get resultGrouping => configuration.resultGrouping;
+
+  /// המונה שהרשימה והדפדוף נמדדים בו: קבוצות כשהאיחוד פעיל, אחרת תוצאות.
+  int get displayTotal => totalGroups ?? totalResults;
 
   // Getters חדשים לרגקס
   bool get regexEnabled => configuration.regexEnabled;

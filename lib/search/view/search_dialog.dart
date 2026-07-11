@@ -16,6 +16,7 @@ import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
@@ -23,6 +24,7 @@ import 'package:otzaria/search/saved_alternatives_store.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
+import 'package:otzaria/search/view/search_dimension_filters.dart';
 import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -98,6 +100,10 @@ class _SearchDialogState extends State<SearchDialog> {
   bool _showHistoryDropdown = false;
   bool _searchAllCategories = true;
   Set<String> _manualFacets = {};
+
+  /// ה-facets הממדיים שנבחרו בדיאלוג (תקופה/מחבר/ספרי יסוד) — מצטרפים
+  /// ב-AND לבחירת הקטגוריות בעת שיגור החיפוש.
+  Set<String> _dimensionFacets = {};
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
   late final VoidCallback _queryListener;
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
@@ -157,14 +163,23 @@ class _SearchDialogState extends State<SearchDialog> {
 
     final persisted = SearchScopePreferences.load();
     final initialScopeFacets = _searchTab.searchBloc.state.searchScopeFacets;
+    // ה-scope של הטאב עשוי לשאת גם facets ממדיים (תקופה/מחבר/ספרי יסוד) —
+    // מפצלים: הקטגוריות מזינות את עץ הבחירה, הממדים את פקדי הממדים.
+    final initialCategories =
+        FacetHelper.categoryFacetsOf(initialScopeFacets);
+    final initialDimensions =
+        FacetHelper.dimensionFacetsOf(initialScopeFacets).toSet();
+    _dimensionFacets = initialDimensions.isNotEmpty
+        ? initialDimensions
+        : SearchScopePreferences.loadDimensionFacets();
 
-    if (initialScopeFacets.isNotEmpty) {
+    if (initialCategories.isNotEmpty) {
       // הטאב מגדיר scope מפורש — כבד אותו תמיד
-      final isExplicitAll = initialScopeFacets.contains('/');
+      final isExplicitAll = initialCategories.contains('/');
       _searchAllCategories = isExplicitAll;
       _manualFacets = isExplicitAll
           ? Set<String>.from(persisted.manualFacets)
-          : Set<String>.from(initialScopeFacets);
+          : Set<String>.from(initialCategories);
     } else {
       _searchAllCategories = persisted.searchAllCategories;
       _manualFacets = Set<String>.from(persisted.manualFacets);
@@ -631,11 +646,17 @@ class _SearchDialogState extends State<SearchDialog> {
     }
 
     // ה-facets שנבחרו לחיפוש. תחביר `@קטגוריה`/`@ספר` גובר על הבחירה הידנית.
-    final facetsToSearch = parsedCategory.categoryFound
+    final categoriesToSearch = parsedCategory.categoryFound
         ? parsedCategory.facets!
         : _selectedCategoryFacets.isEmpty
             ? ['/']
             : _selectedCategoryFacets.toList();
+    // ממדי הסינון שנבחרו בדיאלוג (תקופה/מחבר/ספרי יסוד) מצטרפים ב-AND —
+    // גם כשהקטגוריה נקבעה בתחביר `@`.
+    final facetsToSearch = [
+      ...categoriesToSearch,
+      ...(_dimensionFacets.toList()..sort()),
+    ];
     final distance = _searchTab.searchBloc.state.distance;
     final proximityScope = currentState.configuration.proximityScope;
 
@@ -788,6 +809,8 @@ class _SearchDialogState extends State<SearchDialog> {
     target.searchBloc.add(SetSearchModeWithoutSearch(mode));
     target.searchBloc.add(UpdateDistanceWithoutSearch(distance));
     target.searchBloc.add(UpdateProximityScopeWithoutSearch(proximityScope));
+    // facetsToSearch כבר כולל את ממדי הסינון שנבחרו בדיאלוג (הם אותחלו
+    // מה-state של טאב היעד וניתנים לעריכה בדיאלוג עצמו).
     target.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
     context.read<HistoryBloc>().add(AddHistory(
           target,
@@ -828,7 +851,10 @@ class _SearchDialogState extends State<SearchDialog> {
 
   void _onManualFacetsChanged(Set<String> selection) {
     setState(() {
-      _manualFacets = Set<String>.from(selection);
+      // עץ הבחירה עשוי להחזיר גם facets ממדיים ששומרו בבחירה — מפצלים
+      // כדי שההעדפה הידנית של הקטגוריות תישאר נקייה מממדים.
+      _manualFacets =
+          FacetHelper.categoryFacetsOf(selection).toSet();
       if (!_searchAllCategories) {
         _selectedCategoryFacets = Set<String>.from(_manualFacets);
       }
@@ -836,6 +862,61 @@ class _SearchDialogState extends State<SearchDialog> {
     SearchScopePreferences.save(
       searchAllCategories: _searchAllCategories,
       manualFacets: _manualFacets,
+    );
+  }
+
+  /// חלונית מתקפלת "תקופה, מחבר וספרי יסוד" — סינון שמצטרף ב-AND לבחירת
+  /// הקטגוריות (וגם למצב "חיפוש בכל הקטגוריות").
+  Widget _buildDimensionFilters() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: _dimensionFacets.isNotEmpty,
+        dense: true,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Icon(
+          FluentIcons.filter_add_20_regular,
+          size: 20,
+          color: colorScheme.primary,
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                _dimensionFacets.isEmpty
+                    ? 'תקופה, מחבר וספרי יסוד'
+                    : 'תקופה, מחבר וספרי יסוד (${_dimensionFacets.length})',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.primary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          SearchDimensionControls(
+            selected: _dimensionFacets,
+            onChanged: (next) {
+              setState(() => _dimensionFacets = next);
+              SearchScopePreferences.saveDimensionFacets(next);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -1289,6 +1370,11 @@ class _SearchDialogState extends State<SearchDialog> {
                             ),
 
                             const SizedBox(height: 16),
+
+                            // סינון לפי תקופה/מחבר/ספרי יסוד — מצטרף ב-AND
+                            // לבחירת הקטגוריות (וגם ל"חיפוש בכל הקטגוריות").
+                            _buildDimensionFilters(),
+                            const SizedBox(height: 8),
 
                             // תוכן תחתון - אפשרויות מתקדמות + חלונית קטגוריות.
                             // מגירת ההיסטוריה צפה מעל התוכן הזה כ-overlay (Stack)

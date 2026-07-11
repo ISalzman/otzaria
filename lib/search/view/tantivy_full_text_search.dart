@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -45,8 +46,12 @@ bool shouldShowFacetFilterBanner({
     return false;
   }
 
+  // facets ממדיים (/base, /era/, /author/) אינם הגבלת קטגוריה — סינון
+  // ממדי בלבד לא מציג באנר "מסונן לפי קטגוריה" מטעה (החיווי שלו הוא
+  // המונה בכותרת חלונית "תקופה, מחבר וספרי יסוד").
   final normalizedScope = searchScopeFacets.toSet()
-    ..removeWhere((facet) => facet == '/');
+    ..removeWhere(
+        (facet) => facet == '/' || FacetHelper.isDimensionFacet(facet));
 
   return normalizedScope.isNotEmpty;
 }
@@ -506,7 +511,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                         : [
                             AppTopBarItem(
                               widget: Text(
-                                '${state.results.length}/${state.totalResults} תוצאות',
+                                state.totalGroups != null
+                                    ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
+                                    : '${state.results.length}/${state.totalResults} תוצאות',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Theme.of(context)
@@ -521,6 +528,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                               widget: OrderOfResults(
                                 widget: TantivySearchResults(tab: widget.tab),
                               ),
+                            ),
+                            const AppTopBarItem(
+                              widget: GroupingOfResults(),
                             ),
                           ],
                   ),
@@ -612,8 +622,12 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   /// מוצג רק כשהוגדר טווח מראש; כפתור ה-X מסתיר אותו ויזואלית בלבד.
   Widget _buildFacetFilterBanner(BuildContext context, SearchState state) {
     final cs = Theme.of(context).colorScheme;
-    final facetNames =
-        state.searchScopeFacets.where((facet) => facet != '/').map((facet) {
+    final facetNames = state.searchScopeFacets
+        // facets ממדיים (/era/, /author/, /base) אינם קטגוריות — לא
+        // נכללים ברשימת "חיפוש בקטגוריות" (כמו בתנאי ההצגה של הבאנר).
+        .where(
+            (facet) => facet != '/' && !FacetHelper.isDimensionFacet(facet))
+        .map((facet) {
       // facet בפורמט "/תנ"ך" או "/תנ"ך/ראשונים" - ניקח את החלק האחרון
       final parts = facet.split('/').where((p) => p.isNotEmpty).toList();
       return parts.isNotEmpty ? parts.last : facet;
@@ -753,7 +767,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             ),
             // מספר תוצאות
             Text(
-              '${state.results.length}/${state.totalResults} תוצאות',
+              state.totalGroups != null
+                  ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
+                  : '${state.results.length}/${state.totalResults} תוצאות',
               style: TextStyle(
                 fontSize: 13,
                 color: Theme.of(context)
@@ -768,6 +784,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               widget: TantivySearchResults(tab: widget.tab),
               compact: true,
             ),
+            const SizedBox(width: 4),
+            // איחוד תוצאות
+            const GroupingOfResults(compact: true),
           ],
         ],
       ),
