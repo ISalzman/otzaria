@@ -117,12 +117,14 @@ class SearchQueryBuilder {
   static List<String> splitQueryWords(String query) =>
       engine.splitQueryWords(query: query);
 
-  /// קיפול שומר-אורך של צורות הגרש העבריות לצורת ה-ASCII שמילות
-  /// [splitQueryWords] נושאות, כדי שאיתור מילה בטקסט הגולמי לא יזיז
+  /// קיפול שומר-אורך של צורות הגרשיים/גרש — העבריות (`״`/`׳`) והטיפוגרפיות
+  /// (`“`/`”`/`‘`/`’`) — לצורת ה-ASCII שמילות [splitQueryWords] נושאות,
+  /// באותו מיפוי כמו המנוע, כדי שאיתור מילה בטקסט הגולמי לא יזיז
   /// offsets. נורמליזציות משנות-אורך (`''`→`"`) אינן מטופלות כאן —
   /// [queryWordSpans] נופל לגבולות המקטע כולו במקרים אלה.
-  static String foldQuoteForms(String text) =>
-      text.replaceAll('״', '"').replaceAll('׳', "'");
+  static String foldQuoteForms(String text) => text
+      .replaceAll(RegExp('[״“”]'), '"')
+      .replaceAll(RegExp("[׳‘’]"), "'");
 
   /// מיפוי מילות [splitQueryWords] לטווחיהן בטקסט הגולמי, מקטע-רווח
   /// אחרי מקטע-רווח. מקטע שמתפצל לכמה מילות מנוע (`בית-דין`) מקבל
