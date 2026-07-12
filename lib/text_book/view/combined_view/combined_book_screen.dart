@@ -350,11 +350,16 @@ class _CombinedViewState extends State<CombinedView> {
     });
   }
 
-  /// לחיצה על עוגן-מילה — תצוגה מקדימה של המפרש ליד נקודת ההקשה.
+  /// לחיצה על עוגן: אות-סמן מקפיצה תצוגה מקדימה ליד נקודת ההקשה; טווח-ציטוט
+  /// (`&range=1` — הטקסט המסומן בקו) מנווט ישירות לספר-היעד.
   bool _handleAnchorTap(String url) {
     final anchor = _anchorLinkFromUrl(url);
     if (anchor == null) return false;
     _anchorHoverTimer?.cancel();
+    if (Uri.tryParse(url)?.queryParameters['range'] == '1') {
+      _openAnchorTarget(anchor.link);
+      return true;
+    }
     _showAnchorPreview(
       anchor,
       _lastPointerDownGlobal ?? MediaQuery.of(context).size.center(Offset.zero),

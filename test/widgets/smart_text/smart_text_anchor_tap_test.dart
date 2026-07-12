@@ -33,9 +33,9 @@ void main() {
     expect(tappedUrl, 'otzaria://anchor?ref=3_0');
   });
 
-  testWidgets('עם onAnchorHover — ריחוף מדווח כניסה/יציאה ולחיצה עדיין עובדת',
-      (tester) async {
-    String? tappedUrl;
+  testWidgets(
+      'עם onAnchorHover — גם אות-הסמן וגם טווח-הציטוט מקבלים onEnter/onExit '
+      'ו-recognizer ללחיצה', (tester) async {
     final hovered = <String>[];
     final exited = <String>[];
 
@@ -44,9 +44,11 @@ void main() {
         home: Scaffold(
           body: SmartTextWidget(
             text: 'לפני <a class="link-anchor link-anchor-0" '
-                'href="otzaria://anchor?ref=3_0">(א)</a> אחרי',
+                'href="otzaria://anchor?ref=3_0">(א)</a> '
+                '<a class="link-anchor-range link-anchor-0" '
+                'href="otzaria://anchor?ref=3_1&range=1">שמות כט מג</a> אחרי',
             settings: const RenderSettings(fontSize: 20),
-            onAnchorTap: (url) => tappedUrl = url,
+            onAnchorTap: (_) {},
             onAnchorHover: (url, position) => hovered.add(url),
             onAnchorHoverExit: exited.add,
           ),
@@ -55,26 +57,44 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // עם hover העוגן מרונדר כווידג'ט inline (לא TextSpan עם recognizer).
-    final anchorText = find.text('(א)');
-    expect(anchorText, findsOneWidget);
+    final markerSpan = _findHoverableSpan(tester, '(א)');
+    final rangeSpan = _findHoverableSpan(tester, 'שמות');
+    expect(markerSpan, isNotNull, reason: 'אות-הסמן צריכה TextSpan עם onEnter');
+    expect(rangeSpan, isNotNull,
+        reason: 'טווח-הציטוט צריך TextSpan עם onEnter');
+    expect(markerSpan!.recognizer, isA<TapGestureRecognizer>());
+    expect(rangeSpan!.recognizer, isA<TapGestureRecognizer>());
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: Offset.zero);
-    addTearDown(gesture.removePointer);
-    await tester.pump();
-    await gesture.moveTo(tester.getCenter(anchorText));
-    await tester.pump();
-    expect(hovered, ['otzaria://anchor?ref=3_0']);
-
-    await gesture.moveTo(Offset.zero);
-    await tester.pump();
+    markerSpan.onEnter!(const PointerEnterEvent(position: Offset(3, 4)));
+    rangeSpan.onEnter!(const PointerEnterEvent(position: Offset(5, 6)));
+    markerSpan.onExit!(const PointerExitEvent());
+    expect(hovered, [
+      'otzaria://anchor?ref=3_0',
+      'otzaria://anchor?ref=3_1&range=1',
+    ]);
     expect(exited, ['otzaria://anchor?ref=3_0']);
-
-    await tester.tap(anchorText);
-    await tester.pump();
-    expect(tappedUrl, 'otzaria://anchor?ref=3_0');
   });
+}
+
+/// TextSpan עם onEnter שהטקסט השטוח שלו מכיל את [needle].
+TextSpan? _findHoverableSpan(WidgetTester tester, String needle) {
+  TextSpan? result;
+  void visit(InlineSpan span) {
+    if (result != null || span is! TextSpan) return;
+    if (span.onEnter != null && span.toPlainText().contains(needle)) {
+      result = span;
+      return;
+    }
+    for (final child in span.children ?? const <InlineSpan>[]) {
+      visit(child);
+    }
+  }
+
+  for (final richText in tester.widgetList<RichText>(find.byType(RichText))) {
+    visit(richText.text);
+    if (result != null) break;
+  }
+  return result;
 }
 
 TapGestureRecognizer? _findAnchorRecognizer(WidgetTester tester) {

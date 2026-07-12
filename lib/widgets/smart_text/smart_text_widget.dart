@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:html/dom.dart' as dom;
@@ -103,71 +104,21 @@ class SmartTextWidget extends StatelessWidget {
     final anchorActiveColorCss = toCssHex(colorScheme.primary);
     final anchorActiveBgCss = toCssHex(colorScheme.primaryContainer);
 
-    // עוגן-מילה עם ריחוף: fwfh לא חושף hover על <a>, לכן כשיש onAnchorHover
-    // הסמן מרונדר כווידג'ט inline עם MouseRegion (ולחיצה נשארת דרך GestureDetector).
-    // העיצוב משכפל את מסלול ה-CSS שלמטה: 0.7em מורם, וריאנט קבוע לכל מפרש.
-    Widget? buildHoverableAnchor(dom.Element element) {
-      final href = element.attributes['href'] ?? '';
-      if (!href.startsWith('otzaria://anchor')) return null;
-      final active = element.classes.contains('link-anchor-active');
-      final anchorFontSize = settings.fontSize * 0.7;
-      var style = TextStyle(
-        fontSize: anchorFontSize,
-        fontFamily: settings.fontFamily,
-        height: 1.0,
-        color: active
-            ? colorScheme.primary
-            : DefaultTextStyle.of(context).style.color ?? colorScheme.onSurface,
-        backgroundColor: active ? colorScheme.primaryContainer : null,
-        fontWeight: active ? FontWeight.bold : null,
-      );
-      if (element.classes.contains('link-anchor-0')) {
-        style = style.copyWith(fontWeight: FontWeight.bold);
-      } else if (element.classes.contains('link-anchor-1')) {
-        style = style.copyWith(fontStyle: FontStyle.italic);
-      } else if (element.classes.contains('link-anchor-2')) {
-        style = style.copyWith(
-            fontWeight: FontWeight.bold, fontStyle: FontStyle.italic);
-      } else if (element.classes.contains('link-anchor-3')) {
-        style = style.copyWith(fontFamily: 'NotoRashiHebrew');
-      } else if (element.classes.contains('link-anchor-4')) {
-        style = style.copyWith(
-            fontFamily: 'NotoRashiHebrew', fontWeight: FontWeight.bold);
-      } else if (element.classes.contains('link-anchor-5')) {
-        style = style.copyWith(decoration: TextDecoration.underline);
-      }
-      // superscript דרך יישור-עליון של ה-placeholder (המקבילה של top:-0.55em
-      // במסלול ה-CSS) — לא Transform.translate: הזזה ויזואלית מוציאה את האות
-      // מחוץ למלבן ה-hit-test של ה-WidgetSpan והריחוף/לחיצה מפספסים.
-      return InlineCustomWidget(
-        alignment: PlaceholderAlignment.top,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (event) => onAnchorHover?.call(href, event.position),
-          onExit: (_) => onAnchorHoverExit?.call(href),
-          child: GestureDetector(
-            onTap: onAnchorTap == null ? null : () => onAnchorTap!(href),
-            child: Text(element.text, style: style, softWrap: false),
-          ),
-        ),
-      );
-    }
-
     return HtmlWidget(
       TextRendererService.wrapWithRtlDiv(processedHtml,
           justifyText: settings.justifyText),
       key: widgetKey,
       renderMode: renderMode,
       textStyle: textStyle,
-      customWidgetBuilder: onAnchorHover == null
+      // עוגנים עם ריחוף: fwfh לא חושף hover על <a>, לכן WidgetFactory מותאם
+      // מזריק onEnter/onExit ל-TextSpan של כל עוגן (אות-סמן וטווח-ציטוט כאחד),
+      // בלי לגעת בזרימת הטקסט ובעיצוב ה-CSS שלמטה.
+      factoryBuilder: onAnchorHover == null
           ? null
-          : (dom.Element element) {
-              if (element.localName == 'a' &&
-                  element.classes.contains('link-anchor')) {
-                return buildHoverableAnchor(element);
-              }
-              return null;
-            },
+          : () => _AnchorHoverWidgetFactory(
+                onAnchorHover: onAnchorHover!,
+                onAnchorHoverExit: onAnchorHoverExit,
+              ),
       customStylesBuilder: (dom.Element element) {
         if (element.localName == 'span' &&
             element.classes.contains('footnote-marker-number')) {
@@ -201,10 +152,13 @@ class SmartTextWidget extends StatelessWidget {
           }
           return style;
         }
-        if (element.localName == 'span' &&
+        // טווח-ציטוט: קו תחתון בצבע הטקסט. כ-<a> לחיץ (ריחוף/ניווט) — מנטרלים
+        // את צבע ה-primary שהקישור המובנה היה מקבל.
+        if ((element.localName == 'span' || element.localName == 'a') &&
             element.classes.contains('link-anchor-range')) {
           return <String, String>{
             'text-decoration': 'underline',
+            'color': anchorColorCss,
             ..._linkAnchorVariantStyle(element),
           };
         }
@@ -235,6 +189,70 @@ class SmartTextWidget extends StatelessWidget {
             }
           : null,
     );
+  }
+}
+
+/// WidgetFactory שמוסיף ריחוף לעוגני-מילה: fwfh בונה recognizer לכל `<a>`;
+/// זוכרים אילו recognizers שייכים ל-href של עוגן, וכשה-TextSpan שלהם נבנה —
+/// מזריקים onEnter/onExit (עם מיקום הסמן הגלובלי) לצד ה-recognizer הקיים.
+/// כך גם אות-הסמן וגם טווח-הציטוט מגיבים לריחוף בלי לשבור את זרימת הטקסט.
+class _AnchorHoverWidgetFactory extends WidgetFactory {
+  final void Function(String url, Offset globalPosition) onAnchorHover;
+  final void Function(String url)? onAnchorHoverExit;
+  final _anchorHrefByRecognizer = <GestureRecognizer, String>{};
+
+  _AnchorHoverWidgetFactory({
+    required this.onAnchorHover,
+    this.onAnchorHoverExit,
+  });
+
+  @override
+  GestureRecognizer? buildGestureRecognizer(
+    BuildTree tree, {
+    GestureTapCallback? onTap,
+  }) {
+    final recognizer = super.buildGestureRecognizer(tree, onTap: onTap);
+    final href = tree.element.attributes['href'];
+    if (recognizer != null &&
+        href != null &&
+        href.startsWith('otzaria://anchor')) {
+      _anchorHrefByRecognizer[recognizer] = href;
+    }
+    return recognizer;
+  }
+
+  @override
+  InlineSpan? buildTextSpan({
+    List<InlineSpan>? children,
+    GestureRecognizer? recognizer,
+    TextStyle? style,
+    String? text,
+  }) {
+    final href =
+        recognizer == null ? null : _anchorHrefByRecognizer[recognizer];
+    if (href == null) {
+      return super.buildTextSpan(
+        children: children,
+        recognizer: recognizer,
+        style: style,
+        text: text,
+      );
+    }
+    return TextSpan(
+      children: children,
+      text: text,
+      style: style,
+      recognizer: recognizer,
+      mouseCursor: SystemMouseCursors.click,
+      onEnter: (event) => onAnchorHover(href, event.position),
+      onExit: (_) => onAnchorHoverExit?.call(href),
+    );
+  }
+
+  @override
+  void reset(State state) {
+    _anchorHrefByRecognizer.clear();
+    super.reset(state);
   }
 }
 

@@ -51,9 +51,10 @@ Map<String, int> anchorStyleIndexByCommentator(Iterable<Link> links) {
 ///  - עוגן-טווח (end != null, ציטוטים מ-charLevelData): עטיפת הטווח דרך
 ///    [wrapHtmlRanges] — שסוגר/פותח סביב תגים לא-מאוזנים כדי לשמור קינון
 ///    תקין — באותו וריאנט סגנון של המפרש.
-/// [lineIndex] (0-based) — כשמסופק, סמן הנקודה נפלט כ-`<a>` עם href
+/// [lineIndex] (0-based) — כשמסופק, הסמנים נפלטים כ-`<a>` עם href
 /// `otzaria://anchor?ref=<line>_<i>` (i = מיקום הקישור ב-[anchorLinks]), כדי
-/// שלחיצה תזהה את הקישור. בלעדיו הסמן נשאר `<span>` לא-אינטראקטיבי.
+/// שריחוף/לחיצה יזהו את הקישור; עוגן-טווח מקבל גם `&range=1` — לחיצה עליו
+/// מנווטת ישירות ליעד (ולא רק מקפיצה תצוגה). בלעדיו הכול `<span>` לא-אינטראקטיבי.
 String injectLinkAnchorMarkers({
   required String rawLine,
   required List<Link> anchorLinks,
@@ -83,11 +84,17 @@ String injectLinkAnchorMarkers({
         final rawStart = _rawStartOfVisible(rawLine, span.start);
         final rawEnd = _rawEndOfVisible(rawLine, end);
         if (rawStart < rawEnd) {
+          // עם lineIndex הטווח לחיץ/מרחף (a); בלעדיו — סימון בלבד (span).
+          final tag = lineIndex == null ? 'span' : 'a';
+          final href = lineIndex == null
+              ? ''
+              : ' href="otzaria://anchor?ref=${lineIndex}_$linkIndex&range=1"';
           ranges.add(HtmlWrapRange(
             start: rawStart,
             end: rawEnd,
-            openTag: '<span class="link-anchor-range link-anchor-$styleIndex">',
-            closeTag: '</span>',
+            openTag:
+                '<$tag class="link-anchor-range link-anchor-$styleIndex"$href>',
+            closeTag: '</$tag>',
           ));
         }
       } else {

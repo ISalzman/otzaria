@@ -274,7 +274,8 @@ List<InlineSpan> _nodeToSpans(
     if (href != null && href.isNotEmpty) {
       final childStyle = _styleForElement(node, style);
       // עוגן-מילה לחיץ שומר על מראה הסמן (צבע טקסט יורש, בלי קו תחתון), ובמצב
-      // active מודגש בצבע primary; שאר הקישורים — קו תחתון + צבע theme.
+      // active מודגש בצבע primary; טווח-ציטוט — קו תחתון בצבע הטקסט (לא
+      // primary); שאר הקישורים — קו תחתון + צבע theme.
       final effectiveLinkStyle = node.classes.contains('link-anchor')
           ? (node.classes.contains('link-anchor-active')
               ? childStyle.merge(linkStyle).copyWith(
@@ -282,9 +283,11 @@ List<InlineSpan> _nodeToSpans(
                     fontWeight: FontWeight.bold,
                   )
               : childStyle)
-          : linkStyle == null
+          : node.classes.contains('link-anchor-range')
               ? childStyle.copyWith(decoration: TextDecoration.underline)
-              : childStyle.merge(linkStyle);
+              : linkStyle == null
+                  ? childStyle.copyWith(decoration: TextDecoration.underline)
+                  : childStyle.merge(linkStyle);
       final children = _nodesToSpans(
         node.nodes,
         effectiveLinkStyle,
@@ -299,9 +302,9 @@ List<InlineSpan> _nodeToSpans(
           onTapUrl(href);
         };
       recognizerSink?.add(recognizer);
-      // עוגן-מילה: פתיחת התצוגה המקדימה גם בריחוף (TextSpan תומך onEnter/onExit).
-      final isHoverableAnchor = node.classes.contains('link-anchor') &&
-          href.startsWith('otzaria://anchor') &&
+      // עוגן (אות-סמן או טווח-ציטוט): תצוגה מקדימה גם בריחוף (TextSpan תומך
+      // onEnter/onExit). מזוהה לפי ה-href — תופס גם link-anchor וגם ...-range.
+      final isHoverableAnchor = href.startsWith('otzaria://anchor') &&
           (onAnchorHover != null || onAnchorExit != null);
       return [
         TextSpan(
