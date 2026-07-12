@@ -255,6 +255,9 @@ class _CombinedViewState extends State<CombinedView> {
   int? _activeAnchorIndex;
   bool _disposed = false;
 
+  /// השהיית ריחוף לפני פתיחת חלונית העוגן (מונעת הבהובים במעבר-סמן חולף).
+  Timer? _anchorHoverTimer;
+
   Map<String, int> _anchorStyles(TextBookLoaded state) {
     if (!identical(_anchorStyleSourceLinks, state.links)) {
       _anchorStyleSourceLinks = state.links;
@@ -286,26 +289,53 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
-  /// לחיצה על עוגן-מילה (`otzaria://anchor?ref=<line>_<i>`) — מזהה את הקישור
-  /// ומקפיץ תצוגה מקדימה של המפרש ליד נקודת ההקשה.
-  bool _handleAnchorTap(String url) {
+  /// פענוח `otzaria://anchor?ref=<line>_<i>` לקישור-העוגן, יחד עם השורה
+  /// והאינדקס (להדגשת הסמן הפעיל).
+  ({Link link, int line, int index})? _anchorLinkFromUrl(String url) {
     final ref = Uri.tryParse(url)?.queryParameters['ref'];
     final parts = ref?.split('_');
-    if (parts == null || parts.length != 2) return false;
+    if (parts == null || parts.length != 2) return null;
     final line = int.tryParse(parts[0]);
     final i = int.tryParse(parts[1]);
-    if (line == null || i == null) return false;
+    if (line == null || i == null) return null;
     final state = _textBookBloc.state;
-    if (state is! TextBookLoaded) return false;
+    if (state is! TextBookLoaded) return null;
     final anchorLinks = (state.linksByLine[line + 1] ?? const <Link>[])
         .where((link) => link.anchorStart != null)
         .toList();
-    if (i < 0 || i >= anchorLinks.length) return false;
+    if (i < 0 || i >= anchorLinks.length) return null;
+    return (link: anchorLinks[i], line: line, index: i);
+  }
+
+  /// פתיחת ספר-היעד של קישור-עוגן בטאב חדש (לחיצה על כותרת חלונית התצוגה).
+  void _openAnchorTarget(Link link) {
+    LinkPreviewOverlay.dismiss();
+    widget.openBookCallback(
+      TextBookTab(
+        book: TextBook(
+          title: utils.getTitleFromPath(link.path2),
+          isUserBook: link.targetIsUserBook,
+          categoryId: link.targetCategoryId,
+          fileType: link.targetFileType,
+        ),
+        index: link.index2 - 1,
+        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+      ),
+    );
+  }
+
+  void _showAnchorPreview(
+    ({Link link, int line, int index}) anchor,
+    Offset globalPosition, {
+    required bool hoverMode,
+  }) {
     LinkPreviewOverlay.show(
       context,
-      link: anchorLinks[i],
-      globalPosition: _lastPointerDownGlobal ??
-          MediaQuery.of(context).size.center(Offset.zero),
+      link: anchor.link,
+      globalPosition: globalPosition,
+      hoverMode: hoverMode,
+      onOpen: () => _openAnchorTarget(anchor.link),
       onDismissed: () {
         if (_disposed || !mounted) return;
         setState(() {
@@ -315,10 +345,42 @@ class _CombinedViewState extends State<CombinedView> {
       },
     );
     setState(() {
-      _activeAnchorLine = line;
-      _activeAnchorIndex = i;
+      _activeAnchorLine = anchor.line;
+      _activeAnchorIndex = anchor.index;
     });
+  }
+
+  /// לחיצה על עוגן-מילה — תצוגה מקדימה של המפרש ליד נקודת ההקשה.
+  bool _handleAnchorTap(String url) {
+    final anchor = _anchorLinkFromUrl(url);
+    if (anchor == null) return false;
+    _anchorHoverTimer?.cancel();
+    _showAnchorPreview(
+      anchor,
+      _lastPointerDownGlobal ?? MediaQuery.of(context).size.center(Offset.zero),
+      hoverMode: false,
+    );
     return true;
+  }
+
+  /// ריחוף מעל עוגן-מילה — תצוגה מקדימה אחרי השהיה קצרה (מונעת הבהובים
+  /// כשהסמן רק חולף). כניסה חוזרת לעוגן מבטלת סגירה מתוזמנת של החלונית.
+  void _handleAnchorHover(String url, Offset globalPosition) {
+    LinkPreviewOverlay.cancelScheduledHide();
+    _anchorHoverTimer?.cancel();
+    _anchorHoverTimer = Timer(const Duration(milliseconds: 280), () {
+      if (_disposed || !mounted) return;
+      final anchor = _anchorLinkFromUrl(url);
+      if (anchor == null) return;
+      _showAnchorPreview(anchor, globalPosition, hoverMode: true);
+    });
+  }
+
+  /// הסמן עזב את העוגן — ביטול הצגה ממתינה וסגירה מתוזמנת של חלונית פתוחה
+  /// (מתבטלת אם הסמן נכנס לחלונית עצמה או חוזר לעוגן).
+  void _handleAnchorHoverExit(String url) {
+    _anchorHoverTimer?.cancel();
+    LinkPreviewOverlay.scheduleHide();
   }
 
   // מצב הרצף האחרון שנצפה — לזיהוי החלפת מצב שמחייבת שחזור מיקום.
@@ -461,6 +523,7 @@ class _CombinedViewState extends State<CombinedView> {
   @override
   void dispose() {
     _disposed = true;
+    _anchorHoverTimer?.cancel();
     LinkPreviewOverlay.dismiss();
     _previewScrollController?.dispose();
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
@@ -1867,6 +1930,8 @@ class _CombinedViewState extends State<CombinedView> {
                               ? null
                               : (line) => _onInlineNoteTap(line),
                           onAnchorTap: _handleAnchorTap,
+                          onAnchorHover: _handleAnchorHover,
+                          onAnchorHoverExit: _handleAnchorHoverExit,
                         );
 
                         final constrainedText = textMaxWidth > 0
@@ -1966,6 +2031,8 @@ class _CombinedViewState extends State<CombinedView> {
         );
         return true;
       },
+      onAnchorHover: _handleAnchorHover,
+      onAnchorExit: _handleAnchorHoverExit,
       onLineTap: (lineIndex) {
         final isCtrl = HardwareKeyboard.instance.isControlPressed ||
             HardwareKeyboard.instance.isMetaPressed;

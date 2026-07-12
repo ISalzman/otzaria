@@ -5,24 +5,30 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 
-/// חלונית צפה עם תצוגה מקדימה של מפרש, שנפתחת בלחיצה על עוגן-מילה.
+/// חלונית צפה עם תצוגה מקדימה של מפרש, שנפתחת בריחוף או בלחיצה על עוגן-מילה.
 ///
-/// ממוקמת ליד נקודת הלחיצה, מוגבלת ברוחב ובגובה (4 שורות), נסגרת כשהסמן עוזב
-/// אותה או בהקשה מחוצה לה — ונשארת פתוחה כשהסמן נכנס לתוכה (לסימון והעתקה).
-/// מוצגת חלונית אחת בכל רגע.
+/// ממוקמת ליד נקודת הריחוף/הלחיצה, מוגבלת ברוחב ובגובה (4 שורות), נסגרת כשהסמן
+/// עוזב אותה או בהקשה מחוצה לה — ונשארת פתוחה כשהסמן נכנס לתוכה (לסימון
+/// והעתקה). לחיצה על הכותרת פותחת את היעד. מוצגת חלונית אחת בכל רגע.
 class LinkPreviewOverlay {
   LinkPreviewOverlay._();
 
   static OverlayEntry? _entry;
   static VoidCallback? _onDismissed;
+  static _LinkPreviewPanelState? _activePanel;
 
   /// מקפיצה תצוגה מקדימה של [link] ליד [globalPosition]. סוגרת חלונית קודמת.
   /// [onDismissed] נקרא כשהחלונית נסגרת (גם בהחלפה בחלונית אחרת).
+  /// [onOpen] — לחיצה על כותרת החלונית (פתיחת היעד); הסגירה באחריות הקורא.
+  /// [hoverMode] — חלונית שנפתחה מריחוף: בלי מחסום-הקשות מאחוריה (שלא תחסום
+  /// את הלחיצה הבאה), והסגירה מתוזמנת דרך [scheduleHide] כשהסמן עוזב את העוגן.
   static void show(
     BuildContext context, {
     required Link link,
     required Offset globalPosition,
     VoidCallback? onDismissed,
+    VoidCallback? onOpen,
+    bool hoverMode = false,
   }) {
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
@@ -33,10 +39,18 @@ class LinkPreviewOverlay {
         link: link,
         anchorPosition: globalPosition,
         onDismiss: dismiss,
+        onOpen: onOpen,
+        hoverMode: hoverMode,
       ),
     );
     overlay.insert(_entry!);
   }
+
+  /// מתזמנת סגירה קרובה (הסמן עזב את העוגן). כניסת הסמן לחלונית מבטלת אותה.
+  static void scheduleHide() => _activePanel?._scheduleHide();
+
+  /// מבטלת סגירה מתוזמנת (הסמן חזר לעוגן בזמן שהחלונית פתוחה).
+  static void cancelScheduledHide() => _activePanel?._cancelHide();
 
   static void dismiss() {
     _entry?.remove();
@@ -51,11 +65,15 @@ class _LinkPreviewPanel extends StatefulWidget {
   final Link link;
   final Offset anchorPosition;
   final VoidCallback onDismiss;
+  final VoidCallback? onOpen;
+  final bool hoverMode;
 
   const _LinkPreviewPanel({
     required this.link,
     required this.anchorPosition,
     required this.onDismiss,
+    this.onOpen,
+    this.hoverMode = false,
   });
 
   @override
@@ -76,12 +94,16 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
   @override
   void initState() {
     super.initState();
+    LinkPreviewOverlay._activePanel = this;
     // מיקום דו-שלבי: בנייה סמויה למדידת הגודל, ואז הצמדה לנקודת הלחיצה.
     WidgetsBinding.instance.addPostFrameCallback((_) => _reposition());
   }
 
   @override
   void dispose() {
+    if (identical(LinkPreviewOverlay._activePanel, this)) {
+      LinkPreviewOverlay._activePanel = null;
+    }
     _hideTimer?.cancel();
     super.dispose();
   }
@@ -145,12 +167,15 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
     return Stack(
       children: [
         // מחסום שקוף — הקשה מחוץ לחלונית סוגרת (גם במגע, שאין בו onExit).
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: widget.onDismiss,
+        // בריחוף אין מחסום: הוא היה בולע את הלחיצה הבאה; הסגירה נעשית ביציאת
+        // הסמן מהעוגן/מהחלונית (scheduleHide).
+        if (!widget.hoverMode)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: widget.onDismiss,
+            ),
           ),
-        ),
         Positioned(
           left: _offset.dx,
           top: _offset.dy,
@@ -185,6 +210,7 @@ class _LinkPreviewPanelState extends State<_LinkPreviewPanel> {
                             link: widget.link,
                             maxContentLines: 4,
                             compact: true,
+                            onOpen: widget.onOpen,
                           ),
                         ),
                       ),

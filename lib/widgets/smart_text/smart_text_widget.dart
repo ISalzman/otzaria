@@ -33,6 +33,13 @@ class SmartTextWidget extends StatelessWidget {
   /// מזהה את הקישור ומקפיץ תצוגה מקדימה של המפרש.
   final void Function(String url)? onAnchorTap;
 
+  /// callback לריחוף מעל עוגן-מילה — מקבל את ה-URL ואת מיקום הסמן הגלובלי.
+  /// כשמסופק, סמני העוגן מרונדרים כווידג'ט inline (ל-fwfh אין hover על <a>).
+  final void Function(String url, Offset globalPosition)? onAnchorHover;
+
+  /// callback ליציאת הסמן מעוגן-מילה.
+  final void Function(String url)? onAnchorHoverExit;
+
   /// מפתח ייחודי לווידג'ט (לאופטימיזציה)
   final Key? widgetKey;
 
@@ -46,6 +53,8 @@ class SmartTextWidget extends StatelessWidget {
     this.onOpenBook,
     this.onNoteTap,
     this.onAnchorTap,
+    this.onAnchorHover,
+    this.onAnchorHoverExit,
     this.widgetKey,
     this.renderMode = RenderMode.column,
   });
@@ -94,12 +103,71 @@ class SmartTextWidget extends StatelessWidget {
     final anchorActiveColorCss = toCssHex(colorScheme.primary);
     final anchorActiveBgCss = toCssHex(colorScheme.primaryContainer);
 
+    // עוגן-מילה עם ריחוף: fwfh לא חושף hover על <a>, לכן כשיש onAnchorHover
+    // הסמן מרונדר כווידג'ט inline עם MouseRegion (ולחיצה נשארת דרך GestureDetector).
+    // העיצוב משכפל את מסלול ה-CSS שלמטה: 0.7em מורם, וריאנט קבוע לכל מפרש.
+    Widget? buildHoverableAnchor(dom.Element element) {
+      final href = element.attributes['href'] ?? '';
+      if (!href.startsWith('otzaria://anchor')) return null;
+      final active = element.classes.contains('link-anchor-active');
+      final anchorFontSize = settings.fontSize * 0.7;
+      var style = TextStyle(
+        fontSize: anchorFontSize,
+        fontFamily: settings.fontFamily,
+        height: 1.0,
+        color: active
+            ? colorScheme.primary
+            : DefaultTextStyle.of(context).style.color ?? colorScheme.onSurface,
+        backgroundColor: active ? colorScheme.primaryContainer : null,
+        fontWeight: active ? FontWeight.bold : null,
+      );
+      if (element.classes.contains('link-anchor-0')) {
+        style = style.copyWith(fontWeight: FontWeight.bold);
+      } else if (element.classes.contains('link-anchor-1')) {
+        style = style.copyWith(fontStyle: FontStyle.italic);
+      } else if (element.classes.contains('link-anchor-2')) {
+        style = style.copyWith(
+            fontWeight: FontWeight.bold, fontStyle: FontStyle.italic);
+      } else if (element.classes.contains('link-anchor-3')) {
+        style = style.copyWith(fontFamily: 'NotoRashiHebrew');
+      } else if (element.classes.contains('link-anchor-4')) {
+        style = style.copyWith(
+            fontFamily: 'NotoRashiHebrew', fontWeight: FontWeight.bold);
+      } else if (element.classes.contains('link-anchor-5')) {
+        style = style.copyWith(decoration: TextDecoration.underline);
+      }
+      // superscript דרך יישור-עליון של ה-placeholder (המקבילה של top:-0.55em
+      // במסלול ה-CSS) — לא Transform.translate: הזזה ויזואלית מוציאה את האות
+      // מחוץ למלבן ה-hit-test של ה-WidgetSpan והריחוף/לחיצה מפספסים.
+      return InlineCustomWidget(
+        alignment: PlaceholderAlignment.top,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (event) => onAnchorHover?.call(href, event.position),
+          onExit: (_) => onAnchorHoverExit?.call(href),
+          child: GestureDetector(
+            onTap: onAnchorTap == null ? null : () => onAnchorTap!(href),
+            child: Text(element.text, style: style, softWrap: false),
+          ),
+        ),
+      );
+    }
+
     return HtmlWidget(
       TextRendererService.wrapWithRtlDiv(processedHtml,
           justifyText: settings.justifyText),
       key: widgetKey,
       renderMode: renderMode,
       textStyle: textStyle,
+      customWidgetBuilder: onAnchorHover == null
+          ? null
+          : (dom.Element element) {
+              if (element.localName == 'a' &&
+                  element.classes.contains('link-anchor')) {
+                return buildHoverableAnchor(element);
+              }
+              return null;
+            },
       customStylesBuilder: (dom.Element element) {
         if (element.localName == 'span' &&
             element.classes.contains('footnote-marker-number')) {
