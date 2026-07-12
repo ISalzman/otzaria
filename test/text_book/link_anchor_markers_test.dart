@@ -130,6 +130,38 @@ void main() {
       expect(result, isNot(contains('<span class="link-anchor')));
     });
 
+    test('עוגן-טווח עם lineIndex נפלט כ-<a> עם range=1 (לחיצה מנווטת)', () {
+      final citation = Link(
+        heRef: 'שמות כט, מג',
+        index1: 4,
+        path2: 'שמות',
+        index2: 100,
+        connectionType: 'linker',
+        anchorStart: 5,
+        anchorEnd: 9,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'תחילה ציטוט ארוך מאוד וסוף',
+        anchorLinks: [citation],
+        styleIndexByCommentator: const {'שמות': 2},
+        lineIndex: 12,
+      );
+      expect(
+        result,
+        contains('<a class="link-anchor-range link-anchor-2" '
+            'href="otzaria://anchor?ref=12_0&range=1">'),
+      );
+      // בלי lineIndex — נשאר span לא-אינטראקטיבי.
+      final passive = injectLinkAnchorMarkers(
+        rawLine: 'תחילה ציטוט ארוך מאוד וסוף',
+        anchorLinks: [citation],
+        styleIndexByCommentator: const {'שמות': 2},
+      );
+      expect(
+          passive, contains('<span class="link-anchor-range link-anchor-2">'));
+      expect(passive, isNot(contains('href=')));
+    });
+
     test('activeIndex מסמן את העוגן הפעיל במחלקת link-anchor-active', () {
       final bhg = _anchorLink(
         heRef: 'באר הגולה על שולחן ערוך אורח חיים א, א',
