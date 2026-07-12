@@ -113,7 +113,7 @@ bool _textOverflows({
 Decoration _libraryTooltipDecoration(BuildContext context) {
   final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
-    color: cs.inverseSurface,
+    color: cs.surfaceContainerHigh,
     borderRadius: AppTokens.borderRadiusAll,
   );
 }
@@ -121,7 +121,7 @@ Decoration _libraryTooltipDecoration(BuildContext context) {
 TextStyle _libraryTooltipTextStyle(BuildContext context) {
   final theme = Theme.of(context);
   return (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(
-    color: theme.colorScheme.onInverseSurface,
+    color: theme.colorScheme.onSurface,
     fontSize: 14,
     height: 1.3,
   );
