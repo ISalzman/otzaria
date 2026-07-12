@@ -60,6 +60,15 @@ Future<void> main() async {
       expect(hebrew[1].word, 'משה');
       expect(hebrew[1].index, 1);
 
+      // גרשיים טיפוגרפיים (Word/OCR): מקופלים שומר-אורך כמו במנוע —
+      // טווח מדויק גם עבור רמח”ל.
+      final typographic = SearchQueryBuilder.queryWordSpans('רמח”ל משה');
+      expect(typographic[0].word, 'רמח"ל');
+      expect(typographic[0].start, 0);
+      expect(typographic[0].end, 5);
+      expect(typographic[1].word, 'משה');
+      expect(typographic[1].index, 1);
+
       // '' שמאוחד ל-" משנה אורך — המילה מקבלת את גבולות המקטע כולו,
       // כך שהסמן בכל מקום בתוכו עדיין בוחר אותה.
       final doubled = SearchQueryBuilder.queryWordSpans("רמב''ם משה");
