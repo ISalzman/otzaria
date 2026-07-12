@@ -35,6 +35,7 @@
 | `otzaria://open/library` | פותח את מסך הספרייה |
 | `otzaria://open/search` | פותח את מסך החיפוש (ללא הפעלת חיפוש) |
 | `otzaria://open/search?q=<text>` | פותח לשונית חיפוש חדשה ומפעיל חיפוש מיידית בכל הספרים, עם ברירות המחדל (מצב מתקדם, scope `/`) |
+| `otzaria://open/search?q=<text>&mode=<mode>` | כנ"ל, עם קביעת מצב החיפוש ללשונית: `advanced` (מתקדם), `exact` (מדויק) או `fuzzy` (מקורב). ערך לא מוכר מתעלם — מצב מתקדם |
 | `otzaria://open/settings` | פותח את ההגדרות (הלשונית הנוכחית) |
 | `otzaria://open/settings/design` | פותח הגדרות › מראה |
 | `otzaria://open/settings/text` | פותח הגדרות › כתב |
@@ -96,6 +97,8 @@ otzaria://open/book/1234?index=42&q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/book/1234?index=42&mark
 otzaria://open/book/1234?index=42&m=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
+otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA&mode=exact
+otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA&mode=fuzzy
 otzaria://open/pdf/120
 otzaria://open/pdf/120?index=17
 otzaria://open/detection?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
@@ -274,7 +277,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenSettingsTabAction({SettingsTab? tab})` | `otzaria://open/settings`, `/settings/design`, `/settings/text`, ... | פתיחת הגדרות, אופציונלית עם ניווט לטאב |
 | `OpenHistoryAction()` | `otzaria://open/history` | דיאלוג היסטוריה |
 | `OpenBookmarksAction()` | `otzaria://open/bookmarks` | דיאלוג סימניות |
-| `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
+| `RunSearchAction(String query, {SearchMode? mode})` | `otzaria://open/search?q=<text>&mode=<advanced\|exact\|fuzzy>` | חיפוש מלא בלשונית חדשה, אופציונלית עם מצב חיפוש |
 | `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>`, `otzaria://open/detection` | פתיחת דיאלוג איתור מקורות (ריק או עם טקסט) |
 | `OpenInspectionAction()` | `otzaria://open/inspection` | מסך העיון (ספר אחרון) |
 | `OpenSdkAction()` | `otzaria://open/sdk` | פתיחת דיאלוג ניהול תוספים |

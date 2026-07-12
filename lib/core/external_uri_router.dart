@@ -1,6 +1,8 @@
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/plugin_store_install_request.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
+import 'package:otzaria/search/models/search_configuration.dart'
+    show SearchMode;
 import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
 
 /// פעולה הנגזרת מקישור `otzaria://...` חיצוני.
@@ -109,10 +111,14 @@ class OpenSettingsTabAction extends ExternalUriAction {
 }
 
 /// פתיחת חיפוש כללי בלשונית חדשה והפעלת החיפוש מיידית עם ברירות המחדל
-/// (כל הקטגוריות, מצב מתקדם).
+/// (כל הקטגוריות).
+///
+/// [mode] — מצב החיפוש מהפרמטר `mode=` (מתקדם/מדויק/מקורב). כאשר null
+/// (ללא פרמטר או ערך לא מוכר) החיפוש רץ במצב ברירת המחדל (מתקדם).
 class RunSearchAction extends ExternalUriAction {
   final String query;
-  const RunSearchAction(this.query);
+  final SearchMode? mode;
+  const RunSearchAction(this.query, {this.mode});
 }
 
 /// פתיחת דיאלוג איתור מקורות (FindRefDialog) עם טקסט מילוי-מראש.
@@ -152,6 +158,8 @@ class OpenDailyPageAction extends ExternalUriAction {
 /// * `otzaria://open/library`               – ספרייה
 /// * `otzaria://open/search`                – פותח את מסך החיפוש (ללא הפעלת חיפוש)
 /// * `otzaria://open/search?q=<text>`        – פותח לשונית חיפוש חדשה ומפעיל חיפוש
+///   - `&mode=advanced|exact|fuzzy` מצב החיפוש (מתקדם/מדויק/מקורב); ערך לא
+///     מוכר או חסר — מצב ברירת המחדל (מתקדם)
 /// * `otzaria://open/settings`              – הגדרות (הלשונית הנוכחית)
 /// * `otzaria://open/settings/design`       – הגדרות › מראה
 /// * `otzaria://open/settings/text`         – הגדרות › כתב
@@ -200,6 +208,13 @@ class ExternalUriRouter {
     'library': Screen.library,
     'search': Screen.search,
     'tools': Screen.more,
+  };
+
+  /// מיפוי הפרמטר `mode=` של `open/search` ל-[SearchMode].
+  static const Map<String, SearchMode> _searchModeAliases = {
+    'advanced': SearchMode.advanced,
+    'exact': SearchMode.exact,
+    'fuzzy': SearchMode.fuzzy,
   };
 
   /// מיפוי מחרוזת לשונית (מנתיב URL) ל-[SettingsTab].
@@ -302,7 +317,8 @@ class ExternalUriRouter {
       if (firstLower == 'search') {
         final rawQuery = uri.queryParameters['q']?.trim();
         if (rawQuery != null && rawQuery.isNotEmpty) {
-          return RunSearchAction(rawQuery);
+          final rawMode = uri.queryParameters['mode']?.trim().toLowerCase();
+          return RunSearchAction(rawQuery, mode: _searchModeAliases[rawMode]);
         }
       }
 

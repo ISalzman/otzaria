@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/search/models/search_configuration.dart'
+    show SearchMode;
 import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
 
 void main() {
@@ -491,6 +493,65 @@ void main() {
 
         expect(action, isA<RunSearchAction>());
         expect((action as RunSearchAction).query, 'בראשית');
+        expect(action.mode, isNull);
+      });
+
+      test('mode=fuzzy — מחזיר SearchMode.fuzzy', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=fuzzy'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.fuzzy);
+      });
+
+      test('mode=exact — מחזיר SearchMode.exact', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=exact'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.exact);
+      });
+
+      test('mode=advanced — מחזיר SearchMode.advanced', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=advanced'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.advanced);
+      });
+
+      test('mode אינו רגיש לאותיות גדולות/קטנות', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=FUZZY'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.fuzzy);
+      });
+
+      test('mode לא מוכר או ריק — mode=null (ברירת מחדל)', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/search?q=abc&mode=bogus'),
+          ) as RunSearchAction)
+              .mode,
+          isNull,
+        );
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/search?q=abc&mode='),
+          ) as RunSearchAction)
+              .mode,
+          isNull,
+        );
+      });
+
+      test('mode ללא q — נופל חזרה לפתיחת המסך בלבד', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?mode=fuzzy'),
+        );
+
+        expect(action, isA<OpenScreenAction>());
+        expect((action as OpenScreenAction).screen, Screen.search);
       });
 
       test('q ריק/רווחים — נופל חזרה לפתיחת המסך בלבד', () {
