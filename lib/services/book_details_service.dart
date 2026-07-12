@@ -4,35 +4,153 @@ import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/migration/models/book.dart' as migration_models;
 import 'package:otzaria/models/books.dart';
 
+/// המידע הזמין על ספר להצגה למשתמש.
+class BookInformation {
+  final Book book;
+  final migration_models.Book? databaseBook;
+  final String? source;
+  final String? generation;
+  final Map<String, String> fileDetails;
+
+  const BookInformation({
+    required this.book,
+    required this.databaseBook,
+    required this.source,
+    required this.generation,
+    required this.fileDetails,
+  });
+
+  /// התיאור הקצר, אם קיים.
+  String? get shortDescription => _firstAvailable(
+        book.heShortDesc,
+        databaseBook?.heShortDesc,
+      );
+
+  /// התיאור המלא, אם קיים.
+  String? get fullDescription => _firstAvailable(
+        databaseBook?.heDesc,
+        book.heDesc,
+      );
+
+  /// שמות המחברים, אם קיימים.
+  List<String> get authors {
+    final databaseAuthors = databaseBook?.authors
+            .map((author) => author.name.trim())
+            .where((name) => name.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (databaseAuthors.isNotEmpty) return databaseAuthors;
+    final author = book.author?.trim();
+    return author == null || author.isEmpty ? const [] : [author];
+  }
+
+  /// הנושאים המשויכים לספר במסד הנתונים.
+  List<String> get topics =>
+      databaseBook?.topics
+          .map((topic) => topic.name.trim())
+          .where((name) => name.isNotEmpty)
+          .toList() ??
+      const <String>[];
+
+  /// מקומות הפרסום, אם קיימים.
+  List<String> get publicationPlaces {
+    final places = databaseBook?.pubPlaces
+            .map((place) => place.name.trim())
+            .where((name) => name.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (places.isNotEmpty) return places;
+    return _compactValues([book.pubPlaceStringHe, book.pubPlace]);
+  }
+
+  /// תאריכי הפרסום, אם קיימים.
+  List<String> get publicationDates {
+    final dates = databaseBook?.pubDates
+            .map((date) => date.date.trim())
+            .where((date) => date.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (dates.isNotEmpty) return dates;
+    return _compactValues([book.pubDateStringHe, book.pubDate]);
+  }
+
+  /// הקטגוריות, אם קיימות.
+  String? get categories =>
+      _firstAvailable(book.heCategories, book.categoryPath);
+
+  /// המזהה העברי של הספר במסד, אם קיים.
+  String? get reference => _firstAvailable(databaseBook?.heRef);
+
+  /// מספר שורות התוכן, אם זמין.
+  int? get lineCount => databaseBook?.totalLines;
+
+  static String? _firstAvailable(String? first, [String? second]) {
+    final firstValue = first?.trim();
+    if (firstValue != null && firstValue.isNotEmpty) return firstValue;
+    final secondValue = second?.trim();
+    return secondValue == null || secondValue.isEmpty ? null : secondValue;
+  }
+
+  static List<String> _compactValues(Iterable<String?> values) {
+    return values
+        .map((value) => value?.trim())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+}
+
 /// שירות מרכזי להפקת פרטי ספר לתצוגה/דיווח מתוך DB.
 class BookDetailsService {
   static const String bookNotFoundText = 'לא ניתן למצוא את הספר';
   static const String _customFolderSourcePrefix = 'Personal::';
+
+  /// מחזיר את כל המידע הזמין על הספר לתצוגת "אודות הספר".
+  Future<BookInformation> getBookInformation(Book book) async {
+    final resolvedBook = await _tryResolveDbBook(book);
+    final databaseBook = resolvedBook?.book;
+    final source = await _tryGetDbSourceName(resolvedBook);
+    final generation = await _tryGetGeneration(resolvedBook);
+    final fileDetails = _buildFileDetails(book, databaseBook, source);
+
+    return BookInformation(
+      book: book,
+      databaseBook: databaseBook,
+      source: source,
+      generation: generation,
+      fileDetails: fileDetails,
+    );
+  }
 
   /// מחזיר פרטי ספר בפורמט אחיד:
   /// - שם הקובץ
   /// - נתיב הקובץ
   /// - תיקיית המקור
   Future<Map<String, String>> getBookDetails(Book book) async {
+    return (await getBookInformation(book)).fileDetails;
+  }
+
+  Map<String, String> _buildFileDetails(
+    Book book,
+    migration_models.Book? databaseBook,
+    String? source,
+  ) {
     final details = <String, String>{
       'שם הקובץ': bookNotFoundText,
       'נתיב הקובץ': bookNotFoundText,
       'תיקיית המקור': bookNotFoundText,
     };
 
-    final resolvedBook = await _tryResolveDbBook(book);
-    final dbBook = resolvedBook?.book;
-    final dbSource = await _tryGetDbSourceName(resolvedBook);
-
-    final fileType = _resolveFileType(book, dbBook);
+    final fileType = _resolveFileType(book, databaseBook);
     final inferredName = _inferFileName(
       title: book.title,
       fileType: fileType,
-      rawPath: dbBook?.filePath ?? book.filePath,
+      rawPath: databaseBook?.filePath ?? book.filePath,
     );
 
     final resolvedPath = _resolveFilePath(
-      rawPath: dbBook?.filePath ?? book.filePath,
+      rawPath: databaseBook?.filePath ?? book.filePath,
       fileType: fileType,
       inferredFileName: inferredName,
       categoryPath: book.categoryPath,
@@ -44,8 +162,8 @@ class BookDetailsService {
     if (resolvedPath != null && resolvedPath.isNotEmpty) {
       details['נתיב הקובץ'] = resolvedPath;
     }
-    if (dbSource != null && dbSource.isNotEmpty) {
-      details['תיקיית המקור'] = dbSource;
+    if (source != null && source.isNotEmpty) {
+      details['תיקיית המקור'] = source;
     }
 
     return details;
@@ -82,6 +200,19 @@ class BookDetailsService {
         return sourceName.substring(_customFolderSourcePrefix.length);
       }
       return sourceName;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _tryGetGeneration(
+    ResolvedDbBookRecord? resolvedBook,
+  ) async {
+    if (resolvedBook == null) return null;
+    try {
+      return (await resolvedBook.repository
+              .getBookGenerationInfo(resolvedBook.book.id))
+          ?.generationName;
     } catch (_) {
       return null;
     }

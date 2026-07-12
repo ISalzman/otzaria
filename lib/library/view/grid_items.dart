@@ -11,19 +11,31 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/library/view/book_versions_dialog.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  הנחיות עיצוב:
-//  • מבנה Row: RTL כדי אייקונים משמאל, טקסט מימין (מתאים ל-RTL UI).
-//  • צבעי טקסט: cs.onSurface בכותרת ותיאור (במקום אדום/כחול), cs.primary בהדגשות.
-//  • רקע אייקונים: cs.primary/secondary.withValues(alpha:0.12) או מבנה אדום+כחול.
-//  • אייקונים מעוצבים: 32×32 container, 16px icon או קונטיינר רחוק שיותר.
-//  • ריווח עליון ב-MyGridView: top: 8 או מרווח מתאים.
-//  • Focus מוגדר במפורש: CategoryGridItem + BookGridItem תומכים ב-Focus.
-//  • overflow: ellipsis + tooltip במרווח מספיק.
-// ─────────────────────────────────────────────────────────────────────────────
+/// מספר התווים המרבי בתיאור קצר המוצג בכרטיס ספר, כולל שלוש הנקודות.
+const kBookCardDescriptionMaxCharacters = 120;
+
+/// מקצר תיאור לכרטיס ספר ושומר מקום לשלוש נקודות כשנדרש.
+String truncateBookCardDescription(String description) {
+  final trimmed = description.trim();
+  if (trimmed.length <= kBookCardDescriptionMaxCharacters) return trimmed;
+  final contentLength = kBookCardDescriptionMaxCharacters - 3;
+  return '${trimmed.substring(0, contentLength).trimRight()}...';
+}
+
+String? _bookInfoTooltipText(Book book) {
+  final fullDescription = book.heDesc?.trim();
+  if (fullDescription != null && fullDescription.isNotEmpty) {
+    return fullDescription;
+  }
+  final shortDescription = book.heShortDesc?.trim();
+  return shortDescription == null || shortDescription.isEmpty
+      ? null
+      : shortDescription;
+}
 
 /// מחזיר את נתיב הלוגו של הקטלוג החיצוני שממנו מגיע הספר, או null אם זהו
 /// ספר מקומי רגיל ללא מקור חיצוני.
@@ -474,8 +486,11 @@ class _BookGridTextColumn extends StatelessWidget {
     final authorStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSecondaryContainer,
     );
+    final descriptionStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     final topicsStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.secondary.withValues(alpha: 0.85),
+      color: theme.colorScheme.secondary,
     );
 
     return LayoutBuilder(
@@ -494,12 +509,23 @@ class _BookGridTextColumn extends StatelessWidget {
 
         final authorMaxLines = titleOverflow ? 1 : 2;
         final hasAuthor = (book.author ?? '').isNotEmpty;
+        final shortDescription =
+            truncateBookCardDescription(book.heShortDesc ?? '');
+        final hasShortDescription = shortDescription.isNotEmpty;
+        final descriptionMaxLines = constraints.maxHeight < 100
+            ? 1
+            : titleOverflow
+                ? 2
+                : 3;
         final hasTopics = showTopics && book.topics.trim().isNotEmpty;
         final topicsMaxLines = !hasTopics
             ? 0
             : constraints.maxHeight < 110
                 ? 1
-                : constraints.maxHeight < 140 || hasAuthor || titleOverflow
+                : constraints.maxHeight < 140 ||
+                        hasAuthor ||
+                        titleOverflow ||
+                        hasShortDescription
                     ? 2
                     : 3;
 
@@ -520,6 +546,16 @@ class _BookGridTextColumn extends StatelessWidget {
                 maxLines: authorMaxLines,
                 textAlign: TextAlign.right,
                 style: authorStyle,
+              ),
+            ],
+            if (hasShortDescription) ...[
+              const SizedBox(height: 4),
+              Text(
+                shortDescription,
+                maxLines: descriptionMaxLines,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: descriptionStyle,
               ),
             ],
             if (hasTopics) ...[
@@ -550,6 +586,7 @@ class _BookGridActionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final infoTooltipText = _bookInfoTooltipText(book);
     // מהדורות (book_version) קיימות רק לספרי הספרייה הרשמית (seforim.db);
     // תפריט 'גרסאות' מוצג רק כשיש בפועל מהדורה לבחירה (נבדק ב-FutureBuilder).
     final versionsEligible =
@@ -558,9 +595,9 @@ class _BookGridActionColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if ((book.heShortDesc ?? '').isNotEmpty)
+        if (infoTooltipText != null)
           Tooltip(
-            message: book.heShortDesc ?? '',
+            message: infoTooltipText,
             waitDuration: const Duration(milliseconds: 400),
             textAlign: TextAlign.right,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -575,11 +612,16 @@ class _BookGridActionColumn extends StatelessWidget {
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
               ),
-              alignment: Alignment.center,
-              child: Icon(
-                FluentIcons.info_24_regular,
-                size: 15,
-                color: theme.colorScheme.onSurfaceVariant,
+              child: IconButton(
+                onPressed: () => showBookDetailsDialog(context, book),
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints.tightFor(width: 28, height: 28),
+                icon: Icon(
+                  FluentIcons.info_24_regular,
+                  size: 15,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ),

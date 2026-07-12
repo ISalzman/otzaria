@@ -1,8 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/services/book_details_service.dart';
-import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,7 +15,10 @@ const _sourceMappings = {
   'benyehuda': (text: 'פרוייקט בן י.', url: 'https://benyehuda.org/'),
   'dicta': (text: 'ספריית דיקטה', url: 'https://library.dicta.org.il/'),
   'onyourway': (text: 'ובלכתך בדרך', url: 'https://mobile.tora.ws/'),
-  'orayta': (text: 'אורייתא', url: 'https://github.com/MosheWagner/Orayta-Books'),
+  'orayta': (
+    text: 'אורייתא',
+    url: 'https://github.com/MosheWagner/Orayta-Books'
+  ),
   'tashma': (text: 'תא שמע', url: 'https://tashma.co.il/'),
   'pninim': (text: 'פנינים', url: 'https://pninim.org/'),
   'wikisource': (text: 'ויקיטקסט', url: 'https://he.wikisource.org/wiki'),
@@ -24,7 +27,10 @@ const _sourceMappings = {
     url: 'https://wiki.jewishbooks.org.il/'
   ),
   'nationallibrary': (text: 'יד הרמב"ם', url: 'https://fjms.genizah.org/'),
-  'toratemet': (text: 'תורת אמת', url: 'https://www.toratemetfreeware.com/index.html'),
+  'toratemet': (
+    text: 'תורת אמת',
+    url: 'https://www.toratemetfreeware.com/index.html'
+  ),
   'morebooks': (text: 'ספרים פרטיים או מקורות נוספים', url: ''),
   'unknown': (text: 'מקור לא ידוע', url: ''),
 };
@@ -55,9 +61,7 @@ const _sourceMappings = {
 const _tashmaUrl = 'https://tashma.co.il/';
 
 /// בודק האם מקור הספר הוא "תא שמע".
-/// הזיהוי מבוסס על תיקיית המקור, בדומה ל-error_report_dialog.dart, אך משתמש
-/// באותו נרמול כמו getSourceDisplayInfo (הסרת רווחים/מקפים/קווים תחתונים) כדי
-/// שכל הווריאנטים שמזוהים כ"תא שמע" בתצוגה יקבלו גם את נוסח הזכויות.
+/// הנרמול המאוחד מזהה גם וריאציות כתיב של שם תיקיית המקור.
 bool isTashmaSource(String? sourceFolder) {
   final normalized = (sourceFolder ?? '')
       .toLowerCase()
@@ -78,102 +82,158 @@ bool isNationalLibrarySource(String? sourceFolder) {
 Future<void> showBookSourceDialog(
   BuildContext context,
   TextBookLoaded state,
-) async {
-  try {
-    final bookDetails = await BookDetailsService().getBookDetails(state.book);
-    final bookSource = bookDetails['תיקיית המקור'] ?? 'לא נמצא מקור';
+) {
+  return showBookDetailsDialog(context, state.book);
+}
 
-    final sourceInfo = getSourceDisplayInfo(bookSource);
-    final displayText = sourceInfo.text;
-    final url = sourceInfo.url;
-    final isTashma = isTashmaSource(bookSource);
+/// מציג את כל פרטי הספר הזמינים, גם מחוץ לקורא הטקסט.
+Future<void> showBookDetailsDialog(
+  BuildContext context,
+  Book book,
+) {
+  return showSingleActionDialog(
+    context: context,
+    title: 'אודות הספר',
+    confirmText: 'סגור',
+    customContent: _BookDetailsDialogContent(book: book),
+  );
+}
 
-    if (!context.mounted) return;
+class _BookDetailsDialogContent extends StatefulWidget {
+  final Book book;
 
-    final book = state.book;
+  const _BookDetailsDialogContent({required this.book});
 
-    await showSingleActionDialog(
-      context: context,
-      title: 'אודות הספר',
-      confirmText: 'סגור',
-      customContent: SizedBox(
-        width: 450,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildInfoSection('שם הספר:', book.title),
-              if (book.author != null && book.author!.isNotEmpty)
-                _buildInfoSection('מחבר:', book.author!),
-              if (book.heEra != null && book.heEra!.isNotEmpty)
-                _buildInfoSection('תקופה:', book.heEra!),
-              if (book.heCategories != null && book.heCategories!.isNotEmpty)
-                _buildInfoSection('קטגוריות:', book.heCategories!),
-              if (book.compDateStringHe != null &&
-                  book.compDateStringHe!.isNotEmpty)
-                _buildInfoSection('תאריך חיבור:', book.compDateStringHe!),
-              if (book.compPlaceStringHe != null &&
-                  book.compPlaceStringHe!.isNotEmpty)
-                _buildInfoSection('מקום חיבור:', book.compPlaceStringHe!),
-              if (book.pubDateStringHe != null &&
-                  book.pubDateStringHe!.isNotEmpty)
-                _buildInfoSection('תאריך פרסום:', book.pubDateStringHe!),
-              if (book.pubPlaceStringHe != null &&
-                  book.pubPlaceStringHe!.isNotEmpty)
-                _buildInfoSection('מקום פרסום:', book.pubPlaceStringHe!),
-              if (book.topics.isNotEmpty)
-                _buildInfoSection('נושאים:', book.topics),
-              if (book.heShortDesc != null && book.heShortDesc!.isNotEmpty)
-                _buildInfoSection('תיאור:', book.heShortDesc!),
-              if (book.heDesc != null && book.heDesc!.isNotEmpty)
-                _buildInfoSection('תיאור מורחב:', book.heDesc!),
-              const Divider(height: 24),
-              const Text(
-                'מקור הספר:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              // ספרי "תא שמע" מציגים נוסח זכויות יוצרים; השאר — קישור/טקסט.
-              if (isTashma)
-                const _TashmaCopyrightNotice()
-              else if (url.isNotEmpty)
-                InkWell(
-                  onTap: () async {
-                    final uri = Uri.parse(url);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
-                  child: Text(
-                    displayText,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.primary,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                )
-              else
-                SelectableText(
-                  displayText,
-                  style: const TextStyle(fontSize: 14),
-                ),
-            ],
-          ),
-        ),
+  @override
+  State<_BookDetailsDialogContent> createState() =>
+      _BookDetailsDialogContentState();
+}
+
+class _BookDetailsDialogContentState extends State<_BookDetailsDialogContent> {
+  late final Future<BookInformation> _informationFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _informationFuture = BookDetailsService().getBookInformation(widget.book);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 450,
+      child: FutureBuilder<BookInformation>(
+        future: _informationFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox(
+              height: 120,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return const Text('לא ניתן לטעון את מידע הספר.');
+          }
+          return _buildBookDetailsContent(context, widget.book, snapshot.data!);
+        },
       ),
     );
-  } catch (e) {
-    debugPrint('Error showing book source dialog: $e');
-    if (context.mounted) {
-      UiSnack.showError('שגיאה בטעינת מידע הספר: ${e.toString()}');
-    }
   }
 }
 
+Widget _buildBookDetailsContent(
+  BuildContext context,
+  Book book,
+  BookInformation information,
+) {
+  final bookDetails = information.fileDetails;
+  final bookSource = information.source ?? 'לא נמצא מקור';
+  final sourceInfo = getSourceDisplayInfo(bookSource);
+  final isTashma = isTashmaSource(bookSource);
+
+  return SingleChildScrollView(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInfoSection('שם הספר:', book.title),
+        if (information.authors.isNotEmpty)
+          _buildInfoSection('מחבר:', information.authors.join(', ')),
+        if (information.generation != null)
+          _buildInfoSection('דור:', information.generation!),
+        if (book.heEra != null && book.heEra!.isNotEmpty)
+          _buildInfoSection('תקופה:', book.heEra!),
+        if (information.categories != null)
+          _buildInfoSection('קטגוריות:', information.categories!),
+        if (book.compDateStringHe != null && book.compDateStringHe!.isNotEmpty)
+          _buildInfoSection('תאריך חיבור:', book.compDateStringHe!),
+        if (book.compPlaceStringHe != null &&
+            book.compPlaceStringHe!.isNotEmpty)
+          _buildInfoSection('מקום חיבור:', book.compPlaceStringHe!),
+        if (information.publicationDates.isNotEmpty)
+          _buildInfoSection(
+            'תאריך פרסום:',
+            information.publicationDates.join(', '),
+          ),
+        if (information.publicationPlaces.isNotEmpty)
+          _buildInfoSection(
+            'מקום פרסום:',
+            information.publicationPlaces.join(', '),
+          ),
+        if (information.topics.isNotEmpty)
+          _buildInfoSection('נושאים:', information.topics.join(', ')),
+        if (information.shortDescription != null)
+          _buildInfoSection('תיאור קצר:', information.shortDescription!),
+        if (information.fullDescription != null)
+          _buildInfoSection('תיאור מורחב:', information.fullDescription!),
+        if (information.lineCount != null && information.lineCount! > 0)
+          _buildInfoSection('מספר שורות:', information.lineCount.toString()),
+        const Divider(height: 24),
+        const Text(
+          'מקור הספר:',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        if (isTashma)
+          const _TashmaCopyrightNotice()
+        else if (sourceInfo.url.isNotEmpty)
+          InkWell(
+            onTap: () async {
+              final uri = Uri.parse(sourceInfo.url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              }
+            },
+            child: Text(
+              sourceInfo.text,
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          )
+        else
+          SelectableText(sourceInfo.text, style: const TextStyle(fontSize: 14)),
+        if (bookDetails['שם הקובץ'] != BookDetailsService.bookNotFoundText)
+          _buildInfoSection('שם הקובץ:', bookDetails['שם הקובץ']!),
+        if (bookDetails['נתיב הקובץ'] != BookDetailsService.bookNotFoundText)
+          _buildInfoSection(
+            'נתיב הקובץ:',
+            bookDetails['נתיב הקובץ']!,
+            valueDirection: TextDirection.ltr,
+          ),
+      ],
+    ),
+  );
+}
+
 /// בניית סעיף מידע עם כותרת וערך
-Widget _buildInfoSection(String title, String value) {
+Widget _buildInfoSection(
+  String title,
+  String value, {
+  TextDirection? valueDirection,
+}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: Column(
@@ -187,6 +247,7 @@ Widget _buildInfoSection(String title, String value) {
         SelectableText(
           value,
           style: const TextStyle(fontSize: 14),
+          textDirection: valueDirection,
         ),
       ],
     ),
