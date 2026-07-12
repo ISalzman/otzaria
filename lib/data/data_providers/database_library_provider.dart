@@ -2787,7 +2787,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
   /// Uses only the columns available: id, title, categoryId, orderIndex,
-  /// fileType, filePath, heShortDesc, author.
+  /// fileType, filePath, heShortDesc, heDesc, author.
   /// Falls back to metadata when the minimal row does not include a field.
   Book? _convertMinimalBookMapToBook(
     Map<String, dynamic> bookMap,
@@ -2803,6 +2803,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final filePath = bookMap['filePath'] as String?;
     final fileType = bookMap['fileType'] as String?;
     final heShortDesc = bookMap['heShortDesc'] as String?;
+    final heDesc = bookMap['heDesc'] as String?;
     final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
     final order = orderDouble.toInt();
     final categoryId =
@@ -2839,6 +2840,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final pubDate = bookMeta?['pubDate'] as String?;
     final pubPlace = bookMeta?['pubPlace'] as String?;
     final metaHeShortDesc = heShortDesc ?? bookMeta?['heShortDesc'] as String?;
+    final metaHeDesc = heDesc ?? bookMeta?['heDesc'] as String?;
 
     final normalizedFileType = (fileType ?? '').toLowerCase();
 
@@ -2858,6 +2860,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
+        heDesc: metaHeDesc,
         pubDate: pubDate,
         pubPlace: pubPlace,
         order: order,
@@ -2878,6 +2881,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
+        heDesc: metaHeDesc,
         pubDate: pubDate,
         pubPlace: pubPlace,
         order: order,
@@ -2894,6 +2898,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       category: category,
       author: author,
       heShortDesc: metaHeShortDesc,
+      heDesc: metaHeDesc,
       pubDate: pubDate,
       pubPlace: pubPlace,
       order: order,
