@@ -71,6 +71,7 @@ class AppThemeData {
       textButtonTheme: _textButtonTheme(cs),
       outlinedButtonTheme: _outlinedButtonTheme(cs),
       tabBarTheme: _tabBarTheme(cs),
+      tooltipTheme: _tooltipTheme(cs),
       dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
       menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
       popupMenuTheme: _popupMenuTheme(
@@ -119,6 +120,7 @@ class AppThemeData {
       textButtonTheme: _textButtonTheme(cs),
       outlinedButtonTheme: _outlinedButtonTheme(cs),
       tabBarTheme: _tabBarTheme(cs),
+      tooltipTheme: _tooltipTheme(cs),
       dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
       menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
       popupMenuTheme: _popupMenuTheme(
@@ -159,6 +161,16 @@ class AppThemeData {
         fontSize: metrics.fontSize,
         fontWeight: metrics.itemFontWeight,
       ),
+    );
+  }
+
+  static TooltipThemeData _tooltipTheme(ColorScheme cs) {
+    return TooltipThemeData(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: AppTokens.borderRadiusAll,
+      ),
+      textStyle: TextStyle(color: cs.onSurface),
     );
   }
 
