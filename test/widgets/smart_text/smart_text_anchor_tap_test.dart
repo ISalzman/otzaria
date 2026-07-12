@@ -32,6 +32,49 @@ void main() {
 
     expect(tappedUrl, 'otzaria://anchor?ref=3_0');
   });
+
+  testWidgets('עם onAnchorHover — ריחוף מדווח כניסה/יציאה ולחיצה עדיין עובדת',
+      (tester) async {
+    String? tappedUrl;
+    final hovered = <String>[];
+    final exited = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SmartTextWidget(
+            text: 'לפני <a class="link-anchor link-anchor-0" '
+                'href="otzaria://anchor?ref=3_0">(א)</a> אחרי',
+            settings: const RenderSettings(fontSize: 20),
+            onAnchorTap: (url) => tappedUrl = url,
+            onAnchorHover: (url, position) => hovered.add(url),
+            onAnchorHoverExit: exited.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // עם hover העוגן מרונדר כווידג'ט inline (לא TextSpan עם recognizer).
+    final anchorText = find.text('(א)');
+    expect(anchorText, findsOneWidget);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+    await gesture.moveTo(tester.getCenter(anchorText));
+    await tester.pump();
+    expect(hovered, ['otzaria://anchor?ref=3_0']);
+
+    await gesture.moveTo(Offset.zero);
+    await tester.pump();
+    expect(exited, ['otzaria://anchor?ref=3_0']);
+
+    await tester.tap(anchorText);
+    await tester.pump();
+    expect(tappedUrl, 'otzaria://anchor?ref=3_0');
+  });
 }
 
 TapGestureRecognizer? _findAnchorRecognizer(WidgetTester tester) {

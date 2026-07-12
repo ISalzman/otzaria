@@ -153,6 +153,37 @@ void main() {
       }
     });
 
+    test('עוגן-מילה מקבל onEnter/onExit לריחוף; קישור רגיל — לא', () {
+      final recognizers = <TapGestureRecognizer>[];
+      final hovered = <String>[];
+      final exited = <String>[];
+      final spans = buildInlineHtmlSpans(
+        'לפני <a class="link-anchor link-anchor-0" '
+        'href="otzaria://anchor?ref=3_0">(א)</a> '
+        '<a href="otzaria://inline-link?path=x">קישור</a> אחרי',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+        onTapUrl: (_) async => true,
+        onAnchorHover: (url, position) => hovered.add(url),
+        onAnchorExit: exited.add,
+        recognizerSink: recognizers,
+      );
+      final anchorSpan = _findSpanContaining(spans, '(א)');
+      final plainLinkSpan = _findSpanContaining(spans, 'קישור');
+      expect(anchorSpan, isNotNull);
+      expect(anchorSpan!.onEnter, isNotNull);
+      expect(anchorSpan.onExit, isNotNull);
+      expect(plainLinkSpan!.onEnter, isNull);
+      expect(plainLinkSpan.onExit, isNull);
+
+      anchorSpan.onEnter!(const PointerEnterEvent(position: Offset(5, 7)));
+      anchorSpan.onExit!(const PointerExitEvent());
+      expect(hovered, ['otzaria://anchor?ref=3_0']);
+      expect(exited, ['otzaria://anchor?ref=3_0']);
+      for (final r in recognizers) {
+        r.dispose();
+      }
+    });
+
     test('עוגן-מילה (a.link-anchor) שומר על צבע הטקסט ובלי קו תחתון', () {
       final recognizers = <TapGestureRecognizer>[];
       final spans = buildInlineHtmlSpans(
@@ -219,6 +250,22 @@ void main() {
 void _noopLineTap(int lineIndex) {}
 
 /// מאתר את ה-`TextSpan` של קישור — מזוהה לפי recognizer מחובר.
+/// ה-span הלחיץ (עם recognizer) שהטקסט השטוח שלו מכיל את [needle].
+TextSpan? _findSpanContaining(List<InlineSpan> spans, String needle) {
+  TextSpan? result;
+  void visit(InlineSpan span) {
+    if (result != null || span is! TextSpan) return;
+    if (span.recognizer != null && span.toPlainText().contains(needle)) {
+      result = span;
+      return;
+    }
+    span.children?.forEach(visit);
+  }
+
+  spans.forEach(visit);
+  return result;
+}
+
 TextSpan? _findLinkSpan(List<InlineSpan> spans) {
   TextSpan? result;
   void visit(InlineSpan span) {

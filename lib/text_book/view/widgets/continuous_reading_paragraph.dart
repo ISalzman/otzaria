@@ -7,6 +7,13 @@ import 'package:html/parser.dart' as html_parser;
 /// יוחזר `true` אם הטיפול בקישור הסתיים והעיבוד הרגיל (לחיצה על שורה) לא נדרש.
 typedef ContinuousReadingUrlTap = Future<bool> Function(String url);
 
+/// ריחוף מעל עוגן-מילה (`otzaria://anchor`) — מקבל את מיקום הסמן הגלובלי.
+typedef ContinuousReadingAnchorHover = void Function(
+    String url, Offset globalPosition);
+
+/// יציאת הסמן מעוגן-מילה.
+typedef ContinuousReadingAnchorExit = void Function(String url);
+
 class ContinuousReadingParagraphLine {
   final int lineIndex;
   final String text;
@@ -25,6 +32,8 @@ List<InlineSpan> buildInlineHtmlSpans(
   String htmlText,
   TextStyle baseStyle, {
   ContinuousReadingUrlTap? onTapUrl,
+  ContinuousReadingAnchorHover? onAnchorHover,
+  ContinuousReadingAnchorExit? onAnchorExit,
   TextStyle? linkStyle,
   List<TapGestureRecognizer>? recognizerSink,
 }) {
@@ -33,6 +42,8 @@ List<InlineSpan> buildInlineHtmlSpans(
     fragment.nodes,
     baseStyle,
     onTapUrl: onTapUrl,
+    onAnchorHover: onAnchorHover,
+    onAnchorExit: onAnchorExit,
     linkStyle: linkStyle,
     recognizerSink: recognizerSink,
   );
@@ -44,6 +55,8 @@ class ContinuousReadingParagraph extends StatefulWidget {
   final ValueChanged<int> onLineTap;
   final ValueChanged<int>? onLineSecondaryTap;
   final ContinuousReadingUrlTap? onTapUrl;
+  final ContinuousReadingAnchorHover? onAnchorHover;
+  final ContinuousReadingAnchorExit? onAnchorExit;
   final TextStyle? linkStyle;
   final TextAlign textAlign;
 
@@ -54,6 +67,8 @@ class ContinuousReadingParagraph extends StatefulWidget {
     required this.onLineTap,
     this.onLineSecondaryTap,
     this.onTapUrl,
+    this.onAnchorHover,
+    this.onAnchorExit,
     this.linkStyle,
     this.textAlign = TextAlign.justify,
   });
@@ -135,6 +150,8 @@ class _ContinuousReadingParagraphState
       htmlText,
       line.style,
       onTapUrl: widget.onTapUrl,
+      onAnchorHover: widget.onAnchorHover,
+      onAnchorExit: widget.onAnchorExit,
       linkStyle: widget.linkStyle,
       recognizerSink: _linkRecognizers,
     );
@@ -209,6 +226,8 @@ List<InlineSpan> _nodesToSpans(
   List<dom.Node> nodes,
   TextStyle style, {
   ContinuousReadingUrlTap? onTapUrl,
+  ContinuousReadingAnchorHover? onAnchorHover,
+  ContinuousReadingAnchorExit? onAnchorExit,
   TextStyle? linkStyle,
   List<TapGestureRecognizer>? recognizerSink,
 }) {
@@ -218,6 +237,8 @@ List<InlineSpan> _nodesToSpans(
       node,
       style,
       onTapUrl: onTapUrl,
+      onAnchorHover: onAnchorHover,
+      onAnchorExit: onAnchorExit,
       linkStyle: linkStyle,
       recognizerSink: recognizerSink,
     ));
@@ -229,6 +250,8 @@ List<InlineSpan> _nodeToSpans(
   dom.Node node,
   TextStyle style, {
   ContinuousReadingUrlTap? onTapUrl,
+  ContinuousReadingAnchorHover? onAnchorHover,
+  ContinuousReadingAnchorExit? onAnchorExit,
   TextStyle? linkStyle,
   List<TapGestureRecognizer>? recognizerSink,
 }) {
@@ -266,6 +289,8 @@ List<InlineSpan> _nodeToSpans(
         node.nodes,
         effectiveLinkStyle,
         onTapUrl: onTapUrl,
+        onAnchorHover: onAnchorHover,
+        onAnchorExit: onAnchorExit,
         linkStyle: linkStyle,
         recognizerSink: recognizerSink,
       );
@@ -274,10 +299,21 @@ List<InlineSpan> _nodeToSpans(
           onTapUrl(href);
         };
       recognizerSink?.add(recognizer);
+      // עוגן-מילה: פתיחת התצוגה המקדימה גם בריחוף (TextSpan תומך onEnter/onExit).
+      final isHoverableAnchor = node.classes.contains('link-anchor') &&
+          href.startsWith('otzaria://anchor') &&
+          (onAnchorHover != null || onAnchorExit != null);
       return [
         TextSpan(
           style: effectiveLinkStyle,
           recognizer: recognizer,
+          mouseCursor: isHoverableAnchor ? SystemMouseCursors.click : null,
+          onEnter: isHoverableAnchor && onAnchorHover != null
+              ? (event) => onAnchorHover(href, event.position)
+              : null,
+          onExit: isHoverableAnchor && onAnchorExit != null
+              ? (_) => onAnchorExit(href)
+              : null,
           children: children,
         ),
       ];
@@ -289,6 +325,8 @@ List<InlineSpan> _nodeToSpans(
     node.nodes,
     childStyle,
     onTapUrl: onTapUrl,
+    onAnchorHover: onAnchorHover,
+    onAnchorExit: onAnchorExit,
     linkStyle: linkStyle,
     recognizerSink: recognizerSink,
   );

@@ -43,11 +43,15 @@ class LinkHoverPreviewContent extends StatelessWidget {
   /// כותרת זעירה ומרווחים צמודים — לחלונית קופצת קטנה (עוגן-מילה).
   final bool compact;
 
+  /// כשמסופק — הכותרת הופכת ללחיצה (מעבר ליעד) ומופיע לצידה אייקון פתיחה.
+  final VoidCallback? onOpen;
+
   const LinkHoverPreviewContent({
     super.key,
     required this.link,
     this.maxContentLines,
     this.compact = false,
+    this.onOpen,
   });
 
   @override
@@ -66,7 +70,7 @@ class LinkHoverPreviewContent extends StatelessWidget {
                 if (settingsState.replaceHolyNames) {
                   title = utils.replaceHolyNames(title);
                 }
-                return Text(
+                final titleText = Text(
                   title,
                   maxLines: compact ? 1 : null,
                   overflow: compact ? TextOverflow.ellipsis : null,
@@ -76,6 +80,21 @@ class LinkHoverPreviewContent extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontFamily: settingsState.commentatorsFontFamily,
                     color: colorScheme.primary,
+                  ),
+                );
+                if (onOpen == null) return titleText;
+                return InkWell(
+                  onTap: onOpen,
+                  child: Row(
+                    children: [
+                      Expanded(child: titleText),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.open_in_new,
+                        size: compact ? 13 : 16,
+                        color: colorScheme.primary,
+                      ),
+                    ],
                   ),
                 );
               },
