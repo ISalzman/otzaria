@@ -36,7 +36,23 @@ AppContextMenuEntry buildLinkContextMenuEntry({
 class LinkHoverPreviewContent extends StatelessWidget {
   final Link link;
 
-  const LinkHoverPreviewContent({super.key, required this.link});
+  /// כשמסופק — תוכן המפרש נחתך לגובה של [maxContentLines] שורות, ומופיע "…"
+  /// כשהתוכן ארוך מהחיתוך.
+  final int? maxContentLines;
+
+  /// כותרת זעירה ומרווחים צמודים — לחלונית קופצת קטנה (עוגן-מילה).
+  final bool compact;
+
+  /// כשמסופק — הכותרת הופכת ללחיצה (מעבר ליעד) ומופיע לצידה אייקון פתיחה.
+  final VoidCallback? onOpen;
+
+  const LinkHoverPreviewContent({
+    super.key,
+    required this.link,
+    this.maxContentLines,
+    this.compact = false,
+    this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -54,18 +70,36 @@ class LinkHoverPreviewContent extends StatelessWidget {
                 if (settingsState.replaceHolyNames) {
                   title = utils.replaceHolyNames(title);
                 }
-                return Text(
+                final titleText = Text(
                   title,
+                  maxLines: compact ? 1 : null,
+                  overflow: compact ? TextOverflow.ellipsis : null,
                   style: TextStyle(
-                    fontSize: settingsState.commentatorsFontSize - 2,
+                    fontSize:
+                        compact ? 11 : settingsState.commentatorsFontSize - 2,
                     fontWeight: FontWeight.bold,
                     fontFamily: settingsState.commentatorsFontFamily,
                     color: colorScheme.primary,
                   ),
                 );
+                if (onOpen == null) return titleText;
+                return InkWell(
+                  onTap: onOpen,
+                  child: Row(
+                    children: [
+                      Expanded(child: titleText),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.open_in_new,
+                        size: compact ? 13 : 16,
+                        color: colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
-            const Divider(height: 16),
+            Divider(height: compact ? 8 : 16),
             FutureBuilder<String>(
               future: link.content,
               builder: (context, snapshot) {
@@ -114,7 +148,7 @@ class LinkHoverPreviewContent extends StatelessWidget {
                     removeNikudFromTanach: settingsState.removeNikudFromTanach,
                   ),
                   builder: (context, nikudSnapshot) {
-                    return SmartTextWidget(
+                    final content = SmartTextWidget(
                       text: cleanContent,
                       settings: RenderSettings(
                         removeNikud: nikudSnapshot.data ?? false,
@@ -128,6 +162,67 @@ class LinkHoverPreviewContent extends StatelessWidget {
                         lineHeight: settingsState.lineHeight,
                         justifyText: true,
                       ),
+                    );
+                    if (maxContentLines == null) return content;
+                    final fontSize = settingsState.commentatorsFontSize;
+                    final lineHeight = settingsState.lineHeight;
+                    final maxHeight = fontSize * lineHeight * maxContentLines!;
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        // מדידה על הטקסט כפי שירונדר (בלי ניקוד אם צריך) כדי
+                        // להחליט אם התוכן נגזר ולהציג "…".
+                        var measureText = cleanContent;
+                        if (nikudSnapshot.data ?? false) {
+                          measureText = utils.removeVolwels(measureText);
+                        }
+                        final painter = TextPainter(
+                          text: TextSpan(
+                            text: measureText,
+                            style: TextStyle(
+                              fontSize: fontSize,
+                              fontFamily: settingsState.commentatorsFontFamily,
+                              height: lineHeight,
+                              fontWeight: settingsState.commentatorsFontBold
+                                  ? FontWeight.bold
+                                  : null,
+                            ),
+                          ),
+                          textDirection: TextDirection.rtl,
+                          maxLines: null,
+                        )..layout(maxWidth: constraints.maxWidth);
+                        final truncated = painter.height > maxHeight + 1;
+                        painter.dispose();
+
+                        final clipped = ClipRect(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: maxHeight),
+                            child: content,
+                          ),
+                        );
+                        if (!truncated) return clipped;
+                        return Stack(
+                          children: [
+                            clipped,
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              child: ColoredBox(
+                                color: colorScheme.surface,
+                                child: Text(
+                                  '…',
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    fontFamily:
+                                        settingsState.commentatorsFontFamily,
+                                    height: lineHeight,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
                 );

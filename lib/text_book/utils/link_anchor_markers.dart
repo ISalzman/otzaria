@@ -51,14 +51,21 @@ Map<String, int> anchorStyleIndexByCommentator(Iterable<Link> links) {
 ///  - עוגן-טווח (end != null, ציטוטים מ-charLevelData): עטיפת הטווח דרך
 ///    [wrapHtmlRanges] — שסוגר/פותח סביב תגים לא-מאוזנים כדי לשמור קינון
 ///    תקין — באותו וריאנט סגנון של המפרש.
+/// [lineIndex] (0-based) — כשמסופק, הסמנים נפלטים כ-`<a>` עם href
+/// `otzaria://anchor?ref=<line>_<i>` (i = מיקום הקישור ב-[anchorLinks]), כדי
+/// שריחוף/לחיצה יזהו את הקישור; עוגן-טווח מקבל גם `&range=1` — לחיצה עליו
+/// מנווטת ישירות ליעד (ולא רק מקפיצה תצוגה). בלעדיו הכול `<span>` לא-אינטראקטיבי.
 String injectLinkAnchorMarkers({
   required String rawLine,
   required List<Link> anchorLinks,
   required Map<String, int> styleIndexByCommentator,
+  int? lineIndex,
+  int? activeIndex,
 }) {
   final points = <({int at, int order, String html})>[];
   final ranges = <HtmlWrapRange>[];
-  for (final link in anchorLinks) {
+  for (var linkIndex = 0; linkIndex < anchorLinks.length; linkIndex++) {
+    final link = anchorLinks[linkIndex];
     final spans = link.anchorSpans.isNotEmpty
         ? link.anchorSpans
         : [
@@ -77,23 +84,35 @@ String injectLinkAnchorMarkers({
         final rawStart = _rawStartOfVisible(rawLine, span.start);
         final rawEnd = _rawEndOfVisible(rawLine, end);
         if (rawStart < rawEnd) {
+          // עם lineIndex הטווח לחיץ/מרחף (a); בלעדיו — סימון בלבד (span).
+          final tag = lineIndex == null ? 'span' : 'a';
+          final href = lineIndex == null
+              ? ''
+              : ' href="otzaria://anchor?ref=${lineIndex}_$linkIndex&range=1"';
           ranges.add(HtmlWrapRange(
             start: rawStart,
             end: rawEnd,
-            openTag: '<span class="link-anchor-range link-anchor-$styleIndex">',
-            closeTag: '</span>',
+            openTag:
+                '<$tag class="link-anchor-range link-anchor-$styleIndex"$href>',
+            closeTag: '</$tag>',
           ));
         }
       } else {
         final letter = _letterFor(link, span.label);
         if (letter == null) continue;
-        // span ולא sup: HtmlWidget מממש sup כ-WidgetSpan, ושניים+ בפסקת RTL
-        // מוצגים בסדר תוכן הפוך. ההגבהה נעשית ב-CSS (customStylesBuilder).
+        // a/span ולא sup: HtmlWidget מממש sup כ-WidgetSpan, ושניים+ בפסקת RTL
+        // מוצגים בסדר תוכן הפוך. a נותר TextSpan (recognizer) — סדר RTL נשמר.
+        final tag = lineIndex == null ? 'span' : 'a';
+        final href = lineIndex == null
+            ? ''
+            : ' href="otzaria://anchor?ref=${lineIndex}_$linkIndex"';
+        final activeClass =
+            linkIndex == activeIndex ? ' link-anchor-active' : '';
         points.add((
           at: span.start,
           order: 1,
           html:
-              '<span class="link-anchor link-anchor-$styleIndex">($letter)</span>',
+              '<$tag class="link-anchor link-anchor-$styleIndex$activeClass"$href>($letter)</$tag>',
         ));
       }
     }

@@ -488,51 +488,149 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     add(UpdateSearchQuery(state.searchQuery));
   }
 
-  void _onAddFacet(
+  Future<void> _onAddFacet(
     AddFacet event,
     Emitter<SearchState> emit,
-  ) {
+  ) async {
     final newFacets = List<String>.from(state.currentFacets);
     if (!newFacets.contains(event.facet)) {
       debugPrint('➕ AddFacet: ${event.facet} (before=$newFacets)');
       newFacets.add(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
+      if (await _applyClientSideFacetNarrow(
+          newFacets, newConfig, UpdateSearchQuery(state.searchQuery), emit)) {
+        return;
+      }
       emit(state.copyWith(configuration: newConfig));
       add(UpdateSearchQuery(state.searchQuery));
     }
   }
 
-  void _onRemoveFacet(
+  Future<void> _onRemoveFacet(
     RemoveFacet event,
     Emitter<SearchState> emit,
-  ) {
+  ) async {
     final newFacets = List<String>.from(state.currentFacets);
     if (newFacets.contains(event.facet)) {
       debugPrint('➖ RemoveFacet: ${event.facet} (before=$newFacets)');
       newFacets.remove(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
+      if (await _applyClientSideFacetNarrow(
+          newFacets, newConfig, UpdateSearchQuery(state.searchQuery), emit)) {
+        return;
+      }
       emit(state.copyWith(configuration: newConfig));
       add(UpdateSearchQuery(state.searchQuery));
     }
   }
 
-  void _onSetFacet(
+  Future<void> _onSetFacet(
     SetFacet event,
     Emitter<SearchState> emit,
-  ) {
+  ) async {
     // Clicking root "/" in a scoped search means "all books within scope"
     final effectiveFacets = (event.facet == '/' && state.hasScopedFacetFilter)
         ? state.searchScopeFacets
         : [event.facet];
     final newConfig =
         state.configuration.copyWith(currentFacets: effectiveFacets);
-    emit(state.copyWith(configuration: newConfig));
-    add(UpdateSearchQuery(
+    final searchEvent = UpdateSearchQuery(
       state.searchQuery,
       customSpacing: event.customSpacing,
       alternativeWords: event.alternativeWords,
       searchOptions: event.searchOptions,
+    );
+    if (await _applyClientSideFacetNarrow(
+        effectiveFacets, newConfig, searchEvent, emit)) {
+      return;
+    }
+    emit(state.copyWith(configuration: newConfig));
+    add(searchEvent);
+  }
+
+  /// האם [child] נמצא בתוך היקף ה-facet של [parent] (או שווה לו).
+  @visibleForTesting
+  static bool facetContains(String parent, String child) =>
+      parent == '/' || child == parent || child.startsWith('$parent/');
+
+  /// האם המעבר ל-[newFacets] רק מצמצם את ההיקף הנוכחי [oldFacets] —
+  /// כלומר כל facet חדש מוכל באחד הקיימים.
+  @visibleForTesting
+  static bool isFacetNarrowing(
+    List<String> oldFacets,
+    List<String> newFacets,
+  ) =>
+      newFacets.isNotEmpty &&
+      newFacets.every(
+          (newFacet) => oldFacets.any((old) => facetContains(old, newFacet)));
+
+  /// לחיצת קטגוריה מצמצמת כשכל התוצאות כבר בידינו — סינון מקומי מיידי
+  /// במקום חיפוש מנוע מלא. מחזירה false כשהתנאים לא מתקיימים (תוצאות
+  /// חלקיות, הרחבה, או שהאפשרויות השתנו מאז החיפוש האחרון) — ואז
+  /// הקורא ממשיך במסלול המנוע הרגיל.
+  Future<bool> _applyClientSideFacetNarrow(
+    List<String> newFacets,
+    SearchConfiguration newConfig,
+    UpdateSearchQuery searchEvent,
+    Emitter<SearchState> emit,
+  ) async {
+    // הסט שבידינו שלם רק כשהמנוע החזיר פחות מהמכסה — אחרת התוצאות חתוכות
+    // וסינון מקומי היה מאבד התאמות שמעבר להן.
+    if (state.searchQuery.isEmpty ||
+        state.isLoading ||
+        state.errorMessage != null ||
+        state.currentFacets.isEmpty ||
+        state.results.length >= state.numResults) {
+      return false;
+    }
+
+    // האפשרויות המתקדמות אינן נשמרות ב-state; חתימת הספירות מעידה שהחיפוש
+    // האחרון רץ עם בדיוק אותם קלטים כמו הלחיצה הנוכחית.
+    final signature = _facetRecountSignature(
+        state.searchQuery, searchEvent, _currentFacetRecountInputs());
+    if (signature != _facetCountsSignature) {
+      return false;
+    }
+
+    if (!isFacetNarrowing(state.currentFacets, newFacets)) {
+      return false;
+    }
+
+    final stateBeforeAwait = state;
+    final library = await DataRepository.instance.library;
+    // ה-handlers רצים במקביל (bloc 9) — אם state השתנה בזמן ההמתנה,
+    // התנאים שנבדקו כבר לא תקפים ונופלים למסלול המנוע.
+    if (!identical(state, stateBeforeAwait)) {
+      return false;
+    }
+
+    final bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
+    final filtered = <SearchResult>[];
+    for (final result in state.results) {
+      final catalogueOrder =
+          IndexingRepository.catalogueOrderFromDocumentId(result.id);
+      final book = bookByCatalogueOrder[catalogueOrder];
+      if (book == null) {
+        return false;
+      }
+      final facetPath = FacetHelper.buildBookFacet(
+          FacetHelper.resolveCategoryPath(book), book);
+      if (newFacets.any((facet) => facetContains(facet, facetPath))) {
+        filtered.add(result);
+      }
+    }
+
+    // מבטל המשכים תלויים של החיפוש הקודם (כמו countTexts שעוד ממתין) —
+    // אחרת הם היו דורסים את totalResults המסונן בספירת ההיקף הרחב.
+    _searchRequestId++;
+
+    emit(state.copyWith(
+      configuration: newConfig,
+      results: filtered,
+      totalResults: filtered.length,
+      isLoading: false,
     ));
+    return true;
   }
 
   void _onSetFacetsWithoutSearch(

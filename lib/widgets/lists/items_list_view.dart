@@ -1,12 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+/// שורה ברשימה המוצגת: כותרת קבוצה או פריט. הרשימה משוטחת כדי לאפשר
+/// וירטואליזציה — נבנות רק השורות הנראות.
+class _ListRow {
+  final String? headerTitle;
+  final MapEntry<int, dynamic>? entry;
+  final bool isFirstInGroup;
+  final bool isLastInGroup;
+
+  const _ListRow.header(this.headerTitle)
+      : entry = null,
+        isFirstInGroup = false,
+        isLastInGroup = false;
+
+  const _ListRow.item(
+    MapEntry<int, dynamic> this.entry, {
+    required this.isFirstInGroup,
+    required this.isLastInGroup,
+  }) : headerTitle = null;
+
+  bool get isHeader => entry == null;
+}
 
 class ItemsListView extends StatefulWidget {
   final List<dynamic> items;
@@ -115,8 +139,11 @@ class _ItemsListViewState extends State<ItemsListView> {
   String _searchQuery = '';
 
   int _focusedOriginalIndex = -1;
-  final Map<int, GlobalKey> _itemKeys = {};
   List<MapEntry<int, dynamic>> _displayEntries = [];
+  List<_ListRow> _displayRows = const [];
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
 
   /// קאש לרשימה הממוינת — חישוב המיון (O(n log n)) רץ רק כשהקלט משתנה,
   /// לא בכל הקלדה בשדה החיפוש (שעושה רק filter על הקאש).
@@ -197,7 +224,6 @@ class _ItemsListViewState extends State<ItemsListView> {
     int originalIndex, {
     bool isKeyboardFocused = false,
   }) {
-    final itemKey = _itemKeys.putIfAbsent(originalIndex, () => GlobalKey());
     final subtitle = widget.subtitleBuilder?.call(item);
     final subtitleTooltip = widget.subtitleTooltipBuilder?.call(item);
 
@@ -249,97 +275,128 @@ class _ItemsListViewState extends State<ItemsListView> {
     }
 
     if (!widget.actionsInContextMenu) {
-      return KeyedSubtree(key: itemKey, child: content);
+      return content;
     }
 
-    return KeyedSubtree(
-      key: itemKey,
-      child: AppContextMenuRegion(
-        menuBuilder: (menuContext, _) => [
-          if (widget.onEdit != null)
-            AppContextMenuEntry(
-              label: 'ערוך תיאור',
-              icon: FluentIcons.edit_24_regular,
-              onTap: () => widget.onEdit!(menuContext, item, originalIndex),
-            ),
+    return AppContextMenuRegion(
+      menuBuilder: (menuContext, _) => [
+        if (widget.onEdit != null)
           AppContextMenuEntry(
-            label: 'מחק',
-            icon: FluentIcons.delete_24_regular,
-            isDestructive: true,
-            onTap: () => widget.onDelete(menuContext, originalIndex),
+            label: 'ערוך תיאור',
+            icon: FluentIcons.edit_24_regular,
+            onTap: () => widget.onEdit!(menuContext, item, originalIndex),
           ),
-        ],
-        child: content,
+        AppContextMenuEntry(
+          label: 'מחק',
+          icon: FluentIcons.delete_24_regular,
+          isDestructive: true,
+          onTap: () => widget.onDelete(menuContext, originalIndex),
+        ),
+      ],
+      child: content,
+    );
+  }
+
+  /// משטח את הפריטים (עם כותרות קבוצה אם יש) לרשימת שורות לצורך
+  /// וירטואליזציה. הקיבוץ שומר על סדר ההופעה הראשון.
+  List<_ListRow> _buildDisplayRows(List<MapEntry<int, dynamic>> entries) {
+    List<List<MapEntry<int, dynamic>>> groups;
+    if (widget.groupKeyBuilder == null) {
+      groups = [entries];
+    } else {
+      final grouped = <String, List<MapEntry<int, dynamic>>>{};
+      for (final entry in entries) {
+        final key = widget.groupKeyBuilder!(entry.value) ?? '';
+        (grouped[key] ??= []).add(entry);
+      }
+      groups = grouped.values.toList();
+    }
+
+    final rows = <_ListRow>[];
+    for (final group in groups) {
+      if (widget.groupKeyBuilder != null) {
+        rows.add(_ListRow.header(
+          widget.groupTitleBuilder?.call(group.first.value),
+        ));
+      }
+      for (var i = 0; i < group.length; i++) {
+        rows.add(_ListRow.item(
+          group[i],
+          isFirstInGroup: i == 0,
+          isLastInGroup: i == group.length - 1,
+        ));
+      }
+    }
+    return rows;
+  }
+
+  Widget _buildHeaderRow(BuildContext context, String? title) {
+    if (title == null || title.isEmpty) {
+      return const SizedBox(height: 12);
+    }
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Text(
+        title,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.primary,
+        ),
       ),
     );
   }
 
-  Widget _buildGroupCard(
-    BuildContext context,
-    List<MapEntry<int, dynamic>> entries,
-  ) {
-    return AppCard.section(
-      children: [
-        for (final entry in entries)
-          _buildItemRow(
-            context,
-            entry.value,
-            entry.key,
-            isKeyboardFocused: entry.key == _focusedOriginalIndex,
-          ),
-      ],
+  /// שורת פריט בסגנון [AppCard.section]: רקע כרטיס, פינות מעוגלות בקצות
+  /// הקבוצה ורווח [AppCard.sectionSpacing] בין שורות — נבנית שורה-שורה כדי
+  /// שהרשימה תישאר וירטואלית.
+  Widget _buildCardRow(BuildContext context, _ListRow row) {
+    final entry = row.entry!;
+    Widget content = Material(
+      color: AppSurfaces.card(context),
+      child: _buildItemRow(
+        context,
+        entry.value,
+        entry.key,
+        isKeyboardFocused: entry.key == _focusedOriginalIndex,
+      ),
     );
-  }
 
-  Widget _buildFlatList(
-    BuildContext context,
-    List<MapEntry<int, dynamic>> entries,
-  ) {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 8),
-      children: [_buildGroupCard(context, entries)],
+    const radius = Radius.circular(AppTokens.radius);
+    content = ClipRRect(
+      borderRadius: BorderRadius.vertical(
+        top: row.isFirstInGroup ? radius : Radius.zero,
+        bottom: row.isLastInGroup ? radius : Radius.zero,
+      ),
+      child: content,
     );
-  }
 
-  Widget _buildGroupedList(
-    BuildContext context,
-    List<MapEntry<int, dynamic>> filteredEntries,
-  ) {
-    final theme = Theme.of(context);
-
-    // קיבוץ תוך שמירה על סדר ההופעה הראשון
-    final groups = <String, List<MapEntry<int, dynamic>>>{};
-    for (final entry in filteredEntries) {
-      final key = widget.groupKeyBuilder!(entry.value) ?? '';
-      (groups[key] ??= []).add(entry);
+    if (!row.isLastInGroup) {
+      content = Padding(
+        padding: const EdgeInsets.only(bottom: AppCard.sectionSpacing),
+        child: content,
+      );
     }
+    return content;
+  }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 8),
-      children: [
-        for (final group in groups.entries) ...[
-          Builder(
-            builder: (context) {
-              final title =
-                  widget.groupTitleBuilder?.call(group.value.first.value);
-              if (title == null || title.isEmpty) {
-                return const SizedBox(height: 12);
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: 16, bottom: 8),
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              );
-            },
-          ),
-          _buildGroupCard(context, group.value),
-        ],
-      ],
+  Widget _buildRowsList(BuildContext context, List<_ListRow> rows) {
+    return ScrollablePositionedListScrollbar(
+      scrollController: _itemScrollController,
+      itemPositionsListener: _itemPositionsListener,
+      itemCount: rows.length,
+      child: ScrollablePositionedList.builder(
+        itemScrollController: _itemScrollController,
+        itemPositionsListener: _itemPositionsListener,
+        padding: const EdgeInsets.only(bottom: 8),
+        itemCount: rows.length,
+        itemBuilder: (context, index) {
+          final row = rows[index];
+          return row.isHeader
+              ? _buildHeaderRow(context, row.headerTitle)
+              : _buildCardRow(context, row);
+        },
+      ),
     );
   }
 
@@ -401,11 +458,24 @@ class _ItemsListViewState extends State<ItemsListView> {
 
   void _ensureFocusedVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _itemKeys[_focusedOriginalIndex]?.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(ctx,
-            duration: const Duration(milliseconds: 150));
+      if (!mounted || !_itemScrollController.isAttached) return;
+      final rowIndex = _displayRows.indexWhere(
+        (row) => !row.isHeader && row.entry!.key == _focusedOriginalIndex,
+      );
+      if (rowIndex == -1) return;
+      // אם השורה כבר נראית במלואה — אין מה לגלול.
+      for (final position in _itemPositionsListener.itemPositions.value) {
+        if (position.index == rowIndex &&
+            position.itemLeadingEdge >= 0.0 &&
+            position.itemTrailingEdge <= 1.0) {
+          return;
+        }
       }
+      _itemScrollController.scrollTo(
+        index: rowIndex,
+        alignment: 0.4,
+        duration: const Duration(milliseconds: 150),
+      );
     });
   }
 
@@ -446,6 +516,7 @@ class _ItemsListViewState extends State<ItemsListView> {
     }).toList();
 
     _displayEntries = displayEntries;
+    _displayRows = _buildDisplayRows(displayEntries);
     if (_focusedOriginalIndex != -1 &&
         !displayEntries.any((e) => e.key == _focusedOriginalIndex)) {
       _focusedOriginalIndex = -1;
@@ -505,9 +576,7 @@ class _ItemsListViewState extends State<ItemsListView> {
                       widget.notFoundText,
                     ),
                   )
-                : widget.groupKeyBuilder != null
-                    ? _buildGroupedList(context, displayEntries)
-                    : _buildFlatList(context, displayEntries),
+                : _buildRowsList(context, _displayRows),
           ),
           Padding(
             padding: const EdgeInsets.all(8.0),

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as path;
 
@@ -25,6 +27,10 @@ class DatabaseConstants {
   /// The name of the compressed Talmud Bavli PDF archive (tar.zst).
   static const String talmudBavliArchiveFileName =
       'talmud_bavli_latest.tar.zst';
+
+  /// שם קובץ הגרסה בתיקיית התלמוד, וערך הסימון בזמן חילוץ שטרם הסתיים.
+  static const String talmudBavliVersionFileName = '.version';
+  static const String talmudBavliInstallingMarker = 'installing';
 
   /// The name of the external catalogs version file in GitHub releases
   static const String externalCatalogVersionFileName = 'version.txt';
@@ -126,6 +132,18 @@ class DatabaseConstants {
     }
 
     return [primary, fallback];
+  }
+
+  /// הנתיב לקובץ סימון הגרסה בתוך תיקיית תלמוד נתונה.
+  static String talmudBavliVersionFilePath(String talmudDirPath) =>
+      path.join(talmudDirPath, talmudBavliVersionFileName);
+
+  /// חילוץ שנקטע משאיר את התיקייה עם הסימון [talmudBavliInstallingMarker];
+  /// זיהוי כזה מאפשר לשכבת הספרייה להתעלם מהתקנה חלקית.
+  static bool isTalmudBavliInstallInProgress(String talmudDirPath) {
+    final marker = File(talmudBavliVersionFilePath(talmudDirPath));
+    if (!marker.existsSync()) return false;
+    return marker.readAsStringSync().trim() == talmudBavliInstallingMarker;
   }
 
   /// Returns whether [filePath] points to a file inside the bundled

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
 
 class _Book {
@@ -52,6 +51,14 @@ void main() {
       home: Scaffold(body: child),
     );
   }
+
+  /// שורת "תחילת קבוצה" — ClipRRect עם פינות עליונות מעוגלות שעוטף Material
+  /// של שורת כרטיס. שקול לספירת כרטיסי קבוצה במבנה הווירטואלי.
+  Finder groupStarts() => find.byWidgetPredicate((w) =>
+      w is ClipRRect &&
+      w.borderRadius is BorderRadius &&
+      (w.borderRadius as BorderRadius).topLeft != Radius.zero &&
+      w.child is Material);
 
   group('ItemsListView', () {
     testWidgets('מציג את כל הפריטים כשאין additionalFilter', (tester) async {
@@ -222,8 +229,8 @@ void main() {
         ));
         await tester.pump();
 
-        // גמרא + הלכה = 2 קבוצות → 2 Card widgets
-        expect(find.byType(AppCard), findsNWidgets(2));
+        // גמרא + הלכה = 2 קבוצות → 2 תחילות-כרטיס
+        expect(groupStarts(), findsNWidgets(2));
         expect(find.text('שבת עד:'), findsOneWidget);
         expect(find.text('ברכות ב.'), findsOneWidget);
         expect(find.text('הלכות שבת'), findsOneWidget);
@@ -256,7 +263,7 @@ void main() {
         ));
         await tester.pump();
 
-        expect(find.byType(AppCard), findsNWidgets(2));
+        expect(groupStarts(), findsNWidgets(2));
         expect(find.text('גמרא'), findsNothing);
         expect(find.text('הלכה'), findsNothing);
       });
@@ -278,7 +285,7 @@ void main() {
         ));
         await tester.pump();
 
-        expect(find.byType(AppCard), findsOneWidget);
+        expect(groupStarts(), findsOneWidget);
       });
     });
 

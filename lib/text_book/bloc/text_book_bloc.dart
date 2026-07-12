@@ -41,6 +41,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   static const int _contentLookAheadLines = 260;
   static const int _contentWarmChunkLines = 640;
   static const int _warmFlushChunkCount = 8;
+
+  /// ספר קצר מזה לא משוחרר במעבר לרקע — הרווח זניח והשחרור גורר rebuild.
+  static const int _releaseContentMinLines = 2000;
   static const int _contentReloadThresholdLines = 60;
   static const Duration _visibleIndicesDebounceDuration =
       Duration(milliseconds: 160);
@@ -78,6 +81,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   List<String>? _cachedPageShapeTargetBookTitles;
   bool _isLoadingLinks = false;
   bool _pendingLinksReload = false;
+
+  /// האם הטאב שמציג את ה-bloc נראה כרגע (ראו [SetTabVisibility]).
+  bool _isTabVisible = true;
+
+  /// true רק אחרי שטעינת-טווחים הוכחה כעובדת לספר. ספרי מסלול preview/קובץ
+  /// אינם ניתנים לשחזור אחרי שחרור — אסור לשחרר את תוכנם.
+  bool _supportsContentRangeLoading = false;
   List<int>? _pendingForceLoadIndices;
   bool _pendingForceLoadAll = false;
   bool _awaitingInitialPageShapeVisibleSync = false;
@@ -158,6 +168,83 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateAvailableCommentators>(_onUpdateAvailableCommentators);
     on<RefreshLinksForCurrentWindow>(_onRefreshLinksForCurrentWindow);
     on<LoadAllLinksForIndices>(_onLoadAllLinksForIndices);
+    on<SetTabVisibility>(_onSetTabVisibility);
+  }
+
+  void _onSetTabVisibility(
+    SetTabVisibility event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (_isTabVisible == event.visible) {
+      return;
+    }
+    _isTabVisible = event.visible;
+
+    final currentState = state;
+    if (currentState is! TextBookLoaded) {
+      return;
+    }
+
+    if (event.visible) {
+      _loadContentRangeInBackground(
+          currentState.book, currentState.visibleIndices);
+      _warmContentCacheInBackground(currentState.book);
+    } else {
+      _releaseContentOutsideWindow(currentState, emit);
+    }
+  }
+
+  /// משחרר את תוכן הספר של טאב רקע ומשאיר רק חלון סביב המיקום הנוכחי.
+  /// אורך הרשימה נשמר (placeholders ריקים) כדי שאינדקסי שורות יישארו תקפים.
+  void _releaseContentOutsideWindow(
+    TextBookLoaded currentState,
+    Emitter<TextBookState> emit,
+  ) {
+    final content = currentState.content;
+    if (!_supportsContentRangeLoading ||
+        content.length < _releaseContentMinLines) {
+      return;
+    }
+
+    final window = _calculateContentWindow(currentState.visibleIndices);
+    final keepStart = window.startLine.clamp(0, content.length - 1);
+    final keepEnd = window.endLine.clamp(0, content.length - 1);
+
+    final flags = _loadedContentFlags;
+    var hasLoadedOutsideWindow = false;
+    for (var i = 0; i < content.length; i++) {
+      if (i >= keepStart && i <= keepEnd) {
+        continue;
+      }
+      if (content[i].isNotEmpty) {
+        hasLoadedOutsideWindow = true;
+        break;
+      }
+    }
+    if (!hasLoadedOutsideWindow) {
+      return;
+    }
+
+    final nextContent = List<String>.filled(content.length, '');
+    final nextFlags = List<bool>.filled(content.length, false);
+    for (var i = keepStart; i <= keepEnd; i++) {
+      nextContent[i] = content[i];
+      nextFlags[i] = i < flags.length ? flags[i] : content[i].isNotEmpty;
+    }
+
+    _loadedContentRanges = const [];
+    _setLoadedContentFlags(currentState.book, nextFlags);
+    _markLoadedContentRange(currentState.book, keepStart, keepEnd);
+
+    emit(currentState.copyWith(
+      content: nextContent,
+      contentVersion: currentState.contentVersion + 1,
+      readingSegments: buildReadingSegments(
+        nextContent,
+        continuous: currentState.continuousReadingMode,
+        loadedLineFlags: nextFlags,
+      ),
+    ));
   }
 
   /// מחזירה את הערך האפקטיבי של מצב הרצף לאחר אירוע
@@ -243,9 +330,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         bounds.max < expectedIndex - _initialVisibleSyncTolerance;
   }
 
-  @visibleForTesting
-  static List<({int startLine, int endLine})>
-      mergeLoadedContentRangesForTesting(
+  static List<({int startLine, int endLine})> mergeLoadedContentRanges(
     List<({int startLine, int endLine})> ranges, {
     required int startLine,
     required int endLine,
@@ -282,8 +367,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     return List<({int startLine, int endLine})>.unmodifiable(merged);
   }
 
-  @visibleForTesting
-  static bool isContentWindowSufficientForTesting({
+  static bool isContentWindowSufficient({
     required List<({int startLine, int endLine})> loadedRanges,
     required int startLine,
     required int endLine,
@@ -562,6 +646,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             initialRange.endLine,
             totalLines: initialRange.totalLines,
           );
+          _supportsContentRangeLoading = true;
         } else {
           final preview = await _quickPreviewLoader(
             book.title,
@@ -1666,6 +1751,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     ApplyBookContentRanges event,
     Emitter<TextBookState> emit,
   ) {
+    // אצוות חימום שהוכנסו לתור לפני שהטאב הוסתר — החלתן הייתה מחזירה
+    // לזיכרון תוכן שזה עתה שוחרר.
+    if (!_isTabVisible) {
+      return;
+    }
     _applyContentRanges(event.bookTitle, event.ranges, emit);
   }
 
@@ -1683,6 +1773,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (currentState.book.title != bookTitle || applicable.isEmpty) {
       return;
     }
+
+    // טווח שהוחל בפועל = טעינת-טווחים עובדת לספר הזה (תנאי לשחרור תוכן).
+    _ensureLoadedContentTrackingBook(currentState.book);
+    _supportsContentRangeLoading = true;
 
     final nextContent = List<String>.of(currentState.content);
     final nextLoadedFlags = List<bool>.of(_loadedContentFlags);
@@ -1742,7 +1836,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // טווח, ואצוות חימום הן כמעט תמיד רצף אחד — כך נשארת העתקה אחת לאצווה.
     var mergedRanges = const <({int startLine, int endLine})>[];
     for (final range in applicable) {
-      mergedRanges = mergeLoadedContentRangesForTesting(
+      mergedRanges = mergeLoadedContentRanges(
         mergedRanges,
         startLine: range.startLine,
         endLine: range.startLine + range.lines.length - 1,
@@ -1940,6 +2034,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _loadedContentRanges = const [];
     _loadedContentFlags = const [];
     _loadedContentTotalLines = null;
+    _supportsContentRangeLoading = false;
   }
 
   void _setLoadedContentFlags(TextBook book, List<bool> loadedFlags) {
@@ -1956,7 +2051,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _ensureLoadedContentTrackingBook(book);
 
     _loadedContentTotalLines = totalLines ?? _loadedContentTotalLines;
-    _loadedContentRanges = mergeLoadedContentRangesForTesting(
+    _loadedContentRanges = mergeLoadedContentRanges(
       _loadedContentRanges,
       startLine: startLine,
       endLine: endLine,
@@ -1968,7 +2063,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       return false;
     }
 
-    return isContentWindowSufficientForTesting(
+    return isContentWindowSufficient(
       loadedRanges: _loadedContentRanges,
       startLine: startLine,
       endLine: endLine,
@@ -2060,6 +2155,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (pendingChunks.isEmpty || isClosed) {
         return;
       }
+      // טאב שהוסתר בינתיים: אין טעם להחיל chunks שישוחררו מיד —
+      // _loadedContentRanges מתעדכן רק בהחלה, כך שהוויתור בטוח.
+      if (!_isTabVisible) {
+        pendingChunks.clear();
+        return;
+      }
       add(ApplyBookContentRanges(
         bookTitle: book.title,
         ranges: List.of(pendingChunks),
@@ -2073,6 +2174,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         final currentState = state;
         if (currentState is! TextBookLoaded ||
             currentState.book.title != book.title) {
+          return;
+        }
+
+        // טאב רקע לא מחמם — החימום מתחדש ב-SetTabVisibility(true).
+        if (!_isTabVisible) {
           return;
         }
 
@@ -2091,7 +2197,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
         var effectiveRanges = _loadedContentRanges;
         for (final range in warmedRanges) {
-          effectiveRanges = mergeLoadedContentRangesForTesting(
+          effectiveRanges = mergeLoadedContentRanges(
             effectiveRanges,
             startLine: range.startLine,
             endLine: range.endLine,
@@ -2125,7 +2231,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           totalLines: range.totalLines,
           lines: range.lines,
         ));
-        warmedRanges = mergeLoadedContentRangesForTesting(
+        warmedRanges = mergeLoadedContentRanges(
           warmedRanges,
           startLine: range.startLine,
           endLine: range.startLine + range.lines.length - 1,

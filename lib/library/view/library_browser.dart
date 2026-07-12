@@ -52,6 +52,103 @@ const Duration _kLibrarySearchDebounceDuration = Duration(milliseconds: 250);
 
 enum _LibraryListItemStyle { root, grouped, search }
 
+/// מעל מספר זה של שורות נראות, עץ הקטגוריות משוטח ומרונדר וירטואלית
+/// (כמו ב-TOC) — מתחתיו נשמר העץ המקונן עם אנימציות ההרחבה.
+const int _kLibraryTreeFlattenThreshold = 500;
+
+/// מכסת הספרים המוצגים לקטגוריה; מעבר לה מופיעה שורת "הצג עוד".
+const int _kCategoryBooksCap = 500;
+
+enum FlatLibraryRowKind { categoryHeader, book, rootBook, showMore }
+
+/// שורה בעץ הספרייה המשוטח. דגלי הקצוות משחזרים את מראה הכרטיס של
+/// [ExpandableCard] ברמה העליונה (פינות מעוגלות ורווח בין קבוצות).
+@visibleForTesting
+class FlatLibraryRow {
+  final FlatLibraryRowKind kind;
+  final Category? category;
+  final Book? book;
+  final List<Book>? showMoreBooks;
+  final int level;
+
+  /// נתיב הקטגוריה המכילה — מבדיל בין שורות זהות תחת הורים שונים (keys).
+  final String parentPath;
+  final bool isGroupStart;
+  bool isGroupEnd = false;
+
+  FlatLibraryRow({
+    required this.kind,
+    required this.level,
+    required this.parentPath,
+    this.category,
+    this.book,
+    this.showMoreBooks,
+    this.isGroupStart = false,
+  });
+}
+
+/// משטח את הצמתים הנראים בעץ הספרייה (לפי [expandedPaths]) לרשימת שורות —
+/// אותו סדר ואותם גבולות (מכסה + "הצג עוד") כמו העץ המקונן.
+@visibleForTesting
+List<FlatLibraryRow> buildFlatLibraryRows({
+  required Category category,
+  required Set<String> expandedPaths,
+  required int Function(Category) topCategoryOrder,
+  required int Function(int) normalizeOrder,
+}) {
+  final rows = <FlatLibraryRow>[];
+
+  void collect(Category current, int level) {
+    final books = current.books.toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    final subs = current.subCategories.where((c) => c.hasBooks).toList();
+    if (current is Library) {
+      subs.sort((a, b) => topCategoryOrder(a).compareTo(topCategoryOrder(b)));
+    } else {
+      subs.sort(
+        (a, b) => normalizeOrder(a.order).compareTo(normalizeOrder(b.order)),
+      );
+    }
+
+    for (final sub in subs) {
+      rows.add(FlatLibraryRow(
+        kind: FlatLibraryRowKind.categoryHeader,
+        category: sub,
+        level: level,
+        parentPath: current.path,
+        isGroupStart: level == 0,
+      ));
+      if (expandedPaths.contains(sub.path)) {
+        collect(sub, level + 1);
+      }
+      if (level == 0) {
+        rows.last.isGroupEnd = true;
+      }
+    }
+
+    for (int i = 0; i < books.length && i < _kCategoryBooksCap; i++) {
+      rows.add(FlatLibraryRow(
+        kind:
+            level == 0 ? FlatLibraryRowKind.rootBook : FlatLibraryRowKind.book,
+        book: books[i],
+        level: level,
+        parentPath: current.path,
+      ));
+    }
+    if (books.length > _kCategoryBooksCap) {
+      rows.add(FlatLibraryRow(
+        kind: FlatLibraryRowKind.showMore,
+        showMoreBooks: books,
+        level: level,
+        parentPath: current.path,
+      ));
+    }
+  }
+
+  collect(category, 0);
+  return rows;
+}
+
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
 @visibleForTesting
 ({double paneWidth, double minPaneWidth, double maxPaneWidth})
@@ -1206,10 +1303,109 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  Widget _buildListView(Category category) => _LibraryBrowserList(
+  Widget _buildListView(Category category) {
+    final flatRows = _buildFlatTreeRows(category);
+    if (flatRows.length <= _kLibraryTreeFlattenThreshold) {
+      return _LibraryBrowserList(
         forPanel: false,
         children: _buildCategoryTree(category, 0),
       );
+    }
+    return _LibraryBrowserList(
+      forPanel: false,
+      itemCount: flatRows.length,
+      itemBuilder: (context, index) =>
+          _buildFlatTreeRow(context, flatRows[index]),
+    );
+  }
+
+  List<FlatLibraryRow> _buildFlatTreeRows(Category category) =>
+      buildFlatLibraryRows(
+        category: category,
+        expandedPaths: _expandedCategories,
+        topCategoryOrder: _getTopCategoryOrder,
+        normalizeOrder: _normalizeOrder,
+      );
+
+  /// Key יציב לשורה — בלעדיו אנימציית השברון ומצב hover "זולגים" בין
+  /// שורות כשההרחבה מזיזה אינדקסים ב-ListView.builder.
+  Key _flatRowKey(FlatLibraryRow row) => switch (row.kind) {
+        FlatLibraryRowKind.categoryHeader => ValueKey(row.category!.path),
+        // ObjectKey ולא title — מהדורות חיצוניות וצמדי טקסט/PDF יכולים
+        // לשאת אותו title תחת אותו הורה.
+        FlatLibraryRowKind.book ||
+        FlatLibraryRowKind.rootBook =>
+          ObjectKey(row.book!),
+        FlatLibraryRowKind.showMore => ValueKey('more:${row.parentPath}'),
+      };
+
+  /// בונה שורה משוטחת בסגנון הכרטיס של העץ המקונן: רקע כרטיס, מפריד בין
+  /// שורות, פינות מעוגלות ורווח אנכי בקצות כל קבוצה עליונה.
+  Widget _buildFlatTreeRow(BuildContext context, FlatLibraryRow row) {
+    final isExpanded = row.category != null &&
+        _expandedCategories.contains(row.category!.path);
+
+    if (row.kind == FlatLibraryRowKind.rootBook) {
+      return KeyedSubtree(
+        key: _flatRowKey(row),
+        child: _buildListBookItem(
+          row.book!,
+          row.level,
+          itemStyle: _LibraryListItemStyle.root,
+        ),
+      );
+    }
+
+    // "הצג עוד" ברמה 0 מוצג חשוף גם בעץ המקונן — בלי עטיפת כרטיס.
+    if (row.kind == FlatLibraryRowKind.showMore && row.level == 0) {
+      return KeyedSubtree(
+        key: _flatRowKey(row),
+        child: _buildShowMoreRow(row.showMoreBooks!, row.level),
+      );
+    }
+
+    final Widget child = switch (row.kind) {
+      FlatLibraryRowKind.categoryHeader =>
+        _buildCategoryHeaderRow(row.category!, row.level, isExpanded),
+      FlatLibraryRowKind.book => _buildListBookItem(
+          row.book!,
+          row.level,
+          itemStyle: _LibraryListItemStyle.grouped,
+        ),
+      FlatLibraryRowKind.showMore =>
+        _buildShowMoreRow(row.showMoreBooks!, row.level),
+      FlatLibraryRowKind.rootBook => throw StateError('unreachable'),
+    };
+
+    const radius = Radius.circular(AppTokens.radius);
+    Widget content = Material(
+      color: AppSurfaces.card(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!row.isGroupStart) AppCard.sectionDivider(context),
+          child,
+        ],
+      ),
+    );
+    content = ClipRRect(
+      borderRadius: BorderRadius.vertical(
+        top: row.isGroupStart ? radius : Radius.zero,
+        bottom: row.isGroupEnd ? radius : Radius.zero,
+      ),
+      child: content,
+    );
+    return KeyedSubtree(
+      key: _flatRowKey(row),
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: row.isGroupStart ? 2 : 0,
+          bottom: row.isGroupEnd ? 2 : 0,
+        ),
+        child: content,
+      ),
+    );
+  }
 
   List<Widget> _buildCategoryTree(Category category, int level) {
     final List<Widget> widgets = [];
@@ -1246,8 +1442,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         );
       }
     }
-    const limit = 500;
-    for (int i = 0; i < filteredBooks.length && i < limit; i++) {
+    for (int i = 0; i < filteredBooks.length && i < _kCategoryBooksCap; i++) {
       widgets.add(
         _buildListBookItem(
           filteredBooks[i],
@@ -1258,28 +1453,31 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ),
       );
     }
-    if (filteredBooks.length > limit) {
-      widgets.add(
-        InkWell(
-          onTap: () => _showAllBooksDialog(filteredBooks),
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: 16.0 + level * 18,
-              left: 16,
-              top: 10,
-              bottom: 10,
-            ),
-            child: Text(
-              'הצג עוד ${filteredBooks.length - limit} פריטים',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.secondary,
-                  ),
-            ),
-          ),
-        ),
-      );
+    if (filteredBooks.length > _kCategoryBooksCap) {
+      widgets.add(_buildShowMoreRow(filteredBooks, level));
     }
     return widgets;
+  }
+
+  /// שורת "הצג עוד" לקטגוריה שחצתה את מכסת הספרים המוצגים.
+  Widget _buildShowMoreRow(List<Book> books, int level) {
+    return InkWell(
+      onTap: () => _showAllBooksDialog(books),
+      child: Padding(
+        padding: EdgeInsets.only(
+          right: 16.0 + level * 18,
+          left: 16,
+          top: 10,
+          bottom: 10,
+        ),
+        child: Text(
+          'הצג עוד ${books.length - _kCategoryBooksCap} פריטים',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+        ),
+      ),
+    );
   }
 
   /// שורת כותרת לתיקייה — ללא עטיפת כרטיס (נוסף ע"י [ExpandableCard]).
