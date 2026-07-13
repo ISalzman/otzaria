@@ -509,6 +509,8 @@ class _FakeSearchRepository extends SearchRepository {
     Map<String, Map<String, bool>>? searchOptions,
     Map<String, Map<String, bool>>? negativeSearchOptions,
     ResultGrouping? grouping,
+    WordMatchMode wordMatchMode = WordMatchMode.all,
+    int? wordMatchCount,
   }) async {
     searchCalls++;
     lastQuery = query;

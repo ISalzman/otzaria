@@ -349,6 +349,17 @@ class SearchingTab extends OpenedTab {
     final initialScopeFacets = rawScopeFacets is List
         ? rawScopeFacets.map((e) => e.toString()).toList(growable: false)
         : defaultConfig.searchScopeFacets;
+    final wordMatchModeIndex = json['wordMatchMode'];
+    final initialWordMatchMode = (wordMatchModeIndex is int &&
+            wordMatchModeIndex >= 0 &&
+            wordMatchModeIndex < WordMatchMode.values.length)
+        ? WordMatchMode.values[wordMatchModeIndex]
+        : defaultConfig.wordMatchMode;
+    final wordMatchCountJson = json['wordMatchCount'];
+    final initialWordMatchCount =
+        wordMatchCountJson is int && wordMatchCountJson >= 1
+            ? wordMatchCountJson
+            : defaultConfig.wordMatchCount;
 
     final initialConfig = SearchConfiguration(
       distance: initialDistance,
@@ -357,6 +368,8 @@ class SearchingTab extends OpenedTab {
       sortBy: initialSortBy,
       currentFacets: initialCurrentFacets,
       searchScopeFacets: initialScopeFacets,
+      wordMatchMode: initialWordMatchMode,
+      wordMatchCount: initialWordMatchCount,
       regexEnabled: json['regexEnabled'] == true,
       caseSensitive: json['caseSensitive'] == true,
       multiline: json['multiline'] == true,
@@ -528,6 +541,8 @@ class SearchingTab extends OpenedTab {
       'sortBy': config.sortBy.index,
       'currentFacets': config.currentFacets,
       'searchScopeFacets': config.searchScopeFacets,
+      'wordMatchMode': config.wordMatchMode.index,
+      'wordMatchCount': config.wordMatchCount,
       'regexEnabled': config.regexEnabled,
       'caseSensitive': config.caseSensitive,
       'multiline': config.multiline,

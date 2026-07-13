@@ -152,8 +152,7 @@ class TantivyDataProvider {
     final translationPath = await _materializeBundledAsset(
         'assets/dictionary.json', 'dictionary.json');
     if (translationPath != null) {
-      final loaded =
-          engine.setTranslationDictionaryPath(path: translationPath);
+      final loaded = engine.setTranslationDictionaryPath(path: translationPath);
       debugPrint(loaded
           ? '🔤 מילון תרגום ארמי נטען: $translationPath'
           : '⚠️ מילון התרגום הארמי לא נטען ($translationPath)');
@@ -436,10 +435,12 @@ class TantivyDataProvider {
       Map<String, Map<String, bool>>? searchOptions,
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
-      bool matchTaamim = false}) async {
+      bool matchTaamim = false,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount}) async {
     // Global cache check
     final cacheKey =
-        '$query|not=$negativeQuery|${facets.join(',')}|$fuzzy|$searchMode|$distance|${negativeDistance ?? distance}|$scope|${negativeScope ?? scope}|${customSpacing.toString()}|${negativeCustomSpacing.toString()}|${alternativeWords.toString()}|${negativeAlternativeWords.toString()}|${searchOptions.toString()}|${negativeSearchOptions.toString()}|$matchNikud|$matchTaamim';
+        '$query|not=$negativeQuery|${facets.join(',')}|$fuzzy|$searchMode|$distance|${negativeDistance ?? distance}|$scope|${negativeScope ?? scope}|${customSpacing.toString()}|${negativeCustomSpacing.toString()}|${alternativeWords.toString()}|${negativeAlternativeWords.toString()}|${searchOptions.toString()}|${negativeSearchOptions.toString()}|$matchNikud|$matchTaamim|$wordMatchMode|$wordMatchCount';
 
     if (_lastCachedQuery == query && _globalFacetCache.containsKey(cacheKey)) {
       debugPrint(
@@ -475,6 +476,8 @@ class TantivyDataProvider {
           negativeSearchOptions: negativeSearchOptions ?? const {},
           matchNikud: matchNikud,
           matchTaamim: matchTaamim,
+          wordMatchMode: wordMatchMode,
+          wordMatchCount: wordMatchCount,
         ),
       );
 
@@ -542,6 +545,8 @@ class TantivyDataProvider {
     Map<String, Map<String, bool>>? negativeSearchOptions,
     bool matchNikud = false,
     bool matchTaamim = false,
+    WordMatchMode wordMatchMode = WordMatchMode.all,
+    int? wordMatchCount,
   }) async {
     final results = await _searchGateway.countByBook(
       RustSearchEngineOperations(await engine),
@@ -562,6 +567,8 @@ class TantivyDataProvider {
         negativeSearchOptions: negativeSearchOptions ?? const {},
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
+        wordMatchMode: wordMatchMode,
+        wordMatchCount: wordMatchCount,
       ),
     );
 
@@ -610,6 +617,8 @@ class TantivyDataProvider {
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
       bool matchTaamim = false,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount,
       bool allowEarlyStop = true}) async {
     debugPrint(
         '🔍 TantivyDataProvider: Starting batch count for ${facets.length} facets');
@@ -634,6 +643,8 @@ class TantivyDataProvider {
       negativeSearchOptions: negativeSearchOptions ?? const {},
       matchNikud: matchNikud,
       matchTaamim: matchTaamim,
+      wordMatchMode: wordMatchMode,
+      wordMatchCount: wordMatchCount,
     );
 
     // קיבוץ facets לפי parent prefix כדי לחסוך קריאות FFI

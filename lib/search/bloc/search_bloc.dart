@@ -28,6 +28,8 @@ typedef _FacetRecountInputs = ({
   SearchMode searchMode,
   String negativeQuery,
   SearchScope proximityScope,
+  WordMatchMode wordMatchMode,
+  int wordMatchCount,
 });
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
@@ -78,6 +80,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     on<UpdateDistanceWithoutSearch>(_onUpdateDistanceWithoutSearch);
     on<UpdateProximityScope>(_onUpdateProximityScope);
     on<UpdateProximityScopeWithoutSearch>(_onUpdateProximityScopeWithoutSearch);
+    on<UpdateWordMatchMode>(_onUpdateWordMatchMode);
+    on<UpdateWordMatchModeWithoutSearch>(_onUpdateWordMatchModeWithoutSearch);
     on<ToggleSearchMode>(_onToggleSearchMode);
     on<SetSearchMode>(_onSetSearchMode);
     on<SetSearchModeWithoutSearch>(_onSetSearchModeWithoutSearch);
@@ -204,6 +208,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeAlternativeWords: event.negativeAlternativeWords,
         negativeSearchOptions: event.negativeSearchOptions,
         grouping: state.configuration.resultGrouping.engineGrouping,
+        wordMatchMode: state.wordMatchMode,
+        wordMatchCount: state.wordMatchCount,
       );
 
       final allResults = <SearchResult>[];
@@ -302,6 +308,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       searchMode: state.configuration.searchMode,
       negativeQuery: state.negativeQuery,
       proximityScope: state.proximityScope,
+      wordMatchMode: state.wordMatchMode,
+      wordMatchCount: state.wordMatchCount,
     );
   }
 
@@ -317,6 +325,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       inputs.scopeFacets.join(','),
       event.negativeQuery ?? inputs.negativeQuery,
       inputs.proximityScope.name,
+      inputs.wordMatchMode.name,
+      inputs.wordMatchCount,
       jsonEncode(event.customSpacing ?? const <String, String>{}),
       jsonEncode((event.alternativeWords ?? const <int, List<String>>{})
           .map((k, v) => MapEntry(k.toString(), v))),
@@ -354,6 +364,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         scope: inputs.proximityScope,
         negativeScope: inputs.proximityScope,
         searchMode: inputs.searchMode,
+        wordMatchMode: inputs.wordMatchMode,
+        wordMatchCount: inputs.wordMatchCount,
         customSpacing: event.customSpacing,
         alternativeWords: event.alternativeWords,
         searchOptions: event.searchOptions,
@@ -467,6 +479,40 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     final newConfig = state.configuration.copyWith(proximityScope: scope);
+    if (newConfig == state.configuration) {
+      return false;
+    }
+
+    emit(state.copyWith(configuration: newConfig));
+    return true;
+  }
+
+  void _onUpdateWordMatchMode(
+    UpdateWordMatchMode event,
+    Emitter<SearchState> emit,
+  ) {
+    if (!_updateWordMatchConfiguration(event.mode, event.count, emit)) {
+      return;
+    }
+    add(UpdateSearchQuery(state.searchQuery));
+  }
+
+  void _onUpdateWordMatchModeWithoutSearch(
+    UpdateWordMatchModeWithoutSearch event,
+    Emitter<SearchState> emit,
+  ) {
+    _updateWordMatchConfiguration(event.mode, event.count, emit);
+  }
+
+  bool _updateWordMatchConfiguration(
+    WordMatchMode mode,
+    int? count,
+    Emitter<SearchState> emit,
+  ) {
+    final newConfig = state.configuration.copyWith(
+      wordMatchMode: mode,
+      wordMatchCount: count,
+    );
     if (newConfig == state.configuration) {
       return false;
     }
@@ -797,6 +843,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       scope: state.proximityScope,
       negativeScope: state.proximityScope,
       searchMode: state.configuration.searchMode,
+      wordMatchMode: state.wordMatchMode,
+      wordMatchCount: state.wordMatchCount,
       customSpacing: customSpacing,
       alternativeWords: alternativeWords,
       searchOptions: searchOptions,
@@ -848,6 +896,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         scope: state.proximityScope,
         negativeScope: state.proximityScope,
         searchMode: state.configuration.searchMode,
+        wordMatchMode: state.wordMatchMode,
+        wordMatchCount: state.wordMatchCount,
         customSpacing: customSpacing,
         alternativeWords: alternativeWords,
         searchOptions: searchOptions,
@@ -990,6 +1040,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         negativeAlternativeWords: event.negativeAlternativeWords,
         negativeSearchOptions: event.negativeSearchOptions,
         grouping: state.configuration.resultGrouping.engineGrouping,
+        wordMatchMode: state.wordMatchMode,
+        wordMatchCount: state.wordMatchCount,
       );
 
       final combined = [...state.results, ...nextResults];
@@ -1000,9 +1052,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         // אינם ניתנים לשליפה (ראה יומן המנוע). בלי היישור הזה הכפתור היה
         // מציג "טען תוצאות נוספות (N)" לנצח ומסתובב בלי להביא כלום.
         // היישור חל על המונה שהרשימה נמדדת בו: קבוצות במצב איחוד.
-        totalResults: exhausted && state.totalGroups == null
-            ? combined.length
-            : null,
+        totalResults:
+            exhausted && state.totalGroups == null ? combined.length : null,
         totalGroups: exhausted && state.totalGroups != null
             ? combined.length
             : state.totalGroups,

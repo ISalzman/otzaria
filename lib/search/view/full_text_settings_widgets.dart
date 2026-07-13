@@ -129,21 +129,30 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // טווח קרבה "פסקה"/"כותרת" מייתר את מגבלת המרווח — השדה מושבת
-        // ומציג את שם הטווח במקומה.
+        // ומציג את שם הטווח במקומה. גם התאמה חלקית (לא "כל המילים")
+        // מוותרת על סדר ומרחק ולכן מייתרת אותו.
         final scope = state.proximityScope;
+        final wordMatchMode = state.wordMatchMode;
+        final modeOverridesDistance =
+            state.isAdvancedSearchEnabled && wordMatchMode != WordMatchMode.all;
         final scopeOverridesDistance =
             state.isAdvancedSearchEnabled && scope != SearchScope.wordDistance;
         // בדיקה אם יש מרווחים מותאמים אישית
         final hasCustomSpacing = state.isAdvancedSearchEnabled &&
             widget.tab.spacingValues.isNotEmpty &&
-            !scopeOverridesDistance;
-        final isEnabled = !hasCustomSpacing && !scopeOverridesDistance;
+            !scopeOverridesDistance &&
+            !modeOverridesDistance;
+        final isEnabled = !hasCustomSpacing &&
+            !scopeOverridesDistance &&
+            !modeOverridesDistance;
 
         // במקורב המספר הוא מרחק עריכה בין המילה שהוקלדה לתוצאה,
         // לא מרווח בין מילים — התווית וההסבר משקפים זאת.
         final isFuzzy = state.configuration.searchMode == SearchMode.fuzzy;
         final String label;
-        if (scopeOverridesDistance) {
+        if (modeOverridesDistance) {
+          label = wordMatchMode.label;
+        } else if (scopeOverridesDistance) {
           label = scope.label;
         } else if (hasCustomSpacing) {
           label = 'מרווח בין מילים (מושבת)';
@@ -154,11 +163,13 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
         }
 
         final spinBox = Tooltip(
-          message: scopeOverridesDistance
-              ? scope.tooltip
-              : isFuzzy
-                  ? 'קובע עד כמה מותר לתוצאה להיות שונה מהמילים שהוקלדו.'
-                  : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+          message: modeOverridesDistance
+              ? wordMatchMode.tooltip
+              : scopeOverridesDistance
+                  ? scope.tooltip
+                  : isFuzzy
+                      ? 'קובע עד כמה מותר לתוצאה להיות שונה מהמילים שהוקלדו.'
+                      : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
           child: Focus(
             focusNode: _focusNode,
             child: SpinBox(
@@ -166,7 +177,9 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
               decoration: InputDecoration(
                 labelText: label,
                 labelStyle: TextStyle(
-                  color: hasCustomSpacing || scopeOverridesDistance
+                  color: hasCustomSpacing ||
+                          scopeOverridesDistance ||
+                          modeOverridesDistance
                       ? Theme.of(context).colorScheme.onSurfaceVariant
                       : null,
                 ),
@@ -192,6 +205,37 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
           ),
         );
 
+        // במצב "לפחות X מילים" שדה המרווח (חסר המשמעות) מוחלף בשדה מספר
+        // המילים הנדרש.
+        final countBox = Tooltip(
+          message: 'מספר מילות החיפוש המזערי שחייב להופיע בכל תוצאה.',
+          child: Focus(
+            focusNode: _focusNode,
+            child: SpinBox(
+              decoration: InputDecoration(
+                labelText: 'מספר מילים',
+                border: OutlineInputBorder(
+                  borderRadius: AppTokens.borderRadiusAll,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 16.0,
+                ),
+              ),
+              min: 1,
+              max: 30,
+              value: state.wordMatchCount.toDouble(),
+              onChanged: (value) => context.read<SearchBloc>().add(
+                    widget.triggerSearch
+                        ? UpdateWordMatchMode(wordMatchMode,
+                            count: value.toInt())
+                        : UpdateWordMatchModeWithoutSearch(wordMatchMode,
+                            count: value.toInt()),
+                  ),
+            ),
+          ),
+        );
+
         // בורר הטווח רלוונטי רק לחיפוש המתקדם: במדויק אין קרבה כלל,
         // ובמקורב המרווח משמש כמרחק עריכה.
         if (!state.isAdvancedSearchEnabled) {
@@ -199,7 +243,7 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
         }
 
         return SizedBox(
-          width: 184,
+          width: 228,
           child: Row(
             children: [
               _ProximityScopeMenu(
@@ -211,7 +255,19 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
                     ),
               ),
               const SizedBox(width: 4),
-              Expanded(child: spinBox),
+              _WordMatchModeMenu(
+                mode: wordMatchMode,
+                onSelected: (selected) => context.read<SearchBloc>().add(
+                      widget.triggerSearch
+                          ? UpdateWordMatchMode(selected)
+                          : UpdateWordMatchModeWithoutSearch(selected),
+                    ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child:
+                    wordMatchMode == WordMatchMode.atLeast ? countBox : spinBox,
+              ),
             ],
           ),
         );
@@ -249,6 +305,46 @@ class _ProximityScopeMenu extends StatelessWidget {
             CheckedPopupMenuItem<SearchScope>(
               value: option,
               checked: option == scope,
+              child: Tooltip(
+                message: option.tooltip,
+                child: Text(option.label),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// תפריט מצב התאמת המילים: כל המילים (ברירת המחדל), מילה אחת לפחות,
+/// רוב המילים, או לפחות מספר מילים לבחירה.
+class _WordMatchModeMenu extends StatelessWidget {
+  const _WordMatchModeMenu({
+    required this.mode,
+    required this.onSelected,
+  });
+
+  final WordMatchMode mode;
+  final ValueChanged<WordMatchMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDefault = mode == WordMatchMode.all;
+    return Tooltip(
+      message: 'כמה ממילות החיפוש חייבות להופיע: ${mode.label}',
+      child: PopupMenuButton<WordMatchMode>(
+        initialValue: mode,
+        onSelected: onSelected,
+        icon: Icon(
+          FluentIcons.multiselect_rtl_24_regular,
+          color: isDefault ? null : colorScheme.primary,
+        ),
+        itemBuilder: (context) => [
+          for (final option in WordMatchMode.values)
+            CheckedPopupMenuItem<WordMatchMode>(
+              value: option,
+              checked: option == mode,
               child: Tooltip(
                 message: option.tooltip,
                 child: Text(option.label),

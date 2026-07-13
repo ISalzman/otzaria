@@ -78,8 +78,9 @@ class SearchState {
       searchQuery: searchQuery ?? this.searchQuery,
       negativeQuery: negativeQuery ?? this.negativeQuery,
       totalResults: totalResults ?? this.totalResults,
-      totalGroups:
-          identical(totalGroups, _unset) ? this.totalGroups : totalGroups as int?,
+      totalGroups: identical(totalGroups, _unset)
+          ? this.totalGroups
+          : totalGroups as int?,
       filterQuery: filterQuery,
       filteredBooks: filteredBooks,
       facetCounts: facetCounts ?? this.facetCounts,
@@ -94,6 +95,8 @@ class SearchState {
   // Getters לנוחות גישה להגדרות (backward compatibility)
   int get distance => configuration.distance;
   SearchScope get proximityScope => configuration.proximityScope;
+  WordMatchMode get wordMatchMode => configuration.wordMatchMode;
+  int get wordMatchCount => configuration.wordMatchCount;
   bool get fuzzy => configuration.fuzzy;
   bool get isAdvancedSearchEnabled => configuration.isAdvancedSearchEnabled;
   List<String> get currentFacets => configuration.currentFacets;
