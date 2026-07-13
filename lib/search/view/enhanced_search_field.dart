@@ -554,21 +554,13 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                           border: const OutlineInputBorder(),
                           hintText: 'הקלד מילות חיפוש',
                           labelText: 'חיפוש',
-                          contentPadding: widget.showInlineSearchButton
-                              ? null
-                              : const EdgeInsets.only(
-                                  left: 12,
-                                  right: 48,
-                                  top: 16,
-                                  bottom: 16,
-                                ),
                           prefixIcon: widget.showInlineSearchButton
                               ? IconButton(
                                   onPressed: _performSearch,
                                   icon:
                                       const Icon(FluentIcons.search_24_regular),
                                 )
-                              : null,
+                              : const Icon(FluentIcons.search_24_regular),
                           suffixIcon: widget.trailingAction != null
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,

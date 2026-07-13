@@ -131,19 +131,24 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
         // טווח קרבה "פסקה"/"כותרת" מייתר את מגבלת המרווח — השדה מושבת
         // ומציג את שם הטווח במקומה.
         final scope = state.proximityScope;
-        final scopeOverridesDistance = state.isAdvancedSearchEnabled &&
-            scope != SearchScope.wordDistance;
+        final scopeOverridesDistance =
+            state.isAdvancedSearchEnabled && scope != SearchScope.wordDistance;
         // בדיקה אם יש מרווחים מותאמים אישית
         final hasCustomSpacing = state.isAdvancedSearchEnabled &&
             widget.tab.spacingValues.isNotEmpty &&
             !scopeOverridesDistance;
         final isEnabled = !hasCustomSpacing && !scopeOverridesDistance;
 
+        // במקורב המספר הוא מרחק עריכה בין המילה שהוקלדה לתוצאה,
+        // לא מרווח בין מילים — התווית וההסבר משקפים זאת.
+        final isFuzzy = state.configuration.searchMode == SearchMode.fuzzy;
         final String label;
         if (scopeOverridesDistance) {
           label = scope.label;
         } else if (hasCustomSpacing) {
           label = 'מרווח בין מילים (מושבת)';
+        } else if (isFuzzy) {
+          label = 'מרחק חיפוש';
         } else {
           label = 'מרווח בין מילים';
         }
@@ -151,7 +156,9 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
         final spinBox = Tooltip(
           message: scopeOverridesDistance
               ? scope.tooltip
-              : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
+              : isFuzzy
+                  ? 'קובע עד כמה מותר לתוצאה להיות שונה מהמילים שהוקלדו.'
+                  : 'קובע כמה מילים יכולות להופיע בין מילות החיפוש. כאשר מוגדרים מרווחים ידניים בין מילים, השדה הזה מושבת.',
           child: Focus(
             focusNode: _focusNode,
             child: SpinBox(
@@ -373,7 +380,11 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
     };
 
     // אפשרויות שמופיעות אחרי המילה (סיומות)
-    const Set<String> suffixOptions = {'סיומות', 'סיומות דקדוקיות', 'סיומות ארמיות'};
+    const Set<String> suffixOptions = {
+      'סיומות',
+      'סיומות דקדוקיות',
+      'סיומות ארמיות'
+    };
 
     for (int i = 0; i < words.length; i++) {
       final word = words[i];

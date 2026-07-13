@@ -97,7 +97,6 @@ class _SearchDialogState extends State<SearchDialog> {
   late SearchingTab _searchTab;
   FocusRestorer? _focusRestorer;
   bool _showIndexInProgressWarning = false;
-  bool _showHistoryDropdown = false;
   bool _searchAllCategories = true;
   Set<String> _manualFacets = {};
 
@@ -105,12 +104,10 @@ class _SearchDialogState extends State<SearchDialog> {
   /// ב-AND לבחירת הקטגוריות בעת שיגור החיפוש.
   Set<String> _dimensionFacets = {};
   final ValueNotifier<bool> _advancedControlsHasFocus = ValueNotifier(false);
+  final MenuController _historyMenuController = MenuController();
   late final VoidCallback _queryListener;
   Set<String> _selectedCategoryFacets = {'/'}; // ברירת מחדל: הכל
   late final bool _ownsSearchTab;
-  // groupId משותף לכפתור ההיסטוריה ולמגירת ההיסטוריה — מאפשר ל-TapRegion
-  // לזהות לחיצה על הכפתור עצמו כ"בתוך" האזור (כדי שלא תיגרם סגירה+פתיחה מיידית).
-  final Object _historyTapRegionGroupId = Object();
 
   bool get _usesStagedSubmit =>
       widget.onSearch != null ||
@@ -165,8 +162,7 @@ class _SearchDialogState extends State<SearchDialog> {
     final initialScopeFacets = _searchTab.searchBloc.state.searchScopeFacets;
     // ה-scope של הטאב עשוי לשאת גם facets ממדיים (תקופה/מחבר/ספרי יסוד) —
     // מפצלים: הקטגוריות מזינות את עץ הבחירה, הממדים את פקדי הממדים.
-    final initialCategories =
-        FacetHelper.categoryFacetsOf(initialScopeFacets);
+    final initialCategories = FacetHelper.categoryFacetsOf(initialScopeFacets);
     final initialDimensions =
         FacetHelper.dimensionFacetsOf(initialScopeFacets).toSet();
     _dimensionFacets = initialDimensions.isNotEmpty
@@ -338,117 +334,78 @@ class _SearchDialogState extends State<SearchDialog> {
     );
   }
 
-  // בניית מגירת ההיסטוריה - מציג רק חיפושים מההיסטוריה הכללית
+  // מציג רק חיפושים מההיסטוריה הכללית.
   Widget _buildHistoryDropdown() {
     return BlocBuilder<HistoryBloc, HistoryState>(
       builder: (context, state) {
-        // סינון רק חיפושים
         final searchHistory =
             state.history.where((item) => item.isSearch).toList();
 
         if (searchHistory.isEmpty) return const SizedBox.shrink();
 
-        // הגבלה ל-5 אחרונים
         final recentSearches = searchHistory.take(5).toList();
 
-        return Container(
-          margin: const EdgeInsets.only(top: 4),
-          constraints: const BoxConstraints(maxHeight: 200),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: AppTokens.borderRadiusAll,
-            border: Border.all(
-              color:
-                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: ScrollConfiguration(
-              behavior:
-                  ScrollConfiguration.of(context).copyWith(scrollbars: false),
-              child: ListView.separated(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                itemCount: recentSearches.length,
-                separatorBuilder: (context, index) => Divider(
+        return Column(
+          key: const ValueKey('search-history-menu'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < recentSearches.length; index++) ...[
+              if (index > 0)
+                Divider(
                   height: 1,
                   thickness: 1,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outline
-                      .withValues(alpha: 0.2),
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
-                itemBuilder: (context, index) {
-                  final bookmark = recentSearches[index];
-                  final query = bookmark.book.title; // הטקסט הפשוט של החיפוש
-                  final displayText =
-                      bookmark.ref; // הטקסט המעוצב (עם קידומות וסיומות)
-                  final originalIndex = state.history.indexOf(bookmark);
+              Builder(builder: (context) {
+                final bookmark = recentSearches[index];
+                final query = bookmark.book.title;
+                final displayText = bookmark.ref;
+                final originalIndex = state.history.indexOf(bookmark);
 
-                  return ListTile(
-                    dense: true,
-                    leading:
-                        const Icon(FluentIcons.search_24_regular, size: 18),
-                    title: Text(
-                      displayText,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-                      tooltip: 'מחק מההיסטוריה',
-                      onPressed: () {
-                        context
-                            .read<HistoryBloc>()
-                            .add(RemoveHistory(originalIndex));
-                      },
-                    ),
-                    onTap: () {
-                      // שחזור הטקסט הפשוט (ללא קידומות וסיומות)
-                      _searchTab.queryController.text = query;
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(FluentIcons.search_24_regular, size: 18),
+                  title: Text(
+                    displayText,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(FluentIcons.delete_24_regular, size: 18),
+                    tooltip: 'מחק מההיסטוריה',
+                    onPressed: () => context
+                        .read<HistoryBloc>()
+                        .add(RemoveHistory(originalIndex)),
+                  ),
+                  onTap: () {
+                    _searchTab.queryController.text = query;
 
-                      // שחזור האפשרויות הנוספות
-                      // ההיסטוריה שומרת אפשרויות מורחבות פר-מילה,
-                      // לכן מנקים את האפשרויות הגלובליות הקיימות ועוברים למצב פר-מילה
-                      // כדי שלא יישארו הגדרות חבויות שיופיעו במעבר חזרה למצב גלובלי
-                      if (bookmark.searchOptions != null) {
-                        _searchTab.searchOptions.clear();
-                        _searchTab.searchOptions
-                            .addAll(bookmark.searchOptions!);
-                        _searchTab.globalSearchOptions.clear();
-                        _searchTab.useGlobalSearchOptions.value = false;
-                      }
-                      if (bookmark.alternativeWords != null) {
-                        _searchTab.alternativeWords.clear();
-                        _searchTab.alternativeWords
-                            .addAll(bookmark.alternativeWords!);
-                      }
-                      if (bookmark.spacingValues != null) {
-                        _searchTab.spacingValues.clear();
-                        _searchTab.spacingValues
-                            .addAll(bookmark.spacingValues!);
-                      }
+                    // חיפוש היסטורי מורחב משוחזר במצב פר-מילה.
+                    if (bookmark.searchOptions != null) {
+                      _searchTab.searchOptions
+                        ..clear()
+                        ..addAll(bookmark.searchOptions!);
+                      _searchTab.globalSearchOptions.clear();
+                      _searchTab.useGlobalSearchOptions.value = false;
+                    }
+                    if (bookmark.alternativeWords != null) {
+                      _searchTab.alternativeWords
+                        ..clear()
+                        ..addAll(bookmark.alternativeWords!);
+                    }
+                    if (bookmark.spacingValues != null) {
+                      _searchTab.spacingValues
+                        ..clear()
+                        ..addAll(bookmark.spacingValues!);
+                    }
 
-                      // עדכון התצוגה
-                      setState(() {
-                        _showHistoryDropdown = false;
-                      });
-
-                      _searchTab.searchFieldFocusNode.requestFocus();
-                    },
-                  );
-                },
-              ),
-            ),
-          ),
+                    _historyMenuController.close();
+                    _searchTab.searchFieldFocusNode.requestFocus();
+                  },
+                );
+              }),
+            ],
+          ],
         );
       },
     );
@@ -853,8 +810,7 @@ class _SearchDialogState extends State<SearchDialog> {
     setState(() {
       // עץ הבחירה עשוי להחזיר גם facets ממדיים ששומרו בבחירה — מפצלים
       // כדי שההעדפה הידנית של הקטגוריות תישאר נקייה מממדים.
-      _manualFacets =
-          FacetHelper.categoryFacetsOf(selection).toSet();
+      _manualFacets = FacetHelper.categoryFacetsOf(selection).toSet();
       if (!_searchAllCategories) {
         _selectedCategoryFacets = Set<String>.from(_manualFacets);
       }
@@ -871,10 +827,8 @@ class _SearchDialogState extends State<SearchDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.2),
-        ),
+        borderRadius: AppTokens.borderRadiusAll,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
@@ -956,62 +910,613 @@ class _SearchDialogState extends State<SearchDialog> {
     );
   }
 
-  Widget _buildNavButton(
-    BuildContext context,
-    IconData icon,
-    SearchMode mode,
-    bool isSelected,
-  ) {
-    return Tooltip(
-      message: mode.tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            final oldMode =
-                _searchTab.searchBloc.state.configuration.searchMode;
-            context.read<SearchBloc>().add(
-                  !_usesStagedSubmit
-                      ? SetSearchMode(mode)
-                      : SetSearchModeWithoutSearch(mode),
-                );
-            _swapGlobalOptionsForModeChange(oldMode, mode);
-            _searchTab.searchFieldFocusNode.requestFocus();
-          },
+  // ── שכבת התצוגה ─────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final title = widget.editTab != null
+        ? 'עריכת חיפוש'
+        : widget.bookTitle != null
+            ? 'חיפוש ב${widget.bookTitle}'
+            : 'חיפוש בספרייה';
+    final subtitle = widget.editTab != null
+        ? 'עדכן את השאילתה ואת אפשרויות החיפוש'
+        : widget.bookTitle != null
+            ? 'חיפוש ממוקד בתוך הספר הפתוח'
+            : 'בחר שאילתה, סוג חיפוש והיקף בספרייה';
+    return ColoredBox(
+      color: AppSurfaces.card(context),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(24, 16, 12, 14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: AppTokens.borderRadiusAll,
+              ),
+              child: Icon(
+                FluentIcons.search_24_filled,
+                size: 22,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(FluentIcons.dismiss_24_regular),
+              onPressed: () => Navigator.of(context).pop(),
+              tooltip: 'סגור',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// בורר מצב החיפוש — שלושה מקטעים ברוחב מלא, עם שורת תיאור קצרה
+  /// של המצב הנבחר מתחתיהם.
+  Widget _buildModeSelector(BuildContext context, SearchState state) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final currentMode = state.configuration.searchMode;
+
+    Widget buildSegment(IconData icon, SearchMode mode) {
+      final isSelected = currentMode == mode;
+      final foreground = isSelected
+          ? colorScheme.onSecondaryContainer
+          : colorScheme.onSurfaceVariant;
+      return Expanded(
+        child: Tooltip(
+          message: mode.tooltip,
+          waitDuration: const Duration(milliseconds: 400),
+          child: InkWell(
+            onTap: () {
+              final oldMode =
+                  _searchTab.searchBloc.state.configuration.searchMode;
+              _searchTab.searchBloc.add(
+                !_usesStagedSubmit
+                    ? SetSearchMode(mode)
+                    : SetSearchModeWithoutSearch(mode),
+              );
+              _swapGlobalOptionsForModeChange(oldMode, mode);
+              _searchTab.searchFieldFocusNode.requestFocus();
+            },
+            borderRadius: AppTokens.borderRadiusAll,
+            child: AnimatedContainer(
+              duration: AppTokens.animFast,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? colorScheme.secondaryContainer
+                    : colorScheme.surfaceContainerHigh,
+                borderRadius: AppTokens.borderRadiusAll,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: foreground),
+                  const SizedBox(width: 6),
+                  Text(
+                    mode.shortLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: foreground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: colorScheme.surfaceContainerHigh,
           borderRadius: AppTokens.borderRadiusAll,
-          child: Container(
-            width: 72,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: SizedBox(
+              height: 36,
+              child: Row(
+                children: [
+                  buildSegment(
+                      FluentIcons.text_quote_24_regular, SearchMode.exact),
+                  buildSegment(
+                      FluentIcons.search_info_24_regular, SearchMode.advanced),
+                  buildSegment(
+                      FluentIcons.arrow_bidirectional_left_right_24_regular,
+                      SearchMode.fuzzy),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          currentMode.tooltip,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// שדה החיפוש עם כפתור ההיסטוריה, ולצדו פקד המרווח/המרחק.
+  /// ברוחב צר הפקד יורד לשורה נפרדת.
+  Widget _buildQueryRow() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final historyMenuWidth = screenWidth < 420 ? screenWidth - 48 : 360.0;
+    final searchField = EnhancedSearchField(
+      key: enhancedSearchFieldKey,
+      widget: _SearchDialogWrapper(tab: _searchTab),
+      showInlineSearchButton: false,
+      onSubmit: _performSearch,
+      trailingAction: MenuAnchor(
+        controller: _historyMenuController,
+        alignmentOffset: const Offset(0, 4),
+        style: MenuStyle(
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          backgroundColor:
+              WidgetStatePropertyAll(colorScheme.surfaceContainerHigh),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: AppTokens.borderRadiusAll,
+              side: BorderSide(color: colorScheme.outlineVariant),
+            ),
+          ),
+        ),
+        menuChildren: [
+          SizedBox(width: historyMenuWidth, child: _buildHistoryDropdown()),
+        ],
+        builder: (context, controller, _) => IconButton(
+          icon: Icon(
+            controller.isOpen
+                ? FluentIcons.chevron_up_24_regular
+                : FluentIcons.history_24_regular,
+            size: 24,
+          ),
+          tooltip: 'היסטוריית חיפושים',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      ),
+    );
+
+    final distanceWidget = FuzzyDistance(
+      tab: _searchTab,
+      inputFocusNotifier: _advancedControlsHasFocus,
+      triggerSearch: !_usesStagedSubmit,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 560) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              searchField,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: distanceWidget,
+                ),
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: searchField),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 8.0),
+              child: distanceWidget,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchComposer(SearchState state) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppSurfaces.card(context),
+        borderRadius: AppTokens.borderRadiusAll,
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionLabel('מה לחפש'),
+          const SizedBox(height: 8),
+          _buildQueryRow(),
+          const SizedBox(height: 12),
+          _sectionLabel('סוג החיפוש'),
+          const SizedBox(height: 8),
+          _buildModeSelector(context, state),
+        ],
+      ),
+    );
+  }
+
+  /// שדה "ללא" — סינון תוצאות שמכילות מילים מסוימות (מצב מתקדם בלבד).
+  Widget _buildNegativeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionLabel('החרגת תוצאות'),
+        const SizedBox(height: 8),
+        RtlTextField(
+          controller: _searchTab.negativeQueryController,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+            border: const OutlineInputBorder(),
+            labelText: 'ללא',
+            hintText: 'תוצאות שמכילות מילים אלו לא יופיעו',
+            prefixIcon: const Icon(FluentIcons.subtract_24_regular),
+            suffixIcon: IconButton(
+              icon: const Icon(FluentIcons.dismiss_24_regular),
+              onPressed: () {
+                _searchTab.negativeQueryController.clear();
+                setState(() {});
+              },
+            ),
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _performSearch(),
+        ),
+        if (_searchTab.negativeQueryController.text.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          AdvancedSearchControls(
+            tab: _searchTab,
+            onEmptySubmit: _performSearch,
+            inputFocusNotifier: _advancedControlsHasFocus,
+            supportsVocalized: _supportsVocalizedSearch,
+            queryController: _searchTab.negativeQueryController,
+            searchOptions: _searchTab.negativeSearchOptions,
+            globalSearchOptions: _searchTab.negativeGlobalSearchOptions,
+            useGlobalSearchOptions: _searchTab.useGlobalNegativeSearchOptions,
+            alternativeWords: _searchTab.negativeAlternativeWords,
+            spacingValues: _searchTab.negativeSpacingValues,
+            searchOptionsChanged: _searchTab.negativeSearchOptionsChanged,
+            alternativeWordsChanged: _searchTab.negativeAlternativeWordsChanged,
+            spacingValuesChanged: _searchTab.negativeSpacingValuesChanged,
+            enableSavedAlternatives: false,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// שורת היקף החיפוש: סינון תקופה/מחבר/ספרי יסוד + מתג "כל הקטגוריות".
+  Widget _buildScopeRow() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppSurfaces.card(context),
+        borderRadius: AppTokens.borderRadiusAll,
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionLabel('היכן לחפש'),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 560) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildDimensionFilters(),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: _buildCategoriesToggle(context),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildDimensionFilters()),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 48,
+                    child: Center(child: _buildCategoriesToggle(context)),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// מסגרת אחידה לאזורי האפשרויות של המצבים השונים.
+  Widget _optionsCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppSurfaces.card(context),
+        borderRadius: AppTokens.borderRadiusAll,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildFuzzyHint() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.secondaryContainer
-                  : Colors.transparent,
+              color: colorScheme.secondaryContainer,
               borderRadius: AppTokens.borderRadiusAll,
             ),
+            child: Icon(
+              FluentIcons.arrow_bidirectional_left_right_24_regular,
+              size: 24,
+              color: colorScheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  size: 24,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                const Text(
+                  'חיפוש מקורב',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  mode.shortLabel,
+                  'מוצא גם כתיב שונה ושיבושי כתיב קלים. מרחק החיפוש קובע עד כמה התוצאה יכולה להיות שונה מהמילים שהוקלדו.',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.onSecondaryContainer
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeContentLayout({
+    required Widget controls,
+    required Widget? categoryPanel,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (categoryPanel != null && constraints.maxWidth < 480) {
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                KeyedSubtree(
+                  key: const ValueKey('search-mode-controls'),
+                  child: controls,
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  key: const ValueKey('search-category-panel'),
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: categoryPanel,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                key: const ValueKey('search-mode-controls'),
+                child: controls,
+              ),
+            ),
+            AnimatedSize(
+              duration: AppTokens.animNormal,
+              curve: Curves.easeInOut,
+              child: categoryPanel == null
+                  ? const SizedBox.shrink()
+                  : SizedBox(
+                      key: const ValueKey('search-category-panel'),
+                      width: 260,
+                      height: constraints.maxHeight,
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 12.0),
+                        child: categoryPanel,
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// תוכן האזור התחתון לפי מצב החיפוש: אפשרויות המילה (מדויק), פקדי
+  /// המצב המתקדם, או רמז למצב המקורב — לצד עץ הקטגוריות כשנבחר היקף ידני.
+  Widget _buildModeContent(SearchState state) {
+    final showCategory = !_searchAllCategories && widget.bookTitle == null;
+
+    if (!state.isAdvancedSearchEnabled) {
+      final isExact = state.configuration.searchMode == SearchMode.exact;
+      final modeControls = isExact
+          ? _optionsCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: _sectionLabel('אפשרויות מילה'),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildExactOptionsRow(),
+                  const SizedBox(height: 4),
+                  _buildExactDefaultsRow(state),
+                ],
+              ),
+            )
+          : _optionsCard(child: _buildFuzzyHint());
+
+      return _buildModeContentLayout(
+        controls: modeControls,
+        categoryPanel: showCategory
+            ? CategoryTreeSelector(
+                selectedFacets: _manualFacets,
+                onSelectionChanged: _onManualFacetsChanged,
+              )
+            : null,
+      );
+    }
+
+    final advancedControls = _optionsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdvancedSearchControls(
+            tab: _searchTab,
+            onEmptySubmit: _performSearch,
+            inputFocusNotifier: _advancedControlsHasFocus,
+            supportsVocalized: _supportsVocalizedSearch,
+          ),
+          if (widget.onSearch == null && !widget.returnResultOnSubmit) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            _buildNegativeSection(),
+          ],
+        ],
+      ),
+    );
+    final categoryPanel = showCategory
+        ? CategoryTreeSelector(
+            selectedFacets: _manualFacets,
+            onSelectionChanged: _onManualFacetsChanged,
+          )
+        : null;
+
+    return _buildModeContentLayout(
+      controls: advancedControls,
+      categoryPanel: categoryPanel,
+    );
+  }
+
+  Widget _buildFooter() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final showKeyboardHint = MediaQuery.sizeOf(context).width >= 520;
+    return ColoredBox(
+      color: AppSurfaces.card(context),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+        child: Row(
+          children: [
+            if (showKeyboardHint)
+              Expanded(
+                child: Text(
+                  'Enter מפעיל את החיפוש',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+            else
+              const Spacer(),
+            ActionButton.neutral(
+              text: 'ביטול',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 8),
+            ValueListenableBuilder<bool>(
+              valueListenable: TantivyDataProvider.instance.isInitialized,
+              builder: (context, providerInitialized, _) {
+                final blocked = isSearchBlockedByMissingIndex(
+                  providerInitialized: providerInitialized,
+                );
+                return Tooltip(
+                  message: blocked
+                      ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
+                      : 'חפש',
+                  child: ActionButton.recommended(
+                    text: widget.editTab != null ? 'עדכן חיפוש' : 'חפש',
+                    icon: FluentIcons.search_24_regular,
+                    onPressed: blocked ? null : _performSearch,
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -1020,12 +1525,21 @@ class _SearchDialogState extends State<SearchDialog> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = (screenSize.width * 0.7).clamp(500.0, 900.0);
-    final dialogHeight = (screenSize.height * 0.8).clamp(450.0, 700.0);
+    final isCompact = screenSize.width < 600;
+    final dialogWidth = isCompact
+        ? screenSize.width - 24
+        : (screenSize.width * 0.7).clamp(640.0, 900.0);
+    final dialogHeight = screenSize.height < 560
+        ? screenSize.height - 24
+        : (screenSize.height * 0.84).clamp(500.0, 720.0);
+    final horizontalPadding = isCompact ? 16.0 : 24.0;
 
     return BlocProvider.value(
       value: _searchTab.searchBloc,
       child: Dialog(
+        insetPadding: const EdgeInsets.all(12),
+        backgroundColor: AppSurfaces.solidPanelBackground(context),
+        clipBehavior: Clip.antiAlias,
         child: FocusScope(
           onKeyEvent: (node, event) {
             // תפיסת Enter ברמת הדיאלוג - FocusScope תופס אירועים מכל הילדים
@@ -1040,512 +1554,61 @@ class _SearchDialogState extends State<SearchDialog> {
             }
             return KeyEventResult.ignored;
           },
-          child: Container(
+          child: SizedBox(
             key: tourSearchDialogTargetKey,
             width: dialogWidth,
             height: dialogHeight,
-            padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // כותרת
-                Row(
-                  children: [
-                    const Icon(FluentIcons.search_24_filled, size: 28),
-                    const SizedBox(width: 12),
-                    Text(
-                      widget.editTab != null
-                          ? 'עריכת חיפוש'
-                          : widget.bookTitle != null
-                              ? 'חיפוש ב${widget.bookTitle}'
-                              : 'חיפוש',
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                      onPressed: () => Navigator.of(context).pop(),
-                      tooltip: 'סגור',
-                    ),
-                  ],
-                ),
-                const Divider(height: 24),
-
-                // אזהרת אינדקס
-                _buildIndexWarning(),
-
-                // תוכן הדיאלוג - Row עם ניווט מימין ותוכן משמאל
+                _buildHeader(),
+                const Divider(height: 1),
                 Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Navigation Bar אנכי מימין
-                      BlocBuilder<SearchBloc, SearchState>(
-                        builder: (context, state) {
-                          return Container(
-                            width: 80,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildNavButton(
-                                  context,
-                                  FluentIcons.text_quote_24_regular,
-                                  SearchMode.exact,
-                                  state.configuration.searchMode ==
-                                      SearchMode.exact,
-                                ),
-                                const SizedBox(height: 4),
-                                _buildNavButton(
-                                  context,
-                                  FluentIcons.search_info_24_regular,
-                                  SearchMode.advanced,
-                                  state.configuration.searchMode ==
-                                      SearchMode.advanced,
-                                ),
-                                const SizedBox(height: 4),
-                                _buildNavButton(
-                                  context,
-                                  FluentIcons
-                                      .arrow_bidirectional_left_right_24_regular,
-                                  SearchMode.fuzzy,
-                                  state.configuration.searchMode ==
-                                      SearchMode.fuzzy,
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // תוכן ראשי
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // שדה החיפוש + מרווח בין מילים + כפתור קטגוריות
-                            BlocBuilder<SearchBloc, SearchState>(
-                              builder: (context, state) {
-                                final searchField = Stack(
-                                  children: [
-                                    BlocProvider.value(
-                                      value: _searchTab.searchBloc,
-                                      child: EnhancedSearchField(
-                                        key: enhancedSearchFieldKey,
-                                        widget: _SearchDialogWrapper(
-                                          tab: _searchTab,
-                                        ),
-                                        showInlineSearchButton: false,
-                                        onSubmit: _performSearch,
-                                        trailingAction: TapRegion(
-                                          groupId: _historyTapRegionGroupId,
-                                          child: IconButton(
-                                            icon: Icon(
-                                              _showHistoryDropdown
-                                                  ? FluentIcons
-                                                      .chevron_up_24_regular
-                                                  : FluentIcons
-                                                      .history_24_regular,
-                                              size: 24,
-                                            ),
-                                            tooltip: 'היסטוריית חיפושים',
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            onPressed: () {
-                                              setState(() {
-                                                _showHistoryDropdown =
-                                                    !_showHistoryDropdown;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // כפתור חיפוש
-                                    Positioned(
-                                      right: 10,
-                                      top: 8,
-                                      bottom: 8,
-                                      child: Center(
-                                        child: ValueListenableBuilder<bool>(
-                                          valueListenable: TantivyDataProvider
-                                              .instance.isInitialized,
-                                          builder: (context,
-                                              providerInitialized, _) {
-                                            final blocked =
-                                                isSearchBlockedByMissingIndex(
-                                              providerInitialized:
-                                                  providerInitialized,
-                                            );
-                                            return IconButton(
-                                              icon: const Icon(
-                                                FluentIcons.search_24_filled,
-                                                size: 20,
-                                              ),
-                                              tooltip: blocked
-                                                  ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
-                                                  : 'חפש',
-                                              onPressed: blocked
-                                                  ? null
-                                                  : _performSearch,
-                                              style: IconButton.styleFrom(
-                                                backgroundColor:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .primaryContainer,
-                                                foregroundColor:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onPrimaryContainer,
-                                                padding:
-                                                    const EdgeInsets.all(6),
-                                                minimumSize: const Size(32, 32),
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-
-                                final fuzzyDistanceWidget = Padding(
-                                  padding: const EdgeInsets.only(right: 12.0),
-                                  child: FuzzyDistance(
-                                    tab: _searchTab,
-                                    inputFocusNotifier:
-                                        _advancedControlsHasFocus,
-                                    triggerSearch: !_usesStagedSubmit,
-                                  ),
-                                );
-
-                                final showCategoriesToggleWidget =
-                                    widget.bookTitle == null;
-                                final categoriesToggleWidget = Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: _buildCategoriesToggle(context),
-                                );
-
-                                // ב-LayoutBuilder: אם הרוחב צר — accessories לשורה שנייה
-                                return LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    // FuzzyDistance במצב מתקדם כולל גם את
-                                    // תפריט טווח הקרבה (184px + ריפוד).
-                                    const distanceWidgetWidth = 196.0;
-                                    const categoriesWidgetWidth = 138.0;
-                                    final accessoriesWidth =
-                                        distanceWidgetWidth +
-                                            (showCategoriesToggleWidget
-                                                ? categoriesWidgetWidth
-                                                : 0);
-                                    final hasAccessories = true;
-                                    // FuzzyDistance=140px, toggle~130px, paddings~20px ≈ 290px
-                                    final isNarrow = hasAccessories &&
-                                        constraints.maxWidth <
-                                            accessoriesWidth + 180;
-
-                                    if (isNarrow) {
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          searchField,
-                                          const SizedBox(height: 8),
-                                          Wrap(
-                                            alignment:
-                                                WrapAlignment.spaceBetween,
-                                            runSpacing: 8,
-                                            children: [
-                                              fuzzyDistanceWidget,
-                                              if (showCategoriesToggleWidget)
-                                                categoriesToggleWidget,
-                                            ],
-                                          ),
-                                        ],
-                                      );
-                                    }
-
-                                    return Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(child: searchField),
-                                        fuzzyDistanceWidget,
-                                        if (showCategoriesToggleWidget)
-                                          categoriesToggleWidget,
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-
-                            BlocBuilder<SearchBloc, SearchState>(
-                              builder: (context, state) {
-                                if (!state.isAdvancedSearchEnabled ||
-                                    widget.onSearch != null ||
-                                    widget.returnResultOnSubmit) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      RtlTextField(
-                                        controller:
-                                            _searchTab.negativeQueryController,
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainerHigh,
-                                          border: const OutlineInputBorder(),
-                                          labelText: 'ללא',
-                                          hintText:
-                                              'תוצאות שמכילות מילים אלו לא יופיעו',
-                                          prefixIcon: const Icon(
-                                            FluentIcons.subtract_24_regular,
-                                          ),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(
-                                                FluentIcons.dismiss_24_regular),
-                                            onPressed: () {
-                                              _searchTab.negativeQueryController
-                                                  .clear();
-                                              setState(() {});
-                                            },
-                                          ),
-                                        ),
-                                        onChanged: (_) => setState(() {}),
-                                        onSubmitted: (_) => _performSearch(),
-                                      ),
-                                      if (_searchTab
-                                          .negativeQueryController.text
-                                          .trim()
-                                          .isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        AdvancedSearchControls(
-                                          tab: _searchTab,
-                                          compactMode: true,
-                                          onEmptySubmit: _performSearch,
-                                          inputFocusNotifier:
-                                              _advancedControlsHasFocus,
-                                          supportsVocalized:
-                                              _supportsVocalizedSearch,
-                                          queryController: _searchTab
-                                              .negativeQueryController,
-                                          searchOptions:
-                                              _searchTab.negativeSearchOptions,
-                                          globalSearchOptions: _searchTab
-                                              .negativeGlobalSearchOptions,
-                                          useGlobalSearchOptions: _searchTab
-                                              .useGlobalNegativeSearchOptions,
-                                          alternativeWords: _searchTab
-                                              .negativeAlternativeWords,
-                                          spacingValues:
-                                              _searchTab.negativeSpacingValues,
-                                          searchOptionsChanged: _searchTab
-                                              .negativeSearchOptionsChanged,
-                                          alternativeWordsChanged: _searchTab
-                                              .negativeAlternativeWordsChanged,
-                                          spacingValuesChanged: _searchTab
-                                              .negativeSpacingValuesChanged,
-                                          enableSavedAlternatives: false,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // סינון לפי תקופה/מחבר/ספרי יסוד — מצטרף ב-AND
-                            // לבחירת הקטגוריות (וגם ל"חיפוש בכל הקטגוריות").
-                            _buildDimensionFilters(),
-                            const SizedBox(height: 8),
-
-                            // תוכן תחתון - אפשרויות מתקדמות + חלונית קטגוריות.
-                            // מגירת ההיסטוריה צפה מעל התוכן הזה כ-overlay (Stack)
-                            // כדי שלא תזיז את ההגדרות למטה כשהיא נפתחת.
-                            Expanded(
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  BlocBuilder<SearchBloc, SearchState>(
-                                    builder: (context, state) {
-                                      final showCategory =
-                                          !_searchAllCategories &&
-                                              widget.bookTitle == null;
-
-                                      // מצב לא-מתקדם: אפשרויות המילה ושורת
-                                      // ברירות המחדל של החיפוש הרגיל (במדויק
-                                      // בלבד) + עץ קטגוריות
-                                      if (!state.isAdvancedSearchEnabled) {
-                                        final isExact =
-                                            state.configuration.searchMode ==
-                                                SearchMode.exact;
-                                        final exactControls = isExact
-                                            ? Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  _buildExactOptionsRow(),
-                                                  const SizedBox(height: 4),
-                                                  _buildExactDefaultsRow(state),
-                                                ],
-                                              )
-                                            : null;
-                                        if (!showCategory) {
-                                          return exactControls == null
-                                              ? const SizedBox.shrink()
-                                              : SingleChildScrollView(
-                                                  child: exactControls,
-                                                );
-                                        }
-                                        final categoryTree =
-                                            CategoryTreeSelector(
-                                          selectedFacets: _manualFacets,
-                                          onSelectionChanged:
-                                              _onManualFacetsChanged,
-                                        );
-                                        if (exactControls == null) {
-                                          return categoryTree;
-                                        }
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            // בדיאלוג צר התיבות נשברות לכמה
-                                            // שורות — גלילה פנימית במקום גלישה.
-                                            Flexible(
-                                              fit: FlexFit.loose,
-                                              child: SingleChildScrollView(
-                                                child: exactControls,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Expanded(child: categoryTree),
-                                          ],
-                                        );
-                                      }
-
-                                      // מצב מתקדם: אפשרויות + חלונית קטגוריות צד
-                                      final advancedControls =
-                                          AdvancedSearchControls(
-                                        tab: _searchTab,
-                                        compactMode: true,
-                                        onEmptySubmit: _performSearch,
-                                        inputFocusNotifier:
-                                            _advancedControlsHasFocus,
-                                        supportsVocalized:
-                                            _supportsVocalizedSearch,
-                                      );
-                                      final categoryPanel = showCategory &&
-                                              widget.bookTitle == null
-                                          ? CategoryTreeSelector(
-                                              selectedFacets: _manualFacets,
-                                              onSelectionChanged:
-                                                  _onManualFacetsChanged,
-                                            )
-                                          : null;
-
-                                      return LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          // כשיש פאנל קטגוריות (260px) + controls,
-                                          // דורש לפחות ~480px — אחרת ערמה אנכית
-                                          final useColumns =
-                                              categoryPanel != null &&
-                                                  constraints.maxWidth < 480;
-
-                                          if (useColumns) {
-                                            return SingleChildScrollView(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  advancedControls,
-                                                  const SizedBox(height: 12),
-                                                  ConstrainedBox(
-                                                    constraints:
-                                                        const BoxConstraints(
-                                                            maxHeight: 220),
-                                                    child: categoryPanel,
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          }
-
-                                          return Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: SingleChildScrollView(
-                                                  child: advancedControls,
-                                                ),
-                                              ),
-                                              if (widget.bookTitle == null)
-                                                AnimatedSize(
-                                                  duration: const Duration(
-                                                      milliseconds: 250),
-                                                  curve: Curves.easeInOut,
-                                                  child: categoryPanel != null
-                                                      ? SizedBox(
-                                                          width: 260,
-                                                          height: constraints
-                                                              .maxHeight,
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .only(
-                                                                    right:
-                                                                        12.0),
-                                                            child:
-                                                                categoryPanel,
-                                                          ),
-                                                        )
-                                                      : const SizedBox.shrink(),
-                                                ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                  if (_showHistoryDropdown)
-                                    Positioned(
-                                      top: 0,
-                                      left: 0,
-                                      right: 0,
-                                      child: TapRegion(
-                                        groupId: _historyTapRegionGroupId,
-                                        onTapOutside: (_) => setState(
-                                            () => _showHistoryDropdown = false),
-                                        child: _buildHistoryDropdown(),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
+                  child: BlocBuilder<SearchBloc, SearchState>(
+                    builder: (context, state) {
+                      return Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          16,
+                          horizontalPadding,
+                          0,
                         ),
-                      ),
-                    ],
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildIndexWarning(),
+                                    _buildSearchComposer(state),
+                                    if (widget.bookTitle == null) ...[
+                                      const SizedBox(height: 12),
+                                      _buildScopeRow(),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: 260,
+                                      child: _buildModeContent(state),
+                                    ),
+                                    const SizedBox(height: 16),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
+                const Divider(height: 1),
+                _buildFooter(),
               ],
             ),
           ),

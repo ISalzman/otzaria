@@ -76,7 +76,7 @@ void main() {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
-  testWidgets('מגירת ההיסטוריה משתמשת ברקע של הדיאלוג',
+  testWidgets('תפריט ההיסטוריה משתמש ברקע של הדיאלוג',
       (WidgetTester tester) async {
     final historyBloc = MockHistoryBloc();
     final indexingBloc = MockIndexingBloc();
@@ -134,20 +134,87 @@ void main() {
     await tester.tap(find.byIcon(FluentIcons.history_24_regular));
     await tester.pumpAndSettle();
 
-    final dropdownContainer = tester.widget<Container>(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Container &&
-            widget.margin == const EdgeInsets.only(top: 4) &&
-            widget.decoration is BoxDecoration &&
-            (widget.decoration as BoxDecoration).color ==
-                theme.colorScheme.surfaceContainerHigh,
-      ),
+    final historyMenuAnchor = find.byWidgetPredicate(
+      (widget) => widget is MenuAnchor && widget.controller != null,
+    );
+    final menuAnchor = tester.widget<MenuAnchor>(historyMenuAnchor);
+    expect(
+      menuAnchor.style!.backgroundColor!.resolve({}),
+      theme.colorScheme.surfaceContainerHigh,
+    );
+    expect(find.byKey(const ValueKey('search-history-menu')), findsOneWidget);
+    expect(find.text('משה'), findsWidgets);
+  });
+
+  testWidgets('פאנל הקטגוריות עקבי ומופיע לצד כל סוגי החיפוש',
+      (WidgetTester tester) async {
+    final historyBloc = MockHistoryBloc();
+    final indexingBloc = MockIndexingBloc();
+    final navigationBloc = MockNavigationBloc();
+    final theme = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
     );
 
-    final decoration = dropdownContainer.decoration! as BoxDecoration;
-    expect(decoration.color, theme.colorScheme.surfaceContainerHigh);
-    expect(find.text('משה'), findsWidgets);
+    whenListen(
+      historyBloc,
+      const Stream<HistoryState>.empty(),
+      initialState: HistoryLoaded([]),
+    );
+    whenListen(
+      indexingBloc,
+      const Stream<IndexingState>.empty(),
+      initialState: IndexingInitial(),
+    );
+    whenListen(
+      navigationBloc,
+      const Stream<NavigationState>.empty(),
+      initialState: const NavigationState(currentScreen: Screen.search),
+    );
+
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      await historyBloc.close();
+      await indexingBloc.close();
+      await navigationBloc.close();
+    });
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(_buildDialogHarness(
+      theme: theme,
+      historyBloc: historyBloc,
+      indexingBloc: indexingBloc,
+      navigationBloc: navigationBloc,
+      dialog: const SearchDialog(),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Switch), findsOneWidget);
+    await tester.ensureVisible(find.byType(Switch));
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+
+    void expectCategoryBeside() {
+      final categoryRect =
+          tester.getRect(find.byKey(const ValueKey('search-category-panel')));
+      final controlsRect =
+          tester.getRect(find.byKey(const ValueKey('search-mode-controls')));
+      expect(
+        categoryRect.right <= controlsRect.left ||
+            controlsRect.right <= categoryRect.left,
+        isTrue,
+      );
+    }
+
+    expectCategoryBeside();
+
+    for (final mode in ['מתקדם', 'מקורב', 'מדויק']) {
+      await tester.ensureVisible(find.text(mode).first);
+      await tester.tap(find.text(mode).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'המעבר אל $mode נכשל');
+      expectCategoryBeside();
+    }
   });
 
   testWidgets(
@@ -207,13 +274,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final labelFinder = find.text('קידומות דקדוקיות');
-    expect(labelFinder, findsOneWidget);
-    final checkbox = tester.widget<Checkbox>(find.descendant(
-      of: find.ancestor(of: labelFinder, matching: find.byType(Row)).first,
-      matching: find.byType(Checkbox),
-    ));
-    expect(checkbox.value, isTrue,
+    final chipFinder = find.byWidgetPredicate((widget) =>
+        widget is FilterChip &&
+        (widget.label as Text).data == 'קידומות דקדוקיות');
+    expect(chipFinder, findsOneWidget);
+    expect(tester.widget<FilterChip>(chipFinder).selected, isTrue,
         reason: 'אפשרות פר-מילה משוחזרת חייבת להופיע מסומנת בפתיחה מחדש');
   });
 
