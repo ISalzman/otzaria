@@ -13,7 +13,6 @@ import 'package:otzaria/widgets/text/rtl_text_field.dart';
 /// ווידג'ט לניהול אפשרויות חיפוש מתקדמות לכל מילה בנפרד.
 class AdvancedSearchControls extends StatefulWidget {
   final SearchingTab tab;
-  final bool compactMode;
   final VoidCallback? onEmptySubmit;
   final ValueNotifier<bool>? inputFocusNotifier;
 
@@ -36,7 +35,6 @@ class AdvancedSearchControls extends StatefulWidget {
   const AdvancedSearchControls({
     super.key,
     required this.tab,
-    this.compactMode = false,
     this.onEmptySubmit,
     this.inputFocusNotifier,
     this.supportsVocalized = false,
@@ -247,37 +245,10 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   Widget build(BuildContext context) {
     final isWordSelected = _currentWord != null && _wordIndex != null;
     final useGlobal = _useGlobalSearchOptions.value;
-    // הצ'קבוקסים פעילים אם במצב גלובלי או אם נבחרה מילה
-    final checkboxesEnabled = useGlobal || isWordSelected;
+    // תיבות האפשרויות פעילות אם במצב גלובלי או אם נבחרה מילה
+    final optionsEnabled = useGlobal || isWordSelected;
     // ההגדרות הפר-מיליות (מילים חילופיות + מרווח) תמיד פר-מילה
     final perWordInputsEnabled = isWordSelected;
-
-    if (!checkboxesEnabled && !widget.compactMode) {
-      final colorScheme = Theme.of(context).colorScheme;
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            children: [
-              Icon(
-                FluentIcons.cursor_click_24_regular,
-                size: 48,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'לחץ על מילה בשדה החיפוש כדי להגדיר אפשרויות מתקדמות',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
 
     // המתגים ממוקמים לצד שורת הניווט; ברוחב צר יורדים לשורה נפרדת
     final navigationWithToggle = LayoutBuilder(
@@ -291,7 +262,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
             _buildScopeToggle(),
           ],
         );
-        if (constraints.maxWidth < 520) {
+        if (constraints.maxWidth < 720) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -310,46 +281,30 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
       },
     );
 
-    if (widget.compactMode) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          navigationWithToggle,
-          if (perWordInputsEnabled) ...[
-            const SizedBox(height: 16),
-            _buildInputColumn(perWordInputsEnabled),
-          ],
-          const SizedBox(height: 16),
-          _buildCheckboxGrid(checkboxesEnabled, compactMode: true),
-          _buildSaveDefaultsRow(),
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          flex: 2,
-          child: Column(
-            children: [
-              navigationWithToggle,
-              const SizedBox(height: 16),
-              _buildInputColumn(perWordInputsEnabled),
-            ],
+        navigationWithToggle,
+        const SizedBox(height: 12),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(
+            'אפשרויות מילה',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
-        const SizedBox(width: 24),
-        Expanded(
-          flex: 3,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildCheckboxGrid(checkboxesEnabled, compactMode: false),
-              _buildSaveDefaultsRow(),
-            ],
-          ),
-        ),
+        const SizedBox(height: 8),
+        _buildOptionChips(optionsEnabled),
+        if (perWordInputsEnabled) ...[
+          const SizedBox(height: 12),
+          _buildInputColumn(perWordInputsEnabled),
+        ],
+        const SizedBox(height: 4),
+        _buildSaveDefaultsRow(),
       ],
     );
   }
@@ -742,14 +697,21 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         'התאמת ניקוד: ניקוד שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מנוקדים.',
     SearchQueryBuilder.matchTaamimOptionKey:
         'התאמת טעמי המקרא: טעם שיוקלד במילה יידרש להופיע בטקסט. החיפוש מוגבל לטקסטים מוטעמים.',
-    'קידומות ארמיות': 'קידומות ארמיות (ד/כד/מד/אד...) לפני המילה: מלכא ימצא גם דמלכא, כדמלכא.',
-    'סיומות ארמיות': 'שקילות אות סופית ארמית: ה↔א (מלכה↔מלכא) ו-ם↔ן (חכמים↔חכמין).',
-    'התעלם מגרשיים': 'גרש/גרשיים שהוקלדו במילה לא יידרשו בטקסט: רמב"ם ימצא גם רמבם, ולהפך.',
-    'תרגום ארמי': 'הרחבת המילה בתרגומיה מהמילון הארמי-עברי, בשני הכיוונים (איתא↔יש).',
-    'ראשי תיבות': 'פענוח ראשי-תיבות בשני הכיוונים: רמב"ם ימצא גם "רבי משה בן מיימון", ולהפך. פועל כשהשאילתה היא ראשי-התיבות או הפענוח בשלמותו.',
+    'קידומות ארמיות':
+        'קידומות ארמיות (ד/כד/מד/אד...) לפני המילה: מלכא ימצא גם דמלכא, כדמלכא.',
+    'סיומות ארמיות':
+        'שקילות אות סופית ארמית: ה↔א (מלכה↔מלכא) ו-ם↔ן (חכמים↔חכמין).',
+    'התעלם מגרשיים':
+        'גרש/גרשיים שהוקלדו במילה לא יידרשו בטקסט: רמב"ם ימצא גם רמבם, ולהפך.',
+    'תרגום ארמי':
+        'הרחבת המילה בתרגומיה מהמילון הארמי-עברי, בשני הכיוונים (איתא↔יש).',
+    'ראשי תיבות':
+        'פענוח ראשי-תיבות בשני הכיוונים: רמב"ם ימצא גם "רבי משה בן מיימון", ולהפך. פועל כשהשאילתה היא ראשי-התיבות או הפענוח בשלמותו.',
   };
 
-  Widget _buildCheckboxGrid(bool isEnabled, {required bool compactMode}) {
+  /// תיבות אפשרויות המילה כ-FilterChips — אותו מראה כמו בחיפוש הרגיל.
+  /// במצב גלובלי הסימון חל על כל המילים; במצב פר-מילה על המילה הנבחרת.
+  Widget _buildOptionChips(bool isEnabled) {
     final options = [
       ...SearchQueryBuilder.availableWordOptionKeys,
       ...SearchQueryBuilder.advancedOnlyWordOptionKeys,
@@ -759,8 +721,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
 
     final useGlobal = _useGlobalSearchOptions.value;
 
-    Widget buildCheckbox(String option) {
-      final colorScheme = Theme.of(context).colorScheme;
+    Widget buildChip(String option) {
       bool isChecked = false;
       if (isEnabled) {
         if (useGlobal) {
@@ -771,101 +732,36 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         }
       }
 
+      final chip = FilterChip(
+        label: Text(option),
+        visualDensity: VisualDensity.compact,
+        selected: isChecked,
+        onSelected: isEnabled
+            ? (selected) {
+                setState(() {
+                  if (useGlobal) {
+                    _globalSearchOptions[option] = selected;
+                  } else {
+                    final key = '${_currentWord}_$_wordIndex';
+                    _searchOptions.putIfAbsent(key, () => {});
+                    _searchOptions[key]![option] = selected;
+                  }
+                });
+                _searchOptionsChanged.value++;
+              }
+            : null,
+      );
       final tooltip = _optionTooltips[option];
-      final checkbox = Opacity(
-        opacity: isEnabled ? 1.0 : 0.5,
-        child: InkWell(
-          onTap: isEnabled
-              ? () {
-                  setState(() {
-                    if (useGlobal) {
-                      _globalSearchOptions[option] = !isChecked;
-                    } else {
-                      final key = '${_currentWord}_$_wordIndex';
-                      _searchOptions.putIfAbsent(key, () => {});
-                      _searchOptions[key]![option] = !isChecked;
-                    }
-                  });
-                  _searchOptionsChanged.value++;
-                }
-              : null,
-          borderRadius: AppTokens.borderRadiusAll,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IgnorePointer(
-                    child: Checkbox(
-                      value: isChecked,
-                      onChanged: isEnabled ? (_) {} : null,
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(color: colorScheme.outline),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    option,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isEnabled
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-      return tooltip == null
-          ? checkbox
-          : Tooltip(message: tooltip, child: checkbox);
+      return tooltip == null ? chip : Tooltip(message: tooltip, child: chip);
     }
 
-    if (!compactMode) {
-      return Wrap(
-        spacing: 16,
-        runSpacing: 8,
-        children: options
-            .map((option) => SizedBox(width: 180, child: buildCheckbox(option)))
-            .toList(),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useSingleColumn = constraints.maxWidth < 600;
-
-        if (useSingleColumn) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: options.map(buildCheckbox).toList(),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < options.length; i += 2) ...[
-              if (i > 0) const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: buildCheckbox(options[i])),
-                  if (i + 1 < options.length) ...[
-                    const SizedBox(width: 8),
-                    Expanded(child: buildCheckbox(options[i + 1])),
-                  ],
-                ],
-              ),
-            ],
-          ],
-        );
-      },
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: options.map(buildChip).toList(),
+      ),
     );
   }
 }

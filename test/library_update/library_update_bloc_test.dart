@@ -102,7 +102,7 @@ class _VerifyThenCommitService implements LibraryUpdateService {
       plan;
 
   @override
-  Future<void> applyDeltaPlan(
+  Future<Set<int>> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -118,6 +118,7 @@ class _VerifyThenCommitService implements LibraryUpdateService {
       stage: 'commit',
     ));
     await Future<void>.delayed(const Duration(milliseconds: 10));
+    return const {};
   }
 
   @override
