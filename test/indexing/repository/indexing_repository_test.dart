@@ -386,7 +386,7 @@ void main() {
         onScanProgress: (p, t) => scanCalls.add((p, t)),
         onProgress: (_, __) {},
         loadText: (b) async => texts[b.title],
-        fingerprintOf: (text) async => hashes[text]!,
+        fingerprintOf: (_, text) async => hashes[text]!,
       );
 
       expect(result, isTrue);
@@ -416,7 +416,7 @@ void main() {
         library,
         onProgress: (_, __) {},
         loadText: (_) async => 'טקסט',
-        fingerprintOf: (_) async => BigInt.from(7),
+        fingerprintOf: (_, __) async => BigInt.from(7),
       );
 
       expect(result, isTrue);
@@ -443,7 +443,7 @@ void main() {
           provider.isIndexing.value = false;
           return 'טקסט';
         },
-        fingerprintOf: (_) async => BigInt.one,
+        fingerprintOf: (_, __) async => BigInt.one,
       );
 
       expect(result, isFalse);

@@ -54,7 +54,9 @@ class SearchRepository {
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
       bool matchTaamim = false,
-      ResultGrouping? grouping}) async {
+      ResultGrouping? grouping,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount}) async {
     return _gateway.search(
       await _engine(),
       SearchEngineRequest(
@@ -78,6 +80,8 @@ class SearchRepository {
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
         grouping: grouping,
+        wordMatchMode: wordMatchMode,
+        wordMatchCount: wordMatchCount,
       ),
     );
   }
@@ -110,7 +114,9 @@ class SearchRepository {
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
       bool matchTaamim = false,
-      ResultGrouping? grouping}) async {
+      ResultGrouping? grouping,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount}) async {
     return _gateway.searchAndCount(
       await _engine(),
       SearchEngineRequest(
@@ -134,6 +140,8 @@ class SearchRepository {
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
         grouping: grouping,
+        wordMatchMode: wordMatchMode,
+        wordMatchCount: wordMatchCount,
       ),
     );
   }
@@ -174,7 +182,9 @@ class SearchRepository {
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
       bool matchTaamim = false,
-      ResultGrouping? grouping}) async* {
+      ResultGrouping? grouping,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount}) async* {
     yield* _gateway.searchStream(
       await _engine(),
       SearchEngineRequest(
@@ -198,6 +208,8 @@ class SearchRepository {
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
         grouping: grouping,
+        wordMatchMode: wordMatchMode,
+        wordMatchCount: wordMatchCount,
       ),
       chunkSize: chunkSize,
     );
@@ -226,7 +238,9 @@ class SearchRepository {
       Map<String, Map<String, bool>>? negativeSearchOptions,
       bool matchNikud = false,
       bool matchTaamim = false,
-      ResultGrouping? grouping}) async* {
+      ResultGrouping? grouping,
+      WordMatchMode wordMatchMode = WordMatchMode.all,
+      int? wordMatchCount}) async* {
     yield* _gateway.searchStreamWithCounts(
       await _engine(),
       SearchEngineRequest(
@@ -250,6 +264,8 @@ class SearchRepository {
         matchNikud: matchNikud,
         matchTaamim: matchTaamim,
         grouping: grouping,
+        wordMatchMode: wordMatchMode,
+        wordMatchCount: wordMatchCount,
       ),
       chunkSize: chunkSize,
     );

@@ -41,6 +41,22 @@ extension SearchScopePresentation on SearchScope {
       };
 }
 
+extension WordMatchModePresentation on WordMatchMode {
+  String get label => switch (this) {
+        WordMatchMode.all => 'כל המילים',
+        WordMatchMode.anyWord => 'מילה אחת לפחות',
+        WordMatchMode.mostWords => 'רוב המילים',
+        WordMatchMode.atLeast => 'לפחות X מילים',
+      };
+
+  String get tooltip => switch (this) {
+        WordMatchMode.all => 'כל מילות החיפוש חייבות להופיע (ברירת המחדל).',
+        WordMatchMode.anyWord => 'די בהופעה של מילה אחת ממילות החיפוש.',
+        WordMatchMode.mostWords => 'רוב מילות החיפוש מופיעות (יותר ממחצית).',
+        WordMatchMode.atLeast => 'לפחות מספר מילים שתבחר מופיעות בתוצאה.',
+      };
+}
+
 /// מצב איחוד תוצאות (עטיפת אפליקציה ל-[ResultGrouping] של המנוע,
 /// עם ערך "ללא" שאינו קיים שם).
 enum ResultGroupingMode {
@@ -93,6 +109,13 @@ class SearchConfiguration {
   /// איחוד תוצאות: ללא / לפי סעיף ("נמצאו X תוצאות בטווח") / טקסט זהה.
   final ResultGroupingMode resultGrouping;
 
+  /// כמה ממילות השאילתה חייבות להופיע (מצב מתקדם בלבד): כולן (ברירת
+  /// המחדל), מילה אחת, רוב, או לפחות [wordMatchCount].
+  final WordMatchMode wordMatchMode;
+
+  /// מספר המילים הנדרש כש-[wordMatchMode] הוא atLeast.
+  final int wordMatchCount;
+
   // חיפוש מנוקד (ניקוד/טעמים) אינו דגל גלובלי: הוא אפשרות פר-מילה במפות
   // searchOptions של הטאב, כמו שאר אפשרויות החיפוש המתקדם — ראה
   // SearchQueryBuilder.vocalizedWordOptionKeys.
@@ -114,6 +137,8 @@ class SearchConfiguration {
     this.currentFacets = const ["/"],
     this.searchScopeFacets = const ["/"],
     this.resultGrouping = ResultGroupingMode.none,
+    this.wordMatchMode = WordMatchMode.all,
+    this.wordMatchCount = 2,
     // ערכי ברירת מחדל לרגקס
     this.regexEnabled = false,
     this.caseSensitive = false,
@@ -132,6 +157,8 @@ class SearchConfiguration {
     List<String>? currentFacets,
     List<String>? searchScopeFacets,
     ResultGroupingMode? resultGrouping,
+    WordMatchMode? wordMatchMode,
+    int? wordMatchCount,
     bool? regexEnabled,
     bool? caseSensitive,
     bool? multiline,
@@ -147,6 +174,8 @@ class SearchConfiguration {
       currentFacets: currentFacets ?? this.currentFacets,
       searchScopeFacets: searchScopeFacets ?? this.searchScopeFacets,
       resultGrouping: resultGrouping ?? this.resultGrouping,
+      wordMatchMode: wordMatchMode ?? this.wordMatchMode,
+      wordMatchCount: wordMatchCount ?? this.wordMatchCount,
       regexEnabled: regexEnabled ?? this.regexEnabled,
       caseSensitive: caseSensitive ?? this.caseSensitive,
       multiline: multiline ?? this.multiline,
@@ -166,6 +195,8 @@ class SearchConfiguration {
       'currentFacets': currentFacets,
       'searchScopeFacets': searchScopeFacets,
       'resultGrouping': resultGrouping.index,
+      'wordMatchMode': wordMatchMode.index,
+      'wordMatchCount': wordMatchCount,
       'regexEnabled': regexEnabled,
       'caseSensitive': caseSensitive,
       'multiline': multiline,
@@ -174,31 +205,33 @@ class SearchConfiguration {
     };
   }
 
-  /// יצירה ממפה
+  /// יצירה ממפה. אינדקסי enum שאינם בטווח (כולל שליליים או לא-מספריים)
+  /// נופלים לברירת המחדל במקום לזרוק RangeError.
   factory SearchConfiguration.fromMap(Map<String, dynamic> map) {
-    final rawSearchModeIndex = map['searchMode'] as int? ?? 0;
-    final normalizedSearchMode = rawSearchModeIndex >= SearchMode.values.length
-        ? SearchMode.advanced
-        : SearchMode.values[rawSearchModeIndex];
-
-    final rawProximityScopeIndex = map['proximityScope'] as int? ?? 0;
-    final normalizedProximityScope =
-        rawProximityScopeIndex >= SearchScope.values.length
-            ? SearchScope.wordDistance
-            : SearchScope.values[rawProximityScopeIndex];
+    T enumFrom<T>(List<T> values, Object? raw, T fallback) {
+      return raw is int && raw >= 0 && raw < values.length
+          ? values[raw]
+          : fallback;
+    }
 
     return SearchConfiguration(
       distance: map['distance'] ?? 0,
-      proximityScope: normalizedProximityScope,
-      searchMode: normalizedSearchMode,
-      sortBy: ResultsOrder.values[map['sortBy'] ?? 0],
+      proximityScope: enumFrom(
+          SearchScope.values, map['proximityScope'], SearchScope.wordDistance),
+      searchMode:
+          enumFrom(SearchMode.values, map['searchMode'], SearchMode.advanced),
+      sortBy:
+          enumFrom(ResultsOrder.values, map['sortBy'], ResultsOrder.catalogue),
       numResults: map['numResults'] ?? 100,
       currentFacets: List<String>.from(map['currentFacets'] ?? ["/"]),
       searchScopeFacets: List<String>.from(map['searchScopeFacets'] ?? ["/"]),
-      resultGrouping: switch (map['resultGrouping'] as int?) {
-        final i? when i < ResultGroupingMode.values.length =>
-          ResultGroupingMode.values[i],
-        _ => ResultGroupingMode.none,
+      resultGrouping: enumFrom(ResultGroupingMode.values, map['resultGrouping'],
+          ResultGroupingMode.none),
+      wordMatchMode: enumFrom(
+          WordMatchMode.values, map['wordMatchMode'], WordMatchMode.all),
+      wordMatchCount: switch (map['wordMatchCount']) {
+        final int count when count >= 1 => count,
+        _ => 2,
       },
       regexEnabled: map['regexEnabled'] ?? false,
       caseSensitive: map['caseSensitive'] ?? false,
@@ -237,6 +270,8 @@ class SearchConfiguration {
         other.currentFacets.toString() == currentFacets.toString() &&
         other.searchScopeFacets.toString() == searchScopeFacets.toString() &&
         other.resultGrouping == resultGrouping &&
+        other.wordMatchMode == wordMatchMode &&
+        other.wordMatchCount == wordMatchCount &&
         other.regexEnabled == regexEnabled &&
         other.caseSensitive == caseSensitive &&
         other.multiline == multiline &&
@@ -255,6 +290,8 @@ class SearchConfiguration {
       currentFacets,
       searchScopeFacets,
       resultGrouping,
+      wordMatchMode,
+      wordMatchCount,
       regexEnabled,
       caseSensitive,
       multiline,

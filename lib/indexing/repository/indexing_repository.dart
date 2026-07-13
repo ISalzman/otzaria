@@ -1109,7 +1109,8 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     @visibleForTesting Future<String?> Function(TextBook book)? loadText,
-    @visibleForTesting Future<BigInt> Function(String text)? fingerprintOf,
+    @visibleForTesting
+    Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
   }) async {
     if (await requiresManualReindex(library)) return false;
 
@@ -1117,10 +1118,30 @@ class IndexingRepository {
     final indexFingerprints = await engine.getBookFingerprints();
 
     final textLoader = loadText ?? _loadTextBookText;
-    // computeContentFingerprint היא כעת קריאת FFI סינכרונית; העטיפה
-    // ה-async נשמרת רק כדי לא לשבור את חתימת ההזרקה של הטסטים.
+    // שחזור אותה חתימה קנונית שהאינדוקס חותם — טקסט + metadata (קטגוריה,
+    // סדר קטלוגי, דור, ממדי סינון) — דורש את אותם מפה ומטמונים.
+    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (book) => catalogueOrderKey(book as Book),
+    );
+    await Future.wait([
+      GenerationCache.instance.warmUp(),
+      ReferenceBooksCache.instance.warmUp(),
+      BookFacetMetadataCache.instance.warmUp(),
+    ]);
+    // computeBookFingerprint היא קריאת FFI סינכרונית; העטיפה ה-async
+    // נשמרת רק כדי לא לשבור את חתימת ההזרקה של הטסטים.
     final fingerprint = fingerprintOf ??
-        ((text) async => computeContentFingerprint(text: text));
+        ((TextBook book, String text) async => computeBookFingerprint(
+              text: text,
+              title: book.title,
+              topics: _bookTopics(book),
+              catalogueOrder:
+                  catalogueOrderByBookKey[catalogueOrderKey(book)] ??
+                      0xFFFFFFFF,
+              generationOrder: chronologicalOrderForBook(book),
+              extraFacets: _bookExtraFacets(book),
+            ));
 
     final candidates = library
         .getAllBooks()
@@ -1162,7 +1183,7 @@ class IndexingRepository {
 
         // hash אפס = "לא ניתן לאימות" (מסמכים סותרים / אינדוקס ישן) —
         // מאנדקסים מחדש כדי לרכוש טביעת אצבע תקינה.
-        final dbHash = await fingerprint(text);
+        final dbHash = await fingerprint(textBook, text);
         if (indexHash == BigInt.zero || dbHash != indexHash) {
           changed.add(book);
         }

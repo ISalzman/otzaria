@@ -47,6 +47,34 @@ void main() {
       });
     });
 
+    test('wordMatchMode ו-wordMatchCount מגיעים לבקשה; ברירת מחדל all',
+        () async {
+      final engine = _RecordingSearchEngineOperations();
+      final repository = SearchRepository(engineProvider: () async => engine);
+
+      await repository.searchTexts(
+        'שלום עולם',
+        const ['/'],
+        10,
+        searchMode: SearchMode.advanced,
+      );
+      expect(engine.lastRequest!.wordMatchMode, WordMatchMode.all);
+      expect(engine.lastRequest!.wordMatchCount, isNull);
+
+      await repository
+          .searchTextsStreamWithCounts(
+            'שלום עולם',
+            const ['/'],
+            10,
+            searchMode: SearchMode.advanced,
+            wordMatchMode: WordMatchMode.atLeast,
+            wordMatchCount: 3,
+          )
+          .toList();
+      expect(engine.lastRequest!.wordMatchMode, WordMatchMode.atLeast);
+      expect(engine.lastRequest!.wordMatchCount, 3);
+    });
+
     test('fuzzy=true גובר על searchMode ומנתב לחיפוש מקורב', () async {
       final engine = _RecordingSearchEngineOperations();
       final repository = SearchRepository(engineProvider: () async => engine);

@@ -55,6 +55,20 @@ class UpdateProximityScopeWithoutSearch extends SearchEvent {
   UpdateProximityScopeWithoutSearch(this.scope);
 }
 
+/// עדכון מצב התאמת המילים (כל המילים / מילה אחת / רוב / לפחות X).
+/// [count] רלוונטי רק ל-atLeast; null משאיר את הערך הקיים.
+class UpdateWordMatchMode extends SearchEvent {
+  final WordMatchMode mode;
+  final int? count;
+  UpdateWordMatchMode(this.mode, {this.count});
+}
+
+class UpdateWordMatchModeWithoutSearch extends SearchEvent {
+  final WordMatchMode mode;
+  final int? count;
+  UpdateWordMatchModeWithoutSearch(this.mode, {this.count});
+}
+
 class ToggleSearchMode extends SearchEvent {}
 
 class SetSearchMode extends SearchEvent {

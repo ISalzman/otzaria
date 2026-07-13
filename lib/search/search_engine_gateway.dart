@@ -28,6 +28,15 @@ class SearchEngineRequest {
   /// advanced — המצבים המדויק והמקורב מתעלמים ממנו.
   final SearchScope scope;
   final SearchScope negativeScope;
+
+  /// כמה ממילות השאילתה חייבות להופיע בתוצאה (מצב מתקדם בלבד):
+  /// כולן (ברירת המחדל) / מילה אחת / רוב / לפחות [wordMatchCount].
+  /// בכל מצב שאינו all המנוע מוותר על דרישת הסדר והמרחק.
+  final WordMatchMode wordMatchMode;
+
+  /// מספר המילים הנדרש כש-[wordMatchMode] הוא atLeast; המנוע חותך
+  /// לטווח החוקי.
+  final int? wordMatchCount;
   final Map<String, String> customSpacing;
   final Map<String, String> negativeCustomSpacing;
   final Map<int, List<String>> alternativeWords;
@@ -69,6 +78,8 @@ class SearchEngineRequest {
     this.matchNikud = false,
     this.matchTaamim = false,
     this.grouping,
+    this.wordMatchMode = WordMatchMode.all,
+    this.wordMatchCount,
   });
 
   SearchEngineRequest copyWith({
@@ -92,6 +103,8 @@ class SearchEngineRequest {
     bool? matchNikud,
     bool? matchTaamim,
     Object? grouping = _unset,
+    WordMatchMode? wordMatchMode,
+    Object? wordMatchCount = _unset,
   }) {
     return SearchEngineRequest(
       query: query ?? this.query,
@@ -119,6 +132,10 @@ class SearchEngineRequest {
       grouping: identical(grouping, _unset)
           ? this.grouping
           : grouping as ResultGrouping?,
+      wordMatchMode: wordMatchMode ?? this.wordMatchMode,
+      wordMatchCount: identical(wordMatchCount, _unset)
+          ? this.wordMatchCount
+          : wordMatchCount as int?,
     );
   }
 }
@@ -248,6 +265,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       alternativeWords: const {},
       negativeAlternativeWords: const {},
       negativeSearchOptions: const {},
+      wordMatchMode: WordMatchMode.all,
+      wordMatchCount: null,
     );
   }
 
@@ -289,6 +308,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       scope: request.scope,
       negativeScope: request.negativeScope,
       grouping: request.grouping,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -347,6 +368,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       scope: request.scope,
       negativeScope: request.negativeScope,
       grouping: request.grouping,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -413,6 +436,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       scope: request.scope,
       negativeScope: request.negativeScope,
       grouping: request.grouping,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -465,6 +490,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -509,6 +536,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -563,6 +592,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
       matchTaamim: request.matchTaamim,
       scope: request.scope,
       negativeScope: request.negativeScope,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
     );
   }
 
@@ -627,6 +658,8 @@ class RustSearchEngineOperations implements SearchEngineOperations {
           scope: request.scope,
           negativeScope: request.negativeScope,
           grouping: request.grouping,
+          wordMatchMode: request.wordMatchMode,
+          wordMatchCount: request.wordMatchCount,
         );
       case SearchMode.fuzzy:
         return _engine.searchFuzzyStreamWithCounts(
