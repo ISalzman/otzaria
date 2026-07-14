@@ -17,6 +17,9 @@ class LinkTypes {
   static const String related = 'RELATED';
   static const String other = 'OTHER';
 
+  /// סוג תלוי חדש (למשל "עין איה") — נחשב כמפרש, לא כהפניה.
+  static const String elucidation = 'ELUCIDATION';
+
   /// סוגי קישור תלויי-טקסט — טקסטים שתלויים בטקסט הבסיס (פירוש/תרגום/מדרש
   /// וכד׳) ומוצגים בפאנל המפרשים. "עין משפט" הוא כלי הפניה ולכן מוצג בקישורים.
   static const Set<String> dependentTextTypes = {
@@ -26,6 +29,7 @@ class LinkTypes {
     midrash,
     parshanut,
     diburHamatchil,
+    elucidation,
   };
 
   /// האם הקישור הוא תלוי-טקסט (מפרש) — מוצג בפאנל המפרשים ולא כהפניה צדדית.
