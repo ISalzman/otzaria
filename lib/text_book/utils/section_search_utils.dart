@@ -65,6 +65,24 @@ double matchFractionInLine(String rawLine, String query) {
   return (offset / clean.length).clamp(0.0, 1.0);
 }
 
+/// האם תוצאת החיפוש [query] נחתה בגוף הערת שוליים של [rawLine] בלבד —
+/// המונח נמצא בהערה אך לא בטקסט הראשי. משמש לפתיחת חלונית ההערות בפתיחת
+/// תוצאה, כשהספר לבדו אינו מציג את ההתאמה (גוף ההערה מוסר מהטקסט הראשי).
+bool queryMatchesInlineNoteOnly(String rawLine, String query) {
+  if (!rawLine.contains('footnote')) return false;
+  final q =
+      utils.hasNikud(query) ? utils.removeVolwels(query.trim()) : query.trim();
+  if (q.isEmpty) return false;
+
+  final noteBody = notes.notesForLines([rawLine], const [0]).join(' ');
+  final cleanNote = utils.removeVolwels(utils.stripHtmlIfNeeded(noteBody));
+  if (!_containsWholeWord(cleanNote, q)) return false;
+
+  final cleanMain = utils
+      .removeVolwels(utils.stripHtmlIfNeeded(notes.stripInlineNotes(rawLine)));
+  return !_containsWholeWord(cleanMain, q);
+}
+
 class _SearchWorkerHost {
   _SearchWorkerHost._();
 

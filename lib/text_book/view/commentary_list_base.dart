@@ -2011,8 +2011,13 @@ class _CollapsibleCommentaryGroupState
                           widget.highlightQueryListenable!,
                       ]),
                       builder: (context, _) {
-                        final searchQuery = widget.showSearch
+                        // שדה החיפוש הפנימי גובר כשהוקלד בו; כשהוא ריק נופלים
+                        // להדגשת מונח החיפוש החיצוני (מתוצאה שנחתה בהערה).
+                        final internalQuery = widget.showSearch
                             ? widget.searchQueryListenable.value
+                            : '';
+                        final searchQuery = internalQuery.isNotEmpty
+                            ? internalQuery
                             : (widget.highlightQueryListenable?.value ?? '');
                         final currentSearchIndex = (widget.showSearch ||
                                 widget.highlightQueryListenable != null)
