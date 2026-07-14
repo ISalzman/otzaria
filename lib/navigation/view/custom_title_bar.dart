@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -90,10 +91,6 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
 );
 
 class _CustomTitleBarState extends State<CustomTitleBar> {
-  // נקבע ב-onDoubleTapDown (לפני onDoubleTap): האם הלחיצה הכפולה האחרונה באזור
-  // הטאבים הייתה על טאב בפועל. אם כן — מדלגים על maximize/restore.
-  bool _doubleTapOnTab = false;
-
   // האם העכבר נמצא כרגע מעל שורת הטאבים. בעת סגירת טאב כשהעכבר בפנים מקפיאים
   // את רוחב הטאבים (ראה _pinnedTabWidths) כדי שכפתור ה-X של הטאב הבא יישאר תחת
   // הסמן וסגירות רצופות יפעלו.
@@ -146,9 +143,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   /// maximize/restore בלחיצה כפולה על האזור הריק שבשורת הטאבים (כמו DragToMoveArea).
-  /// אם הלחיצה הייתה על טאב (נקבע ב-onDoubleTapDown) — אין שינוי גודל.
   Future<void> _onTabsAreaDoubleTap() async {
-    if (_doubleTapOnTab) return;
     final isMaximized = await windowManager.isMaximized();
     if (isMaximized) {
       await windowManager.unmaximize();
@@ -544,7 +539,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             ? tabWidths.selected
             : tabWidths.unselected;
         // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
-        // ידלג עליו (ראה onDoubleTapDown למטה).
+        // ידלג עליו (ראה _EmptyAreaDoubleTapRecognizer).
         final tabChild = MetaData(
           metaData: _kTabHitMarker,
           behavior: HitTestBehavior.opaque,
@@ -567,10 +562,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
     );
 
-    // מחליף את DragToMoveArea בגרסה ששולטת ב-onDoubleTap: גרירת חלון (onPanStart)
-    // ו-maximize/restore (onDoubleTap) פעילים על האזור הריק שבשורת הטאבים, אך
-    // לחיצה כפולה *על טאב* מדלגת על ה-maximize. ה-MouseRegion משחרר את קפיאת
-    // הרוחב כשהעכבר עוזב את השורה.
+    // מחליף את DragToMoveArea: גרירת חלון (onPanStart) ו-maximize/restore
+    // (לחיצה כפולה) פעילים רק על האזור הריק שבשורת הטאבים. מזהה הלחיצה הכפולה
+    // דוחה מצביעים שמעל טאב כבר ב-isPointerAllowed — אחרת הוא מחזיק את
+    // ה-gesture arena ומעכב את כפתור ה-X של הטאב ב~300ms.
+    // ה-MouseRegion משחרר את קפיאת הרוחב כשהעכבר עוזב את השורה.
     return MouseRegion(
       onEnter: (_) => _pointerInsideTabStrip = true,
       onExit: (_) {
@@ -586,12 +582,23 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           if (_hitTestTab(context, details.globalPosition)) return;
           windowManager.startDragging();
         },
-        onDoubleTapDown: (details) =>
-            _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
-        onDoubleTap: _onTabsAreaDoubleTap,
-        child: KeyedSubtree(
-          key: tourReadingTabsTargetKey,
-          child: reorderList,
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.translucent,
+          gestures: {
+            _EmptyAreaDoubleTapRecognizer: GestureRecognizerFactoryWithHandlers<
+                _EmptyAreaDoubleTapRecognizer>(
+              () => _EmptyAreaDoubleTapRecognizer(debugOwner: this),
+              (recognizer) {
+                recognizer.isPointerOnTab =
+                    (position) => _hitTestTab(context, position);
+                recognizer.onDoubleTap = _onTabsAreaDoubleTap;
+              },
+            ),
+          },
+          child: KeyedSubtree(
+            key: tourReadingTabsTargetKey,
+            child: reorderList,
+          ),
         ),
       ),
     );
@@ -1275,5 +1282,20 @@ class _CaptionActionButtonState extends State<_CaptionActionButton> {
     }
 
     return Tooltip(message: widget.tooltip!, child: button);
+  }
+}
+
+/// מזהה לחיצה כפולה לאזור הריק של שורת הטאבים בלבד. הדחייה חייבת להיות
+/// ב-isPointerAllowed: מזהה שנכנס ל-arena מחזיק אותה עד timeout ומעכב את
+/// הלחיצה על כפתור ה-X של הטאב.
+class _EmptyAreaDoubleTapRecognizer extends DoubleTapGestureRecognizer {
+  _EmptyAreaDoubleTapRecognizer({super.debugOwner});
+
+  bool Function(Offset globalPosition)? isPointerOnTab;
+
+  @override
+  bool isPointerAllowed(PointerDownEvent event) {
+    if (isPointerOnTab?.call(event.position) ?? false) return false;
+    return super.isPointerAllowed(event);
   }
 }
