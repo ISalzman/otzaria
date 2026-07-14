@@ -343,7 +343,7 @@ class _SearchDialogState extends State<SearchDialog> {
 
         if (searchHistory.isEmpty) return const SizedBox.shrink();
 
-        final recentSearches = searchHistory.take(5).toList();
+        final recentSearches = searchHistory.take(50).toList();
 
         return Column(
           key: const ValueKey('search-history-menu'),
