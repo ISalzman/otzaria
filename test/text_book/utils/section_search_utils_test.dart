@@ -124,4 +124,41 @@ void main() {
       expect(matchFractionInLine('', 'שמע'), 0);
     });
   });
+
+  group('queryMatchesInlineNoteOnly', () {
+    const noteLine = 'שלום עולם '
+        '<sup class="footnote-marker">1</sup>'
+        '<i class="footnote">כאן מופיע דין מיוחד</i>';
+
+    test('מונח שנמצא רק בגוף ההערה — אמת', () {
+      expect(queryMatchesInlineNoteOnly(noteLine, 'דין'), isTrue);
+    });
+
+    test('מונח שנמצא בטקסט הראשי — שקר (אין צורך בחלונית ההערות)', () {
+      expect(queryMatchesInlineNoteOnly(noteLine, 'שלום'), isFalse);
+    });
+
+    test('מונח שאינו קיים כלל — שקר', () {
+      expect(queryMatchesInlineNoteOnly(noteLine, 'משה'), isFalse);
+    });
+
+    test('שורה ללא הערת שוליים — שקר', () {
+      expect(queryMatchesInlineNoteOnly('שלום עולם דין', 'דין'), isFalse);
+    });
+
+    test('התאמה חלקית בהערה (תת-מחרוזת) אינה נספרת', () {
+      expect(queryMatchesInlineNoteOnly(noteLine, 'די'), isFalse);
+    });
+
+    test('מונח מנוקד מול הערה — מתעלם מניקוד', () {
+      const vocalized = 'פתיחה '
+          '<sup class="footnote-marker">2</sup>'
+          '<i class="footnote">אֱלֹהִים חיים</i>';
+      expect(queryMatchesInlineNoteOnly(vocalized, 'אלהים'), isTrue);
+    });
+
+    test('שאילתה ריקה — שקר', () {
+      expect(queryMatchesInlineNoteOnly(noteLine, ''), isFalse);
+    });
+  });
 }

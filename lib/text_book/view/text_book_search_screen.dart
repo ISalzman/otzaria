@@ -575,7 +575,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       viewportExtent: context.size?.height ?? MediaQuery.sizeOf(context).height,
       duration: const Duration(milliseconds: 250),
       curve: Curves.ease,
-      alignment: 0.35,
+      alignment: kSearchResultAnchorAlignment,
       intraLineFraction: intraLineFraction,
     );
 
