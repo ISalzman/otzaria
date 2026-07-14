@@ -637,6 +637,51 @@ void main() {
   });
 
   group('סגירת טאב בלחיצה על כפתור ה-X', () {
+    testWidgets('לחיצה על ה-X סוגרת מיד — בלי המתנה ל-timeout של לחיצה כפולה',
+        (tester) async {
+      // רגרסיה: מזהה הלחיצה הכפולה (maximize על האזור הריק) החזיק את
+      // ה-gesture arena על כל השורה, וה-X הגיב רק אחרי ~300ms. המזהה חייב
+      // לדחות מצביעים שמעל טאב, כך שה-RemoveTab נשלח מיד בשחרור הלחיצה.
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final historyBloc = _TestHistoryBloc();
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+        await historyBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+        historyBloc: historyBloc,
+      );
+
+      final closeButton = find.byIcon(FluentIcons.dismiss_24_regular);
+      expect(closeButton, findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(closeButton));
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      // pump ללא קידום שעון: אסור שהסגירה תחכה ל-timer של הלחיצה הכפולה.
+      await tester.pump();
+
+      expect(tabsBloc.addedEvents.whereType<RemoveTab>(), isNotEmpty,
+          reason: 'ה-X חייב לסגור מיד בשחרור הלחיצה, ללא השהיית arena');
+    });
+
     testWidgets('לחיצה על ה-X של טאב שאינו הנבחר סוגרת אותו (RemoveTab)',
         (tester) async {
       // התרחיש שבו הבאג הופיע: לחיצה על ה-X של טאב לא-נבחר בחרה אותו
