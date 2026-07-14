@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
@@ -66,6 +67,10 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   String? _currentWord;
   int? _wordIndex;
   List<String> _words = [];
+
+  // כל מילות-המנוע שהבחירה בשדה חופפת. בסמן נקודתי — מילה בודדת;
+  // בבחירת טווח — כל מה שהבחירה תופסת. תיבות האפשרויות חלות על כולן.
+  List<QueryWordSpan> _selectedSpans = [];
 
   TextEditingController get _queryController =>
       widget.queryController ?? widget.tab.queryController;
@@ -140,10 +145,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     final selection = _queryController.selection;
 
     if (text.isEmpty || selection.baseOffset < 0) {
-      if (_currentWord != null) {
+      if (_currentWord != null || _selectedSpans.isNotEmpty) {
         setState(() {
           _currentWord = null;
           _wordIndex = null;
+          _selectedSpans = [];
           _currentAlternatives.clear();
         });
       }
@@ -156,26 +162,41 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     // ללא יישור זה, שאילתות כמו `רמב"ם` מצרות מפתחות שאינם נקראים.
     _words = SearchQueryBuilder.splitQueryWords(text);
 
-    // המיפוי מהסמן למילה — דרך queryWordSpans, שמאתר כל מילת-מנוע
+    // המיפוי מהבחירה למילים — דרך queryWordSpans, שמאתר כל מילת-מנוע
     // בטקסט הגולמי (כולל ׳/״ עבריים בשדה ומקטעים משני-אורך כמו
     // `רמב''ם`, שמקבלים את גבולות המקטע כולו).
-    int? foundIndex;
-    String? foundWord;
+    final spans = SearchQueryBuilder.queryWordSpans(text);
+    final base = selection.baseOffset;
+    final extent = selection.extentOffset < 0 ? base : selection.extentOffset;
+    final selStart = base < extent ? base : extent;
+    final selEnd = base < extent ? extent : base;
 
-    for (final span in SearchQueryBuilder.queryWordSpans(text)) {
-      if (selection.baseOffset >= span.start &&
-          selection.baseOffset <= span.end) {
-        foundIndex = span.index;
-        foundWord = span.word;
-        break;
-      }
+    final List<QueryWordSpan> selected;
+    if (selStart == selEnd) {
+      // סמן נקודתי — המילה הבודדת שהסמן בתוכה
+      final span = spans.cast<QueryWordSpan?>().firstWhere(
+          (s) => selStart >= s!.start && selStart <= s.end,
+          orElse: () => null);
+      selected = span == null ? const [] : [span];
+    } else {
+      // בחירת טווח — כל מילה שהבחירה חופפת בפועל
+      selected =
+          spans.where((s) => s.end > selStart && s.start < selEnd).toList();
     }
 
-    if (foundIndex != _wordIndex || foundWord != _currentWord) {
+    final anchor = selected.isNotEmpty ? selected.first : null;
+    // השוואה לפי המפתח המלא `word_index` — אינדקס לבדו יחמיץ שינוי טקסט
+    // של מילה לא-ראשונה בטווח, וישאיר מפתח ישן לכתיבת האפשרויות.
+    final changed = !listEquals(
+        selected.map((s) => '${s.word}_${s.index}').toList(),
+        _selectedSpans.map((s) => '${s.word}_${s.index}').toList());
+
+    if (changed) {
       setState(() {
-        _wordIndex = foundIndex;
-        _currentWord = foundWord;
-        _updateLocalStateForWord(foundIndex);
+        _selectedSpans = selected;
+        _wordIndex = anchor?.index;
+        _currentWord = anchor?.word;
+        _updateLocalStateForWord(anchor?.index);
       });
     }
   }
@@ -247,8 +268,8 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     final useGlobal = _useGlobalSearchOptions.value;
     // תיבות האפשרויות פעילות אם במצב גלובלי או אם נבחרה מילה
     final optionsEnabled = useGlobal || isWordSelected;
-    // ההגדרות הפר-מיליות (מילים חילופיות + מרווח) תמיד פר-מילה
-    final perWordInputsEnabled = isWordSelected;
+    // מרווח/מילה חילופית עובדים על מילה בודדת בלבד — מנוטרלים בבחירת טווח
+    final perWordInputsEnabled = isWordSelected && _selectedSpans.length <= 1;
 
     // המתגים ממוקמים לצד שורת הניווט; ברוחב צר יורדים לשורה נפרדת
     final navigationWithToggle = LayoutBuilder(
@@ -266,7 +287,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildNavigationRow(perWordInputsEnabled),
+              _buildNavigationRow(isWordSelected),
               const SizedBox(height: 4),
               toggles,
             ],
@@ -274,7 +295,7 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         }
         return Row(
           children: [
-            Expanded(child: _buildNavigationRow(perWordInputsEnabled)),
+            Expanded(child: _buildNavigationRow(isWordSelected)),
             toggles,
           ],
         );
@@ -490,7 +511,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
               borderRadius: AppTokens.borderRadiusAll,
             ),
             child: Text(
-              isEnabled ? _currentWord! : 'בחר מילה',
+              !isEnabled
+                  ? 'בחר מילה'
+                  : _selectedSpans.length > 1
+                      ? '${_selectedSpans.length} מילים נבחרו'
+                      : _currentWord!,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -727,8 +752,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         if (useGlobal) {
           isChecked = _globalSearchOptions[option] ?? false;
         } else {
-          final key = '${_currentWord}_$_wordIndex';
-          isChecked = _searchOptions[key]?[option] ?? false;
+          // מסומן רק אם כל המילים הנבחרות מסומנות — אחרת מצב מעורב מוצג ככבוי
+          isChecked = _selectedSpans.isNotEmpty &&
+              _selectedSpans.every(
+                (s) => _searchOptions['${s.word}_${s.index}']?[option] ?? false,
+              );
         }
       }
 
@@ -742,9 +770,11 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                   if (useGlobal) {
                     _globalSearchOptions[option] = selected;
                   } else {
-                    final key = '${_currentWord}_$_wordIndex';
-                    _searchOptions.putIfAbsent(key, () => {});
-                    _searchOptions[key]![option] = selected;
+                    for (final s in _selectedSpans) {
+                      final key = '${s.word}_${s.index}';
+                      _searchOptions.putIfAbsent(key, () => {});
+                      _searchOptions[key]![option] = selected;
+                    }
                   }
                 });
                 _searchOptionsChanged.value++;
