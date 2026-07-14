@@ -260,7 +260,10 @@ void main() {
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
 
       // קובץ שלא קיים — יתום אמיתי; Platform.script בטוח קיים — נשמר.
-      final missingPath = r'C:\definitely\missing\ספר.pdf';
+      final sep = io.Platform.pathSeparator;
+      final missingPath =
+          '${io.Directory.systemTemp.path}${sep}definitely-missing$sep'
+          'ספר.pdf';
       final existingFilePath = io.Platform.resolvedExecutable;
       provider.indexedFilePaths.addAll({missingPath, existingFilePath});
       final repository = IndexingRepository(provider);
