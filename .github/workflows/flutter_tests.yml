@@ -32,9 +32,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # מנוע החיפוש: sanitizeQuery/splitQueryWords מאצילים ל-Rust דרך FRB,
+      # מנוע החיפוש נבנה רק כשה-PR נוגע בקבצי חיפוש — בשאר הריצות הטסטים
+      # התלויים בו מדולגים (skip: searchEngineSkipReason) במקום להיכשל.
+      - name: Detect search-related changes
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename')
+          if echo "$files" | grep -qE 'search|smart_text|toc_filter|snippet|pubspec\.yaml|flutter_test_config|flutter_tests\.yml'; then
+            echo "build_engine=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_engine=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # sanitizeQuery/splitQueryWords מאצילים ל-Rust דרך FRB,
       # ו-flutter_test_config.dart טוען את הספרייה מ-rust/target שבחבילה.
       - name: Cache search engine native build
+        if: steps.changes.outputs.build_engine == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -46,6 +61,7 @@ jobs:
             ${{ runner.os }}-search-engine-
 
       - name: Build search engine native library
+        if: steps.changes.outputs.build_engine == 'true'
         run: |
           pkg_root=$(jq -r '.packages[] | select(.name == "otzaria_search_engine") | .rootUri' .dart_tool/package_config.json)
           pkg_root=${pkg_root#file://}

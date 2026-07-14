@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 
+import '../support/search_engine_test_init.dart';
+
 String _highlighted(List<InlineSpan> spans) => spans
     .whereType<TextSpan>()
     .where((span) => span.style?.fontWeight == FontWeight.bold)
@@ -14,7 +16,11 @@ String _allText(List<InlineSpan> spans) =>
 const _defaultStyle = TextStyle();
 const _highlightStyle = TextStyle(fontWeight: FontWeight.bold);
 
-void main() {
+Future<void> main() async {
+  // sanitizeQuery/splitQueryWords מאצילים למנוע ה-Rust; הטסטים שלהם דורשים
+  // את הספרייה הנייטיבית ומדולגים כשאין build זמין.
+  final engineReady = await tryInitSearchEngine();
+
   group('fromHighlightedHtml - הדגשות מהמנוע', () {
     test('מדגיש טקסט שעטוף בתג font ומשאיר את השאר רגיל', () {
       final spans = SnippetBuilder.fromHighlightedHtml(
@@ -126,7 +132,7 @@ void main() {
       expect(_highlighted(spans), isEmpty);
       expect(_allText(spans), 'שלום עולם');
     });
-  });
+  }, skip: engineReady ? false : searchEngineSkipReason);
 
   group('buildExcerptText', () {
     test('טקסט קצר מהמגבלה מוחזר כמות שהוא', () {
@@ -151,7 +157,7 @@ void main() {
       expect(excerpt, contains('מצרים'));
       expect(excerpt, contains('...'));
       expect(excerpt.length, lessThan(fullText.length));
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('ללא התאמה מחזיר את תחילת הטקסט עם "..."', () {
       final fullText = 'אבגד ' * 60;
@@ -163,7 +169,7 @@ void main() {
 
       expect(excerpt.trimRight(), endsWith('...'));
       expect(excerpt.length, lessThan(fullText.trim().length));
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
   });
 
   group('htmlToPlainText - חילוץ טקסט גולמי', () {

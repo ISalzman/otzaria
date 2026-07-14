@@ -140,7 +140,7 @@ Future<void> main() async {
         'חכמה_0': {'קידומות': true},
         'בינה_1': {'קידומות': true},
       });
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('normalizeParametersForMode משאיר פרמטרים ידניים רק במצב מתקדם', () {
       final advanced = SearchQueryBuilder.normalizeParametersForMode(
