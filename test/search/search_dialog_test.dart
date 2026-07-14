@@ -25,6 +25,8 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+
+import '../support/search_engine_test_init.dart';
 import '../test_helpers/memory_cache_provider.dart';
 
 class MockHistoryBloc extends MockBloc<HistoryEvent, HistoryState>
@@ -71,7 +73,11 @@ Widget _buildDialogHarness({
   );
 }
 
-void main() {
+Future<void> main() async {
+  // הווידג'טים הנבדקים קוראים ל-sanitizeQuery/splitQueryWords שמאצילים למנוע
+  // ה-Rust; הטסטים המסומנים מדולגים כשאין build נייטיבי זמין.
+  final engineReady = await tryInitSearchEngine();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
@@ -280,7 +286,7 @@ void main() {
     expect(chipFinder, findsOneWidget);
     expect(tester.widget<FilterChip>(chipFinder).selected, isTrue,
         reason: 'אפשרות פר-מילה משוחזרת חייבת להופיע מסומנת בפתיחה מחדש');
-  });
+  }, skip: !engineReady);
 
   testWidgets('onSearch לא מעביר פרמטרים מתקדמים במצב exact',
       (WidgetTester tester) async {
@@ -371,7 +377,7 @@ void main() {
     });
     expect(capturedAlternativeWords, isEmpty);
     expect(capturedSpacingValues, isEmpty);
-  });
+  }, skip: !engineReady);
 
   testWidgets('onSearch לא מעביר פרמטרים מתקדמים במצב fuzzy',
       (WidgetTester tester) async {
@@ -453,7 +459,7 @@ void main() {
     expect(capturedSearchOptions, isEmpty);
     expect(capturedAlternativeWords, isEmpty);
     expect(capturedSpacingValues, isEmpty);
-  });
+  }, skip: !engineReady);
 
   testWidgets('בדיאלוג צר בתוך ספר אין overflow כששדה המרחק מוצג',
       (WidgetTester tester) async {
@@ -576,7 +582,7 @@ void main() {
 
     expect(onSearchCalls, 0);
     expect(find.byType(SearchDialog), findsOneWidget);
-  });
+  }, skip: !engineReady);
 
   testWidgets('returnResultOnSubmit מחזיר תוצאת חיפוש אחרי סגירת הדיאלוג',
       (WidgetTester tester) async {
@@ -658,7 +664,7 @@ void main() {
     expect(capturedResult, isNotNull);
     expect(capturedResult!.query, 'חכמה בינה');
     expect(find.byType(SearchDialog), findsNothing);
-  });
+  }, skip: !engineReady);
 
   testWidgets('דיאלוג החיפוש מציג tooltip למצבי החיפוש והסבר למרחק',
       (WidgetTester tester) async {

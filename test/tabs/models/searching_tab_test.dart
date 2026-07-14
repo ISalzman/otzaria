@@ -4,7 +4,13 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
-void main() {
+import '../../support/search_engine_test_init.dart';
+
+Future<void> main() async {
+  // הקוד הנבדק קורא ל-sanitizeQuery/splitQueryWords שמאצילים למנוע ה-Rust;
+  // הטסטים המסומנים מדולגים כשאין build נייטיבי זמין.
+  final engineReady = await tryInitSearchEngine();
+
   WidgetsFlutterBinding.ensureInitialized();
 
   group('SearchingTab persistence', () {
@@ -78,7 +84,7 @@ void main() {
       expect(restored.searchOptions, isEmpty);
       expect(restored.alternativeWords, isEmpty);
       expect(restored.spacingValues, isEmpty);
-    });
+    }, skip: engineReady ? false : searchEngineSkipReason);
 
     test('toJson/fromJson משחזר alternativeWords ו-spacingValues', () {
       final source = SearchingTab('חיפוש', 'א ב');
