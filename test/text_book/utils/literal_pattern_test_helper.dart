@@ -12,7 +12,8 @@ String _r(int a, int b) =>
 String _c(int code) => String.fromCharCode(code);
 
 // [̀-֑ͯ-ׇֽֿׁׂׅׄ]*
-final String _attachedMarks = '[${_r(0x0300, 0x036F)}${_r(0x0591, 0x05BD)}'
+final String _attachedMarks =
+    '[${_r(0x0300, 0x036F)}${_r(0x0591, 0x05BD)}'
     '${_c(0x05BF)}${_c(0x05C1)}${_c(0x05C2)}${_c(0x05C4)}${_c(0x05C5)}'
     '${_c(0x05C7)}]*';
 
@@ -47,9 +48,11 @@ bool _isQuoteCode(int code) =>
 bool _isGershayimCode(int code) =>
     code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D;
 
-// מחלקת גרש/גרשיים לגבול תלוי-הקשר (QUOTE_CHARS_CLASS במנוע).
-final String _quoteCharsClass = '"\'${_c(0x05F3)}${_c(0x05F4)}'
-    '${_c(0x2018)}${_c(0x2019)}${_c(0x201C)}${_c(0x201D)}';
+// fragment גרש/גרשיים לגבול (QUOTE_BOUNDARY_FRAGMENT במנוע): גרשיים יחיד
+// או 1–2 תווי גרש ('' ≡ גרשיים, הייצוג הישן).
+final String _quoteBoundaryFragment =
+    '(?:["${_c(0x05F4)}${_c(0x201C)}${_c(0x201D)}]'
+    "|['${_c(0x05F3)}${_c(0x2018)}${_c(0x2019)}]{1,2})";
 
 void _writeQuoteClass(StringBuffer buf, int code) {
   if (code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D) {
@@ -101,10 +104,11 @@ String literalPatternSource(String query) {
     for (var i = 0; i < words.length; i++)
       _charwisePattern(words[i], i == last),
   ].join(_wordSeparator);
-  // גבול תלוי-הקשר כמו במנוע: גרש/גרשיים בין אותיות (רש״י) אינו גבול.
-  return '(?<![$_hebrewLetterClass]$_attachedMarks[$_quoteCharsClass]?)'
+  // גבול תלוי-הקשר כמו במנוע: גרש/גרשיים בין אותיות (רש״י) אינו גבול,
+  // וה-lookahead מדלג בעצמו על ניקוד שנותר מ-backtracking של [ניקוד]*.
+  return '(?<![$_hebrewLetterClass]$_attachedMarks$_quoteBoundaryFragment?)'
       '(?:$phrase)'
-      '(?![$_quoteCharsClass]?[$_hebrewLetterClass])';
+      '(?!$_attachedMarks$_quoteBoundaryFragment?[$_hebrewLetterClass])';
 }
 
 /// תבנית ליטרלית מקומפלת לשאילתה [query].

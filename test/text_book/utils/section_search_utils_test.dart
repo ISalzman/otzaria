@@ -18,35 +18,41 @@ void main() {
       expect(results.length, 1);
     });
 
-    test('does not match partial word (query is prefix of longer word)',
-        () async {
-      final results = await searchInContent(
-        content: ['שמעון'],
-        query: 'שמע',
-        patternSource: literalPatternSource('שמע'),
-      );
-      expect(results, isEmpty);
-    });
+    test(
+      'does not match partial word (query is prefix of longer word)',
+      () async {
+        final results = await searchInContent(
+          content: ['שמעון'],
+          query: 'שמע',
+          patternSource: literalPatternSource('שמע'),
+        );
+        expect(results, isEmpty);
+      },
+    );
 
-    test('does not match partial word (query is suffix of longer word)',
-        () async {
-      final results = await searchInContent(
-        content: ['ושמע'],
-        query: 'שמע',
-        patternSource: literalPatternSource('שמע'),
-      );
-      expect(results, isEmpty);
-    });
+    test(
+      'does not match partial word (query is suffix of longer word)',
+      () async {
+        final results = await searchInContent(
+          content: ['ושמע'],
+          query: 'שמע',
+          patternSource: literalPatternSource('שמע'),
+        );
+        expect(results, isEmpty);
+      },
+    );
 
-    test('does not match partial word (query is infix of longer word)',
-        () async {
-      final results = await searchInContent(
-        content: ['ושמעון'],
-        query: 'שמע',
-        patternSource: literalPatternSource('שמע'),
-      );
-      expect(results, isEmpty);
-    });
+    test(
+      'does not match partial word (query is infix of longer word)',
+      () async {
+        final results = await searchInContent(
+          content: ['ושמעון'],
+          query: 'שמע',
+          patternSource: literalPatternSource('שמע'),
+        );
+        expect(results, isEmpty);
+      },
+    );
 
     test('finds word at beginning of line', () async {
       final results = await searchInContent(
@@ -75,25 +81,29 @@ void main() {
       expect(results.length, 1);
     });
 
-    test('does not match when query appears only as partial in all occurrences',
-        () async {
-      final results = await searchInContent(
-        content: ['שמעון ושמעיהו'],
-        query: 'שמע',
-        patternSource: literalPatternSource('שמע'),
-      );
-      expect(results, isEmpty);
-    });
+    test(
+      'does not match when query appears only as partial in all occurrences',
+      () async {
+        final results = await searchInContent(
+          content: ['שמעון ושמעיהו'],
+          query: 'שמע',
+          patternSource: literalPatternSource('שמע'),
+        );
+        expect(results, isEmpty);
+      },
+    );
 
-    test('finds match when one occurrence is whole word and another is partial',
-        () async {
-      final results = await searchInContent(
-        content: ['שמע ושמעון'],
-        query: 'שמע',
-        patternSource: literalPatternSource('שמע'),
-      );
-      expect(results.length, 1);
-    });
+    test(
+      'finds match when one occurrence is whole word and another is partial',
+      () async {
+        final results = await searchInContent(
+          content: ['שמע ושמעון'],
+          query: 'שמע',
+          patternSource: literalPatternSource('שמע'),
+        );
+        expect(results.length, 1);
+      },
+    );
 
     test('מוצא מילה מנוקדת הצמודה לגרשיים עבריים (״)', () async {
       final results = await searchInContent(
@@ -150,10 +160,7 @@ void main() {
     });
 
     test('returns empty for empty query', () async {
-      final results = await searchInContent(
-        content: ['שמע ישראל'],
-        query: '',
-      );
+      final results = await searchInContent(content: ['שמע ישראל'], query: '');
       expect(results, isEmpty);
     });
   });
@@ -221,29 +228,46 @@ void main() {
       );
       expect(results, isEmpty);
     });
+
+    test('זוג גרשים (\'\') נחשב גרשיים — "אב" לא נמצא בתוך אב\'\'ג', () async {
+      final results = await searchInContent(
+        content: ["דף עם אב''ג בתוכו"],
+        query: 'אב',
+        patternSource: literalPatternSource('אב'),
+      );
+      expect(results, isEmpty);
+    });
   });
 
   group('matchFractionInLine', () {
     test('מילה בתחילת השורה — שבר 0', () {
       expect(
-        matchFractionInLine('ישראל עם קדוש', 'ישראל',
-            pattern: literalPattern('ישראל')),
+        matchFractionInLine(
+          'ישראל עם קדוש',
+          'ישראל',
+          pattern: literalPattern('ישראל'),
+        ),
         0,
       );
     });
 
     test('מילה בסוף השורה — שבר גבוה', () {
       expect(
-        matchFractionInLine('שמע ישראל', 'ישראל',
-            pattern: literalPattern('ישראל')),
+        matchFractionInLine(
+          'שמע ישראל',
+          'ישראל',
+          pattern: literalPattern('ישראל'),
+        ),
         greaterThan(0.3),
       );
     });
 
     test('שאילתה מנוקדת מול שורה מנוקדת', () {
       final fraction = matchFractionInLine(
-          'בְּרֵאשִׁית בָּרָא אֱלֹהִים', 'אלהים',
-          pattern: literalPattern('אלהים'));
+        'בְּרֵאשִׁית בָּרָא אֱלֹהִים',
+        'אלהים',
+        pattern: literalPattern('אלהים'),
+      );
       expect(fraction, greaterThan(0.5));
     });
 
@@ -256,79 +280,101 @@ void main() {
 
     test('מילה מנוקדת הצמודה לגרשיים — נמצאת בחישוב השבר', () {
       expect(
-        matchFractionInLine('דִּכְתִיב: ״וַאֲשֶׁר הֲרֵעֹתִי״.', 'הרעתי',
-            pattern: literalPattern('הרעתי')),
+        matchFractionInLine(
+          'דִּכְתִיב: ״וַאֲשֶׁר הֲרֵעֹתִי״.',
+          'הרעתי',
+          pattern: literalPattern('הרעתי'),
+        ),
         greaterThan(0),
       );
     });
 
     test('שורה ריקה — שבר 0', () {
-      expect(
-        matchFractionInLine('', 'שמע', pattern: literalPattern('שמע')),
-        0,
-      );
+      expect(matchFractionInLine('', 'שמע', pattern: literalPattern('שמע')), 0);
     });
 
     test('שבר גלילה מתעלם מתג HTML עם רווחים בין המילים', () {
       final fraction = matchFractionInLine(
-          'בראשית <b>ברא </b> אלהים', 'ברא אלהים',
-          pattern: literalPattern('ברא אלהים'));
+        'בראשית <b>ברא </b> אלהים',
+        'ברא אלהים',
+        pattern: literalPattern('ברא אלהים'),
+      );
       expect(fraction, greaterThan(0));
     });
   });
 
   group('queryMatchesInlineNoteOnly', () {
-    const noteLine = 'שלום עולם '
+    const noteLine =
+        'שלום עולם '
         '<sup class="footnote-marker">1</sup>'
         '<i class="footnote">כאן מופיע דין מיוחד</i>';
 
     test('מונח שנמצא רק בגוף ההערה — אמת', () {
       expect(
-        queryMatchesInlineNoteOnly(noteLine, 'דין',
-            pattern: literalPattern('דין')),
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'דין',
+          pattern: literalPattern('דין'),
+        ),
         isTrue,
       );
     });
 
     test('מונח שנמצא בטקסט הראשי — שקר (אין צורך בחלונית ההערות)', () {
       expect(
-        queryMatchesInlineNoteOnly(noteLine, 'שלום',
-            pattern: literalPattern('שלום')),
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'שלום',
+          pattern: literalPattern('שלום'),
+        ),
         isFalse,
       );
     });
 
     test('מונח שאינו קיים כלל — שקר', () {
       expect(
-        queryMatchesInlineNoteOnly(noteLine, 'משה',
-            pattern: literalPattern('משה')),
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'משה',
+          pattern: literalPattern('משה'),
+        ),
         isFalse,
       );
     });
 
     test('שורה ללא הערת שוליים — שקר', () {
       expect(
-        queryMatchesInlineNoteOnly('שלום עולם דין', 'דין',
-            pattern: literalPattern('דין')),
+        queryMatchesInlineNoteOnly(
+          'שלום עולם דין',
+          'דין',
+          pattern: literalPattern('דין'),
+        ),
         isFalse,
       );
     });
 
     test('התאמה חלקית בהערה (תת-מחרוזת) אינה נספרת', () {
       expect(
-        queryMatchesInlineNoteOnly(noteLine, 'די',
-            pattern: literalPattern('די')),
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'די',
+          pattern: literalPattern('די'),
+        ),
         isFalse,
       );
     });
 
     test('מונח מנוקד מול הערה — מתעלם מניקוד', () {
-      const vocalized = 'פתיחה '
+      const vocalized =
+          'פתיחה '
           '<sup class="footnote-marker">2</sup>'
           '<i class="footnote">אֱלֹהִים חיים</i>';
       expect(
-        queryMatchesInlineNoteOnly(vocalized, 'אלהים',
-            pattern: literalPattern('אלהים')),
+        queryMatchesInlineNoteOnly(
+          vocalized,
+          'אלהים',
+          pattern: literalPattern('אלהים'),
+        ),
         isTrue,
       );
     });
