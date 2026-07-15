@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
         defaultTargetPlatform,
         kIsWeb,
         visibleForTesting;
+import 'package:flutter/services.dart' show FontLoader;
 import 'package:system_fonts/system_fonts.dart' show SystemFonts;
 import 'package:otzaria/utils/file/font_file_reader.dart';
 
@@ -26,6 +27,34 @@ class AppFonts {
 
   /// גופן לעריכת טקסט עם טעמים
   static const String editorFont = 'TaameyAshkenaz';
+
+  /// גופנים משתנים (Variable Fonts) עם ציר wght. Flutter לא ממפה
+  /// FontWeight.bold לציר הזה אוטומטית — בלי FontVariation מפורש הבולד יוצא
+  /// מלאכותי (faux). ראו [boldFontVariations].
+  static const Set<String> variableWeightFonts = {
+    'Rubik',
+    'NotoRashiHebrew',
+    'NotoSerifHebrew',
+  };
+
+  /// גופני מערכת שזוהו כ-Variable Fonts עם ציר wght בזמן טעינה.
+  /// מאוכלס ב-[ensureFontLoaded]; נצרך ל-[boldFontVariations].
+  static final Set<String> _variableSystemFonts = {};
+
+  /// מחזיר את ה-[FontVariation] הנדרש כדי לקבל בולד אמיתי בגופן משתנה,
+  /// או null כשאין צורך (גופן לא-משתנה, או משקל לא-מודגש — אז בחירת ה-face
+  /// הרגילה של Flutter מטפלת). מוחזר רק ממשקל w600 ומעלה.
+  static List<FontVariation>? boldFontVariations(
+    String? fontFamily, [
+    FontWeight weight = FontWeight.bold,
+  ]) {
+    if (fontFamily == null) return null;
+    final isVariable = variableWeightFonts.contains(fontFamily) ||
+        _variableSystemFonts.contains(fontFamily);
+    if (!isVariable) return null;
+    if (weight.value < FontWeight.w600.value) return null;
+    return [FontVariation('wght', weight.value.toDouble())];
+  }
 
   static bool get _supportsSystemFonts {
     if (kIsWeb) return false;
@@ -496,8 +525,204 @@ class AppFonts {
       } catch (_) {
         // אם הטעינה נכשלה, מסירים מהקאש כדי לאפשר ניסיון חוזר בעתיד.
         _loadingSystemFonts.remove(fontFamily);
+        return;
       }
+      await _augmentSystemFontWeights(fontFamily);
     });
+  }
+
+  /// אחרי טעינת ה-face הרגיל של גופן מערכת, מנסה להעשיר את המשפחה בבולד אמיתי:
+  /// גופן משתנה עם ציר wght → מסומן ל-[boldFontVariations]; אחרת נטען קובץ
+  /// בולד נפרד (למשל "arialbd") תחת אותו שם משפחה, כדי שהמנוע יבחר בו לבולד.
+  /// לעולם לא זורק — כישלון כאן אינו משפיע על טעינת ה-face הרגיל.
+  static Future<void> _augmentSystemFontWeights(String fontFamily) async {
+    try {
+      final map = SystemFonts().getFontMap();
+      final selfPath = map[fontFamily];
+      if (selfPath == null) return;
+      final selfBytes = _readFontBytesSync(selfPath);
+      if (selfBytes == null) return;
+      final selfInfo = _sfntFaceInfo(selfBytes);
+      if (selfInfo == null) return;
+
+      // גופן משתנה: אין קובץ בולד נפרד — הבולד מגיע דרך FontVariation('wght').
+      if (selfInfo.hasWeightAxis) {
+        _variableSystemFonts.add(fontFamily);
+        return;
+      }
+
+      for (final entry in map.entries) {
+        if (entry.key == fontFamily) continue;
+        if (!_isPlausibleBoldBasename(fontFamily, entry.key)) continue;
+        final bytes = _readFontBytesSync(entry.value);
+        if (bytes == null) continue;
+        final info = _sfntFaceInfo(bytes);
+        if (info == null || !_isBoldSibling(selfInfo, info)) continue;
+        await (FontLoader(fontFamily)
+              ..addFont(Future.value(ByteData.sublistView(bytes))))
+            .load();
+        return;
+      }
+    } catch (_) {
+      // איתור/טעינת הבולד נכשל — משאירים את הגופן הרגיל כפי שנטען.
+    }
+  }
+
+  /// סיומות בסיס-שם נפוצות ל-face בולד ב-Windows (אחרי נרמול): arial→arialbd,
+  /// segoeui→segoeuib, times→timesbd.
+  static const List<String> _boldBasenameSuffixes = ['bold', 'bd', 'b'];
+
+  static String _normalizeFontName(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  /// סינון מוקדם (מחרוזות בלבד, ללא קריאת קבצים): האם [candidate] נראה כמו
+  /// שם קובץ הבולד של [selected]. האימות הסופי נעשה מול טבלאות ה-SFNT.
+  static bool _isPlausibleBoldBasename(String selected, String candidate) {
+    final s = _normalizeFontName(selected);
+    final c = _normalizeFontName(candidate);
+    if (s.isEmpty || c == s) return false;
+    for (final suffix in _boldBasenameSuffixes) {
+      if (c == '$s$suffix') return true;
+    }
+    return false;
+  }
+
+  /// האם [candidate] הוא ה-face הבולד (הלא-נטוי) של אותה משפחה כמו [regular].
+  static bool _isBoldSibling(_FontFaceInfo regular, _FontFaceInfo candidate) {
+    if (candidate.italic || !candidate.isBoldStyle) return false;
+    final rf = regular.family.toLowerCase().trim();
+    final cf = candidate.family.toLowerCase().trim();
+    if (rf.isEmpty || cf.isEmpty) return false;
+    return rf == cf;
+  }
+
+  /// קורא מטבלאות ה-SFNT את שם המשפחה, מחלקת המשקל וסימוני בולד/נטוי/ציר-wght.
+  /// מחזיר null אם המבנה פגום. אינו תומך ב-TTC (system_fonts מחזיר ttf/otf בלבד).
+  static _FontFaceInfo? _sfntFaceInfo(Uint8List data) {
+    int u16(int o) => (o + 2 > data.length) ? -1 : (data[o] << 8) | data[o + 1];
+    int u32(int o) => (o + 4 > data.length)
+        ? -1
+        : (data[o] << 24) |
+            (data[o + 1] << 16) |
+            (data[o + 2] << 8) |
+            data[o + 3];
+    String tag4(int o) => (o + 4 > data.length)
+        ? ''
+        : String.fromCharCodes(data.sublist(o, o + 4));
+
+    if (data.length < 12) return null;
+    final numTables = u16(4);
+    if (numTables <= 0) return null;
+    const dir = 12;
+    if (dir + numTables * 16 > data.length) return null;
+
+    int os2 = -1, head = -1, name = -1, fvar = -1;
+    for (int i = 0; i < numTables; i++) {
+      final rec = dir + i * 16;
+      switch (tag4(rec)) {
+        case 'OS/2':
+          os2 = u32(rec + 8);
+        case 'head':
+          head = u32(rec + 8);
+        case 'name':
+          name = u32(rec + 8);
+        case 'fvar':
+          fvar = u32(rec + 8);
+      }
+    }
+
+    int weightClass = 0;
+    bool bold = false;
+    bool italic = false;
+    if (os2 >= 0 && os2 + 64 <= data.length) {
+      final w = u16(os2 + 4);
+      if (w > 0) weightClass = w;
+      final fsSel = u16(os2 + 62);
+      if (fsSel >= 0) {
+        italic = (fsSel & 0x01) != 0;
+        bold = (fsSel & 0x20) != 0;
+      }
+    }
+    if (head >= 0 && head + 46 <= data.length) {
+      final macStyle = u16(head + 44);
+      if (macStyle >= 0) {
+        bold = bold || (macStyle & 0x01) != 0;
+        italic = italic || (macStyle & 0x02) != 0;
+      }
+    }
+
+    final family = _readSfntFamilyName(data, name, u16);
+
+    bool hasWeightAxis = false;
+    if (fvar >= 0 && fvar + 16 <= data.length) {
+      final axesOffset = u16(fvar + 4);
+      final axisCount = u16(fvar + 8);
+      final axisSize = u16(fvar + 10);
+      if (axesOffset > 0 && axisCount > 0 && axisSize >= 4) {
+        final axesBase = fvar + axesOffset;
+        for (int i = 0; i < axisCount; i++) {
+          if (tag4(axesBase + i * axisSize) == 'wght') {
+            hasWeightAxis = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return _FontFaceInfo(
+      family: family,
+      weightClass: weightClass,
+      bold: bold,
+      italic: italic,
+      hasWeightAxis: hasWeightAxis,
+    );
+  }
+
+  /// שם המשפחה מטבלת ה-name. מעדיף typographic family (nameID 16) על-פני
+  /// שם המשפחה הבסיסי (nameID 1), כך ש-Regular ו-Bold מקבלים שם זהה.
+  static String _readSfntFamilyName(
+    Uint8List data,
+    int nameOffset,
+    int Function(int) u16,
+  ) {
+    if (nameOffset < 0 || nameOffset + 6 > data.length) return '';
+    final count = u16(nameOffset + 2);
+    final storageOffset = nameOffset + u16(nameOffset + 4);
+    if (count <= 0) return '';
+    final recordsBase = nameOffset + 6;
+    if (recordsBase + count * 12 > data.length) return '';
+
+    String? typographic;
+    String? basic;
+    for (int i = 0; i < count; i++) {
+      final rec = recordsBase + i * 12;
+      final nameId = u16(rec + 6);
+      if (nameId != 1 && nameId != 16) continue;
+      final platformId = u16(rec);
+      final length = u16(rec + 8);
+      final strOffset = storageOffset + u16(rec + 10);
+      if (length <= 0 || strOffset + length > data.length) continue;
+
+      final String decoded;
+      if (platformId == 1) {
+        decoded =
+            String.fromCharCodes(data.sublist(strOffset, strOffset + length));
+      } else {
+        // platform 0/3: UTF-16BE.
+        final units = <int>[];
+        for (int j = 0; j + 1 < length; j += 2) {
+          units.add((data[strOffset + j] << 8) | data[strOffset + j + 1]);
+        }
+        decoded = String.fromCharCodes(units);
+      }
+      if (decoded.trim().isEmpty) continue;
+      if (nameId == 16) {
+        typographic ??= decoded;
+      } else {
+        basic ??= decoded;
+      }
+    }
+    return (typographic ?? basic ?? '').trim();
   }
 
   @visibleForTesting
@@ -523,7 +748,61 @@ class AppFonts {
   static void debugResetSystemFontsCache() {
     _systemFontsHebrewCache = null;
     _warmUpFuture = null;
+    _variableSystemFonts.clear();
   }
+
+  @visibleForTesting
+  static int debugFontWeightClass(Uint8List data) =>
+      _sfntFaceInfo(data)?.weightClass ?? 0;
+
+  @visibleForTesting
+  static bool debugFontIsBoldStyle(Uint8List data) =>
+      _sfntFaceInfo(data)?.isBoldStyle ?? false;
+
+  @visibleForTesting
+  static bool debugFontIsItalic(Uint8List data) =>
+      _sfntFaceInfo(data)?.italic ?? false;
+
+  @visibleForTesting
+  static String debugFontFamilyName(Uint8List data) =>
+      _sfntFaceInfo(data)?.family ?? '';
+
+  @visibleForTesting
+  static bool debugFontHasWeightAxis(Uint8List data) =>
+      _sfntFaceInfo(data)?.hasWeightAxis ?? false;
+
+  @visibleForTesting
+  static bool debugIsPlausibleBoldBasename(String selected, String candidate) =>
+      _isPlausibleBoldBasename(selected, candidate);
+
+  /// מפענח את שני הקבצים ומחזיר האם [candidate] הוא ה-face הבולד של [regular].
+  @visibleForTesting
+  static bool debugIsBoldSibling(Uint8List regular, Uint8List candidate) {
+    final r = _sfntFaceInfo(regular);
+    final c = _sfntFaceInfo(candidate);
+    if (r == null || c == null) return false;
+    return _isBoldSibling(r, c);
+  }
+}
+
+/// מידע סגנוני של face גופן, נקרא מטבלאות ה-SFNT לצורך התאמת בולד.
+class _FontFaceInfo {
+  final String family;
+  final int weightClass;
+  final bool bold;
+  final bool italic;
+  final bool hasWeightAxis;
+
+  const _FontFaceInfo({
+    required this.family,
+    required this.weightClass,
+    required this.bold,
+    required this.italic,
+    required this.hasWeightAxis,
+  });
+
+  /// בולד לפי דגל מפורש (fsSelection/macStyle) או usWeightClass ≥ 600.
+  bool get isBoldStyle => bold || weightClass >= 600;
 }
 
 /// מידע על גופן

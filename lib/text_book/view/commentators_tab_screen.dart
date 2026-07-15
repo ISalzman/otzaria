@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -500,6 +501,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       ),
       highlightStyle: TextStyle(
         fontWeight: FontWeight.bold,
+        fontVariations: AppFonts.boldFontVariations(
+            settingsState.commentatorsFontFamily),
         fontSize: 16,
         color: colorScheme.error,
       ),

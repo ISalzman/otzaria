@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 
 /// ממיר HTML פשוט (טקסט + תגי עיצוב בסיסיים בלבד) ל-[TextSpan] ישירות,
 /// כדי לעקוף את עלות הפרסור ובניית העץ של HtmlWidget עבור רוב שורות הספרים.
@@ -44,6 +45,9 @@ class SimpleInlineHtml {
       }
       return TextStyle(
         fontWeight: bold > 0 ? FontWeight.bold : null,
+        // בולד אמיתי לגופן משתנה — הבסיס יורש דרך Text.rich לספאנים לא-מודגשים.
+        fontVariations:
+            bold > 0 ? AppFonts.boldFontVariations(baseStyle.fontFamily) : null,
         fontStyle: italic > 0 ? FontStyle.italic : null,
         decoration: underline > 0 ? TextDecoration.underline : null,
         fontSize: fontSize,
