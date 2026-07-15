@@ -7,6 +7,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -172,51 +173,11 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
 
   Future<void> _loadCommentatorGroups() async {
     final eras = await utils.splitByEra(widget.availableCommentators);
-
-    final known = <String>{
-      ...?eras['תורה שבכתב'],
-      ...?eras['חז"ל'],
-      ...?eras['ראשונים'],
-      ...?eras['אחרונים'],
-      ...?eras['מחברי זמננו'],
-    };
-
-    final others = (eras['מפרשים נוספים'] ?? [])
-        .toSet()
-        .union(widget.availableCommentators
-            .where((c) => !known.contains(c))
-            .toList()
-            .toSet())
-        .toList();
+    final groups = buildCommentatorGroups(eras, widget.availableCommentators);
 
     if (mounted) {
       setState(() {
-        _groups = [
-          CommentatorGroup(
-            title: 'תורה שבכתב',
-            commentators: eras['תורה שבכתב'] ?? const [],
-          ),
-          CommentatorGroup(
-            title: 'חז"ל',
-            commentators: eras['חז"ל'] ?? const [],
-          ),
-          CommentatorGroup(
-            title: 'ראשונים',
-            commentators: eras['ראשונים'] ?? const [],
-          ),
-          CommentatorGroup(
-            title: 'אחרונים',
-            commentators: eras['אחרונים'] ?? const [],
-          ),
-          CommentatorGroup(
-            title: 'מחברי זמננו',
-            commentators: eras['מחברי זמננו'] ?? const [],
-          ),
-          CommentatorGroup(
-            title: 'שאר מפרשים',
-            commentators: others,
-          ),
-        ];
+        _groups = groups;
         _isLoadingGroups = false;
       });
     }
