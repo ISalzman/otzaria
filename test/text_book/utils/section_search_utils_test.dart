@@ -237,6 +237,15 @@ void main() {
       );
       expect(results, isEmpty);
     });
+
+    test('סימן צמוד אחרי גרשיים אינו עוקף את הגבול', () async {
+      final results = await searchInContent(
+        content: ['דף עם אב״ֿג בתוכו'],
+        query: 'אב',
+        patternSource: literalPatternSource('אב'),
+      );
+      expect(results, isEmpty);
+    });
   });
 
   group('matchFractionInLine', () {
