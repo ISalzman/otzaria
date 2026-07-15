@@ -297,7 +297,7 @@ class _ProximityScopeMenu extends StatelessWidget {
         initialValue: scope,
         onSelected: onSelected,
         icon: Icon(
-          Icons.view_agenda_outlined,
+          FluentIcons.apps_list_24_regular,
           color: isDefault ? null : colorScheme.primary,
         ),
         itemBuilder: (context) => [

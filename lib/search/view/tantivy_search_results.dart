@@ -771,7 +771,7 @@ class _MergedSiblingsSectionState extends State<_MergedSiblingsSection> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.layers_outlined,
+                    FluentIcons.layer_24_regular,
                     size: 16,
                     color: colorScheme.secondary,
                   ),
@@ -785,7 +785,9 @@ class _MergedSiblingsSectionState extends State<_MergedSiblingsSection> {
                   ),
                   const SizedBox(width: 4),
                   Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    _expanded
+                        ? FluentIcons.chevron_up_16_regular
+                        : FluentIcons.chevron_down_16_regular,
                     size: 16,
                     color: colorScheme.secondary,
                   ),

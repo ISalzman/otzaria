@@ -807,18 +807,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: _selectedSearchResultIndex == resultListIndex
-                              ? Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer
-                                  .withValues(alpha: 0.35)
+                              ? Theme.of(context).colorScheme.secondaryContainer
                               : null,
                           border: Border.all(
                             color: _selectedSearchResultIndex == resultListIndex
                                 ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .outline
-                                    .withValues(alpha: 0.3),
+                                : Theme.of(context).colorScheme.outlineVariant,
                             width: 1,
                           ),
                           borderRadius: AppTokens.borderRadiusAll,
@@ -1028,21 +1022,18 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: isEnabled
-                ? colorScheme.primaryContainer.withValues(alpha: 0.55)
-                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                ? colorScheme.primaryContainer
+                : colorScheme.surfaceContainerHigh,
             borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
-              color: isEnabled
-                  ? colorScheme.primary.withValues(alpha: 0.6)
-                  : colorScheme.outline.withValues(alpha: 0.3),
+              color: isEnabled ? colorScheme.primary : colorScheme.outlineVariant,
             ),
           ),
           child: Icon(
             icon,
             size: 16,
-            color: isEnabled
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            color:
+                isEnabled ? colorScheme.primary : colorScheme.onSurfaceVariant,
           ),
         ),
       ),
