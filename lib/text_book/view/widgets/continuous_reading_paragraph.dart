@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:otzaria/theme/app_fonts.dart';
 
 /// תגובה ללחיצה על קישור inline בתוך פסקה של מצב טקסט רציף.
 /// יוחזר `true` אם הטיפול בקישור הסתיים והעיבוד הרגיל (לחיצה על שורה) לא נדרש.
@@ -281,6 +282,8 @@ List<InlineSpan> _nodeToSpans(
               ? childStyle.merge(linkStyle).copyWith(
                     decoration: TextDecoration.none,
                     fontWeight: FontWeight.bold,
+                    fontVariations:
+                        AppFonts.boldFontVariations(childStyle.fontFamily),
                   )
               : childStyle)
           : node.classes.contains('link-anchor-range')
@@ -363,7 +366,10 @@ TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
     style = style.copyWith(fontStyle: FontStyle.italic);
   }
   if (localName == 'b' || localName == 'strong') {
-    style = style.copyWith(fontWeight: FontWeight.bold);
+    style = style.copyWith(
+      fontWeight: FontWeight.bold,
+      fontVariations: AppFonts.boldFontVariations(style.fontFamily),
+    );
   }
 
   // הדגשת תוצאות חיפוש מגיעות כ-`<span style="color: red">` או

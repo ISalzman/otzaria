@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/theme/app_tokens.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -1432,6 +1433,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             style: TextStyle(
               fontSize: settingsState.commentatorsFontSize - 2,
               fontWeight: FontWeight.bold,
+              fontVariations: AppFonts.boldFontVariations(
+                  settingsState.commentatorsFontFamily),
               fontFamily: settingsState.commentatorsFontFamily,
             ),
           ),
@@ -1531,6 +1534,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                                     settingsState.commentatorsFontFamily,
                                 fontWeight: settingsState.commentatorsFontBold
                                     ? FontWeight.bold
+                                    : null,
+                                fontVariations: settingsState
+                                        .commentatorsFontBold
+                                    ? AppFonts.boldFontVariations(
+                                        settingsState.commentatorsFontFamily)
                                     : null,
                               ),
                             );
@@ -1823,6 +1831,8 @@ class _CollapsibleCommentaryGroupState
                     style: TextStyle(
                       fontSize: widget.settingsState.commentatorsFontSize - 2,
                       fontWeight: FontWeight.bold,
+                      fontVariations: AppFonts.boldFontVariations(
+                          widget.settingsState.commentatorsFontFamily),
                       fontFamily: widget.settingsState.commentatorsFontFamily,
                     ),
                   ),

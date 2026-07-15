@@ -24,6 +24,25 @@ void main() {
       expect(children.last.style?.fontWeight, isNull);
     });
 
+    test('בולד בגופן משתנה מקבל FontVariation wght 700', () {
+      const variableBase = TextStyle(fontSize: 20, fontFamily: 'Rubik');
+      final span = SimpleInlineHtml.tryParse('<b>אב</b> גד', variableBase);
+      final children = span!.children!.cast<TextSpan>();
+      expect(children.first.style?.fontWeight, FontWeight.bold);
+      expect(children.first.style?.fontVariations,
+          const [FontVariation('wght', 700)]);
+      // ספאן לא-מודגש יורש את הבסיס — בלי FontVariation משלו.
+      expect(children.last.style?.fontVariations, isNull);
+    });
+
+    test('בולד בגופן לא-משתנה אינו מוסיף FontVariation', () {
+      const base = TextStyle(fontSize: 20, fontFamily: 'FrankRuhlCLM');
+      final span = SimpleInlineHtml.tryParse('<b>אב</b>', base);
+      final child = span!.children!.first as TextSpan;
+      expect(child.style?.fontWeight, FontWeight.bold);
+      expect(child.style?.fontVariations, isNull);
+    });
+
     test('קינון b+i משלב bold ו-italic', () {
       final span = SimpleInlineHtml.tryParse('<b><i>אב</i></b>', baseStyle);
       final child = span!.children!.first as TextSpan;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -399,6 +400,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             style: TextStyle(
               fontSize: settingsState.commentatorsFontSize - 2,
               fontWeight: FontWeight.bold,
+              fontVariations: AppFonts.boldFontVariations(
+                  settingsState.commentatorsFontFamily),
               fontFamily: settingsState.commentatorsFontFamily,
             ),
           );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -2026,6 +2027,8 @@ class _CollapsibleCommentaryGroupState
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.85,
                           fontWeight: FontWeight.bold,
+                          fontVariations: AppFonts.boldFontVariations(
+                              settingsState.commentatorsFontFamily),
                           fontFamily: settingsState.commentatorsFontFamily,
                         ),
                       );
@@ -2286,6 +2289,8 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.85,
                           fontWeight: FontWeight.bold,
+                          fontVariations: AppFonts.boldFontVariations(
+                              settingsState.commentatorsFontFamily),
                           fontFamily: settingsState.commentatorsFontFamily,
                         ),
                       ),

@@ -221,6 +221,8 @@ flutter:
     - family: FrankRuhlCLM
       fonts:
         - asset: fonts/FrankRuehlCLM-Medium.ttf
+        - asset: fonts/FrankRuehlCLM-Bold.ttf
+          weight: 700
     - family: Rubik
       fonts:
         - asset: fonts/Rubik-VariableFont_wght.ttf
