@@ -752,6 +752,8 @@ class CalendarWidgetState extends State<CalendarWidget> {
           recurrenceType: result.recurrenceType,
           recurringYears: result.recurringYears,
           eventTime: result.eventTime,
+          endGregorianDate: () => result.endGregorianDate,
+          colorIndex: () => result.colorIndex,
         ));
       } else {
         cubit.addEvent(
@@ -761,6 +763,8 @@ class CalendarWidgetState extends State<CalendarWidget> {
           recurrenceType: result.recurrenceType,
           recurringYears: result.recurringYears,
           eventTime: result.eventTime,
+          endGregorianDate: result.endGregorianDate,
+          colorIndex: result.colorIndex,
         );
       }
     });

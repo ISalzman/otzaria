@@ -16,6 +16,8 @@ class CalendarEventDialogResult {
   final RecurrenceType recurrenceType;
   final int? recurringYears;
   final TimeOfDay? eventTime;
+  final DateTime? endGregorianDate;
+  final int? colorIndex;
 
   const CalendarEventDialogResult({
     required this.title,
@@ -23,6 +25,8 @@ class CalendarEventDialogResult {
     required this.recurrenceType,
     required this.recurringYears,
     required this.eventTime,
+    required this.endGregorianDate,
+    required this.colorIndex,
   });
 }
 
@@ -54,6 +58,8 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
   late bool _recurForever;
   late RecurrenceType _selectedRecurrenceType;
   TimeOfDay? _selectedTime;
+  DateTime? _selectedEndDate;
+  int? _selectedColorIndex;
 
   @override
   void initState() {
@@ -72,6 +78,8 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
         : RecurrenceType.annualHebrew;
     _recurForever = existingEvent?.recurringYears == null;
     _selectedTime = existingEvent?.eventTime;
+    _selectedEndDate = existingEvent?.endGregorianDate;
+    _selectedColorIndex = existingEvent?.colorIndex;
     _displayedGregorianDate = existingEvent != null
         ? existingEvent.baseGregorianDate
         : (widget.specificDate ?? widget.state.selectedGregorianDate);
@@ -101,6 +109,21 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
       }
     }
 
+    // תאריך סיום זמין רק לאירוע חד-פעמי; טווח של יום בודד נשמר כ-null
+    DateTime? endDate;
+    if (!_isRecurring && _selectedEndDate != null) {
+      final start = DateTime(_displayedGregorianDate.year,
+          _displayedGregorianDate.month, _displayedGregorianDate.day);
+      final end = DateTime(_selectedEndDate!.year, _selectedEndDate!.month,
+          _selectedEndDate!.day);
+      if (end.isBefore(start)) {
+        UiSnack.showError(
+            'תאריך הסיום חייב להיות שווה או מאוחר מתאריך ההתחלה.');
+        return;
+      }
+      endDate = end.isAfter(start) ? end : null;
+    }
+
     Navigator.of(context).pop(
       CalendarEventDialogResult(
         title: _titleController.text.trim(),
@@ -109,7 +132,57 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
             _isRecurring ? _selectedRecurrenceType : RecurrenceType.none,
         recurringYears: recurringYears,
         eventTime: _selectedTime,
+        endGregorianDate: endDate,
+        colorIndex: _selectedColorIndex,
       ),
+    );
+  }
+
+  Future<void> _pickEndDate() async {
+    final start = DateTime(_displayedGregorianDate.year,
+        _displayedGregorianDate.month, _displayedGregorianDate.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedEndDate ?? start,
+      firstDate: start,
+      lastDate: DateTime(start.year + 10),
+    );
+    if (picked != null) {
+      setState(() => _selectedEndDate = picked);
+    }
+  }
+
+  Widget _buildColorPicker(ColorScheme cs) {
+    final brightness = Theme.of(context).brightness;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'צבע האירוע',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          children: [
+            _ColorSwatch(
+              color: null,
+              selected: _selectedColorIndex == null,
+              tooltip: 'ללא צבע',
+              onTap: () => setState(() => _selectedColorIndex = null),
+            ),
+            for (int i = 0; i < CalendarEventColors.count; i++)
+              _ColorSwatch(
+                color: CalendarEventColors.colorForIndex(i, brightness),
+                selected: _selectedColorIndex == i,
+                tooltip: CalendarEventColors.nameOf(i),
+                onTap: () => setState(() => _selectedColorIndex = i),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -146,6 +219,8 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
                 ),
                 maxLines: 3,
               ),
+              const SizedBox(height: 16),
+              _buildColorPicker(cs),
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
@@ -203,10 +278,42 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (!_isRecurring)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('תאריך סיום (אופציונלי)'),
+                  subtitle: Text(
+                    _selectedEndDate != null
+                        ? 'סיום: ${_selectedEndDate!.day}/${_selectedEndDate!.month}/${_selectedEndDate!.year}'
+                        : 'אירוע של יום אחד',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedEndDate != null)
+                        IconButton(
+                          icon: const Icon(FluentIcons.dismiss_24_regular),
+                          onPressed: () =>
+                              setState(() => _selectedEndDate = null),
+                          tooltip: 'נקה תאריך סיום',
+                        ),
+                      IconButton(
+                        icon: const Icon(FluentIcons.calendar_24_regular),
+                        onPressed: _pickEndDate,
+                        tooltip: 'בחר תאריך סיום',
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
               SwitchListTile(
                 title: const Text('אירוע חוזר'),
                 value: _isRecurring,
-                onChanged: (value) => setState(() => _isRecurring = value),
+                onChanged: (value) => setState(() {
+                  _isRecurring = value;
+                  // אירוע חוזר אינו תומך בטווח ימים
+                  if (value) _selectedEndDate = null;
+                }),
               ),
               if (_isRecurring) ...[
                 const SizedBox(height: 8),
@@ -298,6 +405,54 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
           onPressed: _submit,
         ),
       ],
+    );
+  }
+}
+
+/// עיגול בחירת צבע יחיד בבורר הצבעים.
+class _ColorSwatch extends StatelessWidget {
+  final Color? color;
+  final bool selected;
+  final String? tooltip;
+  final VoidCallback onTap;
+
+  const _ColorSwatch({
+    required this.color,
+    required this.selected,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        // ריפוד סביב העיגול הנראה — מטרת לחיצה של 48dp לפחות
+        child: Container(
+          width: 32,
+          height: 32,
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color ?? cs.surfaceContainerHighest,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? cs.primary : cs.outlineVariant,
+              width: selected ? 3 : 1,
+            ),
+          ),
+          child: color == null
+              ? Icon(
+                  FluentIcons.line_horizontal_1_24_regular,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                )
+              : null,
+        ),
+      ),
     );
   }
 }
