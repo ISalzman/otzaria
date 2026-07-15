@@ -13,8 +13,7 @@ String _c(int code) => String.fromCharCode(code);
 
 // [̀-֑ͯ-ׇֽֿׁׂׅׄ]*
 // מחלקת הסימנים הצמודים ללא כמת (ATTACHED_MARKS_SET במנוע).
-final String _attachedMarksSet =
-    '[${_r(0x0300, 0x036F)}${_r(0x0591, 0x05BD)}'
+final String _attachedMarksSet = '[${_r(0x0300, 0x036F)}${_r(0x0591, 0x05BD)}'
     '${_c(0x05BF)}${_c(0x05C1)}${_c(0x05C2)}${_c(0x05C4)}${_c(0x05C5)}'
     '${_c(0x05C7)}]';
 
@@ -51,14 +50,15 @@ bool _isQuoteCode(int code) =>
 bool _isGershayimCode(int code) =>
     code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D;
 
-// fragment גרש/גרשיים לגבול (quote_boundary_fragment במנוע): גרשיים יחיד,
-// גרש/זוג-גרשים עם סימנים צמודים אופציונליים ביניהם, או זוג-גרשיים המופרד
-// בסימן צמוד. רצפים לא-תקינים ("" או ''' נקיים) נשארים גבול.
+// fragment גרש/גרשיים לגבול (quote_boundary_fragment במנוע): רצף-ציטוט
+// חוקי הוא Q = גרשיים | גרש אחד/שניים, ורצפים חוקיים המופרדים בסימנים
+// צמודים משתרשרים — Q (סימן+ Q)*. רצפים צמודים לא-חוקיים ("", ''', '")
+// נשארים גבול.
 final String _quoteBoundaryFragment = () {
   final g2 = '"${_c(0x05F4)}${_c(0x201C)}${_c(0x201D)}';
   final g1 = "'${_c(0x05F3)}${_c(0x2018)}${_c(0x2019)}";
-  return '(?:[$g2]$_attachedMarksSet+[$g2]|[$g2]'
-      '|[$g1]$_attachedMarksSet*[$g1]?)';
+  final q = '(?:[$g2]|[$g1]{1,2})';
+  return '(?:$q(?:$_attachedMarksSet+$q)*)';
 }();
 
 void _writeQuoteClass(StringBuffer buf, int code) {
