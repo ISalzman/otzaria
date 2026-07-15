@@ -381,6 +381,7 @@ class IndexingRepository {
         book.title,
         book.categoryId,
         book.fileType ?? 'txt',
+        book.isUserBook,
       );
     }
     if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
@@ -716,6 +717,7 @@ class IndexingRepository {
         book.title,
         book.categoryId,
         book.fileType ?? 'txt',
+        book.isUserBook,
       );
     }
 
