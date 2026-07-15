@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
-import 'package:otzaria_search_engine/otzaria_search_engine.dart' as engine;
+import 'package:otzaria/search/utils/literal_search_pattern.dart';
 
 /// בונה הדגשות לתצוגת תוצאות חיפוש.
 ///
@@ -139,7 +139,7 @@ class SnippetBuilder {
     required TextStyle defaultStyle,
     required TextStyle highlightStyle,
   }) {
-    final pattern = _literalQueryPattern(query);
+    final pattern = buildLiteralPattern(query)?.regExp;
     if (plainText.isEmpty || pattern == null) {
       return [TextSpan(text: plainText, style: defaultStyle)];
     }
@@ -198,7 +198,7 @@ class SnippetBuilder {
       return lastSpace != -1 ? lastSpace + 1 : 0;
     }
 
-    final pattern = _literalQueryPattern(query);
+    final pattern = buildLiteralPattern(query)?.regExp;
     final anchor = pattern?.firstMatch(text);
     if (anchor == null) {
       final end = findWordEnd(maxChars);
@@ -219,24 +219,5 @@ class SnippetBuilder {
     final prefix = start > 0 ? '... ' : '';
     final suffix = end < len ? ' ...' : '';
     return '$prefix${text.substring(start, end)}$suffix';
-  }
-
-  /// השאילתה שהתבנית הליטרלית שבקאש נבנתה עבורה. ההדגשה רצה פר-snippet
-  /// באותה שאילתה, ולכן קריאת ה-FFI מתבצעת פעם אחת לכל שינוי שאילתה.
-  static String? _literalPatternQuery;
-  static RegExp? _literalPatternCache;
-
-  /// רגקס להתאמה ליטרלית של [query] — נבנה במנוע החיפוש (Rust), מקור האמת
-  /// היחיד לתבניות חיפוש. סובלני לניקוד/טעמים, תופס גרשיים בשתי צורותיהם,
-  /// ומכבד גבולות מילה. הצד של Dart רק מקמפל ומחיל.
-  /// מחזיר `null` אם השאילתה ריקה.
-  static RegExp? _literalQueryPattern(String query) {
-    if (query == _literalPatternQuery) return _literalPatternCache;
-    final pattern = engine.generateLiteralHighlightPattern(query: query);
-    _literalPatternQuery = query;
-    _literalPatternCache = pattern == null
-        ? null
-        : RegExp(pattern, caseSensitive: false, unicode: true);
-    return _literalPatternCache;
   }
 }
