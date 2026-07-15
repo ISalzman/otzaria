@@ -31,6 +31,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
@@ -600,40 +601,44 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           children: [
             _buildAppTopBar(context),
             Expanded(
-              child: AdaptiveSidePane(
-                isOpen: _navPaneOpen || _pinLeftPane,
-                alignment: AlignmentDirectional.centerEnd,
-                paneWidth: 320,
-                onClose: () {
-                  if (!_pinLeftPane) setState(() => _navPaneOpen = false);
-                },
-                paneContent: _buildSidePane(context),
-                mainContent: ValueListenableBuilder<bool>(
-                  valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
-                  builder: (context, linksLoading, _) => PdfCommentaryPanel(
-                    key: _panelKey,
-                    tab: widget.tab.sourceTab,
-                    linksCount: widget.tab.sourceTab.links.length,
-                    linksLoading: linksLoading,
-                    isFullScreen: true,
-                    enableInternalFilter: false,
-                    onSelectCommentatorsRequested: _openCommentatorsTab,
-                    lineStartOverride: range.start,
-                    lineEndOverride: range.end,
-                    extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
-                    removeNikud: _removeNikud,
-                    removePunctuation: _removePunctuation,
-                    openBookCallback: (tab) {
-                      if (tab is TextBookTab) {
-                        openBook(context, tab.book, tab.index, '',
-                            ignoreHistory: false);
-                      }
-                    },
-                    fontSize: 16.0,
-                    externalSearchController: _searchController,
-                    externalTotalResultsNotifier: _totalResultsNotifier,
-                    externalCurrentIndexNotifier: _currentIdxNotifier,
-                    externalAllExpandedNotifier: _allExpandedInChild,
+              child: Padding(
+                padding: SplitPaneContentInset.of(context),
+                child: AdaptiveSidePane(
+                  isOpen: _navPaneOpen || _pinLeftPane,
+                  alignment: AlignmentDirectional.centerEnd,
+                  paneWidth: 320,
+                  onClose: () {
+                    if (!_pinLeftPane) setState(() => _navPaneOpen = false);
+                  },
+                  paneContent: _buildSidePane(context),
+                  mainContent: ValueListenableBuilder<bool>(
+                    valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
+                    builder: (context, linksLoading, _) => PdfCommentaryPanel(
+                      key: _panelKey,
+                      tab: widget.tab.sourceTab,
+                      linksCount: widget.tab.sourceTab.links.length,
+                      linksLoading: linksLoading,
+                      isFullScreen: true,
+                      enableInternalFilter: false,
+                      onSelectCommentatorsRequested: _openCommentatorsTab,
+                      lineStartOverride: range.start,
+                      lineEndOverride: range.end,
+                      extraLineIndices:
+                          _extraLines.isEmpty ? null : _extraLines,
+                      removeNikud: _removeNikud,
+                      removePunctuation: _removePunctuation,
+                      openBookCallback: (tab) {
+                        if (tab is TextBookTab) {
+                          openBook(context, tab.book, tab.index, '',
+                              ignoreHistory: false);
+                        }
+                      },
+                      fontSize: 16.0,
+                      externalSearchController: _searchController,
+                      externalTotalResultsNotifier: _totalResultsNotifier,
+                      externalCurrentIndexNotifier: _currentIdxNotifier,
+                      externalAllExpandedNotifier: _allExpandedInChild,
+                    ),
                   ),
                 ),
               ),

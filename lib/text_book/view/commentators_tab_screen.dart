@@ -27,6 +27,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
@@ -501,8 +502,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       ),
       highlightStyle: TextStyle(
         fontWeight: FontWeight.bold,
-        fontVariations: AppFonts.boldFontVariations(
-            settingsState.commentatorsFontFamily),
+        fontVariations:
+            AppFonts.boldFontVariations(settingsState.commentatorsFontFamily),
         fontSize: 16,
         color: colorScheme.error,
       ),
@@ -706,30 +707,33 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   children: [
                     _buildAppBar(context, state, chapters),
                     Expanded(
-                      child: Stack(
-                        children: [
-                          AdaptiveSidePane(
-                            isOpen: _navPaneOpen || _pinLeftPane,
-                            onClose: () {
-                              if (!_pinLeftPane) {
-                                setState(() => _navPaneOpen = false);
-                              }
-                            },
-                            alignment: AlignmentDirectional.centerEnd,
-                            paneWidth: 320,
-                            minMainContentWidth: 400,
-                            mainContent: _buildCommentaryMainContent(
-                              context,
-                              state,
-                              effectiveIndexes,
+                      child: Padding(
+                        padding: SplitPaneContentInset.of(context),
+                        child: Stack(
+                          children: [
+                            AdaptiveSidePane(
+                              isOpen: _navPaneOpen || _pinLeftPane,
+                              onClose: () {
+                                if (!_pinLeftPane) {
+                                  setState(() => _navPaneOpen = false);
+                                }
+                              },
+                              alignment: AlignmentDirectional.centerEnd,
+                              paneWidth: 320,
+                              minMainContentWidth: 400,
+                              mainContent: _buildCommentaryMainContent(
+                                context,
+                                state,
+                                effectiveIndexes,
+                              ),
+                              paneContent: _buildNavPanel(
+                                context,
+                                state: state,
+                                chapters: chapters,
+                              ),
                             ),
-                            paneContent: _buildNavPanel(
-                              context,
-                              state: state,
-                              chapters: chapters,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
