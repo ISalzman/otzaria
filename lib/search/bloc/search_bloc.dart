@@ -1066,8 +1066,28 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
   }
 
-  /// ממפה סדר-קטלוג (כפי שמקודד ב-id של מסמכי האינדקס) לספר — אותו סדר
-  /// שהאינדוקס בונה ב-buildKeyOrderMap עם catalogueOrderKey.
+  /// הספר האמיתי של תוצאת חיפוש לפי שדה ה-filePath של המסמך — מפתח יציב
+  /// שאינו תלוי בסדר הקטלוג בזמן האינדוקס ('uid:5'/'id:5' או נתיב PDF).
+  ///
+  /// פתיחה לפי כותרת בלבד מאבדת את זהות הספר (isUserBook/categoryId),
+  /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. מחזירה null אם
+  /// המפתח לא אותר בקטלוג (ואז נופלים לבנייה לפי כותרת).
+  Future<Book?> resolveBookForIndexedPath(String indexedFilePath) async {
+    final library = await DataRepository.instance.library;
+    if (!identical(library, _resolveCacheLibrary)) {
+      _resolveCacheLibrary = library;
+      _booksByIndexedFilePathCache = bookForIndexedFilePathMap(library);
+    }
+    return _booksByIndexedFilePathCache?[indexedFilePath];
+  }
+
+  Library? _resolveCacheLibrary;
+  Map<String, Book>? _booksByIndexedFilePathCache;
+
+  @visibleForTesting
+  static Map<String, Book> bookForIndexedFilePathMap(Library library) =>
+      _buildBooksByIndexedFilePath(library);
+
   Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
     final keyOrder = SearchCatalogueOrderHelper.buildKeyOrderMap(
       library,
@@ -1083,7 +1103,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     return booksByOrder;
   }
 
-  Map<String, Book> _buildBooksByIndexedFilePath(Library library) {
+  static Map<String, Book> _buildBooksByIndexedFilePath(Library library) {
     final booksByIndexedFilePath = <String, Book>{};
 
     for (final book in library.getAllBooks()) {

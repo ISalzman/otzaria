@@ -159,8 +159,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String reference,
     required int segment,
     required bool isPdf,
+    required String filePath,
   }) {
-    return 'search:${isPdf ? 'pdf' : 'text'}|$title|$reference|$segment';
+    // filePath הוא מפתח האינדקס היציב ('uid:5'/'id:5' או נתיב PDF) — בלעדיו
+    // תוצאה מספר אישי הייתה מתמקדת בטאב פתוח של ספר רשמי באותה כותרת.
+    return 'search:${isPdf ? 'pdf' : 'text'}|$title|$reference|$segment|$filePath';
   }
 
   String _formatTitleForWrapping(String title) {
@@ -197,14 +200,20 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
 
   /// פתיחת מיקום של תוצאה (או של תוצאה מאוחדת) בטאב קריאה — נתיב קוד
   /// משותף ללחיצה על כרטיס ראשי וללחיצה על שורת sibling בקבוצה מאוחדת.
-  void _openResultLocation({
+  Future<void> _openResultLocation({
     required String title,
     required String reference,
     required int segment,
     required bool isPdf,
     required String filePath,
     required Map<String, Map<String, bool>> effectiveOptions,
-  }) {
+  }) async {
+    // שחזור הספר מהקטלוג לפי מפתח האינדקס היציב — פתיחה לפי כותרת בלבד
+    // הייתה פותחת ספר רשמי במקום ספר אישי בעל אותה כותרת.
+    final resolvedBook =
+        await widget.tab.searchBloc.resolveBookForIndexedPath(filePath);
+    if (!mounted) return;
+
     final rawQuery = widget.tab.queryController.text;
     final hasEnabledOptions =
         effectiveOptions.values.any((m) => m.values.any((v) => v == true));
@@ -224,29 +233,36 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         currentMode != SearchMode.fuzzy;
 
     final inBookMode = shouldUseSimpleInBook ? SearchMode.exact : currentMode;
+    final inBookDistance = shouldUseSimpleInBook
+        ? 0
+        : widget.tab.searchBloc.state.configuration.distance;
 
-    final openLeftPane = (Settings.getValue<bool>('key-pin-sidebar') ??
-            false) ||
-        (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
+    final openLeftPane =
+        (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+            (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
 
     if (isPdf) {
       final pageNumber = segment + 1;
       context.read<TabsBloc>().add(
             OpenOrFocusTab(
               PdfBookTab(
-                book: PdfBook(title: title, path: filePath),
+                book: resolvedBook is PdfBook
+                    ? resolvedBook
+                    : PdfBook(title: title, path: filePath),
                 pageNumber: pageNumber,
                 dedupeKey: _searchResultDedupeKey(
                   title: title,
                   reference: reference,
                   segment: segment,
                   isPdf: true,
+                  filePath: filePath,
                 ),
                 searchText: rawQuery,
                 searchOptions: effectiveOptions,
                 alternativeWords: widget.tab.alternativeWords,
                 spacingValues: widget.tab.spacingValues,
                 searchMode: inBookMode,
+                searchDistance: inBookDistance,
                 openLeftPane: openLeftPane,
                 requiresStableLayout: true,
               ),
@@ -258,21 +274,25 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       context.read<TabsBloc>().add(
             OpenOrFocusTab(
               TextBookTab(
-                book: TextBook(
-                  title: title,
-                ),
+                book: switch (resolvedBook) {
+                  final TextBook book => book,
+                  final DocxBook book => book.toTextBook(),
+                  _ => TextBook(title: title),
+                },
                 index: segment,
                 dedupeKey: _searchResultDedupeKey(
                   title: title,
                   reference: reference,
                   segment: segment,
                   isPdf: false,
+                  filePath: filePath,
                 ),
                 searchText: rawQuery,
                 searchOptions: effectiveOptions,
                 alternativeWords: widget.tab.alternativeWords,
                 spacingValues: widget.tab.spacingValues,
                 searchMode: inBookMode,
+                searchDistance: inBookDistance,
                 showPageShapeView:
                     PageShapeSettingsManager.getViewModePreference(title),
                 openLeftPane: openLeftPane,
@@ -629,8 +649,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 mergedCount: result.mergedCount,
                                 siblings: result.merged,
                                 groupingMode: state.resultGrouping,
-                                onOpenSibling: (sibling) =>
-                                    _openResultLocation(
+                                onOpenSibling: (sibling) => _openResultLocation(
                                   title: sibling.title,
                                   reference: sibling.reference,
                                   segment: sibling.segment.toInt(),
