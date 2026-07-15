@@ -9,6 +9,20 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 const int _maxSearchResults = 1000;
 const int _searchChunkSize = 128;
 
+final RegExp _whitespaceRun = RegExp(r'\s+');
+
+/// ניקוי שורה לחיפוש: הסרת הערות/HTML/ניקוד ואז כיווץ רצפי רווח לרווח יחיד.
+/// הכיווץ חיוני — הסרת תגים ("x </b> y") והמרת מקף/פסק לרווח ב-removeVolwels
+/// מייצרות רווח כפול, והחיפוש הליטרלי לא מוצא שאילתה עם רווח בודד.
+String cleanLineForSearch(String rawLine) => utils
+    .removeVolwels(
+        utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(rawLine)))
+    .replaceAll(_whitespaceRun, ' ')
+    .trim();
+
+String _normalizeQueryWhitespace(String query) =>
+    query.replaceAll(_whitespaceRun, ' ').trim();
+
 void _updateAddress(List<String> address, String line) {
   if (line.length < 4) {
     address.add(line);
@@ -55,10 +69,10 @@ bool _containsWholeWord(String text, String query) =>
 /// מיקום יחסי (0..1) של ההתאמה ל-[query] בשורת המקור [rawLine], לאחר ניקוי
 /// זהה לחיפוש. משמש לדיוק גלילה אל המילה בתוך פסקה ארוכה. 0 אם אין התאמה.
 double matchFractionInLine(String rawLine, String query) {
-  final q = utils.hasNikud(query) ? utils.removeVolwels(query) : query;
+  final q = _normalizeQueryWhitespace(
+      utils.hasNikud(query) ? utils.removeVolwels(query) : query);
   if (q.isEmpty) return 0;
-  final clean = utils.removeVolwels(
-      utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(rawLine)));
+  final clean = cleanLineForSearch(rawLine);
   if (clean.isEmpty) return 0;
   final offset = _wholeWordMatchOffset(clean, q);
   if (offset <= 0) return 0;
@@ -70,16 +84,19 @@ double matchFractionInLine(String rawLine, String query) {
 /// תוצאה, כשהספר לבדו אינו מציג את ההתאמה (גוף ההערה מוסר מהטקסט הראשי).
 bool queryMatchesInlineNoteOnly(String rawLine, String query) {
   if (!rawLine.contains('footnote')) return false;
-  final q =
-      utils.hasNikud(query) ? utils.removeVolwels(query.trim()) : query.trim();
+  final q = _normalizeQueryWhitespace(
+      utils.hasNikud(query) ? utils.removeVolwels(query) : query);
   if (q.isEmpty) return false;
 
   final noteBody = notes.notesForLines([rawLine], const [0]).join(' ');
-  final cleanNote = utils.removeVolwels(utils.stripHtmlIfNeeded(noteBody));
+  final cleanNote = utils
+      .removeVolwels(utils.stripHtmlIfNeeded(noteBody))
+      .replaceAll(_whitespaceRun, ' ');
   if (!_containsWholeWord(cleanNote, q)) return false;
 
   final cleanMain = utils
-      .removeVolwels(utils.stripHtmlIfNeeded(notes.stripInlineNotes(rawLine)));
+      .removeVolwels(utils.stripHtmlIfNeeded(notes.stripInlineNotes(rawLine)))
+      .replaceAll(_whitespaceRun, ' ');
   return !_containsWholeWord(cleanMain, q);
 }
 
@@ -292,7 +309,7 @@ class SectionSearchWorkerRuntime {
 
         try {
           final contentId = request['contentId'] as int?;
-          final query = request['query'] as String;
+          final query = _normalizeQueryWhitespace(request['query'] as String);
 
           // ודא שה-cache תואם לתוכן המבוקש; אחרת בנה אותו פעם אחת.
           // בקשה ללא contentId (תאימות לאחור) נחשבת תמיד כתוכן חדש.
@@ -389,8 +406,7 @@ class SectionSearchWorkerRuntime {
   Future<bool> _buildCache(int? contentId, List<String> content) async {
     final clean = List<String>.filled(content.length, '', growable: false);
     for (int i = 0; i < content.length; i++) {
-      clean[i] = utils.removeVolwels(
-          utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(content[i])));
+      clean[i] = cleanLineForSearch(content[i]);
       if ((i + 1) % _searchChunkSize == 0) {
         await Future<void>.delayed(Duration.zero);
         final next = _queuedRequest;

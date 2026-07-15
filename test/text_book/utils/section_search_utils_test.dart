@@ -101,6 +101,32 @@ void main() {
     });
   });
 
+  group('searchInContent - whitespace normalization', () {
+    test('מוצא ביטוי כשיש תג HTML עם רווחים סביבו', () async {
+      final results = await searchInContent(
+        content: ['<b>כמשה </b> מפי הגבורה'],
+        query: 'כמשה מפי הגבורה',
+      );
+      expect(results.length, 1);
+    });
+
+    test('מוצא ביטוי כשמקף עברי מפריד מילים', () async {
+      final results = await searchInContent(
+        content: ['אשר־שמע משה'],
+        query: 'אשר שמע',
+      );
+      expect(results.length, 1);
+    });
+
+    test('מוצא ביטוי כשהשאילתה מכילה רווח כפול', () async {
+      final results = await searchInContent(
+        content: ['שמע ישראל'],
+        query: 'שמע  ישראל',
+      );
+      expect(results.length, 1);
+    });
+  });
+
   group('matchFractionInLine', () {
     test('מילה בתחילת השורה — שבר 0', () {
       expect(matchFractionInLine('ישראל עם קדוש', 'ישראל'), 0);
@@ -122,6 +148,12 @@ void main() {
 
     test('שורה ריקה — שבר 0', () {
       expect(matchFractionInLine('', 'שמע'), 0);
+    });
+
+    test('שבר גלילה מתעלם מתג HTML עם רווחים בין המילים', () {
+      final fraction =
+          matchFractionInLine('בראשית <b>ברא </b> אלהים', 'ברא אלהים');
+      expect(fraction, greaterThan(0));
     });
   });
 
