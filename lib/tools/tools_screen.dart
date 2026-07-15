@@ -64,6 +64,25 @@ void setActiveToolIdSafely(String? id, {bool Function()? isMounted}) {
   }
 }
 
+/// מחשב את התוסף ה-transient לאחר טעינת רשימת תוספים מעודכנת: מחזיר את
+/// גרסתו העדכנית, או null אם הוסר מהתצוגה או הפך חסום במצב מנותק
+/// (למשל כשהוענקה לו הרשאת רשת בזמן אמת).
+@visibleForTesting
+InstalledPlugin? resolveTransientAfterPluginsLoaded(
+  InstalledPlugin? transient,
+  List<InstalledPlugin> plugins, {
+  required bool isOfflineMode,
+}) {
+  if (transient == null) return null;
+  final updated = plugins.firstWhere(
+    (p) => p.pluginId == transient.pluginId,
+    orElse: () => transient,
+  );
+  if (!updated.showInTools && !updated.pinnedToNavRail) return null;
+  if (isOfflineMode && updated.blockedInOfflineMode) return null;
+  return updated;
+}
+
 /// ממיין רשימת [ToolDescriptor] במיון *יציב*.
 ///
 /// כברירת מחדל, כלים מובנים ([BuiltInToolDescriptor]) מופיעים לפני תוספים
@@ -530,7 +549,7 @@ class ToolsScreenState extends State<ToolsScreen>
 
   void openPluginTransiently(InstalledPlugin plugin) {
     final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isOfflineMode && plugin.requiresNetwork) {
+    if (isOfflineMode && plugin.blockedInOfflineMode) {
       UiSnack.showError(
           'התוסף "${plugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
       return;
@@ -794,7 +813,7 @@ class ToolsScreenState extends State<ToolsScreen>
               'התוסף "${matchedPlugin.name}" אינו מוצג בכלים. ניתן להציג אותו דרך הגדרות → ניהול כלים');
           return;
         }
-        if (isOfflineMode && matchedPlugin.requiresNetwork) {
+        if (isOfflineMode && matchedPlugin.blockedInOfflineMode) {
           _clearPendingTool();
           UiSnack.showError(
               'התוסף "${matchedPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
@@ -1221,7 +1240,7 @@ class ToolsScreenState extends State<ToolsScreen>
             // אם התוסף ה-transient דורש אינטרנט ועברנו למצב מנותק — נסגור אותו.
             if (settingsState.isOfflineMode &&
                 _transientPlugin != null &&
-                _transientPlugin!.requiresNetwork) {
+                _transientPlugin!.blockedInOfflineMode) {
               _transientPlugin = null;
             }
             _rebuildTabs(
@@ -1234,17 +1253,13 @@ class ToolsScreenState extends State<ToolsScreen>
         BlocListener<PluginSystemBloc, PluginSystemState>(
           listener: (context, state) {
             if (state is PluginSystemLoaded) {
-              if (_transientPlugin != null) {
-                final updatedTransient = state.plugins.firstWhere(
-                    (p) => p.pluginId == _transientPlugin!.pluginId,
-                    orElse: () => _transientPlugin!);
-                if (!updatedTransient.showInTools &&
-                    !updatedTransient.pinnedToNavRail) {
-                  _transientPlugin = null;
-                } else {
-                  _transientPlugin = updatedTransient;
-                }
-              }
+              final isOfflineMode =
+                  context.read<SettingsBloc>().state.isOfflineMode;
+              _transientPlugin = resolveTransientAfterPluginsLoaded(
+                _transientPlugin,
+                state.plugins,
+                isOfflineMode: isOfflineMode,
+              );
               // עדכון מידע תוסף מוסתר פעיל (אם הותקן מחדש / השתנה)
               if (_hiddenNavRailPlugin != null) {
                 final updated = state.plugins.firstWhere(
@@ -1258,8 +1273,6 @@ class ToolsScreenState extends State<ToolsScreen>
                   _hiddenNavRailPlugin = updated;
                 }
               }
-              final isOfflineMode =
-                  context.read<SettingsBloc>().state.isOfflineMode;
               _rebuildTabs(
                 state.pinnedPlugins.filterForOfflineMode(isOfflineMode),
                 transient: _transientPlugin,
