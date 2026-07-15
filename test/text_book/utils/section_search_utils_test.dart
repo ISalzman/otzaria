@@ -212,6 +212,15 @@ void main() {
       );
       expect(results.length, 1);
     });
+
+    test('גרשיים פנימי אינו גבול — "רש" לא נמצא בתוך רש״י', () async {
+      final results = await searchInContent(
+        content: ['אמר רש״י כאן'],
+        query: 'רש',
+        patternSource: literalPatternSource('רש'),
+      );
+      expect(results, isEmpty);
+    });
   });
 
   group('matchFractionInLine', () {
