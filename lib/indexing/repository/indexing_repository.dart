@@ -365,7 +365,6 @@ class IndexingRepository {
   Future<void> _indexTextBook(
     TextBook book, {
     required Map<String, int> catalogueOrderByBookKey,
-    String? preloadedText,
     void Function()? onActualIndexingStarted,
   }) async {
     // כל הכנת הספר — פיצול לשורות, מעקב reference trail, נרמול, טביעת
@@ -375,8 +374,8 @@ class IndexingRepository {
     // ל-String וקידוד חוזר על הגשר (~180ms/MB שנמדדו בלוגים).
     final loadStopwatch = Stopwatch()..start();
     Uint8List? bytes;
-    String? text = preloadedText;
-    if ((text == null || text.isEmpty) && book.categoryId != null) {
+    String? text;
+    if (book.categoryId != null) {
       bytes = await SqliteDataProvider.instance.getBookTextBytesFromDb(
         book.title,
         book.categoryId,
@@ -384,7 +383,7 @@ class IndexingRepository {
         book.isUserBook,
       );
     }
-    if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
+    if (bytes == null || bytes.isEmpty) {
       // מסלול הנפילה (docx, ספר בלי categoryId): טקסט דרך LibraryProvider.
       text = await book.text;
     }
@@ -557,7 +556,6 @@ class IndexingRepository {
   Future<void> _writeEmptyBookMarker(
     Book book, {
     required Map<String, int> catalogueOrderByBookKey,
-    BigInt? contentHash,
   }) async {
     if (!_tantivyDataProvider.isIndexing.value) {
       return;
@@ -579,7 +577,6 @@ class IndexingRepository {
         segment: BigInt.zero,
         isPdf: book is PdfBook,
         filePath: buildIndexedBookFilePath(book),
-        contentHash: contentHash,
         generationOrder: chronologicalOrderForBook(book),
       ),
     ]);
@@ -706,13 +703,10 @@ class IndexingRepository {
     return pages;
   }
 
-  Future<String?> _loadTextBookText(
-    TextBook book, {
-    String? preloadedText,
-  }) async {
-    String? text = preloadedText;
+  Future<String?> _loadTextBookText(TextBook book) async {
+    String? text;
 
-    if ((text == null || text.isEmpty) && book.categoryId != null) {
+    if (book.categoryId != null) {
       text = await SqliteDataProvider.instance.getBookTextFromDb(
         book.title,
         book.categoryId,
