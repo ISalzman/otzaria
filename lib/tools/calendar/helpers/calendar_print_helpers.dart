@@ -72,9 +72,15 @@ List<CustomEvent> _eventsForDate(DateTime date, CalendarState state) {
       };
     }
 
-    return event.baseGregorianDate.year == gregorianYear &&
-        event.baseGregorianDate.month == gregorianMonth &&
-        event.baseGregorianDate.day == gregorianDay;
+    // אירוע חד-פעמי — מוצג בכל יום שבטווח [התחלה, סיום]
+    final start = DateTime(event.baseGregorianDate.year,
+        event.baseGregorianDate.month, event.baseGregorianDate.day);
+    final end = event.endGregorianDate != null
+        ? DateTime(event.endGregorianDate!.year, event.endGregorianDate!.month,
+            event.endGregorianDate!.day)
+        : start;
+    final current = DateTime(gregorianYear, gregorianMonth, gregorianDay);
+    return !current.isBefore(start) && !current.isAfter(end);
   }).toList()
     ..sort((a, b) => a.title.compareTo(b.title));
 }
