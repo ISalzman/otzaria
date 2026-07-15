@@ -12,10 +12,13 @@ String _r(int a, int b) =>
 String _c(int code) => String.fromCharCode(code);
 
 // [̀-֑ͯ-ׇֽֿׁׂׅׄ]*
-final String _attachedMarks =
+// מחלקת הסימנים הצמודים ללא כמת (ATTACHED_MARKS_SET במנוע).
+final String _attachedMarksSet =
     '[${_r(0x0300, 0x036F)}${_r(0x0591, 0x05BD)}'
     '${_c(0x05BF)}${_c(0x05C1)}${_c(0x05C2)}${_c(0x05C4)}${_c(0x05C5)}'
-    '${_c(0x05C7)}]*';
+    '${_c(0x05C7)}]';
+
+final String _attachedMarks = '$_attachedMarksSet*';
 
 // א-תװ-ײיִ-ﭏ  (U+05D0-05EA, U+05F0-05F2, U+FB1D-FB4F)
 final String _hebrewLetterClass =
@@ -48,11 +51,15 @@ bool _isQuoteCode(int code) =>
 bool _isGershayimCode(int code) =>
     code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D;
 
-// fragment גרש/גרשיים לגבול (QUOTE_BOUNDARY_FRAGMENT במנוע): גרשיים יחיד
-// או 1–2 תווי גרש ('' ≡ גרשיים, הייצוג הישן).
-final String _quoteBoundaryFragment =
-    '(?:["${_c(0x05F4)}${_c(0x201C)}${_c(0x201D)}]'
-    "|['${_c(0x05F3)}${_c(0x2018)}${_c(0x2019)}]{1,2})";
+// fragment גרש/גרשיים לגבול (quote_boundary_fragment במנוע): גרשיים יחיד,
+// גרש/זוג-גרשים עם סימנים צמודים אופציונליים ביניהם, או זוג-גרשיים המופרד
+// בסימן צמוד. רצפים לא-תקינים ("" או ''' נקיים) נשארים גבול.
+final String _quoteBoundaryFragment = () {
+  final g2 = '"${_c(0x05F4)}${_c(0x201C)}${_c(0x201D)}';
+  final g1 = "'${_c(0x05F3)}${_c(0x2018)}${_c(0x2019)}";
+  return '(?:[$g2]$_attachedMarksSet+[$g2]|[$g2]'
+      '|[$g1]$_attachedMarksSet*[$g1]?)';
+}();
 
 void _writeQuoteClass(StringBuffer buf, int code) {
   if (code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D) {
@@ -106,9 +113,11 @@ String literalPatternSource(String query) {
   ].join(_wordSeparator);
   // גבול תלוי-הקשר כמו במנוע: גרש/גרשיים בין אותיות (רש״י) אינו גבול,
   // וה-lookahead מדלג בעצמו על ניקוד שנותר מ-backtracking של [ניקוד]*.
-  return '(?<![$_hebrewLetterClass]$_attachedMarks$_quoteBoundaryFragment?)'
+  return '(?<![$_hebrewLetterClass]$_attachedMarks'
+      '$_quoteBoundaryFragment?$_attachedMarks)'
       '(?:$phrase)'
-      '(?!$_attachedMarks$_quoteBoundaryFragment?[$_hebrewLetterClass])';
+      '(?!$_attachedMarks$_quoteBoundaryFragment?$_attachedMarks'
+      '[$_hebrewLetterClass])';
 }
 
 /// תבנית ליטרלית מקומפלת לשאילתה [query].
