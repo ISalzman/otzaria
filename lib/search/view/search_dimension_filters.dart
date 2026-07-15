@@ -10,6 +10,7 @@ import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// פקדי סינון לפי מאפייני-ספר — ספרי יסוד (`/base`), תקופה (`/era/<שם>`)
 /// ומחבר (`/author/<שם>`) — כרכיב נשלט (controlled): מקבל את הבחירה
@@ -110,11 +111,11 @@ class _SearchDimensionControlsState extends State<SearchDimensionControls> {
     // לחיצה על ה-Material הקרוב — קופסה מעוצבת מעליו מסתירה אותם
     // ומציפה assertion של Flutter בכל לחיצה.
     return Material(
-      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      color: colorScheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
-          color: colorScheme.outline.withValues(alpha: 0.2),
+          color: colorScheme.outlineVariant,
         ),
       ),
       child: SwitchListTile.adaptive(
@@ -189,7 +190,7 @@ class _SearchDimensionControlsState extends State<SearchDimensionControls> {
           fieldViewBuilder:
               (context, textEditingController, focusNode, onFieldSubmitted) {
             _authorFieldController = textEditingController;
-            return TextField(
+            return RtlTextField(
               controller: textEditingController,
               focusNode: focusNode,
               onSubmitted: (_) => onFieldSubmitted(),
