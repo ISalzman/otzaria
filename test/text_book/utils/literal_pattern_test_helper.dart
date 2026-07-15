@@ -44,6 +44,13 @@ bool _isQuoteCode(int code) =>
     code == 0x2018 ||
     code == 0x2019;
 
+bool _isGershayimCode(int code) =>
+    code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D;
+
+// מחלקת גרש/גרשיים לגבול תלוי-הקשר (QUOTE_CHARS_CLASS במנוע).
+final String _quoteCharsClass = '"\'${_c(0x05F3)}${_c(0x05F4)}'
+    '${_c(0x2018)}${_c(0x2019)}${_c(0x201C)}${_c(0x201D)}';
+
 void _writeQuoteClass(StringBuffer buf, int code) {
   if (code == 0x22 || code == 0x05F4 || code == 0x201C || code == 0x201D) {
     buf.write(_gershayimClass);
@@ -54,10 +61,10 @@ void _writeQuoteClass(StringBuffer buf, int code) {
 
 String _charwisePattern(String word, bool isLast) {
   final len = word.length;
-  // רק במילה האחרונה: גרש/גרשיים נגרר הופך ל-lookahead (מאומת, לא נצרך).
+  // רק במילה האחרונה, ורק גרשיים (לא גרש): נגרר הופך ל-lookahead.
   var coreLen = len;
   if (isLast) {
-    while (coreLen > 0 && _isQuoteCode(word.codeUnitAt(coreLen - 1))) {
+    while (coreLen > 0 && _isGershayimCode(word.codeUnitAt(coreLen - 1))) {
       coreLen--;
     }
     if (coreLen == 0) coreLen = len;
@@ -94,7 +101,10 @@ String literalPatternSource(String query) {
     for (var i = 0; i < words.length; i++)
       _charwisePattern(words[i], i == last),
   ].join(_wordSeparator);
-  return '(?<![$_hebrewLetterClass])(?:$phrase)(?![$_hebrewLetterClass])';
+  // גבול תלוי-הקשר כמו במנוע: גרש/גרשיים בין אותיות (רש״י) אינו גבול.
+  return '(?<![$_hebrewLetterClass]$_attachedMarks[$_quoteCharsClass]?)'
+      '(?:$phrase)'
+      '(?![$_quoteCharsClass]?[$_hebrewLetterClass])';
 }
 
 /// תבנית ליטרלית מקומפלת לשאילתה [query].
