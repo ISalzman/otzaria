@@ -2,7 +2,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart'
-    show getTitleFromPath;
+    show getTitleFromPath, notesBookBaseTitle;
 
 /// ספרים גדולים (מעל [kRareCommentatorMinBookLines] שורות) מסתירים מרשימת
 /// בחירת המפרשים מפרשים "נדירים" — כאלה עם פחות מ-[kRareCommentatorMinLinks]
@@ -73,7 +73,7 @@ List<CommentatorGroup> buildCommentatorGroups(
   List<String> promote(List<String> commentators) =>
       _promoteBase(commentators, baseCommentators);
 
-  return [
+  final groups = [
     CommentatorGroup(
         title: 'תורה שבכתב',
         commentators: promote(eras['תורה שבכתב'] ?? const [])),
@@ -88,6 +88,49 @@ List<CommentatorGroup> buildCommentatorGroups(
         commentators: promote(eras['מחברי זמננו'] ?? const [])),
     CommentatorGroup(title: 'שאר מפרשים', commentators: promote(others)),
   ];
+
+  return _anchorNotesAfterBase(groups);
+}
+
+/// מעביר כל ספר "הערות על XX" לקבוצת הדור של XX ומציב אותו מיד אחרי XX,
+/// כך שההערות לא נשמטות לקבוצה נפרדת מהספר שעליו נכתבו.
+/// ספר-הערות שבסיסו אינו זמין נשאר במקומו.
+List<CommentatorGroup> _anchorNotesAfterBase(List<CommentatorGroup> groups) {
+  final allCommentators = <String>{
+    for (final g in groups) ...g.commentators,
+  };
+
+  final notesByBase = <String, List<String>>{};
+  for (final c in allCommentators) {
+    final base = notesBookBaseTitle(c);
+    if (base != null && allCommentators.contains(base)) {
+      (notesByBase[base] ??= []).add(c);
+    }
+  }
+  if (notesByBase.isEmpty) return groups;
+  for (final notes in notesByBase.values) {
+    notes.sort();
+  }
+
+  final relocated = notesByBase.values.expand((n) => n).toSet();
+
+  void addWithNotes(String commentator, List<String> out) {
+    out.add(commentator);
+    for (final note in notesByBase[commentator] ?? const <String>[]) {
+      addWithNotes(note, out);
+    }
+  }
+
+  final result = <CommentatorGroup>[];
+  for (final g in groups) {
+    final ordered = <String>[];
+    for (final c in g.commentators) {
+      if (relocated.contains(c)) continue; // יתווסף מיד אחרי הבסיס שלו
+      addWithNotes(c, ordered);
+    }
+    result.add(g.copyWith(commentators: ordered));
+  }
+  return result;
 }
 
 /// מקדים את המפרשים הבסיסיים לראש הקבוצה (בסדר [base]), ושאר המפרשים אחריהם
