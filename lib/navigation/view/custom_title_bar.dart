@@ -849,6 +849,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           (tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered);
       final showPin =
           tab.isPinned && (extrasBudget - (showClose ? 25 : 0)) >= 20;
+      // אייקון PDF ליד שם הספר — רק כשהטאב רחב (אותו סף כמו מפריד ה-CombinedTab).
+      final showPdfIcon = tab is PdfBookTab && tabWidth >= 100;
 
       return Row(
         children: [
@@ -892,6 +894,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                         children: [
                           if (isSelected) const SizedBox(width: 4),
                           if (showPin) _buildPinIconInline(context, tab),
+                          if (showPdfIcon)
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 4),
+                              child: Icon(
+                                FluentIcons.document_pdf_16_regular,
+                                size: 14,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
                           Expanded(child: buildTabContent()),
                           if (showClose)
                             Tooltip(

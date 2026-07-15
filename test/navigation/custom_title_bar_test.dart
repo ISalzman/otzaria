@@ -8,6 +8,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
@@ -250,9 +251,68 @@ void main() {
 
     expect(find.text('מפרשים | ספר א'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    // אייקוני-הסוג הוסרו מהטאבים — אין אייקון ספר/PDF מוביל.
+    // רק טאב-PDF מקבל אייקון-סוג; בטאב מפרשים אין אייקון מוביל.
     expect(find.byIcon(FluentIcons.book_24_regular), findsNothing);
-    expect(find.byIcon(FluentIcons.document_pdf_24_regular), findsNothing);
+    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsNothing);
+  });
+
+  testWidgets('טאב PDF רחב מציג אייקון PDF ליד שם הספר', (tester) async {
+    final tab = _makePdfTab('ספר PDF');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      tab.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsOneWidget);
+  });
+
+  testWidgets('טאב PDF צר (רוחב < 100) מסתיר את אייקון ה-PDF', (tester) async {
+    // הרבה טאבים ב-surface צר מצמצמים כל טאב מתחת ל-100px — האייקון נעלם.
+    final tabs = List.generate(10, (i) => _makePdfTab('ספר $i'));
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: tabs, currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      for (final tab in tabs) {
+        tab.dispose();
+      }
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(900, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsNothing);
   });
 
   testWidgets('CombinedTab מציג את התחלת שני הספרים, כל אחד בחצי',
@@ -1140,6 +1200,13 @@ TextBookTab _makeTextTab(String title, {String currentTitle = ''}) {
   );
   tab.currentTitle.value = currentTitle;
   return tab;
+}
+
+PdfBookTab _makePdfTab(String title) {
+  return PdfBookTab(
+    book: PdfBook(title: title, path: '$title.pdf'),
+    pageNumber: 1,
+  );
 }
 
 class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
