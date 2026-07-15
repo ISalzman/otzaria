@@ -60,6 +60,7 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'pdf_zoom_bar.dart';
@@ -3344,8 +3345,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildReaderMainContent() {
-    const readerContentPadding = EdgeInsets.only(
-      right: _verticalScrollbarGutter + _scrollbarGutterGap,
+    // בתצוגת "זה לצד זה" מתווספים שוליי הדופן החיצוני לתוכן בלבד; הידית
+    // (Positioned(left:0)) נשארת צמודה לדופן החלון.
+    final splitInset =
+        SplitPaneContentInset.of(context).resolve(Directionality.of(context));
+    final readerContentPadding = EdgeInsets.only(
+      left: splitInset.left,
+      right: _verticalScrollbarGutter + _scrollbarGutterGap + splitInset.right,
       bottom: _horizontalScrollbarGutter + _scrollbarGutterGap,
     );
 
@@ -3498,7 +3504,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ),
                 ),
                 Positioned(
-                  left: 0,
+                  left: splitInset.left,
                   right: readerContentPadding.right,
                   bottom: 0,
                   child: PdfHorizontalScrollbar(

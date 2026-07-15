@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -418,54 +419,57 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                 ),
                 mainContent: Stack(
                   children: [
-                    CombinedView(
-                      data: widget.content,
-                      textSize: state.fontSize,
-                      openBookCallback: widget.openBookCallback,
-                      openLeftPaneTab: widget.openLeftPaneTab,
-                      onSelectedTextChanged: widget.onSelectedTextChanged,
-                      selectionSyncController: _selectionSyncController,
-                      showCommentaryAsExpansionTiles: !widget.showSplitView,
-                      tab: widget.tab,
-                      onOpenPersonalNotes: () {
-                        setState(() {
-                          _paneOpen = true;
-                          _currentTabIndex = 2;
-                        });
-                      },
-                      onOpenCommentatorsPane: () {
-                        setState(() {
-                          _paneOpen = true;
-                        });
-                        Future.delayed(const Duration(milliseconds: 280), () {
-                          if (!mounted) return;
-                          _closeCommentatorsFilterNotifier.value++;
+                    Padding(
+                      padding: SplitPaneContentInset.of(context),
+                      child: CombinedView(
+                        data: widget.content,
+                        textSize: state.fontSize,
+                        openBookCallback: widget.openBookCallback,
+                        openLeftPaneTab: widget.openLeftPaneTab,
+                        onSelectedTextChanged: widget.onSelectedTextChanged,
+                        selectionSyncController: _selectionSyncController,
+                        showCommentaryAsExpansionTiles: !widget.showSplitView,
+                        tab: widget.tab,
+                        onOpenPersonalNotes: () {
                           setState(() {
+                            _paneOpen = true;
+                            _currentTabIndex = 2;
+                          });
+                        },
+                        onOpenCommentatorsPane: () {
+                          setState(() {
+                            _paneOpen = true;
+                          });
+                          Future.delayed(const Duration(milliseconds: 280), () {
+                            if (!mounted) return;
+                            _closeCommentatorsFilterNotifier.value++;
+                            setState(() {
+                              _currentTabIndex = 0;
+                            });
+                          });
+                        },
+                        onOpenCommentatorsPaneWithFilter: () {
+                          setState(() {
+                            _paneOpen = true;
                             _currentTabIndex = 0;
                           });
-                        });
-                      },
-                      onOpenCommentatorsPaneWithFilter: () {
-                        setState(() {
-                          _paneOpen = true;
-                          _currentTabIndex = 0;
-                        });
-                        _openCommentatorsFilterNotifier.value++;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
-                          _openFilterRequest.value++;
-                        });
-                      },
-                      onOpenLinksPane: () {
-                        setState(() {
-                          _paneOpen = true;
-                          _currentTabIndex = _linksTabIndex;
-                        });
-                      },
-                      isCommentatorsTabActive: () =>
-                          _paneOpen && _currentTabIndex == 0,
-                      isLinksTabActive: () =>
-                          _paneOpen && _currentTabIndex == _linksTabIndex,
+                          _openCommentatorsFilterNotifier.value++;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            _openFilterRequest.value++;
+                          });
+                        },
+                        onOpenLinksPane: () {
+                          setState(() {
+                            _paneOpen = true;
+                            _currentTabIndex = _linksTabIndex;
+                          });
+                        },
+                        isCommentatorsTabActive: () =>
+                            _paneOpen && _currentTabIndex == 0,
+                        isLinksTabActive: () =>
+                            _paneOpen && _currentTabIndex == _linksTabIndex,
+                      ),
                     ),
                     if (!_paneOpen)
                       Positioned(
