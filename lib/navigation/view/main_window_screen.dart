@@ -2805,6 +2805,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   );
 
                                   if (orientation == Orientation.landscape) {
+                                    final isCompactRail =
+                                        context.select<SettingsBloc, bool>(
+                                            (b) => b.state.compactMenuMode);
+                                    final railWidth = isCompactRail
+                                        ? NavRailItem.compactWidth
+                                        : NavRailItem.width;
                                     return Row(
                                       children: [
                                         if (!isImmersive)
@@ -2813,7 +2819,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                               context,
                                             ),
                                             child: SizedBox.fromSize(
-                                              size: const Size.fromWidth(74),
+                                              size: Size.fromWidth(railWidth),
                                               child: Column(
                                                 children: [
                                                   Expanded(
@@ -2912,6 +2918,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                         i,
                                                                         state
                                                                             .currentScreen,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                     if (!hideTools)
                                                                       _buildNavRailItem(
@@ -2921,6 +2929,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                             .currentScreen,
                                                                         selectedOverride:
                                                                             isToolsSelected,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                     for (int i =
                                                                             0;
@@ -2933,6 +2943,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                         isSelected:
                                                                             activePinnedIndex ==
                                                                                 i,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                   ];
                                                                   final settingsItem =
@@ -2941,6 +2953,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     _settingsNavIndex,
                                                                     state
                                                                         .currentScreen,
+                                                                    compact:
+                                                                        isCompactRail,
                                                                   );
 
                                                                   if (needsScroll) {
@@ -3362,6 +3376,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     int index,
     Screen currentScreen, {
     bool? selectedOverride,
+    bool compact = false,
   }) {
     final item = _navData[index];
     final isSelected =
@@ -3385,6 +3400,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       tourTargetKey: tourMainNavigationTargetKeys[index],
       tourItemKey: tourMainNavigationItemTargetKeys[index],
       isTourHighlighted: isTourHighlighted,
+      compact: compact,
     );
   }
 
@@ -3392,6 +3408,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     _PinnedToolNavItem item, {
     bool isSelected = false,
+    bool compact = false,
   }) {
     return NavRailItem(
       icon: item.icon,
@@ -3400,6 +3417,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       label: item.label,
       isSelected: isSelected,
       onTap: () => _openPinnedItemInTools(context, item),
+      compact: compact,
     );
   }
 

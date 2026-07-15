@@ -29,6 +29,36 @@ void main() {
     expect(itemKey.currentWidget, isA<SizedBox>());
   });
 
+  group('NavRailItem — רוחב לפי מצב קומפקטי', () {
+    Future<double> railWidth(WidgetTester tester,
+        {required bool compact}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: NavRailItem(
+              icon: FluentIcons.library_24_regular,
+              label: 'ספרייה',
+              isSelected: false,
+              onTap: () {},
+              compact: compact,
+            ),
+          ),
+        ),
+      );
+      return tester.widget<SizedBox>(find.byType(SizedBox).first).width!;
+    }
+
+    testWidgets('רגיל משתמש ברוחב המלא', (tester) async {
+      expect(await railWidth(tester, compact: false), NavRailItem.width);
+    });
+
+    testWidgets('קומפקטי מצר את הפריט', (tester) async {
+      expect(await railWidth(tester, compact: true), NavRailItem.compactWidth);
+      expect(NavRailItem.compactWidth, lessThan(NavRailItem.width));
+    });
+  });
+
   group('NavRailItem imageAsset support', () {
     testWidgets(
       'renders ImageIcon when imageAsset is provided (instead of IconData)',
