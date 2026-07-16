@@ -182,7 +182,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release
+          flutter build windows --release --verbose
 
       - name: Zip Windows build
         shell: pwsh
@@ -192,6 +192,14 @@ jobs:
                     Select-Object -First 1 -ExpandProperty FullName
           if (-not $relDir) { throw 'Release directory not found' }
           Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
+          # portable.marker הופך את ה-ZIP לנייד באמת: כל הנתונים נשמרים
+          # בתיקיית otzaria_data ליד ה-EXE (ראה lib/core/app_paths.dart →
+          # isPortable). ה-marker מתווסף ל-ZIP בלבד ולא לתיקיית Release —
+          # המתקינים (regular/full) נבנים מאותה תיקייה בהמשך ואסור
+          # שההתקנות הרגילות יהפכו לניידות.
+          $marker = Join-Path $env:RUNNER_TEMP 'portable.marker'
+          New-Item -ItemType File -Path $marker -Force | Out-Null
+          Compress-Archive -Path $marker -Update -DestinationPath otzaria-windows.zip
 
       - name: Check if commit message is a version tag
         id: check_version
