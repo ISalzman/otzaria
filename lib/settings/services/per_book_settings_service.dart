@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -23,9 +24,44 @@ class PerBookSettings {
   static String _hashKey(String key) =>
       sha1.convert(utf8.encode(key)).toString();
 
+  /// תור סדרתי לפי קובץ (hash), למניעת דריסה הדדית בין קריאה-שינוי-כתיבה של
+  /// שמירות, מחיקות וניקוי הרצות במקביל על אותו קובץ. ממופתח ב-hash כדי
+  /// שגם הניקוי (שמכיר רק את שם הקובץ) וגם השמירות (שמכירות את המפתח) ינעלו
+  /// על אותו ערך.
+  static final Map<String, Future<void>> _fileLocks = {};
+
+  /// מריץ [action] בזו-אחר-זו עם שאר הפעולות על אותו [lockKey] (hash הקובץ).
+  static Future<T> runLocked<T>(
+    String lockKey,
+    Future<T> Function() action,
+  ) async {
+    final previous = _fileLocks[lockKey] ?? Future.value();
+    // התעלמות מכשל קודם רק לצורך המשכיות התור; כל קורא מקבל את שגיאתו דרך await.
+    final current =
+        previous.then<void>((_) {}, onError: (_) {}).then((_) => action());
+    final gate = current.then((_) {}, onError: (_) {});
+    _fileLocks[lockKey] = gate;
+    try {
+      return await current;
+    } finally {
+      if (identical(_fileLocks[lockKey], gate)) {
+        _fileLocks.remove(lockKey);
+      }
+    }
+  }
+
+  /// גרסת נוחות הנועלת לפי [key] של ספר (ממיר ל-hash פנימית).
+  static Future<T> runLockedForKey<T>(
+    String key,
+    Future<T> Function() action,
+  ) =>
+      runLocked(_hashKey(key), action);
+
   /// תאימות לאחור: קבצים ישנים מופתחו לפי שם הספר בלבד. אם אין קובץ למפתח
   /// החדש אך קיים קובץ-מורשת לפי השם — מעתיקים אותו (copy, לא rename) כדי
-  /// שגם ספר נוסף בעל אותו שם יוכל לרשת את ההגדרות הישנות.
+  /// שגם ספר נוסף בעל אותו שם יוכל לרשת את ההגדרות הישנות. בהעתקה, שדות
+  /// ששווים לברירת המחדל הגלובלית מנורמלים החוצה כדי שהספר יירש שינויים
+  /// עתידיים בברירת המחדל במקום לקבע override מיושן.
   static Future<void> _migrateLegacyFile(String key, String legacyName) async {
     try {
       final dir = await _getSettingsDirectory();
@@ -35,11 +71,50 @@ class PerBookSettings {
           '${dir.path}/settings_${_sanitizeBookName(legacyName)}.json';
       if (newPath == legacyPath) return;
       final legacyFile = File(legacyPath);
-      if (await legacyFile.exists()) {
+      if (!await legacyFile.exists()) return;
+
+      final normalized =
+          _normalizeAgainstGlobalDefaults(await legacyFile.readAsString());
+      if (normalized == null) {
         await legacyFile.copy(newPath);
+      } else if (normalized.isEmpty) {
+        // הכל זהה לברירת המחדל: tombstone מונע מיגרציה חוזרת שתחיה את
+        // ה-override אם ברירת המחדל תשתנה בעתיד.
+        await saveSettings(key, const {resetMarker: true});
+      } else {
+        await saveSettings(key, normalized);
       }
     } catch (e) {
       debugPrint('❌ Error migrating per-book settings: $e');
+    }
+  }
+
+  /// מסיר מ-JSON של legacy שדות ששווים לברירת המחדל הגלובלית הנוכחית.
+  /// מחזיר null כשאי-אפשר לנרמל (JSON פגום או Settings לא מאותחל) —
+  /// ואז ההעתקה נשארת גולמית כבעבר.
+  static Map<String, dynamic>? _normalizeAgainstGlobalDefaults(String raw) {
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final cleaned = Map<String, dynamic>.of(json);
+      if (cleaned['fontSize'] ==
+          (Settings.getValue<double>('key-font-size') ?? 25.0)) {
+        cleaned.remove('fontSize');
+      }
+      if (cleaned['removeNikud'] ==
+          (Settings.getValue<bool>('key-default-nikud') ?? false)) {
+        cleaned.remove('removeNikud');
+      }
+      if (cleaned['commentatorsBelow'] ==
+          !(Settings.getValue<bool>('key-splited-view') ?? true)) {
+        cleaned.remove('commentatorsBelow');
+      }
+      if (cleaned['continuousReadingMode'] ==
+          (Settings.getValue<bool>('key-continuous-reading-mode') ?? false)) {
+        cleaned.remove('continuousReadingMode');
+      }
+      return cleaned;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -154,6 +229,7 @@ class PerBookSettings {
     required double defaultFontSize,
     required bool defaultRemoveNikud,
     required bool defaultShowSplitView,
+    bool defaultContinuousReadingMode = false,
   }) async {
     try {
       final dir = await _getSettingsDirectory();
@@ -164,56 +240,59 @@ class PerBookSettings {
       final files = (await dir.list().toList()).whereType<File>();
       int cleanedCount = 0;
 
+      // hash של קובץ פר-ספר הוא SHA-1 (40 תווי hex). קובצי legacy (שם מ-
+      // sanitize של כותרת) אינם נוגעים כאן: הם read-only artifact, וה-override
+      // שלהם מנוקה כשהם היגרו לקובץ hash — בלי להתנגש עם מיגרציה מקבילה.
+      final hashPattern = RegExp(r'settings_([0-9a-f]{40})\.json$');
+
       for (final file in files) {
-        if (!file.path.endsWith('.json')) continue;
+        final match = hashPattern.firstMatch(file.path);
+        if (match == null) continue;
 
-        try {
-          final json =
-              jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        // כל קובץ hash מטופל דרך תור הנעילה שלו (עקבי עם mutate/save/delete),
+        // כדי שקריאה-שינוי-כתיבה לא תדרוס פעולה פר-ספרית מקבילה. הקריאה נעשית
+        // בתוך הנעילה כי הקובץ עלול להשתנות בזמן ההמתנה בתור.
+        await runLocked(match.group(1)!, () async {
+          try {
+            if (!await file.exists()) return;
+            final json =
+                jsonDecode(await file.readAsString()) as Map<String, dynamic>;
 
-          // קובץ tombstone (איפוס) חייב לשרוד את הניקוי, אחרת המיגרציה
-          // תשחזר את ה-legacy בפתיחה הבאה.
-          if (json.containsKey(resetMarker)) continue;
+            // קובץ tombstone (איפוס) חייב לשרוד את הניקוי, אחרת המיגרציה
+            // תשחזר את ה-legacy בפתיחה הבאה.
+            if (json.containsKey(resetMarker)) return;
 
-          // בדיקה אם כל ההגדרות זהות לברירת המחדל
-          final fontSize = json['fontSize'] as double?;
-          final commentatorsBelow = json['commentatorsBelow'] as bool?;
-          final removeNikud = json['removeNikud'] as bool?;
+            // הסרת שדות שהפכו זהים לברירת המחדל הגלובלית — הספר יירש אותה.
+            // מסירים שדה-שדה (לא קובץ שלם) כדי שגם קובץ עם שדה פר-ספר אמיתי
+            // (מפרשים/רוחבים) לא ישאיר override מיושן שסותר את ברירת המחדל.
+            final cleaned = Map<String, dynamic>.of(json);
+            if (cleaned['fontSize'] == defaultFontSize) {
+              cleaned.remove('fontSize');
+            }
+            if (cleaned['removeNikud'] == defaultRemoveNikud) {
+              cleaned.remove('removeNikud');
+            }
+            if (cleaned['commentatorsBelow'] == !defaultShowSplitView) {
+              cleaned.remove('commentatorsBelow');
+            }
+            if (cleaned['continuousReadingMode'] ==
+                defaultContinuousReadingMode) {
+              cleaned.remove('continuousReadingMode');
+            }
 
-          bool isRedundant = true;
-
-          if (fontSize != null && fontSize != defaultFontSize) {
-            isRedundant = false;
+            if (cleaned.isEmpty) {
+              await file.delete();
+              cleanedCount++;
+              debugPrint('🧹 Cleaned redundant settings file: ${file.path}');
+            } else if (cleaned.length != json.length) {
+              await file.writeAsString(jsonEncode(cleaned));
+              cleanedCount++;
+              debugPrint('🧹 Trimmed redundant fields from: ${file.path}');
+            }
+          } catch (e) {
+            debugPrint('❌ Error processing file ${file.path}: $e');
           }
-          if (removeNikud != null && removeNikud != defaultRemoveNikud) {
-            isRedundant = false;
-          }
-          if (commentatorsBelow != null &&
-              commentatorsBelow != !defaultShowSplitView) {
-            isRedundant = false;
-          }
-
-          // שדות פר-ספר אמיתיים שאין להם ברירת מחדל גלובלית להשוואה (רוחבי
-          // צורת הדף, בחירת מפרשים, זום ופריסת PDF) — קובץ שמכיל אותם לעולם
-          // אינו מיותר ואסור למחוק אותו בניקוי.
-          if (json['pageShapeLeftWidth'] != null ||
-              json['pageShapeRightWidth'] != null ||
-              json['pageShapeBottomHeight'] != null ||
-              json['pageShapeBottomLeftWidth'] != null ||
-              json['activeCommentators'] != null ||
-              json['zoom'] != null ||
-              json['layoutMode'] != null) {
-            isRedundant = false;
-          }
-
-          if (isRedundant) {
-            await file.delete();
-            cleanedCount++;
-            debugPrint('🧹 Cleaned redundant settings file: ${file.path}');
-          }
-        } catch (e) {
-          debugPrint('❌ Error processing file ${file.path}: $e');
-        }
+        });
       }
 
       if (cleanedCount > 0) {
@@ -322,16 +401,12 @@ class TextBookPerBookSettings {
     );
   }
 
-  /// תור כתיבות פר-ספר, לסנכרון רצף load→merge→save לאותו ספר ולמניעת
-  /// דריסה הדדית בין שמירות מקבילות (race condition).
-  static final Map<String, Future<void>> _pendingWrites = {};
-
   /// עדכון אטומי של ההגדרות הפר-ספריות לספר נתון.
   ///
   /// [transform] מקבלת את ההגדרות הקיימות (או null אם אין) ומחזירה את
   /// ההגדרות לשמירה. אם התוצאה null או ריקה (כל השדות null) — הקובץ נמחק.
-  /// כל הקריאות לאותו [bookName] מבוצעות בזו אחר זו, כך שה-load תמיד רואה
-  /// את התוצאה של הכתיבה הקודמת.
+  /// כל הפעולות על אותו קובץ מבוצעות בזו אחר זו (דרך תור הנעילה המשותף), כך
+  /// שה-load תמיד רואה את התוצאה של הכתיבה הקודמת.
   static Future<void> mutate(
     Book book,
     FutureOr<TextBookPerBookSettings?> Function(
@@ -339,14 +414,8 @@ class TextBookPerBookSettings {
     ) transform,
   ) async {
     final key = PerBookSettings.bookKey(book);
-    await PerBookSettings._migrateLegacyFile(key, book.title);
-    final previousWrite = _pendingWrites[key] ?? Future.value();
-    final currentWrite = previousWrite
-        // התעלמות מכשל הכתיבה הקודמת לצורך המשכיות התור בלבד: כשל transient
-        // בכתיבה אחת לא יפיל את הכתיבות שכבר עומדות בתור. כל קריאה עדיין
-        // מקבלת את השגיאה שלה עצמה דרך ה-await בהמשך.
-        .then<void>((_) {}, onError: (_) {})
-        .then((_) async {
+    await PerBookSettings.runLockedForKey(key, () async {
+      await PerBookSettings._migrateLegacyFile(key, book.title);
       final existingJson = await PerBookSettings.loadSettings(key);
       final existing = existingJson == null
           ? null
@@ -358,31 +427,26 @@ class TextBookPerBookSettings {
         await PerBookSettings.saveSettings(key, updated.toJson());
       }
     });
-
-    _pendingWrites[key] = currentWrite;
-
-    try {
-      await currentWrite;
-    } finally {
-      if (identical(_pendingWrites[key], currentWrite)) {
-        _pendingWrites.remove(key);
-      }
-    }
   }
 
   /// טעינת הגדרות
   static Future<TextBookPerBookSettings?> load(Book book) async {
     final key = PerBookSettings.bookKey(book);
-    await PerBookSettings._migrateLegacyFile(key, book.title);
-    final json = await PerBookSettings.loadSettings(key);
-    if (json == null) return null;
-    return TextBookPerBookSettings.fromJson(json);
+    return PerBookSettings.runLockedForKey(key, () async {
+      await PerBookSettings._migrateLegacyFile(key, book.title);
+      final json = await PerBookSettings.loadSettings(key);
+      if (json == null) return null;
+      return TextBookPerBookSettings.fromJson(json);
+    });
   }
 
   /// מחיקת הגדרות
   static Future<void> delete(Book book) async {
     final key = PerBookSettings.bookKey(book);
-    await PerBookSettings._clearOrTombstone(key, book.title);
+    await PerBookSettings.runLockedForKey(
+      key,
+      () => PerBookSettings._clearOrTombstone(key, book.title),
+    );
   }
 }
 
@@ -394,8 +458,6 @@ enum PdfLayoutMode {
 
 /// הגדרות פר-ספר לספרי PDF
 class PdfBookPerBookSettings {
-  static final Map<String, Future<void>> _pendingWrites = {};
-
   final double? zoom;
   final List<String>? activeCommentators;
   final PdfLayoutMode? layoutMode;
@@ -442,14 +504,8 @@ class PdfBookPerBookSettings {
   /// שמירת הגדרות
   Future<void> save(Book book) async {
     final key = PerBookSettings.bookKey(book);
-    await PerBookSettings._migrateLegacyFile(key, book.title);
-    final previousWrite = _pendingWrites[key] ?? Future.value();
-    final currentWrite = previousWrite
-        // התעלמות מכשל הכתיבה הקודמת לצורך המשכיות התור בלבד: כשל transient
-        // בכתיבה אחת לא יפיל את הכתיבות שכבר עומדות בתור. כל קריאה עדיין
-        // מקבלת את השגיאה שלה עצמה דרך ה-await בהמשך.
-        .then<void>((_) {}, onError: (_) {})
-        .then((_) async {
+    await PerBookSettings.runLockedForKey(key, () async {
+      await PerBookSettings._migrateLegacyFile(key, book.title);
       final existingJson = await PerBookSettings.loadSettings(key);
       final existingSettings = existingJson == null
           ? null
@@ -463,43 +519,25 @@ class PdfBookPerBookSettings {
 
       await PerBookSettings.saveSettings(key, settingsToSave.toJson());
     });
-
-    _pendingWrites[key] = currentWrite;
-
-    try {
-      await currentWrite;
-    } finally {
-      if (identical(_pendingWrites[key], currentWrite)) {
-        _pendingWrites.remove(key);
-      }
-    }
   }
 
   /// טעינת הגדרות
   static Future<PdfBookPerBookSettings?> load(Book book) async {
     final key = PerBookSettings.bookKey(book);
-    await PerBookSettings._migrateLegacyFile(key, book.title);
-    final json = await PerBookSettings.loadSettings(key);
-    if (json == null) return null;
-    return PdfBookPerBookSettings.fromJson(json);
+    return PerBookSettings.runLockedForKey(key, () async {
+      await PerBookSettings._migrateLegacyFile(key, book.title);
+      final json = await PerBookSettings.loadSettings(key);
+      if (json == null) return null;
+      return PdfBookPerBookSettings.fromJson(json);
+    });
   }
 
   /// מחיקת הגדרות
   static Future<void> delete(Book book) async {
     final key = PerBookSettings.bookKey(book);
-    final previousWrite = _pendingWrites[key] ?? Future.value();
-    final deleteWrite = previousWrite.then((_) async {
-      await PerBookSettings._clearOrTombstone(key, book.title);
-    });
-
-    _pendingWrites[key] = deleteWrite;
-
-    try {
-      await deleteWrite;
-    } finally {
-      if (identical(_pendingWrites[key], deleteWrite)) {
-        _pendingWrites.remove(key);
-      }
-    }
+    await PerBookSettings.runLockedForKey(
+      key,
+      () => PerBookSettings._clearOrTombstone(key, book.title),
+    );
   }
 }

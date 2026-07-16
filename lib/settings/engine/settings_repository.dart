@@ -27,6 +27,7 @@ class SettingsRepository {
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
   static const String keyDefaultNikud = 'key-default-nikud';
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
+  static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
   static const String keyDefaultCommentaryOpen = 'key-default-commentary-open';
   static const String keyPinSidebar = 'key-pin-sidebar';
@@ -199,6 +200,10 @@ class SettingsRepository {
       ),
       'removeNikudFromTanach': _settings.getValue<bool>(
         keyRemoveNikudFromTanach,
+        defaultValue: false,
+      ),
+      'defaultContinuousReadingMode': _settings.getValue<bool>(
+        keyContinuousReadingMode,
         defaultValue: false,
       ),
       'defaultSidebarOpen': _settings.getValue<bool>(
@@ -450,6 +455,10 @@ class SettingsRepository {
 
   Future<void> updateRemoveNikudFromTanach(bool value) async {
     await _settings.setValue(keyRemoveNikudFromTanach, value);
+  }
+
+  Future<void> updateDefaultContinuousReadingMode(bool value) async {
+    await _settings.setValue(keyContinuousReadingMode, value);
   }
 
   Future<void> updateDefaultSidebarOpen(bool value) async {
@@ -811,6 +820,7 @@ class SettingsRepository {
     await _settings.setValue(keyAutoUpdateIndex, true);
     await _settings.setValue(keyDefaultNikud, false);
     await _settings.setValue(keyRemoveNikudFromTanach, false);
+    await _settings.setValue(keyContinuousReadingMode, false);
     await _settings.setValue(keyDefaultSidebarOpen, false);
     await _settings.setValue(keyDefaultCommentaryOpen, false);
     await _settings.setValue(keyPinSidebar, false);

@@ -80,6 +80,21 @@ class TextSettingsTab extends StatelessWidget {
       keywords: ['רוחב', 'עמודה'],
     ),
     SettingsSearchEntry(
+      id: 'text.font.continuous_reading',
+      title: 'מצב קריאה בתנ"ך ובתלמוד',
+      subtitle: 'הצגת השורות ברצף או בנפרד',
+      tab: SettingsTab.text,
+      cardId: 'text.font',
+      keywords: [
+        'רצף',
+        'רציף',
+        'שורות בודדות',
+        'קריאה',
+        'תנך',
+        'תלמוד',
+      ],
+    ),
+    SettingsSearchEntry(
       id: 'text.nikud.display_mode',
       title: 'הצגת הניקוד',
       subtitle: 'הצג / הסתר ניקוד בתנ"ך ובכל הספרים',
@@ -332,6 +347,23 @@ class TextSettingsTab extends StatelessWidget {
         ),
 
         _TextWidthSlider(state: state),
+        SettingsActionTile.segmentedTile<bool>(
+          icon: FluentIcons.text_align_justify_24_regular,
+          title: 'מצב קריאה בתנ"ך ובתלמוד',
+          subtitle: state.defaultContinuousReadingMode
+              ? 'השורות יוצגו ברצף עד הכותרת הבאה'
+              : 'כל שורה תוצג בנפרד',
+          options: const [
+            SegmentOption(value: false, label: 'שורות בודדות'),
+            SegmentOption(value: true, label: 'רצף'),
+          ],
+          currentValue: state.defaultContinuousReadingMode,
+          onChanged: (value) {
+            context
+                .read<SettingsBloc>()
+                .add(UpdateDefaultContinuousReadingMode(value));
+          },
+        ),
       ],
     );
   }

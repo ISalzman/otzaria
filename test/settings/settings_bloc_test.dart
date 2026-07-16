@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import '../helpers/memory_settings_cache.dart';
 import '../unit/mocks/mock_settings_repository.mocks.dart';
 
 void main() {
@@ -47,6 +53,7 @@ void main() {
         'autoUpdateIndex': false,
         'defaultRemoveNikud': true,
         'removeNikudFromTanach': true,
+        'defaultContinuousReadingMode': true,
         'defaultSidebarOpen': true,
         'defaultCommentaryOpen': true,
         'pinSidebar': true,
@@ -101,6 +108,8 @@ void main() {
             defaultRemoveNikud: mockSettings['defaultRemoveNikud'] as bool,
             removeNikudFromTanach:
                 mockSettings['removeNikudFromTanach'] as bool,
+            defaultContinuousReadingMode:
+                mockSettings['defaultContinuousReadingMode'] as bool,
             defaultSidebarOpen: mockSettings['defaultSidebarOpen'] as bool,
             defaultCommentaryOpen:
                 mockSettings['defaultCommentaryOpen'] as bool,
@@ -237,6 +246,21 @@ void main() {
         ],
         verify: (_) {
           verify(mockRepository.updateRemoveNikudFromTanach(true)).called(1);
+        },
+      );
+    });
+
+    group('UpdateDefaultContinuousReadingMode', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateDefaultContinuousReadingMode is added',
+        build: () => settingsBloc,
+        act: (bloc) => bloc.add(const UpdateDefaultContinuousReadingMode(true)),
+        expect: () => [
+          settingsBloc.state.copyWith(defaultContinuousReadingMode: true),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateDefaultContinuousReadingMode(true))
+              .called(1);
         },
       );
     });
@@ -489,6 +513,50 @@ void main() {
           )).called(1);
         },
       );
+    });
+
+    // חייב לרוץ אחרון: Settings.init גלובלי, והקבוצות הקודמות מסתמכות על
+    // כך שהניקוי נכשל בשקט כש-Settings לא מאותחל.
+    group('ניקוי פר-ספר בעקבות שינוי ברירת מחדל', () {
+      late Directory tempDir;
+
+      setUp(() async {
+        tempDir = await Directory.systemTemp.createTemp('bloc_cleanup');
+        AppPaths.debugOverrideDataRootPath(tempDir.path);
+        // splited-view לא נקבע => ברירת המחדל בפועל: מפרשים בצד (true).
+        await Settings.init(cacheProvider: MemorySettingsCache());
+      });
+
+      tearDown(() async {
+        AppPaths.debugOverrideDataRootPath(null);
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
+      });
+
+      test('שינוי ברירת מחדל קריאה רציפה אינו מוחק override של פריסת מפרשים',
+          () async {
+        // הבאג שתוקן: defaultShowSplitView הועבר כ-false קבוע, ולכן
+        // commentatorsBelow=true (override אמיתי) זוהה כמיותר ונמחק.
+        const overrideKey = 'o__1__בראשית';
+        const redundantKey = 'o__2__שמות';
+        await PerBookSettings.saveSettings(
+            overrideKey, {'commentatorsBelow': true});
+        await PerBookSettings.saveSettings(
+            redundantKey, {'continuousReadingMode': true});
+
+        settingsBloc.add(const UpdateDefaultContinuousReadingMode(true));
+
+        // הניקוי רץ ללא await; מחיקת הקובץ שהפך מיותר מוכיחה שהוא רץ וסיים.
+        var cleaned = false;
+        for (var i = 0; i < 100 && !cleaned; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          cleaned = await PerBookSettings.loadSettings(redundantKey) == null;
+        }
+        expect(cleaned, isTrue, reason: 'הניקוי לא רץ בזמן סביר');
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final overrideJson = await PerBookSettings.loadSettings(overrideKey);
+        expect(overrideJson?['commentatorsBelow'], isTrue);
+      });
     });
   });
 }

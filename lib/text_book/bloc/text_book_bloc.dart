@@ -266,17 +266,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// - ספר שלא תומך → תמיד false.
   /// - אם הדגל [preserveFlag] פעיל ו-currentState הוא Loaded → שומרים
   ///   את הערך הקודם של המשתמש.
-  /// - אחרת — default (false). זה המסלול שמאפס בעת `_resetPerBookSettings`.
+  /// - אחרת — ברירת המחדל הגלובלית [globalDefault]. זה גם המסלול של
+  ///   `_resetPerBookSettings` (חוזר לברירת המחדל) ושל פתיחת ספר חדש.
   @visibleForTesting
   static bool resolvePreservedContinuousReadingMode({
     required bool supportsContinuous,
     required bool preserveFlag,
     required TextBookState? currentState,
+    bool globalDefault = false,
   }) {
     if (!supportsContinuous) return false;
-    if (!preserveFlag) return false;
-    if (currentState is! TextBookLoaded) return false;
-    return currentState.continuousReadingMode;
+    if (preserveFlag && currentState is TextBookLoaded) {
+      return currentState.continuousReadingMode;
+    }
+    return globalDefault;
   }
 
   @visibleForTesting
@@ -753,10 +756,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // שתוכל להיבדק טהורה: _resetPerBookSettings סומך על default=false,
       // וה-listener על שינוי גופן/ניקוד מעביר preserveFlag=true כדי לא
       // לכבות מצב רצף שהמשתמש בחר.
+      final defaultContinuousReading =
+          Settings.getValue<bool>('key-continuous-reading-mode') ?? false;
       final effectiveContinuousReading = resolvePreservedContinuousReadingMode(
         supportsContinuous: supportsContinuousReading,
         preserveFlag: event.preserveContinuousReadingMode,
         currentState: state,
+        globalDefault: defaultContinuousReading,
       );
       final readingSegments = buildReadingSegments(
         contentLines,

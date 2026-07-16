@@ -190,6 +190,15 @@ class UpdateRemoveNikudFromTanach extends SettingsEvent {
   List<Object?> get props => [removeNikudFromTanach];
 }
 
+class UpdateDefaultContinuousReadingMode extends SettingsEvent {
+  final bool defaultContinuousReadingMode;
+
+  const UpdateDefaultContinuousReadingMode(this.defaultContinuousReadingMode);
+
+  @override
+  List<Object?> get props => [defaultContinuousReadingMode];
+}
+
 class UpdateDefaultSidebarOpen extends SettingsEvent {
   final bool defaultSidebarOpen;
 

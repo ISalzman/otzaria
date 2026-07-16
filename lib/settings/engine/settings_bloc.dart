@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -32,6 +33,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
+    on<UpdateDefaultContinuousReadingMode>(
+        _onUpdateDefaultContinuousReadingMode);
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
     on<UpdateDefaultCommentaryOpen>(_onUpdateDefaultCommentaryOpen);
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
@@ -97,6 +100,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       autoUpdateIndex: settings['autoUpdateIndex'],
       defaultRemoveNikud: settings['defaultRemoveNikud'],
       removeNikudFromTanach: settings['removeNikudFromTanach'],
+      defaultContinuousReadingMode:
+          settings['defaultContinuousReadingMode'] ?? false,
       defaultSidebarOpen: settings['defaultSidebarOpen'],
       defaultCommentaryOpen: settings['defaultCommentaryOpen'],
       pinSidebar: settings['pinSidebar'],
@@ -413,6 +418,19 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     _cleanupRedundantPerBookSettings();
   }
 
+  Future<void> _onUpdateDefaultContinuousReadingMode(
+    UpdateDefaultContinuousReadingMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateDefaultContinuousReadingMode(event.defaultContinuousReadingMode);
+    emit(state.copyWith(
+        defaultContinuousReadingMode: event.defaultContinuousReadingMode));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
+  }
+
   Future<void> _onUpdateRemoveNikudFromTanach(
     UpdateRemoveNikudFromTanach event,
     Emitter<SettingsState> emit,
@@ -554,7 +572,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
         defaultRemoveNikud: state.defaultRemoveNikud,
-        defaultShowSplitView: false, // ערך ברירת מחדל
+        defaultShowSplitView:
+            Settings.getValue<bool>('key-splited-view') ?? true,
+        defaultContinuousReadingMode: state.defaultContinuousReadingMode,
       );
     } catch (e) {
       // בטסטים או בסביבות ללא פלאגין, זה בסדר להתעלם
