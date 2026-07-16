@@ -15,6 +15,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
+import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
@@ -1415,6 +1416,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       fontSize: widget.fontSize,
                       removeNikud: state.removeNikud,
                       openBookCallback: widget.openBookCallback,
+                      state: state,
+                      reportLineIndex:
+                          state.selectedIndex ?? currentIndexes.first,
                     );
                   } else if (selectedCommentators.isEmpty) {
                     notesWidget = Center(
@@ -2222,11 +2226,19 @@ class _NotesCommentaryWidget extends StatefulWidget {
   final bool removeNikud;
   final Function(TextBookTab) openBookCallback;
 
+  /// מצב הספר הראשי — דרוש לדיווח על טעות (ההערות inline בתוכו).
+  final TextBookLoaded state;
+
+  /// אינדקס השורה שאליה מיוחסות ההערות המוצגות — לדיווח הטעות.
+  final int reportLineIndex;
+
   const _NotesCommentaryWidget({
     required this.notes,
     required this.fontSize,
     required this.removeNikud,
     required this.openBookCallback,
+    required this.state,
+    required this.reportLineIndex,
   });
 
   @override
@@ -2276,6 +2288,23 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                     fontSize: widget.fontSize,
                   ),
                 ),
+                if (!widget.state.book.isUserBook) ...[
+                  const AppContextMenuEntry.divider(),
+                  AppContextMenuEntry(
+                    label: 'דווח על טעות בספר',
+                    icon: FluentIcons.error_circle_24_regular,
+                    enabled: _selectedText != null &&
+                        _selectedText!.trim().isNotEmpty,
+                    onTap: () => ErrorReportHelper.showErrorReportDialog(
+                      context: menuCtx,
+                      selectedText: _selectedText ?? '',
+                      state: widget.state,
+                      fontSize: widget.fontSize,
+                      bookTitle: widget.state.book.title,
+                      savedSelectedIndex: widget.reportLineIndex,
+                    ),
+                  ),
+                ],
               ],
               child: SingleChildScrollView(
                 child: Column(

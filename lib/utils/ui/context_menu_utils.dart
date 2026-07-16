@@ -9,6 +9,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -84,7 +85,74 @@ class ContextMenuUtils {
           ));
         },
       ),
+      if (!link.targetIsUserBook) ...[
+        const AppContextMenuEntry.divider(),
+        AppContextMenuEntry(
+          label: 'דווח על טעות בספר',
+          icon: FluentIcons.error_circle_24_regular,
+          onTap: () => _reportCommentaryError(
+            context: context,
+            link: link,
+            fontSize: fontSize,
+            savedSelectedText: savedSelectedText,
+          ),
+        ),
+      ],
     ];
+  }
+
+  /// ממפה מפרש ([link] + תוכנו [rawContent]) לפרמטרי דיווח הטעות: הדיווח מופנה
+  /// לספר המפרש עצמו (path2/index2), וללא בחירת טקסט מדווחים על כל פסקת המפרש.
+  static ({
+    TextBook book,
+    List<String> content,
+    int lineIndex,
+    String bookTitle,
+    String selectedText,
+  }) commentaryReportArgs({
+    required Link link,
+    required String rawContent,
+    String? savedSelectedText,
+  }) {
+    final hasSelection =
+        savedSelectedText != null && savedSelectedText.trim().isNotEmpty;
+    return (
+      book: _targetBookFromLink(link),
+      content: [rawContent],
+      lineIndex: link.index2 - 1,
+      bookTitle: utils.getTitleFromPath(link.path2),
+      selectedText: hasSelection
+          ? savedSelectedText
+          : utils.stripHtmlIfNeeded(rawContent),
+    );
+  }
+
+  /// פותח את דיאלוג דיווח הטעות עבור מפרש.
+  static Future<void> _reportCommentaryError({
+    required BuildContext context,
+    required Link link,
+    required double fontSize,
+    String? savedSelectedText,
+  }) async {
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+    final rawContent = await link.content;
+    if (!context.mounted) return;
+    final args = commentaryReportArgs(
+      link: link,
+      rawContent: rawContent,
+      savedSelectedText: savedSelectedText,
+    );
+    await ErrorReportHelper.showErrorReportDialog(
+      context: context,
+      selectedText: args.selectedText,
+      state: state,
+      fontSize: fontSize,
+      bookTitle: args.bookTitle,
+      savedSelectedIndex: args.lineIndex,
+      reportContent: args.content,
+      reportBook: args.book,
+    );
   }
 
   /// העתקת פסקה שלמה של מפרש
