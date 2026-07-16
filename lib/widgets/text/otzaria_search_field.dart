@@ -364,6 +364,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
         onChanged: widget.onChanged,
         onSubmitted: widget.onSubmitted,
         textInputAction: TextInputAction.search,
+        textAlignVertical: TextAlignVertical.center,
         cursorColor: cs.onSurface.withValues(alpha: 0.87),
         style: TextStyle(
           fontSize: effectiveFontSize,
@@ -395,6 +396,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
             fontSize: effectiveFontSize,
             color: cs.onSurfaceVariant,
             height: 1.0,
+            leadingDistribution: TextLeadingDistribution.even,
           ),
           border: noBorder,
           enabledBorder: noBorder,
