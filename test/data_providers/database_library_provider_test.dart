@@ -837,7 +837,8 @@ void main() {
       }
     });
 
-    test('buildLibraryCatalog שומר מחבר מה-DB וחיפוש הספריה מוצא לפי מחבר',
+    test(
+        'buildLibraryCatalog שומר מחבר ותיאורי קטגוריה מה-DB וחיפוש הספריה מוצא לפי מחבר',
         () async {
       final tempDir =
           await Directory.systemTemp.createTemp('otzaria_db_minimal_books');
@@ -857,6 +858,9 @@ void main() {
         await provider.sqliteProvider.dispose();
         provider.clearCache();
         await repository.ensureInitialized();
+        final db = await database.database;
+        db.execute('ALTER TABLE category ADD COLUMN heShortDesc TEXT');
+        db.execute('ALTER TABLE category ADD COLUMN heDesc TEXT');
 
         await Settings.setValue<String>(
           SettingsRepository.keyLibraryPath,
@@ -879,6 +883,17 @@ void main() {
             level: 0,
           ),
         );
+        db.execute(
+          'UPDATE category SET heShortDesc = ?, heDesc = ? WHERE id = ?',
+          ['קצר מה-DB', 'מורחב מה-DB', categoryId],
+        );
+        await repository.insertCategory(
+          const migration_models.Category(
+            title: 'קטגוריה ללא תיאור',
+            parentId: null,
+            level: 0,
+          ),
+        );
 
         await repository.insertBook(
           migration_models.Book(
@@ -892,7 +907,6 @@ void main() {
           ),
         );
 
-        final db = await database.database;
         db.execute('BEGIN');
         try {
           for (var index = 2; index <= 1200; index++) {
@@ -919,7 +933,15 @@ void main() {
         }
 
         await provider.initialize();
-        final library = await provider.buildLibraryCatalog({}, tempDir.path);
+        final library = await provider.buildLibraryCatalog(
+          {
+            'הלכה': {
+              'heShortDesc': 'קצר מ-metadata',
+              'heDesc': 'מורחב מ-metadata',
+            },
+          },
+          tempDir.path,
+        );
         // מסננים קטגוריית "ספרים אישיים" שעלולה להצטרף אוטומטית מ-user_books.db
         // הגלובלי ב-AppData של המכונה — לטסט אכפת רק מהקטגוריה שהוא יצר.
         final halachaCategory =
@@ -927,9 +949,16 @@ void main() {
         final books = halachaCategory.books;
         final targetBook =
             books.firstWhere((book) => book.title == 'ספר בדיקה');
+        final categoryWithoutDescription = library.subCategories.firstWhere(
+          (category) => category.title == 'קטגוריה ללא תיאור',
+        );
 
         expect(books, hasLength(1200));
         expect(targetBook.author, 'רש"י');
+        expect(halachaCategory.shortDescription, 'קצר מה-DB');
+        expect(halachaCategory.description, 'מורחב מה-DB');
+        expect(categoryWithoutDescription.shortDescription, isEmpty);
+        expect(categoryWithoutDescription.description, isEmpty);
 
         final repositoryForSearch = DataRepository()
           ..library = Future.value(library);

@@ -2355,8 +2355,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // Create the category using orderIndex from DB (like Kotlin uses category.order)
     final category = Category(
       title: dbCategory.title,
-      description: metadata[dbCategory.title]?['heDesc'] ?? '',
-      shortDescription: metadata[dbCategory.title]?['heShortDesc'] ?? '',
+      description: dbCategory.heDesc ?? '',
+      shortDescription: dbCategory.heShortDesc ?? '',
       order: dbCategory.orderIndex,
       subCategories: [],
       books: [],
