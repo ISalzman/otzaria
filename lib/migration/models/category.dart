@@ -15,6 +15,12 @@ class Category {
   /// The display order of the category within its parent. Defaults to 999.
   final int orderIndex;
 
+  /// תיאור עברי קצר של הקטגוריה, או null כאשר אינו קיים.
+  final String? heShortDesc;
+
+  /// תיאור עברי מורחב של הקטגוריה, או null כאשר אינו קיים.
+  final String? heDesc;
+
   /// Creates a new instance of [Category].
   const Category({
     this.id = 0,
@@ -22,15 +28,24 @@ class Category {
     required this.title,
     this.level = 0,
     this.orderIndex = 999,
+    this.heShortDesc,
+    this.heDesc,
   });
 
-  /// Creates a new [Category] instance with updated values.
+  /// יוצר עותק של הקטגוריה עם הערכים שסופקו.
+  ///
+  /// הדגלים [clearHeShortDesc] ו־[clearHeDesc] מנקים במפורש שדה nullable;
+  /// השמטת הערך והדגל משאירה את התיאור הקיים.
   Category copyWith({
     int? id,
     int? parentId,
     String? title,
     int? level,
     int? orderIndex,
+    String? heShortDesc,
+    String? heDesc,
+    bool clearHeShortDesc = false,
+    bool clearHeDesc = false,
   }) {
     return Category(
       id: id ?? this.id,
@@ -38,6 +53,8 @@ class Category {
       title: title ?? this.title,
       level: level ?? this.level,
       orderIndex: orderIndex ?? this.orderIndex,
+      heShortDesc: clearHeShortDesc ? null : heShortDesc ?? this.heShortDesc,
+      heDesc: clearHeDesc ? null : heDesc ?? this.heDesc,
     );
   }
 
@@ -49,6 +66,8 @@ class Category {
       title: json['title'] as String,
       level: json['level'] as int? ?? 0,
       orderIndex: json['orderIndex'] as int? ?? 999,
+      heShortDesc: json['heShortDesc'] as String?,
+      heDesc: json['heDesc'] as String?,
     );
   }
 
@@ -60,12 +79,14 @@ class Category {
       'title': title,
       'level': level,
       'orderIndex': orderIndex,
+      'heShortDesc': heShortDesc,
+      'heDesc': heDesc,
     };
   }
 
   @override
   String toString() {
-    return 'Category(id: $id, parentId: $parentId, title: $title, level: $level, orderIndex: $orderIndex)';
+    return 'Category(id: $id, parentId: $parentId, title: $title, level: $level, orderIndex: $orderIndex, heShortDesc: $heShortDesc, heDesc: $heDesc)';
   }
 
   @override
@@ -77,7 +98,9 @@ class Category {
         other.parentId == parentId &&
         other.title == title &&
         other.level == level &&
-        other.orderIndex == orderIndex;
+        other.orderIndex == orderIndex &&
+        other.heShortDesc == heShortDesc &&
+        other.heDesc == heDesc;
   }
 
   @override
@@ -86,5 +109,7 @@ class Category {
       parentId.hashCode ^
       title.hashCode ^
       level.hashCode ^
-      orderIndex.hashCode;
+      orderIndex.hashCode ^
+      heShortDesc.hashCode ^
+      heDesc.hashCode;
 }

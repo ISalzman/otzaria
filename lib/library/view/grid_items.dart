@@ -9,6 +9,7 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
+import 'package:otzaria/library/view/category_details_dialog.dart';
 import 'package:otzaria/library/view/book_versions_dialog.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
@@ -35,6 +36,15 @@ String? _bookInfoTooltipText(Book book) {
   return shortDescription == null || shortDescription.isEmpty
       ? null
       : shortDescription;
+}
+
+/// הטקסט שיוצג ב־Tooltip של לחצן המידע לקטגוריה.
+String? categoryInfoText(Category category) {
+  final fullDescription = category.description.trim();
+  if (fullDescription.isNotEmpty) return fullDescription;
+
+  final shortDescription = category.shortDescription.trim();
+  return shortDescription.isEmpty ? null : shortDescription;
 }
 
 /// מחזיר את נתיב הלוגו של הקטלוג החיצוני שממנו מגיע הספר, או null אם זהו
@@ -261,6 +271,7 @@ class CategoryGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final infoText = categoryInfoText(category);
     return AppCard(
       onTap: onCategoryClickCallback,
       focusNode: focusNode,
@@ -293,15 +304,40 @@ class CategoryGridItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 18),
-            if (category.shortDescription.isNotEmpty)
+            if (infoText != null)
               Tooltip(
-                message: category.shortDescription,
+                message: infoText,
                 waitDuration: const Duration(milliseconds: 400),
-                child: Icon(
-                  FluentIcons.info_24_regular,
-                  size: 16,
-                  color: theme.colorScheme.onSecondaryContainer
-                      .withValues(alpha: 0.6),
+                textAlign: TextAlign.right,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                margin: const EdgeInsets.all(12),
+                constraints: const BoxConstraints(maxWidth: 320),
+                textStyle: _libraryTooltipTextStyle(context),
+                decoration: _libraryTooltipDecoration(context),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    onPressed: () =>
+                        showCategoryDetailsDialog(context, category),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    icon: Icon(
+                      FluentIcons.info_24_regular,
+                      size: 15,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ),
             const SizedBox(width: 4),
