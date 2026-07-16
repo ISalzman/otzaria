@@ -216,11 +216,6 @@ Widget _buildBookDetailsContent(
             title: 'תיאור מורחב:',
             value: information.fullDescription!,
           ),
-        if (information.lineCount != null && information.lineCount! > 0)
-          DetailsInfoSection(
-            title: 'מספר שורות:',
-            value: information.lineCount.toString(),
-          ),
         const Divider(height: 24),
         const Text(
           'מקור הספר:',
@@ -248,11 +243,6 @@ Widget _buildBookDetailsContent(
           )
         else
           SelectableText(sourceInfo.text, style: const TextStyle(fontSize: 14)),
-        if (bookDetails['שם הקובץ'] != BookDetailsService.bookNotFoundText)
-          DetailsInfoSection(
-            title: 'שם הקובץ:',
-            value: bookDetails['שם הקובץ']!,
-          ),
         if (bookDetails['נתיב הקובץ'] != BookDetailsService.bookNotFoundText)
           DetailsInfoSection(
             title: 'נתיב הקובץ:',
