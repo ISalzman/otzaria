@@ -30,6 +30,10 @@ class SettingsState extends Equatable {
   final bool autoUpdateIndex;
   final bool defaultRemoveNikud;
   final bool removeNikudFromTanach;
+
+  /// ברירת מחדל להצגת הטקסט ברצף (מצב "קריאה רציפה"). חלה בפתיחת ספר על
+  /// ספרים שתומכים בכך בלבד (תנ"ך ותלמוד); בשאר הספרים אין לה השפעה.
+  final bool defaultContinuousReadingMode;
   final bool defaultSidebarOpen;
   final bool defaultCommentaryOpen;
   final bool pinSidebar;
@@ -86,6 +90,7 @@ class SettingsState extends Equatable {
     required this.autoUpdateIndex,
     required this.defaultRemoveNikud,
     required this.removeNikudFromTanach,
+    this.defaultContinuousReadingMode = false,
     required this.defaultSidebarOpen,
     required this.defaultCommentaryOpen,
     required this.pinSidebar,
@@ -134,6 +139,7 @@ class SettingsState extends Equatable {
       autoUpdateIndex: true,
       defaultRemoveNikud: false,
       removeNikudFromTanach: false,
+      defaultContinuousReadingMode: false,
       defaultSidebarOpen: false,
       defaultCommentaryOpen: false,
       pinSidebar: false,
@@ -179,6 +185,7 @@ class SettingsState extends Equatable {
     bool? autoUpdateIndex,
     bool? defaultRemoveNikud,
     bool? removeNikudFromTanach,
+    bool? defaultContinuousReadingMode,
     bool? defaultSidebarOpen,
     bool? defaultCommentaryOpen,
     bool? pinSidebar,
@@ -228,6 +235,8 @@ class SettingsState extends Equatable {
       defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
       removeNikudFromTanach:
           removeNikudFromTanach ?? this.removeNikudFromTanach,
+      defaultContinuousReadingMode:
+          defaultContinuousReadingMode ?? this.defaultContinuousReadingMode,
       defaultSidebarOpen: defaultSidebarOpen ?? this.defaultSidebarOpen,
       defaultCommentaryOpen:
           defaultCommentaryOpen ?? this.defaultCommentaryOpen,
@@ -291,6 +300,7 @@ class SettingsState extends Equatable {
         autoUpdateIndex,
         defaultRemoveNikud,
         removeNikudFromTanach,
+        defaultContinuousReadingMode,
         defaultSidebarOpen,
         defaultCommentaryOpen,
         pinSidebar,

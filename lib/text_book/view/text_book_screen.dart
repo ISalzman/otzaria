@@ -2985,6 +2985,8 @@ Future<void> _savePerBookSettingsDirectly(
   final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
   final defaultShowSplitView =
       Settings.getValue<bool>('key-splited-view') ?? true;
+  final defaultContinuousReading =
+      settingsBloc.state.defaultContinuousReadingMode;
 
   // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
   // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
@@ -3019,9 +3021,11 @@ Future<void> _savePerBookSettingsDirectly(
     }
 
     if (continuousReadingMode != null) {
-      // ברירת המחדל למצב רצף היא false (אין הגדרה גלובלית), כך שרק true שווה
-      // לשמירה.
-      newContinuousReadingMode = continuousReadingMode ? true : null;
+      // ערך השווה לברירת המחדל הגלובלית נמחק כדי שהספר יירש אותה.
+      newContinuousReadingMode =
+          (continuousReadingMode == defaultContinuousReading)
+              ? null
+              : continuousReadingMode;
     }
 
     // רוחבי הטורים בצורת הדף נשמרים בנפרד (ב-_saveSizes); כאן מעבירים אותם

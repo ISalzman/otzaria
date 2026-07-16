@@ -371,6 +371,8 @@ class DesignSettingsTab extends StatelessWidget {
                                 defaultRemoveNikud:
                                     settingsBloc.state.defaultRemoveNikud,
                                 defaultShowSplitView: value,
+                                defaultContinuousReadingMode: settingsBloc
+                                    .state.defaultContinuousReadingMode,
                               );
                             });
                           },
