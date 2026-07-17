@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:path/path.dart' as p;
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/models/plugin_store_install_request.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
@@ -190,7 +192,8 @@ class OpenDailyPageAction extends ExternalUriAction {
 /// * `otzaria://plugin/install?url=<download>` – התקנת תוסף
 ///   - `&overwrite=true|false` דריסת תוסף קיים
 /// * `otzaria://plugin/install-local?path=<abs-path>` – התקנת תוסף מקובץ מקומי
-///   (משמש לשיוך קובץ `.otzplugin` במערכת ההפעלה)
+///   (משמש לשיוך קובץ `.otzplugin` במערכת ההפעלה). הנתיב חייב להיות מוחלט,
+///   להסתיים ב-`.otzplugin`, ואינו נתיב UNC/התקן (ראה `_isSafeLocalPluginPath`).
 ///
 /// הסכמה, ה-host והתת-נתיב הראשון אינם רגישים לאותיות גדולות/קטנות.
 class ExternalUriRouter {
@@ -299,8 +302,33 @@ class ExternalUriRouter {
 
     final rawPath = uri.queryParameters['path']?.trim();
     if (rawPath == null || rawPath.isEmpty) return null;
+    if (!_isSafeLocalPluginPath(rawPath)) return null;
 
     return rawPath;
+  }
+
+  /// הקשר הנתיבים לאימות `install-local` — סמנטיקת הפלטפורמה הנוכחית.
+  /// ניתן להחלפה בבדיקות כדי לאמת התנהגות Windows/POSIX מכל פלטפורמה.
+  @visibleForTesting
+  static p.Context pathContext = p.context;
+
+  /// בודקת שנתיב מקומי בטוח להתקנת תוסף. קישור `otzaria://` ניתן להפעלה
+  /// מדף אינטרנט, ולכן הנתיב אינו מהימן:
+  /// - נתיב UNC/התקן (`\\server\share`, `\\.\`, `\\?\`, `//host`) נדחה —
+  ///   עצם קריאתו גורמת ל-Windows לפתוח חיבור SMB ולדלוף אישורי NTLM לתוקף.
+  /// - חובה נתיב מוחלט בסמנטיקת הפלטפורמה הנוכחית (החוזה הוא `<abs-path>`);
+  ///   נתיב יחסי נפתר מול תיקיית העבודה ולכן אינו מהימן מקישור חיצוני.
+  /// - חובה סיומת `.otzplugin` כדי לא לקרוא קובץ שרירותי מהדיסק.
+  static bool _isSafeLocalPluginPath(String path) {
+    if (path.startsWith(r'\\') || path.startsWith('//')) return false;
+    if (!pathContext.isAbsolute(path)) return false;
+    // ב-Windows נתיב כמו `\foo` נחשב rooted אך יחסי-לכונן הנוכחי — נדרש
+    // כונן מפורש כדי שהנתיב יהיה מוחלט באמת.
+    if (pathContext.style == p.Style.windows &&
+        !RegExp(r'^[A-Za-z]:').hasMatch(path)) {
+      return false;
+    }
+    return path.toLowerCase().endsWith('.otzplugin');
   }
 
   static ExternalUriAction? _parseOpen(Uri uri) {
