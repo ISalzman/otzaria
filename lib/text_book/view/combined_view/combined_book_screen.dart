@@ -31,6 +31,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
@@ -57,7 +58,7 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart'
     as inline_notes;
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
-import 'package:otzaria/text_book/view/combined_view/link_preview_overlay.dart';
+import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
 import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
@@ -335,11 +336,15 @@ class _CombinedViewState extends State<CombinedView> {
     Offset globalPosition, {
     required bool hoverMode,
   }) {
+    final state = _textBookBloc.state;
+    final loaded = state is TextBookLoaded ? state : null;
     LinkPreviewOverlay.show(
       context,
       link: anchor.link,
       globalPosition: globalPosition,
       hoverMode: hoverMode,
+      removeNikud: loaded?.removeNikud,
+      removePunctuation: loaded?.removePunctuation,
       onOpen: () => _openAnchorTarget(anchor.link),
       onDismissed: () {
         if (_disposed || !mounted) return;
@@ -493,8 +498,8 @@ class _CombinedViewState extends State<CombinedView> {
         final initialIndex = state.visibleIndices.first;
         // פתיחה מחיפוש: גלילה למילה שנמצאה בתוך הקטע ולא רק לתחילתו, וממוקמת
         // סביב מרכז התצוגה — בעקביות עם ניווט מסרגל תוצאות החיפוש שבתוך הספר.
-        final isFromSearch = state.searchText.isNotEmpty &&
-            initialIndex < state.content.length;
+        final isFromSearch =
+            state.searchText.isNotEmpty && initialIndex < state.content.length;
         final intraLineFraction = isFromSearch
             ? matchFractionInLine(state.content[initialIndex], state.searchText)
             : 0.0;
@@ -974,6 +979,8 @@ class _CombinedViewState extends State<CombinedView> {
           ],
           ...paragraphLinks.map((link) => buildLinkContextMenuEntry(
                 link: link,
+                removeNikud: state.removeNikud,
+                removePunctuation: state.removePunctuation,
                 onTap: () => widget.openBookCallback(
                   TextBookTab(
                     book: TextBook(
@@ -1068,6 +1075,8 @@ class _CombinedViewState extends State<CombinedView> {
         final entry = _siblingController.buildEntry(
           lineIndex: paragraphIndex,
           sourceLink: sourceLink,
+          removeNikud: state.removeNikud,
+          removePunctuation: state.removePunctuation,
           onNavigate: (link) => widget.openBookCallback(
             TextBookTab(
               book: TextBook(
@@ -1285,7 +1294,7 @@ class _CombinedViewState extends State<CombinedView> {
     debugPrint('_currentSelectedIndex: ${_currentSelectedIndex.value}');
 
     if (plainText == null || plainText.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט להעתקה');
+      UiSnack.show(TextBookMessages.selectTextToCopy);
       return;
     }
 
@@ -1305,7 +1314,7 @@ class _CombinedViewState extends State<CombinedView> {
       );
     } catch (e) {
       if (mounted) {
-        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e');
+        UiSnack.showError(TextBookMessages.formattedCopyError(e));
       }
     }
   }
