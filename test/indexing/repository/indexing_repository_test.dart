@@ -331,6 +331,32 @@ void main() {
       expect(engine.removedFilePaths, isEmpty);
       expect(provider.indexedFilePaths, {'uid:99'});
     });
+
+    test('כשל commit בניקוי יתומים — שחזור מנוע ומחזיר 0 בלי לסמן כמנוקה',
+        () async {
+      // רגרסיה: המסלול הזה ביצע delete+commit ישיר; כשל commit היה נבלע,
+      // המחיקה עלולה הייתה להיחתם מאוחר בעוד המפתח נשאר במעקב — קובץ שחזר
+      // לספרייה היה מדולג כ"מאונדקס".
+      final engine = _RecordingSearchEngine()..failCommit = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final existing = TextBook(id: 1, title: 'שבת', isUserBook: true);
+      final library = _buildLibrary(bavliBooks: const []);
+      library.books.add(existing);
+      final existingKey = IndexingRepository.buildIndexedBookFilePath(existing);
+      provider.indexedFilePaths.addAll({existingKey, 'uid:99'});
+      // המחיקה לא נחתמה — המצב החתום בדיסק עדיין מכיל את שניהם.
+      engine.committedFilePaths = [existingKey, 'uid:99'];
+      final repository = IndexingRepository(provider);
+
+      final removed = await repository.dropOrphanedIndexEntries(library);
+
+      expect(removed, 0);
+      expect(engine.rollbackCount, 1);
+      expect(provider.reopenCount, 1);
+      expect(provider.lastReopenForce, isTrue);
+      // המעקב עקבי עם המצב החתום — היתום עדיין רשום, ינוקה בניסיון הבא.
+      expect(provider.indexedFilePaths, {existingKey, 'uid:99'});
+    });
   });
 
   group('IndexingRepository.reindexChangedBooks', () {
