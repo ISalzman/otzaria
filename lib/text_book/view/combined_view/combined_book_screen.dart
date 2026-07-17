@@ -19,13 +19,12 @@ import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/sibling_commentaries_menu.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/tabs/models/tab.dart';
-import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
@@ -314,21 +313,11 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// פתיחת ספר-היעד של קישור-עוגן בטאב חדש (לחיצה על כותרת חלונית התצוגה).
-  void _openAnchorTarget(Link link) {
+  Future<void> _openAnchorTarget(Link link) async {
     LinkPreviewOverlay.dismiss();
-    widget.openBookCallback(
-      TextBookTab(
-        book: TextBook(
-          title: utils.getTitleFromPath(link.path2),
-          isUserBook: link.targetIsUserBook,
-          categoryId: link.targetCategoryId,
-          fileType: link.targetFileType,
-        ),
-        index: link.index2 - 1,
-        openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-            (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-      ),
-    );
+    final tab = await buildLinkTargetTab(link);
+    if (_disposed || !mounted) return;
+    widget.openBookCallback(tab);
   }
 
   void _showAnchorPreview(
@@ -981,21 +970,11 @@ class _CombinedViewState extends State<CombinedView> {
                 link: link,
                 removeNikud: state.removeNikud,
                 removePunctuation: state.removePunctuation,
-                onTap: () => widget.openBookCallback(
-                  TextBookTab(
-                    book: TextBook(
-                      title: utils.getTitleFromPath(link.path2),
-                      isUserBook: link.targetIsUserBook,
-                      categoryId: link.targetCategoryId,
-                      fileType: link.targetFileType,
-                    ),
-                    index: link.index2 - 1,
-                    openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                            false) ||
-                        (Settings.getValue<bool>('key-default-sidebar-open') ??
-                            false),
-                  ),
-                ),
+                onTap: () async {
+                  final tab = await buildLinkTargetTab(link);
+                  if (_disposed || !mounted) return;
+                  widget.openBookCallback(tab);
+                },
               )),
         ];
 
@@ -1077,21 +1056,11 @@ class _CombinedViewState extends State<CombinedView> {
           sourceLink: sourceLink,
           removeNikud: state.removeNikud,
           removePunctuation: state.removePunctuation,
-          onNavigate: (link) => widget.openBookCallback(
-            TextBookTab(
-              book: TextBook(
-                title: utils.getTitleFromPath(link.path2),
-                isUserBook: link.targetIsUserBook,
-                categoryId: link.targetCategoryId,
-                fileType: link.targetFileType,
-              ),
-              index: link.index2 - 1,
-              openLeftPane:
-                  (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                      (Settings.getValue<bool>('key-default-sidebar-open') ??
-                          false),
-            ),
-          ),
+          onNavigate: (link) async {
+            final tab = await buildLinkTargetTab(link);
+            if (_disposed || !mounted) return;
+            widget.openBookCallback(tab);
+          },
         );
         return entry == null
             ? const <AppContextMenuEntry>[]

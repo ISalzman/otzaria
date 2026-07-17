@@ -130,6 +130,8 @@ void main() {
                 mockSettings['enablePerBookSettings'] as bool,
             pdfBookViewByDefault:
                 mockSettings['pdfBookViewByDefault'] as bool? ?? false,
+            talmudBavliOpenFormat:
+                mockSettings['talmudBavliOpenFormat'] as String? ?? 'text',
             isOfflineMode: mockSettings['isOfflineMode'] as bool? ?? false,
             autoSyncCatalogs:
                 mockSettings['autoSyncCatalogs'] as bool? ?? false,
@@ -205,6 +207,20 @@ void main() {
         ],
         verify: (_) {
           verify(mockRepository.updateFontSize(newFontSize)).called(1);
+        },
+      );
+    });
+
+    group('UpdateTalmudBavliOpenFormat', () {
+      blocTest<SettingsBloc, SettingsState>(
+        'emits updated state when UpdateTalmudBavliOpenFormat is added',
+        build: () => settingsBloc,
+        act: (bloc) => bloc.add(const UpdateTalmudBavliOpenFormat('pdf')),
+        expect: () => [
+          settingsBloc.state.copyWith(talmudBavliOpenFormat: 'pdf'),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateTalmudBavliOpenFormat('pdf')).called(1);
         },
       );
     });

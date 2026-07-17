@@ -17,6 +17,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -1210,21 +1211,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             link: link,
             removeNikud: state.removeNikud,
             removePunctuation: state.removePunctuation,
-            onTap: () => widget.openBookCallback(
-              TextBookTab(
-                book: TextBook(
-                  title: utils.getTitleFromPath(link.path2),
-                  isUserBook: link.targetIsUserBook,
-                  categoryId: link.targetCategoryId,
-                  fileType: link.targetFileType,
-                ),
-                index: link.index2 - 1,
-                openLeftPane:
-                    (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-                        (Settings.getValue<bool>('key-default-sidebar-open') ??
-                            false),
-              ),
-            ),
+            onTap: () async {
+              final tab = await buildLinkTargetTab(link);
+              if (!mounted) return;
+              widget.openBookCallback(tab);
+            },
           )));
       return items;
     }
@@ -1326,20 +1317,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         sourceLink: sourceLink,
         removeNikud: state.removeNikud,
         removePunctuation: state.removePunctuation,
-        onNavigate: (link) => widget.openBookCallback(
-          TextBookTab(
-            book: TextBook(
-              title: utils.getTitleFromPath(link.path2),
-              isUserBook: link.targetIsUserBook,
-              categoryId: link.targetCategoryId,
-              fileType: link.targetFileType,
-            ),
-            index: link.index2 - 1,
-            openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ??
-                    false) ||
-                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-          ),
-        ),
+        onNavigate: (link) async {
+          final tab = await buildLinkTargetTab(link);
+          if (!mounted) return;
+          widget.openBookCallback(tab);
+        },
       );
       if (siblingEntry != null) entries.add(siblingEntry);
     }

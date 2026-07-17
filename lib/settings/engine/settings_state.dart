@@ -51,6 +51,7 @@ class SettingsState extends Equatable {
   final Map<String, String> shortcuts;
   final bool enablePerBookSettings;
   final bool pdfBookViewByDefault;
+  final String talmudBavliOpenFormat;
   final bool isOfflineMode;
   final bool enableHtmlLinks;
   final bool personalNotesCollapsedByDefault;
@@ -109,6 +110,7 @@ class SettingsState extends Equatable {
     required this.shortcuts,
     required this.enablePerBookSettings,
     required this.pdfBookViewByDefault,
+    required this.talmudBavliOpenFormat,
     required this.isOfflineMode,
     required this.enableHtmlLinks,
     required this.personalNotesCollapsedByDefault,
@@ -159,6 +161,7 @@ class SettingsState extends Equatable {
       shortcuts: {},
       enablePerBookSettings: false,
       pdfBookViewByDefault: false,
+      talmudBavliOpenFormat: 'text',
       isOfflineMode: false,
       enableHtmlLinks: true,
       personalNotesCollapsedByDefault: true,
@@ -206,6 +209,7 @@ class SettingsState extends Equatable {
     Map<String, String>? shortcuts,
     bool? enablePerBookSettings,
     bool? pdfBookViewByDefault,
+    String? talmudBavliOpenFormat,
     bool? isOfflineMode,
     bool? enableHtmlLinks,
     bool? personalNotesCollapsedByDefault,
@@ -261,6 +265,8 @@ class SettingsState extends Equatable {
       enablePerBookSettings:
           enablePerBookSettings ?? this.enablePerBookSettings,
       pdfBookViewByDefault: pdfBookViewByDefault ?? this.pdfBookViewByDefault,
+      talmudBavliOpenFormat:
+          talmudBavliOpenFormat ?? this.talmudBavliOpenFormat,
       isOfflineMode: isOfflineMode ?? this.isOfflineMode,
       enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
       personalNotesCollapsedByDefault: personalNotesCollapsedByDefault ??
@@ -324,6 +330,7 @@ class SettingsState extends Equatable {
         shortcuts,
         enablePerBookSettings,
         pdfBookViewByDefault,
+        talmudBavliOpenFormat,
         isOfflineMode,
         enableHtmlLinks,
         personalNotesCollapsedByDefault,

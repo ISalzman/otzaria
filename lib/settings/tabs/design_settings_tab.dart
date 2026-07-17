@@ -79,6 +79,14 @@ class DesignSettingsTab extends StatelessWidget {
       keywords: ['pdf', 'תצוגה', 'תצוגת ספר', 'רגילה', 'מופעל', 'לא מופעל'],
     ),
     SettingsSearchEntry(
+      id: 'design.pdf.talmud_bavli_format',
+      title: 'פורמט פתיחת תלמוד בבלי',
+      subtitle: 'פתיחת מסכתות הבבלי בטקסט או ב-PDF (צורת הדף)',
+      tab: SettingsTab.design,
+      cardId: 'design.pdf',
+      keywords: ['תלמוד', 'בבלי', 'גמרא', 'צורת הדף', 'pdf', 'טקסט', 'מסכת'],
+    ),
+    SettingsSearchEntry(
       id: 'design.layout.sidebar_mode',
       title: 'חלונית ניווט בין כותרות',
       subtitle: 'הצגה / אוטומטי / הסתרה של חלונית הניווט',
@@ -263,6 +271,30 @@ class DesignSettingsTab extends StatelessWidget {
                         context
                             .read<SettingsBloc>()
                             .add(UpdatePdfBookViewByDefault(value));
+                      },
+                    ),
+                    SettingsActionTile.segmentedTile<String>(
+                      icon: FluentIcons.book_number_24_regular,
+                      title: 'פורמט פתיחת תלמוד בבלי',
+                      options: const [
+                        SegmentOption(
+                          value: 'text',
+                          label: 'טקסט',
+                          subtitle: 'מסכתות הבבלי ייפתחו במהדורת הטקסט '
+                              '(מאיתור מקורות ומקישורים)',
+                        ),
+                        SegmentOption(
+                          value: 'pdf',
+                          label: 'PDF',
+                          subtitle: 'מסכתות הבבלי ייפתחו במהדורת ה-PDF '
+                              '(צורת הדף) בדף המתאים',
+                        ),
+                      ],
+                      currentValue: state.talmudBavliOpenFormat,
+                      onChanged: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateTalmudBavliOpenFormat(value));
                       },
                     ),
                   ],
