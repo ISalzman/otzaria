@@ -31,6 +31,9 @@ class SettingsState extends Equatable {
   final bool defaultRemoveNikud;
   final bool removeNikudFromTanach;
 
+  /// ברירת מחדל להסרת סימני פיסוק בפתיחת ספר (אינה חלה על ספרי תנ"ך).
+  final bool defaultRemovePunctuation;
+
   /// ברירת מחדל להצגת הטקסט ברצף (מצב "קריאה רציפה"). חלה בפתיחת ספר על
   /// ספרים שתומכים בכך בלבד (תנ"ך ותלמוד); בשאר הספרים אין לה השפעה.
   final bool defaultContinuousReadingMode;
@@ -90,6 +93,7 @@ class SettingsState extends Equatable {
     required this.autoUpdateIndex,
     required this.defaultRemoveNikud,
     required this.removeNikudFromTanach,
+    required this.defaultRemovePunctuation,
     this.defaultContinuousReadingMode = false,
     required this.defaultSidebarOpen,
     required this.defaultCommentaryOpen,
@@ -139,6 +143,7 @@ class SettingsState extends Equatable {
       autoUpdateIndex: true,
       defaultRemoveNikud: false,
       removeNikudFromTanach: false,
+      defaultRemovePunctuation: false,
       defaultContinuousReadingMode: false,
       defaultSidebarOpen: false,
       defaultCommentaryOpen: false,
@@ -185,6 +190,7 @@ class SettingsState extends Equatable {
     bool? autoUpdateIndex,
     bool? defaultRemoveNikud,
     bool? removeNikudFromTanach,
+    bool? defaultRemovePunctuation,
     bool? defaultContinuousReadingMode,
     bool? defaultSidebarOpen,
     bool? defaultCommentaryOpen,
@@ -235,6 +241,8 @@ class SettingsState extends Equatable {
       defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
       removeNikudFromTanach:
           removeNikudFromTanach ?? this.removeNikudFromTanach,
+      defaultRemovePunctuation:
+          defaultRemovePunctuation ?? this.defaultRemovePunctuation,
       defaultContinuousReadingMode:
           defaultContinuousReadingMode ?? this.defaultContinuousReadingMode,
       defaultSidebarOpen: defaultSidebarOpen ?? this.defaultSidebarOpen,
@@ -300,6 +308,7 @@ class SettingsState extends Equatable {
         autoUpdateIndex,
         defaultRemoveNikud,
         removeNikudFromTanach,
+        defaultRemovePunctuation,
         defaultContinuousReadingMode,
         defaultSidebarOpen,
         defaultCommentaryOpen,

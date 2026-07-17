@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
@@ -13,7 +14,6 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 
@@ -163,23 +163,22 @@ class ContextMenuUtils {
   }) async {
     try {
       final settingsState = context.read<SettingsBloc>().state;
+      final textBookState = context.read<TextBookBloc>().state;
 
       final content = await link.content;
       if (content.trim().isEmpty) {
-        UiSnack.show('אין תוכן להעתקה');
+        UiSnack.show(CommonMessages.noContentToCopy);
         return;
       }
 
-      final removeNikud = await resolveRemoveNikudForBook(
-        title: utils.getTitleFromPath(link.path2),
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        categoryId: link.targetCategoryId,
-        fileType: link.targetFileType,
-      );
-
-      final processedContent =
-          removeNikud ? utils.removeVolwels(content) : content;
+      // ההעתקה משקפת את התצוגה: מצב הניקוד/פיסוק של הטאב חל על כל המפרשים.
+      final loaded = textBookState is TextBookLoaded ? textBookState : null;
+      var processedContent = (loaded?.removeNikud ?? false)
+          ? utils.removeVolwels(content)
+          : content;
+      if (loaded?.removePunctuation ?? false) {
+        processedContent = utils.removePunctuation(processedContent);
+      }
       final plainText = utils.stripHtmlIfNeeded(processedContent);
 
       String finalText = plainText;
@@ -228,11 +227,11 @@ class ContextMenuUtils {
         item.add(Formats.plainText(copyContent.plainText));
         item.add(Formats.htmlText(htmlText));
         await clipboard.write([item]);
-        UiSnack.show('הפסקה הועתקה בהצלחה');
+        UiSnack.show(CommonMessages.paragraphCopied);
       }
     } catch (e) {
       debugPrint('Error copying commentary paragraph: $e');
-      UiSnack.showError('שגיאה בהעתקת הפסקה');
+      UiSnack.showError(CommonMessages.paragraphCopyError);
     }
   }
 
@@ -246,7 +245,7 @@ class ContextMenuUtils {
     final plainText = savedSelectedText;
 
     if (plainText == null || plainText.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט להעתקה');
+      UiSnack.show(CommonMessages.noTextSelected);
       return;
     }
 
@@ -287,11 +286,11 @@ class ContextMenuUtils {
         item.add(Formats.htmlText(htmlText));
 
         await clipboard.write([item]);
-        UiSnack.show('הטקסט הועתק');
+        UiSnack.show(CommonMessages.textCopiedShort);
       }
     } catch (e) {
       debugPrint('Error copying text: $e');
-      UiSnack.showError('שגיאה בהעתקת הטקסט');
+      UiSnack.showError(CommonMessages.textCopyError);
     }
   }
 }

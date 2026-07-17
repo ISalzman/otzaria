@@ -53,6 +53,7 @@ void main() {
         'autoUpdateIndex': false,
         'defaultRemoveNikud': true,
         'removeNikudFromTanach': true,
+        'defaultRemovePunctuation': true,
         'defaultContinuousReadingMode': true,
         'defaultSidebarOpen': true,
         'defaultCommentaryOpen': true,
@@ -108,6 +109,8 @@ void main() {
             defaultRemoveNikud: mockSettings['defaultRemoveNikud'] as bool,
             removeNikudFromTanach:
                 mockSettings['removeNikudFromTanach'] as bool,
+            defaultRemovePunctuation:
+                mockSettings['defaultRemovePunctuation'] as bool,
             defaultContinuousReadingMode:
                 mockSettings['defaultContinuousReadingMode'] as bool,
             defaultSidebarOpen: mockSettings['defaultSidebarOpen'] as bool,

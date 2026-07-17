@@ -33,6 +33,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
+    on<UpdateDefaultRemovePunctuation>(_onUpdateDefaultRemovePunctuation);
     on<UpdateDefaultContinuousReadingMode>(
         _onUpdateDefaultContinuousReadingMode);
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
@@ -100,6 +101,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       autoUpdateIndex: settings['autoUpdateIndex'],
       defaultRemoveNikud: settings['defaultRemoveNikud'],
       removeNikudFromTanach: settings['removeNikudFromTanach'],
+      defaultRemovePunctuation: settings['defaultRemovePunctuation'],
       defaultContinuousReadingMode:
           settings['defaultContinuousReadingMode'] ?? false,
       defaultSidebarOpen: settings['defaultSidebarOpen'],
@@ -439,6 +441,19 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach));
   }
 
+  Future<void> _onUpdateDefaultRemovePunctuation(
+    UpdateDefaultRemovePunctuation event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateDefaultRemovePunctuation(event.defaultRemovePunctuation);
+    emit(state.copyWith(
+        defaultRemovePunctuation: event.defaultRemovePunctuation));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
+  }
+
   Future<void> _onUpdateDefaultSidebarOpen(
     UpdateDefaultSidebarOpen event,
     Emitter<SettingsState> emit,
@@ -572,6 +587,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
         defaultRemoveNikud: state.defaultRemoveNikud,
+        defaultRemovePunctuation: state.defaultRemovePunctuation,
         defaultShowSplitView:
             Settings.getValue<bool>('key-splited-view') ?? true,
         defaultContinuousReadingMode: state.defaultContinuousReadingMode,

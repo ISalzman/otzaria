@@ -27,6 +27,8 @@ class SettingsRepository {
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
   static const String keyDefaultNikud = 'key-default-nikud';
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
+  static const String keyDefaultRemovePunctuation =
+      'key-default-remove-punctuation';
   static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
   static const String keyDefaultCommentaryOpen = 'key-default-commentary-open';
@@ -200,6 +202,10 @@ class SettingsRepository {
       ),
       'removeNikudFromTanach': _settings.getValue<bool>(
         keyRemoveNikudFromTanach,
+        defaultValue: false,
+      ),
+      'defaultRemovePunctuation': _settings.getValue<bool>(
+        keyDefaultRemovePunctuation,
         defaultValue: false,
       ),
       'defaultContinuousReadingMode': _settings.getValue<bool>(
@@ -455,6 +461,10 @@ class SettingsRepository {
 
   Future<void> updateRemoveNikudFromTanach(bool value) async {
     await _settings.setValue(keyRemoveNikudFromTanach, value);
+  }
+
+  Future<void> updateDefaultRemovePunctuation(bool value) async {
+    await _settings.setValue(keyDefaultRemovePunctuation, value);
   }
 
   Future<void> updateDefaultContinuousReadingMode(bool value) async {

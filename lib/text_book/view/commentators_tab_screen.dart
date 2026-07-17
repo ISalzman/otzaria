@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
+import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -14,6 +15,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -293,6 +295,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         selectedVerseIdx: _selectedVerseIdx,
         navExpandedChapter: _navExpandedChapter,
       );
+
+  void _toggleAndSaveNikud(BuildContext context, TextBookLoaded state) {
+    final newValue = !state.removeNikud;
+    context.read<TextBookBloc>().add(ToggleNikud(newValue));
+    savePerBookDisplaySettings(context, state, removeNikud: newValue);
+  }
+
+  void _toggleAndSavePunctuation(BuildContext context, TextBookLoaded state) {
+    final newValue = !state.removePunctuation;
+    context.read<TextBookBloc>().add(TogglePunctuation(newValue));
+    savePerBookDisplaySettings(context, state, removePunctuation: newValue);
+  }
 
   /// מחיל מצב חדש שחושב ע"י אחד הרדוסרים הטהורים (ראה [reduceChevronTap]
   /// וחבריו). מבטיח שכל הנתיבים שמשנים את מצב הניווט עוברים דרך אותו צינור.
@@ -956,7 +970,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           commentatorsToShow: commentatorsToShow,
           targetKind: BookmarkTargetKind.commentators,
         );
-    UiSnack.showQuick(added ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+    UiSnack.showQuick(added
+        ? NotesMessages.bookmarkAdded
+        : NotesMessages.bookmarkAlreadyExists);
   }
 
   void _showBookmarksForCurrentBook(BuildContext context, Book book) {
@@ -1019,17 +1035,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       ? FluentIcons.text_font_24_regular
                       : FluentIcons.text_font_info_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(ToggleNikud(!state.removeNikud)),
+                  onPressed: () => _toggleAndSaveNikud(context, state),
                 ),
                 icon: state.removeNikud
                     ? FluentIcons.text_font_24_regular
                     : FluentIcons.text_font_info_24_regular,
                 tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-                onPressed: () => context
-                    .read<TextBookBloc>()
-                    .add(ToggleNikud(!state.removeNikud)),
+                onPressed: () => _toggleAndSaveNikud(context, state),
               ),
               // פיסוק (רק אם לא תנ"ך)
               if (!state.isTanach)
@@ -1041,17 +1053,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         ? FluentIcons.text_quote_24_regular
                         : FluentIcons.text_clear_formatting_24_regular,
                     compact: context.read<SettingsBloc>().state.compactMenuMode,
-                    onPressed: () => context
-                        .read<TextBookBloc>()
-                        .add(TogglePunctuation(!state.removePunctuation)),
+                    onPressed: () => _toggleAndSavePunctuation(context, state),
                   ),
                   icon: state.removePunctuation
                       ? FluentIcons.text_quote_24_regular
                       : FluentIcons.text_clear_formatting_24_regular,
                   tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(TogglePunctuation(!state.removePunctuation)),
+                  onPressed: () => _toggleAndSavePunctuation(context, state),
                 ),
               // הדפסת המפרשים המוצגים
               ActionButtonData(

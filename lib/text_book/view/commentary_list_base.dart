@@ -25,7 +25,6 @@ import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
@@ -41,6 +40,7 @@ import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart'
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
@@ -530,14 +530,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       commentatorsToShow: selectedCommentators,
     );
     if (links.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(TextBookMessages.noCommentatorsToPrint);
       return;
     }
 
     final groups = await _getCachedGroups(links);
     final blocks = await buildCommentaryPrintBlocks(groups);
     if (blocks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(TextBookMessages.noCommentatorsToPrint);
       return;
     }
     if (!mounted) return;
@@ -1030,9 +1030,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     final blocState = context.read<TextBookBloc>().state;
     final removePunctuation =
         blocState is TextBookLoaded && blocState.removePunctuation;
-    final stateRemoveNikud =
-        blocState is TextBookLoaded && blocState.removeNikud;
-    final settings = context.read<SettingsBloc>().state;
+    // מצב הניקוד של הטאב חל על כל המפרשים, ללא רזולוציה פר-יעד.
+    final removeNikud = blocState is TextBookLoaded && blocState.removeNikud;
     final wantSnippets = widget.externalSearchSnippetsNotifier != null;
 
     for (final link in links) {
@@ -1050,12 +1049,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       );
       _updateSearchResultsCount(link, count);
       if (wantSnippets && count > 0) {
-        final removeNikud = await resolveRemoveNikudForBook(
-          title: utils.getTitleFromPath(link.path2),
-          defaultRemoveNikud: settings.defaultRemoveNikud || stateRemoveNikud,
-          removeNikudFromTanach: settings.removeNikudFromTanach,
-        );
-        if (!mounted || gen != _searchComputeGen) return;
         _updateSearchSnippets(link, [
           buildCommentarySearchSnippet(
             content: data,
