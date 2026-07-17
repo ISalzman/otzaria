@@ -14,6 +14,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -314,36 +315,61 @@ class _FindRefDialogState extends State<FindRefDialog> {
     List<String>? initialCommentators,
   }) async {
     Book? book;
+    var openAsPdf = ref.isPdf;
+    var segment = ref.segment.toInt();
 
     if (ref.isPdf && ref.filePath.isNotEmpty) {
       // Use filePath directly — library search may return a same-titled text book
       book = PdfBook(title: ref.title, path: ref.filePath);
     } else {
-      try {
-        final library = await DataRepository.instance.library;
-        // ספרים מסוימים (תלמוד בבלי וכו') מופיעים ב-library כ-PdfBook גם כשה-DB
-        // מכיר אותם כ-txt. אם המשתמש ביקש מפרש מסוים — חייבים TextBookTab,
-        // כי PdfBookTab אינו מקבל commentators כלל.
-        final needsTextBook =
-            initialCommentators != null && initialCommentators.isNotEmpty;
-        // ספרים אישיים: ה-`bookId` שלהם שייך ל-user_books.db ואין לו תאומים
-        // ב-library object, לכן ניפול ל-title; ספר רשמי עם `bookId > 0`
-        // נפתח דרך ה-id כדי שלא יחליף שני ספרים בעלי אותה כותרת.
-        final officialBookId =
-            (ref.bookId > 0 && !ref.isUserBook) ? ref.bookId : null;
-        book = _findBookInLibraryByIdThenTitle(library, ref.title,
-            bookId: officialBookId, preferTextBook: needsTextBook);
-      } catch (e) {
-        debugPrint('Error searching library: $e');
+      // אם המשתמש ביקש מפרש מסוים — חייבים TextBookTab, כי PdfBookTab אינו
+      // מקבל commentators כלל.
+      final needsTextBook =
+          initialCommentators != null && initialCommentators.isNotEmpty;
+
+      // הגדרת "פורמט פתיחת תלמוד בבלי": תוצאת טקסט של מסכת בבלי נפתחת
+      // במהדורת ה-PDF בדף הממופה. bookPath מוסר לאימות שהתוצאה עצמה בבלי.
+      if (!needsTextBook && !ref.isUserBook) {
+        final pdfTarget = await resolveTalmudBavliPdfTarget(
+            TextBook(
+              title: ref.title,
+              categoryPath: ref.bookPath.isEmpty ? null : ref.bookPath,
+            ),
+            segment);
+        if (pdfTarget != null) {
+          book = pdfTarget.book;
+          segment = pdfTarget.page;
+          openAsPdf = true;
+        }
       }
-      book ??= TextBook(title: ref.title);
+
+      if (book == null) {
+        try {
+          final library = await DataRepository.instance.library;
+          // ספרים אישיים: ה-`bookId` שלהם שייך ל-user_books.db ואין לו תאומים
+          // ב-library object, לכן ניפול ל-title; ספר רשמי עם `bookId > 0`
+          // נפתח דרך ה-id כדי שלא יחליף שני ספרים בעלי אותה כותרת.
+          final officialBookId =
+              (ref.bookId > 0 && !ref.isUserBook) ? ref.bookId : null;
+          book = _findBookInLibraryByIdThenTitle(library, ref.title,
+              bookId: officialBookId, preferTextBook: needsTextBook);
+          // ספרי בבלי מופיעים בעץ הספרייה כ-PdfBook גם כשה-DB מכיר אותם
+          // כ-txt; ה-segment הוא אינדקס טקסט, לכן נפתחת מהדורת הטקסט.
+          if (book is PdfBook && isTalmudBavliBook(book)) {
+            book = null;
+          }
+        } catch (e) {
+          debugPrint('Error searching library: $e');
+        }
+        book ??= TextBook(title: ref.title);
+      }
     }
 
     if (!mounted) return;
     Navigator.of(context).pop();
-    openBook(context, book, ref.segment.toInt(), '',
-        ignoreHistory: ref.isPdf,
-        requiresStableLayout: ref.isPdf,
+    openBook(context, book, segment, '',
+        ignoreHistory: openAsPdf,
+        requiresStableLayout: openAsPdf,
         initialCommentators: initialCommentators);
   }
 

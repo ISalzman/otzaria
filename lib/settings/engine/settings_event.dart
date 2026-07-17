@@ -344,6 +344,15 @@ class UpdatePdfBookViewByDefault extends SettingsEvent {
   List<Object?> get props => [pdfBookViewByDefault];
 }
 
+class UpdateTalmudBavliOpenFormat extends SettingsEvent {
+  final String talmudBavliOpenFormat;
+
+  const UpdateTalmudBavliOpenFormat(this.talmudBavliOpenFormat);
+
+  @override
+  List<Object?> get props => [talmudBavliOpenFormat];
+}
+
 class UpdateOfflineMode extends SettingsEvent {
   final bool isOfflineMode;
 

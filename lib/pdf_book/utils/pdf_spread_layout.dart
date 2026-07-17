@@ -55,6 +55,21 @@ int pdfSpreadStartPage(int pageNumber) {
   return (startPage: startPage, endPageExclusive: endExclusive);
 }
 
+/// עמוד היעד של דפדוף קדימה בתצוגת ספר: העמוד הראשון (הימני) של הזוג הבא.
+/// אחרי הכריכה (עמוד 1) הזוג הבא מתחיל בעמוד 2. מחזיר null כשאין זוג הבא.
+int? pdfNextSpreadFocusPage(int currentPage, int totalPages) {
+  final spreadStart = pdfSpreadStartPage(currentPage);
+  final next = spreadStart == 1 ? 2 : spreadStart + 2;
+  return next > totalPages ? null : next;
+}
+
+/// עמוד היעד של דפדוף אחורה בתצוגת ספר: העמוד השני (השמאלי) של הזוג הקודם —
+/// העמוד האחרון שנקרא לפני הזוג הנוכחי. מחזיר null כשאין זוג קודם.
+int? pdfPreviousSpreadFocusPage(int currentPage) {
+  final spreadStart = pdfSpreadStartPage(currentPage);
+  return spreadStart <= 1 ? null : spreadStart - 1;
+}
+
 /// המפריד בין שתי כותרות הספירייד בכותרת תצוגה משולבת.
 const String kSpreadTitleSeparator = ' — ';
 

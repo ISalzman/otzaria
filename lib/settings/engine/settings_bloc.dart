@@ -52,6 +52,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShortcut>(_onUpdateShortcut);
     on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
     on<UpdatePdfBookViewByDefault>(_onUpdatePdfBookViewByDefault);
+    on<UpdateTalmudBavliOpenFormat>(_onUpdateTalmudBavliOpenFormat);
     on<UpdateOfflineMode>(_onUpdateOfflineMode);
     on<UpdateAutoSyncCatalogs>(_onUpdateAutoSyncCatalogs);
     on<UpdateSoftwareAndBookUpdatesEnabled>(
@@ -120,6 +121,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       ),
       enablePerBookSettings: settings['enablePerBookSettings'],
       pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
+      talmudBavliOpenFormat: settings['talmudBavliOpenFormat'] ?? 'text',
       isOfflineMode: settings['isOfflineMode'] ?? false,
       autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
       softwareAndBookUpdatesEnabled:
@@ -153,6 +155,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updatePdfBookViewByDefault(event.pdfBookViewByDefault);
     emit(state.copyWith(pdfBookViewByDefault: event.pdfBookViewByDefault));
+  }
+
+  Future<void> _onUpdateTalmudBavliOpenFormat(
+    UpdateTalmudBavliOpenFormat event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateTalmudBavliOpenFormat(event.talmudBavliOpenFormat);
+    emit(state.copyWith(talmudBavliOpenFormat: event.talmudBavliOpenFormat));
   }
 
   Future<void> _onUpdateOfflineMode(

@@ -47,6 +47,7 @@ class SettingsRepository {
   static const String keyLibraryShowPreview = 'key-library-show-preview';
   static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
   static const String keyPdfBookViewByDefault = 'key-pdf-book-view-by-default';
+  static const String keyTalmudBavliOpenFormat = 'key-talmud-bavli-open-format';
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
@@ -274,6 +275,10 @@ class SettingsRepository {
       'pdfBookViewByDefault': _settings.getValue<bool>(
         keyPdfBookViewByDefault,
         defaultValue: false,
+      ),
+      'talmudBavliOpenFormat': _settings.getValue<String>(
+        keyTalmudBavliOpenFormat,
+        defaultValue: 'text',
       ),
       'isOfflineMode': _settings.getValue<bool>(
         keyOfflineMode,
@@ -537,6 +542,10 @@ class SettingsRepository {
 
   Future<void> updatePdfBookViewByDefault(bool value) async {
     await _settings.setValue(keyPdfBookViewByDefault, value);
+  }
+
+  Future<void> updateTalmudBavliOpenFormat(String value) async {
+    await _settings.setValue(keyTalmudBavliOpenFormat, value);
   }
 
   Future<void> updateOfflineMode(bool value) async {
@@ -848,6 +857,7 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryShowPreview, true);
     await _settings.setValue(keyEnablePerBookSettings, false);
     await _settings.setValue(keyPdfBookViewByDefault, false);
+    await _settings.setValue(keyTalmudBavliOpenFormat, 'text');
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);
