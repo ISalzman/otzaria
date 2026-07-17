@@ -629,6 +629,25 @@ class _BookGridActionColumn extends StatelessWidget {
     final versionsEligible =
         book is TextBook && !book.isUserBook && book.categoryId != null;
 
+    final infoButton = Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: IconButton(
+        onPressed: () => showBookDetailsDialog(context, book),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+        icon: Icon(
+          FluentIcons.info_24_regular,
+          size: 15,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -642,26 +661,10 @@ class _BookGridActionColumn extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 320),
             textStyle: _libraryTooltipTextStyle(context),
             decoration: _libraryTooltipDecoration(context),
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: IconButton(
-                onPressed: () => showBookDetailsDialog(context, book),
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints.tightFor(width: 28, height: 28),
-                icon: Icon(
-                  FluentIcons.info_24_regular,
-                  size: 15,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
+            child: infoButton,
+          )
+        else
+          infoButton,
         FutureBuilder<List<bool>>(
           future: Future.wait([
             _canDeleteBookFromLibrary(book),
