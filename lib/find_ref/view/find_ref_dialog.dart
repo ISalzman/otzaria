@@ -64,19 +64,23 @@ Book? _resolveCommentatorBook(
   required int? bookId,
 }) {
   if (bookId != null && bookId > 0) {
-    final byId = _findBookInLibraryById(library, bookId);
+    final byId = findOfficialTextBookById(library, bookId);
     if (byId != null) return byId;
   }
   // fallback ל-title (תאימות לאחור עם DB שלא מחזיר targetBookId).
   return _findBookInLibraryByTitle(library, title, preferTextBook: true);
 }
 
-Book? _findBookInLibraryById(Category category, int bookId) {
+/// מאתר ספר טקסט רשמי לפי [bookId] מה-DB הראשי.
+/// מזהי seforim.db אינם ייחודיים מול user_books.db ומול ייצוגי PDF בעץ —
+/// ולכן ספרים אישיים וספרים שאינם TextBook מדולגים ולא מסתירים את היעד.
+@visibleForTesting
+TextBook? findOfficialTextBookById(Category category, int bookId) {
   for (final b in category.books) {
-    if (b.id == bookId) return b;
+    if (b is TextBook && !b.isUserBook && b.id == bookId) return b;
   }
   for (final subCat in category.subCategories) {
-    final found = _findBookInLibraryById(subCat, bookId);
+    final found = findOfficialTextBookById(subCat, bookId);
     if (found != null) return found;
   }
   return null;
@@ -342,8 +346,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
           !ref.isUserBook &&
           library != null &&
           ref.bookId > 0) {
-        final sourceBook = _findBookInLibraryById(library, ref.bookId);
-        if (sourceBook is TextBook) {
+        final sourceBook = findOfficialTextBookById(library, ref.bookId);
+        if (sourceBook != null) {
           final pdfTarget =
               await resolveTalmudBavliPdfTarget(sourceBook, segment);
           if (pdfTarget != null) {
@@ -452,7 +456,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
     bool preferTextBook = false,
   }) {
     if (bookId != null) {
-      final byId = _findBookInLibraryById(category, bookId);
+      final byId = findOfficialTextBookById(category, bookId);
       if (byId != null) return byId;
     }
     return _findBookInLibraryByTitle(category, title,
