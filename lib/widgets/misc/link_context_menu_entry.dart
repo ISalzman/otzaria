@@ -15,6 +15,8 @@ import 'package:otzaria/widgets/smart_text/smart_text.dart';
 AppContextMenuEntry buildLinkContextMenuEntry({
   required Link link,
   required VoidCallback onTap,
+  bool? removeNikud,
+  bool? removePunctuation,
 }) {
   return AppContextMenuEntry(
     label: link.fallbackDisplayReference,
@@ -27,7 +29,11 @@ AppContextMenuEntry buildLinkContextMenuEntry({
       ),
     ),
     onTap: onTap,
-    hoverPreviewBuilder: (context) => LinkHoverPreviewContent(link: link),
+    hoverPreviewBuilder: (context) => LinkHoverPreviewContent(
+      link: link,
+      removeNikud: removeNikud,
+      removePunctuation: removePunctuation,
+    ),
   );
 }
 
@@ -46,12 +52,19 @@ class LinkHoverPreviewContent extends StatelessWidget {
   /// כשמסופק — הכותרת הופכת ללחיצה (מעבר ליעד) ומופיע לצידה אייקון פתיחה.
   final VoidCallback? onOpen;
 
+  /// מצב הניקוד/פיסוק של הטאב שממנו נפתחה החלונית. כשמסופק — גובר על
+  /// ההגדרות הגלובליות, כדי שהתצוגה המקדימה תשקף את מה שהמשתמש רואה בטאב.
+  final bool? removeNikud;
+  final bool? removePunctuation;
+
   const LinkHoverPreviewContent({
     super.key,
     required this.link,
     this.maxContentLines,
     this.compact = false,
     this.onOpen,
+    this.removeNikud,
+    this.removePunctuation,
   });
 
   @override
@@ -141,17 +154,22 @@ class LinkHoverPreviewContent extends StatelessWidget {
                   );
                 }
 
+                final removePunctuation = this.removePunctuation ?? false;
                 return FutureBuilder<bool>(
-                  future: resolveRemoveNikudForBook(
-                    title: utils.getTitleFromPath(link.path2),
-                    defaultRemoveNikud: settingsState.defaultRemoveNikud,
-                    removeNikudFromTanach: settingsState.removeNikudFromTanach,
-                  ),
+                  future: removeNikud != null
+                      ? Future.value(removeNikud)
+                      : resolveRemoveNikudForBook(
+                          title: utils.getTitleFromPath(link.path2),
+                          defaultRemoveNikud: settingsState.defaultRemoveNikud,
+                          removeNikudFromTanach:
+                              settingsState.removeNikudFromTanach,
+                        ),
                   builder: (context, nikudSnapshot) {
                     final content = SmartTextWidget(
                       text: cleanContent,
                       settings: RenderSettings(
                         removeNikud: nikudSnapshot.data ?? false,
+                        removePunctuation: removePunctuation,
                         removeTeamim: !settingsState.showTeamim,
                         replaceHolyNames: settingsState.replaceHolyNames,
                         fontSize: settingsState.commentatorsFontSize,
@@ -174,6 +192,9 @@ class LinkHoverPreviewContent extends StatelessWidget {
                         var measureText = cleanContent;
                         if (nikudSnapshot.data ?? false) {
                           measureText = utils.removeVolwels(measureText);
+                        }
+                        if (removePunctuation) {
+                          measureText = utils.removePunctuation(measureText);
                         }
                         final painter = TextPainter(
                           text: TextSpan(

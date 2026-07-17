@@ -70,4 +70,32 @@ void main() {
       );
     });
   });
+
+  group('shouldReloadForPunctuationSettingsChange', () {
+    test('returns true when defaultRemovePunctuation changes', () {
+      final previous = SettingsState.initial();
+      final current = previous.copyWith(defaultRemovePunctuation: true);
+
+      expect(
+        shouldReloadForPunctuationSettingsChange(
+          previous: previous,
+          current: current,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns false when punctuation setting is unchanged', () {
+      final state =
+          SettingsState.initial().copyWith(defaultRemovePunctuation: true);
+
+      expect(
+        shouldReloadForPunctuationSettingsChange(
+          previous: state,
+          current: state.copyWith(fontFamily: 'Rubik'),
+        ),
+        isFalse,
+      );
+    });
+  });
 }

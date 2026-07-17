@@ -54,6 +54,8 @@ class SiblingCommentariesController {
     required int lineIndex,
     required Link? sourceLink,
     required void Function(Link link) onNavigate,
+    bool? removeNikud,
+    bool? removePunctuation,
   }) {
     if (sourceLink == null) return null;
     // הכתובת המלאה (displayReference) מחושבת מה-TOC של המקור ולכן תואמת את
@@ -71,7 +73,13 @@ class SiblingCommentariesController {
         ),
       ),
       icon: FluentIcons.book_24_regular,
-      childrenBuilder: () => _buildChildren(lineIndex, sourceLink, onNavigate),
+      childrenBuilder: () => _buildChildren(
+        lineIndex,
+        sourceLink,
+        onNavigate,
+        removeNikud: removeNikud,
+        removePunctuation: removePunctuation,
+      ),
       childrenRefreshStream: _refresh.stream,
     );
   }
@@ -79,8 +87,10 @@ class SiblingCommentariesController {
   List<AppContextMenuEntry> _buildChildren(
     int lineIndex,
     Link sourceLink,
-    void Function(Link link) onNavigate,
-  ) {
+    void Function(Link link) onNavigate, {
+    bool? removeNikud,
+    bool? removePunctuation,
+  }) {
     if (!_cache.containsKey(lineIndex)) {
       _cache[lineIndex] = null; // מסמן "בטעינה" ומונע טעינה כפולה
       unawaited(_load(lineIndex, sourceLink));
@@ -108,6 +118,8 @@ class SiblingCommentariesController {
       lastEra = era;
       entries.add(buildLinkContextMenuEntry(
         link: link,
+        removeNikud: removeNikud,
+        removePunctuation: removePunctuation,
         onTap: () => onNavigate(link),
       ));
     }

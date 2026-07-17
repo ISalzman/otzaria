@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -26,6 +27,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -301,7 +303,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final state = context.read<TextBookBloc>().state as TextBookLoaded;
 
       if (!dataProvider.hasData) {
-        UiSnack.showError('נתוני שמור וזכור לא נטענו');
+        UiSnack.showError(TextBookMessages.shamorZachorDataNotLoaded);
         return;
       }
 
@@ -322,7 +324,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       if (bookId == null) {
-        UiSnack.showError('הספר לא נמצא במסד הנתונים');
+        UiSnack.showError(TextBookMessages.bookNotFoundInDatabase);
         return;
       }
 
@@ -330,7 +332,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final result = dataProvider.getBookById(bookId);
 
       if (result == null) {
-        UiSnack.showError('הספר לא נמצא בשמור וזכור');
+        UiSnack.showError(TextBookMessages.bookNotFoundInShamorZachor);
         return;
       }
 
@@ -442,7 +444,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       if (columnToMark == null) {
-        UiSnack.show('אין מקום פנוי ב$chapterName, למדת הרבה!');
+        UiSnack.show(TextBookMessages.noFreeSlotInChapter(chapterName));
         return;
       }
 
@@ -458,10 +460,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final columnName = _getColumnDisplayName(columnToMark);
       // השתמש בשם המקורי מהכותרת
       final displayName = chapterName;
-      UiSnack.show('$displayName סומן כ$columnName בהצלחה!');
+      UiSnack.show(TextBookMessages.chapterMarked(displayName, columnName));
     } catch (e) {
       debugPrint('Error in _markShamorZachorProgress: $e');
-      UiSnack.showError('שגיאה בסימון: ${e.toString()}');
+      UiSnack.showError(TextBookMessages.markingError(e));
     }
   }
 
@@ -547,7 +549,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final settingsState = context.read<SettingsBloc>().state;
 
       if (png == null || png.isEmpty) {
-        UiSnack.showError('לא ניתן לצלם את תצוגת "צורת הדף" לצורך הדפסה');
+        UiSnack.showError(TextBookMessages.cannotCapturePageShapeForPrint);
         return;
       }
 
@@ -649,7 +651,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
         );
         await file.writeAsBytes(bytes);
-        UiSnack.showSuccess('קובץ Word נשמר בהצלחה');
+        UiSnack.showSuccess(TextBookMessages.wordFileSaved);
         return;
       }
 
@@ -663,16 +665,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         ),
       );
       await file.writeAsString(text);
-      UiSnack.showSuccess('קובץ טקסט נשמר בהצלחה');
+      UiSnack.showSuccess(TextBookMessages.textFileSaved);
     } on FileSystemException catch (e) {
       if (isLockedTextBookExportFileException(e)) {
-        UiSnack.showError(
-            'לא ניתן לשמור את הקובץ כי הוא פתוח בתוכנה אחרת. יש לסגור אותו ולנסות שוב.');
+        UiSnack.showError(TextBookMessages.exportFileLocked);
         return;
       }
-      UiSnack.showError('ייצוא הספר נכשל: ${e.message}');
+      UiSnack.showError(TextBookMessages.exportFailed(e.message));
     } catch (e) {
-      UiSnack.showError('ייצוא הספר נכשל: $e');
+      UiSnack.showError(TextBookMessages.exportFailed(e));
     }
   }
 
@@ -778,7 +779,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         previous: previousSettingsState,
         current: state,
       );
-      if (state.fontFamily != previousFontFamily || isNikudSettingsChange) {
+      final isPunctuationSettingsChange =
+          shouldReloadForPunctuationSettingsChange(
+        previous: previousSettingsState,
+        current: state,
+      );
+      if (state.fontFamily != previousFontFamily ||
+          isNikudSettingsChange ||
+          isPunctuationSettingsChange) {
         previousFontFamily = state.fontFamily;
         previousSettingsState = state;
 
@@ -797,9 +805,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
                   // הערך החדש
                   preserveRemoveNikud: !isNikudSettingsChange,
-                  // לפיסוק אין הגדרה גלובלית — שינוי גופן/ניקוד לעולם
-                  // לא מאפס את בחירת המשתמש.
-                  preserveRemovePunctuation: true,
+                  preserveRemovePunctuation: !isPunctuationSettingsChange,
                   // שינוי הגדרות גלובליות (גופן/ניקוד) לעולם לא יכבה
                   // את מצב הרצף שהמשתמש בחר עבור הספר.
                   preserveContinuousReadingMode: true,
@@ -954,7 +960,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     ));
 
     if (mounted) {
-      UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
+      UiSnack.show(TextBookMessages.perBookSettingsReset);
     }
   }
 
@@ -1530,7 +1536,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () async {
           final newValue = !state.removeNikud;
           context.read<TextBookBloc>().add(ToggleNikud(newValue));
-          await _savePerBookSettingsDirectly(context, state,
+          await savePerBookDisplaySettings(context, state,
               removeNikud: newValue);
         },
       ),
@@ -1579,7 +1585,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () async {
           final newSize = min(50.0, state.fontSize + 3);
           context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-          await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+          await savePerBookDisplaySettings(context, state, fontSize: newSize);
         },
       ),
 
@@ -1591,7 +1597,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () async {
           final newSize = max(15.0, state.fontSize - 3);
           context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-          await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+          await savePerBookDisplaySettings(context, state, fontSize: newSize);
         },
       ),
     ];
@@ -1845,7 +1851,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
     if (!isPageSelected && isSplitSelected != state.showSplitView) {
       bloc.add(ToggleSplitView(isSplitSelected));
-      await _savePerBookSettingsDirectly(context, state,
+      await savePerBookDisplaySettings(context, state,
           showSplitView: isSplitSelected);
     }
 
@@ -1917,8 +1923,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () async {
         final newValue = !state.removeNikud;
         context.read<TextBookBloc>().add(ToggleNikud(newValue));
-        await _savePerBookSettingsDirectly(context, state,
-            removeNikud: newValue);
+        await savePerBookDisplaySettings(context, state, removeNikud: newValue);
       },
     );
   }
@@ -1927,7 +1932,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       BuildContext context, TextBookLoaded state) async {
     final newValue = !state.removePunctuation;
     context.read<TextBookBloc>().add(TogglePunctuation(newValue));
-    await _savePerBookSettingsDirectly(context, state,
+    await savePerBookDisplaySettings(context, state,
         removePunctuation: newValue);
   }
 
@@ -1947,7 +1952,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       BuildContext context, TextBookLoaded state) async {
     final newValue = !state.continuousReadingMode;
     context.read<TextBookBloc>().add(ToggleContinuousReadingMode(newValue));
-    await _savePerBookSettingsDirectly(context, state,
+    await savePerBookDisplaySettings(context, state,
         continuousReadingMode: newValue);
   }
 
@@ -2001,7 +2006,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () async {
         final newSize = min(50.0, state.fontSize + 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        await savePerBookDisplaySettings(context, state, fontSize: newSize);
       },
     );
   }
@@ -2016,7 +2021,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       onPressed: () async {
         final newSize = max(15.0, state.fontSize - 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        await _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        await savePerBookDisplaySettings(context, state, fontSize: newSize);
       },
     );
   }
@@ -2264,7 +2269,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// Add book to Shamor Zachor tracking
   Future<void> _addBookToShamorZachorTracking(Book book) async {
     if (!_isOfficialSeforimBook(book)) {
-      UiSnack.showError('רק ספרים מהספרייה הרשמית נתמכים במעקב בשמור וזכור');
+      UiSnack.showError(TextBookMessages.onlyOfficialBooksSupportedInTracking);
       return;
     }
     try {
@@ -2327,7 +2332,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       if (bookPath == null) {
-        UiSnack.showError('לא נמצא נתיב לספר');
+        UiSnack.showError(TextBookMessages.bookPathNotFound);
         return;
       }
 
@@ -2338,7 +2343,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       String cleanBookName = bookTitle;
 
       // 3. Show loading indicator
-      UiSnack.show('מוסיף ספר למעקב...');
+      UiSnack.show(TextBookMessages.addingBookToTracking);
 
       // 4. Add book via provider (only needs book name)
       await dataProvider.addCustomBook(
@@ -2348,21 +2353,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       );
 
       // 5. Success message
-      UiSnack.show('הספר "$cleanBookName" נוסף למעקב בהצלחה!');
+      UiSnack.show(TextBookMessages.bookAddedToTracking(cleanBookName));
 
       // 6. Update UI to reflect the change
       setState(() {});
     } catch (e, stackTrace) {
       debugPrint('Error adding book to Shamor Zachor: $e');
       debugPrint('Stack trace: $stackTrace');
-      UiSnack.showError('שגיאה בהוספת הספר למעקב: ${e.toString()}');
+      UiSnack.showError(TextBookMessages.addBookToTrackingError(e));
     }
   }
 
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח
   void _handlePdfButtonPress(BuildContext context, TextBookLoaded state) async {
     if (_pdfBook == null) {
-      UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
+      UiSnack.showError(TextBookMessages.pdfNotFoundForBook(state.book.title));
       return;
     }
 
@@ -2460,7 +2465,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           final textBookBloc = context.read<TextBookBloc>();
           final currentState = textBookBloc.state;
           if (currentState is TextBookLoaded) {
-            _savePerBookSettingsDirectly(context, currentState,
+            savePerBookDisplaySettings(context, currentState,
                 fontSize: currentState.fontSize);
           }
         },
@@ -2848,7 +2853,7 @@ bool _handleGlobalKeyEvent(
 
     if (ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
       if (bookId == null) {
-        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+        UiSnack.showError(TextBookMessages.directLinkUnavailable);
       } else {
         copyLinkToClipboard(buildBookLink(bookId));
       }
@@ -2856,7 +2861,7 @@ bool _handleGlobalKeyEvent(
     }
     if (ShortcutHelper.matchesShortcut(event, copySectionLinkShortcut)) {
       if (bookId == null) {
-        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+        UiSnack.showError(TextBookMessages.directLinkUnavailable);
       } else {
         copyLinkToClipboard(buildSectionLink(bookId, index));
       }
@@ -2864,7 +2869,7 @@ bool _handleGlobalKeyEvent(
     }
     if (ShortcutHelper.matchesShortcut(event, copySectionMarkLinkShortcut)) {
       if (bookId == null) {
-        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+        UiSnack.showError(TextBookMessages.directLinkUnavailable);
       } else {
         copyLinkToClipboard(buildSectionMarkLink(bookId, index));
       }
@@ -2875,9 +2880,9 @@ bool _handleGlobalKeyEvent(
           ? null
           : buildTextMarkLink(bookId, index, selectedTextForNote ?? '');
       if (bookId == null) {
-        UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+        UiSnack.showError(TextBookMessages.directLinkUnavailable);
       } else if (link == null) {
-        UiSnack.showError('יש לבחור טקסט כדי להעתיק קישור עם הדגשה');
+        UiSnack.showError(TextBookMessages.selectTextForMarkLink);
       } else {
         copyLinkToClipboard(link);
       }
@@ -2897,20 +2902,20 @@ bool _handleGlobalKeyEvent(
       case LogicalKeyboardKey.add:
         final newSize = min(50.0, state.fontSize + 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        savePerBookDisplaySettings(context, state, fontSize: newSize);
         return true;
 
       // הקטן את גודל הטקסט (Ctrl+-)
       case LogicalKeyboardKey.minus:
         final newSize = max(15.0, state.fontSize - 3);
         context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        _savePerBookSettingsDirectly(context, state, fontSize: newSize);
+        savePerBookDisplaySettings(context, state, fontSize: newSize);
         return true;
 
       // איפוס גודל טקסט (Ctrl+0)
       case LogicalKeyboardKey.digit0:
         context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
-        _savePerBookSettingsDirectly(context, state, fontSize: 25.0);
+        savePerBookDisplaySettings(context, state, fontSize: 25.0);
         return true;
     }
   }
@@ -2963,86 +2968,6 @@ bool _handleGlobalKeyEvent(
   }
 
   return false;
-}
-
-/// Helper function to save per-book settings directly from global functions
-Future<void> _savePerBookSettingsDirectly(
-  BuildContext context,
-  TextBookLoaded state, {
-  double? fontSize,
-  bool? showSplitView,
-  bool? removeNikud,
-  bool? removePunctuation,
-  bool? continuousReadingMode,
-}) async {
-  final settingsBloc = context.read<SettingsBloc>();
-  if (!settingsBloc.state.enablePerBookSettings) {
-    return;
-  }
-
-  // קבלת ברירות המחדל הגלובליות (אינן תלויות בקובץ, נחשבות פעם אחת)
-  final defaultFontSize = settingsBloc.state.fontSize;
-  final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
-  final defaultShowSplitView =
-      Settings.getValue<bool>('key-splited-view') ?? true;
-  final defaultContinuousReading =
-      settingsBloc.state.defaultContinuousReadingMode;
-
-  // עדכון אטומי: ה-load וה-merge מבוצעים בתוך תור הכתיבה כדי למנוע דריסה
-  // הדדית עם שמירת רוחבי הטורים (_saveSizes) על אותו קובץ.
-  await TextBookPerBookSettings.mutate(state.book, (existingSettings) {
-    // בניית הגדרות חדשות - רק שדות ששונו מברירת המחדל
-    double? newFontSize = existingSettings?.fontSize;
-    bool? newCommentatorsBelow = existingSettings?.commentatorsBelow;
-    bool? newRemoveNikud = existingSettings?.removeNikud;
-    bool? newRemovePunctuation = existingSettings?.removePunctuation;
-    bool? newContinuousReadingMode = existingSettings?.continuousReadingMode;
-
-    // עדכון רק השדה שהשתנה
-    if (fontSize != null) {
-      // אם הערך שווה לברירת המחדל, מוחקים את השדה
-      newFontSize = (fontSize == defaultFontSize) ? null : fontSize;
-    }
-
-    if (showSplitView != null) {
-      final commentatorsBelow = !showSplitView;
-      // אם הערך שווה לברירת המחדל, מוחקים את השדה
-      newCommentatorsBelow =
-          (showSplitView == defaultShowSplitView) ? null : commentatorsBelow;
-    }
-
-    if (removeNikud != null) {
-      // אם הערך שווה לברירת המחדל, מוחקים את השדה
-      newRemoveNikud = (removeNikud == defaultRemoveNikud) ? null : removeNikud;
-    }
-
-    if (removePunctuation != null) {
-      newRemovePunctuation = removePunctuation ? true : null;
-    }
-
-    if (continuousReadingMode != null) {
-      // ערך השווה לברירת המחדל הגלובלית נמחק כדי שהספר יירש אותה.
-      newContinuousReadingMode =
-          (continuousReadingMode == defaultContinuousReading)
-              ? null
-              : continuousReadingMode;
-    }
-
-    // רוחבי הטורים בצורת הדף נשמרים בנפרד (ב-_saveSizes); כאן מעבירים אותם
-    // הלאה כדי לא לדרוס אותם. אם כל השדות יתבררו כ-null, mutate ימחק את הקובץ.
-    return TextBookPerBookSettings(
-      fontSize: newFontSize,
-      commentatorsBelow: newCommentatorsBelow,
-      removeNikud: newRemoveNikud,
-      removePunctuation: newRemovePunctuation,
-      continuousReadingMode: newContinuousReadingMode,
-      activeCommentators: existingSettings?.activeCommentators,
-      pageShapeLeftWidth: existingSettings?.pageShapeLeftWidth,
-      pageShapeRightWidth: existingSettings?.pageShapeRightWidth,
-      pageShapeBottomHeight: existingSettings?.pageShapeBottomHeight,
-      pageShapeBottomLeftWidth: existingSettings?.pageShapeBottomLeftWidth,
-    );
-  });
 }
 
 /// Helper function to add bookmark from keyboard shortcut
@@ -3164,7 +3089,7 @@ void _togglePdfView(
 
   final book = library.getCompanionBook(state.book, PdfBook);
   if (book == null) {
-    UiSnack.showError('לא נמצא ספר PDF עבור "${state.book.title}"');
+    UiSnack.showError(TextBookMessages.pdfNotFoundForBook(state.book.title));
     return;
   }
 

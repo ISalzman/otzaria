@@ -190,6 +190,15 @@ class UpdateRemoveNikudFromTanach extends SettingsEvent {
   List<Object?> get props => [removeNikudFromTanach];
 }
 
+class UpdateDefaultRemovePunctuation extends SettingsEvent {
+  final bool defaultRemovePunctuation;
+
+  const UpdateDefaultRemovePunctuation(this.defaultRemovePunctuation);
+
+  @override
+  List<Object?> get props => [defaultRemovePunctuation];
+}
+
 class UpdateDefaultContinuousReadingMode extends SettingsEvent {
   final bool defaultContinuousReadingMode;
 

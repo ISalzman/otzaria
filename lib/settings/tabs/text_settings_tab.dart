@@ -11,6 +11,7 @@ import 'package:otzaria/widgets/layout/adaptive_row.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 /// טאב הגדרות תצוגת ספרים
@@ -106,6 +107,20 @@ class TextSettingsTab extends StatelessWidget {
         'הצג תמיד',
         'הצג בתנך',
         'אל תציג',
+        'הסתר',
+      ],
+    ),
+    SettingsSearchEntry(
+      id: 'text.nikud.punctuation',
+      title: 'הצגת סימני פיסוק',
+      subtitle: 'הצג / הסתר סימני פיסוק בכל הספרים',
+      tab: SettingsTab.text,
+      cardId: 'text.nikud',
+      keywords: [
+        'פיסוק',
+        'פסיק',
+        'נקודה',
+        'הצג',
         'הסתר',
       ],
     ),
@@ -431,6 +446,19 @@ class TextSettingsTab extends StatelessWidget {
           },
         ),
         SettingsActionTile.switchTile(
+          icon: FluentIcons.text_clear_formatting_24_regular,
+          title: 'הצגת סימני פיסוק',
+          subtitle: state.defaultRemovePunctuation
+              ? 'סימני הפיסוק לא יוצגו (למעט בתנ"ך)'
+              : 'סימני הפיסוק יוצגו בכל הספרים',
+          value: !state.defaultRemovePunctuation,
+          onChanged: (value) {
+            context
+                .read<SettingsBloc>()
+                .add(UpdateDefaultRemovePunctuation(!value));
+          },
+        ),
+        SettingsActionTile.switchTile(
           icon: FluentIcons.shield_keyhole_24_regular,
           title: 'הצגת שם הקודש',
           subtitle: !state.replaceHolyNames
@@ -578,7 +606,7 @@ class TextSettingsTab extends StatelessWidget {
 
     if (confirm == true && context.mounted) {
       await PerBookSettings.deleteAllSettings();
-      UiSnack.show('כל ההגדרות המיוחדות אופסו בהצלחה');
+      UiSnack.show(SettingsMessages.perBookSettingsReset);
     }
   }
 }

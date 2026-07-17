@@ -34,12 +34,12 @@ import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/widgets/book_source_banner.dart';
 import 'package:otzaria/text_book/view/sibling_commentaries_menu.dart';
@@ -365,7 +365,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   int _initialScrollRestoreAttempts = 0;
   bool? _lastContinuousReadingMode;
   int? _pendingDisplayModeRestoreLineIndex;
-  final Map<String, Future<bool>> _removeNikudCache = {};
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
 
@@ -818,49 +817,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     });
   }
 
-  Future<bool> _resolveSelectionRemoveNikud(
-    TextBookLoaded state,
-    SettingsState settingsState,
-  ) {
-    if (widget.isMainText) {
-      return Future.value(state.removeNikud);
-    }
-
-    final targetTitle = widget.bookTitle;
-    if (targetTitle == null) {
-      return Future.value(settingsState.defaultRemoveNikud);
-    }
-
-    final categoryId = widget.reportBook?.categoryId;
-    final fileType = widget.reportBook?.fileType;
-    return _removeNikudCache.putIfAbsent(
-      _removeNikudCacheKey(
-        title: targetTitle,
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        categoryId: categoryId,
-        fileType: fileType,
-      ),
-      () => resolveRemoveNikudForBook(
-        title: targetTitle,
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        categoryId: categoryId,
-        fileType: fileType,
-      ),
-    );
-  }
-
-  String _removeNikudCacheKey({
-    required String title,
-    required bool defaultRemoveNikud,
-    required bool removeNikudFromTanach,
-    int? categoryId,
-    String? fileType,
-  }) {
-    return '$title|$defaultRemoveNikud|$removeNikudFromTanach|$categoryId|$fileType';
-  }
-
   List<int> _sourceIndicesForVisiblePositions(
     Iterable<ItemPosition> itemPositions,
   ) {
@@ -966,8 +922,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     final settingsState = context.read<SettingsBloc>().state;
-    final removeNikud =
-        await _resolveSelectionRemoveNikud(textBookState, settingsState);
+    // מצב הניקוד של הטאב חל גם על טורי המפרשים (isMainText=false).
+    final removeNikud = textBookState.removeNikud;
     final sourceIndices = _selectionSourceIndices();
     final renderSettings = _selectionRenderSettings(
       state: textBookState,
@@ -1252,6 +1208,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           .toList());
       items.addAll(sortedLinks.map((link) => buildLinkContextMenuEntry(
             link: link,
+            removeNikud: state.removeNikud,
+            removePunctuation: state.removePunctuation,
             onTap: () => widget.openBookCallback(
               TextBookTab(
                 book: TextBook(
@@ -1340,7 +1298,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 if (widget.onOpenSearch != null) {
                   widget.onOpenSearch!(cleanedText);
                 } else {
-                  UiSnack.show('חיפוש לא זמין בתצוגה זו');
+                  UiSnack.show(TextBookMessages.searchUnavailableInThisView);
                 }
               }
             : null,
@@ -1366,6 +1324,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final siblingEntry = _siblingController!.buildEntry(
         lineIndex: index,
         sourceLink: sourceLink,
+        removeNikud: state.removeNikud,
+        removePunctuation: state.removePunctuation,
         onNavigate: (link) => widget.openBookCallback(
           TextBookTab(
             book: TextBook(
@@ -1619,9 +1579,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         selectionColumn: selectionColumn,
         categoryId: categoryId,
       );
-      if (mounted) UiSnack.showSuccess('ההערה נשמרה בהצלחה');
+      if (mounted) UiSnack.showSuccess(TextBookMessages.noteSaved);
     } catch (e) {
-      if (mounted) UiSnack.showError('שגיאה בשמירת ההערה: $e');
+      if (mounted) UiSnack.showError(TextBookMessages.noteSaveError(e));
     }
   }
 
@@ -1665,31 +1625,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final settingsState = context.read<SettingsBloc>().state;
     final textBookState = context.read<TextBookBloc>().state;
 
-    final bool removeNikud;
-    if (widget.reportBook != null) {
-      final targetTitle = widget.reportBook!.title;
-      final categoryId = widget.reportBook!.categoryId;
-      final fileType = widget.reportBook!.fileType;
-      removeNikud = await _removeNikudCache.putIfAbsent(
-        _removeNikudCacheKey(
-          title: targetTitle,
-          defaultRemoveNikud: settingsState.defaultRemoveNikud,
-          removeNikudFromTanach: settingsState.removeNikudFromTanach,
-          categoryId: categoryId,
-          fileType: fileType,
-        ),
-        () => resolveRemoveNikudForBook(
-          title: targetTitle,
-          defaultRemoveNikud: settingsState.defaultRemoveNikud,
-          removeNikudFromTanach: settingsState.removeNikudFromTanach,
-          categoryId: categoryId,
-          fileType: fileType,
-        ),
-      );
-    } else {
-      removeNikud =
-          textBookState is TextBookLoaded && textBookState.removeNikud;
-    }
+    // ההעתקה משקפת את התצוגה: מצב הניקוד של הטאב חל גם על טורי המפרשים.
+    final removeNikud =
+        textBookState is TextBookLoaded && textBookState.removeNikud;
     final processedText = removeNikud ? utils.removeVolwels(text) : text;
 
     final plainText = utils.stripHtmlIfNeeded(processedText);
@@ -1756,7 +1694,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final plainText = capturedText ?? _savedSelectedText;
 
     if (plainText == null || plainText.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט להעתקה');
+      UiSnack.show(TextBookMessages.selectTextToCopy);
       return;
     }
 
@@ -1779,7 +1717,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       );
     } catch (e) {
       if (mounted) {
-        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e');
+        UiSnack.showError(TextBookMessages.formattedCopyError(e));
       }
     }
   }
@@ -2153,43 +2091,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               }
 
               final data = widget.content[primaryLineIndex];
-              final targetTitle =
-                  widget.isMainText ? state.book.title : widget.bookTitle;
-              // אם המשתמש לחץ על כפתור ניקוד (override), נשתמש בערך מה-state
-              final bool? overrideRemoveNikud =
-                  widget.isMainText ? state.removeNikud : null;
-              final removeNikudFuture = (overrideRemoveNikud != null)
-                  ? Future.value(overrideRemoveNikud)
-                  : (targetTitle == null
-                      ? Future.value(settingsState.defaultRemoveNikud)
-                      : _removeNikudCache.putIfAbsent(
-                          _removeNikudCacheKey(
-                            title: targetTitle,
-                            defaultRemoveNikud:
-                                settingsState.defaultRemoveNikud,
-                            removeNikudFromTanach:
-                                settingsState.removeNikudFromTanach,
-                            categoryId: widget.isMainText
-                                ? state.book.categoryId
-                                : widget.reportBook?.categoryId,
-                            fileType: widget.isMainText
-                                ? state.book.fileType
-                                : widget.reportBook?.fileType,
-                          ),
-                          () => resolveRemoveNikudForBook(
-                            title: targetTitle,
-                            defaultRemoveNikud:
-                                settingsState.defaultRemoveNikud,
-                            removeNikudFromTanach:
-                                settingsState.removeNikudFromTanach,
-                            categoryId: widget.isMainText
-                                ? state.book.categoryId
-                                : widget.reportBook?.categoryId,
-                            fileType: widget.isMainText
-                                ? state.book.fileType
-                                : widget.reportBook?.fileType,
-                          ),
-                        ));
 
               // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
               final searchText = widget.isMainText
@@ -2211,47 +2112,38 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     )
                   : data;
 
-              final textWidget = FutureBuilder<bool>(
-                future: removeNikudFuture,
-                initialData: state.removeNikud,
-                builder: (context, snapshot) {
-                  return SmartTextWidget(
-                    text: annotatedData,
-                    widgetKey: ValueKey('html_simple_text_$primaryLineIndex'),
-                    settings: RenderSettings(
-                      removeNikud: snapshot.data ?? state.removeNikud,
-                      removePunctuation: state.removePunctuation,
-                      removeTeamim: !settingsState.showTeamim,
-                      replaceHolyNames: settingsState.replaceHolyNames,
-                      searchText: searchText,
-                      highlightYellowBackground: widget.isMainText &&
-                          state.highlightText.isNotEmpty &&
-                          state.permanentHighlightLine == index,
-                      searchOptions:
-                          widget.isMainText ? state.searchOptions : const {},
-                      alternativeWords:
-                          widget.isMainText ? state.alternativeWords : const {},
-                      spacingValues:
-                          widget.isMainText ? state.spacingValues : const {},
-                      isFuzzySearch: widget.isMainText &&
-                          state.searchMode == SearchMode.fuzzy,
-                      searchMode: widget.isMainText
-                          ? state.searchMode
-                          : SearchMode.exact,
-                      searchDistance:
-                          widget.isMainText ? state.searchDistance : 0,
-                      fontSize: widget.fontSize,
-                      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-                      fontWeight:
-                          settingsState.fontBold ? FontWeight.bold : null,
-                      lineHeight: settingsState.lineHeight,
-                    ),
-                    onOpenBook: widget.openBookCallback,
-                    onNoteTap: hasInlineNotes
-                        ? (line) => _onInlineNoteTap(line)
-                        : null,
-                  );
-                },
+              // מצב הניקוד/פיסוק של הטאב חל גם על טורי המפרשים.
+              final textWidget = SmartTextWidget(
+                text: annotatedData,
+                widgetKey: ValueKey('html_simple_text_$primaryLineIndex'),
+                settings: RenderSettings(
+                  removeNikud: state.removeNikud,
+                  removePunctuation: state.removePunctuation,
+                  removeTeamim: !settingsState.showTeamim,
+                  replaceHolyNames: settingsState.replaceHolyNames,
+                  searchText: searchText,
+                  highlightYellowBackground: widget.isMainText &&
+                      state.highlightText.isNotEmpty &&
+                      state.permanentHighlightLine == index,
+                  searchOptions:
+                      widget.isMainText ? state.searchOptions : const {},
+                  alternativeWords:
+                      widget.isMainText ? state.alternativeWords : const {},
+                  spacingValues:
+                      widget.isMainText ? state.spacingValues : const {},
+                  isFuzzySearch:
+                      widget.isMainText && state.searchMode == SearchMode.fuzzy,
+                  searchMode:
+                      widget.isMainText ? state.searchMode : SearchMode.exact,
+                  searchDistance: widget.isMainText ? state.searchDistance : 0,
+                  fontSize: widget.fontSize,
+                  fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+                  fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+                  lineHeight: settingsState.lineHeight,
+                ),
+                onOpenBook: widget.openBookCallback,
+                onNoteTap:
+                    hasInlineNotes ? (line) => _onInlineNoteTap(line) : null,
               );
 
               return textWidget;

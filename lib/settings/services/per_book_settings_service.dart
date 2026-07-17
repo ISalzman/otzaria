@@ -104,6 +104,11 @@ class PerBookSettings {
           (Settings.getValue<bool>('key-default-nikud') ?? false)) {
         cleaned.remove('removeNikud');
       }
+      _removeRedundantPunctuationFields(
+        cleaned,
+        defaultRemovePunctuation:
+            Settings.getValue<bool>('key-default-remove-punctuation') ?? false,
+      );
       if (cleaned['commentatorsBelow'] ==
           !(Settings.getValue<bool>('key-splited-view') ?? true)) {
         cleaned.remove('commentatorsBelow');
@@ -115,6 +120,24 @@ class PerBookSettings {
       return cleaned;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// מסיר override של פיסוק ששווה לברירת המחדל האפקטיבית של הספר.
+  /// בתנ"ך (דגל isTanach שנשמר לצד ה-override) הסרת פיסוק אינה חלה —
+  /// ברירת המחדל האפקטיבית בו תמיד false, ללא תלות בהגדרה הגלובלית.
+  static void _removeRedundantPunctuationFields(
+    Map<String, dynamic> cleaned, {
+    required bool defaultRemovePunctuation,
+  }) {
+    final effectiveDefault =
+        defaultRemovePunctuation && cleaned['isTanach'] != true;
+    if (cleaned['removePunctuation'] == effectiveDefault) {
+      cleaned.remove('removePunctuation');
+    }
+    // הדגל הוא לוויין של ה-override; בלעדיו אין לו משמעות.
+    if (!cleaned.containsKey('removePunctuation')) {
+      cleaned.remove('isTanach');
     }
   }
 
@@ -229,6 +252,7 @@ class PerBookSettings {
     required double defaultFontSize,
     required bool defaultRemoveNikud,
     required bool defaultShowSplitView,
+    bool defaultRemovePunctuation = false,
     bool defaultContinuousReadingMode = false,
   }) async {
     try {
@@ -272,6 +296,10 @@ class PerBookSettings {
             if (cleaned['removeNikud'] == defaultRemoveNikud) {
               cleaned.remove('removeNikud');
             }
+            _removeRedundantPunctuationFields(
+              cleaned,
+              defaultRemovePunctuation: defaultRemovePunctuation,
+            );
             if (cleaned['commentatorsBelow'] == !defaultShowSplitView) {
               cleaned.remove('commentatorsBelow');
             }
@@ -310,6 +338,10 @@ class TextBookPerBookSettings {
   final bool? commentatorsBelow; // true = מתחת, false = בצד
   final bool? removeNikud;
   final bool? removePunctuation;
+
+  /// נשמר לצד [removePunctuation]: בתנ"ך ברירת המחדל האפקטיבית לפיסוק היא
+  /// תמיד false, והניקוי (שרואה רק קובץ hash) זקוק לדגל כדי לחשב אותה.
+  final bool? isTanach;
   final bool? continuousReadingMode;
 
   /// המפרשים הנבחרים בספר זה. נשמר תמיד (לא תלוי ב-enablePerBookSettings) כדי
@@ -327,6 +359,7 @@ class TextBookPerBookSettings {
     this.commentatorsBelow,
     this.removeNikud,
     this.removePunctuation,
+    this.isTanach,
     this.continuousReadingMode,
     this.activeCommentators,
     this.pageShapeLeftWidth,
@@ -340,6 +373,7 @@ class TextBookPerBookSettings {
         if (commentatorsBelow != null) 'commentatorsBelow': commentatorsBelow,
         if (removeNikud != null) 'removeNikud': removeNikud,
         if (removePunctuation != null) 'removePunctuation': removePunctuation,
+        if (isTanach != null) 'isTanach': isTanach,
         if (continuousReadingMode != null)
           'continuousReadingMode': continuousReadingMode,
         if (activeCommentators != null)
@@ -360,6 +394,7 @@ class TextBookPerBookSettings {
       commentatorsBelow: json['commentatorsBelow'] as bool?,
       removeNikud: json['removeNikud'] as bool?,
       removePunctuation: json['removePunctuation'] as bool?,
+      isTanach: json['isTanach'] as bool?,
       continuousReadingMode: json['continuousReadingMode'] as bool?,
       activeCommentators:
           (json['activeCommentators'] as List<dynamic>?)?.cast<String>(),
@@ -389,6 +424,7 @@ class TextBookPerBookSettings {
       commentatorsBelow: commentatorsBelow ?? this.commentatorsBelow,
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
+      isTanach: isTanach,
       continuousReadingMode:
           continuousReadingMode ?? this.continuousReadingMode,
       activeCommentators: activeCommentators ?? this.activeCommentators,

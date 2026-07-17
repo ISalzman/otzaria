@@ -5,7 +5,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
@@ -48,8 +47,6 @@ class CommentaryContent extends StatefulWidget {
 
 class _CommentaryContentState extends State<CommentaryContent> {
   late Future<String> content;
-  Future<bool>? _removeNikudFuture;
-  String? _removeNikudCacheKey;
 
   @override
   void initState() {
@@ -82,25 +79,6 @@ class _CommentaryContentState extends State<CommentaryContent> {
     }
   }
 
-  Future<bool> _resolveRemoveNikud(SettingsState settingsState) {
-    final title = utils.getTitleFromPath(widget.link.path2);
-    final cacheKey =
-        '$title|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}|${widget.removeNikud}';
-
-    if (_removeNikudFuture != null && _removeNikudCacheKey == cacheKey) {
-      return _removeNikudFuture!;
-    }
-
-    _removeNikudCacheKey = cacheKey;
-    _removeNikudFuture = resolveRemoveNikudForBook(
-      title: title,
-      defaultRemoveNikud:
-          settingsState.defaultRemoveNikud || widget.removeNikud,
-      removeNikudFromTanach: settingsState.removeNikudFromTanach,
-    );
-    return _removeNikudFuture!;
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -126,75 +104,68 @@ class _CommentaryContentState extends State<CommentaryContent> {
           builder: (context, data) {
             return BlocBuilder<SettingsBloc, SettingsState>(
               builder: (context, settingsState) {
-                return FutureBuilder<bool>(
-                  future: _resolveRemoveNikud(settingsState),
-                  initialData: widget.removeNikud,
-                  builder: (context, snapshot) {
-                    final effectiveRemoveNikud =
-                        snapshot.data ?? widget.removeNikud;
-
-                    if (widget.searchQuery.isNotEmpty) {
-                      final searchCount = countCommentarySearchMatches(
-                        content: data,
-                        query: widget.searchQuery,
-                        removePunctuation: widget.removePunctuation,
-                      );
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        widget.onSearchResultsCountChanged?.call(searchCount);
-                        if (widget.onSearchSnippetsChanged != null &&
-                            searchCount > 0) {
-                          widget.onSearchSnippetsChanged!.call([
-                            buildCommentarySearchSnippet(
-                              content: data,
-                              query: widget.searchQuery,
-                              removeNikud: effectiveRemoveNikud,
-                              removePunctuation: widget.removePunctuation,
-                            ),
-                          ]);
-                        }
-                      });
+                // מצב הניקוד/פיסוק של הטאב חל על כל המפרשים כפי שהוא,
+                // ללא רזולוציה פר-ספר-יעד.
+                if (widget.searchQuery.isNotEmpty) {
+                  final searchCount = countCommentarySearchMatches(
+                    content: data,
+                    query: widget.searchQuery,
+                    removePunctuation: widget.removePunctuation,
+                  );
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    widget.onSearchResultsCountChanged?.call(searchCount);
+                    if (widget.onSearchSnippetsChanged != null &&
+                        searchCount > 0) {
+                      widget.onSearchSnippetsChanged!.call([
+                        buildCommentarySearchSnippet(
+                          content: data,
+                          query: widget.searchQuery,
+                          removeNikud: widget.removeNikud,
+                          removePunctuation: widget.removePunctuation,
+                        ),
+                      ]);
                     }
+                  });
+                }
 
-                    final renderSettings = RenderSettings(
-                      removeNikud: effectiveRemoveNikud,
-                      removePunctuation: widget.removePunctuation,
-                      removeTeamim: !settingsState.showTeamim,
-                      replaceHolyNames: settingsState.replaceHolyNames,
-                      searchText: widget.searchQuery,
-                      currentSearchIndex: widget.currentSearchIndex,
-                      fontSize: widget.fontSize,
-                      fontFamily: settingsState.commentatorsFontFamily,
-                      fontWeight: settingsState.commentatorsFontBold
-                          ? FontWeight.bold
-                          : null,
-                      lineHeight: settingsState.lineHeight,
-                      partialWordHighlight: true,
-                    );
+                final renderSettings = RenderSettings(
+                  removeNikud: widget.removeNikud,
+                  removePunctuation: widget.removePunctuation,
+                  removeTeamim: !settingsState.showTeamim,
+                  replaceHolyNames: settingsState.replaceHolyNames,
+                  searchText: widget.searchQuery,
+                  currentSearchIndex: widget.currentSearchIndex,
+                  fontSize: widget.fontSize,
+                  fontFamily: settingsState.commentatorsFontFamily,
+                  fontWeight: settingsState.commentatorsFontBold
+                      ? FontWeight.bold
+                      : null,
+                  lineHeight: settingsState.lineHeight,
+                  partialWordHighlight: true,
+                );
 
-                    _reportRenderedText(data, renderSettings);
+                _reportRenderedText(data, renderSettings);
 
-                    // עוגן בצד המקושר (ציטוט מ-charLevelData): הדגשת הטווח
-                    // המצוטט בתוך קטע המפרש, באופסטים של תווים-גלויים.
-                    var displayData = data;
-                    final linkedStart = widget.link.linkedAnchorStart;
-                    final linkedEnd = widget.link.linkedAnchorEnd;
-                    if (linkedStart != null &&
-                        linkedEnd != null &&
-                        linkedEnd > linkedStart) {
-                      displayData = wrapVisibleRange(
-                        html: data,
-                        start: linkedStart,
-                        end: linkedEnd,
-                        openTag: '<span class="link-anchor-range">',
-                        closeTag: '</span>',
-                      );
-                    }
+                // עוגן בצד המקושר (ציטוט מ-charLevelData): הדגשת הטווח
+                // המצוטט בתוך קטע המפרש, באופסטים של תווים-גלויים.
+                var displayData = data;
+                final linkedStart = widget.link.linkedAnchorStart;
+                final linkedEnd = widget.link.linkedAnchorEnd;
+                if (linkedStart != null &&
+                    linkedEnd != null &&
+                    linkedEnd > linkedStart) {
+                  displayData = wrapVisibleRange(
+                    html: data,
+                    start: linkedStart,
+                    end: linkedEnd,
+                    openTag: '<span class="link-anchor-range">',
+                    closeTag: '</span>',
+                  );
+                }
 
-                    return SmartTextWidget(
-                      text: displayData,
-                      settings: renderSettings,
-                    );
-                  },
+                return SmartTextWidget(
+                  text: displayData,
+                  settings: renderSettings,
                 );
               },
             );

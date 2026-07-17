@@ -23,6 +23,14 @@ bool shouldReloadForNikudSettingsChange({
       previous.removeNikudFromTanach != current.removeNikudFromTanach;
 }
 
+/// מחזיר האם ברירת המחדל הגלובלית להסרת פיסוק השתנתה (מחייב טעינה מחדש).
+bool shouldReloadForPunctuationSettingsChange({
+  required SettingsState previous,
+  required SettingsState current,
+}) {
+  return previous.defaultRemovePunctuation != current.defaultRemovePunctuation;
+}
+
 /// פותר האם להסיר ניקוד עבור ספר יעד, לפי הגדרות הניקוד והסיווג שלו.
 Future<bool> resolveRemoveNikudForBook({
   required String title,

@@ -750,6 +750,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         removeNikudFromTanach: removeNikudFromTanach,
         isTanach: isTanach,
       );
+      // הסרת פיסוק אינה חלה על תנ"ך (הכפתור מוסתר שם).
+      final defaultRemovePunctuation = !isTanach &&
+          (Settings.getValue<bool>('key-default-remove-punctuation') ?? false);
 
       // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
       // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
@@ -875,7 +878,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         removePunctuation: (event.preserveRemovePunctuation &&
                 preservedRemovePunctuation != null)
             ? preservedRemovePunctuation
-            : false,
+            : defaultRemovePunctuation,
         isTanach: isTanach,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
