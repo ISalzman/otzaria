@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -29,8 +30,7 @@ class TantivyDataProvider {
   late Future<SearchEngine> engine;
 
   /// Track if index is being reopened to prevent concurrent reopens
-  bool _isReopening = false;
-  DateTime? _lastReopenTime;
+  final ReopenGate _reopenGate = ReopenGate();
   Future<bool>? _magicDictionaryDownload;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider._internal();
@@ -354,70 +354,62 @@ class TantivyDataProvider {
     }
   }
 
-  Future<void> reopenIndex() async {
-    // Prevent concurrent reopens that would cause lock conflicts
-    if (_isReopening) {
-      debugPrint('⚠️ Index reopen already in progress, skipping...');
-      return;
-    }
+  /// פותח את המנוע מחדש וקורא את מצב האינדקס מהדיסק. מחזיר האם הפתיחה
+  /// אכן בוצעה (או הושלמה ע"י reopen שכבר רץ) — false רק בדילוג throttle.
+  ///
+  /// [force] עוקף את מגבלת חמש-השניות ומבטיח פתיחה שמתחילה אחרי הקריאה —
+  /// למסלולי שחזור אחרי כשל כתיבה, שבהם reopen ישן עלול לקרוא מצב מעופש.
+  Future<bool> reopenIndex({bool force = false}) =>
+      _reopenGate.run(_doReopen, force: force);
 
-    // Prevent too frequent reopens (less than 5 seconds apart)
-    if (_lastReopenTime != null &&
-        DateTime.now().difference(_lastReopenTime!).inSeconds < 5) {
-      debugPrint('⚠️ Index reopen too soon after last reopen, skipping...');
-      return;
-    }
-
-    _isReopening = true;
-    _lastReopenTime = DateTime.now();
+  Future<void> _doReopen() async {
     debugPrint('🔄 Reopening search index...');
 
-    try {
-      // Dispose previous engine to release locks
-      await dispose();
+    // Dispose previous engine to release locks
+    await dispose();
 
-      // Reset engines (כולל קריאה מחדש של מצב האינדקס מהאינדקס עצמו)
-      engine = _initAll();
+    // Reset engines (כולל קריאה מחדש של מצב האינדקס מהאינדקס עצמו)
+    engine = _initAll();
 
-      // Check engine
-      engine.then((value) {
-        try {
-          // Test the search engine
-          _searchGateway
-              .search(
-            RustSearchEngineOperations(value),
-            const SearchEngineRequest(
-              query: 'a',
-              limit: 10,
-              offset: 0,
-              facets: ["/"],
-              order: ResultsOrder.catalogue,
-              searchMode: SearchMode.exact,
-            ),
-          )
-              .then((results) {
-            // Engine test successful
-            debugPrint('✅ Search engine test successful');
-          }).catchError((e) {
-            debugPrint('❌ Engine test error: $e');
-          });
-        } catch (e) {
-          // Log sync engine test error
-          debugPrint('❌ Sync engine test error: $e');
-          if (e.toString() ==
-              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-            // Handle schema error asynchronously
-            _handleSchemaError();
-          } else {
-            rethrow;
-          }
+    // Check engine
+    engine.then((value) {
+      try {
+        // Test the search engine
+        _searchGateway
+            .search(
+          RustSearchEngineOperations(value),
+          const SearchEngineRequest(
+            query: 'a',
+            limit: 10,
+            offset: 0,
+            facets: ["/"],
+            order: ResultsOrder.catalogue,
+            searchMode: SearchMode.exact,
+          ),
+        )
+            .then((results) {
+          // Engine test successful
+          debugPrint('✅ Search engine test successful');
+        }).catchError((e) {
+          debugPrint('❌ Engine test error: $e');
+        });
+      } catch (e) {
+        // Log sync engine test error
+        debugPrint('❌ Sync engine test error: $e');
+        if (e.toString() ==
+            "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
+          // Handle schema error asynchronously
+          _handleSchemaError();
+        } else {
+          rethrow;
         }
-      });
+      }
+    });
 
-      debugPrint('✅ Search index reopened successfully');
-    } finally {
-      _isReopening = false;
-    }
+    // הצלחה = האתחול הושלם: בלעדי ההמתנה, "הצלחה" הייתה מדווחת עוד לפני
+    // ש-indexedFilePaths נקרא מחדש — והמעקב היה נשאר מעופש.
+    await engine;
+    debugPrint('✅ Search index reopened successfully');
   }
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
@@ -788,5 +780,55 @@ class TantivyDataProvider {
     } catch (e) {
       debugPrint('⚠️ Error disposing search engine: $e');
     }
+  }
+}
+
+/// שער לפתיחות-מחדש של המנוע: מונע פתיחות מקבילות (קונפליקט נעילות),
+/// אוכף מרווח מינימלי בין פתיחות, ומבטיח ל-[run] עם force פתיחה שמתחילה
+/// אחרי הקריאה — ולא reopen ישן שרץ במקביל וקרא מצב שקדם לכשל.
+@visibleForTesting
+class ReopenGate {
+  Future<void>? _inFlight;
+  DateTime? _lastRun;
+
+  Future<bool> run(
+    Future<void> Function() reopen, {
+    bool force = false,
+  }) async {
+    var inFlight = _inFlight;
+    if (inFlight != null && !force) {
+      debugPrint('⚠️ Index reopen already in progress, awaiting it...');
+      await inFlight;
+      return true;
+    }
+
+    // force: ממתינים ל-reopen הרץ (בלי לרשת את כשלו) ופותחים פתיחה חדשה.
+    while (inFlight != null) {
+      debugPrint('⚠️ Index reopen already in progress, awaiting it...');
+      try {
+        await inFlight;
+      } catch (e) {
+        debugPrint('⚠️ Awaited in-flight reopen failed: $e');
+      }
+      inFlight = _inFlight;
+    }
+
+    // Prevent too frequent reopens (less than 5 seconds apart)
+    if (!force &&
+        _lastRun != null &&
+        DateTime.now().difference(_lastRun!).inSeconds < 5) {
+      debugPrint('⚠️ Index reopen too soon after last reopen, skipping...');
+      return false;
+    }
+
+    _lastRun = DateTime.now();
+    final current = reopen();
+    final wrapped = current.whenComplete(() => _inFlight = null);
+    // כשל מטופל אצל הקורא (await current) ואצל ממתינים; בלי מאזין ריק,
+    // העותק שב-_inFlight היה מדווח unhandled async error כשאין ממתין.
+    unawaited(wrapped.catchError((_) {}));
+    _inFlight = wrapped;
+    await current;
+    return true;
   }
 }

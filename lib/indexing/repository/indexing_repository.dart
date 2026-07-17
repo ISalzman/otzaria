@@ -323,8 +323,12 @@ class IndexingRepository {
           errors++;
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          if (!isBookIndexed(book)) {
-            await _discardPartialBookWrites(book);
+          if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
+            // ניקוי כושל ⇒ commit היה חותם ספר חלקי; משליכים את כל החוצץ
+            // ועוצרים בלי commit — מה שלא נחתם ינוסה שוב בריצה הבאה.
+            await _recoverEngineAfterWriteFailure();
+            cancelled = true;
+            break;
           }
         }
 
@@ -587,14 +591,37 @@ class IndexingRepository {
 
   /// מוחק את המסמכים החלקיים של ספר שכתיבתו למנוע נכשלה באמצע: בלעדי זה
   /// ה-commit הבא חותם ספר חלקי, שנחשב "מאונדקס" ולעולם לא מנוסה שוב.
-  Future<void> _discardPartialBookWrites(Book book) async {
+  Future<bool> _discardPartialBookWrites(Book book) async {
     try {
       final engine = await _tantivyDataProvider.engine;
       await engine.deleteDocumentsByFilePaths(
         filePaths: [buildIndexedBookFilePath(book)],
       );
+      return true;
     } catch (e) {
       debugPrint('⚠️ מחיקת מסמכים חלקיים של ${book.title} נכשלה: $e');
+      return false;
+    }
+  }
+
+  /// שחזור בטוח אחרי כשל כתיבה/commit, כשמצב המנוע אינו ידוע: commit עלול
+  /// היה להיחתם בדיסק גם כשהקריאה זרקה (כשל ב-reload של ה-reader בלבד).
+  Future<void> _recoverEngineAfterWriteFailure() async {
+    // rollback קודם — משליך כתיבות ממתינות גם אם ה-reopen ידולג (throttle).
+    try {
+      await (await _tantivyDataProvider.engine).rollback();
+    } catch (e) {
+      debugPrint('⚠️ rollback אחרי כשל כתיבה נכשל: $e');
+    }
+    // reader טרי מהמצב החתום בדיסק + טעינת indexedFilePaths מחדש — קריאה
+    // מה-reader הישן עלולה להחזיר מצב מעופש שמשחזר מעקב שגוי.
+    try {
+      final reopened = await _tantivyDataProvider.reopenIndex(force: true);
+      if (!reopened) {
+        debugPrint('⚠️ פתיחת המנוע מחדש אחרי כשל כתיבה דולגה');
+      }
+    } catch (e) {
+      debugPrint('⚠️ פתיחת המנוע מחדש אחרי כשל כתיבה נכשלה: $e');
     }
   }
 
@@ -949,8 +976,12 @@ class IndexingRepository {
           errors++;
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          if (!isBookIndexed(book)) {
-            await _discardPartialBookWrites(book);
+          if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
+            // ניקוי כושל ⇒ commit היה חותם ספר חלקי; משליכים את כל החוצץ
+            // ועוצרים בלי commit — מה שלא נחתם ינוסה שוב בריצה הבאה.
+            await _recoverEngineAfterWriteFailure();
+            cancelled = true;
+            break;
           }
         }
 
@@ -1008,23 +1039,26 @@ class IndexingRepository {
 
   /// מסיר מהאינדקס את רשומות הספרים הנתונים — מחיקה מדויקת לפי מפתח
   /// ה-filePath שהמסמכים נכתבו איתו ([buildIndexedBookFilePath]), כך שספר
-  /// אחר החולק את אותה כותרת אינו נפגע.
-  Future<void> dropBookIndexEntries(Iterable<Book> books) async {
+  /// אחר החולק את אותה כותרת אינו נפגע. מחזיר האם המחיקה נקלטה.
+  Future<bool> dropBookIndexEntries(Iterable<Book> books) async {
     final keys = <String>{
       for (final book in books) buildIndexedBookFilePath(book),
     }..remove('');
-    if (keys.isEmpty) return;
+    if (keys.isEmpty) return true;
 
     final engine = await _tantivyDataProvider.engine;
     try {
       await engine.deleteDocumentsByFilePaths(filePaths: keys.toList());
       await engine.commit();
     } catch (e) {
-      // בלי commit המחיקה לא נקלטה — משאירים את המעקב המקומי כמות שהוא.
+      // מחיקה שנכנסה ל-writer בלי commit הייתה נחתמת ע"י commit מאוחר של
+      // מסלול אחר, בעוד הספר עדיין רשום כמאונדקס — rollback משליך אותה.
       debugPrint('⚠️ מחיקת רשומות אינדקס נכשלה: $e');
-      return;
+      await _recoverEngineAfterWriteFailure();
+      return false;
     }
     _tantivyDataProvider.indexedFilePaths.removeAll(keys);
+    return true;
   }
 
   /// מסיר מהאינדקס רשומות "יתומות" — ספרים שכבר אינם בספרייה (למשל ספר
@@ -1073,14 +1107,15 @@ class IndexingRepository {
   /// רשומות אלו מאונדקסות לפי נתיב מוחלט (PDF, וספרי קובץ ללא id יציב),
   /// ולכן אחרי העברה הן מצביעות לנתיב הישן. בלי הסרתן, האינדוקס האוטומטי
   /// שלאחר הרענון מוסיף את אותם ספרים בנתיב החדש ⇒ כפילויות ותוצאות שבורות.
-  Future<void> dropRelocatedFileBookEntries(
+  Future<bool> dropRelocatedFileBookEntries(
           Iterable<Book> relocatedBooks) async =>
       dropBookIndexEntries(relocatedBooks);
 
   /// מאנדקס מחדש ספרים שתוכנם השתנה: מסיר את רשומותיהם הישנות מהאינדקס
   /// ומאנדקס אותם מחדש דרך [indexBooks].
   ///
-  /// מחזיר true אם הסתיים בהצלחה, false אם בוטל או שנדרש אינדוקס ידני מלא.
+  /// מחזיר true אם הסתיים בהצלחה; false אם בוטל, נדרש אינדוקס ידני מלא,
+  /// או שמחיקת הרשומות הישנות נכשלה (ואז אסור לאנדקס — הספר יידולג ממילא).
   Future<bool> reindexChangedBooks(
     List<Book> changedBooks,
     Library library, {
@@ -1095,7 +1130,7 @@ class IndexingRepository {
     final booksToReindex = changedBooks.where(isIndexableBook).toList();
     if (booksToReindex.isEmpty) return true;
 
-    await dropBookIndexEntries(booksToReindex);
+    if (!await dropBookIndexEntries(booksToReindex)) return false;
     return indexBooks(
       booksToReindex,
       library,

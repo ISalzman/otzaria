@@ -191,6 +191,49 @@ void main() {
       expect(engine.removedFilePaths, isEmpty);
       expect(engine.commitCount, 0);
     });
+
+    test('כשל ב-commit של המחיקה — rollback משליך את המחיקה הממתינה', () async {
+      // רגרסיה: מחיקה שנשארה בחוצץ הייתה נחתמת ע"י commit מאוחר של מסלול
+      // אחר, בעוד הספר עדיין רשום ב-indexedFilePaths — נעלם מהחיפוש ומדולג.
+      final engine = _RecordingSearchEngine()..failCommit = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final book = TextBook(id: 5, title: 'שבת');
+      final key = IndexingRepository.buildIndexedBookFilePath(book);
+      provider.indexedFilePaths.add(key);
+      engine.committedFilePaths = [key];
+      final repository = IndexingRepository(provider);
+
+      final result = await repository.dropBookIndexEntries([book]);
+
+      expect(result, isFalse);
+      expect(engine.rollbackCount, 1);
+      expect(provider.reopenCount, 1);
+      // המעקב נשאר עקבי עם המצב החתום — הספר עדיין מאונדקס וזמין בחיפוש.
+      expect(provider.indexedFilePaths, {key});
+    });
+
+    test('commit נחתם בדיסק אך הקריאה זרקה (כשל reload) — המעקב מתעדכן',
+        () async {
+      // רגרסיה: קריאה מה-reader הישן החזירה את הספר ל-indexedFilePaths
+      // למרות שמסמכיו נמחקו — נעלם מהחיפוש וגם דולג באינדוקס הבא.
+      final engine = _RecordingSearchEngine()..failCommit = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final book = TextBook(id: 5, title: 'שבת');
+      final key = IndexingRepository.buildIndexedBookFilePath(book);
+      provider.indexedFilePaths.add(key);
+      // המחיקה כן נחתמה בדיסק — המצב החתום כבר בלי הספר.
+      engine.committedFilePaths = [];
+      final repository = IndexingRepository(provider);
+
+      final result = await repository.dropBookIndexEntries([book]);
+
+      expect(result, isFalse);
+      expect(provider.reopenCount, 1);
+      // פתיחה מאולצת — אחרת throttle של 5 שניות היה מדלג ומשאיר מצב מעופש.
+      expect(provider.lastReopenForce, isTrue);
+      // הספר אינו מסומן כמאונדקס — ינוסה שוב במקום להיעלם מהחיפוש לתמיד.
+      expect(provider.indexedFilePaths, isEmpty);
+    });
   });
 
   group('IndexingRepository.dropBookIndexEntries', () {
@@ -321,6 +364,34 @@ void main() {
       });
       expect(repository.indexedBooks!.single.title, 'שבת');
       expect(repository.indexedBooks!.single.isUserBook, isFalse);
+    });
+
+    test('כשל במחיקת האינדקס הישן — מחזיר false בלי לאנדקס', () async {
+      // רגרסיה: הכשל נבלע, indexBooks דילג על הספר (עדיין ב-indexedFilePaths)
+      // והפונקציה החזירה true — האינדקס הישן נשאר ודווח כהצלחה.
+      final engine = _RecordingSearchEngine()..failDeleteFilePaths = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final changed = TextBook(id: 5, title: 'שבת');
+      final library = _buildLibrary(bavliBooks: const []);
+      library.books.add(changed);
+      provider.indexedFilePaths
+          .add(IndexingRepository.buildIndexedBookFilePath(changed));
+      // המחיקה לא יצאה לפועל — הספר עדיין חתום באינדקס שבדיסק.
+      engine.committedFilePaths = [
+        IndexingRepository.buildIndexedBookFilePath(changed),
+      ];
+      final repository = _ReindexProbeRepository(provider);
+
+      final result = await repository.reindexChangedBooks(
+        [changed],
+        library,
+        onProgress: (_, __) {},
+      );
+
+      expect(result, isFalse);
+      expect(repository.indexedBooks, isNull);
+      // המעקב המקומי לא השתנה — הספר עדיין מסומן וימתין לניסיון הבא.
+      expect(provider.indexedFilePaths, {'id:5'});
     });
 
     test('רשימה ריקה — לא נוגע במנוע ולא מאנדקס', () async {
@@ -556,9 +627,43 @@ void main() {
           await repository.indexAllBooks(library, onProgress: (_, __) {});
 
       expect(result, isTrue);
+      // הכתיבה החלקית אכן נרשמה במנוע לפני הכשל — ורק אז נמחקה.
+      expect(engine.addedDocuments.map((d) => d.title), contains('ב'));
       // רק הספר שכשל נוקה; שכנו שהצליח לא נמחק.
       expect(engine.removedFilePaths, [r'C:\missing\ב.pdf']);
       expect(provider.indexedFilePaths, {r'C:\missing\א.pdf'});
+    });
+
+    test('כשל גם בניקוי המסמכים החלקיים — עוצר בלי commit ומבצע rollback',
+        () async {
+      // רגרסיה: כשה-writer פגוע גם המחיקה נכשלת; המשך עד ה-commit הסופי
+      // היה חותם את הכתיבה החלקית למרות הניקוי הכושל.
+      final engine = _RecordingSearchEngine()
+        ..failAddForTitle = 'ב'
+        ..failDeleteFilePaths = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.addAll([
+        PdfBook(title: 'א', path: r'C:\missing\א.pdf'),
+        PdfBook(title: 'ב', path: r'C:\missing\ב.pdf'),
+        PdfBook(title: 'ג', path: r'C:\missing\ג.pdf'),
+      ]);
+      final repository = IndexingRepository(provider);
+      var progressCalls = 0;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, __) => progressCalls++,
+      );
+
+      expect(result, isFalse);
+      expect(engine.commitCount, 0);
+      expect(engine.rollbackCount, 1);
+      // הספר השלישי לא עובד — הריצה נעצרה מיד אחרי הכשל.
+      expect(engine.addedDocuments.map((d) => d.title), isNot(contains('ג')));
+      // המעקב בזיכרון נטען מחדש מהמצב החתום (ריק) — 'א' הלא-חתום ינוסה שוב.
+      expect(provider.indexedFilePaths, isEmpty);
+      expect(progressCalls, greaterThan(0));
     });
   });
 
@@ -807,8 +912,22 @@ class _RecordingTantivyDataProvider implements TantivyDataProvider {
 
   final _RecordingSearchEngine _engine;
 
+  int reopenCount = 0;
+  bool? lastReopenForce;
+
   @override
   final Set<String> indexedFilePaths = {};
+
+  /// כמו האמיתי: reader טרי + טעינת המעקב מחדש מהמצב החתום של האינדקס.
+  @override
+  Future<bool> reopenIndex({bool force = false}) async {
+    reopenCount++;
+    lastReopenForce = force;
+    indexedFilePaths
+      ..clear()
+      ..addAll(await _engine.getIndexedFilePaths());
+    return true;
+  }
 
   @override
   final ValueNotifier<bool> isIndexing = ValueNotifier<bool>(false);
@@ -855,17 +974,37 @@ class _RecordingSearchEngine implements SearchEngine {
   /// טביעות-אצבע פר-ספר שהמנוע "קרא מהאינדקס" — לבדיקות reconcile.
   Map<String, BigInt> fingerprints = {};
 
-  /// כתיבת ספר בעל כותרת זו נכשלת — מדמה כשל מנוע באמצע כתיבת ספר.
+  /// כתיבת ספר בעל כותרת זו נכשלת אחרי שמסמכיו כבר נרשמו — מדמה כשל מנוע
+  /// באמצע כתיבת ספר, שמשאיר מסמכים חלקיים בחוצץ.
   String? failAddForTitle;
+
+  /// מדמה writer פגוע: גם מחיקת מסמכים נכשלת.
+  bool failDeleteFilePaths = false;
+
+  /// המחיקה מצליחה אך ה-commit שאחריה נכשל.
+  bool failCommit = false;
+
+  int rollbackCount = 0;
+
+  /// המצב ה"חתום" של האינדקס — מה ש-getIndexedFilePaths מחזיר אחרי rollback.
+  List<String> committedFilePaths = [];
 
   @override
   Future<void> addDocumentsBatch({required List<DocumentInput> docs}) async {
+    addedDocuments.addAll(docs);
     if (failAddForTitle != null &&
         docs.any((d) => d.title == failAddForTitle)) {
       throw StateError('engine write failed');
     }
-    addedDocuments.addAll(docs);
   }
+
+  @override
+  Future<void> rollback() async {
+    rollbackCount++;
+  }
+
+  @override
+  Future<List<String>> getIndexedFilePaths() async => committedFilePaths;
 
   @override
   Future<void> setBulkIndexing({required bool enabled}) async {}
@@ -876,11 +1015,17 @@ class _RecordingSearchEngine implements SearchEngine {
   @override
   Future<void> deleteDocumentsByFilePaths(
       {required List<String> filePaths}) async {
+    if (failDeleteFilePaths) {
+      throw StateError('engine delete failed');
+    }
     removedFilePaths.addAll(filePaths);
   }
 
   @override
   Future<void> commit() async {
+    if (failCommit) {
+      throw StateError('engine commit failed');
+    }
     commitCount++;
   }
 
