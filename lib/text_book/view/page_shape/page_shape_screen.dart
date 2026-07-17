@@ -38,6 +38,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
 import 'dart:isolate';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -536,11 +537,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   String _hiddenColumnMessage(PageShapeDisplaySettingsScope scope) {
     switch (scope) {
       case PageShapeDisplaySettingsScope.book:
-        return 'הטור הוסתר בספר זה. ניתן לשנות בהגדרות צורת הדף.';
+        return TextBookMessages.columnHiddenInBook;
       case PageShapeDisplaySettingsScope.workspace:
-        return 'הטור הוסתר בשולחן העבודה הזה. ניתן לשנות בהגדרות צורת הדף.';
+        return TextBookMessages.columnHiddenInWorkspace;
       case PageShapeDisplaySettingsScope.global:
-        return 'הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.';
+        return TextBookMessages.columnHiddenGlobally;
     }
   }
 

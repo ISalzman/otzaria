@@ -14,6 +14,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/messages/report_messages.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -423,7 +425,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בטעינת רשימת הספרים: $e');
+      UiSnack.showError(SettingsMessages.booksListLoadError(e));
     }
   }
 
@@ -481,14 +483,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await reportService.saveSenderEmail(email);
     if (!mounted) return;
     setState(() {});
-    UiSnack.showSuccess('כתובת הזיהוי נשמרה. ניתן לשנות אותה בהגדרות.');
+    UiSnack.showSuccess(ReportMessages.senderEmailSaved);
   }
 
   Future<void> _clearSenderEmail() async {
     await DirectErrorReportService().clearSenderEmail();
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('כתובת הזיהוי הוסרה.');
+    UiSnack.show(ReportMessages.senderEmailCleared);
   }
 
   Future<void> _flushPendingReports() async {
@@ -507,13 +509,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     });
 
     if (sentCount > 0) {
-      UiSnack.showSuccess('נשלחו $sentCount דיווחים ממתינים.');
+      UiSnack.showSuccess(ReportMessages.pendingFlushed(sentCount));
     } else if (pendingBefore == 0) {
-      UiSnack.show('לא נמצאו דיווחים שמורים לשליחה.');
+      UiSnack.show(ReportMessages.noPendingToSend);
     } else {
-      UiSnack.show(
-        'לא ניתן לשלוח כרגע את הדיווחים השמורים. עדיין שמורים בתור $pendingAfter דיווחים, וניתן לנהל אותם בהגדרות.',
-      );
+      UiSnack.show(ReportMessages.pendingFlushFailed(pendingAfter));
     }
   }
 
@@ -528,7 +528,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } catch (e) {
       debugPrint('Failed to send pending direct report: $e');
       if (mounted) {
-        UiSnack.showError('שגיאה בשליחת הדיווח: ${e.toString()}');
+        UiSnack.showError(ReportMessages.sendError(e));
       }
       return;
     } finally {
@@ -543,7 +543,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (result.isSent) {
       await ErrorReportHelper.showDirectReportDetailsDialog(
         context,
-        title: 'הדיווח נשלח בהצלחה',
+        title: ReportMessages.sentSuccessTitle,
         report: report,
       );
       if (!mounted) return;
@@ -572,7 +572,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await DirectErrorReportService().markPendingReportAsSent(report);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח סומן כנשלח.');
+    UiSnack.show(ReportMessages.markedAsSent);
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -608,7 +608,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
       if (!mounted) return;
       setState(() {});
-      UiSnack.showSuccess('הדיווח עודכן.');
+      UiSnack.showSuccess(ReportMessages.reportUpdated);
     }
   }
 
@@ -627,14 +627,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await DirectErrorReportService().deletePendingReport(report.id);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח הוסר מהתור.');
+    UiSnack.show(ReportMessages.removedFromQueue);
   }
 
   Future<void> _deleteSentReport(DirectErrorReport report) async {
     await DirectErrorReportService().deleteSentReport(report.id);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח נמחק מההיסטוריה.');
+    UiSnack.show(ReportMessages.deletedFromHistory);
   }
 
   Future<void> _clearSentReports() async {
@@ -660,7 +660,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     setState(() {
       _isClearingSentReports = false;
     });
-    UiSnack.show('היסטוריית הדיווחים נוקתה.');
+    UiSnack.show(ReportMessages.historyCleared);
   }
 
   Future<void> _clearPendingReports() async {
@@ -686,7 +686,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     setState(() {
       _isClearingPendingReports = false;
     });
-    UiSnack.show('הדיווחים השמורים נמחקו.');
+    UiSnack.show(ReportMessages.pendingCleared);
   }
 
   /// קובע לאיזו מערכת הפעלה יותאם סקריפט השליחה. בוינדוס מחזיר מיד Windows;
@@ -739,7 +739,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final reports = await reportService.getPendingReports();
     if (reports.isEmpty) {
       if (!mounted) return;
-      UiSnack.show('אין דיווחים שמורים לייצוא.');
+      UiSnack.show(ReportMessages.noPendingToExport);
       return;
     }
 
@@ -782,14 +782,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       UiSnack.showSuccess(
         target == OfflineSendScriptTarget.unix
-            ? 'סקריפט השליחה נשמר בהצלחה. הריצו אותו במחשב מחובר '
-                '(אם הקובץ אינו ניתן להרצה: bash ${script.fileName}).'
-            : 'סקריפט השליחה נשמר בהצלחה. לשליחת הדיווחים הפעילו את הקובץ '
-                'במחשב מחובר.',
+            ? ReportMessages.scriptSavedUnix(script.fileName)
+            : ReportMessages.scriptSavedWindows,
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשמירת הסקריפט: ${e.toString()}');
+      UiSnack.showError(ReportMessages.scriptSaveError(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -829,7 +827,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 return;
               }
               context.read<LibraryBloc>().add(RefreshLibrary());
-              UiSnack.showSuccess('הספרייה נטענה בהצלחה.');
+              UiSnack.showSuccess(SettingsMessages.libraryLoaded);
             }
 
             if (librarySelectionState is EmptyLibraryError &&
@@ -1392,8 +1390,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         final partial = result.skippedSections.isNotEmpty;
         final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
         final message = partial
-            ? 'גיבוי חלקי נשמר ($sizeStr) — חסרים: ${result.skippedSections.join(", ")}'
-            : 'הגיבוי נשמר! גודל: $sizeStr';
+            ? SettingsMessages.partialBackupSaved(
+                sizeStr, result.skippedSections.join(", "))
+            : SettingsMessages.backupSaved(sizeStr);
         UiSnack.showWithAction(
           message: message,
           actionLabel: 'פתח מיקום קובץ',
@@ -1412,7 +1411,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       }
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה ביצירת הגיבוי: ${e.toString()}');
+      UiSnack.showError(SettingsMessages.backupCreateError(e));
     }
   }
 
@@ -1420,7 +1419,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final backups = await BackupService.getAvailableBackups();
     if (backups.isEmpty) {
       if (!mounted) return;
-      UiSnack.showError('לא נמצא קובץ גיבוי בתיקיית הגיבוי');
+      UiSnack.showError(SettingsMessages.noBackupFileFound);
       return;
     }
     final filePath = backups.first.path;
@@ -1445,7 +1444,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final archivePath = await BackupService.getArchivePathIfExists();
     if (!mounted) return;
     if (archivePath == null) {
-      UiSnack.show('עדיין לא נוצר ארכיון — הוא נבנה כשגיבויים ישנים ממוזגים');
+      UiSnack.show(SettingsMessages.archiveNotCreatedYet);
       return;
     }
 
@@ -1486,7 +1485,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשחזור הגיבוי: ${e.toString()}');
+      UiSnack.showError(SettingsMessages.backupRestoreError(e));
     }
   }
 
@@ -1498,16 +1497,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       final actions = <String>[
         if (result.mergedIntoArchive > 0)
-          '${result.mergedIntoArchive} גיבויים מוזגו לארכיון',
-        if (result.deletedBackups > 0) '${result.deletedBackups} קבצים נמחקו',
-        if (result.freedBytes > 0) 'התפנו ${_formatBytes(result.freedBytes)}',
+          SettingsMessages.backupsMergedToArchive(result.mergedIntoArchive),
+        if (result.deletedBackups > 0)
+          SettingsMessages.backupFilesDeleted(result.deletedBackups),
+        if (result.freedBytes > 0)
+          SettingsMessages.backupSpaceFreed(_formatBytes(result.freedBytes)),
       ];
-      UiSnack.show(
-          actions.isEmpty ? 'אין מה לנקות — הכל מעודכן' : actions.join(', '));
+      UiSnack.show(actions.isEmpty
+          ? SettingsMessages.nothingToClean
+          : actions.join(', '));
       await _loadBackupStatus();
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בניקוי הגיבויים: ${e.toString()}');
+      UiSnack.showError(SettingsMessages.backupCleanupError(e));
     } finally {
       if (mounted) setState(() => _isRunningMaintenance = false);
     }
@@ -1532,7 +1534,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (verified != true) return;
     if (context.mounted) {
       context.read<SettingsBloc>().add(UpdateProtectedModeEnabled(newValue));
-      UiSnack.show(newValue ? 'המצב המוגן הופעל' : 'המצב המוגן הושבת');
+      UiSnack.show(newValue
+          ? SettingsMessages.protectedModeEnabled
+          : SettingsMessages.protectedModeDisabled);
     }
   }
 

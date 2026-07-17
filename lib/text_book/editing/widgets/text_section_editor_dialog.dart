@@ -13,6 +13,7 @@ import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -212,8 +213,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
 
     _hasShownNotification = true;
 
-    UiSnack.show(
-        'שים לב: השינויים נשמרים מקומית בלבד, ובמקרה של עדכון הספרייה, השינויים ימחקו!',
+    UiSnack.show(TextBookMessages.localEditsWarning,
         duration: const Duration(seconds: 4));
   }
 
@@ -287,7 +287,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
 
     if (widget.hasLinksFile && text.contains('\n')) {
       // Prevent line breaks in books with links
-      UiSnack.show('בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות');
+      UiSnack.show(TextBookMessages.lineStructureLocked);
       return;
     }
 
@@ -368,8 +368,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
           widget.hasLinksFile) {
         // Prevent Enter in books with links
-        UiSnack.show(
-            'בספר זה אסור לשנות מבנה שורות כדי לשמור על קישורי פרשנות');
+        UiSnack.show(TextBookMessages.lineStructureLocked);
         return true;
       } else if (event.logicalKey == LogicalKeyboardKey.f3) {
         // F3 - Find next
@@ -538,7 +537,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog>
       _editorFocusNode.requestFocus();
     } else {
       // Show not found message
-      UiSnack.show('הטקסט לא נמצא');
+      UiSnack.show(TextBookMessages.textNotFound);
     }
   }
 

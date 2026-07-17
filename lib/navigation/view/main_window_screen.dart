@@ -9,6 +9,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
@@ -1128,7 +1129,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final book =
         library.getAllBooks().firstWhereOrNull((b) => b.id == action.bookId);
     if (book == null) {
-      UiSnack.showError('הספר עם המזהה ${action.bookId} לא נמצא בספרייה');
+      UiSnack.showError(LibraryMessages.bookNotFoundById(action.bookId));
       return false;
     }
     dispatchOpenBookAction(
@@ -1150,7 +1151,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           (b) => b is PdfBook && b.id == action.bookId,
         );
     if (book == null) {
-      UiSnack.showError('ספר ה-PDF עם המזהה ${action.bookId} לא נמצא בספרייה');
+      UiSnack.showError(LibraryMessages.pdfBookNotFoundById(action.bookId));
       return false;
     }
     dispatchOpenPdfBookAction(
@@ -1215,16 +1216,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
         final plugin =
             blocState.plugins.firstWhereOrNull((p) => p.pluginId == pluginId);
         if (plugin == null) {
-          UiSnack.showError('התוסף "$pluginId" לא נמצא');
+          UiSnack.showError(LibraryMessages.pluginNotFound(pluginId));
         } else if (!plugin.enabled) {
-          UiSnack.showError('התוסף "${plugin.name}" מושבת');
+          UiSnack.showError(LibraryMessages.pluginDisabled(plugin.name));
         } else {
           toolsState.openPluginTransiently(plugin);
         }
       },
       isReady: (_) =>
           context.read<PluginSystemBloc>().state is PluginSystemLoaded,
-      onExhausted: () => UiSnack.showError('התוסף "$pluginId" לא נמצא'),
+      onExhausted: () =>
+          UiSnack.showError(LibraryMessages.pluginNotFound(pluginId)),
       attemptsLeft: 100,
     );
   }

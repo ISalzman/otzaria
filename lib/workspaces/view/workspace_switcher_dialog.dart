@@ -13,6 +13,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 class WorkspaceSwitcherDialog extends StatefulWidget {
@@ -234,13 +235,13 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
               onPressed: () {
                 // Remove the workspace
                 if (isActive) {
-                  UiSnack.showError('לא ניתן למחוק שולחן עבודה פעיל');
+                  UiSnack.showError(NotesMessages.cannotDeleteActiveWorkspace);
                   return;
                 }
                 context
                     .read<WorkspaceBloc>()
                     .add(RemoveWorkspace(workspace.id));
-                UiSnack.show('שולחן העבודה נמחק');
+                UiSnack.show(NotesMessages.workspaceDeleted);
               },
             ),
           ),

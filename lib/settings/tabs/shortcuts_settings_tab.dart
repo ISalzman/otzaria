@@ -15,6 +15,7 @@ import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
 import 'package:otzaria/shortcuts/view/shortcut_dropdown_tile.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 /// טאב קיצורי מקלדת — מוצג רק בדסקטופ.
@@ -888,7 +889,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
 
     if (conflictingNames.isNotEmpty) {
       UiSnack.showError(
-        'קיצור זה כבר בשימוש עבור: ${conflictingNames.join(', ')}',
+        SettingsMessages.shortcutAlreadyInUse(conflictingNames.join(', ')),
       );
       return;
     }
@@ -905,7 +906,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
     );
     if (confirmed == true && context.mounted) {
       context.read<SettingsBloc>().add(ResetShortcuts());
-      UiSnack.showSuccess('קיצורי המקשים אופסו בהצלחה');
+      UiSnack.showSuccess(SettingsMessages.shortcutsReset);
     }
   }
 }

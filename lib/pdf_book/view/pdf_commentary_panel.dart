@@ -40,6 +40,7 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
@@ -904,14 +905,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   Future<void> printDisplayedCommentaries() async {
     final visibleContent = _getVisibleContent();
     if (visibleContent == null || visibleContent.commentaryLinks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(PdfMessages.noCommentariesToPrint);
       return;
     }
 
     final groups = await visibleContent.sortedGroupsFuture;
     final blocks = await buildCommentaryPrintBlocks(groups);
     if (blocks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(PdfMessages.noCommentariesToPrint);
       return;
     }
     if (!mounted) return;

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -157,9 +158,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       final validChars = RegExp(r'^[א-תםןךףץ\s0-9]+$');
       if (!validChars.hasMatch(searchText)) {
         if (mounted) {
-          UiSnack.showError(
-            'קלט לא תקין. יש להזין אותיות עבריות או מספרים בלבד.',
-          );
+          UiSnack.showError(ToolsMessages.gematriaInvalidInput);
         }
         return;
       }
@@ -285,7 +284,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
         _isSearching = false;
         _searchResults = [];
       });
-      UiSnack.showError('שגיאה בחיפוש: $e');
+      UiSnack.showError(ToolsMessages.gematriaSearchError(e));
     }
   }
 

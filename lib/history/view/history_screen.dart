@@ -9,6 +9,7 @@ import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -315,11 +316,11 @@ class _HistoryViewState extends State<HistoryView> {
                 },
                 onDelete: (ctx, originalIndex) {
                   ctx.read<HistoryBloc>().add(RemoveHistory(originalIndex));
-                  UiSnack.show('נמחק בהצלחה');
+                  UiSnack.show(NotesMessages.historyEntryDeleted);
                 },
                 onClearAll: (ctx) {
                   ctx.read<HistoryBloc>().add(ClearHistory());
-                  UiSnack.show('כל ההיסטוריה נמחקה');
+                  UiSnack.show(NotesMessages.allHistoryDeleted);
                 },
                 hintText: 'חפש בהיסטוריה...',
                 emptyText: 'אין היסטוריה',

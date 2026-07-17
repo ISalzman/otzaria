@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
@@ -661,8 +662,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
           e is TimeoutException ||
           e is http.ClientException;
       _showUpdateError(isNetwork
-          ? 'שגיאה בחיבור לרשת במהלך בדיקת עדכונים'
-          : 'שגיאה בבדיקת עדכונים');
+          ? LibraryMessages.updateCheckNetworkError
+          : LibraryMessages.updateCheckError);
     }
   }
 
@@ -818,7 +819,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       });
     } catch (e, st) {
       debugPrint('[Update] download failed: $e\n$st');
-      _showUpdateError('שגיאה בהורדת העדכון');
+      _showUpdateError(LibraryMessages.updateDownloadError);
     }
   }
 
@@ -835,7 +836,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
-      _showUpdateError('שגיאה בהפעלת מתקין העדכון');
+      _showUpdateError(LibraryMessages.updateInstallerLaunchError);
       return false;
     }
   }

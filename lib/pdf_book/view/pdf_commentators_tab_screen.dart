@@ -11,6 +11,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -734,7 +735,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       commentatorsToShow: sourceTab.activeCommentators.toList(),
       targetKind: BookmarkTargetKind.commentators,
     );
-    UiSnack.show(added ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+    UiSnack.show(added
+        ? NotesMessages.bookmarkAdded
+        : NotesMessages.bookmarkAlreadyExists);
   }
 
   Widget _buildAppTopBar(BuildContext context) {

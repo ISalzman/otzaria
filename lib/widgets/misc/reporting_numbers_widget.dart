@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 /// Widget that displays reporting numbers with copy functionality
@@ -227,11 +228,11 @@ class ReportingNumbersWidget extends StatelessWidget {
     try {
       await Clipboard.setData(ClipboardData(text: text));
       if (context.mounted) {
-        UiSnack.show('הועתק ללוח: $text');
+        UiSnack.show(CommonMessages.copiedToClipboard(text));
       }
     } catch (e) {
       if (context.mounted) {
-        UiSnack.showError('שגיאה בהעתקה ללוח');
+        UiSnack.showError(CommonMessages.clipboardCopyError);
       }
     }
   }
@@ -243,12 +244,12 @@ class ReportingNumbersWidget extends StatelessWidget {
         await launchUrl(phoneUri);
       } else {
         if (context.mounted) {
-          UiSnack.showError('לא ניתן לפתוח את אפליקציית הטלפון');
+          UiSnack.showError(CommonMessages.cannotOpenPhoneApp);
         }
       }
     } catch (e) {
       if (context.mounted) {
-        UiSnack.showError('שגיאה בפתיחת אפליקציית הטלפון');
+        UiSnack.showError(CommonMessages.phoneAppOpenError);
       }
     }
   }

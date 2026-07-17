@@ -13,6 +13,8 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -1499,7 +1501,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
                 final bookId = widget.tab.book.id;
                 if (bookId == null) {
-                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                  UiSnack.showError(PdfMessages.directLinkUnavailableForBook);
                 } else {
                   copyLinkToClipboard(buildPdfBookLink(bookId));
                 }
@@ -1509,7 +1511,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ShortcutHelper.matchesShortcut(event, copyPageLinkShortcut)) {
                 final bookId = widget.tab.book.id;
                 if (bookId == null) {
-                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                  UiSnack.showError(PdfMessages.directLinkUnavailableForBook);
                 } else {
                   final page = widget.tab.pdfViewerController.pageNumber ??
                       widget.tab.pageNumber;
@@ -3003,7 +3005,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _bloc.add(const pdf_events.ResetPerBookSettings());
     widget.tab.activeCommentators.clear();
     if (mounted) {
-      UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
+      UiSnack.show(PdfMessages.perBookSettingsReset);
     }
   }
 
@@ -4201,7 +4203,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!context.mounted) return;
 
     if (index == null) {
-      UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+      UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
     }
     openBook(context, textBook, index ?? 0, '',
         ignoreHistory: true, insertAdjacent: true);
@@ -4238,13 +4240,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           .read<BookmarkBloc>()
           .addBookmark(ref: ref, book: widget.tab.book, index: index);
       if (mounted) {
-        UiSnack.show(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+        UiSnack.show(bookmarkAdded
+            ? NotesMessages.bookmarkAdded
+            : NotesMessages.bookmarkAlreadyExists);
       }
     } catch (e) {
       debugPrint('Error adding bookmark: $e');
       if (mounted) {
-        UiSnack.show('שגיאה בהוספת הסימניה');
+        UiSnack.show(NotesMessages.bookmarkAddError);
       }
     }
 
@@ -4387,7 +4390,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 if (!context.mounted) return;
 
                 if (index == null) {
-                  UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+                  UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
                 }
                 openBook(context, snapshot.data!, index ?? 0, '',
                     ignoreHistory: true, insertAdjacent: true);

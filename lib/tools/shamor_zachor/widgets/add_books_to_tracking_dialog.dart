@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -76,7 +77,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
 
   Future<void> _addSelected() async {
     if (_selectedBooks.isEmpty) {
-      UiSnack.show('לא נבחרו ספרים להוספה');
+      UiSnack.show(ToolsMessages.noBooksSelectedToAdd);
       return;
     }
 
@@ -93,15 +94,15 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
       Navigator.of(context).pop();
 
       if (result.added > 0) {
-        UiSnack.show('${result.added} ספרים נוספו למעקב');
+        UiSnack.show(ToolsMessages.booksAddedToTracking(result.added));
       }
       if (result.failed > 0) {
-        UiSnack.showError('${result.failed} ספרים לא נוספו');
+        UiSnack.showError(ToolsMessages.booksAddFailed(result.failed));
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isAdding = false);
-      UiSnack.showError('שגיאה בהוספת ספרים: $e');
+      UiSnack.showError(ToolsMessages.booksAddError(e));
     }
   }
 

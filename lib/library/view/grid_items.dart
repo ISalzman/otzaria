@@ -8,6 +8,7 @@ import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'dart:math';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/library/view/category_details_dialog.dart';
 import 'package:otzaria/library/view/book_versions_dialog.dart';
@@ -827,8 +828,8 @@ Future<void> _deleteBook(Book book) async {
       throw Exception('המחיקה נכשלה');
     }
 
-    UiSnack.show('הספר "${book.title}" נמחק מהספרייה');
+    UiSnack.show(LibraryMessages.bookDeletedFromLibrary(book.title));
   } catch (e) {
-    UiSnack.showError('שגיאה במחיקת הספר: $e');
+    UiSnack.showError(LibraryMessages.bookDeleteError(e));
   }
 }

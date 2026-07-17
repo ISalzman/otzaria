@@ -10,6 +10,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -60,7 +61,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
     try {
       await widget.onLibraryLoaded();
     } catch (error) {
-      UiSnack.showError('שגיאה בטעינת הספרייה. נסה שוב.');
+      UiSnack.showError(LibraryMessages.libraryLoadError);
       debugPrint('Failed to refresh library after selection: $error');
     }
   }
@@ -75,7 +76,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           }
           if (state is EmptyLibraryZipExtracted) {
             UiSnack.showSuccess(
-              'הקובץ "${state.extractedFileName}" חולץ בהצלחה!',
+              LibraryMessages.zipExtractedSuccessfully(state.extractedFileName),
             );
           }
           if (state is EmptyLibraryError && state.errorMessage != null) {

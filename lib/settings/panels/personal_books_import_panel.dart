@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
@@ -96,11 +97,12 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
       if (!mounted) return;
 
       if (result.errors.isNotEmpty) {
-        UiSnack.showError('שגיאות בייבוא:\n${result.errors.join('\n')}');
+        UiSnack.showError(
+            SettingsMessages.importErrors(result.errors.join('\n')));
       }
       if (result.skippedUnsupported > 0) {
-        UiSnack.show(
-            '${result.skippedUnsupported} קבצים דולגו — ניתן לייבא רק TXT, PDF ו-Word');
+        UiSnack.show(SettingsMessages.unsupportedFilesSkipped(
+            result.skippedUnsupported));
       }
       if (result.copied == 0) return;
 
@@ -136,7 +138,7 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
     try {
       await _service.deleteImportedFile(file.path);
     } catch (e) {
-      UiSnack.showError('שגיאה במחיקת הספר: $e');
+      UiSnack.showError(SettingsMessages.bookDeleteError(e));
       return;
     }
     await _refreshFileList();
@@ -145,7 +147,7 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
       showNoChangesMessage: false,
       onlyFolderPath: await _service.getFolderPath(),
     ));
-    UiSnack.show('הספר "$title" נמחק');
+    UiSnack.show(SettingsMessages.bookDeleted(title));
   }
 
   String _fileTypeLabel(String filePath) {

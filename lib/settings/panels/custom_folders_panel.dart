@@ -12,6 +12,7 @@ import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/dialogs/confirmation_dialog.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -121,7 +122,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     final dir = Directory(path);
     if (!await dir.exists()) {
       if (!mounted) return;
-      UiSnack.showError('התיקייה לא נמצאה');
+      UiSnack.showError(SettingsMessages.folderNotFound);
       return;
     }
 
@@ -155,9 +156,9 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     // הסריקה (כולל חילוץ ZIP ששינה את הרכב הקבצים).
 
     String msg =
-        'התיקייה "${path.split(Platform.pathSeparator).last}" נוספה בהצלחה';
+        SettingsMessages.folderAdded(path.split(Platform.pathSeparator).last);
     if (zipExtracted && extractedFileName != null) {
-      msg += '\nהקובץ "$extractedFileName" חולץ בהצלחה!';
+      msg += '\n${SettingsMessages.fileExtracted(extractedFileName)}';
     }
     UiSnack.show(msg, duration: const Duration(seconds: 9));
   }
@@ -250,7 +251,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
         _openInFileManager(folder.path);
       case _FolderMenuAction.copyPath:
         await Clipboard.setData(ClipboardData(text: folder.path));
-        UiSnack.showSuccess('הנתיב הועתק ללוח');
+        UiSnack.showSuccess(SettingsMessages.pathCopied);
       case _FolderMenuAction.remove:
         await _removeFolder(folder);
     }
@@ -564,9 +565,10 @@ class UserContentImportTile extends StatelessWidget {
         return SettingsActionTile.text(
           icon: FluentIcons.arrow_import_24_regular,
           title: 'ייבוא דורות וקישורים',
-          subtitle: 'בחר קובצי "דורות.csv", "<שם הספר>.links.csv" או קובצי קישורים '
-                'של אוצריא ("<שם הספר>_links.json") והם ייקלטו לצמיתות. '
-                'ייבוא חוזר מעדכן ערכים קיימים ומוסיף חדשים.',
+          subtitle:
+              'בחר קובצי "דורות.csv", "<שם הספר>.links.csv" או קובצי קישורים '
+              'של אוצריא ("<שם הספר>_links.json") והם ייקלטו לצמיתות. '
+              'ייבוא חוזר מעדכן ערכים קיימים ומוסיף חדשים.',
           actions: [
             ActionButton.warning(
               text: 'נקה הכל',

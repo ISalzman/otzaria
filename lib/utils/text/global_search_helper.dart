@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -14,7 +15,7 @@ void openGlobalSearch(
 }) {
   final query = selectedText?.trim() ?? '';
   if (query.isEmpty) {
-    UiSnack.show('לא נבחר טקסט לחיפוש');
+    UiSnack.show(CommonMessages.noTextSelectedForSearch);
     return;
   }
 

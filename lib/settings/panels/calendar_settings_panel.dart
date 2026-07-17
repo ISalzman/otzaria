@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -367,7 +368,7 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                                     if (!context.mounted) return;
                                     if (calendars.isEmpty) {
                                       UiSnack.show(
-                                          'לא נמצאו לוחות שנה. נסה להתחבר מחדש.');
+                                          SettingsMessages.noCalendarsFound);
                                       return;
                                     }
                                     final selected =
