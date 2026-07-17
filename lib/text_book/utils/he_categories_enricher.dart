@@ -17,9 +17,8 @@ typedef EnrichedBookData = ({
 /// מחזיר [EnrichedBookData] עם הערכים החדשים — לא משנה את ה-book.
 Future<EnrichedBookData> enrichHeCategories(TextBook book) async {
   if (book.heCategories != null && book.heCategories!.isNotEmpty) {
-    // heCategories קיים — רק מנסים לקבל id
-    final id = await _tryGetIdFromDatabase(book);
-    return (resolvedId: id, heCategories: null, author: null, heEra: null);
+    // heCategories קיים — משלימים רק id ומחבר חסרים מה-DB
+    return _tryGetIdAndAuthorFromDatabase(book);
   }
 
   try {
@@ -57,20 +56,25 @@ Future<EnrichedBookData?> _tryLoadFromDatabase(TextBook book) async {
     resolvedBook.repository,
     resolvedBook.book.categoryId,
   );
+  final dbAuthors = resolvedBook.book.authors;
   return (
     resolvedId: resolvedBook.book.id,
     heCategories: heCategories,
-    author: null,
+    author: book.author == null && dbAuthors.isNotEmpty
+        ? dbAuthors.first.name
+        : null,
     heEra: null,
   );
 }
 
-/// מחפש רק את ה-id ב-DB מבלי לשנות heCategories (כשהוא כבר קיים).
-Future<int?> _tryGetIdFromDatabase(TextBook book) async {
-  if (book.id != null) return null; // כבר יש id
+/// משלים מה-DB רק id ומחבר חסרים, מבלי לשנות heCategories (כשהוא כבר קיים).
+Future<EnrichedBookData> _tryGetIdAndAuthorFromDatabase(TextBook book) async {
+  const EnrichedBookData empty =
+      (resolvedId: null, heCategories: null, author: null, heEra: null);
+  if (book.id != null && book.author != null) return empty;
   final sqliteProvider = SqliteDataProvider.instance;
   if (!await sqliteProvider.databaseExists() && !book.isUserBook) {
-    return null;
+    return empty;
   }
   try {
     final resolvedBook = await BookDatabaseResolver.resolveBook(
@@ -83,10 +87,19 @@ Future<int?> _tryGetIdFromDatabase(TextBook book) async {
         categoryPath: book.categoryPath,
       ),
     );
-    return resolvedBook?.book.id;
+    if (resolvedBook == null) return empty;
+    final dbAuthors = resolvedBook.book.authors;
+    return (
+      resolvedId: book.id == null ? resolvedBook.book.id : null,
+      heCategories: null,
+      author: book.author == null && dbAuthors.isNotEmpty
+          ? dbAuthors.first.name
+          : null,
+      heEra: null,
+    );
   } catch (e) {
-    debugPrint('⚠️ Failed to get book id from DB: $e');
-    return null;
+    debugPrint('⚠️ Failed to get book id/author from DB: $e');
+    return empty;
   }
 }
 
