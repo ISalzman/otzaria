@@ -11,6 +11,7 @@ import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -3424,7 +3425,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // לולאת האירועים אחת לכמה ספרים — ה-UI ממשיך להגיב בלי לשנות את
       // לוגיקת ה-DB עצמה.
       var processedSinceYield = 0;
-      // ה-source 'external' משותף לכל הספרים — נפתר פעם אחת לסריקה.
+      // source פר-תיקייה (Personal::<נתיב>) — זהה לזה שמסלול הסנכרון/מחיקה
+      // מצפה לו, כדי שה-prune והמחיקה יזהו את הספרים לפי שם ה-source.
+      final folderSourceName = CustomFolderSource.nameForFolder(folderPath);
       int? scanSourceId;
       for (final book in discovered) {
         if (++processedSinceYield >= 8) {
@@ -3486,7 +3489,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             }
           }
 
-          scanSourceId ??= await repository.insertSource('external', -1);
+          scanSourceId ??= await repository.insertSource(folderSourceName, -1);
           await repository.insertExternalContentBook(
             categoryId: categoryId,
             title: book.title,
