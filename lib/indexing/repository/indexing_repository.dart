@@ -323,6 +323,9 @@ class IndexingRepository {
           errors++;
           processedBooks++;
           onProgress(processedBooks, totalBooks);
+          if (!isBookIndexed(book)) {
+            await _discardPartialBookWrites(book);
+          }
         }
 
         await Future.delayed(Duration.zero);
@@ -580,6 +583,19 @@ class IndexingRepository {
         generationOrder: chronologicalOrderForBook(book),
       ),
     ]);
+  }
+
+  /// מוחק את המסמכים החלקיים של ספר שכתיבתו למנוע נכשלה באמצע: בלעדי זה
+  /// ה-commit הבא חותם ספר חלקי, שנחשב "מאונדקס" ולעולם לא מנוסה שוב.
+  Future<void> _discardPartialBookWrites(Book book) async {
+    try {
+      final engine = await _tantivyDataProvider.engine;
+      await engine.deleteDocumentsByFilePaths(
+        filePaths: [buildIndexedBookFilePath(book)],
+      );
+    } catch (e) {
+      debugPrint('⚠️ מחיקת מסמכים חלקיים של ${book.title} נכשלה: $e');
+    }
   }
 
   /// עוטפת את [_extractPdfPages] כך שהתוצאה לעולם אינה זריקה: שגיאת פתיחה
@@ -933,6 +949,9 @@ class IndexingRepository {
           errors++;
           processedBooks++;
           onProgress(processedBooks, totalBooks);
+          if (!isBookIndexed(book)) {
+            await _discardPartialBookWrites(book);
+          }
         }
 
         await Future.delayed(Duration.zero);

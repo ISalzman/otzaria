@@ -539,6 +539,27 @@ void main() {
       expect(calls.first, (1, 2, 0));
       expect(calls.last.$1, 2);
     });
+
+    test('כשל באמצע כתיבת ספר מוחק את מסמכיו החלקיים מהאינדקס', () async {
+      // רגרסיה: בלי המחיקה, ה-commit הבא חתם כתיבה חלקית והספר נחשב
+      // "מאונדקס" לתמיד — ספר חלקי קבוע בתוצאות החיפוש.
+      final engine = _RecordingSearchEngine()..failAddForTitle = 'ב';
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.addAll([
+        PdfBook(title: 'א', path: r'C:\missing\א.pdf'),
+        PdfBook(title: 'ב', path: r'C:\missing\ב.pdf'),
+      ]);
+      final repository = IndexingRepository(provider);
+
+      final result =
+          await repository.indexAllBooks(library, onProgress: (_, __) {});
+
+      expect(result, isTrue);
+      // רק הספר שכשל נוקה; שכנו שהצליח לא נמחק.
+      expect(engine.removedFilePaths, [r'C:\missing\ב.pdf']);
+      expect(provider.indexedFilePaths, {r'C:\missing\א.pdf'});
+    });
   });
 
   group('IndexingRepository.orderBooksForIndexing', () {
@@ -834,8 +855,15 @@ class _RecordingSearchEngine implements SearchEngine {
   /// טביעות-אצבע פר-ספר שהמנוע "קרא מהאינדקס" — לבדיקות reconcile.
   Map<String, BigInt> fingerprints = {};
 
+  /// כתיבת ספר בעל כותרת זו נכשלת — מדמה כשל מנוע באמצע כתיבת ספר.
+  String? failAddForTitle;
+
   @override
   Future<void> addDocumentsBatch({required List<DocumentInput> docs}) async {
+    if (failAddForTitle != null &&
+        docs.any((d) => d.title == failAddForTitle)) {
+      throw StateError('engine write failed');
+    }
     addedDocuments.addAll(docs);
   }
 
