@@ -327,25 +327,35 @@ class _FindRefDialogState extends State<FindRefDialog> {
       final needsTextBook =
           initialCommentators != null && initialCommentators.isNotEmpty;
 
+      Library? library;
+      try {
+        library = await DataRepository.instance.library;
+      } catch (e) {
+        debugPrint('Error loading library: $e');
+      }
+
       // הגדרת "פורמט פתיחת תלמוד בבלי": תוצאת טקסט של מסכת בבלי נפתחת
-      // במהדורת ה-PDF בדף הממופה. bookPath מוסר לאימות שהתוצאה עצמה בבלי.
-      if (!needsTextBook && !ref.isUserBook) {
-        final pdfTarget = await resolveTalmudBavliPdfTarget(
-            TextBook(
-              title: ref.title,
-              categoryPath: ref.bookPath.isEmpty ? null : ref.bookPath,
-            ),
-            segment);
-        if (pdfTarget != null) {
-          book = pdfTarget.book;
-          segment = pdfTarget.page;
-          openAsPdf = true;
+      // במהדורת ה-PDF בדף הממופה. מזהים את ספר המקור בעץ לפי bookId (זהות
+      // יציבה) ומעבירים אותו ל-resolver; בלי זיהוי ודאי לא ממירים ל-PDF,
+      // אחרת בחירה לפי כותרת בלבד עלולה לפתוח ספר אחר בעל שם זהה.
+      if (!needsTextBook &&
+          !ref.isUserBook &&
+          library != null &&
+          ref.bookId > 0) {
+        final sourceBook = _findBookInLibraryById(library, ref.bookId);
+        if (sourceBook is TextBook) {
+          final pdfTarget =
+              await resolveTalmudBavliPdfTarget(sourceBook, segment);
+          if (pdfTarget != null) {
+            book = pdfTarget.book;
+            segment = pdfTarget.page;
+            openAsPdf = true;
+          }
         }
       }
 
       if (book == null) {
-        try {
-          final library = await DataRepository.instance.library;
+        if (library != null) {
           // ספרים אישיים: ה-`bookId` שלהם שייך ל-user_books.db ואין לו תאומים
           // ב-library object, לכן ניפול ל-title; ספר רשמי עם `bookId > 0`
           // נפתח דרך ה-id כדי שלא יחליף שני ספרים בעלי אותה כותרת.
@@ -358,8 +368,6 @@ class _FindRefDialogState extends State<FindRefDialog> {
           if (book is PdfBook && isTalmudBavliBook(book)) {
             book = null;
           }
-        } catch (e) {
-          debugPrint('Error searching library: $e');
         }
         book ??= TextBook(title: ref.title);
       }

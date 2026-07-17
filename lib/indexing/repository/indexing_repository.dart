@@ -1044,6 +1044,14 @@ class IndexingRepository {
     final keys = <String>{
       for (final book in books) buildIndexedBookFilePath(book),
     }..remove('');
+    return _deleteIndexedFilePaths(keys);
+  }
+
+  /// מוחק רשומות אינדקס לפי מפתחות ה-filePath שלהן ומעדכן את המעקב בזיכרון
+  /// רק אחרי commit מאושר. בכשל delete/commit מבצע שחזור מנוע אמין
+  /// ([_recoverEngineAfterWriteFailure]: rollback + reopen מאולץ) ומחזיר
+  /// false — כך המעקב לא מסומן כמנוקה בעוד מחיקה עלולה להיכתב לדיסק מאוחר.
+  Future<bool> _deleteIndexedFilePaths(Set<String> keys) async {
     if (keys.isEmpty) return true;
 
     final engine = await _tantivyDataProvider.engine;
@@ -1077,13 +1085,13 @@ class IndexingRepository {
     if (books.isEmpty) return 0;
 
     // מוודא שה-indexedFilePaths כבר נטענו מהאינדקס (חלק מאתחול המנוע).
-    final engine = await _tantivyDataProvider.engine;
+    await _tantivyDataProvider.engine;
 
     final libraryKeys = <String>{
       for (final book in books) buildIndexedBookFilePath(book),
     };
 
-    final orphans = <String>[];
+    final orphans = <String>{};
     // snapshot — הלולאה מכילה await ואסור שהסט החי ישתנה תחתיה.
     for (final key in _tantivyDataProvider.indexedFilePaths.toList()) {
       if (libraryKeys.contains(key)) continue;
@@ -1095,9 +1103,9 @@ class IndexingRepository {
     }
     if (orphans.isEmpty) return 0;
 
-    await engine.deleteDocumentsByFilePaths(filePaths: orphans);
-    await engine.commit();
-    _tantivyDataProvider.indexedFilePaths.removeAll(orphans);
+    // כשל delete/commit ⇒ שחזור מנוע והחזרת 0: המעקב לא סומן כמנוקה, כך
+    // שקובץ שיחזור לספרייה לא יידלג בטעות כ"מאונדקס".
+    if (!await _deleteIndexedFilePaths(orphans)) return 0;
     debugPrint('🧹 נוקו ${orphans.length} ספרים יתומים מהאינדקס');
     return orphans.length;
   }

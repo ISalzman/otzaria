@@ -348,7 +348,9 @@ class TantivyDataProvider {
     try {
       String indexPath = await AppPaths.getIndexPath();
       await resetIndex(indexPath);
-      await reopenIndex();
+      // force: אחרי reset המנוע סגור וחייב פתיחה; בלי force מגבלת חמש
+      // השניות (פתיחה קודמת זה עתה) הייתה מדלגת ומשאירה מנוע סגור.
+      await reopenIndex(force: true);
     } catch (e) {
       debugPrint('❌ Error handling schema error: $e');
     }
@@ -371,45 +373,35 @@ class TantivyDataProvider {
     // Reset engines (כולל קריאה מחדש של מצב האינדקס מהאינדקס עצמו)
     engine = _initAll();
 
-    // Check engine
-    engine.then((value) {
-      try {
-        // Test the search engine
-        _searchGateway
-            .search(
-          RustSearchEngineOperations(value),
-          const SearchEngineRequest(
-            query: 'a',
-            limit: 10,
-            offset: 0,
-            facets: ["/"],
-            order: ResultsOrder.catalogue,
-            searchMode: SearchMode.exact,
-          ),
-        )
-            .then((results) {
-          // Engine test successful
-          debugPrint('✅ Search engine test successful');
-        }).catchError((e) {
-          debugPrint('❌ Engine test error: $e');
-        });
-      } catch (e) {
-        // Log sync engine test error
-        debugPrint('❌ Sync engine test error: $e');
-        if (e.toString() ==
-            "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-          // Handle schema error asynchronously
-          _handleSchemaError();
-        } else {
-          rethrow;
-        }
-      }
-    });
-
-    // הצלחה = האתחול הושלם: בלעדי ההמתנה, "הצלחה" הייתה מדווחת עוד לפני
-    // ש-indexedFilePaths נקרא מחדש — והמעקב היה נשאר מעופש.
-    await engine;
+    // await יחיד: כשל ב-_initAll מופץ לקורא. בלעדיו (engine.then נגזר
+    // שנזרק) הכשל היה מדווח כשגיאה אסינכרונית לא-מטופלת. ההמתנה גם מבטיחה
+    // ש-indexedFilePaths נקרא מחדש לפני דיווח ההצלחה.
+    final value = await engine;
     debugPrint('✅ Search index reopened successfully');
+
+    // בדיקת שפיות של המנוע — try/catch יחיד. שגיאת סכימה מפעילה איפוס
+    // ובנייה מחדש; הקריאה fire-and-forget כי היא חוזרת ל-reopenIndex,
+    // וההמתנה לה מתוך פתיחה פעילה הייתה ננעלת על השער (re-entrant).
+    try {
+      await _searchGateway.search(
+        RustSearchEngineOperations(value),
+        const SearchEngineRequest(
+          query: 'a',
+          limit: 10,
+          offset: 0,
+          facets: ["/"],
+          order: ResultsOrder.catalogue,
+          searchMode: SearchMode.exact,
+        ),
+      );
+      debugPrint('✅ Search engine test successful');
+    } catch (e) {
+      debugPrint('❌ Engine test error: $e');
+      if (e.toString() ==
+          "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
+        unawaited(_handleSchemaError());
+      }
+    }
   }
 
   Future<int> countTexts(String query, List<String> books, List<String> facets,
