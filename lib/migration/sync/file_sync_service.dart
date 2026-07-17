@@ -55,7 +55,7 @@ class FileSyncResult {
 /// to the database automatically. It runs in the background after app startup.
 class FileSyncService {
   static final _log = Logger('FileSyncService');
-  static const String _customFolderSourcePrefix = 'Personal::';
+  static const String _customFolderSourcePrefix = CustomFolderSource.prefix;
   static FileSyncService? _instance;
 
   /// Repository של `seforim.db` — לתוכן הרשמי (אוצריא, links).
@@ -222,14 +222,11 @@ class FileSyncService {
     _log.info('Folder deleted from DB ($removed books removed)');
   }
 
-  String _normalizeFolderPath(String folderPath) {
-    final normalized = path.normalize(folderPath);
-    return Platform.isWindows ? normalized.toLowerCase() : normalized;
-  }
+  String _normalizeFolderPath(String folderPath) =>
+      CustomFolderSource.normalizePath(folderPath);
 
-  String _buildCustomFolderSourceName(String folderPath) {
-    return '$_customFolderSourcePrefix${_normalizeFolderPath(folderPath)}';
-  }
+  String _buildCustomFolderSourceName(String folderPath) =>
+      CustomFolderSource.nameForFolder(folderPath);
 
   String? _extractCustomFolderPathFromSourceName(String? sourceName) {
     if (sourceName == null ||
@@ -386,8 +383,17 @@ class FileSyncService {
             ? sourceNameCache[book.sourceId]
             : (sourceNameCache[book.sourceId] =
                 (await repo.getSourceById(book.sourceId))?.name);
-        // לא שייך לתיקייה הנוכחית — לא נוגעים בו.
-        if (sourceName != folderSourceName) continue;
+        // שיוך לתיקייה לפי שם ה-source. נפילה-חזרה לפי נתיב הקובץ מוגבלת
+        // *אך ורק* למקור ה-legacy המדויק שמסלול ההוספה הישן ייצר
+        // ('external'), כדי לזהות נתונים ישנים בלי לגעת בספרים ממקור אחר
+        // (תיקייה אחרת, ייבוא) שקובצם במקרה יושב בתוך התיקייה.
+        final bookPath = book.filePath;
+        final belongsToFolder = sourceName == folderSourceName ||
+            (sourceName == CustomFolderSource.legacyExternalSourceName &&
+                bookPath != null &&
+                bookPath.isNotEmpty &&
+                _isPathInsideFolder(bookPath, folderPath));
+        if (!belongsToFolder) continue;
         if (keepKeys != null) {
           // זרימת prune (רענון): ספר "עותק עצמאי" (התוכן נשמר בתוכנה,
           // filePath=null) נועד לשרוד גם אם הקובץ נמחק מהדיסק — זה כל

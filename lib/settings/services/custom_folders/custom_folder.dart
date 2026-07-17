@@ -1,6 +1,28 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:path/path.dart' as p;
+
+/// מקור-אמת יחיד לשם ה-`source` שמזהה ספר כשייך לתיקייה מותאמת אישית.
+/// מסלול ההוספה ומסלול הסנכרון/מחיקה חייבים לתייג באותו שם, אחרת ה-prune
+/// והמחיקה לא מזהים את הספרים.
+class CustomFolderSource {
+  static const String prefix = 'Personal::';
+
+  static String normalizePath(String folderPath) {
+    final normalized = p.normalize(folderPath);
+    return Platform.isWindows ? normalized.toLowerCase() : normalized;
+  }
+
+  /// שם ה-`source` שמסלול ההוספה הישן תייג בו ספרי תיקיות לפני האיחוד
+  /// ל-[prefix]. נשמר רק כדי שה-prune יזהה נתונים legacy מדויקים ויסירם.
+  static const String legacyExternalSourceName = 'external';
+
+  /// שם ה-`source` לתיקייה בנתיב [folderPath].
+  static String nameForFolder(String folderPath) =>
+      '$prefix${normalizePath(folderPath)}';
+}
 
 /// מודל לתיקייה מותאמת אישית שהמשתמש הוסיף
 class CustomFolder {
