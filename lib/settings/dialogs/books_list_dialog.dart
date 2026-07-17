@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -83,10 +84,10 @@ class _BooksListDialogState extends State<_BooksListDialog> {
       // BOM כדי שאקסל יזהה UTF-8 כראוי בעברית.
       await File(path).writeAsString('﻿$csv');
       if (!mounted) return;
-      UiSnack.show('רשימת הספרים נשמרה: ${_rows.length} שורות');
+      UiSnack.show(SettingsMessages.booksListSaved(_rows.length));
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשמירת הקובץ: $e');
+      UiSnack.showError(SettingsMessages.fileSaveError(e));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }

@@ -13,6 +13,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/plugin_messages.dart';
 
 class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   final PluginRegistryRepository repository;
@@ -89,7 +90,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       emit(PluginSystemLoaded(plugins));
     } catch (e) {
       emit(PluginSystemError(e.toString()));
-      UiSnack.showError('שגיאה בטעינת תוספים: ${e.toString()}');
+      UiSnack.showError(PluginMessages.loadPluginsError(e));
     }
   }
 
@@ -110,7 +111,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await repository.updatePinState(event.pluginId, true);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בהצמדת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.pinPluginError(e));
     }
   }
 
@@ -120,7 +121,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await repository.updatePinState(event.pluginId, false);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בהסרת הצמדת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.unpinPluginError(e));
     }
   }
 
@@ -130,7 +131,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await repository.updateNavRailPinState(event.pluginId, true);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בהצמדת התוסף לסרגל הניווט: ${e.toString()}');
+      UiSnack.showError(PluginMessages.pinPluginToNavRailError(e));
     }
   }
 
@@ -141,8 +142,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await repository.updateNavRailPinState(event.pluginId, false);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError(
-          'שגיאה בהסרת הצמדת התוסף מסרגל הניווט: ${e.toString()}');
+      UiSnack.showError(PluginMessages.unpinPluginFromNavRailError(e));
     }
   }
 
@@ -154,8 +154,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       add(LoadPlugins());
     } catch (e) {
       UiSnack.showError(event.showInTools
-          ? 'שגיאה בהצגת התוסף בכלים: ${e.toString()}'
-          : 'שגיאה בהסרת התוסף מהכלים: ${e.toString()}');
+          ? PluginMessages.showPluginInToolsError(e)
+          : PluginMessages.hidePluginFromToolsError(e));
     }
   }
 
@@ -165,7 +165,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await repository.reorderPlugins(event.orderedPluginIds);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בעדכון סדר התוספים: ${e.toString()}');
+      UiSnack.showError(PluginMessages.reorderPluginsError(e));
     }
   }
 
@@ -190,7 +190,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         version: e.version,
       ));
     } catch (e) {
-      UiSnack.showError('שגיאה בהתקנת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.installPluginError(e));
       add(LoadPlugins()); // Reset state
     }
   }
@@ -218,21 +218,18 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
             prepareInfo.previousAllowOrderBeforeBuiltInsGranted,
       ));
     } on PluginOverwriteException catch (e) {
-      UiSnack.show(
-        'תוסף זה כבר מותקן אצלך, באותה הגרסה. '
-        'להתקנה מחדש השתמש בקישור עם overwrite=true.',
-      );
+      UiSnack.show(PluginMessages.pluginAlreadyInstalledSameVersion);
       debugPrint(
         'Plugin overwrite required for "${e.pluginName}" version ${e.version}',
       );
       add(LoadPlugins());
     } on PluginNewerVersionInstalledException catch (e) {
       UiSnack.show(
-        'כבר מותקנת אצלך גרסה חדשה יותר של "${e.pluginName}" (${e.installedVersion})',
+        PluginMessages.newerVersionInstalled(e.pluginName, e.installedVersion),
       );
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בהתקנת התוסף מהחנות: ${e.toString()}');
+      UiSnack.showError(PluginMessages.installRemotePluginError(e));
       add(LoadPlugins());
     } finally {
       if (archivePath != null) {
@@ -258,11 +255,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
             event.manifest.id, entry.key, entry.value);
       }
 
-      UiSnack.showSuccess('התוסף הותקן בהצלחה');
+      UiSnack.showSuccess(PluginMessages.pluginInstalledSuccess);
       add(LoadPlugins());
     } catch (e) {
       await _installerService.cancelInstall(event.tempDirPath);
-      UiSnack.showError('שגיאה באישור התקנה: ${e.toString()}');
+      UiSnack.showError(PluginMessages.confirmInstallError(e));
       add(LoadPlugins());
     }
   }
@@ -280,7 +277,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       await _installerService.uninstallPlugin(event.pluginId);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בהסרת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.uninstallPluginError(e));
     }
   }
 
@@ -294,7 +291,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         add(LoadPlugins());
       }
     } catch (e) {
-      UiSnack.showError('שגיאה בהפעלת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.enablePluginError(e));
     }
   }
 
@@ -309,7 +306,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         add(LoadPlugins());
       }
     } catch (e) {
-      UiSnack.showError('שגיאה בהשבתת התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.disablePluginError(e));
     }
   }
 
@@ -331,7 +328,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       );
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בעדכון הרשאה: ${e.toString()}');
+      UiSnack.showError(PluginMessages.updatePermissionError(e));
     }
   }
 
@@ -343,15 +340,14 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           await devLoader.fetchDevelopmentManifest(event.directoryPath);
       final existing = await repository.getPlugin(manifest.id);
       if (existing != null && !existing.isDevelopment) {
-        UiSnack.showError(
-            'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
+        UiSnack.showError(PluginMessages.duplicatePluginIdError);
         return;
       }
       if (existing != null) {
         await devLoader.loadDevelopmentPlugin(event.directoryPath,
             preValidatedManifest: manifest);
         add(LoadPlugins());
-        UiSnack.showSuccess('תוסף פיתוח נטען מחדש');
+        UiSnack.showSuccess(PluginMessages.devPluginReloaded);
       } else {
         emit(PluginSystemDevInstallRequiresPermissions(
           manifest: manifest,
@@ -363,7 +359,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       debugPrint(
           '[PluginDevLoader] Failed to load plugin from "${event.directoryPath}": $e');
       debugPrint('$stackTrace');
-      UiSnack.showError('שגיאה בטעינת תוסף פיתוח: ${e.toString()}');
+      UiSnack.showError(PluginMessages.loadDevPluginError(e));
     }
   }
 
@@ -376,7 +372,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       devWatchService.stopWatcher(event.pluginId);
       add(LoadPlugins());
     } catch (e) {
-      UiSnack.showError('שגיאה בניתוק התוסף: ${e.toString()}');
+      UiSnack.showError(PluginMessages.detachDevPluginError(e));
     }
   }
 
@@ -410,15 +406,14 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       final manifest = await devLoader.fetchLocalhostManifest(event.baseUrl);
       final existing = await repository.getPlugin(manifest.id);
       if (existing != null && !existing.isDevelopment) {
-        UiSnack.showError(
-            'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.');
+        UiSnack.showError(PluginMessages.duplicatePluginIdError);
         return;
       }
       if (existing != null) {
         await devLoader.loadLocalhostPlugin(event.baseUrl,
             preValidatedManifest: manifest);
         add(LoadPlugins());
-        UiSnack.showSuccess('תוסף localhost נטען מחדש');
+        UiSnack.showSuccess(PluginMessages.localhostPluginReloaded);
       } else {
         emit(PluginSystemDevInstallRequiresPermissions(
           manifest: manifest,
@@ -430,7 +425,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       debugPrint(
           '[PluginLocalhostLoader] Failed to load plugin from "${event.baseUrl}": $e');
       debugPrint('$stackTrace');
-      UiSnack.showError('שגיאה בטעינת תוסף localhost: ${e.toString()}');
+      UiSnack.showError(PluginMessages.loadLocalhostPluginError(e));
     }
   }
 
@@ -461,9 +456,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         ));
       }
       add(LoadPlugins());
-      UiSnack.showSuccess('תוסף פיתוח הותקן בהצלחה');
+      UiSnack.showSuccess(PluginMessages.devPluginInstalledSuccess);
     } catch (e) {
-      UiSnack.showError('שגיאה בהתקנת תוסף פיתוח: ${e.toString()}');
+      UiSnack.showError(PluginMessages.installDevPluginError(e));
       add(LoadPlugins());
     }
   }

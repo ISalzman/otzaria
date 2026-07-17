@@ -24,6 +24,7 @@ import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 import 'package:otzaria/settings/tabs/widgets/android_storage_location_card.dart';
@@ -183,8 +184,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           context.read<NavigationBloc>().add(const CheckLibrary());
 
           if (extractionResult.successfullyExtracted) {
-            UiSnack.show(
-                'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!');
+            UiSnack.show(SettingsMessages.fileExtracted(
+                extractionResult.extractedFileName));
           }
         }
       },
@@ -347,9 +348,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         if (_isRemovingHebrewPath && !libraryState.isLoading) {
           setState(() => _isRemovingHebrewPath = false);
           if (libraryState.error == null) {
-            UiSnack.show('מיקום ספרי היברובוקס הוסר בהצלחה');
+            UiSnack.show(SettingsMessages.hebrewBooksPathRemoved);
           } else {
-            UiSnack.showError('שגיאה בהסרת המיקום: ${libraryState.error}');
+            UiSnack.showError(SettingsMessages.hebrewBooksPathRemoveError(
+                libraryState.error!));
           }
         }
 

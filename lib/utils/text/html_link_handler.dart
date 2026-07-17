@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -76,13 +77,13 @@ class HtmlLinkHandler {
       openBookCallback(tab);
 
       if (context.mounted && ref.isNotEmpty) {
-        UiSnack.show('נפתח: $ref');
+        UiSnack.show(CommonMessages.openedRef(ref));
       }
     } catch (e) {
       debugPrint('שגיאה בטיפול בקישור מבוסס תווים: $e');
 
       if (context.mounted) {
-        UiSnack.show('לא ניתן לפתוח את הקישור: $e');
+        UiSnack.show(CommonMessages.cannotOpenLink(e));
       }
     }
   }
@@ -167,7 +168,7 @@ class HtmlLinkHandler {
 
       // הצגת הודעת שגיאה למשתמש
       if (context.mounted) {
-        UiSnack.show('שגיאה בפתיחת הקישור: $e');
+        UiSnack.show(CommonMessages.linkOpenError(e));
       }
 
       return false;
@@ -205,7 +206,7 @@ class HtmlLinkHandler {
         );
 
         if (context.mounted) {
-          UiSnack.show('נווט ל: $headerName');
+          UiSnack.show(CommonMessages.navigatedToHeader(headerName));
         }
       } else {
         throw Exception('לא נמצאה הכותרת: $headerName');
@@ -214,7 +215,7 @@ class HtmlLinkHandler {
       debugPrint('שגיאה בניווט לכותרת: $e');
 
       if (context.mounted) {
-        UiSnack.show('לא ניתן לנווט לכותרת: $headerName');
+        UiSnack.show(CommonMessages.cannotNavigateToHeader(headerName));
       }
     }
   }
@@ -266,8 +267,8 @@ class HtmlLinkHandler {
         } else {
           // אם לא נמצאה הכותרת, נציג אזהרה אבל עדיין נפתח את הספר
           if (context.mounted) {
-            UiSnack.show(
-                'לא נמצאה הכותרת "$headerName" בספר $bookTitle, פותח את תחילת הספר');
+            UiSnack.show(CommonMessages.headerNotFoundOpeningStart(
+                headerName, bookTitle));
           }
         }
       }
@@ -283,13 +284,13 @@ class HtmlLinkHandler {
       openBookCallback(tab);
 
       if (context.mounted && headerName != null && headerName.isNotEmpty) {
-        UiSnack.show('פתח ספר: $bookTitle - $headerName');
+        UiSnack.show(CommonMessages.openedBookAtHeader(bookTitle, headerName));
       }
     } catch (e) {
       debugPrint('שגיאה בפתיחת ספר: $e');
 
       if (context.mounted) {
-        UiSnack.show('לא ניתן לפתוח את הספר: $bookTitle');
+        UiSnack.show(CommonMessages.cannotOpenBook(bookTitle));
       }
     }
   }

@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import '../../models/books.dart';
 import '../../utils/navigation/otzar_utils.dart';
 import '../../core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 
 class OtzarBookDialog extends StatelessWidget {
   final ExternalLibraryBook book;
@@ -138,7 +139,7 @@ class OtzarBookDialog extends StatelessWidget {
             if (await OtzarUtils.launchOtzarWeb(book.link)) {
               // Success
             } else {
-              UiSnack.showError('לא ניתן לפתוח את הקישור בדפדפן');
+              UiSnack.showError(LibraryMessages.cannotOpenLinkInBrowser);
             }
           },
           style: ElevatedButton.styleFrom(

@@ -7,6 +7,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
@@ -154,7 +155,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       selectionColumn: selectionColumn,
     ));
 
-    UiSnack.showSuccess('ההערה נשמרה בהצלחה');
+    UiSnack.showSuccess(NotesMessages.noteSaved);
   }
 
   @override
@@ -565,11 +566,11 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
     if (uri.scheme == 'http' || uri.scheme == 'https') {
       final launched =
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) UiSnack.showError('לא ניתן לפתוח את הקישור: $url');
+      if (!launched) UiSnack.showError(NotesMessages.cannotOpenLink(url));
       return;
     }
     if (uri.scheme != 'otzaria' && uri.scheme != 'zayit') {
-      UiSnack.show('קישור חיצוני: $url');
+      UiSnack.show(NotesMessages.externalLink(url));
       return;
     }
 
@@ -582,7 +583,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
           widget.onNavigateToLine(line);
           return;
         }
-        UiSnack.show('קישור לספר אחר: $bookId');
+        UiSnack.show(NotesMessages.linkToAnotherBook(bookId));
         return;
       case 'note':
         final noteId = uri.queryParameters['id'];
@@ -620,7 +621,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         final handled = await mainWindowScreenKey.currentState
                 ?.handleInternalDeepLink(url) ??
             false;
-        if (!handled) UiSnack.showError('קישור לא נתמך: $url');
+        if (!handled) UiSnack.showError(NotesMessages.unsupportedLink(url));
         return;
     }
   }
@@ -686,7 +687,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         lineNumber: selectedLineNumber,
       ),
     );
-    UiSnack.show('ההערה שויכה לשורה $selectedLineNumber');
+    UiSnack.show(NotesMessages.noteAssignedToLine(selectedLineNumber));
   }
 
   Future<void> _reanchorNote(

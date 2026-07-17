@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -550,8 +551,7 @@ class ToolsScreenState extends State<ToolsScreen>
   void openPluginTransiently(InstalledPlugin plugin) {
     final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
     if (isOfflineMode && plugin.blockedInOfflineMode) {
-      UiSnack.showError(
-          'התוסף "${plugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
+      UiSnack.showError(ToolsMessages.pluginRequiresInternet(plugin.name));
       return;
     }
     if (!plugin.showInTools) {
@@ -790,8 +790,7 @@ class ToolsScreenState extends State<ToolsScreen>
     if (hiddenBuiltIn != null &&
         settingsState.hiddenBuiltInToolIds.contains(toolId)) {
       _clearPendingTool();
-      UiSnack.showError(
-          'הכלי "${hiddenBuiltIn.label}" מוסתר. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+      UiSnack.showError(ToolsMessages.builtInToolHidden(hiddenBuiltIn.label));
       return;
     }
 
@@ -810,13 +809,13 @@ class ToolsScreenState extends State<ToolsScreen>
         if (!matchedPlugin.showInTools && !matchedPlugin.pinnedToNavRail) {
           _clearPendingTool();
           UiSnack.showError(
-              'התוסף "${matchedPlugin.name}" אינו מוצג בכלים. ניתן להציג אותו דרך הגדרות → ניהול כלים');
+              ToolsMessages.pluginNotShownInTools(matchedPlugin.name));
           return;
         }
         if (isOfflineMode && matchedPlugin.blockedInOfflineMode) {
           _clearPendingTool();
           UiSnack.showError(
-              'התוסף "${matchedPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
+              ToolsMessages.pluginRequiresInternet(matchedPlugin.name));
           return;
         }
       }
@@ -832,7 +831,7 @@ class ToolsScreenState extends State<ToolsScreen>
       if (_pendingToolIdToOpen == toolId) {
         _pendingToolIdToOpen = null;
         _pendingToolTimeoutTimer = null;
-        UiSnack.showError('הכלי "$toolId" לא נמצא');
+        UiSnack.showError(ToolsMessages.toolNotFound(toolId));
       }
     });
   }

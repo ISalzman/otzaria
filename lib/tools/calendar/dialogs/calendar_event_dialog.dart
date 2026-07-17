@@ -1,6 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -96,7 +97,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
 
   void _submit() {
     if (_titleController.text.trim().isEmpty) {
-      UiSnack.showError('יש למלא כותרת לאירוע.');
+      UiSnack.showError(ToolsMessages.eventTitleRequired);
       return;
     }
 
@@ -104,7 +105,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
     if (_isRecurring && !_recurForever) {
       recurringYears = int.tryParse(_yearsController.text.trim());
       if (recurringYears == null || recurringYears <= 0) {
-        UiSnack.showError('יש להזין מספר שנים חיובי עבור אירוע חוזר.');
+        UiSnack.showError(ToolsMessages.eventRecurringYearsInvalid);
         return;
       }
     }
@@ -117,8 +118,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
       final end = DateTime(_selectedEndDate!.year, _selectedEndDate!.month,
           _selectedEndDate!.day);
       if (end.isBefore(start)) {
-        UiSnack.showError(
-            'תאריך הסיום חייב להיות שווה או מאוחר מתאריך ההתחלה.');
+        UiSnack.showError(ToolsMessages.eventEndBeforeStart);
         return;
       }
       endDate = end.isAfter(start) ? end : null;

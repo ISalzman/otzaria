@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/models/books.dart';
@@ -488,7 +489,7 @@ $detailsSection
       await launchUrl(emailUri, mode: LaunchMode.externalApplication);
     } catch (e) {
       if (context.mounted) {
-        UiSnack.show('לא ניתן לפתוח את תוכנת הדואר');
+        UiSnack.show(ReportMessages.cannotOpenMailApp);
       }
     }
   }
@@ -521,7 +522,7 @@ $detailsSection
 
     await reportService.saveSenderEmail(enteredEmail);
     if (context.mounted) {
-      UiSnack.showSuccess('כתובת הזיהוי נשמרה. ניתן לשנות אותה בהגדרות.');
+      UiSnack.showSuccess(ReportMessages.senderEmailSaved);
     }
     return enteredEmail.trim();
   }
@@ -541,7 +542,7 @@ $detailsSection
     return DirectErrorReport(
       id: '${DateTime.now().microsecondsSinceEpoch}-${widgetHash(bookTitle, currentRef, reportData.selectedText)}',
       senderEmail: senderEmail,
-      subject: 'דיווח על טעות: $bookTitle',
+      subject: ReportMessages.reportSubject(bookTitle),
       bookTitle: bookTitle,
       currentRef: currentRef,
       lineNumber: lineNumber,
@@ -566,7 +567,7 @@ $detailsSection
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('דיווח נשלח בהצלחה'),
-        content: const Text('הדיווח נשלח בהצלחה לצוות אוצריא. תודה על הדיווח!'),
+        content: const Text(ReportMessages.phoneSentThanks),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -634,7 +635,7 @@ $detailsSection
       }
 
       debugPrint('Phone report error: $e');
-      showSimpleSnack(context, 'שגיאה בשליחת הדיווח: ${e.toString()}');
+      showSimpleSnack(context, ReportMessages.sendError(e));
     }
   }
 
@@ -665,7 +666,7 @@ $detailsSection
       if (result.isSent) {
         await showDirectReportDetailsDialog(
           context,
-          title: 'הדיווח נשלח בהצלחה',
+          title: ReportMessages.sentSuccessTitle,
           report: reportData,
         );
       } else if (result.isQueued) {
@@ -680,7 +681,7 @@ $detailsSection
 
       debugPrint('Direct report error: $e');
       if (context.mounted) {
-        UiSnack.showError('שגיאה בשליחת הדיווח: ${e.toString()}');
+        UiSnack.showError(ReportMessages.sendError(e));
       }
     }
   }
@@ -744,7 +745,7 @@ $detailsSection
         scheme: 'mailto',
         path: emailAddress,
         query: encodeQueryParameters(<String, String>{
-          'subject': 'דיווח על טעות: $bookTitle',
+          'subject': ReportMessages.reportSubject(bookTitle),
           'body': emailBody,
         }),
       );
@@ -752,7 +753,7 @@ $detailsSection
       try {
         if (!await launchUrl(emailUri, mode: LaunchMode.externalApplication)) {
           if (context.mounted) {
-            showSimpleSnack(context, 'לא ניתן לפתוח את תוכנת הדואר');
+            showSimpleSnack(context, ReportMessages.cannotOpenMailApp);
           }
         }
       } catch (_) {
@@ -784,9 +785,7 @@ $detailsSection
       );
       final count = await reportService.getPendingReportsCount();
       if (context.mounted) {
-        UiSnack.show(
-          'הדיווח נשמר להמשך. יש כרגע $count דיווחים ממתינים בתור, וניתן לנהל את הדיווחים השמורים בהגדרות.',
-        );
+        UiSnack.show(ReportMessages.savedForLater(count));
       }
     }
   }
@@ -936,7 +935,7 @@ $detailsSection
     } catch (e) {
       debugPrint('Error handling report result: $e');
       if (context.mounted) {
-        showSimpleSnack(context, 'שגיאה בטיפול בדיווח: ${e.toString()}');
+        showSimpleSnack(context, ReportMessages.handleError(e));
       }
     }
   }
@@ -1232,7 +1231,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
     if (opened) {
       widget.onCancel(); // המשתמש עבר לתקן באתר — אין צורך בטופס הדיווח
     } else {
-      UiSnack.showError('לא ניתן לפתוח את עמוד העריכה.');
+      UiSnack.showError(ReportMessages.cannotOpenEditPage);
     }
   }
 

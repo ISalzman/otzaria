@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -198,7 +199,8 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
         final usedValue = ShortcutValidator.getShortcutValue(key);
         if (usedValue == finalValue) {
           final conflictingName = ShortcutValidator.shortcutNames[key] ?? key;
-          UiSnack.showError('קיצור זה כבר בשימוש עבור: $conflictingName');
+          UiSnack.showError(
+              CommonMessages.shortcutAlreadyInUse(conflictingName));
           return;
         }
       }

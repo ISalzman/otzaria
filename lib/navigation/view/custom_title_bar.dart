@@ -34,6 +34,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/update/my_update_widget.dart';
@@ -1029,7 +1030,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       currentTabIndex: newActiveIndex,
     ));
 
-    UiSnack.show('הכרטיסיה הועברה לשולחן העבודה "${targetWorkspace.name}"');
+    UiSnack.show(LibraryMessages.tabMovedToWorkspace(targetWorkspace.name));
   }
 
   List<AppContextMenuEntry> _buildTabContextMenuEntries(

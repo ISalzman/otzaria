@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -65,7 +66,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
 
   void _confirmShortcut() {
     if (_pressedKeys.isEmpty) {
-      UiSnack.showError('יש לבחור קיצור');
+      UiSnack.showError(CommonMessages.shortcutRequired);
       return;
     }
 

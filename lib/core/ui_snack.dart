@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
@@ -229,18 +230,18 @@ class UiSnack {
     _currentOverlay = null;
   }
 
-  // ── קבועי טקסט ──────────────────────────────────────────────────────────────
-  static const String textCopied = 'הטקסט הועתק ללוח';
-  static const String formattedTextCopied = 'הטקסט המעוצב הועתק ללוח';
-  static const String copyError = 'שגיאה בהעתקה';
-  static const String formattedCopyError = 'שגיאה בהעתקה מעוצבת';
-  static const String sectionNotFound = 'הדף לא נמצא בתוכן העניינים';
-  static const String bookNotFound = 'הספר איננו קיים';
-  static const String noteCreated = 'ההערה נוצרה והוצבה בסרגל';
-  static const String savedSuccessfully = 'השינויים נשמרו בהצלחה';
-  static const String textNotFound = 'הטקסט לא נמצא';
-  static const String noTextSelected = 'אנא בחר טקסט להעתקה';
-  static const String cleanupCompleted = 'ניקוי טיוטות הושלם';
+  // ── קבועי טקסט — הערכים מרוכזים ב-CommonMessages ────────────────────────────
+  static const String textCopied = CommonMessages.textCopied;
+  static const String formattedTextCopied = CommonMessages.formattedTextCopied;
+  static const String copyError = CommonMessages.copyError;
+  static const String formattedCopyError = CommonMessages.formattedCopyError;
+  static const String sectionNotFound = CommonMessages.sectionNotFound;
+  static const String bookNotFound = CommonMessages.bookNotFound;
+  static const String noteCreated = CommonMessages.noteCreated;
+  static const String savedSuccessfully = CommonMessages.savedSuccessfully;
+  static const String textNotFound = CommonMessages.textNotFound;
+  static const String noTextSelected = CommonMessages.noTextSelected;
+  static const String cleanupCompleted = CommonMessages.cleanupCompleted;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

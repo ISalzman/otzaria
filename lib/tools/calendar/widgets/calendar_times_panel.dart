@@ -4,6 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
@@ -514,7 +515,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
                     final hasAlert = existingAlert != null;
                     final cubit = context.read<CalendarCubit>();
                     if (timeLabel == '--:--') {
-                      UiSnack.showError('לא ניתן להפעיל התראה לזמן לא זמין');
+                      UiSnack.showError(ToolsMessages.zmanAlertUnavailableTime);
                       return;
                     }
                     final result = await showZmanAlertDialog(
@@ -585,7 +586,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       text: _buildDafYomiButtonText(bavliTractate, dafLabel),
       icon: FluentIcons.book_24_regular,
       onPressed: bavliTractate == 'לא זמין'
-          ? () => UiSnack.showError('הדף היומי לא זמין לתאריך זה')
+          ? () => UiSnack.showError(ToolsMessages.dafYomiUnavailableForDate)
           : () => openDafYomiBook(
                 context,
                 bavliTractate,
@@ -615,7 +616,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
       onPressed: () async {
         final timeLabel = _resolveOmerAlertTimeLabel();
         if (timeLabel == '--:--') {
-          UiSnack.showError('לא ניתן להפעיל התראה לספירת העומר ביום זה');
+          UiSnack.showError(ToolsMessages.omerAlertUnavailableToday);
           return;
         }
         final result = await showZmanAlertDialog(
@@ -681,7 +682,7 @@ class _CityDropdown extends StatelessWidget {
 void _runZmanAlertOp(Future<void> future) {
   unawaited(future.catchError((Object error, StackTrace stackTrace) {
     debugPrint('ZmanAlert op failed: $error\n$stackTrace');
-    UiSnack.showError('שגיאה בעדכון ההתראה');
+    UiSnack.showError(ToolsMessages.zmanAlertUpdateError);
   }));
 }
 

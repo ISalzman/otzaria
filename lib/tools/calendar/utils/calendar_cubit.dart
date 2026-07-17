@@ -14,6 +14,7 @@ import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
     as zmanim_helpers;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart'
     as calendar_location;
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/plugins/adapters/plugin_calendar_adapter.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -577,15 +578,11 @@ class CalendarCubit extends Cubit<CalendarState> {
       String message;
 
       if (Platform.isMacOS) {
-        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות המערכת > פרטיות ואבטחה > התראות > אוצריא\n'
-            'או הפעל מחדש את האפליקציה ואשר את בקשת ההרשאות';
+        message = ToolsMessages.notificationsPermissionRequiredMacos;
       } else if (Platform.isIOS) {
-        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות > התראות > אוצריא';
+        message = ToolsMessages.notificationsPermissionRequiredIos;
       } else {
-        message = 'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות';
+        message = ToolsMessages.notificationsPermissionRequired;
       }
 
       UiSnack.showWarning(message, duration: const Duration(seconds: 10));
@@ -602,7 +599,7 @@ class CalendarCubit extends Cubit<CalendarState> {
         jsonEncode(updated.map((k, v) => MapEntry(k, v.toJson()))));
 
     await _rescheduleZmanAlerts();
-    UiSnack.show('התראה הופעלה עבור $displayName');
+    UiSnack.show(ToolsMessages.zmanAlertEnabled(displayName));
   }
 
   Future<void> cancelZmanAlertPreference({
@@ -628,7 +625,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       await notificationService.cancelNotification(id);
     }
 
-    UiSnack.show('ההתראה בוטלה עבור ${existing.displayName}');
+    UiSnack.show(ToolsMessages.zmanAlertCancelled(existing.displayName));
   }
 
   Future<void> _rescheduleZmanAlerts() async {
@@ -648,8 +645,7 @@ class CalendarCubit extends Cubit<CalendarState> {
     if (cityData == null) {
       debugPrint(
           'CalendarCubit: city data not found for "${state.selectedCity}", defaulting to Asia/Jerusalem timezone.');
-      UiSnack.showError(
-          'לא נמצאו נתונים עבור העיר שנבחרה. נעשה שימוש באזור זמן ברירת המחדל.');
+      UiSnack.showError(ToolsMessages.cityDataNotFound);
       timeZoneId = 'Asia/Jerusalem';
     } else {
       timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
@@ -1792,9 +1788,7 @@ class CalendarCubit extends Cubit<CalendarState> {
         await _settingsRepository.updateCalendarNotificationsEnabled(false);
 
         // הצג הודעת שגיאה למשתמש עם הוראות מפורטות
-        UiSnack.showWarning(
-            'לא ניתן להפעיל התראות - נדרשות הרשאות.\n'
-            'עבור להגדרות המכשיר > אפליקציות > אוצריא > הרשאות',
+        UiSnack.showWarning(ToolsMessages.notificationsPermissionRequired,
             duration: const Duration(seconds: 8));
         return;
       }

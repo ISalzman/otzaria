@@ -172,13 +172,18 @@ Add it to the appropriate set/map in `lib/widgets/misc/rtl_icon.dart`, then use 
 
 ### 2. User Messages - ONLY via `UiSnack`
 ```dart
-import 'package:otzaria/core/scaffold_messenger.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/messages_exports.dart';
 
-UiSnack.show('הפעולה בוצעה');              // Success
-UiSnack.showError('שגיאה בביצוע');         // Error
-UiSnack.show(UiSnack.textCopied);          // Pre-defined message
+UiSnack.show(CommonMessages.savedSuccessfully);
+UiSnack.showError(ReportMessages.sendFailed);
+UiSnack.show(UiSnack.textCopied);          // Legacy alias → CommonMessages
 ```
+
+**Message texts are centralized (MANDATORY):** Never pass a hardcoded string literal to `UiSnack`. Every message lives in `lib/core/messages/` — one catalog per domain (`CommonMessages`, `ReportMessages`, `SettingsMessages`, `TextBookMessages`, `ToolsMessages`, `NotesMessages`, `LibraryMessages`, `PluginMessages`, `PdfMessages`). Fixed texts are `static const`; parameterized texts are static functions. Add new messages to the matching catalog (or `CommonMessages` if shared).
+
 **Never use:**
+- Hardcoded message strings at `UiSnack` call sites — add to `lib/core/messages/` instead
 - `ScaffoldMessenger.of(context).showSnackBar()`
 - Custom snackbar widgets
 - Toast packages

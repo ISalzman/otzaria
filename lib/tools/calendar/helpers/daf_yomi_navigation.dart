@@ -5,6 +5,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 // Cache של outlines — מפתח: title של הספר
@@ -52,7 +53,7 @@ void _openDafYomiBookInCategory(
   final libraryBlocState = BlocProvider.of<LibraryBloc>(context).state;
   final library = libraryBlocState.library;
   if (library == null) {
-    UiSnack.showError('הספרייה עדיין בטעינה, נסה שוב בעוד רגע');
+    UiSnack.showError(ToolsMessages.libraryStillLoading);
     return;
   }
 
@@ -78,7 +79,7 @@ void _openDafYomiBookInCategory(
       }
     }
     if (book == null) {
-      UiSnack.showError('לא נמצאה קטגוריה: $categoryName');
+      UiSnack.showError(ToolsMessages.categoryNotFound(categoryName));
       return;
     } else {
       await _openBook(context, book, daf);
@@ -111,7 +112,7 @@ void _openDafYomiBookInCategory(
     final availableBooks =
         allBooksInCategory.map((b) => b.title).take(5).join(', ');
     UiSnack.showError(
-        'לא נמצא ספר: $tractate ב$categoryName\nספרים זמינים: $availableBooks...');
+        ToolsMessages.tractateNotFound(tractate, categoryName, availableBooks));
   }
 }
 
