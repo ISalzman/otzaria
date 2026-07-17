@@ -42,6 +42,22 @@ void main() {
       );
     });
 
+    test('שני מועמדים בעלי שם זהה באותה קטגוריה — מחזיר null ולא מנחש', () {
+      final bavliRoot = _category('תלמוד בבלי');
+      final seder = _category('סדר זרעים', parent: bavliRoot);
+
+      final sourceText = TextBook(title: 'ברכות', category: seder);
+      final pdfA =
+          PdfBook(title: 'ברכות', path: r'C:\a\ברכות.pdf', category: seder);
+      final pdfB =
+          PdfBook(title: 'ברכות', path: r'C:\b\ברכות.pdf', category: seder);
+      seder.books.addAll([sourceText, pdfA, pdfB]);
+
+      final library = Library(categories: [bavliRoot]);
+
+      expect(library.getCompanionBook(sourceText, PdfBook), isNull);
+    });
+
     test('בחיפוש גלובלי — מסנן התנגשות בבלי/ירושלמי', () {
       final bavli = _category('תלמוד בבלי');
       final bavliSeder = _category('סדר זרעים', parent: bavli);

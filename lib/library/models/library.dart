@@ -172,13 +172,16 @@ class Library extends Category {
 
     // 1. חיפוש באותה קטגוריה בדיוק:
     if (book.category != null) {
-      final companion = book.category!.books
+      final companions = book.category!.books
           .where((b) =>
               _normalizeTitle(b.title) == normalizedTitle &&
               b.runtimeType == companionType)
-          .firstOrNull;
+          .take(2)
+          .toList();
 
-      if (companion != null) return companion;
+      // שני מועמדים באותה קטגוריה = זהות לא ודאית; מוותרים במקום לנחש.
+      if (companions.length > 1) return null;
+      if (companions.isNotEmpty) return companions.first;
     }
 
     // 2. חיפוש גלובלי (מאפשר התאמה לפי נרמול הכותרת כפי שמקובל):
