@@ -241,9 +241,12 @@ class TextBookTab extends OpenedTab {
     bool splitedView = _lastSplitView;
     bool showPageShapeView = _lastShowPageShapeView;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
+    // ספר ה-state כולל העשרה שנעשתה ברקע (id/מחבר/קטגוריות) — עדיף לשמירה.
+    TextBook bookToSave = book;
 
     if (bloc.state is TextBookLoaded) {
       final loadedState = bloc.state as TextBookLoaded;
+      bookToSave = loadedState.book;
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
       showPageShapeView = loadedState.showPageShapeView;
@@ -257,7 +260,7 @@ class TextBookTab extends OpenedTab {
 
     return {
       'title': title,
-      'book': book.toJson(),
+      'book': bookToSave.toJson(),
       'initalIndex': currentIndex,
       'commentators': commentators,
       'splitedView': splitedView,

@@ -8,6 +8,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/migration/models/author.dart';
 import 'package:otzaria/migration/models/book.dart' as migration_models;
 import 'package:otzaria/migration/models/category.dart' as migration_models;
 import 'package:otzaria/models/books.dart';
@@ -76,6 +77,63 @@ void main() {
       expect(result.heCategories, isNull);
       // ה-book לא נגע (אין מוטציה)
       expect(book.heCategories, 'ערך-קיים');
+    });
+
+    test('heCategories וגם author חסרים: שניהם מוחזרים מה-DB', () async {
+      final rootId = await seforimRepo.insertCategory(
+        const migration_models.Category(title: 'אחרונים'),
+      );
+      final sourceId = await seforimRepo.insertSource('test-src', -1);
+      await seforimRepo.insertBook(
+        migration_models.Book(
+          categoryId: rootId,
+          sourceId: sourceId,
+          title: 'פרי מגדים',
+          fileType: 'txt',
+          authors: const [Author(name: 'יוסף בן מאיר תאומים')],
+        ),
+      );
+
+      final book = TextBook(
+        title: 'פרי מגדים',
+        categoryId: rootId,
+        fileType: 'txt',
+      );
+
+      final result = await enrichHeCategories(book);
+
+      expect(result.heCategories, 'אחרונים');
+      expect(result.author, 'יוסף בן מאיר תאומים');
+    });
+
+    test('heCategories קיים אך author חסר: המחבר מושלם מה-DB', () async {
+      final rootId = await seforimRepo.insertCategory(
+        const migration_models.Category(title: 'אחרונים'),
+      );
+      final sourceId = await seforimRepo.insertSource('test-src', -1);
+      await seforimRepo.insertBook(
+        migration_models.Book(
+          categoryId: rootId,
+          sourceId: sourceId,
+          title: 'פרי מגדים',
+          fileType: 'txt',
+          authors: const [Author(name: 'יוסף בן מאיר תאומים')],
+        ),
+      );
+
+      final book = TextBook(
+        title: 'פרי מגדים',
+        categoryId: rootId,
+        fileType: 'txt',
+        heCategories: 'אחרונים',
+      );
+
+      final result = await enrichHeCategories(book);
+
+      // heCategories לא נדרס — מושלמים רק המחבר וה-id.
+      expect(result.heCategories, isNull);
+      expect(result.author, 'יוסף בן מאיר תאומים');
+      expect(result.resolvedId, isNotNull);
     });
 
     test('מחזיר heCategories מהיררכיית קטגוריות ב-seforim.db', () async {
