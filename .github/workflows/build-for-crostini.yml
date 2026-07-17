@@ -49,14 +49,14 @@ jobs:
       - name: Prepare app bundle
         shell: bash
         run: |
-          ZSTD_LIB=$(find build -type f -name 'libzstandard_linux.so' | head -n 1)
-          BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
+          #ZSTD_LIB=$(find build -type f -name 'libzstandard_linux.so' | head -n 1)
+          #BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
 
-          cp -v $ZSTD_LIB $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
-          chmod 644 $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
+          #cp -v $ZSTD_LIB $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
+          #chmod 644 $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
 
-          RPATH=$(patchelf --print-rpath $BUNDLE_DIR/lib/libzstandard_linux_plugin.so)
-          patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
+          #RPATH=$(patchelf --print-rpath $BUNDLE_DIR/lib/libzstandard_linux_plugin.so)
+          #patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
 
           # portable.marker makes the raw package portable:
           # All data is stored in the otzaria_data folder next to the executable
