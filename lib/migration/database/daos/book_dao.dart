@@ -34,17 +34,24 @@ class BookDao {
     sqlite3.Database db, {
     bool withFileColumns = false,
   }) {
+    final hasFullDescription = db
+        .select('PRAGMA table_info(book)')
+        .any((column) => column['name'] == 'heDesc');
+    final fullDescriptionColumn =
+        hasFullDescription ? 'heDesc' : 'NULL AS heDesc';
+
     if (withFileColumns) {
       return db.select('''
         SELECT id, title, categoryId, orderIndex, fileType, filePath,
-               heShortDesc
+               heShortDesc, $fullDescriptionColumn
         FROM book
         WHERE COALESCE(fileType, '') NOT IN ('link', 'url')
         ORDER BY orderIndex, title
       ''').toMapList();
     }
     return db.select('''
-      SELECT id, title, categoryId, orderIndex, heShortDesc
+      SELECT id, title, categoryId, orderIndex, heShortDesc,
+             $fullDescriptionColumn
       FROM book
       ORDER BY orderIndex, title
     ''').toMapList();

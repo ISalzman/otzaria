@@ -173,6 +173,56 @@ void main() {
     expect(find.byTooltip('א'), findsNothing);
   });
 
+  test('מקצר תיאור ספר ל-120 תווים כולל שלוש נקודות', () {
+    final description = List.filled(121, 'א').join();
+
+    final result = truncateBookCardDescription(description);
+
+    expect(result.length, kBookCardDescriptionMaxCharacters);
+    expect(result, '${List.filled(117, 'א').join()}...');
+  });
+
+  testWidgets('מציג תיאור קצר בכרטיס ואת התיאור המורחב בריחוף על כפתור המידע',
+      (tester) async {
+    const shortDescription = 'תיאור קצר שמוצג בכרטיס';
+    const fullDescription = 'תיאור ארוך שמוצג בריחוף על כפתור המידע בלבד';
+    final book = TextBook(
+      title: 'ספר מידע',
+      heShortDesc: shortDescription,
+      heDesc: fullDescription,
+    );
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+
+    expect(find.text(shortDescription), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text(shortDescription)).maxLines,
+      3,
+    );
+    expect(
+      tester
+          .widgetList<Tooltip>(find.byType(Tooltip))
+          .map((tooltip) => tooltip.message),
+      contains(fullDescription),
+    );
+  });
+
+  testWidgets('לחיצה על כפתור המידע פותחת את חלון אודות הספר', (tester) async {
+    final book = TextBook(
+      title: 'ספר מידע',
+      heShortDesc: 'תיאור קצר',
+      heDesc: 'תיאור ארוך',
+    );
+
+    await tester.pumpWidget(buildTestWidget(book: book));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(FluentIcons.info_24_regular));
+    await tester.pump();
+
+    expect(find.text('אודות הספר'), findsOneWidget);
+  });
+
   testWidgets('מציג פעולת מחיקה עבור ספר "עותק עצמאי"', (tester) async {
     // עותק עצמאי (content-in-db) — ניתן למחיקה מהספרייה.
     FileSystemData.instance = _FakeFileSystemData(canDelete: true);

@@ -1074,12 +1074,17 @@ class ScanResult {
   final Object? fatalError;
   final List<(String title, String reason)> failedDetails;
 
+  /// מזהי ספרים (ב-user_books.db) שקובצם השתנה מאז הסריקה הקודמת —
+  /// דורשים אינדוקס מחדש בחיפוש.
+  final List<int> updatedBookIds;
+
   const ScanResult({
     this.addedBooks = 0,
     this.updatedBooks = 0,
     this.failedBooks = 0,
     this.fatalError,
     this.failedDetails = const [],
+    this.updatedBookIds = const [],
   });
 
   bool get isSuccess => fatalError == null;
@@ -2787,7 +2792,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// Converts a minimal book map (from getAllBooksMinimal) to the app's Book model.
   /// Uses only the columns available: id, title, categoryId, orderIndex,
-  /// fileType, filePath, heShortDesc, author.
+  /// fileType, filePath, heShortDesc, heDesc, author.
   /// Falls back to metadata when the minimal row does not include a field.
   Book? _convertMinimalBookMapToBook(
     Map<String, dynamic> bookMap,
@@ -2803,6 +2808,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final filePath = bookMap['filePath'] as String?;
     final fileType = bookMap['fileType'] as String?;
     final heShortDesc = bookMap['heShortDesc'] as String?;
+    final heDesc = bookMap['heDesc'] as String?;
     final orderDouble = (bookMap['orderIndex'] as num?)?.toDouble() ?? 999.0;
     final order = orderDouble.toInt();
     final categoryId =
@@ -2839,6 +2845,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     final pubDate = bookMeta?['pubDate'] as String?;
     final pubPlace = bookMeta?['pubPlace'] as String?;
     final metaHeShortDesc = heShortDesc ?? bookMeta?['heShortDesc'] as String?;
+    final metaHeDesc = heDesc ?? bookMeta?['heDesc'] as String?;
 
     final normalizedFileType = (fileType ?? '').toLowerCase();
 
@@ -2858,6 +2865,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
+        heDesc: metaHeDesc,
         pubDate: pubDate,
         pubPlace: pubPlace,
         order: order,
@@ -2878,6 +2886,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         filePath: resolvedFilePath,
         author: author,
         heShortDesc: metaHeShortDesc,
+        heDesc: metaHeDesc,
         pubDate: pubDate,
         pubPlace: pubPlace,
         order: order,
@@ -2894,6 +2903,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       category: category,
       author: author,
       heShortDesc: metaHeShortDesc,
+      heDesc: metaHeDesc,
       pubDate: pubDate,
       pubPlace: pubPlace,
       order: order,
@@ -3383,6 +3393,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     int updated = 0;
     int failed = 0;
     final failedDetails = <(String, String)>[];
+    final updatedBookIds = <int>[];
 
     try {
       final dir = Directory(folderPath);
@@ -3443,6 +3454,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             debugPrint(
                 '📁 Updated external book (metadata+TOC): ${book.title}');
             updated++;
+            updatedBookIds.add(book.existingBookId!);
             continue;
           }
 
@@ -3498,7 +3510,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           addedBooks: added,
           updatedBooks: updated,
           failedBooks: failed,
-          failedDetails: failedDetails);
+          failedDetails: failedDetails,
+          updatedBookIds: updatedBookIds);
     } catch (e) {
       debugPrint('⚠️ Scan failed for $folderPath: $e');
       return ScanResult(fatalError: e);

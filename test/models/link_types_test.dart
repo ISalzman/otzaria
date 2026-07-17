@@ -11,6 +11,7 @@ void main() {
         'MIDRASH',
         'PARSHANUT',
         'DIBUR_HAMATCHIL',
+        'ELUCIDATION',
       ]) {
         expect(LinkTypes.isDependentTextLink(type), isTrue, reason: type);
       }
