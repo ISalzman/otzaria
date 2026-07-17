@@ -49,8 +49,8 @@ jobs:
       - name: Prepare app bundle
         shell: bash
         run: |
+          BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
           #ZSTD_LIB=$(find build -type f -name 'libzstandard_linux.so' | head -n 1)
-          #BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
 
           #cp -v $ZSTD_LIB $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
           #chmod 644 $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
