@@ -87,6 +87,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:otzaria/core/sentry_event_filter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -392,28 +393,17 @@ Future<void> _initializeSentry() async {
         options.release = '${info.appName}@${info.version}+${info.buildNumber}';
         // Privacy: Do not collect IP addresses and request headers
         options.sendDefaultPii = false;
-        // Use lower sampling rates in production to reduce overhead
-        options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
+        // Sentry משמש לדיווח שגיאות בלבד; עסקאות ביצועים אינן נשלחות.
+        options.tracesSampleRate = 0.0;
 
         options.beforeSend = (event, hint) {
-          // Only report from the latest released version
-          if (currentBuild != _latestReleasedBuildNumber) return null;
-
-          final exception = event.throwable?.toString() ?? '';
-          if (Platform.isWindows &&
-              (exception.contains('Failed to update ui::AXTree') ||
-                  exception.contains('accessibility_bridge.cc'))) {
-            return null;
-          }
-          // Filter HardwareKeyboard assertion - handled by clearState() on window focus
-          if (_isIgnorableHardwareKeyboardAssertion(exception)) {
-            return null;
-          }
-          return event;
-        };
-        options.beforeSendTransaction = (transaction, hint) {
-          if (currentBuild != _latestReleasedBuildNumber) return null;
-          return transaction;
+          return shouldReportSentryEvent(
+            event: event,
+            currentBuild: currentBuild,
+            latestReleasedBuildNumber: _latestReleasedBuildNumber,
+          )
+              ? event
+              : null;
         };
       },
     );
