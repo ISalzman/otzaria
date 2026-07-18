@@ -482,6 +482,68 @@ void main() {
   });
 
   test(
+      'regression: הסרת תיקיית-אב legacy לא מוחקת ספרי תיקיית-בן שגם היא legacy',
+      () async {
+    final parentPath = path.join(tempDir.path, 'אב');
+    final childPath = path.join(parentPath, 'בן');
+
+    final personalCategoryId = await repository.insertCategory(
+      const Category(title: 'ספרים אישיים'),
+    );
+    final parentCategoryId = await repository.insertCategory(
+      Category(title: 'אב', parentId: personalCategoryId, level: 1),
+    );
+    final childCategoryId = await repository.insertCategory(
+      Category(title: 'בן', parentId: personalCategoryId, level: 1),
+    );
+    // שתי התיקיות נוצרו לפני המעבר ל-Personal::<path> — כל ספריהן 'external',
+    // כך שהשיוך לתיקייה נופל לזיהוי לפי נתיב בלבד.
+    final externalSourceId = await repository.insertSource('external', -1);
+
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: parentCategoryId,
+        sourceId: externalSourceId,
+        title: 'ספר האב',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(parentPath, 'ספר האב.txt'),
+      ),
+    );
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: childCategoryId,
+        sourceId: externalSourceId,
+        title: 'ספר הבן',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(childPath, 'ספר הבן.txt'),
+      ),
+    );
+    await repository.rebuildCategoryClosure();
+
+    final service = await FileSyncService.getInstance(repository);
+    await service!.deleteFolderFromDatabase(
+      parentPath,
+      otherConfiguredFolderPaths: [childPath],
+    );
+
+    expect(
+      await repository.getBooksByCategory(parentCategoryId),
+      isEmpty,
+      reason: 'ספר האב legacy הוסר עם הסרת תיקיית האב',
+    );
+    expect(
+      (await repository.getBooksByCategory(childCategoryId))
+          .map((book) => book.title),
+      ['ספר הבן'],
+      reason: 'ספר הבן שייך לתיקייה המוגדרת העמוקה יותר — הסרת האב לא נוגעת בו',
+    );
+  });
+
+  test(
       'pruneRemovedCustomFoldersFromDatabase מוחק קטגוריה עמומה בלי הוכחת source או path',
       () async {
     final personalCategoryId = await repository.insertCategory(
