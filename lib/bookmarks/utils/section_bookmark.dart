@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/personal_notes/utils/note_text_utils.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -39,5 +40,7 @@ Future<void> addTextSectionBookmark(
         commentatorsToShow: state.activeCommentators,
         label: label,
       );
-  UiSnack.showQuick(added ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+  UiSnack.showQuick(added
+      ? NotesMessages.bookmarkAdded
+      : NotesMessages.bookmarkAlreadyExists);
 }

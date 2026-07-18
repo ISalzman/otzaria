@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import '../providers/shamor_zachor_data_provider.dart';
@@ -378,8 +379,8 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
 
       if (context.mounted) {
         UiSnack.show(isBaseBook
-            ? 'הספר "$bookName" הוסר מרשימת המעקב'
-            : 'הספר "$bookName" הוסר משמור וזכור');
+            ? ToolsMessages.bookRemovedFromTracking(bookName)
+            : ToolsMessages.bookRemovedFromShamorZachor(bookName));
       }
     } catch (e) {
       if (mounted && !isBaseBook) {
@@ -388,7 +389,7 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
         });
       }
       if (context.mounted) {
-        UiSnack.showError('שגיאה בהסרת הספר: $e');
+        UiSnack.showError(ToolsMessages.bookRemoveError(e));
       }
     }
   }

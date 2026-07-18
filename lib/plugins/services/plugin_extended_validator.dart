@@ -65,6 +65,7 @@ const Set<String> _knownApiMethods = {
   'reader.clearHighlight',
   'reader.clearAllHighlights',
   'navigation.goTo',
+  'plugin.openSelf',
   'notes.list',
   'notes.getBookNotesSummary',
   'notes.add',
@@ -134,6 +135,7 @@ const Set<String> _knownEvents = {
   'reader.current_ref_changed',
   'reader.selection_changed',
   'reader.context_menu_item_clicked',
+  'plugin.page_opened',
   'calendar.date_changed',
   'workspace.changed',
   'settings.changed',
@@ -167,6 +169,7 @@ const Map<String, String> _methodRequiredPermission = {
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
   'navigation.goTo': 'navigation.write',
+  'plugin.openSelf': 'navigation.write',
   'notes.list': 'notes.read',
   'notes.getBookNotesSummary': 'notes.read',
   'notes.add': 'notes.write',
@@ -308,6 +311,8 @@ const Map<String, String> _methodMinVersion = {
   'fs.revokeFile': '0.9.94',
   // 0.9.95
   'app.openUrl': '0.9.95',
+  // 0.9.96
+  'plugin.openSelf': '0.9.96',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).

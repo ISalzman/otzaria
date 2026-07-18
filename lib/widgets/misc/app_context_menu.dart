@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
+import 'package:otzaria/widgets/misc/overlay_scroll_anchor.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppContextMenuRegion — תפריט הקשר (right-click) בסגנון האפליקציה
@@ -66,6 +68,10 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
   final GlobalKey _menuPanelKey = GlobalKey();
   Offset? _currentMenuOffset;
   double? _menuAnchorX;
+
+  /// עוגן-גלילה שנלכד בנקודת פתיחת התפריט (לפני שה-overlay כיסה אותה) —
+  /// חלונית תצוגה מקדימה שקובעה תזוז איתו בזמן גלילת הדף.
+  OverlayScrollAnchor? _menuOpenScrollAnchor;
 
   @override
   void dispose() {
@@ -222,6 +228,9 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     final entries =
         _normalizeEntries(widget.menuBuilder(context, globalPosition));
     if (entries.isEmpty) return;
+
+    _menuOpenScrollAnchor =
+        OverlayScrollAnchor.capture(context, globalPosition);
 
     final overlay = Overlay.of(context, rootOverlay: true);
     final overlayRenderObject = overlay.context.findRenderObject();
@@ -704,6 +713,8 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     return _MenuItemHoverPreview(
       previewBuilder: previewBuilder,
       metrics: metrics,
+      pinScrollAnchor: () => _menuOpenScrollAnchor,
+      onPinned: _closeContextMenu,
       child: child,
     );
   }
@@ -1075,10 +1086,19 @@ class _MenuItemHoverPreview extends StatefulWidget {
   final AppMenuMetrics metrics;
   final Widget child;
 
+  /// עוגן-הגלילה שנלכד בפתיחת התפריט — מועבר לחלונית המקובעת כדי שתזוז
+  /// עם גלילת הדף. פונקציה ולא ערך, כי הלכידה נעשית אחרי בניית הפריטים.
+  final OverlayScrollAnchor? Function()? pinScrollAnchor;
+
+  /// נקרא אחרי קיבוע התצוגה המקדימה — סוגר את התפריט שמתחתיה.
+  final VoidCallback? onPinned;
+
   const _MenuItemHoverPreview({
     required this.previewBuilder,
     required this.metrics,
     required this.child,
+    this.pinScrollAnchor,
+    this.onPinned,
   });
 
   @override
@@ -1283,27 +1303,46 @@ class _MenuItemHoverPreviewState extends State<_MenuItemHoverPreview> {
 
   Widget _buildPanel(double maxWidth, double maxHeight) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      key: _panelKey,
-      color: colorScheme.surfaceContainer,
-      elevation: 6,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppTokens.borderRadiusAll,
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minWidth: widget.metrics.menuMinWidth,
-          maxWidth: maxWidth,
-          maxHeight: maxHeight,
+    return Listener(
+      onPointerDown: (_) => _pinPreview(),
+      child: Material(
+        key: _panelKey,
+        color: colorScheme.surfaceContainer,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppTokens.borderRadiusAll,
+          side: BorderSide(color: colorScheme.outlineVariant),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: Builder(builder: widget.previewBuilder),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: widget.metrics.menuMinWidth,
+            maxWidth: maxWidth,
+            maxHeight: maxHeight,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(12),
+            child: Builder(builder: widget.previewBuilder),
+          ),
         ),
       ),
     );
+  }
+
+  /// לחיצה בתוך התצוגה המקדימה מקבעת אותה: היא מקודמת לחלונית עצמאית
+  /// (ששורדת את סגירת התפריט, נסגרת בהקשה מחוץ לה וזזה עם הגלילה),
+  /// והתפריט שמתחתיה נסגר.
+  void _pinPreview() {
+    final offset = _panelOffset;
+    if (offset == null || !_panelVisible) return;
+    LinkPreviewOverlay.showPinned(
+      context,
+      contentBuilder: widget.previewBuilder,
+      panelPosition: offset,
+      scrollAnchor: widget.pinScrollAnchor?.call(),
+    );
+    _removePreview();
+    widget.onPinned?.call();
   }
 
   // במגע אין רפרוף עכבר (גם במסכי מגע של דסקטופ); לחיצה ארוכה מחליפה אותו

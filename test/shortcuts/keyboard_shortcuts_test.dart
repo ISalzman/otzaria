@@ -71,8 +71,10 @@ class _StubNavigationBloc extends Bloc<NavigationEvent, NavigationState>
     implements NavigationBloc {
   _StubNavigationBloc([Screen screen = Screen.reading])
       : super(NavigationState(currentScreen: screen)) {
-    on<NavigationEvent>((_, __) {});
+    on<NavigationEvent>((event, _) => events.add(event));
   }
+
+  final List<NavigationEvent> events = [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -786,6 +788,125 @@ void main() {
 
       await sendCtrlW(tester);
       expect(tabsBloc.state.tabs, hasLength(2));
+    });
+  });
+
+  group('KeyboardShortcuts - קיצורים כשדיאלוג פתוח', () {
+    late MockSettingsBloc settingsBlocLocal;
+    late StreamController<SettingsState> settingsControllerLocal;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    setUp(() {
+      FocusRepository().resetForTesting();
+      settingsBlocLocal = MockSettingsBloc();
+      settingsControllerLocal = StreamController<SettingsState>.broadcast();
+      whenListen(
+        settingsBlocLocal,
+        settingsControllerLocal.stream,
+        initialState: SettingsState.initial().copyWith(
+          shortcuts: const {
+            'key-shortcut-open-library-browser': 'ctrl+l',
+            'key-shortcut-close-tab': 'ctrl+w',
+          },
+        ),
+      );
+    });
+
+    tearDown(() async {
+      await settingsControllerLocal.close();
+      FocusRepository().resetForTesting();
+    });
+
+    Future<
+        ({
+          TabsBloc tabsBloc,
+          _StubNavigationBloc navigationBloc,
+        })> pumpWithDialog(WidgetTester tester) async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+      final historyBloc = _StubHistoryBloc();
+      final navigationBloc = _StubNavigationBloc();
+      addTearDown(() async {
+        final openTabs = List<OpenedTab>.from(tabsBloc.state.tabs);
+        await tabsBloc.close();
+        for (final tab in openTabs) {
+          tab.dispose();
+        }
+        await historyBloc.close();
+        await navigationBloc.close();
+      });
+
+      tabsBloc.add(AddTab(SearchingTab('חיפוש א', 'א')));
+      await tester.pump();
+      tabsBloc.add(AddTab(SearchingTab('חיפוש ב', 'ב')));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBlocLocal),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            Provider<FocusRepository>.value(value: FocusRepository()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: KeyboardShortcuts(
+                onFindRefRequested: () {},
+                child: const SizedBox(width: 100, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      showDialog(
+        context: tester.element(find.byType(SizedBox)),
+        builder: (_) => const AlertDialog(title: Text('דיאלוג בדיקה')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      return (tabsBloc: tabsBloc, navigationBloc: navigationBloc);
+    }
+
+    Future<void> sendCtrl(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    testWidgets('Ctrl+L פועל גם כשדיאלוג פתוח: סוגר אותו ועובר לספרייה',
+        (tester) async {
+      final blocs = await pumpWithDialog(tester);
+
+      await sendCtrl(tester, LogicalKeyboardKey.keyL);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        blocs.navigationBloc.events,
+        contains(const NavigateToScreen(Screen.library)),
+      );
+
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('Ctrl+W כשדיאלוג פתוח אינו סוגר טאב שברקע', (tester) async {
+      final blocs = await pumpWithDialog(tester);
+      expect(blocs.tabsBloc.state.tabs, hasLength(2));
+
+      await sendCtrl(tester, LogicalKeyboardKey.keyW);
+      await tester.pumpAndSettle();
+
+      expect(blocs.tabsBloc.state.tabs, hasLength(2));
+      expect(find.byType(AlertDialog), findsOneWidget);
     });
   });
 }

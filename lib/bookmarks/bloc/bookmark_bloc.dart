@@ -4,6 +4,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/models/books.dart';
 
 class BookmarkBloc extends Cubit<BookmarkState> {
@@ -29,7 +30,7 @@ class BookmarkBloc extends Cubit<BookmarkState> {
   void _persistBookmarks(List<Bookmark> bookmarks) {
     _repository.saveBookmarks(bookmarks).catchError((Object e) {
       debugPrint('שגיאה בשמירת סימניות: $e');
-      UiSnack.showError('שגיאה בשמירת הסימניות');
+      UiSnack.showError(NotesMessages.bookmarkSaveError);
     });
   }
 
@@ -91,7 +92,7 @@ class BookmarkBloc extends Cubit<BookmarkState> {
   void clearBookmarks() {
     _repository.clearBookmarks().catchError((Object e) {
       debugPrint('שגיאה במחיקת סימניות: $e');
-      UiSnack.showError('שגיאה במחיקת הסימניות');
+      UiSnack.showError(NotesMessages.bookmarkClearError);
     });
     emit(state.copyWith(bookmarks: []));
   }

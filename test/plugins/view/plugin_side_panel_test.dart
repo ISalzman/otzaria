@@ -500,6 +500,28 @@ void main() {
     });
   });
 
+  group('InstalledPlugin.blockedInOfflineMode', () {
+    test('true כשהתוסף דורש רשת והרשאתו הוענקה', () {
+      final plugin = _pluginFor(
+          id: 'a', name: 'A', networkEnabled: true, networkAccessGranted: true);
+      expect(plugin.blockedInOfflineMode, isTrue);
+    });
+
+    test('false כשהתוסף דורש רשת אך הרשאתו כובתה — חייב להיפתח במנותק', () {
+      final plugin = _pluginFor(
+          id: 'a',
+          name: 'A',
+          networkEnabled: true,
+          networkAccessGranted: false);
+      expect(plugin.blockedInOfflineMode, isFalse);
+    });
+
+    test('false כשהתוסף אינו דורש רשת כלל', () {
+      final plugin = _pluginFor(id: 'a', name: 'A');
+      expect(plugin.blockedInOfflineMode, isFalse);
+    });
+  });
+
   group('תפריט פעולות', () {
     testWidgets('פתיחת התפריט מציגה את כל הפעולות', (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(

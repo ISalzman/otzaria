@@ -190,6 +190,24 @@ class UpdateRemoveNikudFromTanach extends SettingsEvent {
   List<Object?> get props => [removeNikudFromTanach];
 }
 
+class UpdateDefaultRemovePunctuation extends SettingsEvent {
+  final bool defaultRemovePunctuation;
+
+  const UpdateDefaultRemovePunctuation(this.defaultRemovePunctuation);
+
+  @override
+  List<Object?> get props => [defaultRemovePunctuation];
+}
+
+class UpdateDefaultContinuousReadingMode extends SettingsEvent {
+  final bool defaultContinuousReadingMode;
+
+  const UpdateDefaultContinuousReadingMode(this.defaultContinuousReadingMode);
+
+  @override
+  List<Object?> get props => [defaultContinuousReadingMode];
+}
+
 class UpdateDefaultSidebarOpen extends SettingsEvent {
   final bool defaultSidebarOpen;
 
@@ -324,6 +342,15 @@ class UpdatePdfBookViewByDefault extends SettingsEvent {
 
   @override
   List<Object?> get props => [pdfBookViewByDefault];
+}
+
+class UpdateTalmudBavliOpenFormat extends SettingsEvent {
+  final String talmudBavliOpenFormat;
+
+  const UpdateTalmudBavliOpenFormat(this.talmudBavliOpenFormat);
+
+  @override
+  List<Object?> get props => [talmudBavliOpenFormat];
 }
 
 class UpdateOfflineMode extends SettingsEvent {

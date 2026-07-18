@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
@@ -81,6 +82,8 @@ class SmartTextWidget extends StatelessWidget {
       fontSize: settings.fontSize,
       fontFamily: settings.fontFamily,
       fontWeight: settings.fontWeight,
+      fontVariations: AppFonts.boldFontVariations(
+          settings.fontFamily, settings.fontWeight ?? FontWeight.normal),
       height: settings.lineHeight,
     );
 
@@ -123,15 +126,14 @@ class SmartTextWidget extends StatelessWidget {
       key: widgetKey,
       renderMode: renderMode,
       textStyle: textStyle,
-      // עוגנים עם ריחוף: fwfh לא חושף hover על <a>, לכן WidgetFactory מותאם
-      // מזריק onEnter/onExit ל-TextSpan של כל עוגן (אות-סמן וטווח-ציטוט כאחד),
-      // בלי לגעת בזרימת הטקסט ובעיצוב ה-CSS שלמטה.
-      factoryBuilder: onAnchorHover == null
-          ? null
-          : () => _AnchorHoverWidgetFactory(
-                onAnchorHover: onAnchorHover!,
-                onAnchorHoverExit: onAnchorHoverExit,
-              ),
+      // WidgetFactory מותאם לשתי מטרות: (1) בולד אמיתי לגופן משתנה — fwfh בונה
+      // font-weight:bold בלי FontVariation, לכן מזריקים אותו לפי הגופן שנפתר.
+      // (2) ריחוף על עוגני-מילה — fwfh לא חושף hover על <a>, לכן מזריקים
+      // onEnter/onExit ל-TextSpan של כל עוגן, בלי לגעת בזרימת הטקסט.
+      factoryBuilder: () => _SmartTextWidgetFactory(
+        onAnchorHover: onAnchorHover,
+        onAnchorHoverExit: onAnchorHoverExit,
+      ),
       customStylesBuilder: (dom.Element element) {
         if (element.localName == 'span' &&
             element.classes.contains('footnote-marker-number')) {
@@ -205,17 +207,18 @@ class SmartTextWidget extends StatelessWidget {
   }
 }
 
-/// WidgetFactory שמוסיף ריחוף לעוגני-מילה: fwfh בונה recognizer לכל `<a>`;
-/// זוכרים אילו recognizers שייכים ל-href של עוגן, וכשה-TextSpan שלהם נבנה —
-/// מזריקים onEnter/onExit (עם מיקום הסמן הגלובלי) לצד ה-recognizer הקיים.
-/// כך גם אות-הסמן וגם טווח-הציטוט מגיבים לריחוף בלי לשבור את זרימת הטקסט.
-class _AnchorHoverWidgetFactory extends WidgetFactory {
-  final void Function(String url, Offset globalPosition) onAnchorHover;
+/// WidgetFactory ל-fwfh עם שתי אחריות:
+/// 1. בולד אמיתי לגופן משתנה — מזריק FontVariation('wght') לספאנים מודגשים.
+/// 2. ריחוף על עוגני-מילה — fwfh בונה recognizer לכל `<a>`; זוכרים אילו
+///    recognizers שייכים ל-href של עוגן, וכשה-TextSpan נבנה מזריקים
+///    onEnter/onExit לצד ה-recognizer הקיים.
+class _SmartTextWidgetFactory extends WidgetFactory {
+  final void Function(String url, Offset globalPosition)? onAnchorHover;
   final void Function(String url)? onAnchorHoverExit;
   final _anchorHrefByRecognizer = <GestureRecognizer, String>{};
 
-  _AnchorHoverWidgetFactory({
-    required this.onAnchorHover,
+  _SmartTextWidgetFactory({
+    this.onAnchorHover,
     this.onAnchorHoverExit,
   });
 
@@ -241,9 +244,11 @@ class _AnchorHoverWidgetFactory extends WidgetFactory {
     TextStyle? style,
     String? text,
   }) {
+    style = _withBoldVariations(style);
+
     final href =
         recognizer == null ? null : _anchorHrefByRecognizer[recognizer];
-    if (href == null) {
+    if (onAnchorHover == null || href == null) {
       return super.buildTextSpan(
         children: children,
         recognizer: recognizer,
@@ -257,9 +262,19 @@ class _AnchorHoverWidgetFactory extends WidgetFactory {
       style: style,
       recognizer: recognizer,
       mouseCursor: SystemMouseCursors.click,
-      onEnter: (event) => onAnchorHover(href, event.position),
+      onEnter: (event) => onAnchorHover!(href, event.position),
       onExit: (_) => onAnchorHoverExit?.call(href),
     );
+  }
+
+  /// מוסיף FontVariation לספאן מודגש בגופן משתנה (אם עוד לא הוגדר), כדי לקבל
+  /// בולד אמיתי במקום מלאכותי לפי הגופן שנפתר בפועל בספאן.
+  TextStyle? _withBoldVariations(TextStyle? style) {
+    if (style == null || style.fontVariations != null) return style;
+    final variations = AppFonts.boldFontVariations(
+        style.fontFamily, style.fontWeight ?? FontWeight.normal);
+    if (variations == null) return style;
+    return style.copyWith(fontVariations: variations);
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:path/path.dart' as path;
 
 void main() {
@@ -47,14 +48,39 @@ void main() {
           reason: 'אחרי close, האתחול הבא מייצר repository חדש');
     });
 
-    test(
-        'resolveDbPath מחזיר נתיב יציב מתחת לתיקיית הנתונים (data_root/databases/user_books.db)',
+    test('resolveDbPath מחזיר נתיב legacy קיים תחת data_root/databases',
         () async {
+      await Directory(path.join(tempDir.path, 'databases'))
+          .create(recursive: true);
+
       final dbPath = await UserBooksDatabaseHolder.resolveDbPath();
 
       expect(
         dbPath,
         path.join(tempDir.path, 'databases', 'user_books.db'),
+      );
+    });
+
+    test('resolveDbPath ממקם התקנה חדשה ליד תיקיית הספרייה', () async {
+      final libraryRoot = await Directory.systemTemp.createTemp(
+        'otzaria-uddh-library-',
+      );
+      addTearDown(() async {
+        if (await libraryRoot.exists()) {
+          await libraryRoot.delete(recursive: true);
+        }
+      });
+
+      await Settings.setValue(
+        SettingsRepository.keyLibraryPath,
+        path.join(libraryRoot.path, 'books'),
+      );
+
+      final dbPath = await UserBooksDatabaseHolder.resolveDbPath();
+
+      expect(
+        dbPath,
+        path.join(libraryRoot.path, 'databases', 'user_books.db'),
       );
     });
 

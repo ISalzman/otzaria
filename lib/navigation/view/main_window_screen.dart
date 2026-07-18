@@ -9,6 +9,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
@@ -29,6 +30,7 @@ import 'package:otzaria/find_ref/view/find_ref_dialog.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
 import 'package:otzaria/library/models/library.dart' as library_model;
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
@@ -55,7 +57,6 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
-import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/work_status/work_status_item.dart';
 import 'package:otzaria/work_status/work_status_overlay.dart';
@@ -69,6 +70,7 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -306,7 +308,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
   OverlayEntry? _tourOverlayEntry;
   bool _tourOverlayInsertScheduled = false;
   bool _tourOpenedOverflowMenu = false;
-  bool _tourOpenedTabContextMenu = false;
   late Screen _lastScreen;
   // עוקב אחר מצב ההגדרות הקודם לצורך dispatch ספציפי
   SettingsState? _prevSettingsState;
@@ -475,6 +476,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _splashOverlayVisible = false;
       context.read<LibraryBloc>().add(LoadLibrary());
     }
+
+    PluginPageLauncher.instance.navigator = (pluginId) {
+      if (!mounted) return;
+      context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+      _openPluginByIdWhenAvailable(pluginId);
+    };
 
     // הצגת פופאפ פרסומת אחרי 5 שניות
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1050,8 +1057,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
             .read<PluginSystemBloc>()
             .add(InstallPluginRequested(archivePath));
         return true;
-      case RunSearchAction(:final query):
-        _runExternalSearch(query);
+      case RunSearchAction(:final query, :final mode):
+        _runExternalSearch(query, mode: mode);
         return true;
       case RunDetectionAction(:final query):
         final focusRepository = context.read<FocusRepository>();
@@ -1103,8 +1110,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
-  void _runExternalSearch(String query) {
-    final tab = SearchingTab(SearchingTab.titleForQuery(query), query);
+  void _runExternalSearch(String query, {SearchMode? mode}) {
+    // ה-configuration מועברת בבנייה ולא ב-event — מניעת race עם
+    // ה-UpdateSearchQuery ש-TantivyFullTextSearch שולח ב-initState.
+    final tab = SearchingTab(
+      SearchingTab.titleForQuery(query),
+      query,
+      initialConfiguration: mode == null
+          ? null
+          : SearchConfiguration(
+              searchMode: mode,
+              distance: mode == SearchMode.fuzzy ? 2 : 0,
+            ),
+    );
     context.read<HistoryBloc>().add(AddHistory(tab));
     context.read<TabsBloc>().add(AddTab(tab));
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.search));
@@ -1118,7 +1136,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final book =
         library.getAllBooks().firstWhereOrNull((b) => b.id == action.bookId);
     if (book == null) {
-      UiSnack.showError('הספר עם המזהה ${action.bookId} לא נמצא בספרייה');
+      UiSnack.showError(LibraryMessages.bookNotFoundById(action.bookId));
       return false;
     }
     dispatchOpenBookAction(
@@ -1140,7 +1158,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           (b) => b is PdfBook && b.id == action.bookId,
         );
     if (book == null) {
-      UiSnack.showError('ספר ה-PDF עם המזהה ${action.bookId} לא נמצא בספרייה');
+      UiSnack.showError(LibraryMessages.pdfBookNotFoundById(action.bookId));
       return false;
     }
     dispatchOpenPdfBookAction(
@@ -1205,22 +1223,24 @@ class MainWindowScreenState extends State<MainWindowScreen>
         final plugin =
             blocState.plugins.firstWhereOrNull((p) => p.pluginId == pluginId);
         if (plugin == null) {
-          UiSnack.showError('התוסף "$pluginId" לא נמצא');
+          UiSnack.showError(LibraryMessages.pluginNotFound(pluginId));
         } else if (!plugin.enabled) {
-          UiSnack.showError('התוסף "${plugin.name}" מושבת');
+          UiSnack.showError(LibraryMessages.pluginDisabled(plugin.name));
         } else {
           toolsState.openPluginTransiently(plugin);
         }
       },
       isReady: (_) =>
           context.read<PluginSystemBloc>().state is PluginSystemLoaded,
-      onExhausted: () => UiSnack.showError('התוסף "$pluginId" לא נמצא'),
+      onExhausted: () =>
+          UiSnack.showError(LibraryMessages.pluginNotFound(pluginId)),
       attemptsLeft: 100,
     );
   }
 
   @override
   void dispose() {
+    PluginPageLauncher.instance.navigator = null;
     // Clean up fullscreen callback
     appWindowListener?.onFullscreenChanged = null;
     appWindowListener?.onWindowStateChanged = null;
@@ -1423,10 +1443,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (!mounted || !context.mounted) return;
 
     // מסך מלא זמין רק בעיון (עם טאב פתוח) או בכלים — יציאה אוטומטית בניווט החוצה.
-    final fullscreenAllowed = FullscreenHelper.isContextAllowed(
-      state.currentScreen,
-      context.read<TabsBloc>().state.hasOpenTabs,
-    );
+    // ב-macOS מסך מלא הוא Space נייטיבי (הכפתור הירוק) — לעולם לא יוצאים ממנו
+    // אוטומטית, אחרת ניווט להגדרות מקפיץ את המשתמש החוצה בלי דרך לחזור.
+    final fullscreenAllowed = (!kIsWeb && Platform.isMacOS) ||
+        FullscreenHelper.isContextAllowed(
+          state.currentScreen,
+          context.read<TabsBloc>().state.hasOpenTabs,
+        );
     if (!fullscreenAllowed && context.read<SettingsBloc>().state.isFullscreen) {
       FullscreenHelper.toggleFullscreen(context, false);
     }
@@ -1579,7 +1602,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         context.read<NavigationBloc>().add(
               const NavigateToScreen(Screen.more),
             );
-        _scheduleTourToolTabForStep(step);
       case TourStepAction.openSettings:
         context.read<NavigationBloc>().add(
               const NavigateToScreen(Screen.settings),
@@ -1589,29 +1611,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         context.read<NavigationBloc>().add(
               const NavigateToScreen(Screen.settings),
             );
-      case TourStepAction.openSystemSettings:
-        _settingsScreenController.openTab(SettingsTab.system);
-        context.read<NavigationBloc>().add(
-              const NavigateToScreen(Screen.settings),
-            );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final ctx = tourBackupSettingsTargetKey.currentContext;
-          if (ctx != null) {
-            Scrollable.ensureVisible(
-              ctx,
-              duration: const Duration(milliseconds: 200),
-              alignment: 0.3,
-            );
-          }
-          _scheduleTourTargetRebuilds(remainingFrames: 15);
-        });
-      case TourStepAction.openShortcutsSettings:
-        _settingsScreenController.openTab(SettingsTab.shortcuts);
-        context.read<NavigationBloc>().add(
-              const NavigateToScreen(Screen.settings),
-            );
-        _scheduleTourTargetRebuilds(remainingFrames: 4);
       case TourStepAction.openFindRef:
         _openGenesisForTour = true;
         _openTourFindRef();
@@ -1625,7 +1624,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
         break;
     }
     _scheduleTourOverflowMenuForStep(step);
-    _scheduleTourTabContextMenuForStep(step);
     _scheduleTourTargetRebuilds(remainingFrames: 4);
   }
 
@@ -1702,35 +1700,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _openFirstTourFindRefResult();
       return;
     }
-    if (step.id == 'advanced_search') {
-      if (_isSearchOpen) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-      _closeTourOverflowMenuIfNeeded();
-      _closeTourTabContextMenuIfNeeded();
-      _tourCubit.next();
-      return;
+    if (step.id == 'advanced_search' && _isSearchOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
     }
     _closeTourOverflowMenuIfNeeded();
-    _closeTourTabContextMenuIfNeeded();
     _tourCubit.next();
-  }
-
-  void _scheduleTourToolTabForStep(TourStep step) {
-    final toolId = switch (step.id) {
-      'calendar' => 'builtin.calendar',
-      'gematria' => 'builtin.gematria',
-      'notes' => 'builtin.notes',
-      _ => null,
-    };
-    if (toolId == null) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      moreScreenKey.currentState?.requestOpenTool(toolId);
-      _scheduleTourTargetRebuilds(remainingFrames: 4);
-    });
   }
 
   void _scheduleTourOverflowMenuForStep(TourStep step) {
@@ -1777,60 +1751,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
     _tourOpenedOverflowMenu = false;
     Navigator.of(context, rootNavigator: true).maybePop();
-  }
-
-  void _scheduleTourTabContextMenuForStep(TourStep step) {
-    if (step.area != TourSpotlightArea.sideBySide) {
-      _closeTourTabContextMenuIfNeeded();
-      return;
-    }
-    unawaited(_openTourSideBySideContextMenu());
-  }
-
-  Future<void> _openTourSideBySideContextMenu() async {
-    await _ensureTourSideBySideCandidates();
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      (tourTabContextMenuTargetKey.currentState as dynamic)?.showMenu();
-      _tourOpenedTabContextMenu = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _bringTourOverlayToFront();
-        _scheduleTourTargetRebuilds(remainingFrames: 4);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          // ייתכן שהפריט נבנה כ-MenuItemButton רגיל (למשל כאשר אין מועמדות
-          // ל"הצג לצד" — לשונית בודדת או רק CombinedTabs). במקרה כזה אין
-          // תת-תפריט לפתוח, ולכן מדלגים בשקט במקום לזרוק NoSuchMethodError.
-          final submenuState = tourTabSideBySideMenuItemTargetKey.currentState;
-          if (submenuState is! AppSubmenuOpener) return;
-          final opener = submenuState as AppSubmenuOpener;
-          opener.openSubmenu(() {
-            if (!mounted) return;
-            _scheduleTourTargetRebuilds(remainingFrames: 4);
-          });
-        });
-      });
-    });
-  }
-
-  void _closeTourTabContextMenuIfNeeded() {
-    if (!_tourOpenedTabContextMenu) {
-      return;
-    }
-    _tourOpenedTabContextMenu = false;
-    final state = tourTabContextMenuTargetKey.currentState as dynamic;
-    state?.closeMenu();
-  }
-
-  Future<void> _ensureTourSideBySideCandidates() async {
-    final tabsState = context.read<TabsBloc>().state;
-    final readableTabs = tabsState.tabs.where((tab) => tab is! CombinedTab);
-    if (readableTabs.length >= 2) {
-      return;
-    }
-    await _openTourBookByTitle('שמות');
   }
 
   void _openTourFindRef() {
@@ -1929,22 +1849,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
         return _rectForGlobalKey(tourReadingSettingsButtonTargetKey);
       case 'tools':
         return _navItemTourRectForScreen(Screen.more);
-      case 'calendar':
-        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.calendar']!);
-      case 'gematria':
-        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.gematria']!);
-      case 'notes':
-        return _rectForGlobalKey(tourToolTabTargetKeys['builtin.notes']!);
       case 'settings':
         return _navItemTourRectForScreen(Screen.settings);
       case 'appearance':
         return _rectForGlobalKey(tourSettingsTabTargetKeys[0]!);
-      case 'backup':
-        return _rectForGlobalKey(tourBackupSettingsTargetKey) ??
-            _rectForGlobalKey(tourSettingsTabTargetKeys[5]!);
-      case 'shortcuts':
-        return _rectForGlobalKey(tourShortcutsSettingsTargetKey) ??
-            _rectForGlobalKey(tourSettingsTabTargetKeys[4]!);
     }
 
     if (step.id == 'toc') {
@@ -1956,42 +1864,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
       TourSpotlightArea.tableOfContents =>
         _rectForGlobalKey(textBookNavigationTourTargetKey) ??
             _rectForGlobalKey(pdfBookNavigationTourTargetKey),
+      // טיפים חיים באזור ההגדרות נצמדים לפריט הניווט של ההגדרות
+      TourSpotlightArea.settings => _navItemTourRectForScreen(Screen.settings),
       _ => null,
     };
   }
 
   List<Rect> _resolveTourTargetRects(TourStep step) {
-    if (step.area == TourSpotlightArea.sideBySide) {
-      final tabRect = _rectForGlobalKey(tourTabContextMenuTargetKey);
-      final menuItemRect =
-          _rectForGlobalKey(tourTabSideBySideMenuItemTargetKey);
-      final firstSubitemRect =
-          _rectForGlobalKey(tourTabSideBySideFirstItemTargetKey);
-      return [
-        if (tabRect != null) tabRect,
-        if (menuItemRect != null) menuItemRect,
-        if (firstSubitemRect != null) firstSubitemRect,
-      ];
-    }
-
-    if (step.id == 'backup') {
-      final contentRect = _rectForGlobalKey(tourBackupSettingsTargetKey);
-      final tabRect = _rectForGlobalKey(tourSettingsTabTargetKeys[5]!);
-      return [
-        if (contentRect != null) contentRect,
-        if (tabRect != null) tabRect,
-      ];
-    }
-
-    if (step.id == 'shortcuts') {
-      final contentRect = _rectForGlobalKey(tourShortcutsSettingsTargetKey);
-      final tabRect = _rectForGlobalKey(tourSettingsTabTargetKeys[4]!);
-      return [
-        if (contentRect != null) contentRect,
-        if (tabRect != null) tabRect,
-      ];
-    }
-
     if (step.id == 'advanced_search') {
       final dialogRect = _rectForGlobalKey(tourSearchDialogTargetKey);
       final navSearchRect = _navItemTourRectForScreen(Screen.search);
@@ -2903,6 +2782,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
               bottomColor: AppSurfaces.panelBackground(context),
               child: KeyboardShortcuts(
                 onFindRefRequested: () => _handleFindRefOpen(context),
+                onNewSearchRequested: () => _handleSearchTabOpen(context),
                 child: MyUpdatWidget(
                   child: Scaffold(
                     resizeToAvoidBottomInset: false,
@@ -2935,6 +2815,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   );
 
                                   if (orientation == Orientation.landscape) {
+                                    final isCompactRail =
+                                        context.select<SettingsBloc, bool>(
+                                            (b) => b.state.compactMenuMode);
+                                    final railWidth = isCompactRail
+                                        ? NavRailItem.compactWidth
+                                        : NavRailItem.width;
                                     return Row(
                                       children: [
                                         if (!isImmersive)
@@ -2943,7 +2829,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                               context,
                                             ),
                                             child: SizedBox.fromSize(
-                                              size: const Size.fromWidth(74),
+                                              size: Size.fromWidth(railWidth),
                                               child: Column(
                                                 children: [
                                                   Expanded(
@@ -3042,6 +2928,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                         i,
                                                                         state
                                                                             .currentScreen,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                     if (!hideTools)
                                                                       _buildNavRailItem(
@@ -3051,6 +2939,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                             .currentScreen,
                                                                         selectedOverride:
                                                                             isToolsSelected,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                     for (int i =
                                                                             0;
@@ -3063,6 +2953,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                         isSelected:
                                                                             activePinnedIndex ==
                                                                                 i,
+                                                                        compact:
+                                                                            isCompactRail,
                                                                       ),
                                                                   ];
                                                                   final settingsItem =
@@ -3071,6 +2963,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     _settingsNavIndex,
                                                                     state
                                                                         .currentScreen,
+                                                                    compact:
+                                                                        isCompactRail,
                                                                   );
 
                                                                   if (needsScroll) {
@@ -3255,6 +3149,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
+  /// סוגר כל דיאלוג/תפריט פתוח מעל מסך הבית, כדי שחלוניות לא ייערמו זו על זו.
+  void _closeRootOverlayRoutes(BuildContext context) {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+  }
+
   void _handleSearchTabOpen(BuildContext context, {bool closeIfOpen = true}) {
     if (_isSearchOpen) {
       if (closeIfOpen) {
@@ -3263,6 +3165,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
+    _closeRootOverlayRoutes(context);
     final navigationBloc = context.read<NavigationBloc>();
     setState(() => _isSearchOpen = true);
 
@@ -3294,6 +3197,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return;
     }
 
+    _closeRootOverlayRoutes(context);
     final navigationBloc = context.read<NavigationBloc>();
     setState(() => _isFindRefOpen = true);
 
@@ -3482,6 +3386,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     int index,
     Screen currentScreen, {
     bool? selectedOverride,
+    bool compact = false,
   }) {
     final item = _navData[index];
     final isSelected =
@@ -3505,6 +3410,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       tourTargetKey: tourMainNavigationTargetKeys[index],
       tourItemKey: tourMainNavigationItemTargetKeys[index],
       isTourHighlighted: isTourHighlighted,
+      compact: compact,
     );
   }
 
@@ -3512,6 +3418,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     BuildContext context,
     _PinnedToolNavItem item, {
     bool isSelected = false,
+    bool compact = false,
   }) {
     return NavRailItem(
       icon: item.icon,
@@ -3520,6 +3427,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       label: item.label,
       isSelected: isSelected,
       onTap: () => _openPinnedItemInTools(context, item),
+      compact: compact,
     );
   }
 
@@ -3571,24 +3479,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       'library' => Screen.library,
       _ => null,
     };
-  }
-
-  Future<void> _openTourBookByTitle(String title) async {
-    try {
-      final library = await DataRepository.instance.library;
-      final book = _findBookByTitle(library, title) ?? TextBook(title: title);
-      if (!mounted) return;
-      openBook(context, book, 0, '', ignoreHistory: true);
-    } catch (_) {
-      if (!mounted) return;
-      openBook(
-        context,
-        TextBook(title: title),
-        0,
-        '',
-        ignoreHistory: true,
-      );
-    }
   }
 }
 

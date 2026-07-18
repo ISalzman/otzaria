@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -521,7 +522,9 @@ class _ActionBar extends StatelessWidget {
         showInTools: shouldShow,
       ));
     }
-    UiSnack.show(shouldShow ? 'התוספים יוצגו בכלים' : 'התוספים הוסרו מהכלים');
+    UiSnack.show(shouldShow
+        ? SettingsMessages.pluginsShownInTools
+        : SettingsMessages.pluginsHiddenFromTools);
   }
 
   void _onTogglePinNavRail(BuildContext context) {
@@ -563,12 +566,12 @@ class _ActionBar extends StatelessWidget {
       }
     }
     if (!updated) {
-      UiSnack.showError('אף תוסף נבחר לא מצהיר על שימוש ברשת — אין מה לעדכן');
+      UiSnack.showError(SettingsMessages.noSelectedPluginUsesNetwork);
       return;
     }
     UiSnack.show(granted
-        ? 'גישה לרשת הוענקה לתוספים הנבחרים'
-        : 'גישה לרשת בוטלה לתוספים הנבחרים');
+        ? SettingsMessages.networkAccessGranted
+        : SettingsMessages.networkAccessRevoked);
   }
 
   void _setRunOnStartup(BuildContext context, {required bool granted}) {
@@ -577,7 +580,7 @@ class _ActionBar extends StatelessWidget {
             p.manifest.permissions.contains(pluginRunOnStartupPermission))
         .toList();
     if (eligible.isEmpty) {
-      UiSnack.showError('אף תוסף נבחר לא תומך בטעינה אוטומטית בעלייה');
+      UiSnack.showError(SettingsMessages.noSelectedPluginSupportsStartup);
       return;
     }
     final bloc = context.read<PluginSystemBloc>();
@@ -589,8 +592,8 @@ class _ActionBar extends StatelessWidget {
       ));
     }
     UiSnack.show(granted
-        ? 'טעינה אוטומטית בעלייה הופעלה לתוספים הנבחרים'
-        : 'טעינה אוטומטית בעלייה בוטלה לתוספים הנבחרים');
+        ? SettingsMessages.runOnStartupEnabled
+        : SettingsMessages.runOnStartupDisabled);
   }
 
   Future<void> _onDelete(BuildContext context) async {
@@ -614,7 +617,7 @@ class _ActionBar extends StatelessWidget {
         bloc.add(UninstallPluginRequested(p.pluginId));
       }
     }
-    UiSnack.show('התוספים סומנו למחיקה');
+    UiSnack.show(SettingsMessages.pluginsMarkedForDeletion);
   }
 }
 

@@ -19,6 +19,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
 import 'package:otzaria/widgets/dialogs/input_dialog.dart';
@@ -138,8 +139,7 @@ class _BookmarkViewState extends State<BookmarkView> {
     return '8_older';
   }
 
-  static String _dateGroupLabel(DateTime? date) =>
-      const {
+  static String _dateGroupLabel(DateTime? date) => const {
         '1_today': 'היום',
         '2_yesterday': 'אתמול',
         '3_this_week': 'השבוע',
@@ -277,12 +277,12 @@ class _BookmarkViewState extends State<BookmarkView> {
               _editBookmarkLabel(ctx, item as Bookmark, originalIndex),
           onDelete: (ctx, originalIndex) {
             ctx.read<BookmarkBloc>().removeBookmark(originalIndex);
-            UiSnack.show('הסימניה נמחקה');
+            UiSnack.show(NotesMessages.bookmarkDeleted);
           },
           onClearAll: (ctx) {
             if (bookFilter == null) {
               ctx.read<BookmarkBloc>().clearBookmarks();
-              UiSnack.show('כל הסימניות נמחקו');
+              UiSnack.show(NotesMessages.allBookmarksDeleted);
             } else {
               // הודעת ההצלחה תוצג רק אם באמת נמחקה סימניה - בלי זה היה
               // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
@@ -290,7 +290,7 @@ class _BookmarkViewState extends State<BookmarkView> {
               final removed =
                   ctx.read<BookmarkBloc>().clearBookmarksForBook(bookFilter);
               if (removed) {
-                UiSnack.show('סימניות הספר נמחקו');
+                UiSnack.show(NotesMessages.bookBookmarksDeleted);
               }
             }
           },

@@ -238,10 +238,17 @@ class DayExtras extends StatelessWidget {
       ));
     }
 
+    final brightness = Theme.of(context).brightness;
     var remainingSlots = maxVisibleItems - visibleItems.length;
     for (final e in events.take(remainingSlots.clamp(0, maxVisibleItems))) {
-      visibleItems.add(Text(
-        '• ${e.title}',
+      final dotColor =
+          CalendarEventColors.colorForIndex(e.colorIndex, brightness) ??
+              Theme.of(context).colorScheme.onSurfaceVariant;
+      visibleItems.add(Text.rich(
+        TextSpan(children: [
+          TextSpan(text: '• ', style: TextStyle(color: dotColor)),
+          TextSpan(text: e.title),
+        ]),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

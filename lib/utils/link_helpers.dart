@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 export 'package:otzaria/utils/book_link_builder.dart';
@@ -8,5 +9,5 @@ export 'package:otzaria/utils/book_link_builder.dart';
 /// `SystemClipboard.instance == null` שעלולה לגרום להודעת "הועתק" שקרית.
 Future<void> copyLinkToClipboard(String url) async {
   await Clipboard.setData(ClipboardData(text: url));
-  UiSnack.show('הקישור הועתק');
+  UiSnack.show(CommonMessages.linkCopied);
 }

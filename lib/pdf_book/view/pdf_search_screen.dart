@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
@@ -358,7 +359,7 @@ class _PdfBookSearchViewState extends State<PdfBookSearchView> {
         _searchResults = [];
         _isSearching = false;
       });
-      UiSnack.showError('שגיאה בחיפוש');
+      UiSnack.showError(PdfMessages.searchError);
     }
   }
 

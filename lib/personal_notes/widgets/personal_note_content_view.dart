@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/utils/note_link_detection.dart';
 
 /// מציגה את תוכן ההערה האישית — כולל עיצוב (Quill Delta) אם קיים.
 ///
@@ -83,9 +84,12 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
       decoded = null;
     }
 
-    final effectiveDelta = decoded != null && widget.maxPreviewChars != null
+    final truncated = decoded != null && widget.maxPreviewChars != null
         ? _truncateDelta(decoded, widget.maxPreviewChars!)
         : decoded;
+    // כתובות שהודבקו כטקסט רגיל הופכות לקישורים לחיצים (גם בהערות ישנות).
+    final effectiveDelta =
+        truncated != null ? linkifyDeltaOps(truncated) : null;
 
     final document = effectiveDelta != null
         ? quill.Document.fromJson(effectiveDelta)
@@ -119,12 +123,15 @@ class _PersonalNoteContentViewState extends State<PersonalNoteContentView> {
         controller: controller,
         focusNode: _focusNode!,
         scrollController: _scrollController!,
-        config: const quill.QuillEditorConfig(
+        config: quill.QuillEditorConfig(
           autoFocus: false,
           expands: false,
           padding: EdgeInsets.zero,
           showCursor: false,
           scrollable: false,
+          // בלי הרישום, Quill מוסיף https:// לפני otzaria:// בעת לחיצה.
+          customLinkPrefixes: const ['otzaria://', 'zayit://'],
+          onLaunchUrl: widget.onLinkTap,
         ),
       );
 

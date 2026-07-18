@@ -31,10 +31,14 @@ class KeyboardShortcuts extends StatefulWidget {
   final Widget child;
   final VoidCallback onFindRefRequested;
 
+  /// פתיחת/סגירת דיאלוג חיפוש חדש דרך MainWindowScreen (מעקב `_isSearchOpen`).
+  final VoidCallback? onNewSearchRequested;
+
   const KeyboardShortcuts({
     super.key,
     required this.child,
     required this.onFindRefRequested,
+    this.onNewSearchRequested,
   });
 
   @override
@@ -51,12 +55,21 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       debugLabel: 'global_keyboard_shortcuts',
       skipTraversal: true,
     );
+    // late handler רץ אחרי עץ הפוקוס כולו ורק אם האירוע לא טופל, ולכן הקיצורים
+    // פועלים גם כשדיאלוג (route נפרד ב-Overlay) מחזיק את הפוקוס.
+    FocusManager.instance.addLateKeyEventHandler(_handleLateKeyEvent);
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeLateKeyEventHandler(_handleLateKeyEvent);
     _shortcutFocusScopeNode.dispose();
     super.dispose();
+  }
+
+  KeyEventResult _handleLateKeyEvent(KeyEvent event) {
+    if (!mounted) return KeyEventResult.ignored;
+    return _handleKeyEvent(event, context.read<SettingsBloc>().state.shortcuts);
   }
 
   /// ממפה מקש ספרה (שורת המספרים או הספרון) ל-1..9. מחזיר null לכל מקש אחר.
@@ -99,7 +112,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
   /// מטפל באירועי מקלדת ברמה הגלובלית - עובד גם כשיש TextField עם focus
   KeyEventResult _handleKeyEvent(
-      FocusNode node, KeyEvent event, Map<String, String> shortcutSettings) {
+      KeyEvent event, Map<String, String> shortcutSettings) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     // מניעת הפעלת קיצורי מקשים של תו בודד (ללא modifiers) בזמן עריכת טקסט
@@ -151,13 +164,23 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final prevTocShortcut = shortcutOf('key-shortcut-prev-toc');
     final nextTocShortcut = shortcutOf('key-shortcut-next-toc');
 
+    // דיאלוג/תפריט פתוח = route מעל מסך הבית ב-root Navigator. קיצורי ניווט
+    // סוגרים אותו לפני המעבר; קיצורי טאבים מנוטרלים כדי לא לפעול על מסך שברקע.
+    final rootNavigator = Navigator.maybeOf(context, rootNavigator: true);
+    final hasOpenOverlayRoute = rootNavigator?.canPop() ?? false;
+    void closeOverlayRoutes() {
+      if (hasOpenOverlayRoute) {
+        rootNavigator!.popUntil((route) => route.isFirst);
+      }
+    }
+
     // קיצורי טאבים/עיון פועלים רק במסך העיון; במסכים אחרים נופלים ל-`ignored`
     // כדי לא לסגור/לשנות טאב שברקע (למשל Ctrl+W בספרייה או בהגדרות).
     // Screen.search מציג את אותו עמוד טאבים כמו Screen.reading,
     // ולכן קיצורי טאבים צריכים לפעול בשני המסכים.
     final currentScreen = context.read<NavigationBloc>().state.currentScreen;
-    final isReadingScreen =
-        currentScreen == Screen.reading || currentScreen == Screen.search;
+    final isReadingScreen = !hasOpenOverlayRoute &&
+        (currentScreen == Screen.reading || currentScreen == Screen.search);
 
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
@@ -238,6 +261,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     }
 
     if (ShortcutHelper.matchesShortcut(event, libraryShortcut)) {
+      closeOverlayRoutes();
       context
           .read<NavigationBloc>()
           .add(const NavigateToScreen(Screen.library));
@@ -288,6 +312,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // עיון
     if (ShortcutHelper.matchesShortcut(event, readingScreenShortcut)) {
+      closeOverlayRoutes();
       context
           .read<NavigationBloc>()
           .add(const NavigateToScreen(Screen.reading));
@@ -296,10 +321,16 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // חיפוש חדש
     if (ShortcutHelper.matchesShortcut(event, newSearchShortcut)) {
-      showDialog(
-        context: context,
-        builder: (context) => const SearchDialog(existingTab: null),
-      );
+      final onNewSearch = widget.onNewSearchRequested;
+      if (onNewSearch != null) {
+        onNewSearch();
+      } else {
+        closeOverlayRoutes();
+        showDialog(
+          context: context,
+          builder: (context) => const SearchDialog(existingTab: null),
+        );
+      }
       return KeyEventResult.handled;
     }
 
@@ -317,6 +348,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // הגדרות
     if (ShortcutHelper.matchesShortcut(event, settingsShortcut)) {
+      closeOverlayRoutes();
       context
           .read<NavigationBloc>()
           .add(const NavigateToScreen(Screen.settings));
@@ -325,12 +357,14 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // כלים
     if (ShortcutHelper.matchesShortcut(event, moreShortcut)) {
+      closeOverlayRoutes();
       context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
       return KeyEventResult.handled;
     }
 
     // סימניות
     if (ShortcutHelper.matchesShortcut(event, bookmarksShortcut)) {
+      closeOverlayRoutes();
       showDialog(
         context: context,
         builder: (context) => const BookmarksDialog(),
@@ -340,6 +374,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // היסטוריה
     if (ShortcutHelper.matchesShortcut(event, historyShortcut)) {
+      closeOverlayRoutes();
       showDialog(
         context: context,
         builder: (context) => const HistoryDialog(),
@@ -349,6 +384,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     // החלף שולחן עבודה
     if (ShortcutHelper.matchesShortcut(event, workspaceShortcut)) {
+      closeOverlayRoutes();
       showDialog(
         context: context,
         builder: (context) => const WorkspaceSwitcherDialog(),
@@ -361,6 +397,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       final toolShortcut = shortcutOf(entry.key);
       if (toolShortcut.isNotEmpty &&
           ShortcutHelper.matchesShortcut(event, toolShortcut)) {
+        closeOverlayRoutes();
         mainWindowScreenKey.currentState
             ?.handleInternalDeepLink('otzaria://open/tool/${entry.value}');
         return KeyEventResult.handled;
@@ -375,6 +412,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       if (pluginShortcut.isNotEmpty &&
           ShortcutHelper.matchesShortcut(event, pluginShortcut)) {
         final pluginId = ShortcutValidator.pluginIdFromShortcutKey(pluginKey);
+        closeOverlayRoutes();
         mainWindowScreenKey.currentState
             ?.handleInternalDeepLink('otzaria://open/plugin/$pluginId');
         return KeyEventResult.handled;
@@ -445,19 +483,12 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SettingsBloc, SettingsState>(
-      buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
-      builder: (context, state) {
-        // Scope יציב שומר על קיצורים גלובליים גם כשאין child ממוקד, בלי
-        // ליצור FocusScopeNode חדש בכל rebuild.
-        return FocusScope(
-          node: _shortcutFocusScopeNode,
-          autofocus: true,
-          onKeyEvent: (node, event) =>
-              _handleKeyEvent(node, event, state.shortcuts),
-          child: widget.child,
-        );
-      },
+    // הטיפול בקיצורים רשום כ-late handler גלובלי (initState); ה-scope נשמר
+    // כדי שתמיד יהיה יעד פוקוס שממנו אירועי מקלדת נכנסים לעץ.
+    return FocusScope(
+      node: _shortcutFocusScopeNode,
+      autofocus: true,
+      child: widget.child,
     );
   }
 }

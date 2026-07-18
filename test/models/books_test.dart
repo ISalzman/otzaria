@@ -21,6 +21,32 @@ void main() {
     expect(restored.categoryPath, 'תנך/תורה');
   });
 
+  test('TextBook toJson/fromJson שומר מחבר ותקופה בשחזור טאב', () {
+    final original = TextBook(
+      title: 'פרי מגדים על אורח חיים',
+      author: 'יוסף בן מאיר תאומים',
+      heEra: 'אחרונים',
+      categoryId: 12,
+    );
+
+    final restored = Book.fromJson(original.toJson()) as TextBook;
+
+    expect(restored.author, 'יוסף בן מאיר תאומים');
+    expect(restored.heEra, 'אחרונים');
+  });
+
+  test('PdfBook toJson/fromJson שומר מחבר בשחזור טאב', () {
+    final original = PdfBook(
+      title: 'ספר',
+      path: '/tmp/sefer.pdf',
+      author: 'מחבר כלשהו',
+    );
+
+    final restored = Book.fromJson(original.toJson()) as PdfBook;
+
+    expect(restored.author, 'מחבר כלשהו');
+  });
+
   group('flattenToc', () {
     test('משטח עץ של מסכת (root יחיד + דפים כצאצאים)', () {
       // מבנה כמו ביומא: root "יומא" וכל הדפים children שלו.

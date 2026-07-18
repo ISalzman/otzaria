@@ -247,6 +247,28 @@ class MockSettingsRepository extends _i1.Mock
       ) as _i3.Future<void>);
 
   @override
+  _i3.Future<void> updateDefaultRemovePunctuation(bool? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateDefaultRemovePunctuation,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateDefaultContinuousReadingMode(bool? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateDefaultContinuousReadingMode,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
   _i3.Future<void> updateDefaultSidebarOpen(bool? value) => (super.noSuchMethod(
         Invocation.method(
           #updateDefaultSidebarOpen,
@@ -417,6 +439,17 @@ class MockSettingsRepository extends _i1.Mock
       (super.noSuchMethod(
         Invocation.method(
           #updatePdfBookViewByDefault,
+          [value],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateTalmudBavliOpenFormat(String? value) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateTalmudBavliOpenFormat,
           [value],
         ),
         returnValue: _i3.Future<void>.value(),

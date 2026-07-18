@@ -28,6 +28,7 @@ import 'package:otzaria/tools/calendar/widgets/calendar_side_panel.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
@@ -290,12 +291,12 @@ class _CalendarTopBarState extends State<CalendarTopBar>
     final result =
         input.isEmpty ? _pendingJumpDate : widget.parseInputDate(input);
     if (result == null) {
-      UiSnack.showError('לא הצלחנו לפרש את התאריך.');
+      UiSnack.showError(ToolsMessages.dateParseFailed);
       _refocusSearchWithSelection();
       return;
     }
     if (!isJumpToDateInRange(result)) {
-      UiSnack.showError('התאריך מחוץ לטווח הנתמך.');
+      UiSnack.showError(ToolsMessages.dateOutOfRange);
       _refocusSearchWithSelection();
       return;
     }

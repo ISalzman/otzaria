@@ -7,7 +7,7 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 /// מותאמות אישית).
 ///
 /// ה-DB עצמו (`user_books.db`) משתמש באותה סכמה ובאותם DAOs כמו
-/// `seforim.db`, אך הוא קובץ נפרד ב-`<dataRoot>/databases/`.
+/// `seforim.db`, אך הוא קובץ נפרד בתיקיית מסדי הנתונים הפעילה.
 /// ההפרדה מבטיחה ששינויים בספרייה הרשמית לא ימחקו את הספרים של המשתמש,
 /// ולהפך.
 ///

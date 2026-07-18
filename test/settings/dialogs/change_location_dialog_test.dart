@@ -384,6 +384,7 @@ void main() {
       final stagingRoot = p.join(tempDir.path, '.otzaria_move_test');
       final newLibrary = p.join(tempDir.path, 'books');
       final newIndex = p.join(tempDir.path, 'index');
+      final newDatabases = p.join(tempDir.path, 'databases');
 
       addTearDown(() async {
         if (await tempDir.exists()) {
@@ -394,21 +395,26 @@ void main() {
       await Directory(stagingRoot).create(recursive: true);
       await Directory(newLibrary).create(recursive: true);
       await Directory(newIndex).create(recursive: true);
+      await Directory(newDatabases).create(recursive: true);
       await File(p.join(stagingRoot, 'tmp')).writeAsString('tmp');
       await File(p.join(newLibrary, 'book')).writeAsString('book');
       await File(p.join(newIndex, 'idx')).writeAsString('idx');
+      await File(p.join(newDatabases, 'user_books.db')).writeAsString('db');
 
       await cleanupCreatedMoveTargetsForTesting(
         stagingRoot: stagingRoot,
         newLibrary: newLibrary,
         newIndex: newIndex,
+        newDatabases: newDatabases,
         finalLibraryCreated: true,
         finalIndexCreated: true,
+        finalDatabasesCreated: true,
       );
 
       expect(await Directory(stagingRoot).exists(), isFalse);
       expect(await Directory(newLibrary).exists(), isFalse);
       expect(await Directory(newIndex).exists(), isFalse);
+      expect(await Directory(newDatabases).exists(), isFalse);
     });
   });
 }

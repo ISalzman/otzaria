@@ -210,21 +210,41 @@ class CommentaryService {
       for (int i = 0; i < groups.length; i++) groups[i].bookTitle: eras[i],
     };
 
-    // מיון הקבוצות לפי הדור
+    final present = groups.map((g) => g.bookTitle).toSet();
+    final baseByTitle = {
+      for (final g in groups)
+        g.bookTitle: _notesBaseInSet(g.bookTitle, present),
+    };
+
+    // מיון הקבוצות לפי הדור, כשספר "הערות על XX" מעוגן לדור ולמיקום של XX
     final sortedGroups = List<LinkGroup>.from(groups);
     sortedGroups.sort((a, b) {
-      final eraA = eraMap[a.bookTitle] ?? CommentaryEra.other;
-      final eraB = eraMap[b.bookTitle] ?? CommentaryEra.other;
+      final anchorA = baseByTitle[a.bookTitle] ?? a.bookTitle;
+      final anchorB = baseByTitle[b.bookTitle] ?? b.bookTitle;
+      final eraA = eraMap[anchorA] ?? CommentaryEra.other;
+      final eraB = eraMap[anchorB] ?? CommentaryEra.other;
 
       if (eraA.order != eraB.order) {
         return eraA.order.compareTo(eraB.order);
       }
+      final anchorCompare = anchorA.compareTo(anchorB);
+      if (anchorCompare != 0) return anchorCompare;
 
-      // אם שני הספרים באותו דור, ממיינים לפי שם
+      // באותו עוגן - הבסיס לפני ההערות עליו
+      final noteA = baseByTitle[a.bookTitle] != null ? 1 : 0;
+      final noteB = baseByTitle[b.bookTitle] != null ? 1 : 0;
+      if (noteA != noteB) return noteA.compareTo(noteB);
+
       return a.bookTitle.compareTo(b.bookTitle);
     });
 
     return sortedGroups;
+  }
+
+  /// מחזיר את ספר-הבסיס של "הערות על XX" רק אם XX נמצא ב-[present], אחרת null.
+  static String? _notesBaseInSet(String title, Set<String> present) {
+    final base = utils.notesBookBaseTitle(title);
+    return (base != null && present.contains(base)) ? base : null;
   }
 
   /// ממיין רשימת קישורים שטוחה לפי סדר הדורות
@@ -257,32 +277,50 @@ class CommentaryService {
       );
     }
 
+    final present = titlesByPath.values.toSet();
     final eraMap = <String, CommentaryEra>{
-      for (final title in titlesByPath.values) title: getCachedBookEra(title),
+      for (final title in present) title: getCachedBookEra(title),
+    };
+    final baseByTitle = <String, String?>{
+      for (final title in present) title: _notesBaseInSet(title, present),
     };
 
     final sorted = List<Link>.from(links);
-    sorted.sort((a, b) => _compareLinksByEra(a, b, titlesByPath, eraMap));
+    sorted.sort(
+        (a, b) => _compareLinksByEra(a, b, titlesByPath, eraMap, baseByTitle));
     return sorted;
   }
 
-  /// משווה שני קישורים לפי דור -> שם ספר -> מיקום קטע
+  /// משווה שני קישורים לפי דור -> שם ספר -> מיקום קטע.
+  /// ספר "הערות על XX" מעוגן לדור ולשם של XX, ומוצב מיד אחריו.
   static int _compareLinksByEra(
     Link a,
     Link b,
     Map<String, String> titlesByPath,
     Map<String, CommentaryEra> eraMap,
+    Map<String, String?> baseByTitle,
   ) {
     final titleA = titlesByPath[a.path2]!;
     final titleB = titlesByPath[b.path2]!;
-    final eraA = eraMap[titleA] ?? CommentaryEra.other;
-    final eraB = eraMap[titleB] ?? CommentaryEra.other;
+    final anchorA = baseByTitle[titleA] ?? titleA;
+    final anchorB = baseByTitle[titleB] ?? titleB;
+    final eraA = eraMap[anchorA] ?? CommentaryEra.other;
+    final eraB = eraMap[anchorB] ?? CommentaryEra.other;
 
     if (eraA.order != eraB.order) {
       return eraA.order.compareTo(eraB.order);
     }
 
-    // באותו דור - מיון אלפביתי לפי שם הספר
+    // באותו דור - מיון אלפביתי לפי שם העוגן
+    final anchorCompare = anchorA.compareTo(anchorB);
+    if (anchorCompare != 0) return anchorCompare;
+
+    // באותו עוגן - הבסיס לפני ההערות עליו
+    final noteA = baseByTitle[titleA] != null ? 1 : 0;
+    final noteB = baseByTitle[titleB] != null ? 1 : 0;
+    if (noteA != noteB) return noteA.compareTo(noteB);
+
+    // שני ספרי הערות שונים על אותו בסיס - לפי שמם
     final titleCompare = titleA.compareTo(titleB);
     if (titleCompare != 0) return titleCompare;
 

@@ -147,6 +147,110 @@ void main() {
       expect(groups[0].links.length, 1);
     });
 
+    test('"הערות על XX" ממוינת מיד אחרי XX, גם כשא"ב היה מקדים אותה', () {
+      // מטמון דורות ריק => כל הספרים בדור "שאר מפרשים", כך שהמיון נקבע לפי
+      // העיגון בלבד. באלפבית "הערות" (ה) קודם ל"חברותא" (ח) — כאן זה מתהפך.
+      CommentaryService.clearEraCache();
+      Link linkFor(String title, int index2) => Link(
+            heRef: title,
+            index1: 1,
+            path2: title,
+            index2: index2,
+            connectionType: 'COMMENTARY',
+          );
+
+      final sorted = CommentaryService.sortLinksByEraSync([
+        linkFor('הערות על חברותא על ברכות', 1),
+        linkFor('אבן עזרא', 1),
+        linkFor('חברותא על ברכות', 1),
+      ]);
+
+      expect(sorted.map((l) => l.heRef).toList(), [
+        'אבן עזרא',
+        'חברותא על ברכות',
+        'הערות על חברותא על ברכות',
+      ]);
+    });
+
+    test('ספר-הערות שבסיסו נעדר ממוין לפי שמו-שלו', () {
+      CommentaryService.clearEraCache();
+      Link linkFor(String title) => Link(
+            heRef: title,
+            index1: 1,
+            path2: title,
+            index2: 1,
+            connectionType: 'COMMENTARY',
+          );
+
+      // "חברותא על ברכות" נעדר => ההערות נופלות חזרה למיון א"ב (ה' לפני ט').
+      final sorted = CommentaryService.sortLinksByEraSync([
+        linkFor('טור'),
+        linkFor('הערות על חברותא על ברכות'),
+      ]);
+
+      expect(sorted.map((l) => l.heRef).toList(), [
+        'הערות על חברותא על ברכות',
+        'טור',
+      ]);
+    });
+
+    test('sortGroupsByEra: קבוצת "הערות על XX" ממוינת מיד אחרי קבוצת XX',
+        () async {
+      // repo לא מאותחל => getBookEra מחזיר "שאר מפרשים" לכולם, כך שהמיון נקבע
+      // לפי העיגון בלבד. באלפבית "הערות" (ה) קודם ל"חברותא" (ח) — כאן זה מתהפך.
+      LinkGroup groupFor(String title) => LinkGroup(
+            bookTitle: title,
+            links: [
+              Link(
+                heRef: title,
+                index1: 1,
+                path2: title,
+                index2: 1,
+                connectionType: 'COMMENTARY',
+              ),
+            ],
+          );
+
+      final sorted = await CommentaryService.sortGroupsByEra([
+        groupFor('הערות על חברותא על ברכות'),
+        groupFor('אבן עזרא'),
+        groupFor('חברותא על ברכות'),
+      ]);
+
+      expect(sorted.map((g) => g.bookTitle).toList(), [
+        'אבן עזרא',
+        'חברותא על ברכות',
+        'הערות על חברותא על ברכות',
+      ]);
+    });
+
+    test('sortGroupsByEra: קבוצת-הערות שבסיסה נעדר ממוינת לפי שמה-שלה',
+        () async {
+      LinkGroup groupFor(String title) => LinkGroup(
+            bookTitle: title,
+            links: [
+              Link(
+                heRef: title,
+                index1: 1,
+                path2: title,
+                index2: 1,
+                connectionType: 'COMMENTARY',
+              ),
+            ],
+          );
+
+      // "חברותא על ברכות" נעדר => ההערות נופלות חזרה למיון א"ב (ה' לפני ט').
+      final sorted = await CommentaryService.sortGroupsByEra([
+        groupFor('טור'),
+        groupFor('הערות על חברותא על ברכות'),
+      ]);
+
+      expect(sorted.map((g) => g.bookTitle).toList(), [
+        'הערות על חברותא על ברכות',
+        'טור',
+      ]);
+    });
+
     test('Async grouping returns the same grouping result', () async {
       final links = [
         Link(

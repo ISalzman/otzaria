@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -120,7 +121,7 @@ class _PersonalNotesManagerScreenState
           _isLoadingBooks = false;
         });
       } else {
-        UiSnack.showError('שגיאה בטעינת רשימת ההערות: $e');
+        UiSnack.showError(NotesMessages.notesListLoadError(e));
       }
     }
   }
@@ -496,7 +497,7 @@ class _PersonalNotesManagerScreenState
     );
 
     if (!mounted) return;
-    UiSnack.show('הגיבוי הושלם בהצלחה');
+    UiSnack.show(NotesMessages.backupCompleted);
   }
 
   Future<void> _exportNotesToText() async {
@@ -530,7 +531,7 @@ class _PersonalNotesManagerScreenState
     );
 
     if (!mounted) return;
-    UiSnack.show('הייצוא לטקסט הושלם בהצלחה');
+    UiSnack.show(NotesMessages.textExportCompleted);
   }
 
   Future<void> _importNotes() async {
@@ -583,10 +584,12 @@ class _PersonalNotesManagerScreenState
     );
 
     if (!mounted) return;
-    UiSnack.show(
-      'ייבוא הושלם: נוספו ${summary.inserted}, עודכנו ${summary.updated}, '
-      'דולגו ${summary.skipped}, שוכפלו ${summary.duplicated}',
-    );
+    UiSnack.show(NotesMessages.importCompleted(
+      inserted: summary.inserted,
+      updated: summary.updated,
+      skipped: summary.skipped,
+      duplicated: summary.duplicated,
+    ));
     _loadBooks();
   }
 
@@ -1224,7 +1227,7 @@ class _PersonalNotesManagerScreenState
 
     final trimmed = result.contentPlain.trim();
     if (trimmed.isEmpty) {
-      UiSnack.show('ההערה ריקה, לא נשמרה');
+      UiSnack.show(NotesMessages.emptyNoteNotSaved);
       return;
     }
 
@@ -1238,7 +1241,7 @@ class _PersonalNotesManagerScreenState
             contentFormat: result.contentFormat,
           ),
         );
-    UiSnack.show('ההערה עודכנה');
+    UiSnack.show(NotesMessages.noteUpdated);
   }
 
   Future<void> _deleteNote(PersonalNote note) async {
@@ -1258,7 +1261,7 @@ class _PersonalNotesManagerScreenState
               noteId: note.id,
             ),
           );
-      UiSnack.show('ההערה נמחקה');
+      UiSnack.show(NotesMessages.noteDeleted);
     }
   }
 
@@ -1285,27 +1288,27 @@ class _PersonalNotesManagerScreenState
               lineNumber: newLine,
             ),
           );
-      UiSnack.show('ההערה הועברה לשורה $newLine');
+      UiSnack.show(NotesMessages.noteMovedToLine(newLine));
     }
   }
 
   Future<void> _openNoteInBook(PersonalNote note) async {
     if (note.lineNumber == null) {
-      UiSnack.show('להערה הזו אין מיקום');
+      UiSnack.show(NotesMessages.noteHasNoLocation);
       return;
     }
 
     final libraryState = context.read<LibraryBloc>().state;
     final library = libraryState.library;
     if (library == null) {
-      UiSnack.show('הספרייה לא נטענה עדיין');
+      UiSnack.show(NotesMessages.libraryNotLoadedYet);
       return;
     }
 
     final book = library.findBookByTitle(note.bookId, TextBook) ??
         library.findBookByTitle(note.bookId, null);
     if (book == null) {
-      UiSnack.show('הספר לא נמצא: ${note.bookId}');
+      UiSnack.show(NotesMessages.bookNotFound(note.bookId));
       return;
     }
 

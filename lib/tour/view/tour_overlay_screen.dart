@@ -604,16 +604,8 @@ Rect tourTargetRectFor(
       rect = Rect.fromLTWH(82, 4, 230, 52);
     case TourSpotlightArea.print:
       rect = toolbarActionRect(0);
-    case TourSpotlightArea.sideBySide:
-      rect = Rect.fromLTWH(130, 54, 260, 58);
-    case TourSpotlightArea.toolsTabs:
-      rect = Rect.fromLTWH(110, 80, width - 220, 78);
     case TourSpotlightArea.designSettings:
       rect = Rect.fromLTWH(width - 310, 78, 260, 70);
-    case TourSpotlightArea.backupSettings:
-      rect = Rect.fromLTWH(110, 240, width - 220, 170);
-    case TourSpotlightArea.shortcutsSettings:
-      rect = Rect.fromLTWH(width - 310, 360, 260, 70);
   }
 
   final safeBounds = area == TourSpotlightArea.navigation

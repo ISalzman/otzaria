@@ -367,6 +367,7 @@ LiveTipSpec(
 |-----|--------|
 | הסיור פעיל (`isActive == true`) | לא מציגים טיפ |
 | יש כבר טיפ פעיל (`hasActiveLiveTip`) | לא מציגים טיפ נוסף |
+| כבר הוצג טיפ כלשהו בסשן הנוכחי (`_sessionTipShown`) | לא מציגים — הטיפ הבא יידחה להפעלה הבאה |
 | הטיפ כבר הוצג (`shownTips`) | לא מציגים שוב |
 | הטיפ נפתר (`resolvedTips`) | לא מציגים בכלל |
 | הסיור הסתיים או דולג, ותנאי הטיפ מתקיים | מציגים |
@@ -376,21 +377,26 @@ LiveTipSpec(
 
 ### טיפ מסוג "הידעת?" — מינימום הפעלות
 
-טיפ מסוג "הידעת?" אינו אמור להופיע בהפעלות הראשונות של התוכנה, גם אם תנאי האינטראקציה כבר התקיים. דרוש מינימום של 3-4 הפעלות לפני שהוא מוצג, כדי לא להציף משתמש חדש.
+טיפ מסוג "הידעת?" אינו אמור להופיע בהפעלות הראשונות של התוכנה, גם אם תנאי האינטראקציה כבר התקיים. דרוש מינימום הפעלות לפני שהוא מוצג, כדי לא להציף משתמש חדש.
 
 - מספר ההפעלות נשמר ב-`LiveTipStorage.launchCountKey` ומוגדל ב-`registerSession()` פעם אחת בכל עליית חלון.
-- הסף נשלט דרך `_delayedTipMinimumLaunchCount` (ברירת מחדל 3, ניתן להזרקה דרך ה-constructor לבדיקות).
-- בטיפ מבוסס-אינטראקציה (למשל `bookSourceHint`) בדוק את הסף ב-`_resolveNextLiveTip` דרך `_hasMinimumLaunches` בנוסף לתנאי האינטראקציה.
-- בטיפ מבוסס-טיימר (למשל `customFoldersHint`) הסף נבדק כבר ב-`registerSession()` לפני תזמון הטיימר.
+- בטיפ מבוסס-אינטראקציה (למשל `bookSourceHint`, `printHint`) בדוק את הסף ב-`_resolveNextLiveTip` דרך `_hasLaunchesAtLeast` בנוסף לתנאי האינטראקציה.
+- בטיפ מבוסס-טיימר (למשל `customFoldersHint`) הסף מוגדר ב-`DelayedTipSchedule` ונבדק ב-`registerSession()` לפני תזמון הטיימר.
 
 ### טיפ מבוסס ותק שימוש (לא מבוסס אינטראקציה)
 
-לא כל טיפ נובע מפעולה נקודתית. טיפ מסוג "הידעת?" יכול להופיע אחרי זמן שימוש מסוים ומההפעלה ה-N ואילך. הדוגמה הקיימת היא `LiveTipId.customFoldersHint`:
+לא כל טיפ נובע מפעולה נקודתית. טיפ מסוג "הידעת?" יכול להופיע אחרי זמן שימוש מסוים ומההפעלה ה-N ואילך. טיפים כאלה מוגדרים ב-`TourCubit.defaultDelayedTipSchedules` — רשימת `DelayedTipSchedule` שבה כל רשומה קובעת טיפ, מינימום הפעלות והשהיה בסשן:
 
-- `registerSession()` ב-`TourCubit` נקרא פעם אחת בעליית החלון הראשי, סופר את ההפעלות (`LiveTipStorage.launchCountKey`) ומתזמן טיימר.
-- כשהטיימר יורה (`_delayedTipDelay`, ברירת מחדל 2.5 דק') מוצג הטיפ דרך אותו מסלול תצוגה של טיפים חיים.
+| טיפ | מינימום הפעלות | השהיה בסשן |
+|-----|----------------|-------------|
+| `customFoldersHint` | 3 | 2:30 דק' |
+| `shortcutsHint` | 5 | 2 דק' |
+| `backupHint` | 10 | 2 דק' |
+
+- `registerSession()` ב-`TourCubit` נקרא פעם אחת בעליית החלון הראשי, סופר את ההפעלות (`LiveTipStorage.launchCountKey`) ומתזמן טיימר **רק לטיפ הזכאי הראשון** לפי סדר הרשימה — הסדר קובע עדיפות.
+- כשהטיימר יורה מוצג הטיפ דרך אותו מסלול תצוגה של טיפים חיים, אלא אם כבר הוצג טיפ אחר בסשן (`_sessionTipShown`).
 - אם החלון נסגר לפני שהטיימר ירה, הטיפ לא סומן כ-`shown` ולכן יופיע בהפעלה הבאה — כך מתממש הכלל "אם השימוש היה קצר, בפעם הבאה".
-- `delayedTipDelay` ו-`delayedTipMinimumLaunchCount` ניתנים להזרקה דרך ה-constructor כדי לאפשר בדיקות מהירות.
+- `delayedTipSchedules` ו-`printHintMinimumSessionDuration` ניתנים להזרקה דרך ה-constructor כדי לאפשר בדיקות מהירות.
 
 השתמש ב-`primaryValue` כאשר התנאי צריך לזהות קשר בין כמה אירועים, למשל כמה פעולות שנעשו על אותו ספר או אותו טאב.
 
@@ -433,7 +439,7 @@ flutter test test\tour\tour_cubit_test.dart
 ## רשימת בדיקה לפני קומיט
 
 - `id` חדש הוא ייחודי ויציב.
-- כל טקסט עברי ב-widget חדש כולל `textDirection: TextDirection.rtl`.
+- אין `textDirection: TextDirection.rtl` על `Text` — ה-locale קובע RTL גלובלית; `TextDirection.ltr` רק לתוכן LTR מובהק.
 - icons חדשים הם רק מ-`fluentui_system_icons`.
 - לא הוצמד `GlobalKey` גלובלי לכמה מופעים במקביל.
 - key של spotlight מוצמד ל-widget המדויק.

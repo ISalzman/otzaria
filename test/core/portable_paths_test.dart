@@ -91,6 +91,8 @@ void main() {
       await Settings.setValue(
           SettingsRepository.keyIndexPath, p.join(oldRoot, 'index'));
       await Settings.setValue(
+          SettingsRepository.keyDatabasesPath, p.join(oldRoot, 'databases'));
+      await Settings.setValue(
           SettingsRepository.keyBackupPath, p.join(oldRoot, 'backups'));
       // נתיב שאינו תחת השורש הישן — חייב להישאר כמו שהוא.
       final unrelated = p.join('another', 'drive', 'books');
@@ -105,6 +107,10 @@ void main() {
       expect(
         Settings.getValue<String>(SettingsRepository.keyIndexPath),
         p.join(dataRoot, 'index'),
+      );
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyDatabasesPath),
+        p.join(dataRoot, 'databases'),
       );
       expect(
         Settings.getValue<String>(SettingsRepository.keyBackupPath),

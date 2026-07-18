@@ -170,7 +170,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
       if (outline != null && outline.isNotEmpty) {
         final heading = _findHeadingForPage(outline, page);
         if (heading != null) {
-          ref = '${tab.title} $heading'; // שם הספר + הכותרת
+          ref = '${tab.title} $heading — עמוד $page';
         } else {
           ref = '${tab.title} עמוד $page'; // אם אין כותרת, הצג עם מספר עמוד
         }

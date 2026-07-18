@@ -4,8 +4,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
@@ -22,7 +20,7 @@ void main() {
 
   CustomFoldersBloc buildBloc() {
     return CustomFoldersBloc(
-      libraryBloc: _FakeLibraryBloc(),
+      addLibraryEvent: (_) {},
       loadFolders: () => [
         CustomFolder(
           path: folderPath,
@@ -31,7 +29,8 @@ void main() {
         ),
       ],
       saveFolders: (_) async {},
-      syncFolders: (_) async => const FileSyncResult(),
+      syncFolders: (_, {String? onlyFolderPath}) async =>
+          const FileSyncResult(),
       deleteFolderFromDb: (_) async {},
     )..add(const LoadCustomFolders());
   }
@@ -121,9 +120,4 @@ void main() {
 
     expect(find.text('הסרת תיקייה'), findsOneWidget);
   });
-}
-
-class _FakeLibraryBloc extends LibraryBloc {
-  @override
-  void add(LibraryEvent event) {}
 }

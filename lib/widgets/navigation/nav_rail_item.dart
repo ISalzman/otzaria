@@ -26,6 +26,11 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 class NavRailItem extends StatelessWidget {
+  /// רוחב הפריט במצב רגיל ובמצב קומפקטי. ה-SizedBox העוטף את הסרגל חייב
+  /// להשתמש באותו ערך, אחרת ייווצר overflow בין רוחב הסרגל לרוחב הפריטים.
+  static const double width = 74;
+  static const double compactWidth = 60;
+
   /// אייקון רגיל (כשלא נבחר). חובה כשלא הועבר [imageAsset].
   final IconData? icon;
 
@@ -60,6 +65,9 @@ class NavRailItem extends StatelessWidget {
   /// מפתח לפריט הניווט כולו, כולל התווית.
   final Key? tourItemKey;
 
+  /// מצמצם את רוחב הפריט ([compactWidth] במקום [width]).
+  final bool compact;
+
   const NavRailItem({
     super.key,
     this.icon,
@@ -72,6 +80,7 @@ class NavRailItem extends StatelessWidget {
     this.tourTargetKey,
     this.tourItemKey,
     this.isTourHighlighted = false,
+    this.compact = false,
   }) : assert(icon != null || imageAsset != null,
             'NavRailItem requires either icon or imageAsset');
 
@@ -113,7 +122,7 @@ class NavRailItem extends StatelessWidget {
 
     return SizedBox(
       key: tourItemKey,
-      width: 74,
+      width: compact ? compactWidth : width,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Column(

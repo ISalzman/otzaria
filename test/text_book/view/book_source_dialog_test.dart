@@ -19,6 +19,14 @@ void main() {
       expect(info.text, equals('תא שמע'));
       expect(info.url, equals('https://tashma.co.il/'));
     });
+
+    test('should resolve the wikiJewishBooksToOtzaria source as stored in DB',
+        () {
+      final info = getSourceDisplayInfo('wikiJewishBooksToOtzaria');
+
+      expect(info.text, equals('אוצר הספרים היהודי השיתופי'));
+      expect(info.url, equals('https://wiki.jewishbooks.org.il/'));
+    });
   });
 
   group('isTashmaSource', () {
@@ -60,6 +68,26 @@ void main() {
       expect(isNationalLibrarySource('TashmaToOtzaria'), isFalse);
       expect(isNationalLibrarySource(''), isFalse);
       expect(isNationalLibrarySource(null), isFalse);
+    });
+  });
+
+  group('isWikiJewishBooksSource', () {
+    test('should detect the wikiJewishBooksToOtzaria source as stored in DB',
+        () {
+      expect(isWikiJewishBooksSource('wikiJewishBooksToOtzaria'), isTrue);
+    });
+
+    test('should detect variants with separators and casing', () {
+      expect(isWikiJewishBooksSource('wiki jewish books'), isTrue);
+      expect(isWikiJewishBooksSource('Wiki_Jewish_Books'), isTrue);
+      expect(isWikiJewishBooksSource('WIKIJEWISHBOOKS'), isTrue);
+    });
+
+    test('should return false for other or empty sources', () {
+      expect(isWikiJewishBooksSource('Sefaria'), isFalse);
+      expect(isWikiJewishBooksSource('wikisourceToOtzaria'), isFalse);
+      expect(isWikiJewishBooksSource(''), isFalse);
+      expect(isWikiJewishBooksSource(null), isFalse);
     });
   });
 }

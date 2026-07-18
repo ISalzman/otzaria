@@ -7,6 +7,7 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 
 class InlineNoteEditor extends StatefulWidget {
   final PersonalNote? note;
@@ -103,7 +104,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
 
     final result = _controller.buildResult();
     if (result.contentPlain.trim().isEmpty) {
-      UiSnack.showError('ההערה ריקה, לא נשמרה');
+      UiSnack.showError(NotesMessages.emptyNoteNotSaved);
       return;
     }
     _isDone = true;

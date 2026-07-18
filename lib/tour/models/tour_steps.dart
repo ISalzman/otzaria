@@ -13,7 +13,6 @@ class TourSteps {
   static List<TourStep> build(
       {required bool libraryLoaded, bool isRestart = false}) {
     final shortcuts = _ShortcutText();
-    final hiddenTools = _readHiddenBuiltInToolIds();
     final steps = <TourStep>[
       if (isRestart)
         TourStep(
@@ -140,22 +139,6 @@ class TourSteps {
           area: TourSpotlightArea.readingSettings,
           action: TourStepAction.openReading,
         ),
-        const TourStep(
-          id: 'print',
-          title: 'הדפסה',
-          body:
-              'הדפס את הפרק הנוכחי עם הפורמט שבחרת — כולל מפרשים אם הם מוצגים.',
-          area: TourSpotlightArea.print,
-          action: TourStepAction.openReading,
-        ),
-        const TourStep(
-          id: 'side_by_side',
-          title: 'שני ספרים זה לצד זה',
-          body:
-              'לחץ לחיצה ימנית על טאב ובחר הצג לצד — שני ספרים יוצגו זה לצד זה עם מחיצה נגררת.',
-          area: TourSpotlightArea.sideBySide,
-          action: TourStepAction.openReading,
-        ),
       ]);
     }
 
@@ -177,32 +160,6 @@ class TourSteps {
         area: TourSpotlightArea.tools,
         action: TourStepAction.openTools,
       ),
-      if (!hiddenTools.contains('builtin.calendar'))
-        const TourStep(
-          id: 'calendar',
-          title: 'לוח שנה יהודי',
-          body:
-              'לוח עברי-לועזי עם זמני תפילה לפי מיקום, וגם דף יומי לתלמוד בבלי ועוד.',
-          area: TourSpotlightArea.toolsTabs,
-          action: TourStepAction.openTools,
-        ),
-      if (!hiddenTools.contains('builtin.gematria'))
-        const TourStep(
-          id: 'gematria',
-          title: 'חיפוש גימטריות',
-          body: 'הזן מילה וקבל את הגימטריה שלה, או חפש מילים לפי ערך גימטרי.',
-          area: TourSpotlightArea.toolsTabs,
-          action: TourStepAction.openTools,
-        ),
-      if (!hiddenTools.contains('builtin.notes'))
-        const TourStep(
-          id: 'notes',
-          title: 'הערות אישיות',
-          body:
-              'הוסף הערות אישיות לכל מקום בכל ספר. ההערות שמורות במכשיר וניתנות לייצוא.',
-          area: TourSpotlightArea.toolsTabs,
-          action: TourStepAction.openTools,
-        ),
       TourStep(
         id: 'settings',
         title: 'הגדרות',
@@ -217,22 +174,6 @@ class TourSteps {
         body: 'בחר מצב בהיר או כהה, צבע בסיסי לממשק ומצב תצוגה מלאה.',
         area: TourSpotlightArea.designSettings,
         action: TourStepAction.openDesignSettings,
-      ),
-      const TourStep(
-        id: 'backup',
-        title: 'גיבוי',
-        body:
-            'שמור גיבוי של הסימניות, ההיסטוריה וההערות שלך, ושחזר בכל עת גם לאחר התקנה מחדש. הגיבוי ניתן לייצוא.',
-        area: TourSpotlightArea.backupSettings,
-        action: TourStepAction.openSystemSettings,
-      ),
-      TourStep(
-        id: 'shortcuts',
-        title: 'קיצורי מקלדת',
-        body: 'צפה בכל קיצורי המקלדת הזמינים והתאם אותם אישית.\n\n'
-            '${shortcuts.shortcutTable}',
-        area: TourSpotlightArea.shortcutsSettings,
-        action: TourStepAction.openShortcutsSettings,
       ),
       TourStep(
         id: 'finish',
@@ -263,16 +204,6 @@ class TourSteps {
 
     return steps;
   }
-
-  static Set<String> _readHiddenBuiltInToolIds() {
-    final raw = Settings.getValue<String>('key-hidden-builtin-tool-ids') ?? '';
-    if (raw.isEmpty) return const <String>{};
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet();
-  }
 }
 
 class _ShortcutText {
@@ -290,15 +221,6 @@ class _ShortcutText {
   String get search => _read('key-shortcut-open-new-search', 'ctrl+shift+f');
   String get tools => _read('key-shortcut-open-more', 'ctrl+m');
   String get settings => _read('key-shortcut-open-settings', 'ctrl+comma');
-
-  String get shortcutTable => [
-        'ספרייה: ${_read('key-shortcut-open-library-browser', 'ctrl+l')}',
-        'איתור: ${_read('key-shortcut-open-find-ref', 'ctrl+o')}',
-        'עיון: ${_read('key-shortcut-open-reading-screen', 'ctrl+r')}',
-        'חיפוש מתקדם: ${_read('key-shortcut-open-new-search', 'ctrl+shift+f')}',
-        'טאב הבא: ${_read('key-shortcut-next-tab', 'ctrl+tab')}',
-        'סגור טאב: ${_read('key-shortcut-close-tab', 'ctrl+w')}',
-      ].join('\n');
 
   String _read(String key, String defaultValue) {
     final value = Settings.getValue<String>(key) ?? defaultValue;

@@ -16,6 +16,8 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
+import 'package:otzaria/settings/services/backup/backup_store.dart';
 
 /// Status of the most recent backup and whether a new one is recommended.
 class BackupStatus {
@@ -57,6 +59,9 @@ class BackupService {
 
   /// Create a backup with specified options.
   /// Returns the backup path and a list of sections that were skipped (e.g. when Hive box is not open).
+  ///
+  /// [isAutoBackup] — גיבוי אוטומטי כפוף לרוטציה; גיבוי ידני מסומן בשם הקובץ
+  /// (`_manual`) והרוטציה לא נוגעת בו לעולם.
   static Future<({String path, List<String> skippedSections})> createBackup({
     required bool includeSettings,
     required bool includeBookmarks,
@@ -66,20 +71,26 @@ class BackupService {
     required bool includeShamorZachor,
     // [EDITING DISABLED] required bool includeUserOverrides,
     required bool includePlugins,
+    bool isAutoBackup = false,
   }) async {
     final skippedSections = <String>[];
     try {
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final backupDir = await getBackupDirectory();
-      final backupFileName = 'otzaria_backup_$timestamp.json';
+      final suffix = isAutoBackup ? '' : '_manual';
+      final backupFileName = 'otzaria_backup_$timestamp$suffix.json';
       final backupPath = p.join(backupDir, backupFileName);
+      // גיבוי ידני חייב להיות קובץ עצמאי שניתן להעתיק למחשב אחר — קבצי
+      // התוספים מוטמעים בו כ-base64. גיבוי אוטומטי מפנה ל-blobs במחסן.
+      final store = isAutoBackup ? BackupStore.forBackupDir(backupDir) : null;
 
       _logger.info('Creating backup at: $backupPath');
       _logger.info('Backup directory: $backupDir');
 
       final backupData = <String, dynamic>{
-        'version': '1.0',
+        'version': '2.0',
         'timestamp': timestamp,
+        'origin': isAutoBackup ? 'auto' : 'manual',
         'includes': {
           'settings': includeSettings,
           'bookmarks': includeBookmarks,
@@ -119,7 +130,7 @@ class BackupService {
 
       // Backup plugins
       if (includePlugins) {
-        backupData['plugins'] = await _backupPlugins(skippedSections);
+        backupData['plugins'] = await _backupPlugins(skippedSections, store);
       }
 
       // Backup workspaces
@@ -191,6 +202,8 @@ class BackupService {
       SettingsRepository.keyCopyWithHeaders,
       SettingsRepository.keyCopyHeaderFormat,
       SettingsRepository.keyLibraryPath,
+      SettingsRepository.keyIndexPath,
+      SettingsRepository.keyDatabasesPath,
       SettingsRepository.keyDbEffectivePath,
       SettingsRepository.keyHebrewBooksPath,
       SettingsRepository.keyDevChannel,
@@ -291,7 +304,7 @@ class BackupService {
   // תוספי פיתוח (`development`) מדולגים, כיון שאינם קיימים במחשב היעד.
   // גיבוי תוסף שנכשל מתבצע דילוג, ומסומן ב-[skippedSections] למניעת שגיאות בשחזור
   static Future<List<Map<String, dynamic>>> _backupPlugins(
-      List<String> skippedSections) async {
+      List<String> skippedSections, BackupStore? store) async {
     final db = PluginSystemDatabase.instance;
     final plugins = await db.getAllInstalledPlugins();
     final result = <Map<String, dynamic>>[];
@@ -300,9 +313,9 @@ class BackupService {
       if (plugin.isDevelopment) continue;
       try {
         final aux = await db.exportPluginAuxData(plugin.pluginId);
-        final files = await _readDirAsBase64(plugin.installPath);
+        final files = await _readDirAsRefs(plugin.installPath, store);
         final dataPath = await AppPaths.getPluginDataPath(plugin.pluginId);
-        final data = await _readDirAsBase64(dataPath);
+        final data = await _readDirAsRefs(dataPath, store);
         result.add({
           'installation': plugin.toDbMap(),
           'permissions': aux['permissions'],
@@ -323,12 +336,14 @@ class BackupService {
     return result;
   }
 
-  /// קורא את כל הקבצים בתיקייה (רקורסיבית) וממפה נתיב-יחסי → תוכן ב-base64.
+  /// קורא את כל הקבצים בתיקייה (רקורסיבית) וממפה נתיב-יחסי → הפניית blob
+  /// במחסן (`sha256:<hex>`), או base64 מוטמע כש-[store] הוא null (גיבוי ידני).
   /// הנתיבים מנורמלים למפריד `/` כדי לאפשר שחזור חוצה-פלטפורמות.
   ///
   /// כשל בקריאת קובץ אינו נבלע אלא מתפשט לקורא — כך גיבוי תוסף נכשל במלואו
   /// ומסומן כחלקי, במקום ליצור גיבוי עם קבצים חסרים בשתיקה.
-  static Future<Map<String, String>> _readDirAsBase64(String dirPath) async {
+  static Future<Map<String, String>> _readDirAsRefs(
+      String dirPath, BackupStore? store) async {
     final dir = Directory(dirPath);
     if (!await dir.exists()) return {};
 
@@ -337,7 +352,8 @@ class BackupService {
       if (entity is File) {
         final relativePath = p.relative(entity.path, from: dir.path);
         final bytes = await entity.readAsBytes();
-        map[p.split(relativePath).join('/')] = base64Encode(bytes);
+        map[p.split(relativePath).join('/')] =
+            store != null ? await store.putBytes(bytes) : base64Encode(bytes);
       }
     }
     return map;
@@ -386,9 +402,16 @@ class BackupService {
 
     // Validate backup version
     final version = backupData['version'] as String?;
-    if (version != '1.0') {
+    if (version != '1.0' && version != '2.0') {
       throw Exception('גרסת גיבוי לא נתמכת');
     }
+
+    // מניפסט v2 מפנה ל-blobs במחסן. מחפשים אותו קודם ליד קובץ הגיבוי עצמו
+    // (גיבוי שהועתק ממחשב אחר עם תיקיית ה-store שלו), ואז בתיקייה המוגדרת.
+    final stores = [
+      BackupStore.forBackupDir(file.parent.path),
+      BackupStore.forBackupDir(await getBackupDirectory()),
+    ];
 
     final partialSections =
         (backupData['partial_sections'] as List?)?.cast<String>() ?? [];
@@ -453,6 +476,7 @@ class BackupService {
     if (includes['plugins'] == true && backupData.containsKey('plugins')) {
       final pluginsHadFailures = await _restorePlugins(
         (backupData['plugins'] as List).cast<Map<String, dynamic>>(),
+        stores,
       );
       if (pluginsHadFailures) runtimeSkipped.add('plugins');
     }
@@ -581,10 +605,11 @@ class BackupService {
   //   }
   // }
 
-  // שחזור תוספים: נתיב ההתקנה מותאם לשינויי מערכות ושם משתמש
-  // אם תוסף אחד נכשל - מחזיר `true`, כי [_restoreDirFromBase64] מוחק את תיקיית ההתקנה הקיימת *לפני* הכתיבה,
+  // שחזור תוספים: נתיב ההתקנה מותאם לשינויי מערכות ושם משתמש.
+  // אם תוסף אחד נכשל — מחזיר `true` כדי שהמשתמש יראה שחזור חלקי.
   static Future<bool> _restorePlugins(
     List<Map<String, dynamic>> pluginsData,
+    List<BackupStore> stores,
   ) async {
     final db = PluginSystemDatabase.instance;
     var hadFailures = false;
@@ -599,16 +624,18 @@ class BackupService {
         installation['install_path'] = installPath;
 
         // כתיבת קבצי התוסף (דריסת התקנה קיימת אם יש).
-        await _restoreDirFromBase64(
+        await _restoreDirFromBackup(
           installPath,
           (entry['files'] as Map?)?.cast<String, dynamic>() ?? const {},
+          stores,
         );
 
         // כתיבת נתוני התוסף.
         final dataPath = await AppPaths.getPluginDataPath(pluginId);
-        await _restoreDirFromBase64(
+        await _restoreDirFromBackup(
           dataPath,
           (entry['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+          stores,
         );
 
         // רשומת ההתקנה.
@@ -629,33 +656,56 @@ class BackupService {
     return hadFailures;
   }
 
-  /// כותב קבצים מגיבוי (מפת נתיב-יחסי → base64) לתיקייה, אחרי ניקוי תוכן
-  /// קודם. נתיבים שמורים עם מפריד `/` ומומרים למפריד המקומי בשחזור.
-  static Future<void> _restoreDirFromBase64(
+  /// כותב קבצים מגיבוי לתיקייה, אחרי ניקוי תוכן קודם. הערכים הם base64
+  /// מוטמע (v1) או הפניית blob במחסן (v2) — לפי הקידומת `sha256:`.
+  /// נתיבים שמורים עם מפריד `/` ומומרים למפריד המקומי בשחזור.
+  ///
+  /// blob חסר או פגום מכשיל את שחזור התוסף כולו (חריגה) — עדיף תוסף מדולג
+  /// ומדווח מאשר תוסף משוחזר-חלקית ושבור בשקט.
+  static Future<void> _restoreDirFromBackup(
     String dirPath,
     Map<String, dynamic> files,
+    List<BackupStore> stores,
   ) async {
+    // כל התוכן נקרא וכל הנתיבים מאומתים לפני מחיקת התיקייה הקיימת —
+    // store חסר/פגום או נתיב לא בטוח (path traversal, רכיבי `..` בגיבוי
+    // פגום/זדוני) מכשילים את השחזור בלי להשאיר את המשתמש בלי ההתקנה הקודמת.
+    final normalizedRoot = p.normalize(dirPath);
+    final resolved = <String, List<int>>{};
+    for (final fileEntry in files.entries) {
+      final targetPath =
+          p.normalize(p.joinAll([dirPath, ...fileEntry.key.split('/')]));
+      if (!p.isWithin(normalizedRoot, targetPath)) {
+        throw Exception('נתיב לא בטוח בגיבוי התוסף: ${fileEntry.key}');
+      }
+      final value = fileEntry.value as String;
+      List<int>? bytes;
+      if (BackupStore.isHashRef(value)) {
+        for (final store in stores) {
+          bytes = await store.getBytes(value);
+          if (bytes != null) break;
+        }
+        if (bytes == null) {
+          throw Exception('קובץ חסר במחסן הגיבוי: ${fileEntry.key} ($value)');
+        }
+      } else {
+        bytes = base64Decode(value);
+      }
+      resolved[targetPath] = bytes;
+    }
+
     final dir = Directory(dirPath);
     if (await dir.exists()) {
       await dir.delete(recursive: true);
     }
-    if (files.isEmpty) return;
+    if (resolved.isEmpty) return;
     await dir.create(recursive: true);
 
-    final normalizedRoot = p.normalize(dirPath);
-    for (final fileEntry in files.entries) {
+    for (final fileEntry in resolved.entries) {
       try {
-        final segments = fileEntry.key.split('/');
-        final targetPath = p.normalize(p.joinAll([dirPath, ...segments]));
-        // הגנה מ-path traversal: דילוג על נתיבים שחורגים מתיקיית היעד
-        // (גיבוי פגום/זדוני עם רכיבי `..` עלול לכתוב מחוץ לתיקיית התוסף).
-        if (!p.isWithin(normalizedRoot, targetPath)) {
-          _logger.warning('Skipping unsafe plugin file path: ${fileEntry.key}');
-          continue;
-        }
-        final file = File(targetPath);
+        final file = File(fileEntry.key);
         await file.parent.create(recursive: true);
-        await file.writeAsBytes(base64Decode(fileEntry.value as String));
+        await file.writeAsBytes(fileEntry.value);
       } catch (e) {
         _logger.warning('Failed to restore plugin file ${fileEntry.key}: $e');
       }
@@ -781,6 +831,7 @@ class BackupService {
       includeShamorZachor: includeShamorZachor,
       // [EDITING DISABLED] includeUserOverrides: includeUserOverrides,
       includePlugins: includePlugins,
+      isAutoBackup: true,
     );
 
     if (result.skippedSections.isNotEmpty) {
@@ -793,17 +844,27 @@ class BackupService {
 
     await Settings.setValue(
         'key-last-auto-backup', DateTime.now().toIso8601String());
+
+    // תחזוקה אחרי גיבוי מוצלח: רוטציה, מיזוג לארכיון וניקוי blobs יתומים.
+    try {
+      await BackupMaintenance.runMaintenance();
+    } catch (e) {
+      _logger.warning('Backup maintenance failed: $e');
+    }
   }
 
-  /// Get list of available backups
+  /// Get list of available backups (ללא קובץ הארכיון)
   static Future<List<FileSystemEntity>> getAvailableBackups() async {
     final backupDir = await getBackupDirectory();
-    final dir = Directory(backupDir);
-    if (!await dir.exists()) return [];
+    final backups = await BackupMaintenance.listBackups(backupDir);
+    return backups.map((b) => File(b.path)).toList();
+  }
 
-    final files = await dir.list().toList();
-    return files.where((f) => f is File && f.path.endsWith('.json')).toList()
-      ..sort((a, b) => b.path.compareTo(a.path)); // Sort by date (newest first)
+  /// נתיב קובץ הארכיון הממוזג, או null אם אינו קיים.
+  static Future<String?> getArchivePathIfExists() async {
+    final backupDir = await getBackupDirectory();
+    final archive = File(p.join(backupDir, BackupMaintenance.archiveFileName));
+    return await archive.exists() ? archive.path : null;
   }
 
   /// Analyzes the most recent backup and returns whether a new backup is recommended.

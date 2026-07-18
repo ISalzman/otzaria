@@ -56,6 +56,17 @@ class TocTextDao {
     return result.first['id'] as int;
   }
 
+  /// גרעין סינכרוני: מאתר או יוצר tocText ומחזיר את ה-id — לשימוש בתוך
+  /// `withTransaction`.
+  int getOrCreateIdSync(sqlite3.Database db, String text) {
+    final existing = db.select(_queries['selectIdByText']!, [text]).toMapList();
+    if (existing.isNotEmpty) return existing.first['id'] as int;
+    db.execute(_queries['insertAndGetId']!, [text]);
+    final inserted = db.select(_queries['selectIdByText']!, [text]).toMapList();
+    if (inserted.isNotEmpty) return inserted.first['id'] as int;
+    throw StateError('Failed to insert tocText (length: ${text.length})');
+  }
+
   Future<int> delete(int id) async {
     final db = await database;
     db.execute(_queries['delete']!, [id]);

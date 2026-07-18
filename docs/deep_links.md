@@ -35,6 +35,7 @@
 | `otzaria://open/library` | פותח את מסך הספרייה |
 | `otzaria://open/search` | פותח את מסך החיפוש (ללא הפעלת חיפוש) |
 | `otzaria://open/search?q=<text>` | פותח לשונית חיפוש חדשה ומפעיל חיפוש מיידית בכל הספרים, עם ברירות המחדל (מצב מתקדם, scope `/`) |
+| `otzaria://open/search?q=<text>&mode=<mode>` | כנ"ל, עם קביעת מצב החיפוש ללשונית: `advanced` (מתקדם), `exact` (מדויק) או `fuzzy` (מקורב). ערך לא מוכר מתעלם — מצב מתקדם |
 | `otzaria://open/settings` | פותח את ההגדרות (הלשונית הנוכחית) |
 | `otzaria://open/settings/design` | פותח הגדרות › מראה |
 | `otzaria://open/settings/text` | פותח הגדרות › כתב |
@@ -96,6 +97,8 @@ otzaria://open/book/1234?index=42&q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/book/1234?index=42&mark
 otzaria://open/book/1234?index=42&m=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
 otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
+otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA&mode=exact
+otzaria://open/search?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA&mode=fuzzy
 otzaria://open/pdf/120
 otzaria://open/pdf/120?index=17
 otzaria://open/detection?q=%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA
@@ -274,7 +277,7 @@ _externalActivationWatchSub = queueFile.parent.watch().listen((event) {
 | `OpenSettingsTabAction({SettingsTab? tab})` | `otzaria://open/settings`, `/settings/design`, `/settings/text`, ... | פתיחת הגדרות, אופציונלית עם ניווט לטאב |
 | `OpenHistoryAction()` | `otzaria://open/history` | דיאלוג היסטוריה |
 | `OpenBookmarksAction()` | `otzaria://open/bookmarks` | דיאלוג סימניות |
-| `RunSearchAction(String query)` | `otzaria://open/search?q=<text>` | חיפוש מלא בלשונית חדשה |
+| `RunSearchAction(String query, {SearchMode? mode})` | `otzaria://open/search?q=<text>&mode=<advanced\|exact\|fuzzy>` | חיפוש מלא בלשונית חדשה, אופציונלית עם מצב חיפוש |
 | `RunDetectionAction(String query)` | `otzaria://open/detection?q=<text>`, `otzaria://open/detection` | פתיחת דיאלוג איתור מקורות (ריק או עם טקסט) |
 | `OpenInspectionAction()` | `otzaria://open/inspection` | מסך העיון (ספר אחרון) |
 | `OpenSdkAction()` | `otzaria://open/sdk` | פתיחת דיאלוג ניהול תוספים |
@@ -353,7 +356,8 @@ case OpenMyFeatureAction():
 ## אבטחה ושיקולי שימוש
 
 - **אין התקנה אוטומטית של תוספים ללא אישור משתמש.** גם עם `overwrite=true`, המשתמש רואה את שמות הקבצים והרשאות התוסף לפני ההתקנה בפועל.
-- **לא ניתן להעביר נתיבי קבצים מקומיים** (`file://`) ב‑`plugin/install` — הסכמה נדחית בכוונה כדי למנוע ניצול לרעה.
+- **`plugin/install` (הורדה מרשת)** מקבל רק `url=` בסכמת `http`/`https` — `file://` וכל סכמה אחרת נדחות בכוונה.
+- **`plugin/install-local` (קובץ מקומי)** מקבל `path=` שחייב להיות **נתיב מוחלט**, להסתיים ב‑`.otzplugin`, ואינו נתיב UNC/התקן (`\\server\share`, `\\.\`, `\\?\`, `//host`). מאחר שקישור `otzaria://` ניתן להפעלה מדף אינטרנט, החסימה מונעת קריאת קובץ שרירותי מהדיסק, שימוש בנתיב יחסי בלתי-צפוי (הנפתר מול תיקיית העבודה), ודליפת אישורי SMB בעצם הגישה לנתיב.
 - **קישור ל‑URL לא קיים** (למשל `otzaria://open/banana`) פשוט מוחזר `null` ואוצריא מתעלמת בשקט. אין הודעת שגיאה — זה עיצובית מכוון, כדי לא להפחיד משתמשים שלחצו על קישור עתידי.
 - **קישור לספר עם ID לא קיים** מציג `UiSnack.showError` בעברית. זאת בכוונה כדי שהמשתמש יבין שהקישור לא תקף בספרייה שלו.
 

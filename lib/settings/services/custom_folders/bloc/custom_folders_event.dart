@@ -34,10 +34,17 @@ class ToggleAddToDatabase extends CustomFoldersEvent {
 }
 
 class RescanCustomFolders extends CustomFoldersEvent {
-  const RescanCustomFolders({this.showNoChangesMessage = true});
+  const RescanCustomFolders({
+    this.showNoChangesMessage = true,
+    this.onlyFolderPath,
+  });
   final bool showNoChangesMessage;
+
+  /// כשמסופק, נסרקת רק תיקייה זו — מייבוא ספרים אישיים, שם שאר התיקיות
+  /// ממילא לא השתנו.
+  final String? onlyFolderPath;
   @override
-  List<Object> get props => [showNoChangesMessage];
+  List<Object?> get props => [showNoChangesMessage, onlyFolderPath];
 }
 
 /// ייבוא ידני של קבצי דורות/קישורים שהמשתמש בחר (לצמיתות, בדריסה מצטברת).

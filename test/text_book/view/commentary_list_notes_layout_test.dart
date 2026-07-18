@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -146,6 +147,47 @@ void main() {
       findsWidgets,
       reason: 'תוכן ההערות חייב להיות בתוך SelectionArea כדי לאפשר בחירה',
     );
+  });
+
+  testWidgets('תפריט ההקשר בהערות כולל "דווח על טעות בספר"', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: Center(
+              child: SizedBox(
+                height: 600,
+                width: 500,
+                child: CommentaryListBase(
+                  openBookCallback: (_) {},
+                  fontSize: 18,
+                  showSearch: true,
+                  shrinkWrap: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final noteText =
+        find.textContaining('הערה לבדיקה', findRichText: true).first;
+    final gesture = await tester.startGesture(
+      tester.getCenter(noteText),
+      buttons: kSecondaryButton,
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('דווח על טעות בספר'), findsOneWidget,
+        reason: 'תפריט ההקשר של ההערות חייב לאפשר דיווח על טעות בספר הראשי');
   });
 }
 

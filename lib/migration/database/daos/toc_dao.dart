@@ -83,6 +83,11 @@ class TocDao {
 
   Future<int> insertTocEntry(TocEntry entry) async {
     final db = await database;
+    return insertTocEntrySync(db, entry);
+  }
+
+  /// גרעין סינכרוני של [insertTocEntry] — לשימוש בתוך `withTransaction`.
+  int insertTocEntrySync(sqlite3.Database db, TocEntry entry) {
     db.execute(_queries['insert']!, [
       entry.bookId,
       entry.parentId,

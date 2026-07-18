@@ -30,6 +30,7 @@ import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -517,48 +518,61 @@ class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
         final rightWidth = totalWidth * _splitRatio;
         final colorScheme = Theme.of(context).colorScheme;
 
-        return Stack(
+        // כל חלונית נצמדת לדופן החלון (הידית יושבת על הדופן), והשוליים מוזרקים
+        // פנימה סביב תוכן הקריאה בלבד — בצד הדופן החיצוני של אותה חלונית.
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
-                SizedBox(
-                  width: rightWidth,
-                  child: ClipRect(child: widget.buildTabView(widget.rightTab)),
+            // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
+            SizedBox(
+              width: rightWidth,
+              child: ClipRect(
+                child: SplitPaneContentInset(
+                  // ספר זה יושב בקצה ההתחלתי של השורה (ימין ב-RTL) — השוליים
+                  // מוזרקים בצד הדופן החיצוני שלו.
+                  contentInset: const EdgeInsetsDirectional.only(
+                      start: _combinedDividerWidth),
+                  child: widget.buildTabView(widget.rightTab),
                 ),
-                // מפריד ניתן לגרירה
-                SizedBox(
-                  width: _combinedDividerWidth,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    alignment: Alignment.center,
-                    children: [
-                      ColoredBox(color: colorScheme.surfaceContainer),
-                      MouseRegion(
-                        cursor: SystemMouseCursors.resizeColumn,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onPanUpdate: (details) {
-                            setState(() {
-                              // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
-                              final ratioDelta = -details.delta.dx / totalWidth;
-                              _splitRatio =
-                                  (_splitRatio + ratioDelta).clamp(0.2, 0.8);
-                            });
-                          },
-                          onPanEnd: (_) =>
-                              widget.onSplitRatioChanged(_splitRatio),
-                        ),
-                      ),
-                    ],
+              ),
+            ),
+            // מפריד ניתן לגרירה
+            SizedBox(
+              width: _combinedDividerWidth,
+              child: Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  ColoredBox(color: colorScheme.surfaceContainer),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanUpdate: (details) {
+                        setState(() {
+                          // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
+                          final ratioDelta = -details.delta.dx / totalWidth;
+                          _splitRatio =
+                              (_splitRatio + ratioDelta).clamp(0.2, 0.8);
+                        });
+                      },
+                      onPanEnd: (_) => widget.onSplitRatioChanged(_splitRatio),
+                    ),
                   ),
+                ],
+              ),
+            ),
+            // ספר שמאלי - Expanded כדי למלא את שאר המקום ללא גלישה
+            Expanded(
+              child: ClipRect(
+                child: SplitPaneContentInset(
+                  // ספר זה יושב בקצה הסופי של השורה (שמאל ב-RTL) — השוליים
+                  // מוזרקים בצד הדופן החיצוני שלו.
+                  contentInset: const EdgeInsetsDirectional.only(
+                      end: _combinedDividerWidth),
+                  child: widget.buildTabView(widget.leftTab),
                 ),
-                // ספר שמאלי - Expanded כדי למלא את שאר המקום ללא גלישה
-                Expanded(
-                  child: ClipRect(child: widget.buildTabView(widget.leftTab)),
-                ),
-              ],
+              ),
             ),
           ],
         );
