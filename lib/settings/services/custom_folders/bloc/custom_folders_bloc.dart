@@ -374,10 +374,16 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     // הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
     // basename שממוזגת לאותה קטגוריה.
     // ה-close/reopen של ה-RO מנוהלים *בתוך* [runDeleteFolderFromDbInIsolate].
+    // ההגדרות כבר נשמרו בלי התיקייה — _loadFolders מחזיר את הנשארות, כדי
+    // שספרי legacy של תיקיית-בן מקוננת לא יימחקו עם האב.
     await runDeleteFolderFromDbInIsolate(
       dbPath: sqliteProvider.dbPath,
       userBooksDbPath: userBooksDbPath,
       folderPath: folder.path,
+      otherConfiguredFolderPaths: [
+        for (final other in _loadFolders())
+          if (other.path != folder.path) other.path,
+      ],
       prepareForWrite: sqliteProvider.closeForExternalWrite,
       restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
     );

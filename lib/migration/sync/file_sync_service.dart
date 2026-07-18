@@ -216,9 +216,19 @@ class FileSyncService {
   /// הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
   /// basename שממוזגת לאותה קטגוריה. קטגוריות שהתרוקנו נמחקות, אך קטגוריה
   /// שעדיין מכילה ספרים של תיקייה אחרת נשמרת.
-  Future<void> deleteFolderFromDatabase(String folderPath) async {
+  ///
+  /// [otherConfiguredFolderPaths] — נתיבי שאר התיקיות המוגדרות: ספר legacy
+  /// ('external') המשויך לפי נתיב לא יימחק אם תיקייה מוגדרת עמוקה יותר
+  /// מכילה אותו (תיקיית-בן מקוננת שנשארת רשומה).
+  Future<void> deleteFolderFromDatabase(
+    String folderPath, {
+    List<String> otherConfiguredFolderPaths = const [],
+  }) async {
     _log.info('Deleting folder books from DB by source: $folderPath');
-    final removed = await _removeFolderBooksBySource(folderPath);
+    final removed = await _removeFolderBooksBySource(
+      folderPath,
+      otherConfiguredFolderPaths: otherConfiguredFolderPaths,
+    );
     _log.info('Folder deleted from DB ($removed books removed)');
   }
 
@@ -249,6 +259,19 @@ class FileSyncService {
         ? normalizedFolderPath
         : '$normalizedFolderPath${path.separator}';
     return normalizedBookPath.startsWith(folderWithSeparator);
+  }
+
+  /// האם אחת מ-[otherFolderPaths] מכילה את [bookPath] ועמוקה יותר
+  /// מ-[folderPath] — כלומר הספר שייך לתיקייה מוגדרת מקוננת ולא לזו הנוכחית.
+  bool _belongsToDeeperFolder(
+    String bookPath,
+    String folderPath,
+    List<String> otherFolderPaths,
+  ) {
+    final folderDepth = _normalizeFolderPath(folderPath).length;
+    return otherFolderPaths.any((other) =>
+        _normalizeFolderPath(other).length > folderDepth &&
+        _isPathInsideFolder(bookPath, other));
   }
 
   Future<bool> _categoryBelongsToAnyConfiguredFolder(
@@ -340,9 +363,14 @@ class FileSyncService {
   /// המלא), כך ש-basename כפול לא יפגע בתיקייה השנייה.
   Future<int> _pruneDeletedBooksInFolder(
     CustomFolder folder,
-    Set<String> validBookKeys,
-  ) =>
-      _removeFolderBooksBySource(folder.path, keepKeys: validBookKeys);
+    Set<String> validBookKeys, {
+    List<String> otherConfiguredFolderPaths = const [],
+  }) =>
+      _removeFolderBooksBySource(
+        folder.path,
+        keepKeys: validBookKeys,
+        otherConfiguredFolderPaths: otherConfiguredFolderPaths,
+      );
 
   /// מסיר מ-`user_books.db` את ספרי התיקייה [folderPath], לפי שם ה-`source`
   /// הייחודי (הנתיב המלא) — לא לפי שם הקטגוריה. כך שתי תיקיות שונות בעלות
@@ -358,6 +386,7 @@ class FileSyncService {
   Future<int> _removeFolderBooksBySource(
     String folderPath, {
     Set<String>? keepKeys,
+    List<String> otherConfiguredFolderPaths = const [],
   }) async {
     final repo = _customFoldersRepo;
     final rootCategories = await repo.getRootCategories();
@@ -387,12 +416,16 @@ class FileSyncService {
         // *אך ורק* למקור ה-legacy המדויק שמסלול ההוספה הישן ייצר
         // ('external'), כדי לזהות נתונים ישנים בלי לגעת בספרים ממקור אחר
         // (תיקייה אחרת, ייבוא) שקובצם במקרה יושב בתוך התיקייה.
+        // ספר legacy משויך רק לתיקייה המוגדרת *העמוקה ביותר* שמכילה אותו —
+        // אחרת מחיקת תיקיית-אב הייתה גוררת גם ספרי תיקיית-בן מקוננת.
         final bookPath = book.filePath;
         final belongsToFolder = sourceName == folderSourceName ||
             (sourceName == CustomFolderSource.legacyExternalSourceName &&
                 bookPath != null &&
                 bookPath.isNotEmpty &&
-                _isPathInsideFolder(bookPath, folderPath));
+                _isPathInsideFolder(bookPath, folderPath) &&
+                !_belongsToDeeperFolder(
+                    bookPath, folderPath, otherConfiguredFolderPaths));
         if (!belongsToFolder) continue;
         if (keepKeys != null) {
           // זרימת prune (רענון): ספר "עותק עצמאי" (התוכן נשמר בתוכנה,
@@ -735,8 +768,14 @@ class FileSyncService {
             // הושלמה (לא בוטלה) — אחרת folderValidKeys חלקי והיינו עלולים
             // למחוק ספרים שקבציהם עדיין קיימים.
             if (_isSyncing) {
-              final removed =
-                  await _pruneDeletedBooksInFolder(folder, folderValidKeys);
+              final removed = await _pruneDeletedBooksInFolder(
+                folder,
+                folderValidKeys,
+                otherConfiguredFolderPaths: [
+                  for (final other in customFolders)
+                    if (!identical(other, folder)) other.path,
+                ],
+              );
               if (removed > 0) sharedCaches = null;
             }
           }
