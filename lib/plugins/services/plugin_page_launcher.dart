@@ -51,6 +51,7 @@ class PluginPageLauncher {
   /// נקרא ע"י PluginTabPage בעת dispose של דף התוסף.
   void markPageClosed(String pluginId) {
     _readyPages.remove(pluginId);
+    _pending.remove(pluginId);
     _deliveryChain.remove(pluginId);
   }
 

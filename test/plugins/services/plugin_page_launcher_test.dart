@@ -128,6 +128,16 @@ void main() {
     expect(controller.jsCalls[1], contains('"param":"b"'));
   });
 
+  test('markPageClosed מנקה אירוע ממתין — לא יימסר בפתיחה עתידית', () async {
+    launcher.open(_kPid, topic: 'plugin.page_opened', payload: {'param': 'x'});
+    launcher.markPageClosed(_kPid);
+
+    launcher.markPageReady(_kPid);
+    await pumpMicrotasks();
+
+    expect(controller.jsCalls, isEmpty);
+  });
+
   test('אחרי markPageClosed — אירוע חדש חוזר להמתין לטעינת הדף', () async {
     launcher.markPageReady(_kPid);
     launcher.markPageClosed(_kPid);
