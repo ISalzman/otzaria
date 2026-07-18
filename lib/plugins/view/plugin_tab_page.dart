@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:collection';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
@@ -339,6 +340,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     // של האפליקציה שלא יספיק להריץ async writes.
     PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
     _adapter.dispose();
+    PluginPageLauncher.instance.markPageClosed(widget.plugin.pluginId);
     PluginRuntimeDispatcher.instance
         .unregisterController(widget.plugin.pluginId);
     PluginRuntimeDispatcher.instance
@@ -699,6 +701,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // כי pause על WebView שעוד לא נטען עלול לקטוע את הטעינה עצמה.
           unawaited(PluginRuntimeDispatcher.instance
               .onForegroundInstanceReady(widget.plugin.pluginId));
+          PluginPageLauncher.instance.markPageReady(widget.plugin.pluginId);
         } catch (e, st) {
           // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
           // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.

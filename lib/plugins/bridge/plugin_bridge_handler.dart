@@ -244,6 +244,12 @@ class PluginBridgeHandler {
         }
       case 'shortcut':
         return 'ui.create_shortcut';
+      case 'plugin':
+        // openSelf מעביר את המשתמש למסך אחר — דורש הרשאת ניווט.
+        if (action == 'openSelf') {
+          return 'navigation.write';
+        }
+        return null;
       default:
         return null;
     }

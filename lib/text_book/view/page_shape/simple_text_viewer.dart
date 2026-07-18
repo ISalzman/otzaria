@@ -57,6 +57,7 @@ import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -1391,18 +1392,26 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             label: item.label,
             icon: fluentIconFromName(item.icon),
             onTap: () {
-              unawaited(PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
-                pluginId,
-                'reader.context_menu_item_clicked',
-                {
-                  'itemId': item.id,
-                  'selectedText': capturedText ?? '',
-                  'currentRef': state.currentTitle ?? '',
-                  'currentBook': state.book.title,
-                  'currentBookId': state.book.title,
-                  'currentIndex': index,
-                },
-              ));
+              final payload = <String, dynamic>{
+                'itemId': item.id,
+                'selectedText': capturedText ?? '',
+                'currentRef': state.currentTitle ?? '',
+                'currentBook': state.book.title,
+                'currentBookId': state.book.title,
+                'currentIndex': index,
+                'param': item.param,
+              };
+              if (item.openPlugin) {
+                PluginPageLauncher.instance.open(
+                  pluginId,
+                  topic: 'reader.context_menu_item_clicked',
+                  payload: payload,
+                );
+              } else {
+                unawaited(PluginRuntimeDispatcher.instance
+                    .dispatchEventToPlugin(
+                        pluginId, 'reader.context_menu_item_clicked', payload));
+              }
             },
           ));
         }

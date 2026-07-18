@@ -70,6 +70,7 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -475,6 +476,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _splashOverlayVisible = false;
       context.read<LibraryBloc>().add(LoadLibrary());
     }
+
+    PluginPageLauncher.instance.navigator = (pluginId) {
+      if (!mounted) return;
+      context.read<NavigationBloc>().add(const NavigateToScreen(Screen.more));
+      _openPluginByIdWhenAvailable(pluginId);
+    };
 
     // הצגת פופאפ פרסומת אחרי 5 שניות
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1233,6 +1240,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   @override
   void dispose() {
+    PluginPageLauncher.instance.navigator = null;
     // Clean up fullscreen callback
     appWindowListener?.onFullscreenChanged = null;
     appWindowListener?.onWindowStateChanged = null;
