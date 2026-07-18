@@ -236,17 +236,6 @@ void _logNonFatalInitializationError(
   );
 }
 
-/// האם השגיאה היא באג ידוע ב-pdfrx_engine שב-_notifyMissingFonts מנסה להוסיף
-/// לסטרים שכבר נסגר. נרשמת פעם אחת בלוג ואחר כך נבלעת כדי לא לייצר רעש.
-bool _isPdfrxMissingFontsStreamError(Object error, StackTrace stack) {
-  return error.toString().contains(
-            'Cannot add new events after calling close',
-          ) &&
-      stack.toString().contains('_notifyMissingFonts');
-}
-
-bool _pdfrxMissingFontsAlreadyLogged = false;
-
 bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
   return errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
       errorString.contains(
@@ -328,20 +317,6 @@ void main(List<String> args) async {
     // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
-    }
-
-    // pdfrx internal bug: stream closed before font-notification completes.
-    // נרשם פעם אחת בלוג כדי שיהיה עקבות, ולאחר מכן נבלע.
-    if (_isPdfrxMissingFontsStreamError(error, stack)) {
-      if (!_pdfrxMissingFontsAlreadyLogged) {
-        _pdfrxMissingFontsAlreadyLogged = true;
-        _appendUnhandledErrorToLocalLog(
-          title: 'pdfrx MissingFonts (once)',
-          error: error,
-          stackTrace: stack,
-        );
-      }
-      return true;
     }
 
     // Log all other errors normally
