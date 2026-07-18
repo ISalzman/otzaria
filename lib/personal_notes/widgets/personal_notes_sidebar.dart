@@ -5,7 +5,10 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
@@ -152,7 +155,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       selectionColumn: selectionColumn,
     ));
 
-    UiSnack.showSuccess('ההערה נשמרה בהצלחה');
+    UiSnack.showSuccess(NotesMessages.noteSaved);
   }
 
   @override
@@ -560,12 +563,18 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   Future<void> _handleNoteLinkTap(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
-    if (uri.scheme != 'otzaria') {
-      UiSnack.show('קישור חיצוני: $url');
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) UiSnack.showError(NotesMessages.cannotOpenLink(url));
+      return;
+    }
+    if (uri.scheme != 'otzaria' && uri.scheme != 'zayit') {
+      UiSnack.show(NotesMessages.externalLink(url));
       return;
     }
 
-    switch (uri.host) {
+    switch (uri.scheme == 'otzaria' ? uri.host : '') {
       case 'book':
         final bookId = uri.queryParameters['bookId'] ?? '';
         final line = int.tryParse(uri.queryParameters['line'] ?? '');
@@ -574,7 +583,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
           widget.onNavigateToLine(line);
           return;
         }
-        UiSnack.show('קישור לספר אחר: $bookId');
+        UiSnack.show(NotesMessages.linkToAnotherBook(bookId));
         return;
       case 'note':
         final noteId = uri.queryParameters['id'];
@@ -608,6 +617,11 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         );
         return;
       default:
+        // קישור עמוק (otzaria://open/... או zayit://) — מנותב למסך הראשי.
+        final handled = await mainWindowScreenKey.currentState
+                ?.handleInternalDeepLink(url) ??
+            false;
+        if (!handled) UiSnack.showError(NotesMessages.unsupportedLink(url));
         return;
     }
   }
@@ -673,7 +687,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
         lineNumber: selectedLineNumber,
       ),
     );
-    UiSnack.show('ההערה שויכה לשורה $selectedLineNumber');
+    UiSnack.show(NotesMessages.noteAssignedToLine(selectedLineNumber));
   }
 
   Future<void> _reanchorNote(

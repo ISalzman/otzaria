@@ -1270,9 +1270,25 @@ begin
       CapturedOutput := CapturedOutput + Output.StdOut[I] + #13#10;
 end;
 
+// ממפה מחרוזות שגיאה נפוצות מ-zstd/7za (תמיד באנגלית) להסבר קצר בעברית.
+// מחזיר מחרוזת ריקה אם לא זוהה דפוס מוכר - אז מוצג רק הפלט הגולמי.
+function FriendlyErrorHint(const ErrOutput: String): String;
+var
+  LowerOutput: String;
+begin
+  LowerOutput := Lowercase(ErrOutput);
+  Result := '';
+  if Pos('no space left on device', LowerOutput) > 0 then
+    Result := 'אין מספיק מקום פנוי בכונן. פנה מקום ונסה להתקין שוב.'
+  else if Pos('permission denied', LowerOutput) > 0 then
+    Result := 'אין הרשאה לכתוב לנתיב היעד. נסה להריץ את ההתקנה כמנהל או לבחור מיקום התקנה אחר.'
+  else if Pos('sharing violation', LowerOutput) > 0 then
+    Result := 'קובץ היעד נעול על ידי תהליך אחר. סגור את אוצריא ותוכנות אחרות שעשויות להשתמש בקבצים ונסה שוב.';
+end;
+
 procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
 var
-  ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput: String;
+  ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
@@ -1294,8 +1310,10 @@ begin
   begin
     // בהתקנה שקטה MsgBox מדוכא (/SUPPRESSMSGBOXES) — ה-Log הוא הפידבק היחיד.
     Log('zstd database extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    Hint := FriendlyErrorHint(ErrOutput);
+    if Hint <> '' then Hint := #13#10#13#10 + Hint;
     MsgBox('חילוץ מסד הנתונים נכשל. קוד יציאה: ' + IntToStr(ResultCode)
-      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
+      + Hint + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 
@@ -1304,7 +1322,7 @@ end;
 
 procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
 var
-  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput: String;
+  ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
@@ -1331,8 +1349,10 @@ begin
   if (not RunAndCaptureErrors(ZstdPath, Params, ResultCode, ErrOutput)) or (ResultCode <> 0) then
   begin
     Log('zstd PDF archive extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    Hint := FriendlyErrorHint(ErrOutput);
+    if Hint <> '' then Hint := #13#10#13#10 + Hint;
     MsgBox('חילוץ ארכיון ה-PDF נכשל. קוד יציאה: ' + IntToStr(ResultCode)
-      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
+      + Hint + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 
@@ -1341,8 +1361,10 @@ begin
      (ResultCode <> 0) then
   begin
     Log('7za PDF archive extraction failed (' + IntToStr(ResultCode) + '): ' + ErrOutput);
+    Hint := FriendlyErrorHint(ErrOutput);
+    if Hint <> '' then Hint := #13#10#13#10 + Hint;
     MsgBox('פתיחת ארכיון ה-PDF נכשלה. קוד יציאה: ' + IntToStr(ResultCode)
-      + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
+      + Hint + #13#10#13#10 + ErrOutput, mbCriticalError, MB_OK);
     Abort;
   end;
 

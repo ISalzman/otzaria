@@ -76,6 +76,10 @@ void main() {
               defaultValue: false))
           .thenReturn(false);
       when(mockSettingsWrapper.getValue<bool>(
+              SettingsRepository.keyContinuousReadingMode,
+              defaultValue: false))
+          .thenReturn(false);
+      when(mockSettingsWrapper.getValue<bool>(
               SettingsRepository.keyDefaultSidebarOpen,
               defaultValue: false))
           .thenReturn(false);
@@ -101,6 +105,7 @@ void main() {
       expect(settings['autoUpdateIndex'], true);
       expect(settings['defaultRemoveNikud'], false);
       expect(settings['removeNikudFromTanach'], false);
+      expect(settings['defaultContinuousReadingMode'], false);
       expect(settings['defaultSidebarOpen'], false);
       expect(settings['pinSidebar'], false);
     });
@@ -164,6 +169,10 @@ void main() {
               defaultValue: false))
           .thenReturn(true);
       when(mockSettingsWrapper.getValue<bool>(
+              SettingsRepository.keyContinuousReadingMode,
+              defaultValue: false))
+          .thenReturn(true);
+      when(mockSettingsWrapper.getValue<bool>(
               SettingsRepository.keyDefaultSidebarOpen,
               defaultValue: false))
           .thenReturn(true);
@@ -189,6 +198,7 @@ void main() {
       expect(settings['autoUpdateIndex'], false);
       expect(settings['defaultRemoveNikud'], true);
       expect(settings['removeNikudFromTanach'], true);
+      expect(settings['defaultContinuousReadingMode'], true);
       expect(settings['defaultSidebarOpen'], true);
       expect(settings['pinSidebar'], true);
     });
@@ -234,6 +244,15 @@ void main() {
       await repository.updateRemoveNikudFromTanach(true);
       verify(mockSettingsWrapper.setValue(
               SettingsRepository.keyRemoveNikudFromTanach, true))
+          .called(1);
+    });
+
+    test(
+        'updateDefaultContinuousReadingMode calls setValue on settings wrapper',
+        () async {
+      await repository.updateDefaultContinuousReadingMode(true);
+      verify(mockSettingsWrapper.setValue(
+              SettingsRepository.keyContinuousReadingMode, true))
           .called(1);
     });
 

@@ -1,6 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_fonts.dart';
+
+Uint8List _bundledFont(String name) =>
+    Uint8List.fromList(File('fonts/$name').readAsBytesSync());
 
 // ---------------------------------------------------------------------------
 // Helpers — build minimal valid OpenType/TrueType byte sequences
@@ -355,6 +361,130 @@ void main() {
 
       expect(AppFonts.debugSystemFontsHebrewCache, isNull);
       expect(AppFonts.debugWarmUpFuture, isNull);
+    });
+  });
+
+  group('פרסור face — מטבלאות SFNT (גופנים מובנים)', () {
+    test('גופן Medium: שם משפחה, משקל 500, לא בולד ולא נטוי', () {
+      final b = _bundledFont('FrankRuehlCLM-Medium.ttf');
+      expect(AppFonts.debugFontFamilyName(b), 'Frank Ruehl CLM');
+      expect(AppFonts.debugFontWeightClass(b), 500);
+      expect(AppFonts.debugFontIsBoldStyle(b), isFalse);
+      expect(AppFonts.debugFontIsItalic(b), isFalse);
+      expect(AppFonts.debugFontHasWeightAxis(b), isFalse);
+    });
+
+    test('גופן Bold: אותה משפחה, משקל 700, מסווג כבולד', () {
+      final b = _bundledFont('FrankRuehlCLM-Bold.ttf');
+      expect(AppFonts.debugFontFamilyName(b), 'Frank Ruehl CLM');
+      expect(AppFonts.debugFontWeightClass(b), 700);
+      expect(AppFonts.debugFontIsBoldStyle(b), isTrue);
+      expect(AppFonts.debugFontIsItalic(b), isFalse);
+    });
+
+    test('Medium ו-Bold חולקים שם משפחה זהה', () {
+      expect(
+        AppFonts.debugFontFamilyName(_bundledFont('FrankRuehlCLM-Medium.ttf')),
+        AppFonts.debugFontFamilyName(_bundledFont('FrankRuehlCLM-Bold.ttf')),
+      );
+    });
+
+    test('גופן משתנה (fvar עם ציר wght) מזוהה', () {
+      for (final f in [
+        'Rubik-VariableFont_wght.ttf',
+        'NotoRashiHebrew-VariableFont_wght.ttf',
+        'NotoSerifHebrew-VariableFont_wdth,wght.ttf',
+      ]) {
+        expect(
+          AppFonts.debugFontHasWeightAxis(_bundledFont(f)),
+          isTrue,
+          reason: '$f צריך להכיל ציר wght',
+        );
+      }
+    });
+
+    test('גופן סטטי אינו מזוהה כמשתנה', () {
+      expect(
+        AppFonts.debugFontHasWeightAxis(_bundledFont('ShofarRegular.ttf')),
+        isFalse,
+      );
+    });
+
+    test('נתונים פגומים → ערכי ברירת מחדל', () {
+      final bad = Uint8List(4);
+      expect(AppFonts.debugFontFamilyName(bad), '');
+      expect(AppFonts.debugFontWeightClass(bad), 0);
+      expect(AppFonts.debugFontIsBoldStyle(bad), isFalse);
+      expect(AppFonts.debugFontHasWeightAxis(bad), isFalse);
+    });
+  });
+
+  group('התאמת bold sibling', () {
+    test('Medium → Bold של אותה משפחה = sibling', () {
+      expect(
+        AppFonts.debugIsBoldSibling(
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+          _bundledFont('FrankRuehlCLM-Bold.ttf'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('מועמד שאינו בולד אינו sibling', () {
+      expect(
+        AppFonts.debugIsBoldSibling(
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('משפחה שונה אינה sibling', () {
+      expect(
+        AppFonts.debugIsBoldSibling(
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+          _bundledFont('ShofarRegular.ttf'),
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('היוריסטיקת שם-קובץ לבולד', () {
+    test('סיומות בולד נפוצות ב-Windows', () {
+      expect(AppFonts.debugIsPlausibleBoldBasename('arial', 'arialbd'), isTrue);
+      expect(AppFonts.debugIsPlausibleBoldBasename('times', 'timesbd'), isTrue);
+      expect(AppFonts.debugIsPlausibleBoldBasename('david', 'davidbd'), isTrue);
+      expect(
+          AppFonts.debugIsPlausibleBoldBasename('segoeui', 'segoeuib'), isTrue);
+      expect(
+          AppFonts.debugIsPlausibleBoldBasename('David Bold', 'davidbold') ||
+              AppFonts.debugIsPlausibleBoldBasename('david', 'David-Bold'),
+          isTrue);
+    });
+
+    test('נטוי/משקל אחר/זהה אינם מתאימים', () {
+      expect(
+          AppFonts.debugIsPlausibleBoldBasename('arial', 'arialbi'), isFalse);
+      expect(AppFonts.debugIsPlausibleBoldBasename('arial', 'ariblk'), isFalse);
+      expect(AppFonts.debugIsPlausibleBoldBasename('arial', 'arial'), isFalse);
+      expect(AppFonts.debugIsPlausibleBoldBasename('', 'anything'), isFalse);
+    });
+  });
+
+  group('AppFonts.boldFontVariations', () {
+    test('גופן משתנה מקבל FontVariation wght לפי המשקל', () {
+      expect(AppFonts.boldFontVariations('Rubik'),
+          const [FontVariation('wght', 700)]);
+      expect(AppFonts.boldFontVariations('NotoRashiHebrew', FontWeight.w800),
+          const [FontVariation('wght', 800)]);
+    });
+
+    test('גופן לא-משתנה או משקל רגיל מחזיר null', () {
+      expect(AppFonts.boldFontVariations('FrankRuhlCLM'), isNull);
+      expect(AppFonts.boldFontVariations(null), isNull);
+      expect(AppFonts.boldFontVariations('Rubik', FontWeight.normal), isNull);
     });
   });
 }

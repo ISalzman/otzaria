@@ -3,6 +3,7 @@ import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/models/books.dart';
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
 
@@ -194,7 +195,7 @@ class CopyUtils {
     try {
       final clipboard = SystemClipboard.instance;
       if (clipboard == null) {
-        UiSnack.show('לא ניתן לגשת ללוח');
+        UiSnack.show(CommonMessages.clipboardUnavailable);
         return;
       }
 
@@ -209,9 +210,9 @@ class CopyUtils {
       item.add(Formats.htmlText(htmlContent)); // טקסט עם עיצוב
 
       await clipboard.write([item]);
-      UiSnack.show('הטקסט המעוצב הועתק ללוח');
+      UiSnack.show(CommonMessages.formattedTextCopied);
     } catch (e) {
-      UiSnack.showError('שגיאה בהעתקה: $e');
+      UiSnack.showError(CommonMessages.copyErrorWithDetails(e));
     }
   }
 

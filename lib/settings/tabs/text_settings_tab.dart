@@ -11,6 +11,7 @@ import 'package:otzaria/widgets/layout/adaptive_row.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 
 /// טאב הגדרות תצוגת ספרים
@@ -80,6 +81,21 @@ class TextSettingsTab extends StatelessWidget {
       keywords: ['רוחב', 'עמודה'],
     ),
     SettingsSearchEntry(
+      id: 'text.font.continuous_reading',
+      title: 'מצב קריאה בתנ"ך ובתלמוד',
+      subtitle: 'הצגת השורות ברצף או בנפרד',
+      tab: SettingsTab.text,
+      cardId: 'text.font',
+      keywords: [
+        'רצף',
+        'רציף',
+        'שורות בודדות',
+        'קריאה',
+        'תנך',
+        'תלמוד',
+      ],
+    ),
+    SettingsSearchEntry(
       id: 'text.nikud.display_mode',
       title: 'הצגת הניקוד',
       subtitle: 'הצג / הסתר ניקוד בתנ"ך ובכל הספרים',
@@ -91,6 +107,20 @@ class TextSettingsTab extends StatelessWidget {
         'הצג תמיד',
         'הצג בתנך',
         'אל תציג',
+        'הסתר',
+      ],
+    ),
+    SettingsSearchEntry(
+      id: 'text.nikud.punctuation',
+      title: 'הצגת סימני פיסוק',
+      subtitle: 'הצג / הסתר סימני פיסוק בכל הספרים',
+      tab: SettingsTab.text,
+      cardId: 'text.nikud',
+      keywords: [
+        'פיסוק',
+        'פסיק',
+        'נקודה',
+        'הצג',
         'הסתר',
       ],
     ),
@@ -332,6 +362,23 @@ class TextSettingsTab extends StatelessWidget {
         ),
 
         _TextWidthSlider(state: state),
+        SettingsActionTile.segmentedTile<bool>(
+          icon: FluentIcons.text_align_justify_24_regular,
+          title: 'מצב קריאה בתנ"ך ובתלמוד',
+          subtitle: state.defaultContinuousReadingMode
+              ? 'השורות יוצגו ברצף עד הכותרת הבאה'
+              : 'כל שורה תוצג בנפרד',
+          options: const [
+            SegmentOption(value: false, label: 'שורות בודדות'),
+            SegmentOption(value: true, label: 'רצף'),
+          ],
+          currentValue: state.defaultContinuousReadingMode,
+          onChanged: (value) {
+            context
+                .read<SettingsBloc>()
+                .add(UpdateDefaultContinuousReadingMode(value));
+          },
+        ),
       ],
     );
   }
@@ -396,6 +443,19 @@ class TextSettingsTab extends StatelessWidget {
                     .add(const UpdateRemoveNikudFromTanach(true));
                 break;
             }
+          },
+        ),
+        SettingsActionTile.switchTile(
+          icon: FluentIcons.text_clear_formatting_24_regular,
+          title: 'הצגת סימני פיסוק',
+          subtitle: state.defaultRemovePunctuation
+              ? 'סימני הפיסוק לא יוצגו (למעט בתנ"ך)'
+              : 'סימני הפיסוק יוצגו בכל הספרים',
+          value: !state.defaultRemovePunctuation,
+          onChanged: (value) {
+            context
+                .read<SettingsBloc>()
+                .add(UpdateDefaultRemovePunctuation(!value));
           },
         ),
         SettingsActionTile.switchTile(
@@ -546,7 +606,7 @@ class TextSettingsTab extends StatelessWidget {
 
     if (confirm == true && context.mounted) {
       await PerBookSettings.deleteAllSettings();
-      UiSnack.show('כל ההגדרות המיוחדות אופסו בהצלחה');
+      UiSnack.show(SettingsMessages.perBookSettingsReset);
     }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -56,7 +57,7 @@ class _SaferModePasswordDialogState extends State<SaferModePasswordDialog>
 
   Future<void> _handleVerify() async {
     if (_passwordController.text.isEmpty) {
-      UiSnack.showError('נא להזין סיסמה');
+      UiSnack.showError(SettingsMessages.passwordRequired);
       return;
     }
 
@@ -72,7 +73,7 @@ class _SaferModePasswordDialogState extends State<SaferModePasswordDialog>
       if (isValid) {
         Navigator.of(context).pop(true);
       } else {
-        UiSnack.showError('סיסמה שגויה');
+        UiSnack.showError(SettingsMessages.wrongPassword);
         _passwordController.clear();
       }
     } finally {
@@ -222,17 +223,17 @@ class _SaferModeSetPasswordDialogState extends State<SaferModeSetPasswordDialog>
 
   Future<void> _handleSave() async {
     if (_passwordController.text.isEmpty) {
-      UiSnack.showError('נא להזין סיסמה');
+      UiSnack.showError(SettingsMessages.passwordRequired);
       return;
     }
 
     if (_passwordController.text.length < 4) {
-      UiSnack.showError('הסיסמה חייבת להכיל לפחות 4 תווים');
+      UiSnack.showError(SettingsMessages.passwordTooShort);
       return;
     }
 
     if (_passwordController.text != _confirmController.text) {
-      UiSnack.showError('הסיסמאות אינן תואמות');
+      UiSnack.showError(SettingsMessages.passwordsDoNotMatch);
       return;
     }
 
@@ -245,11 +246,11 @@ class _SaferModeSetPasswordDialogState extends State<SaferModeSetPasswordDialog>
 
       if (!mounted) return;
 
-      UiSnack.show('הסיסמה נשמרה בהצלחה');
+      UiSnack.show(SettingsMessages.passwordSaved);
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשמירת הסיסמה: $e');
+      UiSnack.showError(SettingsMessages.passwordSaveError(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -275,11 +276,11 @@ class _SaferModeSetPasswordDialogState extends State<SaferModeSetPasswordDialog>
     try {
       await widget.onClearPassword!();
       if (!mounted) return;
-      UiSnack.show('הסיסמה הוסרה');
+      UiSnack.show(SettingsMessages.passwordRemoved);
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בהסרת הסיסמה: $e');
+      UiSnack.showError(SettingsMessages.passwordRemoveError(e));
     } finally {
       if (mounted) {
         setState(() {

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,6 +34,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_event.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/update/my_update_widget.dart';
@@ -63,6 +65,9 @@ const double _kAppBarControlsWidth = 105.0;
 const double _kWindowCaptionButtonsWidth = 138.0;
 const double _kWindowCaptionButtonWidth = 46.0;
 
+/// רוחב אזור כפתורי המערכת של macOS (traffic lights) המצוירים מעל התוכן.
+const double _kMacosTrafficLightsWidth = 78.0;
+
 /// רוחב מרבי לטאב בודד: טאב לא נמתח מעבר לזה גם כשיש מעט טאבים ומלא מקום.
 const double _kTabMaxWidth = 140.0;
 
@@ -87,10 +92,6 @@ final ButtonStyle _kIconButtonStyle = IconButton.styleFrom(
 );
 
 class _CustomTitleBarState extends State<CustomTitleBar> {
-  // נקבע ב-onDoubleTapDown (לפני onDoubleTap): האם הלחיצה הכפולה האחרונה באזור
-  // הטאבים הייתה על טאב בפועל. אם כן — מדלגים על maximize/restore.
-  bool _doubleTapOnTab = false;
-
   // האם העכבר נמצא כרגע מעל שורת הטאבים. בעת סגירת טאב כשהעכבר בפנים מקפיאים
   // את רוחב הטאבים (ראה _pinnedTabWidths) כדי שכפתור ה-X של הטאב הבא יישאר תחת
   // הסמן וסגירות רצופות יפעלו.
@@ -143,9 +144,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   }
 
   /// maximize/restore בלחיצה כפולה על האזור הריק שבשורת הטאבים (כמו DragToMoveArea).
-  /// אם הלחיצה הייתה על טאב (נקבע ב-onDoubleTapDown) — אין שינוי גודל.
   Future<void> _onTabsAreaDoubleTap() async {
-    if (_doubleTapOnTab) return;
     final isMaximized = await windowManager.isMaximized();
     if (isMaximized) {
       await windowManager.unmaximize();
@@ -233,11 +232,28 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                           child: _buildContent(context, navState),
                         ),
 
-                        // כפתורי חלון (רק בדסקטופ)
-                        if (!kIsWeb &&
-                            (Platform.isWindows ||
-                                Platform.isLinux ||
-                                Platform.isMacOS))
+                        // ב-macOS אין כפתורי חלון מותאמים — רק כפתורי המערכת
+                        // המובנים (traffic lights), שמצוירים מעל התוכן בפינה
+                        // השמאלית; שומרים להם מרווח פנוי הניתן לגרירת החלון.
+                        if (!kIsWeb && Platform.isMacOS)
+                          SizedBox(
+                            height: 50,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const ManagedUpdateTitleBarIndicator(),
+                                if (!settingsState.isFullscreen)
+                                  const SizedBox(
+                                    width: _kMacosTrafficLightsWidth,
+                                    child: DragToMoveArea(
+                                        child: SizedBox.expand()),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                        // כפתורי חלון מותאמים (Windows/Linux בלבד)
+                        if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
                           SizedBox(
                             height: 50,
                             child: Row(
@@ -524,7 +540,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             ? tabWidths.selected
             : tabWidths.unselected;
         // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
-        // ידלג עליו (ראה onDoubleTapDown למטה).
+        // ידלג עליו (ראה _EmptyAreaDoubleTapRecognizer).
         final tabChild = MetaData(
           metaData: _kTabHitMarker,
           behavior: HitTestBehavior.opaque,
@@ -547,10 +563,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
     );
 
-    // מחליף את DragToMoveArea בגרסה ששולטת ב-onDoubleTap: גרירת חלון (onPanStart)
-    // ו-maximize/restore (onDoubleTap) פעילים על האזור הריק שבשורת הטאבים, אך
-    // לחיצה כפולה *על טאב* מדלגת על ה-maximize. ה-MouseRegion משחרר את קפיאת
-    // הרוחב כשהעכבר עוזב את השורה.
+    // מחליף את DragToMoveArea: גרירת חלון (onPanStart) ו-maximize/restore
+    // (לחיצה כפולה) פעילים רק על האזור הריק שבשורת הטאבים. מזהה הלחיצה הכפולה
+    // דוחה מצביעים שמעל טאב כבר ב-isPointerAllowed — אחרת הוא מחזיק את
+    // ה-gesture arena ומעכב את כפתור ה-X של הטאב ב~300ms.
+    // ה-MouseRegion משחרר את קפיאת הרוחב כשהעכבר עוזב את השורה.
     return MouseRegion(
       onEnter: (_) => _pointerInsideTabStrip = true,
       onExit: (_) {
@@ -566,12 +583,23 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           if (_hitTestTab(context, details.globalPosition)) return;
           windowManager.startDragging();
         },
-        onDoubleTapDown: (details) =>
-            _doubleTapOnTab = _hitTestTab(context, details.globalPosition),
-        onDoubleTap: _onTabsAreaDoubleTap,
-        child: KeyedSubtree(
-          key: tourReadingTabsTargetKey,
-          child: reorderList,
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.translucent,
+          gestures: {
+            _EmptyAreaDoubleTapRecognizer: GestureRecognizerFactoryWithHandlers<
+                _EmptyAreaDoubleTapRecognizer>(
+              () => _EmptyAreaDoubleTapRecognizer(debugOwner: this),
+              (recognizer) {
+                recognizer.isPointerOnTab =
+                    (position) => _hitTestTab(context, position);
+                recognizer.onDoubleTap = _onTabsAreaDoubleTap;
+              },
+            ),
+          },
+          child: KeyedSubtree(
+            key: tourReadingTabsTargetKey,
+            child: reorderList,
+          ),
         ),
       ),
     );
@@ -822,6 +850,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           (tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered);
       final showPin =
           tab.isPinned && (extrasBudget - (showClose ? 25 : 0)) >= 20;
+      // אייקון PDF ליד שם הספר — רק כשהטאב רחב (אותו סף כמו מפריד ה-CombinedTab).
+      final showPdfIcon = tab is PdfBookTab && tabWidth >= 100;
 
       return Row(
         children: [
@@ -865,6 +895,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                         children: [
                           if (isSelected) const SizedBox(width: 4),
                           if (showPin) _buildPinIconInline(context, tab),
+                          if (showPdfIcon)
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 4),
+                              child: Icon(
+                                FluentIcons.document_pdf_16_regular,
+                                size: 14,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
                           Expanded(child: buildTabContent()),
                           if (showClose)
                             Tooltip(
@@ -922,11 +961,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         }
       },
       child: AppContextMenuRegion(
-        key: isSelected ? tourTabContextMenuTargetKey : null,
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
-        menuItemKeysByLabel:
-            isSelected ? {'הצג לצד': tourTabSideBySideMenuItemTargetKey} : null,
         child: StatefulBuilder(
           builder: (context, setLocalState) {
             return MouseRegion(
@@ -994,7 +1030,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       currentTabIndex: newActiveIndex,
     ));
 
-    UiSnack.show('הכרטיסיה הועברה לשולחן העבודה "${targetWorkspace.name}"');
+    UiSnack.show(LibraryMessages.tabMovedToWorkspace(targetWorkspace.name));
   }
 
   List<AppContextMenuEntry> _buildTabContextMenuEntries(
@@ -1031,10 +1067,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         final otherTabsList =
             state.tabs.where((t) => t != tab && t is! CombinedTab).toList();
         final otherTabs = otherTabsList.asMap().entries.map((mapEntry) {
-          final isFirst = mapEntry.key == 0;
           final otherTab = mapEntry.value;
           return AppContextMenuEntry(
-            key: isFirst ? tourTabSideBySideFirstItemTargetKey : null,
             label: otherTab.title,
             onTap: () {
               context.read<TabsBloc>().add(
@@ -1260,5 +1294,20 @@ class _CaptionActionButtonState extends State<_CaptionActionButton> {
     }
 
     return Tooltip(message: widget.tooltip!, child: button);
+  }
+}
+
+/// מזהה לחיצה כפולה לאזור הריק של שורת הטאבים בלבד. הדחייה חייבת להיות
+/// ב-isPointerAllowed: מזהה שנכנס ל-arena מחזיק אותה עד timeout ומעכב את
+/// הלחיצה על כפתור ה-X של הטאב.
+class _EmptyAreaDoubleTapRecognizer extends DoubleTapGestureRecognizer {
+  _EmptyAreaDoubleTapRecognizer({super.debugOwner});
+
+  bool Function(Offset globalPosition)? isPointerOnTab;
+
+  @override
+  bool isPointerAllowed(PointerDownEvent event) {
+    if (isPointerOnTab?.call(event.position) ?? false) return false;
+    return super.isPointerAllowed(event);
   }
 }

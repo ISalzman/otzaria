@@ -43,6 +43,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
   required String libraryPath,
   required List<CustomFolder> customFolders,
   String folderName = '',
+  String? onlyFolderPath,
   Future<void> Function()? prepareForWrite,
   Future<void> Function()? restoreAfterWrite,
 }) async {
@@ -59,6 +60,7 @@ Future<FileSyncResult> runCustomFoldersDbSyncInIsolate({
         'customFolders': customFolders.map((f) => f.toJson()).toList(),
         'syncFolders': syncFolders,
         'syncLinks': syncLinks,
+        'onlyFolderPath': onlyFolderPath,
       };
 
   // שלב 1 — כתיבת הספרים האישיים ל-user_books.db. seforim.db נפתח RO (רק
@@ -220,10 +222,14 @@ Future<Map<String, Object?>> _runWorkerIsolate(
 ///
 /// [userBooksDbPath] — נתיב `user_books.db` (שם נמצאות התיקיות המותאמות).
 /// [dbPath] — נתיב `seforim.db`. נדרש כי `FileSyncService` מצפה לשני repos.
+///
+/// [otherConfiguredFolderPaths] — נתיבי התיקיות שנשארות מוגדרות: ספר legacy
+/// בתיקיית-בן מקוננת לא יימחק יחד עם תיקיית-האב.
 Future<void> runDeleteFolderFromDbInIsolate({
   required String dbPath,
   required String userBooksDbPath,
   required String folderPath,
+  List<String> otherConfiguredFolderPaths = const [],
   Future<void> Function()? prepareForWrite,
   Future<void> Function()? restoreAfterWrite,
 }) {
@@ -236,6 +242,7 @@ Future<void> runDeleteFolderFromDbInIsolate({
       'dbPath': dbPath,
       'userBooksDbPath': userBooksDbPath,
       'folderPath': folderPath,
+      'otherConfiguredFolderPaths': otherConfiguredFolderPaths,
     };
     // [prepareForWrite]/[restoreAfterWrite] רצים בתוך יחידת התור — ראה ההסבר
     // ב-[runCustomFoldersDbSyncInIsolate].
@@ -262,6 +269,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
   final folderName = (payload['folderName'] as String?) ?? '';
   final syncFolders = (payload['syncFolders'] as bool?) ?? true;
   final syncLinks = (payload['syncLinks'] as bool?) ?? true;
+  final onlyFolderPath = payload['onlyFolderPath'] as String?;
   final rawFolders =
       (payload['customFolders'] as List).cast<Map<String, dynamic>>();
   final customFolders = rawFolders.map(CustomFolder.fromJson).toList();
@@ -289,6 +297,7 @@ Future<Map<String, Object?>> _syncWorkerEntryPoint(
       folderName: folderName,
       syncFolders: syncFolders,
       syncLinks: syncLinks,
+      onlyFolderPath: onlyFolderPath,
     );
     return {
       'addedBooks': result.addedBooks,
@@ -314,6 +323,9 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
   final dbPath = payload['dbPath'] as String;
   final userBooksDbPath = payload['userBooksDbPath'] as String;
   final folderPath = payload['folderPath'] as String;
+  final otherConfiguredFolderPaths =
+      ((payload['otherConfiguredFolderPaths'] as List?) ?? const [])
+          .cast<String>();
 
   // מחיקת תיקייה כותבת רק ל-user_books.db; seforim.db נפתח read-only כדי לא
   // להפוך אותו ל-WAL ולא להריץ עליו DDL (CREATE TABLE) שמזהם את ה-DB הרשמי.
@@ -331,7 +343,10 @@ Future<void> _deleteWorkerEntryPoint(Map<String, Object?> payload) async {
   );
 
   try {
-    await service.deleteFolderFromDatabase(folderPath);
+    await service.deleteFolderFromDatabase(
+      folderPath,
+      otherConfiguredFolderPaths: otherConfiguredFolderPaths,
+    );
   } finally {
     database.close();
     userBooksDatabase.close();

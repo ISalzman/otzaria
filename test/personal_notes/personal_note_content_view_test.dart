@@ -43,6 +43,43 @@ void main() {
     expect(find.text('קישור'), findsOneWidget);
   });
 
+  testWidgets('כתובת otzaria:// שהודבקה כטקסט רגיל הופכת לקישור לחיץ',
+      (tester) async {
+    final note = PersonalNote(
+      id: 'pn_1',
+      bookId: 'Test',
+      lineNumber: 1,
+      displayTitle: 'כותרת',
+      lastKnownLineNumber: null,
+      status: PersonalNoteStatus.located,
+      content: jsonEncode([
+        {'insert': 'ראה otzaria://open/book/2156 כאן'},
+        {'insert': '\n'},
+      ]),
+      contentPlain: 'ראה otzaria://open/book/2156 כאן',
+      contentFormat: PersonalNoteContentFormat.quillDelta,
+      createdAt: DateTime(2025, 1, 1),
+      updatedAt: DateTime(2025, 1, 2),
+    );
+
+    String? tappedUrl;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PersonalNoteContentView(
+            note: note,
+            onLinkTap: (url) => tappedUrl = url,
+          ),
+        ),
+      ),
+    );
+
+    // הכתובת זוהתה כקישור ומופיעה כ-chip לחיץ.
+    expect(find.byType(ActionChip), findsOneWidget);
+    await tester.tap(find.byType(ActionChip));
+    expect(tappedUrl, 'otzaria://open/book/2156');
+  });
+
   testWidgets('בונה מחדש את הקישורים כשה-note מתחלף', (tester) async {
     PersonalNote noteWithLink(String label, String url) => PersonalNote(
           id: 'pn_1',

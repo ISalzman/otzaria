@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/theme/app_tokens.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -39,6 +40,7 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
@@ -461,33 +463,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
 
     final eras = await utils.splitByEra(availableCommentators);
-    final known = <String>{
-      ...?eras['תורה שבכתב'],
-      ...?eras['חז"ל'],
-      ...?eras['ראשונים'],
-      ...?eras['אחרונים'],
-      ...?eras['מחברי זמננו'],
-    };
-    final others = (eras['מפרשים נוספים'] ?? [])
-        .toSet()
-        .union(availableCommentators.where((c) => !known.contains(c)).toSet())
-        .toList();
+    final groups = buildCommentatorGroups(eras, availableCommentators);
     if (!mounted) return;
     setState(() {
       _rareCommentators = rare;
-      _commentatorGroups = [
-        CommentatorGroup(
-            title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
-        CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
-        CommentatorGroup(
-            title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
-        CommentatorGroup(
-            title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
-        CommentatorGroup(
-            title: 'מחברי זמננו',
-            commentators: eras['מחברי זמננו'] ?? const []),
-        CommentatorGroup(title: 'שאר מפרשים', commentators: others),
-      ];
+      _commentatorGroups = groups;
     });
   }
 
@@ -925,14 +905,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
   Future<void> printDisplayedCommentaries() async {
     final visibleContent = _getVisibleContent();
     if (visibleContent == null || visibleContent.commentaryLinks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(PdfMessages.noCommentariesToPrint);
       return;
     }
 
     final groups = await visibleContent.sortedGroupsFuture;
     final blocks = await buildCommentaryPrintBlocks(groups);
     if (blocks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(PdfMessages.noCommentariesToPrint);
       return;
     }
     if (!mounted) return;
@@ -1432,6 +1412,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             style: TextStyle(
               fontSize: settingsState.commentatorsFontSize - 2,
               fontWeight: FontWeight.bold,
+              fontVariations: AppFonts.boldFontVariations(
+                  settingsState.commentatorsFontFamily),
               fontFamily: settingsState.commentatorsFontFamily,
             ),
           ),
@@ -1531,6 +1513,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                                     settingsState.commentatorsFontFamily,
                                 fontWeight: settingsState.commentatorsFontBold
                                     ? FontWeight.bold
+                                    : null,
+                                fontVariations: settingsState
+                                        .commentatorsFontBold
+                                    ? AppFonts.boldFontVariations(
+                                        settingsState.commentatorsFontFamily)
                                     : null,
                               ),
                             );
@@ -1823,6 +1810,8 @@ class _CollapsibleCommentaryGroupState
                     style: TextStyle(
                       fontSize: widget.settingsState.commentatorsFontSize - 2,
                       fontWeight: FontWeight.bold,
+                      fontVariations: AppFonts.boldFontVariations(
+                          widget.settingsState.commentatorsFontFamily),
                       fontFamily: widget.settingsState.commentatorsFontFamily,
                     ),
                   ),

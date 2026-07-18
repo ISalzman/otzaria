@@ -49,6 +49,9 @@ const Map<String, String> apiCallToPermissionHint = {
   'notifications.checkPermissions': 'notifications.system',
   'notifications.requestPermissions': 'notifications.system',
 
+  // plugin.*
+  'plugin.openSelf': 'navigation.write',
+
   // reader.* (new APIs)
   'reader.addContextMenuItem': 'reader.context_menu',
   'reader.removeContextMenuItem': 'reader.context_menu',

@@ -10,6 +10,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/models/links.dart';
@@ -623,8 +624,8 @@ class _PrintingScreenState extends State<PrintingScreen> {
       debugPrint('[PRINT] raster failed: $e\n$st');
       if (mounted) {
         UiSnack.showError(hasPageRange
-            ? 'עיבוד טווח העמודים שנבחר נכשל'
-            : 'עיבוד עמודים מרובים בגיליון נכשל');
+            ? PdfMessages.pageRangeRenderFailed
+            : PdfMessages.multiPageSheetRenderFailed);
       }
       rethrow;
     }
@@ -1349,23 +1350,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
     String dataString = await _dataFuture;
 
-    if (_removeNikud && _removeTaamim) {
-      dataString = removeVolwels(dataString);
-    } else if (_removeNikud && !_removeTaamim) {
-      dataString = dataString
-          .replaceAll('ײ¾', ' ')
-          .replaceAll('׳€', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      dataString = removeTeamim(dataString);
-    }
-
     final shouldReplaceHolyNames =
         Settings.getValue<bool>('key-replace-holy-names') ?? true;
-    if (shouldReplaceHolyNames) {
-      dataString = replaceHolyNames(dataString);
-    }
+    dataString = _applyTextTransforms(dataString, shouldReplaceHolyNames);
 
     // שומרים את תגיות ה-HTML — WordExportService ממיר אותן לעיצוב במסמך
     final allLines = dataString.split('\n').toList();
@@ -1539,21 +1526,20 @@ class _PrintingScreenState extends State<PrintingScreen> {
           fontSize: fontSize,
         );
         await file.writeAsBytes(bytes);
-        UiSnack.showSuccess('קובץ Word נשמר בהצלחה');
+        UiSnack.showSuccess(PdfMessages.wordFileSaved);
         return;
       }
 
       await file.writeAsBytes(await _createOutputPdf(format));
-      UiSnack.showSuccess('קובץ PDF נשמר בהצלחה');
+      UiSnack.showSuccess(PdfMessages.pdfFileSaved);
     } on FileSystemException catch (e) {
       if (_isLockedFileException(e)) {
-        UiSnack.showError(
-            'לא ניתן לשמור את הקובץ כי הוא פתוח בתוכנה אחרת. יש לסגור אותו ולנסות שוב.');
+        UiSnack.showError(PdfMessages.fileLockedByAnotherApp);
         return;
       }
-      UiSnack.showError('ייצוא הקובץ נכשל: ${e.message}');
+      UiSnack.showError(PdfMessages.fileExportFailed(e.message));
     } catch (e) {
-      UiSnack.showError('ייצוא הקובץ נכשל: $e');
+      UiSnack.showError(PdfMessages.fileExportFailed(e));
     }
   }
 
@@ -1604,20 +1590,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (!keepHtml) {
       text = stripHtmlIfNeeded(text);
     }
-    if (_removeNikud && _removeTaamim) {
-      text = removeVolwels(text);
-    } else if (_removeNikud && !_removeTaamim) {
-      text = text
-          .replaceAll('־', ' ')
-          .replaceAll('׀', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[\u05B0-\u05C7]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      text = removeTeamim(text);
-    }
-    if (shouldReplaceHolyNames) {
-      text = replaceHolyNames(text);
-    }
+    text = _applyTextTransforms(text, shouldReplaceHolyNames);
 
     _commentaryContentCache[key] = text;
     return text;

@@ -77,6 +77,10 @@ class InstalledPlugin {
   /// (`SettingsState.isOfflineMode`) רק אם [networkAccessGranted] דלוק.
   bool get requiresNetwork => manifest.networkEnabled;
 
+  /// האם להסתיר/לחסום את התוסף במצב 'מנותק'. אם המשתמש כיבה את הרשאת הרשת
+  /// התוסף אינו ניגש לרשת, ולכן חייב להישאר זמין ולהיפתח גם במצב מנותק.
+  bool get blockedInOfflineMode => requiresNetwork && networkAccessGranted;
+
   InstalledPlugin({
     required this.pluginId,
     required this.name,
@@ -206,6 +210,6 @@ class InstalledPlugin {
 extension OfflineModePluginFilter on List<InstalledPlugin> {
   List<InstalledPlugin> filterForOfflineMode(bool isOfflineMode) {
     if (!isOfflineMode) return this;
-    return where((p) => !p.requiresNetwork || !p.networkAccessGranted).toList();
+    return where((p) => !p.blockedInOfflineMode).toList();
   }
 }

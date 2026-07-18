@@ -262,6 +262,59 @@ class BookDao {
     String? volume,
   }) async {
     final db = await database;
+    return insertBookSync(
+      db,
+      categoryId,
+      sourceId,
+      title,
+      heShortDesc,
+      orderIndex,
+      totalLines,
+      isBaseBook,
+      hasTargumConnection: hasTargumConnection,
+      hasReferenceConnection: hasReferenceConnection,
+      hasSourceConnection: hasSourceConnection,
+      hasCommentaryConnection: hasCommentaryConnection,
+      hasOtherConnection: hasOtherConnection,
+      hasAltStructures: hasAltStructures,
+      hasTeamim: hasTeamim,
+      hasNekudot: hasNekudot,
+      isPersonal: isPersonal,
+      filePath: filePath,
+      fileType: fileType,
+      fileSize: fileSize,
+      lastModified: lastModified,
+      pages: pages,
+      volume: volume,
+    );
+  }
+
+  /// גרעין סינכרוני של [insertBook] — לשימוש בתוך `withTransaction`.
+  int insertBookSync(
+    sqlite3.Database db,
+    int categoryId,
+    int sourceId,
+    String title,
+    String? heShortDesc,
+    double orderIndex,
+    int totalLines,
+    bool isBaseBook, {
+    bool hasTargumConnection = false,
+    bool hasReferenceConnection = false,
+    bool hasSourceConnection = false,
+    bool hasCommentaryConnection = false,
+    bool hasOtherConnection = false,
+    bool hasAltStructures = false,
+    bool hasTeamim = false,
+    bool hasNekudot = false,
+    bool isPersonal = false,
+    String? filePath,
+    String? fileType,
+    int? fileSize,
+    int? lastModified,
+    int? pages,
+    String? volume,
+  }) {
     db.execute(_queries['insert']!, [
       categoryId,
       sourceId,

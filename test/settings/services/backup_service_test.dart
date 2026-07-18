@@ -319,7 +319,8 @@ void main() {
       );
     }
 
-    Future<({String path, List<String> skipped})> createPluginsBackup() async {
+    Future<({String path, List<String> skipped})> createPluginsBackup(
+        {bool isAutoBackup = false}) async {
       final result = await BackupService.createBackup(
         includeSettings: false,
         includeBookmarks: false,
@@ -329,8 +330,24 @@ void main() {
         includeShamorZachor: false,
         // includeUserOverrides: false,
         includePlugins: true,
+        isAutoBackup: isAutoBackup,
       );
       return (path: result.path, skipped: result.skippedSections);
+    }
+
+    /// יוצר תוסף מותקן עם קובץ התקנה וקובץ נתונים, ומחזיר את הנתיבים.
+    Future<({String installPath, String dataPath})> installTestPlugin(
+        String pluginId) async {
+      final db = PluginSystemDatabase.instance;
+      final installPath = await AppPaths.getPluginInstallPath(pluginId);
+      await File(p.join(installPath, 'index.html')).create(recursive: true);
+      await File(p.join(installPath, 'index.html')).writeAsString('original');
+      final dataPath = await AppPaths.getPluginDataPath(pluginId);
+      await File(p.join(dataPath, 'state.bin')).create(recursive: true);
+      await File(p.join(dataPath, 'state.bin')).writeAsBytes([7, 7, 7]);
+      await db.insertOrUpdatePlugin(
+          buildPlugin(id: pluginId, installPath: installPath));
+      return (installPath: installPath, dataPath: dataPath);
     }
 
     test('משחזר תוסף packaged עם קבצים, נתונים, הרשאות ו-KV', () async {
@@ -464,7 +481,92 @@ void main() {
           reason: 'כשל בשחזור חייב להציג שחזור חלקי במקום דיווח-שווא');
     });
 
-    test('שחזור מתעלם מנתיבי קבצים החורגים מתיקיית התוסף (path traversal)',
+    test('גיבוי ידני עצמאי — קבצי תוספים מוטמעים כ-base64 ללא הפניות store',
+        () async {
+      const pluginId = 'manual.plugin';
+      final paths = await installTestPlugin(pluginId);
+
+      final backup = await createPluginsBackup();
+      expect(backup.skipped, isEmpty);
+
+      final backupJson = jsonDecode(await File(backup.path).readAsString())
+          as Map<String, dynamic>;
+      final pluginEntry =
+          (backupJson['plugins'] as List).first as Map<String, dynamic>;
+      final allValues = [
+        ...(pluginEntry['files'] as Map).values,
+        ...(pluginEntry['data'] as Map).values,
+      ];
+      expect(allValues, isNotEmpty);
+      for (final value in allValues) {
+        expect(value, isNot(startsWith('sha256:')),
+            reason: 'גיבוי ידני חייב להיות קובץ עצמאי בלי תלות במחסן');
+      }
+
+      // הקובץ לבדו מספיק לשחזור — גם בלי תיקיית store ליד.
+      final standalone = File(p.join(tempDir.path, 'copied_backup.json'));
+      await File(backup.path).copy(standalone.path);
+      await PluginSystemDatabase.instance.deletePlugin(pluginId);
+      await Directory(paths.installPath).delete(recursive: true);
+      await Directory(paths.dataPath).delete(recursive: true);
+
+      final skipped = await BackupService.restoreFromBackup(standalone.path);
+
+      expect(skipped, isEmpty);
+      expect(await File(p.join(paths.installPath, 'index.html')).readAsString(),
+          'original');
+      expect(await File(p.join(paths.dataPath, 'state.bin')).readAsBytes(),
+          [7, 7, 7]);
+    });
+
+    test('roundtrip גיבוי אוטומטי v2 — קבצים כהפניות store ושחזור מלא',
+        () async {
+      const pluginId = 'auto.plugin';
+      final paths = await installTestPlugin(pluginId);
+
+      final backup = await createPluginsBackup(isAutoBackup: true);
+      expect(backup.skipped, isEmpty);
+
+      final backupJson = jsonDecode(await File(backup.path).readAsString())
+          as Map<String, dynamic>;
+      final pluginEntry =
+          (backupJson['plugins'] as List).first as Map<String, dynamic>;
+      for (final value in (pluginEntry['files'] as Map).values) {
+        expect(value, startsWith('sha256:'));
+      }
+
+      await PluginSystemDatabase.instance.deletePlugin(pluginId);
+      await Directory(paths.installPath).delete(recursive: true);
+      await Directory(paths.dataPath).delete(recursive: true);
+
+      final skipped = await BackupService.restoreFromBackup(backup.path);
+
+      expect(skipped, isEmpty);
+      expect(await File(p.join(paths.installPath, 'index.html')).readAsString(),
+          'original');
+      expect(await File(p.join(paths.dataPath, 'state.bin')).readAsBytes(),
+          [7, 7, 7]);
+    });
+
+    test('store חסר — השחזור נכשל בלי למחוק את ההתקנה הקיימת', () async {
+      const pluginId = 'nostore.plugin';
+      final paths = await installTestPlugin(pluginId);
+
+      final backup = await createPluginsBackup(isAutoBackup: true);
+      await Directory(p.join(File(backup.path).parent.path, 'store'))
+          .delete(recursive: true);
+
+      final skipped = await BackupService.restoreFromBackup(backup.path);
+
+      expect(skipped, contains('plugins'));
+      expect(await File(p.join(paths.installPath, 'index.html')).readAsString(),
+          'original',
+          reason: 'התקנה קיימת חייבת לשרוד שחזור שנכשל על store חסר');
+      expect(await File(p.join(paths.dataPath, 'state.bin')).readAsBytes(),
+          [7, 7, 7]);
+    });
+
+    test('נתיב path traversal מכשיל את שחזור התוסף לפני מחיקת ההתקנה הקיימת',
         () async {
       final db = PluginSystemDatabase.instance;
       const pluginId = 'evil.plugin';
@@ -487,9 +589,10 @@ void main() {
       (pluginEntry['files'] as Map)['../evil.txt'] = base64Encode([6, 6, 6]);
       await backupFile.writeAsString(jsonEncode(backupJson));
 
-      await BackupService.restoreFromBackup(backup.path);
+      final skipped = await BackupService.restoreFromBackup(backup.path);
 
-      // הקובץ התקין שוחזר, אך הקובץ החורג לא נכתב מחוץ לתיקיית ההתקנה.
+      // שחזור התוסף נכשל, ההתקנה הקיימת שרדה והקובץ החורג לא נכתב.
+      expect(skipped, contains('plugins'));
       expect(
           await File(p.join(installPath, 'index.html')).readAsString(), 'safe');
       final escaped = File(p.normalize(p.join(installPath, '..', 'evil.txt')));

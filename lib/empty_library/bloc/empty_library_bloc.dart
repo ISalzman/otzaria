@@ -10,6 +10,7 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/file/tar_zst_extractor.dart';
@@ -42,6 +43,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     on<DeleteZipAnswered>(_onDeleteZipAnswered);
     on<PickDbFileRequested>(_onPickDbFileRequested);
     on<CheckDiskSpaceRequested>(_onCheckDiskSpaceRequested);
+    on<StorageLocationSelected>(_onStorageLocationSelected);
     // בדיקת מקום פנוי מתבצעת מיד — כפתור ההורדה מושבת עד להשלמתה
     add(CheckDiskSpaceRequested());
   }
@@ -302,6 +304,18 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   /// מטפל גם בתרחיש שבו temp ותיקיית הספרייה חולקים אותו volume.
   Future<String?> _checkSpaceForDownload({int? downloadSize}) async {
     if (!Platform.isAndroid) return null;
+
+    // הספרייה שמורה על כרטיס SD שאינו זמין כרגע — הורדה חדשה תיצור ספרייה
+    // כפולה באחסון הפנימי, לכן חוסמים ומסבירים.
+    final sdRoot =
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot);
+    if (sdRoot != null &&
+        sdRoot.isNotEmpty &&
+        !await Directory(sdRoot).exists()) {
+      return 'הספרייה שלך שמורה על כרטיס SD שאינו זמין כעת.\n'
+          'יש להכניס את הכרטיס ולהפעיל מחדש את האפליקציה.';
+    }
+
     // אומדן fallback לסכום הדחוס של שלושת הקבצים, בשימוש רק כש-downloadSize
     // לא ידוע (בדיקת הסף הראשונית, או כש-HEAD לא החזיר Content-Length).
     // נכון להיום הסכום האמיתי ~1.45GB (seforim ~1.01GB + תלמוד ~0.44GB +
@@ -315,6 +329,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     final libraryPath =
         _defaultLibraryPathOverride ?? await AppPaths.getDefaultLibraryPath();
     final checkPath = _findExistingAncestor(libraryPath);
+
+    if (!await AndroidStorageService.volumeSupportsLargeFiles(libraryPath)) {
+      return 'כרטיס ה-SD מפורמט ב-FAT32, שאינו תומך בקבצים מעל 4GB — '
+          'וקובץ הספרייה גדול מכך.\n'
+          'יש לבחור באחסון הפנימי, או לפרמט את הכרטיס ל-exFAT.';
+    }
 
     final tempInfo = await _getDfInfo(tempPath);
     final extractInfo = await _getDfInfo(checkPath);
@@ -351,6 +371,15 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   Future<void> _onCheckDiskSpaceRequested(
       CheckDiskSpaceRequested event, Emitter<EmptyLibraryState> emit) async {
+    _downloadDisabledReason = await _checkSpaceForDownload();
+    emit(EmptyLibraryInitial(downloadDisabledReason: _downloadDisabledReason));
+  }
+
+  /// שומר את מיקום האחסון שנבחר ומריץ מחדש את בדיקת המקום הפנוי עבור היעד
+  /// החדש (הורדה וחילוץ ינותבו לשם דרך getDefaultLibraryPath).
+  Future<void> _onStorageLocationSelected(
+      StorageLocationSelected event, Emitter<EmptyLibraryState> emit) async {
+    await AppPaths.setAndroidLibraryRoot(event.libraryRoot);
     _downloadDisabledReason = await _checkSpaceForDownload();
     emit(EmptyLibraryInitial(downloadDisabledReason: _downloadDisabledReason));
   }

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -32,6 +33,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
+    on<UpdateDefaultRemovePunctuation>(_onUpdateDefaultRemovePunctuation);
+    on<UpdateDefaultContinuousReadingMode>(
+        _onUpdateDefaultContinuousReadingMode);
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
     on<UpdateDefaultCommentaryOpen>(_onUpdateDefaultCommentaryOpen);
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
@@ -48,6 +52,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShortcut>(_onUpdateShortcut);
     on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
     on<UpdatePdfBookViewByDefault>(_onUpdatePdfBookViewByDefault);
+    on<UpdateTalmudBavliOpenFormat>(_onUpdateTalmudBavliOpenFormat);
     on<UpdateOfflineMode>(_onUpdateOfflineMode);
     on<UpdateAutoSyncCatalogs>(_onUpdateAutoSyncCatalogs);
     on<UpdateSoftwareAndBookUpdatesEnabled>(
@@ -97,6 +102,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       autoUpdateIndex: settings['autoUpdateIndex'],
       defaultRemoveNikud: settings['defaultRemoveNikud'],
       removeNikudFromTanach: settings['removeNikudFromTanach'],
+      defaultRemovePunctuation: settings['defaultRemovePunctuation'],
+      defaultContinuousReadingMode:
+          settings['defaultContinuousReadingMode'] ?? false,
       defaultSidebarOpen: settings['defaultSidebarOpen'],
       defaultCommentaryOpen: settings['defaultCommentaryOpen'],
       pinSidebar: settings['pinSidebar'],
@@ -113,6 +121,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       ),
       enablePerBookSettings: settings['enablePerBookSettings'],
       pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
+      talmudBavliOpenFormat: settings['talmudBavliOpenFormat'] ?? 'text',
       isOfflineMode: settings['isOfflineMode'] ?? false,
       autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
       softwareAndBookUpdatesEnabled:
@@ -146,6 +155,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updatePdfBookViewByDefault(event.pdfBookViewByDefault);
     emit(state.copyWith(pdfBookViewByDefault: event.pdfBookViewByDefault));
+  }
+
+  Future<void> _onUpdateTalmudBavliOpenFormat(
+    UpdateTalmudBavliOpenFormat event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateTalmudBavliOpenFormat(event.talmudBavliOpenFormat);
+    emit(state.copyWith(talmudBavliOpenFormat: event.talmudBavliOpenFormat));
   }
 
   Future<void> _onUpdateOfflineMode(
@@ -413,12 +430,38 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     _cleanupRedundantPerBookSettings();
   }
 
+  Future<void> _onUpdateDefaultContinuousReadingMode(
+    UpdateDefaultContinuousReadingMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateDefaultContinuousReadingMode(event.defaultContinuousReadingMode);
+    emit(state.copyWith(
+        defaultContinuousReadingMode: event.defaultContinuousReadingMode));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
+  }
+
   Future<void> _onUpdateRemoveNikudFromTanach(
     UpdateRemoveNikudFromTanach event,
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateRemoveNikudFromTanach(event.removeNikudFromTanach);
     emit(state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach));
+  }
+
+  Future<void> _onUpdateDefaultRemovePunctuation(
+    UpdateDefaultRemovePunctuation event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository
+        .updateDefaultRemovePunctuation(event.defaultRemovePunctuation);
+    emit(state.copyWith(
+        defaultRemovePunctuation: event.defaultRemovePunctuation));
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateDefaultSidebarOpen(
@@ -554,7 +597,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
         defaultRemoveNikud: state.defaultRemoveNikud,
-        defaultShowSplitView: false, // ערך ברירת מחדל
+        defaultRemovePunctuation: state.defaultRemovePunctuation,
+        defaultShowSplitView:
+            Settings.getValue<bool>('key-splited-view') ?? true,
+        defaultContinuousReadingMode: state.defaultContinuousReadingMode,
       );
     } catch (e) {
       // בטסטים או בסביבות ללא פלאגין, זה בסדר להתעלם

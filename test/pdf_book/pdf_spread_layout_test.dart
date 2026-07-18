@@ -27,6 +27,46 @@ void main() {
     });
   });
 
+  group('pdfNextSpreadFocusPage', () {
+    test('מהכריכה — לעמוד 2 (הימני של הזוג הראשון)', () {
+      expect(pdfNextSpreadFocusPage(1, 10), 2);
+    });
+
+    test('מזוג פנימי — לעמוד הימני של הזוג הבא, גם כשהנוכחי הוא השמאלי', () {
+      expect(pdfNextSpreadFocusPage(2, 10), 4);
+      expect(pdfNextSpreadFocusPage(3, 10), 4);
+      expect(pdfNextSpreadFocusPage(5, 10), 6);
+    });
+
+    test('אין זוג הבא — null', () {
+      expect(pdfNextSpreadFocusPage(10, 10), isNull);
+      expect(pdfNextSpreadFocusPage(11, 11), isNull);
+      expect(pdfNextSpreadFocusPage(10, 11), isNull);
+    });
+
+    test('זוג אחרון בעל עמוד יחיד עדיין נגיש', () {
+      expect(pdfNextSpreadFocusPage(8, 10), 10);
+    });
+  });
+
+  group('pdfPreviousSpreadFocusPage', () {
+    test('מהזוג הראשון — חזרה לכריכה', () {
+      expect(pdfPreviousSpreadFocusPage(2), 1);
+      expect(pdfPreviousSpreadFocusPage(3), 1);
+    });
+
+    test('מזוג פנימי — לעמוד השמאלי (השני) של הזוג הקודם', () {
+      expect(pdfPreviousSpreadFocusPage(4), 3);
+      expect(pdfPreviousSpreadFocusPage(5), 3);
+      expect(pdfPreviousSpreadFocusPage(10), 9);
+    });
+
+    test('מהכריכה — null', () {
+      expect(pdfPreviousSpreadFocusPage(1), isNull);
+      expect(pdfPreviousSpreadFocusPage(0), isNull);
+    });
+  });
+
   group('pdfSpreadPageRange — תצוגה רגילה', () {
     test('תמיד מחזיר עמוד יחיד', () {
       for (final page in [1, 2, 3, 4, 5, 50]) {

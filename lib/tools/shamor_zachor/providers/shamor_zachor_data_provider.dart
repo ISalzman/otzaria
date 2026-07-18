@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:convert';
-import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
@@ -536,21 +535,23 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// WITHOUT modifying the books database
   Future<void> addCustomBook({
     required String bookName,
+    int? bookId,
     int? categoryId,
   }) async {
-    if (_sqliteDataProvider?.repository == null) {
+    final repository = _sqliteDataProvider?.repository;
+    if (repository == null) {
       _logger.warning("Repository not initialized");
       throw Exception('מסד הנתונים לא מאותחל');
     }
 
     try {
       // 1. Check if book exists in DB
-      final existing = (await BookDatabaseResolver.resolveBook(
+      final existing = await _findOfficialBook(
+        repository,
+        id: bookId,
         title: bookName,
         categoryId: categoryId,
-        preferUserBooks: true,
-      ))
-          ?.book;
+      );
       if (existing == null) {
         _logger.warning("Book '$bookName' not found in database");
         throw Exception(
@@ -572,12 +573,14 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
   /// מוסיף מספר ספרים למעקב בקריאה אחת, עם טעינה מחדש אחת בלבד בסוף.
   ///
-  /// כל פריט מזוהה לפי [bookName] ו-[categoryId] מול מסד הנתונים.
+  /// כל פריט מזוהה לפי [id] מול המסד הרשמי בלבד — רשימת המעקב נשמרת
+  /// כמזהי seforim.db, ולכן מזהה מ-user_books.db יציג ספר שגוי.
   /// מחזיר את מספר הספרים שנוספו ואת מספר אלו שלא נמצאו/נכשלו.
   Future<({int added, int failed})> addCustomBooks(
-    List<({String bookName, int? categoryId})> books,
+    List<({int? id, String bookName, int? categoryId})> books,
   ) async {
-    if (_sqliteDataProvider?.repository == null) {
+    final repository = _sqliteDataProvider?.repository;
+    if (repository == null) {
       _logger.warning("Repository not initialized");
       throw Exception('מסד הנתונים לא מאותחל');
     }
@@ -590,12 +593,12 @@ class ShamorZachorDataProvider with ChangeNotifier {
     int failed = 0;
     for (final book in books) {
       try {
-        final existing = (await BookDatabaseResolver.resolveBook(
+        final existing = await _findOfficialBook(
+          repository,
+          id: book.id,
           title: book.bookName,
           categoryId: book.categoryId,
-          preferUserBooks: true,
-        ))
-            ?.book;
+        );
         if (existing == null) {
           _logger.warning("Book '${book.bookName}' not found in database");
           failed++;
@@ -618,6 +621,24 @@ class ShamorZachorDataProvider with ChangeNotifier {
     return (added: added, failed: failed);
   }
 
+  /// מאתר ספר במסד הרשמי בלבד — לפי [id] אם סופק, אחרת לפי כותרת.
+  Future<db_models.Book?> _findOfficialBook(
+    SeforimRepository repository, {
+    int? id,
+    required String title,
+    int? categoryId,
+  }) async {
+    if (id != null) {
+      return repository.getBook(id);
+    }
+    if (categoryId != null) {
+      final byCategory =
+          await repository.getBookByTitleAndCategory(title, categoryId);
+      if (byCategory != null) return byCategory;
+    }
+    return repository.getBookByTitle(title);
+  }
+
   /// מסיר ספר מרשימת המעקב לפי מזהה, ללא תלות בהיותו ספר בסיס.
   ///
   /// בניגוד ל-[removeCustomBook], אינו זורק על ספר בסיס - הוא פשוט יורד
@@ -636,24 +657,19 @@ class ShamorZachorDataProvider with ChangeNotifier {
     int? bookId,
     int? categoryId,
   }) async {
-    if (_sqliteDataProvider?.repository == null) {
+    final repository = _sqliteDataProvider?.repository;
+    if (repository == null) {
       _logger.warning("Repository not initialized");
       return;
     }
 
     try {
-      final existing = bookId != null
-          ? (await BookDatabaseResolver.resolveBookById(
-              bookId,
-              preferUserBooks: true,
-            ))
-              ?.book
-          : (await BookDatabaseResolver.resolveBook(
-              title: bookName,
-              categoryId: categoryId,
-              preferUserBooks: true,
-            ))
-              ?.book;
+      final existing = await _findOfficialBook(
+        repository,
+        id: bookId,
+        title: bookName,
+        categoryId: categoryId,
+      );
       if (existing == null) {
         _logger.warning(
             "Book '$bookName'${bookId != null ? ' (ID: $bookId)' : ''} not found in database");

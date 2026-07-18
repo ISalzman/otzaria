@@ -6,6 +6,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
@@ -291,7 +292,7 @@ class _SearchDialogState extends State<SearchDialog> {
                     SearchDefaults.saveDistanceDefault(state.distance);
                   });
                   UiSnack.show(
-                      'מרווח ${state.distance} נקבע כברירת מחדל לחיפוש רגיל');
+                      LibraryMessages.distanceSetAsDefault(state.distance));
                 },
                 child: Text(
                     'קבע את המרווח הנוכחי (${state.distance}) כברירת מחדל'),
@@ -485,7 +486,7 @@ class _SearchDialogState extends State<SearchDialog> {
     if (isSearchBlockedByMissingIndex(
       providerInitialized: TantivyDataProvider.instance.isInitialized.value,
     )) {
-      UiSnack.showError('אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס.');
+      UiSnack.showError(LibraryMessages.searchIndexMissing);
       return;
     }
 
@@ -493,7 +494,7 @@ class _SearchDialogState extends State<SearchDialog> {
     String negativeQuery = _searchTab.negativeQueryController.text.trim();
 
     if (query.isEmpty) {
-      UiSnack.show('נא להזין טקסט לחיפוש');
+      UiSnack.show(LibraryMessages.emptySearchQuery);
       return;
     }
 
@@ -504,12 +505,12 @@ class _SearchDialogState extends State<SearchDialog> {
     );
     if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
       UiSnack.showError(
-          'הקטגוריה או הספר "${parsedCategory.notFoundNames.join('", "')}" לא נמצאו');
+          LibraryMessages.categoryOrBookNotFound(parsedCategory.notFoundNames));
       return;
     }
     query = parsedCategory.query;
     if (query.isEmpty) {
-      UiSnack.show('נא להזין טקסט לחיפוש');
+      UiSnack.show(LibraryMessages.emptySearchQuery);
       return;
     }
 

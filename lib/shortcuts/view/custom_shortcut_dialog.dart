@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -30,7 +31,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
     with DialogFocusRestorerMixin<CustomShortcutDialog> {
   final Set<LogicalKeyboardKey> _pressedKeys = {};
   final FocusNode _focusNode = FocusNode();
-  String _displayText = 'לחץ על המקשים...';
+  String _displayText = 'לא הוגדר קיצור';
   bool _isRecording = false;
 
   @override
@@ -65,7 +66,7 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
 
   void _confirmShortcut() {
     if (_pressedKeys.isEmpty) {
-      UiSnack.showError('יש לבחור קיצור');
+      UiSnack.showError(CommonMessages.shortcutRequired);
       return;
     }
 
@@ -184,6 +185,9 @@ class _CustomShortcutDialogState extends State<CustomShortcutDialog>
                   onPressed: () {
                     setState(() {
                       _isRecording = false;
+                      if (_pressedKeys.isEmpty) {
+                        _displayText = 'לא הוגדר קיצור';
+                      }
                     });
                   },
                   icon: FluentIcons.stop_24_regular,

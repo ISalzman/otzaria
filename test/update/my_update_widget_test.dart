@@ -50,6 +50,79 @@ void main() {
     });
   });
 
+  group('updateCheckBlocked', () {
+    // מצב מנותק חוסם את *בדיקת* העדכון בלבד — אסור שישנה את צורת עץ
+    // הווידג'טים, אחרת ה-PageView הראשי נבנה מחדש ומציג מסך שגוי.
+    test('blocked when offline or when updates are disabled', () {
+      expect(
+        updateCheckBlocked(isOfflineMode: true, updatesEnabled: true),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: false, updatesEnabled: false),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: true, updatesEnabled: false),
+        isTrue,
+      );
+      expect(
+        updateCheckBlocked(isOfflineMode: false, updatesEnabled: true),
+        isFalse,
+      );
+    });
+  });
+
+  group('shouldRecheckAfterUnblock', () {
+    // חסימה קובעת upToDate בלי בדיקה אמיתית — מעבר מחסימה לזמינות חייב
+    // להפעיל בדיקה מחדש, בלי לקטוע הורדה/התקנה שכבר בעיצומן.
+    test('rechecks only on blocked-to-unblocked transition while upToDate', () {
+      expect(
+        shouldRecheckAfterUnblock(
+          wasBlocked: true,
+          isBlocked: false,
+          status: UpdatStatus.upToDate,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldRecheckAfterUnblock(
+          wasBlocked: false,
+          isBlocked: false,
+          status: UpdatStatus.upToDate,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRecheckAfterUnblock(
+          wasBlocked: true,
+          isBlocked: true,
+          status: UpdatStatus.upToDate,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not interrupt an active download or a found update', () {
+      for (final status in [
+        UpdatStatus.checking,
+        UpdatStatus.availableWithChangelog,
+        UpdatStatus.downloading,
+        UpdatStatus.readyToInstall,
+        UpdatStatus.dismissed,
+      ]) {
+        expect(
+          shouldRecheckAfterUnblock(
+            wasBlocked: true,
+            isBlocked: false,
+            status: status,
+          ),
+          isFalse,
+        );
+      }
+    });
+  });
+
   group('shouldLaunchInstallerOnExit', () {
     test('requires installer file and a completed download state', () {
       expect(

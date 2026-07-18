@@ -278,7 +278,11 @@ export interface OtzariaEventMap {
     currentBook: string;
     currentBookId: string;
     currentIndex: number;
+    /** The `param` value passed to `reader.addContextMenuItem`, or null. */
+    param: unknown;
   };
+  /** The plugin page was opened via `plugin.openSelf`. Carries the param passed to the call. */
+  'plugin.page_opened': { param: unknown };
 }
 
 export type NavigationTarget = 'library' | 'reading' | 'more' | 'settings';
@@ -474,6 +478,7 @@ export type OtzariaMethod =
   | 'network.fetch'
   | 'network.download'
   | 'shortcut.create'
+  | 'plugin.openSelf'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.setHighlight'

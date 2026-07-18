@@ -546,7 +546,12 @@ Future<void> _initializeProcessSingletons() async {
       // שנייה עד שפריים חדש הספיק להתרסטר. כאן השינוי קורה לפני שפריים התוכן
       // הראשון מצויר בכלל — והוא נצבע ישר במסגרת ובגודל הסופיים.
       await windowManager.setMinimumSize(WindowPersistence.minSize);
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      // ב-macOS כפתורי החלון המובנים (traffic lights) נשארים גלויים — הם
+      // כפתורי החלון היחידים; אין כפתורים מותאמים בשורת הכותרת.
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: Platform.isMacOS,
+      );
     }
   }
 
@@ -994,7 +999,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(
-              libraryBloc: context.read<LibraryBloc>(),
+              addLibraryEvent: (event) =>
+                  context.read<LibraryBloc>().add(event),
             )..add(const LoadCustomFolders()),
           ),
           BlocProvider<IndexingBloc>(

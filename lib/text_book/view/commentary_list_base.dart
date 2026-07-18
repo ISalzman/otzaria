@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/text_book/view/combined_view/commentary_content.dart';
+import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
@@ -23,7 +25,6 @@ import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
@@ -39,6 +40,7 @@ import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart'
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
@@ -528,14 +530,14 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       commentatorsToShow: selectedCommentators,
     );
     if (links.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(TextBookMessages.noCommentatorsToPrint);
       return;
     }
 
     final groups = await _getCachedGroups(links);
     final blocks = await buildCommentaryPrintBlocks(groups);
     if (blocks.isEmpty) {
-      UiSnack.show('אין מפרשים להדפסה');
+      UiSnack.show(TextBookMessages.noCommentatorsToPrint);
       return;
     }
     if (!mounted) return;
@@ -862,12 +864,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
-    if (controller == null ||
-        controller.activeOwner == null ||
-        identical(controller.activeOwner, _selectionOwner)) {
-      return;
-    }
-    if (!mounted) return;
+    if (controller == null || !mounted) return;
+    final shouldRebuild = shouldRebuildSelectionAreaOnExternalChange(
+      activeOwner: controller.activeOwner,
+      selfOwner: _selectionOwner,
+      hasOwnSelection: _savedSelectedText.value != null,
+    );
+    if (!shouldRebuild) return;
     _savedSelectedText.value = null;
     _lastSelectedLink.value = null;
     setState(() {
@@ -1027,9 +1030,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     final blocState = context.read<TextBookBloc>().state;
     final removePunctuation =
         blocState is TextBookLoaded && blocState.removePunctuation;
-    final stateRemoveNikud =
-        blocState is TextBookLoaded && blocState.removeNikud;
-    final settings = context.read<SettingsBloc>().state;
+    // מצב הניקוד של הטאב חל על כל המפרשים, ללא רזולוציה פר-יעד.
+    final removeNikud = blocState is TextBookLoaded && blocState.removeNikud;
     final wantSnippets = widget.externalSearchSnippetsNotifier != null;
 
     for (final link in links) {
@@ -1047,12 +1049,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       );
       _updateSearchResultsCount(link, count);
       if (wantSnippets && count > 0) {
-        final removeNikud = await resolveRemoveNikudForBook(
-          title: utils.getTitleFromPath(link.path2),
-          defaultRemoveNikud: settings.defaultRemoveNikud || stateRemoveNikud,
-          removeNikudFromTanach: settings.removeNikudFromTanach,
-        );
-        if (!mounted || gen != _searchComputeGen) return;
         _updateSearchSnippets(link, [
           buildCommentarySearchSnippet(
             content: data,
@@ -1413,6 +1409,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       fontSize: widget.fontSize,
                       removeNikud: state.removeNikud,
                       openBookCallback: widget.openBookCallback,
+                      state: state,
+                      reportLineIndex:
+                          state.selectedIndex ?? currentIndexes.first,
                     );
                   } else if (selectedCommentators.isEmpty) {
                     notesWidget = Center(
@@ -2025,6 +2024,8 @@ class _CollapsibleCommentaryGroupState
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.85,
                           fontWeight: FontWeight.bold,
+                          fontVariations: AppFonts.boldFontVariations(
+                              settingsState.commentatorsFontFamily),
                           fontFamily: settingsState.commentatorsFontFamily,
                         ),
                       );
@@ -2218,11 +2219,19 @@ class _NotesCommentaryWidget extends StatefulWidget {
   final bool removeNikud;
   final Function(TextBookTab) openBookCallback;
 
+  /// מצב הספר הראשי — דרוש לדיווח על טעות (ההערות inline בתוכו).
+  final TextBookLoaded state;
+
+  /// אינדקס השורה שאליה מיוחסות ההערות המוצגות — לדיווח הטעות.
+  final int reportLineIndex;
+
   const _NotesCommentaryWidget({
     required this.notes,
     required this.fontSize,
     required this.removeNikud,
     required this.openBookCallback,
+    required this.state,
+    required this.reportLineIndex,
   });
 
   @override
@@ -2272,6 +2281,23 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                     fontSize: widget.fontSize,
                   ),
                 ),
+                if (!widget.state.book.isUserBook) ...[
+                  const AppContextMenuEntry.divider(),
+                  AppContextMenuEntry(
+                    label: 'דווח על טעות בספר',
+                    icon: FluentIcons.error_circle_24_regular,
+                    enabled: _selectedText != null &&
+                        _selectedText!.trim().isNotEmpty,
+                    onTap: () => ErrorReportHelper.showErrorReportDialog(
+                      context: menuCtx,
+                      selectedText: _selectedText ?? '',
+                      state: widget.state,
+                      fontSize: widget.fontSize,
+                      bookTitle: widget.state.book.title,
+                      savedSelectedIndex: widget.reportLineIndex,
+                    ),
+                  ),
+                ],
               ],
               child: SingleChildScrollView(
                 child: Column(
@@ -2285,6 +2311,8 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                         style: TextStyle(
                           fontSize: widget.fontSize * 0.85,
                           fontWeight: FontWeight.bold,
+                          fontVariations: AppFonts.boldFontVariations(
+                              settingsState.commentatorsFontFamily),
                           fontFamily: settingsState.commentatorsFontFamily,
                         ),
                       ),

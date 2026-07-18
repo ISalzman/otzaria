@@ -2,6 +2,7 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
+import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/user_content_import/services/user_links_loader.dart';
@@ -12,6 +13,7 @@ import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -395,6 +397,72 @@ class TextBookRepository {
       linkCountByCommentator: linkCountByTitle,
     ).difference(userCommentators);
     return (all: all, rare: rare);
+  }
+
+  /// מחזיר את "המפרשים הנוספים" על הקטע שבו יושבת שורת המקור [sourceLineIndex]
+  /// בספר [sourceBookTitle] — כלומר שאר המפרשים על אותו עמוד/סוגיה, פרט לספר
+  /// המפרש הפתוח כרגע ([currentBookTitle]). כל [Link] מוחזר בפורמט זהה לקישור
+  /// מפרש רגיל, כך שהתצוגה המקדימה והניווט פועלים דרך התשתית הקיימת.
+  ///
+  /// מיועד לפיצ'ר תפריט ההקשר בספרי מפרש: בהינתן שורה במפרש, הקישור ההפוך
+  /// (SOURCE) כבר נותן את שורת המקור; מכאן נאספים שאר מפרשי אותו קטע.
+  Future<List<Link>> getSiblingCommentaries({
+    required String sourceBookTitle,
+    required int? sourceCategoryId,
+    required int sourceLineIndex,
+    required String currentBookTitle,
+    required int? currentCategoryId,
+  }) async {
+    final repository = _sqliteProvider.repository;
+    if (repository == null) return [];
+
+    final sourceBook = sourceCategoryId != null
+        ? await repository.getBookByTitleAndCategory(
+            sourceBookTitle, sourceCategoryId)
+        : await repository.getBookByTitle(sourceBookTitle);
+    if (sourceBook == null) return [];
+
+    final currentBook = currentCategoryId != null
+        ? await repository.getBookByTitleAndCategory(
+            currentBookTitle, currentCategoryId)
+        : await repository.getBookByTitle(currentBookTitle);
+
+    final rows = await repository.getSiblingCommentaryLinkRowsForLine(
+      bookId: sourceBook.id,
+      bookTitle: sourceBookTitle,
+      lineIndex: sourceLineIndex,
+      excludeBookId: currentBook?.id ?? -1,
+    );
+
+    final links = rows.map((row) {
+      final exact = row['exactTargetLineIndex'] as int?;
+      final minIdx = row['minTargetLineIndex'] as int;
+      final maxIdx = row['maxTargetLineIndex'] as int;
+      // התאמה מדויקת לשורת המקור → תצוגה מקדימה של אותו קטע בלבד. אחרת →
+      // טווח כל הקישורים של המפרש בקטע (תוכן המפרש על העמוד).
+      final int index2;
+      final int? index2End;
+      if (exact != null) {
+        index2 = exact + 1;
+        index2End = null;
+      } else {
+        index2 = minIdx + 1;
+        index2End = maxIdx > minIdx ? maxIdx + 1 : null;
+      }
+      return Link(
+        heRef: row['targetBookTitle'] as String,
+        index1: sourceLineIndex + 1,
+        path2: row['targetBookTitle'] as String,
+        index2: index2,
+        index2End: index2End,
+        connectionType: row['connectionType'] as String? ?? 'commentary',
+        targetCategoryId: row['targetCategoryId'] as int?,
+        targetFileType: row['targetFileType'] as String?,
+      );
+    }).toList();
+
+    // מיון לפי דורות (ראשונים→אחרונים→…) לצורך פסי ההפרדה בתת-התפריט.
+    return CommentaryService.sortLinksByEra(links);
   }
 
   Future<bool> bookExists(String title) async {

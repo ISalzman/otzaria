@@ -175,6 +175,8 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                 final width = constraints.maxWidth;
                 final iconOnlyDelete = width < 560;
                 final splitDate = width < 360;
+                final eventColor = CalendarEventColors.colorForIndex(
+                    event.colorIndex, Theme.of(context).brightness);
 
                 final deleteAction = _DeleteEventAction(
                   iconOnly: iconOnlyDelete,
@@ -215,6 +217,18 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (eventColor != null)
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 8),
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: eventColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
                           Flexible(
                             child: Tooltip(
                               message: event.title,

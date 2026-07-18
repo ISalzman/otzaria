@@ -50,6 +50,7 @@ if (response.success) {
 | `reader.clearHighlight` | 0.9.89 |
 | `reader.clearAllHighlights` | 0.9.89 |
 | `navigation.goTo` | 0.9.89 |
+| `plugin.openSelf` | 0.9.96 |
 | `notes.list` | 0.9.89 |
 | `notes.getBookNotesSummary` | 0.9.89 |
 | `notes.add` | 0.9.89 |
@@ -487,6 +488,35 @@ const { data } = await Otzaria.call('navigation.goTo', {
 });
 // true
 ```
+
+---
+
+### `plugin.openSelf`
+**הרשאה:** `navigation.write` | **מגרסה:** 0.9.96
+
+מעביר את המשתמש לדף התוסף (מסך "כלים"), עם פרמטר אופציונלי שיימסר לתוסף.
+
+שימושי בעיקר מ-instance רקע (`background.html`): למשל, בתגובה ללחיצה על פריט
+תפריט הקשר או על התראה — פותחים את דף התוסף עם ההקשר הרלוונטי.
+
+```javascript
+await Otzaria.call('plugin.openSelf', {
+  param: { view: 'results', query: 'ויאמר' }  // כל ערך JSON (אופציונלי)
+});
+// true
+```
+
+ה-`param` נמסר לדף התוסף באירוע `plugin.page_opened`:
+
+```javascript
+Otzaria.on('plugin.page_opened', (data) => {
+  console.log(data.param);  // { view: 'results', query: 'ויאמר' }
+});
+```
+
+**הערות:**
+- אם דף התוסף עדיין לא נטען, האירוע יישלח מיד אחרי ה-boot שלו — אין צורך בהמתנה מיוחדת.
+- תוסף יכול לפתוח רק את הדף של עצמו, לא של תוספים אחרים.
 
 ---
 
@@ -1765,7 +1795,9 @@ const List<String> pluginNetworkAllowlist = <String>[
 await Otzaria.call('reader.addContextMenuItem', {
   id: 'my-save-item',       // מזהה ייחודי (חובה)
   label: 'הוסף למראי המקומות שלי',  // טקסט לתצוגה (חובה)
-  icon: 'bookmark_24_regular'   // שם אייקון FluentUI System Icons (אופציונלי)
+  icon: 'bookmark_24_regular',  // שם אייקון FluentUI System Icons (אופציונלי)
+  openPlugin: true,          // לחיצה תפתח את דף התוסף (אופציונלי, מגרסה 0.9.96)
+  param: 'save-mode'         // ערך חופשי שיוחזר ב-payload של אירוע הלחיצה (אופציונלי)
 });
 // true
 ```
@@ -1773,6 +1805,10 @@ await Otzaria.call('reader.addContextMenuItem', {
 **הערות:**
 - אם פריט עם אותו `id` כבר קיים, הוא יוחלף
 - הפריטים נשמרים בזיכרון בלבד — יש לרשום מחדש בכל `plugin.boot`
+- עם `openPlugin: true`, לחיצה על הפריט מעבירה את המשתמש לדף התוסף, ואירוע
+  `reader.context_menu_item_clicked` נמסר לדף — גם אם הוא נטען רק עכשיו
+  (האירוע ממתין לסיום ה-boot). כך תוסף ללא instance רקע יכול לקבל את
+  הטקסט המסומן ולפעול עליו בדף שלו.
 
 ---
 
@@ -1807,7 +1843,8 @@ Otzaria.on('reader.context_menu_item_clicked', (data) => {
 //   selectedText: "ויאמר אלהים",
 //   currentRef: "בראשית פרק א",
 //   currentBook: "בראשית",
-//   currentBookId: "בראשית"
+//   currentBookId: "בראשית",
+//   param: "save-mode"   // הערך שנמסר ב-addContextMenuItem (null אם לא נמסר)
 // }
 ```
 

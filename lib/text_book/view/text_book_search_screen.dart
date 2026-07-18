@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -335,7 +336,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       } catch (e) {
         debugPrint('טעינת תוכן הספר לחיפוש נכשלה: $e');
         if (mounted && requestId == _activeSearchRequestId) {
-          UiSnack.showError('טעינת תוכן הספר לחיפוש נכשלה');
+          UiSnack.showError(TextBookMessages.searchContentLoadFailed);
           setState(() {
             searchResults = [];
             _isSearching = false;
@@ -1026,7 +1027,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 : colorScheme.surfaceContainerHigh,
             borderRadius: AppTokens.borderRadiusAll,
             border: Border.all(
-              color: isEnabled ? colorScheme.primary : colorScheme.outlineVariant,
+              color:
+                  isEnabled ? colorScheme.primary : colorScheme.outlineVariant,
             ),
           ),
           child: Icon(

@@ -26,6 +26,8 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
@@ -1542,6 +1544,61 @@ void main() {
         throwsA(isA<Exception>()
             .having((e) => e.toString(), 'message', contains('not_found'))),
       );
+    });
+  });
+
+  group('PluginBridgeAdapter plugin.openSelf + context menu openPlugin', () {
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+            permissions: const ['navigation.write', 'reader.context_menu']),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    tearDown(() {
+      PluginPageLauncher.instance.navigator = null;
+      ContextMenuRegistry.instance.removeAll('test.plugin');
+    });
+
+    test('plugin.openSelf מנווט לדף התוסף עצמו', () async {
+      final navigations = <String>[];
+      PluginPageLauncher.instance.navigator = navigations.add;
+
+      final result =
+          await adapter.execute('plugin', 'openSelf', {'param': 'x'});
+
+      expect(result, isTrue);
+      expect(navigations, ['test.plugin']);
+    });
+
+    test('addContextMenuItem שומר openPlugin ו-param ב-registry', () async {
+      await adapter.execute('reader', 'addContextMenuItem', {
+        'id': 'item-1',
+        'label': 'פתח בתוסף',
+        'openPlugin': true,
+        'param': 'my-param',
+      });
+
+      final items = ContextMenuRegistry.instance.getAll();
+      final item = items.single.$2;
+      expect(items.single.$1, 'test.plugin');
+      expect(item.openPlugin, isTrue);
+      expect(item.param, 'my-param');
+    });
+
+    test('addContextMenuItem ללא הדגלים החדשים — ברירות מחדל', () async {
+      await adapter.execute('reader', 'addContextMenuItem', {
+        'id': 'item-2',
+        'label': 'רגיל',
+      });
+
+      final item = ContextMenuRegistry.instance.getAll().single.$2;
+      expect(item.openPlugin, isFalse);
+      expect(item.param, isNull);
     });
   });
 }

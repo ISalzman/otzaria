@@ -47,6 +47,81 @@ void main() {
       expect(await AppPaths.getIndexPath(), legacyIndex.path);
     });
 
+    test('getDatabasesPath מעדיף נתיב שמור מפורש', () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final databasesRoot =
+          await Directory.systemTemp.createTemp('otzaria_databases_');
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await databasesRoot.exists()) {
+          await databasesRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyDatabasesPath,
+        databasesRoot.path,
+      );
+
+      expect(await AppPaths.getDatabasesPath(), databasesRoot.path);
+    });
+
+    test('getDatabasesPath מעדיף legacy databases תחת data root אם הוא קיים',
+        () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final libraryRoot =
+          await Directory.systemTemp.createTemp('otzaria_library_');
+      final legacyDatabases = Directory(p.join(dataRoot.path, 'databases'));
+      await legacyDatabases.create(recursive: true);
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await libraryRoot.exists()) {
+          await libraryRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyLibraryPath,
+        p.join(libraryRoot.path, 'books'),
+      );
+
+      expect(await AppPaths.getDatabasesPath(), legacyDatabases.path);
+    });
+
+    test('getDatabasesPath ממקם התקנה חדשה ליד תיקיית הספרייה', () async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final libraryRoot =
+          await Directory.systemTemp.createTemp('otzaria_library_');
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+        if (await libraryRoot.exists()) {
+          await libraryRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await Settings.setValue(
+        SettingsRepository.keyLibraryPath,
+        p.join(libraryRoot.path, 'books'),
+      );
+
+      expect(
+        await AppPaths.getDatabasesPath(),
+        p.join(libraryRoot.path, 'databases'),
+      );
+    });
+
     test('AppPaths bundled library — Linux mzhה bundle אם יש marker', () async {
       if (!Platform.isLinux) {
         return;
@@ -557,6 +632,44 @@ void main() {
       // detectInstallMode בודק את system_install.marker דרך
       // Platform.resolvedExecutable האמיתי, אבל מצב נייד חייב לנצח קודם.
       expect(await AppPaths.detectInstallMode(), InstallMode.perUser);
+    });
+
+    test('setAndroidLibraryRoot שומר את שורש הספרייה לבחירת המשתמש', () async {
+      const sdRoot = '/storage/ABCD-1234/Android/data/pkg/files';
+      await AppPaths.setAndroidLibraryRoot(sdRoot);
+
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+    });
+
+    test('setAndroidLibraryRoot עם null מנקה את המפתח לאחסון פנימי', () async {
+      await AppPaths.setAndroidLibraryRoot('/some/sd/path');
+      await AppPaths.setAndroidLibraryRoot(null);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        '',
+      );
+    });
+
+    test(
+        'getDefaultLibraryPath מתעלם מ-override של Android כשלא רצים על Android',
+        () async {
+      // ה-override תקף רק ב-Android; על מארח אחר הוא לא משנה את ברירת המחדל.
+      if (Platform.isAndroid) return;
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      addTearDown(() async {
+        if (await dataRoot.exists()) {
+          await dataRoot.delete(recursive: true);
+        }
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await AppPaths.setAndroidLibraryRoot('/storage/ABCD-1234/x');
+
+      expect(await AppPaths.getDefaultLibraryPath(),
+          p.join(dataRoot.path, 'books'));
     });
 
     test('getStaleDefaultIndexPaths מחזיר נתיבים מנורמלים וללא הנתיב הפעיל',

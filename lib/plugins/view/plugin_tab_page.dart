@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:collection';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
@@ -39,6 +40,8 @@ import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
 // ---------------------------------------------------------------------------
 // Stub SDK — injected at AT_DOCUMENT_START before any page JS runs.
@@ -77,6 +80,14 @@ const String _sdkStub = r'''
     console.error('window.open is locked for security.');
     return null;
   };
+
+  // מקשי מקלדת נבלעים ב-WebView ולא מגיעים ל-Flutter — מעבירים ESC לאפליקציה
+  // (יציאה ממסך מלא).
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('otzaria_escape_pressed');
+    }
+  }, true);
 })();
 ''';
 
@@ -329,6 +340,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     // של האפליקציה שלא יספיק להריץ async writes.
     PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
     _adapter.dispose();
+    PluginPageLauncher.instance.markPageClosed(widget.plugin.pluginId);
     PluginRuntimeDispatcher.instance
         .unregisterController(widget.plugin.pluginId);
     PluginRuntimeDispatcher.instance
@@ -463,6 +475,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
           PluginRuntimeDispatcher.instance
               .registerController(widget.plugin.pluginId, controller);
           _bridge.register(controller);
+          controller.addJavaScriptHandler(
+            handlerName: 'otzaria_escape_pressed',
+            callback: (_) {
+              if (!mounted) return;
+              if (context.read<SettingsBloc>().state.isFullscreen) {
+                FullscreenHelper.toggleFullscreen(context, false);
+              }
+            },
+          );
         } catch (e) {
           // bridge.register נכשל — התהליך חי, לא קריסה native. מנקים גם את
           // ה-registration הלא שלם וגם את ה-canary של ה-crash guard.
@@ -680,6 +701,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // כי pause על WebView שעוד לא נטען עלול לקטוע את הטעינה עצמה.
           unawaited(PluginRuntimeDispatcher.instance
               .onForegroundInstanceReady(widget.plugin.pluginId));
+          PluginPageLauncher.instance.markPageReady(widget.plugin.pluginId);
         } catch (e, st) {
           // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
           // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.

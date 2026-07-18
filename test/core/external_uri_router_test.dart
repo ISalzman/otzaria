@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/search/models/search_configuration.dart'
+    show SearchMode;
 import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
 
 void main() {
@@ -491,6 +494,65 @@ void main() {
 
         expect(action, isA<RunSearchAction>());
         expect((action as RunSearchAction).query, 'בראשית');
+        expect(action.mode, isNull);
+      });
+
+      test('mode=fuzzy — מחזיר SearchMode.fuzzy', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=fuzzy'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.fuzzy);
+      });
+
+      test('mode=exact — מחזיר SearchMode.exact', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=exact'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.exact);
+      });
+
+      test('mode=advanced — מחזיר SearchMode.advanced', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=advanced'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.advanced);
+      });
+
+      test('mode אינו רגיש לאותיות גדולות/קטנות', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?q=abc&mode=FUZZY'),
+        ) as RunSearchAction;
+
+        expect(action.mode, SearchMode.fuzzy);
+      });
+
+      test('mode לא מוכר או ריק — mode=null (ברירת מחדל)', () {
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/search?q=abc&mode=bogus'),
+          ) as RunSearchAction)
+              .mode,
+          isNull,
+        );
+        expect(
+          (ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://open/search?q=abc&mode='),
+          ) as RunSearchAction)
+              .mode,
+          isNull,
+        );
+      });
+
+      test('mode ללא q — נופל חזרה לפתיחת המסך בלבד', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://open/search?mode=fuzzy'),
+        );
+
+        expect(action, isA<OpenScreenAction>());
+        expect((action as OpenScreenAction).screen, Screen.search);
       });
 
       test('q ריק/רווחים — נופל חזרה לפתיחת המסך בלבד', () {
@@ -831,6 +893,16 @@ void main() {
     });
 
     group('plugin/install-local', () {
+      // נתיבי הבדיקה בסגנון Windows — מקבעים סמנטיקת Windows כדי שהבדיקות
+      // יעברו זהה גם ב-CI על Linux. בדיקות POSIX מחליפות ל-p.posix מקומית.
+      setUp(() {
+        ExternalUriRouter.pathContext = p.windows;
+      });
+
+      tearDown(() {
+        ExternalUriRouter.pathContext = p.context;
+      });
+
       test('מחזיר InstallLocalPluginAction עבור נתיב מקודד', () {
         final encodedPath = Uri.encodeQueryComponent(
           r'C:\Users\Foo\Downloads\my plugin.otzplugin',
@@ -863,6 +935,117 @@ void main() {
           ),
           isNull,
         );
+      });
+
+      test('דוחה נתיב ללא סיומת .otzplugin', () {
+        final encoded = Uri.encodeQueryComponent(r'C:\Windows\System32\a.dll');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+          ),
+          isNull,
+        );
+      });
+
+      test('דוחה נתיב UNC (מונע דליפת אישורי SMB)', () {
+        final encoded =
+            Uri.encodeQueryComponent(r'\\attacker\share\evil.otzplugin');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+          ),
+          isNull,
+        );
+      });
+
+      test('דוחה נתיב התקן (\\\\.\\ ו-\\\\?\\)', () {
+        final device = Uri.encodeQueryComponent(r'\\.\C:\evil.otzplugin');
+        final extended =
+            Uri.encodeQueryComponent(r'\\?\C:\Users\x\evil.otzplugin');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$device'),
+          ),
+          isNull,
+        );
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$extended'),
+          ),
+          isNull,
+        );
+      });
+
+      test('דוחה נתיב UNC בלוכסנים קדמיים (//host)', () {
+        final encoded =
+            Uri.encodeQueryComponent('//attacker/share/evil.otzplugin');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+          ),
+          isNull,
+        );
+      });
+
+      test('מקבל סיומת .otzplugin ללא תלות באותיות גדולות/קטנות', () {
+        final encoded =
+            Uri.encodeQueryComponent(r'C:\Users\Foo\plugin.OTZPLUGIN');
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+        );
+        expect(action, isA<InstallLocalPluginAction>());
+      });
+
+      test('מקבל נתיב POSIX מוחלט בפלטפורמת POSIX', () {
+        ExternalUriRouter.pathContext = p.posix;
+        final encoded =
+            Uri.encodeQueryComponent('/home/user/plugins/my.otzplugin');
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+        );
+        expect(action, isA<InstallLocalPluginAction>());
+      });
+
+      test('נתיב Windows נדחה בפלטפורמת POSIX (שם הוא יחסי)', () {
+        ExternalUriRouter.pathContext = p.posix;
+        final encoded =
+            Uri.encodeQueryComponent(r'C:\Users\Foo\plugin.otzplugin');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+          ),
+          isNull,
+        );
+      });
+
+      test('נתיב POSIX נדחה ב-Windows (root-relative, לא מוחלט)', () {
+        final encoded =
+            Uri.encodeQueryComponent('/home/user/plugins/my.otzplugin');
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+          ),
+          isNull,
+        );
+      });
+
+      test('דוחה נתיב יחסי', () {
+        for (final relative in [
+          'plugins/evil.otzplugin',
+          './evil.otzplugin',
+          '../evil.otzplugin',
+          'evil.otzplugin',
+          r'C:evil.otzplugin', // כונן ללא לוכסן — נפתר מול CWD של הכונן
+        ]) {
+          final encoded = Uri.encodeQueryComponent(relative);
+          expect(
+            ExternalUriRouter.parseUri(
+              Uri.parse('otzaria://plugin/install-local?path=$encoded'),
+            ),
+            isNull,
+            reason: 'נתיב יחסי: $relative',
+          );
+        }
       });
     });
 

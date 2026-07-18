@@ -39,6 +39,18 @@ class AppSurfaces {
       ? _cs(context).surfaceContainer
       : _cs(context).surface;
 
+  /// רקע קטע-משנה ניטרלי בתוך חלונית הגדרות.
+  static Color panelSection(BuildContext context) =>
+      _cs(context).surfaceContainerHighest.withValues(alpha: 0.5);
+
+  /// רקע קטע-משנה מודגש בתוך חלונית הגדרות.
+  static Color panelSectionAccent(BuildContext context) =>
+      _cs(context).primaryContainer.withValues(alpha: 0.3);
+
+  /// גבול קטע-משנה מודגש בתוך חלונית הגדרות.
+  static Color panelSectionAccentBorder(BuildContext context) =>
+      _cs(context).primary.withValues(alpha: 0.3);
+
   /// צבע מפריד פנימי בין שורות בתוך כרטיס תוכן.
   /// משמש בהגדרות עם עץ נפתח
   static Color cardRowDivider(BuildContext context) => panelBackground(context);

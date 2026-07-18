@@ -1,4 +1,5 @@
-﻿import 'dart:async';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
@@ -7,7 +8,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -46,11 +49,19 @@ class _EmptyLibraryView extends StatefulWidget {
 }
 
 class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
+  // נטען פעם אחת: מיקומי אחסון ב-Android (ריק אם אין כרטיס SD).
+  late final Future<List<AndroidStorageOption>> _storageOptions =
+      Platform.isAndroid
+          ? AndroidStorageService.listStorageOptions()
+          : Future.value(const []);
+  // שורש הספרייה הנבחר (null = אחסון פנימי, ברירת מחדל).
+  String? _selectedLibraryRoot;
+
   Future<void> _handleLibraryLoaded() async {
     try {
       await widget.onLibraryLoaded();
     } catch (error) {
-      UiSnack.showError('שגיאה בטעינת הספרייה. נסה שוב.');
+      UiSnack.showError(LibraryMessages.libraryLoadError);
       debugPrint('Failed to refresh library after selection: $error');
     }
   }
@@ -65,7 +76,7 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           }
           if (state is EmptyLibraryZipExtracted) {
             UiSnack.showSuccess(
-              'הקובץ "${state.extractedFileName}" חולץ בהצלחה!',
+              LibraryMessages.zipExtractedSuccessfully(state.extractedFileName),
             );
           }
           if (state is EmptyLibraryError && state.errorMessage != null) {
@@ -306,7 +317,9 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+        _buildStoragePicker(context),
+        const SizedBox(height: 8),
         if (state.selectedPath != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -418,6 +431,76 @@ class _EmptyLibraryViewState extends State<_EmptyLibraryView> {
           ),
         ],
       ],
+    );
+  }
+
+  /// בורר מיקום אחסון (Android בלבד) — מוצג רק כשקיים כרטיס SD.
+  Widget _buildStoragePicker(BuildContext context) {
+    return FutureBuilder<List<AndroidStorageOption>>(
+      future: _storageOptions,
+      builder: (context, snapshot) {
+        final options = snapshot.data ?? const [];
+        if (options.isEmpty) return const SizedBox.shrink();
+        final cs = Theme.of(context).colorScheme;
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: AppTokens.borderRadiusAll,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'היכן לשמור את הספרייה?',
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, color: cs.primary),
+              ),
+              const SizedBox(height: 8),
+              ...options.map((o) => _buildStorageOptionTile(context, o)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStorageOptionTile(
+      BuildContext context, AndroidStorageOption option) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = _selectedLibraryRoot == option.libraryRoot;
+    final freeText = option.freeBytes >= 0
+        ? '${(option.freeBytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB פנוי'
+        : null;
+    final subtitle = option.supportsLargeFiles
+        ? freeText
+        : 'לא נתמך — הכרטיס מפורמט ב-FAT32 (מגבלת 4GB לקובץ)';
+    return ListTile(
+      enabled: option.supportsLargeFiles,
+      onTap: () {
+        setState(() => _selectedLibraryRoot = option.libraryRoot);
+        BlocProvider.of<EmptyLibraryBloc>(context)
+            .add(StorageLocationSelected(option.libraryRoot));
+      },
+      hoverColor: Colors.transparent,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        option.isRemovable
+            ? FluentIcons.storage_24_regular
+            : FluentIcons.phone_24_regular,
+        color: selected ? cs.primary : cs.onSurfaceVariant,
+      ),
+      title: Text(
+        option.label,
+        style: TextStyle(
+          color: selected ? cs.primary : cs.onSurface,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      trailing: selected
+          ? Icon(FluentIcons.checkmark_circle_24_filled, color: cs.primary)
+          : null,
     );
   }
 

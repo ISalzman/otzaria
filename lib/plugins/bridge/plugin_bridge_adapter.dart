@@ -43,6 +43,7 @@ import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/models/plugin_highlight.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
@@ -799,7 +800,12 @@ class PluginBridgeAdapter {
         ContextMenuRegistry.instance.register(
           plugin.pluginId,
           PluginContextMenuItem(
-              id: id, label: label, icon: args['icon'] as String?),
+            id: id,
+            label: label,
+            icon: args['icon'] as String?,
+            openPlugin: args['openPlugin'] == true,
+            param: args['param'],
+          ),
         );
         return true;
       case 'removeContextMenuItem':
@@ -2003,6 +2009,13 @@ class PluginBridgeAdapter {
         return installed
             .map((p) => {'name': p.name, 'version': p.version})
             .toList();
+      case 'openSelf':
+        PluginPageLauncher.instance.open(
+          plugin.pluginId,
+          topic: 'plugin.page_opened',
+          payload: {'param': args['param']},
+        );
+        return true;
       default:
         throw Exception('Unknown action in plugin: $action');
     }

@@ -13,6 +13,8 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
+import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -46,6 +48,7 @@ import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -60,6 +63,7 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'pdf_zoom_bar.dart';
@@ -70,6 +74,7 @@ import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -1008,14 +1013,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         relevantLinks: relevantLinks,
         showOpenLinksPaneEntry: showOpenLinksPaneEntry,
         onOpenLinksPane: _openLinksPane,
-        onOpenLink: (link) => openBook(
-          menuContext,
-          TextBook(title: utils.getTitleFromPath(link.path2)),
-          link.index2 - 1,
-          '',
-          ignoreHistory: false,
-          insertAdjacent: true,
-        ),
+        onOpenLink: (link) => _openLinkTarget(menuContext, link),
       ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
@@ -1029,6 +1027,41 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onTap: () => _handleAddNotePress(menuContext),
       ),
     ];
+  }
+
+  /// פתיחת יעד קישור מתפריט ההקשר. יעד השייך לתלמוד בבלי נפתח כ-PDF
+  /// בדף הממופה בהתאם להגדרת פורמט הפתיחה.
+  Future<void> _openLinkTarget(
+      BuildContext menuContext, otz_links.Link link) async {
+    final textBook = TextBook(
+      title: utils.getTitleFromPath(link.path2),
+      isUserBook: link.targetIsUserBook,
+      categoryId: link.targetCategoryId,
+      fileType: link.targetFileType,
+    );
+    final textIndex = link.index2 - 1;
+    final pdfTarget = await resolveTalmudBavliPdfTarget(textBook, textIndex);
+    if (!menuContext.mounted) return;
+    if (pdfTarget != null) {
+      openBook(
+        menuContext,
+        pdfTarget.book,
+        pdfTarget.page,
+        '',
+        ignoreHistory: true,
+        requiresStableLayout: true,
+        insertAdjacent: true,
+      );
+      return;
+    }
+    openBook(
+      menuContext,
+      textBook,
+      textIndex,
+      '',
+      ignoreHistory: false,
+      insertAdjacent: true,
+    );
   }
 
   /// האם יש כרגע טקסט מסומן ב-PDF (מפעיל את "חפש מקבילות" בתפריט).
@@ -1497,7 +1530,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
                 final bookId = widget.tab.book.id;
                 if (bookId == null) {
-                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                  UiSnack.showError(PdfMessages.directLinkUnavailableForBook);
                 } else {
                   copyLinkToClipboard(buildPdfBookLink(bookId));
                 }
@@ -1507,7 +1540,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ShortcutHelper.matchesShortcut(event, copyPageLinkShortcut)) {
                 final bookId = widget.tab.book.id;
                 if (bookId == null) {
-                  UiSnack.showError('קישור ישיר אינו זמין לספר זה');
+                  UiSnack.showError(PdfMessages.directLinkUnavailableForBook);
                 } else {
                   final page = widget.tab.pdfViewerController.pageNumber ??
                       widget.tab.pageNumber;
@@ -1751,8 +1784,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     final totalPages = widget.tab.pdfViewerController.pageCount;
-    final canGoPrevious = currentPage > 1;
-    final canGoNext = currentPage < totalPages;
+    final canGoPrevious = pdfSpreadStartPage(currentPage) > 1;
+    final canGoNext =
+        pdfSpreadPageRange(currentPage, bookView: true, totalPages: totalPages)
+                .endPageExclusive <=
+            totalPages;
     final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
     final horizontalPadding = min(28.0, viewportSize.width * 0.018);
     final colorScheme = Theme.of(context).colorScheme;
@@ -2002,6 +2038,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         (originalRect.center.dy - clampedRect.center.dy).abs() > 0.1;
   }
 
+  /// מרכז-X של יעד הניווט: כשהזום מציג רק חלק מהזוג, המיקוד הוא על עמוד
+  /// היעד עצמו (מוצמד לגבולות הזוג); כשכל הזוג נראה — מרכז הזוג.
+  double _spreadTargetCenterX(
+    PdfViewerController controller,
+    Rect spreadRect,
+    int focusPage,
+  ) {
+    final pageLayouts = controller.layout.pageLayouts;
+    final visibleWidth = controller.visibleRect.width;
+    if (focusPage < 1 ||
+        focusPage > pageLayouts.length ||
+        spreadRect.width <= visibleWidth) {
+      return spreadRect.center.dx;
+    }
+    final halfWidth = visibleWidth / 2;
+    return pageLayouts[focusPage - 1]
+        .center
+        .dx
+        .clamp(spreadRect.left + halfWidth, spreadRect.right - halfWidth);
+  }
+
   Future<void> _goToPageWithSpreadLock(int pageNumber) async {
     final controller = widget.tab.pdfViewerController;
     if (!controller.isReady) return;
@@ -2043,9 +2100,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         final targetCenterY =
             newSpreadRect.top + newScrollTop + visibleHeight / 2;
 
+        final targetCenterX =
+            _spreadTargetCenterX(controller, newSpreadRect, safePage);
         await controller
             .goTo(controller.calcMatrixFor(
-              Offset(newSpreadRect.center.dx, targetCenterY),
+              Offset(targetCenterX, targetCenterY),
               zoom: controller.value.zoom,
               viewSize: controller.viewSize,
             ))
@@ -2271,7 +2330,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// the target spread) and drawing each page at its predicted viewport rect.
   /// Returns null if the spread isn't cached, the controller isn't ready, or
   /// the viewport size is empty.
-  Future<ui.Image?> _composeCachedSpreadSnapshot(int spreadStartPage) async {
+  Future<ui.Image?> _composeCachedSpreadSnapshot(
+    int spreadStartPage, {
+    int? focusPage,
+  }) async {
     final entry = _spreadCache[spreadStartPage];
     if (entry == null || entry.pageImages.isEmpty) return null;
 
@@ -2315,7 +2377,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     final targetMatrix = controller.calcMatrixFor(
-      Offset(newSpreadRect.center.dx, targetCenterY),
+      Offset(
+        _spreadTargetCenterX(
+            controller, newSpreadRect, focusPage ?? spreadStartPage),
+        targetCenterY,
+      ),
       zoom: zoom,
       viewSize: viewSize,
     );
@@ -2548,8 +2614,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final hasCachedTarget = _spreadCache.containsKey(targetSpreadStartPage);
 
       if (hasCachedTarget) {
-        final composed =
-            await _composeCachedSpreadSnapshot(targetSpreadStartPage);
+        final composed = await _composeCachedSpreadSnapshot(
+            targetSpreadStartPage,
+            focusPage: targetPage);
 
         if (!mounted) {
           composed?.dispose();
@@ -2693,33 +2760,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     await _loadActiveCommentators();
     await _applyDefaultCommentatorsIfNeeded(commentatorsSet.toList());
     _maybeAutoOpenCommentaryPane();
-    final eras = await utils.splitByEra(commentatorsSet.toList());
-    final known = <String>{
-      ...?eras['תורה שבכתב'],
-      ...?eras['חז"ל'],
-      ...?eras['ראשונים'],
-      ...?eras['אחרונים'],
-      ...?eras['מחברי זמננו'],
-    };
-    final others = (eras['מפרשים נוספים'] ?? [])
-        .toSet()
-        .union(commentatorsSet.where((c) => !known.contains(c)).toSet())
-        .toList();
+    final available = commentatorsSet.toList();
+    final eras = await utils.splitByEra(available);
+    final groups = buildCommentatorGroups(eras, available);
     if (!mounted) return;
     setState(() {
-      _commentatorGroups = [
-        CommentatorGroup(
-            title: 'תורה שבכתב', commentators: eras['תורה שבכתב'] ?? const []),
-        CommentatorGroup(title: 'חז"ל', commentators: eras['חז"ל'] ?? const []),
-        CommentatorGroup(
-            title: 'ראשונים', commentators: eras['ראשונים'] ?? const []),
-        CommentatorGroup(
-            title: 'אחרונים', commentators: eras['אחרונים'] ?? const []),
-        CommentatorGroup(
-            title: 'מחברי זמננו',
-            commentators: eras['מחברי זמננו'] ?? const []),
-        CommentatorGroup(title: 'שאר מפרשים', commentators: others),
-      ];
+      _commentatorGroups = groups;
     });
   }
 
@@ -3022,7 +3068,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _bloc.add(const pdf_events.ResetPerBookSettings());
     widget.tab.activeCommentators.clear();
     if (mounted) {
-      UiSnack.show('ההגדרות הפר-ספריות אופסו בהצלחה');
+      UiSnack.show(PdfMessages.perBookSettingsReset);
     }
   }
 
@@ -3344,8 +3390,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildReaderMainContent() {
-    const readerContentPadding = EdgeInsets.only(
-      right: _verticalScrollbarGutter + _scrollbarGutterGap,
+    // בתצוגת "זה לצד זה" מתווספים שוליי הדופן החיצוני לתוכן בלבד; הידית
+    // (Positioned(left:0)) נשארת צמודה לדופן החלון.
+    final splitInset =
+        SplitPaneContentInset.of(context).resolve(Directionality.of(context));
+    final readerContentPadding = EdgeInsets.only(
+      left: splitInset.left,
+      right: _verticalScrollbarGutter + _scrollbarGutterGap + splitInset.right,
       bottom: _horizontalScrollbarGutter + _scrollbarGutterGap,
     );
 
@@ -3498,7 +3549,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ),
                 ),
                 Positioned(
-                  left: 0,
+                  left: splitInset.left,
                   right: readerContentPadding.right,
                   bottom: 0,
                   child: PdfHorizontalScrollbar(
@@ -3708,8 +3759,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final isBookViewMode = _isBookViewModeActive();
     final basePage = _effectiveCurrentPageForNavigation();
     final totalPages = widget.tab.pdfViewerController.pageCount;
-    final pageStep = isBookViewMode ? 2 : 1;
-    final nextPage = min(basePage + pageStep, totalPages);
+    final int nextPage;
+    if (isBookViewMode) {
+      final focus = pdfNextSpreadFocusPage(basePage, totalPages);
+      if (focus == null) return;
+      nextPage = focus;
+    } else {
+      nextPage = min(basePage + 1, totalPages);
+    }
 
     if (nextPage == basePage) {
       return;
@@ -3736,8 +3793,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final isBookViewMode = _isBookViewModeActive();
     final basePage = _effectiveCurrentPageForNavigation();
-    final pageStep = isBookViewMode ? 2 : 1;
-    final prevPage = max(basePage - pageStep, 1);
+    final int prevPage;
+    if (isBookViewMode) {
+      final focus = pdfPreviousSpreadFocusPage(basePage);
+      if (focus == null) return;
+      prevPage = focus;
+    } else {
+      prevPage = max(basePage - 1, 1);
+    }
 
     if (prevPage == basePage) {
       return;
@@ -4215,7 +4278,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!context.mounted) return;
 
     if (index == null) {
-      UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+      UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
     }
     openBook(context, textBook, index ?? 0, '',
         ignoreHistory: true, insertAdjacent: true);
@@ -4239,7 +4302,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (outline != null && outline.isNotEmpty) {
       final heading = _findHeadingForPage(outline, index);
       if (heading != null) {
-        ref = '${widget.tab.title} $heading';
+        ref = '${widget.tab.title} $heading — עמוד $index';
       } else {
         ref = '${widget.tab.title} עמוד $index';
       }
@@ -4252,13 +4315,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           .read<BookmarkBloc>()
           .addBookmark(ref: ref, book: widget.tab.book, index: index);
       if (mounted) {
-        UiSnack.show(
-            bookmarkAdded ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+        UiSnack.show(bookmarkAdded
+            ? NotesMessages.bookmarkAdded
+            : NotesMessages.bookmarkAlreadyExists);
       }
     } catch (e) {
       debugPrint('Error adding bookmark: $e');
       if (mounted) {
-        UiSnack.show('שגיאה בהוספת הסימניה');
+        UiSnack.show(NotesMessages.bookmarkAddError);
       }
     }
 
@@ -4325,6 +4389,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
+    context.read<TourCubit>().recordInteraction(
+          TourInteraction(type: TourInteractionType.printUsed),
+        );
     final file = File(_resolvedPdfPath);
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
@@ -4398,7 +4465,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 if (!context.mounted) return;
 
                 if (index == null) {
-                  UiSnack.show('לא נמצא מיקום תואם בטקסט — הספר נפתח מתחילתו');
+                  UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
                 }
                 openBook(context, snapshot.data!, index ?? 0, '',
                     ignoreHistory: true, insertAdjacent: true);

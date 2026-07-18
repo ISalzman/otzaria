@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
+import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -13,6 +15,7 @@ import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -26,6 +29,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
@@ -292,6 +296,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         navExpandedChapter: _navExpandedChapter,
       );
 
+  void _toggleAndSaveNikud(BuildContext context, TextBookLoaded state) {
+    final newValue = !state.removeNikud;
+    context.read<TextBookBloc>().add(ToggleNikud(newValue));
+    savePerBookDisplaySettings(context, state, removeNikud: newValue);
+  }
+
+  void _toggleAndSavePunctuation(BuildContext context, TextBookLoaded state) {
+    final newValue = !state.removePunctuation;
+    context.read<TextBookBloc>().add(TogglePunctuation(newValue));
+    savePerBookDisplaySettings(context, state, removePunctuation: newValue);
+  }
+
   /// מחיל מצב חדש שחושב ע"י אחד הרדוסרים הטהורים (ראה [reduceChevronTap]
   /// וחבריו). מבטיח שכל הנתיבים שמשנים את מצב הניווט עוברים דרך אותו צינור.
   void _applyNavSelection(CommentatorsNavSelection next,
@@ -500,6 +516,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       ),
       highlightStyle: TextStyle(
         fontWeight: FontWeight.bold,
+        fontVariations:
+            AppFonts.boldFontVariations(settingsState.commentatorsFontFamily),
         fontSize: 16,
         color: colorScheme.error,
       ),
@@ -703,30 +721,33 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   children: [
                     _buildAppBar(context, state, chapters),
                     Expanded(
-                      child: Stack(
-                        children: [
-                          AdaptiveSidePane(
-                            isOpen: _navPaneOpen || _pinLeftPane,
-                            onClose: () {
-                              if (!_pinLeftPane) {
-                                setState(() => _navPaneOpen = false);
-                              }
-                            },
-                            alignment: AlignmentDirectional.centerEnd,
-                            paneWidth: 320,
-                            minMainContentWidth: 400,
-                            mainContent: _buildCommentaryMainContent(
-                              context,
-                              state,
-                              effectiveIndexes,
+                      child: Padding(
+                        padding: SplitPaneContentInset.of(context),
+                        child: Stack(
+                          children: [
+                            AdaptiveSidePane(
+                              isOpen: _navPaneOpen || _pinLeftPane,
+                              onClose: () {
+                                if (!_pinLeftPane) {
+                                  setState(() => _navPaneOpen = false);
+                                }
+                              },
+                              alignment: AlignmentDirectional.centerEnd,
+                              paneWidth: 320,
+                              minMainContentWidth: 400,
+                              mainContent: _buildCommentaryMainContent(
+                                context,
+                                state,
+                                effectiveIndexes,
+                              ),
+                              paneContent: _buildNavPanel(
+                                context,
+                                state: state,
+                                chapters: chapters,
+                              ),
                             ),
-                            paneContent: _buildNavPanel(
-                              context,
-                              state: state,
-                              chapters: chapters,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -949,7 +970,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           commentatorsToShow: commentatorsToShow,
           targetKind: BookmarkTargetKind.commentators,
         );
-    UiSnack.showQuick(added ? 'הסימניה נוספה בהצלחה' : 'הסימניה כבר קיימת');
+    UiSnack.showQuick(added
+        ? NotesMessages.bookmarkAdded
+        : NotesMessages.bookmarkAlreadyExists);
   }
 
   void _showBookmarksForCurrentBook(BuildContext context, Book book) {
@@ -1012,17 +1035,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       ? FluentIcons.text_font_24_regular
                       : FluentIcons.text_font_info_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(ToggleNikud(!state.removeNikud)),
+                  onPressed: () => _toggleAndSaveNikud(context, state),
                 ),
                 icon: state.removeNikud
                     ? FluentIcons.text_font_24_regular
                     : FluentIcons.text_font_info_24_regular,
                 tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-                onPressed: () => context
-                    .read<TextBookBloc>()
-                    .add(ToggleNikud(!state.removeNikud)),
+                onPressed: () => _toggleAndSaveNikud(context, state),
               ),
               // פיסוק (רק אם לא תנ"ך)
               if (!state.isTanach)
@@ -1034,17 +1053,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                         ? FluentIcons.text_quote_24_regular
                         : FluentIcons.text_clear_formatting_24_regular,
                     compact: context.read<SettingsBloc>().state.compactMenuMode,
-                    onPressed: () => context
-                        .read<TextBookBloc>()
-                        .add(TogglePunctuation(!state.removePunctuation)),
+                    onPressed: () => _toggleAndSavePunctuation(context, state),
                   ),
                   icon: state.removePunctuation
                       ? FluentIcons.text_quote_24_regular
                       : FluentIcons.text_clear_formatting_24_regular,
                   tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(TogglePunctuation(!state.removePunctuation)),
+                  onPressed: () => _toggleAndSavePunctuation(context, state),
                 ),
               // הדפסת המפרשים המוצגים
               ActionButtonData(
