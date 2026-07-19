@@ -44,7 +44,9 @@ void main() {
     await Settings.init(cacheProvider: MemoryCacheProvider());
     await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false);
     await Settings.setValue<String>(
-        SettingsRepository.keyFontFamily, 'candara');
+      SettingsRepository.keyFontFamily,
+      'candara',
+    );
   });
 
   group('ErrorReportHelper.resolveReportTargetText', () {
@@ -177,25 +179,27 @@ void main() {
   });
 
   group('ErrorReportHelper.buildContextAroundSelection', () {
-    test('should build context around selection with 4 words before and after',
-        () {
-      const fullText = 'אחת שתיים שלוש ארבע חמש שש שבע שמונה תשע עשר';
-      const selectedText = 'חמש שש שבע';
-      final selectionStart = fullText.indexOf(selectedText);
-      final selectionEnd = selectionStart + selectedText.length;
+    test(
+      'should build context around selection with 4 words before and after',
+      () {
+        const fullText = 'אחת שתיים שלוש ארבע חמש שש שבע שמונה תשע עשר';
+        const selectedText = 'חמש שש שבע';
+        final selectionStart = fullText.indexOf(selectedText);
+        final selectionEnd = selectionStart + selectedText.length;
 
-      final context = ErrorReportHelper.buildContextAroundSelection(
-        fullText,
-        selectionStart,
-        selectionEnd,
-        wordsBefore: 4,
-        wordsAfter: 4,
-      );
+        final context = ErrorReportHelper.buildContextAroundSelection(
+          fullText,
+          selectionStart,
+          selectionEnd,
+          wordsBefore: 4,
+          wordsAfter: 4,
+        );
 
-      // צריך לכלול 4 מילים לפני (אחת שתיים שלוש ארבע) + הבחירה (חמש שש שבע) + 4 מילים אחרי (שמונה תשע עשר)
-      // אבל יש רק 3 מילים אחרי, אז נקבל את כולן
-      expect(context, equals('אחת שתיים שלוש ארבע חמש שש שבע שמונה תשע עשר'));
-    });
+        // צריך לכלול 4 מילים לפני (אחת שתיים שלוש ארבע) + הבחירה (חמש שש שבע) + 4 מילים אחרי (שמונה תשע עשר)
+        // אבל יש רק 3 מילים אחרי, אז נקבל את כולן
+        expect(context, equals('אחת שתיים שלוש ארבע חמש שש שבע שמונה תשע עשר'));
+      },
+    );
 
     test('should handle selection at the beginning of text', () {
       const fullText = 'אחת שתיים שלוש ארבע חמש שש שבע שמונה';
@@ -257,8 +261,10 @@ void main() {
       const selectedText = 'שלוש';
       // מופע שני - נחפש החל מאחרי המופע הראשון
       final firstOccurrence = fullText.indexOf(selectedText);
-      final selectionStart =
-          fullText.indexOf(selectedText, firstOccurrence + 1);
+      final selectionStart = fullText.indexOf(
+        selectedText,
+        firstOccurrence + 1,
+      );
       final selectionEnd = selectionStart + selectedText.length;
 
       final context = ErrorReportHelper.buildContextAroundSelection(
@@ -476,50 +482,53 @@ void main() {
       expect(result.contextText, contains('שלישית עם המילה טעות שוב'));
     });
 
-    test('should use line fallback when selection is ambiguous in same line',
-        () {
-      final content = [
-        'אחת טעות שתיים טעות שלוש',
-        'שורה נוספת לבדיקה',
-      ];
+    test(
+      'should use line fallback when selection is ambiguous in same line',
+      () {
+        final content = [
+          'אחת טעות שתיים טעות שלוש',
+          'שורה נוספת לבדיקה',
+        ];
 
-      final result = ErrorReportHelper.resolveSelectionContext(
-        content: content,
-        selectedText: 'טעות',
-        preferredLineNumber: 0,
-      );
+        final result = ErrorReportHelper.resolveSelectionContext(
+          content: content,
+          selectedText: 'טעות',
+          preferredLineNumber: 0,
+        );
 
-      // כשמילה מופיעה כמה פעמים באותה שורה, אי אפשר לדעת איזה מופע
-      // המשתמש בחר (SelectionArea לא חושף offset). לכן:
-      // 1. ההקשר חייב לכלול את כל השורה (שני המופעים)
-      // 2. usedLineFallback == true מסמן שהייתה עמימות
-      // 3. selectionStart/End מצביעים על כל השורה (לא על מופע בודד)
-      expect(result.usedLineFallback, isTrue);
-      expect(result.selectionStart, equals(0)); // תחילת השורה
-      expect(result.selectionEnd, equals(content.first.length)); // סוף השורה
-      expect(result.contextText, contains('אחת טעות שתיים טעות שלוש'));
-    });
+        // כשמילה מופיעה כמה פעמים באותה שורה, אי אפשר לדעת איזה מופע
+        // המשתמש בחר (SelectionArea לא חושף offset). לכן:
+        // 1. ההקשר חייב לכלול את כל השורה (שני המופעים)
+        // 2. usedLineFallback == true מסמן שהייתה עמימות
+        // 3. selectionStart/End מצביעים על כל השורה (לא על מופע בודד)
+        expect(result.usedLineFallback, isTrue);
+        expect(result.selectionStart, equals(0)); // תחילת השורה
+        expect(result.selectionEnd, equals(content.first.length)); // סוף השורה
+        expect(result.contextText, contains('אחת טעות שתיים טעות שלוש'));
+      },
+    );
 
     test(
-        'should include full line context with both occurrences when ambiguous',
-        () {
-      final content = [
-        'מילה ראשונה',
-        'הפתיחה עם שלום ואז עוד שלום בסוף',
-        'מילה אחרונה',
-      ];
+      'should include full line context with both occurrences when ambiguous',
+      () {
+        final content = [
+          'מילה ראשונה',
+          'הפתיחה עם שלום ואז עוד שלום בסוף',
+          'מילה אחרונה',
+        ];
 
-      final result = ErrorReportHelper.resolveSelectionContext(
-        content: content,
-        selectedText: 'שלום',
-        preferredLineNumber: 1,
-      );
+        final result = ErrorReportHelper.resolveSelectionContext(
+          content: content,
+          selectedText: 'שלום',
+          preferredLineNumber: 1,
+        );
 
-      // ההקשר חייב לכלול את שני המופעים של "שלום" כך שמי שקורא
-      // את הדיווח יוכל להבין איזה מופע מדובר
-      expect(result.usedLineFallback, isTrue);
-      expect(result.contextText, contains('שלום ואז עוד שלום'));
-    });
+        // ההקשר חייב לכלול את שני המופעים של "שלום" כך שמי שקורא
+        // את הדיווח יוכל להבין איזה מופע מדובר
+        expect(result.usedLineFallback, isTrue);
+        expect(result.contextText, contains('שלום ואז עוד שלום'));
+      },
+    );
 
     test('should fallback to global search when preferred line is invalid', () {
       final content = [
@@ -559,28 +568,30 @@ void main() {
       );
       expect(textAtResult, equals('טעות'));
 
-      final linesBefore =
-          '\n'.allMatches(allText.substring(0, result.selectionStart)).length;
+      final linesBefore = '\n'
+          .allMatches(allText.substring(0, result.selectionStart))
+          .length;
       expect(linesBefore, equals(2)); // שורה 2 (0-based)
       expect(result.usedLineFallback, isFalse);
     });
 
     test(
-        'should handle three occurrences in same line by returning full line context',
-        () {
-      final content = [
-        'אמר שלום ואז שלום ושוב שלום',
-      ];
+      'should handle three occurrences in same line by returning full line context',
+      () {
+        final content = [
+          'אמר שלום ואז שלום ושוב שלום',
+        ];
 
-      final result = ErrorReportHelper.resolveSelectionContext(
-        content: content,
-        selectedText: 'שלום',
-        preferredLineNumber: 0,
-      );
+        final result = ErrorReportHelper.resolveSelectionContext(
+          content: content,
+          selectedText: 'שלום',
+          preferredLineNumber: 0,
+        );
 
-      expect(result.usedLineFallback, isTrue);
-      expect(result.contextText, contains('שלום ואז שלום ושוב שלום'));
-    });
+        expect(result.usedLineFallback, isTrue);
+        expect(result.contextText, contains('שלום ואז שלום ושוב שלום'));
+      },
+    );
 
     test('should handle empty selected text gracefully', () {
       final content = [
@@ -620,8 +631,9 @@ void main() {
   });
 
   group('RegularReportTab', () {
-    testWidgets('allows submitting direct report without selected text',
-        (tester) async {
+    testWidgets('allows submitting direct report without selected text', (
+      tester,
+    ) async {
       ErrorReportAction? submittedAction;
       ReportedErrorData? submittedData;
 
@@ -662,8 +674,9 @@ void main() {
       expect(submittedData!.errorDetails, equals('זו טעות בפסקה הנוכחית'));
     });
 
-    testWidgets('shows sefaria label for sefaria sourced books',
-        (tester) async {
+    testWidgets('shows sefaria label for sefaria sourced books', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -672,7 +685,7 @@ void main() {
               fontSize: 18,
               state: _loadedState(),
               directReportTargetLabel: 'ספריא',
-              onActionSelected: (_, __) {},
+              onActionSelected: (_, _) {},
               onCancel: () {},
             ),
           ),
@@ -695,8 +708,9 @@ void main() {
       );
     });
 
-    testWidgets('details field receives focus automatically on open',
-        (tester) async {
+    testWidgets('details field receives focus automatically on open', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -705,7 +719,7 @@ void main() {
               fontSize: 18,
               state: _loadedState(),
               directReportTargetLabel: 'אוצריא',
-              onActionSelected: (_, __) {},
+              onActionSelected: (_, _) {},
               onCancel: () {},
             ),
           ),
@@ -737,7 +751,7 @@ void main() {
               directReportTargetLabel: 'אוצריא',
               bookTitle: 'ספר בדיקה',
               isDictaSource: isDictaSource,
-              onActionSelected: (_, __) {},
+              onActionSelected: (_, _) {},
               onCancel: () => cancelled = true,
             ),
           ),
@@ -747,8 +761,9 @@ void main() {
       return cancelled;
     }
 
-    testWidgets('shows the banner for dicta books in online mode',
-        (tester) async {
+    testWidgets('shows the banner for dicta books in online mode', (
+      tester,
+    ) async {
       await pumpTab(tester, isDictaSource: true);
 
       expect(find.text(bannerText), findsOneWidget);
@@ -762,16 +777,18 @@ void main() {
 
     testWidgets('hides the banner in offline mode', (tester) async {
       await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, true);
-      addTearDown(() =>
-          Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false));
+      addTearDown(
+        () => Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false),
+      );
 
       await pumpTab(tester, isDictaSource: true);
 
       expect(find.text(bannerText), findsNothing);
     });
 
-    testWidgets('closes the report form when the edit page opens',
-        (tester) async {
+    testWidgets('closes the report form when the edit page opens', (
+      tester,
+    ) async {
       final previousLauncher = UrlLauncherPlatform.instance;
       UrlLauncherPlatform.instance = _SucceedingUrlLauncher();
       addTearDown(() => UrlLauncherPlatform.instance = previousLauncher);
@@ -787,7 +804,7 @@ void main() {
               directReportTargetLabel: 'אוצריא',
               bookTitle: 'ספר בדיקה',
               isDictaSource: true,
-              onActionSelected: (_, __) {},
+              onActionSelected: (_, _) {},
               onCancel: () => cancelled = true,
             ),
           ),
@@ -802,8 +819,9 @@ void main() {
       expect(cancelled, isTrue);
     });
 
-    testWidgets('keeps the form open when the edit page fails to open',
-        (tester) async {
+    testWidgets('keeps the form open when the edit page fails to open', (
+      tester,
+    ) async {
       final previousLauncher = UrlLauncherPlatform.instance;
       UrlLauncherPlatform.instance = _FailingUrlLauncher();
       addTearDown(() => UrlLauncherPlatform.instance = previousLauncher);
@@ -856,14 +874,19 @@ void main() {
       await tester.tap(find.text('פתח'));
       await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull,
-          reason: 'במסך צר (405px) הקונסטריינטים חייבים להישאר נורמליזיים: '
-              'minWidth ≤ maxWidth, ו-maxWidth מותאם ל-95% מהרוחב במסך צר.');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'במסך צר (405px) הקונסטריינטים חייבים להישאר נורמליזיים: '
+            'minWidth ≤ maxWidth, ו-maxWidth מותאם ל-95% מהרוחב במסך צר.',
+      );
       expect(find.text('דיווח על טעות בספר'), findsOneWidget);
     });
 
-    testWidgets('במסך רחב נשארת ההתנהגות המקורית (~60% מהרוחב)',
-        (tester) async {
+    testWidgets('במסך רחב נשארת ההתנהגות המקורית (~60% מהרוחב)', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {

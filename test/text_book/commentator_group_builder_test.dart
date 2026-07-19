@@ -135,4 +135,43 @@ void main() {
       expect(groupNamed(groups, 'ראשונים'), ['רמב"ן']);
     });
   });
+
+  group('buildCommentatorGroups - עיגון "הערות על XX" אחרי הבסיס', () {
+    test('"הערות על XX" עוברת לדור של הבסיס ומוצבת מיד אחריו', () {
+      final eras = {
+        'מחברי זמננו': ['חברותא על ברכות'],
+      };
+
+      final groups = buildCommentatorGroups(
+        eras,
+        ['חברותא על ברכות', 'הערות על חברותא על ברכות'],
+      );
+
+      expect(groupNamed(groups, 'מחברי זמננו'),
+          ['חברותא על ברכות', 'הערות על חברותא על ברכות']);
+      expect(groupNamed(groups, 'שאר מפרשים'), isEmpty);
+    });
+
+    test('ההערות מוצבת מיד אחרי הבסיס, לפני שאר מפרשי אותו דור', () {
+      final eras = {
+        'ראשונים': ['רש"י', 'רשב"א'],
+      };
+
+      final groups = buildCommentatorGroups(
+        eras,
+        ['רש"י', 'רשב"א', 'הערות על רש"י'],
+      );
+
+      expect(groupNamed(groups, 'ראשונים'), ['רש"י', 'הערות על רש"י', 'רשב"א']);
+    });
+
+    test('ספר-הערות שבסיסו אינו זמין נשאר במקומו', () {
+      final groups = buildCommentatorGroups(
+        const {},
+        ['הערות על חברותא על ברכות'],
+      );
+
+      expect(groupNamed(groups, 'שאר מפרשים'), ['הערות על חברותא על ברכות']);
+    });
+  });
 }

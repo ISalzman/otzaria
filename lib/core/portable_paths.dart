@@ -25,6 +25,7 @@ class PortablePaths {
   static const List<String> _pathSettingsKeys = [
     SettingsRepository.keyLibraryPath,
     SettingsRepository.keyIndexPath,
+    SettingsRepository.keyDatabasesPath,
     SettingsRepository.keyBackupPath,
     SettingsRepository.keyHebrewBooksPath,
     SettingsRepository.keyDbEffectivePath,

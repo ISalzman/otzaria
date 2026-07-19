@@ -13,6 +13,7 @@ import '../providers/shamor_zachor_progress_provider.dart';
 import '../widgets/hebrew_utils.dart';
 import '../widgets/completion_animation_overlay.dart';
 import '../widgets/error_boundary.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
@@ -147,7 +148,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
       // במקרה כזה, אנחנו לא יכולים לשמור התקדמות
       _logger.severe(
           'CRITICAL: bookId is null for book ${widget.bookName}! This should not happen for DB books.');
-      UiSnack.showError('שגיאה: לא ניתן לשמור התקדמות לספר זה (חסר מזהה)');
+      UiSnack.showError(ToolsMessages.progressSaveMissingId);
       return;
     }
   }

@@ -33,8 +33,10 @@ class _BookVersionsDialogState extends State<BookVersionsDialog> {
   @override
   void initState() {
     super.initState();
-    _versionsFuture = DatabaseLibraryProvider.instance
-        .getBookVersions(widget.book.title, widget.book.categoryId ?? -1);
+    _versionsFuture = DatabaseLibraryProvider.instance.getBookVersions(
+      widget.book.title,
+      widget.book.categoryId ?? -1,
+    );
   }
 
   @override
@@ -62,7 +64,7 @@ class _BookVersionsDialogState extends State<BookVersionsDialog> {
           }
           return ListView.separated(
             itemCount: versions.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) => _VersionTile(
               book: widget.book,
               version: versions[index],

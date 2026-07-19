@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
@@ -66,7 +67,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
       setState(() {
         _isLoading = false;
       });
-      UiSnack.showError('שגיאה בטעינת המילון: $e');
+      UiSnack.showError(ToolsMessages.dictionaryLoadError(e));
     }
   }
 

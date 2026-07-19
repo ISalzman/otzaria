@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,9 +9,9 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
@@ -29,9 +30,11 @@ RenderSettings buildSelectedLinkRenderSettings({
   required SettingsState settingsState,
   required bool removeNikud,
   required String searchText,
+  bool removePunctuation = false,
 }) {
   return RenderSettings(
     removeNikud: removeNikud,
+    removePunctuation: removePunctuation,
     removeTeamim: !settingsState.showTeamim,
     replaceHolyNames: settingsState.replaceHolyNames,
     searchText: searchText,
@@ -101,7 +104,6 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   final Map<String, Future<String>> _contentCache = {};
-  final Map<String, Future<bool>> _removeNikudCache = {};
   final Map<String, bool> _expanded = {};
   bool _searchInContent = false;
   Future<List<Link>>? _filteredLinksFuture;
@@ -348,22 +350,6 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
     return filteredLinks;
   }
 
-  Future<bool> _resolveRemoveNikudForLink(
-      Link link, SettingsState settingsState) {
-    final title = utils.getTitleFromPath(link.path2);
-    final cacheKey =
-        '$title|${settingsState.defaultRemoveNikud}|${settingsState.removeNikudFromTanach}';
-
-    return _removeNikudCache.putIfAbsent(
-      cacheKey,
-      () => resolveRemoveNikudForBook(
-        title: title,
-        defaultRemoveNikud: settingsState.defaultRemoveNikud,
-        removeNikudFromTanach: settingsState.removeNikudFromTanach,
-      ),
-    );
-  }
-
   Widget _buildExpansionTile(Link link) {
     final instanceKey = buildSelectedLinkInstanceKey(link);
     final contentKey = buildSelectedLinkContentKey(link);
@@ -399,6 +385,8 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
             style: TextStyle(
               fontSize: settingsState.commentatorsFontSize - 2,
               fontWeight: FontWeight.bold,
+              fontVariations: AppFonts.boldFontVariations(
+                  settingsState.commentatorsFontFamily),
               fontFamily: settingsState.commentatorsFontFamily,
             ),
           );
@@ -615,20 +603,19 @@ class _SelectedLineLinksViewState extends State<SelectedLineLinksView> {
           }
         }
 
-        return FutureBuilder<bool>(
-          future: _resolveRemoveNikudForLink(link, settingsState),
-          builder: (context, snapshot) {
-            // מעבירים HTML גולמי ל-SmartTextWidget (כמו במפרשים) כדי ש-<br>
-            // ומבני HTML אחרים יעובדו; הסרת התגים מראש איבדה את מעברי השורה.
-            return SmartTextWidget(
-              text: content,
-              settings: buildSelectedLinkRenderSettings(
-                settingsState: settingsState,
-                removeNikud: snapshot.data ?? false,
-                searchText: searchText,
-              ),
-            );
-          },
+        // מצב הניקוד/פיסוק של הטאב חל גם על תוכן הקישורים.
+        final blocState = context.read<TextBookBloc>().state;
+        final loaded = blocState is TextBookLoaded ? blocState : null;
+        // מעבירים HTML גולמי ל-SmartTextWidget (כמו במפרשים) כדי ש-<br>
+        // ומבני HTML אחרים יעובדו; הסרת התגים מראש איבדה את מעברי השורה.
+        return SmartTextWidget(
+          text: content,
+          settings: buildSelectedLinkRenderSettings(
+            settingsState: settingsState,
+            removeNikud: loaded?.removeNikud ?? false,
+            removePunctuation: loaded?.removePunctuation ?? false,
+            searchText: searchText,
+          ),
         );
       },
     );

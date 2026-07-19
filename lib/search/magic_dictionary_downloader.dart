@@ -52,10 +52,9 @@ class MagicDictionaryDownloader {
 
   MagicDictionaryDownloader({
     http.Client? client,
-    Duration stallTimeout = const Duration(seconds: 60),
-  })  : _client = client ?? http.Client(),
-        _ownsClient = client == null,
-        _stallTimeout = stallTimeout;
+    this._stallTimeout = const Duration(seconds: 60),
+  }) : _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   void dispose() {
     if (_ownsClient) _client.close();
@@ -74,7 +73,8 @@ class MagicDictionaryDownloader {
     final dest = await AppPaths.getMagicDictionaryPath();
     try {
       final release = await fetchLatestRelease();
-      final upToDate = !force &&
+      final upToDate =
+          !force &&
           await _fileIsUsable(dest) &&
           (await installedVersion()) == release.tag;
       if (upToDate) {
@@ -92,9 +92,12 @@ class MagicDictionaryDownloader {
 
   /// שולף את פרטי ה-release האחרון מ-GitHub. זורק [Exception] בכשל.
   Future<MagicDictionaryRelease> fetchLatestRelease() async {
-    final response = await _send(Uri.parse(latestReleaseApi), headers: {
-      'Accept': 'application/vnd.github+json',
-    });
+    final response = await _send(
+      Uri.parse(latestReleaseApi),
+      headers: {
+        'Accept': 'application/vnd.github+json',
+      },
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       await response.stream.drain<void>();
       throw Exception('GitHub API החזיר ${response.statusCode}');

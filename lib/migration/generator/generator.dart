@@ -348,12 +348,6 @@ class DatabaseGenerator {
 
       final insertedBookId = await repository.insertBook(book);
 
-      // Verify categoryId is correct
-      final insertedBook = await repository.getBook(insertedBookId);
-      if (insertedBook?.categoryId != categoryId) {
-        await repository.updateBookCategoryId(insertedBookId, categoryId);
-      }
-
       // Process content of the book
       if (insertContent) {
         await processBookContent(bookPath, insertedBookId);

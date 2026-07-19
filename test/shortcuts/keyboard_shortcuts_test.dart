@@ -60,7 +60,7 @@ class _StubTabsBloc extends Cubit<TabsState> implements TabsBloc {
 class _StubHistoryBloc extends Bloc<HistoryEvent, HistoryState>
     implements HistoryBloc {
   _StubHistoryBloc() : super(HistoryInitial()) {
-    on<HistoryEvent>((_, __) {});
+    on<HistoryEvent>((_, _) {});
   }
 
   @override
@@ -70,9 +70,11 @@ class _StubHistoryBloc extends Bloc<HistoryEvent, HistoryState>
 class _StubNavigationBloc extends Bloc<NavigationEvent, NavigationState>
     implements NavigationBloc {
   _StubNavigationBloc([Screen screen = Screen.reading])
-      : super(NavigationState(currentScreen: screen)) {
-    on<NavigationEvent>((_, __) {});
+    : super(NavigationState(currentScreen: screen)) {
+    on<NavigationEvent>((event, _) => events.add(event));
   }
+
+  final List<NavigationEvent> events = [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -81,13 +83,15 @@ class _StubNavigationBloc extends Bloc<NavigationEvent, NavigationState>
 class _StubTextBookBloc extends Bloc<TextBookEvent, TextBookState>
     implements TextBookBloc {
   _StubTextBookBloc()
-      : super(TextBookInitial.named(
+    : super(
+        TextBookInitial.named(
           TextBook(title: 'ספר בדיקה'),
           0,
           false,
           const [],
-        )) {
-    on<TextBookEvent>((_, __) {});
+        ),
+      ) {
+    on<TextBookEvent>((_, _) {});
   }
 
   @override
@@ -142,40 +146,42 @@ void main() {
       await settingsController.close();
     });
 
-    testWidgets('לא זורק שגיאה בזמן rebuild של קיצורים כששדה טקסט מחזיק focus',
-        (tester) async {
-      await tester.pumpWidget(
-        BlocProvider<SettingsBloc>.value(
-          value: settingsBloc,
-          child: MaterialApp(
-            home: Scaffold(
-              body: KeyboardShortcuts(
-                onFindRefRequested: () {},
-                child: const TextField(),
+    testWidgets(
+      'לא זורק שגיאה בזמן rebuild של קיצורים כששדה טקסט מחזיק focus',
+      (tester) async {
+        await tester.pumpWidget(
+          BlocProvider<SettingsBloc>.value(
+            value: settingsBloc,
+            child: MaterialApp(
+              home: Scaffold(
+                body: KeyboardShortcuts(
+                  onFindRefRequested: () {},
+                  child: const TextField(),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
+        await tester.tap(find.byType(TextField));
+        await tester.pump();
 
-      expect(FocusManager.instance.primaryFocus, isNotNull);
+        expect(FocusManager.instance.primaryFocus, isNotNull);
 
-      // עדכון shortcuts מטריגר rebuild של ה-FocusScope; לפני התיקון
-      // FocusScopeNode חדש בכל rebuild היה זורק שגיאה כששדה טקסט מחזיק focus.
-      settingsController.add(
-        SettingsState.initial().copyWith(
-          shortcuts: const {
-            'key-shortcut-open-library-browser': 'ctrl+shift+l',
-          },
-        ),
-      );
-      await tester.pump();
+        // עדכון shortcuts מטריגר rebuild של ה-FocusScope; לפני התיקון
+        // FocusScopeNode חדש בכל rebuild היה זורק שגיאה כששדה טקסט מחזיק focus.
+        settingsController.add(
+          SettingsState.initial().copyWith(
+            shortcuts: const {
+              'key-shortcut-open-library-browser': 'ctrl+shift+l',
+            },
+          ),
+        );
+        await tester.pump();
 
-      expect(tester.takeException(), isNull);
-    });
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('KeyboardShortcuts - קיצורי חלוניות (Ctrl+Shift+L/C)', () {
@@ -242,7 +248,9 @@ void main() {
     }
 
     Future<void> sendCtrlShift(
-        WidgetTester tester, LogicalKeyboardKey key) async {
+      WidgetTester tester,
+      LogicalKeyboardKey key,
+    ) async {
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
       await tester.sendKeyDownEvent(key);
@@ -252,8 +260,9 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('Ctrl+Shift+L ב-PdfBookTab מטוגל את toggleNavPaneNotifier',
-        (tester) async {
+    testWidgets('Ctrl+Shift+L ב-PdfBookTab מטוגל את toggleNavPaneNotifier', (
+      tester,
+    ) async {
       final tab = PdfBookTab(
         book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
         pageNumber: 1,
@@ -271,20 +280,22 @@ void main() {
     });
 
     testWidgets(
-        'Ctrl+Shift+C ב-PdfBookTab מטוגל את toggleCommentatorsPaneNotifier '
-        '(תיקון הבאג: PR המקורי בלע את האירוע ב-PDF)', (tester) async {
-      final tab = PdfBookTab(
-        book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
-        pageNumber: 1,
-      );
-      addTearDown(tab.dispose);
+      'Ctrl+Shift+C ב-PdfBookTab מטוגל את toggleCommentatorsPaneNotifier '
+      '(תיקון הבאג: PR המקורי בלע את האירוע ב-PDF)',
+      (tester) async {
+        final tab = PdfBookTab(
+          book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
+          pageNumber: 1,
+        );
+        addTearDown(tab.dispose);
 
-      await pumpWithTab(tester, tab);
+        await pumpWithTab(tester, tab);
 
-      expect(tab.toggleCommentatorsPaneNotifier.value, 0);
-      await sendCtrlShift(tester, LogicalKeyboardKey.keyC);
-      expect(tab.toggleCommentatorsPaneNotifier.value, 1);
-    });
+        expect(tab.toggleCommentatorsPaneNotifier.value, 0);
+        await sendCtrlShift(tester, LogicalKeyboardKey.keyC);
+        expect(tab.toggleCommentatorsPaneNotifier.value, 1);
+      },
+    );
   });
 
   group('KeyboardShortcuts - חיפוש מתקדם אופציונלי', () {
@@ -557,8 +568,9 @@ void main() {
       expect(tabsBloc.state.currentTabIndex, 4);
     });
 
-    testWidgets('Ctrl+ספרה מעבר למספר הטאבים אינו משנה את הטאב הפעיל',
-        (tester) async {
+    testWidgets('Ctrl+ספרה מעבר למספר הטאבים אינו משנה את הטאב הפעיל', (
+      tester,
+    ) async {
       final tabsBloc = await pumpWithTabs(tester, 3);
       tabsBloc.add(const SetCurrentTab(1));
       await tester.pump();
@@ -642,8 +654,9 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('כל אחד מהקיצורים מגלגל את ה-notifier התואם ב-TextBookTab',
-        (tester) async {
+    testWidgets('כל אחד מהקיצורים מגלגל את ה-notifier התואם ב-TextBookTab', (
+      tester,
+    ) async {
       final tab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),
         index: 0,
@@ -666,20 +679,22 @@ void main() {
       expect(tab.navNextTocNotifier.value, 1);
     });
 
-    testWidgets('קיצור ניווט ב-PdfBookTab אינו מגלגל notifier (TextBook בלבד)',
-        (tester) async {
-      final tab = PdfBookTab(
-        book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
-        pageNumber: 1,
-      );
-      addTearDown(tab.dispose);
+    testWidgets(
+      'קיצור ניווט ב-PdfBookTab אינו מגלגל notifier (TextBook בלבד)',
+      (tester) async {
+        final tab = PdfBookTab(
+          book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
+          pageNumber: 1,
+        );
+        addTearDown(tab.dispose);
 
-      await pumpWithTab(tester, tab);
+        await pumpWithTab(tester, tab);
 
-      // לא אמור לזרוק ולא להשפיע — מאומת דרך היעדר חריגה.
-      await sendAlt(tester, LogicalKeyboardKey.arrowUp);
-      expect(tester.takeException(), isNull);
-    });
+        // לא אמור לזרוק ולא להשפיע — מאומת דרך היעדר חריגה.
+        await sendAlt(tester, LogicalKeyboardKey.arrowUp);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('KeyboardShortcuts - Ctrl+W מוגבל למסך עיון', () {
@@ -769,8 +784,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     });
 
-    testWidgets('Ctrl+W במסך חיפוש סוגר את הטאב הנוכחי (issue #539)',
-        (tester) async {
+    testWidgets('Ctrl+W במסך חיפוש סוגר את הטאב הנוכחי (issue #539)', (
+      tester,
+    ) async {
       final tabsBloc = await pumpOnScreen(tester, Screen.search);
       expect(tabsBloc.state.tabs, hasLength(2));
 
@@ -786,6 +802,128 @@ void main() {
 
       await sendCtrlW(tester);
       expect(tabsBloc.state.tabs, hasLength(2));
+    });
+  });
+
+  group('KeyboardShortcuts - קיצורים כשדיאלוג פתוח', () {
+    late MockSettingsBloc settingsBlocLocal;
+    late StreamController<SettingsState> settingsControllerLocal;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    setUp(() {
+      FocusRepository().resetForTesting();
+      settingsBlocLocal = MockSettingsBloc();
+      settingsControllerLocal = StreamController<SettingsState>.broadcast();
+      whenListen(
+        settingsBlocLocal,
+        settingsControllerLocal.stream,
+        initialState: SettingsState.initial().copyWith(
+          shortcuts: const {
+            'key-shortcut-open-library-browser': 'ctrl+l',
+            'key-shortcut-close-tab': 'ctrl+w',
+          },
+        ),
+      );
+    });
+
+    tearDown(() async {
+      await settingsControllerLocal.close();
+      FocusRepository().resetForTesting();
+    });
+
+    Future<
+      ({
+        TabsBloc tabsBloc,
+        _StubNavigationBloc navigationBloc,
+      })
+    >
+    pumpWithDialog(WidgetTester tester) async {
+      final tabsBloc = TabsBloc(repository: _FakeTabsRepository());
+      final historyBloc = _StubHistoryBloc();
+      final navigationBloc = _StubNavigationBloc();
+      addTearDown(() async {
+        final openTabs = List<OpenedTab>.from(tabsBloc.state.tabs);
+        await tabsBloc.close();
+        for (final tab in openTabs) {
+          tab.dispose();
+        }
+        await historyBloc.close();
+        await navigationBloc.close();
+      });
+
+      tabsBloc.add(AddTab(SearchingTab('חיפוש א', 'א')));
+      await tester.pump();
+      tabsBloc.add(AddTab(SearchingTab('חיפוש ב', 'ב')));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<SettingsBloc>.value(value: settingsBlocLocal),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            Provider<FocusRepository>.value(value: FocusRepository()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: KeyboardShortcuts(
+                onFindRefRequested: () {},
+                child: const SizedBox(width: 100, height: 100),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      showDialog(
+        context: tester.element(find.byType(SizedBox)),
+        builder: (_) => const AlertDialog(title: Text('דיאלוג בדיקה')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      return (tabsBloc: tabsBloc, navigationBloc: navigationBloc);
+    }
+
+    Future<void> sendCtrl(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    testWidgets('Ctrl+L פועל גם כשדיאלוג פתוח: סוגר אותו ועובר לספרייה', (
+      tester,
+    ) async {
+      final blocs = await pumpWithDialog(tester);
+
+      await sendCtrl(tester, LogicalKeyboardKey.keyL);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        blocs.navigationBloc.events,
+        contains(const NavigateToScreen(Screen.library)),
+      );
+
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('Ctrl+W כשדיאלוג פתוח אינו סוגר טאב שברקע', (tester) async {
+      final blocs = await pumpWithDialog(tester);
+      expect(blocs.tabsBloc.state.tabs, hasLength(2));
+
+      await sendCtrl(tester, LogicalKeyboardKey.keyW);
+      await tester.pumpAndSettle();
+
+      expect(blocs.tabsBloc.state.tabs, hasLength(2));
+      expect(find.byType(AlertDialog), findsOneWidget);
     });
   });
 }

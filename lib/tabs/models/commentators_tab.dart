@@ -34,11 +34,10 @@ class CommentatorsTab extends OpenedTab {
 
   CommentatorsTab({
     required this.sourceTab,
-    bool disposeSourceTabOnDispose = false,
+    this._disposeSourceTabOnDispose = false,
     @visibleForTesting TextBookBloc? blocOverride,
-  })  : _disposeSourceTabOnDispose = disposeSourceTabOnDispose,
-        initialSelectedLine = _resolveSelectedLine(sourceTab),
-        super('מפרשים | ${sourceTab.title}') {
+  }) : initialSelectedLine = _resolveSelectedLine(sourceTab),
+       super('מפרשים | ${sourceTab.title}') {
     // קורא מיקום התחלתי מה-state הנוכחי של sourceTab
     final sourceState = sourceTab.bloc.state;
     if (sourceState is TextBookLoaded &&
@@ -47,14 +46,15 @@ class CommentatorsTab extends OpenedTab {
     }
     final int startIndex = sourceState is TextBookLoaded
         ? (sourceState.selectedIndex ??
-            (sourceState.visibleIndices.isNotEmpty
-                ? sourceState.visibleIndices.first
-                : sourceTab.index))
+              (sourceState.visibleIndices.isNotEmpty
+                  ? sourceState.visibleIndices.first
+                  : sourceTab.index))
         : sourceTab.index;
 
     // ב-production תמיד נבנה bloc חדש; blocOverride קיים רק לטסטים שצריכים
     // להזריק bloc עם repository מזויף ולהביאו ל-Loaded ללא תשתית קבצים אמיתית.
-    bloc = blocOverride ??
+    bloc =
+        blocOverride ??
         TextBookBloc(
           repository: TextBookRepository(
             fileSystem: FileSystemData.instance,
@@ -74,8 +74,9 @@ class CommentatorsTab extends OpenedTab {
   factory CommentatorsTab.fromJson(Map<String, dynamic> json) {
     // Hive מחזיר nested maps כ-Map<dynamic, dynamic> — צריך להמיר
     final rawSourceTab = json['sourceTab'];
-    final Map<String, dynamic>? sourceJson =
-        rawSourceTab is Map ? Map<String, dynamic>.from(rawSourceTab) : null;
+    final Map<String, dynamic>? sourceJson = rawSourceTab is Map
+        ? Map<String, dynamic>.from(rawSourceTab)
+        : null;
     final TextBookTab sourceTab = sourceJson != null
         ? TextBookTab.fromJson(sourceJson)
         : TextBookTab(
@@ -90,8 +91,9 @@ class CommentatorsTab extends OpenedTab {
     )..isPinned = json['isPinned'] ?? false;
     if (json.containsKey('selectedCommentators')) {
       final saved = json['selectedCommentators'];
-      tab.selectedCommentators =
-          saved is List ? List<String>.from(saved) : null;
+      tab.selectedCommentators = saved is List
+          ? List<String>.from(saved)
+          : null;
     } else {
       // JSON מגרסה שלא שמרה את בחירת הכרטיסייה — הבחירה של טאב המקור קרובה יותר
       // מאשר "כל המפרשים".

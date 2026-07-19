@@ -87,6 +87,7 @@ import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:otzaria/core/sentry_event_filter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -235,17 +236,6 @@ void _logNonFatalInitializationError(
   );
 }
 
-/// האם השגיאה היא באג ידוע ב-pdfrx_engine שב-_notifyMissingFonts מנסה להוסיף
-/// לסטרים שכבר נסגר. נרשמת פעם אחת בלוג ואחר כך נבלעת כדי לא לייצר רעש.
-bool _isPdfrxMissingFontsStreamError(Object error, StackTrace stack) {
-  return error.toString().contains(
-            'Cannot add new events after calling close',
-          ) &&
-      stack.toString().contains('_notifyMissingFonts');
-}
-
-bool _pdfrxMissingFontsAlreadyLogged = false;
-
 bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
   return errorString.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
       errorString.contains(
@@ -329,20 +319,6 @@ void main(List<String> args) async {
       return true; // Silently ignore
     }
 
-    // pdfrx internal bug: stream closed before font-notification completes.
-    // נרשם פעם אחת בלוג כדי שיהיה עקבות, ולאחר מכן נבלע.
-    if (_isPdfrxMissingFontsStreamError(error, stack)) {
-      if (!_pdfrxMissingFontsAlreadyLogged) {
-        _pdfrxMissingFontsAlreadyLogged = true;
-        _appendUnhandledErrorToLocalLog(
-          title: 'pdfrx MissingFonts (once)',
-          error: error,
-          stackTrace: stack,
-        );
-      }
-      return true;
-    }
-
     // Log all other errors normally
     if (kDebugMode) {
       FlutterError.dumpErrorToConsole(FlutterErrorDetails(
@@ -392,28 +368,17 @@ Future<void> _initializeSentry() async {
         options.release = '${info.appName}@${info.version}+${info.buildNumber}';
         // Privacy: Do not collect IP addresses and request headers
         options.sendDefaultPii = false;
-        // Use lower sampling rates in production to reduce overhead
-        options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
+        // Sentry משמש לדיווח שגיאות בלבד; עסקאות ביצועים אינן נשלחות.
+        options.tracesSampleRate = 0.0;
 
         options.beforeSend = (event, hint) {
-          // Only report from the latest released version
-          if (currentBuild != _latestReleasedBuildNumber) return null;
-
-          final exception = event.throwable?.toString() ?? '';
-          if (Platform.isWindows &&
-              (exception.contains('Failed to update ui::AXTree') ||
-                  exception.contains('accessibility_bridge.cc'))) {
-            return null;
-          }
-          // Filter HardwareKeyboard assertion - handled by clearState() on window focus
-          if (_isIgnorableHardwareKeyboardAssertion(exception)) {
-            return null;
-          }
-          return event;
-        };
-        options.beforeSendTransaction = (transaction, hint) {
-          if (currentBuild != _latestReleasedBuildNumber) return null;
-          return transaction;
+          return shouldReportSentryEvent(
+            event: event,
+            currentBuild: currentBuild,
+            latestReleasedBuildNumber: _latestReleasedBuildNumber,
+          )
+              ? event
+              : null;
         };
       },
     );
@@ -556,7 +521,12 @@ Future<void> _initializeProcessSingletons() async {
       // שנייה עד שפריים חדש הספיק להתרסטר. כאן השינוי קורה לפני שפריים התוכן
       // הראשון מצויר בכלל — והוא נצבע ישר במסגרת ובגודל הסופיים.
       await windowManager.setMinimumSize(WindowPersistence.minSize);
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      // ב-macOS כפתורי החלון המובנים (traffic lights) נשארים גלויים — הם
+      // כפתורי החלון היחידים; אין כפתורים מותאמים בשורת הכותרת.
+      await windowManager.setTitleBarStyle(
+        TitleBarStyle.hidden,
+        windowButtonVisibility: Platform.isMacOS,
+      );
     }
   }
 
@@ -1004,7 +974,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
           ),
           BlocProvider<CustomFoldersBloc>(
             create: (context) => CustomFoldersBloc(
-              libraryBloc: context.read<LibraryBloc>(),
+              addLibraryEvent: (event) =>
+                  context.read<LibraryBloc>().add(event),
             )..add(const LoadCustomFolders()),
           ),
           BlocProvider<IndexingBloc>(

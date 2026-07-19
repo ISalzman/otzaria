@@ -191,6 +191,54 @@ void main() {
     });
 
     test(
+        'onlyFolderPath: רק התיקייה הממוקדת נסרקת, וספרי תיקייה אחרת '
+        'שכבר ב-DB אינם נמחקים', () async {
+      final f1 = await makeFolder('ממוקדת-א', 'ספר-א');
+      final f2 = await makeFolder('ממוקדת-ב', 'ספר-ב');
+      final folders = [
+        CustomFolder(
+            path: f1, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
+        CustomFolder(
+            path: f2, addToDatabase: false, addedAt: DateTime(2026, 1, 1)),
+      ];
+
+      // סנכרון מלא ראשון — שתי התיקיות נכנסות ל-DB.
+      await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libPath(),
+        customFolders: folders,
+      );
+
+      // ספר חדש בשתי התיקיות; סריקה ממוקדת של f1 בלבד.
+      await File(p.join(f1, 'ספר-א2.txt')).writeAsString('תוכן', flush: true);
+      await File(p.join(f2, 'ספר-ב2.txt')).writeAsString('תוכן', flush: true);
+
+      final scoped = await runCustomFoldersDbSyncInIsolate(
+        dbPath: dbPath,
+        userBooksDbPath: userBooksDbPath,
+        libraryPath: libPath(),
+        customFolders: folders,
+        onlyFolderPath: f1,
+      );
+
+      expect(scoped.errors, isEmpty);
+      expect(scoped.addedBooks, equals(1),
+          reason: 'רק הספר החדש בתיקייה הממוקדת נוסף');
+
+      // ספרי התיקייה השנייה נשארו ב-DB (לא נמחקו כ"תיקייה שהוסרה").
+      final personalCat = (await userBooksRepository.getRootCategories())
+          .firstWhere((c) => c.title == 'ספרים אישיים');
+      final f2Cat = await userBooksRepository.getCategoryByTitleAndParent(
+        p.basename(f2),
+        personalCat.id,
+      );
+      expect(f2Cat, isNotNull);
+      final f2Books = await userBooksRepository.getBooksByCategory(f2Cat!.id);
+      expect(f2Books, hasLength(1), reason: 'ספרי התיקייה השנייה שרדו');
+    });
+
+    test(
         'יש קבצי links: prepareForWrite/restoreAfterWrite נקראים *בתוך* יחידת '
         'התור, סביב הכתיבה (תיקון מסך עיון/תצוגה מקדימה ריקים)', () async {
       final folderPath = await makeFolder('תיקייה-hooks', 'ספר-hooks');

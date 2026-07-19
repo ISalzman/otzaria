@@ -111,13 +111,15 @@ List<FlatLibraryRow> buildFlatLibraryRows({
     }
 
     for (final sub in subs) {
-      rows.add(FlatLibraryRow(
-        kind: FlatLibraryRowKind.categoryHeader,
-        category: sub,
-        level: level,
-        parentPath: current.path,
-        isGroupStart: level == 0,
-      ));
+      rows.add(
+        FlatLibraryRow(
+          kind: FlatLibraryRowKind.categoryHeader,
+          category: sub,
+          level: level,
+          parentPath: current.path,
+          isGroupStart: level == 0,
+        ),
+      );
       if (expandedPaths.contains(sub.path)) {
         collect(sub, level + 1);
       }
@@ -127,21 +129,26 @@ List<FlatLibraryRow> buildFlatLibraryRows({
     }
 
     for (int i = 0; i < books.length && i < _kCategoryBooksCap; i++) {
-      rows.add(FlatLibraryRow(
-        kind:
-            level == 0 ? FlatLibraryRowKind.rootBook : FlatLibraryRowKind.book,
-        book: books[i],
-        level: level,
-        parentPath: current.path,
-      ));
+      rows.add(
+        FlatLibraryRow(
+          kind: level == 0
+              ? FlatLibraryRowKind.rootBook
+              : FlatLibraryRowKind.book,
+          book: books[i],
+          level: level,
+          parentPath: current.path,
+        ),
+      );
     }
     if (books.length > _kCategoryBooksCap) {
-      rows.add(FlatLibraryRow(
-        kind: FlatLibraryRowKind.showMore,
-        showMoreBooks: books,
-        level: level,
-        parentPath: current.path,
-      ));
+      rows.add(
+        FlatLibraryRow(
+          kind: FlatLibraryRowKind.showMore,
+          showMoreBooks: books,
+          level: level,
+          parentPath: current.path,
+        ),
+      );
     }
   }
 
@@ -152,7 +159,7 @@ List<FlatLibraryRow> buildFlatLibraryRows({
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
 @visibleForTesting
 ({double paneWidth, double minPaneWidth, double maxPaneWidth})
-    calculateLibraryPreviewPaneWidths({
+calculateLibraryPreviewPaneWidths({
   required double availableWidth,
   required String viewMode,
   double? paneWidthOverride,
@@ -231,8 +238,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   ];
 
   int _getTopCategoryOrder(Category cat) {
-    final normalized =
-        cat.title.replaceAll('\u05F4', '"').replaceAll('\u05F3', "'");
+    final normalized = cat.title
+        .replaceAll('\u05F4', '"')
+        .replaceAll('\u05F3', "'");
     final idx = _orderedTopCategories.indexOf(normalized);
     return idx >= 0 ? idx : _orderedTopCategories.length + cat.order;
   }
@@ -255,9 +263,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _togglePreviewPanel(SettingsState s) {
-    context
-        .read<SettingsBloc>()
-        .add(UpdateLibraryShowPreview(!s.libraryShowPreview));
+    context.read<SettingsBloc>().add(
+      UpdateLibraryShowPreview(!s.libraryShowPreview),
+    );
   }
 
   void _syncLibraryPanelController() {
@@ -345,8 +353,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               !current.isLoading &&
               current.library != null,
           listener: (context, state) {
-            final book =
-                _getFirstDisplayedBook(state.currentCategory ?? state.library!);
+            final book = _getFirstDisplayedBook(
+              state.currentCategory ?? state.library!,
+            );
             if (book != null) {
               context.read<LibraryBloc>().add(SelectBookForPreview(book));
             }
@@ -420,13 +429,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                               child: ValueListenableBuilder<double>(
                                 valueListenable: _topBarTotalHeight,
                                 builder: (context, topBarHeight, child) {
-                                  final effectiveTopPad =
-                                      topBarHeight > 0 ? topBarHeight : topPad;
+                                  final effectiveTopPad = topBarHeight > 0
+                                      ? topBarHeight
+                                      : topPad;
                                   return AnimatedPadding(
                                     duration: const Duration(milliseconds: 180),
                                     curve: Curves.easeOut,
-                                    padding:
-                                        EdgeInsets.only(top: effectiveTopPad),
+                                    padding: EdgeInsets.only(
+                                      top: effectiveTopPad,
+                                    ),
                                     child: child,
                                   );
                                 },
@@ -580,8 +591,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       icon: FluentIcons.calendar_24_regular,
       onPressed: () {
         context.read<NavigationBloc>().add(
-              const NavigateToScreen(Screen.more),
-            );
+          const NavigateToScreen(Screen.more),
+        );
         // ToolsScreen נבנה lazy ב-PageView, ולכן בלחיצה הראשונה ייתכן ש-
         // moreScreenKey.currentState עדיין null. ניסיונות חוזרים עם hop קצר
         // מבטיחים שהלוח ייפתח גם בפעם הראשונה שנכנסים למסך הכלים.
@@ -667,10 +678,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final maxButtons = screenWidth < 400
         ? 2
         : screenWidth < 600
-            ? 3
-            : screenWidth < 800
-                ? 4
-                : 5;
+        ? 3
+        : screenWidth < 800
+        ? 4
+        : 5;
 
     return ResponsiveActionBar(
       key: ValueKey('action-bar-offline-${settingsState.isOfflineMode}'),
@@ -720,8 +731,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final libraryBloc = context.read<LibraryBloc>();
     final focusRepository = context.read<FocusRepository>();
 
-    final handled = await mainWindowScreenKey.currentState
-            ?.handleInternalDeepLink(normalized.toString()) ??
+    final handled =
+        await mainWindowScreenKey.currentState?.handleInternalDeepLink(
+          normalized.toString(),
+        ) ??
         false;
 
     if (handled) {
@@ -769,8 +782,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 _scheduleSearchWithSettings(context, settingsState);
               },
               onClear: () {
-                _update(context, state, settingsState,
-                    restoreSearchFocus: true);
+                _update(
+                  context,
+                  state,
+                  settingsState,
+                  restoreSearchFocus: true,
+                );
               },
             ),
           ),
@@ -823,13 +840,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
         child: Chip(
           label: Text(item),
-          backgroundColor:
-              isSelected ? Theme.of(context).colorScheme.secondary : null,
+          backgroundColor: isSelected
+              ? Theme.of(context).colorScheme.secondary
+              : null,
           labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: isSelected
-                    ? Theme.of(context).colorScheme.onSecondary
-                    : null,
-              ),
+            color: isSelected
+                ? Theme.of(context).colorScheme.onSecondary
+                : null,
+          ),
           labelPadding: EdgeInsets.zero,
         ),
       ),
@@ -976,9 +994,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   void _refreshWithPersonalFolders() {
-    context
-        .read<CustomFoldersBloc>()
-        .add(const RescanCustomFolders(showNoChangesMessage: false));
+    context.read<CustomFoldersBloc>().add(
+      const RescanCustomFolders(showNoChangesMessage: false),
+    );
   }
 
   List<ActionButtonData> _buildOriginalOrderActions(
@@ -1117,8 +1135,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       onBack: onBack,
       onHome: () => _handleNavigateHome(context, state, settingsState),
       onOpenSearch: () => _openSearchDialog(context, searchQuery: searchText),
-      onOpenLink:
-          isDeepLink ? () => _tryHandleDeepLink(context, searchText) : null,
+      onOpenLink: isDeepLink
+          ? () => _tryHandleDeepLink(context, searchText)
+          : null,
       showSearchElsewhereHint:
           searchText.isNotEmpty && state.currentCategory != state.library,
     );
@@ -1144,15 +1163,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               final repo = context.read<FocusRepository>();
               return _buildEmptyState(context, state, settingsState, repo);
             }
-            final displayBooks =
-                _filterBooksByTopics(books, state.selectedTopics);
+            final displayBooks = _filterBooksByTopics(
+              books,
+              state.selectedTopics,
+            );
             final displayLimit = min(displayBooks.length, 100);
             final topicsHeader = _buildTopicsSelection(context, state);
             return SingleChildScrollView(
               key: PageStorageKey(state.currentCategory),
               child: Column(
                 children: [
-                  if (topicsHeader != null) topicsHeader,
+                  ?topicsHeader,
                   _buildSearchResultsGrid(displayBooks, displayLimit),
                 ],
               ),
@@ -1186,8 +1207,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   List<Widget> _buildCategoryContent(Category category) {
     final List<Widget> items = [];
     final filteredBooks = category.books.toList();
-    final filteredSubCategories =
-        category.subCategories.where((c) => c.hasBooks).toList();
+    final filteredSubCategories = category.subCategories
+        .where((c) => c.hasBooks)
+        .toList();
     filteredBooks.sort((a, b) => a.order.compareTo(b.order));
     if (category is Library) {
       filteredSubCategories.sort(
@@ -1214,7 +1236,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     var attachedTourKey = false;
     for (final book in filteredBooks) {
       final item = _buildBookItem(book);
-      final isTourBook = _tourPreviewBook != null &&
+      final isTourBook =
+          _tourPreviewBook != null &&
           !attachedTourKey &&
           book.title == _tourPreviewBook!.title;
       allItems.add(
@@ -1254,7 +1277,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               (p.previewBook != c.previewBook) &&
               (p.previewBook == book || c.previewBook == book),
           builder: (ctx, libState) {
-            final isSelected = settingsState.libraryShowPreview &&
+            final isSelected =
+                settingsState.libraryShowPreview &&
                 libState.previewBook == book;
             return GestureDetector(
               onDoubleTap: () =>
@@ -1330,19 +1354,19 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   /// Key יציב לשורה — בלעדיו אנימציית השברון ומצב hover "זולגים" בין
   /// שורות כשההרחבה מזיזה אינדקסים ב-ListView.builder.
   Key _flatRowKey(FlatLibraryRow row) => switch (row.kind) {
-        FlatLibraryRowKind.categoryHeader => ValueKey(row.category!.path),
-        // ObjectKey ולא title — מהדורות חיצוניות וצמדי טקסט/PDF יכולים
-        // לשאת אותו title תחת אותו הורה.
-        FlatLibraryRowKind.book ||
-        FlatLibraryRowKind.rootBook =>
-          ObjectKey(row.book!),
-        FlatLibraryRowKind.showMore => ValueKey('more:${row.parentPath}'),
-      };
+    FlatLibraryRowKind.categoryHeader => ValueKey(row.category!.path),
+    // ObjectKey ולא title — מהדורות חיצוניות וצמדי טקסט/PDF יכולים
+    // לשאת אותו title תחת אותו הורה.
+    FlatLibraryRowKind.book ||
+    FlatLibraryRowKind.rootBook => ObjectKey(row.book!),
+    FlatLibraryRowKind.showMore => ValueKey('more:${row.parentPath}'),
+  };
 
   /// בונה שורה משוטחת בסגנון הכרטיס של העץ המקונן: רקע כרטיס, מפריד בין
   /// שורות, פינות מעוגלות ורווח אנכי בקצות כל קבוצה עליונה.
   Widget _buildFlatTreeRow(BuildContext context, FlatLibraryRow row) {
-    final isExpanded = row.category != null &&
+    final isExpanded =
+        row.category != null &&
         _expandedCategories.contains(row.category!.path);
 
     if (row.kind == FlatLibraryRowKind.rootBook) {
@@ -1365,15 +1389,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     final Widget child = switch (row.kind) {
-      FlatLibraryRowKind.categoryHeader =>
-        _buildCategoryHeaderRow(row.category!, row.level, isExpanded),
+      FlatLibraryRowKind.categoryHeader => _buildCategoryHeaderRow(
+        row.category!,
+        row.level,
+        isExpanded,
+      ),
       FlatLibraryRowKind.book => _buildListBookItem(
-          row.book!,
-          row.level,
-          itemStyle: _LibraryListItemStyle.grouped,
-        ),
-      FlatLibraryRowKind.showMore =>
-        _buildShowMoreRow(row.showMoreBooks!, row.level),
+        row.book!,
+        row.level,
+        itemStyle: _LibraryListItemStyle.grouped,
+      ),
+      FlatLibraryRowKind.showMore => _buildShowMoreRow(
+        row.showMoreBooks!,
+        row.level,
+      ),
       FlatLibraryRowKind.rootBook => throw StateError('unreachable'),
     };
 
@@ -1411,8 +1440,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final List<Widget> widgets = [];
     final filteredBooks = category.books.toList()
       ..sort((a, b) => a.order.compareTo(b.order));
-    final filteredSubs =
-        category.subCategories.where((c) => c.hasBooks).toList();
+    final filteredSubs = category.subCategories
+        .where((c) => c.hasBooks)
+        .toList();
     if (category is Library) {
       filteredSubs.sort(
         (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)),
@@ -1424,8 +1454,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
     for (final sub in filteredSubs) {
       final isExpanded = _expandedCategories.contains(sub.path);
-      final subChildren =
-          isExpanded ? _buildCategoryTree(sub, level + 1) : <Widget>[];
+      final subChildren = isExpanded
+          ? _buildCategoryTree(sub, level + 1)
+          : <Widget>[];
       if (level == 0) {
         widgets.add(
           ExpandableCard(
@@ -1473,8 +1504,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         child: Text(
           'הצג עוד ${books.length - _kCategoryBooksCap} פריטים',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.secondary,
-              ),
+            color: Theme.of(context).colorScheme.secondary,
+          ),
         ),
       ),
     );
@@ -1750,8 +1781,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       book is PdfBook
           ? FluentIcons.document_pdf_24_regular
           : book is DocxBook || book.fileType == 'docx'
-              ? FluentIcons.document_edit_24_regular
-              : FluentIcons.document_text_24_regular,
+          ? FluentIcons.document_edit_24_regular
+          : FluentIcons.document_text_24_regular,
       color: cs.onSecondaryContainer,
       size: iconSize,
     );
@@ -1835,7 +1866,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               (p.previewBook != c.previewBook) &&
               (p.previewBook == book || c.previewBook == book),
           builder: (ctx, libState) {
-            final isSelected = settingsState.libraryShowPreview &&
+            final isSelected =
+                settingsState.libraryShowPreview &&
                 libState.previewBook == book;
             return _buildBookListRow(
               context: ctx,
@@ -1889,10 +1921,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final subs = category.subCategories.toList();
     if (category is Library) {
       subs.sort(
-          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+        (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)),
+      );
     } else {
-      subs.sort((a, b) =>
-          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+      subs.sort(
+        (a, b) => _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)),
+      );
     }
     for (final sub in subs) {
       final book = _getFirstDisplayedBook(sub);
@@ -1909,10 +1943,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final subs = category.subCategories.toList();
     if (category is Library) {
       subs.sort(
-          (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)));
+        (a, b) => _getTopCategoryOrder(a).compareTo(_getTopCategoryOrder(b)),
+      );
     } else {
-      subs.sort((a, b) =>
-          _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)));
+      subs.sort(
+        (a, b) => _normalizeOrder(a.order).compareTo(_normalizeOrder(b.order)),
+      );
     }
 
     for (final sub in subs) {
@@ -2072,11 +2108,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     bool selectAllOnRestore = false,
   }) {
     _searchDebounce?.cancel();
-    final searchText =
-        context.read<FocusRepository>().librarySearchController.text;
+    final searchText = context
+        .read<FocusRepository>()
+        .librarySearchController
+        .text;
     context.read<LibraryBloc>().add(
-          UpdateSearchQuery(searchText.replaceAll('"', '')),
-        );
+      UpdateSearchQuery(searchText.replaceAll('"', '')),
+    );
     _searchWithSettings(context, settingsState);
     setState(() {});
     if (restoreSearchFocus) {
@@ -2096,17 +2134,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _searchDebounce?.cancel();
     _searchDebounce = null;
     context.read<LibraryBloc>().add(
-          SearchBooks(
-            showHebrewBooks: s.showExternalBooks && s.showHebrewBooks,
-            showOtzarHachochma: s.showExternalBooks && s.showOtzarHachochma,
-          ),
-        );
+      SearchBooks(
+        showHebrewBooks: s.showExternalBooks && s.showHebrewBooks,
+        showOtzarHachochma: s.showExternalBooks && s.showOtzarHachochma,
+      ),
+    );
   }
 
   void _refocusSearchBar({bool selectAll = false}) {
     context.read<FocusRepository>().requestLibrarySearchFocus(
-          selectAll: selectAll,
-        );
+      selectAll: selectAll,
+    );
   }
 
   bool _focusFirstSearchResult(LibraryState state) {
@@ -2134,8 +2172,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget _buildSearchResultsGrid(List<Book> books, int displayLimit) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount =
-            (constraints.maxWidth ~/ 250).clamp(1, 5).toInt();
+        final crossAxisCount = (constraints.maxWidth ~/ 250)
+            .clamp(1, 5)
+            .toInt();
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 45),
@@ -2143,15 +2182,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             policy: OrderedTraversalPolicy(),
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: 2,
-                  crossAxisSpacing: kLibraryGridSpacing,
-                  mainAxisSpacing: kLibraryGridSpacing),
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: 2,
+                crossAxisSpacing: kLibraryGridSpacing,
+                mainAxisSpacing: kLibraryGridSpacing,
+              ),
               itemCount: displayLimit,
               itemBuilder: (context, index) {
                 final orderIndex = index;
-                final focusNode =
-                    index == 0 ? _firstSearchResultFocusNode : null;
+                final focusNode = index == 0
+                    ? _firstSearchResultFocusNode
+                    : null;
 
                 return FocusTraversalOrder(
                   order: NumericFocusOrder(orderIndex.toDouble()),
@@ -2225,8 +2266,8 @@ class _SearchingIndicator extends StatelessWidget {
         Text(
           'מחפש...',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
+            color: cs.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -2265,15 +2306,15 @@ class _LoadingDotsTextState extends State<_LoadingDotsText>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
-      builder: (_, __) {
+      builder: (_, _) {
         final v = _controller.value;
         final dots = v < 0.25
             ? 0
             : v < 0.5
-                ? 1
-                : v < 0.75
-                    ? 2
-                    : 3;
+            ? 1
+            : v < 0.75
+            ? 2
+            : 3;
         return Text(
           'טוען ספרייה${'.' * dots}${' ' * (3 - dots)}',
           style: Theme.of(context).textTheme.bodyMedium,
@@ -2291,9 +2332,9 @@ class _LibraryBrowserList extends StatelessWidget {
     this.header,
     this.forPanel = false,
   }) : assert(
-          children != null || (itemCount != null && itemBuilder != null),
-          'Provide either children or itemCount with itemBuilder',
-        );
+         children != null || (itemCount != null && itemBuilder != null),
+         'Provide either children or itemCount with itemBuilder',
+       );
 
   final List<Widget>? children;
   final int? itemCount;
@@ -2313,7 +2354,7 @@ class _LibraryBrowserList extends StatelessWidget {
       return ListView(
         padding: padding,
         children: [
-          if (header != null) header!,
+          ?header,
           ...children!,
         ],
       );

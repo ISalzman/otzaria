@@ -16,7 +16,7 @@ import 'package:otzaria/tools/calendar/widgets/calendar_day_cell.dart';
 class CalendarMainPanel extends StatelessWidget {
   final CalendarState state;
   final void Function({CustomEvent? existingEvent, DateTime? specificDate})
-      onCreateEvent;
+  onCreateEvent;
 
   const CalendarMainPanel({
     super.key,
@@ -64,7 +64,7 @@ class CalendarMainPanel extends StatelessWidget {
                           fit: StackFit.expand,
                           children: [
                             ...previousChildren,
-                            if (currentChild != null) currentChild,
+                            ?currentChild,
                           ],
                         );
                       },
@@ -85,19 +85,23 @@ class CalendarMainPanel extends StatelessWidget {
 
   Key _buildGridKey(CalendarState state) {
     if (state.calendarView == CalendarView.week) {
-      final weekStart = state.selectedGregorianDate
-          .subtract(Duration(days: state.selectedGregorianDate.weekday % 7));
+      final weekStart = state.selectedGregorianDate.subtract(
+        Duration(days: state.selectedGregorianDate.weekday % 7),
+      );
       return ValueKey(
-          'week-${weekStart.year}-${weekStart.month}-${weekStart.day}');
+        'week-${weekStart.year}-${weekStart.month}-${weekStart.day}',
+      );
     }
     if (state.calendarType == CalendarType.hebrew ||
         state.calendarType == CalendarType.combined) {
       final jd = state.currentJewishDate;
       return ValueKey(
-          '${state.calendarView}-${jd.getJewishYear()}-${jd.getJewishMonth()}');
+        '${state.calendarView}-${jd.getJewishYear()}-${jd.getJewishMonth()}',
+      );
     }
     return ValueKey(
-        '${state.calendarView}-${state.currentGregorianDate.month}-${state.currentGregorianDate.year}');
+      '${state.calendarView}-${state.currentGregorianDate.month}-${state.currentGregorianDate.year}',
+    );
   }
 
   double _resolveMaxCalendarWidth(BoxConstraints constraints) {
@@ -121,20 +125,22 @@ class CalendarMainPanel extends StatelessWidget {
   Widget _buildDayNamesRow(BuildContext context) {
     return Row(
       children: kHebrewDays
-          .map((day) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    day,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+          .map(
+            (day) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  day,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ))
+              ),
+            ),
+          )
           .toList(),
     );
   }
@@ -167,8 +173,8 @@ class CalendarMainPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: cells.map((cell) {
         final shortTimes = context.read<CalendarCubit>().shortTimesFor(
-              cell.gregorian,
-            );
+          cell.gregorian,
+        );
         final additionalInfoLines = <String>[
           if (shortTimes['sunrise'] case final sunrise?) 'זריחה $sunrise',
           if (shortTimes['sunset'] case final sunset?) 'שקיעה $sunset',
@@ -180,9 +186,10 @@ class CalendarMainPanel extends StatelessWidget {
             cell.gregorian,
             cell.jewish,
             false,
-            () => context
-                .read<CalendarCubit>()
-                .selectDate(cell.jewish, cell.gregorian),
+            () => context.read<CalendarCubit>().selectDate(
+              cell.jewish,
+              cell.gregorian,
+            ),
             () => onCreateEvent(specificDate: cell.gregorian),
             additionalInfoLines: additionalInfoLines,
           ),
@@ -242,13 +249,19 @@ class CalendarMainPanel extends StatelessWidget {
     if (startWeekday > 0) {
       final prevMonth = JewishDate()
         ..setJewishDate(
-            currentJD.getJewishYear(), currentJD.getJewishMonth(), 1);
+          currentJD.getJewishYear(),
+          currentJD.getJewishMonth(),
+          1,
+        );
       prevMonth.back();
       final daysInPrev = prevMonth.getDaysInJewishMonth();
       for (int i = startWeekday - 1; i >= 0; i--) {
         final jd = JewishDate()
-          ..setJewishDate(prevMonth.getJewishYear(), prevMonth.getJewishMonth(),
-              daysInPrev - i);
+          ..setJewishDate(
+            prevMonth.getJewishYear(),
+            prevMonth.getJewishMonth(),
+            daysInPrev - i,
+          );
         cells.add(_CellData(jd.getGregorianCalendar(), jd, isOtherMonth: true));
       }
     }
@@ -257,7 +270,10 @@ class CalendarMainPanel extends StatelessWidget {
     for (int day = 1; day <= daysInMonth; day++) {
       final jd = JewishDate()
         ..setJewishDate(
-            currentJD.getJewishYear(), currentJD.getJewishMonth(), day);
+          currentJD.getJewishYear(),
+          currentJD.getJewishMonth(),
+          day,
+        );
       cells.add(_CellData(jd.getGregorianCalendar(), jd));
     }
 
@@ -265,7 +281,10 @@ class CalendarMainPanel extends StatelessWidget {
     const totalCells = 42;
     final lastDay = JewishDate()
       ..setJewishDate(
-          currentJD.getJewishYear(), currentJD.getJewishMonth(), daysInMonth);
+        currentJD.getJewishYear(),
+        currentJD.getJewishMonth(),
+        daysInMonth,
+      );
     lastDay.forward();
     final daysFromNext = totalCells - cells.length;
     for (int day = 1; day <= daysFromNext; day++) {
@@ -280,7 +299,10 @@ class CalendarMainPanel extends StatelessWidget {
   // ── בנה שורות ─────────────────────────────────────────────────────────────
 
   Widget _buildRowsFromCells(
-      BuildContext context, CalendarState state, List<_CellData> cells) {
+    BuildContext context,
+    CalendarState state,
+    List<_CellData> cells,
+  ) {
     final numRows = cells.length ~/ 7;
 
     return Column(
@@ -318,9 +340,10 @@ class CalendarMainPanel extends StatelessWidget {
                 if (cell.isOtherMonth) {
                   context.read<CalendarCubit>().jumpToDate(cell.gregorian);
                 } else {
-                  context
-                      .read<CalendarCubit>()
-                      .selectDate(cell.jewish, cell.gregorian);
+                  context.read<CalendarCubit>().selectDate(
+                    cell.jewish,
+                    cell.gregorian,
+                  );
                 }
               },
               () => onCreateEvent(specificDate: cell.gregorian),

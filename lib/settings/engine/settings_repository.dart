@@ -27,6 +27,9 @@ class SettingsRepository {
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
   static const String keyDefaultNikud = 'key-default-nikud';
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
+  static const String keyDefaultRemovePunctuation =
+      'key-default-remove-punctuation';
+  static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
   static const String keyDefaultCommentaryOpen = 'key-default-commentary-open';
   static const String keyPinSidebar = 'key-pin-sidebar';
@@ -44,6 +47,7 @@ class SettingsRepository {
   static const String keyLibraryShowPreview = 'key-library-show-preview';
   static const String keyEnablePerBookSettings = 'key-enable-per-book-settings';
   static const String keyPdfBookViewByDefault = 'key-pdf-book-view-by-default';
+  static const String keyTalmudBavliOpenFormat = 'key-talmud-bavli-open-format';
   static const String keyOfflineMode = 'key-offline-mode';
   static const String keyAutoSync = 'key-auto-sync';
   static const String keyAutoSyncCatalogs = 'key-auto-sync-catalogs';
@@ -55,12 +59,18 @@ class SettingsRepository {
       'key-queue-error-reports-when-offline';
   static const String keyLibraryPath = 'key-library-path';
   static const String keyIndexPath = 'key-index-path';
+  static const String keyDatabasesPath = 'key-databases-path';
   static const String keyBackupPath = 'key-backup-path';
   static const String keyLibraryFolderName = 'key-library-folder-name';
 
   /// Android only: nתיב ה-DB שנגיש ל-sqlite3 native (override ל-getDatabasePath).
   /// נוצר כאשר המשתמש בחר ספרייה באחסון חיצוני ו-DB הועתק/הועבר פנימה.
   static const String keyDbEffectivePath = 'key-db-effective-path';
+
+  /// Android only: שורש הספרייה שבחר המשתמש (למשל תיקיית האפליקציה על כרטיס
+  /// SD). משפיע רק על מיקום הספרייה (ספרים/אינדקס/מסדי נתונים); שאר נתוני
+  /// האפליקציה (Hive, תוספים, גיבויים) נשארים באחסון הפנימי. כשריק — הכל פנימי.
+  static const String keyAndroidLibraryRoot = 'key-android-library-root';
   static const String keyHebrewBooksPath = 'key-hebrew-books-path';
   static const String keyDevChannel = 'key-dev-channel';
   static const String keyCustomFolders = 'key-custom-folders';
@@ -195,6 +205,14 @@ class SettingsRepository {
         keyRemoveNikudFromTanach,
         defaultValue: false,
       ),
+      'defaultRemovePunctuation': _settings.getValue<bool>(
+        keyDefaultRemovePunctuation,
+        defaultValue: false,
+      ),
+      'defaultContinuousReadingMode': _settings.getValue<bool>(
+        keyContinuousReadingMode,
+        defaultValue: false,
+      ),
       'defaultSidebarOpen': _settings.getValue<bool>(
         keyDefaultSidebarOpen,
         defaultValue: false,
@@ -257,6 +275,10 @@ class SettingsRepository {
       'pdfBookViewByDefault': _settings.getValue<bool>(
         keyPdfBookViewByDefault,
         defaultValue: false,
+      ),
+      'talmudBavliOpenFormat': _settings.getValue<String>(
+        keyTalmudBavliOpenFormat,
+        defaultValue: 'text',
       ),
       'isOfflineMode': _settings.getValue<bool>(
         keyOfflineMode,
@@ -446,6 +468,14 @@ class SettingsRepository {
     await _settings.setValue(keyRemoveNikudFromTanach, value);
   }
 
+  Future<void> updateDefaultRemovePunctuation(bool value) async {
+    await _settings.setValue(keyDefaultRemovePunctuation, value);
+  }
+
+  Future<void> updateDefaultContinuousReadingMode(bool value) async {
+    await _settings.setValue(keyContinuousReadingMode, value);
+  }
+
   Future<void> updateDefaultSidebarOpen(bool value) async {
     await _settings.setValue(keyDefaultSidebarOpen, value);
   }
@@ -512,6 +542,10 @@ class SettingsRepository {
 
   Future<void> updatePdfBookViewByDefault(bool value) async {
     await _settings.setValue(keyPdfBookViewByDefault, value);
+  }
+
+  Future<void> updateTalmudBavliOpenFormat(String value) async {
+    await _settings.setValue(keyTalmudBavliOpenFormat, value);
   }
 
   Future<void> updateOfflineMode(bool value) async {
@@ -805,6 +839,7 @@ class SettingsRepository {
     await _settings.setValue(keyAutoUpdateIndex, true);
     await _settings.setValue(keyDefaultNikud, false);
     await _settings.setValue(keyRemoveNikudFromTanach, false);
+    await _settings.setValue(keyContinuousReadingMode, false);
     await _settings.setValue(keyDefaultSidebarOpen, false);
     await _settings.setValue(keyDefaultCommentaryOpen, false);
     await _settings.setValue(keyPinSidebar, false);
@@ -822,6 +857,7 @@ class SettingsRepository {
     await _settings.setValue(keyLibraryShowPreview, true);
     await _settings.setValue(keyEnablePerBookSettings, false);
     await _settings.setValue(keyPdfBookViewByDefault, false);
+    await _settings.setValue(keyTalmudBavliOpenFormat, 'text');
     await _settings.setValue(keySoftwareAndBookUpdatesEnabled, true);
     await _settings.setValue(keyErrorReportSenderEmail, '');
     await _settings.setValue(keyQueueErrorReportsWhenOffline, true);

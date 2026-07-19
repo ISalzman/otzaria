@@ -11,6 +11,7 @@ import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -2355,8 +2356,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // Create the category using orderIndex from DB (like Kotlin uses category.order)
     final category = Category(
       title: dbCategory.title,
-      description: metadata[dbCategory.title]?['heDesc'] ?? '',
-      shortDescription: metadata[dbCategory.title]?['heShortDesc'] ?? '',
+      description: dbCategory.heDesc ?? '',
+      shortDescription: dbCategory.heShortDesc ?? '',
       order: dbCategory.orderIndex,
       subCategories: [],
       books: [],
@@ -3424,6 +3425,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // לולאת האירועים אחת לכמה ספרים — ה-UI ממשיך להגיב בלי לשנות את
       // לוגיקת ה-DB עצמה.
       var processedSinceYield = 0;
+      // source פר-תיקייה (Personal::<נתיב>) — זהה לזה שמסלול הסנכרון/מחיקה
+      // מצפה לו, כדי שה-prune והמחיקה יזהו את הספרים לפי שם ה-source.
+      final folderSourceName = CustomFolderSource.nameForFolder(folderPath);
+      int? scanSourceId;
       for (final book in discovered) {
         if (++processedSinceYield >= 8) {
           processedSinceYield = 0;
@@ -3474,7 +3479,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
             // TXT / DOCX: already parsed inside the isolate.
             tocEntries = _rawTocToDbEntries(book.tocEntries!);
           } else if (book.fileType == 'pdf') {
-            // PDF: parse outline here — pdfrx requires platform channels.
+            // PDF: parse outline here — pdfrx serializes everything through a
+            // single global worker, so there is no gain in parallelizing.
             final pdfToc = await _parsePdfOutline(File(book.path));
             if (pdfToc.isNotEmpty) {
               final dbEntries = <db_models.TocEntry>[];
@@ -3483,6 +3489,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             }
           }
 
+          scanSourceId ??= await repository.insertSource(folderSourceName, -1);
           await repository.insertExternalContentBook(
             categoryId: categoryId,
             title: book.title,
@@ -3494,6 +3501,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
             orderIndex: 999.0,
             isPersonal: true,
             tocEntries: tocEntries,
+            sourceId: scanSourceId,
           );
           debugPrint(
               '📁 Inserted external book to DB: ${book.title} (type: ${book.fileType})');

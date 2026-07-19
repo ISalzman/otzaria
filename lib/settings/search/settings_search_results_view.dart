@@ -34,7 +34,7 @@ class SettingsSearchResultsView extends StatelessWidget {
         child: ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           itemCount: results.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
           itemBuilder: (context, index) {
             final entry = results[index];
             return _SearchResultTile(
@@ -72,15 +72,15 @@ class SettingsSearchResultsView extends StatelessWidget {
                   Text(
                     'לא נמצאו הגדרות תואמות',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'נסה לחפש מילים אחרות',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -108,8 +108,9 @@ class _SearchResultTile extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor =
-        isDark ? colorScheme.surfaceContainer : colorScheme.surface;
+    final cardColor = isDark
+        ? colorScheme.surfaceContainer
+        : colorScheme.surface;
 
     return Material(
       color: cardColor,
@@ -153,8 +154,10 @@ class _SearchResultTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.primary.withValues(alpha: 0.10),
                   borderRadius: AppTokens.borderRadiusAll,
@@ -243,13 +246,15 @@ class _HighlightedText extends StatelessWidget {
       if (origStart > origCursor) {
         spans.add(TextSpan(text: text.substring(origCursor, origStart)));
       }
-      spans.add(TextSpan(
-        text: text.substring(origStart, origEnd),
-        style: TextStyle(
-          backgroundColor: highlightColor,
-          fontWeight: FontWeight.w700,
+      spans.add(
+        TextSpan(
+          text: text.substring(origStart, origEnd),
+          style: TextStyle(
+            backgroundColor: highlightColor,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      ));
+      );
       origCursor = origEnd;
       searchFrom = hitEndExclusive;
     }

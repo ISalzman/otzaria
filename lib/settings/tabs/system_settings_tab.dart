@@ -14,6 +14,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/messages/report_messages.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -21,6 +23,8 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/dialogs/settings_dialogs_exports.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
+import 'package:otzaria/settings/services/backup/backup_rotation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
@@ -44,7 +48,6 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
-import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -233,6 +236,22 @@ class SystemSettingsTab extends StatefulWidget {
       keywords: ['שחזור', 'גיבוי', 'restore', 'import'],
     ),
     SettingsSearchEntry(
+      id: 'system.advanced.backup.retention',
+      title: 'ניקוי גיבויים ישנים',
+      subtitle: 'מדיניות שמירת גיבויים ומיזוגם לארכיון',
+      tab: SettingsTab.system,
+      cardId: 'system.advanced',
+      keywords: ['גיבוי', 'ניקוי', 'רוטציה', 'ארכיון', 'מקום', 'חסכוני'],
+    ),
+    SettingsSearchEntry(
+      id: 'system.advanced.backup.archive_restore',
+      title: 'שחזר מהארכיון',
+      subtitle: 'שחזור כל הנתונים שגובו אי-פעם, כולל פריטים שנמחקו',
+      tab: SettingsTab.system,
+      cardId: 'system.advanced',
+      keywords: ['שחזור', 'ארכיון', 'גיבוי', 'היסטוריה'],
+    ),
+    SettingsSearchEntry(
       id: 'system.advanced.cypher',
       title: 'מצב סייפר',
       subtitle: 'נעילת הגדרות בסיסמה',
@@ -298,6 +317,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   // ── גיבוי (expandable) ─────────────────────────────────────────────────────
   bool _isBackupExpanded = false;
   BackupStatus? _backupStatus;
+  BackupOverview? _backupOverview;
+  bool _isRunningMaintenance = false;
 
   // ── גרסאות ────────────────────────────────────────────────────────────────
   String? _appVersion;
@@ -364,6 +385,34 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final status = await BackupService.analyzeBackupStatus();
     if (!mounted) return;
     setState(() => _backupStatus = status);
+    final overview = await BackupMaintenance.getOverview();
+    if (!mounted) return;
+    setState(() => _backupOverview = overview);
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+
+  String _buildOverviewSubtitle(RetentionProfile profile) {
+    final base = switch (profile) {
+      RetentionProfile.economy =>
+        'שמירה מצומצמת — גיבויים ישנים ממוזגים לארכיון מוקדם',
+      RetentionProfile.balanced =>
+        'שבוע מלא, חודשיים שבועי, שנה חודשי — הישן ממוזג לארכיון',
+      RetentionProfile.keepAll => 'שום גיבוי לא נמחק',
+    };
+    final overview = _backupOverview;
+    if (overview == null) return base;
+    final parts = [
+      '${overview.backupCount} גיבויים',
+      if (overview.archiveExists) 'ארכיון',
+      _formatBytes(overview.totalBytes),
+    ];
+    return '$base\nכעת: ${parts.join(' · ')}';
   }
 
   Future<void> _openBooksListDialog(BuildContext context) async {
@@ -376,7 +425,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בטעינת רשימת הספרים: $e');
+      UiSnack.showError(SettingsMessages.booksListLoadError(e));
     }
   }
 
@@ -434,14 +483,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await reportService.saveSenderEmail(email);
     if (!mounted) return;
     setState(() {});
-    UiSnack.showSuccess('כתובת הזיהוי נשמרה. ניתן לשנות אותה בהגדרות.');
+    UiSnack.showSuccess(ReportMessages.senderEmailSaved);
   }
 
   Future<void> _clearSenderEmail() async {
     await DirectErrorReportService().clearSenderEmail();
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('כתובת הזיהוי הוסרה.');
+    UiSnack.show(ReportMessages.senderEmailCleared);
   }
 
   Future<void> _flushPendingReports() async {
@@ -460,13 +509,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     });
 
     if (sentCount > 0) {
-      UiSnack.showSuccess('נשלחו $sentCount דיווחים ממתינים.');
+      UiSnack.showSuccess(ReportMessages.pendingFlushed(sentCount));
     } else if (pendingBefore == 0) {
-      UiSnack.show('לא נמצאו דיווחים שמורים לשליחה.');
+      UiSnack.show(ReportMessages.noPendingToSend);
     } else {
-      UiSnack.show(
-        'לא ניתן לשלוח כרגע את הדיווחים השמורים. עדיין שמורים בתור $pendingAfter דיווחים, וניתן לנהל אותם בהגדרות.',
-      );
+      UiSnack.show(ReportMessages.pendingFlushFailed(pendingAfter));
     }
   }
 
@@ -481,7 +528,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     } catch (e) {
       debugPrint('Failed to send pending direct report: $e');
       if (mounted) {
-        UiSnack.showError('שגיאה בשליחת הדיווח: ${e.toString()}');
+        UiSnack.showError(ReportMessages.sendError(e));
       }
       return;
     } finally {
@@ -496,7 +543,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (result.isSent) {
       await ErrorReportHelper.showDirectReportDetailsDialog(
         context,
-        title: 'הדיווח נשלח בהצלחה',
+        title: ReportMessages.sentSuccessTitle,
         report: report,
       );
       if (!mounted) return;
@@ -525,7 +572,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await DirectErrorReportService().markPendingReportAsSent(report);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח סומן כנשלח.');
+    UiSnack.show(ReportMessages.markedAsSent);
   }
 
   Future<void> _editPendingReport(DirectErrorReport report) async {
@@ -561,7 +608,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
       if (!mounted) return;
       setState(() {});
-      UiSnack.showSuccess('הדיווח עודכן.');
+      UiSnack.showSuccess(ReportMessages.reportUpdated);
     }
   }
 
@@ -580,14 +627,14 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     await DirectErrorReportService().deletePendingReport(report.id);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח הוסר מהתור.');
+    UiSnack.show(ReportMessages.removedFromQueue);
   }
 
   Future<void> _deleteSentReport(DirectErrorReport report) async {
     await DirectErrorReportService().deleteSentReport(report.id);
     if (!mounted) return;
     setState(() {});
-    UiSnack.show('הדיווח נמחק מההיסטוריה.');
+    UiSnack.show(ReportMessages.deletedFromHistory);
   }
 
   Future<void> _clearSentReports() async {
@@ -613,7 +660,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     setState(() {
       _isClearingSentReports = false;
     });
-    UiSnack.show('היסטוריית הדיווחים נוקתה.');
+    UiSnack.show(ReportMessages.historyCleared);
   }
 
   Future<void> _clearPendingReports() async {
@@ -639,7 +686,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     setState(() {
       _isClearingPendingReports = false;
     });
-    UiSnack.show('הדיווחים השמורים נמחקו.');
+    UiSnack.show(ReportMessages.pendingCleared);
   }
 
   /// קובע לאיזו מערכת הפעלה יותאם סקריפט השליחה. בוינדוס מחזיר מיד Windows;
@@ -692,7 +739,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final reports = await reportService.getPendingReports();
     if (reports.isEmpty) {
       if (!mounted) return;
-      UiSnack.show('אין דיווחים שמורים לייצוא.');
+      UiSnack.show(ReportMessages.noPendingToExport);
       return;
     }
 
@@ -735,14 +782,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       UiSnack.showSuccess(
         target == OfflineSendScriptTarget.unix
-            ? 'סקריפט השליחה נשמר בהצלחה. הריצו אותו במחשב מחובר '
-                '(אם הקובץ אינו ניתן להרצה: bash ${script.fileName}).'
-            : 'סקריפט השליחה נשמר בהצלחה. לשליחת הדיווחים הפעילו את הקובץ '
-                'במחשב מחובר.',
+            ? ReportMessages.scriptSavedUnix(script.fileName)
+            : ReportMessages.scriptSavedWindows,
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשמירת הסקריפט: ${e.toString()}');
+      UiSnack.showError(ReportMessages.scriptSaveError(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -782,7 +827,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 return;
               }
               context.read<LibraryBloc>().add(RefreshLibrary());
-              UiSnack.showSuccess('הספרייה נטענה בהצלחה.');
+              UiSnack.showSuccess(SettingsMessages.libraryLoaded);
             }
 
             if (librarySelectionState is EmptyLibraryError &&
@@ -1345,8 +1390,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         final partial = result.skippedSections.isNotEmpty;
         final sizeStr = '${(size / 1024).toStringAsFixed(1)} KB';
         final message = partial
-            ? 'גיבוי חלקי נשמר ($sizeStr) — חסרים: ${result.skippedSections.join(", ")}'
-            : 'הגיבוי נשמר! גודל: $sizeStr';
+            ? SettingsMessages.partialBackupSaved(
+                sizeStr, result.skippedSections.join(", "))
+            : SettingsMessages.backupSaved(sizeStr);
         UiSnack.showWithAction(
           message: message,
           actionLabel: 'פתח מיקום קובץ',
@@ -1365,7 +1411,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       }
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה ביצירת הגיבוי: ${e.toString()}');
+      UiSnack.showError(SettingsMessages.backupCreateError(e));
     }
   }
 
@@ -1373,7 +1419,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final backups = await BackupService.getAvailableBackups();
     if (backups.isEmpty) {
       if (!mounted) return;
-      UiSnack.showError('לא נמצא קובץ גיבוי בתיקיית הגיבוי');
+      UiSnack.showError(SettingsMessages.noBackupFileFound);
       return;
     }
     final filePath = backups.first.path;
@@ -1390,6 +1436,33 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
     if (confirmed != true) return;
 
+    await _performRestore(filePath);
+  }
+
+  /// שחזור מהארכיון הממוזג — כולל פריטים שנמחקו בעבר, ולכן אזהרה נפרדת.
+  Future<void> _restoreFromArchive() async {
+    final archivePath = await BackupService.getArchivePathIfExists();
+    if (!mounted) return;
+    if (archivePath == null) {
+      UiSnack.show(SettingsMessages.archiveNotCreatedYet);
+      return;
+    }
+
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'שחזור מהארכיון?',
+      content: 'הארכיון מאחד את כל הגיבויים הישנים, ולכן הוא כולל גם פריטים '
+          '(סימניות, הערות, תוספים ועוד) שנמחקו מאז בכוונה — הם ישוחזרו גם הם.',
+      subtitle: 'פעולה זו אינה הפיכה!',
+      cancelText: 'ביטול',
+      confirmText: 'שחזר הכל',
+    );
+    if (confirmed != true) return;
+
+    await _performRestore(archivePath);
+  }
+
+  Future<void> _performRestore(String filePath) async {
     try {
       final skipped = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
@@ -1412,7 +1485,33 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       );
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשחזור הגיבוי: ${e.toString()}');
+      UiSnack.showError(SettingsMessages.backupRestoreError(e));
+    }
+  }
+
+  /// "נקה עכשיו" — רוטציה, מיזוג לארכיון ואיסוף קבצים יתומים.
+  Future<void> _runMaintenanceNow() async {
+    setState(() => _isRunningMaintenance = true);
+    try {
+      final result = await BackupMaintenance.runMaintenance();
+      if (!mounted) return;
+      final actions = <String>[
+        if (result.mergedIntoArchive > 0)
+          SettingsMessages.backupsMergedToArchive(result.mergedIntoArchive),
+        if (result.deletedBackups > 0)
+          SettingsMessages.backupFilesDeleted(result.deletedBackups),
+        if (result.freedBytes > 0)
+          SettingsMessages.backupSpaceFreed(_formatBytes(result.freedBytes)),
+      ];
+      UiSnack.show(actions.isEmpty
+          ? SettingsMessages.nothingToClean
+          : actions.join(', '));
+      await _loadBackupStatus();
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError(SettingsMessages.backupCleanupError(e));
+    } finally {
+      if (mounted) setState(() => _isRunningMaintenance = false);
     }
   }
 
@@ -1435,7 +1534,9 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     if (verified != true) return;
     if (context.mounted) {
       context.read<SettingsBloc>().add(UpdateProtectedModeEnabled(newValue));
-      UiSnack.show(newValue ? 'המצב המוגן הופעל' : 'המצב המוגן הושבת');
+      UiSnack.show(newValue
+          ? SettingsMessages.protectedModeEnabled
+          : SettingsMessages.protectedModeDisabled);
     }
   }
 
@@ -1497,6 +1598,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget _buildAdvancedSection(BuildContext context, SettingsState state) {
     final autoFrequency =
         Settings.getValue<String>(_keyAutoBackupFrequency) ?? 'weekly';
+    final retentionProfile = RetentionProfile.fromName(
+        Settings.getValue<String>(BackupMaintenance.keyRetentionProfile));
     final repository = RepositoryProvider.of<SettingsRepository>(context);
     final hasPassword = state.protectedModePasswordSet;
 
@@ -1525,7 +1628,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
         // ── גיבוי אוטומטי ──
         ExpandableSection(
-          headerKey: tourBackupSettingsTargetKey,
           icon: FluentIcons.calendar_clock_24_regular,
           title: 'גיבוי אוטומטי',
           subtitle: _buildAutoBackupSubtitle(autoFrequency),
@@ -1612,6 +1714,45 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 _loadResolvedBackupPath();
               },
             ),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.calendar_clock_24_regular,
+              title: 'גיבוי אוטומטי',
+              subtitle: switch (autoFrequency) {
+                'daily' => 'יתבצע גיבוי בכל יום',
+                'weekly' => 'יתבצע גיבוי כל שבוע',
+                'monthly' => 'יתבצע גיבוי כל חודש',
+                _ => 'גיבוי אוטומטי מושבת',
+              },
+              value: autoFrequency,
+              entries: const [
+                AppMenuEntry(value: 'none', label: 'ללא'),
+                AppMenuEntry(value: 'daily', label: 'יומי'),
+                AppMenuEntry(value: 'weekly', label: 'שבועי'),
+                AppMenuEntry(value: 'monthly', label: 'חודשי'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(_keyAutoBackupFrequency, value);
+                setState(() {});
+              },
+            ),
+            SettingsActionTile.dropdownTile<String>(
+              icon: FluentIcons.broom_24_regular,
+              title: 'ניקוי גיבויים ישנים',
+              subtitle: _buildOverviewSubtitle(retentionProfile),
+              value: retentionProfile.name,
+              entries: const [
+                AppMenuEntry(value: 'economy', label: 'חסכוני'),
+                AppMenuEntry(value: 'balanced', label: 'מאוזן'),
+                AppMenuEntry(value: 'keepAll', label: 'שמור הכל'),
+              ],
+              onSelected: (value) {
+                if (value == null) return;
+                Settings.setValue<String>(
+                    BackupMaintenance.keyRetentionProfile, value);
+                setState(() {});
+              },
+            ),
             SettingsActionTile.segmentedTile<_BackupMode>(
               icon: FluentIcons.options_24_regular,
               title: 'מצב גיבוי',
@@ -1688,6 +1829,51 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 onChanged: () => setState(() {}),
               ),
             ],
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ActionButton.recommended(
+                      icon: FluentIcons.arrow_upload_24_regular,
+                      text: 'צור גיבוי עכשיו',
+                      onPressed: _createBackup,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.arrow_download_24_regular,
+                      text: 'שחזר מגיבוי',
+                      onPressed: _restoreBackup,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.broom_24_regular,
+                      text: 'נקה עכשיו',
+                      isLoading: _isRunningMaintenance,
+                      onPressed: _runMaintenanceNow,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ActionButton.neutral(
+                      icon: FluentIcons.archive_24_regular,
+                      text: 'שחזר מהארכיון',
+                      onPressed: _restoreFromArchive,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
 

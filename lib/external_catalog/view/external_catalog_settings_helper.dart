@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
@@ -75,7 +76,7 @@ class ExternalCatalogSettingsHelper {
     );
 
     if (shouldDownload != true) {
-      UiSnack.show('ללא מסד הקטלוגים לא יוצגו ספרים חיצוניים');
+      UiSnack.show(SettingsMessages.noCatalogNoExternalBooks);
       return false;
     }
     if (!context.mounted) {
@@ -83,13 +84,13 @@ class ExternalCatalogSettingsHelper {
     }
 
     try {
-      UiSnack.show('מוריד את מסד הקטלוגים החיצוני...');
+      UiSnack.show(SettingsMessages.downloadingCatalogDb);
       await repository.downloadLatestDatabase();
       DataRepository.instance.invalidateExternalBooksCache();
-      UiSnack.showSuccess('מסד הקטלוגים הורד בהצלחה');
+      UiSnack.showSuccess(SettingsMessages.catalogDbDownloaded);
       return true;
     } catch (e) {
-      UiSnack.showError('שגיאה בהורדת מסד הקטלוגים: $e');
+      UiSnack.showError(SettingsMessages.catalogDbDownloadError(e));
       return false;
     }
   }

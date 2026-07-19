@@ -21,7 +21,7 @@ class SettingsState extends Equatable {
   final bool commentatorsFontBold;
   final double commentatorsFontSize;
   final double
-      lineHeight; // מרווח בין שורות (1.0 = רגיל, 1.5 = מרווח וחצי, וכו')
+  lineHeight; // מרווח בין שורות (1.0 = רגיל, 1.5 = מרווח וחצי, וכו')
   final bool showOtzarHachochma;
   final bool showHebrewBooks;
   final bool showExternalBooks;
@@ -30,6 +30,13 @@ class SettingsState extends Equatable {
   final bool autoUpdateIndex;
   final bool defaultRemoveNikud;
   final bool removeNikudFromTanach;
+
+  /// ברירת מחדל להסרת סימני פיסוק בפתיחת ספר (אינה חלה על ספרי תנ"ך).
+  final bool defaultRemovePunctuation;
+
+  /// ברירת מחדל להצגת הטקסט ברצף (מצב "קריאה רציפה"). חלה בפתיחת ספר על
+  /// ספרים שתומכים בכך בלבד (תנ"ך ותלמוד); בשאר הספרים אין לה השפעה.
+  final bool defaultContinuousReadingMode;
   final bool defaultSidebarOpen;
   final bool defaultCommentaryOpen;
   final bool pinSidebar;
@@ -44,6 +51,7 @@ class SettingsState extends Equatable {
   final Map<String, String> shortcuts;
   final bool enablePerBookSettings;
   final bool pdfBookViewByDefault;
+  final String talmudBavliOpenFormat;
   final bool isOfflineMode;
   final bool enableHtmlLinks;
   final bool personalNotesCollapsedByDefault;
@@ -86,6 +94,8 @@ class SettingsState extends Equatable {
     required this.autoUpdateIndex,
     required this.defaultRemoveNikud,
     required this.removeNikudFromTanach,
+    required this.defaultRemovePunctuation,
+    this.defaultContinuousReadingMode = false,
     required this.defaultSidebarOpen,
     required this.defaultCommentaryOpen,
     required this.pinSidebar,
@@ -100,6 +110,7 @@ class SettingsState extends Equatable {
     required this.shortcuts,
     required this.enablePerBookSettings,
     required this.pdfBookViewByDefault,
+    required this.talmudBavliOpenFormat,
     required this.isOfflineMode,
     required this.enableHtmlLinks,
     required this.personalNotesCollapsedByDefault,
@@ -110,8 +121,8 @@ class SettingsState extends Equatable {
     this.mergeUserBooksIntoLibrary = false,
     this.hiddenBuiltInToolIds = const <String>{},
     this.builtInToolsPinnedToNavRail = const <String>{},
-    bool? softwareAndBookUpdatesEnabled,
-  }) : _softwareAndBookUpdatesEnabled = softwareAndBookUpdatesEnabled;
+    this._softwareAndBookUpdatesEnabled,
+  });
 
   factory SettingsState.initial() {
     return const SettingsState(
@@ -134,6 +145,8 @@ class SettingsState extends Equatable {
       autoUpdateIndex: true,
       defaultRemoveNikud: false,
       removeNikudFromTanach: false,
+      defaultRemovePunctuation: false,
+      defaultContinuousReadingMode: false,
       defaultSidebarOpen: false,
       defaultCommentaryOpen: false,
       pinSidebar: false,
@@ -148,6 +161,7 @@ class SettingsState extends Equatable {
       shortcuts: {},
       enablePerBookSettings: false,
       pdfBookViewByDefault: false,
+      talmudBavliOpenFormat: 'text',
       isOfflineMode: false,
       enableHtmlLinks: true,
       personalNotesCollapsedByDefault: true,
@@ -179,6 +193,8 @@ class SettingsState extends Equatable {
     bool? autoUpdateIndex,
     bool? defaultRemoveNikud,
     bool? removeNikudFromTanach,
+    bool? defaultRemovePunctuation,
+    bool? defaultContinuousReadingMode,
     bool? defaultSidebarOpen,
     bool? defaultCommentaryOpen,
     bool? pinSidebar,
@@ -193,6 +209,7 @@ class SettingsState extends Equatable {
     Map<String, String>? shortcuts,
     bool? enablePerBookSettings,
     bool? pdfBookViewByDefault,
+    String? talmudBavliOpenFormat,
     bool? isOfflineMode,
     bool? enableHtmlLinks,
     bool? personalNotesCollapsedByDefault,
@@ -228,6 +245,10 @@ class SettingsState extends Equatable {
       defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
       removeNikudFromTanach:
           removeNikudFromTanach ?? this.removeNikudFromTanach,
+      defaultRemovePunctuation:
+          defaultRemovePunctuation ?? this.defaultRemovePunctuation,
+      defaultContinuousReadingMode:
+          defaultContinuousReadingMode ?? this.defaultContinuousReadingMode,
       defaultSidebarOpen: defaultSidebarOpen ?? this.defaultSidebarOpen,
       defaultCommentaryOpen:
           defaultCommentaryOpen ?? this.defaultCommentaryOpen,
@@ -244,9 +265,12 @@ class SettingsState extends Equatable {
       enablePerBookSettings:
           enablePerBookSettings ?? this.enablePerBookSettings,
       pdfBookViewByDefault: pdfBookViewByDefault ?? this.pdfBookViewByDefault,
+      talmudBavliOpenFormat:
+          talmudBavliOpenFormat ?? this.talmudBavliOpenFormat,
       isOfflineMode: isOfflineMode ?? this.isOfflineMode,
       enableHtmlLinks: enableHtmlLinks ?? this.enableHtmlLinks,
-      personalNotesCollapsedByDefault: personalNotesCollapsedByDefault ??
+      personalNotesCollapsedByDefault:
+          personalNotesCollapsedByDefault ??
           this.personalNotesCollapsedByDefault,
       protectedModeEnabled: protectedModeEnabled ?? this.protectedModeEnabled,
       protectedModePasswordSet:
@@ -271,50 +295,53 @@ class SettingsState extends Equatable {
 
   @override
   List<Object?> get props => [
-        isDarkMode,
-        followSystemTheme,
-        seedColor,
-        darkSeedColor,
-        textMaxWidth,
-        fontSize,
-        fontFamily,
-        commentatorsFontFamily,
-        fontBold,
-        commentatorsFontBold,
-        commentatorsFontSize,
-        lineHeight,
-        showOtzarHachochma,
-        showHebrewBooks,
-        showExternalBooks,
-        showTeamim,
-        replaceHolyNames,
-        autoUpdateIndex,
-        defaultRemoveNikud,
-        removeNikudFromTanach,
-        defaultSidebarOpen,
-        defaultCommentaryOpen,
-        pinSidebar,
-        sidebarWidth,
-        facetFilteringWidth,
-        commentaryPaneWidth,
-        copyWithHeaders,
-        copyHeaderFormat,
-        isFullscreen,
-        libraryViewMode,
-        libraryShowPreview,
-        shortcuts,
-        enablePerBookSettings,
-        pdfBookViewByDefault,
-        isOfflineMode,
-        enableHtmlLinks,
-        personalNotesCollapsedByDefault,
-        protectedModeEnabled,
-        protectedModePasswordSet,
-        autoSyncCatalogs,
-        compactMenuMode,
-        mergeUserBooksIntoLibrary,
-        hiddenBuiltInToolIds,
-        builtInToolsPinnedToNavRail,
-        softwareAndBookUpdatesEnabled,
-      ];
+    isDarkMode,
+    followSystemTheme,
+    seedColor,
+    darkSeedColor,
+    textMaxWidth,
+    fontSize,
+    fontFamily,
+    commentatorsFontFamily,
+    fontBold,
+    commentatorsFontBold,
+    commentatorsFontSize,
+    lineHeight,
+    showOtzarHachochma,
+    showHebrewBooks,
+    showExternalBooks,
+    showTeamim,
+    replaceHolyNames,
+    autoUpdateIndex,
+    defaultRemoveNikud,
+    removeNikudFromTanach,
+    defaultRemovePunctuation,
+    defaultContinuousReadingMode,
+    defaultSidebarOpen,
+    defaultCommentaryOpen,
+    pinSidebar,
+    sidebarWidth,
+    facetFilteringWidth,
+    commentaryPaneWidth,
+    copyWithHeaders,
+    copyHeaderFormat,
+    isFullscreen,
+    libraryViewMode,
+    libraryShowPreview,
+    shortcuts,
+    enablePerBookSettings,
+    pdfBookViewByDefault,
+    talmudBavliOpenFormat,
+    isOfflineMode,
+    enableHtmlLinks,
+    personalNotesCollapsedByDefault,
+    protectedModeEnabled,
+    protectedModePasswordSet,
+    autoSyncCatalogs,
+    compactMenuMode,
+    mergeUserBooksIntoLibrary,
+    hiddenBuiltInToolIds,
+    builtInToolsPinnedToNavRail,
+    softwareAndBookUpdatesEnabled,
+  ];
 }

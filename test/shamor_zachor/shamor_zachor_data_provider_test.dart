@@ -144,6 +144,59 @@ void main() {
     expect(provider.getBookDetails('תנ"ך', 'ספר אישי'), isNotNull);
     expect(provider.getBookDetails('תנ"ך', 'לא במעקב'), isNull);
   });
+
+  group('addCustomBooks', () {
+    ShamorZachorDataProvider buildProvider() => ShamorZachorDataProvider(
+          sqliteDataProvider: SqliteDataProvider.instance,
+          categoryTreeLoader: ({
+            required String dbPath,
+            required List<int> trackedBookIds,
+          }) async {
+            throw Exception('force fallback');
+          },
+        );
+
+    test('מזהה לפי id מול המסד הרשמי גם כשהשם לא קיים', () async {
+      final provider = buildProvider();
+      await provider.loadAllData();
+
+      final result = await provider.addCustomBooks([
+        (
+          id: fixtureBookIds['לא במעקב'],
+          bookName: 'שם שלא קיים במסד',
+          categoryId: null,
+        ),
+      ]);
+
+      expect(result.added, 1);
+      expect(result.failed, 0);
+      expect(provider.trackedBookIds, contains(fixtureBookIds['לא במעקב']));
+    });
+
+    test('נופל לזיהוי לפי כותרת כאשר אין id', () async {
+      final provider = buildProvider();
+      await provider.loadAllData();
+
+      final result = await provider.addCustomBooks([
+        (id: null, bookName: 'לא במעקב', categoryId: null),
+      ]);
+
+      expect(result.added, 1);
+      expect(provider.trackedBookIds, contains(fixtureBookIds['לא במעקב']));
+    });
+
+    test('ספר שלא נמצא נספר ככישלון', () async {
+      final provider = buildProvider();
+      await provider.loadAllData();
+
+      final result = await provider.addCustomBooks([
+        (id: null, bookName: 'ספר שאינו קיים', categoryId: null),
+      ]);
+
+      expect(result.added, 0);
+      expect(result.failed, 1);
+    });
+  });
 }
 
 Future<Map<String, int>> _insertFixture(SeforimRepository repository) async {

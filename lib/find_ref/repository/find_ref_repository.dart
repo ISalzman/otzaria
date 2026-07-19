@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -772,6 +773,23 @@ class FindRefRepository {
     return await _enrichWithPaths(ranked);
   }
 
+  /// תוצאות PDF של תלמוד בבלי אינן מוצגות באיתור — מהדורת הטקסט מייצגת את
+  /// המסכת, ופורמט הפתיחה בפועל נקבע לפי הגדרת המשתמש בעת הפתיחה.
+  static List<DbReferenceResult> _dropTalmudBavliPdfRefs(
+          List<DbReferenceResult> results) =>
+      results.where((r) => !isTalmudBavliPdfRef(r)).toList();
+
+  @visibleForTesting
+  static bool isTalmudBavliPdfRef(DbReferenceResult r) {
+    if (!r.isPdf) return false;
+    const bavli = DatabaseConstants.talmudBavliFolderName;
+    if (r.bookPath.isNotEmpty) {
+      return r.bookPath.split(', ').first.trim() == bavli;
+    }
+    // PDF מחוץ ל-DB: זיהוי לפי תיקיית הקובץ.
+    return r.filePath.contains('/$bavli/') || r.filePath.contains('\\$bavli\\');
+  }
+
   /// מזהה מילת-דור בשאילתה (בכל מיקום) ומחזיר את הדור + טוקני-הנושא שנותרו.
   /// תומך ב"ראשונים"/"אחרונים" (טוקן יחיד) וב"מחברי זמננו" (שני טוקנים).
   ///
@@ -1004,7 +1022,7 @@ class FindRefRepository {
         .map((r) => r.bookId)
         .where((id) => id > 0)
         .toSet();
-    if (uniqueIds.isEmpty) return results;
+    if (uniqueIds.isEmpty) return _dropTalmudBavliPdfRefs(results);
 
     final pathFn =
         getCategoryPath ?? ReferenceBooksCache.instance.getCategoryPathForBook;
@@ -1013,7 +1031,7 @@ class FindRefRepository {
       pathMap[id] = await pathFn(id);
     }));
 
-    return results.map((r) {
+    final enriched = results.map((r) {
       if (r.bookPath.isNotEmpty) return r; // already set — don't overwrite
       final path = r.bookId > 0 ? (pathMap[r.bookId] ?? '') : '';
       if (path.isEmpty) return r;
@@ -1032,6 +1050,7 @@ class FindRefRepository {
         isUserBook: r.isUserBook,
       );
     }).toList();
+    return _dropTalmudBavliPdfRefs(enriched);
   }
 
   /// ממיין את [hits] כך שספרים שכותרתם מכסה יותר טוקני-שאילתה משמעותיים

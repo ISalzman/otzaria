@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
+import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/data/repository/hive_list_repository.dart';
 import 'package:otzaria/models/direct_error_report.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -239,7 +240,7 @@ class DirectErrorReportService {
     if (_isOfflineMode) {
       if (!queueWhenOfflineEnabled) {
         return DirectReportDeliveryResult.failed(
-          'מצב אופליין פעיל, והגדרת התור האוטומטי כבויה.',
+          ReportMessages.offlineQueueDisabled,
         );
       }
 
@@ -248,9 +249,7 @@ class DirectErrorReportService {
         queueType: DirectErrorReportQueueType.automaticRetry,
       );
       return DirectReportDeliveryResult.queued(
-        'אין כרגע חיבור. הדיווח נשמר ויישלח אוטומטית '
-        'ל$directReportTargetLabel כשהתוכנה תחזור להיות מקוונת. '
-        'ניתן לנהל את הדיווחים השמורים בהגדרות.',
+        ReportMessages.queuedOffline(directReportTargetLabel),
       );
     }
 
@@ -259,14 +258,10 @@ class DirectErrorReportService {
       await _saveSentReport(report);
       unawaited(flushPendingReports(onlyAutomaticRetry: true));
       if (_isSefariaReport(report)) {
-        return DirectReportDeliveryResult.sent(
-          'הדיווח נשלח בהצלחה לספריא.',
-        );
+        return DirectReportDeliveryResult.sent(ReportMessages.sentToSefaria);
       }
 
-      return DirectReportDeliveryResult.sent(
-        'הדיווח נשלח בהצלחה לצוות אוצריא.',
-      );
+      return DirectReportDeliveryResult.sent(ReportMessages.sentToOtzaria);
     }
 
     if (attemptResult.isPermanentFailure) {
@@ -278,9 +273,7 @@ class DirectErrorReportService {
       queueType: DirectErrorReportQueueType.automaticRetry,
     );
     return DirectReportDeliveryResult.queued(
-      'השליחה לא הצליחה כרגע. הדיווח נשמר להמשך ויישלח אוטומטית '
-      'ל$directReportTargetLabel בניסיון הבא. ניתן לנהל את הדיווחים '
-      'השמורים בהגדרות.',
+      ReportMessages.queuedAfterFailure(directReportTargetLabel),
     );
   }
 
@@ -419,31 +412,25 @@ class DirectErrorReportService {
 
       if (_isPermanentHttpFailure(response.statusCode)) {
         return _SendAttemptResult.permanentFailure(
-          'שרת הדיווחים החזיר ${response.statusCode}. הדיווח לא נשמר להמשך כי נראה שיש בעיה קבועה בנתונים שנשלחו.',
+          ReportMessages.serverPermanentFailure(response.statusCode),
         );
       }
 
       return _SendAttemptResult.transientFailure(
-        'שרת הדיווחים החזיר ${response.statusCode}. הדיווח יישמר להמשך.',
+        ReportMessages.serverTransientFailure(response.statusCode),
       );
     } on SocketException catch (e) {
       debugPrint('Direct report network error: $e');
-      return _SendAttemptResult.transientFailure(
-        'אין כרגע חיבור לאינטרנט.',
-      );
+      return _SendAttemptResult.transientFailure(ReportMessages.noInternet);
     } on http.ClientException catch (e) {
       debugPrint('Direct report client error: $e');
-      return _SendAttemptResult.transientFailure(
-        'שגיאה בשליחת הדיווח.',
-      );
+      return _SendAttemptResult.transientFailure(ReportMessages.sendFailed);
     } on TimeoutException {
-      return _SendAttemptResult.transientFailure(
-        'השרת לא הגיב בזמן.',
-      );
+      return _SendAttemptResult.transientFailure(ReportMessages.serverTimeout);
     } catch (e) {
       debugPrint('Direct report unexpected error: $e');
       return _SendAttemptResult.transientFailure(
-        'אירעה שגיאה לא צפויה בשליחת הדיווח.',
+        ReportMessages.unexpectedSendError,
       );
     }
   }
@@ -501,7 +488,7 @@ foreach (\$payload in @(\$payloads)) {
 }
 
 \$summary = "נשלחו בהצלחה: \$sent`r`nנכשלו: \$failed`r`n`r`n" + (\$lines -join "`r`n")
-[System.Windows.Forms.MessageBox]::Show(\$summary, 'שליחת דיווחים שמורים - אוצריא') | Out-Null''';
+[System.Windows.Forms.MessageBox]::Show(\$summary, '${ReportMessages.offlineScriptWindowTitle}') | Out-Null''';
   }
 
   /// בונה קובץ .sh ל-Linux/macOS: שולח כל דיווח ב-curl ומציג את הסיכום בחלון
@@ -549,13 +536,13 @@ foreach (\$payload in @(\$payloads)) {
       ..writeln("printf '%b\\n' \"\$summary\" > \"\$tmp\"")
       ..writeln('if command -v zenity >/dev/null 2>&1; then')
       ..writeln(
-          "  zenity --text-info --filename=\"\$tmp\" --title='שליחת דיווחים שמורים - אוצריא'")
+          "  zenity --text-info --filename=\"\$tmp\" --title='${ReportMessages.offlineScriptWindowTitle}'")
       ..writeln('elif command -v kdialog >/dev/null 2>&1; then')
       ..writeln(
-          "  kdialog --title 'שליחת דיווחים שמורים - אוצריא' --textbox \"\$tmp\"")
+          "  kdialog --title '${ReportMessages.offlineScriptWindowTitle}' --textbox \"\$tmp\"")
       ..writeln('elif command -v osascript >/dev/null 2>&1; then')
       ..writeln(
-          "  osascript -e \"display dialog (do shell script \\\"cat \\\" & quoted form of \\\"\$tmp\\\") buttons {\\\"סגור\\\"} with title \\\"שליחת דיווחים שמורים - אוצריא\\\"\" >/dev/null 2>&1")
+          "  osascript -e \"display dialog (do shell script \\\"cat \\\" & quoted form of \\\"\$tmp\\\") buttons {\\\"סגור\\\"} with title \\\"${ReportMessages.offlineScriptWindowTitle}\\\"\" >/dev/null 2>&1")
       ..writeln('else')
       ..writeln("  cat \"\$tmp\"")
       ..writeln('fi')

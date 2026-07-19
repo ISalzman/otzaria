@@ -11,13 +11,15 @@ import '../../helpers/memory_settings_cache.dart';
 class _StubTextBookBloc extends Bloc<TextBookEvent, TextBookState>
     implements TextBookBloc {
   _StubTextBookBloc()
-      : super(TextBookInitial.named(
+    : super(
+        TextBookInitial.named(
           TextBook(title: 'ספר בדיקה'),
           0,
           false,
           const [],
-        )) {
-    on<TextBookEvent>((_, __) {});
+        ),
+      ) {
+    on<TextBookEvent>((_, _) {});
   }
 
   @override
@@ -57,7 +59,8 @@ void main() {
       void listener() => calls++;
       tab.toggleCommentatorsPaneNotifier.addListener(listener);
       addTearDown(
-          () => tab.toggleCommentatorsPaneNotifier.removeListener(listener));
+        () => tab.toggleCommentatorsPaneNotifier.removeListener(listener),
+      );
 
       tab.toggleCommentatorsPaneNotifier.value++;
       tab.toggleCommentatorsPaneNotifier.value++;

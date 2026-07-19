@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -8,9 +9,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
 
-  SettingsBloc({required SettingsRepository repository})
-      : _repository = repository,
-        super(SettingsState.initial()) {
+  SettingsBloc({required this._repository}) : super(SettingsState.initial()) {
     on<LoadSettings>(_onLoadSettings);
     on<UpdateDarkMode>(_onUpdateDarkMode);
     on<UpdateFollowSystemTheme>(_onUpdateFollowSystemTheme);
@@ -32,6 +31,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
+    on<UpdateDefaultRemovePunctuation>(_onUpdateDefaultRemovePunctuation);
+    on<UpdateDefaultContinuousReadingMode>(
+      _onUpdateDefaultContinuousReadingMode,
+    );
     on<UpdateDefaultSidebarOpen>(_onUpdateDefaultSidebarOpen);
     on<UpdateDefaultCommentaryOpen>(_onUpdateDefaultCommentaryOpen);
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
@@ -48,6 +51,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShortcut>(_onUpdateShortcut);
     on<UpdateEnablePerBookSettings>(_onUpdateEnablePerBookSettings);
     on<UpdatePdfBookViewByDefault>(_onUpdatePdfBookViewByDefault);
+    on<UpdateTalmudBavliOpenFormat>(_onUpdateTalmudBavliOpenFormat);
     on<UpdateOfflineMode>(_onUpdateOfflineMode);
     on<UpdateAutoSyncCatalogs>(_onUpdateAutoSyncCatalogs);
     on<UpdateSoftwareAndBookUpdatesEnabled>(
@@ -55,7 +59,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     );
     on<UpdateEnableHtmlLinks>(_onUpdateEnableHtmlLinks);
     on<UpdatePersonalNotesCollapsedByDefault>(
-        _onUpdatePersonalNotesCollapsedByDefault);
+      _onUpdatePersonalNotesCollapsedByDefault,
+    );
     on<UpdateCompactMenuMode>(_onUpdateCompactMenuMode);
     on<UpdateMergeUserBooksIntoLibrary>(_onUpdateMergeUserBooksIntoLibrary);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
@@ -74,62 +79,70 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     // בדסקטופ: אם המשתמש בחר גופן מערכת בעבר, נטען אותו כדי שיהיה זמין ב-TextStyle.
     await AppFonts.ensureFontLoaded(settings['fontFamily'] as String);
     await AppFonts.ensureFontLoaded(
-        settings['commentatorsFontFamily'] as String);
+      settings['commentatorsFontFamily'] as String,
+    );
 
-    emit(SettingsState(
-      isDarkMode: settings['isDarkMode'],
-      followSystemTheme: settings['followSystemTheme'] ?? false,
-      seedColor: settings['seedColor'],
-      darkSeedColor: settings['darkSeedColor'],
-      textMaxWidth: settings['textMaxWidth'],
-      fontSize: settings['fontSize'],
-      fontFamily: settings['fontFamily'],
-      commentatorsFontFamily: settings['commentatorsFontFamily'],
-      fontBold: settings['fontBold'] ?? false,
-      commentatorsFontBold: settings['commentatorsFontBold'] ?? false,
-      commentatorsFontSize: settings['commentatorsFontSize'],
-      lineHeight: settings['lineHeight'],
-      showOtzarHachochma: settings['showOtzarHachochma'],
-      showHebrewBooks: settings['showHebrewBooks'],
-      showExternalBooks: settings['showExternalBooks'],
-      showTeamim: settings['showTeamim'],
-      replaceHolyNames: settings['replaceHolyNames'],
-      autoUpdateIndex: settings['autoUpdateIndex'],
-      defaultRemoveNikud: settings['defaultRemoveNikud'],
-      removeNikudFromTanach: settings['removeNikudFromTanach'],
-      defaultSidebarOpen: settings['defaultSidebarOpen'],
-      defaultCommentaryOpen: settings['defaultCommentaryOpen'],
-      pinSidebar: settings['pinSidebar'],
-      sidebarWidth: settings['sidebarWidth'],
-      facetFilteringWidth: settings['facetFilteringWidth'],
-      commentaryPaneWidth: settings['commentaryPaneWidth'],
-      copyWithHeaders: settings['copyWithHeaders'],
-      copyHeaderFormat: settings['copyHeaderFormat'],
-      isFullscreen: settings['isFullscreen'],
-      libraryViewMode: settings['libraryViewMode'],
-      libraryShowPreview: settings['libraryShowPreview'],
-      shortcuts: Map<String, String>.unmodifiable(
-        Map<String, String>.from(settings['shortcuts'] as Map),
+    emit(
+      SettingsState(
+        isDarkMode: settings['isDarkMode'],
+        followSystemTheme: settings['followSystemTheme'] ?? false,
+        seedColor: settings['seedColor'],
+        darkSeedColor: settings['darkSeedColor'],
+        textMaxWidth: settings['textMaxWidth'],
+        fontSize: settings['fontSize'],
+        fontFamily: settings['fontFamily'],
+        commentatorsFontFamily: settings['commentatorsFontFamily'],
+        fontBold: settings['fontBold'] ?? false,
+        commentatorsFontBold: settings['commentatorsFontBold'] ?? false,
+        commentatorsFontSize: settings['commentatorsFontSize'],
+        lineHeight: settings['lineHeight'],
+        showOtzarHachochma: settings['showOtzarHachochma'],
+        showHebrewBooks: settings['showHebrewBooks'],
+        showExternalBooks: settings['showExternalBooks'],
+        showTeamim: settings['showTeamim'],
+        replaceHolyNames: settings['replaceHolyNames'],
+        autoUpdateIndex: settings['autoUpdateIndex'],
+        defaultRemoveNikud: settings['defaultRemoveNikud'],
+        removeNikudFromTanach: settings['removeNikudFromTanach'],
+        defaultRemovePunctuation: settings['defaultRemovePunctuation'],
+        defaultContinuousReadingMode:
+            settings['defaultContinuousReadingMode'] ?? false,
+        defaultSidebarOpen: settings['defaultSidebarOpen'],
+        defaultCommentaryOpen: settings['defaultCommentaryOpen'],
+        pinSidebar: settings['pinSidebar'],
+        sidebarWidth: settings['sidebarWidth'],
+        facetFilteringWidth: settings['facetFilteringWidth'],
+        commentaryPaneWidth: settings['commentaryPaneWidth'],
+        copyWithHeaders: settings['copyWithHeaders'],
+        copyHeaderFormat: settings['copyHeaderFormat'],
+        isFullscreen: settings['isFullscreen'],
+        libraryViewMode: settings['libraryViewMode'],
+        libraryShowPreview: settings['libraryShowPreview'],
+        shortcuts: Map<String, String>.unmodifiable(
+          Map<String, String>.from(settings['shortcuts'] as Map),
+        ),
+        enablePerBookSettings: settings['enablePerBookSettings'],
+        pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
+        talmudBavliOpenFormat: settings['talmudBavliOpenFormat'] ?? 'text',
+        isOfflineMode: settings['isOfflineMode'] ?? false,
+        autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
+        softwareAndBookUpdatesEnabled:
+            settings['softwareAndBookUpdatesEnabled'] ?? true,
+        enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
+        personalNotesCollapsedByDefault:
+            settings['personalNotesCollapsedByDefault'] ?? true,
+        compactMenuMode: settings['compactMenuMode'] ?? false,
+        mergeUserBooksIntoLibrary:
+            settings['mergeUserBooksIntoLibrary'] ?? false,
+        protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
+        protectedModePasswordSet: _repository.hasProtectedModePassword(),
+        hiddenBuiltInToolIds:
+            (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
+        builtInToolsPinnedToNavRail:
+            (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
+            <String>{},
       ),
-      enablePerBookSettings: settings['enablePerBookSettings'],
-      pdfBookViewByDefault: settings['pdfBookViewByDefault'] ?? false,
-      isOfflineMode: settings['isOfflineMode'] ?? false,
-      autoSyncCatalogs: settings['autoSyncCatalogs'] ?? true,
-      softwareAndBookUpdatesEnabled:
-          settings['softwareAndBookUpdatesEnabled'] ?? true,
-      enableHtmlLinks: settings['enableHtmlLinks'] ?? true,
-      personalNotesCollapsedByDefault:
-          settings['personalNotesCollapsedByDefault'] ?? true,
-      compactMenuMode: settings['compactMenuMode'] ?? false,
-      mergeUserBooksIntoLibrary: settings['mergeUserBooksIntoLibrary'] ?? false,
-      protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
-      protectedModePasswordSet: _repository.hasProtectedModePassword(),
-      hiddenBuiltInToolIds:
-          (settings['hiddenBuiltInToolIds'] as Set<String>?) ?? <String>{},
-      builtInToolsPinnedToNavRail:
-          (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
-              <String>{},
-    ));
+    );
   }
 
   Future<void> _onUpdateEnablePerBookSettings(
@@ -146,6 +159,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updatePdfBookViewByDefault(event.pdfBookViewByDefault);
     emit(state.copyWith(pdfBookViewByDefault: event.pdfBookViewByDefault));
+  }
+
+  Future<void> _onUpdateTalmudBavliOpenFormat(
+    UpdateTalmudBavliOpenFormat event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateTalmudBavliOpenFormat(event.talmudBavliOpenFormat);
+    emit(state.copyWith(talmudBavliOpenFormat: event.talmudBavliOpenFormat));
   }
 
   Future<void> _onUpdateOfflineMode(
@@ -184,10 +205,12 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdatePersonalNotesCollapsedByDefault event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository
-        .updatePersonalNotesCollapsedByDefault(event.collapsedByDefault);
-    emit(state.copyWith(
-        personalNotesCollapsedByDefault: event.collapsedByDefault));
+    await _repository.updatePersonalNotesCollapsedByDefault(
+      event.collapsedByDefault,
+    );
+    emit(
+      state.copyWith(personalNotesCollapsedByDefault: event.collapsedByDefault),
+    );
   }
 
   Future<void> _onUpdateCompactMenuMode(
@@ -202,10 +225,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateMergeUserBooksIntoLibrary event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository
-        .updateMergeUserBooksIntoLibrary(event.mergeUserBooksIntoLibrary);
-    emit(state.copyWith(
-        mergeUserBooksIntoLibrary: event.mergeUserBooksIntoLibrary));
+    await _repository.updateMergeUserBooksIntoLibrary(
+      event.mergeUserBooksIntoLibrary,
+    );
+    emit(
+      state.copyWith(
+        mergeUserBooksIntoLibrary: event.mergeUserBooksIntoLibrary,
+      ),
+    );
   }
 
   Future<void> _onUpdateProtectedModeEnabled(
@@ -246,10 +273,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateBuiltInToolsPinnedToNavRail event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository
-        .updateBuiltInToolsPinnedToNavRail(event.builtInToolsPinnedToNavRail);
-    emit(state.copyWith(
-        builtInToolsPinnedToNavRail: event.builtInToolsPinnedToNavRail));
+    await _repository.updateBuiltInToolsPinnedToNavRail(
+      event.builtInToolsPinnedToNavRail,
+    );
+    emit(
+      state.copyWith(
+        builtInToolsPinnedToNavRail: event.builtInToolsPinnedToNavRail,
+      ),
+    );
   }
 
   Future<void> _onUpdateDarkMode(
@@ -317,8 +348,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     await AppFonts.ensureFontLoaded(event.commentatorsFontFamily);
-    await _repository
-        .updateCommentatorsFontFamily(event.commentatorsFontFamily);
+    await _repository.updateCommentatorsFontFamily(
+      event.commentatorsFontFamily,
+    );
     emit(state.copyWith(commentatorsFontFamily: event.commentatorsFontFamily));
   }
 
@@ -413,12 +445,44 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     _cleanupRedundantPerBookSettings();
   }
 
+  Future<void> _onUpdateDefaultContinuousReadingMode(
+    UpdateDefaultContinuousReadingMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateDefaultContinuousReadingMode(
+      event.defaultContinuousReadingMode,
+    );
+    emit(
+      state.copyWith(
+        defaultContinuousReadingMode: event.defaultContinuousReadingMode,
+      ),
+    );
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
+  }
+
   Future<void> _onUpdateRemoveNikudFromTanach(
     UpdateRemoveNikudFromTanach event,
     Emitter<SettingsState> emit,
   ) async {
     await _repository.updateRemoveNikudFromTanach(event.removeNikudFromTanach);
     emit(state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach));
+  }
+
+  Future<void> _onUpdateDefaultRemovePunctuation(
+    UpdateDefaultRemovePunctuation event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateDefaultRemovePunctuation(
+      event.defaultRemovePunctuation,
+    );
+    emit(
+      state.copyWith(defaultRemovePunctuation: event.defaultRemovePunctuation),
+    );
+
+    // ניקוי קבצי per_book_settings מיותרים
+    _cleanupRedundantPerBookSettings();
   }
 
   Future<void> _onUpdateDefaultSidebarOpen(
@@ -554,7 +618,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
         defaultRemoveNikud: state.defaultRemoveNikud,
-        defaultShowSplitView: false, // ערך ברירת מחדל
+        defaultRemovePunctuation: state.defaultRemovePunctuation,
+        defaultShowSplitView:
+            Settings.getValue<bool>('key-splited-view') ?? true,
+        defaultContinuousReadingMode: state.defaultContinuousReadingMode,
       );
     } catch (e) {
       // בטסטים או בסביבות ללא פלאגין, זה בסדר להתעלם

@@ -6,7 +6,6 @@ import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
-import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/migration/sync/background_db_sync_worker.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart'
@@ -24,30 +23,33 @@ part 'custom_folders_state.dart';
 
 typedef LoadCustomFoldersFn = List<CustomFolder> Function();
 typedef SaveCustomFoldersFn = Future<void> Function(List<CustomFolder> folders);
-typedef SyncCustomFoldersFn = Future<FileSyncResult> Function(
-  List<CustomFolder> folders,
-);
+typedef SyncCustomFoldersFn =
+    Future<FileSyncResult> Function(
+      List<CustomFolder> folders, {
+      String? onlyFolderPath,
+    });
 typedef DeleteCustomFolderFromDbFn = Future<void> Function(CustomFolder folder);
 
 class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
-  final LibraryBloc _libraryBloc;
+  // תלות צרה במקום LibraryBloc מלא — בנייתו מאתחלת את כל ספקי הספרייה,
+  // מה שמכביד על בדיקות ומרחיב את משטח התלויות שלא לצורך.
+  final void Function(LibraryEvent event) _addLibraryEvent;
   final LoadCustomFoldersFn? _loadFoldersOverride;
   final SaveCustomFoldersFn? _saveFoldersOverride;
   final SyncCustomFoldersFn? _syncFoldersOverride;
   final DeleteCustomFolderFromDbFn? _deleteFolderFromDbOverride;
 
   CustomFoldersBloc({
-    required LibraryBloc libraryBloc,
+    required this._addLibraryEvent,
     LoadCustomFoldersFn? loadFolders,
     SaveCustomFoldersFn? saveFolders,
     SyncCustomFoldersFn? syncFolders,
     DeleteCustomFolderFromDbFn? deleteFolderFromDb,
-  })  : _libraryBloc = libraryBloc,
-        _loadFoldersOverride = loadFolders,
-        _saveFoldersOverride = saveFolders,
-        _syncFoldersOverride = syncFolders,
-        _deleteFolderFromDbOverride = deleteFolderFromDb,
-        super(const CustomFoldersState()) {
+  }) : _loadFoldersOverride = loadFolders,
+       _saveFoldersOverride = saveFolders,
+       _syncFoldersOverride = syncFolders,
+       _deleteFolderFromDbOverride = deleteFolderFromDb,
+       super(const CustomFoldersState()) {
     on<LoadCustomFolders>(_onLoad);
     on<AddCustomFolder>(_onAdd);
     on<RemoveCustomFolder>(_onRemove);
@@ -62,53 +64,74 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
   }
 
   Future<void> _onAdd(
-      AddCustomFolder event, Emitter<CustomFoldersState> emit) async {
+    AddCustomFolder event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     final currentFolders = _loadFolders();
-    final newFolders =
-        CustomFoldersManager.addFolder(currentFolders, event.path);
+    final newFolders = CustomFoldersManager.addFolder(
+      currentFolders,
+      event.path,
+    );
     await _saveFolders(newFolders);
-    emit(state.copyWith(
-      folders: newFolders,
-      isSyncing: true,
-      activePath: event.path,
-      message: null,
-      error: null,
-    ));
+    emit(
+      state.copyWith(
+        folders: newFolders,
+        isSyncing: true,
+        activePath: event.path,
+        message: null,
+        error: null,
+      ),
+    );
 
     try {
       final repository = await UserBooksDatabaseHolder.instance.repository;
       final folderName = event.path.split(RegExp(r'[/\\]')).last;
       final result = await DatabaseLibraryProvider.instance
           .scanAndAddExternalBooksFromFolder(
-              event.path, folderName, repository);
+            event.path,
+            folderName,
+            repository,
+          );
 
       if (result.isSuccess) {
-        _libraryBloc.add(RefreshLibrary(changedBookKeys: {
-          for (final id in result.updatedBookIds)
-            IndexingRepository.userBookKey(id),
-        }));
+        _addLibraryEvent(
+          RefreshLibrary(
+            changedBookKeys: {
+              for (final id in result.updatedBookIds)
+                IndexingRepository.userBookKey(id),
+            },
+          ),
+        );
         if (result.hasPartialFailure) {
           final failedMsg = result.failedDetails.isNotEmpty
               ? result.failedDetails.map((d) => '"${d.$1}": ${d.$2}').join('\n')
               : 'כשל: ${result.failedBooks}';
-          emit(state.copyWith(
-            isSyncing: false,
-            error: [
-              '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
-              if (failedMsg.isNotEmpty) failedMsg,
-            ].join('\n'),
-          ));
+          emit(
+            state.copyWith(
+              isSyncing: false,
+              error: [
+                '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו',
+                if (failedMsg.isNotEmpty) failedMsg,
+              ].join('\n'),
+            ),
+          );
         } else {
-          emit(state.copyWith(
-            isSyncing: false,
-            message: result.hasChanges
-                ? '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
-                : 'התיקייה נוספה. לא נמצאו ספרים חדשים.',
-          ));
+          emit(
+            state.copyWith(
+              isSyncing: false,
+              message: result.hasChanges
+                  ? '${result.addedBooks} ספרים נוספו, ${result.updatedBooks} עודכנו'
+                  : 'התיקייה נוספה. לא נמצאו ספרים חדשים.',
+            ),
+          );
         }
       } else {
-        emit(state.copyWith(
-            isSyncing: false, error: 'שגיאת סריקה: ${result.fatalError}'));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            error: 'שגיאת סריקה: ${result.fatalError}',
+          ),
+        );
       }
     } catch (e) {
       emit(state.copyWith(isSyncing: false, error: 'שגיאה בסריקת התיקייה: $e'));
@@ -116,10 +139,14 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
   }
 
   Future<void> _onRemove(
-      RemoveCustomFolder event, Emitter<CustomFoldersState> emit) async {
+    RemoveCustomFolder event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     final currentFolders = _loadFolders();
-    final newFolders =
-        CustomFoldersManager.removeFolder(currentFolders, event.folder.path);
+    final newFolders = CustomFoldersManager.removeFolder(
+      currentFolders,
+      event.folder.path,
+    );
     await _saveFolders(newFolders);
     emit(state.copyWith(folders: newFolders, message: null, error: null));
 
@@ -127,27 +154,35 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       emit(state.copyWith(isSyncing: true, message: null, error: null));
       try {
         await _deleteFolderFromDb(event.folder);
-        emit(state.copyWith(
-          isSyncing: false,
-          message: 'התיקייה והספרים הוסרו מהתוכנה.',
-        ));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            message: 'התיקייה והספרים הוסרו מהתוכנה.',
+          ),
+        );
       } catch (e) {
-        emit(state.copyWith(
-          isSyncing: false,
-          error: 'שגיאה בהסרת הספרים מהתוכנה: $e',
-        ));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            error: 'שגיאה בהסרת הספרים מהתוכנה: $e',
+          ),
+        );
         return;
       }
     } else {
-      emit(state.copyWith(
-        message: 'התיקייה הוסרה. הספרים נשארו בתוכנה.',
-      ));
+      emit(
+        state.copyWith(
+          message: 'התיקייה הוסרה. הספרים נשארו בתוכנה.',
+        ),
+      );
     }
-    _libraryBloc.add(RefreshLibrary());
+    _addLibraryEvent(RefreshLibrary());
   }
 
   Future<void> _onToggleAddToDatabase(
-      ToggleAddToDatabase event, Emitter<CustomFoldersState> emit) async {
+    ToggleAddToDatabase event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     final currentFolders = _loadFolders();
     final newFolders = CustomFoldersManager.updateFolderDbSetting(
       currentFolders,
@@ -155,74 +190,101 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       event.value,
     );
     await _saveFolders(newFolders);
-    emit(state.copyWith(
-      folders: newFolders,
-      isSyncing: true,
-      activePath: event.folder.path,
-      message: null,
-      error: null,
-    ));
+    emit(
+      state.copyWith(
+        folders: newFolders,
+        isSyncing: true,
+        activePath: event.folder.path,
+        message: null,
+        error: null,
+      ),
+    );
 
     try {
       final result = await _syncCustomFolders(newFolders);
       if (!event.value) {
-        emit(state.copyWith(
-          isSyncing: false,
-          message:
-              'תוכן הספרים נסרק ועודכן.\nמעתה הספרים ייקראו ישירות מהקבצים.',
-        ));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            message:
+                'תוכן הספרים נסרק ועודכן.\nמעתה הספרים ייקראו ישירות מהקבצים.',
+          ),
+        );
       } else {
         final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
-        emit(state.copyWith(
-          isSyncing: false,
-          message: hasChanges
-              ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
-                  '${result.updatedBooks} עודכנו'
-              : null,
-        ));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            message: hasChanges
+                ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
+                      '${result.updatedBooks} עודכנו'
+                : null,
+          ),
+        );
       }
-      _libraryBloc.add(RefreshLibrary(changedBookKeys: {
-        for (final id in result.updatedBookIds)
-          IndexingRepository.userBookKey(id),
-      }));
+      _addLibraryEvent(
+        RefreshLibrary(
+          changedBookKeys: {
+            for (final id in result.updatedBookIds)
+              IndexingRepository.userBookKey(id),
+          },
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(isSyncing: false, error: 'שגיאה בסנכרון: $e'));
     }
   }
 
   Future<void> _onRescan(
-      RescanCustomFolders event, Emitter<CustomFoldersState> emit) async {
+    RescanCustomFolders event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     final currentFolders = _loadFolders();
-    emit(state.copyWith(
-      folders: currentFolders,
-      isSyncing: true,
-      message: null,
-      error: null,
-    ));
+    emit(
+      state.copyWith(
+        folders: currentFolders,
+        isSyncing: true,
+        message: null,
+        error: null,
+      ),
+    );
     try {
-      final result = await _syncCustomFolders(currentFolders);
+      final result = await _syncCustomFolders(
+        currentFolders,
+        onlyFolderPath: event.onlyFolderPath,
+      );
       final hasChanges = result.addedBooks > 0 || result.updatedBooks > 0;
       final message = hasChanges
           ? 'הסריקה הושלמה: ${result.addedBooks} ספרים נוספו, '
-              '${result.updatedBooks} עודכנו'
+                '${result.updatedBooks} עודכנו'
           : event.showNoChangesMessage
-              ? 'הסריקה הושלמה. לא נמצאו ספרים חדשים.'
-              : null;
+          ? 'הסריקה הושלמה. לא נמצאו ספרים חדשים.'
+          : null;
       emit(state.copyWith(isSyncing: false, message: message));
-      _libraryBloc.add(RefreshLibrary(changedBookKeys: {
-        for (final id in result.updatedBookIds)
-          IndexingRepository.userBookKey(id),
-      }));
+      _addLibraryEvent(
+        RefreshLibrary(
+          changedBookKeys: {
+            for (final id in result.updatedBookIds)
+              IndexingRepository.userBookKey(id),
+          },
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-          isSyncing: false, error: 'שגיאה בסריקת תיקיות אישיות: $e'));
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          error: 'שגיאה בסריקת תיקיות אישיות: $e',
+        ),
+      );
     }
   }
 
   /// מייבא דורות וקישורים מקבצים שהמשתמש בחר — לצמיתות, בדריסה מצטברת. מנקה
   /// את מטמוני הדור כדי שהשינוי ייכנס לתוקף מיד.
   Future<void> _onImportUserFiles(
-      ImportUserContentFiles event, Emitter<CustomFoldersState> emit) async {
+    ImportUserContentFiles event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     if (event.paths.isEmpty) return;
     emit(state.copyWith(isSyncing: true, message: null, error: null));
     try {
@@ -233,19 +295,24 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         GenerationCache.instance.clear();
         clearCommentatorOrderCache();
         CommentaryService.clearEraCache();
-        _libraryBloc.add(RefreshLibrary());
+        _addLibraryEvent(RefreshLibrary());
       }
       final imp = (
         generations: r.generationsApplied,
         links: r.linksApplied,
-        errors: r.errors
+        errors: r.errors,
       );
-      emit(state.copyWith(
-        isSyncing: false,
-        message: _importSummary(imp) ??
-            (r.errors.isEmpty ? 'לא נמצאו נתונים לייבוא בקבצים שנבחרו.' : null),
-        error: _importErrorText(imp),
-      ));
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          message:
+              _importSummary(imp) ??
+              (r.errors.isEmpty
+                  ? 'לא נמצאו נתונים לייבוא בקבצים שנבחרו.'
+                  : null),
+          error: _importErrorText(imp),
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(isSyncing: false, error: 'שגיאה בייבוא הקבצים: $e'));
     }
@@ -253,7 +320,9 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
 
   /// מוחק את כל הדורות והקישורים המיובאים ומנקה את מטמוני הדור.
   Future<void> _onClearUserContent(
-      ClearUserContent event, Emitter<CustomFoldersState> emit) async {
+    ClearUserContent event,
+    Emitter<CustomFoldersState> emit,
+  ) async {
     emit(state.copyWith(isSyncing: true, message: null, error: null));
     try {
       final userDb =
@@ -262,11 +331,13 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       GenerationCache.instance.clear();
       clearCommentatorOrderCache();
       CommentaryService.clearEraCache();
-      _libraryBloc.add(RefreshLibrary());
-      emit(state.copyWith(
-        isSyncing: false,
-        message: 'הדורות והקישורים המיובאים נמחקו.',
-      ));
+      _addLibraryEvent(RefreshLibrary());
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          message: 'הדורות והקישורים המיובאים נמחקו.',
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(isSyncing: false, error: 'שגיאה במחיקת הנתונים: $e'));
     }
@@ -287,8 +358,9 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
   ) {
     if (imp.errors.isEmpty) return null;
     final shown = imp.errors.take(10).join('\n');
-    final more =
-        imp.errors.length > 10 ? '\nועוד ${imp.errors.length - 10}…' : '';
+    final more = imp.errors.length > 10
+        ? '\nועוד ${imp.errors.length - 10}…'
+        : '';
     return 'שגיאות בייבוא הקבצים:\n$shown$more';
   }
 
@@ -298,18 +370,22 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       return override();
     }
 
-    final jsonString =
-        Settings.getValue<String>(SettingsRepository.keyCustomFolders);
+    final jsonString = Settings.getValue<String>(
+      SettingsRepository.keyCustomFolders,
+    );
     return CustomFoldersManager.loadFolders(jsonString);
   }
 
-  Future<FileSyncResult> _syncCustomFolders(List<CustomFolder> folders) {
+  Future<FileSyncResult> _syncCustomFolders(
+    List<CustomFolder> folders, {
+    String? onlyFolderPath,
+  }) {
     final override = _syncFoldersOverride;
     if (override != null) {
-      return override(folders);
+      return override(folders, onlyFolderPath: onlyFolderPath);
     }
 
-    return _runSync(folders);
+    return _runSync(folders, onlyFolderPath: onlyFolderPath);
   }
 
   Future<void> _deleteFolderFromDb(CustomFolder folder) {
@@ -321,20 +397,25 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     return _deleteFromDatabase(folder);
   }
 
-  Future<FileSyncResult> _runSync(List<CustomFolder> folders) async {
+  Future<FileSyncResult> _runSync(
+    List<CustomFolder> folders, {
+    String? onlyFolderPath,
+  }) async {
     final sqliteProvider = SqliteDataProvider.instance;
     if (!sqliteProvider.isInitialized) await sqliteProvider.initialize();
     if (!sqliteProvider.isInitialized) throw Exception('מסד הנתונים לא זמין');
 
     final dbPath = sqliteProvider.dbPath;
-    final libraryPath = Settings.getValue<String>('key-library-path');
+    final libraryPath = Settings.getValue<String>(
+      SettingsRepository.keyLibraryPath,
+    );
     if (libraryPath == null || libraryPath.isEmpty) {
       throw Exception('נתיב הספרייה לא מוגדר');
     }
 
     final folderName =
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
-            '';
+        '';
     final userBooksDbPath = await UserBooksDatabaseHolder.resolveDbPath();
 
     // ה-close/reopen של ה-RO סביב הכתיבה מנוהלים *בתוך*
@@ -346,6 +427,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       libraryPath: libraryPath,
       customFolders: folders,
       folderName: folderName,
+      onlyFolderPath: onlyFolderPath,
       prepareForWrite: sqliteProvider.closeForExternalWrite,
       restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
     );
@@ -361,10 +443,16 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
     // הקטגוריה — כך הסרת תיקייה לא תפגע בספרי תיקייה אחרת בעלת אותו
     // basename שממוזגת לאותה קטגוריה.
     // ה-close/reopen של ה-RO מנוהלים *בתוך* [runDeleteFolderFromDbInIsolate].
+    // ההגדרות כבר נשמרו בלי התיקייה — _loadFolders מחזיר את הנשארות, כדי
+    // שספרי legacy של תיקיית-בן מקוננת לא יימחקו עם האב.
     await runDeleteFolderFromDbInIsolate(
       dbPath: sqliteProvider.dbPath,
       userBooksDbPath: userBooksDbPath,
       folderPath: folder.path,
+      otherConfiguredFolderPaths: [
+        for (final other in _loadFolders())
+          if (other.path != folder.path) other.path,
+      ],
       prepareForWrite: sqliteProvider.closeForExternalWrite,
       restoreAfterWrite: sqliteProvider.reopenAfterExternalWrite,
     );

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
@@ -405,29 +406,38 @@ String changelogBetweenVersionsForUpdateDialog({
   return result;
 }
 
+/// האם בדיקת עדכונים חסומה כרגע (מצב מנותק או שעדכוני תוכנה כובו בהגדרות).
+bool updateCheckBlocked({
+  required bool isOfflineMode,
+  required bool updatesEnabled,
+}) =>
+    isOfflineMode || !updatesEnabled;
+
+/// האם להריץ בדיקת עדכון מחדש לאחר שינוי הגדרות: רק במעבר מחסימה לזמינות,
+/// וכשאין בדיקה/הורדה/התקנה בעיצומן (upToDate הוא גם המצב שנקבע בעת חסימה).
+@visibleForTesting
+bool shouldRecheckAfterUnblock({
+  required bool wasBlocked,
+  required bool isBlocked,
+  required UpdatStatus status,
+}) =>
+    wasBlocked && !isBlocked && status == UpdatStatus.upToDate;
+
 class MyUpdatWidget extends StatelessWidget {
   const MyUpdatWidget({super.key, required this.child});
 
   final Widget child;
   @override
   Widget build(BuildContext context) {
-    if (!supportsManagedUpdatePlatform(
-      isWeb: kIsWeb,
-      operatingSystem: Platform.operatingSystem,
-    )) {
+    // אסור שצורת העץ תלויה בהגדרות משתנות (מנותק/עדכונים) — החלפת העוטף
+    // בזמן ריצה בונה מחדש את כל תת-העץ וה-PageView מאבד את העמוד הפעיל.
+    if (kDebugMode ||
+        !supportsManagedUpdatePlatform(
+          isWeb: kIsWeb,
+          operatingSystem: Platform.operatingSystem,
+        )) {
       return child;
     }
-    final isOfflineMode =
-        Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false;
-    final softwareAndBookUpdatesEnabled = Settings.getValue<bool>(
-          SettingsRepository.keySoftwareAndBookUpdatesEnabled,
-          defaultValue: true,
-        ) ??
-        true;
-    if (kDebugMode || isOfflineMode || !softwareAndBookUpdatesEnabled) {
-      return child;
-    }
-
     return _ManagedUpdatWidget(child: child);
   }
 }
@@ -460,15 +470,38 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// מסמן שהבדיקה האוטומטית הראשונית כבר הופעלה, כדי שלא תופעל פעמיים.
   bool _initialCheckTriggered = false;
 
+  StreamSubscription<SettingsState>? _settingsSubscription;
+  late bool _updateCheckWasBlocked;
+
   @override
   void initState() {
     super.initState();
     _installWindowCloseHook();
+    _listenForUpdateUnblock();
     // דוחים את הבדיקה הראשונית ל-post-frame כדי שהסיור המודרך (שמופעל אף הוא
     // ב-post-frame, מוקדם יותר באותו פריים) יספיק לעדכן את מצבו לפני שנחליט.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _startInitialUpdateCheckRespectingTour();
+    });
+  }
+
+  /// כשהבדיקה נחסמה (מנותק/עדכונים כבויים) המצב נקבע ל-upToDate ואיש לא
+  /// יבדוק שוב — לכן מאזינים ל-SettingsBloc ובודקים מחדש במעבר לזמינות.
+  void _listenForUpdateUnblock() {
+    final settingsBloc = context.read<SettingsBloc>();
+    _updateCheckWasBlocked = !settingsBloc.state.canUseSoftwareAndBookUpdates;
+    _settingsSubscription = settingsBloc.stream.listen((settingsState) {
+      final isBlocked = !settingsState.canUseSoftwareAndBookUpdates;
+      final shouldRecheck = shouldRecheckAfterUnblock(
+        wasBlocked: _updateCheckWasBlocked,
+        isBlocked: isBlocked,
+        status: _status,
+      );
+      _updateCheckWasBlocked = isBlocked;
+      if (shouldRecheck && _initialCheckTriggered && mounted) {
+        _checkForUpdate();
+      }
     });
   }
 
@@ -494,6 +527,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   @override
   void dispose() {
     _tourSubscription?.cancel();
+    _settingsSubscription?.cancel();
     if (_windowCloseHookInstalled) {
       windowManager.removeListener(_windowListener);
       _windowCloseHookInstalled = false;
@@ -564,6 +598,21 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   Future<void> _checkForUpdate() async {
+    if (updateCheckBlocked(
+      isOfflineMode:
+          Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ?? false,
+      updatesEnabled: Settings.getValue<bool>(
+            SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+            defaultValue: true,
+          ) ??
+          true,
+    )) {
+      setState(() {
+        _status = UpdatStatus.upToDate;
+      });
+      return;
+    }
+
     setState(() {
       _status = UpdatStatus.checking;
     });
@@ -613,8 +662,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
           e is TimeoutException ||
           e is http.ClientException;
       _showUpdateError(isNetwork
-          ? 'שגיאה בחיבור לרשת במהלך בדיקת עדכונים'
-          : 'שגיאה בבדיקת עדכונים');
+          ? LibraryMessages.updateCheckNetworkError
+          : LibraryMessages.updateCheckError);
     }
   }
 
@@ -770,7 +819,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       });
     } catch (e, st) {
       debugPrint('[Update] download failed: $e\n$st');
-      _showUpdateError('שגיאה בהורדת העדכון');
+      _showUpdateError(LibraryMessages.updateDownloadError);
     }
   }
 
@@ -787,7 +836,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
-      _showUpdateError('שגיאה בהפעלת מתקין העדכון');
+      _showUpdateError(LibraryMessages.updateInstallerLaunchError);
       return false;
     }
   }

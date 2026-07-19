@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:flutter/services.dart';
@@ -395,8 +396,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         context.read<LibraryBloc>().state.library,
       );
       if (parsedCategory.hasCategoryToken && !parsedCategory.categoryFound) {
-        UiSnack.showError(
-            'הקטגוריה או הספר "${parsedCategory.notFoundNames.join('", "')}" לא נמצאו');
+        UiSnack.showError(LibraryMessages.categoryOrBookNotFound(
+            parsedCategory.notFoundNames));
         return;
       }
       query = parsedCategory.query;

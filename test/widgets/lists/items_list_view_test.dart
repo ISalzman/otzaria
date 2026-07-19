@@ -33,8 +33,8 @@ void main() {
   }) {
     Widget child = ItemsListView(
       items: testItems,
-      onItemTap: onItemTap ?? (_, __, ___) {},
-      onDelete: (_, __) {},
+      onItemTap: onItemTap ?? (_, _, _) {},
+      onDelete: (_, _) {},
       onClearAll: (_) {},
       hintText: 'חיפוש...',
       emptyText: 'ריק',
@@ -45,7 +45,9 @@ void main() {
       subtitleBuilder: subtitleBuilder,
     );
     if (width != null) {
-      child = Center(child: SizedBox(width: width, child: child));
+      child = Center(
+        child: SizedBox(width: width, child: child),
+      );
     }
     return MaterialApp(
       home: Scaffold(body: child),
@@ -54,11 +56,13 @@ void main() {
 
   /// שורת "תחילת קבוצה" — ClipRRect עם פינות עליונות מעוגלות שעוטף Material
   /// של שורת כרטיס. שקול לספירת כרטיסי קבוצה במבנה הווירטואלי.
-  Finder groupStarts() => find.byWidgetPredicate((w) =>
-      w is ClipRRect &&
-      w.borderRadius is BorderRadius &&
-      (w.borderRadius as BorderRadius).topLeft != Radius.zero &&
-      w.child is Material);
+  Finder groupStarts() => find.byWidgetPredicate(
+    (w) =>
+        w is ClipRRect &&
+        w.borderRadius is BorderRadius &&
+        (w.borderRadius as BorderRadius).topLeft != Radius.zero &&
+        w.child is Material,
+  );
 
   group('ItemsListView', () {
     testWidgets('מציג את כל הפריטים כשאין additionalFilter', (tester) async {
@@ -77,9 +81,11 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        additionalFilter: (item) => item.workspaceName == 'גמרא',
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          additionalFilter: (item) => item.workspaceName == 'גמרא',
+        ),
+      );
       await tester.pump();
 
       expect(find.text('שבת עד:'), findsOneWidget);
@@ -88,56 +94,66 @@ void main() {
     });
 
     testWidgets(
-        'additionalFilter שמחזיר false לכל הפריטים מציג את הודעת המצב הריק '
-        '(לא "לא נמצא")', (tester) async {
-      // הסינון לא מטעמי חיפוש המשתמש, אלא בגלל שאין פריטים תואמים. לכן צריך
-      // להציג את emptyText (למשל "אין סימניות בספר זה") ולא את notFoundText
-      // שמיועד לחיפוש שלא הניב תוצאות.
-      await tester.binding.setSurfaceSize(const Size(800, 600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      'additionalFilter שמחזיר false לכל הפריטים מציג את הודעת המצב הריק '
+      '(לא "לא נמצא")',
+      (tester) async {
+        // הסינון לא מטעמי חיפוש המשתמש, אלא בגלל שאין פריטים תואמים. לכן צריך
+        // להציג את emptyText (למשל "אין סימניות בספר זה") ולא את notFoundText
+        // שמיועד לחיפוש שלא הניב תוצאות.
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        additionalFilter: (_) => false,
-      ));
-      await tester.pump();
+        await tester.pumpWidget(
+          buildWidget(
+            additionalFilter: (_) => false,
+          ),
+        );
+        await tester.pump();
 
-      expect(find.text('ריק'), findsOneWidget);
-      expect(find.text('לא נמצא'), findsNothing);
-      expect(find.text('שבת עד:'), findsNothing);
-      // ב-empty state אין שדה חיפוש או כפתור "נקה"
-      expect(find.byType(TextField), findsNothing);
-      expect(find.text('נקה'), findsNothing);
-    });
+        expect(find.text('ריק'), findsOneWidget);
+        expect(find.text('לא נמצא'), findsNothing);
+        expect(find.text('שבת עד:'), findsNothing);
+        // ב-empty state אין שדה חיפוש או כפתור "נקה"
+        expect(find.byType(TextField), findsNothing);
+        expect(find.text('נקה'), findsNothing);
+      },
+    );
 
     testWidgets(
-        'additionalFilter משאיר פריטים אבל חיפוש לא מניב תוצאות - מציג "לא נמצא"',
-        (tester) async {
-      // וידוא ש-notFoundText עדיין מופיע כשהמשתמש מקליד חיפוש שאינו תואם, גם
-      // בנוכחות additionalFilter.
+      'additionalFilter משאיר פריטים אבל חיפוש לא מניב תוצאות - מציג "לא נמצא"',
+      (tester) async {
+        // וידוא ש-notFoundText עדיין מופיע כשהמשתמש מקליד חיפוש שאינו תואם, גם
+        // בנוכחות additionalFilter.
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          buildWidget(
+            additionalFilter: (item) => item.workspaceName == 'גמרא',
+          ),
+        );
+        await tester.pump();
+
+        await tester.enterText(find.byType(TextField).first, 'אין-כזה-טקסט');
+        await tester.pump();
+
+        expect(find.text('לא נמצא'), findsOneWidget);
+        expect(find.text('ריק'), findsNothing);
+      },
+    );
+
+    testWidgets('searchKeyBuilder מאפשר חיפוש לפי workspaceName', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        additionalFilter: (item) => item.workspaceName == 'גמרא',
-      ));
-      await tester.pump();
-
-      await tester.enterText(find.byType(TextField).first, 'אין-כזה-טקסט');
-      await tester.pump();
-
-      expect(find.text('לא נמצא'), findsOneWidget);
-      expect(find.text('ריק'), findsNothing);
-    });
-
-    testWidgets('searchKeyBuilder מאפשר חיפוש לפי workspaceName',
-        (tester) async {
-      await tester.binding.setSurfaceSize(const Size(800, 600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(buildWidget(
-        searchKeyBuilder: (item) =>
-            '${item.ref as String} ${item.workspaceName as String? ?? ''}',
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          searchKeyBuilder: (item) =>
+              '${item.ref as String} ${item.workspaceName as String? ?? ''}',
+        ),
+      );
       await tester.pump();
 
       await tester.enterText(find.byType(TextField).first, 'הלכה');
@@ -148,8 +164,9 @@ void main() {
       expect(find.text('ברכות ב.'), findsNothing);
     });
 
-    testWidgets('ללא searchKeyBuilder - workspaceName לא נכלל בחיפוש',
-        (tester) async {
+    testWidgets('ללא searchKeyBuilder - workspaceName לא נכלל בחיפוש', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -165,16 +182,19 @@ void main() {
       expect(find.text('ברכות ב.'), findsNothing);
     });
 
-    testWidgets('additionalFilter ו-searchKeyBuilder פועלים יחדיו',
-        (tester) async {
+    testWidgets('additionalFilter ו-searchKeyBuilder פועלים יחדיו', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(800, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        additionalFilter: (item) => item.workspaceName == 'גמרא',
-        searchKeyBuilder: (item) =>
-            '${item.ref as String} ${item.workspaceName as String? ?? ''}',
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          additionalFilter: (item) => item.workspaceName == 'גמרא',
+          searchKeyBuilder: (item) =>
+              '${item.ref as String} ${item.workspaceName as String? ?? ''}',
+        ),
+      );
       await tester.pump();
 
       // additionalFilter לגמרא בלבד
@@ -203,8 +223,8 @@ void main() {
           home: Scaffold(
             body: ItemsListView(
               items: testItems,
-              onItemTap: onItemTap ?? (_, __, ___) {},
-              onDelete: (_, __) {},
+              onItemTap: onItemTap ?? (_, _, _) {},
+              onDelete: (_, _) {},
               onClearAll: (_) {},
               hintText: 'חיפוש',
               emptyText: 'ריק',
@@ -218,15 +238,18 @@ void main() {
         );
       }
 
-      testWidgets('groupKeyBuilder מקבץ פריטים בכרטיסים נפרדים לפי מפתח',
-          (tester) async {
+      testWidgets('groupKeyBuilder מקבץ פריטים בכרטיסים נפרדים לפי מפתח', (
+        tester,
+      ) async {
         await tester.binding.setSurfaceSize(const Size(800, 600));
         addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        await tester.pumpWidget(buildGrouped(
-          testItems: items,
-          groupKeyBuilder: (item) => (item as _Item).workspaceName,
-        ));
+        await tester.pumpWidget(
+          buildGrouped(
+            testItems: items,
+            groupKeyBuilder: (item) => (item as _Item).workspaceName,
+          ),
+        );
         await tester.pump();
 
         // גמרא + הלכה = 2 קבוצות → 2 תחילות-כרטיס
@@ -240,27 +263,32 @@ void main() {
         await tester.binding.setSurfaceSize(const Size(800, 600));
         addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        await tester.pumpWidget(buildGrouped(
-          testItems: items,
-          groupKeyBuilder: (item) => (item as _Item).workspaceName,
-          groupTitleBuilder: (item) => (item as _Item).workspaceName,
-        ));
+        await tester.pumpWidget(
+          buildGrouped(
+            testItems: items,
+            groupKeyBuilder: (item) => (item as _Item).workspaceName,
+            groupTitleBuilder: (item) => (item as _Item).workspaceName,
+          ),
+        );
         await tester.pump();
 
         expect(find.text('גמרא'), findsOneWidget);
         expect(find.text('הלכה'), findsOneWidget);
       });
 
-      testWidgets('groupTitleBuilder שמחזיר null לא מציג כותרת',
-          (tester) async {
+      testWidgets('groupTitleBuilder שמחזיר null לא מציג כותרת', (
+        tester,
+      ) async {
         await tester.binding.setSurfaceSize(const Size(800, 600));
         addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        await tester.pumpWidget(buildGrouped(
-          testItems: items,
-          groupKeyBuilder: (item) => (item as _Item).workspaceName,
-          groupTitleBuilder: (_) => null,
-        ));
+        await tester.pumpWidget(
+          buildGrouped(
+            testItems: items,
+            groupKeyBuilder: (item) => (item as _Item).workspaceName,
+            groupTitleBuilder: (_) => null,
+          ),
+        );
         await tester.pump();
 
         expect(groupStarts(), findsNWidgets(2));
@@ -279,10 +307,12 @@ void main() {
           _Item('ברכות ג.', workspaceName: 'גמרא'),
         ];
 
-        await tester.pumpWidget(buildGrouped(
-          testItems: allGemara,
-          groupKeyBuilder: (item) => (item as _Item).workspaceName,
-        ));
+        await tester.pumpWidget(
+          buildGrouped(
+            testItems: allGemara,
+            groupKeyBuilder: (item) => (item as _Item).workspaceName,
+          ),
+        );
         await tester.pump();
 
         expect(groupStarts(), findsOneWidget);
@@ -300,22 +330,24 @@ void main() {
           _Item('ב-שני'),
         ];
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: ItemsListView(
-              items: unsorted,
-              onItemTap: (_, __, ___) {},
-              onDelete: (_, __) {},
-              onClearAll: (_) {},
-              hintText: 'חיפוש',
-              emptyText: 'ריק',
-              notFoundText: 'לא נמצא',
-              clearAllText: 'נקה',
-              itemSortComparator: (a, b) =>
-                  (a.ref as String).compareTo(b.ref as String),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ItemsListView(
+                items: unsorted,
+                onItemTap: (_, _, _) {},
+                onDelete: (_, _) {},
+                onClearAll: (_) {},
+                hintText: 'חיפוש',
+                emptyText: 'ריק',
+                notFoundText: 'לא נמצא',
+                clearAllText: 'נקה',
+                itemSortComparator: (a, b) =>
+                    (a.ref as String).compareTo(b.ref as String),
+              ),
             ),
           ),
-        ));
+        );
         await tester.pump();
 
         expect(find.text('א-ראשון'), findsOneWidget);
@@ -335,56 +367,67 @@ void main() {
         ];
 
         int? tappedIndex;
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: ItemsListView(
-              items: unsorted,
-              onItemTap: (_, __, i) => tappedIndex = i,
-              onDelete: (_, __) {},
-              onClearAll: (_) {},
-              hintText: 'חיפוש',
-              emptyText: 'ריק',
-              notFoundText: 'לא נמצא',
-              clearAllText: 'נקה',
-              itemSortComparator: (a, b) =>
-                  (a.ref as String).compareTo(b.ref as String),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ItemsListView(
+                items: unsorted,
+                onItemTap: (_, _, i) => tappedIndex = i,
+                onDelete: (_, _) {},
+                onClearAll: (_) {},
+                hintText: 'חיפוש',
+                emptyText: 'ריק',
+                notFoundText: 'לא נמצא',
+                clearAllText: 'נקה',
+                itemSortComparator: (a, b) =>
+                    (a.ref as String).compareTo(b.ref as String),
+              ),
             ),
           ),
-        ));
+        );
         await tester.pump();
 
         // אחרי מיון: א-ראשון (originalIndex=1) מופיע ראשון
         await tester.tap(find.text('א-ראשון'));
         await tester.pump();
 
-        expect(tappedIndex, 1,
-            reason: 'originalIndex צריך להיות 1 (מיקום לפני מיון), לא 0');
+        expect(
+          tappedIndex,
+          1,
+          reason: 'originalIndex צריך להיות 1 (מיקום לפני מיון), לא 0',
+        );
       });
     });
 
     testWidgets(
-        'onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
-        (tester) async {
-      await tester.binding.setSurfaceSize(const Size(800, 600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      'onItemTap מקבל את originalIndex הנכון גם כשאותו אובייקט מופיע פעמיים',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final duplicate = _Item('כפול', workspaceName: 'בדיקה');
-      int? tappedIndex;
+        final duplicate = _Item('כפול', workspaceName: 'בדיקה');
+        int? tappedIndex;
 
-      await tester.pumpWidget(buildWidget(
-        testItems: [duplicate, duplicate, const _Item('אחר')],
-        onItemTap: (_, __, originalIndex) => tappedIndex = originalIndex,
-      ));
-      await tester.pump();
+        await tester.pumpWidget(
+          buildWidget(
+            testItems: [duplicate, duplicate, const _Item('אחר')],
+            onItemTap: (_, _, originalIndex) => tappedIndex = originalIndex,
+          ),
+        );
+        await tester.pump();
 
-      await tester.tap(find.text('כפול').last);
-      await tester.pump();
+        await tester.tap(find.text('כפול').last);
+        await tester.pump();
 
-      expect(tappedIndex, 1,
+        expect(
+          tappedIndex,
+          1,
           reason:
               'כאשר אותו מופע מופיע יותר מפעם אחת, indexOf(item) תמיד מחזיר את ההופעה הראשונה. '
-              'הווידג׳ט צריך לשמר את האינדקס המקורי של הרשומה שסוננה.');
-    });
+              'הווידג׳ט צריך לשמר את האינדקס המקורי של הרשומה שסוננה.',
+        );
+      },
+    );
   });
 
   group('ItemsListView — פריסת ref ו-subtitle', () {
@@ -398,66 +441,87 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1024, 768));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        testItems: [const _Item(longRef)],
-        subtitleBuilder: (_) => subtitleText,
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          testItems: [const _Item(longRef)],
+          subtitleBuilder: (_) => subtitleText,
+        ),
+      );
       await tester.pump();
 
       final refBottom = tester.getBottomLeft(find.text(longRef)).dy;
       final subtitleTop = tester.getTopLeft(find.text(subtitleText)).dy;
-      expect(subtitleTop, greaterThanOrEqualTo(refBottom),
-          reason: 'גם במסך רחב subtitle מוצג מתחת ל-ref כדי שלא ייאסף לרוחב '
-              'ויקצץ את ref לכמה שורות');
+      expect(
+        subtitleTop,
+        greaterThanOrEqualTo(refBottom),
+        reason:
+            'גם במסך רחב subtitle מוצג מתחת ל-ref כדי שלא ייאסף לרוחב '
+            'ויקצץ את ref לכמה שורות',
+      );
     });
 
     testWidgets('מסך צר: subtitle מתחת ל-ref (y גדול יותר)', (tester) async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        testItems: [const _Item(longRef)],
-        subtitleBuilder: (_) => subtitleText,
-        width: 360,
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          testItems: [const _Item(longRef)],
+          subtitleBuilder: (_) => subtitleText,
+          width: 360,
+        ),
+      );
       await tester.pump();
 
       final refBottom = tester.getBottomLeft(find.text(longRef)).dy;
       final subtitleTop = tester.getTopLeft(find.text(subtitleText)).dy;
-      expect(subtitleTop, greaterThanOrEqualTo(refBottom),
-          reason: 'subtitle צריך להופיע מתחת ל-ref בפריסת מסך צר');
+      expect(
+        subtitleTop,
+        greaterThanOrEqualTo(refBottom),
+        reason: 'subtitle צריך להופיע מתחת ל-ref בפריסת מסך צר',
+      );
     });
 
-    testWidgets('מסך צר: ref ארוך תופס רוחב מלא ולא מתקפל לתו-לשורה',
-        (tester) async {
+    testWidgets('מסך צר: ref ארוך תופס רוחב מלא ולא מתקפל לתו-לשורה', (
+      tester,
+    ) async {
       // בלי 2 השורות, מקום ה-Expanded של ref מצטמצם ל~30 פיקסל ועלול לקרוס.
       // אנו מוודאים שהוא מקבל לפחות 200 פיקסל רוחב.
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        testItems: [const _Item(longRef)],
-        subtitleBuilder: (_) => subtitleText,
-        width: 360,
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          testItems: [const _Item(longRef)],
+          subtitleBuilder: (_) => subtitleText,
+          width: 360,
+        ),
+      );
       await tester.pump();
 
       final refWidth = tester.getSize(find.text(longRef)).width;
-      expect(refWidth, greaterThan(200),
-          reason: 'במסך צר ל-ref צריך להיות רוחב סביר; בלי הפריסה הדו-שורתית '
-              'ה-Row היה דוחס אותו לרוחב של תו אחד.');
+      expect(
+        refWidth,
+        greaterThan(200),
+        reason:
+            'במסך צר ל-ref צריך להיות רוחב סביר; בלי הפריסה הדו-שורתית '
+            'ה-Row היה דוחס אותו לרוחב של תו אחד.',
+      );
     });
 
-    testWidgets('מסך צר ללא subtitle: ref ממשיך להיות מוצג בשורה אחת',
-        (tester) async {
+    testWidgets('מסך צר ללא subtitle: ref ממשיך להיות מוצג בשורה אחת', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildWidget(
-        testItems: [const _Item(longRef)],
-        // ללא subtitleBuilder אין שורה שנייה כלל
-        width: 360,
-      ));
+      await tester.pumpWidget(
+        buildWidget(
+          testItems: [const _Item(longRef)],
+          // ללא subtitleBuilder אין שורה שנייה כלל
+          width: 360,
+        ),
+      );
       await tester.pump();
 
       expect(find.text(longRef), findsOneWidget);

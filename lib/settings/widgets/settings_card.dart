@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/search/settings_anchor.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -971,7 +972,7 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
           await _showTargetSubMenu(anchorContext, open: false);
         } else {
           await Clipboard.setData(ClipboardData(text: widget.currentPath));
-          UiSnack.showSuccess('הנתיב הועתק ללוח');
+          UiSnack.showSuccess(CommonMessages.pathCopied);
         }
       case _PathMenuAction.clearPath:
         widget.onClearPath?.call();
@@ -1012,7 +1013,7 @@ class _PathMenuButtonState extends State<_PathMenuButton> {
       widget.onOpenPath?.call(path);
     } else {
       await Clipboard.setData(ClipboardData(text: path));
-      UiSnack.showSuccess('הנתיב הועתק ללוח');
+      UiSnack.showSuccess(CommonMessages.pathCopied);
     }
   }
 

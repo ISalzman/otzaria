@@ -27,7 +27,7 @@ void main() {
         home: Scaffold(
           body: Center(
             child: AppContextMenuRegion(
-              menuBuilder: (_, __) => entries,
+              menuBuilder: (_, _) => entries,
               child: const SizedBox(
                 width: 100,
                 height: 100,
@@ -55,28 +55,29 @@ void main() {
   }
 
   testWidgets(
-      'MenuItemButton בתפריט הקשר אינו גוזל פוקוס בריחוף - שומר את סימון הטקסט',
-      (tester) async {
-    await openContextMenu(
-      tester,
-      entries: [
-        AppContextMenuEntry(label: 'העתק', onTap: () {}),
-      ],
-    );
+    'MenuItemButton בתפריט הקשר אינו גוזל פוקוס בריחוף - שומר את סימון הטקסט',
+    (tester) async {
+      await openContextMenu(
+        tester,
+        entries: [
+          AppContextMenuEntry(label: 'העתק', onTap: () {}),
+        ],
+      );
 
-    final button = tester.widget<MenuItemButton>(find.byType(MenuItemButton));
-    expect(
-      button.requestFocusOnHover,
-      isFalse,
-      reason:
-          'הריחוף מעל פריט תפריט אסור שיגרור requestFocus, אחרת SelectableRegion '
-          'יקבל focus loss וינקה את הסימון הוויזואלי',
-    );
-  });
+      final button = tester.widget<MenuItemButton>(find.byType(MenuItemButton));
+      expect(
+        button.requestFocusOnHover,
+        isFalse,
+        reason:
+            'הריחוף מעל פריט תפריט אסור שיגרור requestFocus, אחרת SelectableRegion '
+            'יקבל focus loss וינקה את הסימון הוויזואלי',
+      );
+    },
+  );
 
-  testWidgets(
-      'SubmenuButton בתפריט הקשר משתמש ב-FocusNode שלא יכול לגזול פוקוס',
-      (tester) async {
+  testWidgets('SubmenuButton בתפריט הקשר משתמש ב-FocusNode שלא יכול לגזול פוקוס', (
+    tester,
+  ) async {
     await openContextMenu(
       tester,
       entries: [
@@ -105,149 +106,152 @@ void main() {
   });
 
   testWidgets(
-      'ריחוף מעל פריט תפריט הקשר אינו מעביר את primaryFocus מ-FocusNode חיצוני',
-      (tester) async {
-    final externalFocusNode = FocusNode(debugLabel: 'ExternalSelection');
-    addTearDown(externalFocusNode.dispose);
+    'ריחוף מעל פריט תפריט הקשר אינו מעביר את primaryFocus מ-FocusNode חיצוני',
+    (tester) async {
+      final externalFocusNode = FocusNode(debugLabel: 'ExternalSelection');
+      addTearDown(externalFocusNode.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Column(
-            children: [
-              Focus(
-                focusNode: externalFocusNode,
-                child: const SizedBox(width: 50, height: 50),
-              ),
-              Center(
-                child: AppContextMenuRegion(
-                  menuBuilder: (_, __) => [
-                    AppContextMenuEntry(label: 'העתק', onTap: () {}),
-                    AppContextMenuEntry(label: 'גזור', onTap: () {}),
-                  ],
-                  child: const SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: ColoredBox(color: Colors.amber),
-                  ),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Focus(
+                  focusNode: externalFocusNode,
+                  child: const SizedBox(width: 50, height: 50),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    externalFocusNode.requestFocus();
-    await tester.pump();
-    expect(externalFocusNode.hasFocus, isTrue);
-
-    final gesture = await tester.createGesture(
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryButton,
-    );
-    await gesture.addPointer(location: Offset.zero);
-    addTearDown(gesture.removePointer);
-
-    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
-    await gesture.moveTo(regionCenter);
-    await gesture.down(regionCenter);
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
-
-    // ריחוף מעל פריט בתפריט - לפני התיקון היה גורר requestFocus
-    final itemCenter = tester.getCenter(find.text('העתק'));
-    await gesture.moveTo(itemCenter);
-    await tester.pumpAndSettle();
-
-    expect(
-      externalFocusNode.hasFocus,
-      isTrue,
-      reason:
-          'ריחוף מעל פריט בתפריט הקשר אסור לגזול פוקוס מ-FocusNode חיצוני - '
-          'אחרת SelectableRegion יקבל focus loss וינקה את הסימון',
-    );
-  });
-
-  testWidgets(
-      'ריחוף מעל SubmenuButton אינו מעביר את primaryFocus מ-FocusNode חיצוני',
-      (tester) async {
-    final externalFocusNode = FocusNode(debugLabel: 'ExternalSelection');
-    addTearDown(externalFocusNode.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Column(
-            children: [
-              Focus(
-                focusNode: externalFocusNode,
-                child: const SizedBox(width: 50, height: 50),
-              ),
-              Center(
-                child: AppContextMenuRegion(
-                  menuBuilder: (_, __) => [
-                    AppContextMenuEntry(
-                      label: 'תת-תפריט',
-                      children: [
-                        AppContextMenuEntry(label: 'פנימי', onTap: () {}),
-                      ],
+                Center(
+                  child: AppContextMenuRegion(
+                    menuBuilder: (_, _) => [
+                      AppContextMenuEntry(label: 'העתק', onTap: () {}),
+                      AppContextMenuEntry(label: 'גזור', onTap: () {}),
+                    ],
+                    child: const SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: ColoredBox(color: Colors.amber),
                     ),
-                  ],
-                  child: const SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: ColoredBox(color: Colors.amber),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    externalFocusNode.requestFocus();
-    await tester.pump();
-    expect(externalFocusNode.hasFocus, isTrue);
+      externalFocusNode.requestFocus();
+      await tester.pump();
+      expect(externalFocusNode.hasFocus, isTrue);
 
-    final gesture = await tester.createGesture(
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryButton,
-    );
-    await gesture.addPointer(location: Offset.zero);
-    addTearDown(gesture.removePointer);
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
 
-    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
-    await gesture.moveTo(regionCenter);
-    await gesture.down(regionCenter);
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
+      final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+      await gesture.moveTo(regionCenter);
+      await gesture.down(regionCenter);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
 
-    // ריחוף מעל SubmenuButton - בלי התיקון, פותח את התת-תפריט וגוזל פוקוס.
-    final submenuCenter = tester.getCenter(find.text('תת-תפריט'));
-    await gesture.moveTo(submenuCenter);
-    await tester.pumpAndSettle();
+      // ריחוף מעל פריט בתפריט - לפני התיקון היה גורר requestFocus
+      final itemCenter = tester.getCenter(find.text('העתק'));
+      await gesture.moveTo(itemCenter);
+      await tester.pumpAndSettle();
 
-    expect(
-      externalFocusNode.hasFocus,
-      isTrue,
-      reason: 'ריחוף מעל SubmenuButton אסור לגזול פוקוס מ-FocusNode חיצוני, '
-          'גם כשהוא פותח את התת-תפריט',
-    );
-  });
+      expect(
+        externalFocusNode.hasFocus,
+        isTrue,
+        reason:
+            'ריחוף מעל פריט בתפריט הקשר אסור לגזול פוקוס מ-FocusNode חיצוני - '
+            'אחרת SelectableRegion יקבל focus loss וינקה את הסימון',
+      );
+    },
+  );
 
   testWidgets(
-      'ריחוף מעל SubmenuButton פותח את התת-תפריט אחרי השהיה (בלי לחיצה)',
-      (tester) async {
+    'ריחוף מעל SubmenuButton אינו מעביר את primaryFocus מ-FocusNode חיצוני',
+    (tester) async {
+      final externalFocusNode = FocusNode(debugLabel: 'ExternalSelection');
+      addTearDown(externalFocusNode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Focus(
+                  focusNode: externalFocusNode,
+                  child: const SizedBox(width: 50, height: 50),
+                ),
+                Center(
+                  child: AppContextMenuRegion(
+                    menuBuilder: (_, _) => [
+                      AppContextMenuEntry(
+                        label: 'תת-תפריט',
+                        children: [
+                          AppContextMenuEntry(label: 'פנימי', onTap: () {}),
+                        ],
+                      ),
+                    ],
+                    child: const SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: ColoredBox(color: Colors.amber),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      externalFocusNode.requestFocus();
+      await tester.pump();
+      expect(externalFocusNode.hasFocus, isTrue);
+
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+
+      final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+      await gesture.moveTo(regionCenter);
+      await gesture.down(regionCenter);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // ריחוף מעל SubmenuButton - בלי התיקון, פותח את התת-תפריט וגוזל פוקוס.
+      final submenuCenter = tester.getCenter(find.text('תת-תפריט'));
+      await gesture.moveTo(submenuCenter);
+      await tester.pumpAndSettle();
+
+      expect(
+        externalFocusNode.hasFocus,
+        isTrue,
+        reason:
+            'ריחוף מעל SubmenuButton אסור לגזול פוקוס מ-FocusNode חיצוני, '
+            'גם כשהוא פותח את התת-תפריט',
+      );
+    },
+  );
+
+  testWidgets('ריחוף מעל SubmenuButton פותח את התת-תפריט אחרי השהיה (בלי לחיצה)', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
             child: AppContextMenuRegion(
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry(
                   label: 'תת-תפריט',
                   children: [
@@ -281,8 +285,11 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('פנימי'), findsNothing,
-        reason: 'התת-תפריט אמור להיות סגור לפני הריחוף');
+    expect(
+      find.text('פנימי'),
+      findsNothing,
+      reason: 'התת-תפריט אמור להיות סגור לפני הריחוף',
+    );
 
     // ריחוף מעל פריט התת-תפריט — אמור לפתוח אותו אחרי השהיית 300ms, בלי לחיצה.
     // (לפני התיקון: השבתת הפוקוס ביטלה את הפתיחה-בריחוף המובנית של SubmenuButton.)
@@ -297,14 +304,15 @@ void main() {
     );
   });
 
-  testWidgets('מעבר עכבר חולף (פחות מההשהיה) אינו פותח את התת-תפריט',
-      (tester) async {
+  testWidgets('מעבר עכבר חולף (פחות מההשהיה) אינו פותח את התת-תפריט', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
             child: AppContextMenuRegion(
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry(
                   label: 'תת-תפריט',
                   children: [
@@ -359,7 +367,7 @@ void main() {
         home: Scaffold(
           body: Center(
             child: AppContextMenuRegion(
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry(label: 'העתק', onTap: () {}),
               ],
               child: const SizedBox(
@@ -388,8 +396,11 @@ void main() {
     await rightGesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('העתק'), findsOneWidget,
-        reason: 'התפריט צריך להיות פתוח לפני הגרירה');
+    expect(
+      find.text('העתק'),
+      findsOneWidget,
+      reason: 'התפריט צריך להיות פתוח לפני הגרירה',
+    );
 
     // מסיר את ה-gesture הימני לפני יצירת ה-gesture השמאלי —
     // mouse tracker דורש שה-pointer יוסר לפני הוספת pointer חדש מאותו device kind
@@ -406,93 +417,102 @@ void main() {
     await leftGesture.down(const Offset(10, 10));
     await tester.pump();
 
-    expect(find.text('העתק'), findsNothing,
-        reason: 'pointer DOWN מחוץ לתפריט (תחילת גרירה) חייב לסגור את התפריט — '
-            'לפני התיקון רק onTap (down+up ללא תנועה) היה סוגר');
+    expect(
+      find.text('העתק'),
+      findsNothing,
+      reason:
+          'pointer DOWN מחוץ לתפריט (תחילת גרירה) חייב לסגור את התפריט — '
+          'לפני התיקון רק onTap (down+up ללא תנועה) היה סוגר',
+    );
 
     await leftGesture.moveBy(const Offset(50, 0));
     await tester.pumpAndSettle();
 
-    expect(find.text('העתק'), findsNothing,
-        reason: 'התפריט צריך להישאר סגור גם לאחר המשך הגרירה');
+    expect(
+      find.text('העתק'),
+      findsNothing,
+      reason: 'התפריט צריך להישאר סגור גם לאחר המשך הגרירה',
+    );
   });
 
   testWidgets(
-      'capturedText: פעולת תפריט משתמשת בערך שנלכד בזמן הבנייה, לא בזמן הלחיצה',
-      (tester) async {
-    // ——————————————————————————————————————————————————————————————————————
-    // מדמה את תבנית savedTextAtBuild ב-_buildLine של SimpleTextViewer:
-    //   final savedTextAtBuild = _savedSelectedText;  // נלכד בזמן BUILD
-    //   menuBuilder: (ctx, pos) => _buildContextMenu(..., savedTextAtBuild)
-    //
-    // הסצנריו המבדוק: ה-menuBuilder נבנה כשיש טקסט נבחר. לאחר פתיחת התפריט,
-    // onSelectionChanged(null) מנקה את _savedSelectedText (= liveValue=null).
-    // הפעולה בתפריט חייבת להשתמש בערך שנלכד בזמן הבנייה ולא בערך המנוקה.
-    // ——————————————————————————————————————————————————————————————————————
-    String? capturedInAction;
-    String? liveValue = 'טקסט נבחר';
-    late StateSetter outerSetState;
+    'capturedText: פעולת תפריט משתמשת בערך שנלכד בזמן הבנייה, לא בזמן הלחיצה',
+    (tester) async {
+      // ——————————————————————————————————————————————————————————————————————
+      // מדמה את תבנית savedTextAtBuild ב-_buildLine של SimpleTextViewer:
+      //   final savedTextAtBuild = _savedSelectedText;  // נלכד בזמן BUILD
+      //   menuBuilder: (ctx, pos) => _buildContextMenu(..., savedTextAtBuild)
+      //
+      // הסצנריו המבדוק: ה-menuBuilder נבנה כשיש טקסט נבחר. לאחר פתיחת התפריט,
+      // onSelectionChanged(null) מנקה את _savedSelectedText (= liveValue=null).
+      // הפעולה בתפריט חייבת להשתמש בערך שנלכד בזמן הבנייה ולא בערך המנוקה.
+      // ——————————————————————————————————————————————————————————————————————
+      String? capturedInAction;
+      String? liveValue = 'טקסט נבחר';
+      late StateSetter outerSetState;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) {
-              outerSetState = setState;
-              final valueAtBuild =
-                  liveValue; // כמו savedTextAtBuild ב-_buildLine
-              return AppContextMenuRegion(
-                menuBuilder: (_, __) => [
-                  AppContextMenuEntry(
-                    label: 'העתק',
-                    enabled: valueAtBuild != null,
-                    onTap: () => capturedInAction = valueAtBuild,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                outerSetState = setState;
+                final valueAtBuild =
+                    liveValue; // כמו savedTextAtBuild ב-_buildLine
+                return AppContextMenuRegion(
+                  menuBuilder: (_, _) => [
+                    AppContextMenuEntry(
+                      label: 'העתק',
+                      enabled: valueAtBuild != null,
+                      onTap: () => capturedInAction = valueAtBuild,
+                    ),
+                  ],
+                  child: const SizedBox(
+                    width: 200,
+                    height: 200,
+                    child: ColoredBox(color: Colors.amber),
                   ),
-                ],
-                child: const SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: ColoredBox(color: Colors.amber),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    // פתיחת תפריט הקשר — בונה entries עם valueAtBuild = 'טקסט נבחר'
-    final gesture = await tester.createGesture(
-      kind: PointerDeviceKind.mouse,
-      buttons: kSecondaryButton,
-    );
-    await gesture.addPointer(location: Offset.zero);
-    addTearDown(gesture.removePointer);
+      // פתיחת תפריט הקשר — בונה entries עם valueAtBuild = 'טקסט נבחר'
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
 
-    final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
-    await gesture.moveTo(regionCenter);
-    await gesture.down(regionCenter);
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
+      final regionCenter = tester.getCenter(find.byType(AppContextMenuRegion));
+      await gesture.moveTo(regionCenter);
+      await gesture.down(regionCenter);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
 
-    // מדמה onSelectionChanged(null) שמנקה את _savedSelectedText אחרי פתיחת התפריט
-    outerSetState(() => liveValue = null);
-    await tester.pump();
+      // מדמה onSelectionChanged(null) שמנקה את _savedSelectedText אחרי פתיחת התפריט
+      outerSetState(() => liveValue = null);
+      await tester.pump();
 
-    // לחיצה על הפריט בתפריט — חייב להשתמש בערך שנלכד בזמן הבנייה
-    await tester.tap(find.text('העתק'));
-    await tester.pumpAndSettle();
+      // לחיצה על הפריט בתפריט — חייב להשתמש בערך שנלכד בזמן הבנייה
+      await tester.tap(find.text('העתק'));
+      await tester.pumpAndSettle();
 
-    expect(
-      capturedInAction,
-      'טקסט נבחר',
-      reason: 'הפעולה חייבת להשתמש ב-capturedText שנלכד בזמן הבנייה, '
-          'גם אחרי ניקוי הערך ע"י onSelectionChanged(null)',
-    );
-  });
+      expect(
+        capturedInAction,
+        'טקסט נבחר',
+        reason:
+            'הפעולה חייבת להשתמש ב-capturedText שנלכד בזמן הבנייה, '
+            'גם אחרי ניקוי הערך ע"י onSelectionChanged(null)',
+      );
+    },
+  );
 
   // ───────────────────────────────────────────────────────────────────────
   // shouldPreserveSelectionOnSecondaryTap — חסימת שחרור הבחירה בלחיצה ימנית
@@ -519,7 +539,7 @@ void main() {
               onSecondaryTapDown: (_) => outerFired = true,
               child: AppContextMenuRegion(
                 shouldPreserveSelectionOnSecondaryTap: (_) => preserveSelection,
-                menuBuilder: (_, __) => [
+                menuBuilder: (_, _) => [
                   AppContextMenuEntry(label: 'העתק', onTap: () {}),
                 ],
                 child: const SizedBox(
@@ -553,38 +573,52 @@ void main() {
   }
 
   testWidgets(
-      'בחירה פעילה: לחיצה ימנית חוסמת את ה-recognizer החיצוני (הבחירה נשמרת)',
-      (tester) async {
-    final outerFired =
-        await rightClickAndReportOuterFired(tester, preserveSelection: true);
+    'בחירה פעילה: לחיצה ימנית חוסמת את ה-recognizer החיצוני (הבחירה נשמרת)',
+    (tester) async {
+      final outerFired = await rightClickAndReportOuterFired(
+        tester,
+        preserveSelection: true,
+      );
 
-    expect(
-      outerFired,
-      isFalse,
-      reason: 'כשיש בחירה, AppContextMenuRegion זוכה eager בכפתור הימני — '
-          'SelectableRegion (האב) נדחה ולא משחרר את הבחירה',
-    );
-    expect(find.text('העתק'), findsOneWidget,
-        reason: 'התפריט עדיין נפתח דרך ה-Listener שאינו תלוי בזירה');
-  });
+      expect(
+        outerFired,
+        isFalse,
+        reason:
+            'כשיש בחירה, AppContextMenuRegion זוכה eager בכפתור הימני — '
+            'SelectableRegion (האב) נדחה ולא משחרר את הבחירה',
+      );
+      expect(
+        find.text('העתק'),
+        findsOneWidget,
+        reason: 'התפריט עדיין נפתח דרך ה-Listener שאינו תלוי בזירה',
+      );
+    },
+  );
 
   testWidgets(
-      'בלי בחירה: לחיצה ימנית אינה חוסמת את ה-recognizer החיצוני (התנהגות רגילה)',
-      (tester) async {
-    final outerFired =
-        await rightClickAndReportOuterFired(tester, preserveSelection: false);
+    'בלי בחירה: לחיצה ימנית אינה חוסמת את ה-recognizer החיצוני (התנהגות רגילה)',
+    (tester) async {
+      final outerFired = await rightClickAndReportOuterFired(
+        tester,
+        preserveSelection: false,
+      );
 
-    expect(
-      outerFired,
-      isTrue,
-      reason: 'בלי בחירה ה-recognizer אינו מתערב — האב מקבל את הלחיצה כרגיל',
-    );
-    expect(find.text('העתק'), findsOneWidget,
-        reason: 'התפריט נפתח גם כשאין בחירה');
-  });
+      expect(
+        outerFired,
+        isTrue,
+        reason: 'בלי בחירה ה-recognizer אינו מתערב — האב מקבל את הלחיצה כרגיל',
+      );
+      expect(
+        find.text('העתק'),
+        findsOneWidget,
+        reason: 'התפריט נפתח גם כשאין בחירה',
+      );
+    },
+  );
 
-  testWidgets('onSecondaryTapDown נקרא בלחיצה ימנית עבור שמירת ההקשר',
-      (tester) async {
+  testWidgets('onSecondaryTapDown נקרא בלחיצה ימנית עבור שמירת ההקשר', (
+    tester,
+  ) async {
     var savedContext = false;
     await tester.pumpWidget(
       MaterialApp(
@@ -592,7 +626,7 @@ void main() {
           body: Center(
             child: AppContextMenuRegion(
               onSecondaryTapDown: (_) => savedContext = true,
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry(label: 'העתק', onTap: () {}),
               ],
               child: const SizedBox(
@@ -620,9 +654,11 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(savedContext, isTrue,
-        reason:
-            'onSecondaryTapDown חייב להיקרא כדי לשמור את הקשר השורה לתפריט');
+    expect(
+      savedContext,
+      isTrue,
+      reason: 'onSecondaryTapDown חייב להיקרא כדי לשמור את הקשר השורה לתפריט',
+    );
   });
 
   // ───────────────────────────────────────────────────────────────────────
@@ -630,43 +666,48 @@ void main() {
   // ───────────────────────────────────────────────────────────────────────
 
   testWidgets(
-      'AppContextMenuRegionState נגישה דרך GlobalKey ומאפשרת openMenuAt',
-      (tester) async {
-    final key = GlobalKey<AppContextMenuRegionState>();
+    'AppContextMenuRegionState נגישה דרך GlobalKey ומאפשרת openMenuAt',
+    (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AppContextMenuRegion(
-            key: key,
-            menuBuilder: (_, __) => [
-              AppContextMenuEntry(label: 'העתק', onTap: () {}),
-            ],
-            child: const SizedBox(
-              width: 200,
-              height: 200,
-              child: ColoredBox(color: Colors.amber),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, _) => [
+                AppContextMenuEntry(label: 'העתק', onTap: () {}),
+              ],
+              child: const SizedBox(
+                width: 200,
+                height: 200,
+                child: ColoredBox(color: Colors.amber),
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(key.currentState, isNotNull,
-        reason: 'AppContextMenuRegionState חייב להיות נגיש דרך GlobalKey');
+      expect(
+        key.currentState,
+        isNotNull,
+        reason: 'AppContextMenuRegionState חייב להיות נגיש דרך GlobalKey',
+      );
 
-    await key.currentState!.openMenuAt(const Offset(100, 100));
-    await tester.pumpAndSettle();
+      await key.currentState!.openMenuAt(const Offset(100, 100));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.text('העתק'),
-      findsOneWidget,
-      reason: 'openMenuAt חייב לפתוח את התפריט עם הפריטים שנבנו',
-    );
-  });
+      expect(
+        find.text('העתק'),
+        findsOneWidget,
+        reason: 'openMenuAt חייב לפתוח את התפריט עם הפריטים שנבנו',
+      );
+    },
+  );
 
-  testWidgets('openMenuAt: לחיצה על פריט מפעילה את onTap ומכסה את התפריט',
-      (tester) async {
+  testWidgets('openMenuAt: לחיצה על פריט מפעילה את onTap ומכסה את התפריט', (
+    tester,
+  ) async {
     final key = GlobalKey<AppContextMenuRegionState>();
     var tapped = false;
 
@@ -675,7 +716,7 @@ void main() {
         home: Scaffold(
           body: AppContextMenuRegion(
             key: key,
-            menuBuilder: (_, __) => [
+            menuBuilder: (_, _) => [
               AppContextMenuEntry(label: 'פעולה א', onTap: () => tapped = true),
               AppContextMenuEntry(label: 'פעולה ב', onTap: () {}),
             ],
@@ -698,33 +739,40 @@ void main() {
     await tester.tap(find.text('פעולה א'));
     await tester.pumpAndSettle();
 
-    expect(tapped, isTrue,
-        reason: 'לחיצה על פריט אחרי openMenuAt חייבת להפעיל את ה-onTap שלו');
-    expect(find.text('פעולה א'), findsNothing,
-        reason: 'התפריט חייב להיסגר לאחר בחירת פריט');
+    expect(
+      tapped,
+      isTrue,
+      reason: 'לחיצה על פריט אחרי openMenuAt חייבת להפעיל את ה-onTap שלו',
+    );
+    expect(
+      find.text('פעולה א'),
+      findsNothing,
+      reason: 'התפריט חייב להיסגר לאחר בחירת פריט',
+    );
   });
 
   testWidgets(
-      'childrenRefreshStream: פעימה מסירה שורה מתת-התפריט בלי לסגור אותו',
-      (tester) async {
-    // משחזר את רשימת "כרטיסיות פתוחות": לחיצה על X מסירה כרטיסייה ממקור
-    // הנתונים, פעימת הסטרים בונה מחדש את תת-התפריט והשורה נעלמת — התפריט נשאר.
-    final controller = StreamController<Object?>.broadcast();
-    addTearDown(controller.close);
-    final tabs = ['ראב"ד', 'עירובין'];
-    final key = GlobalKey<AppContextMenuRegionState>();
+    'childrenRefreshStream: פעימה מסירה שורה מתת-התפריט בלי לסגור אותו',
+    (tester) async {
+      // משחזר את רשימת "כרטיסיות פתוחות": לחיצה על X מסירה כרטיסייה ממקור
+      // הנתונים, פעימת הסטרים בונה מחדש את תת-התפריט והשורה נעלמת — התפריט נשאר.
+      final controller = StreamController<Object?>.broadcast();
+      addTearDown(controller.close);
+      final tabs = ['ראב"ד', 'עירובין'];
+      final key = GlobalKey<AppContextMenuRegionState>();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AppContextMenuRegion(
-            key: key,
-            menuBuilder: (_, __) => [
-              AppContextMenuEntry(
-                label: 'כרטיסיות פתוחות',
-                childrenRefreshStream: controller.stream,
-                childrenBuilder: () => tabs
-                    .map((t) => AppContextMenuEntry(
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, _) => [
+                AppContextMenuEntry(
+                  label: 'כרטיסיות פתוחות',
+                  childrenRefreshStream: controller.stream,
+                  childrenBuilder: () => tabs
+                      .map(
+                        (t) => AppContextMenuEntry(
                           label: t,
                           onTap: () {},
                           trailing: IconButton(
@@ -734,39 +782,50 @@ void main() {
                               controller.add(null);
                             },
                           ),
-                        ))
-                    .toList(),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              child: const SizedBox(
+                width: 200,
+                height: 200,
+                child: ColoredBox(color: Colors.amber),
               ),
-            ],
-            child: const SizedBox(
-              width: 200,
-              height: 200,
-              child: ColoredBox(color: Colors.amber),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await key.currentState!.openMenuAt(const Offset(100, 100));
-    await tester.pumpAndSettle();
+      await key.currentState!.openMenuAt(const Offset(100, 100));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('כרטיסיות פתוחות'));
-    await tester.pumpAndSettle();
-    expect(find.text('ראב"ד'), findsOneWidget);
-    expect(find.text('עירובין'), findsOneWidget);
+      await tester.tap(find.text('כרטיסיות פתוחות'));
+      await tester.pumpAndSettle();
+      expect(find.text('ראב"ד'), findsOneWidget);
+      expect(find.text('עירובין'), findsOneWidget);
 
-    // לחיצה על ה-X של "ראב"ד" — מסירה אותו ופולטת בסטרים
-    await tester.tap(find.byIcon(Icons.close).first);
-    await tester.pumpAndSettle();
+      // לחיצה על ה-X של "ראב"ד" — מסירה אותו ופולטת בסטרים
+      await tester.tap(find.byIcon(Icons.close).first);
+      await tester.pumpAndSettle();
 
-    expect(find.text('ראב"ד'), findsNothing,
-        reason: 'שורת הכרטיסייה שנסגרה חייבת להיעלם מתת-התפריט');
-    expect(find.text('עירובין'), findsOneWidget,
-        reason: 'שאר הכרטיסיות נשארות');
-    expect(find.text('כרטיסיות פתוחות'), findsOneWidget,
-        reason: 'התפריט נשאר פתוח — רק השורה הוסרה');
-  });
+      expect(
+        find.text('ראב"ד'),
+        findsNothing,
+        reason: 'שורת הכרטיסייה שנסגרה חייבת להיעלם מתת-התפריט',
+      );
+      expect(
+        find.text('עירובין'),
+        findsOneWidget,
+        reason: 'שאר הכרטיסיות נשארות',
+      );
+      expect(
+        find.text('כרטיסיות פתוחות'),
+        findsOneWidget,
+        reason: 'התפריט נשאר פתוח — רק השורה הוסרה',
+      );
+    },
+  );
 
   testWidgets('openMenuAt: קריאה כפולה אינה פותחת שני תפריטים', (tester) async {
     final key = GlobalKey<AppContextMenuRegionState>();
@@ -776,7 +835,7 @@ void main() {
         home: Scaffold(
           body: AppContextMenuRegion(
             key: key,
-            menuBuilder: (_, __) => [
+            menuBuilder: (_, _) => [
               AppContextMenuEntry(label: 'פריט', onTap: () {}),
             ],
             child: const SizedBox(
@@ -805,43 +864,47 @@ void main() {
   });
 
   testWidgets(
-      'תפריט ארוך שאין לו מקום מתחת ללחיצה עולה כלפי מעלה ואינו נחתך בתחתית',
-      (tester) async {
-    final key = GlobalKey<AppContextMenuRegionState>();
-    // 12 פריטים (~448px) — גבוה מהמרחב שמתחת ללחיצה אך נכנס בגובה המסך (600).
-    final entries = [
-      for (var i = 0; i < 12; i++)
-        AppContextMenuEntry(label: 'פריט $i', onTap: () {}),
-    ];
+    'תפריט ארוך שאין לו מקום מתחת ללחיצה עולה כלפי מעלה ואינו נחתך בתחתית',
+    (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      // 12 פריטים (~448px) — גבוה מהמרחב שמתחת ללחיצה אך נכנס בגובה המסך (600).
+      final entries = [
+        for (var i = 0; i < 12; i++)
+          AppContextMenuEntry(label: 'פריט $i', onTap: () {}),
+      ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AppContextMenuRegion(
-            key: key,
-            menuBuilder: (_, __) => entries,
-            child:
-                const SizedBox.expand(child: ColoredBox(color: Colors.amber)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppContextMenuRegion(
+              key: key,
+              menuBuilder: (_, _) => entries,
+              child: const SizedBox.expand(
+                child: ColoredBox(color: Colors.amber),
+              ),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    // לחיצה בחצי העליון (y=200): אין מקום מספיק מתחת והמרחב מעל קטן מהמרחב מתחת,
-    // כך שהתפריט נפתח כלפי מטה — לפני התיקון נחתך/נגלל ופריטיו האחרונים נסתרו.
-    await key.currentState!.openMenuAt(const Offset(400, 200));
-    await tester.pumpAndSettle();
+      // לחיצה בחצי העליון (y=200): אין מקום מספיק מתחת והמרחב מעל קטן מהמרחב מתחת,
+      // כך שהתפריט נפתח כלפי מטה — לפני התיקון נחתך/נגלל ופריטיו האחרונים נסתרו.
+      await key.currentState!.openMenuAt(const Offset(400, 200));
+      await tester.pumpAndSettle();
 
-    final overlaySize = tester.view.physicalSize / tester.view.devicePixelRatio;
-    final lastItem = find.text('פריט 11');
-    expect(lastItem, findsOneWidget);
-    expect(
-      tester.getRect(lastItem).bottom,
-      lessThanOrEqualTo(overlaySize.height),
-      reason: 'הפריט האחרון חייב להישאר בגבולות המסך — '
-          'כשאין מקום מתחת ללחיצה התפריט עולה מעלה ולא נחתך',
-    );
-  });
+      final overlaySize =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
+      final lastItem = find.text('פריט 11');
+      expect(lastItem, findsOneWidget);
+      expect(
+        tester.getRect(lastItem).bottom,
+        lessThanOrEqualTo(overlaySize.height),
+        reason:
+            'הפריט האחרון חייב להישאר בגבולות המסך — '
+            'כשאין מקום מתחת ללחיצה התפריט עולה מעלה ולא נחתך',
+      );
+    },
+  );
 
   // ───────────────────────────────────────────────────────────────────────
   // hoverPreviewBuilder — חלונית תצוגה מקדימה צפה ברפרוף על פריט
@@ -869,7 +932,7 @@ void main() {
           home: Scaffold(
             body: AppContextMenuRegion(
               key: key,
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 if (insideSubmenu)
                   AppContextMenuEntry(
                     label: 'קישורים',
@@ -897,19 +960,26 @@ void main() {
       return gesture;
     }
 
-    testWidgets('ריחוף על פריט עם תצוגה מקדימה פותח חלונית צפה אחרי השהיה',
-        (tester) async {
+    testWidgets('ריחוף על פריט עם תצוגה מקדימה פותח חלונית צפה אחרי השהיה', (
+      tester,
+    ) async {
       final gesture = await pumpMenuWithPreviewEntry(tester);
 
       await gesture.moveTo(tester.getCenter(find.text('קישור א')));
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text(previewText), findsNothing,
-          reason: 'החלונית לא נפתחת לפני תום השהיית הפתיחה');
+      expect(
+        find.text(previewText),
+        findsNothing,
+        reason: 'החלונית לא נפתחת לפני תום השהיית הפתיחה',
+      );
 
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
-      expect(find.text(previewText), findsOneWidget,
-          reason: 'אחרי תום ההשהיה החלונית הצפה מוצגת');
+      expect(
+        find.text(previewText),
+        findsOneWidget,
+        reason: 'אחרי תום ההשהיה החלונית הצפה מוצגת',
+      );
     });
 
     testWidgets('ריחוף חולף (פחות מההשהיה) אינו פותח חלונית', (tester) async {
@@ -920,12 +990,16 @@ void main() {
       await gesture.moveTo(const Offset(10, 590));
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text(previewText), findsNothing,
-          reason: 'יציאה מהפריט לפני תום ההשהיה מבטלת את פתיחת החלונית');
+      expect(
+        find.text(previewText),
+        findsNothing,
+        reason: 'יציאה מהפריט לפני תום ההשהיה מבטלת את פתיחת החלונית',
+      );
     });
 
-    testWidgets('יציאה מהפריט סוגרת את החלונית אחרי השהיה קצרה',
-        (tester) async {
+    testWidgets('יציאה מהפריט סוגרת את החלונית אחרי השהיה קצרה', (
+      tester,
+    ) async {
       final gesture = await pumpMenuWithPreviewEntry(tester);
 
       await gesture.moveTo(tester.getCenter(find.text('קישור א')));
@@ -937,12 +1011,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
 
-      expect(find.text(previewText), findsNothing,
-          reason: 'כשהסמן עוזב את הפריט (ולא נכנס לחלונית) — החלונית נעלמת');
+      expect(
+        find.text(previewText),
+        findsNothing,
+        reason: 'כשהסמן עוזב את הפריט (ולא נכנס לחלונית) — החלונית נעלמת',
+      );
     });
 
-    testWidgets('מעבר מהפריט אל החלונית משאיר אותה פתוחה, ויציאה ממנה סוגרת',
-        (tester) async {
+    testWidgets('מעבר מהפריט אל החלונית משאיר אותה פתוחה, ויציאה ממנה סוגרת', (
+      tester,
+    ) async {
       final gesture = await pumpMenuWithPreviewEntry(tester);
 
       await gesture.moveTo(tester.getCenter(find.text('קישור א')));
@@ -954,21 +1032,30 @@ void main() {
       await gesture.moveTo(tester.getCenter(find.text(previewText)));
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(find.text(previewText), findsOneWidget,
-          reason: 'ריחוף על החלונית עצמה משאיר אותה פתוחה');
+      expect(
+        find.text(previewText),
+        findsOneWidget,
+        reason: 'ריחוף על החלונית עצמה משאיר אותה פתוחה',
+      );
 
       // יציאה מהחלונית — נסגרת אחרי ההשהיה
       await gesture.moveTo(const Offset(10, 590));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
-      expect(find.text(previewText), findsNothing,
-          reason: 'יציאה מהחלונית הצפה סוגרת אותה');
+      expect(
+        find.text(previewText),
+        findsNothing,
+        reason: 'יציאה מהחלונית הצפה סוגרת אותה',
+      );
     });
 
-    testWidgets('תצוגה מקדימה פועלת גם על פריט בתוך תת-תפריט (כמו "קישורים")',
-        (tester) async {
-      final gesture =
-          await pumpMenuWithPreviewEntry(tester, insideSubmenu: true);
+    testWidgets('תצוגה מקדימה פועלת גם על פריט בתוך תת-תפריט (כמו "קישורים")', (
+      tester,
+    ) async {
+      final gesture = await pumpMenuWithPreviewEntry(
+        tester,
+        insideSubmenu: true,
+      );
 
       await tester.tap(find.text('קישורים'));
       await tester.pumpAndSettle();
@@ -978,79 +1065,105 @@ void main() {
       await tester.pump(const Duration(milliseconds: 450));
       await tester.pumpAndSettle();
 
-      expect(find.text(previewText), findsOneWidget,
-          reason: 'רפרוף על קישור בתת-תפריט פותח את חלונית התוכן');
+      expect(
+        find.text(previewText),
+        findsOneWidget,
+        reason: 'רפרוף על קישור בתת-תפריט פותח את חלונית התוכן',
+      );
     });
 
-    testWidgets('חלונית שגדלה אחרי טעינת תוכן אסינכרוני אינה נחתכת בתחתית המסך',
-        (tester) async {
-      final key = GlobalKey<AppContextMenuRegionState>();
-      const smallKey = ValueKey('loading-content');
-      const grownKey = ValueKey('grown-content');
-      // מדמה את טעינת תוכן הקישור: בהתחלה קטן (כמו ספינר), ואחרי
-      // שהחלונית כבר מוקמה — גדל משמעותית.
-      final grownNotifier = ValueNotifier(false);
-      addTearDown(grownNotifier.dispose);
+    testWidgets(
+      'חלונית שגדלה אחרי טעינת תוכן אסינכרוני אינה נחתכת בתחתית המסך',
+      (tester) async {
+        final key = GlobalKey<AppContextMenuRegionState>();
+        const smallKey = ValueKey('loading-content');
+        const grownKey = ValueKey('grown-content');
+        // מדמה את טעינת תוכן הקישור: בהתחלה קטן (כמו ספינר), ואחרי
+        // שהחלונית כבר מוקמה — גדל משמעותית.
+        final grownNotifier = ValueNotifier(false);
+        addTearDown(grownNotifier.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: AppContextMenuRegion(
-              key: key,
-              menuBuilder: (_, __) => [
-                AppContextMenuEntry(
-                  label: 'קישור א',
-                  onTap: () {},
-                  hoverPreviewBuilder: (_) => ValueListenableBuilder<bool>(
-                    valueListenable: grownNotifier,
-                    builder: (context, grown, _) => grown
-                        ? const SizedBox(key: grownKey, width: 200, height: 500)
-                        : const SizedBox(key: smallKey, width: 200, height: 40),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: AppContextMenuRegion(
+                key: key,
+                menuBuilder: (_, _) => [
+                  AppContextMenuEntry(
+                    label: 'קישור א',
+                    onTap: () {},
+                    hoverPreviewBuilder: (_) => ValueListenableBuilder<bool>(
+                      valueListenable: grownNotifier,
+                      builder: (context, grown, _) => grown
+                          ? const SizedBox(
+                              key: grownKey,
+                              width: 200,
+                              height: 500,
+                            )
+                          : const SizedBox(
+                              key: smallKey,
+                              width: 200,
+                              height: 40,
+                            ),
+                    ),
                   ),
+                ],
+                child: const SizedBox.expand(
+                  child: ColoredBox(color: Colors.amber),
                 ),
-              ],
-              child: const SizedBox.expand(
-                child: ColoredBox(color: Colors.amber),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      // פתיחת התפריט סמוך לתחתית המסך (ברירת מחדל בטסטים: 800x600)
-      await key.currentState!.openMenuAt(const Offset(400, 560));
-      await tester.pumpAndSettle();
+        // פתיחת התפריט סמוך לתחתית המסך (ברירת מחדל בטסטים: 800x600)
+        await key.currentState!.openMenuAt(const Offset(400, 560));
+        await tester.pumpAndSettle();
 
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
+        final gesture = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.addPointer(location: Offset.zero);
+        addTearDown(gesture.removePointer);
 
-      await gesture.moveTo(tester.getCenter(find.text('קישור א')));
-      await tester.pump(const Duration(milliseconds: 450));
-      await tester.pumpAndSettle();
-      expect(find.byKey(smallKey), findsOneWidget,
-          reason: 'החלונית נפתחת עם תוכן הטעינה הקטן');
+        await gesture.moveTo(tester.getCenter(find.text('קישור א')));
+        await tester.pump(const Duration(milliseconds: 450));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(smallKey),
+          findsOneWidget,
+          reason: 'החלונית נפתחת עם תוכן הטעינה הקטן',
+        );
 
-      // התוכן "נטען" והחלונית גדלה — אחרי שכבר מוקמה לפי הגודל הקטן
-      grownNotifier.value = true;
-      await tester.pumpAndSettle();
+        // התוכן "נטען" והחלונית גדלה — אחרי שכבר מוקמה לפי הגודל הקטן
+        grownNotifier.value = true;
+        await tester.pumpAndSettle();
 
-      final grown = find.byKey(grownKey);
-      expect(grown, findsOneWidget,
-          reason: 'התוכן המלא אמור להופיע אחרי הטעינה');
+        final grown = find.byKey(grownKey);
+        expect(
+          grown,
+          findsOneWidget,
+          reason: 'התוכן המלא אמור להופיע אחרי הטעינה',
+        );
 
-      final overlaySize =
-          tester.view.physicalSize / tester.view.devicePixelRatio;
-      final panelRect = tester.getRect(
-        find.ancestor(of: grown, matching: find.byType(Material)).first,
-      );
-      expect(panelRect.bottom, lessThanOrEqualTo(overlaySize.height),
-          reason: 'החלונית חייבת להישאר בגבולות המסך גם אחרי שהתוכן גדל — '
-              'גדילה אסינכרונית מחייבת הצמדה מחדש של המיקום');
-    });
+        final overlaySize =
+            tester.view.physicalSize / tester.view.devicePixelRatio;
+        final panelRect = tester.getRect(
+          find.ancestor(of: grown, matching: find.byType(Material)).first,
+        );
+        expect(
+          panelRect.bottom,
+          lessThanOrEqualTo(overlaySize.height),
+          reason:
+              'החלונית חייבת להישאר בגבולות המסך גם אחרי שהתוכן גדל — '
+              'גדילה אסינכרונית מחייבת הצמדה מחדש של המיקום',
+        );
+      },
+    );
 
-    testWidgets('לחיצה על הפריט סוגרת את התפריט ואת החלונית יחד',
-        (tester) async {
+    testWidgets('לחיצה על הפריט סוגרת את התפריט ואת החלונית יחד', (
+      tester,
+    ) async {
       final gesture = await pumpMenuWithPreviewEntry(tester);
 
       await gesture.moveTo(tester.getCenter(find.text('קישור א')));
@@ -1061,10 +1174,16 @@ void main() {
       await tester.tap(find.text('קישור א'));
       await tester.pumpAndSettle();
 
-      expect(find.text('קישור א'), findsNothing,
-          reason: 'התפריט נסגר לאחר בחירת הפריט');
-      expect(find.text(previewText), findsNothing,
-          reason: 'החלונית הצפה מוסרת יחד עם סגירת התפריט');
+      expect(
+        find.text('קישור א'),
+        findsNothing,
+        reason: 'התפריט נסגר לאחר בחירת הפריט',
+      );
+      expect(
+        find.text(previewText),
+        findsNothing,
+        reason: 'החלונית הצפה מוסרת יחד עם סגירת התפריט',
+      );
     });
 
     group('מגע — לחיצה ארוכה במקום רפרוף', () {
@@ -1075,7 +1194,7 @@ void main() {
             home: Scaffold(
               body: AppContextMenuRegion(
                 key: key,
-                menuBuilder: (_, __) => [
+                menuBuilder: (_, _) => [
                   AppContextMenuEntry(
                     label: 'קישור א',
                     onTap: () {},
@@ -1101,12 +1220,16 @@ void main() {
         await tester.longPress(find.text('קישור א'));
         await tester.pumpAndSettle();
 
-        expect(find.text(previewText), findsOneWidget,
-            reason: 'לחיצה ארוכה מחליפה את הרפרוף ופותחת את התצוגה');
+        expect(
+          find.text(previewText),
+          findsOneWidget,
+          reason: 'לחיצה ארוכה מחליפה את הרפרוף ופותחת את התצוגה',
+        );
       });
 
-      testWidgets('הקשה מחוץ לחלונית סוגרת אותה ומשאירה את התפריט פתוח',
-          (tester) async {
+      testWidgets('הקשה מחוץ לחלונית סוגרת אותה ומשאירה את התפריט פתוח', (
+        tester,
+      ) async {
         await pumpTouchMenu(tester);
 
         await tester.longPress(find.text('קישור א'));
@@ -1116,10 +1239,16 @@ void main() {
         await tester.tapAt(const Offset(10, 590));
         await tester.pumpAndSettle();
 
-        expect(find.text(previewText), findsNothing,
-            reason: 'הקשה על המחסום מחוץ לחלונית סוגרת את התצוגה');
-        expect(find.text('קישור א'), findsOneWidget,
-            reason: 'התפריט עצמו נשאר פתוח להמשך בחירה');
+        expect(
+          find.text(previewText),
+          findsNothing,
+          reason: 'הקשה על המחסום מחוץ לחלונית סוגרת את התצוגה',
+        );
+        expect(
+          find.text('קישור א'),
+          findsOneWidget,
+          reason: 'התפריט עצמו נשאר פתוח להמשך בחירה',
+        );
       });
     });
   });
@@ -1134,7 +1263,7 @@ void main() {
           home: Scaffold(
             body: Center(
               child: AppContextMenuRegion(
-                menuBuilder: (_, __) => [
+                menuBuilder: (_, _) => [
                   AppContextMenuEntry(label: 'העתק', onTap: () {}),
                 ],
                 child: const SizedBox(
@@ -1153,29 +1282,41 @@ void main() {
       await pumpRegion(tester);
 
       final center = tester.getCenter(find.byType(AppContextMenuRegion));
-      final gesture =
-          await tester.startGesture(center, kind: PointerDeviceKind.touch);
+      final gesture = await tester.startGesture(
+        center,
+        kind: PointerDeviceKind.touch,
+      );
       addTearDown(() async => gesture.up());
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
-      expect(find.text('העתק'), findsOneWidget,
-          reason: 'לחיצה ארוכה במגע צריכה לפתוח את תפריט ההקשר');
+      expect(
+        find.text('העתק'),
+        findsOneWidget,
+        reason: 'לחיצה ארוכה במגע צריכה לפתוח את תפריט ההקשר',
+      );
     });
 
-    testWidgets('החזקת לחיצה שמאלית בעכבר אינה פותחת את התפריט',
-        (tester) async {
+    testWidgets('החזקת לחיצה שמאלית בעכבר אינה פותחת את התפריט', (
+      tester,
+    ) async {
       await pumpRegion(tester);
 
       final center = tester.getCenter(find.byType(AppContextMenuRegion));
-      final gesture = await tester.startGesture(center,
-          kind: PointerDeviceKind.mouse, buttons: kPrimaryButton);
+      final gesture = await tester.startGesture(
+        center,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryButton,
+      );
       addTearDown(() async => gesture.up());
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
-      expect(find.text('העתק'), findsNothing,
-          reason: 'החזקת לחיצה שמאלית בעכבר אסור שתפתח תפריט — רק לחיצה ימנית');
+      expect(
+        find.text('העתק'),
+        findsNothing,
+        reason: 'החזקת לחיצה שמאלית בעכבר אסור שתפתח תפריט — רק לחיצה ימנית',
+      );
     });
   });
 
@@ -1195,7 +1336,7 @@ void main() {
           home: Scaffold(
             body: AppContextMenuRegion(
               key: key,
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry.iconRow(actions),
                 const AppContextMenuEntry.divider(),
                 ...trailingEntries,
@@ -1241,8 +1382,11 @@ void main() {
       expect(find.byIcon(FluentIcons.library_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.note_add_24_regular), findsOneWidget);
-      expect(find.text('פריט'), findsOneWidget,
-          reason: 'הרשימה הרגילה נשארת מתחת לשורת האייקונים');
+      expect(
+        find.text('פריט'),
+        findsOneWidget,
+        reason: 'הרשימה הרגילה נשארת מתחת לשורת האייקונים',
+      );
     });
 
     test('AppContextMenuEntry.iconRow דורש לפחות פעולה אחת', () {
@@ -1274,12 +1418,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tapped, isTrue);
-      expect(find.text('פריט'), findsNothing,
-          reason: 'התפריט נסגר אחרי לחיצה על האייקון היחיד');
+      expect(
+        find.text('פריט'),
+        findsNothing,
+        reason: 'התפריט נסגר אחרי לחיצה על האייקון היחיד',
+      );
     });
 
-    testWidgets('לחיצה על אייקון מפעילה רק את ה-onTap שלו עצמו',
-        (tester) async {
+    testWidgets('לחיצה על אייקון מפעילה רק את ה-onTap שלו עצמו', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       final tapped = <String>[];
       await pumpWithIconRow(
@@ -1310,8 +1458,9 @@ void main() {
       expect(tapped, ['b'], reason: 'רק ה-onTap של האייקון האמצעי שנלחץ הופעל');
     });
 
-    testWidgets('בשורה מעורבת — אייקון מושבת אינו סוגר/מפעיל, מאופשר כן',
-        (tester) async {
+    testWidgets('בשורה מעורבת — אייקון מושבת אינו סוגר/מפעיל, מאופשר כן', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       var enabledTapped = false;
       var disabledTapped = false;
@@ -1337,8 +1486,11 @@ void main() {
       await tester.tap(find.byIcon(FluentIcons.library_24_regular));
       await tester.pumpAndSettle();
       expect(disabledTapped, isFalse);
-      expect(find.text('פריט'), findsOneWidget,
-          reason: 'לחיצה על אייקון מושבת אינה סוגרת את התפריט');
+      expect(
+        find.text('פריט'),
+        findsOneWidget,
+        reason: 'לחיצה על אייקון מושבת אינה סוגרת את התפריט',
+      );
 
       await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
       await tester.pumpAndSettle();
@@ -1366,13 +1518,17 @@ void main() {
         ],
       );
 
-      expect(tester.takeException(), isNull,
-          reason: 'maxWidth חותך label ארוך במקום לגרום ל-RenderFlex overflow');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'maxWidth חותך label ארוך במקום לגרום ל-RenderFlex overflow',
+      );
       expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
     });
 
-    testWidgets('label מוצג ככיתוב מתחת לאייקון, נפרד מה-tooltip',
-        (tester) async {
+    testWidgets('label מוצג ככיתוב מתחת לאייקון, נפרד מה-tooltip', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       await pumpWithIconRow(
         tester,
@@ -1386,10 +1542,16 @@ void main() {
         ],
       );
 
-      expect(find.text('חיפוש'), findsOneWidget,
-          reason: 'label הקצר מוצג ככיתוב מתחת לאייקון');
-      expect(find.text('חיפוש בכל המאגר'), findsNothing,
-          reason: 'ה-tooltip המלא אינו מוצג ככיתוב (מופיע רק בריחוף)');
+      expect(
+        find.text('חיפוש'),
+        findsOneWidget,
+        reason: 'label הקצר מוצג ככיתוב מתחת לאייקון',
+      );
+      expect(
+        find.text('חיפוש בכל המאגר'),
+        findsNothing,
+        reason: 'ה-tooltip המלא אינו מוצג ככיתוב (מופיע רק בריחוף)',
+      );
     });
 
     testWidgets('בהיעדר label, ה-tooltip משמש ככיתוב', (tester) async {
@@ -1405,8 +1567,11 @@ void main() {
         ],
       );
 
-      expect(find.text('העתק'), findsOneWidget,
-          reason: 'בהיעדר label, ה-tooltip מוצג ככיתוב');
+      expect(
+        find.text('העתק'),
+        findsOneWidget,
+        reason: 'בהיעדר label, ה-tooltip מוצג ככיתוב',
+      );
     });
 
     testWidgets('Tooltip נוצר רק לפעולה עם tooltip מוגדר', (tester) async {
@@ -1427,12 +1592,16 @@ void main() {
         ],
       );
 
-      expect(find.byType(Tooltip), findsOneWidget,
-          reason: 'רק לאייקון עם tooltip מוגדר נוצר Tooltip; להערה אין');
+      expect(
+        find.byType(Tooltip),
+        findsOneWidget,
+        reason: 'רק לאייקון עם tooltip מוגדר נוצר Tooltip; להערה אין',
+      );
     });
 
-    testWidgets('לחיצה על כפתור אייקון מפעילה onTap וסוגרת את התפריט',
-        (tester) async {
+    testWidgets('לחיצה על כפתור אייקון מפעילה onTap וסוגרת את התפריט', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       var tapped = false;
       await pumpWithIconRow(
@@ -1451,14 +1620,21 @@ void main() {
       await tester.tap(find.byIcon(FluentIcons.copy_24_regular));
       await tester.pumpAndSettle();
 
-      expect(tapped, isTrue,
-          reason: 'לחיצה על כפתור האייקון חייבת להפעיל את ה-onTap שלו');
-      expect(find.text('פריט'), findsNothing,
-          reason: 'התפריט חייב להיסגר אחרי לחיצה על כפתור בשורת האייקונים');
+      expect(
+        tapped,
+        isTrue,
+        reason: 'לחיצה על כפתור האייקון חייבת להפעיל את ה-onTap שלו',
+      );
+      expect(
+        find.text('פריט'),
+        findsNothing,
+        reason: 'התפריט חייב להיסגר אחרי לחיצה על כפתור בשורת האייקונים',
+      );
     });
 
-    testWidgets('כפתור אייקון מושבת (enabled:false) אינו מפעיל onTap',
-        (tester) async {
+    testWidgets('כפתור אייקון מושבת (enabled:false) אינו מפעיל onTap', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       var tapped = false;
       await pumpWithIconRow(
@@ -1477,8 +1653,11 @@ void main() {
       await tester.tap(find.byIcon(FluentIcons.library_24_regular));
       await tester.pumpAndSettle();
 
-      expect(tapped, isFalse,
-          reason: 'פעולת אייקון מושבתת לא צריכה להגיב ללחיצה');
+      expect(
+        tapped,
+        isFalse,
+        reason: 'פעולת אייקון מושבתת לא צריכה להגיב ללחיצה',
+      );
     });
 
     Future<void> pumpFullScreenIconRow(
@@ -1491,7 +1670,7 @@ void main() {
           home: Scaffold(
             body: AppContextMenuRegion(
               key: key,
-              menuBuilder: (_, __) => [
+              menuBuilder: (_, _) => [
                 AppContextMenuEntry.iconRow(const [
                   AppContextMenuIconAction(
                     tooltip: 'העתק',
@@ -1512,34 +1691,50 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('בפתיחה כלפי מעלה שורת האייקונים עוברת לתחתית (צמודה לעכבר)',
-        (tester) async {
+    testWidgets('בפתיחה כלפי מעלה שורת האייקונים עוברת לתחתית (צמודה לעכבר)', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       // פתיחה סמוך לתחתית (ברירת מחדל 800x600) — אין מקום מתחת, נפתח כלפי מעלה
-      await pumpFullScreenIconRow(tester,
-          key: key, openAt: const Offset(100, 590));
+      await pumpFullScreenIconRow(
+        tester,
+        key: key,
+        openAt: const Offset(100, 590),
+      );
 
-      final iconDy =
-          tester.getCenter(find.byIcon(FluentIcons.copy_24_regular)).dy;
+      final iconDy = tester
+          .getCenter(find.byIcon(FluentIcons.copy_24_regular))
+          .dy;
       final itemDy = tester.getCenter(find.text('פריט')).dy;
-      expect(iconDy, greaterThan(itemDy),
-          reason: 'בפתיחה כלפי מעלה שורת האייקונים צריכה להיות מתחת לרשימה');
+      expect(
+        iconDy,
+        greaterThan(itemDy),
+        reason: 'בפתיחה כלפי מעלה שורת האייקונים צריכה להיות מתחת לרשימה',
+      );
     });
 
     testWidgets('בפתיחה כלפי מטה שורת האייקונים נשארת בראש', (tester) async {
       final key = GlobalKey<AppContextMenuRegionState>();
-      await pumpFullScreenIconRow(tester,
-          key: key, openAt: const Offset(100, 10));
+      await pumpFullScreenIconRow(
+        tester,
+        key: key,
+        openAt: const Offset(100, 10),
+      );
 
-      final iconDy =
-          tester.getCenter(find.byIcon(FluentIcons.copy_24_regular)).dy;
+      final iconDy = tester
+          .getCenter(find.byIcon(FluentIcons.copy_24_regular))
+          .dy;
       final itemDy = tester.getCenter(find.text('פריט')).dy;
-      expect(iconDy, lessThan(itemDy),
-          reason: 'בפתיחה כלפי מטה שורת האייקונים נשארת בראש התפריט');
+      expect(
+        iconDy,
+        lessThan(itemDy),
+        reason: 'בפתיחה כלפי מטה שורת האייקונים נשארת בראש התפריט',
+      );
     });
 
-    testWidgets('פעולת אייקון עם submenuBuilder מציגה חץ ופותחת תת-תפריט',
-        (tester) async {
+    testWidgets('פעולת אייקון עם submenuBuilder מציגה חץ ופותחת תת-תפריט', (
+      tester,
+    ) async {
       final key = GlobalKey<AppContextMenuRegionState>();
       var optionTapped = false;
       await pumpWithIconRow(
@@ -1561,20 +1756,32 @@ void main() {
         trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
       );
 
-      expect(find.byIcon(FluentIcons.chevron_down_12_regular), findsOneWidget,
-          reason: 'פעולה עם submenuBuilder מציגה חץ למטה');
+      expect(
+        find.byIcon(FluentIcons.chevron_down_12_regular),
+        findsOneWidget,
+        reason: 'פעולה עם submenuBuilder מציגה חץ למטה',
+      );
 
       await tester.tap(find.byIcon(FluentIcons.link_24_regular));
       await tester.pumpAndSettle();
-      expect(find.text('העתק קישור למקטע'), findsOneWidget,
-          reason: 'לחיצה על הכפתור פותחת את תת-התפריט');
+      expect(
+        find.text('העתק קישור למקטע'),
+        findsOneWidget,
+        reason: 'לחיצה על הכפתור פותחת את תת-התפריט',
+      );
 
       await tester.tap(find.text('העתק קישור למקטע'));
       await tester.pumpAndSettle();
-      expect(optionTapped, isTrue,
-          reason: 'בחירת אפשרות מפעילה את ה-onTap שלה');
-      expect(find.text('פריט'), findsNothing,
-          reason: 'בחירת אפשרות סוגרת את כל תפריט ההקשר');
+      expect(
+        optionTapped,
+        isTrue,
+        reason: 'בחירת אפשרות מפעילה את ה-onTap שלה',
+      );
+      expect(
+        find.text('פריט'),
+        findsNothing,
+        reason: 'בחירת אפשרות סוגרת את כל תפריט ההקשר',
+      );
     });
   });
 }

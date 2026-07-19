@@ -56,28 +56,38 @@ void main() {
     final loadedTrue = _loaded(continuous: true, supports: true);
     final loadedFalse = _loaded(continuous: false, supports: true);
 
-    test('ספר לא תומך → false (גם אם preserve+state מבקשים true)', () {
+    test('ספר לא תומך → false (גם אם preserve+state+globalDefault מבקשים true)',
+        () {
       expect(
         TextBookBloc.resolvePreservedContinuousReadingMode(
           supportsContinuous: false,
           preserveFlag: true,
           currentState: loadedTrue,
+          globalDefault: true,
         ),
         isFalse,
       );
     });
 
-    test('preserveFlag=false → false (זה המסלול של _resetPerBookSettings)', () {
-      // הבאג שתוקן: לפני התיקון, _resetPerBookSettings לא איפס את מצב
-      // הרצף כי ה-bloc תמיד שמר אותו. עכשיו ברירת המחדל היא לאפס,
-      // והשמירה אקטיבית רק כש-listener של הגדרות גלובליות מבקש זאת.
+    test('preserveFlag=false → globalDefault (מסלול פתיחת ספר / איפוס)', () {
+      // בפתיחת ספר חדש ובאיפוס פר-ספר, הערך נגזר מברירת המחדל הגלובלית.
       expect(
         TextBookBloc.resolvePreservedContinuousReadingMode(
           supportsContinuous: true,
           preserveFlag: false,
           currentState: loadedTrue,
+          globalDefault: false,
         ),
         isFalse,
+      );
+      expect(
+        TextBookBloc.resolvePreservedContinuousReadingMode(
+          supportsContinuous: true,
+          preserveFlag: false,
+          currentState: loadedFalse,
+          globalDefault: true,
+        ),
+        isTrue,
       );
     });
 
@@ -104,16 +114,17 @@ void main() {
       );
     });
 
-    test('currentState אינו Loaded (Initial/Loading) → false', () {
-      // טעינה ראשונית של ספר: אין מה לשמר.
+    test('currentState אינו Loaded (Initial/Loading) → globalDefault', () {
+      // טעינה ראשונית של ספר: אין מה לשמר, אז נגזר מברירת המחדל הגלובלית.
       final initial = TextBookInitial(TextBook(title: 'בראשית'), 0, false, []);
       expect(
         TextBookBloc.resolvePreservedContinuousReadingMode(
           supportsContinuous: true,
           preserveFlag: true,
           currentState: initial,
+          globalDefault: true,
         ),
-        isFalse,
+        isTrue,
       );
 
       expect(
@@ -121,6 +132,7 @@ void main() {
           supportsContinuous: true,
           preserveFlag: true,
           currentState: null,
+          globalDefault: false,
         ),
         isFalse,
       );

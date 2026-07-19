@@ -205,6 +205,114 @@ void main() {
       }
     });
   });
+
+  group('פריט "דווח על טעות בספר"', () {
+    Link officialLink() => Link(
+          heRef: 'רש"י על בראשית א:א',
+          index1: 1,
+          path2: 'אוצריא/תנך/פירושים/רשי.txt',
+          index2: 1,
+          connectionType: 'commentary',
+        );
+
+    Link userLink() => Link(
+          heRef: 'הערה אישית',
+          index1: 1,
+          path2: 'ספר אישי.txt',
+          index2: 1,
+          connectionType: 'commentary',
+          targetIsUserBook: true,
+        );
+
+    Future<List<AppContextMenuEntry>> pumpMenu(
+        WidgetTester tester, Link link) async {
+      late List<AppContextMenuEntry> entries;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              entries = ContextMenuUtils.buildCommentaryContextMenu(
+                context: context,
+                link: link,
+                openBookCallback: (_) {},
+                fontSize: 18,
+                savedSelectedText: null,
+                onCopySelected: () {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      return entries;
+    }
+
+    testWidgets('מוצג עבור מפרש רשמי', (tester) async {
+      final entries = await pumpMenu(tester, officialLink());
+      expect(entries.any((e) => e.label == 'דווח על טעות בספר'), isTrue,
+          reason: 'מפרש רשמי — חייב להיות ניתן לדווח עליו');
+    });
+
+    testWidgets('מוסתר עבור ספר משתמש', (tester) async {
+      final entries = await pumpMenu(tester, userLink());
+      expect(entries.any((e) => e.label == 'דווח על טעות בספר'), isFalse,
+          reason: 'ספר משתמש — אין למי לדווח, הפריט מוסתר');
+    });
+  });
+
+  group('commentaryReportArgs — מיפוי מפרש לפרמטרי דיווח', () {
+    Link commentaryLink() => Link(
+          heRef: 'רש"י על בראשית א:א',
+          index1: 1,
+          path2: 'אוצריא/תנך/פירושים/רשי.txt',
+          index2: 42,
+          connectionType: 'commentary',
+          targetCategoryId: 7,
+          targetFileType: 'txt',
+        );
+
+    test('הדיווח מופנה לספר המפרש, לאינדקס ולתוכן שלו', () {
+      final args = ContextMenuUtils.commentaryReportArgs(
+        link: commentaryLink(),
+        rawContent: '<b>תוכן המפרש</b>',
+        savedSelectedText: null,
+      );
+
+      expect(args.book.title, 'רשי',
+          reason: 'הספר המדווח הוא המפרש (path2), לא הספר הראשי');
+      expect(args.book.categoryId, 7);
+      expect(args.book.fileType, 'txt');
+      expect(args.book.isUserBook, isFalse);
+      expect(args.bookTitle, 'רשי');
+      expect(args.lineIndex, 41,
+          reason: 'index2 הוא 1-based; האינדקס לדיווח הוא index2-1');
+      expect(args.content, const ['<b>תוכן המפרש</b>'],
+          reason: 'reportContent הוא תוכן המפרש הגולמי (שורה בודדת)');
+    });
+
+    test('ללא בחירה — selectedText הוא כל פסקת המפרש (ללא HTML)', () {
+      final args = ContextMenuUtils.commentaryReportArgs(
+        link: commentaryLink(),
+        rawContent: '<b>תוכן</b> המפרש',
+        savedSelectedText: '   ',
+      );
+
+      expect(args.selectedText, 'תוכן המפרש',
+          reason: 'בחירה ריקה/רווחים — נופלים לכל הפסקה, מנוקה מ-HTML');
+    });
+
+    test('עם בחירה — selectedText הוא הטקסט שסומן', () {
+      final args = ContextMenuUtils.commentaryReportArgs(
+        link: commentaryLink(),
+        rawContent: '<b>תוכן</b> המפרש',
+        savedSelectedText: 'קטע מסומן',
+      );
+
+      expect(args.selectedText, 'קטע מסומן');
+      expect(args.content, const ['<b>תוכן</b> המפרש'],
+          reason: 'התוכן המדווח נשאר פסקת המפרש המלאה גם כשיש בחירה');
+    });
+  });
 }
 
 Future<void> _pump(

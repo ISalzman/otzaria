@@ -9,6 +9,9 @@ enum LiveTipId {
   commentaryHint,
   customFoldersHint,
   bookSourceHint,
+  shortcutsHint,
+  printHint,
+  backupHint,
 }
 
 class LiveTipStorage {
@@ -51,6 +54,9 @@ enum TourInteractionType {
   commentaryAvailable,
   commentaryUsed,
   bookSourceViewed,
+  printUsed,
+  shortcutsSettingsOpened,
+  systemSettingsOpened,
 }
 
 class TourInteraction extends Equatable {
@@ -109,7 +115,7 @@ const List<LiveTipSpec> liveTipSpecs = [
     area: TourSpotlightArea.commentators,
     title: 'כדאי לפתוח מפרשים',
     description:
-        'לספר הזה יש מפרשים זמינים. אפשר לפתוח את סרגל הצד בלחצן הסמוך ולעבוד מהר יותר.',
+        'לספר הזה יש מפרשים זמינים. אפשר לפתוח את סרגל הצד בלחצן הסמוך ולעיין יותר.',
   ),
   LiveTipSpec(
     id: LiveTipId.customFoldersHint,
@@ -128,6 +134,30 @@ const List<LiveTipSpec> liveTipSpecs = [
     description:
         'בכל ספר פתוח אפשר ללחוץ על "אודות הספר" שבסרגל הכלים ולראות מהיכן הגיע '
         'הטקסט. כך תדעו למי לפנות אם מצאתם טעות בספר.',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.shortcutsHint,
+    area: TourSpotlightArea.settings,
+    title: 'הידעת?',
+    description:
+        'כמעט לכל פעולה באוצריא יש קיצור מקלדת, ואפשר גם להתאים אותו אישית. '
+        'היכנסו להגדרות ← קיצורי מקלדת כדי לצפות בכל הקיצורים ולשנות אותם '
+        'להרגלי העבודה שלכם.',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.printHint,
+    area: TourSpotlightArea.print,
+    title: 'הידעת?',
+    description: 'אפשר להדפיס את הפרק הנוכחי ישירות מסרגל הכלים של הספר — כולל '
+        'המפרשים המוצגים. לחצו על כפתור ההדפסה ובחרו את הפורמט המתאים.',
+  ),
+  LiveTipSpec(
+    id: LiveTipId.backupHint,
+    area: TourSpotlightArea.settings,
+    title: 'הידעת?',
+    description: 'אוצריא מגבה אוטומטית את הסימניות, ההיסטוריה וההערות שלך. '
+        'בהגדרות ← מערכת אפשר לייצא את הגיבוי לקובץ ולשחזר אותו בכל עת — '
+        'גם לאחר התקנה מחדש.',
   ),
 ];
 

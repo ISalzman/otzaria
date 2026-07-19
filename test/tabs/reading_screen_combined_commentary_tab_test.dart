@@ -28,7 +28,7 @@ import '../helpers/memory_settings_cache.dart';
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
   _FakeSettingsBloc() : super(SettingsState.initial()) {
-    on<SettingsEvent>((_, __) {});
+    on<SettingsEvent>((_, _) {});
   }
 
   @override
@@ -39,7 +39,8 @@ class _FakePersonalNotesBloc
     extends Bloc<PersonalNotesEvent, PersonalNotesState>
     implements PersonalNotesBloc {
   _FakePersonalNotesBloc()
-      : super(const PersonalNotesState(
+    : super(
+        const PersonalNotesState(
           isLoading: false,
           bookId: '',
           locatedNotes: [],
@@ -47,8 +48,9 @@ class _FakePersonalNotesBloc
           errorMessage: null,
           filteredLocatedNotes: [],
           filteredMissingNotes: [],
-        )) {
-    on<PersonalNotesEvent>((_, __) {});
+        ),
+      ) {
+    on<PersonalNotesEvent>((_, _) {});
   }
 
   @override
@@ -57,7 +59,7 @@ class _FakePersonalNotesBloc
 
 class _FakeTabsBloc extends Bloc<TabsEvent, TabsState> implements TabsBloc {
   _FakeTabsBloc(super.initial) {
-    on<TabsEvent>((_, __) {});
+    on<TabsEvent>((_, _) {});
   }
 
   @override
@@ -122,9 +124,13 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(PdfCommentatorsTabScreen), findsNWidgets(2),
-          reason: 'שני צדי התצוגה המפוצלת חייבים לרנדר כרטסיית מפרשים, '
-              'לא SizedBox.shrink');
+      expect(
+        find.byType(PdfCommentatorsTabScreen),
+        findsNWidgets(2),
+        reason:
+            'שני צדי התצוגה המפוצלת חייבים לרנדר כרטסיית מפרשים, '
+            'לא SizedBox.shrink',
+      );
     },
   );
 }

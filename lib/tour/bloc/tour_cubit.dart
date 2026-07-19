@@ -9,13 +9,44 @@ import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/tour/models/tour_steps.dart';
 
+/// תזמון טיפ "הידעת" מבוסס-ותק: מוצג מההפעלה ה-N ואילך, לאחר זמן שימוש בסשן.
+class DelayedTipSchedule {
+  final LiveTipId id;
+  final int minimumLaunchCount;
+  final Duration delay;
+
+  const DelayedTipSchedule({
+    required this.id,
+    required this.minimumLaunchCount,
+    required this.delay,
+  });
+}
+
 class TourCubit extends Cubit<TourState> {
   TourCubit({
-    Duration delayedTipDelay = const Duration(minutes: 2, seconds: 30),
-    int delayedTipMinimumLaunchCount = 3,
-  })  : _delayedTipDelay = delayedTipDelay,
-        _delayedTipMinimumLaunchCount = delayedTipMinimumLaunchCount,
-        super(_loadInitialState());
+    List<DelayedTipSchedule>? delayedTipSchedules,
+    this._printHintMinimumSessionDuration = const Duration(minutes: 3),
+  }) : _delayedTipSchedules = delayedTipSchedules ?? defaultDelayedTipSchedules,
+       super(_loadInitialState());
+
+  /// סדר הרשימה קובע עדיפות: בכל סשן מתוזמן רק הטיפ הזכאי הראשון.
+  static const List<DelayedTipSchedule> defaultDelayedTipSchedules = [
+    DelayedTipSchedule(
+      id: LiveTipId.customFoldersHint,
+      minimumLaunchCount: 3,
+      delay: Duration(minutes: 2, seconds: 30),
+    ),
+    DelayedTipSchedule(
+      id: LiveTipId.shortcutsHint,
+      minimumLaunchCount: 5,
+      delay: Duration(minutes: 2),
+    ),
+    DelayedTipSchedule(
+      id: LiveTipId.backupHint,
+      minimumLaunchCount: 10,
+      delay: Duration(minutes: 2),
+    ),
+  ];
 
   static TourState _loadInitialState() {
     final stored = Settings.getValue<String>(LiveTipStorage.resolvedTipsKey);
@@ -28,14 +59,21 @@ class TourCubit extends Cubit<TourState> {
 
   /// כמה ספרי טקסט שונים צריך לפתוח לפני שמוצג טיפ "אודות הספר".
   static const int _bookSourceHintMinimumBooks = 3;
+  static const int _bookSourceHintMinimumLaunchCount = 3;
+  static const int _printHintMinimumLaunchCount = 7;
 
-  final Duration _delayedTipDelay;
-  final int _delayedTipMinimumLaunchCount;
+  final List<DelayedTipSchedule> _delayedTipSchedules;
+  final Duration _printHintMinimumSessionDuration;
+  final DateTime _sessionStartedAt = DateTime.now();
   bool _sessionRegistered = false;
+
+  /// טיפ אחד לכל היותר בסשן — הופעה של טיפ דוחה את השאר להפעלה הבאה.
+  bool _sessionTipShown = false;
   Timer? _delayedTipTimer;
   Timer? _autoPlayTimer;
   final List<TourInteraction> _recentInteractions = <TourInteraction>[];
   final Set<String> _openedTextBooks = <String>{};
+  bool _hasOpenedTextBookThisSession = false;
   int _textSelectionCount = 0;
   bool _hasRegisteredCommentaryOpportunity = false;
   bool _commentaryOpportunityOpen = false;
@@ -69,16 +107,18 @@ class TourCubit extends Cubit<TourState> {
         isActive: true,
         libraryLoaded: libraryLoaded,
         currentIndex: 0,
-        steps:
-            TourSteps.build(libraryLoaded: libraryLoaded, isRestart: isRestart),
+        steps: TourSteps.build(
+          libraryLoaded: libraryLoaded,
+          isRestart: isRestart,
+        ),
         shownTips: state.shownTips,
         resolvedTips: state.resolvedTips,
       ),
     );
   }
 
-  /// נקרא פעם אחת בעליית החלון. סופר הפעלות ומתזמן את טיפ התיקיות המותאמות;
-  /// סגירה לפני שהטיימר ירה משאירה אותו להפעלה הבאה (כלל "אם השימוש היה קצר").
+  /// נקרא פעם אחת בעליית החלון. סופר הפעלות ומתזמן את טיפ ה"הידעת" הזכאי
+  /// הראשון; סגירה לפני שהטיימר ירה משאירה אותו להפעלה הבאה (שימוש קצר).
   void registerSession() {
     if (_sessionRegistered) {
       return;
@@ -89,25 +129,33 @@ class TourCubit extends Cubit<TourState> {
         (Settings.getValue<int>(LiveTipStorage.launchCountKey) ?? 0) + 1;
     Settings.setValue<int>(LiveTipStorage.launchCountKey, launchCount);
 
-    if (state.resolvedTips.contains(LiveTipId.customFoldersHint) ||
-        launchCount < _delayedTipMinimumLaunchCount) {
-      return;
+    for (final schedule in _delayedTipSchedules) {
+      if (launchCount < schedule.minimumLaunchCount ||
+          !_canShowTip(schedule.id)) {
+        continue;
+      }
+      _delayedTipTimer = Timer(
+        schedule.delay,
+        () => _maybeShowDelayedTip(schedule.id),
+      );
+      break;
     }
-    _delayedTipTimer = Timer(_delayedTipDelay, _maybeShowDelayedTip);
   }
 
-  void _maybeShowDelayedTip() {
+  void _maybeShowDelayedTip(LiveTipId tipId) {
     if (state.isActive ||
         state.hasActiveLiveTip ||
-        !_canShowTip(LiveTipId.customFoldersHint)) {
+        _sessionTipShown ||
+        !_canShowTip(tipId)) {
       return;
     }
+    _sessionTipShown = true;
     emit(
       state.copyWith(
-        activeLiveTipId: LiveTipId.customFoldersHint,
+        activeLiveTipId: tipId,
         shownTips: <LiveTipId>{
           ...state.shownTips,
-          LiveTipId.customFoldersHint,
+          tipId,
         },
       ),
     );
@@ -128,10 +176,12 @@ class TourCubit extends Cubit<TourState> {
       ...state.resolvedTips,
       dismissedId,
     };
-    emit(state.copyWith(
-      resolvedTips: updatedResolved,
-      clearLiveTip: true,
-    ));
+    emit(
+      state.copyWith(
+        resolvedTips: updatedResolved,
+        clearLiveTip: true,
+      ),
+    );
     _persistResolvedTips(updatedResolved);
   }
 
@@ -252,6 +302,7 @@ class TourCubit extends Cubit<TourState> {
         _markTipResolved(LiveTipId.commentaryHint);
         break;
       case TourInteractionType.openedTextBook:
+        _hasOpenedTextBookThisSession = true;
         if (_isInteractionRelevantToOpportunity(interaction)) {
           _commentaryOpportunityScore++;
         }
@@ -262,6 +313,15 @@ class TourCubit extends Cubit<TourState> {
         break;
       case TourInteractionType.bookSourceViewed:
         _markTipResolved(LiveTipId.bookSourceHint);
+        break;
+      case TourInteractionType.printUsed:
+        _markTipResolved(LiveTipId.printHint);
+        break;
+      case TourInteractionType.shortcutsSettingsOpened:
+        _markTipResolved(LiveTipId.shortcutsHint);
+        break;
+      case TourInteractionType.systemSettingsOpened:
+        _markTipResolved(LiveTipId.backupHint);
         break;
       case TourInteractionType.currentTabChanged:
       case TourInteractionType.readerPositionChanged:
@@ -297,7 +357,7 @@ class TourCubit extends Cubit<TourState> {
   }
 
   void _maybeShowLiveTip() {
-    if (state.isActive || state.hasActiveLiveTip) {
+    if (state.isActive || state.hasActiveLiveTip || _sessionTipShown) {
       return;
     }
 
@@ -306,6 +366,7 @@ class TourCubit extends Cubit<TourState> {
       return;
     }
 
+    _sessionTipShown = true;
     emit(
       state.copyWith(
         activeLiveTipId: nextTipId,
@@ -335,9 +396,17 @@ class TourCubit extends Cubit<TourState> {
     }
 
     if (_canShowTip(LiveTipId.bookSourceHint) &&
-        _hasMinimumLaunches &&
+        _hasLaunchesAtLeast(_bookSourceHintMinimumLaunchCount) &&
         _openedTextBooks.length >= _bookSourceHintMinimumBooks) {
       return LiveTipId.bookSourceHint;
+    }
+
+    if (_canShowTip(LiveTipId.printHint) &&
+        _hasOpenedTextBookThisSession &&
+        _hasLaunchesAtLeast(_printHintMinimumLaunchCount) &&
+        DateTime.now().difference(_sessionStartedAt) >=
+            _printHintMinimumSessionDuration) {
+      return LiveTipId.printHint;
     }
 
     return null;
@@ -349,16 +418,18 @@ class TourCubit extends Cubit<TourState> {
   }
 
   /// טיפ "הידעת?" אינו מוצג בהפעלות הראשונות, אלא רק מהסף ואילך.
-  bool get _hasMinimumLaunches {
+  bool _hasLaunchesAtLeast(int minimumLaunchCount) {
     final launchCount =
         Settings.getValue<int>(LiveTipStorage.launchCountKey) ?? 0;
-    return launchCount >= _delayedTipMinimumLaunchCount;
+    return launchCount >= minimumLaunchCount;
   }
 
   bool _shouldShowSideBySideSuggestion() {
     final recentTitles = _recentInteractions
-        .where((interaction) =>
-            interaction.type == TourInteractionType.currentTabChanged)
+        .where(
+          (interaction) =>
+              interaction.type == TourInteractionType.currentTabChanged,
+        )
         .map((interaction) => interaction.primaryValue)
         .whereType<String>()
         .toList();

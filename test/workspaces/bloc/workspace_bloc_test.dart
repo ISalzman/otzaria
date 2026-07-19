@@ -45,11 +45,13 @@ void main() {
       );
 
       // Wait for workspace switch to complete (activeWorkspaceId changes)
-      await bloc.stream
-          .firstWhere((s) => s.activeWorkspaceId == secondWorkspace.id);
+      await bloc.stream.firstWhere(
+        (s) => s.activeWorkspaceId == secondWorkspace.id,
+      );
 
-      final savedWorkspace =
-          bloc.state.workspaces.firstWhere((w) => w.id == firstWorkspace.id);
+      final savedWorkspace = bloc.state.workspaces.firstWhere(
+        (w) => w.id == firstWorkspace.id,
+      );
       expect(savedWorkspace.tabs, hasLength(1));
       expect(savedWorkspace.tabs.first, isNot(same(liveTab)));
       expect(callbackTabs, isNotNull);
@@ -86,8 +88,9 @@ void main() {
         ),
       );
 
-      await bloc.stream
-          .firstWhere((s) => s.activeWorkspaceId == targetWorkspace.id);
+      await bloc.stream.firstWhere(
+        (s) => s.activeWorkspaceId == targetWorkspace.id,
+      );
 
       expect(callbackTabs, isNotNull);
       expect(callbackTabs, hasLength(1));
@@ -109,9 +112,8 @@ TextBookTab _createTextTab(String title) {
 class _FakeWorkspaceRepository extends WorkspaceRepository {
   _FakeWorkspaceRepository({
     required List<Workspace> workspaces,
-    required String activeWorkspaceId,
-  })  : _workspaces = List<Workspace>.from(workspaces),
-        _activeWorkspaceId = activeWorkspaceId;
+    required String this._activeWorkspaceId,
+  }) : _workspaces = List<Workspace>.from(workspaces);
 
   List<Workspace> _workspaces;
   String? _activeWorkspaceId;
@@ -122,7 +124,9 @@ class _FakeWorkspaceRepository extends WorkspaceRepository {
 
   @override
   Future<void> saveWorkspaces(
-      List<Workspace> workspaces, String? currentWorkspaceId) async {
+    List<Workspace> workspaces,
+    String? currentWorkspaceId,
+  ) async {
     _workspaces = List<Workspace>.from(workspaces);
     _activeWorkspaceId = currentWorkspaceId;
   }

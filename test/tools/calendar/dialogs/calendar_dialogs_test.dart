@@ -210,5 +210,41 @@ void main() {
       expect(result!.recurringYears, 3);
       expect(result!.recurrenceType, isNot(RecurrenceType.none));
     });
+
+    testWidgets('בחירת צבע מוחזרת ב-colorIndex', (tester) async {
+      CalendarEventDialogResult? result;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () async {
+                  result = await showCalendarEventDialog(
+                    context: context,
+                    state: CalendarState.initial(),
+                  );
+                },
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'אירוע צבעוני');
+      await tester.tap(find.byTooltip('ירוק'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('צור'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      // 'ירוק' הוא אינדקס 3 בפלטת CalendarEventColors
+      expect(result!.colorIndex, 3);
+    });
   });
 }

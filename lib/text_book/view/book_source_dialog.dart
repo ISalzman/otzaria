@@ -78,6 +78,15 @@ bool isNationalLibrarySource(String? sourceFolder) {
   return normalized.contains('nationallibrary');
 }
 
+/// בודק האם מקור הספר הוא "אוצר הספרים היהודי השיתופי"
+/// (המקור wikiJewishBooksToOtzaria ב-DB). מנורמל כמו [isTashmaSource].
+bool isWikiJewishBooksSource(String? sourceFolder) {
+  final normalized = (sourceFolder ?? '')
+      .toLowerCase()
+      .replaceAll(_sourceNormalizationRegex, '');
+  return normalized.contains('wikijewishbooks');
+}
+
 /// הצגת דיאלוג אודות הספר
 Future<void> showBookSourceDialog(
   BuildContext context,
@@ -156,38 +165,57 @@ Widget _buildBookDetailsContent(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoSection('שם הספר:', book.title),
+        DetailsInfoSection(title: 'שם הספר:', value: book.title),
         if (information.authors.isNotEmpty)
-          _buildInfoSection('מחבר:', information.authors.join(', ')),
+          DetailsInfoSection(
+            title: 'מחבר:',
+            value: information.authors.join(', '),
+          ),
         if (information.generation != null)
-          _buildInfoSection('דור:', information.generation!),
+          DetailsInfoSection(title: 'דור:', value: information.generation!),
         if (book.heEra != null && book.heEra!.isNotEmpty)
-          _buildInfoSection('תקופה:', book.heEra!),
+          DetailsInfoSection(title: 'תקופה:', value: book.heEra!),
         if (information.categories != null)
-          _buildInfoSection('קטגוריות:', information.categories!),
+          DetailsInfoSection(
+            title: 'קטגוריות:',
+            value: information.categories!,
+          ),
         if (book.compDateStringHe != null && book.compDateStringHe!.isNotEmpty)
-          _buildInfoSection('תאריך חיבור:', book.compDateStringHe!),
+          DetailsInfoSection(
+            title: 'תאריך חיבור:',
+            value: book.compDateStringHe!,
+          ),
         if (book.compPlaceStringHe != null &&
             book.compPlaceStringHe!.isNotEmpty)
-          _buildInfoSection('מקום חיבור:', book.compPlaceStringHe!),
+          DetailsInfoSection(
+            title: 'מקום חיבור:',
+            value: book.compPlaceStringHe!,
+          ),
         if (information.publicationDates.isNotEmpty)
-          _buildInfoSection(
-            'תאריך פרסום:',
-            information.publicationDates.join(', '),
+          DetailsInfoSection(
+            title: 'תאריך פרסום:',
+            value: information.publicationDates.join(', '),
           ),
         if (information.publicationPlaces.isNotEmpty)
-          _buildInfoSection(
-            'מקום פרסום:',
-            information.publicationPlaces.join(', '),
+          DetailsInfoSection(
+            title: 'מקום פרסום:',
+            value: information.publicationPlaces.join(', '),
           ),
         if (information.topics.isNotEmpty)
-          _buildInfoSection('נושאים:', information.topics.join(', ')),
+          DetailsInfoSection(
+            title: 'נושאים:',
+            value: information.topics.join(', '),
+          ),
         if (information.shortDescription != null)
-          _buildInfoSection('תיאור קצר:', information.shortDescription!),
+          DetailsInfoSection(
+            title: 'תיאור קצר:',
+            value: information.shortDescription!,
+          ),
         if (information.fullDescription != null)
-          _buildInfoSection('תיאור מורחב:', information.fullDescription!),
-        if (information.lineCount != null && information.lineCount! > 0)
-          _buildInfoSection('מספר שורות:', information.lineCount.toString()),
+          DetailsInfoSection(
+            title: 'תיאור מורחב:',
+            value: information.fullDescription!,
+          ),
         const Divider(height: 24),
         const Text(
           'מקור הספר:',
@@ -215,40 +243,12 @@ Widget _buildBookDetailsContent(
           )
         else
           SelectableText(sourceInfo.text, style: const TextStyle(fontSize: 14)),
-        if (bookDetails['שם הקובץ'] != BookDetailsService.bookNotFoundText)
-          _buildInfoSection('שם הקובץ:', bookDetails['שם הקובץ']!),
         if (bookDetails['נתיב הקובץ'] != BookDetailsService.bookNotFoundText)
-          _buildInfoSection(
-            'נתיב הקובץ:',
-            bookDetails['נתיב הקובץ']!,
+          DetailsInfoSection(
+            title: 'נתיב הקובץ:',
+            value: bookDetails['נתיב הקובץ']!,
             valueDirection: TextDirection.ltr,
           ),
-      ],
-    ),
-  );
-}
-
-/// בניית סעיף מידע עם כותרת וערך
-Widget _buildInfoSection(
-  String title,
-  String value, {
-  TextDirection? valueDirection,
-}) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        SelectableText(
-          value,
-          style: const TextStyle(fontSize: 14),
-          textDirection: valueDirection,
-        ),
       ],
     ),
   );

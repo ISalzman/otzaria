@@ -40,7 +40,7 @@ msix_config:
 version: 0.9.95+90950
 
 environment:
-  sdk: ">=3.2.6 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -62,7 +62,7 @@ dependencies:
   hive_ce: ^2.19.3
   path_provider: ^2.1.5
   html: ^0.15.6
-  pdfrx: ^2.4.3
+  pdfrx: ^2.4.7
   url_launcher: ^6.3.2
   flutter_widget_from_html: ^0.17.2
   scrollable_positioned_list: ^0.3.8
@@ -74,7 +74,7 @@ dependencies:
   multi_split_view: ^3.6.2
   updat: ^1.4.0
   printing:
-  pdf: ^3.12.0
+  pdf: ^3.13.0
   kosher_dart: ^2.0.20
   archive: ^4.0.9
   package_info_plus: ^9.0.1
@@ -85,7 +85,7 @@ dependencies:
   ffi: ^2.2.0
   win32: ^5.15.0
   googleapis: ^16.0.0
-  googleapis_auth: ^2.3.2
+  googleapis_auth: ^2.3.3
   characters: ^1.4.1
   collection: ^1.19.1
   otzaria_search_engine: ^0.6.9
@@ -211,6 +211,8 @@ flutter:
     - family: FrankRuhlCLM
       fonts:
         - asset: fonts/FrankRuehlCLM-Medium.ttf
+        - asset: fonts/FrankRuehlCLM-Bold.ttf
+          weight: 700
     - family: Rubik
       fonts:
         - asset: fonts/Rubik-VariableFont_wght.ttf

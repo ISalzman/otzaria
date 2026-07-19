@@ -8,10 +8,9 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
   final NavigationRepository _repository;
 
   NavigationBloc({
-    required NavigationRepository repository,
+    required this._repository,
     required TabsRepository tabsRepository,
-  })  : _repository = repository,
-        super(NavigationState.initial(tabsRepository.loadTabs().isNotEmpty)) {
+  }) : super(NavigationState.initial(tabsRepository.loadTabs().isNotEmpty)) {
     on<NavigateToScreen>(_onNavigateToScreen);
     on<CheckLibrary>(_onCheckLibrary);
   }

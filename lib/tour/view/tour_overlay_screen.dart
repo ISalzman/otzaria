@@ -40,7 +40,7 @@ Widget tourCardSwitcherLayoutBuilder(
     alignment: AlignmentDirectional.bottomStart,
     children: <Widget>[
       ...previousChildren,
-      if (currentChild != null) currentChild,
+      ?currentChild,
     ],
   );
 }
@@ -128,12 +128,17 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                   ? [targetRect]
                   : resolvedRects;
               _trackTargetRects(step.id, targetRects);
-              final combinedTargetRect =
-                  targetRects.skip(1).fold(targetRects.first, (rect, next) {
-                return rect.expandToInclude(next);
-              });
-              final cardAlignment =
-                  _cardAlignmentFor(step, combinedTargetRect, size);
+              final combinedTargetRect = targetRects.skip(1).fold(
+                targetRects.first,
+                (rect, next) {
+                  return rect.expandToInclude(next);
+                },
+              );
+              final cardAlignment = _cardAlignmentFor(
+                step,
+                combinedTargetRect,
+                size,
+              );
               final isWelcomeStep = step.id == 'welcome';
               final isRestartEntry = step.id == 'restart_welcome';
               if (_renderedStepId != step.id) {
@@ -167,8 +172,9 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                     context.read<TourCubit>().toggleAutoPlay(),
                 onDotTap: (i) {
                   final targetId = state.progressSteps[i].id;
-                  final actualIndex =
-                      state.steps.indexWhere((s) => s.id == targetId);
+                  final actualIndex = state.steps.indexWhere(
+                    (s) => s.id == targetId,
+                  );
                   context.read<TourCubit>().goToStep(actualIndex);
                 },
               );
@@ -178,10 +184,9 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                   if (step.isDialog)
                     IgnorePointer(
                       child: Container(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .scrim
-                            .withValues(alpha: 0.62),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.scrim.withValues(alpha: 0.62),
                       ),
                     )
                   else
@@ -201,10 +206,12 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
                               layoutBuilder: tourCardSwitcherLayoutBuilder,
                               transitionBuilder: (child, animation) {
                                 final blur = Tween<double>(begin: 8.0, end: 0.0)
-                                    .animate(CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOut,
-                                ));
+                                    .animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOut,
+                                      ),
+                                    );
                                 return AnimatedBuilder(
                                   animation: blur,
                                   builder: (context, inner) => ImageFiltered(
@@ -375,7 +382,8 @@ class _LiveTipOverlay extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final targetRect = targetRectResolver?.call(
+          final targetRect =
+              targetRectResolver?.call(
                 TourStep(
                   id: 'live_tip_${tip.id.name}',
                   title: tip.title,
@@ -455,18 +463,21 @@ Offset liveTipCardOffsetFor({
   const gap = 12.0;
 
   final maxLeft = math.max(margin, overlaySize.width - cardSize.width - margin);
-  final left =
-      (targetRect.right - cardSize.width).clamp(margin, maxLeft).toDouble();
+  final left = (targetRect.right - cardSize.width)
+      .clamp(margin, maxLeft)
+      .toDouble();
   final belowTop = targetRect.bottom + gap;
   final aboveTop = targetRect.top - cardSize.height - gap;
-  final maxTop =
-      math.max(margin, overlaySize.height - cardSize.height - margin);
+  final maxTop = math.max(
+    margin,
+    overlaySize.height - cardSize.height - margin,
+  );
 
   final top = belowTop + cardSize.height + margin <= overlaySize.height
       ? belowTop
       : aboveTop >= margin
-          ? aboveTop
-          : belowTop.clamp(margin, maxTop).toDouble();
+      ? aboveTop
+      : belowTop.clamp(margin, maxTop).toDouble();
 
   return Offset(left, top);
 }
@@ -504,8 +515,9 @@ Rect tourTargetRectFor(
   }
 
   Rect readerNavigationButtonRect() {
-    final contentRight =
-        isLandscape && isRtl ? width - navigationRailWidth : width;
+    final contentRight = isLandscape && isRtl
+        ? width - navigationRailWidth
+        : width;
     final contentLeft = isLandscape && !isRtl ? navigationRailWidth : 0.0;
     return Rect.fromLTWH(
       isRtl ? contentRight - 66 : contentLeft + 14,
@@ -604,16 +616,8 @@ Rect tourTargetRectFor(
       rect = Rect.fromLTWH(82, 4, 230, 52);
     case TourSpotlightArea.print:
       rect = toolbarActionRect(0);
-    case TourSpotlightArea.sideBySide:
-      rect = Rect.fromLTWH(130, 54, 260, 58);
-    case TourSpotlightArea.toolsTabs:
-      rect = Rect.fromLTWH(110, 80, width - 220, 78);
     case TourSpotlightArea.designSettings:
       rect = Rect.fromLTWH(width - 310, 78, 260, 70);
-    case TourSpotlightArea.backupSettings:
-      rect = Rect.fromLTWH(110, 240, width - 220, 170);
-    case TourSpotlightArea.shortcutsSettings:
-      rect = Rect.fromLTWH(width - 310, 360, 260, 70);
   }
 
   final safeBounds = area == TourSpotlightArea.navigation

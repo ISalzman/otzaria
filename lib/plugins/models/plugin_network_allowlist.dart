@@ -63,6 +63,12 @@ const List<String> pluginNetworkAllowlist = <String>[
   // הורדת ויקיישיבה וויקיסוגיה
   'https://drive.usercontent.google.com/download?id=1fX-GwDn4f-JUaxrZJPb8y0dVlH38_dMW&export=download&confirm=t',
   'https://drive.usercontent.google.com/download?id=1x0-hX0KSW_DYCDWu2ZgH1MqFye2iMd3d&export=download&confirm=t',
+
+  // תוסף zim (יאיר דניאל) — קבצי milon/wikisugya/wikishiva/otzaria-wiki
+  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/milon-klei-kodesh.zim',
+  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/wikisugya.zim',
+  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/wikishiva.zim',
+  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/otzaria-wiki.zim',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.

@@ -24,8 +24,10 @@ import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
+import 'package:otzaria/settings/tabs/widgets/android_storage_location_card.dart';
 import 'package:path/path.dart' as p;
 
 /// טאב הגדרות ספרייה
@@ -115,6 +117,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
   bool? _requiresManualReindex;
   String? _defaultLibraryPath;
   String? _indexPath;
+  String? _databasesPath;
 
   @override
   void initState() {
@@ -124,6 +127,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     });
     AppPaths.getIndexPath().then((path) {
       if (mounted) setState(() => _indexPath = path);
+    });
+    AppPaths.getDatabasesPath().then((path) {
+      if (mounted) setState(() => _databasesPath = path);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -178,8 +184,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           context.read<NavigationBloc>().add(const CheckLibrary());
 
           if (extractionResult.successfullyExtracted) {
-            UiSnack.show(
-                'הקובץ "${extractionResult.extractedFileName}" חולץ בהצלחה!');
+            UiSnack.show(SettingsMessages.fileExtracted(
+                extractionResult.extractedFileName));
           }
         }
       },
@@ -248,8 +254,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           ? p.dirname(libraryPath)
           : libraryPath;
 
-  /// שורת מיקום הספרייה והאינדקס — מציגה את תיקיית השורש המשותפת
-  /// (ההורה של books ו-index), בלי אפשרות ניקוי (הספרייה חיונית לפעולה).
+  /// שורת מיקום הספרייה, האינדקס ונתוני המשתמש — מציגה את תיקיית השורש
+  /// המשותפת, בלי אפשרות ניקוי (הספרייה חיונית לפעולה).
   Widget _buildLibraryLocationWidget(BuildContext context) {
     final booksPath =
         Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '';
@@ -259,6 +265,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             ? null
             : _libraryRootOf(_defaultLibraryPath!);
     final indexPath = _indexPath ?? '';
+    final databasesPath = _databasesPath ?? '';
 
     return SettingsActionTile.pathTile(
       icon: FluentIcons.folder_24_regular,
@@ -284,9 +291,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             : null,
         moveContentsWarning:
             'בזמן העברת הספרייה התוכנה תיסגר ותיטען מחדש, ולא תהיה זמינה עד '
-            'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books" (הספרייה) ו-"index" '
-            '(אינדקס החיפוש). רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
-            'שהוספת לתיקייה יישארו במקומם.',
+            'לסיום הפעולה. תחת התיקייה שתבחר ייווצרו "books", "index" '
+            'ו-"databases". רק קבצי הספרייה המזוהים יועברו; קבצים אחרים '
+            'שהוספת לתיקיית הספרייה יישארו במקומם.',
         defaultPath: defaultRoot,
       ),
       onOpenFolder: () => _openInFileManager(rootPath),
@@ -295,6 +302,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         PathTarget(label: 'תיקייה ראשית', path: rootPath),
         PathTarget(label: 'ספרייה', path: booksPath),
         PathTarget(label: 'אינדקס', path: indexPath),
+        PathTarget(label: 'נתוני משתמש', path: databasesPath),
       ],
     );
   }
@@ -340,9 +348,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         if (_isRemovingHebrewPath && !libraryState.isLoading) {
           setState(() => _isRemovingHebrewPath = false);
           if (libraryState.error == null) {
-            UiSnack.show('מיקום ספרי היברובוקס הוסר בהצלחה');
+            UiSnack.show(SettingsMessages.hebrewBooksPathRemoved);
           } else {
-            UiSnack.showError('שגיאה בהסרת המיקום: ${libraryState.error}');
+            UiSnack.showError(SettingsMessages.hebrewBooksPathRemoveError(
+                libraryState.error!));
           }
         }
 
@@ -388,6 +397,24 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     // הפאנל המשותף (תצוגה + ספרים נוספים) - כעת כולל את תיקיית היברובוקס בתוכו!
                     LibrarySettingsPanel(
                         hebrewBooksPathWidget: hebrewPathWidget),
+
+                    // בחירת מיקום אחסון (Android בלבד) — מוצג רק כשקיים
+                    // כרטיס SD; הרכיב עצמו מסתיר את עצמו אחרת.
+                    if (Platform.isAndroid) const AndroidStorageLocationCard(),
+
+                    // ייבוא ספרים אישיים (רק במובייל — בדסקטופ יש תיקיות
+                    // מותאמות אישית עם גישה ישירה למערכת הקבצים)
+                    if (Platform.isAndroid || Platform.isIOS) ...[
+                      kSettingsCardSpacing,
+                      SettingsCard(
+                        cardId: 'library.personal_books_import',
+                        title: 'ספרים אישיים',
+                        subtitle: 'ייבוא ספרים משלך אל תוך הספרייה',
+                        children: const [
+                          PersonalBooksImportPanel(),
+                        ],
+                      ),
+                    ],
 
                     // תיקיות מותאמות אישית (רק בדסקטופ)
                     if (!(Platform.isAndroid || Platform.isIOS)) ...[

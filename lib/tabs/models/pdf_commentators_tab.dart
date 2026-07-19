@@ -13,9 +13,8 @@ class PdfCommentatorsTab extends OpenedTab {
 
   PdfCommentatorsTab({
     required this.sourceTab,
-    bool disposeSourceTabOnDispose = false,
-  })  : _disposeSourceTabOnDispose = disposeSourceTabOnDispose,
-        super('מפרשים | ${sourceTab.title}');
+    this._disposeSourceTabOnDispose = false,
+  }) : super('מפרשים | ${sourceTab.title}');
 
   /// שחזור מ-JSON — בונה sourceTab חדש מהנתונים השמורים.
   factory PdfCommentatorsTab.fromJson(Map<String, dynamic> json) {
@@ -50,10 +49,10 @@ class PdfCommentatorsTab extends OpenedTab {
 
   @override
   Map<String, dynamic> toJson() => {
-        'title': title,
-        'type': 'PdfCommentatorsTab',
-        'isPinned': isPinned,
-        'sourceTab': sourceTab.toJson(),
-        'activeCommentators': sourceTab.activeCommentators.toList(),
-      };
+    'title': title,
+    'type': 'PdfCommentatorsTab',
+    'isPinned': isPinned,
+    'sourceTab': sourceTab.toJson(),
+    'activeCommentators': sourceTab.activeCommentators.toList(),
+  };
 }

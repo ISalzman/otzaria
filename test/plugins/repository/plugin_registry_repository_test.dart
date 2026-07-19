@@ -14,7 +14,7 @@ PluginManifest _manifest({String id = 'p', int? toolTabOrder}) {
     'contributes': {
       'toolTab': {
         'title': id,
-        if (toolTabOrder != null) 'order': toolTabOrder,
+        'order': ?toolTabOrder,
       },
     },
   });
@@ -61,7 +61,9 @@ class _FakeDb implements PluginSystemDatabase {
 
   @override
   Future<void> updatePluginShowInTools(
-      String pluginId, bool showInTools) async {
+    String pluginId,
+    bool showInTools,
+  ) async {
     showInToolsCalls.add((pluginId: pluginId, showInTools: showInTools));
   }
 
@@ -85,16 +87,18 @@ void main() {
       });
     });
 
-    test('empty list still forwards an empty map (caller decides no-op)',
-        () async {
-      final fake = _FakeDb([]);
-      final repo = PluginRegistryRepository(database: fake);
+    test(
+      'empty list still forwards an empty map (caller decides no-op)',
+      () async {
+        final fake = _FakeDb([]);
+        final repo = PluginRegistryRepository(database: fake);
 
-      await repo.reorderPlugins([]);
+        await repo.reorderPlugins([]);
 
-      expect(fake.userOrderCalls, hasLength(1));
-      expect(fake.userOrderCalls.single, isEmpty);
-    });
+        expect(fake.userOrderCalls, hasLength(1));
+        expect(fake.userOrderCalls.single, isEmpty);
+      },
+    );
 
     test('a single id gets order 0', () async {
       final fake = _FakeDb([]);
@@ -107,53 +111,70 @@ void main() {
   });
 
   group('PluginRegistryRepository.getAllPlugins sorting', () {
-    test('orders by effectiveToolTabOrder (manifest order when no userOrder)',
-        () async {
-      final fake = _FakeDb([
-        _plugin(id: 'late', manifestToolTabOrder: 900),
-        _plugin(id: 'early', manifestToolTabOrder: 100),
-        _plugin(id: 'mid', manifestToolTabOrder: 500),
-      ]);
-      final repo = PluginRegistryRepository(database: fake);
+    test(
+      'orders by effectiveToolTabOrder (manifest order when no userOrder)',
+      () async {
+        final fake = _FakeDb([
+          _plugin(id: 'late', manifestToolTabOrder: 900),
+          _plugin(id: 'early', manifestToolTabOrder: 100),
+          _plugin(id: 'mid', manifestToolTabOrder: 500),
+        ]);
+        final repo = PluginRegistryRepository(database: fake);
 
-      final result = await repo.getAllPlugins();
+        final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(), ['early', 'mid', 'late']);
-    });
+        expect(result.map((p) => p.pluginId).toList(), [
+          'early',
+          'mid',
+          'late',
+        ]);
+      },
+    );
 
-    test('userOrder beats manifest order (moves to the user-order range)',
-        () async {
-      // 'b' has the lowest manifest order (50) but no userOrder.
-      // 'a' has high manifest order (9999) but userOrder=0 → ends up
-      // at offset+0=1000 — AFTER 'b' (50), not before.
-      final fake = _FakeDb([
-        _plugin(id: 'a', userOrder: 0, manifestToolTabOrder: 9999),
-        _plugin(id: 'b', manifestToolTabOrder: 50),
-      ]);
-      final repo = PluginRegistryRepository(database: fake);
+    test(
+      'userOrder beats manifest order (moves to the user-order range)',
+      () async {
+        // 'b' has the lowest manifest order (50) but no userOrder.
+        // 'a' has high manifest order (9999) but userOrder=0 → ends up
+        // at offset+0=1000 — AFTER 'b' (50), not before.
+        final fake = _FakeDb([
+          _plugin(id: 'a', userOrder: 0, manifestToolTabOrder: 9999),
+          _plugin(id: 'b', manifestToolTabOrder: 50),
+        ]);
+        final repo = PluginRegistryRepository(database: fake);
 
-      final result = await repo.getAllPlugins();
+        final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(), ['b', 'a'],
-          reason: 'plugins without userOrder (relying on manifest) sort by '
+        expect(
+          result.map((p) => p.pluginId).toList(),
+          ['b', 'a'],
+          reason:
+              'plugins without userOrder (relying on manifest) sort by '
               'manifest order; userOrder is offset by 1000 to move them into '
-              'the dedicated manual-order range');
-    });
+              'the dedicated manual-order range',
+        );
+      },
+    );
 
-    test('between two plugins with userOrder, the lower index comes first',
-        () async {
-      final fake = _FakeDb([
-        _plugin(id: 'second', userOrder: 1),
-        _plugin(id: 'first', userOrder: 0),
-        _plugin(id: 'third', userOrder: 2),
-      ]);
-      final repo = PluginRegistryRepository(database: fake);
+    test(
+      'between two plugins with userOrder, the lower index comes first',
+      () async {
+        final fake = _FakeDb([
+          _plugin(id: 'second', userOrder: 1),
+          _plugin(id: 'first', userOrder: 0),
+          _plugin(id: 'third', userOrder: 2),
+        ]);
+        final repo = PluginRegistryRepository(database: fake);
 
-      final result = await repo.getAllPlugins();
+        final result = await repo.getAllPlugins();
 
-      expect(
-          result.map((p) => p.pluginId).toList(), ['first', 'second', 'third']);
-    });
+        expect(result.map((p) => p.pluginId).toList(), [
+          'first',
+          'second',
+          'third',
+        ]);
+      },
+    );
 
     test('empty plugin list returns empty', () async {
       final fake = _FakeDb([]);
@@ -161,35 +182,39 @@ void main() {
       expect(await repo.getAllPlugins(), isEmpty);
     });
 
-    test(
-        'ties on effectiveToolTabOrder are broken deterministically by '
+    test('ties on effectiveToolTabOrder are broken deterministically by '
         'installedAt then pluginId (the common case: many plugins with the '
         'default manifest order of 900)', () async {
       // הקלט מסודר *הפוך* מהצפי כדי לוודא שהמיון באמת רץ.
       final fake = _FakeDb([
         _plugin(
-            id: 'z',
-            manifestToolTabOrder: 900,
-            installedAt: DateTime.utc(2026, 1, 3)),
+          id: 'z',
+          manifestToolTabOrder: 900,
+          installedAt: DateTime.utc(2026, 1, 3),
+        ),
         _plugin(
-            id: 'a',
-            manifestToolTabOrder: 900,
-            installedAt: DateTime.utc(2026, 1, 1)),
+          id: 'a',
+          manifestToolTabOrder: 900,
+          installedAt: DateTime.utc(2026, 1, 1),
+        ),
         _plugin(
-            id: 'm',
-            manifestToolTabOrder: 900,
-            installedAt: DateTime.utc(2026, 1, 2)),
+          id: 'm',
+          manifestToolTabOrder: 900,
+          installedAt: DateTime.utc(2026, 1, 2),
+        ),
       ]);
       final repo = PluginRegistryRepository(database: fake);
 
       final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(), ['a', 'm', 'z'],
-          reason: 'tied orders must be broken by installedAt (ascending)');
+      expect(
+        result.map((p) => p.pluginId).toList(),
+        ['a', 'm', 'z'],
+        reason: 'tied orders must be broken by installedAt (ascending)',
+      );
     });
 
-    test(
-        'identical installedAt falls back to pluginId — fully deterministic '
+    test('identical installedAt falls back to pluginId — fully deterministic '
         'even when timestamps collide', () async {
       final sameTime = DateTime.utc(2026, 1, 1, 12);
       final fake = _FakeDb([
@@ -200,8 +225,11 @@ void main() {
 
       final result = await repo.getAllPlugins();
 
-      expect(result.map((p) => p.pluginId).toList(), ['alpha', 'beta'],
-          reason: 'tied orders + tied installedAt → pluginId asc');
+      expect(
+        result.map((p) => p.pluginId).toList(),
+        ['alpha', 'beta'],
+        reason: 'tied orders + tied installedAt → pluginId asc',
+      );
     });
   });
 
@@ -213,20 +241,24 @@ void main() {
       ]);
       final repo = PluginRegistryRepository(database: fake);
 
-      expect(await repo.getNextUserOrderForNewPlugin(), isNull,
-          reason: 'no manual order yet → new plugin keeps manifest order');
-    });
-
-    test('returns null when the plugin list is empty (very first install)',
-        () async {
-      final fake = _FakeDb([]);
-      final repo = PluginRegistryRepository(database: fake);
-
-      expect(await repo.getNextUserOrderForNewPlugin(), isNull);
+      expect(
+        await repo.getNextUserOrderForNewPlugin(),
+        isNull,
+        reason: 'no manual order yet → new plugin keeps manifest order',
+      );
     });
 
     test(
-        'returns max(userOrder) + 1 so a freshly installed plugin lands '
+      'returns null when the plugin list is empty (very first install)',
+      () async {
+        final fake = _FakeDb([]);
+        final repo = PluginRegistryRepository(database: fake);
+
+        expect(await repo.getNextUserOrderForNewPlugin(), isNull);
+      },
+    );
+
+    test('returns max(userOrder) + 1 so a freshly installed plugin lands '
         'AFTER the user-ordered block — not before (which is what would '
         'happen with userOrder=null, since manifest.toolTabOrder defaults '
         'to 900 which is below the 1000 offset)', () async {
@@ -240,8 +272,7 @@ void main() {
       expect(await repo.getNextUserOrderForNewPlugin(), 3);
     });
 
-    test(
-        'ignores plugins with userOrder=null when computing the max — '
+    test('ignores plugins with userOrder=null when computing the max — '
         'mixed state (some sorted, some not) still picks the highest '
         'manual value', () async {
       final fake = _FakeDb([
@@ -276,18 +307,23 @@ void main() {
       expect(fake.showInToolsCalls.single.showInTools, isTrue);
     });
 
-    test('each call appends — repository does not coalesce duplicate writes',
-        () async {
-      final fake = _FakeDb([]);
-      final repo = PluginRegistryRepository(database: fake);
+    test(
+      'each call appends — repository does not coalesce duplicate writes',
+      () async {
+        final fake = _FakeDb([]);
+        final repo = PluginRegistryRepository(database: fake);
 
-      await repo.updateShowInTools('a', false);
-      await repo.updateShowInTools('b', false);
-      await repo.updateShowInTools('a', true);
+        await repo.updateShowInTools('a', false);
+        await repo.updateShowInTools('b', false);
+        await repo.updateShowInTools('a', true);
 
-      expect(fake.showInToolsCalls, hasLength(3));
-      expect(
-          fake.showInToolsCalls.map((c) => c.pluginId).toList(), ['a', 'b', 'a']);
-    });
+        expect(fake.showInToolsCalls, hasLength(3));
+        expect(fake.showInToolsCalls.map((c) => c.pluginId).toList(), [
+          'a',
+          'b',
+          'a',
+        ]);
+      },
+    );
   });
 }

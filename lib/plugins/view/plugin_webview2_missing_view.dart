@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:otzaria/core/messages/plugin_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 
@@ -28,9 +29,11 @@ class PluginWebView2MissingView extends StatelessWidget {
     try {
       final launched =
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) UiSnack.showError('לא ניתן לפתוח את קישור ההורדה');
+      if (!launched) {
+        UiSnack.showError(PluginMessages.downloadLinkOpenFailed);
+      }
     } catch (_) {
-      UiSnack.showError('לא ניתן לפתוח את קישור ההורדה');
+      UiSnack.showError(PluginMessages.downloadLinkOpenFailed);
     }
   }
 

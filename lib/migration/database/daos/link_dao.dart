@@ -59,6 +59,27 @@ class LinkDao {
         [bookId, startLineIndex, endLineIndex]).toMapList();
   }
 
+  /// מחזיר את הקישורים למפרשים על טווח שורות המקור [`startLineIndex`,
+  /// `endLineIndex`) בספר [bookId]. לכל מפרש מוחזרים `minTargetLineIndex`/
+  /// `maxTargetLineIndex` (קצות הטווח) ו-`exactTargetLineIndex` (המיקום המקביל
+  /// ל-[exactSourceLineIndex] המדויק, או NULL). [excludeBookId] הוא ספר המפרש
+  /// הפתוח (מוחרג כדי לא להחזירו כ"מפרש נוסף" על עצמו).
+  Future<List<Map<String, dynamic>>> selectCommentaryLinksByLineRange(
+      int bookId,
+      int startLineIndex,
+      int endLineIndex,
+      int excludeBookId,
+      int exactSourceLineIndex) async {
+    final db = await database;
+    return db.select(_queries['selectCommentaryLinksByLineRange']!, [
+      exactSourceLineIndex,
+      bookId,
+      startLineIndex,
+      endLineIndex,
+      excludeBookId
+    ]).toMapList();
+  }
+
   /// מחזיר את מפרשי ברירת המחדל של הספר [bookId], ממוינים לפי `position`.
   /// כל שורה: `targetBookTitle` (שם ספר המפרש) ו-`position`.
   Future<List<Map<String, dynamic>>> selectDefaultCommentators(

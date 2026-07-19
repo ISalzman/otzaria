@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -58,8 +59,9 @@ class _BooksListDialogState extends State<_BooksListDialog> {
   void _onSearchChanged() {
     final query = _searchController.text.trim();
     setState(() {
-      _visibleRows =
-          query.isEmpty ? _rows : _rows.where((r) => r.matches(query)).toList();
+      _visibleRows = query.isEmpty
+          ? _rows
+          : _rows.where((r) => r.matches(query)).toList();
     });
   }
 
@@ -83,10 +85,10 @@ class _BooksListDialogState extends State<_BooksListDialog> {
       // BOM כדי שאקסל יזהה UTF-8 כראוי בעברית.
       await File(path).writeAsString('﻿$csv');
       if (!mounted) return;
-      UiSnack.show('רשימת הספרים נשמרה: ${_rows.length} שורות');
+      UiSnack.show(SettingsMessages.booksListSaved(_rows.length));
     } catch (e) {
       if (!mounted) return;
-      UiSnack.showError('שגיאה בשמירת הקובץ: $e');
+      UiSnack.showError(SettingsMessages.fileSaveError(e));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -124,8 +126,8 @@ class _BooksListDialogState extends State<_BooksListDialog> {
                   Text(
                     '${_visibleRows.length} / ${_rows.length}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -155,7 +157,7 @@ class _BooksListDialogState extends State<_BooksListDialog> {
                         child: ListView.separated(
                           controller: _scrollController,
                           itemCount: _visibleRows.length,
-                          separatorBuilder: (_, __) => Divider(
+                          separatorBuilder: (_, _) => Divider(
                             height: 1,
                             color: cs.surfaceContainerHighest,
                           ),
@@ -197,8 +199,8 @@ class _BookListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: cs.onSurfaceVariant,
-        );
+      color: cs.onSurfaceVariant,
+    );
     final detailsLine = [
       if (row.author.isNotEmpty) row.author,
       if (row.category.isNotEmpty) row.category,
@@ -262,7 +264,8 @@ class _BookRow {
 String _buildCsv(List<_BookRow> rows) {
   final buf = StringBuffer();
   buf.write(
-      '${_csvEscape('כותרת')},${_csvEscape('מחבר')},${_csvEscape('קטגוריה')},${_csvEscape('סוג קובץ')}\r\n');
+    '${_csvEscape('כותרת')},${_csvEscape('מחבר')},${_csvEscape('קטגוריה')},${_csvEscape('סוג קובץ')}\r\n',
+  );
   for (final r in rows) {
     buf.write(_csvEscape(r.title));
     buf.write(',');
@@ -278,7 +281,8 @@ String _buildCsv(List<_BookRow> rows) {
 
 String _csvEscape(String value) {
   if (value.isEmpty) return '';
-  final needsQuoting = value.contains(',') ||
+  final needsQuoting =
+      value.contains(',') ||
       value.contains('"') ||
       value.contains('\n') ||
       value.contains('\r');

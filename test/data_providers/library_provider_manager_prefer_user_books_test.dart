@@ -17,16 +17,13 @@ class _FakeProvider implements LibraryProvider {
   final Map<BookCompositeKey, List<TocEntry>> _bookTocByKey;
 
   _FakeProvider({
-    required String providerId,
-    required String displayName,
-    required String sourceIndicator,
+    required this._providerId,
+    required this._displayName,
+    required this._sourceIndicator,
     Map<BookCompositeKey, String>? bookTextByKey,
     Map<BookCompositeKey, List<TocEntry>>? bookTocByKey,
-  })  : _providerId = providerId,
-        _displayName = displayName,
-        _sourceIndicator = sourceIndicator,
-        _bookTextByKey = bookTextByKey ?? {},
-        _bookTocByKey = bookTocByKey ?? {};
+  }) : _bookTextByKey = bookTextByKey ?? {},
+       _bookTocByKey = bookTocByKey ?? {};
 
   @override
   String get providerId => _providerId;
@@ -48,16 +45,19 @@ class _FakeProvider implements LibraryProvider {
 
   @override
   Future<Map<String, List<Book>>> loadBooks(
-      Map<String, Map<String, dynamic>> metadata) async {
+    Map<String, Map<String, dynamic>> metadata,
+  ) async {
     return {};
   }
 
   @override
   Future<bool> hasBook(String title, int categoryId, String fileType) async {
-    return _bookTextByKey.keys.any((k) =>
-        k.title == title &&
-        k.categoryId == categoryId &&
-        k.fileType == fileType);
+    return _bookTextByKey.keys.any(
+      (k) =>
+          k.title == title &&
+          k.categoryId == categoryId &&
+          k.fileType == fileType,
+    );
   }
 
   /// מדמה את ההתנהגות של DatabaseLibraryProvider: קודם מנסה את הוריאנט
@@ -94,7 +94,12 @@ class _FakeProvider implements LibraryProvider {
     bool preferUserBooks = false,
   }) async {
     return _lookupPreferred(
-        _bookTextByKey, title, categoryId, fileType, preferUserBooks);
+      _bookTextByKey,
+      title,
+      categoryId,
+      fileType,
+      preferUserBooks,
+    );
   }
 
   @override
@@ -105,7 +110,12 @@ class _FakeProvider implements LibraryProvider {
     bool preferUserBooks = false,
   }) async {
     return _lookupPreferred(
-        _bookTocByKey, title, categoryId, fileType, preferUserBooks);
+      _bookTocByKey,
+      title,
+      categoryId,
+      fileType,
+      preferUserBooks,
+    );
   }
 
   @override
@@ -123,7 +133,10 @@ class _FakeProvider implements LibraryProvider {
 
   @override
   Future<List<Link>> getAllLinksForBook(
-      String title, int categoryId, String fileType) async {
+    String title,
+    int categoryId,
+    String fileType,
+  ) async {
     return const [];
   }
 
@@ -144,180 +157,196 @@ void main() {
 
   group('LibraryProviderManager — preferUserBooks routing', () {
     test(
-        'getBookText: אותם title+categoryId+fileType בשני וריאנטים → '
-        'preferUserBooks=true מחזיר את ה-user_books, false את ה-seforim',
-        () async {
-      // אותו 3-tuple (title, categoryId, fileType) רשום פעמיים, פעם עם
-      // isUserBook=true ופעם false. ה-resolver של המנהל חייב להחזיר את
-      // הוריאנט הנכון לפי הדגל.
-      final officialKey = BookCompositeKey.create(
-        title: 'משותף',
-        categoryId: 7,
-        fileType: 'txt',
-        isUserBook: false,
-      );
-      final userBookKey = BookCompositeKey.create(
-        title: 'משותף',
-        categoryId: 7,
-        fileType: 'txt',
-        isUserBook: true,
-      );
-      final provider = _FakeProvider(
-        providerId: 'db',
-        displayName: 'DB',
-        sourceIndicator: 'DB',
-        bookTextByKey: {
-          officialKey: 'תוכן רשמי',
-          userBookKey: 'תוכן משתמש',
-        },
-      );
+      'getBookText: אותם title+categoryId+fileType בשני וריאנטים → '
+      'preferUserBooks=true מחזיר את ה-user_books, false את ה-seforim',
+      () async {
+        // אותו 3-tuple (title, categoryId, fileType) רשום פעמיים, פעם עם
+        // isUserBook=true ופעם false. ה-resolver של המנהל חייב להחזיר את
+        // הוריאנט הנכון לפי הדגל.
+        final officialKey = BookCompositeKey.create(
+          title: 'משותף',
+          categoryId: 7,
+          fileType: 'txt',
+          isUserBook: false,
+        );
+        final userBookKey = BookCompositeKey.create(
+          title: 'משותף',
+          categoryId: 7,
+          fileType: 'txt',
+          isUserBook: true,
+        );
+        final provider = _FakeProvider(
+          providerId: 'db',
+          displayName: 'DB',
+          sourceIndicator: 'DB',
+          bookTextByKey: {
+            officialKey: 'תוכן רשמי',
+            userBookKey: 'תוכן משתמש',
+          },
+        );
 
-      manager.seedMappingsForTesting(
-        mapping: {
-          officialKey: provider,
-          userBookKey: provider,
-        },
-        providers: [provider],
-      );
+        manager.seedMappingsForTesting(
+          mapping: {
+            officialKey: provider,
+            userBookKey: provider,
+          },
+          providers: [provider],
+        );
 
-      final official = await manager.getBookText(
-        'משותף',
-        categoryId: 7,
-        fileType: 'txt',
-      );
-      final userBook = await manager.getBookText(
-        'משותף',
-        categoryId: 7,
-        fileType: 'txt',
-        preferUserBooks: true,
-      );
+        final official = await manager.getBookText(
+          'משותף',
+          categoryId: 7,
+          fileType: 'txt',
+        );
+        final userBook = await manager.getBookText(
+          'משותף',
+          categoryId: 7,
+          fileType: 'txt',
+          preferUserBooks: true,
+        );
 
-      expect(official, 'תוכן רשמי');
-      expect(userBook, 'תוכן משתמש');
-    });
-
-    test(
-        'getBookText: כשרשום רק וריאנט user_books, preferUserBooks=false עדיין מוצא אותו',
-        () async {
-      // אם הקורא לא ביקש user_books, אבל מה שיש זה רק user_books — המנהל
-      // צריך עדיין למצוא את הספר במעבר השני (fallback ל-!preferUserBooks).
-      final userBookKey = BookCompositeKey.create(
-        title: 'רק-משתמש',
-        categoryId: 9,
-        fileType: 'txt',
-        isUserBook: true,
-      );
-      final provider = _FakeProvider(
-        providerId: 'db',
-        displayName: 'DB',
-        sourceIndicator: 'DB',
-        bookTextByKey: {userBookKey: 'תוכן משתמש'},
-      );
-
-      manager.seedMappingsForTesting(
-        mapping: {userBookKey: provider},
-        providers: [provider],
-      );
-
-      final text = await manager.getBookText(
-        'רק-משתמש',
-        categoryId: 9,
-        fileType: 'txt',
-        // ברירת מחדל — לא ביקש user_books, אבל נתון יחיד שיש לנו
-      );
-
-      expect(text, 'תוכן משתמש',
-          reason: 'fallback למפתח user_books כשאין וריאנט רשמי תואם');
-    });
+        expect(official, 'תוכן רשמי');
+        expect(userBook, 'תוכן משתמש');
+      },
+    );
 
     test(
-        'getBookText: כשרשום רק וריאנט רשמי, preferUserBooks=true עדיין מוצא אותו',
-        () async {
-      final officialKey = BookCompositeKey.create(
-        title: 'רק-רשמי',
-        categoryId: 9,
-        fileType: 'txt',
-        isUserBook: false,
-      );
-      final provider = _FakeProvider(
-        providerId: 'db',
-        displayName: 'DB',
-        sourceIndicator: 'DB',
-        bookTextByKey: {officialKey: 'תוכן רשמי'},
-      );
+      'getBookText: כשרשום רק וריאנט user_books, preferUserBooks=false עדיין מוצא אותו',
+      () async {
+        // אם הקורא לא ביקש user_books, אבל מה שיש זה רק user_books — המנהל
+        // צריך עדיין למצוא את הספר במעבר השני (fallback ל-!preferUserBooks).
+        final userBookKey = BookCompositeKey.create(
+          title: 'רק-משתמש',
+          categoryId: 9,
+          fileType: 'txt',
+          isUserBook: true,
+        );
+        final provider = _FakeProvider(
+          providerId: 'db',
+          displayName: 'DB',
+          sourceIndicator: 'DB',
+          bookTextByKey: {userBookKey: 'תוכן משתמש'},
+        );
 
-      manager.seedMappingsForTesting(
-        mapping: {officialKey: provider},
-        providers: [provider],
-      );
+        manager.seedMappingsForTesting(
+          mapping: {userBookKey: provider},
+          providers: [provider],
+        );
 
-      final text = await manager.getBookText(
-        'רק-רשמי',
-        categoryId: 9,
-        fileType: 'txt',
-        preferUserBooks: true,
-      );
+        final text = await manager.getBookText(
+          'רק-משתמש',
+          categoryId: 9,
+          fileType: 'txt',
+          // ברירת מחדל — לא ביקש user_books, אבל נתון יחיד שיש לנו
+        );
 
-      expect(text, 'תוכן רשמי',
-          reason: 'fallback למפתח רשמי כשאין וריאנט user_books תואם');
-    });
+        expect(
+          text,
+          'תוכן משתמש',
+          reason: 'fallback למפתח user_books כשאין וריאנט רשמי תואם',
+        );
+      },
+    );
 
     test(
-        'getBookText: ללא categoryId — preferUserBooks מעדיף וריאנט user_books לפי כותרת בלבד',
-        () async {
-      // נכניס שני מפתחות עם categoryId שונה: אחד isUserBook=true, אחד false.
-      // ה-manager צריך לבחור את ה-user_books כשמבוקש.
-      final officialKey = BookCompositeKey.create(
-        title: 'כותרת בלבד',
-        categoryId: 100,
-        fileType: 'txt',
-        isUserBook: false,
-      );
-      final userBookKey = BookCompositeKey.create(
-        title: 'כותרת בלבד',
-        categoryId: 200,
-        fileType: 'txt',
-        isUserBook: true,
-      );
-      final provider = _FakeProvider(
-        providerId: 'db',
-        displayName: 'DB',
-        sourceIndicator: 'DB',
-        bookTextByKey: {
-          officialKey: 'תוכן רשמי',
-          userBookKey: 'תוכן משתמש',
-        },
-      );
+      'getBookText: כשרשום רק וריאנט רשמי, preferUserBooks=true עדיין מוצא אותו',
+      () async {
+        final officialKey = BookCompositeKey.create(
+          title: 'רק-רשמי',
+          categoryId: 9,
+          fileType: 'txt',
+          isUserBook: false,
+        );
+        final provider = _FakeProvider(
+          providerId: 'db',
+          displayName: 'DB',
+          sourceIndicator: 'DB',
+          bookTextByKey: {officialKey: 'תוכן רשמי'},
+        );
 
-      manager.seedMappingsForTesting(
-        mapping: {
-          officialKey: provider,
-          userBookKey: provider,
-        },
-        providers: [provider],
-      );
+        manager.seedMappingsForTesting(
+          mapping: {officialKey: provider},
+          providers: [provider],
+        );
 
-      final official = await manager.getBookText(
-        'כותרת בלבד',
-        fileType: 'txt',
-      );
-      final userBook = await manager.getBookText(
-        'כותרת בלבד',
-        fileType: 'txt',
-        preferUserBooks: true,
-      );
+        final text = await manager.getBookText(
+          'רק-רשמי',
+          categoryId: 9,
+          fileType: 'txt',
+          preferUserBooks: true,
+        );
 
-      // בלי categoryId, ה-resolver עובר ב-findIn לפי הסדר — וכש-preferUserBooks
-      // אמת, הוא מסנן רק user_books בקריאה הראשונה.
-      expect(userBook, 'תוכן משתמש',
+        expect(
+          text,
+          'תוכן רשמי',
+          reason: 'fallback למפתח רשמי כשאין וריאנט user_books תואם',
+        );
+      },
+    );
+
+    test(
+      'getBookText: ללא categoryId — preferUserBooks מעדיף וריאנט user_books לפי כותרת בלבד',
+      () async {
+        // נכניס שני מפתחות עם categoryId שונה: אחד isUserBook=true, אחד false.
+        // ה-manager צריך לבחור את ה-user_books כשמבוקש.
+        final officialKey = BookCompositeKey.create(
+          title: 'כותרת בלבד',
+          categoryId: 100,
+          fileType: 'txt',
+          isUserBook: false,
+        );
+        final userBookKey = BookCompositeKey.create(
+          title: 'כותרת בלבד',
+          categoryId: 200,
+          fileType: 'txt',
+          isUserBook: true,
+        );
+        final provider = _FakeProvider(
+          providerId: 'db',
+          displayName: 'DB',
+          sourceIndicator: 'DB',
+          bookTextByKey: {
+            officialKey: 'תוכן רשמי',
+            userBookKey: 'תוכן משתמש',
+          },
+        );
+
+        manager.seedMappingsForTesting(
+          mapping: {
+            officialKey: provider,
+            userBookKey: provider,
+          },
+          providers: [provider],
+        );
+
+        final official = await manager.getBookText(
+          'כותרת בלבד',
+          fileType: 'txt',
+        );
+        final userBook = await manager.getBookText(
+          'כותרת בלבד',
+          fileType: 'txt',
+          preferUserBooks: true,
+        );
+
+        // בלי categoryId, ה-resolver עובר ב-findIn לפי הסדר — וכש-preferUserBooks
+        // אמת, הוא מסנן רק user_books בקריאה הראשונה.
+        expect(
+          userBook,
+          'תוכן משתמש',
           reason:
-              'preferUserBooks=true בוחר את הוריאנט המתאים גם בלי categoryId');
-      // ולהפך — בלי preferUserBooks, יכול לחזור כל מפתח שתואם. כאן עם
-      // findIn((_) => true) המעבר עובר על המפתחות לפי סדר המפה — בלי דרישה
-      // מי הראשון. הנקודה היא שלפחות אחד מהם חוזר ולא null.
-      expect(official, anyOf('תוכן רשמי', 'תוכן משתמש'),
-          reason: 'בלי דגל, כל וריאנט תואם הוא קביל');
-    });
+              'preferUserBooks=true בוחר את הוריאנט המתאים גם בלי categoryId',
+        );
+        // ולהפך — בלי preferUserBooks, יכול לחזור כל מפתח שתואם. כאן עם
+        // findIn((_) => true) המעבר עובר על המפתחות לפי סדר המפה — בלי דרישה
+        // מי הראשון. הנקודה היא שלפחות אחד מהם חוזר ולא null.
+        expect(
+          official,
+          anyOf('תוכן רשמי', 'תוכן משתמש'),
+          reason: 'בלי דגל, כל וריאנט תואם הוא קביל',
+        );
+      },
+    );
 
     test('getBookToc: אותה לוגיקת ניתוב כמו getBookText', () async {
       final officialKey = BookCompositeKey.create(

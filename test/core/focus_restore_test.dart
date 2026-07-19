@@ -191,8 +191,9 @@ void main() {
   // בdesktop, ה-contentFocusNode מחובר ↠ canRestore=true.
   // במobile, ה-node לא מחובר ↠ canRestore=false.
   group('layout-aware restorer', () {
-    testWidgets('Settings narrow: node לא מחובר → canRestore=false',
-        (tester) async {
+    testWidgets('Settings narrow: node לא מחובר → canRestore=false', (
+      tester,
+    ) async {
       final node = FocusNode();
       addTearDown(node.dispose);
 
@@ -215,7 +216,7 @@ void main() {
       await tester.pumpWidget(
         WidgetsApp(
           color: const Color(0xFFFFFFFF),
-          builder: (_, __) => Focus(focusNode: node, child: const SizedBox()),
+          builder: (_, _) => Focus(focusNode: node, child: const SizedBox()),
         ),
       );
 
@@ -227,8 +228,9 @@ void main() {
       );
     });
 
-    testWidgets('More: canRestore תלוי בחיבור node לעץ, לא ב-showMobileMenu',
-        (tester) async {
+    testWidgets('More: canRestore תלוי בחיבור node לעץ, לא ב-showMobileMenu', (
+      tester,
+    ) async {
       final node = FocusNode();
       addTearDown(node.dispose);
 
@@ -252,7 +254,7 @@ void main() {
       await tester.pumpWidget(
         WidgetsApp(
           color: const Color(0xFFFFFFFF),
-          builder: (_, __) => Focus(focusNode: node, child: const SizedBox()),
+          builder: (_, _) => Focus(focusNode: node, child: const SizedBox()),
         ),
       );
 
@@ -280,8 +282,9 @@ void main() {
       expect(calls, 1, reason: 'בקשה ממתינה צריכה לירות עם רישום התוכן');
     });
 
-    testWidgets('מעבר לטאב אחר לפני טעינה — רק האחרון מקבל פוקוס',
-        (tester) async {
+    testWidgets('מעבר לטאב אחר לפני טעינה — רק האחרון מקבל פוקוס', (
+      tester,
+    ) async {
       final tabA = Object();
       final tabB = Object();
       int aCalls = 0, bCalls = 0;
@@ -321,8 +324,9 @@ void main() {
       expect(calls, 0);
     });
 
-    testWidgets('הטאב הוסר בין התזמון להרצה — לא נקרא requester ישן',
-        (tester) async {
+    testWidgets('הטאב הוסר בין התזמון להרצה — לא נקרא requester ישן', (
+      tester,
+    ) async {
       final tab = Object();
       int calls = 0;
 

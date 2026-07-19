@@ -28,6 +28,7 @@
 //
 export 'confirmation_dialog.dart';
 export 'app_dialogs.dart';
+export 'details_info_section.dart';
 export 'input_dialog.dart';
 export 'selection_dialog.dart';
 export 'reusable_items_dialog.dart';

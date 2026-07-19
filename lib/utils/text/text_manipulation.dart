@@ -746,6 +746,17 @@ String getTitleFromPath(String path) {
   return fileName.substring(0, lastDotIndex);
 }
 
+/// קידומת המזהה ספר "הערות על XX" — הערות הכתובות על ספר אחר.
+const String kNotesOnBookPrefix = 'הערות על ';
+
+/// אם [title] הוא "הערות על XX" מחזיר את שם הבסיס "XX", אחרת null.
+/// משמש לעיגון ספרי-הערות מיד אחרי הספר שעליו נכתבו במיון המפרשים.
+String? notesBookBaseTitle(String title) {
+  if (!title.startsWith(kNotesOnBookPrefix)) return null;
+  final base = title.substring(kNotesOnBookPrefix.length).trim();
+  return base.isEmpty ? null : base;
+}
+
 // Cache for the CSV data to avoid reading the file multiple times
 Map<String, String>? _csvCache;
 // טעינת ה-cache שעדיין מתבצעת — מבטיח שקריאות מקבילות ימתינו לאותה טעינה

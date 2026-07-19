@@ -137,6 +137,22 @@ void main() {
     );
   }
 
+  Widget buildCategoryTestWidget(Category category) {
+    return MaterialApp(
+      home: Material(
+        child: Center(
+          child: SizedBox(
+            width: 260,
+            child: CategoryGridItem(
+              category: category,
+              onCategoryClickCallback: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   testWidgets('מציג tooltip כשהכותרת נחתכת עם ellipsis בתוך המילה האחרונה',
       (tester) async {
     final book = PdfBook(
@@ -317,6 +333,129 @@ void main() {
 
     expect(find.byIcon(FluentIcons.folder_24_regular), findsOneWidget);
     expect(find.byIcon(FluentIcons.folder_24_filled), findsNothing);
+  });
+
+  group('מידע קטגוריה', () {
+    Category category({
+      String shortDescription = '',
+      String description = '',
+    }) {
+      return Category(
+        title: 'קטגוריית בדיקה',
+        description: description,
+        shortDescription: shortDescription,
+        order: 0,
+        subCategories: [],
+        books: [],
+        parent: null,
+      );
+    }
+
+    Finder infoButton() =>
+        find.widgetWithIcon(IconButton, FluentIcons.info_24_regular);
+
+    Future<void> closeDialog(WidgetTester tester) async {
+      await tester.tap(find.text('סגור'));
+      await tester.pumpAndSettle();
+      expect(find.text('אודות הקטגוריה'), findsNothing);
+    }
+
+    testWidgets('קצר וארוך: מציג קצר בכרטיס וארוך בריחוף ובדיאלוג',
+        (tester) async {
+      final item = category(
+        shortDescription: 'תיאור קצר',
+        description: 'תיאור מורחב',
+      );
+
+      await tester.pumpWidget(buildCategoryTestWidget(item));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תיאור קצר'), findsOneWidget);
+      expect(
+        tester
+            .widgetList<Tooltip>(find.byType(Tooltip))
+            .map((tooltip) => tooltip.message),
+        contains('תיאור מורחב'),
+      );
+      expect(infoButton(), findsOneWidget);
+
+      await tester.tap(infoButton());
+      await tester.pumpAndSettle();
+
+      expect(find.text('אודות הקטגוריה'), findsOneWidget);
+      expect(find.text('שם הקטגוריה:'), findsOneWidget);
+      expect(find.text('קטגוריית בדיקה'), findsNWidgets(2));
+      expect(find.text('תיאור קצר:'), findsOneWidget);
+      expect(find.text('תיאור קצר'), findsNWidgets(2));
+      expect(find.text('תיאור מורחב:'), findsOneWidget);
+      expect(find.text('תיאור מורחב'), findsOneWidget);
+      await closeDialog(tester);
+    });
+
+    testWidgets('קצר בלבד: משתמש בקצר בכרטיס, בריחוף ובדיאלוג', (tester) async {
+      final item = category(shortDescription: 'תיאור קצר בלבד');
+
+      await tester.pumpWidget(buildCategoryTestWidget(item));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תיאור קצר בלבד'), findsOneWidget);
+      expect(
+        tester
+            .widgetList<Tooltip>(find.byType(Tooltip))
+            .map((tooltip) => tooltip.message),
+        contains('תיאור קצר בלבד'),
+      );
+      expect(infoButton(), findsOneWidget);
+
+      await tester.tap(infoButton());
+      await tester.pumpAndSettle();
+
+      expect(find.text('אודות הקטגוריה'), findsOneWidget);
+      expect(find.text('תיאור קצר:'), findsOneWidget);
+      expect(find.text('תיאור קצר בלבד'), findsNWidgets(2));
+      expect(find.text('תיאור מורחב:'), findsNothing);
+      await closeDialog(tester);
+    });
+
+    testWidgets('ארוך בלבד: אינו מציג קצר בכרטיס אך מאפשר מידע מלא',
+        (tester) async {
+      final item = category(description: 'תיאור מורחב בלבד');
+
+      await tester.pumpWidget(buildCategoryTestWidget(item));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תיאור מורחב בלבד'), findsNothing);
+      expect(
+        tester
+            .widgetList<Tooltip>(find.byType(Tooltip))
+            .map((tooltip) => tooltip.message),
+        contains('תיאור מורחב בלבד'),
+      );
+      expect(infoButton(), findsOneWidget);
+
+      await tester.tap(infoButton());
+      await tester.pumpAndSettle();
+
+      expect(find.text('אודות הקטגוריה'), findsOneWidget);
+      expect(find.text('תיאור קצר:'), findsNothing);
+      expect(find.text('תיאור מורחב:'), findsOneWidget);
+      expect(find.text('תיאור מורחב בלבד'), findsOneWidget);
+      await closeDialog(tester);
+    });
+
+    testWidgets('ללא תיאורים: אינו מציג לחצן מידע או דיאלוג', (tester) async {
+      await tester.pumpWidget(buildCategoryTestWidget(category()));
+      await tester.pumpAndSettle();
+
+      expect(infoButton(), findsNothing);
+      expect(
+        tester
+            .widgetList<Tooltip>(find.byType(Tooltip))
+            .map((tooltip) => tooltip.message),
+        isNot(contains('')),
+      );
+      expect(find.text('אודות הקטגוריה'), findsNothing);
+    });
   });
 
   group('externalCatalogLogoAsset', () {

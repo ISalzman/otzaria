@@ -358,6 +358,192 @@ void main() {
   });
 
   test(
+      'regression: רענון מוחק ספר file-backed שתויג source="external" (מסלול ההוספה) לפי נתיב',
+      () async {
+    final libraryPath = path.join(tempDir.path, 'library');
+    final folderPath = path.join(tempDir.path, 'תיקיית-הוספה');
+    await Directory(path.join(libraryPath, 'אוצריא')).create(recursive: true);
+    // התיקייה עדיין קיימת, אבל הקובץ נמחק — בדיוק כמו בדיווח.
+    await Directory(folderPath).create(recursive: true);
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyLibraryPath,
+      libraryPath,
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyCustomFolders,
+      CustomFoldersManager.saveFolders([
+        CustomFolder(
+          path: folderPath,
+          addToDatabase: false,
+          addedAt: DateTime(2026, 4, 13),
+        ),
+      ]),
+    );
+
+    // מדמה את מסלול ההוספה (scanAndAddExternalBooksFromFolder): ספר
+    // file-backed המתויג בקטגוריה 'ספרים אישיים' > <שם התיקייה>, עם
+    // source='external' (ולא 'Personal::<path>') ו-filePath בתוך התיקייה.
+    final personalCategoryId = await repository.insertCategory(
+      const Category(title: 'ספרים אישיים'),
+    );
+    final folderCategoryId = await repository.insertCategory(
+      Category(
+        title: path.basename(folderPath),
+        parentId: personalCategoryId,
+        level: 1,
+      ),
+    );
+    final externalSourceId = await repository.insertSource('external', -1);
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: folderCategoryId,
+        sourceId: externalSourceId,
+        title: 'ספר שקובצו נמחק',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(folderPath, 'ספר שקובצו נמחק.txt'),
+      ),
+    );
+    await repository.rebuildCategoryClosure();
+
+    final service = await FileSyncService.getInstance(repository);
+    await service!.syncFiles();
+
+    expect(
+      await repository.getBooksByCategory(folderCategoryId),
+      isEmpty,
+      reason: 'ספר file-backed שתויג "external" וקובצו נמחק חייב להיות מוסר '
+          'ברענון — הזיהוי לפי נתיב תופס אותו למרות ה-source השונה',
+    );
+  });
+
+  test('regression: הסרת תיקיית-אב לא מוחקת ספרי תיקיית-בן מקוננת הרשומה בנפרד',
+      () async {
+    final parentPath = path.join(tempDir.path, 'אב');
+    final childPath = path.join(parentPath, 'בן');
+
+    final personalCategoryId = await repository.insertCategory(
+      const Category(title: 'ספרים אישיים'),
+    );
+    final parentCategoryId = await repository.insertCategory(
+      Category(title: 'אב', parentId: personalCategoryId, level: 1),
+    );
+    // הבן רשום בנפרד — קטגוריה אחות תחת "ספרים אישיים", לא תחת האב.
+    final childCategoryId = await repository.insertCategory(
+      Category(title: 'בן', parentId: personalCategoryId, level: 1),
+    );
+    final parentSourceId =
+        await repository.insertSource(_sourceNameForFolder(parentPath), -1);
+    final childSourceId =
+        await repository.insertSource(_sourceNameForFolder(childPath), -1);
+
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: parentCategoryId,
+        sourceId: parentSourceId,
+        title: 'ספר האב',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(parentPath, 'ספר האב.txt'),
+      ),
+    );
+    // נתיב הקובץ של הבן נמצא *בתוך* תיקיית האב — לכן זיהוי לפי נתיב לבדו
+    // היה מוחק אותו בהסרת האב.
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: childCategoryId,
+        sourceId: childSourceId,
+        title: 'ספר הבן',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(childPath, 'ספר הבן.txt'),
+      ),
+    );
+    await repository.rebuildCategoryClosure();
+
+    final service = await FileSyncService.getInstance(repository);
+    await service!.deleteFolderFromDatabase(parentPath);
+
+    expect(
+      await repository.getBooksByCategory(parentCategoryId),
+      isEmpty,
+      reason: 'ספר האב הוסר עם הסרת תיקיית האב',
+    );
+    expect(
+      (await repository.getBooksByCategory(childCategoryId))
+          .map((book) => book.title),
+      ['ספר הבן'],
+      reason: 'ספר הבן מתויג ל-source של הבן — הסרת האב לא נוגעת בו',
+    );
+  });
+
+  test(
+      'regression: הסרת תיקיית-אב legacy לא מוחקת ספרי תיקיית-בן שגם היא legacy',
+      () async {
+    final parentPath = path.join(tempDir.path, 'אב');
+    final childPath = path.join(parentPath, 'בן');
+
+    final personalCategoryId = await repository.insertCategory(
+      const Category(title: 'ספרים אישיים'),
+    );
+    final parentCategoryId = await repository.insertCategory(
+      Category(title: 'אב', parentId: personalCategoryId, level: 1),
+    );
+    final childCategoryId = await repository.insertCategory(
+      Category(title: 'בן', parentId: personalCategoryId, level: 1),
+    );
+    // שתי התיקיות נוצרו לפני המעבר ל-Personal::<path> — כל ספריהן 'external',
+    // כך שהשיוך לתיקייה נופל לזיהוי לפי נתיב בלבד.
+    final externalSourceId = await repository.insertSource('external', -1);
+
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: parentCategoryId,
+        sourceId: externalSourceId,
+        title: 'ספר האב',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(parentPath, 'ספר האב.txt'),
+      ),
+    );
+    await repository.insertBook(
+      Book(
+        id: 0,
+        categoryId: childCategoryId,
+        sourceId: externalSourceId,
+        title: 'ספר הבן',
+        isPersonal: true,
+        fileType: 'txt',
+        filePath: path.join(childPath, 'ספר הבן.txt'),
+      ),
+    );
+    await repository.rebuildCategoryClosure();
+
+    final service = await FileSyncService.getInstance(repository);
+    await service!.deleteFolderFromDatabase(
+      parentPath,
+      otherConfiguredFolderPaths: [childPath],
+    );
+
+    expect(
+      await repository.getBooksByCategory(parentCategoryId),
+      isEmpty,
+      reason: 'ספר האב legacy הוסר עם הסרת תיקיית האב',
+    );
+    expect(
+      (await repository.getBooksByCategory(childCategoryId))
+          .map((book) => book.title),
+      ['ספר הבן'],
+      reason: 'ספר הבן שייך לתיקייה המוגדרת העמוקה יותר — הסרת האב לא נוגעת בו',
+    );
+  });
+
+  test(
       'pruneRemovedCustomFoldersFromDatabase מוחק קטגוריה עמומה בלי הוכחת source או path',
       () async {
     final personalCategoryId = await repository.insertCategory(

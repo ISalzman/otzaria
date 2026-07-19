@@ -8,5 +8,6 @@ export 'app_colors.dart';
 export 'app_fonts.dart';
 export 'app_surfaces.dart';
 export 'app_seed_colors.dart';
+export 'calendar_event_colors.dart';
 export 'layout_tokens.dart';
 export 'app_input_tokens.dart';

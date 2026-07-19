@@ -6,7 +6,7 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 /// סינגלטון שמחזיק את ה-DB וה-repository הכתיבים למטמונים תפעוליים.
 ///
 /// ה-DB עצמו (`cache.db`) משתמש באותה סכמה ובאותם DAOs כמו `seforim.db`,
-/// אך הוא קובץ נפרד וכתיב ב-`<dataRoot>/databases/`. ההפרדה מאפשרת
+/// אך הוא קובץ נפרד וכתיב בתיקיית מסדי הנתונים הפעילה. ההפרדה מאפשרת
 /// ל-`seforim.db` הרשמי להיפתח read-only — כתיבות מטמון בזמן ריצה
 /// (כגון מטמון ה-outline של קובצי PDF חיצוניים) זורמות לכאן במקום.
 ///

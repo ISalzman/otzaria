@@ -1,6 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/pdf_headings.dart';
+import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
+import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
+import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
+import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/reading_screen.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:provider/provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+import '../helpers/memory_settings_cache.dart';
 
 /// טסטי רגרסיה לתיקונים בקובץ `lib/tabs/reading_screen.dart`:
 ///
@@ -47,8 +70,11 @@ void main() {
 
         await tester.pumpWidget(build(['a', 'b', 'c']));
         await tester.pumpAndSettle();
-        expect(_InitCounter.counts, {'a': 1, 'b': 1, 'c': 1},
-            reason: 'כל ילד עבר initState פעם אחת בלבד בעת ה-mount הראשון');
+        expect(
+          _InitCounter.counts,
+          {'a': 1, 'b': 1, 'c': 1},
+          reason: 'כל ילד עבר initState פעם אחת בלבד בעת ה-mount הראשון',
+        );
 
         // הסרת 'a' מקדמת הרשימה — מדמה סגירה/הזזה של טאב משמאל לטאב הפעיל.
         // אם reconciliation היה לפי אינדקס (כפי שמתנהג ה-`KeyedSubtree.wrap`
@@ -57,8 +83,11 @@ void main() {
         await tester.pumpWidget(build(['b', 'c']));
         await tester.pumpAndSettle();
 
-        expect(_InitCounter.counts, {'a': 1, 'b': 1, 'c': 1},
-            reason: 'אסור שייקרא initState נוסף ל-"b" או ל-"c"');
+        expect(_InitCounter.counts, {
+          'a': 1,
+          'b': 1,
+          'c': 1,
+        }, reason: 'אסור שייקרא initState נוסף ל-"b" או ל-"c"');
       },
     );
 
@@ -86,10 +115,12 @@ void main() {
           );
         }
 
-        await tester.pumpWidget(buildIndexKeyed([
-          const _InitCounter(label: 'text'),
-          const _PdfMock(),
-        ]));
+        await tester.pumpWidget(
+          buildIndexKeyed([
+            const _InitCounter(label: 'text'),
+            const _PdfMock(),
+          ]),
+        );
         await tester.pumpAndSettle();
         expect(_PdfMock.initCount, 1);
 
@@ -97,14 +128,20 @@ void main() {
         // חיצוני (`ValueKey<int>(0)`) — כך שה-Element החיצוני שלו ממוחזר,
         // אבל סוג הילד הפנימי משתנה מ-_InitCounter ל-_PdfMock → ה-Element
         // הפנימי מוחלף, וה-State של _PdfMock נזרק → initState נקרא שוב.
-        await tester.pumpWidget(buildIndexKeyed([
-          const _PdfMock(),
-        ]));
+        await tester.pumpWidget(
+          buildIndexKeyed([
+            const _PdfMock(),
+          ]),
+        );
         await tester.pumpAndSettle();
 
-        expect(_PdfMock.initCount, 2,
-            reason: 'index-keyed wrap (כפי שעושה TabBarView) גורם ל-_PdfMock '
-                'לאבד State כשטאב לפניו נסגר. זו הרגרסיה של 74702ae15.');
+        expect(
+          _PdfMock.initCount,
+          2,
+          reason:
+              'index-keyed wrap (כפי שעושה TabBarView) גורם ל-_PdfMock '
+              'לאבד State כשטאב לפניו נסגר. זו הרגרסיה של 74702ae15.',
+        );
       },
     );
 
@@ -130,21 +167,29 @@ void main() {
           );
         }
 
-        await tester.pumpWidget(buildValueKeyed([
-          ('text', const _InitCounter(label: 'text')),
-          ('pdf', const _PdfMock()),
-        ]));
+        await tester.pumpWidget(
+          buildValueKeyed([
+            ('text', const _InitCounter(label: 'text')),
+            ('pdf', const _PdfMock()),
+          ]),
+        );
         await tester.pumpAndSettle();
         expect(_PdfMock.initCount, 1);
 
-        await tester.pumpWidget(buildValueKeyed([
-          ('pdf', const _PdfMock()),
-        ]));
+        await tester.pumpWidget(
+          buildValueKeyed([
+            ('pdf', const _PdfMock()),
+          ]),
+        );
         await tester.pumpAndSettle();
 
-        expect(_PdfMock.initCount, 1,
-            reason: 'עם ValueKey יציב, ה-Element של "pdf" עוקב אחרי המפתח גם '
-                'כשטאב "text" שלפניו נסגר. ה-State נשמר.');
+        expect(
+          _PdfMock.initCount,
+          1,
+          reason:
+              'עם ValueKey יציב, ה-Element של "pdf" עוקב אחרי המפתח גם '
+              'כשטאב "text" שלפניו נסגר. ה-State נשמר.',
+        );
       },
     );
   });
@@ -172,19 +217,21 @@ void main() {
         final controller = PageController();
         final received = <int>[];
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: PageView(
-              controller: controller,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: received.add,
-              children: const [
-                Center(child: Text('p0')),
-                Center(child: Text('p1')),
-              ],
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PageView(
+                controller: controller,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: received.add,
+                children: const [
+                  Center(child: Text('p0')),
+                  Center(child: Text('p1')),
+                ],
+              ),
             ),
           ),
-        ));
+        );
         await tester.pump();
         received.clear();
 
@@ -194,13 +241,20 @@ void main() {
         controller.jumpToPage(2);
         await tester.pumpAndSettle();
 
-        expect(received, isNotEmpty,
-            reason: 'jumpToPage לאינדקס חורג חייב לירות onPageChanged');
-        expect(received.last, 1,
-            reason: 'אחרי applyContentDimensions ה-pixels נצמדים '
-                'ל-maxScrollExtent (page=1) → onPageChanged יורה עם 1, '
-                'לא עם היעד 2. זה ה-clamped index שדרס את currentTabIndex '
-                'בקוד הישן (ההדגשה זזה ל-"הטאב הבא" במקום לחדש).');
+        expect(
+          received,
+          isNotEmpty,
+          reason: 'jumpToPage לאינדקס חורג חייב לירות onPageChanged',
+        );
+        expect(
+          received.last,
+          1,
+          reason:
+              'אחרי applyContentDimensions ה-pixels נצמדים '
+              'ל-maxScrollExtent (page=1) → onPageChanged יורה עם 1, '
+              'לא עם היעד 2. זה ה-clamped index שדרס את currentTabIndex '
+              'בקוד הישן (ההדגשה זזה ל-"הטאב הבא" במקום לחדש).',
+        );
 
         controller.dispose();
       },
@@ -217,32 +271,149 @@ void main() {
         final controller = PageController();
         var rogueCalled = false;
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: PageView(
-              controller: controller,
-              physics: const NeverScrollableScrollPhysics(),
-              // אם תשנה את זה לפונקציה שמסמנת rogueCalled = true, הטסט
-              // ייכשל — וזה בדיוק מה שהקוד הישן בדסקטופ עשה.
-              onPageChanged: null,
-              children: const [
-                Center(child: Text('p0')),
-                Center(child: Text('p1')),
-              ],
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PageView(
+                controller: controller,
+                physics: const NeverScrollableScrollPhysics(),
+                // אם תשנה את זה לפונקציה שמסמנת rogueCalled = true, הטסט
+                // ייכשל — וזה בדיוק מה שהקוד הישן בדסקטופ עשה.
+                onPageChanged: null,
+                children: const [
+                  Center(child: Text('p0')),
+                  Center(child: Text('p1')),
+                ],
+              ),
             ),
           ),
-        ));
+        );
         await tester.pump();
 
         controller.jumpToPage(2);
         await tester.pumpAndSettle();
 
-        expect(rogueCalled, isFalse,
-            reason: 'onPageChanged: null מבטיח שאין מסלול לכתיבת '
-                'currentTabIndex שגוי גם כשה-clamp קורה');
+        expect(
+          rogueCalled,
+          isFalse,
+          reason:
+              'onPageChanged: null מבטיח שאין מסלול לכתיבת '
+              'currentTabIndex שגוי גם כשה-clamp קורה',
+        );
         expect(tester.takeException(), isNull);
 
         controller.dispose();
+      },
+    );
+  });
+
+  group('reading_screen — שוליים חיצוניים בתצוגה זה-לצד-זה', () {
+    // רגרסיה: הטקסט בתצוגה המפוצלת נצמד לדופן החלון. התיקון מזריק שוליים של 12
+    // (רוחב המפריד) לתוך *תוכן* כל חלונית בלבד, דרך SplitPaneContentInset,
+    // כך שהחלונית עצמה נשארת צמודה לדופן — ידית פתיחת החלונית
+    // (Positioned(left:0)) יושבת בדיוק על הדופן, בעוד הטקסט שומר 12px.
+    const dividerWidth = 12.0;
+
+    setUpAll(() async {
+      await Settings.init(cacheProvider: MemorySettingsCache());
+    });
+
+    testWidgets(
+      'ReadingScreen עם CombinedTab: החלוניות צמודות לדופן והתוכן נשמר 12px פנימה',
+      (tester) async {
+        tester.view.physicalSize = const Size(1600, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final combined = CombinedTab(
+          rightTab: _commentaryTab('ימין'),
+          leftTab: _commentaryTab('שמאל'),
+        );
+        addTearDown(combined.dispose);
+
+        final tabsBloc = _FakeTabsBloc(
+          TabsState(tabs: [combined], currentTabIndex: 0),
+        );
+        addTearDown(tabsBloc.close);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Directionality(
+              // כמו באפליקציה האמיתית (locale he) — כדי שהחלפת start/end
+              // בשוליי SplitPaneContentInset תתגלה בכיוון הייצור.
+              textDirection: TextDirection.rtl,
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc()),
+                  BlocProvider<PersonalNotesBloc>.value(
+                    value: _FakePersonalNotesBloc(),
+                  ),
+                  BlocProvider<TabsBloc>.value(value: tabsBloc),
+                  Provider<FocusRepository>.value(value: FocusRepository()),
+                ],
+                child: const ReadingScreen(),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final panes = find.byType(PdfCommentatorsTabScreen);
+        expect(panes, findsNWidgets(2));
+
+        // כל חלונית נצמדת לדופן החלון — הידית ב-Positioned(left:0) יושבת על
+        // הדופן האמיתי (x=0 / x=רוחב), ולא 12px פנימה.
+        final paneRects = [
+          tester.getRect(panes.at(0)),
+          tester.getRect(panes.at(1)),
+        ];
+        final paneLeft = paneRects
+            .map((r) => r.left)
+            .reduce((a, b) => a < b ? a : b);
+        final paneRight = paneRects
+            .map((r) => r.right)
+            .reduce((a, b) => a > b ? a : b);
+
+        expect(
+          paneLeft,
+          0,
+          reason:
+              'החלונית הקיצונית חייבת להיצמד לדופן החלון כדי שהידית '
+              '(Positioned(left:0)) תשב בדיוק על הדופן',
+        );
+        expect(
+          paneRight,
+          1600,
+          reason: 'החלונית הקיצונית חייבת להיצמד לדופן החלון',
+        );
+
+        // תוכן הקריאה (AdaptiveSidePane) מוזרק 12px פנימה מדופן החלון.
+        final content = find.byType(AdaptiveSidePane);
+        expect(content, findsNWidgets(2));
+        final contentRects = [
+          tester.getRect(content.at(0)),
+          tester.getRect(content.at(1)),
+        ];
+        final contentLeft = contentRects
+            .map((r) => r.left)
+            .reduce((a, b) => a < b ? a : b);
+        final contentRight = contentRects
+            .map((r) => r.right)
+            .reduce((a, b) => a > b ? a : b);
+
+        expect(
+          contentLeft,
+          dividerWidth,
+          reason:
+              'תוכן הקריאה חייב לשמור 12px מדופן החלון; 0 פירושו '
+              'שה-SplitPaneContentInset לא הוזרק לתוכן',
+        );
+        expect(
+          contentRight,
+          1600 - dividerWidth,
+          reason: 'תוכן הקריאה חייב לשמור 12px מדופן החלון',
+        );
       },
     );
   });
@@ -323,9 +494,13 @@ void main() {
           tester,
           wrapperKey: const ValueKey('tab-1'),
         );
-        expect(exception, isNull,
-            reason: 'ValueKey לא משתתפת בנתיב PageStorage, לכן ה-SPL '
-                'וה-PageView הפנימי לא חולקים תא ולא מתרחשת התנגשות');
+        expect(
+          exception,
+          isNull,
+          reason:
+              'ValueKey לא משתתפת בנתיב PageStorage, לכן ה-SPL '
+              'וה-PageView הפנימי לא חולקים תא ולא מתרחשת התנגשות',
+        );
       },
     );
 
@@ -338,13 +513,74 @@ void main() {
           tester,
           wrapperKey: const PageStorageKey('tab-1'),
         );
-        expect(exception, isA<TypeError>(),
-            reason: 'PageStorageKey יוצרת נתיב PageStorage משותף בין SPL '
-                'ל-PageView הפנימי → ItemPosition נקרא במקום double?');
+        expect(
+          exception,
+          isA<TypeError>(),
+          reason:
+              'PageStorageKey יוצרת נתיב PageStorage משותף בין SPL '
+              'ל-PageView הפנימי → ItemPosition נקרא במקום double?',
+        );
         expect(exception.toString(), contains('ItemPosition'));
       },
     );
   });
+}
+
+class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {
+  _FakeSettingsBloc() : super(SettingsState.initial()) {
+    on<SettingsEvent>((_, _) {});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakePersonalNotesBloc
+    extends Bloc<PersonalNotesEvent, PersonalNotesState>
+    implements PersonalNotesBloc {
+  _FakePersonalNotesBloc()
+    : super(
+        const PersonalNotesState(
+          isLoading: false,
+          bookId: '',
+          locatedNotes: [],
+          missingNotes: [],
+          errorMessage: null,
+          filteredLocatedNotes: [],
+          filteredMissingNotes: [],
+        ),
+      ) {
+    on<PersonalNotesEvent>((_, _) {});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeTabsBloc extends Bloc<TabsEvent, TabsState> implements TabsBloc {
+  _FakeTabsBloc(super.initial) {
+    on<TabsEvent>((_, _) {});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// כרטסיית מפרשים מזויפת — תוכן קל שנטען סינכרונית בתצוגה המפוצלת.
+PdfCommentatorsTab _commentaryTab(String title) {
+  final sourceTab = PdfBookTab(
+    book: PdfBook(title: title, path: '/tmp/$title.pdf'),
+    pageNumber: 1,
+  );
+  sourceTab.pdfHeadings = PdfHeadings(
+    bookTitle: title,
+    headingsMap: {'פרק א': 1},
+  );
+  sourceTab.currentTitle.value = 'פרק א';
+  sourceTab.currentTextLineNumber = 1;
+  sourceTab.currentTextLineNumberEnd = 9;
+  return PdfCommentatorsTab(sourceTab: sourceTab);
 }
 
 /// וידג'ט בדיקה שסופר כמה פעמים נקרא ה-initState שלו לכל label.
