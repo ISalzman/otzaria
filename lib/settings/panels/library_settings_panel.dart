@@ -91,9 +91,9 @@ class LibrarySettingsPanel extends StatelessWidget {
                   ],
                   currentValue: state.libraryViewMode,
                   onChanged: (value) {
-                    context
-                        .read<SettingsBloc>()
-                        .add(UpdateLibraryViewMode(value));
+                    context.read<SettingsBloc>().add(
+                      UpdateLibraryViewMode(value),
+                    );
                   },
                 ),
                 SettingsActionTile.switchTile(
@@ -104,9 +104,9 @@ class LibrarySettingsPanel extends StatelessWidget {
                       : 'תצוגה מקדימה מוסתרת',
                   value: state.libraryShowPreview,
                   onChanged: (value) {
-                    context
-                        .read<SettingsBloc>()
-                        .add(UpdateLibraryShowPreview(value));
+                    context.read<SettingsBloc>().add(
+                      UpdateLibraryShowPreview(value),
+                    );
                   },
                 ),
               ],
@@ -123,7 +123,7 @@ class LibrarySettingsPanel extends StatelessWidget {
                   'ספרים מהאתר מוצגים מתוך קטלוג שנשמר עם ספריית אוצריא',
               children: [
                 // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)
-                if (hebrewBooksPathWidget != null) hebrewBooksPathWidget!,
+                ?hebrewBooksPathWidget,
 
                 SettingsActionTile.dropdownTile<String>(
                   icon: FluentIcons.globe_24_regular,
@@ -157,8 +157,10 @@ class LibrarySettingsPanel extends StatelessWidget {
                   ],
                   onSelected: (value) async {
                     if (value != null) {
-                      await ExternalCatalogSettingsHelper
-                          .updateExternalSourceMode(context, value);
+                      await ExternalCatalogSettingsHelper.updateExternalSourceMode(
+                        context,
+                        value,
+                      );
                     }
                   },
                 ),
@@ -169,9 +171,9 @@ class LibrarySettingsPanel extends StatelessWidget {
                     subtitle: 'עדכן קטלוגים חיצוניים אוטומטית',
                     value: state.autoSyncCatalogs,
                     onChanged: (value) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(UpdateAutoSyncCatalogs(value));
+                      context.read<SettingsBloc>().add(
+                        UpdateAutoSyncCatalogs(value),
+                      );
                     },
                   ),
                 ],

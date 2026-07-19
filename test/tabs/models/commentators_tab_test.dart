@@ -21,31 +21,33 @@ void main() {
   });
 
   group('CommentatorsTab', () {
-    test('נבנה עם השורה הנבחרת מה-sourceTab ומאתחל bloc עצמאי לאותו אינדקס',
-        () {
-      final sourceTab = TextBookTab(
-        book: TextBook(title: 'ספר בדיקה'),
-        index: 3,
-        blocOverride: _LoadedTextBookBloc(
-          _loadedState(
-            selectedIndex: 17,
-            visibleIndices: const [17, 18],
+    test(
+      'נבנה עם השורה הנבחרת מה-sourceTab ומאתחל bloc עצמאי לאותו אינדקס',
+      () {
+        final sourceTab = TextBookTab(
+          book: TextBook(title: 'ספר בדיקה'),
+          index: 3,
+          blocOverride: _LoadedTextBookBloc(
+            _loadedState(
+              selectedIndex: 17,
+              visibleIndices: const [17, 18],
+            ),
           ),
-        ),
-      );
-      addTearDown(sourceTab.dispose);
+        );
+        addTearDown(sourceTab.dispose);
 
-      final tab = CommentatorsTab(sourceTab: sourceTab);
-      addTearDown(tab.dispose);
+        final tab = CommentatorsTab(sourceTab: sourceTab);
+        addTearDown(tab.dispose);
 
-      expect(tab.title, 'מפרשים | ספר בדיקה');
-      expect(tab.initialSelectedLine, 17);
+        expect(tab.title, 'מפרשים | ספר בדיקה');
+        expect(tab.initialSelectedLine, 17);
 
-      final initialState = tab.bloc.state as TextBookInitial;
-      expect(initialState.book.title, 'ספר בדיקה');
-      expect(initialState.index, 17);
-      expect(initialState.commentators, isEmpty);
-    });
+        final initialState = tab.bloc.state as TextBookInitial;
+        expect(initialState.book.title, 'ספר בדיקה');
+        expect(initialState.index, 17);
+        expect(initialState.commentators, isEmpty);
+      },
+    );
 
     test('כשאין selectedIndex נופל ל-visibleIndices הראשון', () {
       final sourceTab = TextBookTab(
@@ -240,7 +242,9 @@ void main() {
       expect(json['bookTitle'], 'ספר בדיקה');
       expect(json['sourceTab'], isA<Map<String, dynamic>>());
       expect(
-          (json['sourceTab'] as Map<String, dynamic>)['type'], 'TextBookTab');
+        (json['sourceTab'] as Map<String, dynamic>)['type'],
+        'TextBookTab',
+      );
     });
   });
 }
@@ -248,7 +252,7 @@ void main() {
 class _LoadedTextBookBloc extends Bloc<TextBookEvent, TextBookState>
     implements TextBookBloc {
   _LoadedTextBookBloc(super.state) {
-    on<TextBookEvent>((_, __) {});
+    on<TextBookEvent>((_, _) {});
   }
 
   @override
@@ -259,26 +263,25 @@ TextBookLoaded _loadedState({
   required int? selectedIndex,
   required List<int> visibleIndices,
   List<String> activeCommentators = const <String>[],
-}) =>
-    TextBookLoaded(
-      book: TextBook(title: 'ספר בדיקה'),
-      showLeftPane: false,
-      content: const ['א', 'ב', 'ג'],
-      fontSize: 18,
-      showSplitView: true,
-      showPageShapeView: false,
-      activeCommentators: activeCommentators,
-      commentatorGroups: const [],
-      availableCommentators: const <String>[],
-      links: const <Link>[],
-      visibleLinks: const <Link>[],
-      linksByLine: const {},
-      tableOfContents: const [],
-      removeNikud: false,
-      visibleIndices: visibleIndices,
-      selectedIndex: selectedIndex,
-      pinLeftPane: false,
-      searchText: '',
-      scrollController: ItemScrollController(),
-      positionsListener: ItemPositionsListener.create(),
-    );
+}) => TextBookLoaded(
+  book: TextBook(title: 'ספר בדיקה'),
+  showLeftPane: false,
+  content: const ['א', 'ב', 'ג'],
+  fontSize: 18,
+  showSplitView: true,
+  showPageShapeView: false,
+  activeCommentators: activeCommentators,
+  commentatorGroups: const [],
+  availableCommentators: const <String>[],
+  links: const <Link>[],
+  visibleLinks: const <Link>[],
+  linksByLine: const {},
+  tableOfContents: const [],
+  removeNikud: false,
+  visibleIndices: visibleIndices,
+  selectedIndex: selectedIndex,
+  pinLeftPane: false,
+  searchText: '',
+  scrollController: ItemScrollController(),
+  positionsListener: ItemPositionsListener.create(),
+);

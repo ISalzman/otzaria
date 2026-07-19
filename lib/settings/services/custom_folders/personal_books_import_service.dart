@@ -27,8 +27,7 @@ class PersonalBooksImportResult {
 /// התיקייה נרשמת כתיקייה מותאמת אישית רגילה, וכל צינור הסריקה, האינדוקס
 /// וה-prune הקיים חל עליה ללא שינוי.
 class PersonalBooksImportService {
-  PersonalBooksImportService({String? folderPathOverride})
-      : _folderPathOverride = folderPathOverride;
+  PersonalBooksImportService({this._folderPathOverride});
 
   final String? _folderPathOverride;
 
@@ -73,11 +72,13 @@ class PersonalBooksImportService {
       } catch (e) {
         final isNoSpace =
             (e is FileSystemException && e.osError?.errorCode == 28) ||
-                e.toString().contains('No space') ||
-                e.toString().contains('ENOSPC');
-        errors.add(isNoSpace
-            ? '"$fileName": אין מספיק מקום פנוי באחסון המכשיר'
-            : '"$fileName": $e');
+            e.toString().contains('No space') ||
+            e.toString().contains('ENOSPC');
+        errors.add(
+          isNoSpace
+              ? '"$fileName": אין מספיק מקום פנוי באחסון המכשיר'
+              : '"$fileName": $e',
+        );
       }
     }
 

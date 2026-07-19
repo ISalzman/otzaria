@@ -164,9 +164,11 @@ class AboutSettingsTab extends StatelessWidget {
               cardId: 'about.donors',
               title: 'תורמים',
               children: [
-                _padded(_MemorialCardsGrid(
-                  onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
-                )),
+                _padded(
+                  _MemorialCardsGrid(
+                    onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
+                  ),
+                ),
                 SettingsActionTile(
                   title: Text(
                     'תרמו מהונם ומזמנם',
@@ -190,10 +192,12 @@ class AboutSettingsTab extends StatelessWidget {
               title: 'אודות פיתוח התוכנה',
               children: [
                 _cardTitle(context, 'מפתחים'),
-                _padded(_InfoChipSection(
-                  items: aboutDevelopers,
-                  icon: FluentIcons.person_24_regular,
-                )),
+                _padded(
+                  _InfoChipSection(
+                    items: aboutDevelopers,
+                    icon: FluentIcons.person_24_regular,
+                  ),
+                ),
                 SettingsActionTile.text(
                   icon: FluentIcons.chat_24_regular,
                   title: 'נתקלת בבאג? יש לך שאלה או משוב?',
@@ -224,27 +228,29 @@ class AboutSettingsTab extends StatelessWidget {
                 ),
                 _padded(_BookSourcesSection()),
                 _cardTitle(context, 'מהדירי ספרים'),
-                _padded(Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _InfoChipSection(
-                      label: aboutTopEditorsLabel,
-                      items: aboutTopEditors,
-                      icon: FluentIcons.person_24_regular,
-                    ),
-                    const SizedBox(height: 20),
-                    _InfoChipSection(
-                      label: aboutRegularEditorsLabel,
-                      items: aboutRegularEditors,
-                      icon: FluentIcons.person_24_regular,
-                    ),
-                    const SizedBox(height: 16),
-                    const _SubtitleText(
-                      'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, '
-                      'אנא פנו למייל המערכת.',
-                    ),
-                  ],
-                )),
+                _padded(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _InfoChipSection(
+                        label: aboutTopEditorsLabel,
+                        items: aboutTopEditors,
+                        icon: FluentIcons.person_24_regular,
+                      ),
+                      const SizedBox(height: 20),
+                      _InfoChipSection(
+                        label: aboutRegularEditorsLabel,
+                        items: aboutRegularEditors,
+                        icon: FluentIcons.person_24_regular,
+                      ),
+                      const SizedBox(height: 16),
+                      const _SubtitleText(
+                        'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, '
+                        'אנא פנו למייל המערכת.',
+                      ),
+                    ],
+                  ),
+                ),
                 SettingsActionTile.text(
                   icon: FluentIcons.edit_24_regular,
                   title: 'הצטרף לצוות העריכה ומהדירי הספרים',
@@ -281,7 +287,7 @@ class AboutSettingsTab extends StatelessWidget {
             'assets/icon/iconnew.png',
             width: 60,
             height: 60,
-            errorBuilder: (_, __, ___) =>
+            errorBuilder: (_, _, _) =>
                 const Icon(FluentIcons.library_24_regular, size: 60),
           ),
           const SizedBox(width: 16),
@@ -291,10 +297,9 @@ class AboutSettingsTab extends StatelessWidget {
               children: [
                 Text(
                   'אוצריא',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 Text(
                   'מאגר תורני חינמי, רחב ומהיר לשימוש בכל מקום.',
@@ -374,14 +379,16 @@ class _InfoChipWrap extends StatelessWidget {
       runSpacing: 4,
       alignment: WrapAlignment.center,
       children: items
-          .map((c) => _InfoChip(
-                name: c['name']!,
-                url: c['url'] ?? '',
-                description: c['description'],
-                logo: c['logo'],
-                logoOriginalColor: c['logoOriginalColor'] == 'true',
-                icon: icon,
-              ))
+          .map(
+            (c) => _InfoChip(
+              name: c['name']!,
+              url: c['url'] ?? '',
+              description: c['description'],
+              logo: c['logo'],
+              logoOriginalColor: c['logoOriginalColor'] == 'true',
+              icon: icon,
+            ),
+          )
           .toList(),
     );
   }
@@ -395,13 +402,13 @@ class _SubtitleText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: double.infinity,
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: kSettingsSubtitleStyle,
-        ),
-      );
+    width: double.infinity,
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: kSettingsSubtitleStyle,
+    ),
+  );
 }
 
 /// מקטע צ'יפים ברוחב מלא, עם כותרת/תיאור אופציונלי מעליו.
@@ -449,14 +456,15 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasUrl = url.isNotEmpty;
-    final contentColor =
-        hasUrl ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final contentColor = hasUrl
+        ? colorScheme.primary
+        : colorScheme.onSurfaceVariant;
     // סגנון מפורש התואם למראה בכרטיס 'תרמו מהונם' — labelSmall (w500) של
     // ListTile.trailing עם גודל הכותרת — כך אחיד בכל מיקום ולא תלוי בהקשר.
     final nameStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: kSettingsTitleStyle.fontSize,
-          color: contentColor,
-        );
+      fontSize: kSettingsTitleStyle.fontSize,
+      color: contentColor,
+    );
 
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -537,8 +545,11 @@ class _ClosingQuote extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             children: [
-              Icon(FluentIcons.book_open_24_regular,
-                  size: 32, color: colorScheme.primary),
+              Icon(
+                FluentIcons.book_open_24_regular,
+                size: 32,
+                color: colorScheme.primary,
+              ),
               const SizedBox(height: 12),
               Text(
                 'וְצִדְקָתוֹ עֹמֶדֶת לָעַד',
@@ -555,26 +566,36 @@ class _ClosingQuote extends StatelessWidget {
                 '(תהילים קיב, ג)',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 12, color: colorScheme.onSurfaceVariant),
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   children: [
                     Expanded(
-                        child: Divider(
-                            color: colorScheme.outlineVariant
-                                .withValues(alpha: 0.6))),
+                      child: Divider(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Icon(FluentIcons.sparkle_24_regular,
-                          size: 14,
-                          color: colorScheme.primary.withValues(alpha: 0.6)),
+                      child: Icon(
+                        FluentIcons.sparkle_24_regular,
+                        size: 14,
+                        color: colorScheme.primary.withValues(alpha: 0.6),
+                      ),
                     ),
                     Expanded(
-                        child: Divider(
-                            color: colorScheme.outlineVariant
-                                .withValues(alpha: 0.6))),
+                      child: Divider(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -593,7 +614,9 @@ class _ClosingQuote extends StatelessWidget {
                 '(כתובות נ.)',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 12, color: colorScheme.onSurfaceVariant),
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -637,7 +660,8 @@ class _ZayitCreditState extends State<_ZayitCredit> {
         style: kSettingsSubtitleStyle,
         children: [
           const TextSpan(
-            text: 'Sefaria book conversion, the fuzzy search, and the library '
+            text:
+                'Sefaria book conversion, the fuzzy search, and the library '
                 'updates are powered by the technologies that drive Zayit — ',
           ),
           TextSpan(
@@ -672,7 +696,8 @@ class _MemorialCardsGrid extends StatelessWidget {
           description: 'סכום משמעותי לפיתוח התוכנה',
         ),
         _MemorialCard.donor(
-          title: "לע\"נ ר' משה ב\"ר פרץ ובנו ר' יצחק ב\"ר משה, והאשה הכשרה מרת רחל יהודית בת אליעזר",
+          title:
+              "לע\"נ ר' משה ב\"ר פרץ ובנו ר' יצחק ב\"ר משה, והאשה הכשרה מרת רחל יהודית בת אליעזר",
           description:
               "ולהצלחת דוד ב\"ר יחזקאל ומשפחתו בתורה וביראת שמים\n\nתרומה גדולה ורבה לפיתוח התוכנה",
         ),
@@ -707,17 +732,17 @@ class _MemorialCard extends StatelessWidget {
   final VoidCallback? onDonate;
 
   const _MemorialCard.donor({required this.title, required this.description})
-      : icon = FluentIcons.fire_24_filled,
-        dimIcon = false,
-        titleFontSize = 14,
-        onDonate = null;
+    : icon = FluentIcons.fire_24_filled,
+      dimIcon = false,
+      titleFontSize = 14,
+      onDonate = null;
 
   const _MemorialCard.donation({required this.onDonate})
-      : icon = FluentIcons.heart_24_regular,
-        dimIcon = true,
-        title = 'מקום זה יכול להיות מונצח לע"נ יקירך',
-        titleFontSize = 13,
-        description = null;
+    : icon = FluentIcons.heart_24_regular,
+      dimIcon = true,
+      title = 'מקום זה יכול להיות מונצח לע"נ יקירך',
+      titleFontSize = 13,
+      description = null;
 
   @override
   Widget build(BuildContext context) {
@@ -733,18 +758,25 @@ class _MemorialCard extends StatelessWidget {
           children: [
             Icon(icon, color: iconColor, size: 24),
             const SizedBox(height: 6),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: titleFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: titleFontSize,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
+            ),
             if (description != null) ...[
               const SizedBox(height: 4),
-              Text(description!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 11, color: colorScheme.onSurfaceVariant)),
+              Text(
+                description!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
             if (onDonate != null) ...[
               const SizedBox(height: 8),

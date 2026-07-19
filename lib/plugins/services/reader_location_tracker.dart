@@ -8,14 +8,16 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
-typedef ReaderLocationResolver = Future<ReaderLocationSnapshot?> Function(
-  OpenedTab? currentTab,
-);
+typedef ReaderLocationResolver =
+    Future<ReaderLocationSnapshot?> Function(
+      OpenedTab? currentTab,
+    );
 
-typedef ReaderLocationEventDispatcher = Future<void> Function(
-  String topic,
-  Map<String, dynamic> payload,
-);
+typedef ReaderLocationEventDispatcher =
+    Future<void> Function(
+      String topic,
+      Map<String, dynamic> payload,
+    );
 
 /// עוקב אחרי שינויי מיקום בקורא ומפיץ אירועים לתוספים
 ///
@@ -40,14 +42,11 @@ class ReaderLocationTracker {
   int _generation = 0; // למניעת race conditions
 
   ReaderLocationTracker({
-    required TabsBloc tabsBloc,
-    ReaderLocationResolver resolveLocation = resolveReaderLocation,
-    ReaderLocationEventDispatcher dispatchEvent = _dispatchReaderLocationEvent,
-    Duration debounceDuration = const Duration(milliseconds: 150),
-  })  : _tabsBloc = tabsBloc,
-        _resolveLocation = resolveLocation,
-        _dispatchEvent = dispatchEvent,
-        _debounceDuration = debounceDuration {
+    required this._tabsBloc,
+    this._resolveLocation = resolveReaderLocation,
+    this._dispatchEvent = _dispatchReaderLocationEvent,
+    this._debounceDuration = const Duration(milliseconds: 150),
+  }) {
     _init();
   }
 
@@ -106,13 +105,13 @@ class ReaderLocationTracker {
 
     if (_currentTabValueListener != null && _lastTab != null) {
       if (_lastTab is TextBookTab) {
-        (_lastTab as TextBookTab)
-            .currentTitle
-            .removeListener(_currentTabValueListener!);
+        (_lastTab as TextBookTab).currentTitle.removeListener(
+          _currentTabValueListener!,
+        );
       } else if (_lastTab is PdfBookTab) {
-        (_lastTab as PdfBookTab)
-            .currentTitle
-            .removeListener(_currentTabValueListener!);
+        (_lastTab as PdfBookTab).currentTitle.removeListener(
+          _currentTabValueListener!,
+        );
       }
       _currentTabValueListener = null;
     }

@@ -156,8 +156,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   void _scrollNavToSelectedHeading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_navScrollController.isAttached) return;
-      final listIdx = _navFilteredIndices(_navSearchController.text)
-          .indexOf(_selectedHeadingIdx);
+      final listIdx = _navFilteredIndices(
+        _navSearchController.text,
+      ).indexOf(_selectedHeadingIdx);
       if (listIdx < 0) return;
       _navScrollController.scrollTo(
         index: listIdx,
@@ -221,7 +222,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// כותרות קיימות. [secondIdx] >= 0 רק בספירייד אמיתי. [firstIdx] = -1 כשאין
   /// התאמה כלל.
   ({int firstIdx, int secondIdx}) _resolveTitleSelection(
-      List<MapEntry<String, int>> headings, String title) {
+    List<MapEntry<String, int>> headings,
+    String title,
+  ) {
     final full = headings.indexWhere((e) => e.key == title);
     if (full >= 0) return (firstIdx: full, secondIdx: -1);
     final known = headings.map((e) => e.key).toSet();
@@ -375,8 +378,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      final textBook = library.getCompanionBook(
-          widget.tab.sourceTab.book, TextBook) as TextBook?;
+      final textBook =
+          library.getCompanionBook(widget.tab.sourceTab.book, TextBook)
+              as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -549,7 +553,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       } else {
         // שמירת הטווח הראשי הנוכחי כחלק מהאיחוד לפני הוספת הקטע החדש.
         _extraLines.addAll(
-            _linesForNavItem(_selectedHeadingIdx, _selectedParagraphIdx));
+          _linesForNavItem(_selectedHeadingIdx, _selectedParagraphIdx),
+        );
         _extraLines.addAll(lines);
       }
     });
@@ -569,8 +574,11 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final safeParaIdx = _selectedParagraphIdx == _kAllPara || paragraphs.isEmpty
         ? _kAllPara
         : _selectedParagraphIdx.clamp(0, paragraphs.length - 1);
-    final range =
-        _getLineRangeForPara(_selectedHeadingIdx, paragraphs, safeParaIdx);
+    final range = _getLineRangeForPara(
+      _selectedHeadingIdx,
+      paragraphs,
+      safeParaIdx,
+    );
 
     return Focus(
       autofocus: true,
@@ -602,14 +610,20 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                       onSelectCommentatorsRequested: _openCommentatorsTab,
                       lineStartOverride: range.start,
                       lineEndOverride: range.end,
-                      extraLineIndices:
-                          _extraLines.isEmpty ? null : _extraLines,
+                      extraLineIndices: _extraLines.isEmpty
+                          ? null
+                          : _extraLines,
                       removeNikud: _removeNikud,
                       removePunctuation: _removePunctuation,
                       openBookCallback: (tab) {
                         if (tab is TextBookTab) {
-                          openBook(context, tab.book, tab.index, '',
-                              ignoreHistory: false);
+                          openBook(
+                            context,
+                            tab.book,
+                            tab.index,
+                            '',
+                            ignoreHistory: false,
+                          );
                         }
                       },
                       fontSize: 16.0,
@@ -694,7 +708,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final sourceTab = widget.tab.sourceTab;
     final bookmarkBloc = context.read<BookmarkBloc>();
     final headings = _sortedHeadings;
-    final hasSelectedHeading = headings != null &&
+    final hasSelectedHeading =
+        headings != null &&
         _selectedHeadingIdx >= 0 &&
         _selectedHeadingIdx < headings.length;
 
@@ -716,7 +731,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             library.getCompanionBook(sourceTab.book, TextBook) as TextBook?;
         if (textBook != null) {
           final mapped = await textToPdfPage(
-              textBook, headings[_selectedHeadingIdx].value);
+            textBook,
+            headings[_selectedHeadingIdx].value,
+          );
           if (mapped != null) page = mapped;
         }
       } catch (e) {
@@ -735,9 +752,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       commentatorsToShow: sourceTab.activeCommentators.toList(),
       targetKind: BookmarkTargetKind.commentators,
     );
-    UiSnack.show(added
-        ? NotesMessages.bookmarkAdded
-        : NotesMessages.bookmarkAlreadyExists);
+    UiSnack.show(
+      added ? NotesMessages.bookmarkAdded : NotesMessages.bookmarkAlreadyExists,
+    );
   }
 
   Widget _buildAppTopBar(BuildContext context) {
@@ -1012,14 +1029,17 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final safeParaIdx = _selectedParagraphIdx == _kAllPara || paragraphs.isEmpty
         ? _kAllPara
         : _selectedParagraphIdx.clamp(0, paragraphs.length - 1);
-    final range =
-        _getLineRangeForPara(_selectedHeadingIdx, paragraphs, safeParaIdx);
+    final range = _getLineRangeForPara(
+      _selectedHeadingIdx,
+      paragraphs,
+      safeParaIdx,
+    );
     final relevant = <String>{};
     for (final link in widget.tab.sourceTab.links) {
       if (!LinkTypes.isDependentTextLink(link.connectionType)) continue;
       final inScope =
           (link.index1 >= range.start && link.index1 <= range.end) ||
-              _extraLines.contains(link.index1);
+          _extraLines.contains(link.index1);
       if (!inScope) continue;
       final title = utils.getTitleFromPath(link.path2);
       if (_rareCommentators.contains(title)) relevant.add(title);
@@ -1058,8 +1078,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         // שמירה פר-ספר תמיד (לא תלוי ב-enablePerBookSettings) כדי שהבחירה
         // תיטען בכל פתיחה.
         final settings = PdfBookPerBookSettings(
-          activeCommentators:
-              List.from(widget.tab.sourceTab.activeCommentators),
+          activeCommentators: List.from(
+            widget.tab.sourceTab.activeCommentators,
+          ),
         );
         await settings.save(widget.tab.sourceTab.book);
       },
@@ -1115,7 +1136,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     context: context,
                     headingText: headings[idx].key,
                     // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
-                    isSelected: (isActiveHeading &&
+                    isSelected:
+                        (isActiveHeading &&
                             _selectedParagraphIdx == _kAllPara) ||
                         _isNavItemInMulti(idx, _kAllPara),
                     isExpanded: isExpanded,
@@ -1157,15 +1179,14 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     children: [
                       headingRow,
                       ...List.generate(paras.length, (pi) {
-                        final words = paras[pi]
-                            .text
+                        final words = paras[pi].text
                             .split(RegExp(r'\s+'))
                             .where((w) => w.isNotEmpty)
                             .take(4)
                             .join(' ');
                         final isParaSelected =
                             (isActiveHeading && _selectedParagraphIdx == pi) ||
-                                _isNavItemInMulti(idx, pi);
+                            _isNavItemInMulti(idx, pi);
                         return _buildParagraphRow(
                           context: context,
                           text: words,
@@ -1270,7 +1291,11 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.only(
-            right: 16.0 + 24.0, left: 16, top: 10, bottom: 10),
+          right: 16.0 + 24.0,
+          left: 16,
+          top: 10,
+          bottom: 10,
+        ),
         decoration: BoxDecoration(
           color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
           border: Border(
@@ -1308,7 +1333,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   Widget _buildSearchPanel() {
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _searchController,
-      builder: (context, val, __) {
+      builder: (context, val, _) {
         final hasQuery = val.text.isNotEmpty;
         return ValueListenableBuilder<int>(
           valueListenable: _totalResultsNotifier,
@@ -1330,13 +1355,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                         OtzariaSearchAction.prevResult(
                           onPressed: currentIdx > 0
                               ? () =>
-                                  _panelKey.currentState?.navigateSearchPrev()
+                                    _panelKey.currentState?.navigateSearchPrev()
                               : null,
                         ),
                         OtzariaSearchAction.nextResult(
                           onPressed: currentIdx < total - 1
                               ? () =>
-                                  _panelKey.currentState?.navigateSearchNext()
+                                    _panelKey.currentState?.navigateSearchNext()
                               : null,
                         ),
                       ],

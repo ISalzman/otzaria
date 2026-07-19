@@ -199,10 +199,12 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
         ),
         const AppContextMenuEntry.divider(),
       ],
-      ...relevantLinks.map((link) => buildLinkContextMenuEntry(
-            link: link,
-            onTap: () => onOpenLink(link),
-          )),
+      ...relevantLinks.map(
+        (link) => buildLinkContextMenuEntry(
+          link: link,
+          onTap: () => onOpenLink(link),
+        ),
+      ),
     ];
   }
 
@@ -230,14 +232,15 @@ List<AppContextMenuEntry> buildGroupedCommentatorEntries({
   final items = <AppContextMenuEntry>[];
 
   AppContextMenuEntry buildItem(String commentator) => AppContextMenuEntry(
-        label: commentator,
-        isSelected: activeCommentators.contains(commentator),
-        onTap: () => onToggleCommentator(commentator),
-      );
+    label: commentator,
+    isSelected: activeCommentators.contains(commentator),
+    onTap: () => onToggleCommentator(commentator),
+  );
 
   if (commentatorGroups.isNotEmpty) {
-    final allGrouped =
-        commentatorGroups.expand((group) => group.commentators).toSet();
+    final allGrouped = commentatorGroups
+        .expand((group) => group.commentators)
+        .toSet();
 
     for (final group in commentatorGroups) {
       final groupItems = group.commentators
@@ -249,11 +252,13 @@ List<AppContextMenuEntry> buildGroupedCommentatorEntries({
         }
         // פריט "הצג את כל <תקופה>" שמסמן/מבטל את כל הקבוצה (כמו בספרי טקסט)
         final groupActive = activeCommentators.containsAll(groupItems);
-        items.add(AppContextMenuEntry(
-          label: 'הצג את כל ${group.title}',
-          isSelected: groupActive,
-          onTap: () => onToggleAll(groupItems),
-        ));
+        items.add(
+          AppContextMenuEntry(
+            label: 'הצג את כל ${group.title}',
+            isSelected: groupActive,
+            onTap: () => onToggleAll(groupItems),
+          ),
+        );
         items.addAll(groupItems.map(buildItem));
       }
     }
@@ -434,7 +439,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     controller.text = query; // החזר את הטקסט המקורי
     // הזז את הסמן לסוף הטקסט
     controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: controller.text.length));
+      TextPosition(offset: controller.text.length),
+    );
 
     //ברוב המקרים, שינוי הטקסט עצמו יפעיל את ה-listener של הספרייה.
     // אם לא, ייתכן שעדיין צריך לקרוא לזה ידנית:
@@ -483,8 +489,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     int? persistedIndexFromTab = widget.tab.pdfSearchCurrentMatchIndex;
 
     widget.tab.searchText = currentSearchTerm;
-    widget.tab.pdfSearchMatches =
-        textSearcher != null ? List.from(textSearcher!.matches) : null;
+    widget.tab.pdfSearchMatches = textSearcher != null
+        ? List.from(textSearcher!.matches)
+        : null;
     widget.tab.pdfSearchCurrentMatchIndex = textSearcher?.currentIndex;
 
     if (mounted) {
@@ -605,8 +612,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (widget.tab.pdfViewerController.isReady && widget.tab.pageNumber > 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (mounted && widget.tab.pdfViewerController.isReady) {
-          await widget.tab.pdfViewerController
-              .goToPage(pageNumber: widget.tab.pageNumber);
+          await widget.tab.pdfViewerController.goToPage(
+            pageNumber: widget.tab.pageNumber,
+          );
         }
       });
     }
@@ -683,17 +691,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         _bloc.add(const pdf_events.ToggleRightPane(show: true));
       }
     };
-    widget.tab.toggleCommentatorsPaneNotifier
-        .addListener(_toggleCommentatorsPaneListener);
+    widget.tab.toggleCommentatorsPaneNotifier.addListener(
+      _toggleCommentatorsPaneListener,
+    );
   }
 
   Future<void> _loadInitialLayoutMode() async {
     final enablePerBookSettings =
         Settings.getValue<bool>(SettingsRepository.keyEnablePerBookSettings) ??
-            false;
+        false;
     final pdfBookViewByDefault =
         Settings.getValue<bool>(SettingsRepository.keyPdfBookViewByDefault) ??
-            false;
+        false;
 
     PdfLayoutMode layoutMode = pdfBookViewByDefault
         ? PdfLayoutMode.bookView
@@ -746,18 +755,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final range = _spreadPageRangeFor(pageNumber);
     if (outline.isNotEmpty) {
       final textIndex = await pdfToTextPage(
-          widget.tab.book, outline, range.startPage, context);
+        widget.tab.book,
+        outline,
+        range.startPage,
+        context,
+      );
       if (textIndex != null) {
         if (!mounted) return (start: textIndex + 1, end: null);
         final nextIndex = await pdfToTextPage(
-            widget.tab.book, outline, range.endPageExclusive, context);
+          widget.tab.book,
+          outline,
+          range.endPageExclusive,
+          context,
+        );
         return (start: textIndex + 1, end: nextIndex);
       }
     }
 
-    final title = resolvedTitle ??
+    final title =
+        resolvedTitle ??
         await refFromPageNumber(
-            range.startPage, outline, widget.tab.book.title);
+          range.startPage,
+          outline,
+          widget.tab.book.title,
+        );
     if (widget.tab.pdfHeadings != null && title.isNotEmpty) {
       final lineNumber = widget.tab.pdfHeadings!.getLineNumberForHeading(title);
       if (lineNumber != null) {
@@ -772,25 +793,32 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// - [single] משמש כמפתח לחיפוש בכותרות (תמיד עמוד יחיד)
   /// - [display] משמש להצגה למשתמש (שני עמודי הספירייד בתצוגת ספר, אם הם שונים)
   Future<({String single, String display})> _resolveTitlesForPage(
-      int pageNumber) async {
+    int pageNumber,
+  ) async {
     final outline = widget.tab.outline.value ?? const <PdfOutlineNode>[];
     final bookTitle = widget.tab.book.title;
     final range = _spreadPageRangeFor(pageNumber);
-    final firstTitle =
-        await refFromPageNumber(range.startPage, outline, bookTitle);
+    final firstTitle = await refFromPageNumber(
+      range.startPage,
+      outline,
+      bookTitle,
+    );
     final spans = range.endPageExclusive - range.startPage > 1;
     if (!spans) {
       return (single: firstTitle, display: firstTitle);
     }
-    final secondTitle =
-        await refFromPageNumber(range.startPage + 1, outline, bookTitle);
+    final secondTitle = await refFromPageNumber(
+      range.startPage + 1,
+      outline,
+      bookTitle,
+    );
     final display = pdfCombineSpreadTitles(firstTitle, secondTitle);
     final single = firstTitle.isEmpty ? secondTitle : firstTitle;
     return (single: single, display: display);
   }
 
   ({List<String> commentators, List<otz_links.Link> links})
-      _getRelevantContent() {
+  _getRelevantContent() {
     final range = _getCurrentPdfLinesRange();
     if (range == null) return (commentators: const [], links: const []);
 
@@ -822,11 +850,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   void _recordCommentaryOpenedIfNeeded() {
     if (_getRelevantContent().commentators.isNotEmpty) {
       context.read<TourCubit>().recordInteraction(
-            TourInteraction(
-              type: TourInteractionType.commentaryUsed,
-              primaryValue: widget.tab.title,
-            ),
-          );
+        TourInteraction(
+          type: TourInteractionType.commentaryUsed,
+          primaryValue: widget.tab.title,
+        ),
+      );
     }
   }
 
@@ -916,7 +944,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<AppContextMenuEntry> _buildGroupedCommentatorEntries(
-      List<String> relevantCommentators) {
+    List<String> relevantCommentators,
+  ) {
     return buildGroupedCommentatorEntries(
       relevantCommentators: relevantCommentators,
       commentatorGroups: _commentatorGroups,
@@ -927,11 +956,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<AppContextMenuEntry> _buildPdfContextMenuEntries(
-      BuildContext menuContext, Offset _) {
+    BuildContext menuContext,
+    Offset _,
+  ) {
     final (commentators: relevantCommentators, links: relevantLinks) =
         _getRelevantContent();
 
-    final allActive = relevantCommentators.isNotEmpty &&
+    final allActive =
+        relevantCommentators.isNotEmpty &&
         widget.tab.activeCommentators.containsAll(relevantCommentators);
 
     final isRightPaneClosed = switch (_bloc.state) {
@@ -1032,7 +1064,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// פתיחת יעד קישור מתפריט ההקשר. יעד השייך לתלמוד בבלי נפתח כ-PDF
   /// בדף הממופה בהתאם להגדרת פורמט הפתיחה.
   Future<void> _openLinkTarget(
-      BuildContext menuContext, otz_links.Link link) async {
+    BuildContext menuContext,
+    otz_links.Link link,
+  ) async {
     final textBook = TextBook(
       title: utils.getTitleFromPath(link.path2),
       isUserBook: link.targetIsUserBook,
@@ -1095,8 +1129,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final raw = await controller.textSelectionDelegate.getSelectedText();
     if (!mounted) return;
     // טאב חיפוש חדש נפתח עם תצורת ברירת המחדל — כל הספרייה, בלי facets.
-    openGlobalSearch(context, _parallelsQueryFromSelection(raw),
-        insertAdjacent: true);
+    openGlobalSearch(
+      context,
+      _parallelsQueryFromSelection(raw),
+      insertAdjacent: true,
+    );
   }
 
   /// מחזיר את צבע הרקע שיועבר ל-[PdfViewerParams.backgroundColor].
@@ -1171,7 +1208,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
                       pageLayouts.add(
                         Rect.fromLTWH(
-                            0, totalHeight, nextScaledWidth, nextScaledHeight),
+                          0,
+                          totalHeight,
+                          nextScaledWidth,
+                          nextScaledHeight,
+                        ),
                       );
                       totalHeight +=
                           max(scaledHeight, nextScaledHeight) + params.margin;
@@ -1192,7 +1233,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       calculateCurrentPageNumber: layoutMode == PdfLayoutMode.bookView
           ? null
           : (visibleRect, pageRects, controller) =>
-              pdfTopmostVisiblePage(visibleRect, pageRects),
+                pdfTopmostVisiblePage(visibleRect, pageRects),
       normalizeMatrix: layoutMode == PdfLayoutMode.bookView
           ? (matrix, viewSize, layout, controller) {
               if (_isPageTurnInProgress) {
@@ -1214,10 +1255,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       onDocumentLoadFinished: (documentRef, succeeded) {
         if (!mounted) return;
         if (!succeeded) {
-          _bloc.add(const pdf_events.SetLoadingState(
-            isLoading: false,
-            succeeded: false,
-          ));
+          _bloc.add(
+            const pdf_events.SetLoadingState(
+              isLoading: false,
+              succeeded: false,
+            ),
+          );
           return;
         }
         // המטא-דאטה של כל המסמך נטענה — מסמנים את הדגל ומפעילים את
@@ -1289,8 +1332,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   event,
                   isControlPressed: HardwareKeyboard.instance.isControlPressed,
                 );
-                widget.tab.pdfViewerController
-                    .handlePointerSignalEvent(adjusted);
+                widget.tab.pdfViewerController.handlePointerSignalEvent(
+                  adjusted,
+                );
                 _scheduleReaderFocusAndHidePaneIfNeeded();
               },
               child: const SizedBox.expand(),
@@ -1357,10 +1401,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // ו-resolve של titles/line-numbers הם פעולות כבדות (DB+PDF
         // bookmarks) ונדחקות לרקע — outline מתעדכן ב-tab.outline
         // וב-state בעדכון שני, ו-titles מתעדכנים ב-ValueNotifier.
-        _bloc.add(pdf_events.DocumentReady(
-          documentRef: documentRef,
-          totalPages: totalPages,
-        ));
+        _bloc.add(
+          pdf_events.DocumentReady(
+            documentRef: documentRef,
+            totalPages: totalPages,
+          ),
+        );
 
         // פתיחה ל"עמוד יעד" (דף יומי/חיפוש/קישור/היסטוריה/סימניה) —
         // progressive loading עלול לעדכן ממדי עמודים ברקע ולדחוף את
@@ -1371,16 +1417,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           _beginStableLayoutTracking(initialTargetPage);
         }
 
-        unawaited(_loadOutlineAndTitlesInBackground(
-          document: document,
-          documentRef: documentRef,
-          targetPage: initialTargetPage,
-          totalPages: totalPages,
-        ));
+        unawaited(
+          _loadOutlineAndTitlesInBackground(
+            document: document,
+            documentRef: documentRef,
+            targetPage: initialTargetPage,
+            totalPages: totalPages,
+          ),
+        );
 
         if (!mounted) return;
-        final enablePerBookSettings =
-            context.read<SettingsBloc>().state.enablePerBookSettings;
+        final enablePerBookSettings = context
+            .read<SettingsBloc>()
+            .state
+            .enablePerBookSettings;
 
         final savedZoom = widget.tab.savedZoom;
         final hasSavedZoom = savedZoom != null && savedZoom != 1.0;
@@ -1520,11 +1570,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               }
               // העתקת קישורים — קיצורים אופציונליים. ב-PDF "קישור למקטע" מעתיק
               // קישור לעמוד הנוכחי (אותו מפתח כמו קישור-למקטע בספר טקסט).
-              final copyBookLinkShortcut = ShortcutValidator.getShortcutValue(
-                      ShortcutValidator.copyBookLinkKey) ??
+              final copyBookLinkShortcut =
+                  ShortcutValidator.getShortcutValue(
+                    ShortcutValidator.copyBookLinkKey,
+                  ) ??
                   '';
-              final copyPageLinkShortcut = ShortcutValidator.getShortcutValue(
-                      ShortcutValidator.copySectionLinkKey) ??
+              final copyPageLinkShortcut =
+                  ShortcutValidator.getShortcutValue(
+                    ShortcutValidator.copySectionLinkKey,
+                  ) ??
                   '';
               if (copyBookLinkShortcut.isNotEmpty &&
                   ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
@@ -1542,7 +1596,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 if (bookId == null) {
                   UiSnack.showError(PdfMessages.directLinkUnavailableForBook);
                 } else {
-                  final page = widget.tab.pdfViewerController.pageNumber ??
+                  final page =
+                      widget.tab.pdfViewerController.pageNumber ??
                       widget.tab.pageNumber;
                   copyLinkToClipboard(buildPdfPageLink(bookId, page));
                 }
@@ -1615,8 +1670,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   child: PdfViewer(
                     _pdfDocumentRef,
                     controller: widget.tab.pdfViewerController,
-                    initialPageNumber:
-                        widget.tab.pageNumber < 1 ? 1 : widget.tab.pageNumber,
+                    initialPageNumber: widget.tab.pageNumber < 1
+                        ? 1
+                        : widget.tab.pageNumber,
                     params: _buildPdfViewerParams(layoutMode),
                   ),
                 ),
@@ -1686,11 +1742,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Rect? _currentSpreadViewportRect(
-      PdfViewerController controller, Size viewportSize) {
+    PdfViewerController controller,
+    Size viewportSize,
+  ) {
     final spreadRect = _currentSpreadRect(controller);
     if (spreadRect == null) return null;
-    final viewportRect =
-        MatrixUtils.transformRect(controller.value, spreadRect);
+    final viewportRect = MatrixUtils.transformRect(
+      controller.value,
+      spreadRect,
+    );
     final clippedRect = viewportRect.intersect(Offset.zero & viewportSize);
     if (clippedRect.width <= 0 || clippedRect.height <= 0) return null;
     return clippedRect;
@@ -1699,7 +1759,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildBookViewViewportMask(Size viewportSize) {
     if (!_isBookViewModeActive()) return const SizedBox.shrink();
     final spreadViewportRect = _currentSpreadViewportRect(
-        widget.tab.pdfViewerController, viewportSize);
+      widget.tab.pdfViewerController,
+      viewportSize,
+    );
     if (spreadViewportRect == null) return const SizedBox.shrink();
 
     return Positioned.fill(
@@ -1739,26 +1801,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       final isLeftPage =
           spreadStartPage == 1 || pageNumber == spreadStartPage + 1;
-      final outerStackPages =
-          isLeftPage ? totalPages - pageNumber : pageNumber - 1;
+      final outerStackPages = isLeftPage
+          ? totalPages - pageNumber
+          : pageNumber - 1;
 
-      pages.add(_VisibleBookPage(
-        pageNumber: pageNumber,
-        viewportRect: pageRect,
-        isLeftPage: isLeftPage,
-        outerStackPages: outerStackPages,
-      ));
+      pages.add(
+        _VisibleBookPage(
+          pageNumber: pageNumber,
+          viewportRect: pageRect,
+          isLeftPage: isLeftPage,
+          outerStackPages: outerStackPages,
+        ),
+      );
     }
 
     return pages;
   }
 
   Widget _buildBookViewStackDecoration(
-      BuildContext context, Size viewportSize) {
+    BuildContext context,
+    Size viewportSize,
+  ) {
     if (!_isBookViewModeActive()) return const SizedBox.shrink();
 
-    final visiblePages =
-        _currentSpreadPages(widget.tab.pdfViewerController, viewportSize);
+    final visiblePages = _currentSpreadPages(
+      widget.tab.pdfViewerController,
+      viewportSize,
+    );
     if (visiblePages.isEmpty) return const SizedBox.shrink();
 
     final colorScheme = Theme.of(context).colorScheme;
@@ -1786,9 +1855,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final totalPages = widget.tab.pdfViewerController.pageCount;
     final canGoPrevious = pdfSpreadStartPage(currentPage) > 1;
     final canGoNext =
-        pdfSpreadPageRange(currentPage, bookView: true, totalPages: totalPages)
-                .endPageExclusive <=
-            totalPages;
+        pdfSpreadPageRange(
+          currentPage,
+          bookView: true,
+          totalPages: totalPages,
+        ).endPageExclusive <=
+        totalPages;
     final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
     final horizontalPadding = min(28.0, viewportSize.width * 0.018);
     final colorScheme = Theme.of(context).colorScheme;
@@ -1909,7 +1981,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   int _dominantPageForRect(
-      Rect rect, List<Rect> pageLayouts, int fallbackPage) {
+    Rect rect,
+    List<Rect> pageLayouts,
+    int fallbackPage,
+  ) {
     var bestPage = fallbackPage;
     var bestArea = 0.0;
     for (var i = 0; i < pageLayouts.length; i++) {
@@ -2001,13 +2076,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final targetCenterX = minCenterX <= maxCenterX
         ? candidateVisibleRect.center.dx
-            .clamp(minCenterX, maxCenterX)
-            .toDouble()
+              .clamp(minCenterX, maxCenterX)
+              .toDouble()
         : spreadRect.center.dx;
     final targetCenterY = minCenterY <= maxCenterY
         ? candidateVisibleRect.center.dy
-            .clamp(minCenterY, maxCenterY)
-            .toDouble()
+              .clamp(minCenterY, maxCenterY)
+              .toDouble()
         : spreadRect.center.dy;
 
     // כשאין תיקון ממשי חובה להחזיר את המטריצה המקורית: calcMatrixFor מייצר
@@ -2053,10 +2128,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return spreadRect.center.dx;
     }
     final halfWidth = visibleWidth / 2;
-    return pageLayouts[focusPage - 1]
-        .center
-        .dx
-        .clamp(spreadRect.left + halfWidth, spreadRect.right - halfWidth);
+    return pageLayouts[focusPage - 1].center.dx.clamp(
+      spreadRect.left + halfWidth,
+      spreadRect.right - halfWidth,
+    );
   }
 
   Future<void> _goToPageWithSpreadLock(int pageNumber) async {
@@ -2074,16 +2149,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // Calculate the target matrix directly so we jump to the correct vertical
       // position in one shot — avoiding a flash-to-top that would occur if we
       // called goToPage and then corrected afterwards.
-      final newSpreadRect =
-          _spreadRectForPageLayout(controller.layout, _lockedSpreadStartPage!);
+      final newSpreadRect = _spreadRectForPageLayout(
+        controller.layout,
+        _lockedSpreadStartPage!,
+      );
       if (currentSpreadRect != null &&
           newSpreadRect != null &&
           currentSpreadRect.height > 0 &&
           newSpreadRect.height > 0) {
         final visibleRect = controller.visibleRect;
         final visibleHeight = min(visibleRect.height, currentSpreadRect.height);
-        final currentScrollableExtent =
-            max(currentSpreadRect.height - visibleHeight, 0.0);
+        final currentScrollableExtent = max(
+          currentSpreadRect.height - visibleHeight,
+          0.0,
+        );
 
         // Relative scroll: 0.0 = top of spread, 1.0 = bottom.
         // Uses scroll offset (not center) to avoid placing center outside spread.
@@ -2094,20 +2173,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           relativeScroll = currentScrollTop / currentScrollableExtent;
         }
 
-        final newScrollableExtent =
-            max(newSpreadRect.height - visibleHeight, 0.0);
+        final newScrollableExtent = max(
+          newSpreadRect.height - visibleHeight,
+          0.0,
+        );
         final newScrollTop = relativeScroll * newScrollableExtent;
         final targetCenterY =
             newSpreadRect.top + newScrollTop + visibleHeight / 2;
 
-        final targetCenterX =
-            _spreadTargetCenterX(controller, newSpreadRect, safePage);
+        final targetCenterX = _spreadTargetCenterX(
+          controller,
+          newSpreadRect,
+          safePage,
+        );
         await controller
-            .goTo(controller.calcMatrixFor(
-              Offset(targetCenterX, targetCenterY),
-              zoom: controller.value.zoom,
-              viewSize: controller.viewSize,
-            ))
+            .goTo(
+              controller.calcMatrixFor(
+                Offset(targetCenterX, targetCenterY),
+                zoom: controller.value.zoom,
+                viewSize: controller.viewSize,
+              ),
+            )
             .timeout(const Duration(seconds: 3), onTimeout: () {});
         if (!_pdfViewFocusNode.hasFocus) {
           _pdfViewFocusNode.requestFocus();
@@ -2133,8 +2219,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final halfViewHeight =
           controller.viewSize.height / 2 / controller.value.zoom;
       await controller
-          .goTo(controller
-              .calcMatrixFor(page.topCenter.translate(0, halfViewHeight)))
+          .goTo(
+            controller.calcMatrixFor(
+              page.topCenter.translate(0, halfViewHeight),
+            ),
+          )
           .timeout(const Duration(seconds: 3), onTimeout: () {});
     }
 
@@ -2144,7 +2233,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Future<({ui.Image image, Size viewportLogicalSize})?>
-      _capturePdfViewportSnapshot() async {
+  _capturePdfViewportSnapshot() async {
     final boundaryContext = _pdfViewportBoundaryKey.currentContext;
     if (boundaryContext == null) {
       return null;
@@ -2187,10 +2276,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     const maxCapturePixels = 1600000.0;
     final viewportPixels = renderObject.size.width * renderObject.size.height;
-    final cappedPixelRatio =
-        viewportPixels <= 0 ? 1.0 : sqrt(maxCapturePixels / viewportPixels);
-    final pixelRatio =
-        min(devicePixelRatio, min(1.35, cappedPixelRatio)).clamp(0.85, 1.35);
+    final cappedPixelRatio = viewportPixels <= 0
+        ? 1.0
+        : sqrt(maxCapturePixels / viewportPixels);
+    final pixelRatio = min(
+      devicePixelRatio,
+      min(1.35, cappedPixelRatio),
+    ).clamp(0.85, 1.35);
 
     try {
       final image = await renderObject.toImage(pixelRatio: pixelRatio);
@@ -2307,8 +2399,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       // Replace any stale entry (e.g. from previous render at different zoom).
       _spreadCache[spreadStartPage]?.dispose();
-      _spreadCache[spreadStartPage] =
-          _PdfSpreadCacheEntry(pageImages: pageImages);
+      _spreadCache[spreadStartPage] = _PdfSpreadCacheEntry(
+        pageImages: pageImages,
+      );
     } catch (e, s) {
       debugPrint('Spread pre-render failed for $spreadStartPage: $e\n$s');
       _disposeImageMap(pageImages);
@@ -2362,16 +2455,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         currentSpreadRect.height > 0 &&
         newSpreadRect.height > 0) {
       final visibleHeight = min(visibleRect.height, currentSpreadRect.height);
-      final currentScrollableExtent =
-          max(currentSpreadRect.height - visibleHeight, 0.0);
+      final currentScrollableExtent = max(
+        currentSpreadRect.height - visibleHeight,
+        0.0,
+      );
       var relativeScroll = 0.0;
       if (currentScrollableExtent > 0) {
         final currentScrollTop = (visibleRect.top - currentSpreadRect.top)
             .clamp(0.0, currentScrollableExtent);
         relativeScroll = currentScrollTop / currentScrollableExtent;
       }
-      final newScrollableExtent =
-          max(newSpreadRect.height - visibleHeight, 0.0);
+      final newScrollableExtent = max(
+        newSpreadRect.height - visibleHeight,
+        0.0,
+      );
       final newScrollTop = relativeScroll * newScrollableExtent;
       targetCenterY = newSpreadRect.top + newScrollTop + visibleHeight / 2;
     }
@@ -2379,7 +2476,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final targetMatrix = controller.calcMatrixFor(
       Offset(
         _spreadTargetCenterX(
-            controller, newSpreadRect, focusPage ?? spreadStartPage),
+          controller,
+          newSpreadRect,
+          focusPage ?? spreadStartPage,
+        ),
         targetCenterY,
       ),
       zoom: zoom,
@@ -2388,11 +2488,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     final viewportPixels = viewSize.width * viewSize.height;
     const maxCapturePixels = 1600000.0;
-    final cappedPixelRatio =
-        viewportPixels <= 0 ? 1.0 : sqrt(maxCapturePixels / viewportPixels);
+    final cappedPixelRatio = viewportPixels <= 0
+        ? 1.0
+        : sqrt(maxCapturePixels / viewportPixels);
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final pixelRatio =
-        min(devicePixelRatio, min(1.35, cappedPixelRatio)).clamp(0.85, 1.35);
+    final pixelRatio = min(
+      devicePixelRatio,
+      min(1.35, cappedPixelRatio),
+    ).clamp(0.85, 1.35);
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -2414,8 +2517,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       if (pageIdx < 0 || pageIdx >= pageLayouts.length) continue;
 
       final pageDocRect = pageLayouts[pageIdx];
-      final pageViewportRect =
-          MatrixUtils.transformRect(targetMatrix, pageDocRect);
+      final pageViewportRect = MatrixUtils.transformRect(
+        targetMatrix,
+        pageDocRect,
+      );
 
       final pageImage = entry.pageImages[pageNum]!;
       canvas.drawImageRect(
@@ -2480,23 +2585,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// קודמות) הרלוונטיות נבדקת שוב — אם המשתמש כבר דפדף הלאה, מדלגים.
   void _enqueueSpreadPrerender(int spread) {
     if (!_queuedSpreadPrerenders.add(spread)) return;
-    _spreadPrerenderQueue = _spreadPrerenderQueue.then((_) async {
-      // ההסרה רק בסיום (finally): כך הדה-דופ מכסה גם את זמן הרינדור עצמו,
-      // ולא רק את ההמתנה בתור — דפדוף הלוך-חזור לא יוסיף רשומה כפולה.
-      try {
-        if (!mounted || !_isBookViewModeActive()) return;
-        final controller = widget.tab.pdfViewerController;
-        if (!controller.isReady) return;
-        final currentSpread = _spreadStartPageFor(controller.pageNumber ?? 1);
-        if ((spread - currentSpread).abs() > _kSpreadKeepRange) return;
-        await _renderSpreadPagesIntoCache(spread);
-      } finally {
-        _queuedSpreadPrerenders.remove(spread);
-      }
-    }).catchError((Object e, StackTrace s) {
-      _queuedSpreadPrerenders.remove(spread);
-      debugPrint('Spread pre-render queue error for $spread: $e\n$s');
-    });
+    _spreadPrerenderQueue = _spreadPrerenderQueue
+        .then((_) async {
+          // ההסרה רק בסיום (finally): כך הדה-דופ מכסה גם את זמן הרינדור עצמו,
+          // ולא רק את ההמתנה בתור — דפדוף הלוך-חזור לא יוסיף רשומה כפולה.
+          try {
+            if (!mounted || !_isBookViewModeActive()) return;
+            final controller = widget.tab.pdfViewerController;
+            if (!controller.isReady) return;
+            final currentSpread = _spreadStartPageFor(
+              controller.pageNumber ?? 1,
+            );
+            if ((spread - currentSpread).abs() > _kSpreadKeepRange) return;
+            await _renderSpreadPagesIntoCache(spread);
+          } finally {
+            _queuedSpreadPrerenders.remove(spread);
+          }
+        })
+        .catchError((Object e, StackTrace s) {
+          _queuedSpreadPrerenders.remove(spread);
+          debugPrint('Spread pre-render queue error for $spread: $e\n$s');
+        });
   }
 
   /// Keeps cache memory bounded by evicting spreads more than
@@ -2549,10 +2658,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (_pageTurnController.isAnimating || _isPageTurnInProgress) {
       // Animation already in flight: queue this turn FIFO so it plays after
       // the current one finishes. Each click gets its own curl, in order.
-      _pendingPageTurns.add(_PendingBookPageTurn(
-        targetPage: targetPage,
-        direction: direction,
-      ));
+      _pendingPageTurns.add(
+        _PendingBookPageTurn(
+          targetPage: targetPage,
+          direction: direction,
+        ),
+      );
       return;
     }
 
@@ -2615,8 +2726,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
       if (hasCachedTarget) {
         final composed = await _composeCachedSpreadSnapshot(
-            targetSpreadStartPage,
-            focusPage: targetPage);
+          targetSpreadStartPage,
+          focusPage: targetPage,
+        );
 
         if (!mounted) {
           composed?.dispose();
@@ -2638,8 +2750,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // queued page-turn (if any) starts from the actual settled spread,
         // not a stale viewer mid-transition. The overlay stays visible (at
         // progress=1) until finally clears it, so the user sees no flash.
-        final navigationFuture =
-            _goToPageWithSpreadLock(targetPage).catchError((Object _) {});
+        final navigationFuture = _goToPageWithSpreadLock(
+          targetPage,
+        ).catchError((Object _) {});
 
         await _pageTurnController.forward(from: 0);
         await navigationFuture;
@@ -2699,8 +2812,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<PdfBookPerBookSettings?>? _perBookSettingsFuture;
 
   Future<PdfBookPerBookSettings?> _loadPerBookSettings() {
-    return _perBookSettingsFuture ??=
-        PdfBookPerBookSettings.load(widget.tab.book);
+    return _perBookSettingsFuture ??= PdfBookPerBookSettings.load(
+      widget.tab.book,
+    );
   }
 
   /// טוען את בחירת המפרשים השמורה פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings).
@@ -2782,11 +2896,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final outline = await document.loadOutline();
       if (!mounted) return;
       widget.tab.outline.value = outline;
-      _bloc.add(pdf_events.DocumentReady(
-        documentRef: documentRef,
-        outline: outline,
-        totalPages: totalPages,
-      ));
+      _bloc.add(
+        pdf_events.DocumentReady(
+          documentRef: documentRef,
+          outline: outline,
+          totalPages: totalPages,
+        ),
+      );
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to load PDF outline: $e\n$stackTrace');
     }
@@ -2876,8 +2992,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final currentPage = controller.pageNumber ?? target;
       final inBookView = _isBookViewModeActive();
       final targetKey = inBookView ? pdfSpreadStartPage(target) : target;
-      final currentKey =
-          inBookView ? pdfSpreadStartPage(currentPage) : currentPage;
+      final currentKey = inBookView
+          ? pdfSpreadStartPage(currentPage)
+          : currentPage;
       if (currentKey != targetKey) {
         // הגנה מפני לולאה אינסופית: אם controller.goToPage לא מצליח
         // לקבע את עמוד היעד אחרי N נסיונות, מוותרים על ניווט נוסף
@@ -2885,8 +3002,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // תקוע.
         if (_stableLayoutRetryCount >= _kStableLayoutMaxRetries) {
           debugPrint(
-              '⚠️ stable-layout: ויתור אחרי $_stableLayoutRetryCount נסיונות '
-              '(target=$target, current=$currentPage)');
+            '⚠️ stable-layout: ויתור אחרי $_stableLayoutRetryCount נסיונות '
+            '(target=$target, current=$currentPage)',
+          );
           _completeStableLayoutTracking();
           return;
         }
@@ -2954,14 +3072,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           categoryId: textBook.categoryId,
           fileType: textBook.fileType ?? 'txt',
         );
-        ({
-          List<otz_links.LinkTargetSummary> targets,
-          int maxSourceLine
-        })? summary;
+        ({List<otz_links.LinkTargetSummary> targets, int maxSourceLine})?
+        summary;
         if (provider is DatabaseLibraryProvider &&
             textBook.categoryId != null) {
           summary = await provider.getBookLinkTargetsSummary(
-              textBook.title, textBook.categoryId!);
+            textBook.title,
+            textBook.categoryId!,
+          );
         }
         final Set<String> commentators;
         if (summary != null) {
@@ -2985,9 +3103,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ..sort((a, b) => a.index1.compareTo(b.index1));
           widget.tab.links = loadedLinks;
           widget.tab.linksAreComplete = true;
-          CommentaryService.preloadEras(loadedLinks
-              .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
-              .map((l) => utils.getTitleFromPath(l.path2)));
+          CommentaryService.preloadEras(
+            loadedLinks
+                .where((l) => !LinkTypes.isDependentTextLink(l.connectionType))
+                .map((l) => utils.getTitleFromPath(l.path2)),
+          );
           commentators = {
             for (final link in loadedLinks)
               if (LinkTypes.isDependentTextLink(link.connectionType))
@@ -3022,7 +3142,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       }
     } catch (e, stackTrace) {
       debugPrint(
-          '📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace');
+        '📚 [PDF-DEBUG] ERROR in _loadPdfHeadingsAndLinks: $e\n$stackTrace',
+      );
       if (mounted) {
         _linksLoading = false;
         widget.tab.linksLoadingNotifier.value = false;
@@ -3047,8 +3168,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _leftPaneTabController?.removeListener(_leftPaneTabControllerListener);
     widget.tab.showLeftPane.removeListener(_showLeftPaneListener);
     widget.tab.toggleNavPaneNotifier.removeListener(_toggleNavPaneListener);
-    widget.tab.toggleCommentatorsPaneNotifier
-        .removeListener(_toggleCommentatorsPaneListener);
+    widget.tab.toggleCommentatorsPaneNotifier.removeListener(
+      _toggleCommentatorsPaneListener,
+    );
     _leftPaneTabController?.dispose();
     _openFilterRequest.dispose();
     _searchFieldFocusNode.dispose();
@@ -3085,8 +3207,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   int? _linksWindowStart; // 1-based, כולל
   int? _linksWindowEnd;
   int _linksWindowRequestId = 0;
-  late final TextBookRepository _linksRepository =
-      TextBookRepository(fileSystem: FileSystemData.instance);
+  late final TextBookRepository _linksRepository = TextBookRepository(
+    fileSystem: FileSystemData.instance,
+  );
 
   /// טוען חלון קישורים חדש אם הטווח הנוכחי מתקרב לקצה החלון הטעון.
   Future<void> _refreshLinksWindow() async {
@@ -3179,9 +3302,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final token = _lastComputedForPage = newPage;
 
     final immediateRange = _spreadPageRangeFor(newPage);
-    widget.tab.currentTitle.value = immediateRange.endPageExclusive -
-                immediateRange.startPage >
-            1
+    widget.tab.currentTitle.value =
+        immediateRange.endPageExclusive - immediateRange.startPage > 1
         ? 'עמודים ${immediateRange.startPage}-${immediateRange.endPageExclusive - 1}'
         : 'עמוד $newPage';
 
@@ -3286,11 +3408,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
             _zoomOut,
         LogicalKeySet(
-                LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
-            _zoomOut,
+          LogicalKeyboardKey.control,
+          LogicalKeyboardKey.numpadSubtract,
+        ): _zoomOut,
         LogicalKeySet(
-                LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadSubtract):
-            _zoomOut,
+          LogicalKeyboardKey.meta,
+          LogicalKeyboardKey.numpadSubtract,
+        ): _zoomOut,
       },
       child: Scaffold(
         body: Column(
@@ -3333,14 +3457,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   return true;
                 },
                 builder: (context, state) {
-                  final leftPaneWidth =
-                      state is PdfBookLoaded ? state.sidebarWidth : 300.0;
-                  final rightPaneWidth =
-                      state is PdfBookLoaded ? state.rightPaneWidth : 300.0;
-                  final showLeftPane =
-                      state is PdfBookLoaded ? state.showLeftPane : false;
-                  final showRightPane =
-                      state is PdfBookLoaded ? state.showRightPane : false;
+                  final leftPaneWidth = state is PdfBookLoaded
+                      ? state.sidebarWidth
+                      : 300.0;
+                  final rightPaneWidth = state is PdfBookLoaded
+                      ? state.rightPaneWidth
+                      : 300.0;
+                  final showLeftPane = state is PdfBookLoaded
+                      ? state.showLeftPane
+                      : false;
+                  final showRightPane = state is PdfBookLoaded
+                      ? state.showRightPane
+                      : false;
                   return DualAdaptiveReaderPane(
                     mainContent: _buildReaderMainContent(),
                     showLeftPane: showLeftPane,
@@ -3355,9 +3483,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     onLeftPaneResizeEnd: () {
                       final current = _bloc.state;
                       if (current is PdfBookLoaded) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateSidebarWidth(current.sidebarWidth));
+                        context.read<SettingsBloc>().add(
+                          UpdateSidebarWidth(current.sidebarWidth),
+                        );
                       }
                     },
                     showRightPane: showRightPane,
@@ -3375,7 +3503,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       final current = _bloc.state;
                       if (current is PdfBookLoaded) {
                         context.read<SettingsBloc>().add(
-                            UpdateCommentaryPaneWidth(current.rightPaneWidth));
+                          UpdateCommentaryPaneWidth(current.rightPaneWidth),
+                        );
                       }
                     },
                     minMainContentWidth: 200,
@@ -3392,8 +3521,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildReaderMainContent() {
     // בתצוגת "זה לצד זה" מתווספים שוליי הדופן החיצוני לתוכן בלבד; הידית
     // (Positioned(left:0)) נשארת צמודה לדופן החלון.
-    final splitInset =
-        SplitPaneContentInset.of(context).resolve(Directionality.of(context));
+    final splitInset = SplitPaneContentInset.of(
+      context,
+    ).resolve(Directionality.of(context));
     final readerContentPadding = EdgeInsets.only(
       left: splitInset.left,
       right: _verticalScrollbarGutter + _scrollbarGutterGap + splitInset.right,
@@ -3429,9 +3559,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     child: ColorFiltered(
                       colorFilter: ColorFilter.mode(
                         Colors.white,
-                        Provider.of<SettingsBloc>(context, listen: true)
-                                .state
-                                .isDarkMode
+                        Provider.of<SettingsBloc>(
+                              context,
+                              listen: true,
+                            ).state.isDarkMode
                             ? BlendMode.difference
                             : BlendMode.dst,
                       ),
@@ -3471,8 +3602,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                               }
                               if (!state.loadSucceeded) {
                                 return const Positioned.fill(
-                                  child:
-                                      Center(child: Text('Failed to load PDF')),
+                                  child: Center(
+                                    child: Text('Failed to load PDF'),
+                                  ),
                                 );
                               }
                               return const SizedBox.shrink();
@@ -3508,8 +3640,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                   state.message,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 16),
@@ -3622,17 +3755,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               (
                 icon: FluentIcons.navigation_24_regular,
                 iconFilled: FluentIcons.navigation_24_filled,
-                label: 'ניווט'
+                label: 'ניווט',
               ),
               (
                 icon: FluentIcons.search_24_regular,
                 iconFilled: FluentIcons.search_24_filled,
-                label: 'חיפוש'
+                label: 'חיפוש',
               ),
               (
                 icon: FluentIcons.document_multiple_24_regular,
                 iconFilled: FluentIcons.document_multiple_24_filled,
-                label: 'דפים'
+                label: 'דפים',
               ),
             ],
             isPinned: pinLeftPanel,
@@ -3692,8 +3825,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 valueListenable: widget.tab.documentRef,
                 builder: (context, documentRef, child) => child!,
                 child: ThumbnailsView(
-                    documentRef: widget.tab.documentRef.value,
-                    controller: widget.tab.pdfViewerController),
+                  documentRef: widget.tab.documentRef.value,
+                  controller: widget.tab.pdfViewerController,
+                ),
               ),
             ],
           ),
@@ -3710,8 +3844,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       linksLoading: _linksLoading,
       openBookCallback: (tab) {
         if (tab is TextBookTab) {
-          openBook(context, tab.book, tab.index, '',
-              ignoreHistory: false, insertAdjacent: true);
+          openBook(
+            context,
+            tab.book,
+            tab.index,
+            '',
+            ignoreHistory: false,
+            insertAdjacent: true,
+          );
         }
       },
       fontSize: 16.0,
@@ -3841,8 +3981,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         _pdfViewFocusNode.requestFocus();
       }
 
-      final isUpPressed = HardwareKeyboard.instance.logicalKeysPressed
-          .contains(LogicalKeyboardKey.arrowUp);
+      final isUpPressed = HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.arrowUp,
+      );
       final isDownPressed = HardwareKeyboard.instance.logicalKeysPressed
           .contains(LogicalKeyboardKey.arrowDown);
 
@@ -3935,19 +4076,20 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         return AlertDialog(
           title: const Text('לעבור לURL?'),
           content: RtlSelectionShortcuts(
-              child: SelectionArea(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'האם לעבור לכתובת הבאה\n'),
-                  TextSpan(
-                    text: url.toString(),
-                    style: const TextStyle(color: Colors.blue),
-                  ),
-                ],
+            child: SelectionArea(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'האם לעבור לכתובת הבאה\n'),
+                    TextSpan(
+                      text: url.toString(),
+                      style: const TextStyle(color: Colors.blue),
+                    ),
+                  ],
+                ),
               ),
             ),
-          )),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -3974,15 +4116,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<Widget> _buildPdfActions(BuildContext context, bool wideScreen) {
-    final maxButtons =
-        maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
+    final maxButtons = maxToolbarButtonsForWidth(
+      MediaQuery.of(context).size.width,
+    );
 
     return [
       ResponsiveActionBar(
         key: const ValueKey('pdf_actions'),
         overflowMenuOffset: const Offset(0, 8),
-        overflowButtonKey:
-            widget.enableTourTargets ? pdfBookOverflowTourTargetKey : null,
+        overflowButtonKey: widget.enableTourTargets
+            ? pdfBookOverflowTourTargetKey
+            : null,
         menuItemKeysByTooltip: widget.enableTourTargets
             ? {
                 'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
@@ -4002,7 +4146,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return [
       ActionButtonData(
         widget: _buildTextButton(
-            context, widget.tab.book, widget.tab.pdfViewerController),
+          context,
+          widget.tab.book,
+          widget.tab.pdfViewerController,
+        ),
         icon: FluentIcons.document_text_24_regular,
         tooltip: 'פתח ספר במהדורת טקסט',
         onPressed: () => _handleTextButtonPress(context),
@@ -4011,11 +4158,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         icon: FluentIcons.open_24_regular,
         tooltip: 'פתח כרטיסיית מפרשים',
         onPressed: () => context.read<TabsBloc>().add(
-              AddTab(
-                PdfCommentatorsTab(sourceTab: widget.tab),
-                insertAdjacent: true,
-              ),
-            ),
+          AddTab(
+            PdfCommentatorsTab(sourceTab: widget.tab),
+            insertAdjacent: true,
+          ),
+        ),
         compact: isCompact,
       ),
       ActionButtonData(
@@ -4127,7 +4274,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                     icon: FluentIcons.link_multiple_24_regular,
                     tooltip: 'העתק קישור ישיר לעמוד זה',
                     onPressed: () {
-                      final page = widget.tab.pdfViewerController.pageNumber ??
+                      final page =
+                          widget.tab.pdfViewerController.pageNumber ??
                           widget.tab.pageNumber;
                       copyLinkToClipboard(buildPdfPageLink(bookId, page));
                     },
@@ -4273,15 +4421,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!context.mounted) return;
 
     final index = await pdfToTextPage(
-        widget.tab.book, currentOutline, currentPage, context);
+      widget.tab.book,
+      currentOutline,
+      currentPage,
+      context,
+    );
 
     if (!context.mounted) return;
 
     if (index == null) {
       UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
     }
-    openBook(context, textBook, index ?? 0, '',
-        ignoreHistory: true, insertAdjacent: true);
+    openBook(
+      context,
+      textBook,
+      index ?? 0,
+      '',
+      ignoreHistory: true,
+      insertAdjacent: true,
+    );
   }
 
   void _showBookmarksForCurrentBook(BuildContext context) {
@@ -4311,13 +4469,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     try {
-      bool bookmarkAdded = context
-          .read<BookmarkBloc>()
-          .addBookmark(ref: ref, book: widget.tab.book, index: index);
+      bool bookmarkAdded = context.read<BookmarkBloc>().addBookmark(
+        ref: ref,
+        book: widget.tab.book,
+        index: index,
+      );
       if (mounted) {
-        UiSnack.show(bookmarkAdded
-            ? NotesMessages.bookmarkAdded
-            : NotesMessages.bookmarkAlreadyExists);
+        UiSnack.show(
+          bookmarkAdded
+              ? NotesMessages.bookmarkAdded
+              : NotesMessages.bookmarkAlreadyExists,
+        );
       }
     } catch (e) {
       debugPrint('Error adding bookmark: $e');
@@ -4376,13 +4538,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!mounted) return;
 
-    notesBloc.add(StartCreatingPersonalNote(
-      bookId: widget.tab.book.title,
-      lineNumber: anchorLine,
-      referenceText: 'עמוד $currentPage',
-      initialContent: draft?.content ?? '',
-      initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
-    ));
+    notesBloc.add(
+      StartCreatingPersonalNote(
+        bookId: widget.tab.book.title,
+        lineNumber: anchorLine,
+        referenceText: 'עמוד $currentPage',
+        initialContent: draft?.content ?? '',
+        initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
+      ),
+    );
 
     _openPersonalNotesPane();
   }
@@ -4390,8 +4554,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Future<void> _handlePrintPress(BuildContext context) async {
     if (!context.mounted) return;
     context.read<TourCubit>().recordInteraction(
-          TourInteraction(type: TourInteractionType.printUsed),
-        );
+      TourInteraction(type: TourInteractionType.printUsed),
+    );
     final file = File(_resolvedPdfPath);
     final currentPage = widget.tab.pdfViewerController.isReady
         ? (widget.tab.pdfViewerController.pageNumber ?? widget.tab.pageNumber)
@@ -4426,9 +4590,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
         // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
         // worker is unresponsive.
-        await PdfrxEntryFunctions.instance
-            .stopBackgroundWorker()
-            .timeout(const Duration(seconds: 3));
+        await PdfrxEntryFunctions.instance.stopBackgroundWorker().timeout(
+          const Duration(seconds: 3),
+        );
       } catch (_) {
       } finally {
         if (mounted) {
@@ -4442,11 +4606,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildTextButton(
-      BuildContext context, PdfBook book, PdfViewerController controller) {
+    BuildContext context,
+    PdfBook book,
+    PdfViewerController controller,
+  ) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return FutureBuilder(
-      future: DataRepository.instance.library
-          .then((library) => library.getCompanionBook(book, TextBook)),
+      future: DataRepository.instance.library.then(
+        (library) => library.getCompanionBook(book, TextBook),
+      ),
       builder: (context, snapshot) => snapshot.hasData
           ? ToolbarActionButton(
               tooltip: 'פתח ספר במהדורת טקסט',
@@ -4460,16 +4628,27 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 final currentOutline = widget.tab.outline.value ?? [];
 
                 final index = await pdfToTextPage(
-                    book, currentOutline, currentPage, context);
+                  book,
+                  currentOutline,
+                  currentPage,
+                  context,
+                );
 
                 if (!context.mounted) return;
 
                 if (index == null) {
                   UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
                 }
-                openBook(context, snapshot.data!, index ?? 0, '',
-                    ignoreHistory: true, insertAdjacent: true);
-              })
+                openBook(
+                  context,
+                  snapshot.data!,
+                  index ?? 0,
+                  '',
+                  ignoreHistory: true,
+                  insertAdjacent: true,
+                );
+              },
+            )
           : const SizedBox.shrink(),
     );
   }
@@ -4522,8 +4701,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 Text(text, style: style),
                 if (isSelected) ...[
                   const Spacer(),
-                  Icon(FluentIcons.checkmark_24_regular,
-                      size: 16, color: primaryColor),
+                  Icon(
+                    FluentIcons.checkmark_24_regular,
+                    size: 16,
+                    color: primaryColor,
+                  ),
                 ],
               ],
             ),
@@ -4694,8 +4876,10 @@ class _BookSpreadPainter extends CustomPainter {
       final spineX =
           (pages[0].viewportRect.right + pages[1].viewportRect.left) / 2;
       final top = min(pages[0].viewportRect.top, pages[1].viewportRect.top);
-      final bottom =
-          max(pages[0].viewportRect.bottom, pages[1].viewportRect.bottom);
+      final bottom = max(
+        pages[0].viewportRect.bottom,
+        pages[1].viewportRect.bottom,
+      );
       final spinePaint = Paint()
         ..color = spineColor
         ..strokeWidth = 1.2;
@@ -4719,8 +4903,9 @@ class _BookSpreadPainter extends CustomPainter {
     for (var i = layerCount; i >= 1; i--) {
       final offsetX = direction * i * _layerOffsetX;
       final offsetY = i * _layerOffsetY;
-      final outerX =
-          page.isLeftPage ? rect.left + offsetX : rect.right + offsetX;
+      final outerX = page.isLeftPage
+          ? rect.left + offsetX
+          : rect.right + offsetX;
       final sidePath = Path()
         ..moveTo(
           page.isLeftPage
@@ -4751,7 +4936,10 @@ class _BookSpreadPainter extends CustomPainter {
       ..strokeWidth = 1.0;
     final edgeX = page.isLeftPage ? rect.left : rect.right;
     canvas.drawLine(
-        Offset(edgeX, rect.top), Offset(edgeX, rect.bottom), edgePaint);
+      Offset(edgeX, rect.top),
+      Offset(edgeX, rect.bottom),
+      edgePaint,
+    );
   }
 
   int _stackLayerCount(int pagesCount) {
@@ -4855,7 +5043,11 @@ class _BookPageTurnBackgroundPainter extends CustomPainter {
     final shadowWidth = min(spreadRect.width * 0.045, 34.0);
     final shadowRect = isNext
         ? Rect.fromLTWH(
-            edgeX - shadowWidth, spreadRect.top, shadowWidth, spreadRect.height)
+            edgeX - shadowWidth,
+            spreadRect.top,
+            shadowWidth,
+            spreadRect.height,
+          )
         : Rect.fromLTWH(edgeX, spreadRect.top, shadowWidth, spreadRect.height);
 
     canvas.drawRect(
@@ -5444,7 +5636,8 @@ class _BookPageTurnPainter extends CustomPainter {
             pageHighlightColor.withValues(alpha: 0.08 + shadeStrength * 0.06),
             pageBackColor.withValues(alpha: isFrontFace ? 0.03 : 0.035),
             shadowColor.withValues(
-              alpha: (isFrontFace ? 0.16 : 0.07) +
+              alpha:
+                  (isFrontFace ? 0.16 : 0.07) +
                   shadeStrength * (isFrontFace ? 0.32 : 0.11),
             ),
           ],
@@ -5462,8 +5655,9 @@ class _BookPageTurnPainter extends CustomPainter {
     required double u1,
   }) {
     final pageWidth = viewportRect.width / 2;
-    final effectiveTurnLeftPage =
-        sampleOppositeHalf ? !turnLeftPage : turnLeftPage;
+    final effectiveTurnLeftPage = sampleOppositeHalf
+        ? !turnLeftPage
+        : turnLeftPage;
     final localRect = effectiveTurnLeftPage
         ? Rect.fromLTWH(
             pageWidth - (u1 * pageWidth),
@@ -5482,8 +5676,12 @@ class _BookPageTurnPainter extends CustomPainter {
   }
 
   Rect _sourceRectForLocalRect(ui.Image image, Rect localRect) {
-    final fullImageRect =
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final fullImageRect = Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     final pixelRatioX = image.width / viewportLogicalSize.width;
     final pixelRatioY = image.height / viewportLogicalSize.height;
 
@@ -5595,16 +5793,17 @@ class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, _RenderPdfScrollOnlyListener renderObject) {
+    BuildContext context,
+    _RenderPdfScrollOnlyListener renderObject,
+  ) {
     renderObject.onPointerSignal = onPointerSignal;
   }
 }
 
 class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
   _RenderPdfScrollOnlyListener({
-    required void Function(PointerSignalEvent) onPointerSignal,
-  })  : _onPointerSignal = onPointerSignal,
-        super(behavior: HitTestBehavior.translucent);
+    required this._onPointerSignal,
+  }) : super(behavior: HitTestBehavior.translucent);
 
   void Function(PointerSignalEvent) _onPointerSignal;
 
@@ -5615,8 +5814,10 @@ class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
   @override
   void handleEvent(PointerEvent event, HitTestEntry entry) {
     if (event is PointerScrollEvent) {
-      GestureBinding.instance.pointerSignalResolver
-          .register(event, _onPointerSignal);
+      GestureBinding.instance.pointerSignalResolver.register(
+        event,
+        _onPointerSignal,
+      );
     }
     // PointerScaleEvent is not claimed — pdfrx zooms at the correct focal point
   }

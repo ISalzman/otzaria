@@ -25,11 +25,9 @@ class DelayedTipSchedule {
 class TourCubit extends Cubit<TourState> {
   TourCubit({
     List<DelayedTipSchedule>? delayedTipSchedules,
-    Duration printHintMinimumSessionDuration = const Duration(minutes: 3),
-  })  : _delayedTipSchedules =
-            delayedTipSchedules ?? defaultDelayedTipSchedules,
-        _printHintMinimumSessionDuration = printHintMinimumSessionDuration,
-        super(_loadInitialState());
+    this._printHintMinimumSessionDuration = const Duration(minutes: 3),
+  }) : _delayedTipSchedules = delayedTipSchedules ?? defaultDelayedTipSchedules,
+       super(_loadInitialState());
 
   /// סדר הרשימה קובע עדיפות: בכל סשן מתוזמן רק הטיפ הזכאי הראשון.
   static const List<DelayedTipSchedule> defaultDelayedTipSchedules = [
@@ -109,8 +107,10 @@ class TourCubit extends Cubit<TourState> {
         isActive: true,
         libraryLoaded: libraryLoaded,
         currentIndex: 0,
-        steps:
-            TourSteps.build(libraryLoaded: libraryLoaded, isRestart: isRestart),
+        steps: TourSteps.build(
+          libraryLoaded: libraryLoaded,
+          isRestart: isRestart,
+        ),
         shownTips: state.shownTips,
         resolvedTips: state.resolvedTips,
       ),
@@ -134,8 +134,10 @@ class TourCubit extends Cubit<TourState> {
           !_canShowTip(schedule.id)) {
         continue;
       }
-      _delayedTipTimer =
-          Timer(schedule.delay, () => _maybeShowDelayedTip(schedule.id));
+      _delayedTipTimer = Timer(
+        schedule.delay,
+        () => _maybeShowDelayedTip(schedule.id),
+      );
       break;
     }
   }
@@ -174,10 +176,12 @@ class TourCubit extends Cubit<TourState> {
       ...state.resolvedTips,
       dismissedId,
     };
-    emit(state.copyWith(
-      resolvedTips: updatedResolved,
-      clearLiveTip: true,
-    ));
+    emit(
+      state.copyWith(
+        resolvedTips: updatedResolved,
+        clearLiveTip: true,
+      ),
+    );
     _persistResolvedTips(updatedResolved);
   }
 
@@ -422,8 +426,10 @@ class TourCubit extends Cubit<TourState> {
 
   bool _shouldShowSideBySideSuggestion() {
     final recentTitles = _recentInteractions
-        .where((interaction) =>
-            interaction.type == TourInteractionType.currentTabChanged)
+        .where(
+          (interaction) =>
+              interaction.type == TourInteractionType.currentTabChanged,
+        )
         .map((interaction) => interaction.primaryValue)
         .whereType<String>()
         .toList();

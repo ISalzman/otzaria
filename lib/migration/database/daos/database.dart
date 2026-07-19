@@ -153,9 +153,7 @@ class MyDatabase {
   /// אין סינגלטון ברירת-מחדל — כל קוד הצורך גישה ל-seforim.db עובר דרך
   /// [SqliteDataProvider], וקוד הצורך גישה ל-user_books.db דרך
   /// [UserBooksDatabaseHolder].
-  MyDatabase.withPath(String path, {bool readOnly = false})
-      : _path = path,
-        _readOnly = readOnly;
+  MyDatabase.withPath(String path, {this._readOnly = false}) : _path = path;
 
   Future<sqlite3.Database> get database async {
     if (_database != null) return _database!;
@@ -223,7 +221,8 @@ class MyDatabase {
     }
     if (!columns.contains('parentGenerationId')) {
       db.execute(
-          'ALTER TABLE generation ADD COLUMN parentGenerationId INTEGER');
+        'ALTER TABLE generation ADD COLUMN parentGenerationId INTEGER',
+      );
     }
   }
 

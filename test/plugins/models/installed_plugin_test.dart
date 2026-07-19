@@ -16,7 +16,7 @@ PluginManifest _manifest({
     'contributes': {
       'toolTab': {
         'title': 'T',
-        if (toolTabOrder != null) 'order': toolTabOrder,
+        'order': ?toolTabOrder,
         if (allowOrderBeforeBuiltIns) 'allowOrderBeforeBuiltIns': true,
       },
     },
@@ -75,7 +75,9 @@ void main() {
 
     test('toDbMap serializes pinnedToNavRail as 0/1', () {
       expect(
-          _plugin(pinnedToNavRail: false).toDbMap()['pinned_to_nav_rail'], 0);
+        _plugin(pinnedToNavRail: false).toDbMap()['pinned_to_nav_rail'],
+        0,
+      );
       expect(_plugin(pinnedToNavRail: true).toDbMap()['pinned_to_nav_rail'], 1);
     });
 
@@ -91,16 +93,17 @@ void main() {
       expect(restored.pinnedToNavRail, isFalse);
     });
 
-    test(
-        'fromDbMap defaults pinnedToNavRail to false when column is absent '
+    test('fromDbMap defaults pinnedToNavRail to false when column is absent '
         '(legacy DB before migration)', () {
       // מדמה רשומה משורת DB ישנה לפני שהמיגרציה רצה — אין כלל מפתח כזה.
       final legacyMap = _plugin(pinnedToNavRail: true).toDbMap();
       legacyMap.remove('pinned_to_nav_rail');
       final restored = InstalledPlugin.fromDbMap(legacyMap);
-      expect(restored.pinnedToNavRail, isFalse,
-          reason:
-              'A pre-migration row must not crash and must default to false');
+      expect(
+        restored.pinnedToNavRail,
+        isFalse,
+        reason: 'A pre-migration row must not crash and must default to false',
+      );
     });
 
     test('round-trip toDbMap → fromDbMap preserves both pin flags', () {
@@ -134,8 +137,11 @@ void main() {
     test('copyWith without pinnedToNavRail preserves the existing value', () {
       final original = _plugin(pinnedToNavRail: true);
       final updated = original.copyWith(pinned: false);
-      expect(updated.pinnedToNavRail, isTrue,
-          reason: 'omitted parameter should keep current value');
+      expect(
+        updated.pinnedToNavRail,
+        isTrue,
+        reason: 'omitted parameter should keep current value',
+      );
       expect(updated.pinned, isFalse);
     });
 
@@ -146,27 +152,34 @@ void main() {
 
     test('toDbMap serializes allowOrderBeforeBuiltInsGranted as 0/1', () {
       expect(
-        _plugin(allowOrderBeforeBuiltInsGranted: false)
-            .toDbMap()['allow_order_before_built_ins_granted'],
+        _plugin(
+          allowOrderBeforeBuiltInsGranted: false,
+        ).toDbMap()['allow_order_before_built_ins_granted'],
         0,
       );
       expect(
-        _plugin(allowOrderBeforeBuiltInsGranted: true)
-            .toDbMap()['allow_order_before_built_ins_granted'],
+        _plugin(
+          allowOrderBeforeBuiltInsGranted: true,
+        ).toDbMap()['allow_order_before_built_ins_granted'],
         1,
       );
     });
 
     test(
-        'fromDbMap falls back to manifest request when allow_order_before_built_ins_granted is absent',
-        () {
-      final legacyMap = _plugin(allowOrderBeforeBuiltIns: true).toDbMap();
-      legacyMap.remove('allow_order_before_built_ins_granted');
-      final restored = InstalledPlugin.fromDbMap(legacyMap);
-      expect(restored.allowOrderBeforeBuiltInsGranted, isTrue,
-          reason: 'legacy rows should preserve the old behavior instead of '
-              'suddenly disabling the plugin request');
-    });
+      'fromDbMap falls back to manifest request when allow_order_before_built_ins_granted is absent',
+      () {
+        final legacyMap = _plugin(allowOrderBeforeBuiltIns: true).toDbMap();
+        legacyMap.remove('allow_order_before_built_ins_granted');
+        final restored = InstalledPlugin.fromDbMap(legacyMap);
+        expect(
+          restored.allowOrderBeforeBuiltInsGranted,
+          isTrue,
+          reason:
+              'legacy rows should preserve the old behavior instead of '
+              'suddenly disabling the plugin request',
+        );
+      },
+    );
 
     test('copyWith updates allowOrderBeforeBuiltInsGranted', () {
       final original = _plugin(allowOrderBeforeBuiltInsGranted: true);
@@ -217,38 +230,47 @@ void main() {
       expect(plugin.userOrder, isNull);
     });
 
-    test(
-        'effectiveToolTabOrder falls back to manifest.toolTabOrder '
+    test('effectiveToolTabOrder falls back to manifest.toolTabOrder '
         'when userOrder is null', () {
       final plugin = _plugin(manifestToolTabOrder: 250);
       expect(plugin.userOrder, isNull);
       expect(plugin.effectiveToolTabOrder, 250);
     });
 
-    test(
-        'userOrder=0 maps to userOrderToolTabOffset (1000), not to 0 — '
+    test('userOrder=0 maps to userOrderToolTabOffset (1000), not to 0 — '
         'this keeps reordered plugins in a separate numeric range', () {
       final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 50);
       expect(
-          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset);
-      expect(plugin.effectiveToolTabOrder, greaterThan(100),
-          reason: 'must stay above the built-in numeric range (10..100)');
+        plugin.effectiveToolTabOrder,
+        InstalledPlugin.userOrderToolTabOffset,
+      );
+      expect(
+        plugin.effectiveToolTabOrder,
+        greaterThan(100),
+        reason: 'must stay above the built-in numeric range (10..100)',
+      );
     });
 
     test('effectiveToolTabOrder = offset + userOrder for positive index', () {
       final plugin = _plugin(userOrder: 5, manifestToolTabOrder: 50);
-      expect(plugin.effectiveToolTabOrder,
-          InstalledPlugin.userOrderToolTabOffset + 5);
+      expect(
+        plugin.effectiveToolTabOrder,
+        InstalledPlugin.userOrderToolTabOffset + 5,
+      );
     });
 
-    test('userOrder overrides manifest.toolTabOrder even when manifest is high',
-        () {
-      // לתוסף manifest order של 9999 (אחרון בסדר ברירת מחדל), אבל המשתמש
-      // קבע userOrder=0 כדי שיהיה ראשון בין התוספים.
-      final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 9999);
-      expect(
-          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset);
-    });
+    test(
+      'userOrder overrides manifest.toolTabOrder even when manifest is high',
+      () {
+        // לתוסף manifest order של 9999 (אחרון בסדר ברירת מחדל), אבל המשתמש
+        // קבע userOrder=0 כדי שיהיה ראשון בין התוספים.
+        final plugin = _plugin(userOrder: 0, manifestToolTabOrder: 9999);
+        expect(
+          plugin.effectiveToolTabOrder,
+          InstalledPlugin.userOrderToolTabOffset,
+        );
+      },
+    );
 
     test('relative order between plugins reflects userOrder ordering', () {
       // הסדר היחסי הוא מה שמשנה — הוא צריך להיות עקבי עם userOrder.
@@ -281,15 +303,17 @@ void main() {
       expect(restored.userOrder, 7);
     });
 
-    test(
-        'fromDbMap defaults userOrder to null when column is absent '
+    test('fromDbMap defaults userOrder to null when column is absent '
         '(legacy DB before migration)', () {
       // מדמה רשומה משורת DB ישנה לפני שהמיגרציה רצה — אין כלל מפתח כזה.
       final legacyMap = _plugin(userOrder: 3).toDbMap();
       legacyMap.remove('user_order');
       final restored = InstalledPlugin.fromDbMap(legacyMap);
-      expect(restored.userOrder, isNull,
-          reason: 'pre-migration row must not crash and must default to null');
+      expect(
+        restored.userOrder,
+        isNull,
+        reason: 'pre-migration row must not crash and must default to null',
+      );
     });
 
     test('copyWith updates userOrder', () {
@@ -301,8 +325,11 @@ void main() {
     test('copyWith without userOrder preserves the existing value', () {
       final original = _plugin(userOrder: 9);
       final updated = original.copyWith(pinned: false);
-      expect(updated.userOrder, 9,
-          reason: 'omitted userOrder should keep current value');
+      expect(
+        updated.userOrder,
+        9,
+        reason: 'omitted userOrder should keep current value',
+      );
     });
 
     test('copyWith with clearUserOrder=true sets userOrder back to null', () {
@@ -311,43 +338,55 @@ void main() {
       expect(updated.userOrder, isNull);
     });
 
-    test(
-        'copyWith with both userOrder=X and clearUserOrder=true clears '
+    test('copyWith with both userOrder=X and clearUserOrder=true clears '
         '(clear flag wins)', () {
       final original = _plugin(userOrder: 9);
       final updated = original.copyWith(userOrder: 3, clearUserOrder: true);
-      expect(updated.userOrder, isNull,
-          reason: 'clearUserOrder must take precedence over userOrder');
-    });
-
-    test('allowOrderBeforeBuiltIns is independent from effectiveToolTabOrder',
-        () {
-      final plugin = _plugin(
-        userOrder: 0,
-        manifestToolTabOrder: 5,
-        allowOrderBeforeBuiltIns: true,
-      );
-      expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
       expect(
-          plugin.effectiveToolTabOrder, InstalledPlugin.userOrderToolTabOffset,
-          reason: 'the manifest flag controls the display group; the numeric '
-              'order stays in the plugin user-order range');
+        updated.userOrder,
+        isNull,
+        reason: 'clearUserOrder must take precedence over userOrder',
+      );
     });
 
     test(
-        'allowsOrderBeforeBuiltIns becomes false when the user disables the feature',
-        () {
-      final plugin = _plugin(
-        manifestToolTabOrder: 5,
-        allowOrderBeforeBuiltIns: true,
-        allowOrderBeforeBuiltInsGranted: false,
-      );
-      expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
-      expect(plugin.allowOrderBeforeBuiltInsGranted, isFalse);
-      expect(plugin.allowsOrderBeforeBuiltIns, isFalse,
-          reason: 'the manifest request alone is no longer enough once the '
-              'user explicitly disabled the feature');
-    });
+      'allowOrderBeforeBuiltIns is independent from effectiveToolTabOrder',
+      () {
+        final plugin = _plugin(
+          userOrder: 0,
+          manifestToolTabOrder: 5,
+          allowOrderBeforeBuiltIns: true,
+        );
+        expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
+        expect(
+          plugin.effectiveToolTabOrder,
+          InstalledPlugin.userOrderToolTabOffset,
+          reason:
+              'the manifest flag controls the display group; the numeric '
+              'order stays in the plugin user-order range',
+        );
+      },
+    );
+
+    test(
+      'allowsOrderBeforeBuiltIns becomes false when the user disables the feature',
+      () {
+        final plugin = _plugin(
+          manifestToolTabOrder: 5,
+          allowOrderBeforeBuiltIns: true,
+          allowOrderBeforeBuiltInsGranted: false,
+        );
+        expect(plugin.manifest.allowOrderBeforeBuiltIns, isTrue);
+        expect(plugin.allowOrderBeforeBuiltInsGranted, isFalse);
+        expect(
+          plugin.allowsOrderBeforeBuiltIns,
+          isFalse,
+          reason:
+              'the manifest request alone is no longer enough once the '
+              'user explicitly disabled the feature',
+        );
+      },
+    );
   });
 
   group('InstalledPlugin.showInTools', () {
@@ -379,14 +418,16 @@ void main() {
       expect(restored.showInTools, isFalse);
     });
 
-    test(
-        'fromDbMap defaults showInTools to true when column is absent '
+    test('fromDbMap defaults showInTools to true when column is absent '
         '(legacy DB before migration)', () {
       final legacyMap = _plugin(showInTools: false).toDbMap();
       legacyMap.remove('hidden_from_tools');
       final restored = InstalledPlugin.fromDbMap(legacyMap);
-      expect(restored.showInTools, isTrue,
-          reason: 'pre-migration row must not crash and must default to visible');
+      expect(
+        restored.showInTools,
+        isTrue,
+        reason: 'pre-migration row must not crash and must default to visible',
+      );
     });
 
     test('copyWith updates showInTools without touching other flags', () {
@@ -398,23 +439,35 @@ void main() {
       final updated = original.copyWith(showInTools: false);
 
       expect(updated.showInTools, isFalse);
-      expect(updated.pinned, isTrue,
-          reason: 'hiding from tools must not unpin the plugin from the tools tab');
-      expect(updated.pinnedToNavRail, isTrue,
-          reason: 'hiding from tools must not unpin the plugin from the nav rail');
-      expect(updated.enabled, isTrue,
-          reason: 'hiding from tools must not disable the plugin');
+      expect(
+        updated.pinned,
+        isTrue,
+        reason:
+            'hiding from tools must not unpin the plugin from the tools tab',
+      );
+      expect(
+        updated.pinnedToNavRail,
+        isTrue,
+        reason: 'hiding from tools must not unpin the plugin from the nav rail',
+      );
+      expect(
+        updated.enabled,
+        isTrue,
+        reason: 'hiding from tools must not disable the plugin',
+      );
     });
 
     test('copyWith without showInTools preserves the existing value', () {
       final original = _plugin(showInTools: false);
       final updated = original.copyWith(pinned: false);
-      expect(updated.showInTools, isFalse,
-          reason: 'omitted parameter should keep current value');
+      expect(
+        updated.showInTools,
+        isFalse,
+        reason: 'omitted parameter should keep current value',
+      );
     });
 
-    test(
-        'showInTools is orthogonal to enabled — a hidden-from-tools plugin '
+    test('showInTools is orthogonal to enabled — a hidden-from-tools plugin '
         'can still be enabled (it still loads in the background)', () {
       final p = _plugin(enabled: true, showInTools: false);
       final restored = InstalledPlugin.fromDbMap(p.toDbMap());

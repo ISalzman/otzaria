@@ -13,7 +13,7 @@ List<ActionButtonData> buildBookViewNavigationActions({
   return [
     firstAction,
     previousAction,
-    if (middleAction != null) middleAction,
+    ?middleAction,
     nextAction,
     lastAction,
   ];
