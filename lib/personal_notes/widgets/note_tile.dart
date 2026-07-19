@@ -125,8 +125,10 @@ class _NoteTileState extends State<NoteTile> {
         InkWell(
           onTap: widget.onTap,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 12.0,
+            ),
             color: bgColor,
             child: Row(
               children: [
@@ -136,10 +138,9 @@ class _NoteTileState extends State<NoteTile> {
                     children: [
                       Text(
                         widget.note.title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -193,10 +194,9 @@ class _NoteTileState extends State<NoteTile> {
                             )
                           : PersonalNoteContentView(
                               note: widget.note,
-                              textStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(height: 1.5),
+                              textStyle: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(height: 1.5),
                               onLinkTap: widget.onLinkTap,
                             ),
                     ),
@@ -245,7 +245,7 @@ class _NoteActions extends StatelessWidget {
           ),
           onPressed: onEdit,
         ),
-        if (extraAction != null) extraAction!,
+        ?extraAction,
         IconButton(
           tooltip: 'מחיקה',
           icon: const Icon(FluentIcons.delete_24_regular, size: 18),

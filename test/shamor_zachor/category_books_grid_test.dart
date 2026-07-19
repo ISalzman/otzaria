@@ -92,8 +92,9 @@ class _FakeProgressProvider extends ShamorZachorProgressProvider {
 }
 
 void main() {
-  testWidgets('removes book locally before async providers finish',
-      (tester) async {
+  testWidgets('removes book locally before async providers finish', (
+    tester,
+  ) async {
     final removeCompleter = Completer<void>();
     final clearCompleter = Completer<void>();
     final dataProvider = _FakeDataProvider(removeCompleter);
@@ -134,7 +135,7 @@ void main() {
               categoryName: 'תלמוד בבלי',
               topLevelName: 'תלמוד בבלי',
               category: category,
-              onBookSelected: (_, __, ___) {},
+              onBookSelected: (_, _, _) {},
             ),
           ),
         ),
@@ -160,8 +161,9 @@ void main() {
     expect(dataProvider.removedBookId, 42);
   });
 
-  testWidgets('renders book card without overflow for completed progress',
-      (tester) async {
+  testWidgets('renders book card without overflow for completed progress', (
+    tester,
+  ) async {
     final removeCompleter = Completer<void>();
     final clearCompleter = Completer<void>();
     final dataProvider = _FakeDataProvider(removeCompleter);
@@ -216,7 +218,7 @@ void main() {
               categoryName: 'תלמוד בבלי',
               topLevelName: 'תלמוד בבלי',
               category: category,
-              onBookSelected: (_, __, ___) {},
+              onBookSelected: (_, _, _) {},
             ),
           ),
         ),
@@ -230,8 +232,9 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
   });
 
-  testWidgets('tracked book appears under "in progress" without any progress',
-      (tester) async {
+  testWidgets('tracked book appears under "in progress" without any progress', (
+    tester,
+  ) async {
     final dataProvider = _FakeDataProvider(Completer<void>(), trackedIds: {42});
     final progressProvider = _FakeProgressProvider(Completer<void>());
 
@@ -271,7 +274,7 @@ void main() {
               topLevelName: 'תלמוד בבלי',
               category: category,
               selectedFilter: 'in_progress',
-              onBookSelected: (_, __, ___) {},
+              onBookSelected: (_, _, _) {},
             ),
           ),
         ),
@@ -282,57 +285,59 @@ void main() {
     expect(find.text('ברכות'), findsOneWidget);
   });
 
-  testWidgets('shows in-progress empty state with add hint when no books match',
-      (tester) async {
-    final dataProvider = _FakeDataProvider(Completer<void>());
-    final progressProvider = _FakeProgressProvider(Completer<void>());
+  testWidgets(
+    'shows in-progress empty state with add hint when no books match',
+    (tester) async {
+      final dataProvider = _FakeDataProvider(Completer<void>());
+      final progressProvider = _FakeProgressProvider(Completer<void>());
 
-    final category = BookCategory(
-      name: 'תלמוד בבלי',
-      contentType: 'text',
-      books: {
-        'ברכות': BookDetails(
-          contentType: 'text',
-          isCustom: false,
-          id: 42,
-          categoryPath: 'תלמוד בבלי',
-          parts: const [
-            BookPart(name: 'ראשי', startPage: 1, endPage: 1),
+      final category = BookCategory(
+        name: 'תלמוד בבלי',
+        contentType: 'text',
+        books: {
+          'ברכות': BookDetails(
+            contentType: 'text',
+            isCustom: false,
+            id: 42,
+            categoryPath: 'תלמוד בבלי',
+            parts: const [
+              BookPart(name: 'ראשי', startPage: 1, endPage: 1),
+            ],
+          ),
+        },
+        defaultStartPage: 1,
+        isCustom: false,
+        sourceFile: 'test',
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ShamorZachorDataProvider>.value(
+              value: dataProvider,
+            ),
+            ChangeNotifierProvider<ShamorZachorProgressProvider>.value(
+              value: progressProvider,
+            ),
           ],
-        ),
-      },
-      defaultStartPage: 1,
-      isCustom: false,
-      sourceFile: 'test',
-    );
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<ShamorZachorDataProvider>.value(
-            value: dataProvider,
-          ),
-          ChangeNotifierProvider<ShamorZachorProgressProvider>.value(
-            value: progressProvider,
-          ),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: CategoryBooksGrid(
-              categoryName: 'תלמוד בבלי',
-              topLevelName: 'תלמוד בבלי',
-              category: category,
-              selectedFilter: 'in_progress',
-              onBookSelected: (_, __, ___) {},
+          child: MaterialApp(
+            home: Scaffold(
+              body: CategoryBooksGrid(
+                categoryName: 'תלמוד בבלי',
+                topLevelName: 'תלמוד בבלי',
+                category: category,
+                selectedFilter: 'in_progress',
+                onBookSelected: (_, _, _) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('ברכות'), findsNothing);
-    expect(find.text('אין ספרים בתהליך'), findsOneWidget);
-    expect(find.textContaining('לחצן ההוספה'), findsOneWidget);
-  });
+      expect(find.text('ברכות'), findsNothing);
+      expect(find.text('אין ספרים בתהליך'), findsOneWidget);
+      expect(find.textContaining('לחצן ההוספה'), findsOneWidget);
+    },
+  );
 }

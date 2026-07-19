@@ -16,13 +16,12 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 /// האפליקציה; לא נכתבת שום קובץ cache לדיסק.
 class PluginNetworkAccessResolver {
   PluginNetworkAccessResolver({
-    http.Client? client,
+    this._client,
     Future<String?> Function()? officialTagNameProvider,
     DateTime Function()? nowProvider,
-  })  : _client = client,
-        _officialTagNameProvider =
-            officialTagNameProvider ?? _defaultOfficialTagNameProvider,
-        _nowProvider = nowProvider ?? DateTime.now;
+  }) : _officialTagNameProvider =
+           officialTagNameProvider ?? _defaultOfficialTagNameProvider,
+       _nowProvider = nowProvider ?? DateTime.now;
 
   static PluginNetworkAccessResolver instance = PluginNetworkAccessResolver();
 
@@ -43,17 +42,17 @@ class PluginNetworkAccessResolver {
 
   /// URL ה-raw הרשמי של קובץ ה-allowlist בריפו של אוצריא, מוצמד ל-tag.
   static Uri officialAllowlistUriForTag(String tagName) => Uri(
-        scheme: 'https',
-        host: 'raw.githubusercontent.com',
-        pathSegments: <String>[
-          _officialOwner,
-          _officialRepository,
-          'refs',
-          'tags',
-          tagName,
-          ..._officialAllowlistPath.split('/'),
-        ],
-      );
+    scheme: 'https',
+    host: 'raw.githubusercontent.com',
+    pathSegments: <String>[
+      _officialOwner,
+      _officialRepository,
+      'refs',
+      'tags',
+      tagName,
+      ..._officialAllowlistPath.split('/'),
+    ],
+  );
 
   static Future<String?> _defaultOfficialTagNameProvider() async {
     final packageInfo = await PackageInfo.fromPlatform();
@@ -88,8 +87,10 @@ class PluginNetworkAccessResolver {
     final officialAllowlist = await _loadOfficialAllowlist();
     if (officialAllowlist == null) return false;
 
-    final matchedOfficialPrefix =
-        matchingNetworkAllowlistPrefix(uri, officialAllowlist);
+    final matchedOfficialPrefix = matchingNetworkAllowlistPrefix(
+      uri,
+      officialAllowlist,
+    );
     if (matchedOfficialPrefix == null) return false;
 
     _sessionApprovedOfficialPrefixes.add(matchedOfficialPrefix);
@@ -116,8 +117,9 @@ class PluginNetworkAccessResolver {
         _officialAllowlistCache = result;
         _officialAllowlistFailureUntil = null;
       } else {
-        _officialAllowlistFailureUntil =
-            _nowProvider().add(_officialFailureCacheTtl);
+        _officialAllowlistFailureUntil = _nowProvider().add(
+          _officialFailureCacheTtl,
+        );
       }
       return result;
     } finally {
@@ -149,8 +151,9 @@ class PluginNetworkAccessResolver {
           return null;
         }
 
-        final allowlist =
-            extractPluginNetworkAllowlistFromDartSource(response.body);
+        final allowlist = extractPluginNetworkAllowlistFromDartSource(
+          response.body,
+        );
         return allowlist.isEmpty ? null : allowlist;
       }
       return null;

@@ -36,8 +36,9 @@ class UserContentRepository {
 
   Future<int?> generationIdByName(String name) async {
     final db = await _db.database;
-    final rows =
-        db.select('SELECT id FROM generation WHERE name = ? LIMIT 1', [name]);
+    final rows = db.select('SELECT id FROM generation WHERE name = ? LIMIT 1', [
+      name,
+    ]);
     return rows.isEmpty ? null : rows.first['id'] as int;
   }
 
@@ -46,7 +47,8 @@ class UserContentRepository {
     final rows = categoryId != null
         ? db.select(
             'SELECT id FROM book WHERE title = ? AND categoryId = ? LIMIT 1',
-            [title, categoryId])
+            [title, categoryId],
+          )
         : db.select('SELECT id FROM book WHERE title = ? LIMIT 1', [title]);
     return rows.isEmpty ? null : rows.first['id'] as int;
   }
@@ -130,7 +132,7 @@ class UserContentRepository {
       [
         sourceTitle,
         sourceIsUserBook ? 1 : 0,
-        if (sourceCategoryId != null) sourceCategoryId,
+        ?sourceCategoryId,
         if (hasRange) ...[startLineIndex, endLineIndex],
       ],
     );
@@ -153,8 +155,9 @@ class UserContentRepository {
         ? 'AND (ul.targetCategoryId IS NULL OR ul.targetCategoryId = ?)'
         : '';
     final hasRange = startLineIndex != null && endLineIndex != null;
-    final rangeClause =
-        hasRange ? 'AND ul.targetLineIndex BETWEEN ? AND ?' : '';
+    final rangeClause = hasRange
+        ? 'AND ul.targetLineIndex BETWEEN ? AND ?'
+        : '';
     final rows = db.select(
       'SELECT ul.* FROM user_link ul '
       'WHERE ul.targetTitle = ? AND ul.targetIsUserBook = ? '
@@ -163,7 +166,7 @@ class UserContentRepository {
       [
         targetTitle,
         targetIsUserBook ? 1 : 0,
-        if (targetCategoryId != null) targetCategoryId,
+        ?targetCategoryId,
         if (hasRange) ...[startLineIndex, endLineIndex],
       ],
     );
@@ -189,22 +192,22 @@ class UserContentRepository {
       [
         sourceTitle,
         sourceIsUserBook ? 1 : 0,
-        if (sourceCategoryId != null) sourceCategoryId,
+        ?sourceCategoryId,
       ],
     );
     return rows.map((r) => r['targetTitle'] as String).toList();
   }
 
   UserLinkRecord _fromRow(Map<String, Object?> row) => UserLinkRecord(
-        sourceTitle: row['sourceTitle'] as String,
-        sourceCategoryId: row['sourceCategoryId'] as int?,
-        sourceIsUserBook: (row['sourceIsUserBook'] as int? ?? 0) == 1,
-        sourceLineIndex: row['sourceLineIndex'] as int,
-        targetTitle: row['targetTitle'] as String,
-        targetCategoryId: row['targetCategoryId'] as int?,
-        targetIsUserBook: (row['targetIsUserBook'] as int? ?? 0) == 1,
-        targetRef: row['targetRef'] as String?,
-        targetLineIndex: row['targetLineIndex'] as int?,
-        connectionType: row['connectionType'] as String,
-      );
+    sourceTitle: row['sourceTitle'] as String,
+    sourceCategoryId: row['sourceCategoryId'] as int?,
+    sourceIsUserBook: (row['sourceIsUserBook'] as int? ?? 0) == 1,
+    sourceLineIndex: row['sourceLineIndex'] as int,
+    targetTitle: row['targetTitle'] as String,
+    targetCategoryId: row['targetCategoryId'] as int?,
+    targetIsUserBook: (row['targetIsUserBook'] as int? ?? 0) == 1,
+    targetRef: row['targetRef'] as String?,
+    targetLineIndex: row['targetLineIndex'] as int?,
+    connectionType: row['connectionType'] as String,
+  );
 }

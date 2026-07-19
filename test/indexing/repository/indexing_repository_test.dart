@@ -94,7 +94,8 @@ void main() {
 
       final indexedFilePaths = {
         IndexingRepository.buildIndexedBookFilePath(
-            library.getAllBooks().first),
+          library.getAllBooks().first,
+        ),
       };
 
       expect(
@@ -130,12 +131,14 @@ void main() {
     test('PdfBook תמיד מאונדקס לפי נתיב (גם עם id)', () {
       expect(
         IndexingRepository.hasPathKeyedIndexEntry(
-            PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf')),
+          PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf'),
+        ),
         isTrue,
       );
       expect(
         IndexingRepository.hasPathKeyedIndexEntry(
-            PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf', id: 5)),
+          PdfBook(title: 'ברכות', path: r'C:\lib\ברכות.pdf', id: 5),
+        ),
         isTrue,
       );
     });
@@ -143,12 +146,14 @@ void main() {
     test('DocxBook ללא id — לפי נתיב; עם id — שורד העברה', () {
       expect(
         IndexingRepository.hasPathKeyedIndexEntry(
-            DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx')),
+          DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx'),
+        ),
         isTrue,
       );
       expect(
         IndexingRepository.hasPathKeyedIndexEntry(
-            DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx', id: 7)),
+          DocxBook(title: 'מסמך', path: r'C:\lib\doc.docx', id: 7),
+        ),
         isFalse,
       );
     });
@@ -164,8 +169,9 @@ void main() {
   group('IndexingRepository.dropRelocatedFileBookEntries', () {
     test('מוחק לפי מפתח ה-filePath המדויק ומבצע commit יחיד', () async {
       final engine = _RecordingSearchEngine();
-      final repository =
-          IndexingRepository(_RecordingTantivyDataProvider(engine));
+      final repository = IndexingRepository(
+        _RecordingTantivyDataProvider(engine),
+      );
 
       await repository.dropRelocatedFileBookEntries([
         PdfBook(title: 'ברכות', path: r'C:\old\ברכות.pdf'),
@@ -183,8 +189,9 @@ void main() {
 
     test('ללא ספרים — לא נוגע במנוע', () async {
       final engine = _RecordingSearchEngine();
-      final repository =
-          IndexingRepository(_RecordingTantivyDataProvider(engine));
+      final repository = IndexingRepository(
+        _RecordingTantivyDataProvider(engine),
+      );
 
       await repository.dropRelocatedFileBookEntries(const []);
 
@@ -212,28 +219,30 @@ void main() {
       expect(provider.indexedFilePaths, {key});
     });
 
-    test('commit נחתם בדיסק אך הקריאה זרקה (כשל reload) — המעקב מתעדכן',
-        () async {
-      // רגרסיה: קריאה מה-reader הישן החזירה את הספר ל-indexedFilePaths
-      // למרות שמסמכיו נמחקו — נעלם מהחיפוש וגם דולג באינדוקס הבא.
-      final engine = _RecordingSearchEngine()..failCommit = true;
-      final provider = _RecordingTantivyDataProvider(engine);
-      final book = TextBook(id: 5, title: 'שבת');
-      final key = IndexingRepository.buildIndexedBookFilePath(book);
-      provider.indexedFilePaths.add(key);
-      // המחיקה כן נחתמה בדיסק — המצב החתום כבר בלי הספר.
-      engine.committedFilePaths = [];
-      final repository = IndexingRepository(provider);
+    test(
+      'commit נחתם בדיסק אך הקריאה זרקה (כשל reload) — המעקב מתעדכן',
+      () async {
+        // רגרסיה: קריאה מה-reader הישן החזירה את הספר ל-indexedFilePaths
+        // למרות שמסמכיו נמחקו — נעלם מהחיפוש וגם דולג באינדוקס הבא.
+        final engine = _RecordingSearchEngine()..failCommit = true;
+        final provider = _RecordingTantivyDataProvider(engine);
+        final book = TextBook(id: 5, title: 'שבת');
+        final key = IndexingRepository.buildIndexedBookFilePath(book);
+        provider.indexedFilePaths.add(key);
+        // המחיקה כן נחתמה בדיסק — המצב החתום כבר בלי הספר.
+        engine.committedFilePaths = [];
+        final repository = IndexingRepository(provider);
 
-      final result = await repository.dropBookIndexEntries([book]);
+        final result = await repository.dropBookIndexEntries([book]);
 
-      expect(result, isFalse);
-      expect(provider.reopenCount, 1);
-      // פתיחה מאולצת — אחרת throttle של 5 שניות היה מדלג ומשאיר מצב מעופש.
-      expect(provider.lastReopenForce, isTrue);
-      // הספר אינו מסומן כמאונדקס — ינוסה שוב במקום להיעלם מהחיפוש לתמיד.
-      expect(provider.indexedFilePaths, isEmpty);
-    });
+        expect(result, isFalse);
+        expect(provider.reopenCount, 1);
+        // פתיחה מאולצת — אחרת throttle של 5 שניות היה מדלג ומשאיר מצב מעופש.
+        expect(provider.lastReopenForce, isTrue);
+        // הספר אינו מסומן כמאונדקס — ינוסה שוב במקום להיעלם מהחיפוש לתמיד.
+        expect(provider.indexedFilePaths, isEmpty);
+      },
+    );
   });
 
   group('IndexingRepository.dropBookIndexEntries', () {
@@ -241,8 +250,9 @@ void main() {
       final engine = _RecordingSearchEngine();
       final provider = _RecordingTantivyDataProvider(engine);
       final book = TextBook(id: 5, title: 'שבת');
-      provider.indexedFilePaths
-          .add(IndexingRepository.buildIndexedBookFilePath(book));
+      provider.indexedFilePaths.add(
+        IndexingRepository.buildIndexedBookFilePath(book),
+      );
       final repository = IndexingRepository(provider);
 
       await repository.dropBookIndexEntries([book]);
@@ -324,73 +334,81 @@ void main() {
       provider.indexedFilePaths.add('uid:99');
       final repository = IndexingRepository(provider);
 
-      final removed =
-          await repository.dropOrphanedIndexEntries(Library(categories: []));
+      final removed = await repository.dropOrphanedIndexEntries(
+        Library(categories: []),
+      );
 
       expect(removed, 0);
       expect(engine.removedFilePaths, isEmpty);
       expect(provider.indexedFilePaths, {'uid:99'});
     });
 
-    test('כשל commit בניקוי יתומים — שחזור מנוע ומחזיר 0 בלי לסמן כמנוקה',
-        () async {
-      // רגרסיה: המסלול הזה ביצע delete+commit ישיר; כשל commit היה נבלע,
-      // המחיקה עלולה הייתה להיחתם מאוחר בעוד המפתח נשאר במעקב — קובץ שחזר
-      // לספרייה היה מדולג כ"מאונדקס".
-      final engine = _RecordingSearchEngine()..failCommit = true;
-      final provider = _RecordingTantivyDataProvider(engine);
-      final existing = TextBook(id: 1, title: 'שבת', isUserBook: true);
-      final library = _buildLibrary(bavliBooks: const []);
-      library.books.add(existing);
-      final existingKey = IndexingRepository.buildIndexedBookFilePath(existing);
-      provider.indexedFilePaths.addAll({existingKey, 'uid:99'});
-      // המחיקה לא נחתמה — המצב החתום בדיסק עדיין מכיל את שניהם.
-      engine.committedFilePaths = [existingKey, 'uid:99'];
-      final repository = IndexingRepository(provider);
+    test(
+      'כשל commit בניקוי יתומים — שחזור מנוע ומחזיר 0 בלי לסמן כמנוקה',
+      () async {
+        // רגרסיה: המסלול הזה ביצע delete+commit ישיר; כשל commit היה נבלע,
+        // המחיקה עלולה הייתה להיחתם מאוחר בעוד המפתח נשאר במעקב — קובץ שחזר
+        // לספרייה היה מדולג כ"מאונדקס".
+        final engine = _RecordingSearchEngine()..failCommit = true;
+        final provider = _RecordingTantivyDataProvider(engine);
+        final existing = TextBook(id: 1, title: 'שבת', isUserBook: true);
+        final library = _buildLibrary(bavliBooks: const []);
+        library.books.add(existing);
+        final existingKey = IndexingRepository.buildIndexedBookFilePath(
+          existing,
+        );
+        provider.indexedFilePaths.addAll({existingKey, 'uid:99'});
+        // המחיקה לא נחתמה — המצב החתום בדיסק עדיין מכיל את שניהם.
+        engine.committedFilePaths = [existingKey, 'uid:99'];
+        final repository = IndexingRepository(provider);
 
-      final removed = await repository.dropOrphanedIndexEntries(library);
+        final removed = await repository.dropOrphanedIndexEntries(library);
 
-      expect(removed, 0);
-      expect(engine.rollbackCount, 1);
-      expect(provider.reopenCount, 1);
-      expect(provider.lastReopenForce, isTrue);
-      // המעקב עקבי עם המצב החתום — היתום עדיין רשום, ינוקה בניסיון הבא.
-      expect(provider.indexedFilePaths, {existingKey, 'uid:99'});
-    });
+        expect(removed, 0);
+        expect(engine.rollbackCount, 1);
+        expect(provider.reopenCount, 1);
+        expect(provider.lastReopenForce, isTrue);
+        // המעקב עקבי עם המצב החתום — היתום עדיין רשום, ינוקה בניסיון הבא.
+        expect(provider.indexedFilePaths, {existingKey, 'uid:99'});
+      },
+    );
   });
 
   group('IndexingRepository.reindexChangedBooks', () {
-    test('מוחק ומאנדקס מחדש רק את הספרים שהשתנו — לא שכנים בעלי אותה כותרת',
-        () async {
-      final engine = _RecordingSearchEngine();
-      final provider = _RecordingTantivyDataProvider(engine);
-      final official = TextBook(id: 5, title: 'שבת');
-      final personal = TextBook(id: 9, title: 'שבת', isUserBook: true);
-      final other = TextBook(id: 6, title: 'עירובין');
-      final library = _buildLibrary(bavliBooks: const []);
-      library.books.addAll([official, personal, other]);
-      for (final b in [official, personal, other]) {
-        provider.indexedFilePaths
-            .add(IndexingRepository.buildIndexedBookFilePath(b));
-      }
-      final repository = _ReindexProbeRepository(provider);
+    test(
+      'מוחק ומאנדקס מחדש רק את הספרים שהשתנו — לא שכנים בעלי אותה כותרת',
+      () async {
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine);
+        final official = TextBook(id: 5, title: 'שבת');
+        final personal = TextBook(id: 9, title: 'שבת', isUserBook: true);
+        final other = TextBook(id: 6, title: 'עירובין');
+        final library = _buildLibrary(bavliBooks: const []);
+        library.books.addAll([official, personal, other]);
+        for (final b in [official, personal, other]) {
+          provider.indexedFilePaths.add(
+            IndexingRepository.buildIndexedBookFilePath(b),
+          );
+        }
+        final repository = _ReindexProbeRepository(provider);
 
-      final result = await repository.reindexChangedBooks(
-        [official],
-        library,
-        onProgress: (_, __) {},
-      );
+        final result = await repository.reindexChangedBooks(
+          [official],
+          library,
+          onProgress: (_, _) {},
+        );
 
-      expect(result, isTrue);
-      // המחיקה לפי מפתח ה-filePath המדויק — הספר האישי 'שבת' (uid:9) נשאר.
-      expect(engine.removedFilePaths, ['id:5']);
-      expect(provider.indexedFilePaths, {
-        IndexingRepository.buildIndexedBookFilePath(personal),
-        IndexingRepository.buildIndexedBookFilePath(other),
-      });
-      expect(repository.indexedBooks!.single.title, 'שבת');
-      expect(repository.indexedBooks!.single.isUserBook, isFalse);
-    });
+        expect(result, isTrue);
+        // המחיקה לפי מפתח ה-filePath המדויק — הספר האישי 'שבת' (uid:9) נשאר.
+        expect(engine.removedFilePaths, ['id:5']);
+        expect(provider.indexedFilePaths, {
+          IndexingRepository.buildIndexedBookFilePath(personal),
+          IndexingRepository.buildIndexedBookFilePath(other),
+        });
+        expect(repository.indexedBooks!.single.title, 'שבת');
+        expect(repository.indexedBooks!.single.isUserBook, isFalse);
+      },
+    );
 
     test('כשל במחיקת האינדקס הישן — מחזיר false בלי לאנדקס', () async {
       // רגרסיה: הכשל נבלע, indexBooks דילג על הספר (עדיין ב-indexedFilePaths)
@@ -400,8 +418,9 @@ void main() {
       final changed = TextBook(id: 5, title: 'שבת');
       final library = _buildLibrary(bavliBooks: const []);
       library.books.add(changed);
-      provider.indexedFilePaths
-          .add(IndexingRepository.buildIndexedBookFilePath(changed));
+      provider.indexedFilePaths.add(
+        IndexingRepository.buildIndexedBookFilePath(changed),
+      );
       // המחיקה לא יצאה לפועל — הספר עדיין חתום באינדקס שבדיסק.
       engine.committedFilePaths = [
         IndexingRepository.buildIndexedBookFilePath(changed),
@@ -411,7 +430,7 @@ void main() {
       final result = await repository.reindexChangedBooks(
         [changed],
         library,
-        onProgress: (_, __) {},
+        onProgress: (_, _) {},
       );
 
       expect(result, isFalse);
@@ -422,13 +441,14 @@ void main() {
 
     test('רשימה ריקה — לא נוגע במנוע ולא מאנדקס', () async {
       final engine = _RecordingSearchEngine();
-      final repository =
-          _ReindexProbeRepository(_RecordingTantivyDataProvider(engine));
+      final repository = _ReindexProbeRepository(
+        _RecordingTantivyDataProvider(engine),
+      );
 
       final result = await repository.reindexChangedBooks(
         const [],
         _buildLibrary(bavliBooks: const [('שבת', 1)]),
-        onProgress: (_, __) {},
+        onProgress: (_, _) {},
       );
 
       expect(result, isTrue);
@@ -440,66 +460,78 @@ void main() {
   group('IndexingRepository.reconcileIndexWithLibrary', () {
     TextBook book(int id, String title) => TextBook(id: id, title: title);
 
-    test('מזהה ספרים ששונו או בלתי-ניתנים-לאימות ומאנדקס רק אותם מחדש',
-        () async {
-      final engine = _RecordingSearchEngine();
-      final provider = _RecordingTantivyDataProvider(engine);
-      final unchanged = book(1, 'שבת');
-      final changed = book(2, 'עירובין');
-      final notIndexed = book(3, 'פסחים');
-      final unverifiable = book(4, 'יומא');
-      final unloadable = book(5, 'סוכה');
-      final library = _buildLibrary(bavliBooks: const []);
-      library.books
-          .addAll([unchanged, changed, notIndexed, unverifiable, unloadable]);
+    test(
+      'מזהה ספרים ששונו או בלתי-ניתנים-לאימות ומאנדקס רק אותם מחדש',
+      () async {
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine);
+        final unchanged = book(1, 'שבת');
+        final changed = book(2, 'עירובין');
+        final notIndexed = book(3, 'פסחים');
+        final unverifiable = book(4, 'יומא');
+        final unloadable = book(5, 'סוכה');
+        final library = _buildLibrary(bavliBooks: const []);
+        library.books.addAll([
+          unchanged,
+          changed,
+          notIndexed,
+          unverifiable,
+          unloadable,
+        ]);
 
-      engine.fingerprints = {
-        IndexingRepository.buildIndexedBookFilePath(unchanged): BigInt.from(11),
-        IndexingRepository.buildIndexedBookFilePath(changed): BigInt.from(21),
-        IndexingRepository.buildIndexedBookFilePath(unverifiable): BigInt.zero,
-        IndexingRepository.buildIndexedBookFilePath(unloadable):
-            BigInt.from(55),
-        // notIndexed בכוונה חסר — ספר חדש שמטופל במסלול הרגיל.
-      };
-      for (final b in [unchanged, changed, unverifiable, unloadable]) {
-        provider.indexedFilePaths
-            .add(IndexingRepository.buildIndexedBookFilePath(b));
-      }
+        engine.fingerprints = {
+          IndexingRepository.buildIndexedBookFilePath(unchanged): BigInt.from(
+            11,
+          ),
+          IndexingRepository.buildIndexedBookFilePath(changed): BigInt.from(21),
+          IndexingRepository.buildIndexedBookFilePath(unverifiable):
+              BigInt.zero,
+          IndexingRepository.buildIndexedBookFilePath(unloadable): BigInt.from(
+            55,
+          ),
+          // notIndexed בכוונה חסר — ספר חדש שמטופל במסלול הרגיל.
+        };
+        for (final b in [unchanged, changed, unverifiable, unloadable]) {
+          provider.indexedFilePaths.add(
+            IndexingRepository.buildIndexedBookFilePath(b),
+          );
+        }
 
-      final texts = {
-        'שבת': 'אחד',
-        'עירובין': 'שתיים-חדש',
-        'יומא': 'שלוש',
-        // 'סוכה' חסר — טעינה נכשלת.
-      };
-      final hashes = {
-        'אחד': BigInt.from(11), // תואם לאינדקס — לא השתנה
-        'שתיים-חדש': BigInt.from(22), // שונה מ-21 — השתנה
-        'שלוש': BigInt.from(33),
-      };
+        final texts = {
+          'שבת': 'אחד',
+          'עירובין': 'שתיים-חדש',
+          'יומא': 'שלוש',
+          // 'סוכה' חסר — טעינה נכשלת.
+        };
+        final hashes = {
+          'אחד': BigInt.from(11), // תואם לאינדקס — לא השתנה
+          'שתיים-חדש': BigInt.from(22), // שונה מ-21 — השתנה
+          'שלוש': BigInt.from(33),
+        };
 
-      final repository = _ReindexProbeRepository(provider);
-      final scanCalls = <(int, int)>[];
+        final repository = _ReindexProbeRepository(provider);
+        final scanCalls = <(int, int)>[];
 
-      final result = await repository.reconcileIndexWithLibrary(
-        library,
-        onScanProgress: (p, t) => scanCalls.add((p, t)),
-        onProgress: (_, __) {},
-        loadText: (b) async => texts[b.title],
-        fingerprintOf: (_, text) async => hashes[text]!,
-      );
+        final result = await repository.reconcileIndexWithLibrary(
+          library,
+          onScanProgress: (p, t) => scanCalls.add((p, t)),
+          onProgress: (_, _) {},
+          loadText: (b) async => texts[b.title],
+          fingerprintOf: (_, text) async => hashes[text]!,
+        );
 
-      expect(result, isTrue);
-      expect(
-        repository.indexedBooks!.map((b) => b.title).toSet(),
-        {'עירובין', 'יומא'},
-      );
-      expect(engine.removedFilePaths.toSet(), {'id:2', 'id:4'});
-      // הסריקה כיסתה את חמשת ספרי הטקסט שהוספנו ואת ברירת-המחדל ב"תנ"ך".
-      expect(scanCalls.last, (6, 6));
-      // isIndexing חוזר ל-false אחרי הסריקה (indexBooks מזויף בטסט).
-      expect(provider.isIndexing.value, isFalse);
-    });
+        expect(result, isTrue);
+        expect(
+          repository.indexedBooks!.map((b) => b.title).toSet(),
+          {'עירובין', 'יומא'},
+        );
+        expect(engine.removedFilePaths.toSet(), {'id:2', 'id:4'});
+        // הסריקה כיסתה את חמשת ספרי הטקסט שהוספנו ואת ברירת-המחדל ב"תנ"ך".
+        expect(scanCalls.last, (6, 6));
+        // isIndexing חוזר ל-false אחרי הסריקה (indexBooks מזויף בטסט).
+        expect(provider.isIndexing.value, isFalse);
+      },
+    );
 
     test('כשהכל תואם — מסתיים בהצלחה בלי לגעת באינדקס', () async {
       final engine = _RecordingSearchEngine();
@@ -514,9 +546,9 @@ void main() {
       final repository = _ReindexProbeRepository(provider);
       final result = await repository.reconcileIndexWithLibrary(
         library,
-        onProgress: (_, __) {},
+        onProgress: (_, _) {},
         loadText: (_) async => 'טקסט',
-        fingerprintOf: (_, __) async => BigInt.from(7),
+        fingerprintOf: (_, _) async => BigInt.from(7),
       );
 
       expect(result, isTrue);
@@ -537,13 +569,13 @@ void main() {
       final repository = _ReindexProbeRepository(provider);
       final result = await repository.reconcileIndexWithLibrary(
         library,
-        onProgress: (_, __) {},
+        onProgress: (_, _) {},
         loadText: (b) async {
           // מדמה לחיצת ביטול של המשתמש בזמן הסריקה.
           provider.isIndexing.value = false;
           return 'טקסט';
         },
-        fingerprintOf: (_, __) async => BigInt.one,
+        fingerprintOf: (_, _) async => BigInt.one,
       );
 
       expect(result, isFalse);
@@ -573,7 +605,7 @@ void main() {
         onActualIndexingStarted: () {
           actualIndexingStarted = true;
         },
-        onProgress: (_, __) {
+        onProgress: (_, _) {
           progressCalls++;
         },
       );
@@ -604,7 +636,7 @@ void main() {
         onActualIndexingStarted: () {
           actualIndexingStarted = true;
         },
-        onProgress: (_, __) {
+        onProgress: (_, _) {
           progressCalls++;
         },
       );
@@ -649,8 +681,10 @@ void main() {
       ]);
       final repository = IndexingRepository(provider);
 
-      final result =
-          await repository.indexAllBooks(library, onProgress: (_, __) {});
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
 
       expect(result, isTrue);
       // הכתיבה החלקית אכן נרשמה במנוע לפני הכשל — ורק אז נמחקה.
@@ -660,37 +694,39 @@ void main() {
       expect(provider.indexedFilePaths, {r'C:\missing\א.pdf'});
     });
 
-    test('כשל גם בניקוי המסמכים החלקיים — עוצר בלי commit ומבצע rollback',
-        () async {
-      // רגרסיה: כשה-writer פגוע גם המחיקה נכשלת; המשך עד ה-commit הסופי
-      // היה חותם את הכתיבה החלקית למרות הניקוי הכושל.
-      final engine = _RecordingSearchEngine()
-        ..failAddForTitle = 'ב'
-        ..failDeleteFilePaths = true;
-      final provider = _RecordingTantivyDataProvider(engine);
-      final library = Library(categories: []);
-      library.books.addAll([
-        PdfBook(title: 'א', path: r'C:\missing\א.pdf'),
-        PdfBook(title: 'ב', path: r'C:\missing\ב.pdf'),
-        PdfBook(title: 'ג', path: r'C:\missing\ג.pdf'),
-      ]);
-      final repository = IndexingRepository(provider);
-      var progressCalls = 0;
+    test(
+      'כשל גם בניקוי המסמכים החלקיים — עוצר בלי commit ומבצע rollback',
+      () async {
+        // רגרסיה: כשה-writer פגוע גם המחיקה נכשלת; המשך עד ה-commit הסופי
+        // היה חותם את הכתיבה החלקית למרות הניקוי הכושל.
+        final engine = _RecordingSearchEngine()
+          ..failAddForTitle = 'ב'
+          ..failDeleteFilePaths = true;
+        final provider = _RecordingTantivyDataProvider(engine);
+        final library = Library(categories: []);
+        library.books.addAll([
+          PdfBook(title: 'א', path: r'C:\missing\א.pdf'),
+          PdfBook(title: 'ב', path: r'C:\missing\ב.pdf'),
+          PdfBook(title: 'ג', path: r'C:\missing\ג.pdf'),
+        ]);
+        final repository = IndexingRepository(provider);
+        var progressCalls = 0;
 
-      final result = await repository.indexAllBooks(
-        library,
-        onProgress: (_, __) => progressCalls++,
-      );
+        final result = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) => progressCalls++,
+        );
 
-      expect(result, isFalse);
-      expect(engine.commitCount, 0);
-      expect(engine.rollbackCount, 1);
-      // הספר השלישי לא עובד — הריצה נעצרה מיד אחרי הכשל.
-      expect(engine.addedDocuments.map((d) => d.title), isNot(contains('ג')));
-      // המעקב בזיכרון נטען מחדש מהמצב החתום (ריק) — 'א' הלא-חתום ינוסה שוב.
-      expect(provider.indexedFilePaths, isEmpty);
-      expect(progressCalls, greaterThan(0));
-    });
+        expect(result, isFalse);
+        expect(engine.commitCount, 0);
+        expect(engine.rollbackCount, 1);
+        // הספר השלישי לא עובד — הריצה נעצרה מיד אחרי הכשל.
+        expect(engine.addedDocuments.map((d) => d.title), isNot(contains('ג')));
+        // המעקב בזיכרון נטען מחדש מהמצב החתום (ריק) — 'א' הלא-חתום ינוסה שוב.
+        expect(provider.indexedFilePaths, isEmpty);
+        expect(progressCalls, greaterThan(0));
+      },
+    );
   });
 
   group('IndexingRepository.orderBooksForIndexing', () {
@@ -738,9 +774,9 @@ void main() {
     test('נותן עדיפות לסדר הספר לפני הסדר הפנימי בתוך הספר', () {
       final earlierBookLateSegment =
           IndexingRepository.buildCatalogueDocumentId(
-        catalogueOrder: 0,
-        ordinal: 500,
-      );
+            catalogueOrder: 0,
+            ordinal: 500,
+          );
       final laterBookFirstSegment = IndexingRepository.buildCatalogueDocumentId(
         catalogueOrder: 1,
         ordinal: 0,
@@ -853,31 +889,34 @@ void main() {
       );
     });
 
-    test('catalogueOrderKey זהה גם ללא id (נופל ל-title|category|docx|path)',
-        () {
-      // FileBook משתמש ב-`book.path` ב-pathKey, ו-TextBook (לא FileBook)
-      // משתמש ב-`book.filePath`. `toTextBook()` מעביר `filePath ?? path`,
-      // כך שהמפתח נשאר עקבי גם בלי id.
-      final docx = DocxBook(
-        title: 'בדיקה ללא id',
-        path: r'C:\library\בדיקה.docx',
-        categoryPath: 'ספרים אישיים',
-      );
-      expect(
-        IndexingRepository.catalogueOrderKey(docx),
-        IndexingRepository.catalogueOrderKey(docx.toTextBook()),
-      );
-    });
+    test(
+      'catalogueOrderKey זהה גם ללא id (נופל ל-title|category|docx|path)',
+      () {
+        // FileBook משתמש ב-`book.path` ב-pathKey, ו-TextBook (לא FileBook)
+        // משתמש ב-`book.filePath`. `toTextBook()` מעביר `filePath ?? path`,
+        // כך שהמפתח נשאר עקבי גם בלי id.
+        final docx = DocxBook(
+          title: 'בדיקה ללא id',
+          path: r'C:\library\בדיקה.docx',
+          categoryPath: 'ספרים אישיים',
+        );
+        expect(
+          IndexingRepository.catalogueOrderKey(docx),
+          IndexingRepository.catalogueOrderKey(docx.toTextBook()),
+        );
+      },
+    );
   });
 
   group('IndexingRepository.optimizeIndexBestEffort', () {
     test('מחזיר true כש-optimize מצליח', () async {
       var called = false;
 
-      final completed =
-          await IndexingRepository.optimizeIndexBestEffort(() async {
-        called = true;
-      });
+      final completed = await IndexingRepository.optimizeIndexBestEffort(
+        () async {
+          called = true;
+        },
+      );
 
       expect(called, isTrue);
       expect(completed, isTrue);
@@ -886,12 +925,14 @@ void main() {
     test('מחזיר false ולא זורק כש-optimize נכשל אחרי commit', () async {
       Object? reportedError;
 
-      final completed =
-          await IndexingRepository.optimizeIndexBestEffort(() async {
-        throw StateError('maintenance failed');
-      }, onFailure: (error, _) {
-        reportedError = error;
-      });
+      final completed = await IndexingRepository.optimizeIndexBestEffort(
+        () async {
+          throw StateError('maintenance failed');
+        },
+        onFailure: (error, _) {
+          reportedError = error;
+        },
+      );
 
       expect(completed, isFalse);
       expect(reportedError, isA<StateError>());
@@ -902,8 +943,8 @@ void main() {
 class FakeTantivyDataProvider implements TantivyDataProvider {
   FakeTantivyDataProvider({
     required this.indexedFilePaths,
-    required bool requiresManualReindexValue,
-  }) : _requiresManualReindexValue = requiresManualReindexValue;
+    required this._requiresManualReindexValue,
+  });
 
   final bool _requiresManualReindexValue;
 
@@ -1039,8 +1080,9 @@ class _RecordingSearchEngine implements SearchEngine {
   Future<void> optimize() async {}
 
   @override
-  Future<void> deleteDocumentsByFilePaths(
-      {required List<String> filePaths}) async {
+  Future<void> deleteDocumentsByFilePaths({
+    required List<String> filePaths,
+  }) async {
     if (failDeleteFilePaths) {
       throw StateError('engine delete failed');
     }

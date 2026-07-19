@@ -255,7 +255,9 @@ CommentatorsVerseStep? computeVerseStep(
     return CommentatorsVerseStep(neighborIndex, _kAllChapter);
   }
   return CommentatorsVerseStep(
-      neighborIndex, forward ? neighbor.first : neighbor.last);
+    neighborIndex,
+    forward ? neighbor.first : neighbor.last,
+  );
 }
 
 class CommentatorsTabScreen extends StatefulWidget {
@@ -291,10 +293,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   @visibleForTesting
   CommentatorsNavSelection get debugNavSelection => CommentatorsNavSelection(
-        selectedChapter: _selectedChapter,
-        selectedVerseIdx: _selectedVerseIdx,
-        navExpandedChapter: _navExpandedChapter,
-      );
+    selectedChapter: _selectedChapter,
+    selectedVerseIdx: _selectedVerseIdx,
+    navExpandedChapter: _navExpandedChapter,
+  );
 
   void _toggleAndSaveNikud(BuildContext context, TextBookLoaded state) {
     final newValue = !state.removeNikud;
@@ -310,8 +312,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   /// מחיל מצב חדש שחושב ע"י אחד הרדוסרים הטהורים (ראה [reduceChevronTap]
   /// וחבריו). מבטיח שכל הנתיבים שמשנים את מצב הניווט עוברים דרך אותו צינור.
-  void _applyNavSelection(CommentatorsNavSelection next,
-      {bool clearMulti = true}) {
+  void _applyNavSelection(
+    CommentatorsNavSelection next, {
+    bool clearMulti = true,
+  }) {
     setState(() {
       _selectedChapter = next.selectedChapter;
       _selectedVerseIdx = next.selectedVerseIdx;
@@ -325,14 +329,21 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   /// (Ctrl+לחיצה ב'ניווט'). כשאין ריבוי-בחירה — הבחירה הראשית בלבד.
   List<int>? _effectiveIndexes(List<TocEntry> chapters, int contentLength) {
     final primary = _computeIndexes(
-        chapters, _selectedChapter, _selectedVerseIdx, contentLength);
+      chapters,
+      _selectedChapter,
+      _selectedVerseIdx,
+      contentLength,
+    );
     if (_extraIndexes.isEmpty) return primary;
     return <int>{...?primary, ..._extraIndexes}.toList()..sort();
   }
 
   /// Ctrl+לחיצה על תת-פריט: מוסיף/מסיר את שורותיו מריבוי-הבחירה (toggle).
   void _ctrlToggleSubItem(
-      int verseIdx, TocEntry chapter, List<TocEntry> chapters) {
+    int verseIdx,
+    TocEntry chapter,
+    List<TocEntry> chapters,
+  ) {
     final state = widget.tab.bloc.state;
     final contentLength = state is TextBookLoaded ? state.content.length : 0;
     final idxs = _computeIndexes(chapters, chapter, verseIdx, contentLength);
@@ -343,7 +354,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       } else {
         // שמירת הבחירה הראשית הנוכחית כחלק מהאיחוד לפני הוספת הקטע החדש.
         final primary = _computeIndexes(
-            chapters, _selectedChapter, _selectedVerseIdx, contentLength);
+          chapters,
+          _selectedChapter,
+          _selectedVerseIdx,
+          contentLength,
+        );
         if (primary != null) _extraIndexes.addAll(primary);
         _extraIndexes.addAll(idxs);
       }
@@ -353,7 +368,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   /// האם שורותיו של תת-פריט נמצאות בריבוי-הבחירה (להדגשה ב'ניווט').
   bool _isSubItemInMulti(
-      int verseIdx, TocEntry chapter, List<TocEntry> chapters) {
+    int verseIdx,
+    TocEntry chapter,
+    List<TocEntry> chapters,
+  ) {
     if (_extraIndexes.isEmpty) return false;
     final state = widget.tab.bloc.state;
     final contentLength = state is TextBookLoaded ? state.content.length : 0;
@@ -381,8 +399,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   final _externalCurrentIndex = ValueNotifier<int>(0);
   final _externalTotalResults = ValueNotifier<int>(0);
   final _externalSearchResultsByPath = ValueNotifier<Map<String, int>>({});
-  final _externalSearchSnippets =
-      ValueNotifier<List<CommentarySearchSnippet>>([]);
+  final _externalSearchSnippets = ValueNotifier<List<CommentarySearchSnippet>>(
+    [],
+  );
   bool _initialChapterResolved = false;
   final Map<String, List<InlineSpan>> _snippetSpansCache = {};
 
@@ -417,12 +436,14 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final settings = context.read<SettingsBloc>().state;
-      widget.tab.bloc.add(LoadContent(
-        fontSize: settings.fontSize,
-        showSplitView: false,
-        removeNikud: settings.defaultRemoveNikud,
-        loadCommentators: true,
-      ));
+      widget.tab.bloc.add(
+        LoadContent(
+          fontSize: settings.fontSize,
+          showSplitView: false,
+          removeNikud: settings.defaultRemoveNikud,
+          loadCommentators: true,
+        ),
+      );
     });
 
     // ממקד את חלונית המפרשים כשהטאב הופך פעיל (מעבר טאב) כדי שגלילה עם
@@ -454,7 +475,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   }
 
   ({TocEntry? chapter, int verseIdx}) _findPos(
-      List<TocEntry> chapters, int lineIndex) {
+    List<TocEntry> chapters,
+    int lineIndex,
+  ) {
     final currentState = widget.tab.bloc.state;
     final content = currentState is TextBookLoaded
         ? currentState.content
@@ -516,8 +539,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       ),
       highlightStyle: TextStyle(
         fontWeight: FontWeight.bold,
-        fontVariations:
-            AppFonts.boldFontVariations(settingsState.commentatorsFontFamily),
+        fontVariations: AppFonts.boldFontVariations(
+          settingsState.commentatorsFontFamily,
+        ),
         fontSize: 16,
         color: colorScheme.error,
       ),
@@ -530,8 +554,12 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     return spans;
   }
 
-  List<int>? _computeIndexes(List<TocEntry> chapters, TocEntry? chapter,
-      int verseIdx, int contentLength) {
+  List<int>? _computeIndexes(
+    List<TocEntry> chapters,
+    TocEntry? chapter,
+    int verseIdx,
+    int contentLength,
+  ) {
     if (chapter == null) return null;
 
     if (verseIdx != _kAllChapter) {
@@ -566,7 +594,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   /// מחשב כמה שורות יש בפרק (לספרים ללא TOC ברמת פסוק)
   int _chapterLineCount(
-      List<TocEntry> chapters, TocEntry chapter, int contentLength) {
+    List<TocEntry> chapters,
+    TocEntry chapter,
+    int contentLength,
+  ) {
     final end = chapterEndLineIndex(chapters, chapter, contentLength);
     return (end - chapter.index + 1).clamp(0, 200);
   }
@@ -597,7 +628,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     if (_initialChapterResolved) return;
 
     final chapters = _getChapters(state.tableOfContents);
-    final lineIndex = state.selectedIndex ??
+    final lineIndex =
+        state.selectedIndex ??
         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
     if (chapters.isEmpty) {
@@ -634,8 +666,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       if (!mounted || !_navScrollController.isAttached) return;
       final chapter = _selectedChapter;
       if (chapter == null) return;
-      final idx =
-          _navItems.indexWhere((it) => it.isChapter && it.chapter == chapter);
+      final idx = _navItems.indexWhere(
+        (it) => it.isChapter && it.chapter == chapter,
+      );
       if (idx < 0) return;
       _navScrollController.scrollTo(
         index: idx,
@@ -651,112 +684,119 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     super.build(context); // נדרש ע"י AutomaticKeepAliveClientMixin
     return BlocProvider<TextBookBloc>.value(
       value: widget.tab.bloc,
-      child: Builder(builder: (context) {
-        return BlocConsumer<TextBookBloc, TextBookState>(
-          listenWhen: shouldNotifyCommentatorsTabListener,
-          listener: (context, state) {
-            if (state is! TextBookLoaded) return;
-            _resolveInitialChapter(state);
-            final idx = state.selectedIndex;
-            if (idx == null) return;
-            final chapters = _getChapters(state.tableOfContents);
-            final pos = _findPos(chapters, idx);
-            if (pos.chapter != null) {
-              _onChapterSelected(pos.chapter!, chapters);
-            }
-          },
-          buildWhen: (prev, curr) {
-            if (prev is TextBookLoaded && curr is TextBookLoaded) {
-              return prev.fontSize != curr.fontSize ||
-                  prev.tableOfContents != curr.tableOfContents ||
-                  prev.links != curr.links ||
-                  prev.availableCommentators != curr.availableCommentators ||
-                  prev.removeNikud != curr.removeNikud ||
-                  prev.removePunctuation != curr.removePunctuation;
-            }
-            return true;
-          },
-          builder: (context, state) {
-            if (state is! TextBookLoaded) {
-              final isCompact =
-                  context.read<SettingsBloc>().state.compactMenuMode;
-              return Scaffold(
-                body: Column(
-                  children: [
-                    AppTopBar(
-                      leadingItems: [
-                        AppTopBarItem(
-                          widget: ToolbarActionButton(
-                            tooltip: 'ניווט',
-                            icon: FluentIcons.navigation_24_regular,
-                            compact: isCompact,
-                            onPressed: () {},
+      child: Builder(
+        builder: (context) {
+          return BlocConsumer<TextBookBloc, TextBookState>(
+            listenWhen: shouldNotifyCommentatorsTabListener,
+            listener: (context, state) {
+              if (state is! TextBookLoaded) return;
+              _resolveInitialChapter(state);
+              final idx = state.selectedIndex;
+              if (idx == null) return;
+              final chapters = _getChapters(state.tableOfContents);
+              final pos = _findPos(chapters, idx);
+              if (pos.chapter != null) {
+                _onChapterSelected(pos.chapter!, chapters);
+              }
+            },
+            buildWhen: (prev, curr) {
+              if (prev is TextBookLoaded && curr is TextBookLoaded) {
+                return prev.fontSize != curr.fontSize ||
+                    prev.tableOfContents != curr.tableOfContents ||
+                    prev.links != curr.links ||
+                    prev.availableCommentators != curr.availableCommentators ||
+                    prev.removeNikud != curr.removeNikud ||
+                    prev.removePunctuation != curr.removePunctuation;
+              }
+              return true;
+            },
+            builder: (context, state) {
+              if (state is! TextBookLoaded) {
+                final isCompact = context
+                    .read<SettingsBloc>()
+                    .state
+                    .compactMenuMode;
+                return Scaffold(
+                  body: Column(
+                    children: [
+                      AppTopBar(
+                        leadingItems: [
+                          AppTopBarItem(
+                            widget: ToolbarActionButton(
+                              tooltip: 'ניווט',
+                              icon: FluentIcons.navigation_24_regular,
+                              compact: isCompact,
+                              onPressed: () {},
+                            ),
+                          ),
+                        ],
+                        center: Text(
+                          'מפרשים על ${widget.tab.sourceTab.book.title}',
+                          style: AppTopBar.titleStyle(context),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Expanded(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final chapters = _getChapters(state.tableOfContents);
+
+              final effectiveIndexes = _effectiveIndexes(
+                chapters,
+                state.content.length,
+              );
+
+              return Focus(
+                autofocus: true,
+                onKeyEvent: _handlePrintShortcut,
+                child: Scaffold(
+                  body: Column(
+                    children: [
+                      _buildAppBar(context, state, chapters),
+                      Expanded(
+                        child: Padding(
+                          padding: SplitPaneContentInset.of(context),
+                          child: Stack(
+                            children: [
+                              AdaptiveSidePane(
+                                isOpen: _navPaneOpen || _pinLeftPane,
+                                onClose: () {
+                                  if (!_pinLeftPane) {
+                                    setState(() => _navPaneOpen = false);
+                                  }
+                                },
+                                alignment: AlignmentDirectional.centerEnd,
+                                paneWidth: 320,
+                                minMainContentWidth: 400,
+                                mainContent: _buildCommentaryMainContent(
+                                  context,
+                                  state,
+                                  effectiveIndexes,
+                                ),
+                                paneContent: _buildNavPanel(
+                                  context,
+                                  state: state,
+                                  chapters: chapters,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                      center: Text(
-                        'מפרשים על ${widget.tab.sourceTab.book.title}',
-                        style: AppTopBar.titleStyle(context),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const Expanded(
-                        child: Center(child: CircularProgressIndicator())),
-                  ],
+                    ],
+                  ),
                 ),
               );
-            }
-
-            final chapters = _getChapters(state.tableOfContents);
-
-            final effectiveIndexes =
-                _effectiveIndexes(chapters, state.content.length);
-
-            return Focus(
-              autofocus: true,
-              onKeyEvent: _handlePrintShortcut,
-              child: Scaffold(
-                body: Column(
-                  children: [
-                    _buildAppBar(context, state, chapters),
-                    Expanded(
-                      child: Padding(
-                        padding: SplitPaneContentInset.of(context),
-                        child: Stack(
-                          children: [
-                            AdaptiveSidePane(
-                              isOpen: _navPaneOpen || _pinLeftPane,
-                              onClose: () {
-                                if (!_pinLeftPane) {
-                                  setState(() => _navPaneOpen = false);
-                                }
-                              },
-                              alignment: AlignmentDirectional.centerEnd,
-                              paneWidth: 320,
-                              minMainContentWidth: 400,
-                              mainContent: _buildCommentaryMainContent(
-                                context,
-                                state,
-                                effectiveIndexes,
-                              ),
-                              paneContent: _buildNavPanel(
-                                context,
-                                state: state,
-                                chapters: chapters,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      }),
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -866,7 +906,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   /// הקטעים הניתנים לבחירה בפרק (פסוקים אם יש children, אחרת היסטי פסקאות).
   List<int> _selectableForChapter(
-      TocEntry chapter, List<TocEntry> chapters, List<String> content) {
+    TocEntry chapter,
+    List<TocEntry> chapters,
+    List<String> content,
+  ) {
     return chapter.children.isNotEmpty
         ? _selectableVerseIndices(chapter, content)
         : _selectableParagraphOffsets(chapters, chapter, content);
@@ -899,8 +942,12 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           ? _selectableForChapter(chapters[i], chapters, content)
           : const [],
     );
-    final step = computeVerseStep(selectablePerChapter, ci, _selectedVerseIdx,
-        forward: forward);
+    final step = computeVerseStep(
+      selectablePerChapter,
+      ci,
+      _selectedVerseIdx,
+      forward: forward,
+    );
     if (step == null) return;
     final target = chapters[step.chapterIndex];
     if (step.verseIdx == _kAllChapter) {
@@ -950,7 +997,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     TextBookLoaded state,
     List<int>? effectiveIndexes,
   ) async {
-    final fallbackIndex = state.selectedIndex ??
+    final fallbackIndex =
+        state.selectedIndex ??
         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
     final index = effectiveIndexes?.isNotEmpty == true
         ? effectiveIndexes!.first
@@ -964,15 +1012,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     final commentatorsToShow =
         _selectedCommentatorsOverride ?? state.activeCommentators;
     final added = context.read<BookmarkBloc>().addBookmark(
-          ref: 'מפרשים | $ref',
-          book: state.book,
-          index: index,
-          commentatorsToShow: commentatorsToShow,
-          targetKind: BookmarkTargetKind.commentators,
-        );
-    UiSnack.showQuick(added
-        ? NotesMessages.bookmarkAdded
-        : NotesMessages.bookmarkAlreadyExists);
+      ref: 'מפרשים | $ref',
+      book: state.book,
+      index: index,
+      commentatorsToShow: commentatorsToShow,
+      targetKind: BookmarkTargetKind.commentators,
+    );
+    UiSnack.showQuick(
+      added ? NotesMessages.bookmarkAdded : NotesMessages.bookmarkAlreadyExists,
+    );
   }
 
   void _showBookmarksForCurrentBook(BuildContext context, Book book) {
@@ -1047,8 +1095,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               if (!state.isTanach)
                 ActionButtonData(
                   widget: ToolbarActionButton(
-                    tooltip:
-                        state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
+                    tooltip: state.removePunctuation
+                        ? 'הצג פיסוק'
+                        : 'הסתר פיסוק',
                     icon: state.removePunctuation
                         ? FluentIcons.text_quote_24_regular
                         : FluentIcons.text_clear_formatting_24_regular,
@@ -1099,8 +1148,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       icon: allExpanded
                           ? FluentIcons.arrow_collapse_all_24_regular
                           : FluentIcons.arrow_expand_all_24_regular,
-                      compact:
-                          context.read<SettingsBloc>().state.compactMenuMode,
+                      compact: context
+                          .read<SettingsBloc>()
+                          .state
+                          .compactMenuMode,
                       onPressed: () =>
                           _commentaryKey.currentState?.toggleAllExpanded(),
                     );
@@ -1121,22 +1172,27 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   icon: FluentIcons.bookmark_add_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
                   onPressed: () => _addBookmark(
-                      context,
-                      state,
-                      _computeIndexes(
-                        chapters,
-                        _selectedChapter,
-                        _selectedVerseIdx,
-                        state.content.length,
-                      )),
+                    context,
+                    state,
+                    _computeIndexes(
+                      chapters,
+                      _selectedChapter,
+                      _selectedVerseIdx,
+                      state.content.length,
+                    ),
+                  ),
                 ),
                 icon: FluentIcons.bookmark_add_24_regular,
                 tooltip: 'הוסף סימניה',
                 onPressed: () => _addBookmark(
                   context,
                   state,
-                  _computeIndexes(chapters, _selectedChapter, _selectedVerseIdx,
-                      state.content.length),
+                  _computeIndexes(
+                    chapters,
+                    _selectedChapter,
+                    _selectedVerseIdx,
+                    state.content.length,
+                  ),
                 ),
               ),
               // הגדל טקסט
@@ -1145,15 +1201,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   tooltip: 'הגדל את גודל הטקסט',
                   icon: FluentIcons.zoom_in_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(UpdateFontSize((state.fontSize + 3).clamp(15, 50))),
+                  onPressed: () => context.read<TextBookBloc>().add(
+                    UpdateFontSize((state.fontSize + 3).clamp(15, 50)),
+                  ),
                 ),
                 icon: FluentIcons.zoom_in_24_regular,
                 tooltip: 'הגדל את גודל הטקסט',
-                onPressed: () => context
-                    .read<TextBookBloc>()
-                    .add(UpdateFontSize((state.fontSize + 3).clamp(15, 50))),
+                onPressed: () => context.read<TextBookBloc>().add(
+                  UpdateFontSize((state.fontSize + 3).clamp(15, 50)),
+                ),
               ),
               // הקטן טקסט
               ActionButtonData(
@@ -1161,15 +1217,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                   tooltip: 'הקטן את גודל הטקסט',
                   icon: FluentIcons.zoom_out_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
-                  onPressed: () => context
-                      .read<TextBookBloc>()
-                      .add(UpdateFontSize((state.fontSize - 3).clamp(15, 50))),
+                  onPressed: () => context.read<TextBookBloc>().add(
+                    UpdateFontSize((state.fontSize - 3).clamp(15, 50)),
+                  ),
                 ),
                 icon: FluentIcons.zoom_out_24_regular,
                 tooltip: 'הקטן את גודל הטקסט',
-                onPressed: () => context
-                    .read<TextBookBloc>()
-                    .add(UpdateFontSize((state.fontSize - 3).clamp(15, 50))),
+                onPressed: () => context.read<TextBookBloc>().add(
+                  UpdateFontSize((state.fontSize - 3).clamp(15, 50)),
+                ),
               ),
             ],
             alwaysInMenu: [
@@ -1271,8 +1327,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           child: TabBarView(
             controller: _navTabController,
             children: [
-              _buildTocList(context,
-                  chapters: chapters, content: state.content),
+              _buildTocList(
+                context,
+                chapters: chapters,
+                content: state.content,
+              ),
               _buildCommentatorsSelectionPanel(context, state),
               _buildCommentarySearchPanel(context),
             ],
@@ -1285,7 +1344,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   // ── פאנל בחירת מפרשים ─────────────────────────────────────────────────────
 
   Widget _buildCommentatorsSelectionPanel(
-      BuildContext context, TextBookLoaded state) {
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
     final groups = state.commentatorGroups;
     final selected = _selectedCommentatorsOverride ?? state.activeCommentators;
     if (groups.isEmpty) {
@@ -1321,54 +1382,54 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   Widget _buildCommentarySearchPanel(BuildContext context) {
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _commentarySearchController,
-      builder: (_, val, __) {
+      builder: (_, val, _) {
         final hasQuery = val.text.isNotEmpty;
         return ValueListenableBuilder<int>(
           valueListenable: _externalTotalResults,
-          builder: (_, total, __) => ValueListenableBuilder<int>(
+          builder: (_, total, _) => ValueListenableBuilder<int>(
             valueListenable: _externalCurrentIndex,
-            builder: (_, current, __) =>
+            builder: (_, current, _) =>
                 ValueListenableBuilder<List<CommentarySearchSnippet>>(
-              valueListenable: _externalSearchSnippets,
-              builder: (context, snippets, __) {
-                return SearchPaneBase(
-                  searchController: _commentarySearchController,
-                  focusNode: _searchFocusNode,
-                  hintText: 'חפש בתוך המפרשים המוצגים...',
-                  isNoResults: hasQuery && total == 0,
-                  resetSearchCallback: _commentarySearchController.clear,
-                  resultCountString: hasQuery && total > 0
-                      ? 'תוצאה ${current + 1} מתוך $total'
-                      : null,
-                  resultToolbar: hasQuery && total > 0
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            OtzariaSearchAction.prevResult(
-                              onPressed: current > 0
-                                  ? () => _commentaryKey.currentState
-                                      ?.navigateSearchPrev()
-                                  : null,
-                            ),
-                            OtzariaSearchAction.nextResult(
-                              onPressed: current < total - 1
-                                  ? () => _commentaryKey.currentState
-                                      ?.navigateSearchNext()
-                                  : null,
-                            ),
-                          ],
-                        )
-                      : null,
-                  resultsWidget: _buildSearchResultsList(
-                    context,
-                    query: val.text,
-                    snippets: snippets,
-                    total: total,
-                    currentIdx: current,
-                  ),
-                );
-              },
-            ),
+                  valueListenable: _externalSearchSnippets,
+                  builder: (context, snippets, _) {
+                    return SearchPaneBase(
+                      searchController: _commentarySearchController,
+                      focusNode: _searchFocusNode,
+                      hintText: 'חפש בתוך המפרשים המוצגים...',
+                      isNoResults: hasQuery && total == 0,
+                      resetSearchCallback: _commentarySearchController.clear,
+                      resultCountString: hasQuery && total > 0
+                          ? 'תוצאה ${current + 1} מתוך $total'
+                          : null,
+                      resultToolbar: hasQuery && total > 0
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                OtzariaSearchAction.prevResult(
+                                  onPressed: current > 0
+                                      ? () => _commentaryKey.currentState
+                                            ?.navigateSearchPrev()
+                                      : null,
+                                ),
+                                OtzariaSearchAction.nextResult(
+                                  onPressed: current < total - 1
+                                      ? () => _commentaryKey.currentState
+                                            ?.navigateSearchNext()
+                                      : null,
+                                ),
+                              ],
+                            )
+                          : null,
+                      resultsWidget: _buildSearchResultsList(
+                        context,
+                        query: val.text,
+                        snippets: snippets,
+                        total: total,
+                        currentIdx: current,
+                      ),
+                    );
+                  },
+                ),
           ),
         );
       },
@@ -1395,8 +1456,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       );
     }
 
-    final selectedGlobalIndex =
-        resolveSelectedSnippetGlobalIndex(snippets, currentIdx);
+    final selectedGlobalIndex = resolveSelectedSnippetGlobalIndex(
+      snippets,
+      currentIdx,
+    );
 
     // בניית רשימה מקובצת עם כותרות מפרשים
     final List<_SearchResultItem> items = [];
@@ -1404,7 +1467,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     for (final snippet in snippets) {
       if (snippet.path != lastPath) {
         items.add(
-            _SearchResultItem.header(utils.getTitleFromPath(snippet.path)));
+          _SearchResultItem.header(utils.getTitleFromPath(snippet.path)),
+        );
         lastPath = snippet.path;
       }
       items.add(_SearchResultItem.result(snippet));
@@ -1417,8 +1481,12 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         final item = items[index];
         if (item.isHeader) {
           return Padding(
-            padding:
-                const EdgeInsets.only(top: 8, bottom: 4, right: 4, left: 4),
+            padding: const EdgeInsets.only(
+              top: 8,
+              bottom: 4,
+              right: 4,
+              left: 4,
+            ),
             child: Row(
               children: [
                 Icon(
@@ -1468,8 +1536,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 borderRadius: AppTokens.borderRadiusAll,
               ),
               child: InkWell(
-                onTap: () => _commentaryKey.currentState
-                    ?.navigateToGlobalIndex(snippet.globalIndex),
+                onTap: () => _commentaryKey.currentState?.navigateToGlobalIndex(
+                  snippet.globalIndex,
+                ),
                 borderRadius: AppTokens.borderRadiusAll,
                 child: Padding(
                   padding: const EdgeInsets.all(10),
@@ -1505,7 +1574,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           padding: const EdgeInsets.all(8.0),
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: _tocSearchController,
-            builder: (_, val, __) => RtlTextField(
+            builder: (_, val, _) => RtlTextField(
               controller: _tocSearchController,
               decoration: InputDecoration(
                 hintText: 'איתור כותרת...',
@@ -1517,10 +1586,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                       )
                     : null,
                 isDense: true,
-                border:
-                    OutlineInputBorder(borderRadius: AppTokens.borderRadiusAll),
-                contentPadding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                border: OutlineInputBorder(
+                  borderRadius: AppTokens.borderRadiusAll,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
               ),
             ),
           ),
@@ -1533,8 +1605,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               final filteredChapters = query.isEmpty
                   ? chapters
                   : chapters.where((ch) => ch.text.contains(query)).toList();
-              final items =
-                  _buildVisibleTocItems(filteredChapters, chapters, content);
+              final items = _buildVisibleTocItems(
+                filteredChapters,
+                chapters,
+                content,
+              );
               _navItems = items;
               return ScrollablePositionedList.builder(
                 itemScrollController: _navScrollController,
@@ -1578,7 +1653,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                               },
                               child: Padding(
                                 padding: const EdgeInsets.only(
-                                    right: 16, top: 12, bottom: 12),
+                                  right: 16,
+                                  top: 12,
+                                  bottom: 12,
+                                ),
                                 child: Row(
                                   children: [
                                     Icon(
@@ -1648,8 +1726,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   /// מחזיר תצוגה מקדימה של ~4 מילים ראשונות של הפסקה
   String _getParaPreview(String rawText) {
-    final plain =
-        utils.stripHtmlIfNeeded(rawText).replaceAll(RegExp(r'\s+'), ' ').trim();
+    final plain = utils
+        .stripHtmlIfNeeded(rawText)
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (plain.isEmpty) return '';
     const maxChars = 40;
     if (plain.length <= maxChars) return plain;
@@ -1679,8 +1759,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     TocEntry child,
     List<String> content,
   ) {
-    final textFromContent =
-        child.index < content.length ? content[child.index] : '';
+    final textFromContent = child.index < content.length
+        ? content[child.index]
+        : '';
     return textFromContent.trim().isNotEmpty
         ? _getParaPreview(textFromContent)
         : child.text;
@@ -1694,8 +1775,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
   ) {
     if (offset != 0) return false;
     final lineIndex = chapter.index + offset;
-    final textFromContent =
-        lineIndex < content.length ? content[lineIndex] : '';
+    final textFromContent = lineIndex < content.length
+        ? content[lineIndex]
+        : '';
     if (textFromContent.trim().isEmpty) return false;
     final preview = _getParaPreview(textFromContent);
     return preview.trim() == chapter.text.trim();
@@ -1705,11 +1787,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     return chapter.children
         .asMap()
         .entries
-        .where((entry) => !_isDuplicateChapterChild(
-              chapter,
-              entry.value,
-              _previewForChild(chapter, entry.value, content),
-            ))
+        .where(
+          (entry) => !_isDuplicateChapterChild(
+            chapter,
+            entry.value,
+            _previewForChild(chapter, entry.value, content),
+          ),
+        )
         .map((entry) => entry.key)
         .toList();
   }
@@ -1766,7 +1850,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           items.add(
             _TocListItem.subItem(
               text: preview,
-              isSelected: (isSelectionContext && _selectedVerseIdx == i) ||
+              isSelected:
+                  (isSelectionContext && _selectedVerseIdx == i) ||
                   _isSubItemInMulti(i, chapter, allChapters),
               onTap: () {
                 if (_isCtrlPressed()) {
@@ -1787,8 +1872,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         content,
       )) {
         final lineIndex = chapter.index + i;
-        final textFromContent =
-            lineIndex < content.length ? content[lineIndex] : '';
+        final textFromContent = lineIndex < content.length
+            ? content[lineIndex]
+            : '';
         final preview = textFromContent.trim().isNotEmpty
             ? _getParaPreview(textFromContent)
             : 'פסקה ${i + 1}';
@@ -1796,7 +1882,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
         items.add(
           _TocListItem.subItem(
             text: preview,
-            isSelected: (isSelectionContext && _selectedVerseIdx == i) ||
+            isSelected:
+                (isSelectionContext && _selectedVerseIdx == i) ||
                 _isSubItemInMulti(i, chapter, allChapters),
             onTap: () {
               if (_isCtrlPressed()) {
@@ -1864,7 +1951,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.only(
-            right: 16.0 + 24.0, left: 16, top: 10, bottom: 10),
+          right: 16.0 + 24.0,
+          left: 16,
+          top: 10,
+          bottom: 10,
+        ),
         decoration: BoxDecoration(
           color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
           border: Border(
@@ -1921,10 +2012,10 @@ class _TocListItem {
   final VoidCallback? onTap;
 
   const _TocListItem.chapter(this.chapter)
-      : text = null,
-        isSelected = false,
-        isAllChapter = false,
-        onTap = null;
+    : text = null,
+      isSelected = false,
+      isAllChapter = false,
+      onTap = null;
 
   const _TocListItem.subItem({
     required this.text,

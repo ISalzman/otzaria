@@ -29,7 +29,7 @@ class PersonalNotesImportExportService {
   final PersonalNotesDatabase _database;
 
   PersonalNotesImportExportService({PersonalNotesDatabase? database})
-      : _database = database ?? PersonalNotesDatabase.instance;
+    : _database = database ?? PersonalNotesDatabase.instance;
 
   Map<String, dynamic> buildExport({
     required List<PersonalNote> notes,
@@ -38,7 +38,7 @@ class PersonalNotesImportExportService {
     return {
       'version': '2.0',
       'exportedAt': DateTime.now().toIso8601String(),
-      if (description != null) 'description': description,
+      'description': ?description,
       'notes': notes.map(_noteToJson).toList(),
     };
   }
@@ -114,8 +114,9 @@ class PersonalNotesImportExportService {
         final insert = op['insert'];
         if (insert is! String) continue;
         final attributes = op['attributes'];
-        final link =
-            attributes is Map<String, dynamic> ? attributes['link'] : null;
+        final link = attributes is Map<String, dynamic>
+            ? attributes['link']
+            : null;
         if (link is String && link.isNotEmpty && insert.trim().isNotEmpty) {
           buffer.write('$insert ($link)');
         } else {

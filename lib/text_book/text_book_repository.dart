@@ -36,10 +36,9 @@ class TextBookRepository {
   final SqliteDataProvider _sqliteProvider;
 
   TextBookRepository({
-    required FileSystemData fileSystem,
+    required this._fileSystem,
     SqliteDataProvider? sqliteProvider,
-  })  : _fileSystem = fileSystem,
-        _sqliteProvider = sqliteProvider ?? SqliteDataProvider.instance;
+  }) : _sqliteProvider = sqliteProvider ?? SqliteDataProvider.instance;
 
   Future<String> getBookContent(TextBook book) async {
     // מהדורה חלופית: נטענת אך ורק משאילתת ה-overlay של version_line — בלי
@@ -128,8 +127,9 @@ class TextBookRepository {
         categoryId: categoryId,
         fileType: fileType,
       );
-      final resolvedProvider =
-          (provider is DatabaseLibraryProvider) ? provider : dbProvider;
+      final resolvedProvider = (provider is DatabaseLibraryProvider)
+          ? provider
+          : dbProvider;
       final range = await resolvedProvider.getBookTextRange(
         book.title,
         categoryId,
@@ -184,14 +184,16 @@ class TextBookRepository {
     Iterable<String>? targetBookTitles,
   }) async {
     final normalizedStart = startIndex < 0 ? 0 : startIndex;
-    final normalizedEnd =
-        endIndex < normalizedStart ? normalizedStart : endIndex;
-    final normalizedTargetBookTitles = targetBookTitles
-        ?.map((title) => title.trim())
-        .where((title) => title.isNotEmpty)
-        .toSet()
-        .toList()
-      ?..sort();
+    final normalizedEnd = endIndex < normalizedStart
+        ? normalizedStart
+        : endIndex;
+    final normalizedTargetBookTitles =
+        targetBookTitles
+            ?.map((title) => title.trim())
+            .where((title) => title.isNotEmpty)
+            .toSet()
+            .toList()
+          ?..sort();
 
     final base = await _loadBaseLinks(
       book,
@@ -250,15 +252,18 @@ class TextBookRepository {
       final filteredLinks = providerLinks
           .where((link) => link.index1 >= rangeStart && link.index1 <= rangeEnd)
           .where((link) {
-        if (targetBookTitlesSet == null) {
-          return true;
-        }
-        // Non-commentary links (cross-references, sources, etc.) always pass through
-        if (!LinkTypes.isDependentTextLink(link.connectionType)) {
-          return true;
-        }
-        return targetBookTitlesSet.contains(utils.getTitleFromPath(link.path2));
-      }).toList();
+            if (targetBookTitlesSet == null) {
+              return true;
+            }
+            // Non-commentary links (cross-references, sources, etc.) always pass through
+            if (!LinkTypes.isDependentTextLink(link.connectionType)) {
+              return true;
+            }
+            return targetBookTitlesSet.contains(
+              utils.getTitleFromPath(link.path2),
+            );
+          })
+          .toList();
       return filteredLinks;
     }
 
@@ -321,7 +326,8 @@ class TextBookRepository {
           }
           if (content.isNotEmpty) {
             return await Isolate.run(
-                () => TocParser.parseEntriesFromContent(content));
+              () => TocParser.parseEntriesFromContent(content),
+            );
           }
         }
       }
@@ -349,15 +355,15 @@ class TextBookRepository {
   /// להסתיר מרשימת הבחירה הכללית (בספרים גדולים בלבד). ראה
   /// [computeRareCommentators].
   Future<({List<String> all, Set<String> rare})> getCommentatorsWithRarity(
-      TextBook book) async {
+    TextBook book,
+  ) async {
     // מפרשים מקישורי-משתמש (user_books.db) — נוספים לרשימת המפרשים של כל
     // ספר; מפרש מיובא לעולם אינו "נדיר" (יובא במכוון).
     final userCommentators = (await loadUserCommentatorTitles(
       bookTitle: book.title,
       bookCategoryId: book.categoryId,
       isUserBook: book.isUserBook,
-    ))
-        .toSet();
+    )).toSet();
     userOnly() =>
         (all: userCommentators.toList()..sort(), rare: const <String>{});
 
@@ -371,13 +377,15 @@ class TextBookRepository {
     // מקבל את ה-book ישירות מה-repository (אותו DB שממנו נשלוף את המפרשים)
     final dbBook = book.categoryId != null
         ? await repository.getBookByTitleAndCategory(
-            book.title, book.categoryId!)
+            book.title,
+            book.categoryId!,
+          )
         : await repository.getBookByTitle(book.title);
     if (dbBook == null) return userOnly();
 
     // שולף את הפרשנים ישירות מה-DB, כולל מספר הקישורים של כל מפרש
-    final commentatorsData =
-        await repository.database.linkDao.selectCommentatorsByBook(dbBook.id);
+    final commentatorsData = await repository.database.linkDao
+        .selectCommentatorsByBook(dbBook.id);
 
     // מפרש עשוי להופיע בכמה שורות (מחבר לכל שורה) עם אותו linkCount; לוקחים
     // את הערך המרבי כמספר הקישורים לספר.
@@ -418,13 +426,17 @@ class TextBookRepository {
 
     final sourceBook = sourceCategoryId != null
         ? await repository.getBookByTitleAndCategory(
-            sourceBookTitle, sourceCategoryId)
+            sourceBookTitle,
+            sourceCategoryId,
+          )
         : await repository.getBookByTitle(sourceBookTitle);
     if (sourceBook == null) return [];
 
     final currentBook = currentCategoryId != null
         ? await repository.getBookByTitleAndCategory(
-            currentBookTitle, currentCategoryId)
+            currentBookTitle,
+            currentCategoryId,
+          )
         : await repository.getBookByTitle(currentBookTitle);
 
     final rows = await repository.getSiblingCommentaryLinkRowsForLine(

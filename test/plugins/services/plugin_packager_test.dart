@@ -17,30 +17,29 @@ Map<String, dynamic> _minimalManifest({
   bool allowOrderBeforeBuiltIns = false,
   List<String> permissions = const [],
   Map<String, dynamic>? network,
-}) =>
-    {
-      'schemaVersion': 1,
-      'id': id,
-      'name': name,
-      'version': version,
-      'description': '',
-      'author': '',
-      'homepage': '',
-      'entrypoint': entrypoint,
-      'minAppVersion': '0.0.0',
-      'sdkVersion': '1.x',
-      'permissions': permissions,
-      if (network != null) 'network': network,
-      'contributes': {
-        'toolTab': {
-          'title': title ?? name,
-          'order': 900,
-          'allowOrderBeforeBuiltIns': allowOrderBeforeBuiltIns,
-          'defaultPinned': true,
-        },
-        'publishedDataTypes': const [],
-      },
-    };
+}) => {
+  'schemaVersion': 1,
+  'id': id,
+  'name': name,
+  'version': version,
+  'description': '',
+  'author': '',
+  'homepage': '',
+  'entrypoint': entrypoint,
+  'minAppVersion': '0.0.0',
+  'sdkVersion': '1.x',
+  'permissions': permissions,
+  'network': ?network,
+  'contributes': {
+    'toolTab': {
+      'title': title ?? name,
+      'order': 900,
+      'allowOrderBeforeBuiltIns': allowOrderBeforeBuiltIns,
+      'defaultPinned': true,
+    },
+    'publishedDataTypes': const [],
+  },
+};
 
 /// יוצר תיקיית תוסף בדיסק עם manifest + index.html. מחזיר נתיב מוחלט.
 String _writePluginDir(
@@ -51,8 +50,9 @@ String _writePluginDir(
   Map<String, String> extraFiles = const {},
 }) {
   final dir = Directory(p.join(parent.path, dirName))..createSync();
-  File(p.join(dir.path, 'manifest.json'))
-      .writeAsStringSync(jsonEncode(manifestOverride ?? _minimalManifest()));
+  File(
+    p.join(dir.path, 'manifest.json'),
+  ).writeAsStringSync(jsonEncode(manifestOverride ?? _minimalManifest()));
   File(p.join(dir.path, 'index.html')).writeAsStringSync(indexHtml);
   extraFiles.forEach((rel, contents) {
     final f = File(p.join(dir.path, rel));
@@ -120,8 +120,13 @@ void main() {
 
       expect(
         () => PluginPackager.packDirectory(directoryPath: dir.path),
-        throwsA(isA<PluginPackagerException>()
-            .having((e) => e.message, 'message', contains('manifest.json'))),
+        throwsA(
+          isA<PluginPackagerException>().having(
+            (e) => e.message,
+            'message',
+            contains('manifest.json'),
+          ),
+        ),
       );
     });
 
@@ -135,8 +140,13 @@ void main() {
           directoryPath: pluginDir,
           outputPath: outPath,
         ),
-        throwsA(isA<PluginPackagerException>()
-            .having((e) => e.message, 'message', contains('--force'))),
+        throwsA(
+          isA<PluginPackagerException>().having(
+            (e) => e.message,
+            'message',
+            contains('--force'),
+          ),
+        ),
       );
     });
 
@@ -161,44 +171,47 @@ void main() {
     });
 
     test(
-        'does NOT pack the output .otzplugin into itself when it lives inside the source dir',
-        () async {
-      // רגרסיה: באג שהמשתמש זיהה. כש--output מצביע לתוך תיקיית התוסף,
-      // הקובץ הנוצר היה נסרק ע"י listSync ונכנס לארכיון של עצמו.
-      final pluginDir = _writePluginDir(tempDir);
-      final outPath = p.join(pluginDir, 'my.otzplugin');
+      'does NOT pack the output .otzplugin into itself when it lives inside the source dir',
+      () async {
+        // רגרסיה: באג שהמשתמש זיהה. כש--output מצביע לתוך תיקיית התוסף,
+        // הקובץ הנוצר היה נסרק ע"י listSync ונכנס לארכיון של עצמו.
+        final pluginDir = _writePluginDir(tempDir);
+        final outPath = p.join(pluginDir, 'my.otzplugin');
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-        outputPath: outPath,
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+          outputPath: outPath,
+        );
 
-      // רק 2 קבצים אמורים להיכנס — manifest.json + index.html — לא הקובץ
-      // .otzplugin עצמו.
-      expect(result.fileCount, 2);
+        // רק 2 קבצים אמורים להיכנס — manifest.json + index.html — לא הקובץ
+        // .otzplugin עצמו.
+        expect(result.fileCount, 2);
 
-      // ולוודא שהארכיון לא מכיל ערך בשם my.otzplugin
-      final bytes = File(outPath).readAsBytesSync();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      final names = archive.files.map((f) => f.name).toList();
-      expect(names, isNot(contains('my.otzplugin')));
-      expect(names, containsAll(<String>['manifest.json', 'index.html']));
-    });
+        // ולוודא שהארכיון לא מכיל ערך בשם my.otzplugin
+        final bytes = File(outPath).readAsBytesSync();
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final names = archive.files.map((f) => f.name).toList();
+        expect(names, isNot(contains('my.otzplugin')));
+        expect(names, containsAll(<String>['manifest.json', 'index.html']));
+      },
+    );
 
-    test('default output path lands in parent dir as {id}-{version}.otzplugin',
-        () async {
-      final pluginDir = _writePluginDir(tempDir);
+    test(
+      'default output path lands in parent dir as {id}-{version}.otzplugin',
+      () async {
+        final pluginDir = _writePluginDir(tempDir);
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+        );
 
-      expect(
-        p.basename(result.outputPath),
-        'test.packager.plugin-1.0.0.otzplugin',
-      );
-      expect(p.dirname(result.outputPath), tempDir.path);
-    });
+        expect(
+          p.basename(result.outputPath),
+          'test.packager.plugin-1.0.0.otzplugin',
+        );
+        expect(p.dirname(result.outputPath), tempDir.path);
+      },
+    );
 
     test('rejects a toolTab.title that differs from name', () async {
       // הכותרת המוצגת בטאב חייבת להיות זהה לשם התוסף (כמו בחנות) — אחרת
@@ -209,64 +222,77 @@ void main() {
       await expectLater(
         PluginPackager.packDirectory(directoryPath: pluginDir),
         throwsA(
-            predicate((e) => e.toString().contains('השמות חייבים להיות זהים'))),
+          predicate((e) => e.toString().contains('השמות חייבים להיות זהים')),
+        ),
       );
     });
 
-    test('packaging preserves allowOrderBeforeBuiltIns from the manifest',
-        () async {
-      final manifest = _minimalManifest(allowOrderBeforeBuiltIns: true);
-      final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
+    test(
+      'packaging preserves allowOrderBeforeBuiltIns from the manifest',
+      () async {
+        final manifest = _minimalManifest(allowOrderBeforeBuiltIns: true);
+        final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
 
-      final result =
-          await PluginPackager.packDirectory(directoryPath: pluginDir);
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+        );
 
-      expect(result.manifest.allowOrderBeforeBuiltIns, isTrue,
-          reason: 'the packager must preserve the explicit placement flag from '
-              'manifest.json so packaged plugins behave like development ones');
-    });
+        expect(
+          result.manifest.allowOrderBeforeBuiltIns,
+          isTrue,
+          reason:
+              'the packager must preserve the explicit placement flag from '
+              'manifest.json so packaged plugins behave like development ones',
+        );
+      },
+    );
 
-    test('blocks packaging when manifest validator throws (bad permission)',
-        () async {
-      // הרשאה לא קיימת ברשימה הרשמית => PluginManifestValidator זורק.
-      final manifest = _minimalManifest(
-        permissions: const ['this.is.not.a.real.permission'],
-      );
-      final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
+    test(
+      'blocks packaging when manifest validator throws (bad permission)',
+      () async {
+        // הרשאה לא קיימת ברשימה הרשמית => PluginManifestValidator זורק.
+        final manifest = _minimalManifest(
+          permissions: const ['this.is.not.a.real.permission'],
+        );
+        final pluginDir = _writePluginDir(tempDir, manifestOverride: manifest);
 
-      expect(
-        () => PluginPackager.packDirectory(directoryPath: pluginDir),
-        throwsA(isA<PluginPackagerException>()),
-      );
-    });
+        expect(
+          () => PluginPackager.packDirectory(directoryPath: pluginDir),
+          throwsA(isA<PluginPackagerException>()),
+        );
+      },
+    );
 
-    test('packing succeeds despite warnings; warnings are surfaced in report',
-        () async {
-      // קריאה ל-API לא מוכר -> warning בלבד, האריזה צריכה לעבור.
-      final manifest = _minimalManifest();
-      final pluginDir = _writePluginDir(
-        tempDir,
-        manifestOverride: manifest,
-        extraFiles: {
-          'app.js': '''
+    test(
+      'packing succeeds despite warnings; warnings are surfaced in report',
+      () async {
+        // קריאה ל-API לא מוכר -> warning בלבד, האריזה צריכה לעבור.
+        final manifest = _minimalManifest();
+        final pluginDir = _writePluginDir(
+          tempDir,
+          manifestOverride: manifest,
+          extraFiles: {
+            'app.js': '''
             // קריאה ל-API לא מוכר
             Otzaria.call('totally.fake_method', {});
           ''',
-        },
-      );
+          },
+        );
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+        );
 
-      expect(result.validation.hasErrors, isFalse);
-      expect(result.validation.hasWarnings, isTrue);
-      expect(
-        result.validation.warnings
-            .any((w) => w.contains('totally.fake_method')),
-        isTrue,
-      );
-    });
+        expect(result.validation.hasErrors, isFalse);
+        expect(result.validation.hasWarnings, isTrue);
+        expect(
+          result.validation.warnings.any(
+            (w) => w.contains('totally.fake_method'),
+          ),
+          isTrue,
+        );
+      },
+    );
 
     // ── בדיקות entrypoint בתוך תיקייה מוחרגת ──────────────────────────────
 
@@ -285,11 +311,13 @@ void main() {
 
       await expectLater(
         () => PluginPackager.packDirectory(directoryPath: pluginDir),
-        throwsA(isA<PluginPackagerException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('node_modules'), contains('מוחרגת')),
-        )),
+        throwsA(
+          isA<PluginPackagerException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('node_modules'), contains('מוחרגת')),
+          ),
+        ),
       );
     });
 
@@ -303,18 +331,21 @@ void main() {
 
       await expectLater(
         () => PluginPackager.packDirectory(directoryPath: pluginDir),
-        throwsA(isA<PluginPackagerException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('.git'), contains('מוחרגת')),
-        )),
+        throwsA(
+          isA<PluginPackagerException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('.git'), contains('מוחרגת')),
+          ),
+        ),
       );
     });
 
     test('throws when entrypoint uses ./ prefix into a skipped dir', () async {
       // וריאנט נתיב עם ./ — normalize+absolute חייב לתפוס גם את זה.
-      final manifest =
-          _minimalManifest(entrypoint: './node_modules/pkg/index.html');
+      final manifest = _minimalManifest(
+        entrypoint: './node_modules/pkg/index.html',
+      );
       final pluginDir = _writePluginDir(
         tempDir,
         manifestOverride: manifest,
@@ -327,109 +358,123 @@ void main() {
       );
     });
 
-    test('files inside skipped dirs are silently excluded; entrypoint is safe',
-        () async {
-      // תיקיית .git קיימת עם קבצים, אבל ה-entrypoint עצמו בשורש — תקין.
-      final pluginDir = _writePluginDir(
-        tempDir,
-        extraFiles: {
-          '.git/config': '[core]',
-          '.git/HEAD': 'ref: refs/heads/main',
-          'node_modules/lib/util.js': 'export default {}',
-        },
-      );
+    test(
+      'files inside skipped dirs are silently excluded; entrypoint is safe',
+      () async {
+        // תיקיית .git קיימת עם קבצים, אבל ה-entrypoint עצמו בשורש — תקין.
+        final pluginDir = _writePluginDir(
+          tempDir,
+          extraFiles: {
+            '.git/config': '[core]',
+            '.git/HEAD': 'ref: refs/heads/main',
+            'node_modules/lib/util.js': 'export default {}',
+          },
+        );
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-        outputPath: p.join(tempDir.path, 'out.otzplugin'),
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+          outputPath: p.join(tempDir.path, 'out.otzplugin'),
+        );
 
-      // רק 2 קבצים — קבצי .git ו-node_modules לא אמורים להיכלל.
-      expect(result.fileCount, 2);
+        // רק 2 קבצים — קבצי .git ו-node_modules לא אמורים להיכלל.
+        expect(result.fileCount, 2);
 
-      final bytes = File(result.outputPath).readAsBytesSync();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      final names = archive.files.map((f) => f.name).toSet();
-      expect(names, containsAll(<String>['manifest.json', 'index.html']));
-      expect(names.any((n) => n.startsWith('.git/')), isFalse);
-      expect(names.any((n) => n.startsWith('node_modules/')), isFalse);
-    });
+        final bytes = File(result.outputPath).readAsBytesSync();
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final names = archive.files.map((f) => f.name).toSet();
+        expect(names, containsAll(<String>['manifest.json', 'index.html']));
+        expect(names.any((n) => n.startsWith('.git/')), isFalse);
+        expect(names.any((n) => n.startsWith('node_modules/')), isFalse);
+      },
+    );
 
-    test('entrypoint in a normal (non-skipped) subdirectory packs correctly',
-        () async {
-      final manifest = _minimalManifest(entrypoint: 'src/app/index.html');
-      final pluginDir = _writePluginDir(
-        tempDir,
-        manifestOverride: manifest,
-        extraFiles: {'src/app/index.html': '<html></html>'},
-      );
+    test(
+      'entrypoint in a normal (non-skipped) subdirectory packs correctly',
+      () async {
+        final manifest = _minimalManifest(entrypoint: 'src/app/index.html');
+        final pluginDir = _writePluginDir(
+          tempDir,
+          manifestOverride: manifest,
+          extraFiles: {'src/app/index.html': '<html></html>'},
+        );
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-        outputPath: p.join(tempDir.path, 'out.otzplugin'),
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+          outputPath: p.join(tempDir.path, 'out.otzplugin'),
+        );
 
-      expect(result.fileCount,
-          3); // manifest.json + index.html (root) + src/app/index.html
-      final bytes = File(result.outputPath).readAsBytesSync();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      expect(
-        archive.files.map((f) => f.name),
-        contains('src/app/index.html'),
-      );
-    });
+        expect(
+          result.fileCount,
+          3,
+        ); // manifest.json + index.html (root) + src/app/index.html
+        final bytes = File(result.outputPath).readAsBytesSync();
+        final archive = ZipDecoder().decodeBytes(bytes);
+        expect(
+          archive.files.map((f) => f.name),
+          contains('src/app/index.html'),
+        );
+      },
+    );
 
     // ── החרגה דרך .otzignore ───────────────────────────────────────────────
 
-    test('.otzignore excludes files, dirs, and globs (with ! re-include)',
-        () async {
-      final pluginDir = _writePluginDir(
-        tempDir,
-        extraFiles: {
-          'app.js': 'x',
-          'app.js.map': 'x', // *.map glob
-          'notes.txt': 'x', // קובץ בודד מעוגן
-          'src/raw.ts': 'x', // גזימת תיקיית src/
-          'src/keep.js': 'x', // מוחזר ע"י !
-          '.otzignore': '# build excludes\n'
-              '*.map\n'
-              'notes.txt\n'
-              'src/\n'
-              '!src/keep.js\n',
-        },
-      );
+    test(
+      '.otzignore excludes files, dirs, and globs (with ! re-include)',
+      () async {
+        final pluginDir = _writePluginDir(
+          tempDir,
+          extraFiles: {
+            'app.js': 'x',
+            'app.js.map': 'x', // *.map glob
+            'notes.txt': 'x', // קובץ בודד מעוגן
+            'src/raw.ts': 'x', // גזימת תיקיית src/
+            'src/keep.js': 'x', // מוחזר ע"י !
+            '.otzignore':
+                '# build excludes\n'
+                '*.map\n'
+                'notes.txt\n'
+                'src/\n'
+                '!src/keep.js\n',
+          },
+        );
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-        outputPath: p.join(tempDir.path, 'out.otzplugin'),
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+          outputPath: p.join(tempDir.path, 'out.otzplugin'),
+        );
 
-      final archive =
-          ZipDecoder().decodeBytes(File(result.outputPath).readAsBytesSync());
-      final names = archive.files.map((f) => f.name).toSet();
+        final archive = ZipDecoder().decodeBytes(
+          File(result.outputPath).readAsBytesSync(),
+        );
+        final names = archive.files.map((f) => f.name).toSet();
 
-      expect(names,
-          containsAll(<String>['manifest.json', 'index.html', 'app.js']));
-      expect(names, contains('src/keep.js')); // !src/keep.js הוחזר
-      expect(names, isNot(contains('app.js.map')));
-      expect(names, isNot(contains('notes.txt')));
-      expect(names, isNot(contains('src/raw.ts')));
-      expect(names, isNot(contains('.otzignore'))); // הקובץ עצמו לא נארז
-      expect(result.excludedCount, 3); // app.js.map, notes.txt, src/raw.ts
-    });
+        expect(
+          names,
+          containsAll(<String>['manifest.json', 'index.html', 'app.js']),
+        );
+        expect(names, contains('src/keep.js')); // !src/keep.js הוחזר
+        expect(names, isNot(contains('app.js.map')));
+        expect(names, isNot(contains('notes.txt')));
+        expect(names, isNot(contains('src/raw.ts')));
+        expect(names, isNot(contains('.otzignore'))); // הקובץ עצמו לא נארז
+        expect(result.excludedCount, 3); // app.js.map, notes.txt, src/raw.ts
+      },
+    );
 
-    test('no .otzignore => excludedCount is 0 and nothing extra is dropped',
-        () async {
-      final pluginDir = _writePluginDir(tempDir, extraFiles: {'a.js': 'x'});
+    test(
+      'no .otzignore => excludedCount is 0 and nothing extra is dropped',
+      () async {
+        final pluginDir = _writePluginDir(tempDir, extraFiles: {'a.js': 'x'});
 
-      final result = await PluginPackager.packDirectory(
-        directoryPath: pluginDir,
-        outputPath: p.join(tempDir.path, 'out.otzplugin'),
-      );
+        final result = await PluginPackager.packDirectory(
+          directoryPath: pluginDir,
+          outputPath: p.join(tempDir.path, 'out.otzplugin'),
+        );
 
-      expect(result.excludedCount, 0);
-      expect(result.fileCount, 3); // manifest + index + a.js
-    });
+        expect(result.excludedCount, 0);
+        expect(result.fileCount, 3); // manifest + index + a.js
+      },
+    );
 
     test('throws when .otzignore would exclude the entrypoint', () async {
       final manifest = _minimalManifest(entrypoint: 'app/index.html');
@@ -444,11 +489,13 @@ void main() {
 
       await expectLater(
         () => PluginPackager.packDirectory(directoryPath: pluginDir),
-        throwsA(isA<PluginPackagerException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('app/index.html'), contains('.otzignore')),
-        )),
+        throwsA(
+          isA<PluginPackagerException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('app/index.html'), contains('.otzignore')),
+          ),
+        ),
       );
     });
   });

@@ -19,7 +19,7 @@ import '../helpers/memory_settings_cache.dart';
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
   _FakeSettingsBloc() : super(SettingsState.initial()) {
-    on<SettingsEvent>((_, __) {});
+    on<SettingsEvent>((_, _) {});
   }
 
   @override
@@ -30,7 +30,8 @@ class _FakePersonalNotesBloc
     extends Bloc<PersonalNotesEvent, PersonalNotesState>
     implements PersonalNotesBloc {
   _FakePersonalNotesBloc()
-      : super(const PersonalNotesState(
+    : super(
+        const PersonalNotesState(
           isLoading: false,
           bookId: '',
           locatedNotes: [],
@@ -38,8 +39,9 @@ class _FakePersonalNotesBloc
           errorMessage: null,
           filteredLocatedNotes: [],
           filteredMissingNotes: [],
-        )) {
-    on<PersonalNotesEvent>((_, __) {});
+        ),
+      ) {
+    on<PersonalNotesEvent>((_, _) {});
   }
 
   @override
@@ -47,16 +49,16 @@ class _FakePersonalNotesBloc
 }
 
 Widget _wrap(Widget child) => MaterialApp(
-      home: MultiBlocProvider(
-        providers: [
-          BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc()),
-          BlocProvider<PersonalNotesBloc>.value(
-            value: _FakePersonalNotesBloc(),
-          ),
-        ],
-        child: Scaffold(body: child),
+  home: MultiBlocProvider(
+    providers: [
+      BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc()),
+      BlocProvider<PersonalNotesBloc>.value(
+        value: _FakePersonalNotesBloc(),
       ),
-    );
+    ],
+    child: Scaffold(body: child),
+  ),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -65,8 +67,9 @@ void main() {
     await Settings.init(cacheProvider: MemorySettingsCache());
   });
 
-  testWidgets('כרטסיית מפרשי PDF מסתנכרנת עם currentTitle של sourceTab',
-      (tester) async {
+  testWidgets('כרטסיית מפרשי PDF מסתנכרנת עם currentTitle של sourceTab', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -112,48 +115,50 @@ void main() {
   });
 
   testWidgets(
-      'תצוגת ספר: כותרת משולבת נפתחת על העמוד הראשון ומציגה גם את העמוד השני',
-      (tester) async {
-    tester.view.physicalSize = const Size(1600, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    'תצוגת ספר: כותרת משולבת נפתחת על העמוד הראשון ומציגה גם את העמוד השני',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final sourceTab = PdfBookTab(
-      book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
-      pageNumber: 2,
-    );
-    addTearDown(sourceTab.dispose);
+      final sourceTab = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 2,
+      );
+      addTearDown(sourceTab.dispose);
 
-    sourceTab.pdfHeadings = PdfHeadings(
-      bookTitle: 'PDF בדיקה',
-      headingsMap: {
-        'פרק א': 1,
-        'פרק ב': 10,
-        'פרק ג': 20,
-      },
-    );
-    // כותרת ספירייד משולבת (כפי שנוצרת בתצוגת ספר)
-    sourceTab.currentTitle.value = 'פרק ב — פרק ג';
+      sourceTab.pdfHeadings = PdfHeadings(
+        bookTitle: 'PDF בדיקה',
+        headingsMap: {
+          'פרק א': 1,
+          'פרק ב': 10,
+          'פרק ג': 20,
+        },
+      );
+      // כותרת ספירייד משולבת (כפי שנוצרת בתצוגת ספר)
+      sourceTab.currentTitle.value = 'פרק ב — פרק ג';
 
-    final tab = PdfCommentatorsTab(sourceTab: sourceTab);
+      final tab = PdfCommentatorsTab(sourceTab: sourceTab);
 
-    await tester.pumpWidget(
-      _wrap(PdfCommentatorsTabScreen(tab: tab)),
-    );
-    await tester.pump();
+      await tester.pumpWidget(
+        _wrap(PdfCommentatorsTabScreen(tab: tab)),
+      );
+      await tester.pump();
 
-    PdfCommentaryPanel panel() =>
-        tester.widget<PdfCommentaryPanel>(find.byType(PdfCommentaryPanel));
+      PdfCommentaryPanel panel() =>
+          tester.widget<PdfCommentaryPanel>(find.byType(PdfCommentaryPanel));
 
-    // לא נופל ל'פרק א' (שורה 1) — נבחר העמוד הראשון בספירייד, 'פרק ב' (שורה 10)
-    expect(panel().lineStartOverride, 10);
-    // העמוד השני בספירייד ('פרק ג', שורה 20) נכלל דרך extraLineIndices
-    expect(panel().extraLineIndices, contains(20));
-  });
+      // לא נופל ל'פרק א' (שורה 1) — נבחר העמוד הראשון בספירייד, 'פרק ב' (שורה 10)
+      expect(panel().lineStartOverride, 10);
+      // העמוד השני בספירייד ('פרק ג', שורה 20) נכלל דרך extraLineIndices
+      expect(panel().extraLineIndices, contains(20));
+    },
+  );
 
-  testWidgets('כותרת חוקית עם מקף ארוך אינה מפוצלת בטעות לספירייד',
-      (tester) async {
+  testWidgets('כותרת חוקית עם מקף ארוך אינה מפוצלת בטעות לספירייד', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -192,8 +197,9 @@ void main() {
     expect(panel().extraLineIndices, isNull);
   });
 
-  testWidgets('ספירייד שכותרתו הראשונה מכילה מקף — מתפצל במקום הנכון',
-      (tester) async {
+  testWidgets('ספירייד שכותרתו הראשונה מכילה מקף — מתפצל במקום הנכון', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -233,43 +239,44 @@ void main() {
   });
 
   testWidgets(
-      'כרטסיית מפרשי PDF מציגה "טוען מפרשים..." בזמן טעינת links של sourceTab',
-      (tester) async {
-    tester.view.physicalSize = const Size(1600, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    'כרטסיית מפרשי PDF מציגה "טוען מפרשים..." בזמן טעינת links של sourceTab',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final sourceTab = PdfBookTab(
-      book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
-      pageNumber: 1,
-    );
-    addTearDown(sourceTab.dispose);
+      final sourceTab = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 1,
+      );
+      addTearDown(sourceTab.dispose);
 
-    sourceTab.pdfHeadings = PdfHeadings(
-      bookTitle: 'PDF בדיקה',
-      headingsMap: {
-        'פרק א': 1,
-      },
-    );
-    sourceTab.currentTitle.value = 'פרק א';
-    sourceTab.currentTextLineNumber = 1;
-    sourceTab.currentTextLineNumberEnd = 9;
-    sourceTab.linksLoadingNotifier.value = true;
+      sourceTab.pdfHeadings = PdfHeadings(
+        bookTitle: 'PDF בדיקה',
+        headingsMap: {
+          'פרק א': 1,
+        },
+      );
+      sourceTab.currentTitle.value = 'פרק א';
+      sourceTab.currentTextLineNumber = 1;
+      sourceTab.currentTextLineNumberEnd = 9;
+      sourceTab.linksLoadingNotifier.value = true;
 
-    final tab = PdfCommentatorsTab(sourceTab: sourceTab);
+      final tab = PdfCommentatorsTab(sourceTab: sourceTab);
 
-    await tester.pumpWidget(
-      _wrap(PdfCommentatorsTabScreen(tab: tab)),
-    );
-    await tester.pump();
+      await tester.pumpWidget(
+        _wrap(PdfCommentatorsTabScreen(tab: tab)),
+      );
+      await tester.pump();
 
-    expect(find.text('טוען מפרשים...'), findsOneWidget);
-    expect(find.text('לא נמצאו מפרשים לקטע הנבחר'), findsNothing);
+      expect(find.text('טוען מפרשים...'), findsOneWidget);
+      expect(find.text('לא נמצאו מפרשים לקטע הנבחר'), findsNothing);
 
-    sourceTab.linksLoadingNotifier.value = false;
-    await tester.pump();
+      sourceTab.linksLoadingNotifier.value = false;
+      await tester.pump();
 
-    expect(find.text('לא נמצאו מפרשים לקטע הנבחר'), findsOneWidget);
-  });
+      expect(find.text('לא נמצאו מפרשים לקטע הנבחר'), findsOneWidget);
+    },
+  );
 }

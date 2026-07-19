@@ -17,9 +17,8 @@ class _FakeRepository implements FindRefRepository {
 
   _FakeRepository({
     Future<List<DbReferenceResult>> Function(String)? fn,
-    Exception? error,
-  })  : _fn = fn ?? _emptyFindRefs,
-        _error = error;
+    this._error,
+  }) : _fn = fn ?? _emptyFindRefs;
 
   @override
   Future<List<DbReferenceResult>> findRefs(
@@ -39,16 +38,14 @@ class _FakeRepository implements FindRefRepository {
 DbReferenceResult _result({
   String title = 'בראשית',
   String ref = 'בראשית פרק א',
-}) =>
-    DbReferenceResult(title: title, reference: ref, segment: 1);
+}) => DbReferenceResult(title: title, reference: ref, segment: 1);
 
 FindRefBloc _bloc({
   Future<List<DbReferenceResult>> Function(String)? fn,
   Exception? error,
-}) =>
-    FindRefBloc(
-      findRefRepository: _FakeRepository(fn: fn, error: error),
-    );
+}) => FindRefBloc(
+  findRefRepository: _FakeRepository(fn: fn, error: error),
+);
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -97,8 +94,11 @@ void main() {
       wait: _kPastDebounce,
       expect: () => [
         isA<FindRefLoading>(),
-        isA<FindRefError>()
-            .having((s) => s.message, 'message', contains('DB error')),
+        isA<FindRefError>().having(
+          (s) => s.message,
+          'message',
+          contains('DB error'),
+        ),
       ],
     );
   });

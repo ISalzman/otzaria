@@ -71,11 +71,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
   SearchBloc({
     SearchConfiguration? initialConfiguration,
-    SearchRepository repository = const SearchRepository(),
-  })  : _repository = repository,
-        super(SearchState(
-          configuration: initialConfiguration ?? const SearchConfiguration(),
-        )) {
+    this._repository = const SearchRepository(),
+  }) : super(
+         SearchState(
+           configuration: initialConfiguration ?? const SearchConfiguration(),
+         ),
+       ) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<UpdateDistance>(_onUpdateDistance);
     on<UpdateDistanceWithoutSearch>(_onUpdateDistanceWithoutSearch);
@@ -117,27 +118,31 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final query = event.query;
     final negativeQuery = event.negativeQuery ?? state.negativeQuery;
     if (event.query.isEmpty) {
-      emit(state.copyWith(
-        searchQuery: event.query,
-        negativeQuery: negativeQuery,
-        results: [],
-        totalResults: 0,
-        totalGroups: null,
-        facetCounts: const {},
-      ));
+      emit(
+        state.copyWith(
+          searchQuery: event.query,
+          negativeQuery: negativeQuery,
+          results: [],
+          totalResults: 0,
+          totalGroups: null,
+          facetCounts: const {},
+        ),
+      );
       return;
     }
 
     if (state.currentFacets.isEmpty) {
-      emit(state.copyWith(
-        searchQuery: event.query,
-        negativeQuery: negativeQuery,
-        results: [],
-        totalResults: 0,
-        totalGroups: null,
-        isLoading: false,
-        facetCounts: const {},
-      ));
+      emit(
+        state.copyWith(
+          searchQuery: event.query,
+          negativeQuery: negativeQuery,
+          results: [],
+          totalResults: 0,
+          totalGroups: null,
+          isLoading: false,
+          facetCounts: const {},
+        ),
+      );
       return;
     }
 
@@ -147,26 +152,32 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     // הצילום והחתימה נבנים באותו בלוק סינכרוני — בלי await ביניהם — כדי
     // שהספירה שתרוץ ברקע תתאים תמיד לחתימה שתישמר איתה.
     final recountInputs = _currentFacetRecountInputs();
-    final recountSignature =
-        _facetRecountSignature(query, event, recountInputs);
-    final shouldSkipFacetRecount = state.facetCounts.isNotEmpty &&
+    final recountSignature = _facetRecountSignature(
+      query,
+      event,
+      recountInputs,
+    );
+    final shouldSkipFacetRecount =
+        state.facetCounts.isNotEmpty &&
         recountSignature == _facetCountsSignature;
 
     // Clear global cache for new search
     TantivyDataProvider.clearGlobalCache();
 
-    emit(state.copyWith(
-      searchQuery: query,
-      negativeQuery: negativeQuery,
-      isLoading: true,
-      facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
-      // איפוס שגיאה קודמת בתחילת חיפוש חדש, אחרת הודעת שגיאה ישנה הייתה
-      // נשארת ב-state ומבלבלת את המשתמש במהלך החיפוש החדש.
-      errorMessage: null,
-      // איפוס דגל התוצאות-החלקיות; ייקבע מחדש מאירוע הספירות אם השאילתה
-      // חורגת מתקציב האיסוף במנוע.
-      resultsTruncated: false,
-    ));
+    emit(
+      state.copyWith(
+        searchQuery: query,
+        negativeQuery: negativeQuery,
+        isLoading: true,
+        facetCounts: shouldPreserveFacetCounts ? state.facetCounts : const {},
+        // איפוס שגיאה קודמת בתחילת חיפוש חדש, אחרת הודעת שגיאה ישנה הייתה
+        // נשארת ב-state ומבלבלת את המשתמש במהלך החיפוש החדש.
+        errorMessage: null,
+        // איפוס דגל התוצאות-החלקיות; ייקבע מחדש מאירוע הספירות אם השאילתה
+        // חורגת מתקציב האיסוף במנוע.
+        resultsTruncated: false,
+      ),
+    );
 
     Map<String, Book>? bookByIndexedFilePath;
 
@@ -183,8 +194,14 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // ספירת-ספרים נפרדת נדרשת רק כשהחיפוש רץ על תת-בחירה מהעץ (אחרת
       // ה-stream המשולב מספק את הספירות), וגם אז רק אם החתימה השתנתה.
       if (!scopeEqualsSearch && !shouldSkipFacetRecount) {
-        unawaited(_refreshFacetCountsForAllBooks(
-            event, requestId, recountSignature, recountInputs));
+        unawaited(
+          _refreshFacetCountsForAllBooks(
+            event,
+            requestId,
+            recountSignature,
+            recountInputs,
+          ),
+        );
       }
 
       // stream משולב: האירוע הראשון נושא ספירה כוללת + ספירה לפי ספר
@@ -236,28 +253,32 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
             // מאפשרת לדלג על ספירה חוזרת בלחיצה על קטגוריה מהעץ.
             _facetCountsSignature = recountSignature;
           }
-          emit(state.copyWith(
-            totalResults: update.totalCount,
-            // מספר הקבוצות כשהאיחוד פעיל; null בחיפוש שטוח — ואז הרשימה
-            // נמדדת ב-totalResults כרגיל.
-            totalGroups: update.groupCount,
-            // null משאיר את הספירות הקיימות (למשל כשהעץ מתעדכן בנפרד
-            // דרך ReplaceFacetCounts במקרה של תת-בחירה).
-            facetCounts: aggregated,
-            isLoading: true,
-            // דגל התוצאות-החלקיות מגיע באירוע הספירות בלבד.
-            resultsTruncated: update.truncated,
-          ));
+          emit(
+            state.copyWith(
+              totalResults: update.totalCount,
+              // מספר הקבוצות כשהאיחוד פעיל; null בחיפוש שטוח — ואז הרשימה
+              // נמדדת ב-totalResults כרגיל.
+              totalGroups: update.groupCount,
+              // null משאיר את הספירות הקיימות (למשל כשהעץ מתעדכן בנפרד
+              // דרך ReplaceFacetCounts במקרה של תת-בחירה).
+              facetCounts: aggregated,
+              isLoading: true,
+              // דגל התוצאות-החלקיות מגיע באירוע הספירות בלבד.
+              resultsTruncated: update.truncated,
+            ),
+          );
         }
 
         if (update.results.isEmpty) {
           continue;
         }
         allResults.addAll(update.results);
-        emit(state.copyWith(
-          results: List.from(allResults),
-          isLoading: true, // עדיין טוען
-        ));
+        emit(
+          state.copyWith(
+            results: List.from(allResults),
+            isLoading: true, // עדיין טוען
+          ),
+        );
       }
 
       // סיום - כל התוצאות התקבלו
@@ -271,18 +292,22 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // "טען עוד" שלעולם לא מספק. מיישרים את הספירה למה שבאמת ניתן להצגה.
       // במצב איחוד הרשימה נמדדת בקבוצות — היישוב חל על מונה הקבוצות.
       final effectiveTotal = state.displayTotal;
-      final reconciledTotal = (effectiveTotal <= state.numResults &&
+      final reconciledTotal =
+          (effectiveTotal <= state.numResults &&
               allResults.length < effectiveTotal)
           ? allResults.length
           : effectiveTotal;
 
-      emit(state.copyWith(
-        results: allResults,
-        totalResults:
-            state.totalGroups == null ? reconciledTotal : state.totalResults,
-        totalGroups: state.totalGroups == null ? null : reconciledTotal,
-        isLoading: false,
-      ));
+      emit(
+        state.copyWith(
+          results: allResults,
+          totalResults: state.totalGroups == null
+              ? reconciledTotal
+              : state.totalResults,
+          totalGroups: state.totalGroups == null ? null : reconciledTotal,
+          isLoading: false,
+        ),
+      );
     } catch (e, stackTrace) {
       // זיהוי שגיאה: שגיאת מנוע (למשל כשל קומפילציית רגקס) פעם נבלעה כאן
       // בשקט והוצגה כ"0 תוצאות" — מצב שלא נבדל מחיפוש ריק לגיטימי. כעת:
@@ -290,13 +315,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // שה-UI יציג שגיאה במקום "אין תוצאות" באופן מתמשך עד החיפוש הבא.
       debugPrint('❌ Search failed: $e\n$stackTrace');
       UiSnack.showError(LibraryMessages.searchError);
-      emit(state.copyWith(
-        results: [],
-        totalResults: 0,
-        totalGroups: null,
-        isLoading: false,
-        errorMessage: 'אירעה שגיאה בעת החיפוש',
-      ));
+      emit(
+        state.copyWith(
+          results: [],
+          totalResults: 0,
+          totalGroups: null,
+          isLoading: false,
+          errorMessage: 'אירעה שגיאה בעת החיפוש',
+        ),
+      );
     }
   }
 
@@ -317,7 +344,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// חתימה של כל הקלטים שמשפיעים על תוצאת countByBook. חוסר-התאמה גורר
   /// לכל היותר ספירה מיותרת (הכיוון הבטוח), לכן הצפנת ה-JSON אינה ממוינת.
   String _facetRecountSignature(
-      String query, UpdateSearchQuery event, _FacetRecountInputs inputs) {
+    String query,
+    UpdateSearchQuery event,
+    _FacetRecountInputs inputs,
+  ) {
     return [
       query,
       inputs.searchMode.name,
@@ -329,19 +359,30 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       inputs.wordMatchMode.name,
       inputs.wordMatchCount,
       jsonEncode(event.customSpacing ?? const <String, String>{}),
-      jsonEncode((event.alternativeWords ?? const <int, List<String>>{})
-          .map((k, v) => MapEntry(k.toString(), v))),
+      jsonEncode(
+        (event.alternativeWords ?? const <int, List<String>>{}).map(
+          (k, v) => MapEntry(k.toString(), v),
+        ),
+      ),
       jsonEncode(event.searchOptions ?? const <String, Map<String, bool>>{}),
       jsonEncode(event.negativeCustomSpacing ?? const <String, String>{}),
-      jsonEncode((event.negativeAlternativeWords ?? const <int, List<String>>{})
-          .map((k, v) => MapEntry(k.toString(), v))),
       jsonEncode(
-          event.negativeSearchOptions ?? const <String, Map<String, bool>>{}),
+        (event.negativeAlternativeWords ?? const <int, List<String>>{}).map(
+          (k, v) => MapEntry(k.toString(), v),
+        ),
+      ),
+      jsonEncode(
+        event.negativeSearchOptions ?? const <String, Map<String, bool>>{},
+      ),
     ].join('|');
   }
 
-  Future<void> _refreshFacetCountsForAllBooks(UpdateSearchQuery event,
-      int requestId, String signature, _FacetRecountInputs inputs) async {
+  Future<void> _refreshFacetCountsForAllBooks(
+    UpdateSearchQuery event,
+    int requestId,
+    String signature,
+    _FacetRecountInputs inputs,
+  ) async {
     final query = event.query;
     final negativeQuery = event.negativeQuery ?? inputs.negativeQuery;
     if (query.isEmpty) return;
@@ -394,8 +435,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       bookByIndexedFilePath,
     );
 
-    add(ReplaceFacetCounts(aggregated,
-        requestId: requestId, signature: signature));
+    add(
+      ReplaceFacetCounts(
+        aggregated,
+        requestId: requestId,
+        signature: signature,
+      ),
+    );
   }
 
   Future<void> _onUpdateFilterQuery(
@@ -403,21 +449,28 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) async {
     if (event.query.length < 3) {
-      emit(state.copyWith(
-        filterQuery: event.query,
-        filteredBooks: null,
-      ));
+      emit(
+        state.copyWith(
+          filterQuery: event.query,
+          filteredBooks: null,
+        ),
+      );
       return;
     }
 
     try {
-      final results = await DataRepository.instance
-          .findBooks(event.query, null, sortByRatio: false);
+      final results = await DataRepository.instance.findBooks(
+        event.query,
+        null,
+        sortByRatio: false,
+      );
 
-      emit(state.copyWith(
-        filterQuery: event.query,
-        filteredBooks: results,
-      ));
+      emit(
+        state.copyWith(
+          filterQuery: event.query,
+          filteredBooks: results,
+        ),
+      );
     } catch (e, stackTrace) {
       // זיהוי שגיאה גם במסלול סינון הספרים — אחרת המשתמש רואה "אין תוצאות"
       // ולא מבין שזו תקלה, בדיוק כמו במסלולי החיפוש הראשי וטעינת עוד.
@@ -425,10 +478,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       // (לא נערם), כך שאין הצפת toasts גם אם הכשל מתמשך.
       debugPrint('❌ Book filter failed: $e\n$stackTrace');
       UiSnack.showError(LibraryMessages.bookFilterError);
-      emit(state.copyWith(
-        filterQuery: event.query,
-        filteredBooks: null,
-      ));
+      emit(
+        state.copyWith(
+          filterQuery: event.query,
+          filteredBooks: null,
+        ),
+      );
     }
   }
 
@@ -436,9 +491,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ClearFilter event,
     Emitter<SearchState> emit,
   ) {
-    emit(state.copyWith(
-      filterQuery: null,
-    ));
+    emit(
+      state.copyWith(
+        filterQuery: null,
+      ),
+    );
   }
 
   void _onUpdateDistance(
@@ -619,7 +676,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       newFacets.add(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       if (await _applyClientSideFacetNarrow(
-          newFacets, newConfig, UpdateSearchQuery(state.searchQuery), emit)) {
+        newFacets,
+        newConfig,
+        UpdateSearchQuery(state.searchQuery),
+        emit,
+      )) {
         return;
       }
       emit(state.copyWith(configuration: newConfig));
@@ -637,7 +698,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       newFacets.remove(event.facet);
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       if (await _applyClientSideFacetNarrow(
-          newFacets, newConfig, UpdateSearchQuery(state.searchQuery), emit)) {
+        newFacets,
+        newConfig,
+        UpdateSearchQuery(state.searchQuery),
+        emit,
+      )) {
         return;
       }
       emit(state.copyWith(configuration: newConfig));
@@ -653,8 +718,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final effectiveFacets = (event.facet == '/' && state.hasScopedFacetFilter)
         ? state.searchScopeFacets
         : [event.facet];
-    final newConfig =
-        state.configuration.copyWith(currentFacets: effectiveFacets);
+    final newConfig = state.configuration.copyWith(
+      currentFacets: effectiveFacets,
+    );
     final searchEvent = UpdateSearchQuery(
       state.searchQuery,
       customSpacing: event.customSpacing,
@@ -662,7 +728,11 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       searchOptions: event.searchOptions,
     );
     if (await _applyClientSideFacetNarrow(
-        effectiveFacets, newConfig, searchEvent, emit)) {
+      effectiveFacets,
+      newConfig,
+      searchEvent,
+      emit,
+    )) {
       return;
     }
     emit(state.copyWith(configuration: newConfig));
@@ -683,7 +753,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) =>
       newFacets.isNotEmpty &&
       newFacets.every(
-          (newFacet) => oldFacets.any((old) => facetContains(old, newFacet)));
+        (newFacet) => oldFacets.any((old) => facetContains(old, newFacet)),
+      );
 
   /// לחיצת קטגוריה מצמצמת כשכל התוצאות כבר בידינו — סינון מקומי מיידי
   /// במקום חיפוש מנוע מלא. מחזירה false כשהתנאים לא מתקיימים (תוצאות
@@ -715,7 +786,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     // האפשרויות המתקדמות אינן נשמרות ב-state; חתימת הספירות מעידה שהחיפוש
     // האחרון רץ עם בדיוק אותם קלטים כמו הלחיצה הנוכחית.
     final signature = _facetRecountSignature(
-        state.searchQuery, searchEvent, _currentFacetRecountInputs());
+      state.searchQuery,
+      searchEvent,
+      _currentFacetRecountInputs(),
+    );
     if (signature != _facetCountsSignature) {
       return false;
     }
@@ -735,14 +809,17 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
     final filtered = <SearchResult>[];
     for (final result in state.results) {
-      final catalogueOrder =
-          IndexingRepository.catalogueOrderFromDocumentId(result.id);
+      final catalogueOrder = IndexingRepository.catalogueOrderFromDocumentId(
+        result.id,
+      );
       final book = bookByCatalogueOrder[catalogueOrder];
       if (book == null) {
         return false;
       }
       final facetPath = FacetHelper.buildBookFacet(
-          FacetHelper.resolveCategoryPath(book), book);
+        FacetHelper.resolveCategoryPath(book),
+        book,
+      );
       if (newFacets.any((facet) => facetContains(facet, facetPath))) {
         filtered.add(result);
       }
@@ -752,12 +829,14 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     // אחרת הם היו דורסים את totalResults המסונן בספירת ההיקף הרחב.
     _searchRequestId++;
 
-    emit(state.copyWith(
-      configuration: newConfig,
-      results: filtered,
-      totalResults: filtered.length,
-      isLoading: false,
-    ));
+    emit(
+      state.copyWith(
+        configuration: newConfig,
+        results: filtered,
+        totalResults: filtered.length,
+        isLoading: false,
+      ),
+    );
     return true;
   }
 
@@ -786,8 +865,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     if (event.grouping == state.configuration.resultGrouping) return;
-    final newConfig =
-        state.configuration.copyWith(resultGrouping: event.grouping);
+    final newConfig = state.configuration.copyWith(
+      resultGrouping: event.grouping,
+    );
     emit(state.copyWith(configuration: newConfig, totalGroups: null));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -796,8 +876,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     UpdateNumResults event,
     Emitter<SearchState> emit,
   ) {
-    final newConfig =
-        state.configuration.copyWith(numResults: event.numResults);
+    final newConfig = state.configuration.copyWith(
+      numResults: event.numResults,
+    );
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -832,7 +913,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     debugPrint('🔢 Counting texts for facet: $facet');
     debugPrint('🔢 Query: ${state.searchQuery}');
     debugPrint(
-        '🔢 Books to search: ${state.booksToSearch.map((e) => e.title).toList()}');
+      '🔢 Books to search: ${state.booksToSearch.map((e) => e.title).toList()}',
+    );
     final result = await TantivyDataProvider.instance.countTexts(
       SearchQueryBuilder.sanitizeQuery(state.searchQuery),
       state.booksToSearch.map((e) => e.title).toList(),
@@ -885,27 +967,29 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     // אם יש facets חסרים, נבצע ספירה רק עבורם
     if (missingFacets.isNotEmpty) {
-      final missingResults =
-          await TantivyDataProvider.instance.countTextsForMultipleFacets(
-        SearchQueryBuilder.sanitizeQuery(state.searchQuery),
-        state.booksToSearch.map((e) => e.title).toList(),
-        missingFacets,
-        fuzzy: state.fuzzy,
-        distance: state.distance,
-        negativeQuery: SearchQueryBuilder.sanitizeQuery(state.negativeQuery),
-        negativeDistance: state.distance,
-        scope: state.proximityScope,
-        negativeScope: state.proximityScope,
-        searchMode: state.configuration.searchMode,
-        wordMatchMode: state.wordMatchMode,
-        wordMatchCount: state.wordMatchCount,
-        customSpacing: customSpacing,
-        alternativeWords: alternativeWords,
-        searchOptions: searchOptions,
-        negativeCustomSpacing: negativeCustomSpacing,
-        negativeAlternativeWords: negativeAlternativeWords,
-        negativeSearchOptions: negativeSearchOptions,
-      );
+      final missingResults = await TantivyDataProvider.instance
+          .countTextsForMultipleFacets(
+            SearchQueryBuilder.sanitizeQuery(state.searchQuery),
+            state.booksToSearch.map((e) => e.title).toList(),
+            missingFacets,
+            fuzzy: state.fuzzy,
+            distance: state.distance,
+            negativeQuery: SearchQueryBuilder.sanitizeQuery(
+              state.negativeQuery,
+            ),
+            negativeDistance: state.distance,
+            scope: state.proximityScope,
+            negativeScope: state.proximityScope,
+            searchMode: state.configuration.searchMode,
+            wordMatchMode: state.wordMatchMode,
+            wordMatchCount: state.wordMatchCount,
+            customSpacing: customSpacing,
+            alternativeWords: alternativeWords,
+            searchOptions: searchOptions,
+            negativeCustomSpacing: negativeCustomSpacing,
+            negativeAlternativeWords: negativeAlternativeWords,
+            negativeSearchOptions: negativeSearchOptions,
+          );
       results.addAll(missingResults);
     }
 
@@ -916,7 +1000,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   int getFacetCountFromState(String facet) {
     final result = state.facetCounts[facet] ?? 0;
     debugPrint(
-        '🔍 getFacetCountFromState($facet) = $result, cache has ${state.facetCounts.length} entries');
+      '🔍 getFacetCountFromState($facet) = $result, cache has ${state.facetCounts.length} entries',
+    );
     return result;
   }
 
@@ -925,8 +1010,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ToggleRegex event,
     Emitter<SearchState> emit,
   ) {
-    final newConfig =
-        state.configuration.copyWith(regexEnabled: !state.regexEnabled);
+    final newConfig = state.configuration.copyWith(
+      regexEnabled: !state.regexEnabled,
+    );
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -935,8 +1021,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     ToggleCaseSensitive event,
     Emitter<SearchState> emit,
   ) {
-    final newConfig =
-        state.configuration.copyWith(caseSensitive: !state.caseSensitive);
+    final newConfig = state.configuration.copyWith(
+      caseSensitive: !state.caseSensitive,
+    );
     emit(state.copyWith(configuration: newConfig));
     add(UpdateSearchQuery(state.searchQuery));
   }
@@ -973,17 +1060,21 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     debugPrint(
-        '📝 Updating facet counts: ${event.facetCounts.entries.where((e) => e.value > 0).map((e) => '${e.key}: ${e.value}').join(', ')}');
+      '📝 Updating facet counts: ${event.facetCounts.entries.where((e) => e.value > 0).map((e) => '${e.key}: ${e.value}').join(', ')}',
+    );
     final newFacetCounts = event.facetCounts.isEmpty
         ? <String, int>{} // אם מעבירים מפה ריקה, מנקים הכל
         : {...state.facetCounts, ...event.facetCounts};
-    emit(state.copyWith(
-      facetCounts: newFacetCounts,
-    ));
+    emit(
+      state.copyWith(
+        facetCounts: newFacetCounts,
+      ),
+    );
     debugPrint('📊 Total facets in state: ${newFacetCounts.length}');
     if (newFacetCounts.isNotEmpty) {
       debugPrint(
-          '📋 All cached facets: ${newFacetCounts.keys.take(10).join(', ')}...');
+        '📋 All cached facets: ${newFacetCounts.keys.take(10).join(', ')}...',
+      );
     } else {
       debugPrint('🧹 Facet counts cleared');
     }
@@ -1047,19 +1138,22 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
       final combined = [...state.results, ...nextResults];
       final exhausted = nextResults.isEmpty;
-      emit(state.copyWith(
-        results: combined,
-        // עמוד ריק למרות שהמונה מבטיח עוד: ההיטים הנותרים נספרו אך
-        // אינם ניתנים לשליפה (ראה יומן המנוע). בלי היישור הזה הכפתור היה
-        // מציג "טען תוצאות נוספות (N)" לנצח ומסתובב בלי להביא כלום.
-        // היישור חל על המונה שהרשימה נמדדת בו: קבוצות במצב איחוד.
-        totalResults:
-            exhausted && state.totalGroups == null ? combined.length : null,
-        totalGroups: exhausted && state.totalGroups != null
-            ? combined.length
-            : state.totalGroups,
-        isLoading: false,
-      ));
+      emit(
+        state.copyWith(
+          results: combined,
+          // עמוד ריק למרות שהמונה מבטיח עוד: ההיטים הנותרים נספרו אך
+          // אינם ניתנים לשליפה (ראה יומן המנוע). בלי היישור הזה הכפתור היה
+          // מציג "טען תוצאות נוספות (N)" לנצח ומסתובב בלי להביא כלום.
+          // היישור חל על המונה שהרשימה נמדדת בו: קבוצות במצב איחוד.
+          totalResults: exhausted && state.totalGroups == null
+              ? combined.length
+              : null,
+          totalGroups: exhausted && state.totalGroups != null
+              ? combined.length
+              : state.totalGroups,
+          isLoading: false,
+        ),
+      );
     } catch (e, stackTrace) {
       debugPrint('❌ Load more results failed: $e\n$stackTrace');
       UiSnack.showError(LibraryMessages.loadMoreResultsError);

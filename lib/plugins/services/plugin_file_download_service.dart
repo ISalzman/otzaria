@@ -43,9 +43,8 @@ class PluginFileDownloadService {
 
   PluginFileDownloadService({
     http.Client? client,
-    Duration stallTimeout = const Duration(seconds: 60),
-  })  : _client = client ?? http.Client(),
-        _stallTimeout = stallTimeout {
+    this._stallTimeout = const Duration(seconds: 60),
+  }) : _client = client ?? http.Client() {
     HttpClientRegistry.register(_closer);
   }
 
@@ -170,7 +169,8 @@ class PluginFileDownloadService {
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       // ה-URL ההתחלתי חייב להיות ברשימה הגלובלית. יעד redirect מותר אם הוא
       // ברשימה הגלובלית, או שאושר במפורש ע"י isRedirectAllowed לפי ה-hop הקודם.
-      final permitted = await isAllowed(current) ||
+      final permitted =
+          await isAllowed(current) ||
           (previous != null &&
               (isRedirectAllowed?.call(previous, current) ?? false));
       if (!permitted) {

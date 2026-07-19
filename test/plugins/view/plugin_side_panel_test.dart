@@ -34,8 +34,8 @@ class _FakeSettingsRepository extends Fake implements SettingsRepository {
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
   _FakeSettingsBloc({bool isOfflineMode = false})
-      : super(SettingsState.initial().copyWith(isOfflineMode: isOfflineMode)) {
-    on<SettingsEvent>((_, __) {});
+    : super(SettingsState.initial().copyWith(isOfflineMode: isOfflineMode)) {
+    on<SettingsEvent>((_, _) {});
   }
 
   @override
@@ -98,7 +98,7 @@ InstalledPlugin _pluginFor({
 class _StaticPluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState>
     implements PluginSystemBloc {
   _StaticPluginSystemBloc(super.initial) {
-    on<PluginSystemEvent>((_, __) {});
+    on<PluginSystemEvent>((_, _) {});
   }
 
   @override
@@ -161,8 +161,9 @@ class FakeFilePickerPlatform extends FilePickerPlatform
     bool readSequential = false,
     bool cancelUploadOnWindowBlur = true,
   }) async {
-    return FilePickerResult(
-        [PlatformFile(path: fakeDirectoryPath, name: 'dir', size: 0)]);
+    return FilePickerResult([
+      PlatformFile(path: fakeDirectoryPath, name: 'dir', size: 0),
+    ]);
   }
 
   @override
@@ -213,72 +214,84 @@ void main() {
     );
   });
 
-  testWidgets('PluginSidePanel shows dev tools explicitly when flag is true',
-      (WidgetTester tester) async {
+  testWidgets('PluginSidePanel shows dev tools explicitly when flag is true', (
+    WidgetTester tester,
+  ) async {
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
-    await tester.pumpWidget(_wrap(
-      pluginBloc: bloc,
-      settingsBloc: _FakeSettingsBloc(),
-      showDevTools: true,
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        pluginBloc: bloc,
+        settingsBloc: _FakeSettingsBloc(),
+        showDevTools: true,
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsOneWidget);
   });
 
-  testWidgets('PluginSidePanel hides dev tools explicitly when flag is false',
-      (WidgetTester tester) async {
+  testWidgets('PluginSidePanel hides dev tools explicitly when flag is false', (
+    WidgetTester tester,
+  ) async {
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
-    await tester.pumpWidget(_wrap(
-      pluginBloc: bloc,
-      settingsBloc: _FakeSettingsBloc(),
-      showDevTools: false,
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        pluginBloc: bloc,
+        settingsBloc: _FakeSettingsBloc(),
+        showDevTools: false,
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsNothing);
   });
 
-  testWidgets('PluginSidePanel triggers picker and bloc on dev button tap',
-      (WidgetTester tester) async {
+  testWidgets('PluginSidePanel triggers picker and bloc on dev button tap', (
+    WidgetTester tester,
+  ) async {
     // Pre-cache package info to prevent method channel hang during widget test async pumped frames
     await PackageInfo.fromPlatform();
 
     final mockRepo = FakePluginRegistryRepository();
     final bloc = PluginSystemBloc(repository: mockRepo);
 
-    final tempDir =
-        Directory.systemTemp.createTempSync('otzaria_test_sidepanel');
+    final tempDir = Directory.systemTemp.createTempSync(
+      'otzaria_test_sidepanel',
+    );
     final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
-    manifestFile.writeAsStringSync(jsonEncode({
-      'schemaVersion': 1,
-      'id': 'test.ui.plugin',
-      'version': '1.0.0',
-      'name': 'UI Dev Plugin',
-      'entrypoint': 'index.html',
-      'permissions': [],
-      'minAppVersion': '1.0.0',
-      'description': 'test',
-      'author': 'tester',
-      'homepage': 'https://test.com',
-      'sdkVersion': '1.0.0',
-      'networkEnabled': false,
-      'networkAllowlist': [],
-      'toolTabTitle': 'Tab',
-      'toolTabOrder': 0,
-      'publishedDataTypes': []
-    }));
+    manifestFile.writeAsStringSync(
+      jsonEncode({
+        'schemaVersion': 1,
+        'id': 'test.ui.plugin',
+        'version': '1.0.0',
+        'name': 'UI Dev Plugin',
+        'entrypoint': 'index.html',
+        'permissions': [],
+        'minAppVersion': '1.0.0',
+        'description': 'test',
+        'author': 'tester',
+        'homepage': 'https://test.com',
+        'sdkVersion': '1.0.0',
+        'networkEnabled': false,
+        'networkAllowlist': [],
+        'toolTabTitle': 'Tab',
+        'toolTabOrder': 0,
+        'publishedDataTypes': [],
+      }),
+    );
     File(p.join(tempDir.path, 'index.html')).createSync();
 
     FilePickerPlatform.instance = FakeFilePickerPlatform(tempDir.path);
 
-    await tester.pumpWidget(_wrap(
-      pluginBloc: bloc,
-      settingsBloc: _FakeSettingsBloc(),
-      showDevTools: true,
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        pluginBloc: bloc,
+        settingsBloc: _FakeSettingsBloc(),
+        showDevTools: true,
+      ),
+    );
     await tester.pumpAndSettle();
 
     // Step 1: Tapping folder_add → expects PluginSystemDevInstallRequiresPermissions
@@ -303,13 +316,15 @@ void main() {
       emitsThrough(isA<PluginSystemLoaded>()),
     );
 
-    bloc.add(ConfirmDevPluginInstall(
-      manifest: permState.manifest,
-      sourcePath: permState.sourcePath,
-      sourceType: permState.sourceType,
-      grantedPermissions: const {},
-      allowOrderBeforeBuiltInsGranted: false,
-    ));
+    bloc.add(
+      ConfirmDevPluginInstall(
+        manifest: permState.manifest,
+        sourcePath: permState.sourcePath,
+        sourceType: permState.sourceType,
+        grantedPermissions: const {},
+        allowOrderBeforeBuiltInsGranted: false,
+      ),
+    );
 
     await tester.runAsync(() => loadedExpectation);
 
@@ -329,40 +344,55 @@ void main() {
   });
 
   group('סינון לפי מצב מנותק', () {
-    testWidgets('במצב מקוון מציג גם תוספים שדורשים אינטרנט וגם שלא דורשים',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(id: 'cloud.plugin', name: 'תוסף ענן', networkEnabled: true),
-      ]));
+    testWidgets('במצב מקוון מציג גם תוספים שדורשים אינטרנט וגם שלא דורשים', (
+      tester,
+    ) async {
+      final pluginBloc = _StaticPluginSystemBloc(
+        PluginSystemLoaded([
+          _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
+          _pluginFor(
+            id: 'cloud.plugin',
+            name: 'תוסף ענן',
+            networkEnabled: true,
+          ),
+        ]),
+      );
       addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: false),
-      ));
+      await tester.pumpWidget(
+        _wrap(
+          pluginBloc: pluginBloc,
+          settingsBloc: _FakeSettingsBloc(isOfflineMode: false),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('תוסף מקומי'), findsOneWidget);
       expect(find.text('תוסף ענן'), findsOneWidget);
     });
 
-    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט והרשאתם דלוקה',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
-        _pluginFor(
+    testWidgets('במצב מנותק מסתיר תוספים שדורשים אינטרנט והרשאתם דלוקה', (
+      tester,
+    ) async {
+      final pluginBloc = _StaticPluginSystemBloc(
+        PluginSystemLoaded([
+          _pluginFor(id: 'local.plugin', name: 'תוסף מקומי'),
+          _pluginFor(
             id: 'cloud.plugin',
             name: 'תוסף ענן',
             networkEnabled: true,
-            networkAccessGranted: true),
-      ]));
+            networkAccessGranted: true,
+          ),
+        ]),
+      );
       addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
-      ));
+      await tester.pumpWidget(
+        _wrap(
+          pluginBloc: pluginBloc,
+          settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('תוסף מקומי'), findsOneWidget);
@@ -370,88 +400,116 @@ void main() {
     });
 
     testWidgets(
-        'במצב מנותק תוסף רשת שהמשתמש כיבה בו את הרשאת הרשת ממשיך להופיע',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(
-            id: 'cloud.plugin',
-            name: 'תוסף ענן',
-            networkEnabled: true,
-            networkAccessGranted: false),
-      ]));
-      addTearDown(pluginBloc.close);
+      'במצב מנותק תוסף רשת שהמשתמש כיבה בו את הרשאת הרשת ממשיך להופיע',
+      (tester) async {
+        final pluginBloc = _StaticPluginSystemBloc(
+          PluginSystemLoaded([
+            _pluginFor(
+              id: 'cloud.plugin',
+              name: 'תוסף ענן',
+              networkEnabled: true,
+              networkAccessGranted: false,
+            ),
+          ]),
+        );
+        addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          _wrap(
+            pluginBloc: pluginBloc,
+            settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('תוסף ענן'), findsOneWidget);
-    });
-
-    testWidgets(
-        'במצב מנותק כשכל התוספים דורשים אינטרנט - מציג הודעת empty state ייעודית',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(
-            id: 'cloud.plugin',
-            name: 'תוסף ענן',
-            networkEnabled: true,
-            networkAccessGranted: true),
-      ]));
-      addTearDown(pluginBloc.close);
-
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.textContaining('הוסתרו במצב מנותק'),
-        findsOneWidget,
-      );
-    });
+        expect(find.text('תוסף ענן'), findsOneWidget);
+      },
+    );
 
     testWidgets(
-        'כשאין תוספים מותקנים - מציג הודעת empty state רגילה גם במצב מנותק',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(const PluginSystemLoaded([]));
-      addTearDown(pluginBloc.close);
+      'במצב מנותק כשכל התוספים דורשים אינטרנט - מציג הודעת empty state ייעודית',
+      (tester) async {
+        final pluginBloc = _StaticPluginSystemBloc(
+          PluginSystemLoaded([
+            _pluginFor(
+              id: 'cloud.plugin',
+              name: 'תוסף ענן',
+              networkEnabled: true,
+              networkAccessGranted: true,
+            ),
+          ]),
+        );
+        addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          _wrap(
+            pluginBloc: pluginBloc,
+            settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('לא הותקנו תוספים'), findsOneWidget);
-    });
+        expect(
+          find.textContaining('הוסתרו במצב מנותק'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'כשאין תוספים מותקנים - מציג הודעת empty state רגילה גם במצב מנותק',
+      (tester) async {
+        final pluginBloc = _StaticPluginSystemBloc(
+          const PluginSystemLoaded([]),
+        );
+        addTearDown(pluginBloc.close);
+
+        await tester.pumpWidget(
+          _wrap(
+            pluginBloc: pluginBloc,
+            settingsBloc: _FakeSettingsBloc(isOfflineMode: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('לא הותקנו תוספים'), findsOneWidget);
+      },
+    );
   });
 
   group('showInTools — פאנל הצד מציג את כל התוספים הפעילים', () {
     testWidgets(
-        'תוסף עם showInTools=false עדיין מופיע בפאנל הצד כי ה-side panel מציג הכל',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'visible.plugin', name: 'תוסף גלוי'),
-        _pluginFor(
-            id: 'hidden.plugin', name: 'תוסף לא בכלים', showInTools: false),
-      ]));
-      addTearDown(pluginBloc.close);
+      'תוסף עם showInTools=false עדיין מופיע בפאנל הצד כי ה-side panel מציג הכל',
+      (tester) async {
+        final pluginBloc = _StaticPluginSystemBloc(
+          PluginSystemLoaded([
+            _pluginFor(id: 'visible.plugin', name: 'תוסף גלוי'),
+            _pluginFor(
+              id: 'hidden.plugin',
+              name: 'תוסף לא בכלים',
+              showInTools: false,
+            ),
+          ]),
+        );
+        addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          _wrap(
+            pluginBloc: pluginBloc,
+            settingsBloc: _FakeSettingsBloc(),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('תוסף גלוי'), findsOneWidget);
-      expect(find.text('תוסף לא בכלים'), findsOneWidget,
+        expect(find.text('תוסף גלוי'), findsOneWidget);
+        expect(
+          find.text('תוסף לא בכלים'),
+          findsOneWidget,
           reason:
-              'showInTools only hides from tools screen, not from side panel');
-    });
+              'showInTools only hides from tools screen, not from side panel',
+        );
+      },
+    );
   });
 
   group('OfflineModePluginFilter extension', () {
@@ -466,7 +524,11 @@ void main() {
     test('במצב מנותק מסנן רק תוספי רשת שהרשאתם הוענקה בפועל', () {
       final local = _pluginFor(id: 'a', name: 'A');
       final cloud = _pluginFor(
-          id: 'b', name: 'B', networkEnabled: true, networkAccessGranted: true);
+        id: 'b',
+        name: 'B',
+        networkEnabled: true,
+        networkAccessGranted: true,
+      );
       final filtered = [local, cloud].filterForOfflineMode(true);
       expect(filtered, [local]);
     });
@@ -474,10 +536,11 @@ void main() {
     test('במצב מנותק תוסף רשת ללא הרשאת רשת מוענקת אינו מסונן', () {
       final local = _pluginFor(id: 'a', name: 'A');
       final cloudRevoked = _pluginFor(
-          id: 'b',
-          name: 'B',
-          networkEnabled: true,
-          networkAccessGranted: false);
+        id: 'b',
+        name: 'B',
+        networkEnabled: true,
+        networkAccessGranted: false,
+      );
       final filtered = [local, cloudRevoked].filterForOfflineMode(true);
       expect(filtered, [local, cloudRevoked]);
     });
@@ -503,16 +566,21 @@ void main() {
   group('InstalledPlugin.blockedInOfflineMode', () {
     test('true כשהתוסף דורש רשת והרשאתו הוענקה', () {
       final plugin = _pluginFor(
-          id: 'a', name: 'A', networkEnabled: true, networkAccessGranted: true);
+        id: 'a',
+        name: 'A',
+        networkEnabled: true,
+        networkAccessGranted: true,
+      );
       expect(plugin.blockedInOfflineMode, isTrue);
     });
 
     test('false כשהתוסף דורש רשת אך הרשאתו כובתה — חייב להיפתח במנותק', () {
       final plugin = _pluginFor(
-          id: 'a',
-          name: 'A',
-          networkEnabled: true,
-          networkAccessGranted: false);
+        id: 'a',
+        name: 'A',
+        networkEnabled: true,
+        networkAccessGranted: false,
+      );
       expect(plugin.blockedInOfflineMode, isFalse);
     });
 
@@ -525,13 +593,16 @@ void main() {
   group('תפריט פעולות', () {
     testWidgets('פתיחת התפריט מציגה את כל הפעולות', (tester) async {
       final pluginBloc = _StaticPluginSystemBloc(
-          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+        PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]),
+      );
       addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
+      await tester.pumpWidget(
+        _wrap(
+          pluginBloc: pluginBloc,
+          settingsBloc: _FakeSettingsBloc(),
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('פעולות'));
@@ -546,13 +617,16 @@ void main() {
 
     testWidgets('לחיצה על "השבת" שולחת DisablePluginRequested', (tester) async {
       final pluginBloc = _RecordingPluginSystemBloc(
-          PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]));
+        PluginSystemLoaded([_pluginFor(id: 'a', name: 'תוסף א')]),
+      );
       addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
+      await tester.pumpWidget(
+        _wrap(
+          pluginBloc: pluginBloc,
+          settingsBloc: _FakeSettingsBloc(),
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('פעולות'));
@@ -572,17 +646,21 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'a', name: 'תוסף א'),
-        _pluginFor(id: 'b', name: 'תוסף ב'),
-        _pluginFor(id: 'c', name: 'תוסף ג'),
-      ]));
+      final pluginBloc = _StaticPluginSystemBloc(
+        PluginSystemLoaded([
+          _pluginFor(id: 'a', name: 'תוסף א'),
+          _pluginFor(id: 'b', name: 'תוסף ב'),
+          _pluginFor(id: 'c', name: 'תוסף ג'),
+        ]),
+      );
       addTearDown(pluginBloc.close);
 
-      await tester.pumpWidget(_wrap(
-        pluginBloc: pluginBloc,
-        settingsBloc: _FakeSettingsBloc(),
-      ));
+      await tester.pumpWidget(
+        _wrap(
+          pluginBloc: pluginBloc,
+          settingsBloc: _FakeSettingsBloc(),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final actionButton = find.text('פעולות').last;
@@ -601,17 +679,19 @@ void main() {
   });
 
   group('Reorder UI', () {
-    testWidgets(
-        'mounting inside a LayoutBuilder ancestor does not crash — '
+    testWidgets('mounting inside a LayoutBuilder ancestor does not crash — '
         'regression for the _RenderLayoutBuilder mutation assert and the '
         '_retakeInactiveElement assert that fired when ReorderableListView '
-        'tried to use a root OverlayPortal through outer LayoutBuilders',
-        (tester) async {
-      final pluginBloc = _StaticPluginSystemBloc(PluginSystemLoaded([
-        _pluginFor(id: 'a', name: 'A'),
-        _pluginFor(id: 'b', name: 'B'),
-        _pluginFor(id: 'c', name: 'C'),
-      ]));
+        'tried to use a root OverlayPortal through outer LayoutBuilders', (
+      tester,
+    ) async {
+      final pluginBloc = _StaticPluginSystemBloc(
+        PluginSystemLoaded([
+          _pluginFor(id: 'a', name: 'A'),
+          _pluginFor(id: 'b', name: 'B'),
+          _pluginFor(id: 'c', name: 'C'),
+        ]),
+      );
       addTearDown(pluginBloc.close);
 
       // מדמים את המסגרת האמיתית בה הפאנל נמצא ב-ToolsScreen: עטוף
@@ -629,7 +709,8 @@ void main() {
                   providers: [
                     BlocProvider<PluginSystemBloc>.value(value: pluginBloc),
                     BlocProvider<SettingsBloc>.value(
-                        value: _FakeSettingsBloc()),
+                      value: _FakeSettingsBloc(),
+                    ),
                   ],
                   child: const PluginSidePanel(showDevTools: false),
                 ),

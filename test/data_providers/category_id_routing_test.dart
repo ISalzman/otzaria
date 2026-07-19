@@ -20,16 +20,13 @@ class _FakeProvider implements LibraryProvider {
   final Map<BookCompositeKey, List<Link>> _linksByBook;
 
   _FakeProvider({
-    required String providerId,
-    required String displayName,
-    required String sourceIndicator,
+    required this._providerId,
+    required this._displayName,
+    required this._sourceIndicator,
     Set<BookCompositeKey>? availableKeys,
     Map<BookCompositeKey, List<Link>>? linksByBook,
-  })  : _providerId = providerId,
-        _displayName = displayName,
-        _sourceIndicator = sourceIndicator,
-        _availableKeys = availableKeys ?? {},
-        _linksByBook = linksByBook ?? {};
+  }) : _availableKeys = availableKeys ?? {},
+       _linksByBook = linksByBook ?? {};
 
   @override
   String get providerId => _providerId;
@@ -51,7 +48,8 @@ class _FakeProvider implements LibraryProvider {
 
   @override
   Future<Map<String, List<Book>>> loadBooks(
-      Map<String, Map<String, dynamic>> metadata) async {
+    Map<String, Map<String, dynamic>> metadata,
+  ) async {
     return {};
   }
 
@@ -100,7 +98,10 @@ class _FakeProvider implements LibraryProvider {
 
   @override
   Future<List<Link>> getAllLinksForBook(
-      String title, int categoryId, String fileType) async {
+    String title,
+    int categoryId,
+    String fileType,
+  ) async {
     final key = BookCompositeKey.create(
       title: title,
       categoryId: categoryId,
@@ -126,7 +127,10 @@ void main() {
 
   test('provider mapping by categoryId מזהה ספר DB ללא categoryPath', () async {
     final dbKey = BookCompositeKey.create(
-        title: 'ספר בדיקה', categoryId: 12, fileType: 'txt');
+      title: 'ספר בדיקה',
+      categoryId: 12,
+      fileType: 'txt',
+    );
     final dbProvider = _FakeProvider(
       providerId: 'database',
       displayName: 'DB',
@@ -155,9 +159,15 @@ void main() {
 
   test('getBookDataSource מחזיר DB לספר DB ו-ק לספר קבצים', () async {
     final dbKey = BookCompositeKey.create(
-        title: 'ספר DB', categoryId: 1, fileType: 'txt');
+      title: 'ספר DB',
+      categoryId: 1,
+      fileType: 'txt',
+    );
     final fileKey = BookCompositeKey.create(
-        title: 'ספר קבצים', categoryId: 2, fileType: 'txt');
+      title: 'ספר קבצים',
+      categoryId: 2,
+      fileType: 'txt',
+    );
 
     final dbProvider = _FakeProvider(
       providerId: 'database',
@@ -195,25 +205,30 @@ void main() {
     expect(fileSource, 'ק');
   });
 
-  test('findCategoryPathForBook מחזיר נתיב קטגוריה מלא ולא מזהה מספרי',
-      () async {
-    final dbProvider = DatabaseLibraryProvider.instance;
-    final key = BookCompositeKey.create(
-        title: 'בראשית', categoryId: 101, fileType: 'txt');
-    dbProvider.seedCacheForTesting(
-      keys: [key],
-      categoryIdToPath: {101: 'תנך, תורה'},
-    );
+  test(
+    'findCategoryPathForBook מחזיר נתיב קטגוריה מלא ולא מזהה מספרי',
+    () async {
+      final dbProvider = DatabaseLibraryProvider.instance;
+      final key = BookCompositeKey.create(
+        title: 'בראשית',
+        categoryId: 101,
+        fileType: 'txt',
+      );
+      dbProvider.seedCacheForTesting(
+        keys: [key],
+        categoryIdToPath: {101: 'תנך, תורה'},
+      );
 
-    final categoryPath = await dbProvider.findCategoryPathForBook(
-      'בראשית',
-      categoryId: 101,
-      fileType: 'txt',
-    );
+      final categoryPath = await dbProvider.findCategoryPathForBook(
+        'בראשית',
+        categoryId: 101,
+        fileType: 'txt',
+      );
 
-    expect(categoryPath, 'תנך, תורה');
-    expect(categoryPath, isNot('101'));
-  });
+      expect(categoryPath, 'תנך, תורה');
+      expect(categoryPath, isNot('101'));
+    },
+  );
 
   test('isTanachPath מזהה נתיבי DB ונתיבי קבצים ישנים', () {
     expect(FileSystemData.isTanachPathForTesting('תנ"ך/תורה/בראשית'), isTrue);
@@ -256,73 +271,85 @@ void main() {
   });
 
   test(
-      'supportsContinuousReadingPath מאשר תנ"ך, בבלי וירושלמי תחת סדר, ושולל מפרשים/אחרונים',
-      () {
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תנ"ך, תורה, בראשית'),
-      isTrue,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תנ"ך, נביאים, ישעיהו'),
-      isTrue,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תנ"ך, כתובים, תהילים'),
-      isTrue,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תלמוד בבלי, סדר מועד, שבת'),
-      isTrue,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תלמוד ירושלמי, סדר זרעים, ברכות'),
-      isTrue,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תנ"ך, אחרונים, ספר כלשהו'),
-      isFalse,
-      reason: 'מפרשים על תנ"ך לא יכללו',
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תלמוד בבלי, אחרונים, ספר כלשהו'),
-      isFalse,
-      reason: 'אחרונים על בבלי לא יכללו',
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תלמוד בבלי, ראשונים, ספר כלשהו'),
-      isFalse,
-      reason: 'ראשונים על בבלי לא יכללו',
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'תלמוד בבלי, מסכתות קטנות, אבות דרבי נתן'),
-      isFalse,
-      reason: 'מסכתות קטנות לא יכללו',
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'משנה, סדר זרעים, ברכות'),
-      isFalse,
-      reason: 'משניות בלי בבלי/ירושלמי לא יכללו',
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting('הלכה, רמב"ם'),
-      isFalse,
-    );
-    expect(
-      FileSystemData.supportsContinuousReadingPathForTesting(
-          'error: book path not found'),
-      isFalse,
-    );
-  });
+    'supportsContinuousReadingPath מאשר תנ"ך, בבלי וירושלמי תחת סדר, ושולל מפרשים/אחרונים',
+    () {
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תנ"ך, תורה, בראשית',
+        ),
+        isTrue,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תנ"ך, נביאים, ישעיהו',
+        ),
+        isTrue,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תנ"ך, כתובים, תהילים',
+        ),
+        isTrue,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תלמוד בבלי, סדר מועד, שבת',
+        ),
+        isTrue,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תלמוד ירושלמי, סדר זרעים, ברכות',
+        ),
+        isTrue,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תנ"ך, אחרונים, ספר כלשהו',
+        ),
+        isFalse,
+        reason: 'מפרשים על תנ"ך לא יכללו',
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תלמוד בבלי, אחרונים, ספר כלשהו',
+        ),
+        isFalse,
+        reason: 'אחרונים על בבלי לא יכללו',
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תלמוד בבלי, ראשונים, ספר כלשהו',
+        ),
+        isFalse,
+        reason: 'ראשונים על בבלי לא יכללו',
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'תלמוד בבלי, מסכתות קטנות, אבות דרבי נתן',
+        ),
+        isFalse,
+        reason: 'מסכתות קטנות לא יכללו',
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'משנה, סדר זרעים, ברכות',
+        ),
+        isFalse,
+        reason: 'משניות בלי בבלי/ירושלמי לא יכללו',
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting('הלכה, רמב"ם'),
+        isFalse,
+      );
+      expect(
+        FileSystemData.supportsContinuousReadingPathForTesting(
+          'error: book path not found',
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test('BookLocator מאתר ספר קובץ לפי קטגוריה עם key חדש', () async {
     final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
@@ -368,39 +395,41 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  test('BookLocator מאתר ספר קובץ גם לפי categoryId בלי אובייקט קטגוריה',
-      () async {
-    final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
-    final testFile = File(
-      '${tempDir.path}${Platform.pathSeparator}ספר איתור 2.txt',
-    );
-    await testFile.writeAsString('שורה 1\nשורה 2');
+  test(
+    'BookLocator מאתר ספר קובץ גם לפי categoryId בלי אובייקט קטגוריה',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
+      final testFile = File(
+        '${tempDir.path}${Platform.pathSeparator}ספר איתור 2.txt',
+      );
+      await testFile.writeAsString('שורה 1\nשורה 2');
 
-    const categoryPath = 'משנה, סדר זרעים';
-    final categoryId = categoryPath.hashCode;
-    final storageKey = BookCompositeKey.create(
-      title: 'ספר איתור 2',
-      categoryId: categoryId,
-      fileType: 'txt',
-    ).toStorageKey();
+      const categoryPath = 'משנה, סדר זרעים';
+      final categoryId = categoryPath.hashCode;
+      final storageKey = BookCompositeKey.create(
+        title: 'ספר איתור 2',
+        categoryId: categoryId,
+        fileType: 'txt',
+      ).toStorageKey();
 
-    FileSystemLibraryProvider.instance.seedKeyToPathForTesting(
-      keyToPath: {storageKey: testFile.path},
-      categoryIdToPath: {categoryId: categoryPath},
-      libraryPath: tempDir.path,
-    );
+      FileSystemLibraryProvider.instance.seedKeyToPathForTesting(
+        keyToPath: {storageKey: testFile.path},
+        categoryIdToPath: {categoryId: categoryPath},
+        libraryPath: tempDir.path,
+      );
 
-    final location = await BookLocator.locateBook(
-      'ספר איתור 2',
-      categoryId: categoryId,
-    );
+      final location = await BookLocator.locateBook(
+        'ספר איתור 2',
+        categoryId: categoryId,
+      );
 
-    expect(location, isNotNull);
-    expect(location!.source, BookSource.fileSystem);
-    expect(location.filePath, testFile.path);
+      expect(location, isNotNull);
+      expect(location!.source, BookSource.fileSystem);
+      expect(location.filePath, testFile.path);
 
-    await tempDir.delete(recursive: true);
-  });
+      await tempDir.delete(recursive: true);
+    },
+  );
 
   test('BookLocator לא נופל חזרה לחיפוש לפי שם כשיש categoryId שגוי', () async {
     final tempDir = await Directory.systemTemp.createTemp('otzaria_locator_');
@@ -457,7 +486,10 @@ void main() {
       connectionType: 'reference',
     );
     final key = BookCompositeKey.create(
-        title: 'ספר מקשר', categoryId: 7, fileType: 'txt');
+      title: 'ספר מקשר',
+      categoryId: 7,
+      fileType: 'txt',
+    );
 
     final dbProvider = _FakeProvider(
       providerId: 'database',

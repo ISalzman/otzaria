@@ -96,30 +96,34 @@ const _settingsBlocklist = {
 // ===================================================================
 Map<String, dynamic> buildThemePayload(BuildContext context) {
   final theme = Theme.of(context);
-  return buildThemePayloadFromScheme(theme.colorScheme,
-      isDark: theme.brightness == Brightness.dark);
+  return buildThemePayloadFromScheme(
+    theme.colorScheme,
+    isDark: theme.brightness == Brightness.dark,
+  );
 }
 
 /// בונה את ה-payload מ-[ColorScheme] מפורש במקום מ-`Theme.of(context)`.
 /// נצרך כשמדווחים על שינוי theme בזמן אמת: ה-`MaterialApp` מתעדכן רק ב-frame
 /// הבא, כך ש-`Theme.of(context)` עדיין מחזיר את הצבעים הישנים. בנייה מ-scheme
 /// שמחושב ישירות מההגדרות מבטיחה שהתוסף יקבל את הצבעים הנכונים.
-Map<String, dynamic> buildThemePayloadFromScheme(ColorScheme cs,
-    {required bool isDark}) {
+Map<String, dynamic> buildThemePayloadFromScheme(
+  ColorScheme cs, {
+  required bool isDark,
+}) {
   String hex(Color c) =>
       '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 
   final fontFamily =
       Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
-          'Frank Ruhl Libre';
+      'Frank Ruhl Libre';
   final commentatorsFontFamily =
       Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
-          'Shofar';
+      'Shofar';
   final fontSize =
       Settings.getValue<double>(SettingsRepository.keyFontSize) ?? 25.0;
   final commentatorsFontSize =
       Settings.getValue<double>(SettingsRepository.keyCommentatorsFontSize) ??
-          22.0;
+      22.0;
   final lineHeight =
       Settings.getValue<double>(SettingsRepository.keyLineHeight) ?? 1.5;
 
@@ -201,10 +205,10 @@ Future<String> _loadFontFaceCss(String fontFamily) async {
 Future<String> buildPluginFontFaceCss() async {
   final fontFamily =
       Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
-          AppFonts.defaultFont;
+      AppFonts.defaultFont;
   final commentatorsFontFamily =
       Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
-          AppFonts.defaultCommentatorsFont;
+      AppFonts.defaultCommentatorsFont;
   final families = <String>{fontFamily, commentatorsFontFamily};
   final parts = <String>[];
   for (final family in families) {
@@ -227,12 +231,14 @@ class PluginBridgeDependencies {
   final Future<bool> Function({
     required String title,
     required String content,
-  }) showConfirmDialog;
+  })
+  showConfirmDialog;
   final Future<bool> Function({
     required String title,
     required String content,
     required String subtitle,
-  }) showWarningDialog;
+  })
+  showWarningDialog;
   final void Function(String downloadUrl)? requestPluginInstall;
 
   /// פותח דיאלוג בחירת תיקייה ומחזיר את הנתיב שנבחר, או `null` אם המשתמש
@@ -246,14 +252,16 @@ class PluginBridgeDependencies {
   final Future<String?> Function({
     List<String>? allowedExtensions,
     String? title,
-  })? pickFile;
+  })?
+  pickFile;
 
   /// פותר הפניה חופשית (שם ספר + ref, למשל "תלמוד ירושלמי עירובין פ\"ו ה\"ז")
   /// למיקום, דרך מנוע `find_ref` המודע-להקשר. מחזיר התאמות עם מיקום ה-index.
   /// אופציונלי — אם לא סופק, `openBookAtRef` נופל להתאמת TOC מקומית בלבד.
   final Future<List<({String title, int index, bool isPdf})>> Function(
     String reference,
-  )? resolveReference;
+  )?
+  resolveReference;
 
   const PluginBridgeDependencies({
     required this.historyBloc,
@@ -286,24 +294,21 @@ class PluginBridgeAdapter {
 
   PluginBridgeAdapter(
     this.plugin, {
-    required PluginBridgeDependencies dependencies,
+    required this._dependencies,
     PluginRegistryRepository? pluginRepository,
     NotificationService? notificationService,
     PluginDatabaseService? databaseService,
-    PluginNetworkFetchService? networkFetchService,
-    PluginFileDownloadService? fileDownloadService,
+    this._networkFetchService,
+    this._fileDownloadService,
     PluginFsService? fsService,
     PluginShortcutService? shortcutService,
     PluginFileServer? fileServer,
-  })  : _dependencies = dependencies,
-        _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
-        _notificationService = notificationService ?? NotificationService(),
-        _databaseService = databaseService ?? PluginDatabaseService(),
-        _networkFetchService = networkFetchService,
-        _fileDownloadService = fileDownloadService,
-        _pluginFsService = fsService,
-        _pluginShortcutService = shortcutService,
-        _fileServer = fileServer ?? PluginFileServer.instance;
+  }) : _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
+       _notificationService = notificationService ?? NotificationService(),
+       _databaseService = databaseService ?? PluginDatabaseService(),
+       _pluginFsService = fsService,
+       _pluginShortcutService = shortcutService,
+       _fileServer = fileServer ?? PluginFileServer.instance;
 
   // שרת הקבצים הפנימי שמגיש קבצים אישיים ל-WebView (מופע יחיד לכל האפליקציה
   // כברירת מחדל; ניתן להזרקה לבדיקות).
@@ -375,10 +380,10 @@ class PluginBridgeAdapter {
     // איתור ה-TextBook מהקטלוג כדי לקבל categoryId/fileType נכונים מה-metadata.
     // בלי זה, השכבה התחתונה מקבעת fileType='txt' ונכשלת לגבי ספרים בפורמט אחר
     // אצל משתמשים שאין להם קבצי טקסט נפרדים בדיסק (רק seforim.db).
-    final cataloged = library
-        .getAllBooks()
-        .cast<dynamic>()
-        .firstWhere((b) => b?.title == bookId, orElse: () => null);
+    final cataloged = library.getAllBooks().cast<dynamic>().firstWhere(
+      (b) => b?.title == bookId,
+      orElse: () => null,
+    );
     final String rawText;
     if (cataloged is TextBook) {
       rawText = await TextBookRepository(
@@ -395,7 +400,10 @@ class PluginBridgeAdapter {
   }
 
   Future<dynamic> execute(
-      String domain, String action, Map<String, dynamic> args) async {
+    String domain,
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (domain) {
       case 'app':
         return await _handleApp(action, args);
@@ -457,8 +465,10 @@ class PluginBridgeAdapter {
       case 'getLocale':
         return {'locale': 'he-IL', 'textDirection': 'rtl'};
       case 'getUserEmail':
-        final email = Settings.getValue<String>(
-                SettingsRepository.keyErrorReportSenderEmail) ??
+        final email =
+            Settings.getValue<String>(
+              SettingsRepository.keyErrorReportSenderEmail,
+            ) ??
             '';
         return {'email': email.trim()};
       case 'openUrl':
@@ -475,8 +485,10 @@ class PluginBridgeAdapter {
         if (uri.scheme != 'http' && uri.scheme != 'https') {
           throw Exception('error.forbidden: only http/https URLs are allowed');
         }
-        final launched =
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
         if (!launched) {
           throw Exception('error.internal: failed to open URL');
         }
@@ -494,7 +506,9 @@ class PluginBridgeAdapter {
   // library.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleLibrary(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     final library = await DataRepository.instance.library;
     switch (action) {
       case 'findBooks':
@@ -510,24 +524,27 @@ class PluginBridgeAdapter {
         return matched
             .take(limit)
             // spec: returns [{bookId, title, author?, topics?}]
-            .map((b) => {
-                  'bookId': b.title, // title is the stable ID in otzaria
-                  'title': b.title,
-                })
+            .map(
+              (b) => {
+                'bookId': b.title, // title is the stable ID in otzaria
+                'title': b.title,
+              },
+            )
             .toList();
       case 'getBookMetadata':
         // spec: accepts bookId (= title in otzaria) or title for back-compat
         final bookId = (args['bookId'] ?? args['title']) as String?;
         if (bookId == null) throw Exception('bookId required');
         final allBooks = library.getAllBooks();
-        final book = allBooks
-            .cast<dynamic>()
-            .firstWhere((b) => b?.title == bookId, orElse: () => null);
+        final book = allBooks.cast<dynamic>().firstWhere(
+          (b) => b?.title == bookId,
+          orElse: () => null,
+        );
         if (book == null) return null;
         return {
           'bookId': book.title,
           'title': book.title,
-          'topics': book.topics
+          'topics': book.topics,
         };
       case 'listRecentBooks':
         final historyState = _dependencies.historyBloc.state;
@@ -535,8 +552,13 @@ class PluginBridgeAdapter {
         return historyState.history
             .where((b) => !b.isSearch)
             .take(20)
-            .map((b) =>
-                {'bookId': b.book.title, 'title': b.book.title, 'ref': b.ref})
+            .map(
+              (b) => {
+                'bookId': b.book.title,
+                'title': b.book.title,
+                'ref': b.ref,
+              },
+            )
             .toList();
       case 'getBookContent':
         final bookId = (args['bookId'] ?? args['title']) as String?;
@@ -558,9 +580,10 @@ class PluginBridgeAdapter {
         final bookId = (args['bookId'] ?? args['title']) as String?;
         if (bookId == null) throw Exception('bookId required');
         final allBooks = library.getAllBooks();
-        final book = allBooks
-            .cast<dynamic>()
-            .firstWhere((b) => b?.title == bookId, orElse: () => null);
+        final book = allBooks.cast<dynamic>().firstWhere(
+          (b) => b?.title == bookId,
+          orElse: () => null,
+        );
         if (book != null && book is TextBook) {
           final toc = flattenToc(await book.tableOfContents);
           return toc
@@ -631,8 +654,9 @@ class PluginBridgeAdapter {
     final segments = normalized.split('/').where((s) => s.isNotEmpty).toList();
     Category current = library;
     for (final segment in segments) {
-      final next =
-          current.subCategories.where((c) => c.title == segment).firstOrNull;
+      final next = current.subCategories
+          .where((c) => c.title == segment)
+          .firstOrNull;
       if (next == null) return null;
       current = next;
     }
@@ -643,17 +667,27 @@ class PluginBridgeAdapter {
   // search.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleSearch(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'fullText':
         final query = args['query'] as String?;
         final limit = args['limit'] as int? ?? 50;
         if (query == null || query.isEmpty) return [];
-        final results =
-            await _dependencies.searchRepository.searchTexts(query, [], limit);
+        final results = await _dependencies.searchRepository.searchTexts(
+          query,
+          [],
+          limit,
+        );
         return results
-            .map((r) =>
-                {'book': r.title, 'text': r.text, 'index': r.segment.toInt()})
+            .map(
+              (r) => {
+                'book': r.title,
+                'text': r.text,
+                'index': r.segment.toInt(),
+              },
+            )
             .toList();
       default:
         throw Exception("Unknown action in search: $action");
@@ -664,7 +698,9 @@ class PluginBridgeAdapter {
   // reader.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleReader(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'openBook':
         // spec: openBook({ bookId, index?, searchQuery? })
@@ -674,9 +710,10 @@ class PluginBridgeAdapter {
         final searchQuery = args['searchQuery'] as String? ?? '';
         if (bookId == null) throw Exception('bookId required');
         final allBooks = (await DataRepository.instance.library).getAllBooks();
-        final book = allBooks
-            .cast<dynamic>()
-            .firstWhere((b) => b?.title == bookId, orElse: () => null);
+        final book = allBooks.cast<dynamic>().firstWhere(
+          (b) => b?.title == bookId,
+          orElse: () => null,
+        );
         if (book == null) return false;
         _dependencies.bookOpenCoordinator.openBook(
           book,
@@ -692,9 +729,10 @@ class PluginBridgeAdapter {
         int index = args['index'] as int? ?? 0;
         if (bookId == null) throw Exception('bookId required');
         final allBooks = (await DataRepository.instance.library).getAllBooks();
-        final book = allBooks
-            .cast<dynamic>()
-            .firstWhere((b) => b?.title == bookId, orElse: () => null);
+        final book = allBooks.cast<dynamic>().firstWhere(
+          (b) => b?.title == bookId,
+          orElse: () => null,
+        );
         if (book == null) return false;
         var refFound = false;
         if (ref != null && ref.isNotEmpty && book is TextBook) {
@@ -704,8 +742,9 @@ class PluginBridgeAdapter {
           if (resolve != null) {
             try {
               final hits = await resolve('$bookId $ref');
-              final hit =
-                  hits.where((h) => h.title == bookId && !h.isPdf).firstOrNull;
+              final hit = hits
+                  .where((h) => h.title == bookId && !h.isPdf)
+                  .firstOrNull;
               if (hit != null) {
                 index = hit.index;
                 refFound = true;
@@ -717,11 +756,11 @@ class PluginBridgeAdapter {
             try {
               final toc = flattenToc(await book.tableOfContents);
               final entry = toc.cast<dynamic>().firstWhere(
-                    (e) =>
-                        e?.text != null &&
-                        tocTextMatchesRef(e.text.toString(), ref),
-                    orElse: () => null,
-                  );
+                (e) =>
+                    e?.text != null &&
+                    tocTextMatchesRef(e.text.toString(), ref),
+                orElse: () => null,
+              );
               if (entry != null) {
                 index = entry.index as int;
                 refFound = true;
@@ -760,12 +799,13 @@ class PluginBridgeAdapter {
             'currentBook': null,
             'currentIndex': 0,
             'currentRef': null,
-            'openTabs': openTabs
+            'openTabs': openTabs,
           };
         }
         final currentTabIndex = tabs.indexOf(currentTab);
-        final currentSnapshot =
-            currentTabIndex >= 0 ? snapshots[currentTabIndex] : null;
+        final currentSnapshot = currentTabIndex >= 0
+            ? snapshots[currentTabIndex]
+            : null;
         return {
           'currentBook': currentTab.title,
           'currentBookId': currentTab.title,
@@ -777,7 +817,8 @@ class PluginBridgeAdapter {
         };
       case 'getCurrentRef':
         final snapshot = await resolveReaderLocation(
-            _dependencies.tabsBloc.state.currentTab);
+          _dependencies.tabsBloc.state.currentTab,
+        );
         if (snapshot == null) {
           return {
             'currentBook': null,
@@ -860,7 +901,9 @@ class PluginBridgeAdapter {
   // navigation.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleNavigation(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'goTo':
         final target = args['target'] as String?;
@@ -883,7 +926,8 @@ class PluginBridgeAdapter {
             break;
           default:
             throw Exception(
-                "Invalid navigation target: $target. Valid: library, reading, more, settings");
+              "Invalid navigation target: $target. Valid: library, reading, more, settings",
+            );
         }
         _dependencies.navigationBloc.add(NavigateToScreen(screen));
         return true;
@@ -903,21 +947,25 @@ class PluginBridgeAdapter {
         if (bookId == null) throw Exception("bookId required");
         final notes = await repo.loadNotes(bookId);
         return notes
-            .map((n) => {
-                  'id': n.id,
-                  'lineNumber': n.lineNumber,
-                  'content': n.content,
-                  'contentPlain': n.contentPlain
-                })
+            .map(
+              (n) => {
+                'id': n.id,
+                'lineNumber': n.lineNumber,
+                'content': n.content,
+                'contentPlain': n.contentPlain,
+              },
+            )
             .toList();
       case 'getBookNotesSummary':
         final summaries = await repo.listBooksWithNotes();
         return summaries
-            .map((s) => {
-                  'bookId': s.bookId,
-                  'noteCount': s.noteCount,
-                  'lastModified': s.lastUpdated.toIso8601String()
-                })
+            .map(
+              (s) => {
+                'bookId': s.bookId,
+                'noteCount': s.noteCount,
+                'lastModified': s.lastUpdated.toIso8601String(),
+              },
+            )
             .toList();
       case 'add':
         final bookId = args['bookId'] as String?;
@@ -942,11 +990,12 @@ class PluginBridgeAdapter {
           throw Exception("Missing arguments");
         }
         await repo.updateNote(
-            bookId: bookId,
-            noteId: noteId,
-            content: content,
-            contentPlain: content,
-            contentFormat: PersonalNoteContentFormat.plain);
+          bookId: bookId,
+          noteId: noteId,
+          content: content,
+          contentPlain: content,
+          contentFormat: PersonalNoteContentFormat.plain,
+        );
         return true;
       case 'delete':
         final bookId = args['bookId'] as String?;
@@ -1042,12 +1091,14 @@ class PluginBridgeAdapter {
         final destFolder = args['destFolder'] as String?;
         if (zipPath == null || destFolder == null) {
           throw Exception(
-              'error.invalid_params: zipPath and destFolder required');
+            'error.invalid_params: zipPath and destFolder required',
+          );
         }
         if (!_isPathInGrantedFolder(zipPath) ||
             !_isPathInGrantedFolder(destFolder)) {
           throw Exception(
-              'error.forbidden: path outside a user-selected folder');
+            'error.forbidden: path outside a user-selected folder',
+          );
         }
         await _fsService.extractZip(zipPath, destFolder);
         return true;
@@ -1058,7 +1109,8 @@ class PluginBridgeAdapter {
         }
         if (!_isPathInGrantedFolder(path)) {
           throw Exception(
-              'error.forbidden: path outside a user-selected folder');
+            'error.forbidden: path outside a user-selected folder',
+          );
         }
         await _fsService.deleteFile(path);
         return true;
@@ -1105,12 +1157,14 @@ class PluginBridgeAdapter {
     final rawExt = args['extensions'];
     final extensions = rawExt is List
         ? rawExt
-            .map((e) => e.toString().replaceAll('.', '').toLowerCase())
-            .where((e) => e.isNotEmpty)
-            .toList()
+              .map((e) => e.toString().replaceAll('.', '').toLowerCase())
+              .where((e) => e.isNotEmpty)
+              .toList()
         : null;
     final path = await picker(
-        allowedExtensions: extensions, title: args['title'] as String?);
+      allowedExtensions: extensions,
+      title: args['title'] as String?,
+    );
     if (path == null || path.isEmpty) {
       return {'cancelled': true};
     }
@@ -1135,7 +1189,8 @@ class PluginBridgeAdapter {
   /// `fs.resolveFileUrl` — בונה מחדש URL טרי לקובץ שכבר אושר (לפי token שהתוסף
   /// שמר). נצרך אחרי reload, כשהפורט של השרת השתנה ורישום הזיכרון אבד.
   Future<Map<String, dynamic>> _resolveUserFileUrl(
-      Map<String, dynamic> args) async {
+    Map<String, dynamic> args,
+  ) async {
     final token = args['token'] as String?;
     if (token == null) throw Exception('error.invalid_params: token required');
     final canonical = await _resolveGrantedFilePath(token);
@@ -1187,7 +1242,10 @@ class PluginBridgeAdapter {
 
   Future<Map<String, dynamic>> _readUserFileGrants() async {
     final raw = await _pluginRepo.getKV(
-        plugin.pluginId, '_internal', _userFileGrantsKey);
+      plugin.pluginId,
+      '_internal',
+      _userFileGrantsKey,
+    );
     if (raw == null) return {};
     try {
       final decoded = jsonDecode(raw);
@@ -1201,7 +1259,11 @@ class PluginBridgeAdapter {
     final grants = await _readUserFileGrants();
     grants[token] = path;
     await _pluginRepo.setKV(
-        plugin.pluginId, '_internal', _userFileGrantsKey, jsonEncode(grants));
+      plugin.pluginId,
+      '_internal',
+      _userFileGrantsKey,
+      jsonEncode(grants),
+    );
   }
 
   Future<String?> _loadUserFileGrant(String token) async {
@@ -1213,7 +1275,11 @@ class PluginBridgeAdapter {
     final grants = await _readUserFileGrants();
     if (grants.remove(token) != null) {
       await _pluginRepo.setKV(
-          plugin.pluginId, '_internal', _userFileGrantsKey, jsonEncode(grants));
+        plugin.pluginId,
+        '_internal',
+        _userFileGrantsKey,
+        jsonEncode(grants),
+      );
     }
   }
 
@@ -1221,14 +1287,19 @@ class PluginBridgeAdapter {
   // shortcut.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleShortcut(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'create':
         final granted = await _pluginRepo.getPermission(
-            plugin.pluginId, 'ui.create_shortcut');
+          plugin.pluginId,
+          'ui.create_shortcut',
+        );
         if (granted != true) {
           throw Exception(
-              'error.permission_denied: ui.create_shortcut required');
+            'error.permission_denied: ui.create_shortcut required',
+          );
         }
 
         final label = (args['label'] as String?)?.trim();
@@ -1246,7 +1317,8 @@ class PluginBridgeAdapter {
             location = ShortcutLocation.startMenu;
           default:
             throw Exception(
-                'error.invalid_params: location must be "desktop" or "startMenu"');
+              'error.invalid_params: location must be "desktop" or "startMenu"',
+            );
         }
 
         final placeLabel = location == ShortcutLocation.startMenu
@@ -1278,7 +1350,9 @@ class PluginBridgeAdapter {
   // storage.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleStorage(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'get':
         final key = args['key'] as String?;
@@ -1292,7 +1366,11 @@ class PluginBridgeAdapter {
           throw Exception("key and value required");
         }
         await _pluginRepo.setKV(
-            plugin.pluginId, 'default', key, jsonEncode(value));
+          plugin.pluginId,
+          'default',
+          key,
+          jsonEncode(value),
+        );
         return true;
       case 'remove':
         final key = args['key'] as String?;
@@ -1310,7 +1388,9 @@ class PluginBridgeAdapter {
   // settings.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleSettings(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     bool isAllowed(String key) =>
         _settingsAllowlist.contains(key) && !_settingsBlocklist.contains(key);
 
@@ -1335,7 +1415,9 @@ class PluginBridgeAdapter {
   // calendar.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleCalendar(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     final calendarState = _dependencies.calendarCubit.state;
 
     switch (action) {
@@ -1355,7 +1437,7 @@ class PluginBridgeAdapter {
       case 'getEvents':
         final date = args['date'] != null
             ? DateTime.tryParse(args['date'] as String) ??
-                calendarState.selectedGregorianDate
+                  calendarState.selectedGregorianDate
             : calendarState.selectedGregorianDate;
         final events = calendarState.events
             .where((e) {
@@ -1364,12 +1446,14 @@ class PluginBridgeAdapter {
                   eventDate.month == date.month &&
                   eventDate.day == date.day;
             })
-            .map((e) => {
-                  'id': e.id,
-                  'title': e.title,
-                  'date': e.baseGregorianDate.toIso8601String(),
-                  'description': e.description,
-                })
+            .map(
+              (e) => {
+                'id': e.id,
+                'title': e.title,
+                'date': e.baseGregorianDate.toIso8601String(),
+                'description': e.description,
+              },
+            )
             .toList();
         return events;
       default:
@@ -1381,7 +1465,9 @@ class PluginBridgeAdapter {
   // publishedData.*
   // ----------------------------------------------------------------
   Future<dynamic> _handlePublishedData(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'upsert':
         final type = args['type'] as String?;
@@ -1392,7 +1478,13 @@ class PluginBridgeAdapter {
           throw Exception('type, key, payload required');
         }
         await _pluginRepo.publishRecord(
-            plugin.pluginId, type, scope, key, jsonEncode(payload), null);
+          plugin.pluginId,
+          type,
+          scope,
+          key,
+          jsonEncode(payload),
+          null,
+        );
         // רענון חי של לוח השנה כשמדובר באירוע לוח
         if (type == 'calendar.event') {
           _dependencies.calendarCubit.refreshPluginEvents(
@@ -1418,15 +1510,18 @@ class PluginBridgeAdapter {
         }
         return true;
       case 'listOwn':
-        final rows =
-            await _pluginRepo.getPluginPublishedRecords(plugin.pluginId);
+        final rows = await _pluginRepo.getPluginPublishedRecords(
+          plugin.pluginId,
+        );
         return rows
-            .map((record) => {
-                  'type': record.type,
-                  'scope': record.scope,
-                  'key': record.key,
-                  'payload': record.decodedPayload,
-                })
+            .map(
+              (record) => {
+                'type': record.type,
+                'scope': record.scope,
+                'key': record.key,
+                'payload': record.decodedPayload,
+              },
+            )
             .toList();
       default:
         throw Exception("Unknown action in publishedData: $action");
@@ -1437,7 +1532,9 @@ class PluginBridgeAdapter {
   // feedback.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleFeedback(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'sendEmail':
         final to = args['to'] as String?;
@@ -1468,8 +1565,10 @@ class PluginBridgeAdapter {
         );
 
         try {
-          final launched =
-              await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+          final launched = await launchUrl(
+            emailUri,
+            mode: LaunchMode.externalApplication,
+          );
           if (!launched) {
             throw Exception('Failed to launch email client');
           }
@@ -1487,7 +1586,9 @@ class PluginBridgeAdapter {
   // history.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleHistory(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'list':
         final limit = args['limit'] as int? ?? 50;
@@ -1497,13 +1598,15 @@ class PluginBridgeAdapter {
         return historyState.history
             .where((b) => !b.isSearch)
             .take(limit)
-            .map((b) => {
-                  'bookId': b.book.title,
-                  'title': b.book.title,
-                  'ref': b.ref,
-                  'index': b.index,
-                  'workspaceName': b.workspaceName,
-                })
+            .map(
+              (b) => {
+                'bookId': b.book.title,
+                'title': b.book.title,
+                'ref': b.ref,
+                'index': b.index,
+                'workspaceName': b.workspaceName,
+              },
+            )
             .toList();
 
       case 'listSearches':
@@ -1514,11 +1617,13 @@ class PluginBridgeAdapter {
         return historyState.history
             .where((b) => b.isSearch)
             .take(limit)
-            .map((b) => {
-                  'query': b.book.title,
-                  'ref': b.ref,
-                  'workspaceName': b.workspaceName,
-                })
+            .map(
+              (b) => {
+                'query': b.book.title,
+                'ref': b.ref,
+                'workspaceName': b.workspaceName,
+              },
+            )
             .toList();
 
       case 'clear':
@@ -1560,7 +1665,9 @@ class PluginBridgeAdapter {
   // notifications.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleNotifications(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'showInApp':
         // התראה בתוך האפליקציה (UiSnack)
@@ -1698,7 +1805,7 @@ class PluginBridgeAdapter {
         final hasPermissions = await _notificationService.checkPermissions();
         return {
           'granted': hasPermissions,
-          'initialized': _notificationService.isInitialized
+          'initialized': _notificationService.isInitialized,
         };
 
       case 'requestPermissions':
@@ -1722,8 +1829,10 @@ class PluginBridgeAdapter {
   /// Encode query parameters for mailto URL
   String? _encodeQueryParameters(Map<String, String> params) {
     return params.entries
-        .map((e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .map(
+          (e) =>
+              '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+        )
         .join('&');
   }
 
@@ -1786,7 +1895,10 @@ class PluginBridgeAdapter {
   /// Get all tracked notification IDs for this plugin
   Future<List<int>> _getTrackedNotificationIds() async {
     final value = await _pluginRepo.getKV(
-        plugin.pluginId, '_internal', 'notification_ids');
+      plugin.pluginId,
+      '_internal',
+      'notification_ids',
+    );
     if (value == null) return [];
     try {
       final decoded = jsonDecode(value);
@@ -1800,7 +1912,10 @@ class PluginBridgeAdapter {
   /// Clear all tracked notification IDs
   Future<void> _clearTrackedNotificationIds() async {
     await _pluginRepo.removeKV(
-        plugin.pluginId, '_internal', 'notification_ids');
+      plugin.pluginId,
+      '_internal',
+      'notification_ids',
+    );
   }
 
   // ----------------------------------------------------------------
@@ -1826,7 +1941,10 @@ class PluginBridgeAdapter {
   }
 
   String _upcomingParasha(
-      DateTime date, bool inIsrael, HebrewDateFormatter formatter) {
+    DateTime date,
+    bool inIsrael,
+    HebrewDateFormatter formatter,
+  ) {
     final dayOfWeek = date.weekday; // 1=Mon … 6=Sat, 7=Sun in Dart
     // Dart weekday: Mon=1 … Sat=6, Sun=7. Shabbat = Saturday = 6.
     final daysUntilShabbat = dayOfWeek == 6 ? 0 : (6 - dayOfWeek) % 7;
@@ -1867,7 +1985,9 @@ class PluginBridgeAdapter {
           addHoliday('פסח שני', 'yomTov');
         } else {
           addHoliday(
-              yomTovLabel, _holidayKindForLabel(yomTovLabel, jewishCalendar));
+            yomTovLabel,
+            _holidayKindForLabel(yomTovLabel, jewishCalendar),
+          );
         }
       } else {
         for (final label in yomTovLabel.split(',')) {
@@ -1911,11 +2031,12 @@ class PluginBridgeAdapter {
 
   Future<List<String>> _getGrantedPermissions() async {
     final permissions = await _pluginRepo.getPluginPermissions(plugin.pluginId);
-    final grantedPermissions = permissions
-        .where((permission) => permission.granted)
-        .map((permission) => permission.permission)
-        .toList()
-      ..sort();
+    final grantedPermissions =
+        permissions
+            .where((permission) => permission.granted)
+            .map((permission) => permission.permission)
+            .toList()
+          ..sort();
     return grantedPermissions;
   }
 
@@ -1969,7 +2090,9 @@ class PluginBridgeAdapter {
         final sourceId = args['sourceId'] as String?;
         if (sourceId == null) {
           throw const PluginDatabaseException(
-              'database.invalid_spec', 'sourceId is required');
+            'database.invalid_spec',
+            'sourceId is required',
+          );
         }
         return _databaseService.describeSource(plugin, sourceId);
 
@@ -1977,11 +2100,13 @@ class PluginBridgeAdapter {
         return _databaseService.query(plugin, args);
 
       case 'batchQuery':
-        final queries =
-            (args['queries'] as List<dynamic>?)?.cast<Map<String, dynamic>>();
+        final queries = (args['queries'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>();
         if (queries == null) {
           throw const PluginDatabaseException(
-              'database.invalid_spec', '"queries" list is required');
+            'database.invalid_spec',
+            '"queries" list is required',
+          );
         }
         final results = _databaseService.batchQuery(plugin, queries);
         return {'results': results};
@@ -1995,7 +2120,9 @@ class PluginBridgeAdapter {
   // plugin.*
   // ----------------------------------------------------------------
   Future<dynamic> _handlePlugin(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'requestInstall':
         final url = args['url'] as String?;
@@ -2025,12 +2152,16 @@ class PluginBridgeAdapter {
   // network.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleNetwork(
-      String action, Map<String, dynamic> args) async {
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'fetch':
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: '
-              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
+          throw Exception(
+            'error.permission_denied: '
+            'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
+          );
         }
 
         final url = args['url'] as String?;
@@ -2041,21 +2172,26 @@ class PluginBridgeAdapter {
 
         final requiredPermission = requiredNetworkPermissionFor(uri);
         final granted = await _pluginRepo.getPermission(
-            plugin.pluginId, requiredPermission);
+          plugin.pluginId,
+          requiredPermission,
+        );
         if (granted != true) {
           final what = requiredPermission == 'network.localhost'
               ? 'גישה לשירותים מקומיים (localhost)'
               : 'גישה לאינטרנט';
-          throw Exception('error.permission_denied: '
-              'לתוסף אין הרשאת $what. '
-              'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.');
+          throw Exception(
+            'error.permission_denied: '
+            'לתוסף אין הרשאת $what. '
+            'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
+          );
         }
 
         final allowed = await PluginNetworkAccessResolver.instance
             .isUriAllowedForPlugin(uri, plugin.manifest);
         if (!allowed) {
           throw Exception(
-              'error.forbidden: URL not in plugin network allowlist');
+            'error.forbidden: URL not in plugin network allowlist',
+          );
         }
 
         // method/headers/body אופציונליים. הניתוב דרך הגשר נחוץ לתוספים
@@ -2094,8 +2230,10 @@ class PluginBridgeAdapter {
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
         // לכתוב לדיסק. נדרשת הרשאת רשת לפי היעד (אינטרנט או localhost).
         if (!plugin.manifest.networkEnabled) {
-          throw Exception('error.permission_denied: '
-              'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.');
+          throw Exception(
+            'error.permission_denied: '
+            'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
+          );
         }
 
         final url = args['url'] as String?;
@@ -2106,21 +2244,26 @@ class PluginBridgeAdapter {
 
         final requiredPermission = requiredNetworkPermissionFor(uri);
         final granted = await _pluginRepo.getPermission(
-            plugin.pluginId, requiredPermission);
+          plugin.pluginId,
+          requiredPermission,
+        );
         if (granted != true) {
           final what = requiredPermission == 'network.localhost'
               ? 'גישה לשירותים מקומיים (localhost)'
               : 'גישה לאינטרנט';
-          throw Exception('error.permission_denied: '
-              'לתוסף אין הרשאת $what. '
-              'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.');
+          throw Exception(
+            'error.permission_denied: '
+            'לתוסף אין הרשאת $what. '
+            'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
+          );
         }
 
         final allowed = await PluginNetworkAccessResolver.instance
             .isUriAllowedForPlugin(uri, plugin.manifest);
         if (!allowed) {
           throw Exception(
-              'error.forbidden: URL not in plugin network allowlist');
+            'error.forbidden: URL not in plugin network allowlist',
+          );
         }
 
         // destPath אופציונלי: הורדה אל נתיב קובץ מלא שבחר התוסף, במקום
@@ -2130,7 +2273,8 @@ class PluginBridgeAdapter {
         if (destPath != null && destPath.isNotEmpty) {
           if (!_isPathInGrantedFolder(destPath)) {
             throw Exception(
-                'error.forbidden: destPath outside a user-selected folder');
+              'error.forbidden: destPath outside a user-selected folder',
+            );
           }
           final result = await _downloadService.downloadToPath(
             uri,

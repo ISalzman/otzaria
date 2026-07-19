@@ -12,29 +12,28 @@ Map<String, dynamic> _baseManifest({
   String name = 'Test Plugin',
   String? title,
   String minAppVersion = '0.9.94',
-}) =>
-    {
-      'schemaVersion': 1,
-      'id': 'test.extended.plugin',
-      'name': name,
-      'version': '1.0.0',
-      'description': '',
-      'author': '',
-      'homepage': '',
-      'entrypoint': 'index.html',
-      'minAppVersion': minAppVersion,
-      'sdkVersion': '1.x',
-      'permissions': permissions,
-      if (network != null) 'network': network,
-      'contributes': {
-        'toolTab': {
-          'title': title ?? name,
-          'order': 900,
-          'defaultPinned': true,
-        },
-        'publishedDataTypes': const [],
-      },
-    };
+}) => {
+  'schemaVersion': 1,
+  'id': 'test.extended.plugin',
+  'name': name,
+  'version': '1.0.0',
+  'description': '',
+  'author': '',
+  'homepage': '',
+  'entrypoint': 'index.html',
+  'minAppVersion': minAppVersion,
+  'sdkVersion': '1.x',
+  'permissions': permissions,
+  'network': ?network,
+  'contributes': {
+    'toolTab': {
+      'title': title ?? name,
+      'order': 900,
+      'defaultPinned': true,
+    },
+    'publishedDataTypes': const [],
+  },
+};
 
 PluginValidationReport _runOn(
   Directory tempDir, {
@@ -63,8 +62,9 @@ void main() {
   late Directory tempDir;
 
   setUp(() {
-    tempDir =
-        Directory.systemTemp.createTempSync('otzaria_ext_validator_test_');
+    tempDir = Directory.systemTemp.createTempSync(
+      'otzaria_ext_validator_test_',
+    );
   });
 
   tearDown(() {
@@ -162,8 +162,7 @@ void main() {
   });
 
   group('name vs toolTab.title (enforced upstream in validateManifest)', () {
-    test(
-        'extended validator stays silent — the rule is a blocking error in '
+    test('extended validator stays silent — the rule is a blocking error in '
         'validateManifest, so this layer does not re-flag a mismatch', () {
       final report = _runOn(
         tempDir,
@@ -208,7 +207,8 @@ void main() {
         ),
         files: {
           'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('network.fetch', {url: 'x'});"
+          'app.js':
+              "Otzaria.call('network.fetch', {url: 'x'});"
               "Otzaria.call('network.download', {url: 'y'});",
         },
       );
@@ -241,60 +241,67 @@ void main() {
       );
       expect(
         report.warnings.any(
-            (w) => w.contains('network.fetch') && w.contains('network.access')),
-        isFalse,
-      );
-    });
-
-    test('warns when network.download is used but network.access is missing',
-        () {
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('network.download', {url: 'y'});",
-        },
-      );
-      expect(
-        report.warnings.any((w) =>
-            w.contains('network.download') && w.contains('network.access')),
-        isTrue,
-      );
-    });
-
-    test('warns when known API is used but its required permission is missing',
-        () {
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('library.findBooks', {});",
-        },
-      );
-      expect(
-        report.warnings.any((w) => w.contains('library.books.read')),
-        isTrue,
-      );
-    });
-
-    test('does not warn when required permission is declared', () {
-      final report = _runOn(
-        tempDir,
-        manifestOverride:
-            _baseManifest(permissions: const ['library.books.read']),
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('library.findBooks', {});",
-        },
-      );
-      expect(
-        report.warnings.any((w) => w.contains('library.books.read')),
+          (w) => w.contains('network.fetch') && w.contains('network.access'),
+        ),
         isFalse,
       );
     });
 
     test(
-        'every known API method has a required-permission mapping '
+      'warns when network.download is used but network.access is missing',
+      () {
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': "Otzaria.call('network.download', {url: 'y'});",
+          },
+        );
+        expect(
+          report.warnings.any(
+            (w) =>
+                w.contains('network.download') && w.contains('network.access'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'warns when known API is used but its required permission is missing',
+      () {
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': "Otzaria.call('library.findBooks', {});",
+          },
+        );
+        expect(
+          report.warnings.any((w) => w.contains('library.books.read')),
+          isTrue,
+        );
+      },
+    );
+
+    test('does not warn when required permission is declared', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['library.books.read'],
+        ),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('library.findBooks', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) => w.contains('library.books.read')),
+        isFalse,
+      );
+    });
+
+    test('every known API method has a required-permission mapping '
         '(except the runtime-ungated fs ops)', () {
       // שומר מפני רגרסיה: כל API שנוסף ל-knownApiMethods חייב להופיע גם
       // ב-methodRequiredPermissions, אלא אם ה-runtime לא דורש עבורו הרשאה.
@@ -302,12 +309,18 @@ void main() {
       const noManifestPermission = {'fs.extractZip', 'fs.deleteFile'};
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))
-          .where((m) =>
-              !PluginExtendedValidator.methodRequiredPermissions.containsKey(m))
+          .where(
+            (m) => !PluginExtendedValidator.methodRequiredPermissions
+                .containsKey(m),
+          )
           .toList();
-      expect(missing, isEmpty,
-          reason: 'APIs ללא מיפוי הרשאה — יעברו אריזה אך ייכשלו ב-runtime: '
-              '$missing');
+      expect(
+        missing,
+        isEmpty,
+        reason:
+            'APIs ללא מיפוי הרשאה — יעברו אריזה אך ייכשלו ב-runtime: '
+            '$missing',
+      );
     });
 
     test('warns when library.getTree is used without library.books.read', () {
@@ -319,8 +332,10 @@ void main() {
         },
       );
       expect(
-        report.warnings.any((w) =>
-            w.contains('library.getTree') && w.contains('library.books.read')),
+        report.warnings.any(
+          (w) =>
+              w.contains('library.getTree') && w.contains('library.books.read'),
+        ),
         isTrue,
       );
     });
@@ -335,54 +350,62 @@ void main() {
       );
       expect(
         report.warnings.any(
-            (w) => w.contains('ui.pickFolder') && w.contains('ui.feedback')),
+          (w) => w.contains('ui.pickFolder') && w.contains('ui.feedback'),
+        ),
         isTrue,
       );
     });
 
-    test('warns when personal-file APIs are used without fs.user_files.read',
-        () {
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('fs.pickUserFile', {});"
-              "Otzaria.call('fs.resolveFileUrl', {});"
-              "Otzaria.call('fs.readTextFile', {});"
-              "Otzaria.call('fs.revokeFile', {});",
-        },
-      );
-      for (final method in const [
-        'fs.pickUserFile',
-        'fs.resolveFileUrl',
-        'fs.readTextFile',
-        'fs.revokeFile',
-      ]) {
-        expect(
-          report.warnings.any(
-              (w) => w.contains(method) && w.contains('fs.user_files.read')),
-          isTrue,
-          reason: '$method חייב לדרוש את fs.user_files.read',
+    test(
+      'warns when personal-file APIs are used without fs.user_files.read',
+      () {
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js':
+                "Otzaria.call('fs.pickUserFile', {});"
+                "Otzaria.call('fs.resolveFileUrl', {});"
+                "Otzaria.call('fs.readTextFile', {});"
+                "Otzaria.call('fs.revokeFile', {});",
+          },
         );
-      }
-    });
+        for (final method in const [
+          'fs.pickUserFile',
+          'fs.resolveFileUrl',
+          'fs.readTextFile',
+          'fs.revokeFile',
+        ]) {
+          expect(
+            report.warnings.any(
+              (w) => w.contains(method) && w.contains('fs.user_files.read'),
+            ),
+            isTrue,
+            reason: '$method חייב לדרוש את fs.user_files.read',
+          );
+        }
+      },
+    );
 
-    test('no warning for personal-file APIs when fs.user_files.read declared',
-        () {
-      final report = _runOn(
-        tempDir,
-        manifestOverride:
-            _baseManifest(permissions: const ['fs.user_files.read']),
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('fs.readTextFile', {});",
-        },
-      );
-      expect(
-        report.warnings.any((w) => w.contains('fs.user_files.read')),
-        isFalse,
-      );
-    });
+    test(
+      'no warning for personal-file APIs when fs.user_files.read declared',
+      () {
+        final report = _runOn(
+          tempDir,
+          manifestOverride: _baseManifest(
+            permissions: const ['fs.user_files.read'],
+          ),
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': "Otzaria.call('fs.readTextFile', {});",
+          },
+        );
+        expect(
+          report.warnings.any((w) => w.contains('fs.user_files.read')),
+          isFalse,
+        );
+      },
+    );
 
     test('shorthand `Otzaria.app.getInfo()` is detected as API usage', () {
       final report = _runOn(
@@ -399,8 +422,7 @@ void main() {
       );
     });
 
-    test('reserved shorthand fields (.call/.on/.off) are NOT treated as API',
-        () {
+    test('reserved shorthand fields (.call/.on/.off) are NOT treated as API', () {
       final report = _runOn(
         tempDir,
         files: {
@@ -461,57 +483,62 @@ void main() {
       );
     });
 
-    test('regex literals containing `//` do not blow away the rest of the line',
-        () {
-      // רגרסיה: regex literal עם `\/\/` בתוכו (URL pattern). אם המסיר
-      // לא מגן על regex literals, הוא יחתוך מ-`//` הראשון שב-regex עד
-      // סוף השורה ויבליע את הקריאה האמיתית שאחריו.
-      final report = _runOn(
-        tempDir,
-        manifestOverride:
-            _baseManifest(permissions: const ['library.books.read']),
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': r'''
+    test(
+      'regex literals containing `//` do not blow away the rest of the line',
+      () {
+        // רגרסיה: regex literal עם `\/\/` בתוכו (URL pattern). אם המסיר
+        // לא מגן על regex literals, הוא יחתוך מ-`//` הראשון שב-regex עד
+        // סוף השורה ויבליע את הקריאה האמיתית שאחריו.
+        final report = _runOn(
+          tempDir,
+          manifestOverride: _baseManifest(
+            permissions: const ['library.books.read'],
+          ),
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': r'''
             const re = /https?:\/\/example/; Otzaria.call('library.findBooks', {});
           ''',
-        },
-      );
-      // הקריאה ל-library.findBooks אמורה להיתפס (לא לקבל warning
-      // "API לא מוכר"), והרשאה הוכרזה.
-      expect(
-        report.warnings.any((w) => w.contains('library.findBooks')),
-        isFalse,
-      );
-    });
+          },
+        );
+        // הקריאה ל-library.findBooks אמורה להיתפס (לא לקבל warning
+        // "API לא מוכר"), והרשאה הוכרזה.
+        expect(
+          report.warnings.any((w) => w.contains('library.findBooks')),
+          isFalse,
+        );
+      },
+    );
 
     test(
-        'regex literal containing `Otzaria.call` is NOT treated as a real call',
-        () {
-      // רגרסיה הפוכה: regex literal עם הטקסט "Otzaria.call" בתוכו לא
-      // צריך להיחשב כקריאה.
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': r'''
+      'regex literal containing `Otzaria.call` is NOT treated as a real call',
+      () {
+        // רגרסיה הפוכה: regex literal עם הטקסט "Otzaria.call" בתוכו לא
+        // צריך להיחשב כקריאה.
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': r'''
             const matcher = /Otzaria\.call\('inside.regex'\)/g;
           ''',
-        },
-      );
-      expect(
-        report.warnings.any((w) => w.contains('inside.regex')),
-        isFalse,
-      );
-    });
+          },
+        );
+        expect(
+          report.warnings.any((w) => w.contains('inside.regex')),
+          isFalse,
+        );
+      },
+    );
 
     test('regex with character class containing `/` is handled', () {
       // `/[a-z\/]+/g` — class פנימי עם `/` ברוח. אסור לסיים את ה-regex
       // ב-`/` שבתוך ה-class.
       final report = _runOn(
         tempDir,
-        manifestOverride:
-            _baseManifest(permissions: const ['library.books.read']),
+        manifestOverride: _baseManifest(
+          permissions: const ['library.books.read'],
+        ),
         files: {
           'index.html': '<html lang="he" dir="rtl"></html>',
           'app.js': r'''
@@ -548,49 +575,55 @@ void main() {
       );
     });
 
-    test('string literals containing `//` (URLs/regex) are not mistakenly cut',
-        () {
-      // אם _stripCommentsForScan חותך // אגרסיבית מדי, היא תפגע ב-URL
-      // וגם תתעלם מקריאה אמיתית אחריו. נוודא שזה לא קורה.
-      final report = _runOn(
-        tempDir,
-        manifestOverride:
-            _baseManifest(permissions: const ['library.books.read']),
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': '''
+    test(
+      'string literals containing `//` (URLs/regex) are not mistakenly cut',
+      () {
+        // אם _stripCommentsForScan חותך // אגרסיבית מדי, היא תפגע ב-URL
+        // וגם תתעלם מקריאה אמיתית אחריו. נוודא שזה לא קורה.
+        final report = _runOn(
+          tempDir,
+          manifestOverride: _baseManifest(
+            permissions: const ['library.books.read'],
+          ),
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': '''
             const url = "https://example.com/api";
             Otzaria.call('library.findBooks', { src: url });
           ''',
-        },
-      );
-      // הקריאה האמיתית נסרקה -> אין warning של API לא מוכר.
-      expect(
-        report.warnings.any((w) => w.contains('library.findBooks')),
-        isFalse,
-      );
-      // וגם לא warning של ההרשאה החסרה (היא הוכרזה).
-      expect(
-        report.warnings.any((w) => w.contains('library.books.read')),
-        isFalse,
-      );
-    });
+          },
+        );
+        // הקריאה האמיתית נסרקה -> אין warning של API לא מוכר.
+        expect(
+          report.warnings.any((w) => w.contains('library.findBooks')),
+          isFalse,
+        );
+        // וגם לא warning של ההרשאה החסרה (היא הוכרזה).
+        expect(
+          report.warnings.any((w) => w.contains('library.books.read')),
+          isFalse,
+        );
+      },
+    );
 
-    test('event subscription without events.subscribe permission -> warning',
-        () {
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.on('navigation.changed', () => {});",
-        },
-      );
-      expect(
-        report.warnings
-            .any((w) => w.contains('events.subscribe:navigation.changed')),
-        isTrue,
-      );
-    });
+    test(
+      'event subscription without events.subscribe permission -> warning',
+      () {
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': "Otzaria.on('navigation.changed', () => {});",
+          },
+        );
+        expect(
+          report.warnings.any(
+            (w) => w.contains('events.subscribe:navigation.changed'),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 
   group('design compliance', () {
@@ -613,15 +646,15 @@ void main() {
     });
 
     test(
-        ':root CSS variable defaults with hex/rgba/px do NOT trigger false positives',
-        () {
-      // רגרסיה: DESIGN_GUIDE עצמו ממליץ על #6750A4, rgba(...) ו-18px כברירות
-      // מחדל ב-:root. הוולידטור חייב להחריג הגדרות --variable.
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'styles.css': '''
+      ':root CSS variable defaults with hex/rgba/px do NOT trigger false positives',
+      () {
+        // רגרסיה: DESIGN_GUIDE עצמו ממליץ על #6750A4, rgba(...) ו-18px כברירות
+        // מחדל ב-:root. הוולידטור חייב להחריג הגדרות --variable.
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'styles.css': '''
             :root {
               --color-primary: #6750A4;
               --color-on-primary: #FFFFFF;
@@ -631,11 +664,12 @@ void main() {
             }
             body { color: var(--color-on-primary); background: var(--color-primary); font-size: var(--font-size-base); }
           ''',
-        },
-      );
-      expect(report.design.violations, isEmpty);
-      expect(report.design.compliant, isTrue);
-    });
+          },
+        );
+        expect(report.design.violations, isEmpty);
+        expect(report.design.compliant, isTrue);
+      },
+    );
 
     test('flags hex colors that are NOT inside CSS variable declarations', () {
       final report = _runOn(
@@ -723,10 +757,12 @@ void main() {
         },
       );
       expect(
-        report.errors.any((e) =>
-            e.contains('shortcut.create') &&
-            e.contains('0.9.94') &&
-            e.contains('0.9.90')),
+        report.errors.any(
+          (e) =>
+              e.contains('shortcut.create') &&
+              e.contains('0.9.94') &&
+              e.contains('0.9.90'),
+        ),
         isTrue,
         reason: 'shortcut.create (0.9.94) עם minAppVersion=0.9.90 חייב error',
       );
@@ -756,14 +792,17 @@ void main() {
         ),
         files: const {
           'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
-          'app.js': "Otzaria.call('library.findBooks', {});"
+          'app.js':
+              "Otzaria.call('library.findBooks', {});"
               "Otzaria.call('fs.readTextFile', {});",
         },
       );
       // library.findBooks (0.9.90) תקין; fs.readTextFile (0.9.94) חוסם.
       expect(report.errors.any((e) => e.contains('fs.readTextFile')), isTrue);
       expect(
-          report.errors.any((e) => e.contains('library.findBooks')), isFalse);
+        report.errors.any((e) => e.contains('library.findBooks')),
+        isFalse,
+      );
     });
 
     test('API לא מוכר אינו מפעיל בדיקת גרסה (רק אזהרה)', () {
@@ -776,8 +815,10 @@ void main() {
         },
       );
       expect(report.errors, isEmpty);
-      expect(report.warnings.any((w) => w.contains('totally.fake_method')),
-          isTrue);
+      expect(
+        report.warnings.any((w) => w.contains('totally.fake_method')),
+        isTrue,
+      );
     });
   });
 }

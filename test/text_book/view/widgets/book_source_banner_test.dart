@@ -10,8 +10,8 @@ import 'package:otzaria/text_book/view/widgets/book_source_banner.dart';
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
   _FakeSettingsBloc({bool isOfflineMode = false})
-      : super(SettingsState.initial().copyWith(isOfflineMode: isOfflineMode)) {
-    on<SettingsEvent>((_, __) {});
+    : super(SettingsState.initial().copyWith(isOfflineMode: isOfflineMode)) {
+    on<SettingsEvent>((_, _) {});
   }
 
   @override
@@ -76,12 +76,14 @@ void main() {
 
   group('BookSourceBanner', () {
     testWidgets('shows the national library credit text', (tester) async {
-      await tester.pumpWidget(_wrap(
-        const BookSourceBanner(
-          kind: BookSourceBannerKind.nationalLibrary,
-          bookTitle: 'ספר',
+      await tester.pumpWidget(
+        _wrap(
+          const BookSourceBanner(
+            kind: BookSourceBannerKind.nationalLibrary,
+            bookTitle: 'ספר',
+          ),
         ),
-      ));
+      );
 
       expect(find.text(kNationalLibraryBannerText), findsOneWidget);
       expect(find.text('כאן'), findsNothing);
@@ -90,13 +92,15 @@ void main() {
     testWidgets('shows the wiki jewish books link when online', (
       tester,
     ) async {
-      await tester.pumpWidget(_wrap(
-        const BookSourceBanner(
-          kind: BookSourceBannerKind.wikiJewishBooks,
-          bookTitle: 'עץ הדר',
+      await tester.pumpWidget(
+        _wrap(
+          const BookSourceBanner(
+            kind: BookSourceBannerKind.wikiJewishBooks,
+            bookTitle: 'עץ הדר',
+          ),
+          isOfflineMode: false,
         ),
-        isOfflineMode: false,
-      ));
+      );
 
       expect(find.textContaining(kWikiJewishBooksBannerText), findsOneWidget);
       expect(find.textContaining('אפשר ללחוץ'), findsOneWidget);
@@ -106,13 +110,15 @@ void main() {
     testWidgets('hides the wiki jewish books link when offline', (
       tester,
     ) async {
-      await tester.pumpWidget(_wrap(
-        const BookSourceBanner(
-          kind: BookSourceBannerKind.wikiJewishBooks,
-          bookTitle: 'עץ הדר',
+      await tester.pumpWidget(
+        _wrap(
+          const BookSourceBanner(
+            kind: BookSourceBannerKind.wikiJewishBooks,
+            bookTitle: 'עץ הדר',
+          ),
+          isOfflineMode: true,
         ),
-        isOfflineMode: true,
-      ));
+      );
 
       expect(find.text(kWikiJewishBooksBannerText), findsOneWidget);
       expect(find.textContaining('אפשר ללחוץ'), findsNothing);

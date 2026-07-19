@@ -32,10 +32,13 @@ class AdaptiveSidePane extends StatefulWidget {
   final ValueChanged<double>? onPaneWidthChanged;
   final VoidCallback? onPaneResizeEnd;
   final Widget Function(
-          BuildContext context, Widget paneContent, double paneWidth)?
-      widePaneBuilder;
+    BuildContext context,
+    Widget paneContent,
+    double paneWidth,
+  )?
+  widePaneBuilder;
   final Widget Function(BuildContext context, Widget paneContent)?
-      narrowPaneBuilder;
+  narrowPaneBuilder;
   final bool autoHandleResponsiveVisibility;
 
   /// רווח עליון ל-scrollbar thumb — null = ברירת מחדל (_kWideTopGap).
@@ -162,8 +165,9 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     required bool paneOnRight,
   }) {
     final paneColor = _effectivePaneColor(context);
-    final shadowColor =
-        Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22);
+    final shadowColor = Theme.of(
+      context,
+    ).colorScheme.shadow.withValues(alpha: 0.22);
 
     // ממקם את פסי הגלילה בקצה החיצוני של הפאנל (הצמוד לדופן החלון) ולא בקצה
     // הפנימי, שם יושבת ידית הגרירה (ResizableDragHandle) וחוסמת את הלחיצה על
@@ -256,7 +260,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         // ומסונכרן מ-widget.paneWidth ב-didUpdateWidget כשאין גרירה.
         final wideOccupiedWidth =
             _livePaneWidth.value + _kWideOuterSideGap + _kWideInnerSideGap;
-        final calculatedHasRoomForSideBySide = constraints.maxWidth >=
+        final calculatedHasRoomForSideBySide =
+            constraints.maxWidth >=
             (wideOccupiedWidth + widget.minMainContentWidth);
         final hasRoomForSideBySide = _resolveHasRoomForSideBySide(
           calculatedHasRoomForSideBySide,
@@ -290,7 +295,8 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     BuildContext context, {
     required bool paneOnRight,
   }) {
-    final showHandle = widget.isOpen &&
+    final showHandle =
+        widget.isOpen &&
         widget.isResizable &&
         widget.onPaneWidthChanged != null;
 
@@ -324,7 +330,10 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         } else {
           final widePaneContent = widget.widePaneBuilder != null
               ? widget.widePaneBuilder!(
-                  context, widget.paneContent, currentWidth)
+                  context,
+                  widget.paneContent,
+                  currentWidth,
+                )
               : widget.paneContent;
           paneSlotContent = Padding(
             padding: EdgeInsetsDirectional.only(
@@ -370,7 +379,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                 ),
               ),
             ),
-            if (handleWidget != null) handleWidget,
+            ?handleWidget,
           ],
         );
       },
@@ -390,15 +399,19 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     required double maxWidth,
   }) {
     // בחלון צר מצמצמים את רוחב הפאנל כדי להשאיר שוליים משני הצדדים
-    final maxPaneWidth =
-        (maxWidth - _kNarrowSideGap * 2).clamp(0.0, double.infinity);
+    final maxPaneWidth = (maxWidth - _kNarrowSideGap * 2).clamp(
+      0.0,
+      double.infinity,
+    );
     // אופטימיזציית ביצועים: לא לבנות את תוכן הפאנל לפני שנפתח לראשונה.
     // אחרי הפתיחה הראשונה התוכן נשמר במגדל גם בסגירה כדי לשמור state.
     final Widget narrowPane = _paneEverOpened
         ? _buildPaneShell(
             context,
-            (widget.narrowPaneBuilder ?? _defaultNarrowPaneBuilder)
-                .call(context, widget.paneContent),
+            (widget.narrowPaneBuilder ?? _defaultNarrowPaneBuilder).call(
+              context,
+              widget.paneContent,
+            ),
             paneOnRight: paneOnRight,
           )
         : const SizedBox.shrink();
@@ -420,10 +433,9 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                     duration: AppTokens.animPanelOpacity,
                     opacity: widget.isOpen ? 1.0 : 0.0,
                     child: ColoredBox(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .scrim
-                          .withValues(alpha: 0.30),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.scrim.withValues(alpha: 0.30),
                     ),
                   ),
                 ),
@@ -431,10 +443,12 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               ValueListenableBuilder<double>(
                 valueListenable: _livePaneWidth,
                 builder: (context, liveWidth, _) {
-                  final currentWidth =
-                      liveWidth > maxPaneWidth ? maxPaneWidth : liveWidth;
-                  final overhang =
-                      showHandle ? handleHitOverhang(context) : 0.0;
+                  final currentWidth = liveWidth > maxPaneWidth
+                      ? maxPaneWidth
+                      : liveWidth;
+                  final overhang = showHandle
+                      ? handleHitOverhang(context)
+                      : 0.0;
 
                   return Stack(
                     children: [
@@ -471,8 +485,9 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                             child: AnimatedSlide(
                               duration: AppTokens.animPanelSlide,
                               curve: Curves.easeInOut,
-                              offset:
-                                  widget.isOpen ? Offset.zero : closedOffset,
+                              offset: widget.isOpen
+                                  ? Offset.zero
+                                  : closedOffset,
                               child: _buildResizeHandle(paneOnRight, false),
                             ),
                           ),

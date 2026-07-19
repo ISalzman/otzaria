@@ -5,8 +5,10 @@
 /// כך שהן מוצגות ולחיצות כמו קישור שנוסף דרך הדיאלוג המובנה.
 library;
 
-final RegExp _urlPattern =
-    RegExp(r'(?:otzaria|zayit|https?)://[^\s]+', caseSensitive: false);
+final RegExp _urlPattern = RegExp(
+  r'(?:otzaria|zayit|https?)://[^\s]+',
+  caseSensitive: false,
+);
 
 /// תווי פיסוק שמסיימים משפט ולא שייכים לכתובת עצמה.
 const String _trailingPunctuation = '.,;:!?)]}\'"';
@@ -49,7 +51,7 @@ List<dynamic> linkifyDeltaOps(List<dynamic> ops) {
       if (match.start > cursor) {
         result.add({
           'insert': insert.substring(cursor, match.start),
-          if (attributes != null) 'attributes': attributes,
+          'attributes': ?attributes,
         });
       }
       result.add({
@@ -70,7 +72,7 @@ List<dynamic> linkifyDeltaOps(List<dynamic> ops) {
     if (cursor < insert.length) {
       result.add({
         'insert': insert.substring(cursor),
-        if (attributes != null) 'attributes': attributes,
+        'attributes': ?attributes,
       });
     }
   }

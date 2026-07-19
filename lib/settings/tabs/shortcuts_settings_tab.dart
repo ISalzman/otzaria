@@ -428,7 +428,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
       'ctrl+shift+w',
     ];
     return {
-      for (final k in keys) k: ShortcutHelper.formatShortcutForDisplay(k)
+      for (final k in keys) k: ShortcutHelper.formatShortcutForDisplay(k),
     };
   }
 
@@ -516,7 +516,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
         _ShortcutTile(
           settingKey: ShortcutValidator.openPluginShortcutKey(plugin.pluginId),
           label: 'פתיחת ${plugin.name}',
-          icon: fluentIconFromName(plugin.manifest.toolTabIconName) ??
+          icon:
+              fluentIconFromName(plugin.manifest.toolTabIconName) ??
               FluentIcons.puzzle_piece_24_regular,
           allShortcuts: _shortcutsList,
         ),
@@ -857,7 +858,9 @@ class ShortcutsSettingsTab extends StatelessWidget {
   }
 
   Future<void> _addShortcut(
-      BuildContext context, List<String> unconfiguredKeys) async {
+    BuildContext context,
+    List<String> unconfiguredKeys,
+  ) async {
     final settingsBloc = context.read<SettingsBloc>();
 
     final selectedKey = await showDialog<String>(
@@ -971,7 +974,7 @@ class _PickActionDialog extends StatelessWidget {
         child: ListView.separated(
           shrinkWrap: true,
           itemCount: actionKeys.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, i) {
             final key = actionKeys[i];
             final name = ShortcutValidator.shortcutNames[key] ?? key;

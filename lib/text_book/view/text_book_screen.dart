@@ -246,9 +246,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   String? _selectedTextForSearch;
   int?
-      _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
+  _selectedLineForNote; // שורת המקור של הטקסט המסומן, ליצירת הערה בקיצור מקשים
   int?
-      _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
+  _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
   Book? _pdfBook; // Companion PDF
   bool _hasPdfBook = false;
   bool _hasResolvedCompanionPdf = false;
@@ -260,15 +260,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   final Key _pageShapeKey = UniqueKey();
 
   // בקשה לפתיחת דיאלוג הגדרות צורת הדף מתוך PageShapeScreen (עדכון חי)
-  final ValueNotifier<int> _pageShapeOpenSettingsNotifier =
-      ValueNotifier<int>(0);
+  final ValueNotifier<int> _pageShapeOpenSettingsNotifier = ValueNotifier<int>(
+    0,
+  );
 
   // RepaintBoundary key עבור הדפסה של "צורת הדף" כפי שמוצג
   final GlobalKey _pageShapePrintBoundaryKey = GlobalKey();
 
   // בקשות לפתיחת חלונית פנימית ב"צורת הדף": 0=קישורים, 1=הערות
-  final ValueNotifier<int?> _pageShapeSidebarTabNotifier =
-      ValueNotifier<int?>(null);
+  final ValueNotifier<int?> _pageShapeSidebarTabNotifier = ValueNotifier<int?>(
+    null,
+  );
 
   // Cache לרשימת אינדקסי TOC ממוינת - למניעת חישוב מחדש בכל לחיצה
   List<int>? _cachedTocIndices;
@@ -343,8 +345,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final currentIndex = _topmostVisibleSourceLine(state);
 
       // קבלת הכותרת הנוכחית
-      String currentRef =
-          await refFromIndex(currentIndex, state.book.tableOfContents);
+      String currentRef = await refFromIndex(
+        currentIndex,
+        state.book.tableOfContents,
+      );
 
       // אם הכותרת זהה לשם הספר, סימן שאנחנו לפני כל פרק - נחפש את ה-H2 הראשונה
       if (currentRef == state.book.title || currentRef.isEmpty) {
@@ -397,7 +401,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       for (int i = 0; i < learnableItems.length && i < 10; i++) {
         final item = learnableItems[i];
         debugPrint(
-            '  [$i] displayLabel: "${item.displayLabel}", partName: "${item.partName}", hierarchyPath: ${item.hierarchyPath}');
+          '  [$i] displayLabel: "${item.displayLabel}", partName: "${item.partName}", hierarchyPath: ${item.hierarchyPath}',
+        );
       }
       if (learnableItems.length > 10) {
         debugPrint('  ... and ${learnableItems.length - 10} more items');
@@ -423,14 +428,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       }
 
       debugPrint(
-          'Found target item: displayLabel="${targetItem.displayLabel}", partName="${targetItem.partName}"');
+        'Found target item: displayLabel="${targetItem.displayLabel}", partName="${targetItem.partName}"',
+      );
 
       debugPrint(
-          'Target item: ${targetItem.pageNumber}${targetItem.amudKey}, absoluteIndex: ${targetItem.absoluteIndex}');
+        'Target item: ${targetItem.pageNumber}${targetItem.amudKey}, absoluteIndex: ${targetItem.absoluteIndex}',
+      );
 
       // בדיקת מצב העמודות עבור הפרק הספציפי - משתמשים ב-ID!
       final itemProgress = progressProvider.getProgressForItemById(
-          bookId, targetItem.absoluteIndex);
+        bookId,
+        targetItem.absoluteIndex,
+      );
 
       // מציאת העמודה הראשונה שלא מסומנת
       String? columnToMark;
@@ -533,15 +542,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   void _handleBookSourcePress(BuildContext context, TextBookLoaded state) {
     context.read<TourCubit>().recordInteraction(
-          TourInteraction(type: TourInteractionType.bookSourceViewed),
-        );
+      TourInteraction(type: TourInteractionType.bookSourceViewed),
+    );
     showBookSourceDialog(context, state);
   }
 
   Future<void> _handlePrintPress(TextBookLoaded state) async {
     context.read<TourCubit>().recordInteraction(
-          TourInteraction(type: TourInteractionType.printUsed),
-        );
+      TourInteraction(type: TourInteractionType.printUsed),
+    );
     if (state.showPageShapeView) {
       final png = await _capturePageShapeViewPng();
       if (!mounted) return;
@@ -589,8 +598,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       barrierDismissible: false,
       builder: (context) => PrintingScreen(
         // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
-        data:
-            context.read<TextBookBloc>().repository.getBookContent(state.book),
+        data: context.read<TextBookBloc>().repository.getBookContent(
+          state.book,
+        ),
         bookId: state.book.title,
         book: state.book,
         links: state.links,
@@ -623,19 +633,23 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       if (path == null) return;
       if (!mounted) return;
 
-      final file = File(normalizeTextBookExportPath(
-        path,
-        defaultExtension: extension,
-      ));
+      final file = File(
+        normalizeTextBookExportPath(
+          path,
+          defaultExtension: extension,
+        ),
+      );
 
       final settingsState = context.read<SettingsBloc>().state;
       final removeTaamim = !settingsState.showTeamim;
       final shouldReplaceHolyNames =
           Settings.getValue<bool>('key-replace-holy-names') ?? true;
-      final fullContent =
-          await context.read<TextBookBloc>().repository.getBookContent(
-                state.book,
-              );
+      final fullContent = await context
+          .read<TextBookBloc>()
+          .repository
+          .getBookContent(
+            state.book,
+          );
 
       if (selectedFormat == _TextBookExportFormat.word) {
         final bytes = await compute(
@@ -727,8 +741,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // ה-PDF (_hasPdfBook), לא על התוכן — לכן נדחה ל-_resolveCompanionPdf
     // שנקרא ברגע שהספר נטען (ראו ה-listener של ה-BlocConsumer).
 
-    final pendingSidebarTab =
-        Settings.getValue<int>('key-sidebar-tab-index-pending');
+    final pendingSidebarTab = Settings.getValue<int>(
+      'key-sidebar-tab-index-pending',
+    );
     if (pendingSidebarTab != null && pendingSidebarTab >= 0) {
       _sidebarTabIndex = pendingSidebarTab;
     }
@@ -752,7 +767,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _checkAltTitles();
 
     _sidebarWidth = ValueNotifier<double>(
-        Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!);
+      Settings.getValue<double>('key-sidebar-width', defaultValue: 300)!,
+    );
 
     // שמירת הגדרות נוכחיות כדי לזהות שינויים
     double previousFontSize = context.read<SettingsBloc>().state.fontSize;
@@ -781,9 +797,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       );
       final isPunctuationSettingsChange =
           shouldReloadForPunctuationSettingsChange(
-        previous: previousSettingsState,
-        current: state,
-      );
+            previous: previousSettingsState,
+            current: state,
+          );
       if (state.fontFamily != previousFontFamily ||
           isNikudSettingsChange ||
           isPunctuationSettingsChange) {
@@ -795,22 +811,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final currentState = context.read<TextBookBloc>().state;
         if (currentState is TextBookLoaded) {
           context.read<TextBookBloc>().add(
-                LoadContent(
-                  fontSize: state.fontSize,
-                  showSplitView: currentState.showSplitView,
-                  removeNikud: state.defaultRemoveNikud,
-                  forceCloseLeftPane: widget.isInCombinedView,
-                  preserveState: true,
-                  // שמירת מצב הניקוד הנוכחי של המשתמש רק כשרק הגופן
-                  // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
-                  // הערך החדש
-                  preserveRemoveNikud: !isNikudSettingsChange,
-                  preserveRemovePunctuation: !isPunctuationSettingsChange,
-                  // שינוי הגדרות גלובליות (גופן/ניקוד) לעולם לא יכבה
-                  // את מצב הרצף שהמשתמש בחר עבור הספר.
-                  preserveContinuousReadingMode: true,
-                ),
-              );
+            LoadContent(
+              fontSize: state.fontSize,
+              showSplitView: currentState.showSplitView,
+              removeNikud: state.defaultRemoveNikud,
+              forceCloseLeftPane: widget.isInCombinedView,
+              preserveState: true,
+              // שמירת מצב הניקוד הנוכחי של המשתמש רק כשרק הגופן
+              // השתנה - אם הגדרות הניקוד עצמן השתנו, יש להחיל את
+              // הערך החדש
+              preserveRemoveNikud: !isNikudSettingsChange,
+              preserveRemovePunctuation: !isPunctuationSettingsChange,
+              // שינוי הגדרות גלובליות (גופן/ניקוד) לעולם לא יכבה
+              // את מצב הרצף שהמשתמש בחר עבור הספר.
+              preserveContinuousReadingMode: true,
+            ),
+          );
         }
       } else {
         previousSettingsState = state;
@@ -950,14 +966,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final settingsBloc = context.read<SettingsBloc>();
     final textBookBloc = context.read<TextBookBloc>();
 
-    textBookBloc.add(LoadContent(
-      fontSize: settingsBloc.state.fontSize,
-      showSplitView: Settings.getValue<bool>('key-splited-view') ?? true,
-      removeNikud: settingsBloc.state.defaultRemoveNikud,
-      preserveState: true,
-      // בתצוגה משולבת, חלונית הצד תמיד סגורה
-      forceCloseLeftPane: widget.isInCombinedView,
-    ));
+    textBookBloc.add(
+      LoadContent(
+        fontSize: settingsBloc.state.fontSize,
+        showSplitView: Settings.getValue<bool>('key-splited-view') ?? true,
+        removeNikud: settingsBloc.state.defaultRemoveNikud,
+        preserveState: true,
+        // בתצוגה משולבת, חלונית הצד תמיד סגורה
+        forceCloseLeftPane: widget.isInCombinedView,
+      ),
+    );
 
     if (mounted) {
       UiSnack.show(TextBookMessages.perBookSettingsReset);
@@ -1035,8 +1053,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  void _onSelectedTextChanged(String? selectedText, int? lineIndex,
-      [int? column]) {
+  void _onSelectedTextChanged(
+    String? selectedText,
+    int? lineIndex, [
+    int? column,
+  ]) {
     _selectedTextForSearch = selectedText;
     _selectedLineForNote = lineIndex;
     _selectedColumnForNote = column;
@@ -1069,10 +1090,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   void _openSearchWithText(String? selectedText) {
-    _openLeftPaneTab(1,
-        searchText: selectedText?.trim().isNotEmpty == true
-            ? selectedText
-            : _selectedTextForSearch);
+    _openLeftPaneTab(
+      1,
+      searchText: selectedText?.trim().isNotEmpty == true
+          ? selectedText
+          : _selectedTextForSearch,
+    );
   }
 
   @override
@@ -1105,17 +1128,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               if (currentState is TextBookLoaded && currentState.showLeftPane) {
                 // בדיקה אם הטאב הנוכחי הוא אחד מהטאבים המוצגים
                 final currentTabIndex = tabsState.currentTabIndex;
-                final isInSideBySide = currentTabIndex ==
-                        tabsState.sideBySideMode!.leftTabIndex ||
+                final isInSideBySide =
+                    currentTabIndex == tabsState.sideBySideMode!.leftTabIndex ||
                     currentTabIndex == tabsState.sideBySideMode!.rightTabIndex;
 
                 if (isInSideBySide) {
                   // סגירה מיידית
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) {
-                      context
-                          .read<TextBookBloc>()
-                          .add(const ToggleLeftPane(false));
+                      context.read<TextBookBloc>().add(
+                        const ToggleLeftPane(false),
+                      );
                     }
                   });
                 }
@@ -1145,8 +1168,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     _lastShowLeftPaneForReanchor = state.showLeftPane;
                     _reanchorMainContentToTopmostVisible();
                   }
-                  final pendingSidebarTab =
-                      Settings.getValue<int>('key-sidebar-tab-index-pending');
+                  final pendingSidebarTab = Settings.getValue<int>(
+                    'key-sidebar-tab-index-pending',
+                  );
                   if (pendingSidebarTab != null && pendingSidebarTab >= 0) {
                     if (_sidebarTabIndex != pendingSidebarTab) {
                       setState(() {
@@ -1155,7 +1179,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     }
                     if (state.showSplitView) {
                       Settings.setValue<int>(
-                          'key-sidebar-tab-index-pending', -1);
+                        'key-sidebar-tab-index-pending',
+                        -1,
+                      );
                     }
                   } else if (!state.showSplitView && _sidebarTabIndex != null) {
                     setState(() {
@@ -1167,8 +1193,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               builder: (context, state) {
                 if (state is TextBookInitial) {
                   // איפוס אינדקס הכרטיסייה כשטוענים ספר חדש
-                  final pendingSidebarTab =
-                      Settings.getValue<int>('key-sidebar-tab-index-pending');
+                  final pendingSidebarTab = Settings.getValue<int>(
+                    'key-sidebar-tab-index-pending',
+                  );
                   if (_sidebarTabIndex != null &&
                       (pendingSidebarTab == null || pendingSidebarTab < 0)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1179,19 +1206,21 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   }
 
                   context.read<TextBookBloc>().add(
-                        LoadContent(
-                          fontSize: settingsState.fontSize,
-                          showSplitView: state.splitedView,
-                          removeNikud: settingsState.defaultRemoveNikud,
-                          // בתצוגה משולבת, חלונית הצד תמיד סגורה
-                          forceCloseLeftPane: widget.isInCombinedView,
-                        ),
-                      );
+                    LoadContent(
+                      fontSize: settingsState.fontSize,
+                      showSplitView: state.splitedView,
+                      removeNikud: settingsState.defaultRemoveNikud,
+                      // בתצוגה משולבת, חלונית הצד תמיד סגורה
+                      forceCloseLeftPane: widget.isInCombinedView,
+                    ),
+                  );
                 }
 
                 if (state is TextBookInitial || state is TextBookLoading) {
-                  final isCompact =
-                      context.read<SettingsBloc>().state.compactMenuMode;
+                  final isCompact = context
+                      .read<SettingsBloc>()
+                      .state
+                      .compactMenuMode;
                   return Scaffold(
                     body: Column(
                       children: [
@@ -1214,7 +1243,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                           ),
                         ),
                         const Expanded(
-                            child: Center(child: CircularProgressIndicator())),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
                       ],
                     ),
                   );
@@ -1252,7 +1282,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       return;
                     }
                     if (isTextInputFocusNode(
-                        FocusManager.instance.primaryFocus)) {
+                      FocusManager.instance.primaryFocus,
+                    )) {
                       return;
                     }
 
@@ -1264,8 +1295,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                       // שרשם CombinedView; הוא צאצא של ה-KeyboardListener הזה,
                       // לכן Ctrl+P/Home וכו' ממשיכים לעבוד. fallback ל-node הזה
                       // אם אין requester (למשל צורת הדף).
-                      final didFocus = _focusRepository
-                              ?.requestTabContentFocus(widget.tab) ??
+                      final didFocus =
+                          _focusRepository?.requestTabContentFocus(
+                            widget.tab,
+                          ) ??
                           false;
                       if (!didFocus) _bookContentFocusNode.requestFocus();
                     }
@@ -1347,7 +1380,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// הדיאלוג נפתח ע"י PageShapeScreen עצמו (דרך ה-notifier), כדי שכל שינוי
   /// בדיאלוג יוחל על המסך בעדכון חי בלי להמתין לסגירתו.
   Widget _buildPageShapeSettingsButton(
-      BuildContext context, TextBookLoaded state) {
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return ToolbarActionButton(
       tooltip: 'הגדרות צורת הדף',
@@ -1357,15 +1392,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildTitle(TextBookLoaded state,
-      {TextAlign textAlign = TextAlign.end}) {
+  Widget _buildTitle(
+    TextBookLoaded state, {
+    TextAlign textAlign = TextAlign.end,
+  }) {
     if (state.currentTitle == null) {
       return const SizedBox.shrink();
     }
 
     // שימוש בפונקציה העזר להוספת שם הספר
-    String displayText =
-        addBookTitleToRef(state.currentTitle!, state.book.title);
+    String displayText = addBookTitleToRef(
+      state.currentTitle!,
+      state.book.title,
+    );
 
     final author = state.book.author;
 
@@ -1436,16 +1475,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
     bool wideScreen,
   ) {
-    final maxButtons =
-        maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
+    final maxButtons = maxToolbarButtonsForWidth(
+      MediaQuery.of(context).size.width,
+    );
 
     return [
       Consumer<ShamorZachorDataProvider>(
-        builder: (context, _, __) => ResponsiveActionBar(
+        builder: (context, _, _) => ResponsiveActionBar(
           key: const ValueKey('responsive_actions'),
           overflowMenuOffset: const Offset(0, 8),
-          overflowButtonKey:
-              widget.enableTourTargets ? textBookOverflowTourTargetKey : null,
+          overflowButtonKey: widget.enableTourTargets
+              ? textBookOverflowTourTargetKey
+              : null,
           menuItemKeysByTooltip: widget.enableTourTargets
               ? {
                   _getViewModeTooltip(state):
@@ -1536,8 +1577,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         onPressed: () async {
           final newValue = !state.removeNikud;
           context.read<TextBookBloc>().add(ToggleNikud(newValue));
-          await savePerBookDisplaySettings(context, state,
-              removeNikud: newValue);
+          await savePerBookDisplaySettings(
+            context,
+            state,
+            removeNikud: newValue,
+          );
         },
       ),
 
@@ -1775,7 +1819,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   List<ActionButtonData> _buildNavigationActions(
-      BuildContext context, TextBookLoaded state) {
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
         widget: _buildPreviousTocButton(context, state),
@@ -1824,15 +1870,18 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// טיפול בבחירת מצב תצוגה — משותף לתפריט הכפתור ולתת-התפריט ב-overflow
   Future<void> _onViewModeSelected(
-      BuildContext context, TextBookLoaded state, String value) async {
+    BuildContext context,
+    TextBookLoaded state,
+    String value,
+  ) async {
     // פתיחת כרטיסיית מפרשים נפרדת — פעולה, לא מצב תצוגה
     if (value == _actionOpenCommentatorsTab) {
       context.read<TabsBloc>().add(
-            AddTab(
-              CommentatorsTab(sourceTab: widget.tab),
-              insertAdjacent: true,
-            ),
-          );
+        AddTab(
+          CommentatorsTab(sourceTab: widget.tab),
+          insertAdjacent: true,
+        ),
+      );
       return;
     }
 
@@ -1851,8 +1900,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
     if (!isPageSelected && isSplitSelected != state.showSplitView) {
       bloc.add(ToggleSplitView(isSplitSelected));
-      await savePerBookDisplaySettings(context, state,
-          showSplitView: isSplitSelected);
+      await savePerBookDisplaySettings(
+        context,
+        state,
+        showSplitView: isSplitSelected,
+      );
     }
 
     if (isPageSelected || isSplitSelected) {
@@ -1929,11 +1981,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Future<void> _toggleAndSavePunctuation(
-      BuildContext context, TextBookLoaded state) async {
+    BuildContext context,
+    TextBookLoaded state,
+  ) async {
     final newValue = !state.removePunctuation;
     context.read<TextBookBloc>().add(TogglePunctuation(newValue));
-    await savePerBookDisplaySettings(context, state,
-        removePunctuation: newValue);
+    await savePerBookDisplaySettings(
+      context,
+      state,
+      removePunctuation: newValue,
+    );
   }
 
   Widget _buildPunctuationButton(BuildContext context, TextBookLoaded state) {
@@ -1949,19 +2006,27 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Future<void> _toggleAndSaveContinuousReading(
-      BuildContext context, TextBookLoaded state) async {
+    BuildContext context,
+    TextBookLoaded state,
+  ) async {
     final newValue = !state.continuousReadingMode;
     context.read<TextBookBloc>().add(ToggleContinuousReadingMode(newValue));
-    await savePerBookDisplaySettings(context, state,
-        continuousReadingMode: newValue);
+    await savePerBookDisplaySettings(
+      context,
+      state,
+      continuousReadingMode: newValue,
+    );
   }
 
   Widget _buildContinuousReadingButton(
-      BuildContext context, TextBookLoaded state) {
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return ToolbarActionButton(
-      tooltip:
-          state.continuousReadingMode ? 'הצג כשורות בודדות' : 'הצג כטקסט רציף',
+      tooltip: state.continuousReadingMode
+          ? 'הצג כשורות בודדות'
+          : 'הצג כטקסט רציף',
       icon: state.continuousReadingMode
           ? FluentIcons.text_align_justify_24_filled
           : FluentIcons.text_align_justify_24_regular,
@@ -1982,7 +2047,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state, {
     Key? key,
   }) {
-    final shortcut = ShortcutValidator.getShortcutValue(
+    final shortcut =
+        ShortcutValidator.getShortcutValue(
           ShortcutValidator.currentWindowSearchKey,
         ) ??
         'ctrl+f';
@@ -2109,7 +2175,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// מוצא את הכותרת הבאה (דף/פרק) מתוך תוכן העניינים
   /// מחזיר את האינדקס של הכותרת הבאה, או null אם אין
   int? _findNextTocIndex(
-      List<TocEntry> entries, int currentIndex, String bookTitle) {
+    List<TocEntry> entries,
+    int currentIndex,
+    String bookTitle,
+  ) {
     final allIndices = _getSortedTocIndices(entries, bookTitle);
 
     // חיפוש בינארי יעיל יותר
@@ -2131,7 +2200,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// מוצא את הכותרת הקודמת (דף/פרק) מתוך תוכן העניינים
   /// מחזיר את האינדקס של הכותרת הקודמת, או null אם אין
   int? _findPreviousTocIndex(
-      List<TocEntry> entries, int currentIndex, String bookTitle) {
+    List<TocEntry> entries,
+    int currentIndex,
+    String bookTitle,
+  ) {
     final allIndices = _getSortedTocIndices(entries, bookTitle);
 
     // חיפוש בינארי יעיל יותר
@@ -2154,7 +2226,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void _navigateToPreviousToc(TextBookLoaded state) {
     final currentIndex = _topmostVisibleSourceLine(state);
     final prevIndex = _findPreviousTocIndex(
-        state.tableOfContents, currentIndex, state.book.title);
+      state.tableOfContents,
+      currentIndex,
+      state.book.title,
+    );
     if (prevIndex != null) {
       state.scrollController.scrollTo(
         // ה-TOC עובד בשורות מקור; ה-ListView לפי itemIndex (=segmentIndex
@@ -2169,7 +2244,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   void _navigateToNextToc(TextBookLoaded state) {
     final currentIndex = _bottommostVisibleSourceLine(state);
     final nextIndex = _findNextTocIndex(
-        state.tableOfContents, currentIndex, state.book.title);
+      state.tableOfContents,
+      currentIndex,
+      state.book.title,
+    );
     if (nextIndex != null) {
       state.scrollController.scrollTo(
         index: _itemIndexForSourceLine(state, nextIndex),
@@ -2211,18 +2289,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       tooltip: 'הדפסה (${shortcut.toUpperCase()})',
       onPressed: () {
         context.read<TourCubit>().recordInteraction(
-              TourInteraction(type: TourInteractionType.printUsed),
-            );
+          TourInteraction(type: TourInteractionType.printUsed),
+        );
         final settingsState = context.read<SettingsBloc>().state;
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => PrintingScreen(
             // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
-            data: context
-                .read<TextBookBloc>()
-                .repository
-                .getBookContent(state.book),
+            data: context.read<TextBookBloc>().repository.getBookContent(
+              state.book,
+            ),
             bookId: state.book.title,
             book: state.book,
             links: state.links,
@@ -2324,7 +2401,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         if (categoryPath.isNotEmpty) {
           final libraryPath =
               Settings.getValue<String>(SettingsRepository.keyLibraryPath) ??
-                  '.';
+              '.';
           bookPath =
               '$libraryPath${Platform.pathSeparator}אוצריא${Platform.pathSeparator}$categoryPath${Platform.pathSeparator}$bookTitle.txt';
           debugPrint('Book path from DB: $bookPath');
@@ -2396,8 +2473,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final controller = widget.tab.scrollController;
     if (!controller.isAttached) return;
 
-    final visible = widget.tab.positionsListener.itemPositions.value
-        .where((p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0);
+    final visible = widget.tab.positionsListener.itemPositions.value.where(
+      (p) => p.itemLeadingEdge < 1 && p.itemTrailingEdge > 0,
+    );
     if (visible.isEmpty) return;
 
     ItemPosition pickByMinLeadingEdge(Iterable<ItemPosition> items) =>
@@ -2442,9 +2520,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       },
       onPaneResizeEnd: () {
         _reanchorMainContentToTopmostVisible();
-        context
-            .read<SettingsBloc>()
-            .add(UpdateSidebarWidth(_sidebarWidth.value));
+        context.read<SettingsBloc>().add(
+          UpdateSidebarWidth(_sidebarWidth.value),
+        );
       },
       autoHandleResponsiveVisibility: false,
       scrollbarTopMargin: 0,
@@ -2457,27 +2535,31 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       child: GestureDetector(
         onScaleUpdate: (details) {
           context.read<TextBookBloc>().add(
-                UpdateFontSize((state.fontSize * details.scale).clamp(15, 60)),
-              );
+            UpdateFontSize((state.fontSize * details.scale).clamp(15, 60)),
+          );
         },
         onScaleEnd: (details) {
           // שמירת גודל הגופן בסיום המחווה
           final textBookBloc = context.read<TextBookBloc>();
           final currentState = textBookBloc.state;
           if (currentState is TextBookLoaded) {
-            savePerBookDisplaySettings(context, currentState,
-                fontSize: currentState.fontSize);
+            savePerBookDisplaySettings(
+              context,
+              currentState,
+              fontSize: currentState.fontSize,
+            );
           }
         },
         child: NotificationListener<UserScrollNotification>(
           onNotification: (scrollNotification) {
-            final isSidebarPinned = state.pinLeftPane ||
+            final isSidebarPinned =
+                state.pinLeftPane ||
                 (Settings.getValue<bool>('key-pin-sidebar') ?? false);
             final shouldAutoCloseLeftPane =
                 scrollNotification.direction != ScrollDirection.idle &&
-                    state.showLeftPane &&
-                    !isSidebarPinned &&
-                    !_leftPaneAutoCloseQueuedByScroll;
+                state.showLeftPane &&
+                !isSidebarPinned &&
+                !_leftPaneAutoCloseQueuedByScroll;
             if (shouldAutoCloseLeftPane) {
               _leftPaneAutoCloseQueuedByScroll = true;
               Future.microtask(() {
@@ -2558,25 +2640,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             (
               icon: FluentIcons.navigation_24_regular,
               iconFilled: FluentIcons.navigation_24_filled,
-              label: 'ניווט'
+              label: 'ניווט',
             ),
             if (_hasAltTitles)
               (
                 icon: FluentIcons.list_24_regular,
                 iconFilled: FluentIcons.list_24_filled,
-                label: 'כותרות'
+                label: 'כותרות',
               ),
             (
               icon: FluentIcons.search_24_regular,
               iconFilled: FluentIcons.search_24_filled,
-              label: 'חיפוש'
+              label: 'חיפוש',
             ),
           ],
           isPinned: state.pinLeftPane,
           onTogglePin: MediaQuery.of(context).size.width >= 600
-              ? () => context
-                  .read<TextBookBloc>()
-                  .add(TogglePinLeftPane(!state.pinLeftPane))
+              ? () => context.read<TextBookBloc>().add(
+                  TogglePinLeftPane(!state.pinLeftPane),
+                )
               : null,
         ),
         Expanded(
@@ -2588,35 +2670,37 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 AltTocSidebarView(
                   book: widget.tab.book,
                   focusNode: altTitlesSearchFocusNode,
-                  closeLeftPaneCallback: () => context
-                      .read<TextBookBloc>()
-                      .add(const ToggleLeftPane(false)),
+                  closeLeftPaneCallback: () => context.read<TextBookBloc>().add(
+                    const ToggleLeftPane(false),
+                  ),
                   scrollController: state.scrollController,
                 ),
-              Builder(builder: (context) {
-                void openSearch() {
-                  context.read<TextBookBloc>().add(
-                        const ToggleLeftPane(true),
-                      );
-                  tabController.index = _hasAltTitles ? 2 : 1;
-                  textSearchFocusNode.requestFocus();
-                }
+              Builder(
+                builder: (context) {
+                  void openSearch() {
+                    context.read<TextBookBloc>().add(
+                      const ToggleLeftPane(true),
+                    );
+                    tabController.index = _hasAltTitles ? 2 : 1;
+                    textSearchFocusNode.requestFocus();
+                  }
 
-                return CallbackShortcuts(
-                  bindings: <ShortcutActivator, VoidCallback>{
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyF,
-                    ): openSearch,
-                    // Mac: Cmd+F
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyF,
-                    ): openSearch,
-                  },
-                  child: _buildSearchView(context, state),
-                );
-              }),
+                  return CallbackShortcuts(
+                    bindings: <ShortcutActivator, VoidCallback>{
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.keyF,
+                      ): openSearch,
+                      // Mac: Cmd+F
+                      LogicalKeySet(
+                        LogicalKeyboardKey.meta,
+                        LogicalKeyboardKey.keyF,
+                      ): openSearch,
+                    },
+                    child: _buildSearchView(context, state),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -2681,10 +2765,10 @@ int _bottommostVisibleIndex(TextBookLoaded state) =>
 // הלוגיקה נבדקת ב-test/text_book/utils/visible_index_test.dart.
 
 int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
-      positions: state.positionsListener.itemPositions.value,
-      continuousReadingMode: state.continuousReadingMode,
-      readingSegments: state.readingSegments,
-    );
+  positions: state.positionsListener.itemPositions.value,
+  continuousReadingMode: state.continuousReadingMode,
+  readingSegments: state.readingSegments,
+);
 
 int _bottommostVisibleSourceLine(TextBookLoaded state) =>
     resolveBottommostSourceLine(
@@ -2739,7 +2823,8 @@ bool _handleGlobalKeyEvent(
   // [EDITING DISABLED]
   // final editSectionShortcut =
   //     Settings.getValue<String>('key-shortcut-edit-section') ?? 'ctrl+e';
-  final searchInBookShortcut = ShortcutValidator.getShortcutValue(
+  final searchInBookShortcut =
+      ShortcutValidator.getShortcutValue(
         ShortcutValidator.currentWindowSearchKey,
       ) ??
       'ctrl+f';
@@ -2751,19 +2836,25 @@ bool _handleGlobalKeyEvent(
       Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
   final togglePdfShortcut =
       Settings.getValue<String>('key-shortcut-toggle-pdf-view') ??
-          ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
-          'ctrl+shift+p';
+      ShortcutValidator.defaultShortcuts['key-shortcut-toggle-pdf-view'] ??
+      'ctrl+shift+p';
   final copyBookLinkShortcut =
       ShortcutValidator.getShortcutValue(ShortcutValidator.copyBookLinkKey) ??
-          '';
-  final copySectionLinkShortcut = ShortcutValidator.getShortcutValue(
-          ShortcutValidator.copySectionLinkKey) ??
       '';
-  final copySectionMarkLinkShortcut = ShortcutValidator.getShortcutValue(
-          ShortcutValidator.copySectionMarkLinkKey) ??
+  final copySectionLinkShortcut =
+      ShortcutValidator.getShortcutValue(
+        ShortcutValidator.copySectionLinkKey,
+      ) ??
       '';
-  final copyTextMarkLinkShortcut = ShortcutValidator.getShortcutValue(
-          ShortcutValidator.copyTextMarkLinkKey) ??
+  final copySectionMarkLinkShortcut =
+      ShortcutValidator.getShortcutValue(
+        ShortcutValidator.copySectionMarkLinkKey,
+      ) ??
+      '';
+  final copyTextMarkLinkShortcut =
+      ShortcutValidator.getShortcutValue(
+        ShortcutValidator.copyTextMarkLinkKey,
+      ) ??
       '';
 
   // [EDITING DISABLED]
@@ -2788,16 +2879,17 @@ bool _handleGlobalKeyEvent(
   // הדפסה
   if (ShortcutHelper.matchesShortcut(event, printShortcut)) {
     context.read<TourCubit>().recordInteraction(
-          TourInteraction(type: TourInteractionType.printUsed),
-        );
+      TourInteraction(type: TourInteractionType.printUsed),
+    );
     final settingsState = context.read<SettingsBloc>().state;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => PrintingScreen(
         // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור)
-        data:
-            context.read<TextBookBloc>().repository.getBookContent(state.book),
+        data: context.read<TextBookBloc>().repository.getBookContent(
+          state.book,
+        ),
         bookId: state.book.title,
         book: state.book,
         links: state.links,
@@ -2848,7 +2940,8 @@ bool _handleGlobalKeyEvent(
       copySectionMarkLinkShortcut.isNotEmpty ||
       copyTextMarkLinkShortcut.isNotEmpty) {
     final bookId = state.book.id;
-    final index = selectedLineForNote ??
+    final index =
+        selectedLineForNote ??
         (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
     if (ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
@@ -2892,7 +2985,8 @@ bool _handleGlobalKeyEvent(
 
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
   // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
-  final isCtrlOrCmd = HardwareKeyboard.instance.isControlPressed ||
+  final isCtrlOrCmd =
+      HardwareKeyboard.instance.isControlPressed ||
       (Platform.isMacOS && HardwareKeyboard.instance.isMetaPressed);
 
   if (event is KeyDownEvent && isCtrlOrCmd) {
@@ -2972,7 +3066,9 @@ bool _handleGlobalKeyEvent(
 
 /// Helper function to add bookmark from keyboard shortcut
 void _addBookmarkFromKeyboard(
-    BuildContext context, TextBookLoaded state) async {
+  BuildContext context,
+  TextBookLoaded state,
+) async {
   final index = _topmostVisibleSourceLine(state);
   await addTextSectionBookmark(context, state, index);
 }
@@ -2992,7 +3088,8 @@ Future<void> _addNoteFromKeyboard(
   final trimmedSelection = selectedText?.trim();
   final hasSelection = trimmedSelection != null && trimmedSelection.isNotEmpty;
 
-  final currentIndex = (hasSelection ? selectedLineIndex : null) ??
+  final currentIndex =
+      (hasSelection ? selectedLineIndex : null) ??
       state.selectedIndex ??
       (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
 
@@ -3015,15 +3112,17 @@ Future<void> _addNoteFromKeyboard(
   if (!context.mounted) return;
 
   // שלח event לפתיחת מצב יצירה בסיידבר
-  context.read<PersonalNotesBloc>().add(StartCreatingPersonalNote(
-        bookId: state.book.title,
-        lineNumber: currentIndex + 1,
-        referenceText: referenceText,
-        selectedText: hasSelection ? trimmedSelection : null,
-        selectionColumn: hasSelection ? selectionColumn : null,
-        initialContent: draft?.content ?? '',
-        initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
-      ));
+  context.read<PersonalNotesBloc>().add(
+    StartCreatingPersonalNote(
+      bookId: state.book.title,
+      lineNumber: currentIndex + 1,
+      referenceText: referenceText,
+      selectedText: hasSelection ? trimmedSelection : null,
+      selectionColumn: hasSelection ? selectionColumn : null,
+      initialContent: draft?.content ?? '',
+      initialFormat: draft?.contentFormat ?? PersonalNoteContentFormat.plain,
+    ),
+  );
 
   openNotesForCurrentView();
 }
@@ -3080,7 +3179,10 @@ Future<void> _addNoteFromKeyboard(
 // }
 
 void _togglePdfView(
-    BuildContext context, TextBookLoaded state, TextBookTab tab) async {
+  BuildContext context,
+  TextBookLoaded state,
+  TextBookTab tab,
+) async {
   final currentIndex = _topmostVisibleSourceLine(state);
   tab.index = currentIndex;
 

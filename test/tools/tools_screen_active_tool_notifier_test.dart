@@ -35,7 +35,7 @@ void main() {
               children: [
                 ValueListenableBuilder<String?>(
                   valueListenable: activeToolIdNotifier,
-                  builder: (_, value, __) {
+                  builder: (_, value, _) {
                     observed = value;
                     return const SizedBox.shrink();
                   },
@@ -50,7 +50,8 @@ void main() {
         expect(
           observed,
           isNull,
-          reason: 'setActiveToolIdSafely חייב לדחות עדכון בזמן build phase כדי '
+          reason:
+              'setActiveToolIdSafely חייב לדחות עדכון בזמן build phase כדי '
               'למנוע setState-during-build אצל מאזינים שכבר מורכבים.',
         );
 
@@ -80,7 +81,7 @@ void main() {
               children: [
                 ValueListenableBuilder<String?>(
                   valueListenable: activeToolIdNotifier,
-                  builder: (_, __, ___) => const SizedBox.shrink(),
+                  builder: (_, _, _) => const SizedBox.shrink(),
                 ),
                 const _SetsNotifierFromInitState(
                   toolId: 'builtin.measurement_converter',
