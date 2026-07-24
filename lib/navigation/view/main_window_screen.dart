@@ -3009,196 +3009,192 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                     return Row(
                                       children: [
                                         if (!isImmersive)
-                                          ColoredBox(
-                                            color: AppSurfaces.panelBackground(
-                                              context,
-                                            ),
-                                            child: SizedBox.fromSize(
-                                              size: Size.fromWidth(railWidth),
-                                              child: Column(
-                                                children: [
-                                                  Expanded(
-                                                    child: Material(
-                                                      color:
-                                                          AppSurfaces.panelBackground(
-                                                            context,
-                                                          ),
-                                                      surfaceTintColor:
-                                                          Colors.transparent,
-                                                      child:
-                                                          BlocBuilder<
-                                                            PluginSystemBloc,
-                                                            PluginSystemState
-                                                          >(
-                                                            buildWhen:
-                                                                _pinnedNavRailIdsChanged,
-                                                            builder:
-                                                                (
-                                                                  context,
-                                                                  pluginState,
-                                                                ) {
-                                                                  final settingsState =
-                                                                      context.select<
-                                                                        SettingsBloc,
-                                                                        SettingsState
-                                                                      >(
-                                                                        (b) => b
-                                                                            .state,
-                                                                      );
-                                                                  final pinnedItems = _resolvePinnedItems(
-                                                                    pluginState:
-                                                                        pluginState,
-                                                                    pinnedBuiltInIds:
-                                                                        settingsState
-                                                                            .builtInToolsPinnedToNavRail,
-                                                                    hiddenBuiltInIds:
-                                                                        settingsState
-                                                                            .hiddenBuiltInToolIds,
-                                                                    isOfflineMode:
-                                                                        settingsState
-                                                                            .isOfflineMode,
-                                                                    builtInToolsOrder:
-                                                                        settingsState
-                                                                            .builtInToolsOrder,
-                                                                  );
-                                                                  return BlocBuilder<
-                                                                    TabsBloc,
-                                                                    TabsState
-                                                                  >(
-                                                                    buildWhen: (p, c) =>
-                                                                        _activeToolIdOf(
-                                                                          p,
-                                                                        ) !=
-                                                                        _activeToolIdOf(
-                                                                          c,
-                                                                        ),
-                                                                    builder:
-                                                                        (
-                                                                          context,
-                                                                          tabsState,
-                                                                        ) {
-                                                                          final activeToolId = _activeToolIdOf(
-                                                                            tabsState,
-                                                                          );
-                                                                          final hideTools = _isAllToolsHidden(
-                                                                            settingsState,
-                                                                            pluginState,
-                                                                          );
-                                                                          final isReaderScreen =
-                                                                              state.currentScreen ==
-                                                                                  Screen.reading ||
-                                                                              state.currentScreen ==
-                                                                                  Screen.search;
-                                                                          final activePinnedIndex =
-                                                                              isReaderScreen &&
-                                                                                  activeToolId !=
-                                                                                      null
-                                                                              ? pinnedItems.indexWhere(
-                                                                                  (
-                                                                                    it,
-                                                                                  ) =>
-                                                                                      it.toolId ==
-                                                                                      activeToolId,
-                                                                                )
-                                                                              : -1;
-                                                                          // "כלים" מודגש כל עוד פאנל המשגר פתוח
-                                                                          final isToolsSelected =
-                                                                              !hideTools &&
-                                                                              _isToolsLauncherOpen;
-                                                                          return LayoutBuilder(
-                                                                            builder:
+                                          SizedBox.fromSize(
+                                            size: Size.fromWidth(railWidth),
+                                            child: Column(
+                                              children: [
+                                                Expanded(
+                                                  child: Material(
+                                                    color:
+                                                        AppSurfaces.topBarBackground(
+                                                          context,
+                                                        ),
+                                                    surfaceTintColor:
+                                                        Colors.transparent,
+                                                    child:
+                                                        BlocBuilder<
+                                                          PluginSystemBloc,
+                                                          PluginSystemState
+                                                        >(
+                                                          buildWhen:
+                                                              _pinnedNavRailIdsChanged,
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                pluginState,
+                                                              ) {
+                                                                final settingsState =
+                                                                    context.select<
+                                                                      SettingsBloc,
+                                                                      SettingsState
+                                                                    >(
+                                                                      (b) => b
+                                                                          .state,
+                                                                    );
+                                                                final pinnedItems = _resolvePinnedItems(
+                                                                  pluginState:
+                                                                      pluginState,
+                                                                  pinnedBuiltInIds:
+                                                                      settingsState
+                                                                          .builtInToolsPinnedToNavRail,
+                                                                  hiddenBuiltInIds:
+                                                                      settingsState
+                                                                          .hiddenBuiltInToolIds,
+                                                                  isOfflineMode:
+                                                                      settingsState
+                                                                          .isOfflineMode,
+                                                                  builtInToolsOrder:
+                                                                      settingsState
+                                                                          .builtInToolsOrder,
+                                                                );
+                                                                return BlocBuilder<
+                                                                  TabsBloc,
+                                                                  TabsState
+                                                                >(
+                                                                  buildWhen: (p, c) =>
+                                                                      _activeToolIdOf(
+                                                                        p,
+                                                                      ) !=
+                                                                      _activeToolIdOf(
+                                                                        c,
+                                                                      ),
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                        tabsState,
+                                                                      ) {
+                                                                        final activeToolId =
+                                                                            _activeToolIdOf(
+                                                                              tabsState,
+                                                                            );
+                                                                        final hideTools = _isAllToolsHidden(
+                                                                          settingsState,
+                                                                          pluginState,
+                                                                        );
+                                                                        final isReaderScreen =
+                                                                            state.currentScreen ==
+                                                                                Screen.reading ||
+                                                                            state.currentScreen ==
+                                                                                Screen.search;
+                                                                        final activePinnedIndex =
+                                                                            isReaderScreen &&
+                                                                                activeToolId !=
+                                                                                    null
+                                                                            ? pinnedItems.indexWhere(
                                                                                 (
+                                                                                  it,
+                                                                                ) =>
+                                                                                    it.toolId ==
+                                                                                    activeToolId,
+                                                                              )
+                                                                            : -1;
+                                                                        // "כלים" מודגש כל עוד פאנל המשגר פתוח
+                                                                        final isToolsSelected =
+                                                                            !hideTools &&
+                                                                            _isToolsLauncherOpen;
+                                                                        return LayoutBuilder(
+                                                                          builder:
+                                                                              (
+                                                                                context,
+                                                                                constraints,
+                                                                              ) {
+                                                                                const buttonHeight = 60.0;
+                                                                                const minSpacerHeight = 20.0;
+                                                                                final totalItems =
+                                                                                    (_navData.length -
+                                                                                        (hideTools
+                                                                                            ? 1
+                                                                                            : 0)) +
+                                                                                    pinnedItems.length;
+                                                                                final needsScroll =
+                                                                                    totalItems *
+                                                                                            buttonHeight +
+                                                                                        minSpacerHeight >
+                                                                                    constraints.maxHeight;
+
+                                                                                final topItems =
+                                                                                    <
+                                                                                      Widget
+                                                                                    >[
+                                                                                      for (
+                                                                                        int i = 0;
+                                                                                        i <
+                                                                                            _toolsNavIndex;
+                                                                                        i++
+                                                                                      )
+                                                                                        _buildNavRailItem(
+                                                                                          context,
+                                                                                          i,
+                                                                                          state.currentScreen,
+                                                                                          compact: isCompactRail,
+                                                                                        ),
+                                                                                      if (!hideTools)
+                                                                                        _buildNavRailItem(
+                                                                                          context,
+                                                                                          _toolsNavIndex,
+                                                                                          state.currentScreen,
+                                                                                          selectedOverride: isToolsSelected,
+                                                                                          compact: isCompactRail,
+                                                                                        ),
+                                                                                      for (
+                                                                                        int i = 0;
+                                                                                        i <
+                                                                                            pinnedItems.length;
+                                                                                        i++
+                                                                                      )
+                                                                                        _buildPinnedItemNavRailItem(
+                                                                                          context,
+                                                                                          pinnedItems[i],
+                                                                                          isSelected:
+                                                                                              activePinnedIndex ==
+                                                                                              i,
+                                                                                          compact: isCompactRail,
+                                                                                        ),
+                                                                                    ];
+                                                                                final settingsItem = _buildNavRailItem(
                                                                                   context,
-                                                                                  constraints,
-                                                                                ) {
-                                                                                  const buttonHeight = 60.0;
-                                                                                  const minSpacerHeight = 20.0;
-                                                                                  final totalItems =
-                                                                                      (_navData.length -
-                                                                                          (hideTools
-                                                                                              ? 1
-                                                                                              : 0)) +
-                                                                                      pinnedItems.length;
-                                                                                  final needsScroll =
-                                                                                      totalItems *
-                                                                                              buttonHeight +
-                                                                                          minSpacerHeight >
-                                                                                      constraints.maxHeight;
+                                                                                  _settingsNavIndex,
+                                                                                  state.currentScreen,
+                                                                                  compact: isCompactRail,
+                                                                                );
 
-                                                                                  final topItems =
-                                                                                      <
-                                                                                        Widget
-                                                                                      >[
-                                                                                        for (
-                                                                                          int i = 0;
-                                                                                          i <
-                                                                                              _toolsNavIndex;
-                                                                                          i++
-                                                                                        )
-                                                                                          _buildNavRailItem(
-                                                                                            context,
-                                                                                            i,
-                                                                                            state.currentScreen,
-                                                                                            compact: isCompactRail,
-                                                                                          ),
-                                                                                        if (!hideTools)
-                                                                                          _buildNavRailItem(
-                                                                                            context,
-                                                                                            _toolsNavIndex,
-                                                                                            state.currentScreen,
-                                                                                            selectedOverride: isToolsSelected,
-                                                                                            compact: isCompactRail,
-                                                                                          ),
-                                                                                        for (
-                                                                                          int i = 0;
-                                                                                          i <
-                                                                                              pinnedItems.length;
-                                                                                          i++
-                                                                                        )
-                                                                                          _buildPinnedItemNavRailItem(
-                                                                                            context,
-                                                                                            pinnedItems[i],
-                                                                                            isSelected:
-                                                                                                activePinnedIndex ==
-                                                                                                i,
-                                                                                            compact: isCompactRail,
-                                                                                          ),
-                                                                                      ];
-                                                                                  final settingsItem = _buildNavRailItem(
-                                                                                    context,
-                                                                                    _settingsNavIndex,
-                                                                                    state.currentScreen,
-                                                                                    compact: isCompactRail,
+                                                                                if (needsScroll) {
+                                                                                  return SingleChildScrollView(
+                                                                                    child: Column(
+                                                                                      children: [
+                                                                                        ...topItems,
+                                                                                        settingsItem,
+                                                                                      ],
+                                                                                    ),
                                                                                   );
+                                                                                }
 
-                                                                                  if (needsScroll) {
-                                                                                    return SingleChildScrollView(
-                                                                                      child: Column(
-                                                                                        children: [
-                                                                                          ...topItems,
-                                                                                          settingsItem,
-                                                                                        ],
-                                                                                      ),
-                                                                                    );
-                                                                                  }
-
-                                                                                  return Column(
-                                                                                    children: [
-                                                                                      ...topItems,
-                                                                                      const Spacer(),
-                                                                                      settingsItem,
-                                                                                    ],
-                                                                                  );
-                                                                                },
-                                                                          );
-                                                                        },
-                                                                  );
-                                                                },
-                                                          ),
-                                                    ),
+                                                                                return Column(
+                                                                                  children: [
+                                                                                    ...topItems,
+                                                                                    const Spacer(),
+                                                                                    settingsItem,
+                                                                                  ],
+                                                                                );
+                                                                              },
+                                                                        );
+                                                                      },
+                                                                );
+                                                              },
+                                                        ),
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         if (!isImmersive)
