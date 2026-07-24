@@ -34,14 +34,13 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
-import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 
 /// ערך מיוחד ל-_selectedParagraphIdx שמשמעו "כל הכותרת" (כל המפרשים בקטע),
@@ -605,7 +604,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             Expanded(
               child: Padding(
                 padding: SplitPaneContentInset.of(context),
-                child: AdaptiveSidePane(
+                child: NavSidePanel(
                   isOpen: _navPaneOpen || _pinLeftPane,
                   alignment: AlignmentDirectional.centerEnd,
                   paneWidth: 320,
@@ -773,13 +772,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     return AppTopBar(
       leadingItems: [
         AppTopBarItem(
-          widget: BarButton.icon(
-            tooltip: 'ניווט',
-            icon: _navPaneOpen
-                ? OtzariaIcons.text_continuous_24_filled
-                : OtzariaIcons.text_continuous_24_regular,
-            compact: isCompact,
-            onPressed: () {
+          widget: NavPanelToggleButton(
+            isOpen: _navPaneOpen,
+            onToggle: () {
               setState(() => _navPaneOpen = !_navPaneOpen);
               if (_navPaneOpen && _navTabController.index == 0) {
                 _scrollNavToSelectedHeading();
@@ -954,69 +949,29 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// פאנל הצד — סרגל 3 לשוניות זהה לכרטיסיית הטקסט (ניווט / מפרשים / חיפוש)
   /// עם כפתור נעיצה בפינה.
   Widget _buildSidePane(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        SizedBox(
-          height: 44,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
+        NavPanelTabHeader(
+          controller: _navTabController,
+          tabs: const [
+            (
+              icon: OtzariaIcons.list_24_regular,
+              iconFilled: OtzariaIcons.list_24_filled,
+              label: 'ניווט',
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TabBar(
-                    controller: _navTabController,
-                    tabs: const [
-                      Tab(
-                        icon: Icon(OtzariaIcons.list_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'ניווט',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      Tab(
-                        icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'מפרשים',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      Tab(
-                        icon: Icon(FluentIcons.search_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'חיפוש',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    ],
-                    labelColor: colorScheme.primary,
-                    unselectedLabelColor: colorScheme.onSurfaceVariant,
-                    indicatorColor: colorScheme.primary,
-                    dividerColor: Colors.transparent,
-                    splashBorderRadius: AppTokens.borderRadiusAll,
-                  ),
-                ),
-                AnimatedPinButton(
-                  isPinned: _pinLeftPane,
-                  tooltip: _pinLeftPane ? 'בטל נעיצה' : 'נעץ את הפאנל',
-                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
-                ),
-              ],
+            (
+              icon: FluentIcons.apps_list_24_regular,
+              iconFilled: FluentIcons.apps_list_24_filled,
+              label: 'מפרשים',
             ),
-          ),
+            (
+              icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
+              label: 'חיפוש',
+            ),
+          ],
+          isPinned: _pinLeftPane,
+          onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
         ),
         Expanded(
           child: TabBarView(

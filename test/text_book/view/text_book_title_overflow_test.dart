@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
@@ -182,7 +183,7 @@ void main() {
       );
 
       final buttonRects = {
-        'כפתור הניווט': tester.getRect(find.byTooltip('ניווט וחיפוש')),
+        'כפתור הניווט': tester.getRect(find.byType(NavPanelToggleButton)),
         'סרגל הפעולות': tester.getRect(find.byType(ResponsiveActionBar)),
       };
 
@@ -210,7 +211,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
 
-      final leadingRect = tester.getRect(find.byTooltip('ניווט וחיפוש'));
+      final leadingRect = tester.getRect(find.byType(NavPanelToggleButton));
       for (final textRect in _titleTextRects(tester)) {
         expect(
           textRect.overlaps(leadingRect.deflate(_kTolerance)),

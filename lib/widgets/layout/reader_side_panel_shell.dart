@@ -4,13 +4,18 @@ import 'package:otzaria/widgets/layout/floating_panel.dart';
 
 /// מעטפת עיצובית לחלוניות הצד במסכי הקריאה.
 ///
-/// מוסיפה מראה צף עם פינות מעוגלות, צל ורווח קטן מהקצה החיצוני,
+/// ברירת המחדל היא מראה צף עם פינות מעוגלות, צל ורווח קטן מהקצה החיצוני,
 /// כדי להבדיל את החלונית מתוכן הקריאה עצמו.
+///
+/// ב-[attached] החלונית מקבלת את עיצוב חלונית הניווט: צמודה לכל הקצוות ובצבע
+/// הסרגל העליון, כהמשך רציף שלו. העיגול הקעור במפגש עם התוכן מצויר בנפרד
+/// (ConcaveCornerFillet) ע"י הפריסה שמכילה אותה.
 class ReaderSidePanelShell extends StatelessWidget {
   final Widget child;
   final AlignmentDirectional alignment;
   final Color? color;
   final EdgeInsetsGeometry? margin;
+  final bool attached;
 
   const ReaderSidePanelShell({
     super.key,
@@ -18,9 +23,12 @@ class ReaderSidePanelShell extends StatelessWidget {
     required this.alignment,
     this.color,
     this.margin,
+    this.attached = false,
   });
 
   EdgeInsets _resolveMargin(BuildContext context) {
+    if (attached) return EdgeInsets.zero;
+
     final resolvedMargin = margin?.resolve(Directionality.of(context));
     if (resolvedMargin != null) {
       return resolvedMargin;
@@ -39,14 +47,26 @@ class ReaderSidePanelShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shadowColor = Theme.of(
+      context,
+    ).colorScheme.shadow.withValues(alpha: 0.22);
+
+    if (attached) {
+      return Material(
+        color: color ?? AppSurfaces.navPanelBackground(context),
+        elevation: 1,
+        shadowColor: shadowColor,
+        surfaceTintColor: Colors.transparent,
+        child: child,
+      );
+    }
+
     return Padding(
       padding: _resolveMargin(context),
       child: FloatingPanel(
         color: color ?? AppSurfaces.solidPanelBackground(context),
         elevation: 8,
-        shadowColor: Theme.of(
-          context,
-        ).colorScheme.shadow.withValues(alpha: 0.22),
+        shadowColor: shadowColor,
         child: child,
       ),
     );

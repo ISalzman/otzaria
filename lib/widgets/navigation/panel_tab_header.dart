@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
-import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 
 /// טאב סטנדרטי לפנלים הימניים (ללא אייקון filled).
 /// כאשר [label] הוא null — מוצג אייקון בלבד (מצב compact).
@@ -33,28 +31,6 @@ class PanelTab extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
       ),
-    );
-  }
-}
-
-/// כפתור pin לחלונית צד — מסובב ב-45° כשנעוץ, ומשנה אייקון ל-filled.
-class PinSidebarButton extends StatelessWidget {
-  final bool isPinned;
-  final VoidCallback? onToggle;
-
-  const PinSidebarButton({
-    super.key,
-    required this.isPinned,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final globalPin = Settings.getValue<bool>('key-pin-sidebar') ?? false;
-    final effectivePinned = isPinned || globalPin;
-    return AnimatedPinButton(
-      isPinned: effectivePinned,
-      onPressed: globalPin ? null : onToggle,
     );
   }
 }
@@ -111,113 +87,6 @@ class _PanelOpenHandleState extends State<PanelOpenHandle> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Header לחלונית ניווט שמאלית — עם filled icon לטאב הנבחר וכפתור pin.
-/// [onTogglePin] null = כפתור pin מוסתר.
-class SidebarTabHeader extends StatefulWidget {
-  final TabController controller;
-
-  /// כל entry: (icon, iconFilled, label) — iconFilled אופציונלי.
-  final List<({IconData icon, IconData? iconFilled, String? label})> tabs;
-  final bool isPinned;
-  final VoidCallback? onTogglePin;
-
-  const SidebarTabHeader({
-    super.key,
-    required this.controller,
-    required this.tabs,
-    this.isPinned = false,
-    this.onTogglePin,
-  });
-
-  @override
-  State<SidebarTabHeader> createState() => _SidebarTabHeaderState();
-}
-
-class _SidebarTabHeaderState extends State<SidebarTabHeader> {
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_rebuild);
-  }
-
-  @override
-  void didUpdateWidget(SidebarTabHeader oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_rebuild);
-      widget.controller.addListener(_rebuild);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_rebuild);
-    super.dispose();
-  }
-
-  void _rebuild() => setState(() {});
-
-  @override
-  Widget build(BuildContext context) {
-    final sel = widget.controller.index;
-    return SizedBox(
-      height: AppTokens.panelTabHeight,
-      child: Row(
-        children: [
-          Expanded(
-            child: TabBar(
-              controller: widget.controller,
-              splashBorderRadius: AppTokens.borderRadiusAll,
-              tabs: [
-                for (var i = 0; i < widget.tabs.length; i++)
-                  _tab(widget.tabs[i], i == sel),
-              ],
-            ),
-          ),
-          if (widget.onTogglePin != null)
-            PinSidebarButton(
-              isPinned: widget.isPinned,
-              onToggle: widget.onTogglePin,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Tab _tab(
-    ({IconData icon, IconData? iconFilled, String? label}) data,
-    bool sel,
-  ) {
-    final iconData = (sel && data.iconFilled != null)
-        ? data.iconFilled!
-        : data.icon;
-    final iconWidget = AnimatedSwitcher(
-      duration: AppTokens.animFast,
-      child: Icon(
-        iconData,
-        key: ValueKey<IconData>(iconData),
-        size: AppTokens.panelTabIconSize,
-      ),
-    );
-    final lbl = data.label;
-    if (lbl == null) {
-      return Tab(icon: iconWidget, height: AppTokens.panelTabHeight);
-    }
-    return Tab(
-      icon: iconWidget,
-      iconMargin: AppTokens.panelTabIconMargin,
-      height: AppTokens.panelTabHeight,
-      child: Text(
-        lbl,
-        style: const TextStyle(fontSize: AppTokens.panelTabFontSize),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
       ),
     );
   }

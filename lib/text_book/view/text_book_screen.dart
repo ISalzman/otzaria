@@ -79,7 +79,6 @@ import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/app_selection_area.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/text_book/utils/link_processing.dart'
@@ -87,7 +86,7 @@ import 'package:otzaria/text_book/utils/link_processing.dart'
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
@@ -1230,21 +1229,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 }
 
                 if (state is TextBookInitial || state is TextBookLoading) {
-                  final isCompact = context
-                      .read<SettingsBloc>()
-                      .state
-                      .compactMenuMode;
                   return Scaffold(
                     body: Column(
                       children: [
                         AppTopBar(
                           leadingItems: [
                             AppTopBarItem(
-                              widget: BarButton.icon(
-                                tooltip: 'ניווט וחיפוש',
-                                icon: OtzariaIcons.text_continuous_24_regular,
-                                compact: isCompact,
-                                onPressed: () {},
+                              widget: NavPanelToggleButton(
+                                isOpen: false,
+                                onToggle: () {},
                               ),
                             ),
                           ],
@@ -1524,15 +1517,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildMenuButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
+    return NavPanelToggleButton(
       key: widget.enableTourTargets ? textBookNavigationTourTargetKey : null,
-      tooltip: 'ניווט וחיפוש',
-      icon: state.showLeftPane
-          ? OtzariaIcons.text_continuous_24_filled
-          : OtzariaIcons.text_continuous_24_regular,
-      compact: isCompact,
-      onPressed: () =>
+      isOpen: state.showLeftPane,
+      onToggle: () =>
           context.read<TextBookBloc>().add(ToggleLeftPane(!state.showLeftPane)),
     );
   }
@@ -2666,7 +2654,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
-    return AdaptiveSidePane(
+    return NavSidePanel(
       isOpen: state.showLeftPane,
       alignment: AlignmentDirectional.centerEnd,
       paneWidth: _sidebarWidth.value,
@@ -2694,7 +2682,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         _paneUsesPushLayout = usesPushLayout;
       },
       autoHandleResponsiveVisibility: false,
-      scrollbarTopMargin: 0,
     );
   }
 
@@ -2803,7 +2790,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
     return Column(
       children: [
-        SidebarTabHeader(
+        NavPanelTabHeader(
           controller: tabController,
           tabs: [
             (

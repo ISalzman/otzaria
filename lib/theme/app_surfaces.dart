@@ -36,6 +36,10 @@ class AppSurfaces {
   static Color topBarBackground(BuildContext context) =>
       _cs(context).surfaceContainerHigh;
 
+  /// רקע חלונית הניווט — צבע הסרגל העליון, כדי שתיראה כהמשך רציף שלו.
+  static Color navPanelBackground(BuildContext context) =>
+      topBarBackground(context);
+
   /// צבע ברירת המחדל לכרטיסי תוכן באפליקציה.
   static Color card(BuildContext context) => _cs(context).isDark
       ? _cs(context).surfaceContainer

@@ -21,7 +21,7 @@ import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
 
 class TantivyFullTextSearch extends StatefulWidget {
@@ -318,17 +318,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   AppTopBar(
                     leadingItems: [
                       AppTopBarItem(
-                        widget: BarButton.icon(
-                          tooltip: 'הצג/הסתר עץ ספרים',
-                          icon: FluentIcons.line_horizontal_3_20_regular,
-                          compact: context
-                              .read<SettingsBloc>()
-                              .state
-                              .compactMenuMode,
-                          onPressed: () {
-                            widget.tab.isLeftPaneOpen.value =
-                                !widget.tab.isLeftPaneOpen.value;
-                          },
+                        widget: ValueListenableBuilder<bool>(
+                          valueListenable: widget.tab.isLeftPaneOpen,
+                          builder: (context, isOpen, _) =>
+                              NavPanelToggleButton(
+                                isOpen: isOpen,
+                                onToggle: () =>
+                                    widget.tab.isLeftPaneOpen.value = !isOpen,
+                              ),
                         ),
                       ),
                     ],
@@ -412,7 +409,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 (_facetPaneWidthOverride ??
                                         settingsState.facetFilteringWidth)
                                     .clamp(220.0, 600.0);
-                            return AdaptiveSidePane(
+                            return NavSidePanel(
                               isOpen: isOpen,
                               alignment: AlignmentDirectional.centerEnd,
                               mainContent: _buildResultsContent(context),
@@ -637,14 +634,12 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: Row(
         children: [
-          // כפתור פתיחה/סגירה של עץ הספרים - שלושה פסים
-          IconButton(
-            tooltip: "הצג/הסתר עץ ספרים",
-            icon: const Icon(FluentIcons.line_horizontal_3_20_regular),
-            onPressed: () {
-              widget.tab.isLeftPaneOpen.value =
-                  !widget.tab.isLeftPaneOpen.value;
-            },
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.tab.isLeftPaneOpen,
+            builder: (context, isOpen, _) => NavPanelToggleButton(
+              isOpen: isOpen,
+              onToggle: () => widget.tab.isLeftPaneOpen.value = !isOpen,
+            ),
           ),
           // מילות החיפוש + כפתור עריכה (רק אם יש חיפוש)
           if (state.searchQuery.isNotEmpty) ...[

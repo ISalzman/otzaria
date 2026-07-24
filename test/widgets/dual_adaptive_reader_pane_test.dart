@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/layout/concave_corner_fillet.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/floating_panel.dart';
+import 'package:otzaria/widgets/layout/reader_side_panel_shell.dart';
 
 void main() {
   Widget buildPane({
@@ -9,6 +12,7 @@ void main() {
     required bool showRightPane,
     required VoidCallback onCloseLeftPane,
     required VoidCallback onCloseRightPane,
+    bool attachLeftPaneToTopEdge = false,
   }) {
     return MaterialApp(
       home: Directionality(
@@ -30,6 +34,7 @@ void main() {
               rightMinPaneWidth: 180,
               onCloseRightPane: onCloseRightPane,
               minMainContentWidth: 500,
+              attachLeftPaneToTopEdge: attachLeftPaneToTopEdge,
             ),
           ),
         ),
@@ -123,5 +128,61 @@ void main() {
     // בתום האנימציה החלונית מכווצת לרוחב 0 אך נשמרת בעץ (state preservation).
     await tester.pumpAndSettle();
     expect(find.text('main'), findsOneWidget);
+  });
+
+  // מסך רחב אמיתי: SizedBox לבדו מוגבל ע"י מסך הבדיקה (800x600), ואז הפריסה
+  // נופלת ל-overlay ולא ל-side-by-side.
+  Future<void> pumpWide(WidgetTester tester, Widget widget) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(widget);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'attachLeftPaneToTopEdge: חלונית הניווט צמודה ובעלת עיגול קעור, המפרשים צפה',
+    (tester) async {
+      await pumpWide(
+        tester,
+        buildPane(
+          width: 1400,
+          showLeftPane: true,
+          showRightPane: true,
+          onCloseLeftPane: () {},
+          onCloseRightPane: () {},
+          attachLeftPaneToTopEdge: true,
+        ),
+      );
+
+      final shells = tester
+          .widgetList<ReaderSidePanelShell>(find.byType(ReaderSidePanelShell))
+          .toList();
+      expect(shells.length, 2);
+      // חלונית הניווט (start ב-RTL) צמודה; חלונית המפרשים נשארת צפה.
+      expect(shells.where((s) => s.attached).length, 1);
+      expect(find.byType(FloatingPanel), findsOneWidget);
+
+      final fillet = tester.widget<ConcaveCornerFillet>(
+        find.byType(ConcaveCornerFillet),
+      );
+      expect(fillet.paneOnRight, isTrue);
+    },
+  );
+
+  testWidgets('ללא הצמדה — שתי החלוניות צפות וללא עיגול קעור', (tester) async {
+    await pumpWide(
+      tester,
+      buildPane(
+        width: 1400,
+        showLeftPane: true,
+        showRightPane: true,
+        onCloseLeftPane: () {},
+        onCloseRightPane: () {},
+      ),
+    );
+
+    expect(find.byType(FloatingPanel), findsNWidgets(2));
+    expect(find.byType(ConcaveCornerFillet), findsNothing);
   });
 }

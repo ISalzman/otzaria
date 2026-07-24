@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
+import 'package:otzaria/widgets/layout/concave_corner_fillet.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
@@ -51,6 +52,10 @@ class AdaptiveSidePane extends StatefulWidget {
   /// העבר 0 כשיש כותרת קבועה בראש הפאנל שכבר יוצרת הפרדה ויזואלית.
   final double? scrollbarTopMargin;
 
+  /// במצב רחב: מצמיד את החלונית לראש ולדופן החיצונית (ללא מרווח ופינה חיצונית
+  /// עליונה מרובעת), כך שהיא נראית כהמשך של הסרגל העליון. שאר הפינות מעוגלות.
+  final bool attachToTopEdge;
+
   const AdaptiveSidePane({
     super.key,
     required this.isOpen,
@@ -73,6 +78,7 @@ class AdaptiveSidePane extends StatefulWidget {
     this.narrowPaneBuilder,
     this.autoHandleResponsiveVisibility = true,
     this.scrollbarTopMargin,
+    this.attachToTopEdge = false,
   });
 
   @override
@@ -99,6 +105,15 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
   static const double _kWideBottomGap = 10;
   static const double _kWideOuterSideGap = 10;
   static const double _kWideInnerSideGap = 12;
+
+  // במצב הצמדה החלונית נצמדת לכל הקצוות (ראש, תחתית ודופן חיצונית) ללא
+  // מרווחים — היא ממשיכה את הסרגל העליון ומגיעה עד קצוות החלון.
+  double get _wideTopGap => widget.attachToTopEdge ? 0 : _kWideTopGap;
+  double get _wideBottomGap => widget.attachToTopEdge ? 0 : _kWideBottomGap;
+  double get _wideOuterSideGap =>
+      widget.attachToTopEdge ? 0 : _kWideOuterSideGap;
+  double get _wideInnerSideGap =>
+      widget.attachToTopEdge ? 0 : _kWideInnerSideGap;
   static const double _kNarrowTopGap = 14;
   static const double _kNarrowBottomGap = 10;
   static const double _kNarrowSideGap = 10;
@@ -171,6 +186,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     BuildContext context,
     Widget child, {
     required bool paneOnRight,
+    bool attached = false,
   }) {
     final paneColor = _effectivePaneColor(context);
     final shadowColor = Theme.of(
@@ -192,6 +208,18 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         child: child,
       ),
     );
+
+    if (attached) {
+      // מעטפת ריבועית צמודה לכל הקצוות; העיגול הקעור בפינה הפנימית-עליונה
+      // מצויר בנפרד כטלאי (_buildTopCornerFillet) באזור התוכן.
+      return Material(
+        color: paneColor,
+        elevation: 1,
+        shadowColor: shadowColor,
+        surfaceTintColor: Colors.transparent,
+        child: scrollbarWrapped,
+      );
+    }
 
     if (widget.wrapPaneInFloatingPanel) {
       return FloatingPanel(
@@ -268,7 +296,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
         // _livePaneWidth הוא ה-source of truth לרוחב: מתעדכן בזמן גרירה,
         // ומסונכרן מ-widget.paneWidth ב-didUpdateWidget כשאין גרירה.
         final wideOccupiedWidth =
-            _livePaneWidth.value + _kWideOuterSideGap + _kWideInnerSideGap;
+            _livePaneWidth.value + _wideOuterSideGap + _wideInnerSideGap;
         final calculatedHasRoomForSideBySide =
             constraints.maxWidth >=
             (wideOccupiedWidth + widget.minMainContentWidth);
@@ -335,10 +363,10 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     // ה-handle לא תלוי ברוחב — מוגדר מחוץ ל-ValueListenableBuilder
     final handleWidget = showHandle
         ? Positioned(
-            top: _kWideTopGap,
-            bottom: _kWideBottomGap,
-            left: paneOnRight ? _kWideOuterSideGap - outreach : null,
-            right: paneOnRight ? null : _kWideOuterSideGap - outreach,
+            top: _wideTopGap,
+            bottom: _wideBottomGap,
+            left: paneOnRight ? _wideOuterSideGap - outreach : null,
+            right: paneOnRight ? null : _wideOuterSideGap - outreach,
             child: _buildResizeHandle(paneOnRight, true),
           )
         : null;
@@ -349,7 +377,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       builder: (context, liveWidth, child) {
         final currentWidth = liveWidth;
         final currentOccupied =
-            currentWidth + _kWideOuterSideGap + _kWideInnerSideGap;
+            currentWidth + _wideOuterSideGap + _wideInnerSideGap;
         // אופטימיזציית ביצועים: לא לבנות את תוכן הפאנל לפני שנפתח לראשונה.
         // לפני האופטימיזציה, paneContent (כולל TocViewer עם אלפי ערכים)
         // היה נבנה תמיד גם בפאנל סגור, מה שיצר frame של 12+ שניות.
@@ -367,10 +395,10 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
               : widget.paneContent;
           paneSlotContent = Padding(
             padding: EdgeInsetsDirectional.only(
-              top: _kWideTopGap,
-              bottom: _kWideBottomGap,
-              start: paneOnRight ? _kWideInnerSideGap : _kWideOuterSideGap,
-              end: paneOnRight ? _kWideOuterSideGap : _kWideInnerSideGap,
+              top: _wideTopGap,
+              bottom: _wideBottomGap,
+              start: paneOnRight ? _wideInnerSideGap : _wideOuterSideGap,
+              end: paneOnRight ? _wideOuterSideGap : _wideInnerSideGap,
             ),
             child: SizedBox(
               width: currentWidth,
@@ -380,6 +408,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
                   context,
                   widePaneContent,
                   paneOnRight: paneOnRight,
+                  attached: widget.attachToTopEdge,
                 ),
               ),
             ),
@@ -416,12 +445,42 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     );
 
     final mainContent = _mainContentWithAreaWidth(context, areaWidth);
-
-    return Row(
+    final row = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: paneOnRight
           ? [paneSlot, Expanded(child: mainContent)]
           : [Expanded(child: mainContent), paneSlot],
+    );
+
+    if (!widget.attachToTopEdge) return row;
+
+    // במצב הצמדה מציירים עיגול קעור בפינה שבין החלונית לתוכן — טלאי בצבע
+    // החלונית באזור התוכן, שמתעגל כלפי החלון הגדול.
+    return Stack(
+      children: [row, _buildTopCornerFillet(paneOnRight)],
+    );
+  }
+
+  /// טלאי בצבע החלונית שנצמד לפינה הפנימית-עליונה (במפגש עם הסרגל) ומצייר שם
+  /// עיגול קעור לעבר התוכן. מוצג רק כשהחלונית פתוחה.
+  Widget _buildTopCornerFillet(bool paneOnRight) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _livePaneWidth,
+      builder: (context, liveWidth, _) {
+        if (!widget.isOpen) return const SizedBox.shrink();
+        final occupied = liveWidth + _wideOuterSideGap + _wideInnerSideGap;
+        return Positioned(
+          top: 0,
+          right: paneOnRight ? occupied : null,
+          left: paneOnRight ? null : occupied,
+          width: ConcaveCornerFillet.size,
+          height: ConcaveCornerFillet.size,
+          child: ConcaveCornerFillet(
+            color: _effectivePaneColor(context),
+            paneOnRight: paneOnRight,
+          ),
+        );
+      },
     );
   }
 

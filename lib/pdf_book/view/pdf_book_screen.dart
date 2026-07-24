@@ -95,6 +95,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
@@ -3848,18 +3849,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             AppTopBar(
               leadingItems: [
                 AppTopBarItem(
-                  widget: BarButton.icon(
+                  widget: NavPanelToggleButton(
                     key: widget.enableTourTargets
                         ? pdfBookNavigationTourTargetKey
                         : null,
-                    tooltip: 'חיפוש וניווט',
-                    icon: widget.tab.showLeftPane.value
-                        ? OtzariaIcons.text_continuous_24_filled
-                        : OtzariaIcons.text_continuous_24_regular,
-                    compact: context.read<SettingsBloc>().state.compactMenuMode,
-                    onPressed: () {
-                      _setLeftPaneVisibility(!widget.tab.showLeftPane.value);
-                    },
+                    isOpen: widget.tab.showLeftPane.value,
+                    onToggle: () =>
+                        _setLeftPaneVisibility(!widget.tab.showLeftPane.value),
                   ),
                 ),
               ],
@@ -3904,6 +3900,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       ? state.showRightPane
                       : false;
                   return DualAdaptiveReaderPane(
+                    // חלונית הניווט מקבלת את עיצוב חלונית הניווט האחיד;
+                    // חלונית המפרשים נשארת צפה.
+                    attachLeftPaneToTopEdge: true,
                     mainContent: _buildReaderMainContent(),
                     showLeftPane: showLeftPane,
                     leftPaneContent: _buildLeftPaneContent(showLeftPane),
@@ -4269,7 +4268,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       children: [
         ValueListenableBuilder(
           valueListenable: widget.tab.pinLeftPane,
-          builder: (context, pinLeftPanel, child) => SidebarTabHeader(
+          builder: (context, pinLeftPanel, child) => NavPanelTabHeader(
             controller: _leftPaneTabController!,
             tabs: const [
               (

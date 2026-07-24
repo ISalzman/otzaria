@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/layout/concave_corner_fillet.dart';
 import 'package:otzaria/widgets/layout/reader_side_panel_shell.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
@@ -30,6 +31,10 @@ class DualAdaptiveReaderPane extends StatefulWidget {
   final VoidCallback? onRightPaneResizeEnd;
   final double minMainContentWidth;
 
+  /// מצמיד את חלונית הניווט (השמאלית) לסרגל העליון בעיצוב חלונית הניווט
+  /// האחיד; חלונית המפרשים נשארת צפה.
+  final bool attachLeftPaneToTopEdge;
+
   const DualAdaptiveReaderPane({
     super.key,
     required this.mainContent,
@@ -50,6 +55,7 @@ class DualAdaptiveReaderPane extends StatefulWidget {
     required this.onCloseRightPane,
     this.onRightPaneResizeEnd,
     this.minMainContentWidth = 640,
+    this.attachLeftPaneToTopEdge = false,
   });
 
   @override
@@ -133,12 +139,14 @@ class _DualAdaptiveReaderPaneState extends State<DualAdaptiveReaderPane> {
     if (!everOpened) {
       content = const SizedBox.shrink();
     } else {
+      final attached = isLeft && widget.attachLeftPaneToTopEdge;
       final shell = SizedBox(
         width: width,
         child: ReaderSidePanelShell(
           alignment: isLeft
               ? AlignmentDirectional.centerEnd
               : AlignmentDirectional.centerStart,
+          attached: attached,
           child: isLeft ? widget.leftPaneContent : widget.rightPaneContent,
         ),
       );
@@ -196,6 +204,7 @@ class _DualAdaptiveReaderPaneState extends State<DualAdaptiveReaderPane> {
                   alignment: isLeft
                       ? AlignmentDirectional.centerEnd
                       : AlignmentDirectional.centerStart,
+                  attached: isLeft && widget.attachLeftPaneToTopEdge,
                   child: isLeft
                       ? widget.leftPaneContent
                       : widget.rightPaneContent,
@@ -211,12 +220,30 @@ class _DualAdaptiveReaderPaneState extends State<DualAdaptiveReaderPane> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (_hasRoomForSideBySide(constraints)) {
-          return Row(
+          final row = Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildWidePaneSlot(context, isLeft: true),
               Expanded(child: widget.mainContent),
               _buildWidePaneSlot(context, isLeft: false),
+            ],
+          );
+          if (!widget.attachLeftPaneToTopEdge || !widget.showLeftPane) {
+            return row;
+          }
+          return Stack(
+            children: [
+              row,
+              PositionedDirectional(
+                top: 0,
+                start: widget.leftPaneWidth + _kHandleHitSize,
+                width: ConcaveCornerFillet.size,
+                height: ConcaveCornerFillet.size,
+                child: ConcaveCornerFillet(
+                  color: AppSurfaces.navPanelBackground(context),
+                  paneOnRight: true,
+                ),
+              ),
             ],
           );
         }
