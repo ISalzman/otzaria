@@ -88,6 +88,7 @@ class CombinedView extends StatefulWidget {
     this.onSelectedTextChanged,
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
+    this.onOpenCommentaryPersonalNote,
     this.onOpenCommentatorsPane,
     this.onOpenCommentatorsPaneWithFilter,
     this.onOpenLinksPane,
@@ -107,6 +108,7 @@ class CombinedView extends StatefulWidget {
   onSelectedTextChanged;
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
+  final void Function(Link link, int lineNumber)? onOpenCommentaryPersonalNote;
   final VoidCallback? onOpenCommentatorsPane;
   final VoidCallback? onOpenCommentatorsPaneWithFilter;
   final VoidCallback? onOpenLinksPane;
@@ -1503,9 +1505,11 @@ class _CombinedViewState extends State<CombinedView> {
   void _onInlineNoteTap(int lineIndex) {
     _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
     _addTextBookEventIfOpen(HighlightLine(lineIndex));
-    // פותחים את ההערה עצמה בחלונית, גם אם מוגדר "סגור כברירת מחדל".
-    context.read<PersonalNotesBloc>().add(
-      RequestExpandNotesForLine(lineIndex + 1),
+    openPersonalNotesTarget(
+      context.read<PersonalNotesBloc>(),
+      bookId: widget.tab.book.title,
+      categoryId: widget.tab.book.categoryId,
+      lineNumber: lineIndex + 1,
     );
     if (widget.onOpenPersonalNotes != null) {
       widget.onOpenPersonalNotes!.call();
@@ -2308,6 +2312,7 @@ class _CombinedViewState extends State<CombinedView> {
               selectionSyncController: widget.selectionSyncController,
               searchText: state.searchText,
               scrollTargetListenable: _anchorScrollTargetNotifier,
+              onOpenPersonalNote: widget.onOpenCommentaryPersonalNote,
             ),
           ),
       ],
@@ -2577,6 +2582,7 @@ class _CommentaryCard extends StatefulWidget {
   final SelectionSyncController? selectionSyncController;
   final String searchText;
   final ValueListenable<String?> scrollTargetListenable;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   const _CommentaryCard({
     super.key,
@@ -2587,6 +2593,7 @@ class _CommentaryCard extends StatefulWidget {
     this.selectionSyncController,
     this.searchText = '',
     required this.scrollTargetListenable,
+    this.onOpenPersonalNote,
   });
 
   @override
@@ -2698,6 +2705,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                     highlightQueryListenable: _highlightNotifier,
                     externalTotalResultsNotifier: _totalNotifier,
                     externalCurrentIndexNotifier: _currentIndexNotifier,
+                    onOpenPersonalNote: widget.onOpenPersonalNote,
                   ),
                 ),
               ),

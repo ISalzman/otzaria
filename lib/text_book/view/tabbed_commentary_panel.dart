@@ -17,6 +17,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 
@@ -49,6 +50,10 @@ class TabbedCommentaryPanel extends StatefulWidget {
   /// ניווט לשורה מתוך לשונית ההערות. כשהוא null נעשה ניווט ישיר ב-scrollController.
   /// צורת הדף מספקת מימוש משלה, שממיר שורת מקור לסגמנט קריאה רציפה.
   final ValueChanged<int>? onNavigateToLine;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
+  final String? notesBookIdOverride;
+  final int? notesCategoryIdOverride;
+  final int? notesFocusLineNumber;
 
   const TabbedCommentaryPanel({
     super.key,
@@ -66,6 +71,10 @@ class TabbedCommentaryPanel extends StatefulWidget {
     this.tab,
     this.highlightQueryListenable,
     this.onNavigateToLine,
+    this.onOpenPersonalNote,
+    this.notesBookIdOverride,
+    this.notesCategoryIdOverride,
+    this.notesFocusLineNumber,
   });
 
   @override
@@ -232,6 +241,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                                   insertAdjacent: true,
                                 ),
                               ),
+                        onOpenPersonalNote: widget.onOpenPersonalNote,
                       ),
                     )
                   else
@@ -248,8 +258,11 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                   ),
                   // כרטיסיית ההערות האישיות
                   PersonalNotesSidebar(
-                    bookId: state.book.title,
-                    categoryId: state.book.categoryId,
+                    bookId: widget.notesBookIdOverride ?? state.book.title,
+                    categoryId: widget.notesBookIdOverride == null
+                        ? state.book.categoryId
+                        : widget.notesCategoryIdOverride,
+                    focusLineNumber: widget.notesFocusLineNumber,
                     onNavigateToLine:
                         widget.onNavigateToLine ??
                         (line) => _handleNoteNavigation(context, state, line),

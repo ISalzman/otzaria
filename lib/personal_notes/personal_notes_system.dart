@@ -8,6 +8,7 @@ export 'services/personal_notes_import_export_service.dart';
 export 'repository/personal_notes_repository.dart';
 export 'storage/personal_notes_database.dart';
 export 'utils/note_text_utils.dart';
+export 'utils/open_personal_notes_target.dart';
 export 'view/personal_notes_screen.dart';
 export 'widgets/personal_note_editor.dart';
 export 'widgets/personal_note_editor_dialog.dart';

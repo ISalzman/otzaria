@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -11,8 +13,39 @@ import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
+import 'package:otzaria/text_book/utils/note_inline_render.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
+
+@visibleForTesting
+List<PersonalNote> commentaryNotesForLine(
+  List<PersonalNote> notes,
+  int lineNumber,
+) => notes
+    .where((note) => note.hasLocation && note.lineNumber == lineNumber)
+    .toList();
+
+@visibleForTesting
+ValueChanged<int>? commentaryNoteTapHandler(
+  BuildContext context,
+  List<PersonalNote> notes,
+) => notes.isEmpty
+    ? null
+    : (_) => showPersonalNotesDialog(context: context, notes: notes);
+
+@visibleForTesting
+void openCommentaryPersonalNote({
+  required BuildContext context,
+  required Link link,
+  required List<PersonalNote> notes,
+  void Function(Link link, int lineNumber)? onOpenPersonalNote,
+}) {
+  if (onOpenPersonalNote != null) {
+    onOpenPersonalNote(link, link.index2);
+    return;
+  }
+  showPersonalNotesDialog(context: context, notes: notes);
+}
 
 class CommentaryContent extends StatefulWidget {
   const CommentaryContent({
@@ -27,6 +60,8 @@ class CommentaryContent extends StatefulWidget {
     this.onSearchResultsCountChanged,
     this.onSearchSnippetsChanged,
     this.onRendered,
+    this.personalNotes,
+    this.onOpenPersonalNote,
   });
   final bool removeNikud;
   final bool removePunctuation;
@@ -41,6 +76,10 @@ class CommentaryContent extends StatefulWidget {
   /// מדווח את הטקסט הפשוט המרונדר (כפי שמופיע במסך) — משמש לשחזור מעברי שורה
   /// בהעתקה רב-שורתית של מפרשים.
   final void Function(String renderedPlainText)? onRendered;
+
+  /// הערות ספר המפרש. אותו Future משותף לכל קטעי המפרש בקבוצה.
+  final Future<List<PersonalNote>>? personalNotes;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   @override
   State<CommentaryContent> createState() => _CommentaryContentState();
@@ -150,32 +189,55 @@ class _CommentaryContentState extends State<CommentaryContent> {
 
               _reportRenderedText(data, renderSettings);
 
-              // עוגן בצד המקושר (ציטוט מ-charLevelData): הדגשת הטווח
-              // המצוטט בתוך קטע המפרש, באופסטים של תווים-גלויים.
-              var displayData = data;
-              final linkedStart = widget.link.linkedAnchorStart;
-              final linkedEnd = widget.link.linkedAnchorEnd;
-              if (linkedStart != null &&
-                  linkedEnd != null &&
-                  linkedEnd > linkedStart) {
-                displayData = wrapVisibleRange(
-                  html: data,
-                  start: linkedStart,
-                  end: linkedEnd,
-                  openTag: '<span class="link-anchor-range">',
-                  closeTag: '</span>',
-                );
-              }
+              return FutureBuilder<List<PersonalNote>>(
+                future: widget.personalNotes,
+                builder: (context, snapshot) {
+                  // המפרש מרונדר מיד; הסימונים נוספים כשההערות נטענות. הסתרה
+                  // עד לטעינה מעלימה את המפרש כשהטעינה נכשלת או נתקעת.
+                  final notesForLine = commentaryNotesForLine(
+                    snapshot.data ?? const <PersonalNote>[],
+                    widget.link.index2,
+                  );
+                  var displayData = buildAnnotatedLineHtml(
+                    rawLine: data,
+                    notesForLine: notesForLine,
+                    lineIndex0: widget.link.index2 - 1,
+                    underlineColor: Theme.of(context).colorScheme.primary,
+                  );
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SmartTextWidget(
-                    text: displayData,
-                    settings: renderSettings,
-                  ),
-                  LaazCommentarySubBlock(link: widget.link),
-                ],
+                  final linkedStart = widget.link.linkedAnchorStart;
+                  final linkedEnd = widget.link.linkedAnchorEnd;
+                  if (linkedStart != null &&
+                      linkedEnd != null &&
+                      linkedEnd > linkedStart) {
+                    displayData = wrapVisibleRange(
+                      html: displayData,
+                      start: linkedStart,
+                      end: linkedEnd,
+                      openTag: '<span class="link-anchor-range">',
+                      closeTag: '</span>',
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SmartTextWidget(
+                        text: displayData,
+                        settings: renderSettings,
+                        onNoteTap: notesForLine.isEmpty
+                            ? null
+                            : (_) => openCommentaryPersonalNote(
+                                context: context,
+                                link: widget.link,
+                                notes: notesForLine,
+                                onOpenPersonalNote: widget.onOpenPersonalNote,
+                              ),
+                      ),
+                      LaazCommentarySubBlock(link: widget.link),
+                    ],
+                  );
+                },
               );
             },
           );

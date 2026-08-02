@@ -688,6 +688,68 @@ void main() {
     },
   );
 
+  testWidgets('מפרש בצורת הדף מציג סימון הערה ופותח אותה בלחיצה', (
+    tester,
+  ) async {
+    String? openedBookId;
+    int? openedCategoryId;
+    int? openedLine;
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      const PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: [],
+        missingNotes: [],
+        errorMessage: null,
+        filteredLocatedNotes: [],
+        filteredMissingNotes: [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורת מפרש'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: false,
+              bookTitle: 'רש"י',
+              reportBook: TextBook(title: 'רש"י', categoryId: 9),
+              notesRepository: _CommentaryNotesRepository([_note()]),
+              onOpenCommentaryPersonalNote: (bookId, categoryId, lineNumber) {
+                openedBookId = bookId;
+                openedCategoryId = categoryId;
+                openedLine = lineNumber;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final smartText = tester.widget<SmartTextWidget>(
+      find.byType(SmartTextWidget).first,
+    );
+    expect(smartText.text, contains('otzaria://note?line=0'));
+    expect(smartText.onNoteTap, isNotNull);
+
+    smartText.onNoteTap!(0);
+    expect(openedBookId, 'רש"י');
+    expect(openedCategoryId, 9);
+    expect(openedLine, 1);
+    expect(find.text('הערה אישית'), findsNothing);
+  });
+
   test('שומר בחירה אחרונה רק כאשר הטקסט הנבחר אינו ריק', () {
     expect(shouldPersistSelectedText('טקסט נבחר'), isTrue);
     expect(shouldPersistSelectedText('  טקסט עם רווחים  '), isTrue);
@@ -1673,6 +1735,18 @@ class _RecordingNotesRepository extends PersonalNotesRepository {
     capturedSelectionColumn = selectionColumn;
     return const [];
   }
+}
+
+class _CommentaryNotesRepository extends PersonalNotesRepository {
+  _CommentaryNotesRepository(this.notes);
+
+  final List<PersonalNote> notes;
+
+  @override
+  Future<List<PersonalNote>> loadNotes(
+    String bookId, {
+    int? categoryId,
+  }) async => notes;
 }
 
 PersonalNote _note() {

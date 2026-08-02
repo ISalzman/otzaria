@@ -14,6 +14,7 @@ import 'package:otzaria/services/target_line_links_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
@@ -141,6 +142,7 @@ class CommentaryListBase extends StatefulWidget {
   /// בחירת סוגי המפרשים המנוהלת ע"י ההורה. נדרש כשהצ׳יפים מוצגים בפאנל שההורה
   /// בונה (כרטיסיית המפרשים) — בלעדיו הסינון היה חל רק על הפאנל הפנימי.
   final CommentaryTypeSelection? typeSelection;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   const CommentaryListBase({
     super.key,
@@ -171,6 +173,7 @@ class CommentaryListBase extends StatefulWidget {
     this.autofocus = false,
     this.highlightQueryListenable,
     this.typeSelection,
+    this.onOpenPersonalNote,
   });
 
   @override
@@ -1352,6 +1355,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           _renderedTitleByKey[_getLinkKey(link)] = title
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
+      onOpenPersonalNote: widget.onOpenPersonalNote,
       restoreLineBreaks: _restoreLineBreaks,
     );
   }
@@ -2124,6 +2128,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 
   /// מחרוזת להדגשה מה-BLoC החיצוני, ללא שדה החיפוש הפנימי.
   final ValueListenable<String>? highlightQueryListenable;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -2150,6 +2155,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.onLinkTitleRendered,
     this.restoreLineBreaks,
     this.highlightQueryListenable,
+    this.onOpenPersonalNote,
   });
 
   @override
@@ -2160,11 +2166,13 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 class _CollapsibleCommentaryGroupState
     extends State<_CollapsibleCommentaryGroup> {
   late bool _isExpanded;
+  late Future<List<PersonalNote>> _personalNotes;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = widget.isExpanded;
+    _loadPersonalNotes();
   }
 
   /// פותח את יעד הקישור בכרטיסייה חדשה (טקסט או PDF, לפי תבנית הפתיחה).
@@ -2180,6 +2188,21 @@ class _CollapsibleCommentaryGroupState
     if (oldWidget.isExpanded != widget.isExpanded) {
       _isExpanded = widget.isExpanded;
     }
+    if (oldWidget.group.bookTitle != widget.group.bookTitle) {
+      _loadPersonalNotes();
+    }
+  }
+
+  void _loadPersonalNotes() {
+    final categoryId = widget.group.links.firstOrNull?.targetCategoryId;
+    _personalNotes = PersonalNotesRepository().loadNotes(
+      widget.group.bookTitle,
+      categoryId: categoryId,
+    );
+  }
+
+  void _refreshPersonalNotes() {
+    setState(_loadPersonalNotes);
   }
 
   @override
@@ -2364,6 +2387,7 @@ class _CollapsibleCommentaryGroupState
                               removePunctuation: widget.removePunctuation,
                               savedSelectedText: savedTextAtBuild,
                               onNavigateToLink: _navigateToLink,
+                              onNoteSaved: _refreshPersonalNotes,
                               onCopySelected: () => ContextMenuUtils.copyFormattedText(
                                 context: menuCtx,
                                 savedSelectedText:
@@ -2409,6 +2433,8 @@ class _CollapsibleCommentaryGroupState
                                 : null,
                             onRendered: (text) =>
                                 widget.onLinkRendered?.call(link, text),
+                            personalNotes: _personalNotes,
+                            onOpenPersonalNote: widget.onOpenPersonalNote,
                           ),
                         );
                       },
