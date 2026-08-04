@@ -775,9 +775,16 @@ class CalendarWidgetState extends State<CalendarWidget> {
             baseJewishDay: jd.getJewishDayOfMonth(),
             recurrenceType: result.recurrenceType,
             recurringYears: result.recurringYears,
-            eventTime: result.eventTime,
+            eventTime: () => result.eventTime,
+            endTime: () => result.endTime,
             endGregorianDate: () => result.endGregorianDate,
-            colorIndex: () => result.colorIndex,
+            colorIndex: result.colorChanged ? () => result.colorIndex : null,
+            inheritedColorIndex: result.colorChanged ? () => null : null,
+            googleColorId: result.colorChanged
+                ? () => CalendarEventColors.googleColorIdForIndex(
+                    result.colorIndex,
+                  )
+                : null,
             notificationMinutes: result.notificationMinutes,
           ),
         );
@@ -789,6 +796,7 @@ class CalendarWidgetState extends State<CalendarWidget> {
           recurrenceType: result.recurrenceType,
           recurringYears: result.recurringYears,
           eventTime: result.eventTime,
+          endTime: result.endTime,
           endGregorianDate: result.endGregorianDate,
           colorIndex: result.colorIndex,
           notificationMinutes: result.notificationMinutes,

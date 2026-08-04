@@ -6,6 +6,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/utils/note_collection_utils.dart';
+import 'package:otzaria/personal_notes/utils/personal_notes_filter.dart';
 
 class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
   PersonalNotesBloc({PersonalNotesRepository? repository})
@@ -34,15 +35,19 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     LoadPersonalNotes event,
     Emitter<PersonalNotesState> emit,
   ) async {
+    // רענון אותו ספר חייב לשמר את השורות הגלויות; איפוסן היה מבטל את הסינון
+    // "הצג רק הערות לטקסט הנראה" ומציג את כל הספר עד הגלילה הבאה.
+    final isSameBook =
+        state.bookId == event.bookId && state.categoryId == event.categoryId;
+
     emit(
       state.copyWith(
         isLoading: true,
         bookId: event.bookId,
         categoryId: event.categoryId,
         errorMessage: null,
-        // איפוס החיפוש כשטוענים ספר חדש
-        searchQuery: '',
-        visibleLineIndices: [],
+        searchQuery: isSameBook ? state.searchQuery : '',
+        visibleLineIndices: isSameBook ? state.visibleLineIndices : [],
         // איפוס בקשת פתיחת הערה, כדי שלא תיפתח אוטומטית הערה באותה שורה בספר החדש
         clearExpandRequest: true,
       ),
@@ -190,12 +195,12 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     UpdateSearchQuery event,
     Emitter<PersonalNotesState> emit,
   ) {
-    final filtered = _applyFilters(
-      state.locatedNotes,
-      state.missingNotes,
-      event.query,
-      state.showOnlyVisible,
-      state.visibleLineIndices,
+    final filtered = filterPersonalNotes(
+      locatedNotes: state.locatedNotes,
+      missingNotes: state.missingNotes,
+      searchQuery: event.query,
+      showOnlyVisible: state.showOnlyVisible,
+      visibleLineIndices: state.visibleLineIndices,
     );
     emit(
       state.copyWith(
@@ -210,12 +215,12 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     UpdateVisibleLines event,
     Emitter<PersonalNotesState> emit,
   ) {
-    final filtered = _applyFilters(
-      state.locatedNotes,
-      state.missingNotes,
-      state.searchQuery,
-      state.showOnlyVisible,
-      event.visibleLineIndices,
+    final filtered = filterPersonalNotes(
+      locatedNotes: state.locatedNotes,
+      missingNotes: state.missingNotes,
+      searchQuery: state.searchQuery,
+      showOnlyVisible: state.showOnlyVisible,
+      visibleLineIndices: event.visibleLineIndices,
     );
     emit(
       state.copyWith(
@@ -231,12 +236,12 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     Emitter<PersonalNotesState> emit,
   ) {
     final newShowOnlyVisible = !state.showOnlyVisible;
-    final filtered = _applyFilters(
-      state.locatedNotes,
-      state.missingNotes,
-      state.searchQuery,
-      newShowOnlyVisible,
-      state.visibleLineIndices,
+    final filtered = filterPersonalNotes(
+      locatedNotes: state.locatedNotes,
+      missingNotes: state.missingNotes,
+      searchQuery: state.searchQuery,
+      showOnlyVisible: newShowOnlyVisible,
+      visibleLineIndices: state.visibleLineIndices,
     );
     emit(
       state.copyWith(
@@ -247,50 +252,6 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     );
   }
 
-  _NotesPartition _applyFilters(
-    List<PersonalNote> locatedNotes,
-    List<PersonalNote> missingNotes,
-    String searchQuery,
-    bool showOnlyVisible,
-    List<int> visibleLineIndices,
-  ) {
-    // סינון לפי טקסט נראה
-    var filteredLocated = locatedNotes;
-    if (showOnlyVisible && visibleLineIndices.isNotEmpty) {
-      filteredLocated = locatedNotes.where((note) {
-        if (note.lineNumber == null) return false;
-        return visibleLineIndices.contains(note.lineNumber! - 1);
-      }).toList();
-    }
-
-    // סינון לפי חיפוש
-    if (searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      filteredLocated = filteredLocated.where((note) {
-        return note.contentPlain.toLowerCase().contains(query) ||
-            (note.lineNumber?.toString().contains(query) ?? false);
-      }).toList();
-    }
-
-    // הערות חסרות מיקום - מוצגות רק אם לא מסננים לפי טקסט נראה
-    var filteredMissing = <PersonalNote>[];
-    if (!showOnlyVisible) {
-      filteredMissing = missingNotes;
-      if (searchQuery.isNotEmpty) {
-        final query = searchQuery.toLowerCase();
-        filteredMissing = filteredMissing.where((note) {
-          return note.contentPlain.toLowerCase().contains(query) ||
-              (note.lastKnownLineNumber?.toString().contains(query) ?? false);
-        }).toList();
-      }
-    }
-
-    return _NotesPartition(
-      locatedNotes: filteredLocated,
-      missingNotes: filteredMissing,
-    );
-  }
-
   void _emitNotes(
     String bookId,
     List<PersonalNote> notes,
@@ -298,12 +259,12 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
     bool clearCreatingState = false,
   }) {
     final split = _splitNotes(notes);
-    final filtered = _applyFilters(
-      split.locatedNotes,
-      split.missingNotes,
-      state.searchQuery,
-      state.showOnlyVisible,
-      state.visibleLineIndices,
+    final filtered = filterPersonalNotes(
+      locatedNotes: split.locatedNotes,
+      missingNotes: split.missingNotes,
+      searchQuery: state.searchQuery,
+      showOnlyVisible: state.showOnlyVisible,
+      visibleLineIndices: state.visibleLineIndices,
     );
     emit(
       state.copyWith(
