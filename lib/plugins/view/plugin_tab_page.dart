@@ -793,19 +793,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
           }
         }
       },
-      onProcessFailed: (controller, detail) {
-        // תהליך WebView2 (renderer/browser/GPU) מת — התוכן נעלם בלי חריגה.
-        logPluginWebViewFailure(
-          'Plugin WebView2 process failed',
-          detail.kind,
-          details: {
-            'Plugin': widget.plugin.pluginId,
-            'Reason': detail.reason?.toString(),
-            'ExitCode': detail.exitCode?.toString(),
-            'Process': detail.processDescription,
-          },
-        );
-      },
       onReceivedError: (controller, request, error) {
         // only fail the view for the entrypoint file load itself
         if (request.url.scheme == 'file') {
