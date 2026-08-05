@@ -144,6 +144,17 @@ class BackgroundSyncInitializer {
   /// Check if sync has already run
   static bool get hasRun => _hasRun;
 
+  /// משחרר את חסימת הריצה-הכפולה לקראת בנייה מחדש של עץ ה-widgets.
+  ///
+  /// [RestartWidget] אינו סוגר את התהליך, ולכן [_hasRun] היה שורד ומונע מהסריקה
+  /// לרוץ שוב. אחרי שחזור מגיבוי זה השאיר את תיקיות הספרים המשוחזרות בלי סריקה
+  /// עד ההפעלה הבאה — הספרים פשוט לא הופיעו.
+  static void resetForAppRestart() {
+    _hasRun = false;
+    _customFoldersSyncedThisSession = false;
+    _syncCompleter = null;
+  }
+
   /// Wait for sync to complete (useful for testing)
   static Future<FileSyncResult?> waitForCompletion() async {
     if (_syncCompleter == null) return null;

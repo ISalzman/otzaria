@@ -221,7 +221,9 @@ void main() {
         'Arial',
       );
 
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
 
       expect(skipped, isEmpty);
       expect(Settings.getValue<double>(SettingsRepository.keyFontSize), 22.5);
@@ -379,7 +381,9 @@ void main() {
 
     test('גיבוי ריק לגמרי נוצר בהצלחה ונטען בשחזור', () async {
       final backup = await createBackup();
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
       expect(skipped, isEmpty);
     });
   });
@@ -467,7 +471,9 @@ void main() {
         },
       );
 
-      expect(await BackupService.restoreFromBackup(path), ['plugins']);
+      expect((await BackupService.restoreFromBackup(path)).skippedSections, [
+        'plugins',
+      ]);
     });
   });
 
@@ -734,7 +740,9 @@ void main() {
       await Directory(paths.installPath).delete(recursive: true);
       await Directory(paths.dataPath).delete(recursive: true);
 
-      final skipped = await BackupService.restoreFromBackup(archivePath);
+      final skipped = (await BackupService.restoreFromBackup(
+        archivePath,
+      )).skippedSections;
 
       expect(skipped, isEmpty);
       expect(

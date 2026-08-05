@@ -1565,20 +1565,32 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _performRestore(String filePath) async {
     try {
-      final skipped = await BackupService.restoreFromBackup(filePath);
+      final result = await BackupService.restoreFromBackup(filePath);
       if (!mounted) return;
-      final content = skipped.isEmpty
-          ? context.settingsText(
-              'הנתונים שוחזרו בהצלחה. האפליקציה תיטען מחדש כעת.',
-            )
-          : context.settingsText(
-              'שחזור חלקי — חסרים בקובץ הגיבוי: {items}.\nהאפליקציה תיטען מחדש כעת.',
-              args: {'items': skipped.join(", ")},
-            );
+      final skipped = result.skippedSections;
+      final missingFolders = result.missingCustomFolders;
+      final content = [
+        if (skipped.isEmpty)
+          context.settingsText('הנתונים שוחזרו בהצלחה.')
+        else
+          context.settingsText(
+            'שחזור חלקי — חסרים בקובץ הגיבוי: {items}.',
+            args: {'items': skipped.join(", ")},
+          ),
+        if (missingFolders.isNotEmpty)
+          context.settingsText(
+            'תיקיות הספרים הבאות שוחזרו אך לא נמצאו במחשב זה:\n{folders}\n'
+            'יש להוסיף אותן מחדש בהגדרות הספרייה, או לחברן לאותו נתיב.',
+            args: {'folders': missingFolders.join('\n')},
+          ),
+        context.settingsText('האפליקציה תיטען מחדש כעת.'),
+      ].join('\n\n');
       await showSingleActionDialog(
         context: context,
         title: context.settingsText(
-          skipped.isEmpty ? 'השחזור הושלם' : 'שחזור חלקי',
+          skipped.isEmpty && missingFolders.isEmpty
+              ? 'השחזור הושלם'
+              : 'שחזור חלקי',
         ),
         content: content,
         confirmText: context.settingsText('טען מחדש'),

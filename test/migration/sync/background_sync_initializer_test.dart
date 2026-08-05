@@ -76,4 +76,55 @@ void main() {
       expect(result, isTrue);
     });
   });
+
+  group('BackgroundSyncInitializer.resetForAppRestart', () {
+    /// מריצה את הסנכרון ומחכה שיסתיים. בסביבת בדיקה אין DB, ולכן הריצה
+    /// נכשלת — מה שנבדק הוא דגל החסימה, לא תוצאת הסריקה.
+    Future<void> runSyncIgnoringOutcome() async {
+      await BackgroundSyncInitializer.initializeAfterDelay(delaySeconds: 0);
+      await BackgroundSyncInitializer.waitForCompletion().catchError(
+        (_) => null,
+      );
+    }
+
+    tearDown(BackgroundSyncInitializer.reset);
+
+    test('משחרר את חסימת הריצה הכפולה', () async {
+      // RestartWidget בונה מחדש את העץ בלי לסגור את התהליך, ולכן הדגל הסטטי
+      // היה שורד ומונע סריקה של תיקיות ספרים ששוחזרו מגיבוי.
+      await runSyncIgnoringOutcome();
+      expect(BackgroundSyncInitializer.hasRun, isTrue);
+
+      BackgroundSyncInitializer.resetForAppRestart();
+
+      expect(BackgroundSyncInitializer.hasRun, isFalse);
+    });
+
+    test('אחרי האיפוס הסנכרון רץ שוב', () async {
+      await runSyncIgnoringOutcome();
+      BackgroundSyncInitializer.resetForAppRestart();
+
+      await runSyncIgnoringOutcome();
+
+      expect(BackgroundSyncInitializer.hasRun, isTrue);
+    });
+
+    test('מבטל את סימון הסריקה הידנית של הסשן', () async {
+      BackgroundSyncInitializer.markCustomFoldersSyncedThisSession();
+
+      BackgroundSyncInitializer.resetForAppRestart();
+
+      // אין getter לדגל, ולכן הבדיקה עקיפה: אחרי איפוס הריצה אינה מדלגת
+      // בטענה שהסריקה כבר בוצעה בסשן.
+      await runSyncIgnoringOutcome();
+      expect(BackgroundSyncInitializer.hasRun, isTrue);
+    });
+
+    test('קריאה חוזרת אינה מפילה ואינה משנה מצב', () {
+      BackgroundSyncInitializer.resetForAppRestart();
+      BackgroundSyncInitializer.resetForAppRestart();
+
+      expect(BackgroundSyncInitializer.hasRun, isFalse);
+    });
+  });
 }
