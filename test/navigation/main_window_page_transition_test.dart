@@ -94,6 +94,60 @@ void main() {
     });
   });
 
+  group('resolvePageTransition', () {
+    test('עמוד היעד הוא העמוד המוצג — קפיצה מיישרת, בלי החלקה', () {
+      // המקרה שקרס: החלקה חוצה מ-0 אל 0 מחשבת עמוד-שכן -1 → RangeError בכל
+      // build (המסך נהפך אפור).
+      for (var page = 0; page < 3; page++) {
+        expect(
+          resolvePageTransition(currentPage: page, targetPage: page),
+          PageTransitionKind.snap,
+          reason: 'עמוד $page',
+        );
+      }
+    });
+
+    test('עמודים סמוכים — החלקה רגילה', () {
+      expect(
+        resolvePageTransition(currentPage: 0, targetPage: 1),
+        PageTransitionKind.slide,
+      );
+      expect(
+        resolvePageTransition(currentPage: 2, targetPage: 1),
+        PageTransitionKind.slide,
+      );
+    });
+
+    test('עמודים לא-סמוכים — החלקה חוצה', () {
+      expect(
+        resolvePageTransition(currentPage: 0, targetPage: 2),
+        PageTransitionKind.crossSlide,
+      );
+      expect(
+        resolvePageTransition(currentPage: 2, targetPage: 0),
+        PageTransitionKind.crossSlide,
+      );
+    });
+
+    test('כל מעבר שמוכרז כחוצה מייצר עמוד-שכן חוקי', () {
+      const pageCount = 3;
+      for (var from = 0; from < pageCount; from++) {
+        for (var to = 0; to < pageCount; to++) {
+          if (resolvePageTransition(currentPage: from, targetPage: to) !=
+              PageTransitionKind.crossSlide) {
+            continue;
+          }
+          final slot = from + (to > from ? 1 : -1);
+          expect(
+            slot,
+            allOf(greaterThanOrEqualTo(0), lessThan(pageCount)),
+            reason: '$from→$to מייצר slot=$slot מחוץ לטווח העמודים',
+          );
+        }
+      }
+    });
+  });
+
   group('שימור State במהלך slide חוצה (PageView אמיתי)', () {
     testWidgets(
       'מסך ממותג (GlobalKey) שזז בעץ דרך swap עובר reparent ולא נבנה מחדש',
