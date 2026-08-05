@@ -27,6 +27,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
@@ -1355,20 +1356,33 @@ void main() {
   group('PluginBridgeAdapter fs + pickFolder + download.destPath', () {
     late Directory tempDir;
     late _StubPluginRegistryRepository registry;
+    late PluginNetworkAccessResolver originalResolver;
+
+    const downloadHost =
+        'https://github.com/YairDaniel11/Otzarya-Unofficial-Books';
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('adapter_fs_test_');
       registry = _StubPluginRegistryRepository()..permissionGrant = true;
+
+      // בלי ה-stub הזה הבדיקה מושכת את רשימת ההיתר החיה מענף
+      // plugin-network-allowlist ב-GitHub, ונצבעת אדום ברגע שמישהו עורך
+      // שם כתובת. סנכרון הרשימה האמיתית נבדק ב-
+      // plugin_network_allowlist_branch_sync_test.
+      originalResolver = PluginNetworkAccessResolver.instance;
+      PluginNetworkAccessResolver.instance = PluginNetworkAccessResolver(
+        client: MockClient((_) async => http.Response(downloadHost, 200)),
+      );
     });
 
     tearDown(() async {
+      PluginNetworkAccessResolver.instance = originalResolver;
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
     });
 
-    const downloadUrl =
-        'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books/releases/latest/download/books.zip';
+    const downloadUrl = '$downloadHost/releases/latest/download/books.zip';
 
     PluginBridgeAdapter buildAdapter({
       required Future<String?> Function({String? title}) pickFolder,
@@ -1378,9 +1392,7 @@ void main() {
         _buildInstalledPlugin(
           permissions: const ['ui.feedback', 'network.access'],
           networkEnabled: true,
-          networkAllowlist: const [
-            'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
-          ],
+          networkAllowlist: const [downloadHost],
         ),
         dependencies: PluginBridgeDependencies(
           historyBloc: _MockHistoryBloc(),
