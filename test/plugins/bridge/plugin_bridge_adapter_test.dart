@@ -1365,9 +1365,8 @@ void main() {
       tempDir = await Directory.systemTemp.createTemp('adapter_fs_test_');
       registry = _StubPluginRegistryRepository()..permissionGrant = true;
 
-      // בלי ה-stub הזה הבדיקה מושכת את רשימת ההיתר החיה מענף
-      // plugin-network-allowlist ב-GitHub, ונצבעת אדום ברגע שמישהו עורך
-      // שם כתובת. סנכרון הרשימה האמיתית נבדק ב-
+      // בלי ה-stub הזה הבדיקה מושכת את רשימת ההיתר החיה מ-GitHub, ונצבעת
+      // אדום ברגע שמישהו עורך שם כתובת. סנכרון הרשימה האמיתית נבדק ב-
       // plugin_network_allowlist_branch_sync_test.
       originalResolver = PluginNetworkAccessResolver.instance;
       PluginNetworkAccessResolver.instance = PluginNetworkAccessResolver(

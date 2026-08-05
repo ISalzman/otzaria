@@ -254,11 +254,11 @@ https://other.example.com
       expect(fetches, 2);
     });
 
-    test('כתובת הרשימה הרשמית מצביעה על הענף הייעודי', () {
+    test('כתובת הרשימה הרשמית מצביעה על הקובץ שבענף dev', () {
       expect(
         PluginNetworkAccessResolver.officialAllowlistUri.toString(),
         'https://raw.githubusercontent.com/Otzaria/otzaria/'
-        'plugin-network-allowlist/plugin_network_allowlist.txt',
+        'dev/plugin_network_allowlist.txt',
       );
     });
   });
