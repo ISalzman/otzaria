@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/core/messages/library_messages.dart';
@@ -9,6 +10,7 @@ import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
+import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -24,10 +26,75 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 export 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart'
     show PdfExtraction;
 
+class _PdfExtractionFailure implements Exception {
+  const _PdfExtractionFailure(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => cause.toString();
+}
+
 class IndexingRepository {
   final TantivyDataProvider _tantivyDataProvider;
 
   IndexingRepository(this._tantivyDataProvider);
+
+  @visibleForTesting
+  static IndexingFailure classifyFailureForTesting(
+    Book book,
+    Object error, [
+    StackTrace? stackTrace,
+  ]) => _classifyFailure(book, error, stackTrace);
+
+  @visibleForTesting
+  static IndexingFailure classifyPdfExtractionFailureForTesting(
+    PdfBook book,
+    Object error,
+  ) => _classifyFailure(book, _PdfExtractionFailure(error), null);
+
+  static IndexingFailure _classifyFailure(
+    Book book,
+    Object error,
+    StackTrace? stackTrace,
+  ) {
+    final sourceError = error is _PdfExtractionFailure ? error.cause : error;
+    final message = sourceError.toString();
+    final normalized = message.toLowerCase();
+    final kind = switch (sourceError) {
+      final RangeError rangeError
+          when rangeError.invalidValue == -1 && rangeError.end == 3 =>
+        IndexingFailureKind.pdfUnsupported,
+      final TimeoutException _ => IndexingFailureKind.timeout,
+      _
+          when normalized.contains('no password supplied') ||
+              normalized.contains('password required') ||
+              normalized.contains('incorrect password') ||
+              normalized.contains('passwordprovider') =>
+        IndexingFailureKind.passwordProtected,
+      _
+          when normalized.contains('access is denied') ||
+              normalized.contains('permission denied') ||
+              normalized.contains('operation not permitted') ||
+              normalized.contains('os error 5') =>
+        IndexingFailureKind.permissionDenied,
+      _
+          when normalized.contains('timeout') ||
+              normalized.contains('timed out') =>
+        IndexingFailureKind.timeout,
+      _ when error is _PdfExtractionFailure =>
+        IndexingFailureKind.pdfUnsupported,
+      _ => IndexingFailureKind.unknown,
+    };
+
+    return IndexingFailure(
+      bookTitle: book.title,
+      bookPath: buildIndexedBookFilePath(book),
+      kind: kind,
+      error: message,
+      stackTrace: stackTrace?.toString(),
+    );
+  }
 
   /// בודקת אם בכלל יש טעם להריץ את בדיקת requiresManualReindex.
   /// ספרייה ריקה (כולל המקרה של "אין ספרייה") אין טעם לאפס לה אינדקס,
@@ -131,14 +198,20 @@ class IndexingRepository {
   ///
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
-  /// מבצע אינדוקס ומחזיר true אם הסתיים בהצלחה, false אם בוטל
-  Future<bool> indexAllBooks(
+  /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
+  Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
     bool includePdfBooks = true,
   }) async {
-    if (await _blockIndexingOnTempFallback()) return false;
+    if (await _blockIndexingOnTempFallback()) {
+      return const IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
 
     final allBooks = orderBooksForIndexing(
       library.getAllBooks(),
@@ -149,7 +222,11 @@ class IndexingRepository {
       debugPrint(
         '⚠️ האינדקס דורש איפוס ובנייה מחדש באישור המשתמש - מדלג על אינדוקס אוטומטי',
       );
-      return false;
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: totalBooks,
+        indexedBooks: 0,
+      );
     }
 
     if (areAllIndexableBooksIndexed(
@@ -159,7 +236,11 @@ class IndexingRepository {
       debugPrint(
         '⚡ Fast path: כל הספרים האינדקסביליים כבר מאונדקסים לפי האינדקס עצמו - מדלג על האינדוקס',
       );
-      return true;
+      return IndexingRunResult.completed(
+        processedBooks: totalBooks,
+        totalBooks: totalBooks,
+        indexedBooks: 0,
+      );
     }
 
     _tantivyDataProvider.isIndexing.value = true;
@@ -169,6 +250,12 @@ class IndexingRepository {
     // חילוץ ה-PDF איטי בסדר גודל מאינדוקס ספר טקסט, ולכן חילוצי ה-PDF הבאים
     // רצים מראש ברקע בזמן שהמנוע מאנדקס את הספרים שלפניהם.
     final prefetcher = PdfExtractionPrefetcher(extract: extractPdfPagesGuarded);
+    var processedBooks = 0;
+    var actuallyIndexed = 0;
+    var indexedSinceCommit = 0;
+    var skipped = 0;
+    var errors = 0;
+    final failures = <IndexingFailure>[];
 
     try {
       await _setDbReadBoost(true);
@@ -189,11 +276,6 @@ class IndexingRepository {
         BookFacetMetadataCache.instance.warmUp(),
       ]);
 
-      int processedBooks = 0;
-      int actuallyIndexed = 0;
-      int indexedSinceCommit = 0;
-      int skipped = 0;
-      int errors = 0;
       final totalStopwatch = Stopwatch()..start();
       final commitStopwatch = Stopwatch();
 
@@ -233,7 +315,7 @@ class IndexingRepository {
             onProgress(bookIndex + 1, totalBooks);
           }
           try {
-            await _indexPdfBook(
+            final droppedPages = await _indexPdfBook(
               readyBook,
               catalogueOrderByBookKey: catalogueOrderByBookKey,
               preExtracted: ready.extraction,
@@ -247,15 +329,26 @@ class IndexingRepository {
               cancelled = true;
               break bookLoop;
             }
+            _recordPartialPdfFailure(readyBook, droppedPages, failures);
             _tantivyDataProvider.indexedFilePaths.add(
               buildIndexedBookFilePath(readyBook),
             );
             actuallyIndexed++;
             indexedSinceCommit++;
-          } catch (e) {
+          } catch (e, stackTrace) {
             debugPrint('❌ שגיאה באינדוקס מוקדם של ${readyBook.title}: $e');
             errors++;
-            if (!isBookIndexed(readyBook) &&
+            final failure = _classifyFailure(readyBook, e, stackTrace);
+            failures.add(failure);
+            final handled = await _markPermanentPdfFailure(
+              readyBook,
+              failure,
+              catalogueOrderByBookKey,
+              failures,
+            );
+            if (handled) {
+              indexedSinceCommit++;
+            } else if (!isBookIndexed(readyBook) &&
                 !await _discardPartialBookWrites(readyBook)) {
               await _recoverEngineAfterWriteFailure();
               cancelled = true;
@@ -316,7 +409,7 @@ class IndexingRepository {
                 bookIndex + 1,
                 shouldPrefetch: shouldPrefetch,
               );
-              await _indexPdfBook(
+              final droppedPages = await _indexPdfBook(
                 book,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 preExtracted: preExtracted,
@@ -332,6 +425,7 @@ class IndexingRepository {
                 cancelled = true;
                 break;
               }
+              _recordPartialPdfFailure(book, droppedPages, failures);
               _tantivyDataProvider.indexedFilePaths.add(
                 buildIndexedBookFilePath(book),
               );
@@ -375,12 +469,23 @@ class IndexingRepository {
               processedBooks == totalBooks) {
             onProgress(processedBooks, totalBooks);
           }
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
           errors++;
+          final failure = _classifyFailure(book, e, stackTrace);
+          failures.add(failure);
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
+          final handled = await _markPermanentPdfFailure(
+            book,
+            failure,
+            catalogueOrderByBookKey,
+            failures,
+          );
+          if (handled) {
+            indexedSinceCommit++;
+          } else if (!isBookIndexed(book) &&
+              !await _discardPartialBookWrites(book)) {
             // ניקוי כושל ⇒ commit היה חותם ספר חלקי; משליכים את כל החוצץ
             // ועוצרים בלי commit — מה שלא נחתם ינוסה שוב בריצה הבאה.
             await _recoverEngineAfterWriteFailure();
@@ -424,7 +529,19 @@ class IndexingRepository {
       }
       _tantivyDataProvider.isIndexing.value = false;
     }
-    return !cancelled;
+    return cancelled
+        ? IndexingRunResult.cancelled(
+            processedBooks: processedBooks,
+            totalBooks: totalBooks,
+            indexedBooks: actuallyIndexed,
+            failures: List.unmodifiable(failures),
+          )
+        : IndexingRunResult.completed(
+            processedBooks: processedBooks,
+            totalBooks: totalBooks,
+            indexedBooks: actuallyIndexed,
+            failures: List.unmodifiable(failures),
+          );
   }
 
   Future<void> _indexTextBook(
@@ -516,7 +633,7 @@ class IndexingRepository {
     }
   }
 
-  Future<void> _indexPdfBook(
+  Future<int> _indexPdfBook(
     PdfBook book, {
     required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
@@ -540,7 +657,7 @@ class IndexingRepository {
       'ב-${extracted.extractMs}ms${preExtracted != null ? ' (prefetch)' : ''}',
     );
     if (!_tantivyDataProvider.isIndexing.value) {
-      return;
+      return extracted.droppedPages;
     }
 
     // ההכרעה אם ל-PDF יש טקסט שמיש עברה למנוע: add_pdf_book מנרמל ומסנן
@@ -569,7 +686,10 @@ class IndexingRepository {
       } else if (openError != null) {
         // כשל בטעינת ה-PDF עצמו (להבדיל מטקסט סרוק): בלי sidecar מפיצים את
         // השגיאה, אחרת הספר היה נרשם כ"ריק" לצמיתות ולא מנוסה שוב.
-        Error.throwWithStackTrace(openError, openStackTrace!);
+        Error.throwWithStackTrace(
+          _PdfExtractionFailure(openError),
+          openStackTrace!,
+        );
       }
     }
 
@@ -579,6 +699,23 @@ class IndexingRepository {
         catalogueOrderByBookKey: catalogueOrderByBookKey,
       );
     }
+    return extracted.droppedPages;
+  }
+
+  void _recordPartialPdfFailure(
+    PdfBook book,
+    int droppedPages,
+    List<IndexingFailure> failures,
+  ) {
+    if (droppedPages == 0) return;
+    failures.add(
+      IndexingFailure(
+        bookTitle: book.title,
+        bookPath: book.path,
+        kind: IndexingFailureKind.partialPdf,
+        error: '$droppedPages עמודים נשמטו מהחילוץ עקב timeout',
+      ),
+    );
   }
 
   /// שולח את עמודי ה-PDF למנוע בקריאת FFI אחת (add_pdf_book: נרמול, סינון
@@ -657,6 +794,39 @@ class IndexingRepository {
     );
   }
 
+  Future<bool> _markPermanentPdfFailure(
+    Book book,
+    IndexingFailure failure,
+    Map<String, int> catalogueOrderByBookKey,
+    List<IndexingFailure> failures,
+  ) async {
+    if (book is! PdfBook || failure.isRetryable) return false;
+    if (!_tantivyDataProvider.isIndexing.value) return false;
+
+    try {
+      await _writeEmptyBookMarker(
+        book,
+        catalogueOrderByBookKey: catalogueOrderByBookKey,
+      );
+    } catch (error, stackTrace) {
+      failures.add(
+        IndexingFailure(
+          bookTitle: book.title,
+          bookPath: book.path,
+          kind: IndexingFailureKind.engineWrite,
+          error: error.toString(),
+          stackTrace: stackTrace.toString(),
+        ),
+      );
+      debugPrint('⚠️ כתיבת סמן כשל קבוע עבור ${book.title} נכשלה: $error');
+      return false;
+    }
+    if (!_tantivyDataProvider.isIndexing.value) return false;
+
+    _tantivyDataProvider.indexedFilePaths.add(buildIndexedBookFilePath(book));
+    return true;
+  }
+
   /// מוחק את המסמכים החלקיים של ספר שכתיבתו למנוע נכשלה באמצע: בלעדי זה
   /// ה-commit הבא חותם ספר חלקי, שנחשב "מאונדקס" ולעולם לא מנוסה שוב.
   Future<bool> _discardPartialBookWrites(Book book) async {
@@ -707,6 +877,7 @@ class IndexingRepository {
         error: null,
         stackTrace: null,
         extractMs: stopwatch.elapsedMilliseconds,
+        droppedPages: extracted.droppedPages,
       );
     } catch (e, st) {
       return (
@@ -715,6 +886,7 @@ class IndexingRepository {
         error: e,
         stackTrace: st,
         extractMs: stopwatch.elapsedMilliseconds,
+        droppedPages: 0,
       );
     }
   }
@@ -726,12 +898,14 @@ class IndexingRepository {
     ({
       List<({String reference, String text, int pageIndex})> pages,
       List<PdfOutlineNode> outline,
+      int droppedPages,
     })
   >
   _extractPdfPages(PdfBook book) async {
     const empty = (
       pages: <({String reference, String text, int pageIndex})>[],
       outline: <PdfOutlineNode>[],
+      droppedPages: 0,
     );
     final file = File(book.path);
     if (!await file.exists()) return empty;
@@ -778,7 +952,11 @@ class IndexingRepository {
         );
       }
 
-      return (pages: pages, outline: outline);
+      return (
+        pages: pages,
+        outline: outline,
+        droppedPages: droppedPages,
+      );
     } finally {
       // בלי סגירה מפורשת המסמך נשאר פתוח ב-pdfium עד סוף התהליך: אין
       // Finalizer על העטיפה, ו-FPDF_CloseDocument נקרא רק מ-dispose.
@@ -983,21 +1161,37 @@ class IndexingRepository {
 
   /// Indexes a specific list of books (e.g. newly added personal books).
   ///
-  /// מבצע אינדוקס ומחזיר true אם הסתיים בהצלחה, false אם בוטל
-  Future<bool> indexBooks(
+  /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
+  Future<IndexingRunResult> indexBooks(
     List<Book> books,
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
-    if (books.isEmpty) return true;
-    if (await _blockIndexingOnTempFallback()) return false;
+    if (books.isEmpty) {
+      return const IndexingRunResult.completed(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
+    if (await _blockIndexingOnTempFallback()) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: books.length,
+        indexedBooks: 0,
+      );
+    }
 
     _tantivyDataProvider.isIndexing.value = true;
 
     if (await requiresManualReindex(library)) {
       _tantivyDataProvider.isIndexing.value = false;
-      return false;
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: books.length,
+        indexedBooks: 0,
+      );
     }
 
     // בנה מפת סדר קטלוג מהספרייה הטרייה שהועברה כפרמטר
@@ -1018,6 +1212,7 @@ class IndexingRepository {
     int errors = 0;
     bool cancelled = false;
     var didStartActualIndexing = false;
+    final failures = <IndexingFailure>[];
 
     try {
       await _setDbReadBoost(true);
@@ -1056,7 +1251,7 @@ class IndexingRepository {
             if (!isBookIndexed(book)) {
               onProgress(processedBooks + 1, totalBooks);
               debugPrint('📄 מאנדקס PDF חדש: ${book.title}');
-              await _indexPdfBook(
+              final droppedPages = await _indexPdfBook(
                 book,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 onActualIndexingStarted: () {
@@ -1069,6 +1264,7 @@ class IndexingRepository {
                 cancelled = true;
                 break;
               }
+              _recordPartialPdfFailure(book, droppedPages, failures);
               _tantivyDataProvider.indexedFilePaths.add(
                 buildIndexedBookFilePath(book),
               );
@@ -1078,12 +1274,22 @@ class IndexingRepository {
 
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
           errors++;
+          final failure = _classifyFailure(book, e, stackTrace);
+          failures.add(failure);
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
+          final handled = await _markPermanentPdfFailure(
+            book,
+            failure,
+            catalogueOrderByBookKey,
+            failures,
+          );
+          if (!handled &&
+              !isBookIndexed(book) &&
+              !await _discardPartialBookWrites(book)) {
             // ניקוי כושל ⇒ commit היה חותם ספר חלקי; משליכים את כל החוצץ
             // ועוצרים בלי commit — מה שלא נחתם ינוסה שוב בריצה הבאה.
             await _recoverEngineAfterWriteFailure();
@@ -1108,7 +1314,19 @@ class IndexingRepository {
       await _setDbReadBoost(false);
       _tantivyDataProvider.isIndexing.value = false;
     }
-    return !cancelled;
+    return cancelled
+        ? IndexingRunResult.cancelled(
+            processedBooks: processedBooks,
+            totalBooks: totalBooks,
+            indexedBooks: actuallyIndexed,
+            failures: List.unmodifiable(failures),
+          )
+        : IndexingRunResult.completed(
+            processedBooks: processedBooks,
+            totalBooks: totalBooks,
+            indexedBooks: actuallyIndexed,
+            failures: List.unmodifiable(failures),
+          );
   }
 
   /// מפעיל/מכבה בוסט זמני לחיבורי הקריאה של ה-DB לטובת הקריאות הרציפות
@@ -1230,23 +1448,55 @@ class IndexingRepository {
   /// מאנדקס מחדש ספרים שתוכנם השתנה: מסיר את רשומותיהם הישנות מהאינדקס
   /// ומאנדקס אותם מחדש דרך [indexBooks].
   ///
-  /// מחזיר true אם הסתיים בהצלחה; false אם בוטל, נדרש אינדוקס ידני מלא,
-  /// או שמחיקת הרשומות הישנות נכשלה (ואז אסור לאנדקס — הספר יידולג ממילא).
-  Future<bool> reindexChangedBooks(
+  /// מחזיר תוצאה מפורטת; ביטול כולל מצב שבו נדרש אינדוקס ידני מלא או
+  /// שמחיקת הרשומות הישנות נכשלה.
+  Future<IndexingRunResult> reindexChangedBooks(
     List<Book> changedBooks,
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
-    if (changedBooks.isEmpty) return true;
-    if (await requiresManualReindex(library)) return false;
+    if (changedBooks.isEmpty) {
+      return const IndexingRunResult.completed(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
+    if (await requiresManualReindex(library)) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: changedBooks.length,
+        indexedBooks: 0,
+      );
+    }
 
     // המחיקה מדויקת לפי מפתח ה-filePath של כל ספר, ולכן אין צורך להרחיב
     // לספרים אחרים החולקים כותרת — מאנדקסים מחדש רק את מה שבאמת השתנה.
     final booksToReindex = changedBooks.where(isIndexableBook).toList();
-    if (booksToReindex.isEmpty) return true;
+    if (booksToReindex.isEmpty) {
+      return IndexingRunResult.completed(
+        processedBooks: changedBooks.length,
+        totalBooks: changedBooks.length,
+        indexedBooks: 0,
+      );
+    }
 
-    if (!await dropBookIndexEntries(booksToReindex)) return false;
+    if (!await dropBookIndexEntries(booksToReindex)) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: booksToReindex.length,
+        indexedBooks: 0,
+        failures: [
+          IndexingFailure(
+            bookTitle: booksToReindex.first.title,
+            bookPath: buildIndexedBookFilePath(booksToReindex.first),
+            kind: IndexingFailureKind.engineWrite,
+            error: 'מחיקת רשומות האינדקס הישנות נכשלה',
+          ),
+        ],
+      );
+    }
     return indexBooks(
       booksToReindex,
       library,
@@ -1265,11 +1515,10 @@ class IndexingRepository {
   ///
   /// [onScanProgress] מדווח על שלב הסריקה (קריאת ה-DB והשוואה);
   /// [onProgress] מדווח על שלב האינדוקס-מחדש של הספרים שנמצאו שונים.
-  /// מחזיר true אם הסתיים (גם כשאין שינויים), false אם בוטל או שנדרש
-  /// אינדוקס ידני מלא.
+  /// מחזיר תוצאה מפורטת; ריצה ללא שינויים נחשבת השלמה נקייה.
   ///
   /// [loadText] ו-[fingerprintOf] ניתנים להזרקה בטסטים בלבד.
-  Future<bool> reconcileIndexWithLibrary(
+  Future<IndexingRunResult> reconcileIndexWithLibrary(
     Library library, {
     void Function(int processed, int total)? onScanProgress,
     void Function()? onActualIndexingStarted,
@@ -1278,8 +1527,14 @@ class IndexingRepository {
     @visibleForTesting
     Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
   }) async {
-    if (await _blockIndexingOnTempFallback()) return false;
-    if (await requiresManualReindex(library)) return false;
+    if (await _blockIndexingOnTempFallback() ||
+        await requiresManualReindex(library)) {
+      return const IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: 0,
+        indexedBooks: 0,
+      );
+    }
 
     final engine = await _tantivyDataProvider.engine;
     final indexFingerprints = await engine.getBookFingerprints();
@@ -1365,10 +1620,20 @@ class IndexingRepository {
       _tantivyDataProvider.isIndexing.value = false;
     }
 
-    if (cancelled) return false;
+    if (cancelled) {
+      return IndexingRunResult.cancelled(
+        processedBooks: 0,
+        totalBooks: total,
+        indexedBooks: 0,
+      );
+    }
     if (changed.isEmpty) {
       debugPrint('🔎 reconcile: האינדקס תואם את הספרייה — אין מה לעדכן');
-      return true;
+      return IndexingRunResult.completed(
+        processedBooks: total,
+        totalBooks: total,
+        indexedBooks: 0,
+      );
     }
 
     debugPrint('🔁 reconcile: ${changed.length} ספרים השתנו — מאנדקס מחדש');

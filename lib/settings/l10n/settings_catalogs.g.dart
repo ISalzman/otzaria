@@ -142,6 +142,8 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'דיווחים שנשלחו': 'Sent reports',
     'דלג על הסיור': 'Skip the tour',
     'דלג — אגלה לבד': 'Skip — I\'ll explore on my own',
+    'האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות': 'Indexing finished with {count} issues; details were saved to the error log',
+    'האינדוקס נעצר לפני שהושלם': 'Indexing stopped before it finished',
     'האינדקס לא מעודכן': 'The index is not up to date',
     'האינדקס מעודכן': 'The index is up to date',
     'האם אתה בטוח שברצונך לאפס ולמחוק את כל ההגדרות לפי ספר?': 'Are you sure you want to delete all the per-sefer settings?',

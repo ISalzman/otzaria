@@ -659,6 +659,8 @@
   "בודק אם נדרש איפוס ואינדוקס מחדש": "Checking whether a reset and re-index is needed",
   "נדרש איפוס ואינדוקס מחדש באישור המשתמש": "A reset and re-index is needed — waiting for you to approve",
   "התקדמות האינדקס: {processed}/{total}": "Indexing: {processed}/{total}",
+  "האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות": "Indexing finished with {count} issues; details were saved to the error log",
+  "האינדוקס נעצר לפני שהושלם": "Indexing stopped before it finished",
   "האינדקס מעודכן": "The index is up to date",
   "האינדקס לא מעודכן": "The index is not up to date",
   "אינדקס חיפוש": "Search index",

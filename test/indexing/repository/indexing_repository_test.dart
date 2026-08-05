@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:io' as io;
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 void main() {
   group('IndexingRepository.shouldSkipManualReindexCheck', () {
@@ -400,7 +403,7 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isTrue);
+        expect(result.completed, isTrue);
         // המחיקה לפי מפתח ה-filePath המדויק — הספר האישי 'שבת' (uid:9) נשאר.
         expect(engine.removedFilePaths, ['id:5']);
         expect(provider.indexedFilePaths, {
@@ -435,7 +438,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isFalse);
+      expect(result.completed, isFalse);
       expect(repository.indexedBooks, isNull);
       // המעקב המקומי לא השתנה — הספר עדיין מסומן וימתין לניסיון הבא.
       expect(provider.indexedFilePaths, {'id:5'});
@@ -453,7 +456,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       expect(engine.removedFilePaths, isEmpty);
       expect(repository.indexedBooks, isNull);
     });
@@ -522,7 +525,7 @@ void main() {
           fingerprintOf: (_, text) async => hashes[text]!,
         );
 
-        expect(result, isTrue);
+        expect(result.completed, isTrue);
         expect(
           repository.indexedBooks!.map((b) => b.title).toSet(),
           {'עירובין', 'יומא'},
@@ -553,7 +556,7 @@ void main() {
         fingerprintOf: (_, _) async => BigInt.from(7),
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       expect(repository.indexedBooks, isNull);
       expect(engine.removedFilePaths, isEmpty);
     });
@@ -580,7 +583,7 @@ void main() {
         fingerprintOf: (_, _) async => BigInt.one,
       );
 
-      expect(result, isFalse);
+      expect(result.completed, isFalse);
       expect(repository.indexedBooks, isNull);
     });
   });
@@ -623,7 +626,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       expect(engine.addedDocuments, isEmpty);
       expect(provider.indexedFilePaths, isEmpty);
     });
@@ -654,7 +657,7 @@ void main() {
         },
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
     });
@@ -685,9 +688,9 @@ void main() {
         onProgress: (_, _) => progressCalls++,
       );
 
-      expect(fullRun, isFalse);
-      expect(specificRun, isFalse);
-      expect(reconcileRun, isFalse);
+      expect(fullRun.completed, isFalse);
+      expect(specificRun.completed, isFalse);
+      expect(reconcileRun.completed, isFalse);
       expect(progressCalls, 0);
       expect(engine.addedDocuments, isEmpty);
       expect(provider.isIndexing.value, isFalse);
@@ -719,7 +722,7 @@ void main() {
         },
       );
 
-      expect(result, isFalse);
+      expect(result.completed, isFalse);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
     });
@@ -741,7 +744,7 @@ void main() {
         onProgress: (p, t) => calls.add((p, t, engine.addedDocuments.length)),
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       // הדיווח הראשון הוא תחילת הספר הראשון — עוד לפני שנכתב מסמך כלשהו.
       expect(calls.first, (1, 2, 0));
       expect(calls.last.$1, 2);
@@ -764,7 +767,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       // הכתיבה החלקית אכן נרשמה במנוע לפני הכשל — ורק אז נמחקה.
       expect(engine.addedDocuments.map((d) => d.title), contains('ב'));
       // רק הספר שכשל נוקה; שכנו שהצליח לא נמחק.
@@ -775,8 +778,7 @@ void main() {
     test(
       'חילוצי PDF שהסתיימו בזמן שלב הטקסטים מאונדקסים מיד ולא פעמיים',
       () async {
-        // רגרסיה: ה-prefetch היה חד-סלוטי — לאורך כל שלב הטקסטים חולץ PDF
-        // אחד בלבד, והשאר חולצו סדרתית רק בסוף.
+        // ברירת המחדל החד-סלוטית מונעת timeout של עבודה שממתינה בתור PDFium.
         final engine = _RecordingSearchEngine();
         final provider = _RecordingTantivyDataProvider(engine);
         final library = Library(categories: []);
@@ -802,12 +804,11 @@ void main() {
           onProgress: (p, _) => events.add('progress:$p'),
         );
 
-        expect(result, isTrue);
-        // שני ה-PDF (מיקומים 3 ו-4) נכתבו בסבב אחד, בזמן שהלולאה עוד עמדה
-        // על ט2 (מיקום 2). במימוש החד-סלוטי כל כתיבה חיכתה לסבב נוסף.
+        expect(result.completed, isTrue);
         expect(events, [
           'progress:2',
           'pdf:א',
+          'progress:3',
           'pdf:ב',
           'progress:4',
         ]);
@@ -822,10 +823,9 @@ void main() {
     );
 
     test(
-      'חילוצי PDF רבים מוזנקים במקביל — עד תקרת המקביליות ולא מעליה',
+      'חילוצי PDF נשארים סדרתיים כי PDFium משתמש ב-worker יחיד',
       () async {
-        // רגרסיה: ה-prefetch היה חד-סלוטי, כך שה-worker של pdfium יושב בטל
-        // בין ניקוז לניקוז במקום להחזיק תור עבודה מלא.
+        // PDFium משתמש ב-worker יחיד, ולכן אין ערך בתור חילוצים מקבילי.
         final engine = _RecordingSearchEngine();
         final provider = _RecordingTantivyDataProvider(engine);
         final library = Library(categories: []);
@@ -848,10 +848,10 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isTrue);
+        expect(result.completed, isTrue);
         // המספר קשיח בכוונה: ציפייה שמתייחסת ל-defaultMaxInFlight עצמו הייתה
         // מעגלית ועוברת גם במימוש חד-סלוטי.
-        expect(repository.peakConcurrentExtractions, 25);
+        expect(repository.peakConcurrentExtractions, 1);
         // התקרה היא הבלם על הזיכרון: מ-40 מועמדים לא נפתחו יותר ממנה.
         expect(
           repository.peakConcurrentExtractions,
@@ -880,7 +880,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       // הכשל בחילוץ אינו כתיבה חלקית — אין מה לנקות, והשאר אונדקסו.
       expect(engine.addedPdfTitles, ['p0', 'p2', 'p3']);
       expect(provider.indexedFilePaths, isNot(contains(pdfs[1].path)));
@@ -888,6 +888,226 @@ void main() {
         provider.indexedFilePaths,
         containsAll([pdfs[0].path, pdfs[2].path, pdfs[3].path]),
       );
+    });
+
+    test('PDF מוגן בסיסמה מסומן כטופל ואינו יוצר לולאת אינדוקס', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'מוגן', path: r'C:\pdfs\protected.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = Exception(
+          'PdfException: No password supplied by PasswordProvider.',
+        );
+
+      final firstRun = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+      final extractionsAfterFirstRun = repository.extractedTitles.length;
+      final secondRun = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(firstRun.completed, isTrue);
+      expect(firstRun.isClean, isFalse);
+      expect(
+        firstRun.failures.single.kind,
+        IndexingFailureKind.passwordProtected,
+      );
+      expect(provider.indexedFilePaths, contains(pdf.path));
+      expect(
+        engine.addedDocuments,
+        contains(
+          isA<DocumentInput>()
+              .having((document) => document.filePath, 'filePath', pdf.path)
+              .having((document) => document.text, 'text', isEmpty),
+        ),
+      );
+      expect(secondRun.isClean, isTrue);
+      expect(repository.extractedTitles.length, extractionsAfterFirstRun);
+    });
+
+    test('כשל rotation הקבוע מקבל סמן ריק ואינו מנוסה שוב', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'סיבוב פגום', path: r'C:\pdfs\rotation.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = RangeError.index(
+          -1,
+          const [0, 1, 2, 3],
+          'rotation',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failures.single.kind, IndexingFailureKind.pdfUnsupported);
+      expect(result.failures.single.isRetryable, isFalse);
+      expect(provider.indexedFilePaths, contains(pdf.path));
+    });
+
+    test('PDF חלקי מאונדקס אך מוחזר כאזהרה מפורטת', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'חלקי', path: r'C:\pdfs\partial.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..droppedPagesByTitle[pdf.title] = 7;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.completed, isTrue);
+      expect(result.indexedBooks, 1);
+      expect(result.warningCount, 1);
+      expect(result.blockingFailureCount, 0);
+      expect(result.hasRetryableFailures, isFalse);
+      expect(result.failures.single.kind, IndexingFailureKind.partialPdf);
+      expect(result.failures.single.error, contains('7'));
+      expect(provider.indexedFilePaths, contains(pdf.path));
+    });
+
+    test('כשל בכתיבת סמן PDF קבוע אינו מפיל את הריצה', () async {
+      final engine = _RecordingSearchEngine()..failAddForTitle = 'סיבוב פגום';
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'סיבוב פגום', path: r'C:\pdfs\rotation.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = RangeError.index(
+          -1,
+          const [0, 1, 2, 3],
+          'rotation',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.completed, isTrue);
+      expect(result.failures.map((failure) => failure.kind), [
+        IndexingFailureKind.pdfUnsupported,
+        IndexingFailureKind.engineWrite,
+      ]);
+      expect(result.hasRetryableFailures, isTrue);
+      expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      expect(engine.removedFilePaths, [pdf.path]);
+      expect(engine.commitCount, 1);
+    });
+
+    for (final entry in <String, Object>{
+      'timeout': TimeoutException('PDF open timed out'),
+      'הרשאה': Exception('Access is denied. (os error 5)'),
+    }.entries) {
+      test('כשל ${entry.key} מסומן ואינו יוצר לולאת הפעלה', () async {
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine);
+        final pdf = PdfBook(
+          title: entry.key,
+          path: 'C:\\pdfs\\${entry.key}.pdf',
+        );
+        final library = Library(categories: [])..books.add(pdf);
+        final repository = _FakeExtractionRepository(provider)
+          ..failureByTitle[pdf.title] = entry.value;
+
+        final result = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+
+        expect(result.completed, isTrue);
+        expect(result.hasRetryableFailures, isFalse);
+        expect(provider.indexedFilePaths, contains(pdf.path));
+        expect(engine.addedDocuments, hasLength(1));
+
+        final second = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+        expect(second.isClean, isTrue);
+        expect(repository.extractedTitles, [pdf.title]);
+      });
+    }
+
+    test('כשל לא ידוע נשאר לניסיון חוזר ואינו מקבל סמן קבוע', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'לא ידוע', path: r'C:\pdfs\unknown.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = StateError('unexpected failure');
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.hasRetryableFailures, isTrue);
+      expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      expect(engine.addedDocuments, isEmpty);
+    });
+
+    test('כשל פתיחת PDF לא מוכר מסומן ואינו חוזר בהפעלה הבאה', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'פתיחה נכשלה', path: r'C:\pdfs\broken.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..guardedOpenErrorByTitle[pdf.title] = Exception(
+          'unknown PDFium open error',
+        );
+
+      final first = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+      final second = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(first.failures.single.kind, IndexingFailureKind.pdfUnsupported);
+      expect(first.hasRetryableFailures, isFalse);
+      expect(second.isClean, isTrue);
+      expect(provider.indexedFilePaths, contains(pdf.path));
+      expect(repository.extractedTitles, [pdf.title]);
+    });
+
+    test('שינוי ספר מסיר את סמן הכשל ומאפשר אינדוקס אמיתי מחדש', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'הוחלף', path: r'C:\pdfs\replaced.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = Exception('password required');
+
+      final first = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+      expect(first.failures.single.kind, IndexingFailureKind.passwordProtected);
+      expect(provider.indexedFilePaths, contains(pdf.path));
+
+      repository.failureByTitle.remove(pdf.title);
+      final second = await repository.reindexChangedBooks(
+        [pdf],
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(second.isClean, isTrue);
+      expect(second.indexedBooks, 1);
+      expect(engine.removedFilePaths, contains(pdf.path));
+      expect(engine.addedPdfTitles, [pdf.title]);
+      expect(provider.indexedFilePaths, contains(pdf.path));
+      expect(repository.extractedTitles, [pdf.title, pdf.title]);
     });
 
     test(
@@ -913,7 +1133,7 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isFalse);
+        expect(result.completed, isFalse);
         // הריצה נעצרה מיד; שאר החילוצים נזרקו בלי להפיל את הריצה.
         expect(engine.addedPdfTitles.length, 1);
         await Future<void>.delayed(Duration.zero);
@@ -940,7 +1160,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.completed, isTrue);
       // 'א' נוסה פעם אחת (בניקוז המוקדם) ולא שוב כשהלולאה הגיעה אליו.
       expect(repository.extractedTitles, ['א', 'ב']);
       expect(engine.addedPdfTitles, ['א', 'ב']);
@@ -974,7 +1194,7 @@ void main() {
           onProgress: (_, _) => progressCalls++,
         );
 
-        expect(result, isFalse);
+        expect(result.completed, isFalse);
         expect(engine.commitCount, 0);
         expect(engine.rollbackCount, 1);
         // שני הספרים שאחרי הכושל לא עובדו — הריצה נעצרה מיד אחרי הכשל.
@@ -1315,14 +1535,18 @@ class _ReindexProbeRepository extends IndexingRepository {
   List<Book>? indexedBooks;
 
   @override
-  Future<bool> indexBooks(
+  Future<IndexingRunResult> indexBooks(
     List<Book> books,
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
     indexedBooks = books;
-    return true;
+    return IndexingRunResult.completed(
+      processedBooks: books.length,
+      totalBooks: books.length,
+      indexedBooks: books.length,
+    );
   }
 }
 
@@ -1339,6 +1563,9 @@ class _FakeExtractionRepository extends IndexingRepository {
 
   /// כותרות שחילוצן ייכשל — לבדיקת שחרור הסלוט והפצת השגיאה.
   final failingTitles = <String>{};
+  final failureByTitle = <String, Object>{};
+  final guardedOpenErrorByTitle = <String, Object>{};
+  final droppedPagesByTitle = <String, int>{};
 
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {
@@ -1351,6 +1578,21 @@ class _FakeExtractionRepository extends IndexingRepository {
     // בלי סבב אירועים החילוץ מסתיים סינכרונית, ושיא המקביליות היה תמיד 1.
     await Future<void>.delayed(Duration.zero);
     _activeExtractions--;
+    final guardedOpenError = guardedOpenErrorByTitle[book.title];
+    if (guardedOpenError != null) {
+      return (
+        pages: const <({String reference, String text, int pageIndex})>[],
+        outline: const <PdfOutlineNode>[],
+        error: guardedOpenError,
+        stackTrace: StackTrace.current,
+        extractMs: 0,
+        droppedPages: 0,
+      );
+    }
+    final configuredFailure = failureByTitle[book.title];
+    if (configuredFailure != null) {
+      throw configuredFailure;
+    }
     if (failingTitles.contains(book.title)) {
       throw StateError('חילוץ נכשל: ${book.title}');
     }
@@ -1362,6 +1604,7 @@ class _FakeExtractionRepository extends IndexingRepository {
       error: null,
       stackTrace: null,
       extractMs: 0,
+      droppedPages: droppedPagesByTitle[book.title] ?? 0,
     );
     return extraction;
   }

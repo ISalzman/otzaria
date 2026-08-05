@@ -2292,6 +2292,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 );
               } else {
                 cubit.remove('indexing');
+                if (state is IndexingComplete && !state.isClean) {
+                  UiSnack.show(
+                    LibraryMessages.indexingCompletedWithFailures(
+                      state.failureCount,
+                    ),
+                  );
+                }
               }
             },
           ),
