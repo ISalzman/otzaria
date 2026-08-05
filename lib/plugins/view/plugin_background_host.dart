@@ -569,19 +569,6 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           );
         }
       },
-      onProcessFailed: (controller, detail) {
-        // תוסף רקע מוסתר — בלי הרישום אין לכשל הזה שום עדות נראית.
-        logPluginWebViewFailure(
-          'Background plugin WebView2 process failed',
-          detail.kind,
-          details: {
-            'Plugin': widget.plugin.pluginId,
-            'Reason': detail.reason?.toString(),
-            'ExitCode': detail.exitCode?.toString(),
-            'Process': detail.processDescription,
-          },
-        );
-      },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         try {
           final uri = navigationAction.request.url;
