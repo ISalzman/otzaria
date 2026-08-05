@@ -220,11 +220,15 @@ class PluginProtocolRegistrationService {
       'Version=1.0',
       'Type=Application',
       'Name=אוצריא',
-      'Exec="$executable" %u',
+      'Comment=Otzaria',
+      'GenericName=Hebrew Library',
+      'Exec=$executable %u',
       'Terminal=false',
       'MimeType=${mimeTypes.join(';')};',
       'Categories=Education;Utility;',
+      'Keywords=Hebrew;Books;Library;Jewish;Text;',
       'StartupNotify=true',
+      'StartupWMClass=Otzaria',
       if (iconPath != null && iconPath.trim().isNotEmpty) 'Icon=$iconPath',
     ];
 
