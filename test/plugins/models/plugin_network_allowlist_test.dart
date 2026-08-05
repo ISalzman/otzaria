@@ -57,7 +57,7 @@ void main() {
       expect(
         isUriAllowedForPluginNetwork(
           Uri.parse(
-            'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books/releases/latest/download/a.zip',
+            'https://github.com/YairDaniel11/Otzarya-Unofficial-Books/releases/latest/download/a.zip',
           ),
         ),
         isTrue,

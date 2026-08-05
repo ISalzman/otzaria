@@ -56,9 +56,11 @@ const List<String> pluginNetworkAllowlist = <String>[
 
   // Google Apps Script — תוסף ספריית אוצריא
   'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
-  'https://api.github.com/repos/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
-  'https://github.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
-  'https://raw.githubusercontent.com/Open-Otzarya-Projects/Otzarya-Unofficial-Books',
+
+  // תוסף הורדת ספרים — מאגר הספרים הלא רשמי
+  'https://api.github.com/repos/YairDaniel11/Otzarya-Unofficial-Books',
+  'https://github.com/YairDaniel11/Otzarya-Unofficial-Books',
+  'https://raw.githubusercontent.com/YairDaniel11/Otzarya-Unofficial-Books',
 
   //תוסף עיון ההלכה
   'https://api.github.com/repos/Y-PLONI/iyun_h-halacha_plugin',
