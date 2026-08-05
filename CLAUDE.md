@@ -666,6 +666,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Facet helper | `test/search/facet_helper_test.dart` |
 | Search BLoC facet counts | `test/search/search_bloc_facet_counts_test.dart` |
 | Search scope preferences | `test/search/search_scope_preferences_test.dart` |
+| עץ ניווט תוצאות (רשימת סינון, גלוּת הבחירה, פתיחת ענפים) | `test/search/search_navigation_tree_test.dart` |
+| חלונית סינון התוצאות מקצה לקצה (שדה "איתור ספר") | `test/search/search_facet_filtering_book_filter_test.dart` |
 | Gematria search | `test/tools/gematria/gematria_search_test.dart` |
 
 **Personal Notes**
