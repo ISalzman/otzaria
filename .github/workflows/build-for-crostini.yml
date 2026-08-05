@@ -25,8 +25,6 @@ jobs:
         run: |
           sudo apt update -y
           sudo apt install -y \
-            clang cmake git ninja-build pkg-config \
-            curl xz-utils zstd patchelf \
             libgtk-3-dev \
             liblzma-dev \
             libstdc++-12-dev \
