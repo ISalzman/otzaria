@@ -446,6 +446,8 @@ Otzaria.on('theme.changed',  applyTheme);   // ← חשוב! מעדכן בזמן
 
 > **גופנים — אין צורך לארוז:** השמות שמגיעים ב-`theme.typography.fontFamily` ו-`theme.typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`) נטענים אוטומטית כ-`@font-face` ב-WebView של התוסף לפני ה-`plugin.boot`. ניתן להפנות אליהם ישירות מ-CSS. כשהמשתמש בחר גופן מערכת מותאם, ההזרקה מדלגת עליו ויש להסתמך על fallback של מערכת ההפעלה — לכן השאירו תמיד `serif` (ועדיף גם `'David'`) בסוף שרשרת ה-`font-family`.
 
+> **כותרת התוסף — בפס עליון, לא בגוף התוכן:** התוסף נפתח כטאב קריאה ואוצריא אינה מציירת כותרת מעל ה-WebView. שם התוסף חייב להופיע בפס עליון קבוע ברקע `colorScheme.surfaceContainerHigh` — אותו צבע וגובה כמו הסרגל העליון של מסכי הספרים. ראה [DESIGN\_GUIDE.md § סרגל כותרת התוסף](DESIGN_GUIDE.md#סרגל-כותרת-התוסף-top-bar) ומתכון מלא ב-[COOKBOOK.md § 4](COOKBOOK.md#4-סרגל-כותרת-התוסף-top-bar).
+
 > מדריך עיצוב מלא — Color Roles, צורות, טיפוגרפיה, כפתורים, כרטיסים ואנימציות — ב-[DESIGN_GUIDE.md](DESIGN_GUIDE.md).
 
 ---
