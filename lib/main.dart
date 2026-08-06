@@ -297,10 +297,9 @@ void main(List<String> args) async {
   FlutterError.onError = (FlutterErrorDetails details) {
     final errorString = details.exceptionAsString();
 
-    // Skip accessibility tree errors on Windows - they're harmless noise
-    if (Platform.isWindows &&
-        (errorString.contains('Failed to update ui::AXTree') ||
-            errorString.contains('accessibility_bridge.cc'))) {
+    // Flutter's desktop accessibility bridge can report stale AXTree nodes.
+    if ((Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+        isFlutterAccessibilityNoise(errorString)) {
       return; // Silently ignore these errors
     }
 
@@ -326,10 +325,9 @@ void main(List<String> args) async {
   PlatformDispatcher.instance.onError = (error, stack) {
     final errorString = error.toString();
 
-    // Skip accessibility tree errors on Windows
-    if (Platform.isWindows &&
-        (errorString.contains('Failed to update ui::AXTree') ||
-            errorString.contains('accessibility_bridge.cc'))) {
+    // Flutter's desktop accessibility bridge can report stale AXTree nodes.
+    if ((Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+        isFlutterAccessibilityNoise(errorString)) {
       return true; // Silently ignore these errors
     }
 
