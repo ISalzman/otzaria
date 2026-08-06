@@ -532,6 +532,48 @@ void main() {
       );
     });
 
+    group('UpdateBuiltInToolsOrder', () {
+      const order = ['builtin.gematria', 'builtin.calendar'];
+
+      blocTest<SettingsBloc, SettingsState>(
+        'persists the order and emits state with the new order',
+        build: () {
+          when(
+            mockRepository.updateBuiltInToolsOrder(order),
+          ).thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) => bloc.add(const UpdateBuiltInToolsOrder(order)),
+        expect: () => [
+          settingsBloc.state.copyWith(builtInToolsOrder: order),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateBuiltInToolsOrder(order)).called(1);
+        },
+      );
+
+      blocTest<SettingsBloc, SettingsState>(
+        'initial state has no custom order',
+        build: () => settingsBloc,
+        verify: (bloc) => expect(bloc.state.builtInToolsOrder, isEmpty),
+      );
+
+      // הסדר משמעותי — שתי רשימות באותם מזהים בסדר שונה הן מצבים שונים.
+      test('state equality is order sensitive', () {
+        final a = SettingsState.initial().copyWith(
+          builtInToolsOrder: const ['a', 'b'],
+        );
+        final b = SettingsState.initial().copyWith(
+          builtInToolsOrder: const ['b', 'a'],
+        );
+        expect(a, isNot(b));
+        expect(
+          a,
+          SettingsState.initial().copyWith(builtInToolsOrder: const ['a', 'b']),
+        );
+      });
+    });
+
     // חייב לרוץ אחרון: Settings.init גלובלי, והקבוצות הקודמות מסתמכות על
     // כך שהניקוי נכשל בשקט כש-Settings לא מאותחל.
     group('ניקוי פר-ספר בעקבות שינוי ברירת מחדל', () {

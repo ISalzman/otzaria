@@ -450,6 +450,15 @@ class UpdateBuiltInToolsPinnedToNavRail extends SettingsEvent {
   List<Object?> get props => [builtInToolsPinnedToNavRail];
 }
 
+class UpdateBuiltInToolsOrder extends SettingsEvent {
+  final List<String> builtInToolsOrder;
+
+  const UpdateBuiltInToolsOrder(this.builtInToolsOrder);
+
+  @override
+  List<Object?> get props => [builtInToolsOrder];
+}
+
 class UpdateSettingsLanguageCode extends SettingsEvent {
   final String settingsLanguageCode;
 

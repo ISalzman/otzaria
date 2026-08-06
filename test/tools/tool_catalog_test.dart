@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 
 InstalledPlugin _plugin(
@@ -184,6 +185,59 @@ void main() {
           .map((e) => e.toolId)
           .toList();
       expect(pluginIds, ['p.first', 'p.second']);
+    });
+
+    test('סדר הכלים המובנים שהמשתמש קבע גובר על סדר הקטלוג', () {
+      final entries = buildToolCatalog(
+        hiddenBuiltInToolIds: const {},
+        isOfflineMode: false,
+        pluginState: PluginSystemInitial(),
+        builtInToolsOrder: const ['builtin.gematria', 'builtin.calendar'],
+      );
+      final ids = entries.map((e) => e.toolId).toList();
+      expect(ids.take(2), ['builtin.gematria', 'builtin.calendar']);
+      expect(ids.length, kBuiltInToolsCatalog.length);
+    });
+
+    test('סדר מותאם אינו מבטל את הסתרת כלי', () {
+      final entries = buildToolCatalog(
+        hiddenBuiltInToolIds: const {'builtin.gematria'},
+        isOfflineMode: false,
+        pluginState: PluginSystemInitial(),
+        builtInToolsOrder: const ['builtin.gematria', 'builtin.calendar'],
+      );
+      final ids = entries.map((e) => e.toolId);
+      expect(ids, isNot(contains('builtin.gematria')));
+      expect(ids.first, 'builtin.calendar');
+    });
+
+    test('סדר מותאם אינו מקדם כלי מובנה לפני תוסף שהורשה להקדים', () {
+      final entries = buildToolCatalog(
+        hiddenBuiltInToolIds: const {},
+        isOfflineMode: false,
+        pluginState: PluginSystemLoaded([
+          _plugin('p.first', order: 1, allowOrderBeforeBuiltIns: true),
+        ]),
+        builtInToolsOrder: const ['builtin.gematria'],
+      );
+      expect(entries.first.toolId, 'p.first');
+      expect(entries[1].toolId, 'builtin.gematria');
+    });
+
+    test('סדר מותאם ריק משמר את סדר התצוגה המקורי', () {
+      List<String> ids(List<String> order) => buildToolCatalog(
+        hiddenBuiltInToolIds: const {},
+        isOfflineMode: false,
+        pluginState: PluginSystemInitial(),
+        builtInToolsOrder: order,
+      ).map((e) => e.toolId).toList();
+
+      expect(ids(const []), ids(const []));
+      expect(ids(const []).first, 'builtin.calendar');
+      expect(
+        ids(const []).indexOf('builtin.notes'),
+        lessThan(ids(const []).indexOf('builtin.measurements')),
+      );
     });
   });
 

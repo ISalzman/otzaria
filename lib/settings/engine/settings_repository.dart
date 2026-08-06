@@ -97,6 +97,9 @@ class SettingsRepository {
   static const String keyBuiltInToolsPinnedToNavRail =
       'key-builtin-tools-pinned-to-nav-rail';
 
+  /// CSV של סדר הכלים המובנים שהמשתמש קבע. הסדר משמעותי — אינו ממוין.
+  static const String keyBuiltInToolsOrder = 'key-builtin-tools-order';
+
   // Protected Mode Settings
   static const String keyProtectedModeEnabled = 'key-protected-mode-enabled';
   static const String keyProtectedModePasswordHash =
@@ -429,6 +432,12 @@ class SettingsRepository {
           defaultValue: '',
         ),
       ),
+      'builtInToolsOrder': _parseToolIdList(
+        _settings.getValue<String>(
+          keyBuiltInToolsOrder,
+          defaultValue: '',
+        ),
+      ),
 
       // Protected Mode
       'protectedModeEnabled': _settings.getValue<bool>(
@@ -706,6 +715,10 @@ class SettingsRepository {
     );
   }
 
+  Future<void> updateBuiltInToolsOrder(List<String> value) async {
+    await _settings.setValue(keyBuiltInToolsOrder, value.join(','));
+  }
+
   /// פירוק רשימת מזהי כלים מ-CSV. מתעלם מערכים ריקים ומ-whitespace.
   static Set<String> _parseToolIdSet(String raw) {
     if (raw.isEmpty) return <String>{};
@@ -714,6 +727,16 @@ class SettingsRepository {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toSet();
+  }
+
+  /// פירוק סדר מזהי כלים מ-CSV, תוך שמירת הסדר וללא כפילויות.
+  static List<String> _parseToolIdList(String raw) {
+    if (raw.isEmpty) return const <String>[];
+    final seen = <String>{};
+    return [
+      for (final id in raw.split(','))
+        if (id.trim().isNotEmpty && seen.add(id.trim())) id.trim(),
+    ];
   }
 
   /// סדרת מזהי כלים ל-CSV. ממוין דטרמיניסטית.

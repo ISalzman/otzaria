@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/tools/tool_order.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 
 /// מטא-דאטה לתצוגה של כלי מובנה.
@@ -86,3 +87,47 @@ const List<BuiltInToolMeta> kBuiltInToolsCatalog = [
     iconFilled: FluentIcons.text_quote_24_filled,
   ),
 ];
+
+/// הקטלוג לפי סדר התצוגה שנקבע ב-[BuiltInToolMeta.order] — הבסיס לכל סידור,
+/// גם כשלמשתמש אין סדר משלו.
+List<BuiltInToolMeta> get _catalogInDisplayOrder =>
+    [...kBuiltInToolsCatalog]..sort((a, b) => a.order.compareTo(b.order));
+
+/// הכלים המובנים לפי הסדר שהמשתמש קבע ב-[customOrder] (מזהים, לפי הסדר).
+///
+/// מזהה שאינו בקטלוג מתעלמים ממנו; כלי שאינו ב-[customOrder] (כלי חדש שנוסף
+/// בגרסה מאוחרת) נספח בסוף לפי סדר הקטלוג.
+List<BuiltInToolMeta> orderedBuiltInTools(List<String> customOrder) {
+  final base = _catalogInDisplayOrder;
+  if (customOrder.isEmpty) return base;
+  final byId = {for (final meta in base) meta.toolId: meta};
+  final ordered = <BuiltInToolMeta>[];
+  final seen = <String>{};
+  for (final toolId in customOrder) {
+    final meta = byId[toolId];
+    if (meta == null || !seen.add(toolId)) continue;
+    ordered.add(meta);
+  }
+  for (final meta in base) {
+    if (!seen.contains(meta.toolId)) ordered.add(meta);
+  }
+  return ordered;
+}
+
+/// סדר מזהי הכלים המובנים לאחר הפלת [sourceId] לפני [targetId] או אחריו.
+///
+/// [currentOrder] יכול להיות חלקי או ריק — הבסיס תמיד מנורמל לרשימה מלאה,
+/// כדי שהסדר שיישמר יכיל את כל הכלים ולא ייווצרו מזהים חסרים.
+List<String> reorderedBuiltInToolIds(
+  List<String> currentOrder,
+  String sourceId,
+  String targetId, {
+  required bool placeAfter,
+}) {
+  return reorderIdsAroundTarget(
+    orderedBuiltInTools(currentOrder).map((meta) => meta.toolId).toList(),
+    sourceId,
+    targetId,
+    placeAfter: placeAfter,
+  );
+}

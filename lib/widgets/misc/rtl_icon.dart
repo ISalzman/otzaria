@@ -49,6 +49,8 @@ class RtlIcon extends StatelessWidget {
     FluentIcons.arrow_left_24_regular: FluentIcons.arrow_right_24_regular,
     FluentIcons.arrow_right_24_filled: FluentIcons.arrow_left_24_filled,
     FluentIcons.arrow_left_24_filled: FluentIcons.arrow_right_24_filled,
+    FluentIcons.arrow_previous_24_regular: FluentIcons.arrow_next_24_regular,
+    FluentIcons.arrow_next_24_regular: FluentIcons.arrow_previous_24_regular,
     FluentIcons.calendar_24_regular: FluentIcons.calendar_rtl_24_regular,
     FluentIcons.calendar_24_filled: FluentIcons.calendar_rtl_24_filled,
     FluentIcons.panel_left_24_regular: FluentIcons.panel_right_24_regular,
