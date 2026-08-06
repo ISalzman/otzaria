@@ -129,7 +129,6 @@ class WebViewEnvironmentHolder {
     String userDataFolder,
   ) => WebViewEnvironmentSettings(
     userDataFolder: userDataFolder,
-    exclusiveUserDataFolderAccess: true,
   );
 
   /// Disposes the current Windows WebView environment after the old widget
