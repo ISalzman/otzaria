@@ -818,6 +818,52 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  /// גולל כדי שהמפרש בעל [title] יהיה גלוי, אם הוא ברשימה.
+  /// נקרא מ-[_CommentaryCard] כשנפתח דרך anchor על מפרש ספציפי.
+  void scrollToCommentator(String title) {
+    if (!_itemScrollController.isAttached || _orderedLinks.isEmpty) {
+      // ייתכן שהרשימה עדיין בטעינה — ננסה שוב אחרי frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _itemScrollController.isAttached) {
+          _scrollToCommentatorNow(title);
+        }
+      });
+      return;
+    }
+    _scrollToCommentatorNow(title);
+  }
+
+  void _scrollToCommentatorNow(String title) {
+    // מוצא את האינדקס של הקבוצה הראשונה עם ה-title הנתון
+    final groupIndex = _findGroupIndexByTitle(title);
+    if (groupIndex < 0) return;
+    // מוודא שהקבוצה פתוחה
+    if (_expansionStates[title] == false) {
+      setState(() {
+        _expansionStates[title] = true;
+        _allExpanded = true;
+      });
+    }
+    _itemScrollController.scrollTo(
+      index: groupIndex,
+      alignment: 0.0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  int _findGroupIndexByTitle(String title) {
+    // _orderedLinks מסודר לפי קבוצות — מחפש את האינדקס הקבוצתי
+    // על ידי מניית קבוצות ייחודיות (כמו ב-ScrollablePositionedList)
+    final seen = <String>[];
+    for (final link in _orderedLinks) {
+      final t = utils.getTitleFromPath(link.path2);
+      if (!seen.contains(t)) seen.add(t);
+    }
+    final idx = seen.indexOf(title);
+    return idx; // -1 אם לא נמצא
+  }
+
   void _updateLastScrollIndex() {
     // הרשימה מדווחת גם פריטים שנבנו מחוץ למסך (cache) — מסננים לנראים בלבד.
     final positions = _itemPositionsListener.itemPositions.value;
