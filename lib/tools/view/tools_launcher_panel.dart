@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -58,16 +60,24 @@ List<ToolCatalogEntry> filterToolEntries(
 typedef ToolGroup = ({String label, List<ToolCatalogEntry> entries});
 
 /// מקבץ רשומות עוקבות לפי סוגן בלי לשנות את סדר הקטלוג.
+///
+/// הפיצול הוא גם לפי קבוצת המיון, ולא לפי התווית בלבד: כשכל הכלים המובנים
+/// מוסתרים, שתי קבוצות התוספים (זו שהורשתה להקדים אותם וזו הרגילה) נהיות
+/// עוקבות, וקבוצה מאוחדת הייתה מייצרת פעולות הזזה פעילות שאינן עושות דבר.
 @visibleForTesting
 List<ToolGroup> groupToolEntries(List<ToolCatalogEntry> entries) {
   final groups = <ToolGroup>[];
+  int? lastPriority;
   for (final entry in entries) {
     final label = entry.isPlugin ? kPluginsGroupLabel : kBuiltInToolsGroupLabel;
-    if (groups.isNotEmpty && groups.last.label == label) {
+    if (groups.isNotEmpty &&
+        groups.last.label == label &&
+        lastPriority == entry.sortGroupPriority) {
       groups.last.entries.add(entry);
     } else {
       groups.add((label: label, entries: [entry]));
     }
+    lastPriority = entry.sortGroupPriority;
   }
   return groups;
 }
@@ -100,6 +110,8 @@ int nextHighlightIndex({
   required int total,
 }) {
   if (total <= 0) return 0;
+  // ממצב "אין סימון" כל חץ מסמן את הקובייה הראשונה, ולא מדלג delta קוביות.
+  if (current < 0) return 0;
   return (current + delta).clamp(0, total - 1);
 }
 
@@ -172,6 +184,11 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   /// הכלי שזז אחרון ומספר ההזזה — מריצים פעימת הדגשה על הקובייה שזזה.
   String? _movedToolId;
   int _moveNonce = 0;
+
+  /// הסדר ששוגר וטרם חזר מה-bloc. בסיס לחישוב הזזה נוספת שמגיעה לפני שהמצב
+  /// התיישר. `null` = אין שיגור באוויר.
+  List<String>? _pendingBuiltInOrder;
+  List<String>? _pendingPluginOrder;
 
   @override
   void dispose() {
@@ -279,7 +296,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
 
   /// סידור אפשרי רק ברשימה המלאה: בחיפוש הקוביות מסוננות, ו"השכן" על המסך
   /// אינו השכן האמיתי בסדר.
-  bool get _isReorderEnabled => _query.trim().isEmpty;
+  bool get _isReorderEnabled => normalizeToolSearchText(_query).isEmpty;
 
   void _reorder({
     required ToolCatalogEntry source,
@@ -289,41 +306,67 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     if (!canReorderBetween(source, target)) return;
     final pluginBloc = context.read<PluginSystemBloc>();
     final settingsBloc = context.read<SettingsBloc>();
-    final pluginState = pluginBloc.state;
 
     // שיגור מושהה לפריים הבא: הרשת נבנית בתוך LayoutBuilder, ושיגור בזמן
     // הבנייה מפיל את Flutter על הפעלה-מחדש של רכיבי Overlay.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (source.isPlugin) {
+        final pluginState = pluginBloc.state;
         if (pluginState is! PluginSystemLoaded) return;
-        pluginBloc.add(
-          ReorderPluginsRequested(
-            reorderIdsAroundTarget(
-              pluginState.plugins.map((plugin) => plugin.pluginId).toList(),
-              source.toolId,
-              target.toolId,
-              placeAfter: placeAfter,
-            ),
-          ),
+        // הסדר ששוגר לפני רגע הוא הבסיס עד שה-bloc מתיישר, אחרת הזזה שנייה
+        // מהירה מחושבת מהסדר הישן ומוחקת את הראשונה.
+        final base =
+            _pendingPluginOrder ??
+            pluginState.plugins.map((plugin) => plugin.pluginId).toList();
+        final ordered = reorderIdsAroundTarget(
+          base,
+          source.toolId,
+          target.toolId,
+          placeAfter: placeAfter,
         );
+        _pendingPluginOrder = ordered;
+        pluginBloc.add(ReorderPluginsRequested(ordered));
       } else {
-        settingsBloc.add(
-          UpdateBuiltInToolsOrder(
-            reorderedBuiltInToolIds(
-              settingsBloc.state.builtInToolsOrder,
-              source.toolId,
-              target.toolId,
-              placeAfter: placeAfter,
-            ),
-          ),
+        final ordered = reorderedBuiltInToolIds(
+          _pendingBuiltInOrder ?? settingsBloc.state.builtInToolsOrder,
+          source.toolId,
+          target.toolId,
+          placeAfter: placeAfter,
         );
+        _pendingBuiltInOrder = ordered;
+        settingsBloc.add(UpdateBuiltInToolsOrder(ordered));
       }
       setState(() {
         _movedToolId = source.toolId;
         _moveNonce++;
       });
     });
+  }
+
+  /// מנקה את הסדר הממתין ברגע שה-bloc התיישר עליו. חייב לקרות ב-build, כי שם
+  /// מגיע ה-state המעודכן.
+  void _clearSettledPendingOrders(
+    SettingsState settingsState,
+    PluginSystemState pluginState,
+  ) {
+    final pendingBuiltIn = _pendingBuiltInOrder;
+    if (pendingBuiltIn != null &&
+        const ListEquality<String>().equals(
+          settingsState.builtInToolsOrder,
+          pendingBuiltIn,
+        )) {
+      _pendingBuiltInOrder = null;
+    }
+    final pendingPlugins = _pendingPluginOrder;
+    if (pendingPlugins != null && pluginState is PluginSystemLoaded) {
+      final current = pluginState.plugins
+          .map((plugin) => plugin.pluginId)
+          .toList();
+      if (const ListEquality<String>().equals(current, pendingPlugins)) {
+        _pendingPluginOrder = null;
+      }
+    }
   }
 
   /// פעולות הקובייה, בסדר שבו הן מוצגות בתפריט ⋯.
@@ -380,8 +423,12 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         onTap: () => _togglePinToNavRail(entry),
       ),
       ToolTileAction(
-        icon: FluentIcons.eye_off_24_regular,
-        label: 'הסתר מהממשק',
+        // תוסף מוצמד לסרגל הניווט נשאר בקטלוג גם כשהוא מוסתר, ולכן התווית
+        // חייבת לשקף את מצבו בפועל — אחרת הלחיצה הבאה מחזירה אותו בשקט.
+        icon: (plugin?.showInTools ?? true)
+            ? FluentIcons.eye_off_24_regular
+            : FluentIcons.eye_24_regular,
+        label: (plugin?.showInTools ?? true) ? 'הסתר מהממשק' : 'הצג בממשק',
         onTap: () => _hideFromInterface(entry),
       ),
       if (plugin != null)
@@ -443,6 +490,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       pluginState: pluginState,
       builtInToolsOrder: settingsState.builtInToolsOrder,
     );
+    _clearSettledPendingOrders(settingsState, pluginState);
     final entries = orderedToolEntries(filterToolEntries(allEntries, _query));
     final openToolIds = _openToolIds(context.watch<TabsBloc>().state);
     _keyboardEntries = entries;
@@ -532,7 +580,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       onChanged: (value) => setState(() {
         _query = value;
         // בחיפוש התוצאה הראשונה מסומנת (Enter יפתח אותה); בלי חיפוש אין סימון.
-        _highlightedIndex = value.trim().isEmpty ? -1 : 0;
+        _highlightedIndex = normalizeToolSearchText(value).isEmpty ? -1 : 0;
       }),
       onSubmitted: (_) => _activateHighlighted(entries),
     );
@@ -574,7 +622,9 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
               padding: const EdgeInsets.only(right: kToolGridScrollbarGutter),
               children: [
                 for (var i = 0; i < groups.length; i++) ...[
-                  if (i > 0)
+                  // קבוצות עוקבות באותה תווית (תוספים לפני/אחרי הכלים המובנים)
+                  // נראות כמקטע אחד — הכותרת והמפריד מוצגים רק במעבר תווית.
+                  if (i > 0 && groups[i].label != groups[i - 1].label)
                     const Padding(
                       padding: EdgeInsets.only(
                         top: AppTokens.spaceMD,
@@ -582,19 +632,20 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
                       ),
                       child: Divider(height: 1),
                     ),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: AppTokens.spaceSM,
-                      bottom: AppTokens.spaceSM,
-                    ),
-                    child: Text(
-                      groups[i].label,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.secondary,
-                        fontWeight: FontWeight.bold,
+                  if (i == 0 || groups[i].label != groups[i - 1].label)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        top: AppTokens.spaceSM,
+                        bottom: AppTokens.spaceSM,
+                      ),
+                      child: Text(
+                        groups[i].label,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.secondary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
                   GridView.count(
                     crossAxisCount: columns,
                     shrinkWrap: true,

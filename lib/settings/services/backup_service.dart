@@ -205,7 +205,6 @@ class BackupService {
     // דגל פנימי שמסמן שברירות המחדל נכתבו לדיסק.
     'settings_initialized',
   };
-
   /// מפתחות ההגדרות שהגיבוי אוסף כשאין גישה ל-Hive box (ראה [_backupSettings]).
   /// כולל את הקיצורים הדינמיים, שמפתחותיהם נגזרים מהתוספים המותקנים.
   static List<String> get fallbackSettingsKeys => [

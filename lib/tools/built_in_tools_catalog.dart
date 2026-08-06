@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/tools/tool_order.dart';
@@ -90,8 +91,14 @@ const List<BuiltInToolMeta> kBuiltInToolsCatalog = [
 
 /// הקטלוג לפי סדר התצוגה שנקבע ב-[BuiltInToolMeta.order] — הבסיס לכל סידור,
 /// גם כשלמשתמש אין סדר משלו.
-List<BuiltInToolMeta> get _catalogInDisplayOrder =>
-    [...kBuiltInToolsCatalog]..sort((a, b) => a.order.compareTo(b.order));
+///
+/// המיון יציב (insertionSort): שני כלים עם אותו order שומרים על סדר ההצהרה,
+/// אחרת הסדר שהמשתמש שמר היה זז בין הרצות.
+List<BuiltInToolMeta> get _catalogInDisplayOrder {
+  final ordered = [...kBuiltInToolsCatalog];
+  insertionSort(ordered, compare: (a, b) => a.order.compareTo(b.order));
+  return ordered;
+}
 
 /// הכלים המובנים לפי הסדר שהמשתמש קבע ב-[customOrder] (מזהים, לפי הסדר).
 ///

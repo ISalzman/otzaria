@@ -232,12 +232,16 @@ void main() {
         builtInToolsOrder: order,
       ).map((e) => e.toolId).toList();
 
-      expect(ids(const []), ids(const []));
-      expect(ids(const []).first, 'builtin.calendar');
-      expect(
-        ids(const []).indexOf('builtin.notes'),
-        lessThan(ids(const []).indexOf('builtin.measurements')),
-      );
+      // עוגן מפורש: זה הסדר שהמשתמש רואה כשלא סידר בעצמו כלום.
+      expect(ids(const []), [
+        'builtin.calendar',
+        'builtin.shamor_zachor',
+        'builtin.notes',
+        'builtin.measurements',
+        'builtin.gematria',
+        'builtin.aramaic_dictionary',
+        'builtin.acronyms_dictionary',
+      ]);
     });
   });
 

@@ -503,6 +503,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return [...builtIns, ...plugins];
   }
 
+  /// מזהי הכלים המוצמדים לסרגל הניווט, בסדר התצוגה. עוטף [_resolvePinnedItems]
+  /// כדי שהסדר יהיה בר-בדיקה בלי לחשוף את טיפוס הפריט הפרטי.
+  @visibleForTesting
+  static List<String> pinnedToolIdsForNavRail({
+    required PluginSystemState pluginState,
+    required Set<String> pinnedBuiltInIds,
+    required Set<String> hiddenBuiltInIds,
+    required bool isOfflineMode,
+    List<String> builtInToolsOrder = const [],
+  }) => _resolvePinnedItems(
+    pluginState: pluginState,
+    pinnedBuiltInIds: pinnedBuiltInIds,
+    hiddenBuiltInIds: hiddenBuiltInIds,
+    isOfflineMode: isOfflineMode,
+    builtInToolsOrder: builtInToolsOrder,
+  ).map((item) => item.toolId).toList();
+
   @override
   void initState() {
     super.initState();
@@ -3468,7 +3485,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       imageAsset: item.imageAsset,
       label: item.label,
       isSelected: isSelected,
-      onTap: () => openToolTabById(context, item.toolId),
+      onTap: () {
+        // הכלי נפתח בעיון גם כשזה המסך הנוכחי, ואז אין שינוי מסך שיסגור את
+        // פאנל הכלים — לכן הסגירה מפורשת, כמו במסלול ה-NavigationBar.
+        _closeToolsLauncher();
+        openToolTabById(context, item.toolId);
+      },
       compact: compact,
     );
   }

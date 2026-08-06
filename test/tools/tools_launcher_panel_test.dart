@@ -390,6 +390,25 @@ void main() {
     test('רשימה ריקה — אין קבוצות', () {
       expect(groupToolEntries(const []), isEmpty);
     });
+
+    // בלי הפיצול הזה, קבוצה מאוחדת הייתה מייצרת פעולות הזזה פעילות בין תוספים
+    // שאסור לסדר ביניהם — ולכן פעולה שאינה עושה דבר.
+    test('שתי קבוצות תוספים עוקבות אינן מתמזגות', () {
+      final groups = groupToolEntries([
+        _pluginEntry(
+          'com.example.leading',
+          'תוסף מקדים',
+          allowOrderBeforeBuiltIns: true,
+        ),
+        _pluginEntry('com.example.regular', 'תוסף רגיל'),
+      ]);
+      expect(groups, hasLength(2));
+      expect(groups.map((g) => g.label), [
+        kPluginsGroupLabel,
+        kPluginsGroupLabel,
+      ]);
+      expect(groups.first.entries.single.toolId, 'com.example.leading');
+    });
   });
 
   // ניווט המקלדת ממופה לאינדקס ברשימה השטוחה, ולכן היא חייבת להיות בסדר
@@ -495,6 +514,14 @@ void main() {
 
     test('פריט יחיד נשאר על 0', () {
       expect(nextHighlightIndex(current: 0, delta: 1, total: 1), 0);
+    });
+
+    // ממצב "אין סימון" כל חץ מסמן את הראשונה; בלי זה חץ למטה היה מדלג שורה
+    // שלמה ומסמן את הקובייה החמישית.
+    test('ממצב ללא סימון כל חץ מסמן את הקובייה הראשונה', () {
+      expect(nextHighlightIndex(current: -1, delta: 1, total: 7), 0);
+      expect(nextHighlightIndex(current: -1, delta: 5, total: 7), 0);
+      expect(nextHighlightIndex(current: -1, delta: -5, total: 7), 0);
     });
   });
 
@@ -1466,6 +1493,96 @@ void main() {
 
       await openMenu(tester, 'לוח שנה');
       expect(_menuItemEnabled(tester, 'הזזה'), isFalse);
+    });
+
+    // שאילתה של פיסוק בלבד מתנרמלת לריקה ואינה מסננת דבר, ולכן אין סיבה
+    // להשבית את הסידור או לסמן קובייה.
+    testWidgets('שאילתת פיסוק בלבד אינה מצב חיפוש', (tester) async {
+      await pumpPanel(tester);
+      await tester.enterText(find.byType(TextField), '״');
+      await tester.pump();
+
+      expect(_selectedCardCount(tester), 0);
+      expect(
+        find.byType(ToolTile),
+        findsNWidgets(kBuiltInToolsCatalog.length + 2),
+      );
+      await openMenu(tester, 'לוח שנה');
+      expect(_menuItemEnabled(tester, 'הזזה'), isTrue);
+    });
+
+    testWidgets('חץ למטה ראשון מסמן את הקובייה הראשונה, לא את השורה הבאה', (
+      tester,
+    ) async {
+      await pumpPanel(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+
+      expect(_selectedCardCount(tester), 1);
+      expect(_isCardSelected(tester, 'לוח שנה'), isTrue);
+    });
+
+    testWidgets('הפאנל מצייר את הסדר השמור', (tester) async {
+      await pumpPanel(
+        tester,
+        settings: SettingsState.initial().copyWith(
+          builtInToolsOrder: const [
+            'builtin.acronyms_dictionary',
+            'builtin.calendar',
+          ],
+        ),
+      );
+
+      final labels = tester
+          .widgetList<ToolTile>(find.byType(ToolTile))
+          .map((tile) => tile.entry.label)
+          .toList();
+      expect(labels.first, 'ראשי תיבות');
+      expect(labels[1], 'לוח שנה');
+    });
+
+    testWidgets('תוסף שהוסתר מהממשק ונשאר מוצמד מציג "הצג בממשק"', (
+      tester,
+    ) async {
+      final hiddenPinned = _pluginEntry(
+        'com.example.hidden',
+        'תוסף נסתר',
+      ).plugin!.copyWith(showInTools: false, pinnedToNavRail: true);
+      await pumpPanel(
+        tester,
+        pluginState: PluginSystemLoaded([hiddenPinned]),
+      );
+      await openMenu(tester, 'תוסף נסתר');
+
+      expect(find.text('הצג בממשק'), findsOneWidget);
+      expect(find.text('הסתר מהממשק'), findsNothing);
+    });
+
+    // ההזזה השנייה מגיעה לפני שה-bloc התיישר; בלי בסיס ממתין היא הייתה
+    // מחושבת מהסדר הישן ומוחקת את הראשונה.
+    testWidgets('שתי הזזות רצופות נערמות ואינן מבטלות זו את זו', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        await dragTileTo(tester, 'לוח שנה', 'גימטריה', beforeTarget: false);
+        await dragTileTo(tester, 'שמור וזכור', 'גימטריה', beforeTarget: false);
+
+        final orders = settingsBloc.recorded
+            .whereType<UpdateBuiltInToolsOrder>()
+            .map((event) => event.builtInToolsOrder)
+            .toList();
+        expect(orders, hasLength(2));
+        expect(
+          orders.last.indexOf('builtin.calendar'),
+          greaterThan(orders.last.indexOf('builtin.gematria')),
+          reason: 'ההזזה הראשונה חייבת לשרוד בסדר שהשנייה שולחת',
+        );
+        expect(
+          orders.last.indexOf('builtin.shamor_zachor'),
+          greaterThan(orders.last.indexOf('builtin.gematria')),
+        );
+      });
     });
 
     testWidgets('סידור מחדש אינו זורק וממשיך להציג את כל הכלים', (
