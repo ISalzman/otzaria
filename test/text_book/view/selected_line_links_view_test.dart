@@ -961,7 +961,7 @@ void main() {
       // Divider(height: 1) חסר thickness => DividerTheme.thickness ?? 0.0.
       final dividerThickness =
           DividerTheme.of(
-            tester.element(find.byType(ListView)),
+            tester.element(find.byType(SelectedLineLinksView)),
           ).thickness ??
           0.0;
       expect(shapeOf(tester, 0).bottom.width, dividerThickness);
@@ -971,7 +971,7 @@ void main() {
       await pumpTwo(tester);
 
       final dividerColor = Theme.of(
-        tester.element(find.byType(ListView)),
+        tester.element(find.byType(SelectedLineLinksView)),
       ).dividerColor;
       expect(shapeOf(tester, 0).bottom.color, dividerColor);
     });
@@ -1038,7 +1038,7 @@ void main() {
       );
 
       final surface = Theme.of(
-        tester.element(find.byType(ListView)),
+        tester.element(find.byType(SelectedLineLinksView)),
       ).colorScheme.surface;
       final painted = tester
           .widgetList<Container>(find.byType(Container))

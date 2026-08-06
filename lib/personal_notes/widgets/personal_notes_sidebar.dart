@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/notes_messages.dart';
@@ -25,6 +26,7 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {
@@ -62,6 +64,13 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   bool get wantKeepAlive => true;
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
   final ValueNotifier<List<int>> _visibleLineIndices = ValueNotifier(const []);
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
+  // פריט = הערה, והערה ארוכה עשויה להיות גבוהה מהמסך. בלי ה-offsetController
+  // גרירת האגודל הייתה נעצרת על גבולות פריטים ולא מזיזה כלום בתוכה.
+  final ScrollOffsetController _scrollOffsetController =
+      ScrollOffsetController();
 
   @override
   void initState() {
@@ -504,9 +513,18 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       );
     }
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: items,
+    return ScrollablePositionedListScrollbar(
+      scrollController: _itemScrollController,
+      itemPositionsListener: _itemPositionsListener,
+      offsetController: _scrollOffsetController,
+      itemCount: items.length,
+      child: ScrollablePositionedList.builder(
+        itemScrollController: _itemScrollController,
+        itemPositionsListener: _itemPositionsListener,
+        scrollOffsetController: _scrollOffsetController,
+        itemCount: items.length,
+        itemBuilder: (context, index) => items[index],
+      ),
     );
   }
 
