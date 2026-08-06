@@ -13,12 +13,102 @@ void main() {
     await Settings.init(cacheProvider: _MemoryCacheProvider());
     AppPaths.debugOverrideDataRootPath(null);
     AppPaths.debugOverrideResolvedExecutable(null);
+    AppPaths.debugOverrideDocumentsRootPath(null);
   });
 
   tearDown(() async {
     AppPaths.debugOverrideDataRootPath(null);
     AppPaths.debugOverrideResolvedExecutable(null);
+    AppPaths.debugOverrideDocumentsRootPath(null);
     Settings.clearCache();
+  });
+
+  group('AppPaths backup paths', () {
+    Future<({Directory dataRoot, Directory documents})> setUpRoots() async {
+      final dataRoot = await Directory.systemTemp.createTemp('otzaria_data_');
+      final documents = await Directory.systemTemp.createTemp('otzaria_docs_');
+
+      addTearDown(() async {
+        if (await dataRoot.exists()) await dataRoot.delete(recursive: true);
+        if (await documents.exists()) await documents.delete(recursive: true);
+      });
+
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      AppPaths.debugOverrideDocumentsRootPath(documents.path);
+      return (dataRoot: dataRoot, documents: documents);
+    }
+
+    test('ברירת המחדל היא תיקיית הגיבויים תחת מסמכי המשתמש', () async {
+      final roots = await setUpRoots();
+
+      expect(
+        await AppPaths.getDefaultBackupPath(),
+        p.join(roots.documents.path, 'אוצריא - גיבויים'),
+      );
+    });
+
+    test('גיבויים קיימים בנתיב הישן ממשיכים לשמש כברירת מחדל', () async {
+      final roots = await setUpRoots();
+      final legacyBackups = Directory(p.join(roots.dataRoot.path, 'backups'));
+      await legacyBackups.create(recursive: true);
+      await File(
+        p.join(legacyBackups.path, 'otzaria_backup_20250101_120000.zip'),
+      ).writeAsString('');
+
+      expect(await AppPaths.getDefaultBackupPath(), legacyBackups.path);
+    });
+
+    test('תיקייה ישנה ריקה לא מונעת מעבר למסמכי המשתמש', () async {
+      final roots = await setUpRoots();
+      await Directory(p.join(roots.dataRoot.path, 'backups')).create();
+
+      expect(
+        await AppPaths.getDefaultBackupPath(),
+        p.join(roots.documents.path, 'אוצריא - גיבויים'),
+      );
+    });
+
+    test('ללא תיקיית מסמכים — נפילה חזרה לתיקיית הנתונים', () async {
+      final roots = await setUpRoots();
+      AppPaths.debugOverrideDocumentsRootPath('');
+
+      expect(
+        await AppPaths.getDefaultBackupPath(),
+        p.join(roots.dataRoot.path, 'backups'),
+      );
+    });
+
+    test('מצב נייד — הגיבויים נשארים תחת תיקיית הנתונים', () async {
+      final exeRoot = await Directory.systemTemp.createTemp('otzaria_exe_');
+      final documents = await Directory.systemTemp.createTemp('otzaria_docs_');
+
+      addTearDown(() async {
+        if (await exeRoot.exists()) await exeRoot.delete(recursive: true);
+        if (await documents.exists()) await documents.delete(recursive: true);
+      });
+
+      final exePath = p.join(exeRoot.path, 'otzaria.exe');
+      await File(exePath).writeAsString('fake exe');
+      await File(
+        p.join(exeRoot.path, AppPaths.portableMarkerFileName),
+      ).writeAsString('');
+
+      AppPaths.debugOverrideResolvedExecutable(exePath);
+      AppPaths.debugOverrideDocumentsRootPath(documents.path);
+
+      expect(
+        await AppPaths.getDefaultBackupPath(),
+        p.join(exeRoot.path, 'otzaria_data', 'backups'),
+      );
+    });
+
+    test('נתיב מותאם אישית בהגדרות גובר על ברירת המחדל', () async {
+      final roots = await setUpRoots();
+      final custom = p.join(roots.documents.path, 'custom_backups');
+      await Settings.setValue(SettingsRepository.keyBackupPath, custom);
+
+      expect(await AppPaths.getBackupPath(), custom);
+    });
   });
 
   group('AppPaths index paths', () {

@@ -41,6 +41,15 @@ class AppPaths {
 
   static bool? _isPortableCache;
 
+  static String? _documentsRootPathOverride;
+
+  /// דורס את תיקיית המסמכים של המשתמש לצורכי בדיקה. מחרוזת ריקה מדמה
+  /// פלטפורמה שאינה מספקת תיקיית מסמכים.
+  @visibleForTesting
+  static void debugOverrideDocumentsRootPath(String? path) {
+    _documentsRootPathOverride = path;
+  }
+
   /// קובע את שורש נתוני התהליך לפני אתחול השירותים.
   ///
   /// מיועד לפקודות headless שעובדות בסביבת staging מבודדת.
@@ -465,9 +474,44 @@ class AppPaths {
     return candidates.where((c) => c != activePath).toList();
   }
 
-  /// Returns the backup path inside the writable app data root.
+  /// שם תיקיית ברירת המחדל לגיבויים תחת מסמכי המשתמש בדסקטופ.
+  static const String _documentsBackupFolderName = 'אוצריא - גיבויים';
+
+  /// מחזיר את תיקיית ברירת המחדל לגיבויים.
+  ///
+  /// בדסקטופ התיקייה יושבת תחת מסמכי המשתמש ולא תחת תיקיית הנתונים, כדי
+  /// שהסרת התוכנה או מחיקת תיקיית הנתונים לא ימחקו את הגיבויים. במצב נייד
+  /// ובמובייל הגיבויים נשארים תחת תיקיית הנתונים כדי שינדדו יחד איתה.
   static Future<String> getDefaultBackupPath() async {
-    return p.join(await getDataRootPath(), 'backups');
+    final dataRootBackups = p.join(await getDataRootPath(), 'backups');
+    if (Platform.isAndroid || Platform.isIOS || isPortable) {
+      return dataRootBackups;
+    }
+
+    // [LEGACY — למחיקה בעוד כמה גרסאות] התקנות שכבר יש בהן גיבויים בנתיב
+    // הישן ממשיכות להשתמש בו, אחרת הגיבויים הקיימים ייעלמו מהמסך.
+    if (await _directoryHasEntries(dataRootBackups)) return dataRootBackups;
+
+    final documentsRoot = await _documentsRootPath();
+    if (documentsRoot == null) return dataRootBackups;
+    return p.join(documentsRoot, _documentsBackupFolderName);
+  }
+
+  /// מחזיר את תיקיית המסמכים של המשתמש, או null כשהפלטפורמה לא מספקת אותה.
+  static Future<String?> _documentsRootPath() async {
+    final override = _documentsRootPathOverride;
+    if (override != null) return override.isEmpty ? null : override;
+    try {
+      return (await getApplicationDocumentsDirectory()).path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> _directoryHasEntries(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) return false;
+    return !await dir.list().isEmpty;
   }
 
   /// Gets backup path from settings.
