@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -96,7 +97,8 @@ const double kToolTileTargetWidth = 104;
 @visibleForTesting
 const double kToolGridScrollbarGutter = 14;
 
-/// מספר העמודות ברשת לרוחב פאנל נתון.
+/// מספר העמודות ברשת לרוחב נתון. הרוחב שמועבר הוא זה שנשאר לקוביות — כלומר
+/// לאחר הפחתת [kToolGridScrollbarGutter].
 @visibleForTesting
 int toolGridColumns(double width) =>
     (width / kToolTileTargetWidth).floor().clamp(2, 5);
@@ -363,7 +365,13 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       final current = pluginState.plugins
           .map((plugin) => plugin.pluginId)
           .toList();
-      if (const ListEquality<String>().equals(current, pendingPlugins)) {
+      // גם כשקבוצת התוספים עצמה השתנתה (התקנה, הסרה, כישלון בשמירה) הבסיס
+      // הממתין אינו רלוונטי — אחרת הוא היה נשאר לנצח ומשגר סדר חסר מזהה.
+      if (const ListEquality<String>().equals(current, pendingPlugins) ||
+          !const SetEquality<String>().equals(
+            current.toSet(),
+            pendingPlugins.toSet(),
+          )) {
         _pendingPluginOrder = null;
       }
     }
@@ -492,6 +500,9 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     );
     _clearSettledPendingOrders(settingsState, pluginState);
     final entries = orderedToolEntries(filterToolEntries(allEntries, _query));
+    // הרשימה התקצרה (כלי הוסתר) — סימון שיצא מהטווח היה נשאר בלי חיווי, אבל
+    // Enter היה פותח כלי אחר.
+    if (_highlightedIndex >= entries.length) _highlightedIndex = -1;
     final openToolIds = _openToolIds(context.watch<TabsBloc>().state);
     _keyboardEntries = entries;
 
@@ -706,6 +717,9 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         isOpen: openToolIds.contains(entry.toolId),
         isHighlighted: flatIndex == _highlightedIndex,
         movePulse: entry.toolId == _movedToolId ? _moveNonce : 0,
+        // בלי זה הפוקוס נשאר על מסלול התפריט שנסגר, ומקשי הפאנל (Escape,
+        // חצים, Enter) מפסיקים לעבוד עד לחיצה על שדה החיפוש.
+        onMenuClosed: () => _searchFocusNode.requestFocus(),
         actions: _tileActions(
           entry,
           onMoveEarlier: moveTo(
@@ -797,7 +811,9 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
 
   /// בכיוון RTL "לפני" הוא הצד הימני של הקובייה, ולכן סמן בחצי הימני מציב
   /// לפניה וסמן בחצי השמאלי מציב אחריה.
-  void _updateSide(Offset globalPointer) {
+  void _updateSide(ToolCatalogEntry source, Offset globalPointer) {
+    // Flutter מדווח על תזוזה גם ליעדים שנדחו, כולל הקובייה הנגררת עצמה.
+    if (!canReorderBetween(source, widget.entry)) return;
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final local = box.globalToLocal(globalPointer);
@@ -812,7 +828,7 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
     return DragTarget<ToolCatalogEntry>(
       onWillAcceptWithDetails: (details) =>
           widget.canDrag && canReorderBetween(details.data, widget.entry),
-      onMove: (details) => _updateSide(details.offset),
+      onMove: (details) => _updateSide(details.data, details.offset),
       onAcceptWithDetails: (details) =>
           widget.onAcceptSource(details.data, placeAfter: _placeAfter),
       builder: (context, candidates, _) {
@@ -832,7 +848,7 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
                 childWhenDragging: placeholder,
                 child: tile,
               )
-            : Draggable<ToolCatalogEntry>(
+            : _SlopDraggable<ToolCatalogEntry>(
                 data: widget.entry,
                 dragAnchorStrategy: pointerDragAnchorStrategy,
                 feedback: feedback,
@@ -842,6 +858,63 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
       },
     );
   }
+}
+
+/// מרחק התזוזה שממנו לחיצה נחשבת גרירה.
+///
+/// ה-`Draggable` הרגיל תופס את המחווה כבר בפיקסל אחד בעכבר, ואז לחיצה שבה
+/// היד רעדה קלות אינה מגיעה ללחצן שבקובייה — הכלי לא נפתח והתפריט לא נפתח.
+const double _kToolDragSlop = 12;
+
+/// מזהה גרירה מיידי עם סף תזוזה גדול מברירת המחדל. תומך במצביע מדויק בלבד:
+/// במגע הגרירה מתחילה בלחיצה ארוכה, כדי לא לחטוף את הגלילה.
+class _SlopMultiDragGestureRecognizer extends MultiDragGestureRecognizer {
+  _SlopMultiDragGestureRecognizer({super.debugOwner})
+    : super(
+        supportedDevices: const {
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+        },
+      );
+
+  @override
+  MultiDragPointerState createNewPointerState(PointerDownEvent event) =>
+      _SlopPointerState(event.position, event.kind, gestureSettings);
+
+  @override
+  String get debugDescription => 'tool tile drag';
+}
+
+class _SlopPointerState extends MultiDragPointerState {
+  _SlopPointerState(super.initialPosition, super.kind, super.gestureSettings);
+
+  @override
+  void checkForResolutionAfterMove() {
+    if ((pendingDelta?.distance ?? 0) > _kToolDragSlop) {
+      resolve(GestureDisposition.accepted);
+    }
+  }
+
+  @override
+  void accepted(GestureMultiDragStartCallback starter) =>
+      starter(initialPosition);
+}
+
+class _SlopDraggable<T extends Object> extends Draggable<T> {
+  const _SlopDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.dragAnchorStrategy,
+    super.childWhenDragging,
+  });
+
+  @override
+  MultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) => _SlopMultiDragGestureRecognizer(debugOwner: this)..onStart = onStart;
 }
 
 /// מפתח קו ההוספה שמוצג בגרירה, בצד שאליו הקובייה תיפול.
@@ -947,6 +1020,9 @@ class ToolTile extends StatelessWidget {
   /// מזהה פעימת ההזזה: כל שינוי מריץ אנימציית הדגשה קצרה. 0 = ללא פעימה.
   final int movePulse;
 
+  /// נקרא כשתפריט הפעולות נסגר — הפאנל מחזיר לעצמו את הפוקוס למקלדת.
+  final VoidCallback? onMenuClosed;
+
   const ToolTile({
     super.key,
     required this.entry,
@@ -955,6 +1031,7 @@ class ToolTile extends StatelessWidget {
     required this.onTap,
     this.actions = const [],
     this.movePulse = 0,
+    this.onMenuClosed,
   });
 
   @override
@@ -1047,6 +1124,7 @@ class ToolTile extends StatelessWidget {
           minHeight: menuButtonSize,
         ),
         onSelected: (action) => action(),
+        onMenuClosed: onMenuClosed,
         itemBuilder: (context) {
           final metrics =
               Theme.of(context).extension<AppMenuMetrics>() ??
@@ -1150,9 +1228,10 @@ class _MovePulseState extends State<_MovePulse>
     final cs = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: _progress,
+      // מבנה העץ קבוע גם במנוחה: החלפת מבנה בתחילת הפעימה ובסופה הייתה בונה
+      // את הקובייה מחדש ומאפסת את מצב הריחוף שלה.
       builder: (context, child) {
         final remaining = 1.0 - _progress.value;
-        if (remaining == 0) return child!;
         return Transform.scale(
           scale: 1.0 - 0.06 * remaining,
           child: DecoratedBox(

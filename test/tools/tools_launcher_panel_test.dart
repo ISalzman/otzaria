@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1336,8 +1337,11 @@ void main() {
       required bool beforeTarget,
       bool release = true,
     }) async {
+      // עכבר ולא מגע: בשולחן העבודה הגרירה מוגבלת למצביע מדויק, כדי שהחלקה
+      // במגע תמשיך לגלול את הרשת.
       final gesture = await tester.startGesture(
         tester.getCenter(find.text(from)),
+        kind: PointerDeviceKind.mouse,
       );
       await tester.pump(const Duration(milliseconds: 50));
       final target = tester.getRect(
@@ -1472,6 +1476,98 @@ void main() {
         );
         expect(find.byKey(kToolDropIndicatorKey), findsNothing);
       });
+    });
+
+    // הבאג: Draggable רגיל תופס את המחווה כבר בפיקסל אחד בעכבר, ואז לחיצה
+    // שהיד רעדה בה לא הגיעה ללחצן — הכלי לא נפתח.
+    testWidgets('לחיצה עם רעידת עכבר קטנה עדיין פותחת את הכלי', (tester) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('לוח שנה')),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(2, 1));
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(selected.single.toolId, 'builtin.calendar');
+      });
+    });
+
+    testWidgets('לחיצה עם רעידת עכבר קטנה עדיין פותחת את תפריט ⋯', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await tester.startGesture(
+          tester.getCenter(_menuButtonOf('לוח שנה')),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(2, 1));
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.text('הסתר מהממשק'), findsOneWidget);
+      });
+    });
+
+    // במגע בשולחן העבודה (מסך מגע ב-Windows) הגלילה חשובה יותר מהגרירה, ולכן
+    // הסידור שם נעשה דרך תפריט ⋯.
+    testWidgets('החלקה במגע בשולחן העבודה אינה מסדרת ואינה פותחת כלי', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('לוח שנה')),
+        );
+        await gesture.moveTo(tester.getCenter(find.text('גימטריה')));
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(
+          settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>(),
+          isEmpty,
+        );
+      });
+    });
+
+    testWidgets('אחרי פעולה בתפריט המקלדת חוזרת לפאנל', (tester) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        await openMenu(tester, 'גימטריה');
+        await tapMenuItem(tester, 'הצמד לסרגל הניווט');
+
+        // Escape מטופל ב-onKeyEvent של שדה החיפוש; אם הפוקוס נשאר על מסלול
+        // התפריט שנסגר — הוא לא יגיע לפאנל.
+        final searchField = tester.widget<TextField>(find.byType(TextField));
+        expect(searchField.focusNode!.hasFocus, isTrue);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+        expect(_selectedCardCount(tester), 1);
+      });
+    });
+
+    testWidgets('סימון שיצא מהטווח מתאפס כשהרשימה מתקצרת', (tester) async {
+      await pumpPanel(tester);
+      for (var i = 0; i < kBuiltInToolsCatalog.length + 2; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      }
+      await tester.pump();
+      expect(_selectedCardCount(tester), 1);
+
+      await pumpPanel(
+        tester,
+        pluginState: PluginSystemLoaded(const []),
+        settings: SettingsState.initial().copyWith(
+          hiddenBuiltInToolIds: const {'builtin.acronyms_dictionary'},
+        ),
+      );
+      expect(_selectedCardCount(tester), 0);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('גרירה אינה פותחת את הכלי', (tester) async {

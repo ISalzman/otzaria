@@ -254,6 +254,11 @@ class AppPopupMenuButton<T> extends StatefulWidget {
   /// ובריחוף יוצג צבע מוגבר — שימושי לכפתורי מצב פעיל (כמו מיון).
   final bool highlighted;
 
+  /// נקרא כשהתפריט נסגר — גם בבחירת פעולה וגם בביטול. המסלול היחיד להחזרת
+  /// הפוקוס למי שמנוהל במקלדת: אחרי סגירת התפריט הפוקוס נשאר על ה-scope של
+  /// המסלול, ולא חוזר לרכיב שפתח אותו.
+  final VoidCallback? onMenuClosed;
+
   const AppPopupMenuButton({
     super.key,
     this.entries,
@@ -270,6 +275,7 @@ class AppPopupMenuButton<T> extends StatefulWidget {
     this.initialValue,
     this.iconData,
     this.highlighted = false,
+    this.onMenuClosed,
   });
 
   @override
@@ -330,6 +336,7 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
       offset: widget.offset,
     );
     if (mounted) setState(() => _isMenuOpen = false);
+    widget.onMenuClosed?.call();
 
     if (selected != null) {
       widget.onSelected?.call(selected);
