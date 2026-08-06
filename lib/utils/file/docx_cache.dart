@@ -8,6 +8,8 @@ import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/migration/models/docx_text_cache_entry.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
+import 'package:otzaria/utils/file/text_encoding.dart';
+import 'package:path/path.dart' as p;
 
 /// משך חיים של רשומת מטמון המרה (docx/epub) ללא גישה. רשומות של ספרים שלא
 /// נפתחו מעבר לפרק זמן זה מנוקות — כדי ש-`cache.db` לא יגדל ללא הגבלה (כל
@@ -60,6 +62,30 @@ Future<String> convertEpubWithoutEmbeddedImages(File file, String title) =>
 
 String _epubToTextWithoutEmbeddedImages(Uint8List bytes, String title) =>
     epubToText(bytes, title, embedImages: false);
+
+/// קורא ספר שתוכנו יושב בקובץ חיצוני, לפי סוגו. DOCX/EPUB הם ZIP בינארי —
+/// קריאתם כטקסט זורקת; PDF אינו טקסט כלל ומוחזר ריק. [fileType] ריק/null —
+/// נגזר מסיומת הקובץ.
+Future<String> readFileBackedBookText(
+  File file,
+  String? fileType,
+  String title,
+) async {
+  final declared = (fileType ?? '').toLowerCase();
+  final ext = declared.isNotEmpty
+      ? declared
+      : p.extension(file.path).replaceFirst('.', '').toLowerCase();
+  switch (ext) {
+    case 'docx':
+      return convertDocxWithCache(file, title);
+    case 'epub':
+      return convertEpubWithCache(file, title);
+    case 'pdf':
+      return '';
+    default:
+      return readTextFileSmart(file);
+  }
+}
 
 Future<String> _convertWithCache(
   File file,
