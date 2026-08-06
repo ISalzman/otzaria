@@ -87,7 +87,6 @@ void main() {
           isFalse,
         );
       });
-    });
 
     test('מזהה meta רק כש-meta לחוץ', () {
       final event = KeyDownEvent(
