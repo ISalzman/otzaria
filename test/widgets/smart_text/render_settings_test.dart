@@ -1,6 +1,9 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope;
 
 void main() {
   group('RenderSettings equality', () {
@@ -42,6 +45,21 @@ void main() {
         withAlternative.hashCode,
         isNot(equals(withoutAlternative.hashCode)),
       );
+    });
+
+    test('changes when match policy changes', () {
+      // בלי המדיניות בשוויון, ה-widget של הטקסט לא היה מתרנן כשהמשתמש עובר
+      // לחיפוש "באותה פסקה", והשורה הייתה נשארת בלי הדגשה.
+      const sameParagraph = RenderSettings(
+        searchText: 'אמר רבי',
+        matchPolicy: SearchMatchPolicy(
+          proximityScope: SearchScope.sameParagraph,
+        ),
+      );
+      const wordDistance = RenderSettings(searchText: 'אמר רבי');
+
+      expect(sameParagraph, isNot(equals(wordDistance)));
+      expect(sameParagraph.hashCode, isNot(wordDistance.hashCode));
     });
 
     test('changes when font weight changes', () {

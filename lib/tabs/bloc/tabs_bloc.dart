@@ -215,6 +215,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         existingTab: state.tabs[matchingIndex],
         incomingTab: event.tab,
       );
+      _propagateSearchToExistingTab(
+        existingTab: state.tabs[matchingIndex],
+        incomingTab: event.tab,
+      );
       // סימניות/היסטוריה: המשתמש בחר מיקום ספציפי בספר, ולא מספיק להעביר
       // focus לטאב הקיים — צריך לגלול אותו למיקום המבוקש.
       if (event.navigateToPositionIfReused) {
@@ -322,6 +326,47 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         .firstWhere((state) => state is TextBookLoaded)
         .then((_) => dispatch())
         .catchError((_) {});
+  }
+
+  /// מעביר את החיפוש של הטאב הנכנס אל הטאב הקיים שקיבל את המיקוד. בלעדיו
+  /// פתיחת תוצאה בספר שכבר פתוח מאבדת את השאילתה ואת כל התוספות שלה, והחיפוש
+  /// בספר חוזר למסלול המחרוזת הרצופה — "אין תוצאות" על תוצאה שנמצאה.
+  void _propagateSearchToExistingTab({
+    required OpenedTab existingTab,
+    required OpenedTab incomingTab,
+  }) {
+    if (incomingTab is TextBookTab) {
+      if (incomingTab.searchText.isEmpty) return;
+      final targetText = _resolveTextBookTab(existingTab, incomingTab);
+      if (targetText == null) return;
+      targetText.bloc.add(
+        UpdateSearchText(
+          incomingTab.searchText,
+          searchOptions: incomingTab.searchOptions,
+          alternativeWords: incomingTab.alternativeWords,
+          spacingValues: incomingTab.spacingValues,
+          searchMode: incomingTab.searchMode,
+          searchDistance: incomingTab.searchDistance,
+          matchPolicy: incomingTab.matchPolicy,
+        ),
+      );
+      return;
+    }
+
+    if (incomingTab is PdfBookTab) {
+      if (incomingTab.searchText.isEmpty) return;
+      final targetPdf = _resolvePdfBookTab(existingTab, incomingTab);
+      if (targetPdf == null) return;
+      // בטאב PDF שדות הטאב הם מקור המצב לחלונית החיפוש (ראו PdfBookBloc).
+      targetPdf.searchText = incomingTab.searchText;
+      targetPdf.searchController.text = incomingTab.searchText;
+      targetPdf.searchOptions = incomingTab.searchOptions;
+      targetPdf.alternativeWords = incomingTab.alternativeWords;
+      targetPdf.spacingValues = incomingTab.spacingValues;
+      targetPdf.searchMode = incomingTab.searchMode;
+      targetPdf.searchDistance = incomingTab.searchDistance;
+      targetPdf.matchPolicy = incomingTab.matchPolicy;
+    }
   }
 
   TextBookTab? _resolveTextBookTab(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -37,6 +38,9 @@ class PdfBookTab extends OpenedTab {
   Map<String, String> spacingValues;
   SearchMode searchMode;
   int searchDistance;
+
+  /// טווח הקרבה ומצב התאמת המילים שבהם נמצאה התוצאה — ראו [SearchMatchPolicy].
+  SearchMatchPolicy matchPolicy;
 
   List<PdfPageTextRange>? pdfSearchMatches;
   int? pdfSearchCurrentMatchIndex;
@@ -109,6 +113,7 @@ class PdfBookTab extends OpenedTab {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.pdfSearchMatches,
     this.pdfSearchCurrentMatchIndex,
     bool isPinned = false,
@@ -158,12 +163,22 @@ class PdfBookTab extends OpenedTab {
       );
     }
 
+    // קונפיגורציית החיפוש נטענת מהדיסק — ראו [ReadingTabSearchState].
+    final searchState = ReadingTabSearchState.fromJson(json);
+
     final tab = PdfBookTab(
       book: restoredBook,
       pageNumber: pageNumber,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
       requiresStableLayout: json['requiresStableLayout'] ?? false,
+      searchText: searchState.searchText,
+      searchOptions: searchState.searchOptions,
+      alternativeWords: searchState.alternativeWords,
+      spacingValues: searchState.spacingValues,
+      searchMode: searchState.searchMode,
+      searchDistance: searchState.searchDistance,
+      matchPolicy: searchState.matchPolicy,
     );
 
     tab.savedLayoutMode = savedLayoutMode;
@@ -212,6 +227,17 @@ class PdfBookTab extends OpenedTab {
       'type': 'PdfBookTab',
       'requiresStableLayout': requiresStableLayout,
       if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
+      // שדה החיפוש עצמו הוא המצב המעודכן (הבנאי מאתחל אותו מ-searchText):
+      // נפילה חזרה ל-searchText הייתה מחזירה חיפוש שהמשתמש כבר ניקה.
+      ...ReadingTabSearchState(
+        searchText: searchController.text,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+        searchMode: searchMode,
+        searchDistance: searchDistance,
+        matchPolicy: matchPolicy,
+      ).toJson(),
     };
   }
 }

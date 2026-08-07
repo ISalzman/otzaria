@@ -1,9 +1,11 @@
+import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
@@ -17,6 +19,8 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope, WordMatchMode;
 import 'package:path/path.dart' as p;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -132,6 +136,90 @@ void main() {
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 0);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('פוקוס על טאב טקסט קיים מעביר אליו את החיפוש ותוספותיו', () async {
+      // פתיחת תוצאה מהחיפוש הגלובלי בספר שכבר פתוח: בלי ההעברה הטאב הנכנס
+      // עובר dispose והשאילתה נעלמת — החלונית מציגה "אין תוצאות".
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final recorder = _RecordingTextBookBloc();
+      final existingTab = TextBookTab(
+        book: TextBook(title: 'ספר א', categoryId: 1),
+        index: 0,
+        blocOverride: recorder,
+      )..currentTitle.value = 'פרק א';
+
+      // טאב שני כדי שהמיקוד יזוז מ-1 ל-0 ויספק סימן סיום להמתנה.
+      bloc.add(AddTab(existingTab));
+      bloc.add(AddTab(_createTextTab('ספר ב', index: 0, categoryId: 2)));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      const policy = SearchMatchPolicy(
+        proximityScope: SearchScope.sameSection,
+        wordMatchMode: WordMatchMode.atLeast,
+        wordMatchCount: 3,
+      );
+      final targetTab = TextBookTab(
+        book: TextBook(title: 'ספר א', categoryId: 1),
+        index: 12,
+        searchText: 'תדע זרעך',
+        searchOptions: const {
+          'תדע_0': {'ראשי תיבות': true},
+        },
+        alternativeWords: const {
+          0: ['ידע'],
+        },
+        spacingValues: const {'0-1': '2'},
+        searchMode: SearchMode.advanced,
+        searchDistance: 3,
+        matchPolicy: policy,
+      );
+
+      bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר א, פרק א'));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 2 && s.currentTabIndex == 0,
+      );
+
+      final searchEvents = recorder.received.whereType<UpdateSearchText>();
+      expect(searchEvents, hasLength(1));
+      final searchEvent = searchEvents.single;
+      expect(searchEvent.text, 'תדע זרעך');
+      expect(searchEvent.searchMode, SearchMode.advanced);
+      expect(searchEvent.searchDistance, 3);
+      expect(searchEvent.matchPolicy, policy);
+      expect(searchEvent.searchOptions, targetTab.searchOptions);
+      expect(searchEvent.alternativeWords, targetTab.alternativeWords);
+      expect(searchEvent.spacingValues, targetTab.spacingValues);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('פוקוס על טאב קיים בלי חיפוש אינו משדר UpdateSearchText', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final recorder = _RecordingTextBookBloc();
+      final existingTab = TextBookTab(
+        book: TextBook(title: 'ספר א', categoryId: 1),
+        index: 0,
+        blocOverride: recorder,
+      )..currentTitle.value = 'פרק א';
+
+      bloc.add(AddTab(existingTab));
+      bloc.add(AddTab(_createTextTab('ספר ב', index: 0, categoryId: 2)));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      bloc.add(
+        OpenOrFocusTab(
+          _createTextTab('ספר א', index: 12, categoryId: 1),
+          targetTitle: 'ספר א, פרק א',
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 2 && s.currentTabIndex == 0,
+      );
+
+      expect(recorder.received.whereType<UpdateSearchText>(), isEmpty);
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
@@ -1805,6 +1893,33 @@ class _PinpointFakeTextBookRepository extends TextBookRepository {
   @override
   Future<List<String>> getAvailableCommentators(TextBook book) async =>
       const [];
+}
+
+/// bloc של ספר טקסט שרק אוסף אירועים — לאימות מה הועבר לטאב הקיים.
+class _RecordingTextBookBloc extends Bloc<TextBookEvent, TextBookState>
+    implements TextBookBloc {
+  _RecordingTextBookBloc()
+    : super(
+        TextBookInitial.named(
+          TextBook(title: 'ספר א'),
+          0,
+          false,
+          const [],
+        ),
+      ) {
+    on<TextBookEvent>((event, emit) {});
+  }
+
+  final List<TextBookEvent> received = [];
+
+  @override
+  void add(TextBookEvent event) {
+    received.add(event);
+    super.add(event);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 TextBookTab _createTextTab(String title, {int index = 0, int? categoryId}) {

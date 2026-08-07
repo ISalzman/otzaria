@@ -13,6 +13,7 @@ import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/search/utils/literal_search_pattern.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
@@ -42,6 +43,7 @@ class PdfBookSearchView extends StatefulWidget {
     this.initialSpacingValues = const {},
     this.initialSearchMode = SearchMode.exact,
     this.initialSearchDistance = 0,
+    this.initialMatchPolicy = SearchMatchPolicy.standard,
     this.onSearchResultNavigated,
     this.searchRepository = const SearchRepository(),
     super.key,
@@ -67,6 +69,7 @@ class PdfBookSearchView extends StatefulWidget {
   final Map<String, String> initialSpacingValues;
   final SearchMode initialSearchMode;
   final int initialSearchDistance;
+  final SearchMatchPolicy initialMatchPolicy;
   final VoidCallback? onSearchResultNavigated;
 
   /// מנוע החיפוש המתקדם. נחלף בבדיקות במימוש שלא נוגע במנוע ה-Rust.
@@ -151,6 +154,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
   int _searchDistance = 0;
+  SearchMatchPolicy _matchPolicy = SearchMatchPolicy.standard;
 
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightSource = '';
@@ -168,6 +172,17 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
 
   bool get _isSimpleSearch =>
       !_forceSearchEngine && _searchMode == SearchMode.exact;
+
+  void _updateForceSearchEngine() {
+    _forceSearchEngine = !InBookSearchRouting.canRunAsSimpleSearch(
+      searchMode: _searchMode,
+      distance: _searchDistance,
+      searchOptions: _searchOptions,
+      alternativeWords: _alternativeWords,
+      spacingValues: _spacingValues,
+      matchPolicy: _matchPolicy,
+    );
+  }
 
   SearchModeScopedParameters get _activeSearchParameters {
     return SearchQueryBuilder.normalizeParametersForMode(
@@ -211,12 +226,8 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     _spacingValues = widget.initialSpacingValues;
     _searchMode = widget.initialSearchMode;
     _searchDistance = widget.initialSearchDistance;
-    _forceSearchEngine =
-        _searchMode != SearchMode.exact ||
-        _searchDistance > 0 ||
-        _activeSearchParameters.searchOptions.isNotEmpty ||
-        _activeSearchParameters.alternativeWords.isNotEmpty ||
-        _activeSearchParameters.customSpacing.isNotEmpty;
+    _matchPolicy = widget.initialMatchPolicy;
+    _updateForceSearchEngine();
     widget.textSearcher.addListener(_onTextSearcherMatchesChanged);
     widget.searchController.addListener(_searchTextUpdated);
     _initializeBookPath();
@@ -345,12 +356,8 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       _spacingValues = normalizedParameters.customSpacing;
       _searchMode = result.searchMode;
       _searchDistance = result.distance;
-      _forceSearchEngine =
-          _searchMode != SearchMode.exact ||
-          _searchDistance > 0 ||
-          _searchOptions.isNotEmpty ||
-          _alternativeWords.isNotEmpty ||
-          _spacingValues.isNotEmpty;
+      _matchPolicy = result.matchPolicy;
+      _updateForceSearchEngine();
     });
     pdfBookBloc.add(
       UpdateSearchOptions(
@@ -359,6 +366,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
         spacingValues: normalizedParameters.customSpacing,
         searchMode: result.searchMode,
         searchDistance: result.distance,
+        matchPolicy: result.matchPolicy,
       ),
     );
 
@@ -432,6 +440,9 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
         fuzzy: _searchMode == SearchMode.fuzzy,
         distance: _searchDistance,
         searchMode: _searchMode,
+        scope: _matchPolicy.proximityScope,
+        wordMatchMode: _matchPolicy.wordMatchMode,
+        wordMatchCount: _matchPolicy.wordMatchCount,
         order: ResultsOrder.catalogue,
       );
 
@@ -613,6 +624,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
           _spacingValues = {};
           _searchMode = SearchMode.exact;
           _searchDistance = 0;
+          _matchPolicy = SearchMatchPolicy.standard;
         });
         context.read<PdfBookBloc>().add(
           const UpdateSearchOptions(
@@ -621,6 +633,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
             spacingValues: {},
             searchMode: SearchMode.exact,
             searchDistance: 0,
+            matchPolicy: SearchMatchPolicy.standard,
           ),
         );
         _schedulePdfHighlight(null);
@@ -635,9 +648,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
         final tempTab = SearchingTab(
           'חיפוש',
           widget.searchController.text,
-          initialConfiguration: SearchConfiguration(
+          initialConfiguration: SearchConfiguration.forInBookSearch(
             searchMode: _searchMode,
             distance: _searchDistance,
+            matchPolicy: _matchPolicy,
           ),
         );
         tempTab.searchOptions.addAll(_searchOptions);

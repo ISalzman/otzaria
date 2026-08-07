@@ -91,6 +91,8 @@ class TextRendererService {
         spacingValues: settings.spacingValues,
         isFuzzy: settings.isFuzzySearch,
         searchDistance: settings.searchDistance,
+        matchPolicy: settings.matchPolicy,
+        isSearchResultLine: settings.isSearchResultLine,
         yellowBackground: settings.highlightYellowBackground,
         partialWordMatch: settings.partialWordHighlight,
       );
@@ -245,6 +247,8 @@ class TextRendererService {
       spacingValues: settings.spacingValues,
       isFuzzySearch: settings.isFuzzySearch,
       searchDistance: settings.searchDistance,
+      matchPolicy: settings.matchPolicy,
+      isSearchResultLine: settings.isSearchResultLine,
       formatParentheses: settings.formatParentheses,
       highlightYellowBackground: settings.highlightYellowBackground,
       partialWordHighlight: settings.partialWordHighlight,

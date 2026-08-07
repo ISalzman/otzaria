@@ -6,6 +6,8 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope, WordMatchMode;
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -1362,6 +1364,137 @@ void main() {
         await bloc.close();
       });
     });
+
+    group('מדיניות ההתאמה של החיפוש', () {
+      test('נשמרת מה-state ההתחלתי אל TextBookLoaded', () async {
+        // הטאב נפתח עם הקונפיגורציה שבה נמצאה התוצאה; בלעדיה חלונית החיפוש
+        // בספר הייתה שולחת למנוע חיפוש מרווח-מילים רגיל.
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          matchPolicy: const SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+            wordMatchMode: WordMatchMode.atLeast,
+            wordMatchCount: 3,
+          ),
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await _waitFor(
+          () => bloc.state is TextBookLoaded,
+          description: 'טעינת תוכן',
+        );
+
+        final policy = (bloc.state as TextBookLoaded).matchPolicy;
+        expect(policy.proximityScope, SearchScope.sameParagraph);
+        expect(policy.wordMatchMode, WordMatchMode.atLeast);
+        expect(policy.wordMatchCount, 3);
+
+        await bloc.close();
+      });
+
+      test('שורות התוצאות נשמרות ב-state, ושאילתה חדשה מאפסת אותן', () async {
+        // ההדגשה במדיניות שאינה ברירת המחדל מוגבלת לשורות האלה; שאריות
+        // מחיפוש קודם היו צובעות שורות שאינן תוצאה.
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await _waitFor(
+          () => bloc.state is TextBookLoaded,
+          description: 'טעינת תוכן',
+        );
+        expect((bloc.state as TextBookLoaded).searchResultLines, isNull);
+
+        bloc.add(const UpdateSearchResultLines({3, 17}));
+        await _waitFor(
+          () => (bloc.state as TextBookLoaded).searchResultLines != null,
+          description: 'עדכון שורות התוצאות',
+        );
+        expect((bloc.state as TextBookLoaded).searchResultLines, {3, 17});
+
+        bloc.add(
+          const UpdateSearchText(
+            'שאילתה אחרת',
+            searchOptions: {},
+            alternativeWords: {},
+            spacingValues: {},
+          ),
+        );
+        await _waitFor(
+          () => (bloc.state as TextBookLoaded).searchText == 'שאילתה אחרת',
+          description: 'עדכון השאילתה',
+        );
+        expect((bloc.state as TextBookLoaded).searchResultLines, isNull);
+
+        await bloc.close();
+      });
+
+      test('UpdateSearchText מעדכן את מדיניות ההתאמה', () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await _waitFor(
+          () => bloc.state is TextBookLoaded,
+          description: 'טעינת תוכן',
+        );
+
+        bloc.add(
+          const UpdateSearchText(
+            'תדע זרעך',
+            searchOptions: {},
+            alternativeWords: {},
+            spacingValues: {},
+            searchMode: SearchMode.advanced,
+            searchDistance: 3,
+            matchPolicy: SearchMatchPolicy(
+              proximityScope: SearchScope.sameSection,
+            ),
+          ),
+        );
+        await _waitFor(
+          () =>
+              (bloc.state as TextBookLoaded).matchPolicy.proximityScope ==
+              SearchScope.sameSection,
+          description: 'עדכון מדיניות ההתאמה',
+        );
+
+        final state = bloc.state as TextBookLoaded;
+        expect(state.searchDistance, 3);
+        expect(state.searchMode, SearchMode.advanced);
+
+        await bloc.close();
+      });
+    });
   });
 }
 
@@ -1391,6 +1524,7 @@ TextBookBloc _createBloc({
   List<String> commentators = const [],
   TextBook? book,
   int initialIndex = 10,
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
   Future<String?> Function(
     String title,
     int currentLine, {
@@ -1409,6 +1543,7 @@ TextBookBloc _createBloc({
       false,
       commentators,
       searchMode: SearchMode.exact,
+      matchPolicy: matchPolicy,
       showPageShapeView: showPageShapeView,
     ),
     scrollController: ItemScrollController(),

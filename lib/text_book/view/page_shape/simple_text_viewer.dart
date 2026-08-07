@@ -1171,6 +1171,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       isFuzzySearch: widget.isMainText && state.searchMode == SearchMode.fuzzy,
       searchMode: widget.isMainText ? state.searchMode : SearchMode.exact,
       searchDistance: widget.isMainText ? state.searchDistance : 0,
+      matchPolicy: widget.isMainText
+          ? state.matchPolicy
+          : SearchMatchPolicy.standard,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -2737,6 +2740,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     searchDistance: widget.isMainText
                         ? state.searchDistance
                         : 0,
+                    matchPolicy: widget.isMainText
+                        ? state.matchPolicy
+                        : SearchMatchPolicy.standard,
+                    isSearchResultLine:
+                        widget.isMainText &&
+                        (state.searchResultLines?.contains(primaryLineIndex) ??
+                            false),
                     fontSize: widget.fontSize,
                     fontFamily: widget.fontFamily ?? settingsState.fontFamily,
                     fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -2974,6 +2984,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
       searchMode: effectiveSearchMode,
       searchDistance: useStateSearchSettings ? state.searchDistance : 0,
+      matchPolicy: useStateSearchSettings
+          ? state.matchPolicy
+          : SearchMatchPolicy.standard,
+      isSearchResultLine:
+          useStateSearchSettings &&
+          (state.searchResultLines?.contains(lineIndex) ?? false),
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,

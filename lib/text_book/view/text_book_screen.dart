@@ -2785,6 +2785,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialSpacingValues: state.spacingValues,
       initialSearchMode: state.searchMode,
       initialSearchDistance: state.searchDistance,
+      initialMatchPolicy: state.matchPolicy,
       closeLeftPaneCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );
