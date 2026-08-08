@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -40,6 +40,15 @@ class AppPaths {
   static const String _portableDataFolderName = 'otzaria_data';
 
   static bool? _isPortableCache;
+
+  static String? _documentsRootPathOverride;
+
+  /// דורס את תיקיית המסמכים של המשתמש לצורכי בדיקה. מחרוזת ריקה מדמה
+  /// פלטפורמה שאינה מספקת תיקיית מסמכים.
+  @visibleForTesting
+  static void debugOverrideDocumentsRootPath(String? path) {
+    _documentsRootPathOverride = path;
+  }
 
   /// קובע את שורש נתוני התהליך לפני אתחול השירותים.
   ///
@@ -465,9 +474,200 @@ class AppPaths {
     return candidates.where((c) => c != activePath).toList();
   }
 
-  /// Returns the backup path inside the writable app data root.
+  /// שם תיקיית ברירת המחדל לגיבויים תחת מסמכי המשתמש בדסקטופ.
+  static const String _documentsBackupFolderName = 'אוצריא - גיבויים';
+  static const String _legacyBackupMigrationMarker =
+      '.otzaria-legacy-migration-complete';
+
+  /// מחזיר את תיקיית ברירת המחדל לגיבויים.
+  ///
+  /// בדסקטופ התיקייה יושבת תחת מסמכי המשתמש ולא תחת תיקיית הנתונים, כדי
+  /// שהסרת התוכנה או מחיקת תיקיית הנתונים לא ימחקו את הגיבויים. במצב נייד
+  /// ובמובייל הגיבויים נשארים תחת תיקיית הנתונים כדי שינדדו יחד איתה.
   static Future<String> getDefaultBackupPath() async {
-    return p.join(await getDataRootPath(), 'backups');
+    final dataRootBackups = p.join(await getDataRootPath(), 'backups');
+    if (Platform.isAndroid || Platform.isIOS || isPortable) {
+      return dataRootBackups;
+    }
+
+    final documentsRoot = await _documentsRootPath();
+    if (documentsRoot == null) return dataRootBackups;
+    final documentsBackups = p.join(documentsRoot, _documentsBackupFolderName);
+
+    // נתיב מותאם אישית מנוהל בידי המשתמש: העברת התיקייה הישנה מתחתיו הייתה
+    // מייתמת את הגיבויים, כי getBackupPath ממשיך להחזיר את הנתיב השמור.
+    final saved = Settings.getValue<String>(SettingsRepository.keyBackupPath);
+    if (saved != null && saved.isNotEmpty) return documentsBackups;
+
+    // העברה חד-פעמית של גיבויים מהנתיב הישן שבתיקיית הנתונים.
+    final migrationKey = '$dataRootBackups|$documentsBackups';
+    if (_legacyBackupMigrationKey != migrationKey) {
+      _legacyBackupMigrationKey = migrationKey;
+      _legacyBackupMigration = _migrateLegacyBackups(
+        from: dataRootBackups,
+        to: documentsBackups,
+      );
+    }
+    return _legacyBackupMigration!;
+  }
+
+  static String? _legacyBackupMigrationKey;
+  static Future<String>? _legacyBackupMigration;
+
+  /// מעביר את כל תיקיית הגיבויים הישנה, לרבות מחסן ה־blobs.
+  static Future<String> _migrateLegacyBackups({
+    required String from,
+    required String to,
+    Future<Directory> Function(Directory source, String destination)?
+    moveLegacyDirectory,
+    Future<void> Function(Directory source, Directory destination)?
+    copyLegacyDirectory,
+    Future<void> Function(Directory source)? deleteLegacyDirectory,
+  }) async {
+    final legacy = Directory(from);
+    final target = Directory(to);
+    final marker = File(p.join(to, _legacyBackupMigrationMarker));
+    final moveLegacy =
+        moveLegacyDirectory ??
+        (Directory source, String destination) => source.rename(destination);
+    final copyLegacy = copyLegacyDirectory ?? _copyDirectory;
+    final deleteLegacy =
+        deleteLegacyDirectory ??
+        (Directory source) async => source.delete(recursive: true);
+
+    // marker קיים רק אחרי פרסום עותק שלם; המקור הוא שארית לניקוי בלבד.
+    if (await marker.exists()) {
+      await _deleteLegacyBackupSource(legacy, marker, deleteLegacy);
+      return to;
+    }
+
+    final sourceType = await FileSystemEntity.type(from, followLinks: false);
+    if (sourceType == FileSystemEntityType.link) {
+      debugPrint('⚠️ תיקיית הגיבויים הישנה היא קישור — ההעברה בוטלה: $from');
+      return from;
+    }
+
+    final bool legacyHasEntries;
+    try {
+      legacyHasEntries = await _directoryHasEntries(from);
+    } catch (e) {
+      debugPrint('⚠️ קריאת תיקיית הגיבויים הישנה $from נכשלה: $e');
+      return to;
+    }
+    if (!legacyHasEntries) return to;
+
+    if (await _containsSymbolicLink(legacy)) {
+      debugPrint('⚠️ נמצא קישור בתיקיית הגיבויים — ההעברה בוטלה: $from');
+      return from;
+    }
+
+    try {
+      if (await _directoryHasEntries(to)) {
+        debugPrint('⚠️ היעד $to אינו ריק — הגיבויים נשארים בנתיב הישן $from');
+        return from;
+      }
+
+      await Directory(p.dirname(to)).create(recursive: true);
+      if (await target.exists()) await target.delete();
+      await moveLegacy(legacy, to);
+      return to;
+    } catch (_) {
+      // rename בין כוננים נכשל; מפרסמים עותק שלם דרך staging באותו יעד.
+    }
+
+    final staging = Directory('$to.migrating');
+    try {
+      if (await staging.exists()) await staging.delete(recursive: true);
+      await copyLegacy(legacy, staging);
+      await File(
+        p.join(staging.path, _legacyBackupMigrationMarker),
+      ).writeAsString('complete', flush: true);
+      if (await target.exists()) await target.delete();
+      await staging.rename(to);
+    } catch (e) {
+      debugPrint('⚠️ העברת הגיבויים מ-$from ל-$to נכשלה: $e');
+      try {
+        if (await staging.exists()) await staging.delete(recursive: true);
+      } catch (_) {}
+      return from;
+    }
+
+    await _deleteLegacyBackupSource(legacy, marker, deleteLegacy);
+    return to;
+  }
+
+  static Future<void> _deleteLegacyBackupSource(
+    Directory legacy,
+    File marker,
+    Future<void> Function(Directory source) deleteLegacy,
+  ) async {
+    try {
+      if (await legacy.exists()) await deleteLegacy(legacy);
+      if (!await legacy.exists() && await marker.exists()) {
+        await marker.delete();
+      }
+    } catch (e) {
+      debugPrint('⚠️ ניקוי תיקיית הגיבויים הישנה נכשל: $e');
+    }
+  }
+
+  static Future<bool> _containsSymbolicLink(Directory root) async {
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is Link) return true;
+    }
+    return false;
+  }
+
+  /// מעתיק עץ בלי לעקוב אחר קישורים, כדי שהמקור יוכל להימחק בבטחה.
+  static Future<void> _copyDirectory(Directory from, Directory to) async {
+    await to.create(recursive: true);
+    await for (final entity in from.list(followLinks: false)) {
+      final destination = p.join(to.path, p.basename(entity.path));
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destination));
+      } else if (entity is File) {
+        await entity.copy(destination);
+      } else {
+        throw FileSystemException(
+          'קישור סימבולי בתיקיית הגיבויים — ההעברה בוטלה',
+          entity.path,
+        );
+      }
+    }
+  }
+
+  @visibleForTesting
+  static Future<String> debugMigrateLegacyBackups({
+    required String from,
+    required String to,
+    Future<Directory> Function(Directory source, String destination)?
+    moveLegacyDirectory,
+    Future<void> Function(Directory source, Directory destination)?
+    copyLegacyDirectory,
+    Future<void> Function(Directory source)? deleteLegacyDirectory,
+  }) => _migrateLegacyBackups(
+    from: from,
+    to: to,
+    moveLegacyDirectory: moveLegacyDirectory,
+    copyLegacyDirectory: copyLegacyDirectory,
+    deleteLegacyDirectory: deleteLegacyDirectory,
+  );
+
+  /// מחזיר את תיקיית המסמכים של המשתמש, או null כשהפלטפורמה לא מספקת אותה.
+  static Future<String?> _documentsRootPath() async {
+    final override = _documentsRootPathOverride;
+    if (override != null) return override.isEmpty ? null : override;
+    try {
+      return (await getApplicationDocumentsDirectory()).path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> _directoryHasEntries(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) return false;
+    return !await dir.list().isEmpty;
   }
 
   /// Gets backup path from settings.

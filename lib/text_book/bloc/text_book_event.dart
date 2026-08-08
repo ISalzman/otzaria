@@ -236,6 +236,7 @@ class UpdateSearchText extends TextBookEvent {
   final Map<String, String>? spacingValues;
   final SearchMode? searchMode;
   final int? searchDistance;
+  final SearchMatchPolicy? matchPolicy;
 
   const UpdateSearchText(
     this.text, {
@@ -244,6 +245,7 @@ class UpdateSearchText extends TextBookEvent {
     this.spacingValues,
     this.searchMode,
     this.searchDistance,
+    this.matchPolicy,
   });
 
   @override
@@ -254,7 +256,18 @@ class UpdateSearchText extends TextBookEvent {
     spacingValues,
     searchMode,
     searchDistance,
+    matchPolicy,
   ];
+}
+
+/// שורות הספר שחיפוש המנוע החזיר — ראו [TextBookLoaded.searchResultLines].
+class UpdateSearchResultLines extends TextBookEvent {
+  final Set<int> lines;
+
+  const UpdateSearchResultLines(this.lines);
+
+  @override
+  List<Object?> get props => [lines];
 }
 
 class ApplyFullBookContent extends TextBookEvent {

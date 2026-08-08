@@ -1479,6 +1479,7 @@ class _CombinedViewState extends State<CombinedView> {
       isFuzzySearch: state.searchMode == SearchMode.fuzzy,
       searchMode: state.searchMode,
       searchDistance: state.searchDistance,
+      matchPolicy: state.matchPolicy,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -1627,14 +1628,16 @@ class _CombinedViewState extends State<CombinedView> {
                     final selectionText = fixedPlain?.trim() ?? '';
                     if (selectionText.isNotEmpty && loadedState != null) {
                       unawaited(
-                        PluginRuntimeDispatcher.instance
-                            .dispatchEvent('reader.selection_changed', {
+                        PluginRuntimeDispatcher.instance.dispatchEvent(
+                          'reader.selection_changed',
+                          {
                             'text': selectionText,
                             'currentRef': loadedState.currentTitle ?? '',
                             'currentBook': loadedState.book.title,
                             'currentBookId': loadedState.book.title,
                             'currentIndex': foundIndex ?? 0,
-                            }),
+                          },
+                        ),
                       );
                     }
                   }
@@ -2167,6 +2170,10 @@ class _CombinedViewState extends State<CombinedView> {
                                   state.searchMode == SearchMode.fuzzy,
                               searchMode: state.searchMode,
                               searchDistance: state.searchDistance,
+                              matchPolicy: state.matchPolicy,
+                              isSearchResultLine:
+                                  state.searchResultLines?.contains(index) ??
+                                  false,
                               fontSize: widget.textSize,
                               fontFamily: settingsState.fontFamily,
                               fontWeight: settingsState.fontBold
@@ -2440,6 +2447,11 @@ class _CombinedViewState extends State<CombinedView> {
         ? SearchMode.exact
         : state.searchMode;
     final effectiveSearchDistance = hasPinpoint ? 0 : state.searchDistance;
+    // הדגשה ממוקדת מ-deep link היא מחרוזת רצופה, ולכן מדיניות ההתאמה של
+    // החיפוש אינה חלה עליה.
+    final effectiveMatchPolicy = hasPinpoint
+        ? SearchMatchPolicy.standard
+        : state.matchPolicy;
 
     final renderSettings = RenderSettings(
       removeNikud: state.removeNikud,
@@ -2453,6 +2465,8 @@ class _CombinedViewState extends State<CombinedView> {
       isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
       searchMode: effectiveSearchMode,
       searchDistance: effectiveSearchDistance,
+      matchPolicy: effectiveMatchPolicy,
+      isSearchResultLine: state.searchResultLines?.contains(lineIndex) ?? false,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,

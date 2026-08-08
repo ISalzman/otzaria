@@ -17,6 +17,8 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:path/path.dart' as path;
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope;
 import 'package:pdfrx/pdfrx.dart';
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
@@ -789,6 +791,33 @@ void main() {
           'תורה_0': {'סיומות': true},
         }),
       ],
+    );
+
+    blocTest<PdfBookBloc, PdfBookState>(
+      'UpdateSearchOptions עם מדיניות התאמה בלבד מעדכן את ה-state',
+      // בלי matchPolicy ב-props, שינוי טווח קרבה בלבד נחשב state זהה
+      // וה-Bloc לא היה פולט אותו — החלונית הייתה ממשיכה לחפש בטווח הישן.
+      build: () => _makeBloc(_tab()),
+      seed: () => _loaded(),
+      act: (b) => b.add(
+        const UpdateSearchOptions(
+          matchPolicy: SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+          ),
+        ),
+      ),
+      expect: () => [
+        isA<PdfBookLoaded>().having(
+          (s) => s.matchPolicy.proximityScope,
+          'proximityScope',
+          SearchScope.sameParagraph,
+        ),
+      ],
+      verify: (b) => expect(
+        b.tab.matchPolicy.proximityScope,
+        SearchScope.sameParagraph,
+        reason: 'הטאב הוא מקור המצב לשכפול ולשחזור',
+      ),
     );
 
     blocTest<PdfBookBloc, PdfBookState>(

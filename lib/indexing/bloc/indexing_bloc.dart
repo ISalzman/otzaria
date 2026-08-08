@@ -3,17 +3,24 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/indexing/services/indexing_failure_reporter.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 
 class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   final IndexingRepository _repository;
+  final void Function(IndexingRunResult result) _reportFailures;
   int _nextWorkId = 0;
   int? _activeWorkId;
 
-  IndexingBloc(this._repository) : super(IndexingInitial()) {
+  IndexingBloc(
+    this._repository, {
+    void Function(IndexingRunResult result)? reportFailures,
+  }) : _reportFailures = reportFailures ?? IndexingFailureReporter.write,
+       super(IndexingInitial()) {
     on<IndexingWorkEvent>(_onIndexingWork, transformer: sequential());
     on<CheckIndexStatus>(_onCheckIndexStatus);
     on<CancelIndexing>(_onCancelIndexing);
@@ -90,7 +97,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     );
 
     try {
-      final completed = await _repository.reconcileIndexWithLibrary(
+      final result = await _repository.reconcileIndexWithLibrary(
         event.library,
         // שלב הסריקה מדווח דרך emit ישיר (ולא UpdateIndexingProgress) כדי
         // ש-processed==total בסוף הסריקה לא ייתפס כ"אינדוקס הושלם" לפני
@@ -122,8 +129,9 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed) {
-        emit(const IndexingComplete());
+      _reportRunFailures(result);
+      if (result.completed) {
+        emit(IndexingComplete(failures: result.failures));
       } else {
         emit(IndexingInitial());
       }
@@ -167,7 +175,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     );
 
     try {
-      final completed = await _repository.indexAllBooks(
+      final result = await _repository.indexAllBooks(
         event.library,
         onActualIndexingStarted: () {
           add(ActualIndexingStarted(workId));
@@ -187,8 +195,9 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed && totalBooks > 0) {
-        emit(const IndexingComplete());
+      _reportRunFailures(result);
+      if (result.completed && totalBooks > 0) {
+        emit(IndexingComplete(failures: result.failures));
       } else {
         emit(IndexingInitial());
       }
@@ -263,7 +272,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
           total: total,
         ),
       );
-      final completed = reindex
+      final result = reindex
           ? await _repository.reindexChangedBooks(
               books,
               library,
@@ -280,8 +289,9 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed) {
-        emit(const IndexingComplete());
+      _reportRunFailures(result);
+      if (result.completed) {
+        emit(IndexingComplete(failures: result.failures));
       } else {
         emit(IndexingInitial());
       }
@@ -298,6 +308,10 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         ),
       );
     }
+  }
+
+  void _reportRunFailures(IndexingRunResult result) {
+    if (result.failures.isNotEmpty) _reportFailures(result);
   }
 
   Future<void> _onCheckIndexStatus(
@@ -336,7 +350,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   ) {
     _activeWorkId = null;
     _repository.cancelIndexing();
-    emit(IndexingInitial());
+    emit(IndexingStopped());
   }
 
   /// Handles the EraseIndex event

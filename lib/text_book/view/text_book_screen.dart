@@ -1425,17 +1425,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         final authorStyle = AppTopBar.subtitleStyle(
           context,
         ).copyWith(height: 1.1);
-        final textPainter = TextPainter(
-          text: TextSpan(text: displayText, style: titleStyle),
+        TextPainter measure(String text) => TextPainter(
+          text: TextSpan(text: text, style: titleStyle),
           textDirection: Directionality.of(context),
           maxLines: 1,
         )..layout(minWidth: 0, maxWidth: constraints.maxWidth);
+
+        final textPainter = measure(displayText);
 
         // כשהכותרת בפורמט "שם הספר, מיקום" מציגים אותם כשני חלקים: השם מתקצר
         // (ellipsis) לפי המקום הפנוי, אך המיקום נשאר גלוי במלואו — נחוץ לחברותא
         // שבה אין מידע אחר על המיקום.
         final namePrefix = '${state.book.title}, ';
-        final hasSeparateLocation = displayText.startsWith(namePrefix);
+        // מיקום שאינו נכנס בעצמו ברוחב הפנוי (כותרת Word שהיא פסקה שלמה) חייב
+        // להיחתך כמחרוזת אחת — כשני חלקים הוא חורג מהסרגל ודורס את הכפתורים.
+        final hasSeparateLocation =
+            displayText.startsWith(namePrefix) &&
+            !measure(
+              displayText.substring(namePrefix.length),
+            ).didExceedMaxLines;
         final rowAlignment = switch (textAlign) {
           TextAlign.center => MainAxisAlignment.center,
           TextAlign.start => MainAxisAlignment.start,
@@ -2777,6 +2785,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialSpacingValues: state.spacingValues,
       initialSearchMode: state.searchMode,
       initialSearchDistance: state.searchDistance,
+      initialMatchPolicy: state.matchPolicy,
       closeLeftPaneCallback: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
     );

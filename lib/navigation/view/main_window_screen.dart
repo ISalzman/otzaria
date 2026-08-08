@@ -210,6 +210,23 @@ LibraryPageBuildDecision resolveLibraryPageBuildDecision({
       : LibraryPageBuildDecision.usePlaceholder;
 }
 
+/// אופן המעבר מהעמוד שה-PageController מציג כרגע אל עמוד היעד.
+enum PageTransitionKind { snap, slide, crossSlide }
+
+@visibleForTesting
+PageTransitionKind resolvePageTransition({
+  required int currentPage,
+  required int targetPage,
+}) {
+  final distance = (currentPage - targetPage).abs();
+  // מרחק 0 — ה-controller כבר על היעד ורק המצב הלוגי פיגר (למשל אנימציה שנתקעה
+  // בעוד החלון מוסתר). החלקה חוצה כאן מחשבת עמוד-שכן שלילי וקורסת ב-build.
+  if (distance == 0) return PageTransitionKind.snap;
+  return distance == 1
+      ? PageTransitionKind.slide
+      : PageTransitionKind.crossSlide;
+}
+
 final GlobalKey<State<LibraryBrowser>> libraryBrowserKey =
     GlobalKey<State<LibraryBrowser>>();
 final GlobalKey<MainWindowScreenState> mainWindowScreenKey =
@@ -1463,20 +1480,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
       } else if (pageController.hasClients) {
         // עמודים סמוכים — החלקה (slide) רגילה. עמודים לא-סמוכים
         // (למשל "ספריה" → "כלים") — החלקה ישירה דרך _slideToDistantPage, כך
-        // שעמוד הביניים ("עיון") אינו נראה ומערכת התוספים/WebView אינה נטענת לחינם.
+        // שעמוד הביניים ("עיון") אינו נראה ומערכת התוספים/WebView אינה נטענת
+        // לחינם. ראה [resolvePageTransition].
         final currentPage = pageController.page?.round() ?? _currentPageIndex;
-        final isAdjacent = (currentPage - targetPage).abs() == 1;
-        if (isAdjacent) {
-          setState(() {
-            _currentPageIndex = targetPage;
-          });
-          pageController.animateToPage(
-            targetPage,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        } else {
-          unawaited(_slideToDistantPage(currentPage, targetPage));
+        switch (resolvePageTransition(
+          currentPage: currentPage,
+          targetPage: targetPage,
+        )) {
+          case PageTransitionKind.snap:
+            setState(() {
+              _currentPageIndex = targetPage;
+            });
+            pageController.jumpToPage(targetPage);
+          case PageTransitionKind.slide:
+            setState(() {
+              _currentPageIndex = targetPage;
+            });
+            pageController.animateToPage(
+              targetPage,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          case PageTransitionKind.crossSlide:
+            unawaited(_slideToDistantPage(currentPage, targetPage));
         }
       } else {
         setState(() {
@@ -2292,6 +2318,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 );
               } else {
                 cubit.remove('indexing');
+                if (state is IndexingComplete && !state.isClean) {
+                  UiSnack.show(
+                    LibraryMessages.indexingCompletedWithFailures(
+                      state.failureCount,
+                    ),
+                  );
+                }
               }
             },
           ),

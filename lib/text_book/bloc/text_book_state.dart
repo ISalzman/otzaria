@@ -60,6 +60,7 @@ class TextBookInitial extends TextBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
   final bool splitedView;
   final bool showPageShapeView;
 
@@ -86,6 +87,7 @@ class TextBookInitial extends TextBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.splitedView = true,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -106,6 +108,7 @@ class TextBookInitial extends TextBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     bool? splitedView,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -125,6 +128,7 @@ class TextBookInitial extends TextBookState {
     _spacingValuesSignature(spacingValues),
     searchMode,
     searchDistance,
+    matchPolicy,
     splitedView,
     showPageShapeView,
     pinpointHighlightIndex,
@@ -206,6 +210,12 @@ class TextBookLoaded extends TextBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
+
+  /// שורות הספר שחיפוש המנוע החזיר בפועל (0-based), או null כשלא רץ חיפוש
+  /// מנוע. ההדגשה במדיניות התאמה שאינה ברירת המחדל מוגבלת לשורות האלה, כדי
+  /// שהאפליקציה לא תשחזר בעצמה את החלטת המנוע (טווח פסקה/כותרת, סף מילים).
+  final Set<int>? searchResultLines;
   final String? currentTitle;
   final String? selectedTextForNote;
   final int? selectedTextSectionIndex;
@@ -277,6 +287,8 @@ class TextBookLoaded extends TextBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
+    this.searchResultLines,
     required this.scrollController,
     required this.positionsListener,
     this.scrollOffsetController,
@@ -383,6 +395,8 @@ class TextBookLoaded extends TextBookState {
     Map<String, String>? spacingValues,
     SearchMode? searchMode,
     int? searchDistance,
+    SearchMatchPolicy? matchPolicy,
+    Set<int>? searchResultLines,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
     ScrollOffsetController? scrollOffsetController,
@@ -398,6 +412,7 @@ class TextBookLoaded extends TextBookState {
     int? pinpointHighlightIndex,
     String? pinpointHighlightText,
     bool clearPinpointHighlight = false,
+    bool clearSearchResultLines = false,
     bool? isEditorOpen,
     int? editorIndex,
     String? editorSectionId,
@@ -450,6 +465,10 @@ class TextBookLoaded extends TextBookState {
       spacingValues: spacingValues ?? this.spacingValues,
       searchMode: searchMode ?? this.searchMode,
       searchDistance: searchDistance ?? this.searchDistance,
+      matchPolicy: matchPolicy ?? this.matchPolicy,
+      searchResultLines: clearSearchResultLines
+          ? null
+          : (searchResultLines ?? this.searchResultLines),
       scrollController: scrollController ?? this.scrollController,
       positionsListener: positionsListener ?? this.positionsListener,
       scrollOffsetController:
@@ -549,6 +568,8 @@ class TextBookLoaded extends TextBookState {
     _spacingValuesSignature(spacingValues),
     searchMode,
     searchDistance,
+    matchPolicy,
+    searchResultLines,
     currentTitle,
     selectedTextForNote,
     selectedTextSectionIndex,

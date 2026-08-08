@@ -1,6 +1,8 @@
+import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/personal_notes/utils/note_anchor_utils.dart';
 import 'package:otzaria/text_book/utils/link_anchor_variants.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show isHeadingLine;
 
 /// סמני עוגן-מילה (טבלת link_anchor שבמסד): הזרקת אות סימון קטנה, למשל (א),
 /// בנקודה המדויקת בשורת המקור שבה יושבת הערת המפרש.
@@ -57,6 +59,9 @@ int _stableStyleIndex(String title) {
 ///  - עוגן-טווח (end != null, ציטוטי הלינקר): עטיפת הטווח דרך [wrapHtmlRanges]
 ///    — שסוגר/פותח סביב תגים לא-מאוזנים כדי לשמור קינון תקין. הטווח מעוצב
 ///    אחיד (צבע הנושא, בלי קו תחתון) ואינו נושא וריאנט טיפוגרפי.
+///
+/// בשורת כותרת (`<h1>`–`<h6>`) קישורי לינקר מדולגים לגמרי; שאר סוגי הקישורים
+/// (סמני מפרשים וכד') מוזרקים כרגיל.
 /// [lineIndex] (0-based) — כשמסופק, הסמנים נפלטים כ-`<a>` עם href
 /// `otzaria://anchor?ref=<line>_<i>` (i = מיקום הקישור ב-[anchorLinks]), כדי
 /// שריחוף/לחיצה יזהו את הקישור; עוגן-טווח מקבל גם `&range=1` — לחיצה עליו
@@ -70,8 +75,12 @@ String injectLinkAnchorMarkers({
 }) {
   final points = <({int at, int order, String html})>[];
   final ranges = <HtmlWrapRange>[];
+  // כותרת היא כלי ניווט: ציטוט לינקר בתוכה הופך אותה לקישור לספר אחר.
+  final skipLinker = isHeadingLine(rawLine);
   for (var linkIndex = 0; linkIndex < anchorLinks.length; linkIndex++) {
     final link = anchorLinks[linkIndex];
+    // continue ולא סינון מראש: האינדקס מזהה את הקישור ב-href של הסמן.
+    if (skipLinker && _isLinkerLink(link)) continue;
     final spans = link.anchorSpans.isNotEmpty
         ? link.anchorSpans
         : [
@@ -132,6 +141,9 @@ String injectLinkAnchorMarkers({
   var result = ranges.isEmpty ? rawLine : wrapHtmlRanges(rawLine, ranges);
   return _injectAtVisibleOffsets(result, points);
 }
+
+bool _isLinkerLink(Link link) =>
+    LinkTypes.normalize(link.connectionType) == LinkTypes.linker;
 
 /// עוטף טווח תווים-גלויים [start, end) של שורת HTML בתגי פתיחה/סגירה, תוך
 /// שמירת קינון תקין סביב תגים לא-מאוזנים (דרך [wrapHtmlRanges]).

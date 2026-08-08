@@ -9,9 +9,9 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 /// URL מאושר רק אם:
 /// 1. הוא הוצהר ב-`network.allowlist` של התוסף עצמו.
 /// 2. הוא מופיע במקור אמון רשמי של אוצריא: הרשימה המקומפלת (חירום בלבד),
-///    או קובץ ה-allowlist בענף הייעודי `plugin-network-allowlist` בריפו
-///    אוצריא ב-GitHub. עריכת הקובץ בענף נכנסת לתוקף מיד אצל כל המשתמשים,
-///    בלי release (ראו תיעוד ב-plugin_network_allowlist.dart).
+///    או הקובץ `plugin_network_allowlist.txt` בשורש ענף `dev` בריפו אוצריא
+///    ב-GitHub. עריכת הקובץ נכנסת לתוקף מיד אצל כל המשתמשים, בלי release
+///    (ראו תיעוד ב-plugin_network_allowlist.dart).
 ///
 /// אישורים שהגיעו מהקובץ הרשמי ב-GitHub נשמרים **בזיכרון בלבד** עד סגירת
 /// האפליקציה; לא נכתבת שום קובץ cache לדיסק.
@@ -25,7 +25,7 @@ class PluginNetworkAccessResolver {
 
   static const String _officialOwner = 'Otzaria';
   static const String _officialRepository = 'otzaria';
-  static const String _officialBranch = 'plugin-network-allowlist';
+  static const String _officialBranch = 'dev';
   static const String _officialAllowlistFile = 'plugin_network_allowlist.txt';
   static const Duration _officialFetchTimeout = Duration(seconds: 15);
   static const Duration _officialFailureCacheTtl = Duration(minutes: 5);
@@ -36,7 +36,7 @@ class PluginNetworkAccessResolver {
   List<String>? _officialAllowlistCache;
   DateTime? _officialAllowlistFailureUntil;
 
-  /// URL ה-raw של קובץ ה-allowlist הרשמי בענף הייעודי בריפו אוצריא.
+  /// URL ה-raw של קובץ ה-allowlist הרשמי בענף dev בריפו אוצריא.
   static Uri get officialAllowlistUri => Uri(
     scheme: 'https',
     host: 'raw.githubusercontent.com',

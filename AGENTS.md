@@ -613,8 +613,12 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | Screen actions (overflow, layout) | `test/text_book/view/text_book_screen_actions_test.dart` |
+| שימור חלונית הניווט במעבר טאב | `test/text_book/view/text_book_nav_panel_preserved_test.dart` |
+| יעד סיור לחלונית הניווט (מפתח יציב) | `test/text_book/view/widgets/nav_panel_tour_target_test.dart` |
 | Search controller sync | `test/text_book/text_book_search_query_sync_test.dart` |
 | Search screen | `test/text_book/view/text_book_search_screen_test.dart` |
+| מסלול המנוע בחלונית החיפוש בספר (מרווח, זיהוי הספר) | `test/text_book/view/text_book_search_engine_route_test.dart` |
+| קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
@@ -639,6 +643,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Background content loading | `test/text_book/bloc/background_full_content_loading_test.dart` |
 | Continuous reading mode | `test/text_book/bloc/continuous_reading_mode_test.dart` |
 | Selected link types persistence | `test/text_book/bloc/selected_link_types_persistence_test.dart` |
+| visibleIndices throttling (scroll perf) | `test/text_book/bloc/visible_indices_throttle_test.dart` |
 
 **Data / Database**
 | Area | Test File |
@@ -662,6 +667,14 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Facet helper | `test/search/facet_helper_test.dart` |
 | Search BLoC facet counts | `test/search/search_bloc_facet_counts_test.dart` |
 | Search scope preferences | `test/search/search_scope_preferences_test.dart` |
+| עץ ניווט תוצאות (רשימת סינון, גלוּת הבחירה, פתיחת ענפים) | `test/search/search_navigation_tree_test.dart` |
+| חלונית סינון התוצאות מקצה לקצה (שדה "איתור ספר") | `test/search/search_facet_filtering_book_filter_test.dart` |
+| ניתוב חיפוש-בספר: פשוט מול מנוע | `test/search/utils/in_book_search_routing_test.dart` |
+| מדיניות ההתאמה (טווח קרבה + התאמת מילים) | `test/search/search_match_policy_test.dart` |
+| פתיחת תוצאה: העברת הקונפיגורציה לטאב הקריאה | `test/search/tantivy_search_results_in_book_routing_test.dart` |
+| שקילות מנוע ↔ הדגשה במרווח בין מילים | `test/search/highlight_engine_distance_parity_test.dart` |
+| הדגשה במדיניות התאמה — רק בשורות שהמנוע החזיר | `test/utils/highlight_match_policy_test.dart` |
+| שימור קונפיגורציית החיפוש בשכפול/שחזור טאב ובשמירה ל-JSON | `test/tabs/models/tab_search_state_clone_test.dart` |
 | Gematria search | `test/tools/gematria/gematria_search_test.dart` |
 
 **Personal Notes**
@@ -673,6 +686,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Note draft service | `test/personal_notes/personal_note_draft_service_test.dart` |
 | Note content view | `test/personal_notes/personal_note_content_view_test.dart` |
 | Notes export | `test/personal_notes/personal_notes_export_test.dart` |
+| סינון "הצג רק הערות לטקסט הנראה" (BLoC) | `test/personal_notes/bloc/personal_notes_visible_filter_test.dart` |
+| שורות גלויות בחלונית ההערות (הרכבה, גלילה, PDF) | `test/personal_notes/widgets/personal_notes_sidebar_visible_lines_test.dart` |
 
 **Settings**
 | Area | Test File |
@@ -695,12 +710,16 @@ dart format lib/file.dart    # Format ONLY files you modified
 | App menu | `test/widgets/app_menu_test.dart` |
 | App top bar | `test/widgets/app_top_bar_test.dart` |
 | Context overlay panel | `test/widgets/context_overlay_panel_test.dart` |
+| Context menu (incl. hover preview + pinning) | `test/widgets/app_context_menu_test.dart` |
+| Link preview panel (placement, pin, scroll anchor) | `test/widgets/link_preview_overlay_test.dart` |
 | Dual adaptive reader pane | `test/widgets/dual_adaptive_reader_pane_test.dart` |
 | Nav rail item | `test/widgets/nav_rail_item_test.dart` |
 | Reader side panel shell | `test/widgets/reader_side_panel_shell_test.dart` |
 | Responsive action bar | `test/widgets/responsive_action_bar_test.dart` |
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
+| Smooth mouse-wheel scrolling | `test/widgets/smooth_wheel_scroll_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
+| Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
 | App dropdown/search menu | `test/widgets/app_dropdown_field_test.dart`, `…app_search_menu_test.dart` |
 | Search pane base | `test/widgets/search_pane_base_test.dart` |
@@ -722,12 +741,26 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Empty library screen | `test/empty_library/empty_library_screen_test.dart` |
 | PDF isolate / rasterizer | `test/printing/pdf_isolate_test.dart`, `…pdf_text_rasterizer_test.dart` |
 | PDF in-book search highlight pattern | `test/pdf_book/pdf_search_highlight_pattern_test.dart` |
+| ניתוב החיפוש בתוך PDF (פשוט מול מנוע) | `test/pdf_book/pdf_search_in_book_routing_test.dart` |
 | Printing models | `test/printing/print_content_models_test.dart` |
 | File sync / background sync | `test/migration/sync/file_sync_service_prune_test.dart`, `…background_db_sync_worker_test.dart`, `…background_sync_initializer_test.dart` |
 | DB migration / generator | `test/migration/generator_create_and_process_book_test.dart`, `test/migration/dao/daos/database_locked_test.dart` |
 | Indexing repository | `test/indexing/repository/indexing_repository_test.dart` |
-| External catalog | `test/external_catalog/external_catalog_repository_test.dart` |
-| Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `test/plugins/services/plugin_store_link_parser_test.dart`, `test/plugins/bridge/plugin_bridge_adapter_test.dart` |
+| External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
+| Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
+| Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
+| Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
+
+**Tools & plugins as reading tabs**
+| Area | Test File |
+|------|-----------|
+| ToolTab model (JSON, clone, dedupe) | `test/tabs/models/tool_tab_test.dart` |
+| Tool catalog + availability reasons | `test/tools/tool_catalog_test.dart` |
+| Tools launcher panel (search, grouping, grid columns, tile layout) | `test/tools/tools_launcher_panel_test.dart` |
+| Tool tab focus (WebView regression) | `test/tools/tool_tab_focus_test.dart` |
+| Tool tab dedupe / focus-existing | `test/tabs/bloc/tool_tab_dedupe_test.dart` |
+| `readingPane` (plugin reader API context) | `test/tabs/reading_pane_test.dart` |
+
 | Shamor Zachor | `test/shamor_zachor/shamor_zachor_test.dart` (+ 4 more in that dir) |
 | Dictionary lookup | `test/tools/dictionary/dictionary_lookup_repository_test.dart` |
 | Laaz Rashi commentary line-lookup | `test/tools/dictionary/laaz_rashi_line_lookup_test.dart` |

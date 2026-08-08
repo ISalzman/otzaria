@@ -1,5 +1,11 @@
 import 'package:sentry_flutter/sentry_flutter.dart';
 
+/// מחזירה האם הטקסט הוא רעש מוכר של גשר הנגישות של Flutter בדסקטופ.
+bool isFlutterAccessibilityNoise(String exceptionText) {
+  return exceptionText.contains('Failed to update ui::AXTree') ||
+      exceptionText.contains('accessibility_bridge.cc');
+}
+
 /// מחזירה האם אירוע Sentry הוא חריגה לא מטופלת מהגרסה המופצת הנוכחית.
 bool shouldReportSentryEvent({
   required SentryEvent event,
@@ -20,8 +26,7 @@ bool shouldReportSentryEvent({
 }
 
 bool _isKnownSentryNoise(String exceptionText) {
-  return exceptionText.contains('Failed to update ui::AXTree') ||
-      exceptionText.contains('accessibility_bridge.cc') ||
+  return isFlutterAccessibilityNoise(exceptionText) ||
       exceptionText.contains('!_pressedKeys.containsKey(event.physicalKey)') ||
       exceptionText.contains(
         'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed',

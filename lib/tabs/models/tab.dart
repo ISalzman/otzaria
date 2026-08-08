@@ -35,6 +35,15 @@ abstract class OpenedTab {
       // (למשל ניקוי ה‑pinpoint עם חיפוש ידני חדש).
       String? pinpointText = tab.pinpointHighlight;
       int? pinpointSectionIndex = tab.pinpointHighlightSectionIndex;
+      // קונפיגורציית החיפוש נלקחת מה-state המעודכן: בלעדיה שכפול ושחזור
+      // מחזירים את החיפוש בספר למסלול המחרוזת הרצופה.
+      String searchText = tab.searchText;
+      var searchOptions = tab.searchOptions;
+      var alternativeWords = tab.alternativeWords;
+      var spacingValues = tab.spacingValues;
+      var searchMode = tab.searchMode;
+      var searchDistance = tab.searchDistance;
+      var matchPolicy = tab.matchPolicy;
       final state = tab.bloc.state;
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
@@ -42,16 +51,36 @@ abstract class OpenedTab {
         commentators = state.activeCommentators;
         pinpointText = state.pinpointHighlightText;
         pinpointSectionIndex = state.pinpointHighlightIndex;
+        searchText = state.searchText;
+        searchOptions = state.searchOptions;
+        alternativeWords = state.alternativeWords;
+        spacingValues = state.spacingValues;
+        searchMode = state.searchMode;
+        searchDistance = state.searchDistance;
+        matchPolicy = state.matchPolicy;
       } else if (state is TextBookInitial) {
         // טאב ששמור בשולחן עבודה לא-פעיל מעולם לא נטען — בלי הענף הזה
         // צורת הדף והתצוגה המפוצלת מתאפסות בכל החלפת שולחן עבודה.
         splitedView = state.splitedView;
         showPageShapeView = state.showPageShapeView;
+        searchText = state.searchText;
+        searchOptions = state.searchOptions;
+        alternativeWords = state.alternativeWords;
+        spacingValues = state.spacingValues;
+        searchMode = state.searchMode;
+        searchDistance = state.searchDistance;
+        matchPolicy = state.matchPolicy;
       }
       return TextBookTab(
         index: tab.index,
         book: tab.book,
-        searchText: tab.searchText,
+        searchText: searchText,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+        searchMode: searchMode,
+        searchDistance: searchDistance,
+        matchPolicy: matchPolicy,
         commentators: commentators,
         openLeftPane: state.showLeftPane,
         splitedView: splitedView,
@@ -66,6 +95,14 @@ abstract class OpenedTab {
         book: tab.book,
         pageNumber: tab.pageNumber,
         openLeftPane: tab.showLeftPane.value,
+        // ה-BLoC מסנכרן את שדות החיפוש של הטאב, ולכן הם המצב המעודכן.
+        searchText: tab.searchText,
+        searchOptions: tab.searchOptions,
+        alternativeWords: tab.alternativeWords,
+        spacingValues: tab.spacingValues,
+        searchMode: tab.searchMode,
+        searchDistance: tab.searchDistance,
+        matchPolicy: tab.matchPolicy,
         isPinned: tab.isPinned,
         dedupeKey: tab.dedupeKey,
         requiresStableLayout: tab.requiresStableLayout,

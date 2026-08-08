@@ -10,6 +10,7 @@ import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
+import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
@@ -31,6 +32,10 @@ Future<void> resetRuntimeStateForAppRestart() async {
 
   LibraryProviderManager.instance.resetRuntimeState();
   DataRepository.instance.invalidateExternalBooksCache();
+
+  // בלי זה סריקת התיקיות האישיות לא תרוץ שוב אחרי הבנייה מחדש, ותיקיות
+  // ספרים ששוחזרו מגיבוי יישארו בלי ספרים עד ההפעלה הבאה.
+  BackgroundSyncInitializer.resetForAppRestart();
 
   ReferenceBooksCache.instance.clear();
   BooksCache.instance.clear();

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/search/models/search_match_policy.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show HighlightPattern, generateHighlightPattern;
 
@@ -669,11 +670,29 @@ String _highlightMatchedSearchWords(
 /// מאתר את התאמות ההדגשה בטקסט: התאמות התבנית המשולבת שעוברות גם את
 /// בדיקת גבולות המילה פר-מילה. משותף ל-[highLight] ול-[countMatches], כך
 /// שהמונה סופר בדיוק את מה שמודגש בפועל.
+///
+/// [matchPolicy] שאינה ברירת המחדל (טווח פסקה/כותרת, או התאמה חלקית של מילות
+/// השאילתה) מתירה תוצאות שהמילים בהן מפוזרות או חסרות, ולכן ההתאמה המשולבת
+/// פוסלת דווקא את מה שהמנוע מחזיר: במצב כזה מדגישים כל מילת שאילתה בנפרד,
+/// ורק ב-[isSearchResultLine] — שורה שהמנוע החזיר.
+///
+/// אין לשחזר כאן את החלטת המנוע (למשל סף מילים פר-שורה): הסף שלו מחושב על
+/// הסעיף בטווח "תחת אותה כותרת", והוא סופר מילים ייחודיות.
 List<_HighlightMatch> _findHighlightMatches(
   String data,
   _CompiledHighlightPattern compiled,
-  List<bool> requireTokenBoundaries,
-) {
+  List<bool> requireTokenBoundaries, {
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+  bool isSearchResultLine = false,
+}) {
+  if (!matchPolicy.isStandard) {
+    if (!isSearchResultLine) return const [];
+    return _findPerWordHighlightMatches(
+      data,
+      compiled,
+      requireTokenBoundaries,
+    );
+  }
   return compiled.combined
       .allMatches(data)
       .map((match) {
@@ -691,6 +710,42 @@ List<_HighlightMatch> _findHighlightMatches(
       .toList();
 }
 
+/// התאמות של כל מילת שאילתה בנפרד בשורה שהמנוע החזיר, ממוינות ובלי חפיפות —
+/// [highLight] משכתב את הטקסט לפי סדר ההתאמות ולכן חפיפה הייתה משבשת את
+/// ההיסטים.
+List<_HighlightMatch> _findPerWordHighlightMatches(
+  String data,
+  _CompiledHighlightPattern compiled,
+  List<bool> requireTokenBoundaries,
+) {
+  final matches = <_HighlightMatch>[];
+  for (var i = 0; i < compiled.words.length; i++) {
+    final requireBoundary =
+        i < requireTokenBoundaries.length && requireTokenBoundaries[i];
+    for (final match in compiled.words[i].allMatches(data)) {
+      if (match.end <= match.start) continue;
+      if (requireBoundary &&
+          (!_hasTokenBoundaryBefore(data, match.start) ||
+              !_hasTokenBoundaryAfter(data, match.end))) {
+        continue;
+      }
+      matches.add(
+        _HighlightMatch(match, [_HighlightRange(0, match.end - match.start)]),
+      );
+    }
+  }
+
+  matches.sort((a, b) => a.match.start.compareTo(b.match.start));
+  final result = <_HighlightMatch>[];
+  var lastEnd = -1;
+  for (final match in matches) {
+    if (match.match.start < lastEnd) continue;
+    result.add(match);
+    lastEnd = match.match.end;
+  }
+  return result;
+}
+
 String highLight(
   String data,
   String searchQuery, {
@@ -700,6 +755,8 @@ String highLight(
   Map<String, String> spacingValues = const {},
   bool isFuzzy = false,
   int searchDistance = 0,
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+  bool isSearchResultLine = false,
   bool yellowBackground = false,
   bool partialWordMatch = false,
 }) {
@@ -725,7 +782,13 @@ String highLight(
       eligible && !yellowBackground && !partialWordMatch,
   ];
 
-  final matches = _findHighlightMatches(data, compiled, requireTokenBoundaries);
+  final matches = _findHighlightMatches(
+    data,
+    compiled,
+    requireTokenBoundaries,
+    matchPolicy: matchPolicy,
+    isSearchResultLine: isSearchResultLine,
+  );
 
   if (matches.isEmpty) return data;
 
@@ -740,7 +803,7 @@ String highLight(
 
     for (final highlightMatch in matches) {
       final match = highlightMatch.match;
-      final matchedText = match.group(0)!;
+      final matchedText = data.substring(match.start, match.end);
       // הדגשת קטע מקושר (רקע צהוב) צריכה להיות רציפה כמו מרקר,
       // בניגוד להדגשת חיפוש שמסמנת רק את מילות החיפוש עצמן.
       final replacement = yellowBackground
@@ -768,7 +831,7 @@ String highLight(
   for (int i = 0; i < matches.length; i++) {
     final highlightMatch = matches[i];
     final match = highlightMatch.match;
-    final matchedText = match.group(0)!;
+    final matchedText = data.substring(match.start, match.end);
     final color = i == currentIndex ? 'blue' : 'red';
     final backgroundColor = i == currentIndex
         ? 'background-color: yellow;'
@@ -800,6 +863,8 @@ List<List<int>> computeHighlightRanges(
   Map<String, String> spacingValues = const {},
   bool isFuzzy = false,
   int searchDistance = 0,
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+  bool isSearchResultLine = false,
   bool partialWordMatch = false,
 }) {
   if (searchQuery.isEmpty || data.isEmpty) return const [];
@@ -816,7 +881,13 @@ List<List<int>> computeHighlightRanges(
     for (final eligible in compiled.boundaryEligible)
       eligible && !partialWordMatch,
   ];
-  final matches = _findHighlightMatches(data, compiled, requireTokenBoundaries);
+  final matches = _findHighlightMatches(
+    data,
+    compiled,
+    requireTokenBoundaries,
+    matchPolicy: matchPolicy,
+    isSearchResultLine: isSearchResultLine,
+  );
   final ranges = <List<int>>[];
   for (final highlightMatch in matches) {
     final base = highlightMatch.match.start;

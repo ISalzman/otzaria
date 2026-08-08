@@ -1,4 +1,7 @@
+import 'package:otzaria/search/models/search_match_policy.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
+
+export 'package:otzaria/search/models/search_match_policy.dart';
 
 /// מצבי החיפוש השונים
 enum SearchMode {
@@ -146,6 +149,30 @@ class SearchConfiguration {
     this.dotAll = false,
     this.unicode = true,
   });
+
+  /// הקונפיגורציה שאיתה נפתח דיאלוג החיפוש המתקדם מתוך ספר: כל מה שהחיפוש
+  /// שבספר נושא — מצב, מרווח ומדיניות ההתאמה. בלי המדיניות הדיאלוג היה נפתח
+  /// בברירות מחדל, ואישור בו היה מוחק בשקט את הטווח ומצב התאמת המילים.
+  factory SearchConfiguration.forInBookSearch({
+    required SearchMode searchMode,
+    required int distance,
+    required SearchMatchPolicy matchPolicy,
+  }) {
+    return SearchConfiguration(
+      searchMode: searchMode,
+      distance: distance,
+      proximityScope: matchPolicy.proximityScope,
+      wordMatchMode: matchPolicy.wordMatchMode,
+      wordMatchCount: matchPolicy.wordMatchCount,
+    );
+  }
+
+  /// מדיניות ההתאמה כיחידה אחת, להעברה אל טאב הקריאה והחיפוש שבתוך הספר.
+  SearchMatchPolicy get matchPolicy => SearchMatchPolicy(
+    proximityScope: proximityScope,
+    wordMatchMode: wordMatchMode,
+    wordMatchCount: wordMatchCount,
+  );
 
   /// יוצר עותק עם שינויים
   SearchConfiguration copyWith({

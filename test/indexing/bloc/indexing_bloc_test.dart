@@ -1,0 +1,395 @@
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
+import 'package:otzaria/indexing/bloc/indexing_event.dart';
+import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/indexing/models/indexing_run_result.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/books.dart';
+
+void main() {
+  const failure = IndexingFailure(
+    bookTitle: 'מוגן',
+    bookPath: 'locked.pdf',
+    kind: IndexingFailureKind.passwordProtected,
+    error: 'password required',
+  );
+
+  Library libraryWithBooks([int count = 1]) =>
+      Library(categories: [])
+        ..books.addAll([
+          for (var i = 0; i < count; i++) TextBook(id: i + 1, title: 'ספר $i'),
+        ]);
+  _FakeIndexingRepository repositoryOf(IndexingBloc bloc) =>
+      (bloc as _FakeIndexingBloc).repository;
+
+  group('StartIndexing', () {
+    blocTest<IndexingBloc, IndexingState>(
+      'ריצה נקייה מסתיימת ב-IndexingComplete נקי ואינה נרשמת ללוג',
+      build: () {
+        final repository = _FakeIndexingRepository();
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) => bloc.add(StartIndexing(libraryWithBooks(2))),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 2,
+          isCreatingIndex: false,
+        ),
+        const IndexingComplete(),
+      ],
+      verify: (bloc) {
+        final repository = repositoryOf(bloc);
+        expect(repository.indexAllCalls, 1);
+        expect(repository.reportedResults, isEmpty);
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ריצה עם כשל שומרת את הפרטים ב-state ומעבירה אותם לדיווח',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..result = const IndexingRunResult.completed(
+            processedBooks: 1,
+            totalBooks: 1,
+            indexedBooks: 0,
+            failures: [failure],
+          );
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) => bloc.add(StartIndexing(libraryWithBooks())),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 1,
+          isCreatingIndex: false,
+        ),
+        const IndexingComplete(failures: [failure]),
+      ],
+      verify: (bloc) {
+        expect(repositoryOf(bloc).reportedResults, hasLength(1));
+        expect(repositoryOf(bloc).reportedResults.single.failures, [failure]);
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ריצה שבוטלה אינה מוצגת כהשלמה אך הכשלים שלה נשמרים בדוח',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..result = const IndexingRunResult.cancelled(
+            processedBooks: 1,
+            totalBooks: 3,
+            indexedBooks: 1,
+            failures: [failure],
+          );
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) => bloc.add(StartIndexing(libraryWithBooks(3))),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 3,
+          isCreatingIndex: false,
+        ),
+        isA<IndexingInitial>(),
+      ],
+      verify: (bloc) {
+        expect(repositoryOf(bloc).reportedResults, hasLength(1));
+        expect(repositoryOf(bloc).reportedResults.single.cancelled, isTrue);
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ספרייה ריקה נשארת במצב התחלתי ואינה קוראת ל-repository',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(StartIndexing(Library(categories: []))),
+      expect: () => [isA<IndexingInitial>()],
+      verify: (bloc) => expect(repositoryOf(bloc).indexAllCalls, 0),
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'חריגת repository הופכת ל-IndexingError עם מוני ההתקדמות',
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()..error = StateError('engine failed'),
+      ),
+      act: (bloc) => bloc.add(StartIndexing(libraryWithBooks())),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 1,
+          isCreatingIndex: false,
+        ),
+        isA<IndexingError>()
+            .having((state) => state.error, 'error', contains('engine failed'))
+            .having((state) => state.booksProcessed, 'processed', 0)
+            .having((state) => state.totalBooks, 'total', 1),
+      ],
+    );
+  });
+
+  group('עבודות אינדוקס נוספות', () {
+    blocTest<IndexingBloc, IndexingState>(
+      'IndexSpecificBooks מפיץ כשל מפורט',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..result = const IndexingRunResult.completed(
+            processedBooks: 1,
+            totalBooks: 1,
+            indexedBooks: 0,
+            failures: [failure],
+          );
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) {
+        final library = libraryWithBooks();
+        bloc.add(IndexSpecificBooks(library.books, library));
+      },
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 1,
+          isCreatingIndex: false,
+        ),
+        const IndexingComplete(failures: [failure]),
+      ],
+      verify: (bloc) {
+        expect(repositoryOf(bloc).indexBooksCalls, 1);
+        expect(repositoryOf(bloc).reportedResults, hasLength(1));
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ReindexChangedBooks משתמש במסלול reindex ולא במסלול ספרים חדשים',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) {
+        final library = libraryWithBooks();
+        bloc.add(ReindexChangedBooks(library.books, library));
+      },
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 1,
+          isCreatingIndex: false,
+        ),
+        const IndexingComplete(),
+      ],
+      verify: (bloc) {
+        expect(repositoryOf(bloc).reindexCalls, 1);
+        expect(repositoryOf(bloc).indexBooksCalls, 0);
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ReconcileIndex מעביר כשל לדוח ולמצב הסופי',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..result = const IndexingRunResult.completed(
+            processedBooks: 1,
+            totalBooks: 1,
+            indexedBooks: 0,
+            failures: [failure],
+          );
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) => bloc.add(ReconcileIndex(libraryWithBooks())),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 1,
+          isCreatingIndex: false,
+        ),
+        const IndexingComplete(failures: [failure]),
+      ],
+      verify: (bloc) {
+        expect(repositoryOf(bloc).reconcileCalls, 1);
+        expect(repositoryOf(bloc).reportedResults, hasLength(1));
+      },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'רשימת ספרים ריקה אינה מתחילה עבודה',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(
+        IndexSpecificBooks(const [], Library(categories: [])),
+      ),
+      expect: () => <IndexingState>[],
+      verify: (bloc) => expect(repositoryOf(bloc).indexBooksCalls, 0),
+    );
+  });
+
+  group('בקרה ומצב', () {
+    blocTest<IndexingBloc, IndexingState>(
+      'CancelIndexing מבטל ב-repository ומציג מצב עצירה מפורש',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(CancelIndexing()),
+      expect: () => [isA<IndexingStopped>()],
+      verify: (bloc) => expect(repositoryOf(bloc).cancelCalls, 1),
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ClearIndex מנקה ומחזיר למצב התחלתי',
+      seed: () => IndexingStopped(),
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(ClearIndex()),
+      expect: () => [isA<IndexingInitial>()],
+      verify: (bloc) => expect(repositoryOf(bloc).clearCalls, 1),
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'בדיקת מצב מחזירה complete כשכל הספרים מאונדקסים',
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()..allBooksIndexed = true,
+      ),
+      act: (bloc) => bloc.add(CheckIndexStatus(libraryWithBooks(2))),
+      expect: () => [const IndexingComplete()],
+      verify: (bloc) => expect(repositoryOf(bloc).awaitReadyCalls, 1),
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'בדיקת מצב אינה מכריזה complete כשחסר ספר',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(CheckIndexStatus(libraryWithBooks())),
+      expect: () => [isA<IndexingInitial>()],
+      verify: (bloc) => expect(repositoryOf(bloc).awaitReadyCalls, 1),
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'דרישת reindex ידני גוברת על רשומות האינדקס',
+      seed: () => const IndexingComplete(),
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()
+          ..allBooksIndexed = true
+          ..manualReindex = true,
+      ),
+      act: (bloc) => bloc.add(CheckIndexStatus(libraryWithBooks())),
+      expect: () => [isA<IndexingInitial>()],
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'ספרייה בלי ספרים אינדקסביליים נחשבת שלמה',
+      build: _FakeIndexingBloc.new,
+      act: (bloc) => bloc.add(CheckIndexStatus(Library(categories: []))),
+      expect: () => [const IndexingComplete()],
+    );
+  });
+}
+
+class _FakeIndexingBloc extends IndexingBloc {
+  _FakeIndexingBloc([_FakeIndexingRepository? repository])
+    : this._(repository ?? _FakeIndexingRepository());
+
+  _FakeIndexingBloc._(this.repository)
+    : super(repository, reportFailures: repository.reportedResults.add);
+
+  final _FakeIndexingRepository repository;
+}
+
+class _FakeIndexingRepository extends IndexingRepository {
+  _FakeIndexingRepository() : super(_UnusedTantivyDataProvider());
+
+  IndexingRunResult result = const IndexingRunResult.completed(
+    processedBooks: 1,
+    totalBooks: 1,
+    indexedBooks: 1,
+  );
+  Object? error;
+  bool allBooksIndexed = false;
+  bool manualReindex = false;
+  final reportedResults = <IndexingRunResult>[];
+  int indexAllCalls = 0;
+  int indexBooksCalls = 0;
+  int reindexCalls = 0;
+  int reconcileCalls = 0;
+  int cancelCalls = 0;
+  int clearCalls = 0;
+  int awaitReadyCalls = 0;
+
+  Future<IndexingRunResult> _finish(
+    void Function(int processed, int total) onProgress,
+  ) async {
+    final thrown = error;
+    if (thrown != null) throw thrown;
+    onProgress(result.processedBooks, result.totalBooks);
+    return result;
+  }
+
+  @override
+  Future<IndexingRunResult> indexAllBooks(
+    Library library, {
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+    bool includePdfBooks = true,
+  }) {
+    indexAllCalls++;
+    return _finish(onProgress);
+  }
+
+  @override
+  Future<IndexingRunResult> indexBooks(
+    List<Book> books,
+    Library library, {
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+  }) {
+    indexBooksCalls++;
+    return _finish(onProgress);
+  }
+
+  @override
+  Future<IndexingRunResult> reindexChangedBooks(
+    List<Book> changedBooks,
+    Library library, {
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+  }) {
+    reindexCalls++;
+    return _finish(onProgress);
+  }
+
+  @override
+  Future<IndexingRunResult> reconcileIndexWithLibrary(
+    Library library, {
+    void Function(int processed, int total)? onScanProgress,
+    void Function()? onActualIndexingStarted,
+    required void Function(int processed, int total) onProgress,
+    Future<String?> Function(TextBook book)? loadText,
+    Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
+  }) {
+    reconcileCalls++;
+    return _finish(onProgress);
+  }
+
+  @override
+  Future<void> awaitReady() async {
+    awaitReadyCalls++;
+  }
+
+  @override
+  Future<bool> requiresManualReindex(Library library) async => manualReindex;
+
+  @override
+  bool isBookIndexed(Book book) => allBooksIndexed;
+
+  @override
+  bool isIndexing() => true;
+
+  @override
+  void cancelIndexing() {
+    cancelCalls++;
+  }
+
+  @override
+  Future<void> clearIndex() async {
+    clearCalls++;
+  }
+}
+
+class _UnusedTantivyDataProvider implements TantivyDataProvider {
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw UnimplementedError('Unexpected provider call: $invocation');
+  }
+}

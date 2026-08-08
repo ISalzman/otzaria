@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -24,6 +26,19 @@ void main() {
       final withoutOptions = _loadedState();
 
       expect(withOptions, isNot(equals(withoutOptions)));
+    });
+
+    test('changes when match policy changes', () {
+      // ההשוואה חייבת לזהות את שינוי מדיניות ההתאמה, אחרת חלונית החיפוש
+      // לא תריץ חיפוש מחדש כשהמשתמש עובר ל"באותה פסקה".
+      final sameParagraph = _loadedState(
+        matchPolicy: const SearchMatchPolicy(
+          proximityScope: SearchScope.sameParagraph,
+        ),
+      );
+      final wordDistance = _loadedState();
+
+      expect(sameParagraph, isNot(equals(wordDistance)));
     });
 
     test('changes when search mode changes', () {
@@ -104,6 +119,7 @@ TextBookLoaded _loadedState({
   Map<int, List<String>> alternativeWords = const {},
   Map<String, String> spacingValues = const {},
   SearchMode searchMode = SearchMode.exact,
+  SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
   Set<int> selectedIndices = const {},
   Set<String> selectedLinkTypes = const {},
   String? heCategories,
@@ -132,6 +148,7 @@ TextBookLoaded _loadedState({
     alternativeWords: alternativeWords,
     spacingValues: spacingValues,
     searchMode: searchMode,
+    matchPolicy: matchPolicy,
     scrollController: ItemScrollController(),
     positionsListener: ItemPositionsListener.create(),
   );

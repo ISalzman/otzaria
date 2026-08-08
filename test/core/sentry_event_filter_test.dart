@@ -3,6 +3,18 @@ import 'package:otzaria/core/sentry_event_filter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 void main() {
+  test('מזהה רעש AXTree של Flutter', () {
+    expect(
+      isFlutterAccessibilityNoise('Failed to update ui::AXTree, error: 3405'),
+      isTrue,
+    );
+    expect(
+      isFlutterAccessibilityNoise('accessibility_bridge.cc(114)'),
+      isTrue,
+    );
+    expect(isFlutterAccessibilityNoise('StateError: test'), isFalse);
+  });
+
   SentryEvent eventWithHandledState(bool handled) {
     return SentryEvent(
       exceptions: [

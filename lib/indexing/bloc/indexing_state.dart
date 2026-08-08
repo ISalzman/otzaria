@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/indexing/models/indexing_run_result.dart';
 
 sealed class IndexingState extends Equatable {
   final int? booksProcessed;
@@ -26,8 +27,18 @@ class IndexingInProgress extends IndexingState {
 }
 
 class IndexingComplete extends IndexingState {
-  const IndexingComplete();
+  const IndexingComplete({this.failures = const []});
+
+  final List<IndexingFailure> failures;
+
+  bool get isClean => failures.isEmpty;
+  int get failureCount => failures.length;
+
+  @override
+  List<Object?> get props => [failures];
 }
+
+class IndexingStopped extends IndexingState {}
 
 class IndexingError extends IndexingState {
   final String error;

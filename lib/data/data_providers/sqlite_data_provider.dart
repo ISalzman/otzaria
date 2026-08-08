@@ -337,7 +337,9 @@ class SqliteDataProvider {
         fileType: fileType,
         preferUserBooks: preferUserBooks,
       );
-      if (resolvedBook == null) return null;
+      if (resolvedBook == null || resolvedBook.book.totalLines <= 0) {
+        return null;
+      }
       final book = resolvedBook.book;
 
       // Load 10 lines before and 10 after (20 total)

@@ -10,6 +10,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -218,31 +219,23 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     if (!mounted) return;
 
     final rawQuery = widget.tab.queryController.text;
-    final hasEnabledOptions = effectiveOptions.values.any(
-      (m) => m.values.any((v) => v == true),
-    );
-    final hasAlternativeWords = widget.tab.alternativeWords.values.any(
-      (alts) => alts.any((w) => w.trim().isNotEmpty),
-    );
-    final hasSpacingValues = widget.tab.spacingValues.values.any(
-      (v) => v.trim().isNotEmpty,
-    );
-    final currentMode = widget.tab.searchBloc.state.configuration.searchMode;
+    final configuration = widget.tab.searchBloc.state.configuration;
 
     // אין צורך בזיהוי "שאילתת רגקס": המנוע מנקה מטא-תווים
     // ב-sanitize_query לפני בניית השאילתה, כך שקלט המשתמש
     // לעולם אינו מפורש כתבנית — שאילתה בלי אפשרויות מיוחדות
     // היא תמיד ליטרלית וניתנת לחיפוש פשוט בתוך הספר.
-    final shouldUseSimpleInBook =
-        !hasEnabledOptions &&
-        !hasAlternativeWords &&
-        !hasSpacingValues &&
-        currentMode != SearchMode.fuzzy;
-
-    final inBookMode = shouldUseSimpleInBook ? SearchMode.exact : currentMode;
-    final inBookDistance = shouldUseSimpleInBook
-        ? 0
-        : widget.tab.searchBloc.state.configuration.distance;
+    final inBookParameters = InBookSearchRouting.resolveForReadingTab(
+      searchMode: configuration.searchMode,
+      distance: configuration.distance,
+      searchOptions: effectiveOptions,
+      alternativeWords: widget.tab.alternativeWords,
+      spacingValues: widget.tab.spacingValues,
+      matchPolicy: configuration.matchPolicy,
+    );
+    final inBookMode = inBookParameters.searchMode;
+    final inBookDistance = inBookParameters.distance;
+    final inBookMatchPolicy = inBookParameters.matchPolicy;
 
     final openLeftPane =
         (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
@@ -270,6 +263,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             spacingValues: widget.tab.spacingValues,
             searchMode: inBookMode,
             searchDistance: inBookDistance,
+            matchPolicy: inBookMatchPolicy,
             openLeftPane: openLeftPane,
             requiresStableLayout: true,
           ),
@@ -303,6 +297,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         spacingValues: widget.tab.spacingValues,
         searchMode: inBookMode,
         searchDistance: inBookDistance,
+        matchPolicy: inBookMatchPolicy,
         showPageShapeView: PageShapeSettingsManager.getViewModePreference(
           title,
         ),
@@ -331,6 +326,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 spacingValues: widget.tab.spacingValues,
                 searchMode: inBookMode,
                 searchDistance: inBookDistance,
+                matchPolicy: inBookMatchPolicy,
                 openLeftPane: openLeftPane,
                 requiresStableLayout: true,
               ),

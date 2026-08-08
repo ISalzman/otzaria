@@ -502,7 +502,9 @@ void main() {
       (pluginEntry['installation'] as Map)['manifest_json'] = 'not-json{';
       await backupFile.writeAsString(jsonEncode(backupJson));
 
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
 
       expect(
         skipped,
@@ -545,7 +547,9 @@ void main() {
         await Directory(paths.installPath).delete(recursive: true);
         await Directory(paths.dataPath).delete(recursive: true);
 
-        final skipped = await BackupService.restoreFromBackup(standalone.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          standalone.path,
+        )).skippedSections;
 
         expect(skipped, isEmpty);
         expect(
@@ -582,7 +586,9 @@ void main() {
         await Directory(paths.installPath).delete(recursive: true);
         await Directory(paths.dataPath).delete(recursive: true);
 
-        final skipped = await BackupService.restoreFromBackup(backup.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          backup.path,
+        )).skippedSections;
 
         expect(skipped, isEmpty);
         expect(
@@ -606,7 +612,9 @@ void main() {
         p.join(File(backup.path).parent.path, 'store'),
       ).delete(recursive: true);
 
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
 
       expect(skipped, contains('plugins'));
       expect(
@@ -646,7 +654,9 @@ void main() {
         (pluginEntry['files'] as Map)['../evil.txt'] = base64Encode([6, 6, 6]);
         await backupFile.writeAsString(jsonEncode(backupJson));
 
-        final skipped = await BackupService.restoreFromBackup(backup.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          backup.path,
+        )).skippedSections;
 
         // שחזור התוסף נכשל, ההתקנה הקיימת שרדה והקובץ החורג לא נכתב.
         expect(skipped, contains('plugins'));

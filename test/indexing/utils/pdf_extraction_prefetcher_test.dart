@@ -38,6 +38,7 @@ PdfExtraction _extractionOf(String title, int chars) => (
   error: null,
   stackTrace: null,
   extractMs: 0,
+  droppedPages: 0,
 );
 
 PdfBook _pdf(String title) => PdfBook(title: title, path: 'C:\\$title.pdf');
@@ -46,6 +47,25 @@ bool _always(PdfBook book) => true;
 
 void main() {
   group('PdfExtractionPrefetcher.fill', () {
+    test('ברירת המחדל משאירה רק חילוץ יחיד בטיסה', () async {
+      final extractor = _ControlledExtractor();
+      final prefetcher = PdfExtractionPrefetcher(
+        extract: extractor.call,
+        fileSizeOf: (_) => 0,
+      );
+      final books = [_pdf('p0'), _pdf('p1'), _pdf('p2')];
+
+      prefetcher.fill(books, 0, shouldPrefetch: _always);
+
+      expect(extractor.started, ['p0']);
+      expect(prefetcher.length, 1);
+
+      await extractor.finish('p0');
+      prefetcher.takeReady();
+      prefetcher.fill(books, 0, shouldPrefetch: _always);
+      expect(extractor.started, ['p0', 'p1']);
+    });
+
     test('מזניק את כל ספרי ה-PDF עד תקרת המקביליות', () {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
@@ -65,6 +85,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 2,
         fileSizeOf: (_) => 0,
       );
       final skipped = _pdf('מאונדקס');
@@ -87,6 +108,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 3,
         fileSizeOf: (_) => 0,
       );
       final books = [_pdf('p0'), _pdf('p1')];
@@ -121,6 +143,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 2,
         fileSizeOf: (_) => 0,
       );
       final books = [_pdf('p0'), _pdf('p1')];
@@ -134,6 +157,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 3,
         fileSizeOf: (_) => 0,
       );
       final books = [_pdf('p0'), _pdf('p1'), _pdf('p2')];
@@ -154,6 +178,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 2,
         fileSizeOf: (_) => 0,
       );
       final books = [_pdf('p0'), _pdf('p1')];
@@ -312,6 +337,7 @@ void main() {
       final extractor = _ControlledExtractor();
       final prefetcher = PdfExtractionPrefetcher(
         extract: extractor.call,
+        maxInFlight: 3,
         fileSizeOf: (_) => 10,
       );
       final books = [for (var i = 0; i < 3; i++) _pdf('p$i')];

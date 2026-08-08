@@ -904,4 +904,55 @@ Future<void> main() async {
     },
     skip: engineReady ? false : searchEngineSkipReason,
   );
+
+  group(
+    'מקף ופסק כמפרידי מילים בספירת המרווח',
+    () {
+      const verse = 'ויאמר לאברם ידע תדע כי־גר יהיה זרעך בארץ';
+
+      test('מקף נספר כשתי מילים — מרווח 2 אינו מספיק', () {
+        // האינדקס מפצל "כי־גר" לשתי מילים; ההדגשה סימנה כאן כבר במרווח 2
+        // והמשתמש ראה מילים מודגשות לצד "אין תוצאות" בחלונית החיפוש.
+        expect(
+          computeHighlightRanges(verse, 'תדע זרעך', searchDistance: 2),
+          isEmpty,
+        );
+      });
+
+      test('מרווח 3 מתאים — כמו במנוע', () {
+        final ranges = computeHighlightRanges(
+          verse,
+          'תדע זרעך',
+          searchDistance: 3,
+        );
+        expect(ranges, hasLength(2));
+        expect(
+          [for (final range in ranges) verse.substring(range[0], range[1])],
+          ['תדע', 'זרעך'],
+        );
+      });
+
+      test('מילים שהמקף מחבר ביניהן מודגשות בנפרד', () {
+        final result = highLight('תדע כי־גר יהיה', 'כי גר');
+        expect(result, contains('<span style="color: red">כי</span>'));
+        expect(result, contains('<span style="color: red">גר</span>'));
+      });
+
+      test('המקף נשמר בטקסט המודגש', () {
+        expect(highLight('תדע כי־גר יהיה', 'כי גר'), contains('־'));
+      });
+
+      test('פסק בין המילים אינו נספר כמילה', () {
+        expect(
+          computeHighlightRanges(
+            'תדע כי ׀ גר זרעך',
+            'תדע זרעך',
+            searchDistance: 3,
+          ),
+          hasLength(2),
+        );
+      });
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 }

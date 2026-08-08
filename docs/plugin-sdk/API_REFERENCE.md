@@ -222,6 +222,8 @@ const { data } = await Otzaria.call('app.getTheme');
 הצבעים הם **Material Design 3 Color Roles** בפורמט hex RGB (`#rrggbb`).
 ראה [DESIGN_GUIDE.md](DESIGN_GUIDE.md) להסבר מלא על השימוש בהם.
 
+> **`surfaceContainerHigh` — רקע פס הכותרת שלך.** התוסף נפתח כטאב קריאה ואוצריא אינה מציירת כותרת מעל ה-WebView; שם התוסף חייב להופיע בפס עליון קבוע בצבע הזה, כדי שיתיישר עם הסרגל העליון של מסכי הספרים. ראה [DESIGN\_GUIDE.md § סרגל כותרת התוסף](DESIGN_GUIDE.md#סרגל-כותרת-התוסף-top-bar).
+
 > **גופנים מוטמעים אוטומטית:** השמות שמגיעים ב-`typography.fontFamily` ו-`typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`, `NotoRashiHebrew`) נטענים אוטומטית ב-WebView של התוסף כ-`@font-face` עוד לפני ה-`plugin.boot`. אין צורך לארוז את קבצי הגופן בתוסף — מספיק להפנות לשם שהתקבל ב-CSS: `font-family: 'FrankRuhlCLM', serif;`. אם המשתמש בחר גופן מערכת (לא מובנה), ההזרקה האוטומטית מדלגת עליו וה-WebView ייפול חזרה ל-fallback של מערכת ההפעלה.
 
 ### `app.getLocale`
@@ -452,7 +454,7 @@ if (res.success && res.data.ok) {
 מתבצעת בצד אוצריא (Flutter), כך שאין צורך ב-`showDirectoryPicker` או
 ב-File System Access API (שאינם זמינים ל-WebView של התוסף).
 
-- ה-`url` חייב להופיע גם ב-`network.allowlist` של התוסף וגם ברשימת ההיתר הרשמית של אוצריא (הקובץ בענף `plugin-network-allowlist` ב-GitHub, או הגיבוי המקומפל `pluginNetworkAllowlist`).
+- ה-`url` חייב להופיע גם ב-`network.allowlist` של התוסף וגם ברשימת ההיתר הרשמית של אוצריא (הקובץ `plugin_network_allowlist.txt` בענף `dev` ב-GitHub, או הגיבוי המקומפל `pluginNetworkAllowlist`).
   redirect של גיטהאב ל-CDN מטופל אוטומטית בצד אוצריא.
 - `filename` אופציונלי; אם לא סופק, שם הקובץ נגזר מה-URL.
 - אם קיים כבר קובץ באותו שם, נוספת סיומת מספרית (` (1)`) כדי לא לדרוס.
@@ -1950,18 +1952,18 @@ Otzaria.on('plugin.boot', async (payload) => {
 1. להופיע ב-`network.allowlist` של התוסף עצמו.
 2. להופיע ברשימת ההיתר הרשמית של אוצריא.
 
-רשימת ההיתר הרשמית מנוהלת בקובץ `plugin_network_allowlist.txt` בענף הייעודי **`plugin-network-allowlist`** של הריפו `Otzaria/otzaria`:
+רשימת ההיתר הרשמית מנוהלת בקובץ `plugin_network_allowlist.txt` שבשורש הריפו `Otzaria/otzaria`, בענף **`dev`**:
 
-<https://github.com/Otzaria/otzaria/blob/plugin-network-allowlist/plugin_network_allowlist.txt>
+<https://github.com/Otzaria/otzaria/blob/dev/plugin_network_allowlist.txt>
 
-אוצריא מושכת את הקובץ הזה בזמן ריצה וטוענת אישורים ממנו **לזיכרון בלבד** עד סגירת האפליקציה. עריכת הקובץ בענף נכנסת לתוקף **מיד אצל כל המשתמשים, בכל גרסה מותקנת** — אין צורך ב-release חדש של אוצריא.
+אוצריא מושכת את הקובץ הזה בזמן ריצה וטוענת אישורים ממנו **לזיכרון בלבד** עד סגירת האפליקציה. מיזוג עריכה של הקובץ ל-`dev` נכנס לתוקף **מיד אצל כל המשתמשים, בכל גרסה מותקנת** — אין צורך ב-release חדש של אוצריא.
 
 ### תהליך הוספת URL חדש
 
 כל תוסף שזקוק לגישה ל-URL כלשהו ברשת **חייב**:
 
 1. להצהיר על ה-URL ב-`manifest.json` תחת `network.allowlist`.
-2. לפנות למתחזקי אוצריא (או לפתוח Pull Request לענף `plugin-network-allowlist`) כדי להוסיף את ה-URL לקובץ הנ"ל.
+2. לפנות למתחזקי אוצריא (או לפתוח Pull Request לענף `dev`) כדי להוסיף את ה-URL לקובץ הנ"ל.
 
 ללא שני השלבים יחד — ה-URL ייחסם ב-runtime עם `403 Forbidden`, גם אם המשתמש אישר את הרשאת `network.access`.
 

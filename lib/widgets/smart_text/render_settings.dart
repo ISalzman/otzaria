@@ -127,6 +127,14 @@ class RenderSettings {
   /// מרחק חיפוש בין מילים כאשר לא הוגדר spacing מפורש
   final int searchDistance;
 
+  /// טווח הקרבה ומצב התאמת המילים של החיפוש — ראו [SearchMatchPolicy].
+  final SearchMatchPolicy matchPolicy;
+
+  /// האם השורה המרונדרת היא אחת מהשורות שחיפוש המנוע החזיר. במדיניות התאמה
+  /// שאינה ברירת המחדל רק שורה כזו מודגשת (מילה-מילה), כי המנוע — ולא
+  /// האפליקציה — הוא שמכריע אם השורה תוצאה.
+  final bool isSearchResultLine;
+
   /// גודל הטקסט
   final double fontSize;
 
@@ -167,6 +175,8 @@ class RenderSettings {
     this.isFuzzySearch = false,
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
+    this.isSearchResultLine = false,
     this.fontSize = 18.0,
     this.fontFamily,
     this.fontWeight,
@@ -211,6 +221,8 @@ class RenderSettings {
     bool? isFuzzySearch,
     SearchMode? searchMode,
     int? searchDistance,
+    SearchMatchPolicy? matchPolicy,
+    bool? isSearchResultLine,
     double? fontSize,
     String? fontFamily,
     FontWeight? fontWeight,
@@ -234,6 +246,8 @@ class RenderSettings {
       isFuzzySearch: isFuzzySearch ?? this.isFuzzySearch,
       searchMode: searchMode ?? this.searchMode,
       searchDistance: searchDistance ?? this.searchDistance,
+      matchPolicy: matchPolicy ?? this.matchPolicy,
+      isSearchResultLine: isSearchResultLine ?? this.isSearchResultLine,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
       fontWeight: fontWeight ?? this.fontWeight,
@@ -263,6 +277,8 @@ class RenderSettings {
         isFuzzySearch == other.isFuzzySearch &&
         searchMode == other.searchMode &&
         searchDistance == other.searchDistance &&
+        matchPolicy == other.matchPolicy &&
+        isSearchResultLine == other.isSearchResultLine &&
         fontSize == other.fontSize &&
         fontFamily == other.fontFamily &&
         fontWeight == other.fontWeight &&
@@ -289,6 +305,8 @@ class RenderSettings {
       isFuzzySearch,
       searchMode,
       searchDistance,
+      matchPolicy,
+      isSearchResultLine,
       fontSize,
       fontFamily,
       fontWeight,
