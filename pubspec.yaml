@@ -169,6 +169,7 @@ flutter:
     - lib/migration/database/sql/
     - assets/dictionary.json
     - assets/Acronyms.json
+    - assets/support_organizations.json
 
   fonts:
     - family: TaameyAshkenaz
