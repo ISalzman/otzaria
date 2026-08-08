@@ -45,6 +45,10 @@ class PdfBookTab extends OpenedTab {
   List<PdfPageTextRange>? pdfSearchMatches;
   int? pdfSearchCurrentMatchIndex;
 
+  /// תצורת חיפוש חיצונית שממתינה להחלה בחלונית החיפוש.
+  final ValueNotifier<ReadingTabSearchState?> incomingSearchConfiguration =
+      ValueNotifier<ReadingTabSearchState?>(null);
+
   final currentTitle = ValueNotifier<String>("");
 
   ///a flag that tells if the left pane should be shown
@@ -128,6 +132,22 @@ class PdfBookTab extends OpenedTab {
     pinLeftPane.value = Settings.getValue<bool>('key-pin-sidebar') ?? false;
   }
 
+  /// מחיל תצורת חיפוש חיצונית בלי לחשוף שאילתה לתצורה הישנה.
+  void applyIncomingSearchConfiguration(ReadingTabSearchState configuration) {
+    searchText = configuration.searchText;
+    searchOptions = configuration.searchOptions;
+    alternativeWords = configuration.alternativeWords;
+    spacingValues = configuration.spacingValues;
+    searchMode = configuration.searchMode;
+    searchDistance = configuration.searchDistance;
+    matchPolicy = configuration.matchPolicy;
+
+    incomingSearchConfiguration.value = configuration;
+    if (incomingSearchConfiguration.value != null) {
+      searchController.text = configuration.searchText;
+    }
+  }
+
   /// מתודה להוספת listener לעדכון מספר העמוד
   /// צריך לקרוא לזה אחרי שה-controller מוכן
   void setupPageTracking() {
@@ -199,6 +219,7 @@ class PdfBookTab extends OpenedTab {
     pinLeftPane.dispose();
     toggleNavPaneNotifier.dispose();
     toggleCommentatorsPaneNotifier.dispose();
+    incomingSearchConfiguration.dispose();
     super.dispose();
   }
 

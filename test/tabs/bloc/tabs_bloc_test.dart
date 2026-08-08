@@ -144,7 +144,7 @@ void main() {
       // פתיחת תוצאה מהחיפוש הגלובלי בספר שכבר פתוח: בלי ההעברה הטאב הנכנס
       // עובר dispose והשאילתה נעלמת — החלונית מציגה "אין תוצאות".
       final bloc = TabsBloc(repository: _FakeTabsRepository());
-      final recorder = _RecordingTextBookBloc();
+      final recorder = _RecordingTextBookBloc(loaded: true);
       final existingTab = TextBookTab(
         book: TextBook(title: 'ספר א', categoryId: 1),
         index: 0,
@@ -192,6 +192,50 @@ void main() {
       expect(searchEvent.searchOptions, targetTab.searchOptions);
       expect(searchEvent.alternativeWords, targetTab.alternativeWords);
       expect(searchEvent.spacingValues, targetTab.spacingValues);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('טאב טקסט שטרם נטען מקבל את החיפוש רק כשהוא מגיע ל-Loaded', () async {
+      // טאב ששוחזר ולא נצפה עדיין נשאר ב-TextBookInitial, ושם UpdateSearchText
+      // נזרק בשקט — כל התצורה הייתה נעלמת.
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final recorder = _RecordingTextBookBloc();
+      final existingTab = TextBookTab(
+        book: TextBook(title: 'ספר א', categoryId: 1),
+        index: 0,
+        blocOverride: recorder,
+      )..currentTitle.value = 'פרק א';
+
+      bloc.add(AddTab(existingTab));
+      bloc.add(AddTab(_createTextTab('ספר ב', index: 0, categoryId: 2)));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      final targetTab = TextBookTab(
+        book: TextBook(title: 'ספר א', categoryId: 1),
+        index: 12,
+        searchText: 'תדע זרעך',
+        searchDistance: 3,
+      );
+
+      bloc.add(OpenOrFocusTab(targetTab, targetTitle: 'ספר א, פרק א'));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 2 && s.currentTabIndex == 0,
+      );
+
+      expect(
+        recorder.received.whereType<UpdateSearchText>(),
+        isEmpty,
+        reason: 'ב-Initial העברת החיפוש חייבת להמתין, לא להישלח לריק',
+      );
+
+      recorder.emitLoadedForTesting();
+      await Future<void>.delayed(Duration.zero);
+
+      final searchEvents = recorder.received.whereType<UpdateSearchText>();
+      expect(searchEvents, hasLength(1));
+      expect(searchEvents.single.text, 'תדע זרעך');
+      expect(searchEvents.single.searchDistance, 3);
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
@@ -1898,17 +1942,44 @@ class _PinpointFakeTextBookRepository extends TextBookRepository {
 /// bloc של ספר טקסט שרק אוסף אירועים — לאימות מה הועבר לטאב הקיים.
 class _RecordingTextBookBloc extends Bloc<TextBookEvent, TextBookState>
     implements TextBookBloc {
-  _RecordingTextBookBloc()
+  /// [loaded] — ה-bloc מתחיל ב-TextBookLoaded. נדרש לכל מסלול שמותנה בטעינה:
+  /// ב-TextBookInitial המטפלים ב-TextBookBloc יוצאים מיד.
+  _RecordingTextBookBloc({bool loaded = false})
     : super(
-        TextBookInitial.named(
-          TextBook(title: 'ספר א'),
-          0,
-          false,
-          const [],
-        ),
+        loaded
+            ? _loadedState()
+            : TextBookInitial.named(
+                TextBook(title: 'ספר א'),
+                0,
+                false,
+                const [],
+              ),
       ) {
     on<TextBookEvent>((event, emit) {});
   }
+
+  static TextBookLoaded _loadedState() => TextBookLoaded(
+    book: TextBook(title: 'ספר א'),
+    showLeftPane: false,
+    content: const ['שורה'],
+    fontSize: 20,
+    showSplitView: false,
+    activeCommentators: const [],
+    commentatorGroups: const [],
+    availableCommentators: const [],
+    links: const [],
+    linksByLine: const {},
+    tableOfContents: const [],
+    removeNikud: false,
+    visibleIndices: const [0],
+    pinLeftPane: false,
+    searchText: '',
+    scrollController: ItemScrollController(),
+    positionsListener: ItemPositionsListener.create(),
+  );
+
+  /// מדמה סיום טעינת התוכן, כדי לבדוק מסלולים שממתינים ל-TextBookLoaded.
+  void emitLoadedForTesting() => emit(_loadedState());
 
   final List<TextBookEvent> received = [];
 

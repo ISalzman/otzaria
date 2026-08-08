@@ -14,6 +14,7 @@ import 'package:otzaria/pdf_book/view/pdf_search_screen.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -41,6 +42,7 @@ Future<void> main() async {
     required int searchDistance,
     Map<String, Map<String, bool>> searchOptions = const {},
     SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+    ValueNotifier<ReadingTabSearchState?>? incomingSearchConfiguration,
   }) async {
     final settingsBloc = _MockSettingsBloc();
     whenListen(
@@ -85,6 +87,7 @@ Future<void> main() async {
               initialSearchDistance: searchDistance,
               initialSearchOptions: searchOptions,
               initialMatchPolicy: matchPolicy,
+              incomingSearchConfiguration: incomingSearchConfiguration,
               searchRepository: repository,
             ),
           ),
@@ -185,6 +188,42 @@ Future<void> main() async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(repository.requests, hasLength(requestsAfterReset));
+
+    await tester.pump(const Duration(milliseconds: 800));
+  }, skip: !engineReady);
+
+  testWidgets('תצורה נכנסת לחלונית פתוחה רצה במסלול המנוע, לא בישן', (
+    tester,
+  ) async {
+    // פתיחת תוצאת חיפוש גלובלי מורכב בספר PDF שכבר פתוח: החלונית קיימת
+    // ומחזיקה תצורה פשוטה, ואסור שהשאילתה החדשה תרוץ איתה.
+    final incoming = ValueNotifier<ReadingTabSearchState?>(null);
+    addTearDown(incoming.dispose);
+
+    final repository = await pumpPdfSearch(
+      tester,
+      query: 'תדע',
+      searchMode: SearchMode.exact,
+      searchDistance: 0,
+      incomingSearchConfiguration: incoming,
+    );
+    expect(repository.requests, isEmpty);
+
+    incoming.value = const ReadingTabSearchState(
+      searchText: 'תדע זרעך',
+      searchMode: SearchMode.exact,
+      searchDistance: 3,
+      matchPolicy: SearchMatchPolicy(proximityScope: SearchScope.sameSection),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(repository.requests, hasLength(1));
+    expect(repository.requests.last.query, 'תדע זרעך');
+    expect(repository.requests.last.distance, 3);
+    expect(repository.requests.last.scope, SearchScope.sameSection);
+    // ריקון המחוון מסמן לטאב שהחלונית קלטה את התצורה בעצמה.
+    expect(incoming.value, isNull);
 
     await tester.pump(const Duration(milliseconds: 800));
   }, skip: !engineReady);

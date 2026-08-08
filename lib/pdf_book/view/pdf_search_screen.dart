@@ -18,6 +18,7 @@ import 'package:otzaria/search/utils/literal_search_pattern.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/text_book/utils/search_query_sync.dart';
@@ -44,6 +45,7 @@ class PdfBookSearchView extends StatefulWidget {
     this.initialSearchMode = SearchMode.exact,
     this.initialSearchDistance = 0,
     this.initialMatchPolicy = SearchMatchPolicy.standard,
+    this.incomingSearchConfiguration,
     this.onSearchResultNavigated,
     this.searchRepository = const SearchRepository(),
     super.key,
@@ -70,6 +72,10 @@ class PdfBookSearchView extends StatefulWidget {
   final SearchMode initialSearchMode;
   final int initialSearchDistance;
   final SearchMatchPolicy initialMatchPolicy;
+
+  /// תצורת חיפוש שממתינה להחלה אטומית בחלונית.
+  final ValueNotifier<ReadingTabSearchState?>? incomingSearchConfiguration;
+
   final VoidCallback? onSearchResultNavigated;
 
   /// מנוע החיפוש המתקדם. נחלף בבדיקות במימוש שלא נוגע במנוע ה-Rust.
@@ -228,9 +234,35 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     _searchDistance = widget.initialSearchDistance;
     _matchPolicy = widget.initialMatchPolicy;
     _updateForceSearchEngine();
+    // התצורה הממתינה כבר משוקפת בערכי האתחול; אין להחילה שוב.
+    widget.incomingSearchConfiguration?.value = null;
+    widget.incomingSearchConfiguration?.addListener(
+      _onIncomingSearchConfiguration,
+    );
     widget.textSearcher.addListener(_onTextSearcherMatchesChanged);
     widget.searchController.addListener(_searchTextUpdated);
     _initializeBookPath();
+  }
+
+  /// מחילה קונפיגורציית חיפוש שהגיעה מפתיחת תוצאה בספר שכבר פתוח.
+  void _onIncomingSearchConfiguration() {
+    final notifier = widget.incomingSearchConfiguration;
+    final configuration = notifier?.value;
+    if (configuration == null) return;
+    // הריקון מונע מהטאב לכתוב את השאילתה במסלול נפרד עם תצורה ישנה.
+    notifier!.value = null;
+    if (!mounted) return;
+
+    _applySearchConfiguration(
+      query: configuration.searchText,
+      searchOptions: configuration.searchOptions,
+      alternativeWords: configuration.alternativeWords,
+      spacingValues: configuration.spacingValues,
+      searchMode: configuration.searchMode,
+      searchDistance: configuration.searchDistance,
+      matchPolicy: configuration.matchPolicy,
+      pdfBookBloc: context.read<PdfBookBloc>(),
+    );
   }
 
   Future<void> _initializeBookPath() async {
@@ -329,6 +361,9 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
 
   @override
   void dispose() {
+    widget.incomingSearchConfiguration?.removeListener(
+      _onIncomingSearchConfiguration,
+    );
     widget.textSearcher.removeListener(_onTextSearcherMatchesChanged);
     widget.searchController.removeListener(_searchTextUpdated);
     _pdfHighlightDebounce?.cancel();
@@ -348,29 +383,53 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       alternativeWords: result.alternativeWords,
       searchOptions: result.searchOptions,
     );
-    final queryChanged = widget.searchController.text != result.query;
+
+    _applySearchConfiguration(
+      query: result.query,
+      searchOptions: normalizedParameters.searchOptions,
+      alternativeWords: normalizedParameters.alternativeWords,
+      spacingValues: normalizedParameters.customSpacing,
+      searchMode: result.searchMode,
+      searchDistance: result.distance,
+      matchPolicy: result.matchPolicy,
+      pdfBookBloc: pdfBookBloc,
+    );
+  }
+
+  /// מחילה את התצורה לפני השאילתה ומריצה חיפוש אחד בלבד.
+  void _applySearchConfiguration({
+    required String query,
+    required Map<String, Map<String, bool>> searchOptions,
+    required Map<int, List<String>> alternativeWords,
+    required Map<String, String> spacingValues,
+    required SearchMode searchMode,
+    required int searchDistance,
+    required SearchMatchPolicy matchPolicy,
+    required PdfBookBloc pdfBookBloc,
+  }) {
+    final queryChanged = widget.searchController.text != query;
 
     setState(() {
-      _searchOptions = normalizedParameters.searchOptions;
-      _alternativeWords = normalizedParameters.alternativeWords;
-      _spacingValues = normalizedParameters.customSpacing;
-      _searchMode = result.searchMode;
-      _searchDistance = result.distance;
-      _matchPolicy = result.matchPolicy;
+      _searchOptions = searchOptions;
+      _alternativeWords = alternativeWords;
+      _spacingValues = spacingValues;
+      _searchMode = searchMode;
+      _searchDistance = searchDistance;
+      _matchPolicy = matchPolicy;
       _updateForceSearchEngine();
     });
     pdfBookBloc.add(
       UpdateSearchOptions(
-        searchOptions: normalizedParameters.searchOptions,
-        alternativeWords: normalizedParameters.alternativeWords,
-        spacingValues: normalizedParameters.customSpacing,
-        searchMode: result.searchMode,
-        searchDistance: result.distance,
-        matchPolicy: result.matchPolicy,
+        searchOptions: searchOptions,
+        alternativeWords: alternativeWords,
+        spacingValues: spacingValues,
+        searchMode: searchMode,
+        searchDistance: searchDistance,
+        matchPolicy: matchPolicy,
       ),
     );
 
-    syncSearchControllerQuery(widget.searchController, result.query);
+    syncSearchControllerQuery(widget.searchController, query);
     if (!queryChanged) {
       _searchTextUpdated();
     }

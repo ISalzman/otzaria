@@ -11,6 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -339,9 +340,42 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       if (incomingTab.searchText.isEmpty) return;
       final targetText = _resolveTextBookTab(existingTab, incomingTab);
       if (targetText == null) return;
-      targetText.bloc.add(
-        UpdateSearchText(
-          incomingTab.searchText,
+      void dispatch() {
+        targetText.bloc.add(
+          UpdateSearchText(
+            incomingTab.searchText,
+            searchOptions: incomingTab.searchOptions,
+            alternativeWords: incomingTab.alternativeWords,
+            spacingValues: incomingTab.spacingValues,
+            searchMode: incomingTab.searchMode,
+            searchDistance: incomingTab.searchDistance,
+            matchPolicy: incomingTab.matchPolicy,
+          ),
+        );
+      }
+
+      // טאב שוחזר ולא נצפה עדיין — ה-bloc שלו ב-TextBookInitial, ושם
+      // UpdateSearchText נזרק. ממתינים לטעינה, כמו במסלול ההדגשה המדויקת.
+      if (targetText.bloc.state is TextBookLoaded) {
+        dispatch();
+      } else {
+        targetText.bloc.stream
+            .firstWhere((state) => state is TextBookLoaded)
+            .then((_) => dispatch())
+            .catchError((_) {});
+      }
+      return;
+    }
+
+    if (incomingTab is PdfBookTab) {
+      if (incomingTab.searchText.isEmpty) return;
+      final targetPdf = _resolvePdfBookTab(existingTab, incomingTab);
+      if (targetPdf == null) return;
+      // החלה אטומית: השאילתה והתצורה יחד. עדכון שדה החיפוש לפני התצורה היה
+      // מריץ את השאילתה החדשה עם התצורה הישנה.
+      targetPdf.applyIncomingSearchConfiguration(
+        ReadingTabSearchState(
+          searchText: incomingTab.searchText,
           searchOptions: incomingTab.searchOptions,
           alternativeWords: incomingTab.alternativeWords,
           spacingValues: incomingTab.spacingValues,
@@ -350,22 +384,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           matchPolicy: incomingTab.matchPolicy,
         ),
       );
-      return;
-    }
-
-    if (incomingTab is PdfBookTab) {
-      if (incomingTab.searchText.isEmpty) return;
-      final targetPdf = _resolvePdfBookTab(existingTab, incomingTab);
-      if (targetPdf == null) return;
-      // בטאב PDF שדות הטאב הם מקור המצב לחלונית החיפוש (ראו PdfBookBloc).
-      targetPdf.searchText = incomingTab.searchText;
-      targetPdf.searchController.text = incomingTab.searchText;
-      targetPdf.searchOptions = incomingTab.searchOptions;
-      targetPdf.alternativeWords = incomingTab.alternativeWords;
-      targetPdf.spacingValues = incomingTab.spacingValues;
-      targetPdf.searchMode = incomingTab.searchMode;
-      targetPdf.searchDistance = incomingTab.searchDistance;
-      targetPdf.matchPolicy = incomingTab.matchPolicy;
     }
   }
 

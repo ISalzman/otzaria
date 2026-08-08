@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -89,6 +90,63 @@ void main() {
     expect(clone.searchOptions, original.searchOptions);
     expect(clone.alternativeWords, original.alternativeWords);
     expect(clone.spacingValues, original.spacingValues);
+  });
+
+  test('תצורה נכנסת לטאב PDF בלי חלונית מחוברת נכתבת גם לשדה החיפוש', () {
+    final tab = PdfBookTab(
+      book: PdfBook(title: 'ספר', path: '/nonexistent/test.pdf'),
+      pageNumber: 1,
+      searchText: 'תדע',
+    );
+    addTearDown(tab.dispose);
+
+    tab.applyIncomingSearchConfiguration(
+      ReadingTabSearchState(
+        searchText: 'תדע זרעך',
+        searchOptions: const {
+          'תדע_0': {'ראשי תיבות': true},
+        },
+        searchMode: SearchMode.advanced,
+        searchDistance: 3,
+        matchPolicy: policy,
+      ),
+    );
+
+    expect(tab.searchText, 'תדע זרעך');
+    expect(tab.searchController.text, 'תדע זרעך');
+    expect(tab.searchMode, SearchMode.advanced);
+    expect(tab.searchDistance, 3);
+    expect(tab.matchPolicy, policy);
+    expect(tab.searchOptions, {
+      'תדע_0': {'ראשי תיבות': true},
+    });
+    expect(tab.incomingSearchConfiguration.value, isNotNull);
+  });
+
+  test('חלונית מחוברת שקלטה את התצורה מונעת כתיבה לשדה החיפוש', () {
+    // כתיבה לשדה החיפוש הייתה מפעילה את ה-listener של החלונית עם התצורה
+    // הישנה, ומריצה את השאילתה החדשה במסלול הפשוט.
+    final tab = PdfBookTab(
+      book: PdfBook(title: 'ספר', path: '/nonexistent/test.pdf'),
+      pageNumber: 1,
+      searchText: 'תדע',
+    );
+    addTearDown(tab.dispose);
+
+    void consume() {
+      if (tab.incomingSearchConfiguration.value == null) return;
+      tab.incomingSearchConfiguration.value = null;
+    }
+
+    tab.incomingSearchConfiguration.addListener(consume);
+    addTearDown(() => tab.incomingSearchConfiguration.removeListener(consume));
+
+    tab.applyIncomingSearchConfiguration(
+      const ReadingTabSearchState(searchText: 'תדע זרעך', searchDistance: 3),
+    );
+
+    expect(tab.searchDistance, 3);
+    expect(tab.searchController.text, 'תדע');
   });
 
   test('JSON round-trip של טאב טקסט שומר את כל קונפיגורציית החיפוש', () {
