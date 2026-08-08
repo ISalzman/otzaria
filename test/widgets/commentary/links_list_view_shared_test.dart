@@ -43,6 +43,25 @@ Link _link({
   connectionType: connectionType,
 );
 
+class _LongContentLink extends Link {
+  _LongContentLink({
+    required super.heRef,
+    required super.index1,
+    required super.path2,
+    required super.index2,
+    required super.connectionType,
+    required this._content,
+  });
+
+  final String _content;
+
+  @override
+  Future<String> get content => Future.value(_content);
+
+  @override
+  Future<String> get displayReference => Future.value(fallbackDisplayReference);
+}
+
 /// בונה את הרשימה המשותפת **בלי** `BlocProvider<TextBookBloc>` — כך שכל
 /// קריאה ל-`read<TextBookBloc>()` בתוכה תיכשל ותיתפס כאן.
 Future<Set<String>?> _pumpWithoutTextBookBloc(
@@ -253,10 +272,8 @@ void main() {
   ) async {
     final links = List.generate(
       30,
-      (index) => _link(
-        path2: 'ספר-$index',
-        connectionType: LinkTypes.mesoratHashas,
-      ),
+      (index) =>
+          _link(path2: 'ספר-$index', connectionType: LinkTypes.mesoratHashas),
     );
     CommentaryService.seedEraCache({
       for (var index = 0; index < 30; index++)
@@ -308,16 +325,11 @@ void main() {
     );
   });
 
-  // רגרסיה: הרשימה הייתה `ListView` בלי מסילה משלה, ולכן קיבלה את פס הגלילה
-  // האוטומטי של הפאנל — שנדחף לקצה החיצוני, כלומר לשמאל. באותה חלונית לשונית
-  // המפרשים הציגה מסילה בימין, וכל לשונית הראתה את הפס בצד אחר.
   testWidgets('המסילה בקצה ימין של הרשימה, לא בשמאל', (tester) async {
     final links = List.generate(
       30,
-      (index) => _link(
-        path2: 'ספר-$index',
-        connectionType: LinkTypes.mesoratHashas,
-      ),
+      (index) =>
+          _link(path2: 'ספר-$index', connectionType: LinkTypes.mesoratHashas),
     );
     CommentaryService.seedEraCache({
       for (var index = 0; index < 30; index++)
@@ -365,8 +377,6 @@ void main() {
       reason: 'אין מסילה בקצה השמאלי — הרשימה מגיעה עד לשם',
     );
 
-    // קישור מורחב עשוי להיות גבוה מהמסך. בלי ה-offsetController האגודל נוחת
-    // רק על גבולות פריטים, וגרירה בתוך קישור כזה אינה מזיזה כלום.
     final bar = tester.widget<ScrollablePositionedListScrollbar>(
       find.byType(ScrollablePositionedListScrollbar),
     );
@@ -375,6 +385,72 @@ void main() {
     );
     expect(bar.offsetController, isNotNull);
     expect(bar.offsetController, same(list.scrollOffsetController));
+  });
+
+  testWidgets('גרירת המסילה גוללת בתוך קישור יחיד ומורחב', (tester) async {
+    final longContent = List.filled(200, 'תוכן ארוך לבדיקה').join('\n');
+    final link = _LongContentLink(
+      heRef: 'קישור ארוך, א',
+      index1: 1,
+      path2: 'קישור ארוך',
+      index2: 1,
+      connectionType: LinkTypes.mesoratHashas,
+      content: longContent,
+    );
+    CommentaryService.seedEraCache({'קישור ארוך': CommentaryEra.other});
+    addTearDown(CommentaryService.clearEraCache);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: BlocProvider<SettingsBloc>.value(
+            value: _FakeSettingsBloc(),
+            child: Scaffold(
+              body: LinksListView(
+                links: [link],
+                chipSourceLinks: [link],
+                openBookTitle: 'שבת',
+                selectedLinkTypes: const {},
+                onSelectedLinkTypesChanged: (_) {},
+                openBookCallback: (_) {},
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+
+    final scrollbar = find.byType(ScrollablePositionedListScrollbar);
+    final scrollbarRect = tester.getRect(scrollbar);
+    final listFinder = find.byType(ScrollablePositionedList);
+    final list = tester.widget<ScrollablePositionedList>(listFinder);
+    expect(
+      tester.getRect(listFinder).right,
+      lessThan(scrollbarRect.right),
+      reason: 'קישור מורחב וגבוה מציג מסילה',
+    );
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      closeTo(0, 0.01),
+    );
+
+    await tester.dragFrom(
+      Offset(scrollbarRect.right - 6, scrollbarRect.top + 20),
+      Offset(0, scrollbarRect.height - 40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      lessThan(-0.1),
+      reason: 'ה־offsetController מאפשר למסילה לגלול בתוך אותו קישור',
+    );
   });
 
   group('מבנה — שני הצדדים צורכים את אותה רשימה', () {

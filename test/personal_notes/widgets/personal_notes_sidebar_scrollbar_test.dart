@@ -12,9 +12,6 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
 
-/// רגרסיה: חלונית ההערות הייתה `ListView` בלי מסילה משלה, ולכן קיבלה את פס
-/// הגלילה האוטומטי של הפאנל — שנדחף לקצה החיצוני, כלומר לשמאל. באותה חלונית
-/// לשונית המפרשים הציגה מסילה בימין, וכל לשונית הראתה את הפס בצד אחר.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,10 +33,12 @@ void main() {
     updatedAt: DateTime(2026, 1, 1),
   );
 
-  Future<void> pumpSidebar(WidgetTester tester, {int noteCount = 30}) async {
-    final notesBloc = _StubNotesBloc(
-      List.generate(noteCount, note),
-    );
+  Future<void> pumpSidebar(
+    WidgetTester tester, {
+    int noteCount = 30,
+    List<PersonalNote>? notes,
+  }) async {
+    final notesBloc = _StubNotesBloc(notes ?? List.generate(noteCount, note));
     addTearDown(notesBloc.close);
 
     await tester.pumpWidget(
@@ -84,8 +83,6 @@ void main() {
   });
 
   testWidgets('המסילה והרשימה חולקות offsetController', (tester) async {
-    // הערה ארוכה עשויה להיות גבוהה מהמסך. בלי ה-offsetController האגודל נוחת
-    // רק על גבולות פריטים, וגרירה בתוך הערה כזו אינה מזיזה כלום.
     await pumpSidebar(tester);
 
     final bar = tester.widget<ScrollablePositionedListScrollbar>(
@@ -97,6 +94,53 @@ void main() {
 
     expect(bar.offsetController, isNotNull);
     expect(bar.offsetController, same(list.scrollOffsetController));
+  });
+
+  testWidgets('גרירת המסילה גוללת בתוך הערה יחידה וארוכה', (tester) async {
+    final longContent = List.filled(200, 'שורה ארוכה לבדיקה').join('\n');
+    final longNote = PersonalNote(
+      id: 'long-note',
+      bookId: 'ספר בדיקה',
+      lineNumber: 1,
+      displayTitle: 'הערה ארוכה',
+      lastKnownLineNumber: 1,
+      status: PersonalNoteStatus.located,
+      content: longContent,
+      contentPlain: longContent,
+      contentFormat: PersonalNoteContentFormat.plain,
+      createdAt: DateTime(2026, 1, 1),
+      updatedAt: DateTime(2026, 1, 1),
+    );
+    await pumpSidebar(tester, notes: [longNote]);
+
+    await tester.tap(find.byTooltip('פתח'));
+    await tester.pumpAndSettle();
+
+    final scrollbar = find.byType(ScrollablePositionedListScrollbar);
+    final scrollbarRect = tester.getRect(scrollbar);
+    final listFinder = find.byType(ScrollablePositionedList);
+    final list = tester.widget<ScrollablePositionedList>(listFinder);
+    expect(
+      tester.getRect(listFinder).right,
+      lessThan(scrollbarRect.right),
+      reason: 'הערה גבוהה מציגה מסילה ותופסת לה מקום בפריסה',
+    );
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      closeTo(0, 0.01),
+    );
+
+    await tester.dragFrom(
+      Offset(scrollbarRect.right - 6, scrollbarRect.top + 20),
+      Offset(0, scrollbarRect.height - 40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      lessThan(-0.1),
+      reason: 'ה־offsetController מאפשר למסילה לגלול בתוך אותו פריט',
+    );
   });
 
   testWidgets('אין מה לגלול — אין מסילה ואין צמצום של הרשימה', (tester) async {
