@@ -72,6 +72,9 @@ class SettingsState extends Equatable {
   /// מזהי כלים מובנים שהמשתמש הצמיד לסרגל הניווט הראשי.
   final Set<String> builtInToolsPinnedToNavRail;
 
+  /// סדר הכלים המובנים שהמשתמש קבע (מזהים, לפי הסדר). ריק = סדר הקטלוג.
+  final List<String> builtInToolsOrder;
+
   /// בחירת שפת מסך ההגדרות בלבד: קוד שפה, או `system` להתאמה אוטומטית.
   /// אינה משפיעה על שאר האפליקציה. ראה [resolveSettingsLanguage].
   final String settingsLanguageCode;
@@ -124,6 +127,7 @@ class SettingsState extends Equatable {
     this.mergeUserBooksIntoLibrary = false,
     this.hiddenBuiltInToolIds = const <String>{},
     this.builtInToolsPinnedToNavRail = const <String>{},
+    this.builtInToolsOrder = const <String>[],
     this.settingsLanguageCode = kDefaultSettingsLanguageCode,
     this._softwareAndBookUpdatesEnabled,
   });
@@ -222,6 +226,7 @@ class SettingsState extends Equatable {
     bool? mergeUserBooksIntoLibrary,
     Set<String>? hiddenBuiltInToolIds,
     Set<String>? builtInToolsPinnedToNavRail,
+    List<String>? builtInToolsOrder,
     String? settingsLanguageCode,
     bool? softwareAndBookUpdatesEnabled,
   }) {
@@ -284,6 +289,7 @@ class SettingsState extends Equatable {
       hiddenBuiltInToolIds: hiddenBuiltInToolIds ?? this.hiddenBuiltInToolIds,
       builtInToolsPinnedToNavRail:
           builtInToolsPinnedToNavRail ?? this.builtInToolsPinnedToNavRail,
+      builtInToolsOrder: builtInToolsOrder ?? this.builtInToolsOrder,
       settingsLanguageCode: settingsLanguageCode ?? this.settingsLanguageCode,
       softwareAndBookUpdatesEnabled:
           softwareAndBookUpdatesEnabled ?? this.softwareAndBookUpdatesEnabled,
@@ -344,6 +350,7 @@ class SettingsState extends Equatable {
     mergeUserBooksIntoLibrary,
     hiddenBuiltInToolIds,
     builtInToolsPinnedToNavRail,
+    builtInToolsOrder,
     settingsLanguageCode,
     softwareAndBookUpdatesEnabled,
   ];

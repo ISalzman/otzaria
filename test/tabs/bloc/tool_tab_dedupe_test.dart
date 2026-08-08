@@ -38,17 +38,23 @@ void main() {
       TextBookTab(book: TextBook(title: title), index: 0);
 
   test('OpenOrFocusTab על תוסף פתוח ממקד ואינו מוסיף כרטיסיה', () async {
-    // כל אירוע נצרך בנפרד: OpenOrFocusTab ו-AddTab רשומים בטרנספורמרים
-    // נפרדים ולכן אינם מובטחים לרוץ בסדר ההוספה.
+    final toolOpened = bloc.stream.firstWhere(
+      (state) => state.tabs.length == 1 && state.currentTabIndex == 0,
+    );
     bloc.add(OpenOrFocusTab(tool('com.example.plugin')));
-    await pumpEventQueue();
-    bloc.add(AddTab(book('בראשית')));
-    await pumpEventQueue();
-    expect(bloc.state.tabs.length, 2);
-    expect(bloc.state.currentTabIndex, 1);
+    await toolOpened;
 
+    final bookOpened = bloc.stream.firstWhere(
+      (state) => state.tabs.length == 2 && state.currentTabIndex == 1,
+    );
+    bloc.add(AddTab(book('בראשית')));
+    await bookOpened;
+
+    final toolFocused = bloc.stream.firstWhere(
+      (state) => state.tabs.length == 2 && state.currentTabIndex == 0,
+    );
     bloc.add(OpenOrFocusTab(tool('com.example.plugin')));
-    await pumpEventQueue();
+    await toolFocused;
 
     expect(bloc.state.tabs.length, 2, reason: 'לא נפתחה כרטיסיה נוספת');
     expect(bloc.state.currentTabIndex, 0, reason: 'המיקוד עבר לתוסף הקיים');

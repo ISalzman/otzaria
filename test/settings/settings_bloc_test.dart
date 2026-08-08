@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bloc_test/bloc_test.dart';
@@ -530,6 +531,77 @@ void main() {
           ).called(1);
         },
       );
+    });
+
+    group('UpdateBuiltInToolsOrder', () {
+      const order = ['builtin.gematria', 'builtin.calendar'];
+
+      blocTest<SettingsBloc, SettingsState>(
+        'persists the order and emits state with the new order',
+        build: () {
+          when(
+            mockRepository.updateBuiltInToolsOrder(order),
+          ).thenAnswer((_) async {});
+          return settingsBloc;
+        },
+        act: (bloc) => bloc.add(const UpdateBuiltInToolsOrder(order)),
+        expect: () => [
+          settingsBloc.state.copyWith(builtInToolsOrder: order),
+        ],
+        verify: (_) {
+          verify(mockRepository.updateBuiltInToolsOrder(order)).called(1);
+        },
+      );
+
+      blocTest<SettingsBloc, SettingsState>(
+        'initial state has no custom order',
+        build: () => settingsBloc,
+        verify: (bloc) => expect(bloc.state.builtInToolsOrder, isEmpty),
+      );
+
+      test('שומר הזזות מהירות לפי סדר הבקשות', () async {
+        const firstOrder = ['builtin.calendar', 'builtin.gematria'];
+        const secondOrder = ['builtin.gematria', 'builtin.calendar'];
+        final firstWrite = Completer<void>();
+        final secondWrite = Completer<void>();
+        when(
+          mockRepository.updateBuiltInToolsOrder(firstOrder),
+        ).thenAnswer((_) => firstWrite.future);
+        when(
+          mockRepository.updateBuiltInToolsOrder(secondOrder),
+        ).thenAnswer((_) => secondWrite.future);
+        final secondStarted = untilCalled(
+          mockRepository.updateBuiltInToolsOrder(secondOrder),
+        );
+
+        settingsBloc.add(const UpdateBuiltInToolsOrder(firstOrder));
+        settingsBloc.add(const UpdateBuiltInToolsOrder(secondOrder));
+        await Future<void>.delayed(Duration.zero);
+        verify(mockRepository.updateBuiltInToolsOrder(firstOrder)).called(1);
+        verifyNever(mockRepository.updateBuiltInToolsOrder(secondOrder));
+
+        firstWrite.complete();
+        await secondStarted;
+        secondWrite.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(settingsBloc.state.builtInToolsOrder, secondOrder);
+      });
+
+      // הסדר משמעותי — שתי רשימות באותם מזהים בסדר שונה הן מצבים שונים.
+      test('state equality is order sensitive', () {
+        final a = SettingsState.initial().copyWith(
+          builtInToolsOrder: const ['a', 'b'],
+        );
+        final b = SettingsState.initial().copyWith(
+          builtInToolsOrder: const ['b', 'a'],
+        );
+        expect(a, isNot(b));
+        expect(
+          a,
+          SettingsState.initial().copyWith(builtInToolsOrder: const ['a', 'b']),
+        );
+      });
     });
 
     // חייב לרוץ אחרון: Settings.init גלובלי, והקבוצות הקודמות מסתמכות על

@@ -393,6 +393,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
     (d) => d.screen == null,
   );
 
+  /// האם לחיצה על פריט הניווט [index] אמורה לסגור את פאנל הכלים. כל פריט הוא
+  /// מסך — פרט ל"כלים" עצמו, שרק מחליף את מצב הפאנל.
+  @visibleForTesting
+  static bool shouldCloseToolsLauncherOnNavTap(int index) =>
+      index >= 0 && index < _navData.length && _navData[index].screen != null;
+
   /// אינדקס "הגדרות" בתוך `_navData`. תוספים מוצמדים-לסרגל מוזרקים
   /// _אחרי_ פריט הכלים ו_לפני_ פריט ההגדרות.
   static final int _settingsNavIndex = _navData.indexWhere(
@@ -481,8 +487,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     required Set<String> pinnedBuiltInIds,
     required Set<String> hiddenBuiltInIds,
     required bool isOfflineMode,
+    List<String> builtInToolsOrder = const [],
   }) {
-    final builtIns = kBuiltInToolsCatalog
+    final builtIns = orderedBuiltInTools(builtInToolsOrder)
         .where(
           (m) =>
               pinnedBuiltInIds.contains(m.toolId) &&
@@ -495,6 +502,23 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ).map(_PinnedToolNavItem.fromPlugin);
     return [...builtIns, ...plugins];
   }
+
+  /// מזהי הכלים המוצמדים לסרגל הניווט, בסדר התצוגה. עוטף [_resolvePinnedItems]
+  /// כדי שהסדר יהיה בר-בדיקה בלי לחשוף את טיפוס הפריט הפרטי.
+  @visibleForTesting
+  static List<String> pinnedToolIdsForNavRail({
+    required PluginSystemState pluginState,
+    required Set<String> pinnedBuiltInIds,
+    required Set<String> hiddenBuiltInIds,
+    required bool isOfflineMode,
+    List<String> builtInToolsOrder = const [],
+  }) => _resolvePinnedItems(
+    pluginState: pluginState,
+    pinnedBuiltInIds: pinnedBuiltInIds,
+    hiddenBuiltInIds: hiddenBuiltInIds,
+    isOfflineMode: isOfflineMode,
+    builtInToolsOrder: builtInToolsOrder,
+  ).map((item) => item.toolId).toList();
 
   @override
   void initState() {
@@ -1442,6 +1466,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     if (state.currentScreen != _lastScreen) {
+      // גם מסלולי ניווט שאינם סרגל הניווט (קיצורי מקלדת, סימניות, קישור עמוק)
+      // חייבים לסגור את הפאנל — ה-scrim שלו מכסה רק את אזור התוכן.
+      _closeToolsLauncher();
       if (_lastScreen == Screen.library) {
         final libraryState = libraryBrowserKey.currentState;
         if (libraryState != null) {
@@ -2914,6 +2941,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                                     isOfflineMode:
                                                                         settingsState
                                                                             .isOfflineMode,
+                                                                    builtInToolsOrder:
+                                                                        settingsState
+                                                                            .builtInToolsOrder,
                                                                   );
                                                                   return BlocBuilder<
                                                                     TabsBloc,
@@ -3087,6 +3117,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                                     .hiddenBuiltInToolIds,
                                                 isOfflineMode:
                                                     settingsState.isOfflineMode,
+                                                builtInToolsOrder: settingsState
+                                                    .builtInToolsOrder,
                                               );
                                               final hideTools =
                                                   _isAllToolsHidden(
@@ -3355,6 +3387,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
     final pinnedEnd = effectiveSettingsIdx + pinnedItems.length;
     if (index < pinnedEnd) {
+      _closeToolsLauncher();
       openToolTabById(
         context,
         pinnedItems[index - effectiveSettingsIdx].toolId,
@@ -3378,6 +3411,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
       _toggleToolsLauncher();
       return;
     }
+    // מעבר מסך סוגר את פאנל הכלים — ה-scrim שלו מכסה רק את אזור התוכן, ולכן
+    // בלי זה הוא נשאר צף מעל המסך החדש.
+    if (shouldCloseToolsLauncherOnNavTap(index)) _closeToolsLauncher();
 
     final currentIndex = _getSelectedIndex(currentScreen);
     if (index == currentIndex &&
@@ -3449,7 +3485,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       imageAsset: item.imageAsset,
       label: item.label,
       isSelected: isSelected,
-      onTap: () => openToolTabById(context, item.toolId),
+      onTap: () {
+        // הכלי נפתח בעיון גם כשזה המסך הנוכחי, ואז אין שינוי מסך שיסגור את
+        // פאנל הכלים — לכן הסגירה מפורשת, כמו במסלול ה-NavigationBar.
+        _closeToolsLauncher();
+        openToolTabById(context, item.toolId);
+      },
       compact: compact,
     );
   }

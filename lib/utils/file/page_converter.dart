@@ -13,6 +13,14 @@ import 'package:pdfrx/pdfrx.dart';
 // A cache for the generated page maps to avoid rebuilding them on every conversion.
 final _pageMapCache = <String, PageMap>{};
 
+typedef PdfAnchorsReader =
+    Future<List<({int page, String ref})>> Function(
+      String pdfPath,
+    );
+
+@visibleForTesting
+PdfAnchorsReader? pdfAnchorsReaderForTesting;
+
 /// TTL לרשומות מטמון העוגנים המתמיד — נגזר מהמדיניות של מטמון ה-outline.
 const _persistentAnchorCacheTtl = Duration(days: 90);
 
@@ -104,15 +112,20 @@ Future<List<({int page, String ref})>> _getPdfAnchors(String pdfPath) async {
     }
   }
 
-  PdfDocument? doc;
   final List<({int page, String ref})> anchors;
-  try {
-    doc = await PdfDocument.openFile(pdfPath);
-    anchors = collectPdfAnchors(await doc.loadOutline());
-  } finally {
-    // המתנה לשחרור בפועל — הטאב הסופי עשוי לפתוח מיד את אותו PDF, וה-worker
-    // היחיד של pdfrx חייב להשתחרר מהמסמך הזה קודם.
-    await doc?.dispose();
+  final readerForTesting = pdfAnchorsReaderForTesting;
+  if (readerForTesting != null) {
+    anchors = await readerForTesting(pdfPath);
+  } else {
+    PdfDocument? doc;
+    try {
+      doc = await PdfDocument.openFile(pdfPath);
+      anchors = collectPdfAnchors(await doc.loadOutline());
+    } finally {
+      // המתנה לשחרור בפועל — הטאב הסופי עשוי לפתוח מיד את אותו PDF, וה-worker
+      // היחיד של pdfrx חייב להשתחרר מהמסמך הזה קודם.
+      await doc?.dispose();
+    }
   }
 
   // גם רשימה ריקה נשמרת — PDF ללא outline לא ייפתח וייסרק מחדש בכל המרה.

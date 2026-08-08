@@ -297,7 +297,8 @@ class _ToolsManagementPanelState extends State<ToolsManagementPanel> {
 
   List<Widget> _builtInToolRows(SettingsState state) {
     return [
-      for (final meta in kBuiltInToolsCatalog)
+      // אותו סדר שהמשתמש רואה במשגר הכלים, כולל סדר שהוא קבע בעצמו.
+      for (final meta in orderedBuiltInTools(state.builtInToolsOrder))
         _BuiltInToolRow(
           meta: meta,
           hidden: state.hiddenBuiltInToolIds.contains(meta.toolId),

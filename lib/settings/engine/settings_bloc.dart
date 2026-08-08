@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -68,6 +69,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<ClearProtectedModePassword>(_onClearProtectedModePassword);
     on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
     on<UpdateBuiltInToolsPinnedToNavRail>(_onUpdateBuiltInToolsPinnedToNavRail);
+    on<UpdateBuiltInToolsOrder>(
+      _onUpdateBuiltInToolsOrder,
+      transformer: sequential(),
+    );
     on<UpdateSettingsLanguageCode>(_onUpdateSettingsLanguageCode);
   }
 
@@ -141,6 +146,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         builtInToolsPinnedToNavRail:
             (settings['builtInToolsPinnedToNavRail'] as Set<String>?) ??
             <String>{},
+        builtInToolsOrder:
+            (settings['builtInToolsOrder'] as List<String>?) ?? <String>[],
         settingsLanguageCode:
             (settings['settingsLanguageCode'] as String?) ??
             kDefaultSettingsLanguageCode,
@@ -284,6 +291,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         builtInToolsPinnedToNavRail: event.builtInToolsPinnedToNavRail,
       ),
     );
+  }
+
+  Future<void> _onUpdateBuiltInToolsOrder(
+    UpdateBuiltInToolsOrder event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateBuiltInToolsOrder(event.builtInToolsOrder);
+    emit(state.copyWith(builtInToolsOrder: event.builtInToolsOrder));
   }
 
   Future<void> _onUpdateDarkMode(
