@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -102,6 +103,28 @@ void main() {
     bloc.add(SetCurrentTab(backTo));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('מחוות מעבר טאבים בדסקטופ מקבלות trackpad בלבד', (
+    tester,
+  ) async {
+    final tabs = [_tab('א')];
+    addTearDown(tabs.single.dispose);
+    await pumpReadingScreen(tester, tabs);
+
+    final detectorFinder = find.byWidgetPredicate(
+      (widget) => widget is RawGestureDetector && widget.child is PageView,
+    );
+    expect(detectorFinder, findsOneWidget);
+
+    final detector = tester.widget<RawGestureDetector>(detectorFinder);
+    final factory = detector.gestures[HorizontalDragGestureRecognizer];
+    expect(factory, isNotNull);
+
+    final recognizer =
+        factory!.constructor() as HorizontalDragGestureRecognizer;
+    addTearDown(recognizer.dispose);
+    expect(recognizer.supportedDevices, const {PointerDeviceKind.trackpad});
+  });
 
   group('ReadingScreen + MoveTab — שימור State', () {
     testWidgets('גרירת הטאב הראשון לסוף: כל הטאבים שומרים State', (
