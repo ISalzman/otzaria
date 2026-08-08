@@ -192,6 +192,19 @@ class _AdPopupDialogState extends State<AdPopupDialog>
   Widget _buildAnimatedContent() {
     return AnimatedBuilder(
       animation: Listenable.merge([_textReveal, _collapse]),
+      // הרשימה נבנית פעם אחת ועוברת דרך child: בלעדיו כל 10 הכרטיסים
+      // נבנים מחדש בכל פריים של האנימציה.
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: FutureBuilder<SupportOrganizations>(
+          future: _organizations,
+          builder: (context, snapshot) {
+            final organizations = snapshot.data;
+            if (organizations == null) return const SizedBox.shrink();
+            return _OrganizationsList(organizations: organizations);
+          },
+        ),
+      ),
       builder: (context, child) {
         final c = _collapse.value; // 0 -> 1: התקדמות הכיווץ למעלה
         final t = _textReveal.value; // 0 -> 1: הופעת הטקסט
@@ -262,27 +275,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                 child: Align(
                   alignment: Alignment.topCenter,
                   heightFactor: c,
-                  child: Opacity(
-                    opacity: c,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      child: FutureBuilder<SupportOrganizations>(
-                        future: _organizations,
-                        builder: (context, snapshot) {
-                          final organizations = snapshot.data;
-                          if (organizations == null) {
-                            return const SizedBox.shrink();
-                          }
-                          return _OrganizationsList(
-                            organizations: organizations,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+                  child: Opacity(opacity: c, child: child),
                 ),
               ),
             ),
