@@ -11,6 +11,7 @@ import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
@@ -232,6 +233,37 @@ void main() {
         Settings.getValue<String>(SettingsRepository.keyFontFamily),
         'FrankRuhlCLM',
       );
+    });
+
+    test('גיבוי ישן אינו משחזר טיוטת הערה כהגדרה', () async {
+      const draftKey = '${PersonalNoteDraftService.keyPrefix}book-1:42';
+      final path = await writeBackupFile(
+        timestamp: '2026-01-01T00-00-00.000',
+        data: {
+          'version': '2.0',
+          'timestamp': '2026-01-01T00:00:00.000',
+          'origin': 'manual',
+          'includes': {
+            'settings': true,
+            'bookmarks': false,
+            'history': false,
+            'notes': false,
+            'workspaces': false,
+            'shamorZachor': false,
+            'plugins': false,
+          },
+          'settings': {
+            SettingsRepository.keyFontSize: 24.0,
+            draftKey: '{"contentPlain":"private"}',
+          },
+        },
+        isManual: true,
+      );
+
+      await BackupService.restoreFromBackup(path);
+
+      expect(Settings.getValue<double>(SettingsRepository.keyFontSize), 24.0);
+      expect(box.containsKey(draftKey), isFalse);
     });
 
     test('סימניות והיסטוריה: שתי הרשימות משוחזרות במלואן', () async {

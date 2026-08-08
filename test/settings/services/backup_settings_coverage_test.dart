@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
@@ -78,6 +79,14 @@ void main() {
     test('מפתח שמור-וזכור אינו חלק מההגדרות (מגובה בסעיף נפרד)', () {
       expect(BackupService.isPortableSettingKey('sz:progress_by_id'), isFalse);
       expect(BackupService.isPortableSettingKey('sz:anything'), isFalse);
+    });
+
+    test('טיוטת הערה אישית אינה הגדרה ואינה נכנסת לסעיף ההגדרות', () {
+      // הטיוטה מחזיקה את מלוא תוכן ההערה. הכללתה כאן הייתה מגבה הערות גם
+      // למשתמש שביקש לגבות הגדרות בלבד.
+      const key = '${PersonalNoteDraftService.keyPrefix}book-1:42';
+      expect(BackupService.isNonSettingKey(key), isTrue);
+      expect(BackupService.isPortableSettingKey(key), isFalse);
     });
 
     test('מפתח ברשימת החסימה אינו מגובה', () {
@@ -205,6 +214,21 @@ void main() {
       final settings = await backupSettingsSection();
 
       expect(settings.containsKey('sz:progress_by_id'), isFalse);
+    });
+
+    test('אינו מכניס טיוטות הערות אישיות לתוך ההגדרות', () async {
+      // הטיוטה יושבת באותו box ומחזיקה את מלוא תוכן ההערה: גיבוי הגדרות בלבד
+      // היה מוציא איתו הערות שהמשתמש לא ביקש לגבות.
+      const draftKey = '${PersonalNoteDraftService.keyPrefix}book-1:42';
+      await box.put(draftKey, '{"contentPlain":"טקסט פרטי"}');
+
+      final settings = await backupSettingsSection();
+
+      expect(settings.containsKey(draftKey), isFalse);
+      expect(
+        settings.values.whereType<String>().any((v) => v.contains('טקסט פרטי')),
+        isFalse,
+      );
     });
 
     test('מגבה את שאר הגדרות יומן Google למרות חסימת האסימון', () async {

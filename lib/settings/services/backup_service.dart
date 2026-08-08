@@ -16,6 +16,7 @@ import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -257,11 +258,21 @@ class BackupService {
     return settings;
   }
 
-  /// האם המפתח מגובה. מסנן את [nonPortableSettingsKeys] ואת מפתחות שמור-וזכור
-  /// (`sz:`) שמגובים בסעיף נפרד ואינם חלק מההגדרות.
+  /// קידומות של נתונים שאינם הגדרות, אף שהם נשמרים באותו Hive box.
+  static final List<String> _nonSettingKeyPrefixes = [
+    'sz:',
+    PersonalNoteDraftService.keyPrefix,
+  ];
+
+  /// האם המפתח אינו הגדרה כלל, לפי [_nonSettingKeyPrefixes].
+  @visibleForTesting
+  static bool isNonSettingKey(String key) =>
+      _nonSettingKeyPrefixes.any(key.startsWith);
+
+  /// האם המפתח מגובה. מסנן את [nonPortableSettingsKeys] ואת מה שאינו הגדרה.
   @visibleForTesting
   static bool isPortableSettingKey(String key) =>
-      !key.startsWith('sz:') && !nonPortableSettingsKeys.contains(key);
+      !isNonSettingKey(key) && !nonPortableSettingsKeys.contains(key);
 
   /// Backup bookmarks
   static Future<List<Map<String, dynamic>>> _backupBookmarks() async {
@@ -589,6 +600,8 @@ class BackupService {
   /// Restore settings
   static Future<void> _restoreSettings(Map<String, dynamic> settings) async {
     for (final entry in settings.entries) {
+      // גיבויים ישנים עשויים להכיל נתונים שאינם הגדרות בסעיף הזה.
+      if (isNonSettingKey(entry.key)) continue;
       // keyDbEffectivePath הוא setting פנימי ל-Android בלבד.
       // אם backup נוצר ב-Android ומשוחזר על macOS/Windows — מדלגים,
       // כדי למנוע נתיב /data/user/0/... להחליף את ה-DB path הנכון.
