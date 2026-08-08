@@ -9,6 +9,7 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 
 import '../../helpers/memory_settings_cache.dart';
+import '../../support/search_engine_test_init.dart';
 
 /// היסטוריה של טאב מפוצל: טאב מפוצל אינו ספר, ולכן בלי פירוק לחלוניות אף
 /// מפגש קריאה בפיצול לא היה נרשם — אובדן שקט של "איפה קראתי".
@@ -27,8 +28,9 @@ class _MemoryHistoryRepository extends HistoryRepository {
   }
 }
 
-void main() {
+Future<void> main() async {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final engineReady = await tryInitSearchEngine();
 
   setUp(() async {
     await Settings.init(cacheProvider: MemorySettingsCache());
@@ -47,22 +49,26 @@ void main() {
     return bloc;
   }
 
-  test('AddHistory על טאב מפוצל רושם רשומה לכל חלונית', () async {
-    final bloc = await loadedBloc(_MemoryHistoryRepository());
+  test(
+    'AddHistory על טאב מפוצל רושם רשומה לכל חלונית',
+    () async {
+      final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    final split = CombinedTab(
-      rightTab: search('שאלה א'),
-      leftTab: search('שאלה ב'),
-    );
-    bloc.add(AddHistory(split));
-    await bloc.stream.firstWhere((s) => s.history.length == 2);
+      final split = CombinedTab(
+        rightTab: search('שאלה א'),
+        leftTab: search('שאלה ב'),
+      );
+      bloc.add(AddHistory(split));
+      await bloc.stream.firstWhere((s) => s.history.length == 2);
 
-    // החלונית הראשונה בסדר התצוגה נשארת בראש ההיסטוריה.
-    expect(bloc.state.history.map((b) => b.book.title), [
-      'שאלה א',
-      'שאלה ב',
-    ]);
-  });
+      // החלונית הראשונה בסדר התצוגה נשארת בראש ההיסטוריה.
+      expect(bloc.state.history.map((b) => b.book.title), [
+        'שאלה א',
+        'שאלה ב',
+      ]);
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 
   test('טאב רגיל רושם רשומה אחת', () async {
     final bloc = await loadedBloc(_MemoryHistoryRepository());
@@ -71,78 +77,98 @@ void main() {
     await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
 
     expect(bloc.state.history.map((b) => b.book.title), ['יחיד']);
-  });
+  }, skip: engineReady ? false : searchEngineSkipReason);
 
-  test('AddHistoryForTabs מפרק כל טאב מפוצל שברשימה', () async {
-    final bloc = await loadedBloc(_MemoryHistoryRepository());
+  test(
+    'AddHistoryForTabs מפרק כל טאב מפוצל שברשימה',
+    () async {
+      final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    bloc.add(
-      AddHistoryForTabs([
-        search('רגיל'),
-        CombinedTab(rightTab: search('מפוצל א'), leftTab: search('מפוצל ב')),
-      ]),
-    );
-    await bloc.stream.firstWhere((s) => s.history.length == 3);
+      bloc.add(
+        AddHistoryForTabs([
+          search('רגיל'),
+          CombinedTab(rightTab: search('מפוצל א'), leftTab: search('מפוצל ב')),
+        ]),
+      );
+      await bloc.stream.firstWhere((s) => s.history.length == 3);
 
-    expect(bloc.state.history.map((b) => b.book.title).toSet(), {
-      'רגיל',
-      'מפוצל א',
-      'מפוצל ב',
-    });
-  });
+      expect(bloc.state.history.map((b) => b.book.title).toSet(), {
+        'רגיל',
+        'מפוצל א',
+        'מפוצל ב',
+      });
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 
-  test('CaptureStateForHistory שומר את כל החלוניות בהשטפה', () async {
-    final repository = _MemoryHistoryRepository();
-    final bloc = await loadedBloc(repository);
+  test(
+    'CaptureStateForHistory שומר את כל החלוניות בהשטפה',
+    () async {
+      final repository = _MemoryHistoryRepository();
+      final bloc = await loadedBloc(repository);
 
-    final split = CombinedTab(rightTab: search('א'), leftTab: search('ב'));
-    bloc.add(CaptureStateForHistory(split));
-    await pumpEventQueue();
+      final split = CombinedTab(rightTab: search('א'), leftTab: search('ב'));
+      bloc.add(CaptureStateForHistory(split));
+      await pumpEventQueue();
 
-    // ה-snapshot ממתין ב-debounce; FlushHistory הוא מה שרץ ביציאה מהמסך.
-    bloc.add(FlushHistory());
-    await bloc.stream.firstWhere((s) => s.history.length == 2);
+      // ה-snapshot ממתין ב-debounce; FlushHistory הוא מה שרץ ביציאה מהמסך.
+      bloc.add(FlushHistory());
+      await bloc.stream.firstWhere((s) => s.history.length == 2);
 
-    expect(repository.stored, hasLength(2));
-  });
+      expect(repository.stored, hasLength(2));
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 
-  test('אותה שאילתה בשתי חלוניות אינה נרשמת פעמיים', () async {
-    final bloc = await loadedBloc(_MemoryHistoryRepository());
+  test(
+    'אותה שאילתה בשתי חלוניות אינה נרשמת פעמיים',
+    () async {
+      final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    final split = CombinedTab(
-      rightTab: search('אותה שאילתה'),
-      leftTab: search('אותה שאילתה'),
-    );
-    bloc.add(CaptureStateForHistory(split));
-    await pumpEventQueue();
-    bloc.add(FlushHistory());
-    await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
+      final split = CombinedTab(
+        rightTab: search('אותה שאילתה'),
+        leftTab: search('אותה שאילתה'),
+      );
+      bloc.add(CaptureStateForHistory(split));
+      await pumpEventQueue();
+      bloc.add(FlushHistory());
+      await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
 
-    expect(bloc.state.history, hasLength(1));
-  });
+      expect(bloc.state.history, hasLength(1));
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 
-  test('טאב שאינו מפוצל ממשיך לרשום רשומה אחת', () async {
-    final bloc = await loadedBloc(_MemoryHistoryRepository());
+  test(
+    'טאב שאינו מפוצל ממשיך לרשום רשומה אחת',
+    () async {
+      final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    bloc.add(AddHistory(search('בודד')));
-    await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
+      bloc.add(AddHistory(search('בודד')));
+      await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
 
-    expect(bloc.state.history, hasLength(1));
-    expect(bloc.state.history.first.book.title, 'בודד');
-  });
+      expect(bloc.state.history, hasLength(1));
+      expect(bloc.state.history.first.book.title, 'בודד');
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 
-  test('חלונית עם שאילתה ריקה אינה נרשמת', () async {
-    final bloc = await loadedBloc(_MemoryHistoryRepository());
+  test(
+    'חלונית עם שאילתה ריקה אינה נרשמת',
+    () async {
+      final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    final empty = SearchingTab('ריק', null);
-    addTearDown(empty.dispose);
-    final split = CombinedTab(rightTab: search('יש'), leftTab: empty);
+      final empty = SearchingTab('ריק', null);
+      addTearDown(empty.dispose);
+      final split = CombinedTab(rightTab: search('יש'), leftTab: empty);
 
-    bloc.add(AddHistory(split));
-    await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
-    await pumpEventQueue();
+      bloc.add(AddHistory(split));
+      await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
+      await pumpEventQueue();
 
-    expect(bloc.state.history, hasLength(1));
-    expect(bloc.state.history.first.book.title, 'יש');
-  });
+      expect(bloc.state.history, hasLength(1));
+      expect(bloc.state.history.first.book.title, 'יש');
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 }
