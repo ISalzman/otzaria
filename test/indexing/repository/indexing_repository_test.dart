@@ -974,6 +974,128 @@ void main() {
       expect(provider.indexedFilePaths, contains(pdf.path));
     });
 
+    test(
+      'כל העמודים ב-timeout — הספר נשאר לניסיון חוזר ולא מקבל סמן ריק',
+      () async {
+        // worker של pdfium שנתקע: כל loadText חורג, ואין עמוד אחד להוסיף. סימון
+        // כ-partialPdf היה מחשיב את הספר מאונדקס עם אפס תוכן, לנצח.
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine);
+        final pdf = PdfBook(title: 'נתקע', path: r'C:\pdfs\stuck.pdf');
+        final library = Library(categories: [])..books.add(pdf);
+        final repository = _FakeExtractionRepository(provider)
+          ..emptyPagesTitles.add(pdf.title)
+          ..droppedPagesByTitle[pdf.title] = 12;
+
+        final result = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+
+        expect(result.failures.single.kind, IndexingFailureKind.timeout);
+        expect(result.hasRetryableFailures, isTrue);
+        expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+        expect(engine.addedDocuments, isEmpty);
+      },
+    );
+
+    test(
+      'עמודים ב-timeout ואפס תוכן שנוסף — ניסיון חוזר, לא סמן ריק',
+      () async {
+        // העמודים ששרדו סוננו במנוע כזבל: אין תוכן, אבל כן היו חריגות timeout,
+        // ולכן זהו אינו PDF סרוק שראוי לסמן ריק.
+        final engine = _RecordingSearchEngine()..addPdfReturnsZeroFor = 'מסונן';
+        final provider = _RecordingTantivyDataProvider(engine);
+        final pdf = PdfBook(title: 'מסונן', path: r'C:\pdfs\filtered.pdf');
+        final library = Library(categories: [])..books.add(pdf);
+        final repository = _FakeExtractionRepository(provider)
+          ..droppedPagesByTitle[pdf.title] = 99;
+
+        final result = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+
+        expect(result.failures.single.kind, IndexingFailureKind.timeout);
+        expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      },
+    );
+
+    test('sidecar מסונן אינו מסתיר timeout של חילוץ העמודים', () async {
+      final temp = await io.Directory.systemTemp.createTemp(
+        'otzaria_pdf_sidecar_',
+      );
+      addTearDown(() => temp.delete(recursive: true));
+      final pdf = PdfBook(
+        title: 'sidecar ריק',
+        path: '${temp.path}${io.Platform.pathSeparator}stuck.pdf',
+      );
+      await io.File('${pdf.path}.txt').writeAsString('');
+
+      final engine = _RecordingSearchEngine()..addPdfReturnsZeroFor = pdf.title;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final repository = _FakeExtractionRepository(provider)
+        ..emptyPagesTitles.add(pdf.title)
+        ..droppedPagesByTitle[pdf.title] = 8;
+      final library = Library(categories: [])..books.add(pdf);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failures.single.kind, IndexingFailureKind.timeout);
+      expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      expect(engine.addedPdfTitles, [pdf.title]);
+    });
+
+    test('sidecar מסונן אינו מסתיר timeout של פתיחת PDF', () async {
+      final temp = await io.Directory.systemTemp.createTemp(
+        'otzaria_pdf_sidecar_',
+      );
+      addTearDown(() => temp.delete(recursive: true));
+      final pdf = PdfBook(
+        title: 'פתיחה איטית',
+        path: '${temp.path}${io.Platform.pathSeparator}slow.pdf',
+      );
+      await io.File('${pdf.path}.txt').writeAsString('טקסט שנדחה');
+
+      final engine = _RecordingSearchEngine()..addPdfReturnsZeroFor = pdf.title;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final repository = _FakeExtractionRepository(provider)
+        ..guardedOpenErrorByTitle[pdf.title] = TimeoutException(
+          'PDF open timed out',
+        );
+      final library = Library(categories: [])..books.add(pdf);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failures.single.kind, IndexingFailureKind.timeout);
+      expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      expect(engine.addedPdfTitles, [pdf.title]);
+    });
+
+    test('PDF סרוק (אפס עמודים, בלי timeout) מקבל סמן ריק כמקודם', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'סרוק', path: r'C:\pdfs\scanned.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..emptyPagesTitles.add(pdf.title);
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.isClean, isTrue);
+      expect(provider.indexedFilePaths, contains(pdf.path));
+      expect(engine.addedDocuments, hasLength(1));
+    });
+
     test('כשל בכתיבת סמן PDF קבוע אינו מפיל את הריצה', () async {
       final engine = _RecordingSearchEngine()..failAddForTitle = 'סיבוב פגום';
       final provider = _RecordingTantivyDataProvider(engine);
@@ -1002,8 +1124,29 @@ void main() {
       expect(engine.commitCount, 1);
     });
 
+    test('timeout נשאר לניסיון חוזר ואינו מקבל סמן קבוע', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final pdf = PdfBook(title: 'איטי', path: r'C:\pdfs\slow.pdf');
+      final library = Library(categories: [])..books.add(pdf);
+      final repository = _FakeExtractionRepository(provider)
+        ..failureByTitle[pdf.title] = TimeoutException('PDF open timed out');
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.hasRetryableFailures, isTrue);
+      expect(provider.indexedFilePaths, isNot(contains(pdf.path)));
+      expect(engine.addedDocuments, isEmpty);
+
+      // הריצה הבאה מנסה שוב — עומס רגעי לא מוציא ספר תקין מהאינדקס לתמיד.
+      await repository.indexAllBooks(library, onProgress: (_, _) {});
+      expect(repository.extractedTitles, [pdf.title, pdf.title]);
+    });
+
     for (final entry in <String, Object>{
-      'timeout': TimeoutException('PDF open timed out'),
       'הרשאה': Exception('Access is denied. (os error 5)'),
     }.entries) {
       test('כשל ${entry.key} מסומן ואינו יוצר לולאת הפעלה', () async {
@@ -1567,6 +1710,9 @@ class _FakeExtractionRepository extends IndexingRepository {
   final guardedOpenErrorByTitle = <String, Object>{};
   final droppedPagesByTitle = <String, int>{};
 
+  /// כותרות שחילוצן מחזיר אפס עמודים — PDF סרוק, או כל העמודים ב-timeout.
+  final emptyPagesTitles = <String>{};
+
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {
     extractedTitles.add(book.title);
@@ -1597,9 +1743,11 @@ class _FakeExtractionRepository extends IndexingRepository {
       throw StateError('חילוץ נכשל: ${book.title}');
     }
     final PdfExtraction extraction = (
-      pages: [
-        (reference: '${book.title}, עמוד 1', text: 'תוכן', pageIndex: 0),
-      ],
+      pages: emptyPagesTitles.contains(book.title)
+          ? const <({String reference, String text, int pageIndex})>[]
+          : [
+              (reference: '${book.title}, עמוד 1', text: 'תוכן', pageIndex: 0),
+            ],
       outline: const [],
       error: null,
       stackTrace: null,
@@ -1637,8 +1785,13 @@ class _RecordingSearchEngine implements SearchEngine {
     if (title == failPdfAddForTitle) {
       throw StateError('engine pdf write failed');
     }
+    // המנוע מסנן זבל בעצמו ועשוי להחזיר 0 גם כשנשלחו אליו עמודים.
+    if (title == addPdfReturnsZeroFor) return 0;
     return pages.length;
   }
+
+  /// כותרת שכתיבתה למנוע מחזירה 0 מסמכים — כל העמודים סוננו כזבל.
+  String? addPdfReturnsZeroFor;
 
   /// טביעות-אצבע פר-ספר שהמנוע "קרא מהאינדקס" — לבדיקות reconcile.
   Map<String, BigInt> fingerprints = {};

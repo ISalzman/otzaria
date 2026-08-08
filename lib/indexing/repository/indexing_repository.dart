@@ -683,12 +683,22 @@ class IndexingRepository {
           catalogueOrderByBookKey: catalogueOrderByBookKey,
           onActualIndexingStarted: onActualIndexingStarted,
         );
-      } else if (openError != null) {
+      }
+
+      if (added == 0 && openError != null) {
         // כשל בטעינת ה-PDF עצמו (להבדיל מטקסט סרוק): בלי sidecar מפיצים את
-        // השגיאה, אחרת הספר היה נרשם כ"ריק" לצמיתות ולא מנוסה שוב.
+        // השגיאה, אלא אם ה-sidecar הוסיף בפועל תוכן שמיש.
         Error.throwWithStackTrace(
           _PdfExtractionFailure(openError),
           openStackTrace!,
+        );
+      }
+      if (added == 0 && extracted.droppedPages > 0) {
+        // אפס תוכן לאינדוקס אחרי שעמודים חרגו מה-timeout (worker של pdfium
+        // שנתקע, או עומס רגעי). sidecar נחשב רק אם המנוע קיבל את תוכנו.
+        throw TimeoutException(
+          'חילוץ הטקסט של "${book.title}" לא הניב תוכן; '
+          '${extracted.droppedPages} עמודים חרגו מה-timeout',
         );
       }
     }

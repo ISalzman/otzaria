@@ -72,14 +72,14 @@ void main() {
       });
     }
 
-    test('מסווג TimeoutException בלי ניסיון אוטומטי אינסופי', () {
+    test('מסווג TimeoutException ככשל חולף שראוי לניסיון חוזר', () {
       final failure = IndexingRepository.classifyFailureForTesting(
         pdf,
         TimeoutException('open timed out'),
       );
 
       expect(failure.kind, IndexingFailureKind.timeout);
-      expect(failure.isRetryable, isFalse);
+      expect(failure.isRetryable, isTrue);
     });
 
     test('מסווג הודעת timeout גם כשהחריגה עטופה', () {

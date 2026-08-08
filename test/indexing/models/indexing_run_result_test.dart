@@ -8,12 +8,12 @@ void main() {
       expect(IndexingFailureKind.pdfUnsupported.isRetryable, isFalse);
     });
 
-    test('הרשאה ו-timeout אינם נכנסים ללולאת ניסיון אוטומטית', () {
+    test('כשל הרשאה אינו נכנס ללולאת ניסיון אוטומטית', () {
       expect(IndexingFailureKind.permissionDenied.isRetryable, isFalse);
-      expect(IndexingFailureKind.timeout.isRetryable, isFalse);
     });
 
-    test('כתיבת מנוע וכשל לא ידוע ניתנים לניסיון חוזר', () {
+    test('timeout, כתיבת מנוע וכשל לא ידוע ניתנים לניסיון חוזר', () {
+      expect(IndexingFailureKind.timeout.isRetryable, isTrue);
       expect(IndexingFailureKind.engineWrite.isRetryable, isTrue);
       expect(IndexingFailureKind.unknown.isRetryable, isTrue);
     });
