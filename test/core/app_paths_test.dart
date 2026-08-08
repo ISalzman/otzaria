@@ -47,15 +47,204 @@ void main() {
       );
     });
 
-    test('גיבויים קיימים בנתיב הישן ממשיכים לשמש כברירת מחדל', () async {
+    test('גיבויים קיימים בנתיב הישן מועברים לתיקיית המסמכים', () async {
       final roots = await setUpRoots();
       final legacyBackups = Directory(p.join(roots.dataRoot.path, 'backups'));
       await legacyBackups.create(recursive: true);
       await File(
         p.join(legacyBackups.path, 'otzaria_backup_20250101_120000.zip'),
-      ).writeAsString('');
+      ).writeAsString('archive');
+      // המחסן חייב לנוע יחד עם המניפסטים, אחרת הגיבויים מאבדים את ה-blobs.
+      final legacyBlob = File(
+        p.join(legacyBackups.path, 'store', 'objects', 'ab', 'abcd'),
+      );
+      await legacyBlob.parent.create(recursive: true);
+      await legacyBlob.writeAsString('blob');
 
+      final resolved = await AppPaths.getDefaultBackupPath();
+
+      expect(resolved, p.join(roots.documents.path, 'אוצריא - גיבויים'));
+      expect(
+        await File(
+          p.join(resolved, 'otzaria_backup_20250101_120000.zip'),
+        ).readAsString(),
+        'archive',
+      );
+      expect(
+        await File(
+          p.join(resolved, 'store', 'objects', 'ab', 'abcd'),
+        ).readAsString(),
+        'blob',
+      );
+      expect(await legacyBackups.exists(), isFalse);
+    });
+
+    test('כשל rename חוצה כוננים מעתיק דרך staging ומנקה את המקור', () async {
+      final roots = await setUpRoots();
+      final legacy = Directory(p.join(roots.dataRoot.path, 'backups'));
+      final target = p.join(roots.documents.path, 'אוצריא - גיבויים');
+      await legacy.create(recursive: true);
+      await File(p.join(legacy.path, 'old.zip')).writeAsString('archive');
+
+      final staleStaging = Directory('$target.migrating');
+      await staleStaging.create(recursive: true);
+      await File(p.join(staleStaging.path, 'partial')).writeAsString('partial');
+
+      final resolved = await AppPaths.debugMigrateLegacyBackups(
+        from: legacy.path,
+        to: target,
+        moveLegacyDirectory: (_, _) async {
+          throw const FileSystemException('Cross-device link');
+        },
+      );
+
+      expect(resolved, target);
+      expect(await legacy.exists(), isFalse);
+      expect(await staleStaging.exists(), isFalse);
+      expect(await File(p.join(target, 'old.zip')).readAsString(), 'archive');
+      expect(
+        await File(
+          p.join(target, '.otzaria-legacy-migration-complete'),
+        ).exists(),
+        isFalse,
+      );
+    });
+
+    test('כשל בהעתקת fallback משאיר את המקור ומנקה staging חלקי', () async {
+      final roots = await setUpRoots();
+      final legacy = Directory(p.join(roots.dataRoot.path, 'backups'));
+      final target = p.join(roots.documents.path, 'אוצריא - גיבויים');
+      await legacy.create(recursive: true);
+      final sourceFile = File(p.join(legacy.path, 'old.zip'));
+      await sourceFile.writeAsString('archive');
+
+      final resolved = await AppPaths.debugMigrateLegacyBackups(
+        from: legacy.path,
+        to: target,
+        moveLegacyDirectory: (_, _) async {
+          throw const FileSystemException('Cross-device link');
+        },
+        copyLegacyDirectory: (_, staging) async {
+          await staging.create(recursive: true);
+          await File(p.join(staging.path, 'partial')).writeAsString('partial');
+          throw const FileSystemException('Disk full');
+        },
+      );
+
+      expect(resolved, legacy.path);
+      expect(await sourceFile.readAsString(), 'archive');
+      expect(await Directory(target).exists(), isFalse);
+      expect(await Directory('$target.migrating').exists(), isFalse);
+    });
+
+    test('כשל ניקוי אחרי פרסום היעד אינו מחזיר נתיב מקור חלקי', () async {
+      final roots = await setUpRoots();
+      final legacy = Directory(p.join(roots.dataRoot.path, 'backups'));
+      final target = p.join(roots.documents.path, 'אוצריא - גיבויים');
+      await legacy.create(recursive: true);
+      await File(p.join(legacy.path, 'old.zip')).writeAsString('archive');
+
+      final firstResolved = await AppPaths.debugMigrateLegacyBackups(
+        from: legacy.path,
+        to: target,
+        moveLegacyDirectory: (_, _) async {
+          throw const FileSystemException('Cross-device link');
+        },
+        deleteLegacyDirectory: (_) async {
+          throw const FileSystemException('File is locked');
+        },
+      );
+
+      expect(firstResolved, target);
+      expect(await legacy.exists(), isTrue);
+      expect(await File(p.join(target, 'old.zip')).readAsString(), 'archive');
+      final marker = File(
+        p.join(target, '.otzaria-legacy-migration-complete'),
+      );
+      expect(await marker.exists(), isTrue);
+
+      // בהפעלה הבאה ה-marker מכריע שהיעד השלם הוא מקור האמת.
+      final recovered = await AppPaths.debugMigrateLegacyBackups(
+        from: legacy.path,
+        to: target,
+      );
+      expect(recovered, target);
+      expect(await legacy.exists(), isFalse);
+      expect(await marker.exists(), isFalse);
+    });
+
+    test(
+      'קישור סימבולי במקור מבטל את ההעברה ואינו נמחק',
+      () async {
+        final roots = await setUpRoots();
+        final legacy = Directory(p.join(roots.dataRoot.path, 'backups'));
+        final target = p.join(roots.documents.path, 'אוצריא - גיבויים');
+        await legacy.create(recursive: true);
+        final external = File(p.join(roots.dataRoot.path, 'external.zip'));
+        await external.writeAsString('outside');
+        final link = Link(p.join(legacy.path, 'linked.zip'));
+        await link.create(external.path);
+
+        final resolved = await AppPaths.debugMigrateLegacyBackups(
+          from: legacy.path,
+          to: target,
+        );
+
+        expect(resolved, legacy.path);
+        expect(await link.exists(), isTrue);
+        expect(await external.readAsString(), 'outside');
+        expect(await Directory(target).exists(), isFalse);
+      },
+      skip: Platform.isWindows,
+    );
+
+    test('יעד שאינו ריק — נשארים בנתיב הישן ולא מזיזים דבר', () async {
+      final roots = await setUpRoots();
+      final legacyBackups = Directory(p.join(roots.dataRoot.path, 'backups'));
+      await legacyBackups.create(recursive: true);
+      await File(p.join(legacyBackups.path, 'old.zip')).writeAsString('old');
+
+      final documentsBackups = Directory(
+        p.join(roots.documents.path, 'אוצריא - גיבויים'),
+      );
+      await documentsBackups.create(recursive: true);
+      await File(p.join(documentsBackups.path, 'new.zip')).writeAsString('new');
+
+      // מיזוג שתי התיקיות אינו בתחום ההעברה; החזרת היעד הייתה מסתירה את
+      // הגיבויים הישנים מהמסך.
       expect(await AppPaths.getDefaultBackupPath(), legacyBackups.path);
+      expect(
+        await File(p.join(legacyBackups.path, 'old.zip')).readAsString(),
+        'old',
+      );
+      expect(
+        await File(p.join(documentsBackups.path, 'new.zip')).readAsString(),
+        'new',
+      );
+    });
+
+    test('נתיב גיבוי מותאם אישית — ההעברה אינה רצה כלל', () async {
+      // רגרסיה: העברת התיקייה הישנה כשהמשתמש בחר בה במפורש הייתה מרוקנת את
+      // הנתיב ש-getBackupPath ממשיך להחזיר, וכל הגיבויים היו נעלמים מהמסך.
+      final roots = await setUpRoots();
+      final legacyBackups = Directory(p.join(roots.dataRoot.path, 'backups'));
+      await legacyBackups.create(recursive: true);
+      await File(p.join(legacyBackups.path, 'old.zip')).writeAsString('old');
+
+      await Settings.setValue(
+        SettingsRepository.keyBackupPath,
+        legacyBackups.path,
+      );
+
+      expect(
+        await AppPaths.getDefaultBackupPath(),
+        p.join(roots.documents.path, 'אוצריא - גיבויים'),
+      );
+      expect(await AppPaths.getBackupPath(), legacyBackups.path);
+      expect(
+        await File(p.join(legacyBackups.path, 'old.zip')).readAsString(),
+        'old',
+      );
     });
 
     test('תיקייה ישנה ריקה לא מונעת מעבר למסמכי המשתמש', () async {
