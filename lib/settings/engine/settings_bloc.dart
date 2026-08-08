@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -68,7 +69,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<ClearProtectedModePassword>(_onClearProtectedModePassword);
     on<UpdateHiddenBuiltInToolIds>(_onUpdateHiddenBuiltInToolIds);
     on<UpdateBuiltInToolsPinnedToNavRail>(_onUpdateBuiltInToolsPinnedToNavRail);
-    on<UpdateBuiltInToolsOrder>(_onUpdateBuiltInToolsOrder);
+    on<UpdateBuiltInToolsOrder>(
+      _onUpdateBuiltInToolsOrder,
+      transformer: sequential(),
+    );
     on<UpdateSettingsLanguageCode>(_onUpdateSettingsLanguageCode);
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bloc_test/bloc_test.dart';
@@ -557,6 +558,35 @@ void main() {
         build: () => settingsBloc,
         verify: (bloc) => expect(bloc.state.builtInToolsOrder, isEmpty),
       );
+
+      test('שומר הזזות מהירות לפי סדר הבקשות', () async {
+        const firstOrder = ['builtin.calendar', 'builtin.gematria'];
+        const secondOrder = ['builtin.gematria', 'builtin.calendar'];
+        final firstWrite = Completer<void>();
+        final secondWrite = Completer<void>();
+        when(
+          mockRepository.updateBuiltInToolsOrder(firstOrder),
+        ).thenAnswer((_) => firstWrite.future);
+        when(
+          mockRepository.updateBuiltInToolsOrder(secondOrder),
+        ).thenAnswer((_) => secondWrite.future);
+        final secondStarted = untilCalled(
+          mockRepository.updateBuiltInToolsOrder(secondOrder),
+        );
+
+        settingsBloc.add(const UpdateBuiltInToolsOrder(firstOrder));
+        settingsBloc.add(const UpdateBuiltInToolsOrder(secondOrder));
+        await Future<void>.delayed(Duration.zero);
+        verify(mockRepository.updateBuiltInToolsOrder(firstOrder)).called(1);
+        verifyNever(mockRepository.updateBuiltInToolsOrder(secondOrder));
+
+        firstWrite.complete();
+        await secondStarted;
+        secondWrite.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(settingsBloc.state.builtInToolsOrder, secondOrder);
+      });
 
       // הסדר משמעותי — שתי רשימות באותם מזהים בסדר שונה הן מצבים שונים.
       test('state equality is order sensitive', () {

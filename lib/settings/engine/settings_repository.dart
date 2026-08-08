@@ -210,6 +210,7 @@ class SettingsRepository {
     keyCompactMenuMode,
     keyHiddenBuiltInToolIds,
     keyBuiltInToolsPinnedToNavRail,
+    keyBuiltInToolsOrder,
     keyProtectedModeEnabled,
     keyProtectedModePasswordHash,
     keyCalendarNotificationsEnabled,
