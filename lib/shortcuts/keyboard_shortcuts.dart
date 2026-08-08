@@ -122,7 +122,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     if (_isEditing()) {
       final isModifierPressed =
           HardwareKeyboard.instance.isControlPressed ||
-          HardwareKeyboard.instance.isAltPressed ||
+          ShortcutHelper.isAltModifierPressed ||
           HardwareKeyboard.instance.isMetaPressed;
 
       if (!isModifierPressed) {

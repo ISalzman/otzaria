@@ -28,10 +28,12 @@ void main() {
   // מקובעת כדי שהערך הקנוני יהיה זהה בכל סביבת ריצה.
   setUp(() {
     ShortcutHelper.isMacForTesting = false;
+    ShortcutHelper.isWindowsForTesting = false;
     FocusRepository().resetForTesting();
   });
   tearDown(() {
     ShortcutHelper.isMacForTesting = null;
+    ShortcutHelper.isWindowsForTesting = null;
     FocusRepository().resetForTesting();
   });
 
@@ -173,6 +175,67 @@ void main() {
       await confirm(tester);
 
       expect(await result, 'alt+q');
+    });
+
+    testWidgets('AltGraph מובחן נשמר כ-alt', (tester) async {
+      final result = await openDialog(tester);
+
+      sendKeys(tester, [
+        _modifier(LogicalKeyboardKey.altGraph, PhysicalKeyboardKey.altRight),
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.arrowUp,
+          logicalKey: LogicalKeyboardKey.arrowUp,
+          timeStamp: Duration.zero,
+        ),
+      ]);
+      await tester.pump();
+      await confirm(tester);
+
+      expect(await result, 'alt+arrowup');
+    });
+
+    testWidgets('AltGr של Windows אינו שומר Control סינתטי', (tester) async {
+      ShortcutHelper.isWindowsForTesting = true;
+      final result = await openDialog(tester);
+
+      sendKeys(tester, [
+        _modifier(
+          LogicalKeyboardKey.controlLeft,
+          PhysicalKeyboardKey.controlLeft,
+        ),
+        _modifier(LogicalKeyboardKey.altRight, PhysicalKeyboardKey.altRight),
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.arrowUp,
+          logicalKey: LogicalKeyboardKey.arrowUp,
+          timeStamp: Duration.zero,
+        ),
+      ]);
+      await tester.pump();
+      await confirm(tester);
+
+      expect(await result, 'alt+arrowup');
+    });
+
+    testWidgets('Ctrl+Alt שמאלי נשמר במפורש כ-ctrl+alt', (tester) async {
+      ShortcutHelper.isWindowsForTesting = true;
+      final result = await openDialog(tester);
+
+      sendKeys(tester, [
+        _modifier(
+          LogicalKeyboardKey.controlLeft,
+          PhysicalKeyboardKey.controlLeft,
+        ),
+        _modifier(LogicalKeyboardKey.altLeft, PhysicalKeyboardKey.altLeft),
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.arrowUp,
+          logicalKey: LogicalKeyboardKey.arrowUp,
+          timeStamp: Duration.zero,
+        ),
+      ]);
+      await tester.pump();
+      await confirm(tester);
+
+      expect(await result, 'ctrl+alt+arrowup');
     });
   });
 
