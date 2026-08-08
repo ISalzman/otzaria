@@ -11,7 +11,9 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../helpers/memory_settings_cache.dart';
 
@@ -40,6 +42,25 @@ Link _link({
   index2: index2,
   connectionType: connectionType,
 );
+
+class _LongContentLink extends Link {
+  _LongContentLink({
+    required super.heRef,
+    required super.index1,
+    required super.path2,
+    required super.index2,
+    required super.connectionType,
+    required this._content,
+  });
+
+  final String _content;
+
+  @override
+  Future<String> get content => Future.value(_content);
+
+  @override
+  Future<String> get displayReference => Future.value(fallbackDisplayReference);
+}
 
 /// בונה את הרשימה המשותפת **בלי** `BlocProvider<TextBookBloc>` — כך שכל
 /// קריאה ל-`read<TextBookBloc>()` בתוכה תיכשל ותיתפס כאן.
@@ -251,10 +272,8 @@ void main() {
   ) async {
     final links = List.generate(
       30,
-      (index) => _link(
-        path2: 'ספר-$index',
-        connectionType: LinkTypes.mesoratHashas,
-      ),
+      (index) =>
+          _link(path2: 'ספר-$index', connectionType: LinkTypes.mesoratHashas),
     );
     CommentaryService.seedEraCache({
       for (var index = 0; index < 30; index++)
@@ -279,23 +298,159 @@ void main() {
       ),
     );
 
+    final list = find.byType(ScrollablePositionedList);
     await tester.pumpWidget(view('עמוד-א'));
-    for (var i = 0; i < 20 && find.byType(ListView).evaluate().isEmpty; i++) {
+    for (var i = 0; i < 20 && list.evaluate().isEmpty; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    expect(find.byType(ListView), findsOneWidget);
+    expect(list, findsOneWidget);
     final stateBefore = tester.state(find.byType(LinksListView));
-    final listBefore = tester.widget<ListView>(find.byType(ListView));
-    listBefore.controller!.jumpTo(500);
-    await tester.pump();
-    expect(listBefore.controller!.offset, greaterThan(0));
+
+    await tester.drag(list, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('ספר-0'),
+      findsNothing,
+      reason: 'גללנו למטה — ראש הרשימה יצא מהמסך',
+    );
 
     await tester.pumpWidget(view('עמוד-ב'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    final listAfter = tester.widget<ListView>(find.byType(ListView));
     expect(tester.state(find.byType(LinksListView)), same(stateBefore));
-    expect(listAfter.controller!.offset, 0);
+    expect(
+      find.text('ספר-0'),
+      findsOneWidget,
+      reason: 'החלפת הקטע חייבת להחזיר את הרשימה לראשה',
+    );
+  });
+
+  testWidgets('המסילה בקצה ימין של הרשימה, לא בשמאל', (tester) async {
+    final links = List.generate(
+      30,
+      (index) =>
+          _link(path2: 'ספר-$index', connectionType: LinkTypes.mesoratHashas),
+    );
+    CommentaryService.seedEraCache({
+      for (var index = 0; index < 30; index++)
+        'ספר-$index': CommentaryEra.other,
+    });
+    addTearDown(CommentaryService.clearEraCache);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          // האפליקציה כולה RTL (locale he_IL); בלי זה הצד נמדד הפוך.
+          textDirection: TextDirection.rtl,
+          child: BlocProvider<SettingsBloc>.value(
+            value: _FakeSettingsBloc(),
+            child: Scaffold(
+              body: LinksListView(
+                links: links,
+                chipSourceLinks: links,
+                openBookTitle: 'שבת',
+                selectedLinkTypes: const {},
+                onSelectedLinkTypesChanged: (_) {},
+                openBookCallback: (_) {},
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final barRect = tester.getRect(
+      find.byType(ScrollablePositionedListScrollbar),
+    );
+    final listRect = tester.getRect(find.byType(ScrollablePositionedList));
+
+    expect(
+      listRect.right,
+      lessThan(barRect.right),
+      reason: 'המסילה חייבת לתפוס את הקצה הימני והרשימה להצטמצם לפניה',
+    );
+    expect(
+      listRect.left,
+      barRect.left,
+      reason: 'אין מסילה בקצה השמאלי — הרשימה מגיעה עד לשם',
+    );
+
+    final bar = tester.widget<ScrollablePositionedListScrollbar>(
+      find.byType(ScrollablePositionedListScrollbar),
+    );
+    final list = tester.widget<ScrollablePositionedList>(
+      find.byType(ScrollablePositionedList),
+    );
+    expect(bar.offsetController, isNotNull);
+    expect(bar.offsetController, same(list.scrollOffsetController));
+  });
+
+  testWidgets('גרירת המסילה גוללת בתוך קישור יחיד ומורחב', (tester) async {
+    final longContent = List.filled(200, 'תוכן ארוך לבדיקה').join('\n');
+    final link = _LongContentLink(
+      heRef: 'קישור ארוך, א',
+      index1: 1,
+      path2: 'קישור ארוך',
+      index2: 1,
+      connectionType: LinkTypes.mesoratHashas,
+      content: longContent,
+    );
+    CommentaryService.seedEraCache({'קישור ארוך': CommentaryEra.other});
+    addTearDown(CommentaryService.clearEraCache);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: BlocProvider<SettingsBloc>.value(
+            value: _FakeSettingsBloc(),
+            child: Scaffold(
+              body: LinksListView(
+                links: [link],
+                chipSourceLinks: [link],
+                openBookTitle: 'שבת',
+                selectedLinkTypes: const {},
+                onSelectedLinkTypesChanged: (_) {},
+                openBookCallback: (_) {},
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+
+    final scrollbar = find.byType(ScrollablePositionedListScrollbar);
+    final scrollbarRect = tester.getRect(scrollbar);
+    final listFinder = find.byType(ScrollablePositionedList);
+    final list = tester.widget<ScrollablePositionedList>(listFinder);
+    expect(
+      tester.getRect(listFinder).right,
+      lessThan(scrollbarRect.right),
+      reason: 'קישור מורחב וגבוה מציג מסילה',
+    );
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      closeTo(0, 0.01),
+    );
+
+    await tester.dragFrom(
+      Offset(scrollbarRect.right - 6, scrollbarRect.top + 20),
+      Offset(0, scrollbarRect.height - 40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      list.itemPositionsNotifier!.itemPositions.value.single.itemLeadingEdge,
+      lessThan(-0.1),
+      reason: 'ה־offsetController מאפשר למסילה לגלול בתוך אותו קישור',
+    );
   });
 
   group('מבנה — שני הצדדים צורכים את אותה רשימה', () {

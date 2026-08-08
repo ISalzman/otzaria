@@ -23,6 +23,8 @@ import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 @visibleForTesting
 RenderSettings buildSelectedLinkRenderSettings({
@@ -274,7 +276,13 @@ class LinksListView extends StatefulWidget {
 
 class _LinksListViewState extends State<LinksListView> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
+  // פריט = קישור, ומורחב הוא עשוי להיות גבוה מהמסך. בלי ה-offsetController
+  // גרירת האגודל הייתה נעצרת על גבולות פריטים ולא מזיזה כלום בתוך קישור כזה.
+  final ScrollOffsetController _scrollOffsetController =
+      ScrollOffsetController();
   String _searchQuery = '';
   final Map<String, Future<String>> _contentCache = {};
   final Map<String, bool> _expanded = {};
@@ -305,7 +313,6 @@ class _LinksListViewState extends State<LinksListView> {
       _handleExternalSelectionChange,
     );
     _searchController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -329,10 +336,10 @@ class _LinksListViewState extends State<LinksListView> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             widget.contentScopeKey != contentScopeKey ||
-            !_scrollController.hasClients) {
+            !_itemScrollController.isAttached) {
           return;
         }
-        _scrollController.jumpTo(0);
+        _itemScrollController.jumpTo(index: 0);
       });
     }
   }
@@ -633,13 +640,21 @@ class _LinksListViewState extends State<LinksListView> {
           return _buildEmptyMessage('לא נמצאו קישורים התואמים לחיפוש');
         }
 
-        return ListView.builder(
-          controller: _scrollController,
+        return ScrollablePositionedListScrollbar(
+          scrollController: _itemScrollController,
+          itemPositionsListener: _itemPositionsListener,
+          offsetController: _scrollOffsetController,
           itemCount: filteredLinks.length,
-          itemBuilder: (context, index) {
-            final link = filteredLinks[index];
-            return _buildExpansionTile(link);
-          },
+          child: ScrollablePositionedList.builder(
+            itemScrollController: _itemScrollController,
+            itemPositionsListener: _itemPositionsListener,
+            scrollOffsetController: _scrollOffsetController,
+            itemCount: filteredLinks.length,
+            itemBuilder: (context, index) {
+              final link = filteredLinks[index];
+              return _buildExpansionTile(link);
+            },
+          ),
         );
       },
     );
