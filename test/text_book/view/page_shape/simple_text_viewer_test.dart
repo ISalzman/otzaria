@@ -98,7 +98,7 @@ void main() {
     expect(openedTab, kNotesTabIndex);
   });
 
-  testWidgets('בצורת הדף ריחוף על עוגן נקודה ועל עוגן טווח מציג פופאפ', (
+  testWidgets('כניסה חוזרת לעוגן בצורת הדף אינה בונה פופאפ מחדש', (
     tester,
   ) async {
     final pointLink = Link(
@@ -173,6 +173,22 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(LinkHoverPreviewContent), findsOneWidget);
+    final firstPreview = tester.element(find.byType(LinkHoverPreviewContent));
+
+    await tester.pump();
+    final activeSmartText = tester
+        .widgetList<SmartTextWidget>(find.byType(SmartTextWidget))
+        .firstWhere((widget) => widget.text.contains('link-anchor-active'));
+    activeSmartText.onAnchorHoverExit!('otzaria://anchor?ref=0_0');
+    activeSmartText.onAnchorHover!(
+      'otzaria://anchor?ref=0_0',
+      const Offset(100, 100),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      tester.element(find.byType(LinkHoverPreviewContent)),
+      same(firstPreview),
+    );
 
     LinkPreviewOverlay.dismiss();
     smartText.onAnchorHover!(

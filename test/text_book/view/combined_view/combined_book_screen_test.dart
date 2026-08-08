@@ -21,6 +21,9 @@ import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
+import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
+import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -419,6 +422,82 @@ void main() {
 
     expect(textBookBloc.addWasCalled, isFalse);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('כניסה חוזרת לעוגן הפעיל אינה בונה מחדש את הפופאפ', (
+    tester,
+  ) async {
+    final link = Link(
+      heRef: 'מפרש א, א',
+      index1: 1,
+      path2: 'מפרש א',
+      index2: 1,
+      connectionType: 'commentary',
+      anchorStart: 0,
+      anchorLabel: 'א',
+    );
+    final textBookBloc = _RecordingTextBookBloc(
+      _loadedState().copyWith(
+        links: [link],
+        linksByLine: {
+          1: [link],
+        },
+      ),
+    );
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      const PersonalNotesState.initial(),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final tab = TextBookTab(book: TextBook(title: 'ספר בדיקה'), index: 0);
+    addTearDown(textBookBloc.close);
+    addTearDown(personalNotesBloc.close);
+    addTearDown(settingsBloc.close);
+    addTearDown(tab.dispose);
+    addTearDown(LinkPreviewOverlay.dismiss);
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<TextBookBloc>.value(value: textBookBloc),
+          BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: CombinedView(
+              data: const ['שורה א'],
+              openBookCallback: (_) {},
+              openLeftPaneTab: (_, {searchText}) {},
+              textSize: 18,
+              showCommentaryAsExpansionTiles: false,
+              tab: tab,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const url = 'otzaria://anchor?ref=0_0';
+    var smartText = tester
+        .widgetList<SmartTextWidget>(find.byType(SmartTextWidget))
+        .firstWhere((widget) => widget.text.contains(url));
+    smartText.onAnchorHover!(url, const Offset(100, 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    final firstPreview = tester.element(find.byType(LinkHoverPreviewContent));
+
+    await tester.pump();
+    smartText = tester
+        .widgetList<SmartTextWidget>(find.byType(SmartTextWidget))
+        .firstWhere((widget) => widget.text.contains(url));
+    smartText.onAnchorHoverExit!(url);
+    smartText.onAnchorHover!(url, const Offset(100, 100));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      tester.element(find.byType(LinkHoverPreviewContent)),
+      same(firstPreview),
+    );
   });
 
   testWidgets(

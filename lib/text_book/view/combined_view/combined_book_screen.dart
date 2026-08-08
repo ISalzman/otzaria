@@ -457,11 +457,6 @@ class _CombinedViewState extends State<CombinedView> {
     widget.openBookCallback(tab);
   }
 
-  Link? _previewLinkFromUrl(String url) {
-    final anchor = _anchorLinkFromUrl(url);
-    return anchor?.link ?? inlineLinkFromPreviewUrl(url);
-  }
-
   /// [activeAnchor] — כשהחלונית נפתחה מסמן-אות, הסמן מודגש כל עוד היא פתוחה.
   void _showLinkPreview(
     Link link,
@@ -520,19 +515,16 @@ class _CombinedViewState extends State<CombinedView> {
     LinkPreviewOverlay.cancelScheduledHide();
     _cancelPendingAnchorHover();
 
-    // הסמן שחלוניתו מוצגת מסומן כ"פעיל", והסימון מרנדר מחדש את השורה.
-    // הרינדור מחליף את ה-TextSpan ואת ה-MouseRegion שבתוכו, ולכן פלאטר
-    // מדווח onExit ואחריו onEnter למרות שהעכבר לא זז — מה שסוגר את החלונית
-    // ופותח אותה מחדש, ונראה כהבהוב. כניסה חוזרת לאותו סמן אינה כוונת
-    // משתמש אלא תוצר של הרינדור, ודי בביטול הסגירה המתוזמנת שנעשה למעלה.
-    final reentered = _anchorLinkFromUrl(url);
-    if (reentered != null &&
-        reentered.line == _activeAnchorLine &&
-        reentered.index == _activeAnchorIndex) {
+    // סימון העוגן מחליף את MouseRegion ויוצר exit/enter מלאכותיים.
+    // הסגירה כבר בוטלה לעיל; אין לתזמן פתיחה מחדש לאותו עוגן.
+    final anchor = _anchorLinkFromUrl(url);
+    if (anchor != null &&
+        anchor.line == _activeAnchorLine &&
+        anchor.index == _activeAnchorIndex) {
       return;
     }
 
-    final previewLink = _previewLinkFromUrl(url);
+    final previewLink = anchor?.link ?? inlineLinkFromPreviewUrl(url);
     if (previewLink != null) prefetchLinkPreview(previewLink);
     _anchorHoverTimer = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || !mounted) return;
