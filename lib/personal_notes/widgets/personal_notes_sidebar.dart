@@ -13,6 +13,7 @@ import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
 import 'package:otzaria/personal_notes/utils/personal_notes_filter.dart';
+import 'package:otzaria/personal_notes/utils/open_personal_notes_target.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -116,6 +117,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       context.read<PersonalNotesBloc>().add(const CancelCreatingPersonalNote());
       _loadTarget();
       _restorePendingNewNoteDraftIfNeeded();
+      _syncVisibleLines();
     } else if (oldWidget.focusLineNumber != widget.focusLineNumber &&
         widget.focusLineNumber != null) {
       context.read<PersonalNotesBloc>().add(
@@ -137,11 +139,17 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
 
   void _loadTarget() {
     final bloc = context.read<PersonalNotesBloc>();
-    bloc.add(LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId));
     final focusLineNumber = widget.focusLineNumber;
     if (focusLineNumber != null) {
-      bloc.add(RequestExpandNotesForLine(focusLineNumber));
+      openPersonalNotesTarget(
+        bloc,
+        bookId: widget.bookId,
+        categoryId: widget.categoryId,
+        lineNumber: focusLineNumber,
+      );
+      return;
     }
+    bloc.add(LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId));
   }
 
   Future<void> _restorePendingNewNoteDraftIfNeeded() async {

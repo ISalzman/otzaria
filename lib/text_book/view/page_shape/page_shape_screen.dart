@@ -45,6 +45,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
@@ -543,6 +544,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       selectedCommentatorsOverride: commentators,
       commentatorGroupsOverride: _rightPaneCommentatorGroups(state),
       bookTitleOverride: state.book.title,
+      personalNotesLoader: loadStoredPersonalNotes,
       onSelectedCommentatorsOverrideChanged: (selected) =>
           _saveRightPaneCommentators(state, selected),
       onOpenInNewTab: widget.tab == null

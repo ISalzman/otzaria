@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
@@ -242,6 +243,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                                 ),
                               ),
                         onOpenPersonalNote: widget.onOpenPersonalNote,
+                        personalNotesLoader: loadStoredPersonalNotes,
                       ),
                     )
                   else

@@ -143,6 +143,7 @@ class CommentaryListBase extends StatefulWidget {
   /// בונה (כרטיסיית המפרשים) — בלעדיו הסינון היה חל רק על הפאנל הפנימי.
   final CommentaryTypeSelection? typeSelection;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
+  final PersonalNotesLoader? personalNotesLoader;
 
   const CommentaryListBase({
     super.key,
@@ -174,6 +175,7 @@ class CommentaryListBase extends StatefulWidget {
     this.highlightQueryListenable,
     this.typeSelection,
     this.onOpenPersonalNote,
+    this.personalNotesLoader,
   });
 
   @override
@@ -265,6 +267,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
   List<Link> _orderedLinks = [];
+  String? _pendingCommentatorScrollTitle;
+  bool _commentatorScrollScheduled = false;
 
   List<String> _allSelectedCommentators(TextBookLoaded state) {
     if (widget.selectedCommentatorsOverride != null) {
@@ -824,35 +828,31 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   /// גולל כדי שהמפרש בעל [title] יהיה גלוי, אם הוא ברשימה.
   /// נקרא מ-[_CommentaryCard] כשנפתח דרך anchor על מפרש ספציפי.
   void scrollToCommentator(String title) {
-    if (!_itemScrollController.isAttached || _orderedLinks.isEmpty) {
-      // ייתכן שהרשימה עדיין בטעינה — ננסה שוב אחרי frame
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _itemScrollController.isAttached) {
-          _scrollToCommentatorNow(title);
-        }
-      });
-      return;
-    }
-    _scrollToCommentatorNow(title);
+    _pendingCommentatorScrollTitle = title;
+    _schedulePendingCommentatorScroll();
   }
 
-  void _scrollToCommentatorNow(String title) {
-    // מוצא את האינדקס של הקבוצה הראשונה עם ה-title הנתון
-    final groupIndex = _findGroupIndexByTitle(title);
-    if (groupIndex < 0) return;
-    // מוודא שהקבוצה פתוחה
-    if (_expansionStates[title] == false) {
-      setState(() {
-        _expansionStates[title] = true;
-        _allExpanded = true;
-      });
-    }
-    _itemScrollController.scrollTo(
-      index: groupIndex,
-      alignment: 0.0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
+  void _schedulePendingCommentatorScroll() {
+    if (_commentatorScrollScheduled) return;
+    _commentatorScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _commentatorScrollScheduled = false;
+      if (!mounted || !_itemScrollController.isAttached) return;
+      final title = _pendingCommentatorScrollTitle;
+      if (title == null) return;
+      final groupIndex = _findGroupIndexByTitle(title);
+      if (groupIndex < 0) return;
+      _pendingCommentatorScrollTitle = null;
+      if (_expansionStates[title] == false) {
+        setState(() => _expansionStates[title] = true);
+      }
+      _itemScrollController.scrollTo(
+        index: groupIndex,
+        alignment: 0.0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   int _findGroupIndexByTitle(String title) {
@@ -1356,6 +1356,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
       onOpenPersonalNote: widget.onOpenPersonalNote,
+      personalNotesLoader: widget.personalNotesLoader,
       restoreLineBreaks: _restoreLineBreaks,
     );
   }
@@ -1693,6 +1694,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                   // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
                   _orderedLinks = data;
+                  if (_pendingCommentatorScrollTitle != null) {
+                    _schedulePendingCommentatorScroll();
+                  }
 
                   // מנקה מפתחות ישנים ומכין מפתחות חדשים
                   final currentLinkKeys = data
@@ -2129,6 +2133,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   /// מחרוזת להדגשה מה-BLoC החיצוני, ללא שדה החיפוש הפנימי.
   final ValueListenable<String>? highlightQueryListenable;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
+  final PersonalNotesLoader? personalNotesLoader;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -2156,6 +2161,7 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.restoreLineBreaks,
     this.highlightQueryListenable,
     this.onOpenPersonalNote,
+    this.personalNotesLoader,
   });
 
   @override
@@ -2194,8 +2200,13 @@ class _CollapsibleCommentaryGroupState
   }
 
   void _loadPersonalNotes() {
+    final loader = widget.personalNotesLoader;
+    if (loader == null) {
+      _personalNotes = Future.value(const <PersonalNote>[]);
+      return;
+    }
     final categoryId = widget.group.links.firstOrNull?.targetCategoryId;
-    _personalNotes = PersonalNotesRepository().loadNotes(
+    _personalNotes = loader(
       widget.group.bookTitle,
       categoryId: categoryId,
     );

@@ -240,13 +240,19 @@ bool shouldRestoreScrollOnContinuousModeChange({
   return previousMode != null && previousMode != currentMode;
 }
 
+@visibleForTesting
+bool shouldHandleCommentaryScrollTarget({
+  required int cardIndex,
+  required int targetLineIndex,
+}) => cardIndex == targetLineIndex;
+
+typedef _CommentaryScrollTarget = ({int lineIndex, String title});
+
 class _CombinedViewState extends State<CombinedView> {
   bool _anchorHandledCurrentTap = false;
 
-  /// שם מפרש שנלחץ דרך anchor — מועבר ל-_CommentaryCard לגלילה מיידית.
-  /// מאופס אחרי frame אחד כדי שלא יגלול מחדש בכל rebuild עתידי.
-  final ValueNotifier<String?> _anchorScrollTargetNotifier =
-      ValueNotifier<String?>(null);
+  final ValueNotifier<_CommentaryScrollTarget?> _anchorScrollTargetNotifier =
+      ValueNotifier<_CommentaryScrollTarget?>(null);
 
   // שמירת הטקסט הנבחר האחרון
   final ValueNotifier<String?> _savedSelectedText = ValueNotifier<String?>(
@@ -400,12 +406,16 @@ class _CombinedViewState extends State<CombinedView> {
                   ),
                 );
               }
-              // מעדכן את ה-notifier; _CommentaryCard יקרא ל-scrollToCommentator
-              _anchorScrollTargetNotifier.value = title;
-              // מאפס אחרי frame כדי שלא יגלול שוב בrebuild עתידי
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _anchorScrollTargetNotifier.value = null;
-              });
+              if (sourceLine != null) {
+                final target = (lineIndex: sourceLine, title: title);
+                _anchorScrollTargetNotifier.value = null;
+                _anchorScrollTargetNotifier.value = target;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _anchorScrollTargetNotifier.value == target) {
+                    _anchorScrollTargetNotifier.value = null;
+                  }
+                });
+              }
             }
             return;
           }
@@ -2581,7 +2591,7 @@ class _CommentaryCard extends StatefulWidget {
   final double viewportHeight;
   final SelectionSyncController? selectionSyncController;
   final String searchText;
-  final ValueListenable<String?> scrollTargetListenable;
+  final ValueListenable<_CommentaryScrollTarget?> scrollTargetListenable;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   const _CommentaryCard({
@@ -2607,11 +2617,15 @@ class _CommentaryCardState extends State<_CommentaryCard> {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
 
   void _onScrollTargetChanged() {
-    final title = widget.scrollTargetListenable.value;
-    if (title == null) return;
-    // ה-CommentaryListBase אולי עוד בטעינה — נמסור ל-scrollToCommentator
-    // שמטפל בזה פנימית עם postFrameCallback
-    _commentaryKey.currentState?.scrollToCommentator(title);
+    final target = widget.scrollTargetListenable.value;
+    if (target == null ||
+        !shouldHandleCommentaryScrollTarget(
+          cardIndex: widget.index,
+          targetLineIndex: target.lineIndex,
+        )) {
+      return;
+    }
+    _commentaryKey.currentState?.scrollToCommentator(target.title);
   }
 
   @override
@@ -2621,10 +2635,16 @@ class _CommentaryCardState extends State<_CommentaryCard> {
     widget.scrollTargetListenable.addListener(_onScrollTargetChanged);
     // בדיקה מיידית: אולי הנוטיפייר כבר הוגדר לפני שה-card נוצר
     final initialTarget = widget.scrollTargetListenable.value;
-    if (initialTarget != null) {
+    if (initialTarget != null &&
+        shouldHandleCommentaryScrollTarget(
+          cardIndex: widget.index,
+          targetLineIndex: initialTarget.lineIndex,
+        )) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _commentaryKey.currentState?.scrollToCommentator(initialTarget);
+          _commentaryKey.currentState?.scrollToCommentator(
+            initialTarget.title,
+          );
         }
       });
     }
@@ -2706,6 +2726,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                     externalTotalResultsNotifier: _totalNotifier,
                     externalCurrentIndexNotifier: _currentIndexNotifier,
                     onOpenPersonalNote: widget.onOpenPersonalNote,
+                    personalNotesLoader: loadStoredPersonalNotes,
                   ),
                 ),
               ),
