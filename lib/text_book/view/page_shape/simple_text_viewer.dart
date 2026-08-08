@@ -517,11 +517,6 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return (link: anchorLinks[index], line: line, index: index);
   }
 
-  Link? _previewLinkFromUrl(String url, TextBookLoaded state) {
-    final anchor = _anchorLinkFromUrl(url, state);
-    return anchor?.link ?? inlineLinkFromPreviewUrl(url);
-  }
-
   Future<void> _openAnchorTarget(Link link) async {
     LinkPreviewOverlay.dismiss();
     final tab = await buildLinkTargetTab(link);
@@ -577,7 +572,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     _cancelPendingPreview();
     final currentState = context.read<TextBookBloc>().state;
     if (currentState is TextBookLoaded) {
-      final previewLink = _previewLinkFromUrl(url, currentState);
+      // סימון העוגן מחליף את MouseRegion ויוצר exit/enter מלאכותיים.
+      // הסגירה כבר בוטלה לעיל; אין לתזמן פתיחה מחדש לאותו עוגן.
+      final anchor = _anchorLinkFromUrl(url, currentState);
+      if (anchor != null &&
+          anchor.line == _activeAnchorLine &&
+          anchor.index == _activeAnchorIndex) {
+        return;
+      }
+      final previewLink = anchor?.link ?? inlineLinkFromPreviewUrl(url);
       if (previewLink != null) prefetchLinkPreview(previewLink);
     }
     _previewHoverTimer = Timer(const Duration(milliseconds: 280), () {

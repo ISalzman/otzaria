@@ -457,11 +457,6 @@ class _CombinedViewState extends State<CombinedView> {
     widget.openBookCallback(tab);
   }
 
-  Link? _previewLinkFromUrl(String url) {
-    final anchor = _anchorLinkFromUrl(url);
-    return anchor?.link ?? inlineLinkFromPreviewUrl(url);
-  }
-
   /// [activeAnchor] — כשהחלונית נפתחה מסמן-אות, הסמן מודגש כל עוד היא פתוחה.
   void _showLinkPreview(
     Link link,
@@ -519,7 +514,17 @@ class _CombinedViewState extends State<CombinedView> {
     }
     LinkPreviewOverlay.cancelScheduledHide();
     _cancelPendingAnchorHover();
-    final previewLink = _previewLinkFromUrl(url);
+
+    // סימון העוגן מחליף את MouseRegion ויוצר exit/enter מלאכותיים.
+    // הסגירה כבר בוטלה לעיל; אין לתזמן פתיחה מחדש לאותו עוגן.
+    final anchor = _anchorLinkFromUrl(url);
+    if (anchor != null &&
+        anchor.line == _activeAnchorLine &&
+        anchor.index == _activeAnchorIndex) {
+      return;
+    }
+
+    final previewLink = anchor?.link ?? inlineLinkFromPreviewUrl(url);
     if (previewLink != null) prefetchLinkPreview(previewLink);
     _anchorHoverTimer = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || !mounted) return;
