@@ -91,6 +91,25 @@ void main() {
     });
   });
 
+  group('shouldHandleCommentaryScrollTarget', () {
+    test('רק כרטיס השורה שממנה נלחץ העוגן מגיב ליעד', () {
+      expect(
+        shouldHandleCommentaryScrollTarget(
+          cardIndex: 4,
+          targetLineIndex: 4,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldHandleCommentaryScrollTarget(
+          cardIndex: 8,
+          targetLineIndex: 4,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('buildCombinedViewContextMenuLinksForParagraph', () {
     test('מחזירה רק קישורים רגילים של הפסקה שנלחצה', () {
       final linksByLine = <int, List<Link>>{

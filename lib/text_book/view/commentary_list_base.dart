@@ -14,6 +14,7 @@ import 'package:otzaria/services/target_line_links_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
@@ -141,6 +142,8 @@ class CommentaryListBase extends StatefulWidget {
   /// בחירת סוגי המפרשים המנוהלת ע"י ההורה. נדרש כשהצ׳יפים מוצגים בפאנל שההורה
   /// בונה (כרטיסיית המפרשים) — בלעדיו הסינון היה חל רק על הפאנל הפנימי.
   final CommentaryTypeSelection? typeSelection;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
+  final PersonalNotesLoader? personalNotesLoader;
 
   const CommentaryListBase({
     super.key,
@@ -171,6 +174,8 @@ class CommentaryListBase extends StatefulWidget {
     this.autofocus = false,
     this.highlightQueryListenable,
     this.typeSelection,
+    this.onOpenPersonalNote,
+    this.personalNotesLoader,
   });
 
   @override
@@ -262,6 +267,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   // רשימה של כל ה-links לפי סדר הופעתם (נבנית מחדש בכל build)
   List<Link> _orderedLinks = [];
+  String? _pendingCommentatorScrollTitle;
+  bool _commentatorScrollScheduled = false;
 
   List<String> _allSelectedCommentators(TextBookLoaded state) {
     if (widget.selectedCommentatorsOverride != null) {
@@ -818,6 +825,48 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  /// גולל כדי שהמפרש בעל [title] יהיה גלוי, אם הוא ברשימה.
+  /// נקרא מ-[_CommentaryCard] כשנפתח דרך anchor על מפרש ספציפי.
+  void scrollToCommentator(String title) {
+    _pendingCommentatorScrollTitle = title;
+    _schedulePendingCommentatorScroll();
+  }
+
+  void _schedulePendingCommentatorScroll() {
+    if (_commentatorScrollScheduled) return;
+    _commentatorScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _commentatorScrollScheduled = false;
+      if (!mounted || !_itemScrollController.isAttached) return;
+      final title = _pendingCommentatorScrollTitle;
+      if (title == null) return;
+      final groupIndex = _findGroupIndexByTitle(title);
+      if (groupIndex < 0) return;
+      _pendingCommentatorScrollTitle = null;
+      if (_expansionStates[title] == false) {
+        setState(() => _expansionStates[title] = true);
+      }
+      _itemScrollController.scrollTo(
+        index: groupIndex,
+        alignment: 0.0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  int _findGroupIndexByTitle(String title) {
+    // _orderedLinks מסודר לפי קבוצות — מחפש את האינדקס הקבוצתי
+    // על ידי מניית קבוצות ייחודיות (כמו ב-ScrollablePositionedList)
+    final seen = <String>[];
+    for (final link in _orderedLinks) {
+      final t = utils.getTitleFromPath(link.path2);
+      if (!seen.contains(t)) seen.add(t);
+    }
+    final idx = seen.indexOf(title);
+    return idx; // -1 אם לא נמצא
+  }
+
   void _updateLastScrollIndex() {
     // הרשימה מדווחת גם פריטים שנבנו מחוץ למסך (cache) — מסננים לנראים בלבד.
     final positions = _itemPositionsListener.itemPositions.value;
@@ -1306,6 +1355,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           _renderedTitleByKey[_getLinkKey(link)] = title
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
+      onOpenPersonalNote: widget.onOpenPersonalNote,
+      personalNotesLoader: widget.personalNotesLoader,
       restoreLineBreaks: _restoreLineBreaks,
     );
   }
@@ -1643,6 +1694,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
                   // שומר את הסדר של ה-links לצורך חישוב אינדקס החיפוש
                   _orderedLinks = data;
+                  if (_pendingCommentatorScrollTitle != null) {
+                    _schedulePendingCommentatorScroll();
+                  }
 
                   // מנקה מפתחות ישנים ומכין מפתחות חדשים
                   final currentLinkKeys = data
@@ -2078,6 +2132,8 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 
   /// מחרוזת להדגשה מה-BLoC החיצוני, ללא שדה החיפוש הפנימי.
   final ValueListenable<String>? highlightQueryListenable;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
+  final PersonalNotesLoader? personalNotesLoader;
 
   const _CollapsibleCommentaryGroup({
     super.key,
@@ -2104,6 +2160,8 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     this.onLinkTitleRendered,
     this.restoreLineBreaks,
     this.highlightQueryListenable,
+    this.onOpenPersonalNote,
+    this.personalNotesLoader,
   });
 
   @override
@@ -2114,11 +2172,13 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
 class _CollapsibleCommentaryGroupState
     extends State<_CollapsibleCommentaryGroup> {
   late bool _isExpanded;
+  late Future<List<PersonalNote>> _personalNotes;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = widget.isExpanded;
+    _loadPersonalNotes();
   }
 
   /// פותח את יעד הקישור בכרטיסייה חדשה (טקסט או PDF, לפי תבנית הפתיחה).
@@ -2134,6 +2194,26 @@ class _CollapsibleCommentaryGroupState
     if (oldWidget.isExpanded != widget.isExpanded) {
       _isExpanded = widget.isExpanded;
     }
+    if (oldWidget.group.bookTitle != widget.group.bookTitle) {
+      _loadPersonalNotes();
+    }
+  }
+
+  void _loadPersonalNotes() {
+    final loader = widget.personalNotesLoader;
+    if (loader == null) {
+      _personalNotes = Future.value(const <PersonalNote>[]);
+      return;
+    }
+    final categoryId = widget.group.links.firstOrNull?.targetCategoryId;
+    _personalNotes = loader(
+      widget.group.bookTitle,
+      categoryId: categoryId,
+    );
+  }
+
+  void _refreshPersonalNotes() {
+    setState(_loadPersonalNotes);
   }
 
   @override
@@ -2318,6 +2398,7 @@ class _CollapsibleCommentaryGroupState
                               removePunctuation: widget.removePunctuation,
                               savedSelectedText: savedTextAtBuild,
                               onNavigateToLink: _navigateToLink,
+                              onNoteSaved: _refreshPersonalNotes,
                               onCopySelected: () => ContextMenuUtils.copyFormattedText(
                                 context: menuCtx,
                                 savedSelectedText:
@@ -2363,6 +2444,8 @@ class _CollapsibleCommentaryGroupState
                                 : null,
                             onRendered: (text) =>
                                 widget.onLinkRendered?.call(link, text),
+                            personalNotes: _personalNotes,
+                            onOpenPersonalNote: widget.onOpenPersonalNote,
                           ),
                         );
                       },

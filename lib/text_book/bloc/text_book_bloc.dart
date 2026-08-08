@@ -1195,6 +1195,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
+      if (event.displayOrderOnly) {
+        emit(
+          currentState.copyWith(
+            activeCommentators: event.commentators,
+            selectedIndex: currentState.selectedIndex,
+          ),
+        );
+        return;
+      }
+
       // בחירה אוטומטית (ברירת מחדל) ושחזור שמור גוברים על בחירה אוטומטית
       // קודמת (כגון אוטו-בחירת 'הערות'), כל עוד המשתמש לא בחר ידנית בסשן זה.
       if (!event.isUserAction) {

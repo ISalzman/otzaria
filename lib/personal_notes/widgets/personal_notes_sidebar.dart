@@ -13,6 +13,7 @@ import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
 import 'package:otzaria/personal_notes/utils/personal_notes_filter.dart';
+import 'package:otzaria/personal_notes/utils/open_personal_notes_target.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -35,6 +36,7 @@ class PersonalNotesSidebar extends StatefulWidget {
   final ValueChanged<int> onNavigateToLine;
   final bool isPdf;
   final List<int>? visibleLineIndices;
+  final int? focusLineNumber;
 
   /// ה-outline של ה-PDF לחישוב כתובת המיקום של כל הערה. רלוונטי רק כש-[isPdf].
   /// מועבר כ-listenable כי ה-outline עשוי להיטען אחרי בניית הפאנל.
@@ -47,6 +49,7 @@ class PersonalNotesSidebar extends StatefulWidget {
     required this.onNavigateToLine,
     this.isPdf = false,
     this.visibleLineIndices,
+    this.focusLineNumber,
     this.pdfOutline,
   });
 
@@ -77,9 +80,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<PersonalNotesBloc>().add(
-        LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
-      );
+      _loadTarget();
       _restorePendingNewNoteDraftIfNeeded();
       _syncVisibleLines();
     });
@@ -114,12 +115,14 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
     if (oldWidget.bookId != widget.bookId ||
         oldWidget.categoryId != widget.categoryId) {
       context.read<PersonalNotesBloc>().add(const CancelCreatingPersonalNote());
-      context.read<PersonalNotesBloc>().add(
-        LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
-      );
+      _loadTarget();
       _restorePendingNewNoteDraftIfNeeded();
       _syncVisibleLines();
-      return;
+    } else if (oldWidget.focusLineNumber != widget.focusLineNumber &&
+        widget.focusLineNumber != null) {
+      context.read<PersonalNotesBloc>().add(
+        RequestExpandNotesForLine(widget.focusLineNumber!),
+      );
     }
 
     if (!listEquals(oldWidget.visibleLineIndices, widget.visibleLineIndices) &&
@@ -132,6 +135,21 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   void dispose() {
     _visibleLineIndices.dispose();
     super.dispose();
+  }
+
+  void _loadTarget() {
+    final bloc = context.read<PersonalNotesBloc>();
+    final focusLineNumber = widget.focusLineNumber;
+    if (focusLineNumber != null) {
+      openPersonalNotesTarget(
+        bloc,
+        bookId: widget.bookId,
+        categoryId: widget.categoryId,
+        lineNumber: focusLineNumber,
+      );
+      return;
+    }
+    bloc.add(LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId));
   }
 
   Future<void> _restorePendingNewNoteDraftIfNeeded() async {

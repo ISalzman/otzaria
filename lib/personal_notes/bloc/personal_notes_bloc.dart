@@ -12,7 +12,7 @@ class PersonalNotesBloc extends Bloc<PersonalNotesEvent, PersonalNotesState> {
   PersonalNotesBloc({PersonalNotesRepository? repository})
     : _repository = repository ?? PersonalNotesRepository(),
       super(const PersonalNotesState.initial()) {
-    on<LoadPersonalNotes>(_onLoadNotes);
+    on<LoadPersonalNotes>(_onLoadNotes, transformer: restartable());
     on<AddPersonalNote>(_onAddNote);
     on<UpdatePersonalNote>(_onUpdateNote);
     on<DeletePersonalNote>(_onDeleteNote);

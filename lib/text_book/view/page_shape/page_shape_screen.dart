@@ -45,6 +45,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
@@ -93,6 +94,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   bool _isLoadingConfig = true;
   bool _isLeftSidebarOpen = false;
   int _leftSidebarTabIndex = 0;
+  String? _notesBookIdOverride;
+  int? _notesCategoryIdOverride;
+  int? _notesFocusLineNumber;
 
   // פאנל הגדרות צורת הדף (overlay צף בצד הימני). המפתח מאולץ מחדש בכל פתיחה
   // כדי שהפאנל ייטען עם הערכים העדכניים גם אחרי שינויים במסך.
@@ -540,6 +544,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       selectedCommentatorsOverride: commentators,
       commentatorGroupsOverride: _rightPaneCommentatorGroups(state),
       bookTitleOverride: state.book.title,
+      personalNotesLoader: loadStoredPersonalNotes,
       onSelectedCommentatorsOverrideChanged: (selected) =>
           _saveRightPaneCommentators(state, selected),
       onOpenInNewTab: widget.tab == null
@@ -673,7 +678,13 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   void _openLeftSidebarTab(int index) {
     final validIndex = index.clamp(0, kSidebarTabCount - 1);
-    if (_isLeftSidebarOpen && _leftSidebarTabIndex == validIndex) {
+    // פתיחה מחדש של לשונית ההערות חייבת לעבור גם כשהיא כבר פתוחה, כדי לאפס
+    // יעד הערה של מפרש ולחזור להערות הספר הראשי.
+    final shouldResetNotesTarget =
+        validIndex == kNotesTabIndex && _notesBookIdOverride != null;
+    if (_isLeftSidebarOpen &&
+        _leftSidebarTabIndex == validIndex &&
+        !shouldResetNotesTarget) {
       return;
     }
 
@@ -681,6 +692,39 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _isLeftSidebarOpen = true;
       _leftSidebarTabIndex = validIndex;
+      if (validIndex == kNotesTabIndex) {
+        _notesBookIdOverride = null;
+        _notesCategoryIdOverride = null;
+        _notesFocusLineNumber = null;
+      }
+    });
+  }
+
+  void _openCommentaryPersonalNote(
+    String bookId,
+    int? categoryId,
+    int lineNumber,
+  ) {
+    if (!_isLeftSidebarOpen) _reanchorMainText();
+    setState(() {
+      _notesBookIdOverride = bookId;
+      _notesCategoryIdOverride = categoryId;
+      _notesFocusLineNumber = lineNumber;
+      _isLeftSidebarOpen = true;
+      _leftSidebarTabIndex = kNotesTabIndex;
+    });
+  }
+
+  void _focusMainBookNotes() {
+    if (_notesBookIdOverride == null ||
+        !_isLeftSidebarOpen ||
+        _leftSidebarTabIndex != kNotesTabIndex) {
+      return;
+    }
+    setState(() {
+      _notesBookIdOverride = null;
+      _notesCategoryIdOverride = null;
+      _notesFocusLineNumber = null;
     });
   }
 
@@ -917,6 +961,9 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                           closeCommentatorsFilterNotifier:
                               _closeCommentatorsFilterNotifier,
                           tab: widget.tab,
+                          notesBookIdOverride: _notesBookIdOverride,
+                          notesCategoryIdOverride: _notesCategoryIdOverride,
+                          notesFocusLineNumber: _notesFocusLineNumber,
                           onNavigateToLine: (lineNumber) =>
                               _navigateToLine(state, lineNumber),
                           onClosePane: _toggleLeftSidebar,
@@ -975,6 +1022,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                           _activeWorkspaceId,
                                                       selectionSyncController:
                                                           _selectionSyncController,
+                                                      onOpenPersonalNote:
+                                                          _openCommentaryPersonalNote,
                                                       onLoadFailed: () =>
                                                           _hideColumn(
                                                             'left',
@@ -1060,45 +1109,49 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                 ),
                                               ],
                                               Expanded(
-                                                child: SimpleTextViewer(
-                                                  content: state.content,
-                                                  fontSize: state.fontSize,
-                                                  selectionSyncController:
-                                                      _selectionSyncController,
-                                                  openBookCallback:
-                                                      widget.openBookCallback,
-                                                  scrollController:
-                                                      state.scrollController,
-                                                  positionsListener:
-                                                      state.positionsListener,
-                                                  isMainText: true,
-                                                  isPersonalNotesTabActive:
-                                                      _isLeftSidebarOpen &&
-                                                      _leftSidebarTabIndex ==
-                                                          kNotesTabIndex,
-                                                  isCommentatorsTabActive:
-                                                      _isLeftSidebarOpen &&
-                                                      _leftSidebarTabIndex ==
-                                                          kCommentaryTabIndex,
-                                                  onOpenCommentatorsPane:
-                                                      _openCommentatorsPane,
-                                                  onOpenCommentatorsPaneWithFilter:
-                                                      _openCommentatorsPaneWithFilter,
-                                                  tab: widget.tab,
-                                                  labelForIndex:
-                                                      state
-                                                          .tableOfContents
-                                                          .isEmpty
-                                                      ? null
-                                                      : (index) =>
-                                                            _mainTextLabelForIndex(
-                                                              index,
-                                                              state,
-                                                            ),
-                                                  onOpenSidebarTab:
-                                                      _openLeftSidebarTab,
-                                                  onOpenSearch:
-                                                      widget.onOpenSearch,
+                                                child: Listener(
+                                                  onPointerDown: (_) =>
+                                                      _focusMainBookNotes(),
+                                                  child: SimpleTextViewer(
+                                                    content: state.content,
+                                                    fontSize: state.fontSize,
+                                                    selectionSyncController:
+                                                        _selectionSyncController,
+                                                    openBookCallback:
+                                                        widget.openBookCallback,
+                                                    scrollController:
+                                                        state.scrollController,
+                                                    positionsListener:
+                                                        state.positionsListener,
+                                                    isMainText: true,
+                                                    isPersonalNotesTabActive:
+                                                        _isLeftSidebarOpen &&
+                                                        _leftSidebarTabIndex ==
+                                                            kNotesTabIndex,
+                                                    isCommentatorsTabActive:
+                                                        _isLeftSidebarOpen &&
+                                                        _leftSidebarTabIndex ==
+                                                            kCommentaryTabIndex,
+                                                    onOpenCommentatorsPane:
+                                                        _openCommentatorsPane,
+                                                    onOpenCommentatorsPaneWithFilter:
+                                                        _openCommentatorsPaneWithFilter,
+                                                    tab: widget.tab,
+                                                    labelForIndex:
+                                                        state
+                                                            .tableOfContents
+                                                            .isEmpty
+                                                        ? null
+                                                        : (index) =>
+                                                              _mainTextLabelForIndex(
+                                                                index,
+                                                                state,
+                                                              ),
+                                                    onOpenSidebarTab:
+                                                        _openLeftSidebarTab,
+                                                    onOpenSearch:
+                                                        widget.onOpenSearch,
+                                                  ),
                                                 ),
                                               ),
                                               if (_columnVisibility['right'] ==
@@ -1292,6 +1345,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                       true,
                                                                   selectionSyncController:
                                                                       _selectionSyncController,
+                                                                  onOpenPersonalNote:
+                                                                      _openCommentaryPersonalNote,
                                                                   onLoadFailed: () =>
                                                                       _hideColumn(
                                                                         'bottom',
@@ -1354,6 +1409,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                 isBottom: true,
                                                                 selectionSyncController:
                                                                     _selectionSyncController,
+                                                                onOpenPersonalNote:
+                                                                    _openCommentaryPersonalNote,
                                                                 onLoadFailed: () =>
                                                                     _hideColumn(
                                                                       'bottomRight',
@@ -1420,6 +1477,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                                 isBottom: true,
                                                                 selectionSyncController:
                                                                     _selectionSyncController,
+                                                                onOpenPersonalNote:
+                                                                    _openCommentaryPersonalNote,
                                                                 onLoadFailed: () =>
                                                                     _hideColumn(
                                                                       'bottom',
@@ -1496,6 +1555,8 @@ class _CommentaryPane extends StatefulWidget {
   final bool isBottom; // האם זה מפרש תחתון (גופן ייעודי מדיאלוג ההגדרות)
   final VoidCallback? onLoadFailed;
   final SelectionSyncController? selectionSyncController;
+  final void Function(String bookId, int? categoryId, int lineNumber)?
+  onOpenPersonalNote;
 
   const _CommentaryPane({
     required this.commentatorName,
@@ -1504,6 +1565,7 @@ class _CommentaryPane extends StatefulWidget {
     this.isBottom = false,
     this.onLoadFailed,
     this.selectionSyncController,
+    this.onOpenPersonalNote,
   });
 
   @override
@@ -2287,6 +2349,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               reportBook: _reportBook,
               highlightedIndices: _highlightedIndices, // הדגשות מקומיות
               onCommentatorChanged: _reloadCommentary, // callback לרענון
+              onOpenCommentaryPersonalNote: widget.onOpenPersonalNote,
             );
           },
         );

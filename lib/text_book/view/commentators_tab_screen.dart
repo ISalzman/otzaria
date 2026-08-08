@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -804,6 +805,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           externalSearchSnippetsNotifier: _externalSearchSnippets,
           externalAllExpandedNotifier: _allExpandedInChild,
           typeSelection: _typeSelection,
+          personalNotesLoader: loadStoredPersonalNotes,
         ),
       ),
     );

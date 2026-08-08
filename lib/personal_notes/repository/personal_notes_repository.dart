@@ -9,6 +9,18 @@ import 'package:otzaria/personal_notes/services/personal_notes_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 
+typedef PersonalNotesLoader =
+    Future<List<PersonalNote>> Function(
+      String bookId, {
+      int? categoryId,
+    });
+
+/// טוען הערות שמורות ללא קריאת תוכן הספר ויישוב מחדש של המיקומים.
+Future<List<PersonalNote>> loadStoredPersonalNotes(
+  String bookId, {
+  int? categoryId,
+}) => PersonalNotesDatabase.instance.loadNotes(bookId);
+
 class PersonalNotesRepository {
   final FileSystemData _fileSystem;
   final PersonalNotesService _service;

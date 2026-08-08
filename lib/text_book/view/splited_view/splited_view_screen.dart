@@ -20,6 +20,8 @@ import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/models/links.dart';
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -60,6 +62,9 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   // מונח החיפוש להדגשה בטאב המפרשים (התוצאה שנחתה בהערה).
   late final ValueNotifier<String> _searchHighlightNotifier;
   int? _currentTabIndex;
+  String? _notesBookIdOverride;
+  int? _notesCategoryIdOverride;
+  int? _notesFocusLineNumber;
   late double _leftPaneWidth;
   final ValueNotifier<String?> _savedSelectedText = ValueNotifier<String?>(
     null,
@@ -319,6 +324,29 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     });
   }
 
+  void _openCommentaryPersonalNote(Link link, int lineNumber) {
+    setState(() {
+      _notesBookIdOverride = utils.getTitleFromPath(link.path2);
+      _notesCategoryIdOverride = link.targetCategoryId;
+      _notesFocusLineNumber = lineNumber;
+      _paneOpen = true;
+      _currentTabIndex = kNotesTabIndex;
+    });
+  }
+
+  void _focusMainBookNotes() {
+    if (_notesBookIdOverride == null ||
+        !_paneOpen ||
+        _currentTabIndex != kNotesTabIndex) {
+      return;
+    }
+    setState(() {
+      _notesBookIdOverride = null;
+      _notesCategoryIdOverride = null;
+      _notesFocusLineNumber = null;
+    });
+  }
+
   @override
   void dispose() {
     widget.tab.toggleCommentatorsPaneNotifier.removeListener(
@@ -405,6 +433,10 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                         _openCommentatorsFilterNotifier,
                     closeCommentatorsFilterNotifier:
                         _closeCommentatorsFilterNotifier,
+                    onOpenPersonalNote: _openCommentaryPersonalNote,
+                    notesBookIdOverride: _notesBookIdOverride,
+                    notesCategoryIdOverride: _notesCategoryIdOverride,
+                    notesFocusLineNumber: _notesFocusLineNumber,
                     onTabChanged: (index) {
                       debugPrint(
                         'DEBUG: Tab changed to $index, showSplitView: ${widget.showSplitView}',
@@ -430,59 +462,70 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                 ),
                 mainContent: Stack(
                   children: [
-                    Padding(
-                      padding: SplitPaneContentInset.of(context),
-                      child: CombinedView(
-                        data: widget.content,
-                        textSize: state.fontSize,
-                        openBookCallback: widget.openBookCallback,
-                        openLeftPaneTab: widget.openLeftPaneTab,
-                        onSelectedTextChanged: widget.onSelectedTextChanged,
-                        selectionSyncController: _selectionSyncController,
-                        showCommentaryAsExpansionTiles: !widget.showSplitView,
-                        tab: widget.tab,
-                        onOpenPersonalNotes: () {
-                          setState(() {
-                            _paneOpen = true;
-                            _currentTabIndex = kNotesTabIndex;
-                          });
-                        },
-                        onOpenCommentatorsPane: () {
-                          setState(() {
-                            _paneOpen = true;
-                          });
-                          Future.delayed(const Duration(milliseconds: 280), () {
-                            if (!mounted) return;
-                            _closeCommentatorsFilterNotifier.value++;
+                    Listener(
+                      onPointerDown: (_) => _focusMainBookNotes(),
+                      child: Padding(
+                        padding: SplitPaneContentInset.of(context),
+                        child: CombinedView(
+                          data: widget.content,
+                          textSize: state.fontSize,
+                          openBookCallback: widget.openBookCallback,
+                          openLeftPaneTab: widget.openLeftPaneTab,
+                          onSelectedTextChanged: widget.onSelectedTextChanged,
+                          selectionSyncController: _selectionSyncController,
+                          showCommentaryAsExpansionTiles: !widget.showSplitView,
+                          tab: widget.tab,
+                          onOpenPersonalNotes: () {
                             setState(() {
+                              _notesBookIdOverride = null;
+                              _notesCategoryIdOverride = null;
+                              _notesFocusLineNumber = null;
+                              _paneOpen = true;
+                              _currentTabIndex = kNotesTabIndex;
+                            });
+                          },
+                          onOpenCommentaryPersonalNote:
+                              _openCommentaryPersonalNote,
+                          onOpenCommentatorsPane: () {
+                            setState(() {
+                              _paneOpen = true;
+                            });
+                            Future.delayed(
+                              const Duration(milliseconds: 280),
+                              () {
+                                if (!mounted) return;
+                                _closeCommentatorsFilterNotifier.value++;
+                                setState(() {
+                                  _currentTabIndex = kCommentaryTabIndex;
+                                });
+                              },
+                            );
+                          },
+                          onOpenCommentatorsPaneWithFilter: () {
+                            setState(() {
+                              _paneOpen = true;
                               _currentTabIndex = kCommentaryTabIndex;
                             });
-                          });
-                        },
-                        onOpenCommentatorsPaneWithFilter: () {
-                          setState(() {
-                            _paneOpen = true;
-                            _currentTabIndex = kCommentaryTabIndex;
-                          });
-                          _openCommentatorsFilterNotifier.value++;
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            _openFilterRequest.value++;
-                          });
-                        },
-                        onOpenLinksPane: () {
-                          setState(() {
-                            _paneOpen = true;
-                            _currentTabIndex = kLinksTabIndex;
-                          });
-                        },
-                        isCommentatorsTabActive: () =>
-                            _paneOpen &&
-                            _currentTabIndex == kCommentaryTabIndex,
-                        isLinksTabActive: () =>
-                            _paneOpen && _currentTabIndex == kLinksTabIndex,
-                        isPersonalNotesTabActive: () =>
-                            _paneOpen && _currentTabIndex == kNotesTabIndex,
+                            _openCommentatorsFilterNotifier.value++;
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              _openFilterRequest.value++;
+                            });
+                          },
+                          onOpenLinksPane: () {
+                            setState(() {
+                              _paneOpen = true;
+                              _currentTabIndex = kLinksTabIndex;
+                            });
+                          },
+                          isCommentatorsTabActive: () =>
+                              _paneOpen &&
+                              _currentTabIndex == kCommentaryTabIndex,
+                          isLinksTabActive: () =>
+                              _paneOpen && _currentTabIndex == kLinksTabIndex,
+                          isPersonalNotesTabActive: () =>
+                              _paneOpen && _currentTabIndex == kNotesTabIndex,
+                        ),
                       ),
                     ),
                     if (!_paneOpen)

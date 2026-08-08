@@ -338,6 +338,8 @@ class SimpleTextViewer extends StatefulWidget {
   /// repository לשמירת הערות מפרשים. ניתן להזרקה בבדיקות; בייצור נוצר ברירת מחדל.
   final PersonalNotesRepository? notesRepository;
   final bool isPersonalNotesTabActive;
+  final void Function(String bookId, int? categoryId, int lineNumber)?
+  onOpenCommentaryPersonalNote;
 
   /// לשונית המפרשים פתוחה כרגע בחלונית הצד — פריטי הפתיחה בתפריט ההקשר
   /// מיותרים במצב זה.
@@ -368,6 +370,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.reportBook,
     this.selectionSyncController,
     this.tab,
+    this.onOpenCommentaryPersonalNote,
     this.labelForIndex,
     this.notesRepository,
     this.isPersonalNotesTabActive = false,
@@ -425,6 +428,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   List<Link>? _anchorStyleSourceLinks;
   Map<String, int> _anchorStyleCache = const {};
   Timer? _previewHoverTimer;
+  List<PersonalNote> _commentaryNotes = const [];
 
   /// מזהה הריחוף הממתין. טעינה אסינכרונית שהתחילה בודקת אותו לאחר ה-await —
   /// ביטול ה-Timer לבדו אינו עוצר טעינה שכבר יצאה לדרך.
@@ -788,6 +792,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // מאזין גלובלי לקיצורי מפרש (העתקה / הוספת הערה) ללא צורך בפוקוס
     if (!widget.isMainText) {
       HardwareKeyboard.instance.addHandler(_handleCommentaryKeyEvent);
+      _loadCommentaryNotes();
     }
 
     // גלילה למיקום הנוכחי אחרי בניית הווידג'ט (רק לטקסט המרכזי)
@@ -946,6 +951,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         _handleExternalSelectionChange,
       );
     }
+    if (!widget.isMainText &&
+        (oldWidget.bookTitle != widget.bookTitle ||
+            oldWidget.reportBook?.categoryId !=
+                widget.reportBook?.categoryId)) {
+      _loadCommentaryNotes();
+    }
     // side-by-side אינו ממפתח לפי identity — מעבר ספר עלול לשמר את ה-State.
     final oldTab = oldWidget.tab;
     final newTab = widget.tab;
@@ -974,6 +985,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         kind != _sourceBannerKind) {
       setState(() => _sourceBannerKind = kind);
     }
+  }
+
+  Future<void> _loadCommentaryNotes() async {
+    final bookTitle = widget.bookTitle;
+    if (widget.isMainText || bookTitle == null || bookTitle.isEmpty) return;
+    final notes = await (widget.notesRepository ?? PersonalNotesRepository())
+        .loadNotes(bookTitle, categoryId: widget.reportBook?.categoryId);
+    if (!mounted || widget.bookTitle != bookTitle) return;
+    setState(() => _commentaryNotes = notes);
   }
 
   void _handleExternalSelectionChange() {
@@ -2072,6 +2092,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         selectionColumn: selectionColumn,
         categoryId: categoryId,
       );
+      await _loadCommentaryNotes();
       if (mounted) UiSnack.showSuccess(TextBookMessages.noteSaved);
     } catch (e) {
       if (mounted) UiSnack.showError(TextBookMessages.noteSaveError(e));
@@ -2256,8 +2277,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               return BlocBuilder<PersonalNotesBloc, PersonalNotesState>(
                 builder: (context, notesState) {
                   final noteMap = <int, List<PersonalNote>>{};
-                  if (notesState.bookId == state.book.title) {
-                    for (final note in notesState.locatedNotes) {
+                  final visibleNotes = widget.isMainText
+                      ? (notesState.bookId == state.book.title
+                            ? notesState.locatedNotes
+                            : const <PersonalNote>[])
+                      : _commentaryNotes;
+                  for (final note in visibleNotes) {
+                    if (note.hasLocation) {
                       final line = note.lineNumber;
                       if (line == null) continue;
                       noteMap.putIfAbsent(line, () => []).add(note);
@@ -2671,7 +2697,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           : state.searchText)
                     : '';
 
-                // הזרקת סימוני הערות אישיות inline (רק בטקסט הראשי).
+                // קישורי inline שייכים לטקסט הראשי; סימוני הערות שייכים גם למפרש.
                 final inlineLinks =
                     widget.isMainText &&
                         settingsState.enableHtmlLinks &&
@@ -2684,8 +2710,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                           .toList()
                     : const <Link>[];
                 final hasAnnotations =
-                    widget.isMainText &&
-                    (notesForLine.isNotEmpty || inlineLinks.isNotEmpty);
+                    notesForLine.isNotEmpty || inlineLinks.isNotEmpty;
                 final annotatedData = hasAnnotations
                     ? buildAnnotatedLineHtml(
                         rawLine: data,
@@ -2753,9 +2778,27 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     lineHeight: settingsState.lineHeight,
                   ),
                   onOpenBook: widget.openBookCallback,
-                  onNoteTap: notesForLine.isNotEmpty
+                  onNoteTap: notesForLine.isEmpty
+                      ? null
+                      : widget.isMainText
                       ? (line) => _onInlineNoteTap(line)
-                      : null,
+                      : (_) {
+                          final openInSidebar =
+                              widget.onOpenCommentaryPersonalNote;
+                          if (openInSidebar != null &&
+                              widget.bookTitle != null) {
+                            openInSidebar(
+                              widget.bookTitle!,
+                              widget.reportBook?.categoryId,
+                              primaryLineIndex + 1,
+                            );
+                          } else {
+                            showPersonalNotesDialog(
+                              context: context,
+                              notes: notesForLine,
+                            );
+                          }
+                        },
                   onAnchorTap: widget.isMainText ? _handlePreviewTap : null,
                   onAnchorHover: widget.isMainText ? _handlePreviewHover : null,
                   onAnchorHoverExit: widget.isMainText

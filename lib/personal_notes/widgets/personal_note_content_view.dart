@@ -4,6 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/utils/note_link_detection.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
+
+/// מציג את ההערות של שורה בחלון קריאה ממורכז.
+Future<bool?> showPersonalNotesDialog({
+  required BuildContext context,
+  required List<PersonalNote> notes,
+}) => showSingleActionDialog(
+  context: context,
+  title: notes.length == 1 ? 'הערה אישית' : 'הערות אישיות',
+  customContent: PersonalNotesListView(notes: notes),
+  confirmText: 'סגור',
+);
 
 /// מציגה את תוכן ההערה האישית — כולל עיצוב (Quill Delta) אם קיים.
 ///

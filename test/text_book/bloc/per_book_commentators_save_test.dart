@@ -115,6 +115,29 @@ void main() {
       expect(await TextBookPerBookSettings.load(book), isNull);
     });
 
+    test('שינוי סדר תצוגה אינו נשמר כהעדפת ספר', () async {
+      await select(const ['רש"י', 'רמב"ן']);
+
+      bloc.emit(_seed(book, active: const ['רש"י', 'רמב"ן']));
+      bloc.add(
+        const UpdateCommentators(
+          ['רמב"ן', 'רש"י'],
+          displayOrderOnly: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await PerBookSettings.settle();
+
+      expect(
+        (bloc.state as TextBookLoaded).activeCommentators,
+        ['רמב"ן', 'רש"י'],
+      );
+      expect(
+        (await TextBookPerBookSettings.load(book))?.activeCommentators,
+        ['רש"י', 'רמב"ן'],
+      );
+    });
+
     test('שחזור בחירה שמורה אינו כותב מחדש', () async {
       await select(const ['רש"י'], isUserAction: false, isRestore: true);
 

@@ -93,6 +93,33 @@ void main() {
     expect(notesBloc.visibleLineUpdates, isEmpty);
   });
 
+  testWidgets('יעד הערה ממוקד מבטל את סינון השורות לפני הטעינה', (
+    tester,
+  ) async {
+    final notesBloc = _RecordingNotesBloc();
+    addTearDown(notesBloc.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BlocProvider<PersonalNotesBloc>.value(
+            value: notesBloc,
+            child: PersonalNotesSidebar(
+              bookId: 'מפרש',
+              focusLineNumber: 7,
+              onNavigateToLine: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(notesBloc.received[0], isA<ToggleShowOnlyVisible>());
+    expect(notesBloc.received[1], const LoadPersonalNotes('מפרש'));
+    expect(notesBloc.received[2], const RequestExpandNotesForLine(7));
+  });
+
   testWidgets('גלילה אינה מעדכנת את ה-BLoC הגלובלי', (
     tester,
   ) async {
