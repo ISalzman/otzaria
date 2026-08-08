@@ -433,6 +433,10 @@ class _ExpandableOrgCard extends StatefulWidget {
 }
 
 class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
+  /// הלוגו מוצג ב-50×50, אך חלק מקובצי המקור הם 3000px ומעלה. בלי פענוח
+  /// בגודל מוקטן כל אחד תופס עשרות MB ב-ImageCache עד סוף הריצה.
+  static const int _logoDecodeWidth = 200;
+
   bool _isExpanded = false;
 
   static final _defaultDetailsStyle = TextStyle(
@@ -527,6 +531,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                           policy: ResizeImagePolicy.fit,
                         ),
                         fit: BoxFit.cover,
+                        cacheWidth: _logoDecodeWidth,
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(
                             FluentIcons.building_24_regular,
