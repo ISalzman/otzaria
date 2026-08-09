@@ -89,18 +89,13 @@ dependencies:
   flutter_markdown: ^0.7.7+1
   system_fonts: ^1.0.1
   flutter_quill: ^11.5.1
-  flutter_inappwebview:
-    git:
-      url: https://github.com/Otzaria/flutter_inappwebview
-      ref: 30dee63c62a82058094e7312839ce6685f808482
-      path: flutter_inappwebview
+  zikzak_inappwebview: ^4.7.0
   custom_mouse_cursor: ^1.1.3
 
 dependency_overrides:
   matcher: ^0.12.20
   analyzer: any
   device_info_plus: ^13.2.0
-  flutter_inappwebview: ^6.1.5
   otzaria_search_engine:
     git:
       url: https://github.com/Otzaria/otzaria_search_engine
