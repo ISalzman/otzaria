@@ -176,6 +176,10 @@ class PluginRuntimeDispatcher {
     }
   }
 
+  bool get _supportsNativePauseResume =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.windows;
+
   Future<void> _suspendForeground(String pluginId) async {
     final controller = _controllersByPlugin[pluginId]?['default'];
     if (controller == null) return;
@@ -184,20 +188,24 @@ class PluginRuntimeDispatcher {
     // מודיעים ל-JS לפני ההקפאה כדי שיעצור timers בעצמו — זו ההגנה היחידה
     // בפלטפורמות שבהן pause נייטיב אינו נתמך (macOS/iOS/Linux).
     await _dispatchLifecycleEvent(controller, pluginId, 'plugin.suspended');
-    try {
-      await controller.pause();
-    } catch (e) {
-      debugPrint('PluginRuntimeDispatcher: pause failed for $pluginId: $e');
+    if (_supportsNativePauseResume) {
+      try {
+        await controller.pause();
+      } catch (e) {
+        debugPrint('PluginRuntimeDispatcher: pause failed for $pluginId: $e');
+      }
     }
   }
 
   Future<void> _resumeForeground(String pluginId) async {
     final controller = _controllersByPlugin[pluginId]?['default'];
     if (controller == null) return;
-    try {
-      await controller.resume();
-    } catch (e) {
-      debugPrint('PluginRuntimeDispatcher: resume failed for $pluginId: $e');
+    if (_supportsNativePauseResume) {
+      try {
+        await controller.resume();
+      } catch (e) {
+        debugPrint('PluginRuntimeDispatcher: resume failed for $pluginId: $e');
+      }
     }
     _suspendedForegroundIds.remove(pluginId);
     await _dispatchLifecycleEvent(controller, pluginId, 'plugin.resumed');

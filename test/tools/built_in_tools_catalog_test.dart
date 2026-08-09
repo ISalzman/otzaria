@@ -70,9 +70,9 @@ void main() {
     });
 
     test('orders fit within the built-in range (<1000)', () {
-      // userOrderToolTabOffset = 1000 ⇒ תוספים בעלי userOrder מוקצים החל
-      // מ-1000+ כדי להישאר *אחרי* הכלים המובנים. אם כלי מובנה מקבל
-      // order ≥ 1000, הוא ערבב עם תוספים בלשונית הכלים.
+      // הפרדת הכלים מהתוספים נשענת על sortGroupPriority, אך שדה order של
+      // הכלים המובנים נצרך גם בסרגלים; הטווח <1000 נשמר לעקביות עם
+      // InstalledPlugin.userOrderToolTabOffset.
       for (final m in kBuiltInToolsCatalog) {
         expect(
           m.order,

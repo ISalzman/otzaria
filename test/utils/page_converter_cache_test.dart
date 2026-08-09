@@ -181,9 +181,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  late Map<String, List<PdfOutlineNode>> outlinesByPath;
 
   setUp(() async {
     await Settings.init(cacheProvider: MemorySettingsCache());
+    outlinesByPath = {};
+    pdfAnchorsReaderForTesting = (pdfPath) async {
+      final outline = outlinesByPath[pdfPath];
+      if (outline == null) throw FileSystemException('PDF not found', pdfPath);
+      return collectPdfAnchors(outline);
+    };
     tempDir = await Directory.systemTemp.createTemp('page_converter_cache');
     final dbDir = Directory(p.join(tempDir.path, 'databases'));
     await dbDir.create(recursive: true);
@@ -206,7 +213,21 @@ void main() {
     addTearDown(() => AppPaths.debugOverrideDataRootPath(previousDataRoot));
     addTearDown(() => CacheDatabaseHolder.instance.close());
     addTearDown(() => LibraryProviderManager.instance.resetForTesting());
+    addTearDown(() => pdfAnchorsReaderForTesting = null);
   });
+
+  Future<void> writePdf(
+    String pdfPath, {
+    required List<({String title, int page})> bookmarks,
+  }) async {
+    outlinesByPath[pdfPath] = [
+      for (final bookmark in bookmarks)
+        _outlineNode(bookmark.title, bookmark.page),
+    ];
+    await File(pdfPath).writeAsBytes(
+      buildMinimalPdf(pageCount: 3, bookmarks: bookmarks),
+    );
+  }
 
   /// ספרייה עם מהדורת PDF אחת ומהדורות טקסט לפי [textTitles], וספק
   /// תוכן-עניינים רשום — בלעדיו `TextBook.tableOfContents` מחזיר רשימה ריקה.
@@ -352,9 +373,7 @@ void main() {
   group('מטמון העוגנים המתמיד (cache.db)', () {
     test('PDF עם סימניות — הרשומה נשמרת וההמרה מצליחה', () async {
       final pdfPath = p.join(tempDir.path, 'with-outline.pdf');
-      await File(pdfPath).writeAsBytes(
-        buildMinimalPdf(pageCount: 3, bookmarks: _pdfBookmarks),
-      );
+      await writePdf(pdfPath, bookmarks: _pdfBookmarks);
       final books = seedLibrary(
         textTitles: const ['סוכה-מלא'],
         pdfPath: pdfPath,
@@ -374,9 +393,7 @@ void main() {
         // שתי כותרות טקסט מול אותו PDF: מפתח מפת-העמודים שונה, ולכן הקריאה
         // השנייה חוזרת למטמון המתמיד במקום להתקצר במטמון שבזיכרון.
         final pdfPath = p.join(tempDir.path, 'reused.pdf');
-        await File(pdfPath).writeAsBytes(
-          buildMinimalPdf(pageCount: 3, bookmarks: _pdfBookmarks),
-        );
+        await writePdf(pdfPath, bookmarks: _pdfBookmarks);
         final books = seedLibrary(
           textTitles: const ['יומא-א', 'יומא-ב'],
           pdfPath: pdfPath,
@@ -409,11 +426,9 @@ void main() {
     test('החלפת הקובץ פוסלת את הרשומה ומרעננת את העוגנים', () async {
       final pdfPath = p.join(tempDir.path, 'replaced.pdf');
       final file = File(pdfPath);
-      await file.writeAsBytes(
-        buildMinimalPdf(
-          pageCount: 3,
-          bookmarks: const [(title: 'דף ב.', page: 1)],
-        ),
+      await writePdf(
+        pdfPath,
+        bookmarks: const [(title: 'דף ב.', page: 1)],
       );
       final books = seedLibrary(
         textTitles: const ['נדרים-א', 'נדרים-ב'],
@@ -424,9 +439,7 @@ void main() {
       final before = await waitFor(() => anchorRow(pdfPath));
       expect(before!.decodeAnchors(), hasLength(1));
 
-      await file.writeAsBytes(
-        buildMinimalPdf(pageCount: 3, bookmarks: _pdfBookmarks),
-      );
+      await writePdf(pdfPath, bookmarks: _pdfBookmarks);
 
       expect(await textToPdfPage(books.texts[1], 20, pdfBook: books.pdf), 2);
       final after = await waitFor(() async {
@@ -440,9 +453,7 @@ void main() {
     test('outline ריק מהטאב — הסימניות נקראות מהקובץ', () async {
       // ה-outline של הטאב נטען ברקע; לחיצה לפני שהגיע חייבת ליפול לקובץ.
       final pdfPath = p.join(tempDir.path, 'tab-outline-empty.pdf');
-      await File(pdfPath).writeAsBytes(
-        buildMinimalPdf(pageCount: 3, bookmarks: _pdfBookmarks),
-      );
+      await writePdf(pdfPath, bookmarks: _pdfBookmarks);
       final books = seedLibrary(
         textTitles: const ['גיטין-רקע'],
         pdfPath: pdfPath,

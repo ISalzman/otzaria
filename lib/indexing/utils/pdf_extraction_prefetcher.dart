@@ -12,6 +12,7 @@ typedef PdfExtraction = ({
   Object? error,
   StackTrace? stackTrace,
   int extractMs,
+  int droppedPages,
 });
 
 class _PrefetchSlot {
@@ -50,8 +51,9 @@ class PdfExtractionPrefetcher {
     @visibleForTesting int Function(String path)? fileSizeOf,
   }) : _fileSizeOf = fileSizeOf ?? _statFileSize;
 
-  /// כמה חילוצים רשאים לרוץ או להמתין מוכנים בו-זמנית.
-  static const int defaultMaxInFlight = 25;
+  /// PDFium מעבד את כל הקריאות ב-worker יחיד. תור עמוק רק מפעיל timeouts
+  /// בזמן ההמתנה, ולכן ברירת המחדל שומרת חילוץ יחיד בטיסה.
+  static const int defaultMaxInFlight = 1;
 
   /// תקרת התווים של תוצאות שהושלמו וממתינות לאינדוקס. ‏String ב-Dart הוא
   /// UTF-16, כך שהתקרה שקולה לכ-24MB heap.

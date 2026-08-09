@@ -34,11 +34,12 @@ class ToolCatalogEntry {
   bool get isPlugin => plugin != null;
   bool get isDevelopment => plugin?.isDevelopment ?? false;
 
-  factory ToolCatalogEntry.fromBuiltIn(BuiltInToolMeta meta) =>
+  /// [order] דוחק את סדר הקטלוג — משמש כשהמשתמש קבע סדר משלו לכלים המובנים.
+  factory ToolCatalogEntry.fromBuiltIn(BuiltInToolMeta meta, {int? order}) =>
       ToolCatalogEntry(
         toolId: meta.toolId,
         label: meta.label,
-        order: meta.order,
+        order: order ?? meta.order,
         icon: meta.icon,
         iconFilled: meta.iconFilled,
         imageIcon: meta.imageIcon,
@@ -145,15 +146,19 @@ class ToolUnavailable extends ToolLookupResult {
 }
 
 /// הכלים הזמינים להצגה במשגר.
+///
+/// [builtInToolsOrder] הוא סדר הכלים המובנים שהמשתמש קבע; ריק = סדר הקטלוג.
 List<ToolCatalogEntry> buildToolCatalog({
   required Set<String> hiddenBuiltInToolIds,
   required bool isOfflineMode,
   required PluginSystemState pluginState,
+  List<String> builtInToolsOrder = const [],
 }) {
+  final orderedBuiltIns = orderedBuiltInTools(builtInToolsOrder);
   final entries = <ToolCatalogEntry>[
-    for (final meta in kBuiltInToolsCatalog)
-      if (!hiddenBuiltInToolIds.contains(meta.toolId))
-        ToolCatalogEntry.fromBuiltIn(meta),
+    for (var i = 0; i < orderedBuiltIns.length; i++)
+      if (!hiddenBuiltInToolIds.contains(orderedBuiltIns[i].toolId))
+        ToolCatalogEntry.fromBuiltIn(orderedBuiltIns[i], order: i),
   ];
 
   if (pluginState is PluginSystemLoaded) {

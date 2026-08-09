@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
@@ -13,6 +16,7 @@ import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -105,7 +109,7 @@ class BackupService {
 
       // Backup settings
       if (includeSettings) {
-        backupData['settings'] = await _backupSettings();
+        backupData['settings'] = await _backupSettings(skippedSections);
       }
 
       // Backup bookmarks
@@ -175,45 +179,76 @@ class BackupService {
     }
   }
 
-  /// Backup all settings
-  static Future<Map<String, dynamic>> _backupSettings() async {
-    final settingsKeys = [
-      SettingsRepository.keyDarkMode,
-      SettingsRepository.keySwatchColor,
-      SettingsRepository.keyFontSize,
-      SettingsRepository.keyFontFamily,
-      SettingsRepository.keyFontBold,
-      SettingsRepository.keyCommentatorsFontBold,
-      SettingsRepository.keyShowOtzarHachochma,
-      SettingsRepository.keyShowHebrewBooks,
-      SettingsRepository.keyShowExternalBooks,
-      SettingsRepository.keyShowTeamim,
-      SettingsRepository.keyReplaceHolyNames,
-      SettingsRepository.keyAutoUpdateIndex,
-      SettingsRepository.keyDefaultNikud,
-      SettingsRepository.keyRemoveNikudFromTanach,
-      SettingsRepository.keyDefaultSidebarOpen,
-      SettingsRepository.keyPinSidebar,
-      SettingsRepository.keySidebarWidth,
-      SettingsRepository.keyFacetFilteringWidth,
-      SettingsRepository.keyCalendarType,
-      SettingsRepository.keySelectedCity,
-      SettingsRepository.keyCalendarEvents,
-      SettingsRepository.keyCopyWithHeaders,
-      SettingsRepository.keyCopyHeaderFormat,
-      SettingsRepository.keyLibraryPath,
-      SettingsRepository.keyIndexPath,
-      SettingsRepository.keyDatabasesPath,
-      SettingsRepository.keyDbEffectivePath,
-      SettingsRepository.keyHebrewBooksPath,
-      SettingsRepository.keyDevChannel,
-      SettingsRepository.keyAutoSync,
-      SettingsRepository.keyOfflineMode,
-      SettingsRepository.keyPersonalNotesCollapsedByDefault,
-    ];
+  /// מפתחות הגדרות שאינם מועברים בין התקנות.
+  ///
+  /// הגיבוי סורק את *כל* מפתחות ההגדרות (ראה [_backupSettings]) ומחסיר את
+  /// אלה, כדי שהגדרה חדשה תיכנס לגיבוי מעצמה ולא תישמט בשקט כפי שקרה
+  /// לתיקיות המותאמות אישית.
+  static const Set<String> nonPortableSettingsKeys = {
+    // מצב ממשק רגעי — לא בחירה של המשתמש.
+    SettingsRepository.keyIsFullscreen,
+    'key-splited-view',
+    'key-sidebar-tab-index-combined',
+    'key-sidebar-tab-index-pending',
+    'key-last-search-typing',
+    // נתיבים שנגזרים מהמכשיר: שחזור למכשיר אחר מכניס נתיב שאינו קיים בו.
+    SettingsRepository.keyDbEffectivePath,
+    SettingsRepository.keyAndroidLibraryRoot,
+    // חותמות זמן ומזהים תפעוליים: שחזור ערך ישן מבלבל את התזמון.
+    'key-last-auto-backup',
+    _kLastPartialAutoBackupKey,
+    SettingsRepository.keyCalendarEventNotificationIds,
+    SettingsRepository.keyGoogleCalendarLastSync,
+    // אסימון גישה חי ליומן Google — אין להטמיע אותו בקובץ גיבוי נייד.
+    // ההתחברות נדרשת מחדש ביעד, ושאר הגדרות היומן משוחזרות.
+    SettingsRepository.keyGoogleCalendarCredentialsJson,
+    // דגל פנימי שמסמן שברירות המחדל נכתבו לדיסק.
+    'settings_initialized',
+  };
+  /// מפתחות ההגדרות שהגיבוי אוסף כשאין גישה ל-Hive box (ראה [_backupSettings]).
+  /// כולל את הקיצורים הדינמיים, שמפתחותיהם נגזרים מהתוספים המותקנים.
+  static List<String> get fallbackSettingsKeys => [
+    ...SettingsRepository.allKeys,
+    ...ShortcutValidator.shortcutKeys,
+    'shortcuts',
+  ];
 
+  /// גיבוי ההגדרות.
+  ///
+  /// המקור המועדף הוא ה-Hive box עצמו, כדי לתפוס גם מפתחות שאינם מוצהרים
+  /// ב-[SettingsRepository] — קיצורי מקלדת (כולל של תוספים), העדפות גיבוי
+  /// והגדרות כלים. כשה-box אינו פתוח (נסיגת `Settings.init` ל-
+  /// `SharePreferenceCache`) נאספת רשימת המפתחות המוצהרת, והסעיף מסומן חלקי.
+  static Future<Map<String, dynamic>> _backupSettings(
+    List<String> skippedSections,
+  ) async {
+    if (!Hive.isBoxOpen(HiveCache.keyName)) {
+      _logger.warning(
+        '_backupSettings: Hive box not open — falling back to declared keys',
+      );
+      skippedSections.add('settings');
+      return backupSettingsFromKeys(fallbackSettingsKeys);
+    }
+
+    final box = Hive.box<dynamic>(HiveCache.keyName);
     final settings = <String, dynamic>{};
-    for (final key in settingsKeys) {
+    for (final key in box.keys) {
+      final name = key.toString();
+      if (!isPortableSettingKey(name)) continue;
+      final value = box.get(key);
+      if (value != null) {
+        settings[name] = value;
+      }
+    }
+    return settings;
+  }
+
+  /// אוסף את [keys] דרך `Settings.getValue`, בדילוג על מפתחות לא ניידים.
+  @visibleForTesting
+  static Map<String, dynamic> backupSettingsFromKeys(List<String> keys) {
+    final settings = <String, dynamic>{};
+    for (final key in keys) {
+      if (!isPortableSettingKey(key)) continue;
       final value = Settings.getValue(key);
       if (value != null) {
         settings[key] = value;
@@ -221,6 +256,22 @@ class BackupService {
     }
     return settings;
   }
+
+  /// קידומות של נתונים שאינם הגדרות, אף שהם נשמרים באותו Hive box.
+  static final List<String> _nonSettingKeyPrefixes = [
+    'sz:',
+    PersonalNoteDraftService.keyPrefix,
+  ];
+
+  /// האם המפתח אינו הגדרה כלל, לפי [_nonSettingKeyPrefixes].
+  @visibleForTesting
+  static bool isNonSettingKey(String key) =>
+      _nonSettingKeyPrefixes.any(key.startsWith);
+
+  /// האם המפתח מגובה. מסנן את [nonPortableSettingsKeys] ואת מה שאינו הגדרה.
+  @visibleForTesting
+  static bool isPortableSettingKey(String key) =>
+      !isNonSettingKey(key) && !nonPortableSettingsKeys.contains(key);
 
   /// Backup bookmarks
   static Future<List<Map<String, dynamic>>> _backupBookmarks() async {
@@ -403,8 +454,15 @@ class BackupService {
   }
 
   /// Restore from backup file.
-  /// Returns a list of sections that were missing in the backup file (partial backup).
-  static Future<List<String>> restoreFromBackup(String backupPath) async {
+  ///
+  /// [skippedSections] — סעיפים שחסרו בקובץ הגיבוי או שדולגו בזמן השחזור.
+  /// [missingCustomFolders] — נתיבי תיקיות ספרים מותאמות אישית ששוחזרו אך
+  /// אינם קיימים במחשב היעד (שם משתמש אחר, כונן שאינו מחובר). הספרים שבהן
+  /// לא ייסרקו, ולכן המשתמש חייב לדעת ולהצביע על הנתיב מחדש.
+  static Future<
+    ({List<String> skippedSections, List<String> missingCustomFolders})
+  >
+  restoreFromBackup(String backupPath) async {
     final file = File(backupPath);
     if (!await file.exists()) {
       throw Exception('קובץ הגיבוי לא נמצא');
@@ -418,6 +476,8 @@ class BackupService {
     if (version != '1.0' && version != '2.0') {
       throw Exception('גרסת גיבוי לא נתמכת');
     }
+
+    final missingCustomFolders = <String>[];
 
     // מניפסט v2 מפנה ל-blobs במחסן. מחפשים אותו קודם ליד קובץ הגיבוי עצמו
     // (גיבוי שהועתק ממחשב אחר עם תיקיית ה-store שלו), ואז בתיקייה המוגדרת.
@@ -439,6 +499,7 @@ class BackupService {
     // Restore settings
     if (includes['settings'] == true && backupData.containsKey('settings')) {
       await _restoreSettings(backupData['settings'] as Map<String, dynamic>);
+      missingCustomFolders.addAll(await findMissingCustomFolders());
     }
 
     // Restore bookmarks
@@ -509,12 +570,37 @@ class BackupService {
       ...partialSections,
       ...runtimeSkipped.where((s) => !partialSections.contains(s)),
     ];
-    return allSkipped;
+    return (
+      skippedSections: allSkipped,
+      missingCustomFolders: missingCustomFolders,
+    );
+  }
+
+  /// נתיבי התיקיות המותאמות אישית שרשומות בהגדרות ואינן קיימות בדיסק.
+  ///
+  /// נקרא אחרי שחזור ההגדרות: נתיבי התיקיות נשמרים מוחלטים, ולכן גיבוי
+  /// שנוצר במחשב אחר מצביע על נתיב שאינו קיים ביעד. בלי דיווח, הספרים
+  /// פשוט לא מופיעים והמשתמש אינו יודע שעליו להצביע על התיקייה מחדש.
+  @visibleForTesting
+  static Future<List<String>> findMissingCustomFolders() async {
+    final folders = CustomFoldersManager.loadFolders(
+      Settings.getValue<String>(SettingsRepository.keyCustomFolders),
+    );
+
+    final missing = <String>[];
+    for (final folder in folders) {
+      if (!await Directory(folder.path).exists()) {
+        missing.add(folder.path);
+      }
+    }
+    return missing;
   }
 
   /// Restore settings
   static Future<void> _restoreSettings(Map<String, dynamic> settings) async {
     for (final entry in settings.entries) {
+      // גיבויים ישנים עשויים להכיל נתונים שאינם הגדרות בסעיף הזה.
+      if (isNonSettingKey(entry.key)) continue;
       // keyDbEffectivePath הוא setting פנימי ל-Android בלבד.
       // אם backup נוצר ב-Android ומשוחזר על macOS/Windows — מדלגים,
       // כדי למנוע נתיב /data/user/0/... להחליף את ה-DB path הנכון.

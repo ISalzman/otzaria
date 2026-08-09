@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/notes_messages.dart';
@@ -12,6 +13,7 @@ import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/personal_notes/utils/note_location_ref.dart';
 import 'package:otzaria/personal_notes/utils/personal_notes_filter.dart';
+import 'package:otzaria/personal_notes/utils/open_personal_notes_target.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -25,6 +27,7 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {
@@ -33,6 +36,7 @@ class PersonalNotesSidebar extends StatefulWidget {
   final ValueChanged<int> onNavigateToLine;
   final bool isPdf;
   final List<int>? visibleLineIndices;
+  final int? focusLineNumber;
 
   /// ה-outline של ה-PDF לחישוב כתובת המיקום של כל הערה. רלוונטי רק כש-[isPdf].
   /// מועבר כ-listenable כי ה-outline עשוי להיטען אחרי בניית הפאנל.
@@ -45,6 +49,7 @@ class PersonalNotesSidebar extends StatefulWidget {
     required this.onNavigateToLine,
     this.isPdf = false,
     this.visibleLineIndices,
+    this.focusLineNumber,
     this.pdfOutline,
   });
 
@@ -62,15 +67,20 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   bool get wantKeepAlive => true;
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
   final ValueNotifier<List<int>> _visibleLineIndices = ValueNotifier(const []);
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
+  // פריט = הערה, והערה ארוכה עשויה להיות גבוהה מהמסך. בלי ה-offsetController
+  // גרירת האגודל הייתה נעצרת על גבולות פריטים ולא מזיזה כלום בתוכה.
+  final ScrollOffsetController _scrollOffsetController =
+      ScrollOffsetController();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<PersonalNotesBloc>().add(
-        LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
-      );
+      _loadTarget();
       _restorePendingNewNoteDraftIfNeeded();
       _syncVisibleLines();
     });
@@ -105,12 +115,14 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
     if (oldWidget.bookId != widget.bookId ||
         oldWidget.categoryId != widget.categoryId) {
       context.read<PersonalNotesBloc>().add(const CancelCreatingPersonalNote());
-      context.read<PersonalNotesBloc>().add(
-        LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId),
-      );
+      _loadTarget();
       _restorePendingNewNoteDraftIfNeeded();
       _syncVisibleLines();
-      return;
+    } else if (oldWidget.focusLineNumber != widget.focusLineNumber &&
+        widget.focusLineNumber != null) {
+      context.read<PersonalNotesBloc>().add(
+        RequestExpandNotesForLine(widget.focusLineNumber!),
+      );
     }
 
     if (!listEquals(oldWidget.visibleLineIndices, widget.visibleLineIndices) &&
@@ -123,6 +135,21 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
   void dispose() {
     _visibleLineIndices.dispose();
     super.dispose();
+  }
+
+  void _loadTarget() {
+    final bloc = context.read<PersonalNotesBloc>();
+    final focusLineNumber = widget.focusLineNumber;
+    if (focusLineNumber != null) {
+      openPersonalNotesTarget(
+        bloc,
+        bookId: widget.bookId,
+        categoryId: widget.categoryId,
+        lineNumber: focusLineNumber,
+      );
+      return;
+    }
+    bloc.add(LoadPersonalNotes(widget.bookId, categoryId: widget.categoryId));
   }
 
   Future<void> _restorePendingNewNoteDraftIfNeeded() async {
@@ -504,9 +531,18 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       );
     }
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: items,
+    return ScrollablePositionedListScrollbar(
+      scrollController: _itemScrollController,
+      itemPositionsListener: _itemPositionsListener,
+      offsetController: _scrollOffsetController,
+      itemCount: items.length,
+      child: ScrollablePositionedList.builder(
+        itemScrollController: _itemScrollController,
+        itemPositionsListener: _itemPositionsListener,
+        scrollOffsetController: _scrollOffsetController,
+        itemCount: items.length,
+        itemBuilder: (context, index) => items[index],
+      ),
     );
   }
 

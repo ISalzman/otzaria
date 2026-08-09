@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -90,6 +92,20 @@ class _FakeRepo implements PluginRegistryRepository {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+class _DelayedReorderRepo extends _FakeRepo {
+  final completions = <Completer<void>>[];
+
+  _DelayedReorderRepo(super.plugins);
+
+  @override
+  Future<void> reorderPlugins(List<String> orderedPluginIds) async {
+    reorderCalls.add(List.of(orderedPluginIds));
+    final completion = Completer<void>();
+    completions.add(completion);
+    await completion.future;
+  }
+}
+
 void main() {
   group('PluginSystemBloc ReorderPluginsRequested handler', () {
     test('forwards the ordered ids to repository.reorderPlugins', () async {
@@ -150,6 +166,24 @@ void main() {
       await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
 
       expect(repo.reorderCalls.single, isEmpty);
+    });
+
+    test('serializes rapid reorder requests', () async {
+      final repo = _DelayedReorderRepo([_plugin(id: 'a')]);
+      final bloc = PluginSystemBloc(repository: repo);
+      addTearDown(bloc.close);
+
+      const first = ['a', 'b'];
+      const second = ['b', 'a'];
+      bloc.add(const ReorderPluginsRequested(first));
+      bloc.add(const ReorderPluginsRequested(second));
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.reorderCalls, [first]);
+
+      repo.completions.single.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.reorderCalls, [first, second]);
+      repo.completions.last.complete();
     });
   });
 }

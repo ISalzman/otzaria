@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
@@ -499,12 +500,20 @@ void main() {
 
     setUp(_d.resetVisibilityForTesting);
 
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    });
+
     tearDown(() {
       _d.unregisterController(pidA);
       _d.unregisterController(pidA, instanceId: 'background');
       _d.unregisterController(pidB);
       // שחזור ה-repository האמיתי לטסטים שהזריקו fake.
       _d.repositoryForTesting = PluginRegistryRepository();
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
     });
 
     test('מעבר מתוסף לתוסף משהה את הקודם ומחדש את הנכנס', () async {
@@ -523,6 +532,22 @@ void main() {
       expect(a.pauseCalls, 1);
       expect(a.jsEvents, contains(contains('plugin.suspended')));
       expect(b.resumeCalls, 1);
+    });
+
+    test('בפלטפורמה ללא pause native נשלחים רק אירועי lifecycle', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final a = _LifecycleFakeController();
+      _d.registerController(pidA, a);
+
+      _d.setVisiblePluginTabs({pidA});
+      await pumpEventQueue();
+      _d.setVisiblePluginTabs(const {});
+      await pumpEventQueue();
+
+      expect(a.resumeCalls, 0);
+      expect(a.pauseCalls, 0);
+      expect(a.jsEvents, contains(contains('plugin.resumed')));
+      expect(a.jsEvents, contains(contains('plugin.suspended')));
     });
 
     test('יציאה ממסך העיון משהה, וחזרה מחדשת', () async {
@@ -655,9 +680,17 @@ void main() {
 
     setUp(_d.resetVisibilityForTesting);
 
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    });
+
     tearDown(() {
       _d.unregisterController(pidA);
       _d.unregisterController(pidB);
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
     });
 
     test(
@@ -713,9 +746,17 @@ void main() {
 
     setUp(_d.resetVisibilityForTesting);
 
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    });
+
     tearDown(() {
       _d.unregisterController(pidA);
       _d.unregisterController(pidB);
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
     });
 
     test('תוסף שנטען כשהוא ה-foreground הנבחר — אינו מושהה', () async {

@@ -123,14 +123,23 @@ class UpdateCommentators extends TextBookEvent {
   /// וגובר על בחירה אוטומטית (כגון 'הערות') כי זו בחירה אמיתית קודמת.
   final bool isRestore;
 
+  /// שינוי סדר תצוגה בלבד, ללא שמירה וטעינה מחודשת של קישורים.
+  final bool displayOrderOnly;
+
   const UpdateCommentators(
     this.commentators, {
     this.isUserAction = true,
     this.isRestore = false,
+    this.displayOrderOnly = false,
   });
 
   @override
-  List<Object?> get props => [commentators, isUserAction, isRestore];
+  List<Object?> get props => [
+    commentators,
+    isUserAction,
+    isRestore,
+    displayOrderOnly,
+  ];
 }
 
 /// עדכון סוגי הקישורים המוצגים בפאנל הקישורים. קבוצה ריקה = הצג הכל.
@@ -236,6 +245,7 @@ class UpdateSearchText extends TextBookEvent {
   final Map<String, String>? spacingValues;
   final SearchMode? searchMode;
   final int? searchDistance;
+  final SearchMatchPolicy? matchPolicy;
 
   const UpdateSearchText(
     this.text, {
@@ -244,6 +254,7 @@ class UpdateSearchText extends TextBookEvent {
     this.spacingValues,
     this.searchMode,
     this.searchDistance,
+    this.matchPolicy,
   });
 
   @override
@@ -254,7 +265,18 @@ class UpdateSearchText extends TextBookEvent {
     spacingValues,
     searchMode,
     searchDistance,
+    matchPolicy,
   ];
+}
+
+/// שורות הספר שחיפוש המנוע החזיר — ראו [TextBookLoaded.searchResultLines].
+class UpdateSearchResultLines extends TextBookEvent {
+  final Set<int> lines;
+
+  const UpdateSearchResultLines(this.lines);
+
+  @override
+  List<Object?> get props => [lines];
 }
 
 class ApplyFullBookContent extends TextBookEvent {

@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/utils/ui/image_decode_size.dart';
 
 /// פופאפ פרסומת עם אנימציה מתקדמת
 class AdPopupDialog extends StatefulWidget {
@@ -220,6 +221,9 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                       'assets/icon/iconnew.png',
                       width: logoSize,
                       height: logoSize,
+                      // לפי הגודל המקסימלי של האנימציה — גודל מונפש היה מפענח
+                      // את הקובץ מחדש בכל פריים
+                      cacheWidth: imageDecodeSize(context, 120),
                     ),
                     SizedBox(width: gap),
                     // הטקסט מופיע ב-fade ומתרחב מ-0 רוחב כדי שלא יקפוץ
@@ -790,8 +794,15 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     ),
                     child: ClipRRect(
                       borderRadius: AppTokens.borderRadiusAll,
-                      child: Image.asset(
-                        widget.org['logo'],
+                      child: Image(
+                        // policy.fit מקטין עד שהתמונה עדיין מכסה את הריבוע;
+                        // ברירת המחדל (exact) הייתה מעוותת אותה תחת cover
+                        image: ResizeImage(
+                          AssetImage(widget.org['logo']),
+                          width: imageDecodeSize(context, 50),
+                          height: imageDecodeSize(context, 50),
+                          policy: ResizeImagePolicy.fit,
+                        ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(

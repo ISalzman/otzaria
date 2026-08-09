@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchScope;
 
 import '../../support/search_engine_test_init.dart';
 
@@ -169,4 +172,70 @@ Future<void> main() async {
       skip: engineReady ? false : searchEngineSkipReason,
     );
   });
+
+  group(
+    'TextRendererService - מדיניות התאמת החיפוש',
+    () {
+      const text = 'תדע אחת שתים שלוש ארבע חמש זרעך';
+
+      test('ברירת המחדל אינה מדגישה מילים רחוקות', () {
+        const settings = RenderSettings(
+          searchText: 'תדע זרעך',
+          searchDistance: 2,
+        );
+        expect(
+          TextRendererService.processText(text, settings),
+          isNot(contains('<span style="color: red">')),
+        );
+      });
+
+      test('טווח "באותה פסקה" מדגיש כל מילת שאילתה בשורת תוצאה', () {
+        // המדיניות והדגל מגיעים מ-state הספר אל RenderSettings; בלעדיהם
+        // החלונית הציגה תוצאה שגוף הספר לא הדגיש בכלל.
+        const settings = RenderSettings(
+          searchText: 'תדע זרעך',
+          searchDistance: 2,
+          matchPolicy: SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+          ),
+          isSearchResultLine: true,
+        );
+        final out = TextRendererService.processText(text, settings);
+        expect(out, contains('<span style="color: red">תדע</span>'));
+        expect(out, contains('<span style="color: red">זרעך</span>'));
+      });
+
+      test('שורה שאינה תוצאה אינה מודגשת גם במדיניות מפוזרת', () {
+        const settings = RenderSettings(
+          searchText: 'תדע זרעך',
+          searchDistance: 2,
+          matchPolicy: SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+          ),
+        );
+        expect(
+          TextRendererService.processText(text, settings),
+          isNot(contains('<span style="color: red">')),
+        );
+      });
+
+      test('המדיניות והדגל משתתפים במפתח המטמון של הרינדור', () {
+        const text = 'תדע אחת שתים שלוש זרעך';
+        const standard = RenderSettings(searchText: 'תדע זרעך');
+        const sameParagraph = RenderSettings(
+          searchText: 'תדע זרעך',
+          matchPolicy: SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+          ),
+          isSearchResultLine: true,
+        );
+
+        final standardOut = TextRendererService.render(text, standard);
+        final policyOut = TextRendererService.render(text, sameParagraph);
+
+        expect(policyOut, isNot(equals(standardOut)));
+      });
+    },
+    skip: engineReady ? false : searchEngineSkipReason,
+  );
 }

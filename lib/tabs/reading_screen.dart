@@ -64,7 +64,7 @@ class _ReadingScreenState extends State<ReadingScreen>
   /// הצטברות ה-dx מתחילת מחוות ההחלקה הנוכחית.
   double _swipeAccum = 0;
 
-  /// האם המחווה הנוכחית כבר הפעילה מעבר טאב (מעבר אחד לכל מחווה).
+  /// האם המחווה הנוכחית כבר הפעילה מעבר טאב.
   bool _swipeFired = false;
 
   /// מדכא את [_syncPageController] בזמן אנימציית מעבר מהחלקה, כדי
@@ -132,18 +132,8 @@ class _ReadingScreenState extends State<ReadingScreen>
     });
   }
 
-  /// עוטפת את ה-PageView בזיהוי החלקה אופקית למעבר טאב בדסקטופ.
-  ///
-  /// ה-physics של ה-PageView נשאר NeverScrollable בדסקטופ (ראו הערה שם),
-  /// והמחווה ממומשת ב-recognizer ייעודי המוגבל לטאצ'פד ולמסך מגע בלבד:
-  /// - גרירות עכבר (kind: mouse) מסוננות לגמרי, כך שסימון טקסט אופקי
-  ///   ב-SelectionArea וב-PDF לא נפגע.
-  /// - ה-recognizer משתתף ב-gesture arena כצומת חיצוני, ולכן מפסיד
-  ///   לכל רכיב פנימי שתובע את המחווה: גלילה אנכית בספרי טקסט,
-  ///   pan/zoom של pdfrx (כולל גלילה אופקית ב-PDF), וסרגלי טאבים
-  ///   פנימיים הנגללים אופקית.
-  /// - אירועי גלגלת (pointer signals) לא מטופלים כלל — אין מצב של
-  ///   טאב "תקוע" באמצע גלילה ואין טיפול כפול מול ה-Listener של ה-PDF.
+  /// מזהה החלקה בין טאבים בדסקטופ באמצעות trackpad בלבד.
+  /// החרגת touch מונעת תחרות בזירת המחוות עם הגלילה האנכית של התוכן.
   Widget _wrapWithDesktopTabSwipe(Widget child) {
     if (Platform.isAndroid || Platform.isIOS) return child;
     return RawGestureDetector(
@@ -153,10 +143,7 @@ class _ReadingScreenState extends State<ReadingScreen>
               HorizontalDragGestureRecognizer
             >(
               () => HorizontalDragGestureRecognizer(
-                supportedDevices: const {
-                  PointerDeviceKind.trackpad,
-                  PointerDeviceKind.touch,
-                },
+                supportedDevices: const {PointerDeviceKind.trackpad},
               ),
               (recognizer) {
                 recognizer

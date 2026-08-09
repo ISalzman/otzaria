@@ -27,6 +27,7 @@ class PdfBookInitial extends PdfBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
   final PdfLayoutMode layoutMode;
 
   const PdfBookInitial({
@@ -38,6 +39,7 @@ class PdfBookInitial extends PdfBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.layoutMode = PdfLayoutMode.regularView,
   });
 
@@ -59,6 +61,7 @@ class PdfBookLoading extends PdfBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
   final PdfLayoutMode layoutMode;
 
   const PdfBookLoading({
@@ -69,6 +72,7 @@ class PdfBookLoading extends PdfBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.layoutMode = PdfLayoutMode.regularView,
   });
 
@@ -127,6 +131,7 @@ class PdfBookLoaded extends PdfBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
+  final SearchMatchPolicy matchPolicy;
   final List<PdfPageTextRange>? searchMatches;
   final int? currentSearchMatchIndex;
 
@@ -163,6 +168,7 @@ class PdfBookLoaded extends PdfBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.searchMatches,
     this.currentSearchMatchIndex,
     this.pdfHeadings,
@@ -197,6 +203,7 @@ class PdfBookLoaded extends PdfBookState {
     Map<String, String>? spacingValues,
     SearchMode? searchMode,
     int? searchDistance,
+    SearchMatchPolicy? matchPolicy,
     List<PdfPageTextRange>? searchMatches,
     int? currentSearchMatchIndex,
     PdfHeadings? pdfHeadings,
@@ -237,6 +244,7 @@ class PdfBookLoaded extends PdfBookState {
       spacingValues: spacingValues ?? this.spacingValues,
       searchMode: searchMode ?? this.searchMode,
       searchDistance: searchDistance ?? this.searchDistance,
+      matchPolicy: matchPolicy ?? this.matchPolicy,
       searchMatches: clearSearchMatches
           ? null
           : (searchMatches ?? this.searchMatches),
@@ -272,6 +280,7 @@ class PdfBookLoaded extends PdfBookState {
     searchText,
     searchMode,
     searchDistance,
+    matchPolicy,
     searchOptions,
     alternativeWords,
     spacingValues,

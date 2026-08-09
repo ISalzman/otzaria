@@ -97,6 +97,9 @@ class SettingsRepository {
   static const String keyBuiltInToolsPinnedToNavRail =
       'key-builtin-tools-pinned-to-nav-rail';
 
+  /// CSV של סדר הכלים המובנים שהמשתמש קבע. הסדר משמעותי — אינו ממוין.
+  static const String keyBuiltInToolsOrder = 'key-builtin-tools-order';
+
   // Protected Mode Settings
   static const String keyProtectedModeEnabled = 'key-protected-mode-enabled';
   static const String keyProtectedModePasswordHash =
@@ -138,6 +141,94 @@ class SettingsRepository {
   static const String keyGoogleCalendarLastSync =
       'key-google-calendar-last-sync';
   static const String keySettingsLanguage = 'key-settings-language';
+
+  /// כל מפתחות ההגדרות המוצהרים במחלקה זו.
+  ///
+  /// משמש כרשת ביטחון לגיבוי כשלא ניתן לסרוק את ה-Hive box ישירות (ראה
+  /// [BackupService.backupSettingsFromKeys]). `settings_repository_all_keys_test`
+  /// נכשל אם מפתח חדש הוגדר כאן ולא נוסף לרשימה — אחרת הוא נשמט מהגיבוי בשקט.
+  static const List<String> allKeys = [
+    keyDarkMode,
+    keyFollowSystemTheme,
+    keySwatchColor,
+    keyDarkSwatchColor,
+    keyTextMaxWidth,
+    keyFontSize,
+    keyFontFamily,
+    keyCommentatorsFontFamily,
+    keyFontBold,
+    keyCommentatorsFontBold,
+    keyCommentatorsFontSize,
+    keyLineHeight,
+    keyShowOtzarHachochma,
+    keyShowHebrewBooks,
+    keyShowExternalBooks,
+    keyShowTeamim,
+    keyReplaceHolyNames,
+    keyAutoUpdateIndex,
+    keyDefaultNikud,
+    keyRemoveNikudFromTanach,
+    keyDefaultRemovePunctuation,
+    keyContinuousReadingMode,
+    keyDefaultSidebarOpen,
+    keyDefaultCommentaryOpen,
+    keySelectedLinkTypes,
+    keyPinSidebar,
+    keySidebarWidth,
+    keyFacetFilteringWidth,
+    keyCommentaryPaneWidth,
+    keyCalendarType,
+    keyCalendarDayTransition,
+    keySelectedCity,
+    keyCalendarEvents,
+    keyCopyWithHeaders,
+    keyCopyHeaderFormat,
+    keyIsFullscreen,
+    keyLibraryViewMode,
+    keyLibraryShowPreview,
+    keyEnablePerBookSettings,
+    keyPdfBookViewByDefault,
+    keyTalmudBavliOpenFormat,
+    keyOfflineMode,
+    keyAutoSync,
+    keySoftwareAndBookUpdatesEnabled,
+    keyErrorReportSenderEmail,
+    keyQueueErrorReportsWhenOffline,
+    keyLibraryPath,
+    keyIndexPath,
+    keyDatabasesPath,
+    keyBackupPath,
+    keyLibraryFolderName,
+    keyDbEffectivePath,
+    keyAndroidLibraryRoot,
+    keyHebrewBooksPath,
+    keyDevChannel,
+    keyCustomFolders,
+    keyMergeUserBooksIntoLibrary,
+    keyEnableHtmlLinks,
+    keyPersonalNotesCollapsedByDefault,
+    keyCompactMenuMode,
+    keyHiddenBuiltInToolIds,
+    keyBuiltInToolsPinnedToNavRail,
+    keyBuiltInToolsOrder,
+    keyProtectedModeEnabled,
+    keyProtectedModePasswordHash,
+    keyCalendarNotificationsEnabled,
+    keyCalendarNotificationTime,
+    keyCalendarNotificationSound,
+    keyCalendarZmanAlerts,
+    keyCalendarEnabledZmanim,
+    keyCalendarEventNotificationIds,
+    keyGoogleCalendarEnabled,
+    keyGoogleCalendarSelectedIds,
+    keyGoogleCalendarClientId,
+    keyGoogleCalendarClientSecret,
+    keyGoogleCalendarCredentialsJson,
+    keyGoogleCalendarSyncPastDays,
+    keyGoogleCalendarSyncFutureDays,
+    keyGoogleCalendarLastSync,
+    keySettingsLanguage,
+  ];
 
   final SettingsWrapper _settings;
 
@@ -339,6 +430,12 @@ class SettingsRepository {
       'builtInToolsPinnedToNavRail': _parseToolIdSet(
         _settings.getValue<String>(
           keyBuiltInToolsPinnedToNavRail,
+          defaultValue: '',
+        ),
+      ),
+      'builtInToolsOrder': _parseToolIdList(
+        _settings.getValue<String>(
+          keyBuiltInToolsOrder,
           defaultValue: '',
         ),
       ),
@@ -619,6 +716,10 @@ class SettingsRepository {
     );
   }
 
+  Future<void> updateBuiltInToolsOrder(List<String> value) async {
+    await _settings.setValue(keyBuiltInToolsOrder, value.join(','));
+  }
+
   /// פירוק רשימת מזהי כלים מ-CSV. מתעלם מערכים ריקים ומ-whitespace.
   static Set<String> _parseToolIdSet(String raw) {
     if (raw.isEmpty) return <String>{};
@@ -627,6 +728,16 @@ class SettingsRepository {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toSet();
+  }
+
+  /// פירוק סדר מזהי כלים מ-CSV, תוך שמירת הסדר וללא כפילויות.
+  static List<String> _parseToolIdList(String raw) {
+    if (raw.isEmpty) return const <String>[];
+    final seen = <String>{};
+    return [
+      for (final id in raw.split(','))
+        if (id.trim().isNotEmpty && seen.add(id.trim())) id.trim(),
+    ];
   }
 
   /// סדרת מזהי כלים ל-CSV. ממוין דטרמיניסטית.

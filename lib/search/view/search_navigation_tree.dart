@@ -33,7 +33,10 @@ class SearchNavigationTree extends StatelessWidget {
   /// בחירת facet יחיד (לחיצה רגילה) / הוספה-הסרה (Ctrl+לחיצה).
   final void Function(String facet) onSetFacet;
   final void Function(String facet) onToggleFacet;
-  final void Function(String path) onToggleExpand;
+
+  /// [isExpanded] הוא המצב האפקטיבי של הקטגוריה כרגע (כולל פתיחה אוטומטית
+  /// של ענף הבחירה) — בלעדיו הלחיצה הראשונה על החץ לא הייתה מכווצת.
+  final void Function(String path, bool isExpanded) onToggleExpand;
   final bool Function() isMultiSelectPressed;
 
   /// ניקוי כל הסינון (קטגוריות + ממדים) — מכפתור "נקה סינון" שבכותרת השורש.
@@ -59,6 +62,16 @@ class SearchNavigationTree extends StatelessWidget {
   static const double _iconSize = 14;
 
   bool _isSelected(String facet) => selectedFacets.contains(facet);
+
+  /// נתיבי הקטגוריות/ספרים המסוננים כרגע (בלי השורש ובלי ממדים).
+  List<String> _selectedPaths() => FacetHelper.categoryFacetsOf(
+    selectedFacets,
+  ).where((f) => f != '/').toList();
+
+  /// האם [path] הוא אב-קדמון של סינון פעיל. ענף כזה נפתח כברירת מחדל ומוצג
+  /// גם בספירה 0 — אחרת הסינון הפעיל נעלם מהעץ ואין דרך לבטלו.
+  static bool _leadsToSelection(String path, List<String> selectedPaths) =>
+      selectedPaths.any((facet) => facet.startsWith('$path/'));
 
   bool get _categoryFilterActive =>
       FacetHelper.categoryFacetsOf(selectedFacets).any((f) => f != '/');
@@ -86,7 +99,7 @@ class SearchNavigationTree extends StatelessWidget {
   List<_FlatRow> _flattenRows() {
     final rows = <_FlatRow>[];
     rows.add(_FlatRow.rootHeader(facetCounts[library.path] ?? 0));
-    _flattenChildren(library, 0, rows);
+    _flattenChildren(library, 0, rows, _selectedPaths());
     _markGroupBoundaries(rows);
     return rows;
   }
@@ -120,18 +133,24 @@ class SearchNavigationTree extends StatelessWidget {
     }
   }
 
-  void _flattenChildren(Category category, int level, List<_FlatRow> rows) {
+  void _flattenChildren(
+    Category category,
+    int level,
+    List<_FlatRow> rows,
+    List<String> selectedPaths,
+  ) {
     for (final sub in _sortedSubCategories(category)) {
       final count = facetCounts[sub.path] ?? 0;
-      if (count == 0) continue;
-      final isExpanded = expansion[sub.path] ?? false;
+      final leadsToSelection = _leadsToSelection(sub.path, selectedPaths);
+      if (count == 0 && !leadsToSelection && !_isSelected(sub.path)) continue;
+      final isExpanded = expansion[sub.path] ?? leadsToSelection;
       rows.add(_FlatRow.category(sub, level + 1, count, isExpanded));
-      if (isExpanded) _flattenChildren(sub, level + 1, rows);
+      if (isExpanded) _flattenChildren(sub, level + 1, rows, selectedPaths);
     }
     for (final book in _uniqueBooks(category.books)) {
       final facet = FacetHelper.buildBookFacet(category.path, book);
       final count = facetCounts[facet] ?? 0;
-      if (count == 0) continue;
+      if (count == 0 && !_isSelected(facet)) continue;
       rows.add(_FlatRow.book(book, facet, count, level + 1));
     }
   }
@@ -267,7 +286,7 @@ class SearchNavigationTree extends StatelessWidget {
       onTap: () => isMultiSelectPressed()
           ? onToggleFacet(category.path)
           : onSetFacet(category.path),
-      onToggleExpand: () => onToggleExpand(category.path),
+      onToggleExpand: () => onToggleExpand(category.path, isExpanded),
     );
   }
 
@@ -318,34 +337,43 @@ class SearchNavigationTree extends StatelessWidget {
   // ── רשימת סינון שטוחה ───────────────────────────────────────────────────────
 
   Widget _buildFilteredBookList(BuildContext context) {
-    final query = filterQuery.toLowerCase();
-    final books = _allBooks(
-      library,
-    ).where((b) => b.title.toLowerCase().contains(query)).toList();
-
     if (isLoading && !hasResults) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (books.isEmpty) {
+
+    final query = filterQuery.toLowerCase();
+    // ספר ללא תוצאות מוסתר כאן בדיוק כמו בעץ: בחירתו הייתה מרוקנת את
+    // התוצאות ומשאירה סינון שלא מיוצג בעץ אחרי ניקוי שדה האיתור.
+    final matches = <_FilteredBook>[];
+    for (final book in _allBooks(library)) {
+      if (!book.title.toLowerCase().contains(query)) continue;
+      final facet = FacetHelper.buildBookFacet(
+        FacetHelper.resolveCategoryPath(book),
+        book,
+      );
+      final count = facetCounts[facet] ?? 0;
+      if (count == 0) continue;
+      matches.add(_FilteredBook(book, facet, count));
+    }
+
+    if (matches.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16),
-          child: Text('לא נמצאו ספרים'),
+          child: Text(
+            'לא נמצאו ספרים עם תוצאות',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: books.length,
+      itemCount: matches.length,
       itemBuilder: (context, index) {
-        final book = books[index];
-        final facet = FacetHelper.buildBookFacet(
-          FacetHelper.resolveCategoryPath(book),
-          book,
-        );
-        final count = facetCounts[facet] ?? 0;
-        return _buildBook(context, book, facet, count, 0);
+        final match = matches[index];
+        return _buildBook(context, match.book, match.facet, match.count, 0);
       },
     );
   }
@@ -399,6 +427,15 @@ class SearchNavigationTree extends StatelessWidget {
     final categoryKey = book.categoryId?.toString() ?? book.categoryPath ?? '';
     return '${book.title.trim()}|$categoryKey';
   }
+}
+
+/// ספר שעבר את סינון שדה האיתור, יחד עם ה-facet והספירה שכבר חושבו עבורו.
+class _FilteredBook {
+  final Book book;
+  final String facet;
+  final int count;
+
+  const _FilteredBook(this.book, this.facet, this.count);
 }
 
 enum _FlatRowKind { rootHeader, category, book }

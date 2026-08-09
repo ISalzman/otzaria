@@ -71,6 +71,64 @@ void main() {
     expect(shamorZachor.containsKey('other:key'), isFalse);
   });
 
+  // רשימת המפתחות ב-_backupSettings קשיחה; הטסט הזה הוא השומר שמונע השמטה של
+  // התאמות הכלים (סדר, הסתרה, הצמדה) בגיבוי הבא.
+  test('createBackup כולל את הגדרות הכלים ומשחזר אותן', () async {
+    await Settings.setValue<String>(
+      SettingsRepository.keyBuiltInToolsOrder,
+      'builtin.gematria,builtin.calendar',
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyHiddenBuiltInToolIds,
+      'builtin.notes',
+    );
+    await Settings.setValue<String>(
+      SettingsRepository.keyBuiltInToolsPinnedToNavRail,
+      'builtin.calendar',
+    );
+
+    final result = await BackupService.createBackup(
+      includeSettings: true,
+      includeBookmarks: false,
+      includeHistory: false,
+      includeNotes: false,
+      includeWorkspaces: false,
+      includeShamorZachor: false,
+      includePlugins: false,
+    );
+
+    final settings =
+        (jsonDecode(await File(result.path).readAsString())
+                as Map<String, dynamic>)['settings']
+            as Map<String, dynamic>;
+    expect(
+      settings[SettingsRepository.keyBuiltInToolsOrder],
+      'builtin.gematria,builtin.calendar',
+    );
+    expect(
+      settings[SettingsRepository.keyHiddenBuiltInToolIds],
+      'builtin.notes',
+    );
+    expect(
+      settings[SettingsRepository.keyBuiltInToolsPinnedToNavRail],
+      'builtin.calendar',
+    );
+
+    await Settings.setValue<String>(
+      SettingsRepository.keyBuiltInToolsOrder,
+      '',
+    );
+    await BackupService.restoreFromBackup(result.path);
+
+    expect(
+      Settings.getValue<String>(
+        SettingsRepository.keyBuiltInToolsOrder,
+        defaultValue: '',
+      ),
+      'builtin.gematria,builtin.calendar',
+    );
+  });
+
   test('restoreFromBackup משחזר טיפוסים ישירות ל-Hive', () async {
     final backupDir = Directory(p.join(tempDir.path, 'manual_backups'));
     await backupDir.create(recursive: true);
@@ -502,7 +560,9 @@ void main() {
       (pluginEntry['installation'] as Map)['manifest_json'] = 'not-json{';
       await backupFile.writeAsString(jsonEncode(backupJson));
 
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
 
       expect(
         skipped,
@@ -545,7 +605,9 @@ void main() {
         await Directory(paths.installPath).delete(recursive: true);
         await Directory(paths.dataPath).delete(recursive: true);
 
-        final skipped = await BackupService.restoreFromBackup(standalone.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          standalone.path,
+        )).skippedSections;
 
         expect(skipped, isEmpty);
         expect(
@@ -582,7 +644,9 @@ void main() {
         await Directory(paths.installPath).delete(recursive: true);
         await Directory(paths.dataPath).delete(recursive: true);
 
-        final skipped = await BackupService.restoreFromBackup(backup.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          backup.path,
+        )).skippedSections;
 
         expect(skipped, isEmpty);
         expect(
@@ -606,7 +670,9 @@ void main() {
         p.join(File(backup.path).parent.path, 'store'),
       ).delete(recursive: true);
 
-      final skipped = await BackupService.restoreFromBackup(backup.path);
+      final skipped = (await BackupService.restoreFromBackup(
+        backup.path,
+      )).skippedSections;
 
       expect(skipped, contains('plugins'));
       expect(
@@ -646,7 +712,9 @@ void main() {
         (pluginEntry['files'] as Map)['../evil.txt'] = base64Encode([6, 6, 6]);
         await backupFile.writeAsString(jsonEncode(backupJson));
 
-        final skipped = await BackupService.restoreFromBackup(backup.path);
+        final skipped = (await BackupService.restoreFromBackup(
+          backup.path,
+        )).skippedSections;
 
         // שחזור התוסף נכשל, ההתקנה הקיימת שרדה והקובץ החורג לא נכתב.
         expect(skipped, contains('plugins'));

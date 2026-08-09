@@ -603,8 +603,16 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
               'התקדמות האינדקס: {processed}/{total}',
               args: {'processed': processed, 'total': total},
             );
+          } else if (indexingState is IndexingComplete &&
+              !indexingState.isClean) {
+            subtitleText = context.settingsText(
+              'האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות',
+              args: {'count': indexingState.failureCount},
+            );
           } else if (indexingState is IndexingComplete) {
             subtitleText = context.settingsText('האינדקס מעודכן');
+          } else if (indexingState is IndexingStopped) {
+            subtitleText = context.settingsText('האינדוקס נעצר לפני שהושלם');
           } else {
             subtitleText = context.settingsText('האינדקס לא מעודכן');
           }

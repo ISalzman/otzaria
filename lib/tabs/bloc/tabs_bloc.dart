@@ -11,6 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -215,6 +216,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         existingTab: state.tabs[matchingIndex],
         incomingTab: event.tab,
       );
+      _propagateSearchToExistingTab(
+        existingTab: state.tabs[matchingIndex],
+        incomingTab: event.tab,
+      );
       // סימניות/היסטוריה: המשתמש בחר מיקום ספציפי בספר, ולא מספיק להעביר
       // focus לטאב הקיים — צריך לגלול אותו למיקום המבוקש.
       if (event.navigateToPositionIfReused) {
@@ -322,6 +327,64 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         .firstWhere((state) => state is TextBookLoaded)
         .then((_) => dispatch())
         .catchError((_) {});
+  }
+
+  /// מעביר את החיפוש של הטאב הנכנס אל הטאב הקיים שקיבל את המיקוד. בלעדיו
+  /// פתיחת תוצאה בספר שכבר פתוח מאבדת את השאילתה ואת כל התוספות שלה, והחיפוש
+  /// בספר חוזר למסלול המחרוזת הרצופה — "אין תוצאות" על תוצאה שנמצאה.
+  void _propagateSearchToExistingTab({
+    required OpenedTab existingTab,
+    required OpenedTab incomingTab,
+  }) {
+    if (incomingTab is TextBookTab) {
+      if (incomingTab.searchText.isEmpty) return;
+      final targetText = _resolveTextBookTab(existingTab, incomingTab);
+      if (targetText == null) return;
+      void dispatch() {
+        targetText.bloc.add(
+          UpdateSearchText(
+            incomingTab.searchText,
+            searchOptions: incomingTab.searchOptions,
+            alternativeWords: incomingTab.alternativeWords,
+            spacingValues: incomingTab.spacingValues,
+            searchMode: incomingTab.searchMode,
+            searchDistance: incomingTab.searchDistance,
+            matchPolicy: incomingTab.matchPolicy,
+          ),
+        );
+      }
+
+      // טאב שוחזר ולא נצפה עדיין — ה-bloc שלו ב-TextBookInitial, ושם
+      // UpdateSearchText נזרק. ממתינים לטעינה, כמו במסלול ההדגשה המדויקת.
+      if (targetText.bloc.state is TextBookLoaded) {
+        dispatch();
+      } else {
+        targetText.bloc.stream
+            .firstWhere((state) => state is TextBookLoaded)
+            .then((_) => dispatch())
+            .catchError((_) {});
+      }
+      return;
+    }
+
+    if (incomingTab is PdfBookTab) {
+      if (incomingTab.searchText.isEmpty) return;
+      final targetPdf = _resolvePdfBookTab(existingTab, incomingTab);
+      if (targetPdf == null) return;
+      // החלה אטומית: השאילתה והתצורה יחד. עדכון שדה החיפוש לפני התצורה היה
+      // מריץ את השאילתה החדשה עם התצורה הישנה.
+      targetPdf.applyIncomingSearchConfiguration(
+        ReadingTabSearchState(
+          searchText: incomingTab.searchText,
+          searchOptions: incomingTab.searchOptions,
+          alternativeWords: incomingTab.alternativeWords,
+          spacingValues: incomingTab.spacingValues,
+          searchMode: incomingTab.searchMode,
+          searchDistance: incomingTab.searchDistance,
+          matchPolicy: incomingTab.matchPolicy,
+        ),
+      );
+    }
   }
 
   TextBookTab? _resolveTextBookTab(

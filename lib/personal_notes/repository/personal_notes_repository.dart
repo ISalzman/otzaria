@@ -7,6 +7,19 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_notes_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
+import 'package:otzaria/utils/file/docx_cache.dart';
+
+typedef PersonalNotesLoader =
+    Future<List<PersonalNote>> Function(
+      String bookId, {
+      int? categoryId,
+    });
+
+/// טוען הערות שמורות ללא קריאת תוכן הספר ויישוב מחדש של המיקומים.
+Future<List<PersonalNote>> loadStoredPersonalNotes(
+  String bookId, {
+  int? categoryId,
+}) => PersonalNotesDatabase.instance.loadNotes(bookId);
 
 class PersonalNotesRepository {
   final FileSystemData _fileSystem;
@@ -115,7 +128,11 @@ class PersonalNotesRepository {
           if (dbBook.isFileBacked && dbBook.filePath != null) {
             final file = File(dbBook.filePath!);
             if (await file.exists()) {
-              return await file.readAsString();
+              return await readFileBackedBookText(
+                file,
+                dbBook.fileType,
+                bookId,
+              );
             }
           }
 
@@ -133,7 +150,7 @@ class PersonalNotesRepository {
             location.filePath != null) {
           final file = File(location.filePath!);
           if (await file.exists()) {
-            return await file.readAsString();
+            return await readFileBackedBookText(file, null, bookId);
           }
         }
       }

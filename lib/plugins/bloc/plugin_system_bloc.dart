@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
@@ -48,7 +49,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<PinPluginToNavRailRequested>(_onPinPluginToNavRailRequested);
     on<UnpinPluginFromNavRailRequested>(_onUnpinPluginFromNavRailRequested);
     on<SetPluginShowInToolsRequested>(_onSetPluginShowInToolsRequested);
-    on<ReorderPluginsRequested>(_onReorderPluginsRequested);
+    on<ReorderPluginsRequested>(
+      _onReorderPluginsRequested,
+      transformer: sequential(),
+    );
     on<EnablePluginRequested>(_onEnablePluginRequested);
     on<DisablePluginRequested>(_onDisablePluginRequested);
     on<SetPluginPermissionRequested>(_onSetPluginPermissionRequested);

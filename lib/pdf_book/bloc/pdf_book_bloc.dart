@@ -163,6 +163,8 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         alternativeWords: initial.alternativeWords,
         spacingValues: initial.spacingValues,
         searchMode: initial.searchMode,
+        searchDistance: initial.searchDistance,
+        matchPolicy: initial.matchPolicy,
         layoutMode: initial.layoutMode,
       ),
     );
@@ -253,6 +255,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     final Map<String, String> spacingValues;
     final SearchMode searchMode;
     final int searchDistance;
+    final SearchMatchPolicy matchPolicy;
     final PdfLayoutMode layoutMode;
 
     if (current is PdfBookInitial) {
@@ -263,6 +266,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       spacingValues = current.spacingValues;
       searchMode = current.searchMode;
       searchDistance = current.searchDistance;
+      matchPolicy = current.matchPolicy;
       layoutMode = current.layoutMode;
     } else if (current is PdfBookLoading) {
       book = current.book;
@@ -272,6 +276,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       spacingValues = current.spacingValues;
       searchMode = current.searchMode;
       searchDistance = current.searchDistance;
+      matchPolicy = current.matchPolicy;
       layoutMode = current.layoutMode;
     } else if (current is PdfBookLoaded) {
       // Already loaded, just update
@@ -314,6 +319,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         spacingValues: spacingValues,
         searchMode: searchMode,
         searchDistance: searchDistance,
+        matchPolicy: matchPolicy,
         layoutMode: layoutMode,
         // כל פתיחה לעמוד שאינו הראשון (היסטוריה, סימניות, דף יומי,
         // חיפוש, קישור→PDF) צריכה overlay עד ש-stability tracking
@@ -357,6 +363,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         spacingValues: tab.spacingValues,
         searchMode: tab.searchMode,
         searchDistance: tab.searchDistance,
+        matchPolicy: tab.matchPolicy,
         layoutMode: tab.savedLayoutMode ?? PdfLayoutMode.regularView,
       ),
     );
@@ -622,6 +629,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
           spacingValues: current.spacingValues,
           searchMode: current.searchMode,
           searchDistance: current.searchDistance,
+          matchPolicy: current.matchPolicy,
           layoutMode: event.layoutMode,
         ),
       );
@@ -758,6 +766,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         alternativeWords: event.alternativeWords ?? current.alternativeWords,
         spacingValues: event.spacingValues ?? current.spacingValues,
         searchMode: event.searchMode ?? current.searchMode,
+        matchPolicy: event.matchPolicy ?? current.matchPolicy,
         searchDistance: event.searchDistance ?? current.searchDistance,
       ),
     );
@@ -767,6 +776,7 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
     tab.spacingValues = event.spacingValues ?? current.spacingValues;
     tab.searchMode = event.searchMode ?? current.searchMode;
     tab.searchDistance = event.searchDistance ?? current.searchDistance;
+    tab.matchPolicy = event.matchPolicy ?? current.matchPolicy;
   }
 
   void _onUpdateSearchResults(

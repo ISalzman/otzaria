@@ -617,6 +617,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         alternativeWords: widget.tab.alternativeWords,
         spacingValues: widget.tab.spacingValues,
         searchMode: widget.tab.searchMode,
+        searchDistance: widget.tab.searchDistance,
+        matchPolicy: widget.tab.matchPolicy,
         layoutMode: initialLayoutMode,
       ),
     );
@@ -4300,6 +4302,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         initialSpacingValues: widget.tab.spacingValues,
                         initialSearchMode: widget.tab.searchMode,
                         initialSearchDistance: widget.tab.searchDistance,
+                        initialMatchPolicy: widget.tab.matchPolicy,
+                        incomingSearchConfiguration:
+                            widget.tab.incomingSearchConfiguration,
                         onSearchResultNavigated: _ensureSearchTabIsActive,
                       )
                     : const Center(

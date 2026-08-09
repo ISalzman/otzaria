@@ -177,6 +177,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<ApplyMarkHighlight>(_onApplyMarkHighlight);
     on<TogglePinLeftPane>(_onTogglePinLeftPane);
     on<UpdateSearchText>(_onUpdateSearchText);
+    on<UpdateSearchResultLines>(_onUpdateSearchResultLines);
     on<ApplyFullBookContent>(_onApplyFullBookContent);
     on<ApplyBookContentRange>(_onApplyBookContentRange);
     on<ApplyBookContentRanges>(_onApplyBookContentRanges);
@@ -605,6 +606,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     Map<String, String> spacingValues = {};
     SearchMode searchMode = SearchMode.exact;
     int searchDistance = 0;
+    SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard;
     bool showLeftPane;
     List<String> commentators;
     late final List<int> visibleIndices;
@@ -630,6 +632,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       spacingValues = currentState.spacingValues;
       searchMode = currentState.searchMode;
       searchDistance = currentState.searchDistance;
+      matchPolicy = currentState.matchPolicy;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -657,6 +660,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       spacingValues = initial.spacingValues;
       searchMode = initial.searchMode;
       searchDistance = initial.searchDistance;
+      matchPolicy = initial.matchPolicy;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index < 0 ? 0 : initial.index];
@@ -966,6 +970,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         spacingValues: spacingValues,
         searchMode: searchMode,
         searchDistance: searchDistance,
+        matchPolicy: matchPolicy,
         scrollController: scrollController,
         positionsListener: positionsListener,
         scrollOffsetController: scrollOffsetController,
@@ -1189,6 +1194,16 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+
+      if (event.displayOrderOnly) {
+        emit(
+          currentState.copyWith(
+            activeCommentators: event.commentators,
+            selectedIndex: currentState.selectedIndex,
+          ),
+        );
+        return;
+      }
 
       // בחירה אוטומטית (ברירת מחדל) ושחזור שמור גוברים על בחירה אוטומטית
       // קודמת (כגון אוטו-בחירת 'הערות'), כל עוד המשתמש לא בחר ידנית בסשן זה.
@@ -1887,11 +1902,24 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           spacingValues: event.spacingValues,
           searchMode: event.searchMode,
           searchDistance: event.searchDistance,
+          matchPolicy: event.matchPolicy,
           selectedIndex: currentState.selectedIndex,
           clearPinpointHighlight: true,
+          // שאילתה חדשה — תוצאות החיפוש הקודם אינן תקפות יותר.
+          clearSearchResultLines: true,
         ),
       );
     }
+  }
+
+  void _onUpdateSearchResultLines(
+    UpdateSearchResultLines event,
+    Emitter<TextBookState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! TextBookLoaded) return;
+    if (setEquals(currentState.searchResultLines, event.lines)) return;
+    emit(currentState.copyWith(searchResultLines: event.lines));
   }
 
   void _onApplyFullBookContent(

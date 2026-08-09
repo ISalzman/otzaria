@@ -52,7 +52,9 @@ class PersonalNoteDraft {
 }
 
 class PersonalNoteDraftService {
-  static const _prefix = 'personal_note_draft:';
+  /// קידומת מפתחות הטיוטות ב-Hive box של ההגדרות. חשופה כדי שגיבוי
+  /// ההגדרות יחריג אותה — טיוטה היא תוכן הערה אישית, לא הגדרה.
+  static const keyPrefix = 'personal_note_draft:';
 
   String _key(
     String bookId, {
@@ -63,14 +65,14 @@ class PersonalNoteDraftService {
     assert((lineNumber == null) != (noteId == null));
     final bookSegment = categoryId != null ? '$bookId@$categoryId' : bookId;
     if (noteId != null) {
-      return '$_prefix$bookSegment:note:$noteId';
+      return '$keyPrefix$bookSegment:note:$noteId';
     }
-    return '$_prefix$bookSegment:$lineNumber';
+    return '$keyPrefix$bookSegment:$lineNumber';
   }
 
   String _bookPrefix(String bookId, {int? categoryId}) {
     final bookSegment = categoryId != null ? '$bookId@$categoryId' : bookId;
-    return '$_prefix$bookSegment:';
+    return '$keyPrefix$bookSegment:';
   }
 
   Future<PersonalNoteDraft?> loadDraft({

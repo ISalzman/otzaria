@@ -6,6 +6,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter/foundation.dart';
@@ -39,6 +40,9 @@ class TextBookTab extends OpenedTab {
   /// מרחק העריכה לחיפוש מקורב. בלעדיו fuzzy במרחק 0 מתנהג כחיפוש מדויק,
   /// ותוצאה שנפתחה מהחיפוש הגלובלי לא תימצא שוב בסרגל החיפוש שבתוך הספר.
   final int searchDistance;
+
+  /// טווח הקרבה ומצב התאמת המילים שבהם נמצאה התוצאה — ראו [SearchMatchPolicy].
+  final SearchMatchPolicy matchPolicy;
 
   /// תת-מחרוזת להדגשה ממוקדת **רק** בסעיף שצוין. נטענת מקישור עומק
   /// (`otzaria://open/book/<id>?index=<n>&highlight=<text>`) ואינה פותחת חלונית
@@ -108,6 +112,7 @@ class TextBookTab extends OpenedTab {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
+    this.matchPolicy = SearchMatchPolicy.standard,
     this.commentators,
     bool openLeftPane = false,
     bool? splitedView,
@@ -157,6 +162,7 @@ class TextBookTab extends OpenedTab {
             spacingValues: spacingValues,
             searchMode: searchMode,
             searchDistance: searchDistance,
+            matchPolicy: matchPolicy,
             splitedView: effectiveSplitedView,
             showPageShapeView: effectiveShowPageShapeView,
             highlightText: highlightText,
@@ -221,6 +227,10 @@ class TextBookTab extends OpenedTab {
         : TextBook(
             title: json['title'],
           );
+    // קונפיגורציית החיפוש נטענת מהדיסק: בלעדיה הספר נפתח מחדש עם מסלול
+    // המחרוזת הרצופה, וחלונית החיפוש הציגה "אין תוצאות" על חיפוש מורכב.
+    final searchState = ReadingTabSearchState.fromJson(json);
+
     return TextBookTab(
       index: json['initalIndex'],
       book: restoredBook,
@@ -229,6 +239,13 @@ class TextBookTab extends OpenedTab {
       showPageShapeView: json['showPageShapeView'] ?? false,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
+      searchText: searchState.searchText,
+      searchOptions: searchState.searchOptions,
+      alternativeWords: searchState.alternativeWords,
+      spacingValues: searchState.spacingValues,
+      searchMode: searchState.searchMode,
+      searchDistance: searchState.searchDistance,
+      matchPolicy: searchState.matchPolicy,
     );
   }
 
@@ -247,9 +264,28 @@ class TextBookTab extends OpenedTab {
     // ספר ה-state כולל העשרה שנעשתה ברקע (id/מחבר/קטגוריות) — עדיף לשמירה.
     TextBook bookToSave = book;
 
+    var searchState = ReadingTabSearchState(
+      searchText: searchText,
+      searchOptions: searchOptions,
+      alternativeWords: alternativeWords,
+      spacingValues: spacingValues,
+      searchMode: searchMode,
+      searchDistance: searchDistance,
+      matchPolicy: matchPolicy,
+    );
+
     if (bloc.state is TextBookLoaded) {
       final loadedState = bloc.state as TextBookLoaded;
       bookToSave = loadedState.book;
+      searchState = ReadingTabSearchState(
+        searchText: loadedState.searchText,
+        searchOptions: loadedState.searchOptions,
+        alternativeWords: loadedState.alternativeWords,
+        spacingValues: loadedState.spacingValues,
+        searchMode: loadedState.searchMode,
+        searchDistance: loadedState.searchDistance,
+        matchPolicy: loadedState.matchPolicy,
+      );
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
       showPageShapeView = loadedState.showPageShapeView;
@@ -271,6 +307,7 @@ class TextBookTab extends OpenedTab {
       'showLeftPane': bloc.state.showLeftPane,
       'isPinned': isPinned,
       'type': 'TextBookTab',
+      ...searchState.toJson(),
     };
   }
 }

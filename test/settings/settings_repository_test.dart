@@ -813,6 +813,65 @@ void main() {
       ).called(1);
     });
 
+    test('updateBuiltInToolsOrder stores CSV in order, not sorted', () async {
+      await repository.updateBuiltInToolsOrder([
+        'builtin.gematria',
+        'builtin.calendar',
+      ]);
+
+      verify(
+        mockSettingsWrapper.setValue(
+          SettingsRepository.keyBuiltInToolsOrder,
+          'builtin.gematria,builtin.calendar',
+        ),
+      ).called(1);
+    });
+
+    test('loadSettings parses builtInToolsOrder preserving order', () async {
+      when(
+        mockSettingsWrapper.getValue<bool>(
+          'settings_initialized',
+          defaultValue: false,
+        ),
+      ).thenReturn(true);
+      when(
+        mockSettingsWrapper.getValue<String>(
+          SettingsRepository.keyBuiltInToolsOrder,
+          defaultValue: '',
+        ),
+      ).thenReturn('builtin.gematria, builtin.calendar,,builtin.gematria');
+
+      final settings = await repository.loadSettings();
+
+      expect(
+        settings['builtInToolsOrder'],
+        equals(['builtin.gematria', 'builtin.calendar']),
+        reason: 'הסדר נשמר, רווחים נחתכים, וכפילויות/ערכים ריקים מסוננים',
+      );
+    });
+
+    test(
+      'loadSettings returns an empty order when nothing was saved',
+      () async {
+        when(
+          mockSettingsWrapper.getValue<bool>(
+            'settings_initialized',
+            defaultValue: false,
+          ),
+        ).thenReturn(true);
+        when(
+          mockSettingsWrapper.getValue<String>(
+            SettingsRepository.keyBuiltInToolsOrder,
+            defaultValue: '',
+          ),
+        ).thenReturn('');
+
+        final settings = await repository.loadSettings();
+
+        expect(settings['builtInToolsOrder'], isEmpty);
+      },
+    );
+
     test('loadSettings parses hiddenBuiltInToolIds CSV into a Set', () async {
       // מאתחלים את כל ה-defaults הנדרשים כדי ש-loadSettings יסיים בלי
       // null-cast errors — אבל ה-stubs לערכי ברירת מחדל מספקים את זה דרך

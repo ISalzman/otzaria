@@ -1,31 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/view/search_navigation_tree.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 
 void main() {
-  Category makeCategory(String title) => Category(
+  Category makeCategory(
+    String title, {
+    List<Category> subCategories = const [],
+    List<Book> books = const [],
+  }) => Category(
     title: title,
     description: '',
     shortDescription: '',
     order: 1,
-    subCategories: const [],
-    books: const [],
+    subCategories: subCategories,
+    books: books,
     parent: null,
   );
 
-  Library makeLibrary() {
-    final tanach = makeCategory('תנ"ך');
-    final library = Library(categories: [tanach]);
-    tanach.parent = library;
+  /// מחבר את ההורים בעץ — [Category.path] נבנה מהשרשרת הזו.
+  Library makeLibraryFrom(List<Category> topLevel) {
+    final library = Library(categories: topLevel);
+    void link(Category parent) {
+      for (final sub in parent.subCategories) {
+        sub.parent = parent;
+        link(sub);
+      }
+    }
+
+    for (final cat in topLevel) {
+      cat.parent = library;
+    }
+    link(library);
     return library;
   }
+
+  Library makeLibrary() => makeLibraryFrom([makeCategory('תנ"ך')]);
+
+  /// ספר עם id — מפתח ה-facet שלו הוא `id:<id>`, ו-[categoryPath] קובע את
+  /// הנתיב שרשימת הסינון השטוחה בונה ממנו את ה-facet.
+  TextBook makeBook(int id, String title, String categoryPath) =>
+      TextBook(id: id, title: title, categoryPath: categoryPath);
 
   Future<void> pumpTree(
     WidgetTester tester, {
     required Library library,
+    Map<String, int> facetCounts = const {'/': 3, '/תנ"ך': 3},
     Set<String> selectedFacets = const {},
+    Map<String, bool> expansion = const {},
+    String filterQuery = '',
+    bool isLoading = false,
+    bool hasResults = true,
     void Function(String facet)? onSetFacet,
+    void Function(String path, bool isExpanded)? onToggleExpand,
     VoidCallback? onClearAll,
   }) {
     return tester.pumpWidget(
@@ -36,15 +65,15 @@ void main() {
             height: 600,
             child: SearchNavigationTree(
               library: library,
-              facetCounts: const {'/': 3, '/תנ"ך': 3},
+              facetCounts: facetCounts,
               selectedFacets: selectedFacets,
-              expansion: const {},
-              filterQuery: '',
-              isLoading: false,
-              hasResults: true,
+              expansion: expansion,
+              filterQuery: filterQuery,
+              isLoading: isLoading,
+              hasResults: hasResults,
               onSetFacet: onSetFacet ?? (_) {},
               onToggleFacet: (_) {},
-              onToggleExpand: (_) {},
+              onToggleExpand: onToggleExpand ?? (_, _) {},
               isMultiSelectPressed: () => false,
               onClearAll: onClearAll ?? () {},
             ),
@@ -54,56 +83,309 @@ void main() {
     );
   }
 
-  testWidgets('ללא סינון: כותרת השורש היא "ספריית אוצריא" והקטגוריה מוצגת', (
-    tester,
-  ) async {
-    await pumpTree(tester, library: makeLibrary());
-
-    expect(find.text('ספריית אוצריא'), findsOneWidget);
-    expect(find.text('תנ"ך'), findsOneWidget);
-    expect(find.text('נקה סינון'), findsNothing);
-  });
-
-  testWidgets('סינון ממד: כותרת השורש מציגה את שם הממד במקום "ספריית אוצריא"', (
-    tester,
-  ) async {
-    await pumpTree(
+  group('עץ הניווט — התנהגות בסיסית', () {
+    testWidgets('ללא סינון: כותרת השורש היא "ספריית אוצריא" והקטגוריה מוצגת', (
       tester,
-      library: makeLibrary(),
-      selectedFacets: {'/era/ראשונים'},
+    ) async {
+      await pumpTree(tester, library: makeLibrary());
+
+      expect(find.text('ספריית אוצריא'), findsOneWidget);
+      expect(find.text('תנ"ך'), findsOneWidget);
+      expect(find.text('נקה סינון'), findsNothing);
+    });
+
+    testWidgets(
+      'סינון ממד: כותרת השורש מציגה את שם הממד במקום "ספריית אוצריא"',
+      (tester) async {
+        await pumpTree(
+          tester,
+          library: makeLibrary(),
+          selectedFacets: {'/era/ראשונים'},
+        );
+
+        expect(find.text('ראשונים'), findsOneWidget);
+        expect(find.text('ספריית אוצריא'), findsNothing);
+        expect(find.text('נקה סינון'), findsOneWidget);
+      },
     );
 
-    expect(find.text('ראשונים'), findsOneWidget);
-    expect(find.text('ספריית אוצריא'), findsNothing);
-    expect(find.text('נקה סינון'), findsOneWidget);
+    testWidgets('לחיצה על "נקה סינון" בשורש מפעילה onClearAll', (tester) async {
+      var cleared = false;
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        selectedFacets: {'/era/ראשונים'},
+        onClearAll: () => cleared = true,
+      );
+
+      await tester.tap(find.text('נקה סינון'));
+      await tester.pump();
+      expect(cleared, isTrue);
+    });
+
+    testWidgets('לחיצה על קטגוריה מפעילה onSetFacet עם הנתיב שלה', (
+      tester,
+    ) async {
+      String? facet;
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        onSetFacet: (f) => facet = f,
+      );
+
+      await tester.tap(find.text('תנ"ך'));
+      await tester.pump();
+      expect(facet, '/תנ"ך');
+    });
+
+    testWidgets('קטגוריה ללא תוצאות אינה מוצגת', (tester) async {
+      await pumpTree(
+        tester,
+        library: makeLibraryFrom([makeCategory('תנ"ך'), makeCategory('משנה')]),
+        facetCounts: const {'/': 3, '/תנ"ך': 3},
+      );
+
+      expect(find.text('תנ"ך'), findsOneWidget);
+      expect(find.text('משנה'), findsNothing);
+    });
   });
 
-  testWidgets('לחיצה על "נקה סינון" בשורש מפעילה onClearAll', (tester) async {
-    var cleared = false;
-    await pumpTree(
-      tester,
-      library: makeLibrary(),
-      selectedFacets: {'/era/ראשונים'},
-      onClearAll: () => cleared = true,
+  group('רשימת הסינון השטוחה — רק ספרים עם תוצאות', () {
+    Library libraryWithBooks() => makeLibraryFrom([
+      makeCategory(
+        'תנ"ך',
+        books: [
+          makeBook(1, 'ויקרא', '/תנ"ך'),
+          makeBook(2, 'רש"י על ויקרא', '/תנ"ך'),
+          makeBook(3, 'תהילים', '/תנ"ך'),
+        ],
+      ),
+    ]);
+
+    testWidgets('ספר תואם ללא תוצאות אינו מוצג ברשימה', (tester) async {
+      await pumpTree(
+        tester,
+        library: libraryWithBooks(),
+        // רק לרש"י על ויקרא יש תוצאות; ל"ויקרא" עצמו אין.
+        facetCounts: const {'/': 4, '/תנ"ך': 4, '/תנ"ך/id:2': 4},
+        filterQuery: 'ויקרא',
+      );
+
+      expect(find.text('רש"י על ויקרא'), findsOneWidget);
+      expect(find.text('ויקרא'), findsNothing);
+      expect(find.text('תהילים'), findsNothing);
+    });
+
+    testWidgets(
+      'כשלאף ספר תואם אין תוצאות מוצגת ההודעה "לא נמצאו ספרים עם תוצאות"',
+      (tester) async {
+        await pumpTree(
+          tester,
+          library: libraryWithBooks(),
+          facetCounts: const {'/': 4, '/תנ"ך': 4, '/תנ"ך/id:3': 4},
+          filterQuery: 'ויקרא',
+        );
+
+        expect(find.text('לא נמצאו ספרים עם תוצאות'), findsOneWidget);
+        expect(find.byType(NavTreeTile), findsNothing);
+      },
     );
 
-    await tester.tap(find.text('נקה סינון'));
-    await tester.pump();
-    expect(cleared, isTrue);
+    testWidgets('אין התאמת שם כלל — אותה הודעה', (tester) async {
+      await pumpTree(
+        tester,
+        library: libraryWithBooks(),
+        facetCounts: const {'/': 4, '/תנ"ך': 4, '/תנ"ך/id:1': 4},
+        filterQuery: 'זוהר',
+      );
+
+      expect(find.text('לא נמצאו ספרים עם תוצאות'), findsOneWidget);
+    });
+
+    testWidgets('לחיצה על ספר ברשימה מפעילה onSetFacet עם facet הספר', (
+      tester,
+    ) async {
+      String? facet;
+      await pumpTree(
+        tester,
+        library: libraryWithBooks(),
+        facetCounts: const {'/': 4, '/תנ"ך': 4, '/תנ"ך/id:1': 4},
+        filterQuery: 'ויקרא',
+        onSetFacet: (f) => facet = f,
+      );
+
+      await tester.tap(find.text('ויקרא'));
+      await tester.pump();
+      expect(facet, '/תנ"ך/id:1');
+    });
+
+    testWidgets('בטעינה ראשונית ללא תוצאות מוצג ספינר ולא ההודעה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: libraryWithBooks(),
+        facetCounts: const {},
+        filterQuery: 'ויקרא',
+        isLoading: true,
+        hasResults: false,
+      );
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('לא נמצאו ספרים עם תוצאות'), findsNothing);
+    });
   });
 
-  testWidgets('לחיצה על קטגוריה מפעילה onSetFacet עם הנתיב שלה', (
-    tester,
-  ) async {
-    String? facet;
-    await pumpTree(
+  group('הסינון הפעיל חייב להישאר גלוי בעץ', () {
+    Library nestedLibrary() => makeLibraryFrom([
+      makeCategory(
+        'תנ"ך',
+        subCategories: [
+          makeCategory(
+            'כתובים',
+            books: [makeBook(7, 'תהילים', '/תנ"ך/כתובים')],
+          ),
+        ],
+      ),
+      makeCategory('משנה'),
+    ]);
+
+    const nestedCounts = {
+      '/': 5,
+      '/תנ"ך': 5,
+      '/תנ"ך/כתובים': 5,
+      '/תנ"ך/כתובים/id:7': 5,
+      '/משנה': 2,
+    };
+
+    testWidgets('ללא בחירה הענפים סגורים — הספר הפנימי אינו מוצג', (
       tester,
-      library: makeLibrary(),
-      onSetFacet: (f) => facet = f,
+    ) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: nestedCounts,
+      );
+
+      expect(find.text('תנ"ך'), findsOneWidget);
+      expect(find.text('כתובים'), findsNothing);
+      expect(find.text('תהילים'), findsNothing);
+    });
+
+    testWidgets('בחירת ספר פותחת אוטומטית את ענף האבות עד אליו', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: nestedCounts,
+        selectedFacets: {'/תנ"ך/כתובים/id:7'},
+      );
+
+      expect(find.text('תנ"ך'), findsOneWidget);
+      expect(find.text('כתובים'), findsOneWidget);
+      expect(find.text('תהילים'), findsOneWidget);
+      // ענף שאינו בדרך אל הבחירה נשאר סגור.
+      expect(find.text('משנה'), findsOneWidget);
+    });
+
+    testWidgets('כיווץ ידני גובר על הפתיחה האוטומטית', (tester) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: nestedCounts,
+        selectedFacets: {'/תנ"ך/כתובים/id:7'},
+        expansion: const {'/תנ"ך': false},
+      );
+
+      expect(find.text('כתובים'), findsNothing);
+      expect(find.text('תהילים'), findsNothing);
+    });
+
+    testWidgets(
+      'לחיצה על החץ בענף שנפתח אוטומטית מדווחת isExpanded=true (ולכן מכווצת)',
+      (tester) async {
+        final toggles = <(String, bool)>[];
+        await pumpTree(
+          tester,
+          library: nestedLibrary(),
+          facetCounts: nestedCounts,
+          selectedFacets: {'/תנ"ך/כתובים/id:7'},
+          onToggleExpand: (path, isExpanded) => toggles.add((path, isExpanded)),
+        );
+
+        final chevron = find.descendant(
+          of: find.ancestor(
+            of: find.text('תנ"ך'),
+            matching: find.byType(NavTreeTile),
+          ),
+          matching: find.byType(IconButton),
+        );
+        await tester.tap(chevron);
+        await tester.pump();
+
+        expect(toggles, [('/תנ"ך', true)]);
+      },
     );
 
-    await tester.tap(find.text('תנ"ך'));
-    await tester.pump();
-    expect(facet, '/תנ"ך');
+    testWidgets('החץ בענף סגור מדווח isExpanded=false', (tester) async {
+      final toggles = <(String, bool)>[];
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: nestedCounts,
+        onToggleExpand: (path, isExpanded) => toggles.add((path, isExpanded)),
+      );
+
+      final chevron = find.descendant(
+        of: find.ancestor(
+          of: find.text('תנ"ך'),
+          matching: find.byType(NavTreeTile),
+        ),
+        matching: find.byType(IconButton),
+      );
+      await tester.tap(chevron);
+      await tester.pump();
+
+      expect(toggles, [('/תנ"ך', false)]);
+    });
+
+    testWidgets('ספר נבחר שספירתו 0 עדיין מוצג יחד עם ענף האבות שלו', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        // הבחירה כבר לא מחזירה תוצאות — ובכל זאת חייבת להיראות בעץ.
+        facetCounts: const {'/': 2, '/משנה': 2},
+        selectedFacets: {'/תנ"ך/כתובים/id:7'},
+      );
+
+      expect(find.text('תנ"ך'), findsOneWidget);
+      expect(find.text('כתובים'), findsOneWidget);
+      expect(find.text('תהילים'), findsOneWidget);
+    });
+
+    testWidgets('קטגוריה נבחרת שספירתה 0 עדיין מוצגת', (tester) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: const {'/': 2, '/משנה': 2},
+        selectedFacets: {'/תנ"ך'},
+      );
+
+      expect(find.text('תנ"ך'), findsOneWidget);
+    });
+
+    testWidgets('בחירת ספר מציגה "נקה סינון" בכותרת השורש', (tester) async {
+      await pumpTree(
+        tester,
+        library: nestedLibrary(),
+        facetCounts: nestedCounts,
+        selectedFacets: {'/תנ"ך/כתובים/id:7'},
+      );
+
+      expect(find.text('נקה סינון'), findsOneWidget);
+    });
   });
 }

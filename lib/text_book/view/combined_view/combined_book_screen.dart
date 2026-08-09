@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/gestures.dart' show kPrimaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
@@ -87,6 +88,7 @@ class CombinedView extends StatefulWidget {
     this.onSelectedTextChanged,
     this.isPreviewMode = false,
     this.onOpenPersonalNotes,
+    this.onOpenCommentaryPersonalNote,
     this.onOpenCommentatorsPane,
     this.onOpenCommentatorsPaneWithFilter,
     this.onOpenLinksPane,
@@ -106,6 +108,7 @@ class CombinedView extends StatefulWidget {
   onSelectedTextChanged;
   final bool isPreviewMode;
   final VoidCallback? onOpenPersonalNotes;
+  final void Function(Link link, int lineNumber)? onOpenCommentaryPersonalNote;
   final VoidCallback? onOpenCommentatorsPane;
   final VoidCallback? onOpenCommentatorsPaneWithFilter;
   final VoidCallback? onOpenLinksPane;
@@ -237,7 +240,20 @@ bool shouldRestoreScrollOnContinuousModeChange({
   return previousMode != null && previousMode != currentMode;
 }
 
+@visibleForTesting
+bool shouldHandleCommentaryScrollTarget({
+  required int cardIndex,
+  required int targetLineIndex,
+}) => cardIndex == targetLineIndex;
+
+typedef _CommentaryScrollTarget = ({int lineIndex, String title});
+
 class _CombinedViewState extends State<CombinedView> {
+  bool _anchorHandledCurrentTap = false;
+
+  final ValueNotifier<_CommentaryScrollTarget?> _anchorScrollTargetNotifier =
+      ValueNotifier<_CommentaryScrollTarget?>(null);
+
   // שמירת הטקסט הנבחר האחרון
   final ValueNotifier<String?> _savedSelectedText = ValueNotifier<String?>(
     null,
@@ -366,17 +382,51 @@ class _CombinedViewState extends State<CombinedView> {
     LinkPreviewOverlay.dismiss();
     if (!shouldOpenPreviewLinkInBook(link)) {
       if (sourceLine != null) {
-        _addTextBookEventIfOpen(UpdateSelectedIndex(sourceLine));
+        final state = _textBookBloc.state;
+        if (state is! TextBookLoaded ||
+            state.selectedIndex != sourceLine ||
+            state.selectedIndices.length != 1) {
+          _addTextBookEventIfOpen(UpdateSelectedIndex(sourceLine));
+        }
       }
       if (LinkTypes.isDependentTextLink(link.connectionType)) {
         final state = _textBookBloc.state;
         if (state is TextBookLoaded) {
+          if (widget.showCommentaryAsExpansionTiles) {
+            // במצב מפרשים-מתחת: מוודאים שהמפרש פעיל אם צריך, ושומרים את
+            // שמו לגלילה מיידית ב-_CommentaryCard.
+            // חשוב: לא משנים סדר — שינוי סדר גורם לריבילד+ריצוד.
+            final title = utils.getTitleFromPath(link.path2);
+            if (title.isNotEmpty) {
+              if (!state.activeCommentators.contains(title)) {
+                _addTextBookEventIfOpen(
+                  UpdateCommentators(
+                    [...state.activeCommentators, title],
+                    displayOrderOnly: true,
+                  ),
+                );
+              }
+              if (sourceLine != null) {
+                final target = (lineIndex: sourceLine, title: title);
+                _anchorScrollTargetNotifier.value = null;
+                _anchorScrollTargetNotifier.value = target;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _anchorScrollTargetNotifier.value == target) {
+                    _anchorScrollTargetNotifier.value = null;
+                  }
+                });
+              }
+            }
+            return;
+          }
           final commentators = activatePreviewCommentator(
             activeCommentators: state.activeCommentators,
             link: link,
           );
           if (!identical(commentators, state.activeCommentators)) {
-            _addTextBookEventIfOpen(UpdateCommentators(commentators));
+            _addTextBookEventIfOpen(
+              UpdateCommentators(commentators, displayOrderOnly: true),
+            );
           }
         }
         if (widget.showCommentaryAsExpansionTiles) {
@@ -400,9 +450,11 @@ class _CombinedViewState extends State<CombinedView> {
     widget.openBookCallback(tab);
   }
 
-  Link? _previewLinkFromUrl(String url) {
-    final anchor = _anchorLinkFromUrl(url);
-    return anchor?.link ?? inlineLinkFromPreviewUrl(url);
+  Future<void> _openLinkTarget(Link link) async {
+    LinkPreviewOverlay.dismiss();
+    final tab = await buildLinkTargetTab(link);
+    if (_disposed || !mounted) return;
+    widget.openBookCallback(tab);
   }
 
   /// [activeAnchor] — כשהחלונית נפתחה מסמן-אות, הסמן מודגש כל עוד היא פתוחה.
@@ -421,8 +473,7 @@ class _CombinedViewState extends State<CombinedView> {
       hoverMode: hoverMode,
       removeNikud: loaded?.removeNikud,
       removePunctuation: loaded?.removePunctuation,
-      onOpen: () =>
-          _openPreviewDestination(link, sourceLine: activeAnchor?.line),
+      onOpen: () => _openLinkTarget(link),
       onDismissed: activeAnchor == null
           ? null
           : () => _setActiveAnchor(null, null),
@@ -436,6 +487,12 @@ class _CombinedViewState extends State<CombinedView> {
   bool _handleAnchorTap(String url) {
     final anchor = _anchorLinkFromUrl(url);
     if (anchor == null) return false;
+    _anchorHandledCurrentTap = true;
+    // מאפסים אחרי 400ms — יותר מה-300ms של EnhancedGestureDetector,
+    // כדי שה-onSingleTap המתוזמן לא יבטל את הבחירה שנפתחה.
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _anchorHandledCurrentTap = false;
+    });
     _cancelPendingAnchorHover();
     _openPreviewDestination(anchor.link, sourceLine: anchor.line);
     return true;
@@ -457,7 +514,17 @@ class _CombinedViewState extends State<CombinedView> {
     }
     LinkPreviewOverlay.cancelScheduledHide();
     _cancelPendingAnchorHover();
-    final previewLink = _previewLinkFromUrl(url);
+
+    // סימון העוגן מחליף את MouseRegion ויוצר exit/enter מלאכותיים.
+    // הסגירה כבר בוטלה לעיל; אין לתזמן פתיחה מחדש לאותו עוגן.
+    final anchor = _anchorLinkFromUrl(url);
+    if (anchor != null &&
+        anchor.line == _activeAnchorLine &&
+        anchor.index == _activeAnchorIndex) {
+      return;
+    }
+
+    final previewLink = anchor?.link ?? inlineLinkFromPreviewUrl(url);
     if (previewLink != null) prefetchLinkPreview(previewLink);
     _anchorHoverTimer = Timer(const Duration(milliseconds: 280), () {
       if (_disposed || !mounted) return;
@@ -762,6 +829,7 @@ class _CombinedViewState extends State<CombinedView> {
     _savedSelectedText.dispose();
     _savedSelectedIndex.dispose();
     _currentSelectedIndex.dispose();
+    _anchorScrollTargetNotifier.dispose();
     if (!widget.isPreviewMode) {
       FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     }
@@ -1452,9 +1520,11 @@ class _CombinedViewState extends State<CombinedView> {
   void _onInlineNoteTap(int lineIndex) {
     _addTextBookEventIfOpen(UpdateSelectedIndex(lineIndex));
     _addTextBookEventIfOpen(HighlightLine(lineIndex));
-    // פותחים את ההערה עצמה בחלונית, גם אם מוגדר "סגור כברירת מחדל".
-    context.read<PersonalNotesBloc>().add(
-      RequestExpandNotesForLine(lineIndex + 1),
+    openPersonalNotesTarget(
+      context.read<PersonalNotesBloc>(),
+      bookId: widget.tab.book.title,
+      categoryId: widget.tab.book.categoryId,
+      lineNumber: lineIndex + 1,
     );
     if (widget.onOpenPersonalNotes != null) {
       widget.onOpenPersonalNotes!.call();
@@ -1479,6 +1549,7 @@ class _CombinedViewState extends State<CombinedView> {
       isFuzzySearch: state.searchMode == SearchMode.fuzzy,
       searchMode: state.searchMode,
       searchDistance: state.searchDistance,
+      matchPolicy: state.matchPolicy,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -1627,14 +1698,16 @@ class _CombinedViewState extends State<CombinedView> {
                     final selectionText = fixedPlain?.trim() ?? '';
                     if (selectionText.isNotEmpty && loadedState != null) {
                       unawaited(
-                        PluginRuntimeDispatcher.instance
-                            .dispatchEvent('reader.selection_changed', {
+                        PluginRuntimeDispatcher.instance.dispatchEvent(
+                          'reader.selection_changed',
+                          {
                             'text': selectionText,
                             'currentRef': loadedState.currentTitle ?? '',
                             'currentBook': loadedState.book.title,
                             'currentBookId': loadedState.book.title,
                             'currentIndex': foundIndex ?? 0,
-                            }),
+                          },
+                        ),
                       );
                     }
                   }
@@ -1935,6 +2008,10 @@ class _CombinedViewState extends State<CombinedView> {
                 }
               },
               onSingleTap: () {
+                if (_anchorHandledCurrentTap) {
+                  _anchorHandledCurrentTap = false;
+                  return;
+                }
                 // במצב רציף, לחיצה רגילה על פסקה לא בוחרת שורה — הלחיצה
                 // הספציפית מטופלת בתוך ContinuousReadingParagraph (recognizer לכל שורה).
                 if (isContinuousParagraph) {
@@ -2167,6 +2244,10 @@ class _CombinedViewState extends State<CombinedView> {
                                   state.searchMode == SearchMode.fuzzy,
                               searchMode: state.searchMode,
                               searchDistance: state.searchDistance,
+                              matchPolicy: state.matchPolicy,
+                              isSearchResultLine:
+                                  state.searchResultLines?.contains(index) ??
+                                  false,
                               fontSize: widget.textSize,
                               fontFamily: settingsState.fontFamily,
                               fontWeight: settingsState.fontBold
@@ -2245,6 +2326,8 @@ class _CombinedViewState extends State<CombinedView> {
               viewportHeight: _viewportHeight,
               selectionSyncController: widget.selectionSyncController,
               searchText: state.searchText,
+              scrollTargetListenable: _anchorScrollTargetNotifier,
+              onOpenPersonalNote: widget.onOpenCommentaryPersonalNote,
             ),
           ),
       ],
@@ -2440,6 +2523,11 @@ class _CombinedViewState extends State<CombinedView> {
         ? SearchMode.exact
         : state.searchMode;
     final effectiveSearchDistance = hasPinpoint ? 0 : state.searchDistance;
+    // הדגשה ממוקדת מ-deep link היא מחרוזת רצופה, ולכן מדיניות ההתאמה של
+    // החיפוש אינה חלה עליה.
+    final effectiveMatchPolicy = hasPinpoint
+        ? SearchMatchPolicy.standard
+        : state.matchPolicy;
 
     final renderSettings = RenderSettings(
       removeNikud: state.removeNikud,
@@ -2453,6 +2541,8 @@ class _CombinedViewState extends State<CombinedView> {
       isFuzzySearch: effectiveSearchMode == SearchMode.fuzzy,
       searchMode: effectiveSearchMode,
       searchDistance: effectiveSearchDistance,
+      matchPolicy: effectiveMatchPolicy,
+      isSearchResultLine: state.searchResultLines?.contains(lineIndex) ?? false,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -2506,6 +2596,8 @@ class _CommentaryCard extends StatefulWidget {
   final double viewportHeight;
   final SelectionSyncController? selectionSyncController;
   final String searchText;
+  final ValueListenable<_CommentaryScrollTarget?> scrollTargetListenable;
+  final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
   const _CommentaryCard({
     super.key,
@@ -2515,6 +2607,8 @@ class _CommentaryCard extends StatefulWidget {
     required this.viewportHeight,
     this.selectionSyncController,
     this.searchText = '',
+    required this.scrollTargetListenable,
+    this.onOpenPersonalNote,
   });
 
   @override
@@ -2527,15 +2621,47 @@ class _CommentaryCardState extends State<_CommentaryCard> {
   final ValueNotifier<int> _totalNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
 
+  void _onScrollTargetChanged() {
+    final target = widget.scrollTargetListenable.value;
+    if (target == null ||
+        !shouldHandleCommentaryScrollTarget(
+          cardIndex: widget.index,
+          targetLineIndex: target.lineIndex,
+        )) {
+      return;
+    }
+    _commentaryKey.currentState?.scrollToCommentator(target.title);
+  }
+
   @override
   void initState() {
     super.initState();
     _highlightNotifier = ValueNotifier<String>(widget.searchText);
+    widget.scrollTargetListenable.addListener(_onScrollTargetChanged);
+    // בדיקה מיידית: אולי הנוטיפייר כבר הוגדר לפני שה-card נוצר
+    final initialTarget = widget.scrollTargetListenable.value;
+    if (initialTarget != null &&
+        shouldHandleCommentaryScrollTarget(
+          cardIndex: widget.index,
+          targetLineIndex: initialTarget.lineIndex,
+        )) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _commentaryKey.currentState?.scrollToCommentator(
+            initialTarget.title,
+          );
+        }
+      });
+    }
   }
 
   @override
   void didUpdateWidget(_CommentaryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollTargetListenable != widget.scrollTargetListenable) {
+      oldWidget.scrollTargetListenable.removeListener(_onScrollTargetChanged);
+      widget.scrollTargetListenable.addListener(_onScrollTargetChanged);
+    }
     if (oldWidget.searchText != widget.searchText) {
       _highlightNotifier.value = widget.searchText;
     }
@@ -2543,6 +2669,7 @@ class _CommentaryCardState extends State<_CommentaryCard> {
 
   @override
   void dispose() {
+    widget.scrollTargetListenable.removeListener(_onScrollTargetChanged);
     _highlightNotifier.dispose();
     _totalNotifier.dispose();
     _currentIndexNotifier.dispose();
@@ -2603,6 +2730,8 @@ class _CommentaryCardState extends State<_CommentaryCard> {
                     highlightQueryListenable: _highlightNotifier,
                     externalTotalResultsNotifier: _totalNotifier,
                     externalCurrentIndexNotifier: _currentIndexNotifier,
+                    onOpenPersonalNote: widget.onOpenPersonalNote,
+                    personalNotesLoader: loadStoredPersonalNotes,
                   ),
                 ),
               ),

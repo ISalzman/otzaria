@@ -50,6 +50,7 @@ class SearchDialogResult {
     required this.spacingValues,
     required this.searchMode,
     required this.distance,
+    this.matchPolicy = SearchMatchPolicy.standard,
   });
 
   final String query;
@@ -58,6 +59,9 @@ class SearchDialogResult {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int distance;
+
+  /// טווח הקרבה ומצב התאמת המילים שנבחרו בדיאלוג — ראו [SearchMatchPolicy].
+  final SearchMatchPolicy matchPolicy;
 }
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
@@ -592,6 +596,7 @@ class _SearchDialogState extends State<SearchDialog> {
           spacingValues: normalizedParameters.customSpacing,
           searchMode: currentMode,
           distance: _searchTab.searchBloc.state.distance,
+          matchPolicy: currentState.configuration.matchPolicy,
         ),
       );
       return;

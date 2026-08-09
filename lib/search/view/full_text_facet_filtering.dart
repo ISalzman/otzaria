@@ -314,8 +314,8 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               hasResults: searchState.results.isNotEmpty,
               onSetFacet: (facet) => _setFacet(context, facet),
               onToggleFacet: (facet) => _handleFacetToggle(context, facet),
-              onToggleExpand: (path) => setState(() {
-                _expansionState[path] = !(_expansionState[path] ?? false);
+              onToggleExpand: (path, isExpanded) => setState(() {
+                _expansionState[path] = !isExpanded;
               }),
               isMultiSelectPressed: _isMultiSelectModifierPressed,
               onClearAll: () => _clearAllScope(context),

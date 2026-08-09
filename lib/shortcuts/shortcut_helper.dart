@@ -33,7 +33,24 @@ class ShortcutHelper {
   @visibleForTesting
   static bool? isMacForTesting;
 
+  /// override לבדיקת דיווח AltGr הייחודי ל-Windows.
+  @visibleForTesting
+  static bool? isWindowsForTesting;
+
   static bool get _treatCtrlAsMeta => isMacForTesting ?? _isMac;
+  static bool get _treatRightAltAsAltGr =>
+      isWindowsForTesting ?? (!kIsWeb && Platform.isWindows);
+
+  /// האם לחוץ Alt רגיל או AltGr, גם כשהמערכת מדווחת עליו כ-AltGraph.
+  static bool get isAltModifierPressed {
+    final keyboard = HardwareKeyboard.instance;
+    return keyboard.isAltPressed || _isAltGrPressed(keyboard);
+  }
+
+  static bool _isAltGrPressed(HardwareKeyboard keyboard) =>
+      keyboard.isLogicalKeyPressed(LogicalKeyboardKey.altGraph) ||
+      (_treatRightAltAsAltGr &&
+          keyboard.isPhysicalKeyPressed(PhysicalKeyboardKey.altRight));
 
   /// בודק אם האירוע [event] תואם להגדרת הקיצור [shortcutSetting].
   ///
@@ -45,6 +62,7 @@ class ShortcutHelper {
     bool? isControlPressed,
     bool? isShiftPressed,
     bool? isAltPressed,
+    bool? isAltGrPressed,
     bool? isMetaPressed,
   }) {
     if (event is! KeyDownEvent) return false;
@@ -64,21 +82,25 @@ class ShortcutHelper {
         : hasMetaToken;
 
     // בדיקת modifiers
-    final controlPressed =
-        isControlPressed ?? HardwareKeyboard.instance.isControlPressed;
-    final shiftPressed =
-        isShiftPressed ?? HardwareKeyboard.instance.isShiftPressed;
-    final altPressed = isAltPressed ?? HardwareKeyboard.instance.isAltPressed;
-    final metaPressed =
-        isMetaPressed ?? HardwareKeyboard.instance.isMetaPressed;
+    final keyboard = HardwareKeyboard.instance;
+    final controlPressed = isControlPressed ?? keyboard.isControlPressed;
+    final shiftPressed = isShiftPressed ?? keyboard.isShiftPressed;
+    final altPressed = isAltPressed ?? keyboard.isAltPressed;
+    final altGrPressed = isAltGrPressed ?? _isAltGrPressed(keyboard);
+    final effectiveAltPressed = altPressed || altGrPressed;
+    final metaPressed = isMetaPressed ?? keyboard.isMetaPressed;
 
-    if (requiresCtrl != null && requiresCtrl != controlPressed) {
+    // AltGr עשוי להוסיף Control סינתטי; מדכאים אותו תמיד כדי שהאירוע לא
+    // יתאים בו-זמנית גם ל-alt וגם ל-ctrl+alt.
+    final effectiveControlPressed = altGrPressed ? false : controlPressed;
+
+    if (requiresCtrl != null && requiresCtrl != effectiveControlPressed) {
       return false;
     }
     if (requiresShift != shiftPressed) {
       return false;
     }
-    if (requiresAlt != altPressed) return false;
+    if (requiresAlt != effectiveAltPressed) return false;
     if (requiresMeta != metaPressed) return false;
 
     // מציאת המקש הראשי (לא modifier)
@@ -151,6 +173,9 @@ class ShortcutHelper {
     bool hasAlt = false;
     bool hasMeta = false;
     String? mainKey;
+    final hasAltGr =
+        keys.contains(LogicalKeyboardKey.altGraph) ||
+        (_treatRightAltAsAltGr && keys.contains(LogicalKeyboardKey.altRight));
 
     for (final key in keys) {
       if (key == LogicalKeyboardKey.control ||
@@ -163,7 +188,8 @@ class ShortcutHelper {
         hasShift = true;
       } else if (key == LogicalKeyboardKey.alt ||
           key == LogicalKeyboardKey.altLeft ||
-          key == LogicalKeyboardKey.altRight) {
+          key == LogicalKeyboardKey.altRight ||
+          key == LogicalKeyboardKey.altGraph) {
         hasAlt = true;
       } else if (key == LogicalKeyboardKey.meta ||
           key == LogicalKeyboardKey.metaLeft ||
@@ -173,6 +199,8 @@ class ShortcutHelper {
         mainKey = getKeyLabel(key);
       }
     }
+
+    if (hasAltGr) hasCtrl = false;
 
     // ב-Mac גם Cmd וגם Control מתורגמים לאותו token קנוני `ctrl`. זה שומר
     // על תאימות בין-פלטפורמות (אותו `ctrl+f` עובד בכל מערכת) ומונע יצירת
@@ -245,12 +273,15 @@ class ShortcutHelper {
 
   /// ממיר מחרוזת קיצור (כגון `'ctrl+f'`) ל-[ShortcutActivator].
   ///
-  /// מחזיר [SingleActivator] עם modifiers מתאימים.
+  /// מחזיר מפעיל קיצור עם modifiers מתאימים.
   /// אם המחרוזת אינה ניתנת לניתוח, מחזיר `null`.
   ///
   /// ב-Mac ה-token `ctrl` ממופה ל-`meta: true` כדי שמתפעלי קיצור (Flutter
-  /// `Shortcuts` widget) יזהו לחיצת Command.
-  static ShortcutActivator? activatorFromShortcut(String shortcut) {
+  /// `Shortcuts` widget) יזהו לחיצת Command, אלא אם [mapCtrlToMeta] הוא false.
+  static ShortcutActivator? activatorFromShortcut(
+    String shortcut, {
+    bool mapCtrlToMeta = true,
+  }) {
     final parts = shortcut.toLowerCase().split('+');
     final hasCtrlToken = parts.contains('ctrl') || parts.contains('control');
     final hasMetaToken = parts.contains('meta');
@@ -259,7 +290,8 @@ class ShortcutHelper {
 
     final bool useControl;
     final bool useMeta;
-    if (_treatCtrlAsMeta) {
+    final treatCtrlAsMeta = mapCtrlToMeta && _treatCtrlAsMeta;
+    if (treatCtrlAsMeta) {
       useControl = false;
       useMeta = hasCtrlToken || hasMetaToken;
     } else {
@@ -271,21 +303,104 @@ class ShortcutHelper {
     if (mainKeyName == null) return null;
 
     LogicalKeyboardKey? logicalKey;
+    PhysicalKeyboardKey? physicalTrigger;
     if (mainKeyName.length == 1) {
       final code = mainKeyName.codeUnitAt(0);
       if (code >= 97 && code <= 122) {
-        logicalKey = LogicalKeyboardKey(0x00000061 + (code - 97));
+        final offset = code - 97;
+        logicalKey = LogicalKeyboardKey(0x00000061 + offset);
+        physicalTrigger = PhysicalKeyboardKey(
+          PhysicalKeyboardKey.keyA.usbHidUsage + offset,
+        );
       }
     }
     logicalKey ??= KeyMap.keyFor(mainKeyName);
     if (logicalKey == null) return null;
 
+    if (hasAlt) {
+      return _AltAwareShortcutActivator(
+        logicalKey,
+        physicalTrigger: physicalTrigger,
+        control: useControl,
+        shift: hasShift,
+        meta: useMeta,
+      );
+    }
+
     return SingleActivator(
       logicalKey,
       control: useControl,
       shift: hasShift,
-      alt: hasAlt,
       meta: useMeta,
     );
   }
+}
+
+class _AltAwareShortcutActivator extends ShortcutActivator {
+  const _AltAwareShortcutActivator(
+    this.trigger, {
+    required this.physicalTrigger,
+    required this.control,
+    required this.shift,
+    required this.meta,
+  });
+
+  final LogicalKeyboardKey trigger;
+  final PhysicalKeyboardKey? physicalTrigger;
+  final bool control;
+  final bool shift;
+  final bool meta;
+
+  @override
+  Iterable<LogicalKeyboardKey>? get triggers =>
+      physicalTrigger != null ? null : [trigger];
+
+  @override
+  bool accepts(KeyEvent event, HardwareKeyboard state) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+
+    final altGrPressed = ShortcutHelper._isAltGrPressed(state);
+    final effectiveControlPressed = altGrPressed
+        ? false
+        : state.isControlPressed;
+    if (control != effectiveControlPressed ||
+        shift != state.isShiftPressed ||
+        !(state.isAltPressed || altGrPressed) ||
+        meta != state.isMetaPressed) {
+      return false;
+    }
+
+    return physicalTrigger != null
+        ? event.physicalKey == physicalTrigger
+        : event.logicalKey == trigger;
+  }
+
+  @override
+  String debugDescribeKeys() {
+    final modifiers = <String>[
+      if (control) 'ctrl',
+      if (shift) 'shift',
+      'alt',
+      if (meta) 'meta',
+    ];
+    return [...modifiers, ShortcutHelper.getKeyLabel(trigger)].join('+');
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AltAwareShortcutActivator &&
+      other.trigger == trigger &&
+      other.physicalTrigger == physicalTrigger &&
+      other.control == control &&
+      other.shift == shift &&
+      other.meta == meta;
+
+  @override
+  int get hashCode => Object.hash(
+    trigger,
+    physicalTrigger,
+    control,
+    shift,
+    meta,
+  );
 }

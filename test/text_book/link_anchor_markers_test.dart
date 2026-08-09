@@ -451,6 +451,84 @@ void main() {
       );
     });
 
+    test('ציטוט לינקר מדולג בכותרות בכל הרמות', () {
+      final citation = Link(
+        heRef: 'ברכות ב ב',
+        index1: 4,
+        path2: 'ברכות',
+        index2: 1,
+        connectionType: 'linker',
+        anchorStart: 4,
+        anchorEnd: 8,
+      );
+
+      for (var level = 1; level <= 6; level++) {
+        final raw = '<h$level>אבגד הוזח טיכל</h$level>';
+        expect(
+          injectLinkAnchorMarkers(
+            rawLine: raw,
+            anchorLinks: [citation],
+            styleIndexByCommentator: const {'ברכות': 0},
+            lineIndex: 5,
+          ),
+          raw,
+          reason: 'h$level אינה מקבלת ציטוט לינקר',
+        );
+      }
+    });
+
+    test('בכותרת מדולג רק הלינקר — סמן מפרש נשאר, והאינדקסים לא זזים', () {
+      final citation = Link(
+        heRef: 'ברכות ב ב',
+        index1: 4,
+        path2: 'ברכות',
+        index2: 1,
+        connectionType: 'linker',
+        anchorStart: 0,
+        anchorEnd: 2,
+      );
+      final commentary = _anchorLink(
+        heRef: 'משנה ברורה, א, ב',
+        path2: 'משנה ברורה',
+        anchorStart: 2,
+        anchorLabel: 'ב',
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: '<h2>אבג</h2>',
+        anchorLinks: [citation, commentary],
+        styleIndexByCommentator: const {'ברכות': 3, 'משנה ברורה': 4},
+        lineIndex: 5,
+      );
+      expect(result, isNot(contains('link-anchor-range')));
+      // ref=5_1 ולא 5_0: הדילוג שומר על מיקום הקישור ב-anchorLinks, שלפיו
+      // הריחוף/הלחיצה מאתרים אותו.
+      expect(
+        result,
+        '<h2>אב'
+        '<a class="link-anchor link-anchor-4" href="otzaria://anchor?ref=5_1">'
+        '(ב)</a>ג</h2>',
+      );
+    });
+
+    test('ציטוט לינקר בשורה רגילה נשאר', () {
+      final citation = Link(
+        heRef: 'ברכות ב ב',
+        index1: 4,
+        path2: 'ברכות',
+        index2: 1,
+        connectionType: 'linker',
+        anchorStart: 0,
+        anchorEnd: 3,
+      );
+      final result = injectLinkAnchorMarkers(
+        rawLine: 'אבג דה',
+        anchorLinks: [citation],
+        styleIndexByCommentator: const {'ברכות': 0},
+        lineIndex: 5,
+      );
+      expect(result, contains('link-anchor-range'));
+    });
+
     test('שורה בלי עוגנים חוזרת כמות שהיא', () {
       expect(
         injectLinkAnchorMarkers(

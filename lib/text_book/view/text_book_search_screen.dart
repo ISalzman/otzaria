@@ -18,6 +18,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
@@ -54,11 +55,15 @@ class TextBookSearchView extends StatefulWidget {
   final Map<String, String> initialSpacingValues;
   final SearchMode initialSearchMode;
   final int initialSearchDistance;
+  final SearchMatchPolicy initialMatchPolicy;
   final Future<List<TextSearchResult>> Function(
     List<String> content,
     String query,
   )?
   simpleSearchRunner;
+
+  /// מנוע החיפוש שמריץ את מסלול החיפוש המורכב. מוזרק בבדיקות בלבד.
+  final SearchRepository searchRepository;
 
   const TextBookSearchView({
     super.key,
@@ -72,7 +77,9 @@ class TextBookSearchView extends StatefulWidget {
     this.initialSpacingValues = const {},
     this.initialSearchMode = SearchMode.exact,
     this.initialSearchDistance = 0,
+    this.initialMatchPolicy = SearchMatchPolicy.standard,
     this.simpleSearchRunner,
+    this.searchRepository = const SearchRepository(),
   });
 
   @override
@@ -82,7 +89,6 @@ class TextBookSearchView extends StatefulWidget {
 class TextBookSearchViewState extends State<TextBookSearchView>
     with AutomaticKeepAliveClientMixin<TextBookSearchView> {
   TextEditingController searchTextController = TextEditingController();
-  final SearchRepository _searchRepository = SearchRepository();
   List<TextSearchResult> searchResults = [];
   late ItemScrollController scrollControler;
   bool _isSearching = false;
@@ -93,12 +99,14 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   Future<List<String>>? _contentFuture;
   String? _bookPath;
   String? _bookTitle;
+  Future<void>? _bookPathFuture;
   bool _forceSearchEngine = false;
   Map<String, Map<String, bool>> _searchOptions = {};
   Map<int, List<String>> _alternativeWords = {};
   Map<String, String> _spacingValues = {};
   SearchMode _searchMode = SearchMode.exact;
   int _searchDistance = 0;
+  SearchMatchPolicy _matchPolicy = SearchMatchPolicy.standard;
   int? _selectedSearchResultIndex;
   // מספר השורה בספר של התוצאה הנבחרת — משמש לשמירת הבחירה לפי זהות בין
   // חיפושים. אינדקס סידורי לבדו אינו אמין כי תוכן הרשימה משתנה כשהשאילתה
@@ -114,10 +122,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       !_forceSearchEngine && _searchMode == SearchMode.exact;
 
   static const int _maxResultSnippetChars = 220;
-
-  SearchMode _normalizedSearchMode(SearchMode searchMode) {
-    return searchMode;
-  }
 
   bool _searchOptionsEqual(
     Map<String, Map<String, bool>> first,
@@ -163,21 +167,23 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   void _updateForceSearchEngine() {
-    final activeParameters = _activeSearchParameters;
-    _forceSearchEngine =
-        _searchMode != SearchMode.exact ||
-        _searchDistance > 0 ||
-        activeParameters.searchOptions.isNotEmpty ||
-        activeParameters.alternativeWords.isNotEmpty ||
-        activeParameters.customSpacing.isNotEmpty;
+    _forceSearchEngine = !InBookSearchRouting.canRunAsSimpleSearch(
+      searchMode: _searchMode,
+      distance: _searchDistance,
+      searchOptions: _searchOptions,
+      alternativeWords: _alternativeWords,
+      spacingValues: _spacingValues,
+      matchPolicy: _matchPolicy,
+    );
   }
 
   void _syncSearchConfigurationFromWidget() {
     _searchOptions = widget.initialSearchOptions;
     _alternativeWords = widget.initialAlternativeWords;
     _spacingValues = widget.initialSpacingValues;
-    _searchMode = _normalizedSearchMode(widget.initialSearchMode);
+    _searchMode = widget.initialSearchMode;
     _searchDistance = widget.initialSearchDistance;
+    _matchPolicy = widget.initialMatchPolicy;
     _updateForceSearchEngine();
   }
 
@@ -191,6 +197,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         spacingValues: activeParameters.customSpacing,
         searchMode: _searchMode,
         searchDistance: _searchDistance,
+        matchPolicy: _matchPolicy,
       ),
     );
   }
@@ -206,7 +213,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     widget.focusNode.requestFocus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeBookPath();
+      if (!mounted) return;
+      if (searchTextController.text.isNotEmpty) {
+        _searchTextUpdated();
+      } else {
+        unawaited(_ensureBookPath());
+      }
     });
   }
 
@@ -227,9 +239,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     final queryChanged = widget.initialQuery != oldWidget.initialQuery;
     final needsControllerSync =
         widget.initialQuery != searchTextController.text;
-    final normalizedSearchMode = _normalizedSearchMode(
-      widget.initialSearchMode,
-    );
+    final normalizedSearchMode = widget.initialSearchMode;
     final searchConfigurationChanged =
         !_searchOptionsEqual(_searchOptions, widget.initialSearchOptions) ||
         !_alternativeWordsEqual(
@@ -238,7 +248,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         ) ||
         !mapEquals(_spacingValues, widget.initialSpacingValues) ||
         _searchMode != normalizedSearchMode ||
-        _searchDistance != widget.initialSearchDistance;
+        _searchDistance != widget.initialSearchDistance ||
+        _matchPolicy != widget.initialMatchPolicy;
 
     if (queryChanged && needsControllerSync) {
       syncSearchControllerQuery(searchTextController, widget.initialQuery);
@@ -263,48 +274,55 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
   }
 
-  Future<void> _initializeBookPath() async {
-    if (!mounted) return;
-    final state = context.read<TextBookBloc>().state;
-    if (state is TextBookLoaded) {
-      final bookTitle = state.book.title;
-      debugPrint('📚 TextBookSearch: book.title = $bookTitle');
-
-      _bookTitle = bookTitle;
-
-      final topics = await BookFacet.resolveTopics(
-        title: bookTitle,
-        initialTopics: state.book.topics,
-        type: TextBook,
-        categoryPath: state.book.categoryPath,
-        externalLibraryId: state.book.externalLibraryId,
-        bookId: state.book.id,
-        fileType: state.book.fileType,
-        filePath: state.book.filePath,
-      );
-
-      if (!mounted) return;
-
-      debugPrint('📚 TextBookSearch: final topics = "$topics"');
-      _bookPath = BookFacet.buildFacetPath(
-        title: bookTitle,
-        topics: topics,
-        bookId: state.book.id,
-        isUserBook: state.book.isUserBook,
-        externalLibraryId: state.book.externalLibraryId,
-        categoryPath: state.book.categoryPath,
-        fileType: state.book.fileType,
-        filePath: state.book.filePath,
-      );
-      debugPrint('📚 TextBookSearch: _bookPath = $_bookPath');
-      if (searchTextController.text.isNotEmpty) {
-        _runInitialSearch();
+  /// מזהה את הספר לחיפוש המנוע פעם אחת ושומר את הזיהוי. זיהוי שלא הצליח —
+  /// למשל כשהספר עדיין נטען — אינו נשמר, כדי שהחיפוש הבא ינסה שוב במקום
+  /// להיתקע. האיפוס אחרי ה-await ולא ב-[_resolveBookPath], כי כשל לפני
+  /// ה-await הראשון קורה עוד לפני שהשדה קיבל את ה-Future.
+  Future<void> _ensureBookPath() async {
+    final existing = _bookPathFuture;
+    if (existing != null) return existing;
+    final future = _resolveBookPath();
+    _bookPathFuture = future;
+    try {
+      await future;
+    } finally {
+      if (_bookPath == null || _bookTitle == null) {
+        _bookPathFuture = null;
       }
     }
   }
 
-  void _runInitialSearch() {
-    _searchTextUpdated();
+  Future<void> _resolveBookPath() async {
+    if (!mounted) return;
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return;
+
+    final bookTitle = state.book.title;
+
+    final topics = await BookFacet.resolveTopics(
+      title: bookTitle,
+      initialTopics: state.book.topics,
+      type: TextBook,
+      categoryPath: state.book.categoryPath,
+      externalLibraryId: state.book.externalLibraryId,
+      bookId: state.book.id,
+      fileType: state.book.fileType,
+      filePath: state.book.filePath,
+    );
+
+    if (!mounted) return;
+
+    _bookTitle = bookTitle;
+    _bookPath = BookFacet.buildFacetPath(
+      title: bookTitle,
+      topics: topics,
+      bookId: state.book.id,
+      isUserBook: state.book.isUserBook,
+      externalLibraryId: state.book.externalLibraryId,
+      categoryPath: state.book.categoryPath,
+      fileType: state.book.fileType,
+      filePath: state.book.filePath,
+    );
   }
 
   /// טוען את תוכן הספר פעם אחת ושומר אותו עד לשחרור. כישלון — או שחרור בזמן
@@ -340,8 +358,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   Future<void> _searchTextUpdated() async {
     final requestId = ++_activeSearchRequestId;
     String query = searchTextController.text.trim();
-    if (query.isEmpty ||
-        (!_isSimpleSearch && (_bookPath == null || _bookTitle == null))) {
+    if (query.isEmpty) {
       setState(() {
         searchResults = [];
         _isSearching = false;
@@ -393,6 +410,21 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
 
     try {
+      // ממתינים לזיהוי הספר במקום לבדוק אותו מקדימה, ובתוך ה-try — כך חיפוש
+      // שנשלח לפני שהזיהוי הסתיים אינו מציג "אין תוצאות" ואינו נתקע ב"מחפש".
+      await _ensureBookPath();
+      if (!mounted || requestId != _activeSearchRequestId) {
+        return;
+      }
+      if (_bookPath == null || _bookTitle == null) {
+        setState(() {
+          searchResults = [];
+          _isSearching = false;
+          _searchErrorMessage = LibraryMessages.searchError;
+        });
+        return;
+      }
+
       // The facet filter is a prefix filter in the underlying engine, so when a
       // book is a parent facet (e.g. /.../ספר הזהר) it may also match child
       // facets like commentaries. We therefore post-filter by exact title.
@@ -404,7 +436,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
       final List<SearchResult> rawResults;
       final activeParameters = _activeSearchParameters;
-      rawResults = await _searchRepository.searchTexts(
+      rawResults = await widget.searchRepository.searchTexts(
         query,
         [_bookPath!],
         rawLimit,
@@ -414,6 +446,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         fuzzy: _searchMode == SearchMode.fuzzy,
         distance: _searchDistance,
         searchMode: _searchMode,
+        scope: _matchPolicy.proximityScope,
+        wordMatchMode: _matchPolicy.wordMatchMode,
+        wordMatchCount: _matchPolicy.wordMatchCount,
         order: ResultsOrder.catalogue,
       );
 
@@ -464,6 +499,12 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   void _applySearchResults(List<TextSearchResult> results) {
+    // השורות שהתקבלו הן מקור האמת להדגשה במדיניות התאמה שאינה ברירת המחדל:
+    // האפליקציה אינה מנחשת מה המנוע היה מחזיר (ראו TextBookLoaded).
+    context.read<TextBookBloc>().add(
+      UpdateSearchResultLines({for (final result in results) result.index}),
+    );
+
     // שמירת בחירה לפי זהות (שורה בספר), לא לפי אינדקס סידורי.
     // אינדקס סידורי לא יציב כי תוכן הרשימה משתנה בין חיפושים.
     int? selectedIndex;
@@ -688,10 +729,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   List<TextSearchResult> _convertSearchResults(List<SearchResult> results) {
-    final state = context.read<TextBookBloc>().state;
-    final int? contentLength =
-        _content?.length ??
-        (state is TextBookLoaded ? state.content.length : null);
+    // רק עותק השורות המלא תוחם את מספרי השורות. `state.content` יכול להיות
+    // חלון חלקי סביב מקום הקריאה, ולפיו היו נזרקות תוצאות מנוע תקפות.
+    final int? contentLength = _content?.length;
     final List<TextSearchResult> converted = [];
     for (final result in results) {
       try {
@@ -856,6 +896,8 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                     spacingValues: _spacingValues,
                     isFuzzy: _searchMode == SearchMode.fuzzy,
                     searchDistance: _searchDistance,
+                    matchPolicy: _matchPolicy,
+                    isSearchResultLine: true,
                   );
                   highlightedSnippet = ranges.isEmpty
                       ? SnippetBuilder.fromHighlightedHtml(
@@ -933,6 +975,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             spacingValues: activeParameters.customSpacing,
             searchMode: _searchMode,
             searchDistance: _searchDistance,
+            matchPolicy: _matchPolicy,
           ),
         );
         _searchTextUpdated();
@@ -950,6 +993,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           _spacingValues = {};
           _searchMode = SearchMode.exact;
           _searchDistance = 0;
+          _matchPolicy = SearchMatchPolicy.standard;
         });
         context.read<TextBookBloc>().add(
           const UpdateSearchText(
@@ -959,6 +1003,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             spacingValues: {},
             searchMode: SearchMode.exact,
             searchDistance: 0,
+            matchPolicy: SearchMatchPolicy.standard,
           ),
         );
       },
@@ -971,9 +1016,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         final tempTab = SearchingTab(
           'חיפוש',
           searchTextController.text,
-          initialConfiguration: SearchConfiguration(
+          initialConfiguration: SearchConfiguration.forInBookSearch(
             searchMode: _searchMode,
             distance: _searchDistance,
+            matchPolicy: _matchPolicy,
           ),
         );
         tempTab.searchOptions.addAll(_searchOptions);
@@ -1026,6 +1072,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 spacingValues: normalizedParameters.customSpacing,
                 searchMode: result.searchMode,
                 searchDistance: result.distance,
+                matchPolicy: result.matchPolicy,
               ),
             );
           },
@@ -1036,6 +1083,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           _spacingValues = normalizedParameters.customSpacing;
           _searchMode = result.searchMode;
           _searchDistance = result.distance;
+          _matchPolicy = result.matchPolicy;
           _updateForceSearchEngine();
         });
         _searchTextUpdated();
