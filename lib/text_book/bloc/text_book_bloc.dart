@@ -32,6 +32,8 @@ import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
+import 'package:otzaria/utils/file/toc_parser.dart';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
@@ -729,13 +731,27 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     try {
-      final tocFuture = repository.getTableOfContents(book);
+      final requiresRenderedToc = _requiresWholeBookContent(book);
+      final tocFuture = requiresRenderedToc
+          ? null
+          : repository.getTableOfContents(book);
 
       List<String>? contentLines;
       List<bool>? loadedLineFlags;
       if (state is TextBookLoaded && event.preserveState) {
         contentLines = (state as TextBookLoaded).content;
         loadedLineFlags = _loadedContentFlags;
+      } else if (requiresRenderedToc) {
+        final content = await repository.getBookContent(book);
+        contentLines = await splitContentLines(content);
+        loadedLineFlags = List<bool>.filled(contentLines.length, true);
+        _setLoadedContentFlags(book, loadedLineFlags);
+        _markLoadedContentRange(
+          book,
+          0,
+          contentLines.isEmpty ? 0 : contentLines.length - 1,
+          totalLines: contentLines.length,
+        );
       } else {
         final initialRange = await repository.getBookContentRange(
           book,
@@ -799,7 +815,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       loadedLineFlags ??= _loadedContentFlags;
 
-      final tableOfContents = await tocFuture;
+      // Markdown מוצג מ-HTML מומר, ולכן ה-TOC שלו נגזר מאותן שורות מוצגות;
+      // TOC שמור מתייחס לשורות המקור ולא יוכל לנווט בתוכן הזה.
+      final tableOfContents = requiresRenderedToc
+          ? TocParser.parseEntriesFromContent(contentLines.join('\n'))
+          : await tocFuture ?? const <TocEntry>[];
 
       String? currentTitle;
       if (visibleIndices.isNotEmpty) {
@@ -2009,10 +2029,17 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _setLoadedContentFlags(currentState.book, nextLoadedFlags);
 
+    final renderedToc = TocParser.parseEntriesFromContent(
+      event.content.join('\n'),
+    );
+
     final updatedState = _withInlineNotesCommentator(
       currentState.copyWith(
         content: event.content,
         contentVersion: currentState.contentVersion + 1,
+        tableOfContents: renderedToc.isEmpty
+            ? currentState.tableOfContents
+            : renderedToc,
         readingSegments: buildReadingSegments(
           event.content,
           continuous: currentState.continuousReadingMode,
@@ -2405,6 +2432,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     List<int> visibleIndices, {
     bool force = false,
   }) async {
+    if (_requiresWholeBookContent(book)) return;
+
     final window = _calculateContentWindow(visibleIndices);
     if (!force &&
         _isContentWindowSufficient(book, window.startLine, window.endLine)) {
@@ -2457,6 +2486,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   Future<void> _warmContentCacheInBackground(TextBook book) async {
+    if (_requiresWholeBookContent(book)) return;
+
     if (_isWarmingContentCache || !_allowBackgroundWarming) {
       return;
     }
@@ -2576,6 +2607,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       _isWarmingContentCache = false;
     }
   }
+
+  bool _requiresWholeBookContent(TextBook book) =>
+      isMarkdownBook(fileType: book.fileType, filePath: book.filePath);
 
   Future<void> _loadFullBookInBackground(TextBook book) async {
     try {

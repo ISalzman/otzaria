@@ -245,7 +245,9 @@ class FileSystemLibraryProvider implements LibraryProvider {
 
     if (path.endsWith('.txt') ||
         path.endsWith('.docx') ||
-        path.endsWith('.epub')) {
+        path.endsWith('.epub') ||
+        path.endsWith('.md') ||
+        path.endsWith('.markdown')) {
       final categoryPathStr = categoryPath.join(', ');
       final categoryId = categoryPathStr.hashCode;
       _categoryIdToPath[categoryId] = categoryPathStr;
@@ -292,6 +294,11 @@ class FileSystemLibraryProvider implements LibraryProvider {
         topics: finalTopics,
         extraTitles: metadata[title]?['extraTitles'],
         filePath: file.path,
+        fileType: path.endsWith('.markdown')
+            ? 'markdown'
+            : path.endsWith('.md')
+            ? 'md'
+            : 'txt',
         categoryPath: categoryPathStr,
         categoryId: categoryId,
       );
@@ -334,6 +341,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
       return convertDocxWithCache(file, title);
     } else if (lowerPath.endsWith('.epub')) {
       return convertEpubWithCache(file, title);
+    } else if (lowerPath.endsWith('.md') || lowerPath.endsWith('.markdown')) {
+      return convertMarkdownWithCache(file, title);
     } else {
       return readTextFileSmart(file);
     }
@@ -450,6 +459,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
         if (lower.endsWith('.txt') ||
             lower.endsWith('.docx') ||
             lower.endsWith('.epub') ||
+            lower.endsWith('.md') ||
+            lower.endsWith('.markdown') ||
             lower.endsWith('.pdf')) {
           results.add(entity.path);
         }
@@ -555,9 +566,12 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (path == null) throw Exception('Book not found: $title');
 
     final lowerPath = path.toLowerCase();
-    if (lowerPath.endsWith('.docx') || lowerPath.endsWith('.epub')) {
+    if (lowerPath.endsWith('.docx') ||
+        lowerPath.endsWith('.epub') ||
+        lowerPath.endsWith('.md') ||
+        lowerPath.endsWith('.markdown')) {
       throw Exception(
-        'Cannot save to DOCX/EPUB files. Only text files are supported.',
+        'Cannot save converted book formats. Only text files are supported.',
       );
     }
 

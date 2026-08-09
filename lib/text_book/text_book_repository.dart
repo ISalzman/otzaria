@@ -15,6 +15,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'dart:io';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'dart:isolate';
 
 class BookContentRange {
@@ -103,6 +104,9 @@ class TextBookRepository {
           if (ext == 'epub') {
             return await convertEpubWithCache(file, title);
           }
+          if (ext == 'md' || ext == 'markdown') {
+            return await convertMarkdownWithCache(file, title);
+          }
           if (ext == 'pdf') return '';
           return await readTextFileSmart(file);
         }
@@ -130,6 +134,12 @@ class TextBookRepository {
   }) async {
     final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
+
+    // מסד ספרי המשתמש שומר את שורות מקור ה-Markdown בעוד שהקורא מציג HTML
+    // מומר; טעינת טווח מהמסד תערבב שתי מפות אינדקסים ותשבור ניווט וקישורים.
+    if (isMarkdownBook(fileType: fileType, filePath: book.filePath)) {
+      return null;
+    }
 
     // ספרי seforim.db בלבד: השאילתה וה-split רצים ב-isolate (כמו הקישורים),
     // כדי שלא יחסמו את ה-UI thread בזמן גלילה. ה-isolate פותח רק את seforim.db,

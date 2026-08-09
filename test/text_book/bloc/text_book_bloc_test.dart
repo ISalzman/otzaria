@@ -129,6 +129,131 @@ void main() {
       expect(lines[13], 'שורה 13');
     });
 
+    test('Markdown נטען כתוכן מומר מלא בלי טווח או preview גולמי', () async {
+      final repository = _FakeTextBookRepository();
+      var previewCalls = 0;
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        book: TextBook(title: 'ספר Markdown', fileType: 'md'),
+        quickPreviewLoader:
+            (
+              title,
+              currentLine, {
+              categoryId,
+              fileType,
+              preferUserBooks = false,
+            }) async {
+              previewCalls++;
+              return 'מקור גולמי';
+            },
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+      await _waitFor(() => bloc.state is TextBookLoaded);
+
+      expect(repository.getBookContentCalls, 1);
+      expect(repository.getBookContentRangeCalls, 0);
+      expect(previewCalls, 0);
+      expect((bloc.state as TextBookLoaded).content, hasLength(40));
+      expect((bloc.state as TextBookLoaded).content.first, 'שורה 0');
+      await bloc.close();
+    });
+
+    test('קובץ Markdown מזוהה לפי הנתיב גם אם fileType מיושן', () async {
+      final repository = _FakeTextBookRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        book: TextBook(
+          title: 'ספר Markdown ישן',
+          fileType: 'txt',
+          filePath: r'C:\books\legacy.md',
+        ),
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+      await _waitFor(() => bloc.state is TextBookLoaded);
+
+      expect(repository.getBookContentCalls, 1);
+      expect(repository.getBookContentRangeCalls, 0);
+      await bloc.close();
+    });
+
+    test('Markdown בונה תוכן עניינים מאותו HTML שמוצג', () async {
+      final repository = _MarkdownTocRepository();
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: false,
+        book: TextBook(title: 'ספר Markdown', fileType: 'md'),
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+      await _waitFor(() => bloc.state is TextBookLoaded);
+
+      final toc = (bloc.state as TextBookLoaded).tableOfContents;
+      expect(toc.map((entry) => entry.index), [1, 4]);
+      expect(toc.map((entry) => entry.text), ['כותרת ראשונה', 'כותרת שנייה']);
+      await bloc.close();
+    });
+
+    test('החלפת תוכן רקע מלא מרעננת תוכן עניינים מהתוכן המוצג', () async {
+      final bloc = _createBloc(
+        repository: _FakeTextBookRepository(),
+        showPageShapeView: false,
+        book: TextBook(title: 'ספר מיושן', fileType: 'txt'),
+      );
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+      await _waitFor(() => bloc.state is TextBookLoaded);
+
+      bloc.add(
+        const ApplyFullBookContent(
+          bookTitle: 'ספר מיושן',
+          content: [
+            '<h1 id="first">ראשון</h1>',
+            '<p>תוכן</p>',
+            '<h2 id="second">שני</h2>',
+          ],
+        ),
+      );
+      await _waitFor(
+        () => (bloc.state as TextBookLoaded).tableOfContents.isNotEmpty,
+      );
+
+      final toc = (bloc.state as TextBookLoaded).tableOfContents;
+      expect(toc.single.index, 0);
+      expect(toc.single.children.single.index, 2);
+      await bloc.close();
+    });
+
     test('טווחי תוכן טעונים נשמרים כרשימת טווחים ממוזגת ללא הנחת רציפות', () {
       final merged = TextBookBloc.mergeLoadedContentRanges(
         const [
@@ -1844,9 +1969,12 @@ class _FakeTextBookRepository extends TextBookRepository {
   int? lastStartIndex;
   int? lastEndIndex;
   List<String>? lastTargetBookTitles;
+  int getBookContentCalls = 0;
+  int getBookContentRangeCalls = 0;
 
   @override
   Future<String> getBookContent(TextBook book) async {
+    getBookContentCalls++;
     return List.generate(40, (index) => 'שורה $index').join('\n');
   }
 
@@ -1856,6 +1984,7 @@ class _FakeTextBookRepository extends TextBookRepository {
     required int startLine,
     required int endLine,
   }) async {
+    getBookContentRangeCalls++;
     final contentLines = List.generate(40, (index) => 'line $index');
     final normalizedStart = startLine.clamp(0, contentLines.length - 1);
     final normalizedEnd = endLine.clamp(
@@ -1911,9 +2040,29 @@ class _EmptyContentTextBookRepository extends _FakeTextBookRepository {
   }
 }
 
+class _MarkdownTocRepository extends _FakeTextBookRepository {
+  @override
+  Future<String> getBookContent(TextBook book) async {
+    getBookContentCalls++;
+    return [
+      '<p>פתיחה</p>',
+      '<h1 id="first">כותרת ראשונה</h1>',
+      '<p>א</p>',
+      '<p>ב</p>',
+      '<h1 id="second">כותרת שנייה</h1>',
+      '<p>סיום</p>',
+    ].join('\n');
+  }
+
+  @override
+  Future<List<TocEntry>> getTableOfContents(TextBook book) async {
+    // Simulates a stale TOC whose indexes came from raw Markdown.
+    return [TocEntry(text: 'כותרת ראשונה', index: 0)];
+  }
+}
+
 class _DelayedContentTextBookRepository extends _FakeTextBookRepository {
   final Completer<String> _fullContentCompleter = Completer<String>();
-  int getBookContentCalls = 0;
 
   @override
   Future<String> getBookContent(TextBook book) async {

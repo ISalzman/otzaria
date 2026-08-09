@@ -8,6 +8,7 @@ import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/migration/models/docx_text_cache_entry.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:path/path.dart' as p;
 
@@ -48,6 +49,18 @@ Future<String> convertDocxWithCache(File file, String title) =>
 /// [convertDocxWithCache] (הרשומות חולקות טבלה; המפתח הוא נתיב הקובץ).
 Future<String> convertEpubWithCache(File file, String title) =>
     _convertWithCache(file, title, kEpubConverterVersion, epubToText);
+
+/// ממיר Markdown דרך מטמון ההמרות המשותף ומטמיע תמונות מקומיות לאחר השליפה.
+Future<String> convertMarkdownWithCache(File file, String title) async {
+  final html = await _convertWithCache(
+    file,
+    title,
+    kMarkdownConverterVersion,
+    markdownBytesToHtml,
+    cacheVariant: 'markdown',
+  );
+  return const MarkdownToOtzaria().finalizeCachedHtml(html, file.parent.path);
+}
 
 /// ממיר EPUB ללא נתוני התמונות, תוך שימור placeholders ואינדקסי השורות.
 /// מיועד ל-TOC, טביעות אצבע ואינדוקס ואינו מקצה מחרוזות Base64 גדולות.
@@ -131,7 +144,9 @@ Future<String> _convertWithCache(
   // דה-דופ המרות מקבילות: אם כבר רצה המרה לאותו קובץ, נצרף אליה.
   final key = '$cachePath|$size|$mtime|$converterVersion';
   final pending = _inFlight[key];
-  if (pending != null) return _withFreshTitle(await pending, title);
+  if (pending != null) {
+    return _withFreshTitle(await pending, title);
+  }
 
   final future = _convert(path, title, converter);
   _inFlight[key] = future;

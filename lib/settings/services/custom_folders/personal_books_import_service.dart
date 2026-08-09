@@ -37,6 +37,8 @@ class PersonalBooksImportService {
     '.pdf',
     '.docx',
     '.epub',
+    '.md',
+    '.markdown',
   };
 
   /// נתיב תיקיית הספרים האישיים.

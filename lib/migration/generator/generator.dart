@@ -291,6 +291,8 @@ class DatabaseGenerator {
         if ((fileType == 'txt' ||
                 fileType == 'docx' ||
                 fileType == 'epub' ||
+                fileType == 'md' ||
+                fileType == 'markdown' ||
                 fileType == 'pdf') &&
             insertContent) {
           await repository.clearBookContent(existingBook.id);
@@ -316,7 +318,11 @@ class DatabaseGenerator {
           }
         } else {
           try {
-            if (fileType == 'txt' || fileType == 'docx' || fileType == 'epub') {
+            if (fileType == 'txt' ||
+                fileType == 'docx' ||
+                fileType == 'epub' ||
+                fileType == 'md' ||
+                fileType == 'markdown') {
               // We're moving to file-backed storage, so clear lines from DB to save space, but preserve TOC
               await repository.deleteBookLines(existingBook.id);
               await repository.updateBookTotalLines(existingBook.id, 0);

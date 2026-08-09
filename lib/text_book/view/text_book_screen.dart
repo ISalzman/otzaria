@@ -30,6 +30,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/utils/book_versions_action.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
+import 'package:otzaria/text_book/utils/reader_build_policy.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -432,18 +433,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       // חיפוש לפי displayLabel או partName שמכיל את שם הכותרת. בכוונה אין
       // התאמה חלקית לפי מילים בודדות — היא סימנה התקדמות על פריט שגוי.
-      targetItem = learnableItems.firstWhereOrNull(
-        (item) {
-          if (item.displayLabel != null &&
-              item.displayLabel!.contains(searchTitle)) {
-            return true;
-          }
-          if (item.partName.contains(searchTitle)) {
-            return true;
-          }
-          return item.hierarchyPath.any((path) => path.contains(searchTitle));
-        },
-      );
+      targetItem = learnableItems.firstWhereOrNull((item) {
+        if (item.displayLabel != null &&
+            item.displayLabel!.contains(searchTitle)) {
+          return true;
+        }
+        if (item.partName.contains(searchTitle)) {
+          return true;
+        }
+        return item.hierarchyPath.any((path) => path.contains(searchTitle));
+      });
 
       if (targetItem == null) {
         throw Exception('$searchTitle לא נמצא בשמור וזכור');
@@ -600,12 +599,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               pw.Page(
                 pageFormat: format,
                 margin: pw.EdgeInsets.zero,
-                build: (context) => pw.Center(
-                  child: pw.Image(
-                    img,
-                    fit: pw.BoxFit.contain,
-                  ),
-                ),
+                build: (context) =>
+                    pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain)),
               ),
             );
             return doc.save();
@@ -654,9 +649,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final fullContent = await context
           .read<TextBookBloc>()
           .repository
-          .getBookContent(
-            state.book,
-          );
+          .getBookContent(state.book);
 
       final Uint8List bytes;
       final String successMessage;
@@ -1179,7 +1172,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             return BlocConsumer<TextBookBloc, TextBookState>(
               bloc: context.read<TextBookBloc>(),
               // ה-listener ממשיך לרוץ על כל מצב; רק הבנייה מדלגת.
-              buildWhen: textBookStateDiffersBeyondVisibleIndices,
+              buildWhen: shouldRebuildReader,
               listener: (context, state) {
                 // [EDITING DISABLED]
                 // if (state is TextBookLoaded &&
@@ -2059,10 +2052,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // פתיחת כרטיסיית מפרשים נפרדת — פעולה, לא מצב תצוגה
     if (value == _actionOpenCommentatorsTab) {
       context.read<TabsBloc>().add(
-        AddTab(
-          CommentatorsTab(sourceTab: widget.tab),
-          insertAdjacent: true,
-        ),
+        AddTab(CommentatorsTab(sourceTab: widget.tab), insertAdjacent: true),
       );
       return;
     }
@@ -2728,16 +2718,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     // itemLeadingEdge יכול להיות שלילי כשקטע ארוך מתחיל מעל התצוגה (גלילה
     // לעומק הקטע). clamp ל-0 היה מיישר את תחילת הקטע לראש התצוגה = קפיצה.
-    controller.jumpTo(
-      index: anchor.index,
-      alignment: anchor.itemLeadingEdge,
-    );
+    controller.jumpTo(index: anchor.index, alignment: anchor.itemLeadingEdge);
   }
 
-  Widget _buildBody(
-    BuildContext context,
-    TextBookLoaded state,
-  ) {
+  Widget _buildBody(BuildContext context, TextBookLoaded state) {
     return NavSidePanel(
       isOpen: state.showLeftPane,
       alignment: AlignmentDirectional.centerEnd,
@@ -2830,10 +2814,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 LogicalKeyboardKey.keyF,
               ): _openSearchFromToolbar,
               // Mac: Cmd+F
-              LogicalKeySet(
-                LogicalKeyboardKey.meta,
-                LogicalKeyboardKey.keyF,
-              ): _openSearchFromToolbar,
+              LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
+                  _openSearchFromToolbar,
             },
             child: TextBookScaffold(
               content: state.content,
@@ -2914,10 +2896,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   child: AltTocSidebarView(
                     book: widget.tab.book,
                     focusNode: altTitlesSearchFocusNode,
-                    closeLeftPaneCallback: () =>
-                        context.read<TextBookBloc>().add(
-                          const ToggleLeftPane(false),
-                        ),
+                    closeLeftPaneCallback: () => context
+                        .read<TextBookBloc>()
+                        .add(const ToggleLeftPane(false)),
                     scrollController: state.scrollController,
                   ),
                 ),

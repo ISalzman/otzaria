@@ -27,6 +27,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/text_book/utils/reader_build_policy.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
@@ -1732,6 +1733,164 @@ void main() {
     scrollController.dispose();
     focusNode.dispose();
   });
+
+  test('שינוי טקסט הבחירה להערה אינו בונה מחדש את אזור הבחירה', () {
+    final previous = _loadedState();
+    final current = previous.copyWith(
+      selectedTextForNote: 'טקסט נבחר',
+      selectedTextSectionIndex: 0,
+      selectedTextStart: 0,
+      selectedTextEnd: 10,
+    );
+
+    expect(
+      shouldRebuildReader(previous, current),
+      isFalse,
+    );
+  });
+
+  test('שינוי תוכן אמיתי עדיין בונה מחדש את הקורא', () {
+    final previous = _loadedState();
+    final current = previous.copyWith(content: const ['שורה חדשה']);
+
+    expect(
+      shouldRebuildReader(previous, current),
+      isTrue,
+    );
+  });
+
+  testWidgets('גרירת עכבר לבחירה שורדת את פליטת ה-state של הבחירה', (
+    tester,
+  ) async {
+    const lines = [
+      'ראש השנה הוא יום הדין לכל באי עולם ובו נחתמים הדברים',
+      'ובמוצאי היום הזה מתחילים ימי התשובה עד יום הכיפורים',
+      'וכל המרבה בתפילה ובצדקה הרי זה משובח מאוד מאוד',
+    ];
+    final textBookBloc = _SelectionEmittingTextBookBloc(
+      _loadedState().copyWith(content: lines, visibleIndices: const [0, 1, 2]),
+    );
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: lines,
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final regionElement = _findSelectableRegionElement(tester);
+    expect(regionElement, isNotNull, reason: 'SelectableRegion לא נוצר');
+    final regionKey =
+        (regionElement!.widget as SelectableRegion).key
+            as GlobalKey<SelectableRegionState>;
+    final stateBefore = regionKey.currentState;
+    expect(stateBefore, isNotNull);
+
+    final rect = tester.getRect(find.byWidget(regionElement.widget));
+    final y = rect.top + 14;
+    // גרירה בכיוון קריאה עברי: מימין לשמאל.
+    final gesture = await tester.startGesture(
+      Offset(rect.right - 12, y),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+
+    for (var step = 1; step <= 6; step++) {
+      await gesture.moveTo(
+        Offset(rect.right - 12 - (rect.width - 24) * step / 6, y),
+      );
+      await tester.pump();
+
+      // ליבת הרגרסיה: אזור הבחירה חייב לשרוד את כל אירועי ה-state
+      // שנפלטים תוך כדי הגרירה — אחרת הבחירה מתאפסת באמצע.
+      expect(
+        identical(regionKey.currentState, stateBefore),
+        isTrue,
+        reason: 'SelectableRegionState נבנה מחדש בצעד $step של הגרירה',
+      );
+    }
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(identical(regionKey.currentState, stateBefore), isTrue);
+    // בלי זה הבדיקה ריקה מתוכן: גרירה שלא ייצרה בחירה כלל "עוברת" תמיד.
+    expect(
+      textBookBloc.selectionEvents.whereType<String>(),
+      isNotEmpty,
+      reason:
+          'הגרירה לא ייצרה בחירה כלל — הבדיקה אינה מדמה בחירה אמיתית. '
+          'events=${textBookBloc.selectionEvents}',
+    );
+    // אירוע ניקוי באמצע הגרירה מבטל את הבחירה בפועל.
+    final mid = textBookBloc.selectionEvents.length > 1
+        ? textBookBloc.selectionEvents.sublist(
+            0,
+            textBookBloc.selectionEvents.length - 1,
+          )
+        : const <String?>[];
+    expect(
+      mid.where((text) => text == null),
+      isEmpty,
+      reason:
+          'התקבל UpdateSelectedTextForNote(null) באמצע הגרירה: '
+          '${textBookBloc.selectionEvents}',
+    );
+  });
+}
+
+/// BLoC שמתנהג כמו הייצור: כל [UpdateSelectedTextForNote] פולט
+/// `TextBookLoaded` חדש. בלי זה בדיקת הגרירה לא מדמה את מה שקורה באפליקציה.
+class _SelectionEmittingTextBookBloc extends Bloc<TextBookEvent, TextBookState>
+    implements TextBookBloc {
+  _SelectionEmittingTextBookBloc(super.initialState) {
+    on<TextBookEvent>((event, emit) {
+      if (event is! UpdateSelectedTextForNote) return;
+      selectionEvents.add(event.text);
+      final current = state;
+      if (current is! TextBookLoaded) return;
+      emit(
+        current.copyWith(
+          selectedTextForNote: event.text,
+          selectedTextSectionIndex: event.sectionIndex,
+          selectedTextStart: event.start,
+          selectedTextEnd: event.end,
+          clearSelectedText: event.text == null,
+        ),
+      );
+    });
+  }
+
+  final List<String?> selectionEvents = [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// מחזירה את ה-Element של SelectableRegion שנוצר על-ידי SimpleTextViewer.

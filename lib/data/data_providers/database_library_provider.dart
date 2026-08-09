@@ -31,6 +31,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
 import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -151,6 +152,10 @@ Future<void> _collectBookFilesRecursive(
           fileType = 'docx';
         } else if (lower.endsWith('.epub')) {
           fileType = 'epub';
+        } else if (lower.endsWith('.markdown')) {
+          fileType = 'markdown';
+        } else if (lower.endsWith('.md')) {
+          fileType = 'md';
         } else if (lower.endsWith('.pdf')) {
           fileType = 'pdf';
         } else {
@@ -198,12 +203,17 @@ Future<void> _collectBookFilesRecursive(
           } catch (_) {
             // TOC parse failure is non-fatal.
           }
-        } else if (fileType == 'docx' || fileType == 'epub') {
+        } else if (fileType == 'docx' ||
+            fileType == 'epub' ||
+            fileType == 'md' ||
+            fileType == 'markdown') {
           try {
             final bytes = await entity.readAsBytes();
-            final content = fileType == 'docx'
-                ? docxToText(bytes, title)
-                : epubToText(bytes, title, embedImages: false);
+            final content = switch (fileType) {
+              'docx' => docxToText(bytes, title),
+              'epub' => epubToText(bytes, title, embedImages: false),
+              _ => markdownBytesToHtml(bytes, title),
+            };
             try {
               final parsed = TocParser.parseEntriesFromContent(content);
               rawToc = _flattenTocToRaw(parsed);
@@ -1903,6 +1913,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
                 file.path.toLowerCase().endsWith('.epub')) {
               return await convertEpubWithCache(file, title);
             }
+            if (isMarkdownBook(fileType: book.fileType, filePath: file.path)) {
+              return await convertMarkdownWithCache(file, title);
+            }
             // קבצים אישיים ישנים עשויים להיות ב-Windows-1255/UTF-16 ולא UTF-8.
             return await readTextFileSmart(file);
           }
@@ -1932,6 +1945,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
             }
             if ((book.fileType ?? '').toLowerCase() == 'epub') {
               return await convertEpubWithCache(file, title);
+            }
+            if (isMarkdownBook(fileType: book.fileType, filePath: file.path)) {
+              return await convertMarkdownWithCache(file, title);
             }
             return await readTextFileSmart(file);
           }
@@ -1996,10 +2012,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
         if (book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           final ext = (book.fileType ?? '').toLowerCase();
-          if ((ext == 'docx' || ext == 'epub') && await file.exists()) {
-            final content = ext == 'docx'
-                ? await convertDocxWithCache(file, title)
-                : await convertEpubWithoutEmbeddedImages(file, title);
+          if ((ext == 'docx' ||
+                  ext == 'epub' ||
+                  ext == 'md' ||
+                  ext == 'markdown') &&
+              await file.exists()) {
+            final content = switch (ext) {
+              'docx' => await convertDocxWithCache(file, title),
+              'epub' => await convertEpubWithoutEmbeddedImages(file, title),
+              _ => await convertMarkdownWithCache(file, title),
+            };
             if (content.isNotEmpty) {
               final toc = await Isolate.run(
                 () => TocParser.parseEntriesFromContent(content),
@@ -3076,6 +3098,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
       topics: topics,
       categoryPath: categoryPath,
       categoryId: categoryId,
+      filePath: filePath == null ? null : resolveMovedFileBookPath(filePath),
+      fileType: normalizedFileType.isEmpty ? 'txt' : normalizedFileType,
       isUserBook: isUserBook,
     );
   }

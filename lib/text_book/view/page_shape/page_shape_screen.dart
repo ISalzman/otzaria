@@ -8,6 +8,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reader_build_policy.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
@@ -614,9 +615,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
     if (showSnack && global && persist) {
       UiSnack.show(
-        _hiddenColumnMessage(
-          _activeDisplaySettingsScope(state.book.title),
-        ),
+        _hiddenColumnMessage(_activeDisplaySettingsScope(state.book.title)),
       );
     }
 
@@ -928,14 +927,10 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         ),
       ],
       child: _isLoadingConfig
-          ? const Scaffold(
-              body: LoadingIndicator(),
-            )
+          ? const Scaffold(body: LoadingIndicator())
           : TextBookStateBuilder(
-              buildWhen: textBookStateDiffersBeyondVisibleIndices,
-              loadingWidget: const Scaffold(
-                body: LoadingIndicator(),
-              ),
+              buildWhen: shouldRebuildReader,
+              loadingWidget: const Scaffold(body: LoadingIndicator()),
               builder: (context, state) {
                 // נראות כל פאנל תחתון נשלטת בנפרד; האזור התחתון מוצג רק אם
                 // לפחות אחד מהם גלוי ובעל מפרש.
@@ -1087,9 +1082,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                           _openSettingsPane();
                                                         },
                                                         onHideColumn: () =>
-                                                            _hideColumn(
-                                                              'left',
-                                                            ),
+                                                            _hideColumn('left'),
                                                       ),
                                                     ),
                                                   ],
@@ -1226,9 +1219,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                           state,
                                                         ) !=
                                                         null) ...[
-                                                      const SizedBox(
-                                                        width: 4,
-                                                      ),
+                                                      const SizedBox(width: 4),
                                                       SizedBox(
                                                         width: 20,
                                                         child: Center(
@@ -1630,10 +1621,7 @@ class _LoadedCommentaryData {
   final TextBook book;
   final List<String> content;
 
-  const _LoadedCommentaryData({
-    required this.book,
-    required this.content,
-  });
+  const _LoadedCommentaryData({required this.book, required this.content});
 }
 
 class _CommentaryPaneState extends State<_CommentaryPane> {
@@ -1998,10 +1986,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }
 
     final lines = await Isolate.run(() => bookContent.split('\n'));
-    return _LoadedCommentaryData(
-      book: book,
-      content: lines,
-    );
+    return _LoadedCommentaryData(book: book, content: lines);
   }
 
   Future<void> _applyFullCommentaryData(
@@ -2121,10 +2106,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       if (state is! TextBookLoaded) {
         try {
           state = await bloc.stream
-              .firstWhere(
-                (s) => s is TextBookLoaded,
-                orElse: () => state,
-              )
+              .firstWhere((s) => s is TextBookLoaded, orElse: () => state)
               .timeout(const Duration(seconds: 5));
         } catch (e) {
           // הספר לא נטען תוך 5 שניות — ממשיכים בלי רענון קישורים
@@ -2231,10 +2213,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
 
       final fullCommentaryFuture = _getOrLoadFullCommentary(
         _commentaryCacheKey(book, preferDatabase: useDatabaseSource),
-        () => _fetchFullCommentaryData(
-          book,
-          preferDatabase: useDatabaseSource,
-        ),
+        () => _fetchFullCommentaryData(book, preferDatabase: useDatabaseSource),
       );
       await _applyFullCommentaryData(
         fullCommentaryFuture,
@@ -2286,10 +2265,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
         return;
       }
       _initialSyncAttempts++;
-      Future.delayed(
-        const Duration(milliseconds: 50),
-        _runInitialSyncAttempt,
-      );
+      Future.delayed(const Duration(milliseconds: 50), _runInitialSyncAttempt);
     });
   }
 
@@ -2351,10 +2327,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       }
       if (_lastSyncedIndex == null) {
         // סנכרון ראשוני: הרשימה נבנתה מאינדקס 0 וחייבת להגיע למקומה מיד.
-        _scrollController.jumpTo(
-          index: targetIndex,
-          alignment: _syncAlignment,
-        );
+        _scrollController.jumpTo(index: targetIndex, alignment: _syncAlignment);
       } else if (state.selectedIndex != null) {
         _scrollController.scrollTo(
           index: targetIndex,
@@ -2520,10 +2493,7 @@ class _HorizontalDragHandle extends StatelessWidget {
         child: Center(
           child: FractionallySizedBox(
             widthFactor: 0.5,
-            child: Container(
-              height: 1,
-              color: Theme.of(context).dividerColor,
-            ),
+            child: Container(height: 1, color: Theme.of(context).dividerColor),
           ),
         ),
       );

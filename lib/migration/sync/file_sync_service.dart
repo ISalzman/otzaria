@@ -631,9 +631,13 @@ class FileSyncService {
     final title = path.basenameWithoutExtension(filePath);
     final extension = path.extension(filePath).toLowerCase();
 
-    // PDF, DOCX and EPUB files always act as external (content never in DB)
+    // פורמטים שמומרים בזמן קריאה נשארים חיצוניים כדי שהמטמון יבודד גרסאות.
     final isBinaryFormat =
-        extension == '.pdf' || extension == '.docx' || extension == '.epub';
+        extension == '.pdf' ||
+        extension == '.docx' ||
+        extension == '.epub' ||
+        extension == '.md' ||
+        extension == '.markdown';
     final effectiveInsertContent = isBinaryFormat ? false : insertContent;
 
     // Build category path
@@ -961,7 +965,14 @@ class FileSyncService {
   Future<List<String>> _findNewFiles(String basePath) async {
     final newFiles = <String>[];
     final dir = Directory(basePath);
-    final supportedExtensions = {'.txt', '.pdf', '.docx', '.epub'};
+    final supportedExtensions = {
+      '.txt',
+      '.pdf',
+      '.docx',
+      '.epub',
+      '.md',
+      '.markdown',
+    };
 
     if (!await dir.exists()) return newFiles;
 

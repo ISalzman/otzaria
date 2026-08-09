@@ -13,6 +13,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reader_build_policy.dart';
 import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
@@ -1990,9 +1991,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         bookSource: PluginBookIdentity.sourceOf(state.book),
       ),
       context: 'reader-highlight',
-      selectionActionDispatcher: pluginSelectionActionDispatcherOf(
-        menuContext,
-      ),
+      selectionActionDispatcher: pluginSelectionActionDispatcherOf(menuContext),
     );
     if (entries.isEmpty) return const [];
     return [const AppContextMenuEntry.divider(), ...entries];
@@ -2409,7 +2408,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         // תוכן
         Expanded(
           child: BlocBuilder<TextBookBloc, TextBookState>(
-            buildWhen: textBookStateDiffersBeyondVisibleIndices,
+            buildWhen: shouldRebuildReader,
             builder: (context, state) {
               if (state is! TextBookLoaded) {
                 return const Center(child: CircularProgressIndicator());
