@@ -1700,6 +1700,8 @@ Otzaria.on('event.name', (data) => {
 
 - `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה). ה-payload כולל `app.runMode: 'foreground' | 'background'` — ראה §ריצת רקע.
 - `plugin.ready` - נורה אחרי boot (ללא הרשאה)
+- `plugin.suspended` - התוסף הושהה (יציאה מלשונית התוסף / מעבר לרקע). ללא הרשאה — ראה §השהיה ברקע ב-README
+- `plugin.resumed` - התוסף חזר מהשהיה (ללא הרשאה)
 - `theme.changed` - שינוי בערכת הצבעים (הרשאה: `events.subscribe:theme.changed`)
 - `navigation.changed` - מעבר בין מסכים ראשיים בלבד (library ↔ reading ↔ more ↔ settings) (הרשאה: `events.subscribe:navigation.changed`)
 - `reader.current_book_changed` - שינוי הספר/טאב הפעיל בלבד (הרשאה: `events.subscribe:reader.current_book_changed`)
