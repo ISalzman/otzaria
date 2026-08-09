@@ -87,6 +87,65 @@ void main() {
     },
   );
 
+  testWidgets(
+    'scrollToSourceLine: יעד כותרת (ללא דיוק תוך-שורתי) מתוקן לעוגן גם כשהגלילה הופרעה',
+    (tester) async {
+      final itemScrollController = ItemScrollController();
+      final scrollOffsetController = ScrollOffsetController();
+      final positionsListener = ItemPositionsListener.create();
+
+      final lines = List.generate(30, (i) => 'שורה מספר $i');
+      final segments = buildReadingSegments(lines, continuous: false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ScrollablePositionedList.builder(
+                itemScrollController: itemScrollController,
+                scrollOffsetController: scrollOffsetController,
+                itemPositionsListener: positionsListener,
+                itemCount: lines.length,
+                itemBuilder: (context, index) =>
+                    SizedBox(height: 100, child: Text(lines[index])),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scrollFuture = scrollToSourceLine(
+        scrollController: itemScrollController,
+        scrollOffsetController: scrollOffsetController,
+        positionsListener: positionsListener,
+        segments: segments,
+        lineIndex: 7,
+        viewportExtent: 400,
+        duration: const Duration(milliseconds: 250),
+      );
+
+      // הפרעה באמצע האנימציה (מדמה reanchor/רה-פריסה מטעינה הדרגתית):
+      // היעד נשאר גלוי אך רחוק מקו העוגן.
+      await tester.pump(const Duration(milliseconds: 100));
+      itemScrollController.jumpTo(index: 7, alignment: 0.5);
+
+      await tester.pumpAndSettle();
+      await scrollFuture;
+
+      expect(tester.takeException(), isNull);
+      final position = positionsListener.itemPositions.value.singleWhere(
+        (item) => item.index == 7,
+      );
+      expect(
+        position.itemLeadingEdge,
+        closeTo(kReadingAnchorAlignment, kAnchorLandingEpsilon),
+        reason: 'ניווט מכותרות חייב להתאושש מהפרעה ולנחות על קו העוגן',
+      );
+    },
+  );
+
   group('closePaneAfterNavigation', () {
     test('לא סוגר את החלונית לפני שהגלילה הסתיימה', () async {
       final navigation = Completer<void>();

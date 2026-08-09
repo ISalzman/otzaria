@@ -63,6 +63,9 @@ ItemPosition? _findPosition(ItemPositionsListener listener, int segmentIndex) {
 /// [intraLineFraction] (0..1) הוא מיקום היעד בתוך השורה (למשל מילת חיפוש בתוך
 /// פסקה ארוכה). כשהסגמנט כבר גלוי מתבצעת גלילה יחסית אחת ישירות אל היעד — בלי
 /// קפיצה לתחילת הסגמנט ואז תיקון — כדי שלא ייראה "זיגזג" כשמתחילים מתחת ליעד.
+///
+/// הנחיתה נמדדת ומתוקנת גם ליעד ללא דיוק תוך-שורתי (ניווט מכותרות/TOC):
+/// רה-פריסה תוך כדי האנימציה (טעינה הדרגתית) מסיטה את היעד, ובלי תיקון נשארים במקום.
 Future<void> scrollToSourceLine({
   required ItemScrollController scrollController,
   required ScrollOffsetController? scrollOffsetController,
@@ -106,9 +109,8 @@ Future<void> scrollToSourceLine({
     }
   }
 
-  // ללא דיוק תוך-סגמנט — גלילה רגילה לתחילת הסגמנט.
-  if (fraction <= 0 ||
-      scrollOffsetController == null ||
+  // בלי כלי מדידה אין אפשרות לאמת את הנחיתה — גלילה רגילה בלבד.
+  if (scrollOffsetController == null ||
       positionsListener == null ||
       viewportExtent <= 0) {
     await scrollToSegment();
