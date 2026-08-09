@@ -2,10 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/models/support_organization.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
+import 'package:otzaria/services/support_organizations_service.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/image_decode_size.dart';
+import 'package:otzaria/widgets/feedback/app_future_builder.dart';
+
+const _organizationsLoadError = 'לא ניתן לטעון את פרטי הארגונים';
 
 /// פופאפ פרסומת עם אנימציה מתקדמת
 class AdPopupDialog extends StatefulWidget {
@@ -45,9 +50,8 @@ class AdPopupDialog extends StatefulWidget {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => const AdPopupDialog(
-        title: 'אוצריא מתגייסת לעזרת לומדי התורה',
-      ),
+      builder: (context) =>
+          const AdPopupDialog(title: 'אוצריא מתגייסת לעזרת לומדי התורה'),
     );
   }
 }
@@ -67,9 +71,13 @@ class _AdPopupDialogState extends State<AdPopupDialog>
   late final AnimationController _collapseController;
   late final Animation<double> _collapse;
 
+  late final Future<SupportOrganizations> _organizations;
+
   @override
   void initState() {
     super.initState();
+
+    _organizations = SupportOrganizationsService.load();
 
     // כניסת הדיאלוג: scale עדין מ-0.92 ל-1 יחד עם fade
     _entryController = AnimationController(
@@ -152,9 +160,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // תוכן עם אנימציה רציפה (לוגו -> לוגו+טקסט -> כיווץ למעלה)
-                    Flexible(
-                      child: _buildAnimatedContent(),
-                    ),
+                    Flexible(child: _buildAnimatedContent()),
                     const Divider(height: 1),
                     // כפתורים תחתונים
                     _buildBottomButtons(),
@@ -189,6 +195,25 @@ class _AdPopupDialogState extends State<AdPopupDialog>
   Widget _buildAnimatedContent() {
     return AnimatedBuilder(
       animation: Listenable.merge([_textReveal, _collapse]),
+      // הרשימה נבנית פעם אחת ועוברת דרך child: בלעדיו כל 10 הכרטיסים
+      // נבנים מחדש בכל פריים של האנימציה.
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: AppFutureBuilder<SupportOrganizations>(
+          future: _organizations,
+          loadingWidget: const SizedBox.shrink(),
+          errorBuilder: (context, error) => Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _organizationsLoadError,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+          builder: (context, organizations) =>
+              _OrganizationsList(organizations: organizations),
+        ),
+      ),
       builder: (context, child) {
         final c = _collapse.value; // 0 -> 1: התקדמות הכיווץ למעלה
         final t = _textReveal.value; // 0 -> 1: הופעת הטקסט
@@ -259,16 +284,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                 child: Align(
                   alignment: Alignment.topCenter,
                   heightFactor: c,
-                  child: Opacity(
-                    opacity: c,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      child: _OrganizationsList(),
-                    ),
-                  ),
+                  child: Opacity(opacity: c, child: child),
                 ),
               ),
             ),
@@ -353,286 +369,9 @@ class _AdPopupDialogState extends State<AdPopupDialog>
 
 /// רשימת ארגונים
 class _OrganizationsList extends StatelessWidget {
-  final List<Map<String, dynamic>> emergencyLines = [
-    {
-      'name': 'צבע שחור',
-      'phone': '073-888-1234',
-      'logo': 'assets/logos/tzeva_shahor.png',
-      'details': '''**לדיווח בעת ניסיון מעצר הקש כוכבית**
-0 - הרשמה לקבלת התרעות
-1 - היסטוריית ההתרעות
-2 - שלוחת הרכבים
-5 - שלוחת רישום למקבלי הצווים
-7 - כמות הנרשמים (מעל 102,631)
-8 - דיווח על תקלות במערכת
-9 - הסרה מרשימת התפוצה
+  final SupportOrganizations organizations;
 
-לאחר לחיצה על 0:
-1 - ירושלים
-2 - בני ברק
-3 - בית שמש
-4 - מודיעין עילית
-5 - אלעד
-6 - לוד גני איילון אחיסמך וכפר חב"ד
-7 - ביתר עילית
-8 - אשדוד
-9 - ערים נוספות
-
-לאחר לחיצה על 9 (ערים נוספות):
-1 - ערים בצפון
-2 - ערים במרכז
-3 - ערים בדרום
-
-ערים בצפון (לחיצה על 1):
-1 - חיפה
-2 - זכרון יעקב
-3 - טבריה
-4 - גליל
-5 - רכסים והקריות
-6 - בית שאן
-7 - חדרה והאזור
-8 - עפולה, מגדל העמק, הר יונה
-9 - יבניאל
-10 - נהריה ומעלות תרשיחא
-
-ערים במרכז (לחיצה על 2):
-1 - תל אביב יפו
-2 - פתח תקווה
-3 - רמת גן
-4 - אזור רחובות
-5 - ערים שונות בגוש דן
-6 - אזור השרון
-7 - חולון ובת ים
-8 - קרית מלאכי
-9 - קרית יערים תלסטון
-10 - עמנואל
-
-מזרח גוש דן (לחיצה על 5 ואז 0):
-0 - כל אזור מזרח גוש דן
-1 - גבעת שמואל
-2 - יהוד
-3 - קרית אונו וגני תקווה
-4 - אור יהודה
-
-ערים בדרום (לחיצה על 3):
-1 - באר שבע
-2 - אשקלון
-3 - ירוחם
-4 - דימונה
-5 - ערים נוספות
-6 - ערד
-7 - קרית גת
-
-אופקים, נתיבות ותפרח (לחיצה על 5):
-0 - אופקים, נתיבות ותפרח ביחד
-1 - אופקים
-2 - נתיבות
-3 - תפרח''',
-    },
-    {
-      'name': 'החוטפים הגיעו',
-      'phone': '02-800-8080',
-      'logo': 'assets/logos/hachotfim_higiu.jpg',
-      'details': '''1 - לרישום
-2 - להסרה מרשימת התפוצה
-3 - להגבלת שעות כפי המידע שנמסר בהוראות
-(לע"ע האפשרות להגבלת שעות היא רק על מבזקים ולא על צינתוקים)
-4 - **לדיווח חירום בעת נסיון מעצר**
-5 - לדיווח על מחסומים
-6 - להשארת הודעות למערכת
-7 - להוראות רישום ומידע מורחב על המערכת החדשה
-8 - כמות הנרשמים (מעל 108,837)
-
-לאחר לחיצה על 1 (לרישום):
-1 - להרשמה לפי עיר
-2 - להרשמה לפי אזור בארץ
-3 - להרשמה לכל הארץ
-
-לאחר לחיצה על 1 (להרשמה לפי עיר)
-יושמע התקליט הבא:
-בחר את העיר הרצויה, אם ידוע לך קוד העיר הקש אותו בכל שלב
-רשימת הערים יוקראו ברצף -
-לבחירת העיר הקש 0
-למעבר מהיר לעיר הבאה הקש #
-לעיר הקודמת הקש *
-
-1 בני ברק
-2 ירושלים
-3 בית שמש 
-4 מודיעין עילית
-5 ביתר 
-6 אשדוד 
-7 אלעד
-8 אופקים
-9 אור יהודה
-10 אשקלון
-11 באר יעקב
-12 באר שבע
-13 בית חלקיה
-14 בית שאן
-15 בת ים
-16 גני תקוה
-17 דימונה
-18 זכרון יעקב
-19 חדרה
-20 חולון
-21 חיפה
-22 חצור
-23 חריש
-24 טבריה
-25 טלסטון
-26 יבניאל
-27 יהוד
-28 יסודות
-29 ירוחם
-30 כרמיאל
-31 לוד - אחיסמך
-32 לוד כללי
-33 מגדל העמק
-34 מירון
-35 מעלה אדומים
-36 מעלות
-37 נהריה
-38 נצרת נוף הגליל
-39 נתיבות 
-40 נתניה
-41 עמנואל
-42 עפולה
-43 ערד
-44 פתח תקוה
-45 צפת
-46 קוממיות חזון יחזקאל
-47 קרית אתא
-48 קרית גת
-49 קרית מלאכי
-50 ראשון לציון
-51 רחובות
-52 רכסים
-53 רמת גן
-54 תל אביב יפו
-55 תל ציון
-56 תפרח
-57 אילת
-58 הרצליה
-59 רמת השרון
-
-לאחר בחירת עיר מסוימת, יושמע התקליט הבא:
-לאישור הקש 1
-להקשה מחודשת הקישו 2
-(אחרי לחיצה על 1 לאישור)
-להוספת מספרכם לרשימת הצינתוקים הקישו 1
-להסרת מספרכם מרשימת הצינתוקים הקישו 2 
-להוספת מספרכם לרשימת הצינתוקים לזמן מסוים הקישו 3
-להשתקת קבלת צינתוקים עד לזמן מסוים הקישו 4 
-ליציאה הקישו *
-
-לאחר לחיצה על 2 (להרשמה לפי אזור)
-יושמע התקליט הבא:
-הקש את קוד האזור, ובסיום הקש סולמית
-1 אזור המרכז
-2 אזור ירושלים ובית שמש
-3 אזור הדרום - אזור אשדוד
-4 אזור הדרום - אזור הנגב
-5 אזור הגליל והגולן
-6 אזור הצפון - קו החוף''',
-    },
-  ];
-
-  final List<Map<String, dynamic>> supportOrgs = [
-    {
-      'name': 'נותנים גב',
-      'phone': '04-313-2000',
-      'logo': 'assets/logos/notnim_gav.png',
-      'details': '''לאנגלית הקש 4
-1 - מוקד רישום לבחורים מקבלי הצווים
-2 - אגף ייעוץ מקצועי
-3 - אגף תמיכה לנשים ואמהות
-5 - הדרכה מוקלטת למקבלי הצווים
-8 - הרשמה להתנדבות בארגון
-9 - השארת הודעה למנהלי הארגון
-0 - תרומות במענה אנושי או אוטומטי
-* - מוקד חרום בעת מעצר''',
-    },
-    {
-      'name': 'עם קדוש',
-      'phone': '*5172',
-      'logo': 'assets/logos/am_kadosh.jpg',
-      'details': '''גימטריא קטנה של "נאזר" בגבורה
-1 - בחור מגיל 18 ומעלה שקיבל צו
-2 - מגיל 16 וחצי עד 18
-3 - השארת הודעה
-4 - מענה בעת ניסיון מעצר או בשעת מעצר
-5 - דיווח על מחסומים ברחבי הארץ
-8 - תרומות''',
-    },
-    {
-      'name': 'עזרם ומגינם',
-      'phone': '02-500-0110',
-      'logo': 'assets/logos/ezram_maginam.png',
-      'details': '''1 - מידע והנחיות
-2 - מענה אנושי
-3 - פניה בעת מעצר
-4 - מזכירות הארגון
-9 - הרשמה לקבלת התרעות בעת מעצר''',
-    },
-    {
-      'name': 'הפקדתי שומרים',
-      'phone': '09-313-2142',
-      'logo': 'assets/logos/ezram.jpg',
-      'details': '''ארגון לתושבי ביתר
-הפועל בצמוד ובתמיכת רבני העיר
-* - מוקד החירום במקרי מעצר
-1 - רישום למקבלי צווי הגיוס
-2 - לייעוץ משפטי למקבלי הצווים
-3 - מוקד התמיכה לאמהות ונשות מקבלי הצווים
-4 - מענה מנציגים
-9 - להנהלת הארגון
-0 - לתרומות''',
-    },
-    {
-      'name': 'אגודת בני הישיבות',
-      'phone': '02-994-0030',
-      'logo': 'assets/logos/agudat_bnei_yeshivot.png',
-      'details': '''1 - לרישום
-2 - מענה והכוונה משפטית
-3 -מענה בשפות נוספות
-7 - מוקד משפטי למנהלי הישיבות
-9 - שלוחת החירום למקרי מעצר
-קו תוכן שע"י האגודה: 077-226-2626
-אפשרויות קו התוכן:
-1 - עדכונים
-5 - רישום, תמיכה וסיוע משפטי
-6 - תרומות
-9 - הרשמה והסרה מרשימות התפוצה''',
-    },
-    {
-      'name': 'הצלה לאחים',
-      'phone': '02-502-3231',
-      'logo': 'assets/logos/hatzala_leachim.png',
-      'details': '''1 - לפניות חדשות והמשך טיפול
-2 - לפניות בנושא עיכוב יציאה מהארץ
-3 - לפניות בנושא עצורים בכלא הצבאי
-6 - לקבלת כתובת המייל והפקס
-8 - לשמיעת הסטטוס בתיק שלכם
-9 - לשמיעה חוזרת''',
-    },
-    {
-      'name': 'אחים אנחנו',
-      'phone': '02-579-5252',
-      'logo': 'assets/logos/achim_anachnu.png',
-      'details': '''1 - למקבלי צווי ההתיצבות והגיוס
-2 - לבעיות מול הצבא
-4 - להשארת הודעה
-5 - לקבלת מספר הפקס ודואר אלקטרוני
-6 - לכל נושא אחר''',
-    },
-    {
-      'name': 'מגן ומושיע',
-      'phone': '*9273',
-      'logo': 'assets/logos/magen_umoshia.png',
-      'details': '''ארגון סיוע ללומדי תורה''',
-    },
-  ];
+  const _OrganizationsList({required this.organizations});
 
   @override
   Widget build(BuildContext context) {
@@ -641,11 +380,15 @@ class _OrganizationsList extends StatelessWidget {
       children: [
         // קווי חירום
         _buildSectionTitle('קווי חירום', Colors.red),
-        ...emergencyLines.map((org) => _buildOrgCard(context, org, true)),
+        ...organizations.emergencyLines.map(
+          (org) => _ExpandableOrgCard(org: org, isEmergency: true),
+        ),
         const SizedBox(height: 20),
         // ארגוני סיוע
         _buildSectionTitle('ארגוני סיוע', Colors.blue),
-        ...supportOrgs.map((org) => _buildOrgCard(context, org, false)),
+        ...organizations.supportOrgs.map(
+          (org) => _ExpandableOrgCard(org: org, isEmergency: false),
+        ),
       ],
     );
   }
@@ -678,25 +421,14 @@ class _OrganizationsList extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildOrgCard(
-    BuildContext context,
-    Map<String, dynamic> org,
-    bool isEmergency,
-  ) {
-    return _ExpandableOrgCard(org: org, isEmergency: isEmergency);
-  }
 }
 
 /// כרטיס ארגון מתרחב
 class _ExpandableOrgCard extends StatefulWidget {
-  final Map<String, dynamic> org;
+  final SupportOrganization org;
   final bool isEmergency;
 
-  const _ExpandableOrgCard({
-    required this.org,
-    required this.isEmergency,
-  });
+  const _ExpandableOrgCard({required this.org, required this.isEmergency});
 
   @override
   State<_ExpandableOrgCard> createState() => _ExpandableOrgCardState();
@@ -734,12 +466,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
       }
 
       // טקסט מודגש (ללא הכוכביות)
-      spans.add(
-        TextSpan(
-          text: match.group(1),
-          style: _boldDetailsStyle,
-        ),
-      );
+      spans.add(TextSpan(text: match.group(1), style: _boldDetailsStyle));
 
       lastIndex = match.end;
     }
@@ -754,9 +481,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
       );
     }
 
-    return Text.rich(
-      TextSpan(children: spans),
-    );
+    return Text.rich(TextSpan(children: spans));
   }
 
   @override
@@ -795,13 +520,12 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     child: ClipRRect(
                       borderRadius: AppTokens.borderRadiusAll,
                       child: Image(
-                        // policy.fit מקטין עד שהתמונה עדיין מכסה את הריבוע;
-                        // ברירת המחדל (exact) הייתה מעוותת אותה תחת cover
-                        image: ResizeImage(
-                          AssetImage(widget.org['logo']),
-                          width: imageDecodeSize(context, 50),
-                          height: imageDecodeSize(context, 50),
-                          policy: ResizeImagePolicy.fit,
+                        image: coverResizeAsset(
+                          context,
+                          widget.org.logo,
+                          logicalSize: 50,
+                          maxSourceAspectRatio:
+                              SupportOrganizationsService.maxLogoAspectRatio,
                         ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
@@ -814,14 +538,14 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     ),
                   );
                   final name = Text(
-                    widget.org['name'],
+                    widget.org.name,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   );
                   final phone = Text(
-                    widget.org['phone'],
+                    widget.org.phone,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -891,7 +615,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // טלפונים נוספים
-                  if (widget.org['phones'] != null) ...[
+                  if (widget.org.phones.isNotEmpty) ...[
                     const Text(
                       'מספרי טלפון:',
                       style: TextStyle(
@@ -900,7 +624,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...((widget.org['phones'] as List).map(
+                    ...widget.org.phones.map(
                       (phone) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Row(
@@ -915,11 +639,11 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                           ],
                         ),
                       ),
-                    )),
+                    ),
                     const SizedBox(height: 12),
                   ],
                   // פרטים
-                  if (widget.org['details'] != null) ...[
+                  if (widget.org.details.isNotEmpty) ...[
                     const Text(
                       'אפשרויות הקו:',
                       style: TextStyle(
@@ -928,7 +652,7 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildDetailsText(widget.org['details']),
+                    _buildDetailsText(widget.org.details),
                   ],
                 ],
               ),
