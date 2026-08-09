@@ -1287,6 +1287,7 @@ class _SearchDialogState extends State<SearchDialog> {
               onEmptySubmit: _performSearch,
               inputFocusNotifier: _advancedControlsHasFocus,
               supportsVocalized: _supportsVocalizedSearch,
+              supportsCategorySyntax: true,
             ),
             if (widget.onSearch == null && !widget.returnResultOnSubmit) ...[
               const SizedBox(height: 12),

@@ -309,7 +309,8 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
   // המיפוי לטווחים בטקסט הגולמי — כולל סמן על `דין` בתוך `בית-דין`
   // ומקטעים שהנורמליזציה שינתה את אורכם (`רמב''ם`) — ב-queryWordSpans.
   Map<String, dynamic>? _getCurrentWordInfo() {
-    final text = widget.tab.queryController.text;
+    // חלק הצמצום `@קטגוריה` אינו מילות חיפוש — לא מציעים עליו אפשרויות.
+    final text = categoryQueryPart(widget.tab.queryController.text);
     final cursorPosition = widget.tab.queryController.selection.baseOffset;
 
     if (text.isEmpty || cursorPosition < 0) return null;

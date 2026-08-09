@@ -4,6 +4,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/search/saved_alternatives_store.dart';
+import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -33,6 +34,10 @@ class AdvancedSearchControls extends StatefulWidget {
   final ValueNotifier<int>? spacingValuesChanged;
   final bool enableSavedAlternatives;
 
+  /// האם השדה תומך בתחביר `@קטגוריה` — אז חלק הצמצום אינו מילות חיפוש
+  /// ואין להציג עבורו אפשרויות פר-מילה.
+  final bool supportsCategorySyntax;
+
   const AdvancedSearchControls({
     super.key,
     required this.tab,
@@ -50,6 +55,7 @@ class AdvancedSearchControls extends StatefulWidget {
     this.alternativeWordsChanged,
     this.spacingValuesChanged,
     this.enableSavedAlternatives = true,
+    this.supportsCategorySyntax = false,
   });
 
   @override
@@ -142,7 +148,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
   }
 
   void _analyzeCurrentWord() {
-    final text = _queryController.text;
+    final text = widget.supportsCategorySyntax
+        ? categoryQueryPart(_queryController.text)
+        : _queryController.text;
     final selection = _queryController.selection;
 
     if (text.isEmpty || selection.baseOffset < 0) {
@@ -257,7 +265,9 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
     // שאינה ניתנת לאיתור מדויק (נורמליזציה משנת-אורך) מקבלת את גבולות
     // המקטע שלה — הצבת הסמן באמצע הטווח נכונה בשני המקרים.
     final spans = SearchQueryBuilder.queryWordSpans(
-      _queryController.text,
+      widget.supportsCategorySyntax
+          ? categoryQueryPart(_queryController.text)
+          : _queryController.text,
     );
     if (newIndex >= spans.length) return;
     final span = spans[newIndex];
