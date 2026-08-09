@@ -197,6 +197,25 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     } catch (e, st) {
       if (_isStale(opId)) return;
       _logUpdateError('applyDeltaPlan', e, st);
+      // תוכן ה-DB סטה מהקנוני — כל ניסיון דלתא חוזר ייכשל באותה נקודה,
+      // לכן מציעים הורדה מלאה במקום להשאיר את המשתמש בלולאת נסה-שוב.
+      if (e is PatchApplyException && e.isContentMismatch) {
+        final fallback = plan.toFullDownloadFallback(
+          reason: 'תוכן הספרייה המקומית שונה מהצפוי',
+        );
+        if (fallback != null) {
+          emit(
+            LibraryUpdateState(
+              status: LibraryUpdateStatus.needsFullConfirmation,
+              message:
+                  'תוכן הספרייה המקומית שונה מהצפוי — נדרשת הורדה '
+                  'מלאה (${_formatSize(fallback.totalDownloadSize)})',
+              plan: fallback,
+            ),
+          );
+          return;
+        }
+      }
       emit(
         LibraryUpdateState(
           status: LibraryUpdateStatus.error,
