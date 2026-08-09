@@ -7,13 +7,17 @@ const kLibraryUpdateWorkStatusId = 'library_update';
 
 /// פריט חיווי העבודה לעדכון הספרייה, או `null` כשאין מה להציג.
 ///
+/// [LibraryUpdateStatus.checking] שקט: הבדיקה רצה בכל עלייה וברוב הפעמים אין
+/// עדכון — חיווי עליה הוא הפרעה בכל פתיחה. מוצג רק כשיש עבודה ממשית (הורדה,
+/// החלה, ריענון) או כשל.
+///
 /// [LibraryUpdateStatus.disconnected] מחזיר `null` בכוונה: היעדר אינטרנט אינו
 /// כשל לדווח עליו, והסימון היחיד עליו הוא הסמל בכפתור עדכון הספרייה.
 WorkStatusItem? libraryUpdateWorkStatusItem(
   LibraryUpdateState state, {
   required VoidCallback onRetry,
 }) {
-  if (state.isBusy) {
+  if (state.isBusy && state.status != LibraryUpdateStatus.checking) {
     return WorkStatusItem(
       id: kLibraryUpdateWorkStatusId,
       title: 'עדכון ספרייה',
