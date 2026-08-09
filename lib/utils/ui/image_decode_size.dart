@@ -9,3 +9,21 @@ import 'package:flutter/widgets.dart';
 /// [logicalSize] - הגודל שבו התמונה מוצגת בפועל, בפיקסלים לוגיים
 int imageDecodeSize(BuildContext context, double logicalSize) =>
     (logicalSize * MediaQuery.devicePixelRatioOf(context)).ceil();
+
+/// מפענח נכס כך שגם הצלע הקצרה תכסה ריבוע בגודל [logicalSize].
+ImageProvider coverResizeAsset(
+  BuildContext context,
+  String assetName, {
+  required double logicalSize,
+  required double maxSourceAspectRatio,
+}) {
+  assert(maxSourceAspectRatio >= 1);
+  final targetSize = imageDecodeSize(context, logicalSize);
+  final decodeBound = (targetSize * maxSourceAspectRatio).ceil();
+  return ResizeImage(
+    AssetImage(assetName),
+    width: decodeBound,
+    height: decodeBound,
+    policy: ResizeImagePolicy.fit,
+  );
+}

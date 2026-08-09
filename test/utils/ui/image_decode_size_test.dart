@@ -26,6 +26,32 @@ void main() {
       expect(decoded, 150);
     });
 
+    testWidgets('פענוח cover שומר די פיקסלים גם בצלע הקצרה', (tester) async {
+      late ResizeImage provider;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(devicePixelRatio: 3),
+          child: Builder(
+            builder: (context) {
+              provider =
+                  coverResizeAsset(
+                        context,
+                        'assets/logos/hatzala_leachim.png',
+                        logicalSize: 50,
+                        maxSourceAspectRatio: 2,
+                      )
+                      as ResizeImage;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      expect(provider.width, 300);
+      expect(provider.height, 300);
+      expect(provider.policy, ResizeImagePolicy.fit);
+    });
+
     testWidgets('מעגל כלפי מעלה כדי לא לפענח מתחת לגודל התצוגה', (
       tester,
     ) async {
@@ -111,7 +137,7 @@ void main() {
         isFalse,
         reason: 'לוגו של 2480×3508 בריבוע 50 מפוענח ל-35MB בלי הקטנה',
       );
-      expect(src.contains('ResizeImagePolicy.fit'), isTrue);
+      expect(src.contains('coverResizeAsset('), isTrue);
     });
   });
 }

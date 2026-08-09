@@ -8,6 +8,9 @@ import 'package:otzaria/services/ad_popup_service.dart';
 import 'package:otzaria/services/support_organizations_service.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/utils/ui/image_decode_size.dart';
+import 'package:otzaria/widgets/feedback/app_future_builder.dart';
+
+const _organizationsLoadError = 'לא ניתן לטעון את פרטי הארגונים';
 
 /// פופאפ פרסומת עם אנימציה מתקדמת
 class AdPopupDialog extends StatefulWidget {
@@ -135,7 +138,6 @@ class _AdPopupDialogState extends State<AdPopupDialog>
     _entryController.dispose();
     _textController.dispose();
     _collapseController.dispose();
-    SupportOrganizationsService.release();
     super.dispose();
   }
 
@@ -197,13 +199,19 @@ class _AdPopupDialogState extends State<AdPopupDialog>
       // נבנים מחדש בכל פריים של האנימציה.
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: FutureBuilder<SupportOrganizations>(
+        child: AppFutureBuilder<SupportOrganizations>(
           future: _organizations,
-          builder: (context, snapshot) {
-            final organizations = snapshot.data;
-            if (organizations == null) return const SizedBox.shrink();
-            return _OrganizationsList(organizations: organizations);
-          },
+          loadingWidget: const SizedBox.shrink(),
+          errorBuilder: (context, error) => Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _organizationsLoadError,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+          builder: (context, organizations) =>
+              _OrganizationsList(organizations: organizations),
         ),
       ),
       builder: (context, child) {
@@ -512,13 +520,12 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                     child: ClipRRect(
                       borderRadius: AppTokens.borderRadiusAll,
                       child: Image(
-                        // policy.fit מקטין עד שהתמונה עדיין מכסה את הריבוע;
-                        // ברירת המחדל (exact) הייתה מעוותת אותה תחת cover
-                        image: ResizeImage(
-                          AssetImage(widget.org.logo),
-                          width: imageDecodeSize(context, 50),
-                          height: imageDecodeSize(context, 50),
-                          policy: ResizeImagePolicy.fit,
+                        image: coverResizeAsset(
+                          context,
+                          widget.org.logo,
+                          logicalSize: 50,
+                          maxSourceAspectRatio:
+                              SupportOrganizationsService.maxLogoAspectRatio,
                         ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {

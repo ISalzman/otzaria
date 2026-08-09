@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/support_organization.dart';
@@ -84,6 +85,29 @@ void main() {
           File(org.logo).existsSync(),
           isTrue,
           reason: 'הלוגו ${org.logo} של "${org.name}" לא קיים בדיסק',
+        );
+      }
+    });
+
+    test('כל יחס תמונה נמצא בתחום שפענוח ה-cover מכסה', () async {
+      final all = [
+        ...organizations.emergencyLines,
+        ...organizations.supportOrgs,
+      ];
+      for (final org in all) {
+        final buffer = await ui.ImmutableBuffer.fromFilePath(org.logo);
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        final ratio = descriptor.width / descriptor.height;
+        final directionalRatio = ratio >= 1 ? ratio : 1 / ratio;
+        descriptor.dispose();
+        buffer.dispose();
+
+        expect(
+          directionalRatio,
+          lessThanOrEqualTo(
+            SupportOrganizationsService.maxLogoAspectRatio,
+          ),
+          reason: 'הלוגו של "${org.name}" דורש הגדלת maxLogoAspectRatio',
         );
       }
     });

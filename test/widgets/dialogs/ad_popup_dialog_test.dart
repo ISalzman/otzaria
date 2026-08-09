@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/support_organization.dart';
 import 'package:otzaria/services/support_organizations_service.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
 
@@ -66,6 +69,20 @@ void main() {
       await finishAnimations(tester);
     });
 
+    testWidgets('שגיאת טעינה מוצגת למשתמש במקום רשימה ריקה', (tester) async {
+      final completer = Completer<SupportOrganizations>();
+      SupportOrganizationsService.setCacheForTesting(completer.future);
+
+      await tester.pumpWidget(
+        const MaterialApp(home: AdPopupDialog(title: 'כותרת')),
+      );
+      completer.completeError(StateError('asset failed'));
+      await tester.pump();
+
+      expect(find.text('לא ניתן לטעון את פרטי הארגונים'), findsOneWidget);
+      await finishAnimations(tester);
+    });
+
     testWidgets('פתיחת כרטיס מציגה את אפשרויות הקו', (tester) async {
       await pumpUntilListReady(tester);
       await finishAnimations(tester);
@@ -88,54 +105,41 @@ void main() {
     testWidgets('לוגואי הארגונים מפוענחים בגודל מוקטן ולא ברזולוציית המקור', (
       tester,
     ) async {
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.resetDevicePixelRatio);
       await pumpUntilListReady(tester);
 
       final logos = tester
           .widgetList<Image>(find.byType(Image))
           .map((image) => image.image)
           .whereType<ResizeImage>()
+          .where((provider) {
+            final source = provider.imageProvider;
+            return source is AssetImage &&
+                source.assetName.startsWith('assets/logos/');
+          })
           .toList();
 
+      final organizations = await SupportOrganizationsService.load();
       expect(
         logos,
-        isNotEmpty,
-        reason: 'אף לוגו לא מפוענח מוקטן — הפענוח המוקטן הוסר',
+        hasLength(
+          organizations.emergencyLines.length +
+              organizations.supportOrgs.length,
+        ),
       );
       for (final logo in logos) {
-        expect(logo.width, isNotNull);
-        expect(logo.width!, lessThanOrEqualTo(400));
+        expect(logo.width, 300);
+        expect(logo.height, 300);
+        expect(logo.policy, ResizeImagePolicy.fit);
       }
 
       await finishAnimations(tester);
     });
 
-    testWidgets('הפינוי בסגירה משתמש באותו מפתח שבו נטענו הלוגואים', (
+    testWidgets('סגירה משמרת את הנתונים לפתיחה חוזרת בלי טעינה נוספת', (
       tester,
     ) async {
-      await pumpUntilListReady(tester);
-
-      final organizations = await SupportOrganizationsService.load();
-      final rendered = tester
-          .widgetList<Image>(find.byType(Image))
-          .map((image) => image.image)
-          .toSet();
-
-      // release מפנה לפי logoImage. מפתח שונה מזה שבו נטענה התמונה לא היה
-      // מייצר שגיאה — הוא פשוט היה משאיר אותה ב-ImageCache בשקט.
-      for (final org in [
-        ...organizations.emergencyLines,
-        ...organizations.supportOrgs,
-      ]) {
-        expect(
-          rendered,
-          contains(SupportOrganizationsService.logoImage(org.logo)),
-        );
-      }
-
-      await finishAnimations(tester);
-    });
-
-    testWidgets('סגירת הפופאפ משחררת את הנתונים מהמטמון', (tester) async {
       await pumpUntilListReady(tester);
       await finishAnimations(tester);
 
@@ -145,8 +149,8 @@ void main() {
 
       expect(
         identical(SupportOrganizationsService.load(), whileOpen),
-        isFalse,
-        reason: 'הנתונים נשארו במטמון אחרי סגירת הפופאפ',
+        isTrue,
+        reason: 'סגירת הפופאפ גרמה לטעינה חוזרת של אותם נתונים',
       );
     });
 
