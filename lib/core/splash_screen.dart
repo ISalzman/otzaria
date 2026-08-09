@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/utils/ui/image_decode_size.dart';
 
 /// סמל מסך הפתיחה, באטימות 70%. החלון הראשי מוסתר לכל אורך שלב ה-splash —
 /// הסמל שנראה למשתמש הוא חלון ה-splash הנייטיבי הנפרד (ראה runner).
@@ -7,13 +8,14 @@ class SplashIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Opacity(
         opacity: 0.70,
-        child: Image(
-          image: AssetImage('assets/icon/iconnew.png'),
+        child: Image.asset(
+          'assets/icon/iconnew.png',
           width: 128,
           height: 128,
+          cacheWidth: imageDecodeSize(context, 128),
         ),
       ),
     );

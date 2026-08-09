@@ -13,6 +13,7 @@ import 'package:otzaria/settings/tabs/about_settings_data.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
+import 'package:otzaria/utils/ui/image_decode_size.dart';
 
 /// פותח כתובת URL בדפדפן החיצוני.
 /// בלי canLaunchUrl — באנדרואיד 11+ הוא מחזיר false ל-https ומשתיק את הפתיחה.
@@ -304,6 +305,7 @@ class AboutSettingsTab extends StatelessWidget {
             'assets/icon/iconnew.png',
             width: 60,
             height: 60,
+            cacheWidth: imageDecodeSize(context, 60),
             errorBuilder: (_, _, _) =>
                 const Icon(FluentIcons.library_24_regular, size: 60),
           ),

@@ -64,6 +64,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
+import 'package:otzaria/utils/ui/image_decode_size.dart';
 
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
@@ -2386,6 +2387,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               'assets/icon/shamor_zachor_with_v.png',
               width: iconSize,
               height: iconSize,
+              cacheWidth: imageDecodeSize(context, iconSize),
             )
           : null,
       compact: isCompact,
