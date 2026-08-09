@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:otzaria/core/app_paths.dart';
@@ -18,10 +19,14 @@ class MagicDictionaryRelease {
   /// גודל הנכס בבייטים, אם דווח ב-API (לחישוב התקדמות). `null` אם לא ידוע.
   final int? sizeBytes;
 
+  /// ה-sha256 של הנכס כפי שדווח ב-API (`digest`), או `null` כשאינו זמין.
+  final String? sha256;
+
   const MagicDictionaryRelease({
     required this.tag,
     required this.downloadUrl,
     this.sizeBytes,
+    this.sha256,
   });
 }
 
@@ -79,16 +84,29 @@ class MagicDictionaryDownloader {
     final dest = await _destinationProvider();
     try {
       final release = await fetchLatestRelease();
-      final upToDate =
+      final installed = await installedVersion();
+      // הסימון עשוי להיות תג (התקנות ישנות) או digest (מתקיני FULL) — שניהם
+      // עדכניים; ההשוואה לפי digest שורדת גם החלפת תג עם אותו קובץ.
+      var upToDate =
           !force &&
           await _fileIsUsable(dest) &&
-          (await installedVersion()) == release.tag;
+          installed != null &&
+          (installed == release.tag || installed == release.sha256);
+      if (upToDate && release.sha256 != null && installed != release.sha256) {
+        // המרה חד-פעמית של סימון-תג ל-digest, רק אחרי אימות שהקובץ המקומי
+        // אכן תואם — אחרת קובץ סוטה היה מוחתם כעדכני לצמיתות.
+        if (await _fileSha256(dest) == release.sha256) {
+          await writeVersionMarker(dest, release.sha256!);
+        } else {
+          upToDate = false;
+        }
+      }
       if (upToDate) {
         onProgress?.call(1.0);
         return true;
       }
       await _download(release, dest, onProgress);
-      await writeVersionMarker(dest, release.tag);
+      await writeVersionMarker(dest, release.sha256 ?? release.tag);
       return true;
     } catch (_) {
       // אם נכשלנו אבל כבר יש קובץ שמיש מהורדה קודמת — עדיין שמיש.
@@ -127,10 +145,16 @@ class MagicDictionaryDownloader {
       tag: tag,
       downloadUrl: Uri.parse(asset['browser_download_url'] as String),
       sizeBytes: (asset['size'] as num?)?.toInt(),
+      sha256: switch (asset['digest']) {
+        final String digest when digest.startsWith('sha256:') =>
+          digest.substring('sha256:'.length),
+        _ => null,
+      },
     );
   }
 
-  /// הגרסה המותקנת כעת (תג ה-release), או `null` אם אין מילון/סימון גרסה.
+  /// הסימון המותקן כעת — digest של הנכס, או תג release בהתקנות ישנות.
+  /// `null` אם אין מילון/סימון גרסה.
   Future<String?> installedVersion() async {
     final dest = await _destinationProvider();
     final marker = File(_versionPath(dest));
@@ -191,6 +215,15 @@ class MagicDictionaryDownloader {
       rethrow;
     }
     onProgress?.call(1.0);
+  }
+
+  /// ה-sha256 של [path] בזרימה — בלי לטעון 57MB לזיכרון. `null` בכשל קריאה.
+  Future<String?> _fileSha256(String path) async {
+    try {
+      return (await sha256.bind(File(path).openRead()).first).toString();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _fileIsUsable(String path) async {

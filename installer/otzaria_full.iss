@@ -2019,6 +2019,17 @@ begin
   WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
   WizardForm.StatusLabel.Update;
   ExtractBundledDatabase('lexical.db.zst', 'lexical.db');
+  // בלי קובץ הגרסה בדיקת העדכון הראשונה מורידה את המילון (~57MB) מחדש;
+  // ה-sha256 של הקובץ הוא ה-digest של נכס ה-release שהאפליקציה משווה מולו.
+  if FileExists(SelectedBooksPath + '\lexical.db') then
+  begin
+    try
+      SaveStringToFile(SelectedBooksPath + '\lexical.db.version',
+        Lowercase(GetSHA256OfFile(SelectedBooksPath + '\lexical.db')), False);
+    except
+      Log('Lexical version marker was not written: ' + GetExceptionMessage);
+    end;
+  end;
 #endif
 
   WizardForm.ProgressGauge.Style := npbstNormal;

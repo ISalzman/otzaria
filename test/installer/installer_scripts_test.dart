@@ -456,6 +456,34 @@ void main() {
       });
     }
   });
+
+  group('סימון גרסת מילון החיפוש בחבילות FULL', () {
+    // בלי הסימון האפליקציה מורידה מחדש ~57MB בבדיקת העדכון הראשונה (issue #665).
+    test('$_full: אחרי חילוץ lexical.db נכתב סימון מ-sha256 של הקובץ', () {
+      final body = _routine(_script(_full), 'procedure CurStepChanged(');
+
+      expect(body, contains("'\\lexical.db.version'"));
+      expect(
+        body,
+        contains(
+          "Lowercase(GetSHA256OfFile(SelectedBooksPath + '\\lexical.db'))",
+        ),
+        reason: 'הנכס ב-release אינו דחוס — ה-digest מחושב על הקובץ המחולץ',
+      );
+    });
+
+    for (final entry in const {
+      'Create Linux FULL portable bundle': 'sha256sum',
+      'Create macOS FULL portable bundle': 'shasum -a 256',
+    }.entries) {
+      test('${entry.key}: הסימון נכתב ליד lexical.db', () {
+        final step = _workflowStep(entry.key);
+
+        expect(step, contains(entry.value));
+        expect(step, contains(r'$BUNDLE_ROOT/אוצריא/lexical.db.version'));
+      });
+    }
+  });
 }
 
 /// גוף שלב [name] ב-workflow הראשי, עד השלב הבא.
