@@ -126,6 +126,126 @@ void main() {
     expect(recognizer.supportedDevices, const {PointerDeviceKind.trackpad});
   });
 
+  group('החלקת trackpad — גרירה הדרגתית והתיישבות', () {
+    PageController pageControllerOf(WidgetTester tester) =>
+        tester.widget<PageView>(find.byType(PageView)).controller!;
+
+    testWidgets('גרירה קצרה מזיזה את התצוגה בהדרגה וחוזרת לטאב הנוכחי', (
+      tester,
+    ) async {
+      final tabs = [_tab('א'), _tab('ב')];
+      addTearDown(() {
+        for (final t in tabs) {
+          t.dispose();
+        }
+      });
+      final bloc = await pumpReadingScreen(tester, tabs);
+
+      final center = tester.getCenter(find.byType(PageView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center, timeStamp: Duration.zero);
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-200, 0),
+        timeStamp: const Duration(milliseconds: 50),
+      );
+      await tester.pump();
+
+      final midDragPage = pageControllerOf(tester).page!;
+      expect(
+        midDragPage,
+        greaterThan(0.05),
+        reason: 'הגרירה חייבת להזיז את התצוגה בהדרגה, לא לחכות לסף',
+      );
+      expect(midDragPage, lessThan(0.5));
+      expect(bloc.state.currentTabIndex, 0);
+
+      // עצירה לפני השחרור — מאפסת את מהירות ההנפה.
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-200, 0),
+        timeStamp: const Duration(milliseconds: 300),
+      );
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-200, 0),
+        timeStamp: const Duration(milliseconds: 350),
+      );
+      await gesture.panZoomEnd(timeStamp: const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(pageControllerOf(tester).page, 0);
+      expect(bloc.state.currentTabIndex, 0);
+    });
+
+    testWidgets('גרירה מעבר למחצית הדרך מתיישבת על הטאב הסמוך', (tester) async {
+      final tabs = [_tab('א'), _tab('ב')];
+      addTearDown(() {
+        for (final t in tabs) {
+          t.dispose();
+        }
+      });
+      final bloc = await pumpReadingScreen(tester, tabs);
+
+      final center = tester.getCenter(find.byType(PageView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center, timeStamp: Duration.zero);
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-900, 0),
+        timeStamp: const Duration(milliseconds: 100),
+      );
+      await tester.pump();
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-900, 0),
+        timeStamp: const Duration(milliseconds: 350),
+      );
+      await gesture.panZoomUpdate(
+        center,
+        pan: const Offset(-900, 0),
+        timeStamp: const Duration(milliseconds: 400),
+      );
+      await gesture.panZoomEnd(timeStamp: const Duration(milliseconds: 450));
+      await tester.pumpAndSettle();
+
+      expect(bloc.state.currentTabIndex, 1);
+      expect(pageControllerOf(tester).page, 1);
+    });
+
+    testWidgets('הנפה מהירה מעבירה טאב גם לפני מחצית הדרך', (tester) async {
+      final tabs = [_tab('א'), _tab('ב')];
+      addTearDown(() {
+        for (final t in tabs) {
+          t.dispose();
+        }
+      });
+      final bloc = await pumpReadingScreen(tester, tabs);
+
+      final center = tester.getCenter(find.byType(PageView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center, timeStamp: Duration.zero);
+      for (var i = 1; i <= 5; i++) {
+        await gesture.panZoomUpdate(
+          center,
+          pan: Offset(-30.0 * i, 0),
+          timeStamp: Duration(milliseconds: 10 * i),
+        );
+      }
+      await gesture.panZoomEnd(timeStamp: const Duration(milliseconds: 60));
+      await tester.pumpAndSettle();
+
+      expect(bloc.state.currentTabIndex, 1);
+      expect(pageControllerOf(tester).page, 1);
+    });
+  });
+
   group('ReadingScreen + MoveTab — שימור State', () {
     testWidgets('גרירת הטאב הראשון לסוף: כל הטאבים שומרים State', (
       tester,
