@@ -7,11 +7,16 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // כברירת מחדל קובעים פלטפורמה שאינה Mac, כך שהקבוצות הבודקות סמנטיקת Control
-  // לא תלויות בפלטפורמת הריצה (ב-macOS `ctrl` מתורגם ל-Meta). הקבוצה הייעודית
-  // ל-macOS שלהלן עושה override ל-true ב-setUp שלה.
-  setUp(() => ShortcutHelper.isMacForTesting = false);
-  tearDown(() => ShortcutHelper.isMacForTesting = null);
+  // קיבוע הפלטפורמה מונע תלות במערכת שמריצה את הטסטים; הקבוצה הייעודית
+  // ל-macOS דורסת את הערך לפי הצורך.
+  setUp(() {
+    ShortcutHelper.isMacForTesting = false;
+    ShortcutHelper.isWindowsForTesting = false;
+  });
+  tearDown(() {
+    ShortcutHelper.isMacForTesting = null;
+    ShortcutHelper.isWindowsForTesting = null;
+  });
 
   group('ShortcutHelper.matchesShortcut', () {
     test('מזהה meta רק כש-meta לחוץ', () {
@@ -205,6 +210,17 @@ void main() {
       expect(activator.meta, isTrue);
       expect(activator.control, isFalse);
       expect(activator.trigger, LogicalKeyboardKey.keyF);
+    });
+
+    test('activatorFromShortcut יכול לשמר Control פיזי ב-Mac', () {
+      final activator =
+          ShortcutHelper.activatorFromShortcut(
+                'ctrl+f',
+                mapCtrlToMeta: false,
+              )!
+              as SingleActivator;
+      expect(activator.control, isTrue);
+      expect(activator.meta, isFalse);
     });
   });
 
@@ -566,6 +582,317 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+  group('AltGr ו-AltGraph', () {
+    final arrowUp = KeyDownEvent(
+      physicalKey: PhysicalKeyboardKey.arrowUp,
+      logicalKey: LogicalKeyboardKey.arrowUp,
+      timeStamp: Duration.zero,
+    );
+
+    test('קיצור alt בלבד מותאם גם כשה-Ctrl מגיע מ-AltGr', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'alt+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: true,
+          isMetaPressed: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('AltGraph מובחן נחשב alt גם כש-isAltPressed הוא false', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'alt+arrowup',
+          isControlPressed: false,
+          isShiftPressed: false,
+          isAltPressed: false,
+          isAltGrPressed: true,
+          isMetaPressed: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('Ctrl+Alt רגיל אינו מותאם לקיצור alt בלבד', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'alt+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isFalse,
+      );
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'ctrl+alt+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('קיצור alt בלבד ממשיך להיות מותאם ללחיצת Alt רגילה', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'alt+arrowup',
+          isControlPressed: false,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('Ctrl בלי Alt אינו נחשב AltGr ואינו מותאם לקיצור alt', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'alt+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: false,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('קיצור שדורש ctrl במפורש אינו מושפע מההקלה', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'ctrl+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: false,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isTrue,
+      );
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'ctrl+arrowup',
+          isControlPressed: false,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: false,
+          isMetaPressed: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('AltGr אינו מפעיל קיצור ctrl בלבד', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'ctrl+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: true,
+          isMetaPressed: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('AltGr אינו מפעיל קיצור ctrl+alt', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          arrowUp,
+          'ctrl+alt+arrowup',
+          isControlPressed: true,
+          isShiftPressed: false,
+          isAltPressed: true,
+          isAltGrPressed: true,
+          isMetaPressed: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('AltGraph נשמר כ-alt בעת הקלטת קיצור', () {
+      expect(
+        ShortcutHelper.formatKeysToShortcut({
+          LogicalKeyboardKey.altGraph,
+          LogicalKeyboardKey.arrowUp,
+        }),
+        'alt+arrowup',
+      );
+    });
+
+    test('AltGr של Windows אינו שומר את Control הסינתטי', () {
+      ShortcutHelper.isWindowsForTesting = true;
+
+      expect(
+        ShortcutHelper.formatKeysToShortcut({
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.altRight,
+          LogicalKeyboardKey.arrowUp,
+        }),
+        'alt+arrowup',
+      );
+    });
+
+    test('Ctrl+Alt שמאלי נשמר כ-ctrl+alt', () {
+      ShortcutHelper.isWindowsForTesting = true;
+
+      expect(
+        ShortcutHelper.formatKeysToShortcut({
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.altLeft,
+          LogicalKeyboardKey.arrowUp,
+        }),
+        'ctrl+alt+arrowup',
+      );
+    });
+
+    testWidgets('ShortcutActivator מפעיל alt בקלט AltGr של Windows', (
+      tester,
+    ) async {
+      ShortcutHelper.isWindowsForTesting = true;
+      var calls = 0;
+      final activator = ShortcutHelper.activatorFromShortcut('alt+arrowup')!;
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CallbackShortcuts(
+            bindings: {activator: () => calls++},
+            child: const Focus(
+              autofocus: true,
+              child: SizedBox(width: 1, height: 1),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyUpEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+      expect(calls, 1);
+    });
+
+    test('ShortcutActivator מקבל alt בקלט AltGraph של Linux', () {
+      final activator = ShortcutHelper.activatorFromShortcut('alt+arrowup')!;
+      final keyboard = HardwareKeyboard();
+      keyboard.handleKeyEvent(
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.altRight,
+          logicalKey: LogicalKeyboardKey.altGraph,
+          timeStamp: Duration.zero,
+        ),
+      );
+      final arrowUp = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
+        timeStamp: Duration.zero,
+      );
+      keyboard.handleKeyEvent(arrowUp);
+
+      expect(activator.accepts(arrowUp, keyboard), isTrue);
+    });
+
+    test('ShortcutActivator משמר חזרה בהחזקת קיצור alt', () {
+      final activator = ShortcutHelper.activatorFromShortcut('alt+arrowup')!;
+      final keyboard = HardwareKeyboard();
+      keyboard.handleKeyEvent(
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.altRight,
+          logicalKey: LogicalKeyboardKey.altGraph,
+          timeStamp: Duration.zero,
+        ),
+      );
+      keyboard.handleKeyEvent(
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.arrowUp,
+          logicalKey: LogicalKeyboardKey.arrowUp,
+          timeStamp: Duration.zero,
+        ),
+      );
+      final repeat = KeyRepeatEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
+        timeStamp: Duration.zero,
+      );
+
+      expect(activator.accepts(repeat, keyboard), isTrue);
+    });
+
+    test('ShortcutActivator משווה קיצורים לפי ערכים מנורמלים', () {
+      expect(
+        ShortcutHelper.activatorFromShortcut('ALT+F'),
+        ShortcutHelper.activatorFromShortcut('alt+f'),
+      );
+      expect(
+        ShortcutHelper.activatorFromShortcut('control+alt+f'),
+        ShortcutHelper.activatorFromShortcut('ctrl+alt+f'),
+      );
+    });
+
+    test('AltRight פיזי רגיל אינו AltGr מחוץ ל-Windows', () {
+      final altActivator = ShortcutHelper.activatorFromShortcut('alt+arrowup')!;
+      final ctrlAltActivator = ShortcutHelper.activatorFromShortcut(
+        'ctrl+alt+arrowup',
+      )!;
+      final keyboard = HardwareKeyboard();
+      keyboard.handleKeyEvent(
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.controlLeft,
+          logicalKey: LogicalKeyboardKey.controlLeft,
+          timeStamp: Duration.zero,
+        ),
+      );
+      keyboard.handleKeyEvent(
+        const KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.altRight,
+          logicalKey: LogicalKeyboardKey.altRight,
+          timeStamp: Duration.zero,
+        ),
+      );
+      final arrowUp = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
+        timeStamp: Duration.zero,
+      );
+      keyboard.handleKeyEvent(arrowUp);
+
+      expect(altActivator.accepts(arrowUp, keyboard), isFalse);
+      expect(ctrlAltActivator.accepts(arrowUp, keyboard), isTrue);
     });
   });
 }

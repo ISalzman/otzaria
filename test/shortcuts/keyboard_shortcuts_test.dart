@@ -38,6 +38,7 @@ import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:provider/provider.dart';
 import '../helpers/memory_settings_cache.dart';
 
@@ -120,8 +121,14 @@ void main() {
 
   // הטסטים שולחים Control פיזי. ב-macOS `ctrl` מתורגם ל-Meta, ולכן בלי קיבוע
   // זה הקיצורים (Ctrl+Shift+L/C/T) לא היו מזוהים והטסטים נכשלים על Mac/CI.
-  setUp(() => ShortcutHelper.isMacForTesting = false);
-  tearDown(() => ShortcutHelper.isMacForTesting = null);
+  setUp(() {
+    ShortcutHelper.isMacForTesting = false;
+    ShortcutHelper.isWindowsForTesting = false;
+  });
+  tearDown(() {
+    ShortcutHelper.isMacForTesting = null;
+    ShortcutHelper.isWindowsForTesting = null;
+  });
 
   group('KeyboardShortcuts', () {
     late MockSettingsBloc settingsBloc;
@@ -805,7 +812,11 @@ void main() {
       FocusRepository().resetForTesting();
     });
 
-    Future<void> pumpWithTab(WidgetTester tester, OpenedTab tab) async {
+    Future<void> pumpWithTab(
+      WidgetTester tester,
+      OpenedTab tab, {
+      Widget child = const SizedBox(width: 100, height: 100),
+    }) async {
       final tabsBloc = _StubTabsBloc(
         TabsState(tabs: [tab], currentTabIndex: 0),
       );
@@ -830,7 +841,7 @@ void main() {
             home: Scaffold(
               body: KeyboardShortcuts(
                 onFindRefRequested: () {},
-                child: const SizedBox(width: 100, height: 100),
+                child: child,
               ),
             ),
           ),
@@ -844,6 +855,35 @@ void main() {
       await tester.sendKeyDownEvent(key);
       await tester.sendKeyUpEvent(key);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pump();
+    }
+
+    Future<void> sendAltGr(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    Future<void> sendCtrlAlt(
+      WidgetTester tester,
+      LogicalKeyboardKey key,
+    ) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyUpEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pump();
     }
 
@@ -870,6 +910,63 @@ void main() {
 
       await sendAlt(tester, LogicalKeyboardKey.pageDown);
       expect(tab.navNextTocNotifier.value, 1);
+    });
+
+    testWidgets('AltGr של Windows מפעיל קיצור alt דרך מצב HardwareKeyboard', (
+      tester,
+    ) async {
+      ShortcutHelper.isWindowsForTesting = true;
+      final tab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 0,
+        blocOverride: _StubTextBookBloc(),
+      );
+      addTearDown(tab.dispose);
+
+      await pumpWithTab(tester, tab);
+      await sendAltGr(tester, LogicalKeyboardKey.arrowUp);
+
+      expect(tab.navPreviousSegmentNotifier.value, 1);
+    });
+
+    testWidgets('AltGr אינו מסונן כששדה RTL מחזיק פוקוס', (tester) async {
+      ShortcutHelper.isWindowsForTesting = true;
+      final focusNode = FocusNode();
+      final tab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 0,
+        blocOverride: _StubTextBookBloc(),
+      );
+      addTearDown(() {
+        focusNode.dispose();
+        tab.dispose();
+      });
+
+      await pumpWithTab(
+        tester,
+        tab,
+        child: RtlTextField(focusNode: focusNode, autofocus: true),
+      );
+      await tester.pump();
+      expect(focusNode.hasFocus, isTrue);
+
+      await sendAltGr(tester, LogicalKeyboardKey.arrowUp);
+
+      expect(tab.navPreviousSegmentNotifier.value, 1);
+    });
+
+    testWidgets('Ctrl+Alt שמאלי אינו מפעיל קיצור alt בלבד', (tester) async {
+      final tab = TextBookTab(
+        book: TextBook(title: 'ספר בדיקה'),
+        index: 0,
+        blocOverride: _StubTextBookBloc(),
+      );
+      addTearDown(tab.dispose);
+
+      await pumpWithTab(tester, tab);
+      await sendCtrlAlt(tester, LogicalKeyboardKey.arrowUp);
+
+      expect(tab.navPreviousSegmentNotifier.value, 0);
     });
 
     testWidgets(

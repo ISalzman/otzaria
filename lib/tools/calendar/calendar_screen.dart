@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
-import 'package:otzaria/shortcuts/key_map.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart'
     show kMainPanelMinWidth, kSideBySideMinWidth;
@@ -190,49 +190,23 @@ class CalendarWidgetState extends State<CalendarWidget> {
     final configuredShortcut = shortcuts[key];
     final configuredActivator = configuredShortcut == null
         ? null
-        : _activatorFromShortcut(configuredShortcut);
+        : ShortcutHelper.activatorFromShortcut(
+            configuredShortcut,
+            mapCtrlToMeta: false,
+          );
     if (configuredShortcut != null && configuredActivator == null) {
       debugPrint('Invalid shortcut for $key: $configuredShortcut');
     }
 
-    final fallbackActivator = _activatorFromShortcut(fallback);
+    final fallbackActivator = ShortcutHelper.activatorFromShortcut(
+      fallback,
+      mapCtrlToMeta: false,
+    );
     if (fallbackActivator == null) {
       debugPrint('Invalid fallback shortcut for $key: $fallback');
     }
 
     return configuredActivator ?? fallbackActivator;
-  }
-
-  static const _modifiers = {'ctrl', 'control', 'shift', 'alt', 'meta'};
-
-  ShortcutActivator? _activatorFromShortcut(String shortcut) {
-    final parts = shortcut.toLowerCase().split('+');
-    final hasCtrl = parts.contains('ctrl') || parts.contains('control');
-    final hasShift = parts.contains('shift');
-    final hasAlt = parts.contains('alt');
-    final hasMeta = parts.contains('meta');
-
-    final mainKeyName = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
-    if (mainKeyName == null) return null;
-
-    LogicalKeyboardKey? logicalKey;
-    if (mainKeyName.length == 1) {
-      // אות יחידה a–z
-      final code = mainKeyName.codeUnitAt(0);
-      if (code >= 97 && code <= 122) {
-        logicalKey = LogicalKeyboardKey(0x00000061 + (code - 97));
-      }
-    }
-    logicalKey ??= KeyMap.keyFor(mainKeyName);
-    if (logicalKey == null) return null;
-
-    return SingleActivator(
-      logicalKey,
-      control: hasCtrl,
-      shift: hasShift,
-      alt: hasAlt,
-      meta: hasMeta,
-    );
   }
 
   void _navigateMonth(BuildContext context, {required bool forward}) {

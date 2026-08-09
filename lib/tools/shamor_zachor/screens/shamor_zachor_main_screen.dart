@@ -14,8 +14,8 @@ import '../widgets/add_books_to_tracking_dialog.dart';
 import '../models/book_model.dart';
 import 'book_detail_screen.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
-import 'package:otzaria/shortcuts/key_map.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/controls/segmented_control.dart';
@@ -309,37 +309,6 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     return KeyEventResult.ignored;
   }
 
-  static const _modifiers = {'ctrl', 'control', 'shift', 'alt', 'meta'};
-
-  ShortcutActivator? _activatorFromShortcut(String shortcut) {
-    final parts = shortcut.toLowerCase().split('+');
-    final hasCtrl = parts.contains('ctrl') || parts.contains('control');
-    final hasShift = parts.contains('shift');
-    final hasAlt = parts.contains('alt');
-    final hasMeta = parts.contains('meta');
-
-    final mainKeyName = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
-    if (mainKeyName == null) return null;
-
-    LogicalKeyboardKey? logicalKey;
-    if (mainKeyName.length == 1) {
-      final code = mainKeyName.codeUnitAt(0);
-      if (code >= 97 && code <= 122) {
-        logicalKey = LogicalKeyboardKey(0x00000061 + (code - 97));
-      }
-    }
-    logicalKey ??= KeyMap.keyFor(mainKeyName);
-    if (logicalKey == null) return null;
-
-    return SingleActivator(
-      logicalKey,
-      control: hasCtrl,
-      shift: hasShift,
-      alt: hasAlt,
-      meta: hasMeta,
-    );
-  }
-
   void _scrollContent({required bool forward}) {
     if (!_contentScrollController.hasClients) return;
     final position = _contentScrollController.position;
@@ -423,12 +392,18 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
 
     return CallbackShortcuts(
       bindings: {
-        _activatorFromShortcut(cycleFilterShortcutSetting) ??
+        ShortcutHelper.activatorFromShortcut(
+              cycleFilterShortcutSetting,
+              mapCtrlToMeta: false,
+            ) ??
             const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
           if (_isTextFieldFocused()) return;
           _cycleFilter();
         },
-        _activatorFromShortcut(searchShortcutSetting) ??
+        ShortcutHelper.activatorFromShortcut(
+              searchShortcutSetting,
+              mapCtrlToMeta: false,
+            ) ??
             const SingleActivator(LogicalKeyboardKey.keyF, control: true): () {
           _focusSearchField();
         },
