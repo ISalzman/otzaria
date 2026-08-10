@@ -24,6 +24,7 @@ import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_download_handler.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
@@ -540,9 +541,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         allowUniversalAccessFromFileURLs: false,
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
-        // נדרש כדי ש-onDownloadStarting ייקרא (הקוד ה-native בודק את הדגל
-        // לפני העברת אירוע DownloadStarting ל-Dart).
-        useOnDownloadStart: true,
+        useOnDownloadStart: PluginDownloadHandler.isSupported,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: kDebugMode,
       ),
@@ -553,13 +552,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         ),
         buildPluginDropGuardScript(),
       ]),
-      onDownloadStarting: (controller, request) async {
-        // תוסף רקע מוסתר - חלונית ההורדות של WebView2 הייתה נפתחת בתוך
-        // WebView בלתי-נראה, ללא שום חיווי למשתמש. מסתירים אותה ומציגים
-        // הודעת הצלחה; ההורדה ממשיכה כרגיל אל תיקיית ההורדות.
-        UiSnack.showSuccess('הקובץ נשמר בהצלחה!');
-        return DownloadStartResponse(handled: true);
-      },
+      onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
       onWebViewCreated: (controller) {
         try {
           _controller = controller;

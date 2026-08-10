@@ -75,4 +75,5 @@ abstract class PluginMessages {
 
   // ===== WebView2 =====
   static const String downloadLinkOpenFailed = 'לא ניתן לפתוח את קישור ההורדה';
+  static const String fileDownloadStarted = 'הורדת הקובץ החלה';
 }
