@@ -24,6 +24,9 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show SearchResult;
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -880,9 +883,93 @@ class PluginBridgeAdapter {
               },
             )
             .toList();
+      case 'getOptions':
+        return PluginSearchApi.describeOptions();
+      case 'query':
+        return await _runPluginSearch(args);
       default:
         throw Exception("Unknown action in search: $action");
     }
+  }
+
+  /// מריץ את `search.query` — אותו מסלול מנוע שמסך החיפוש מריץ, כולל
+  /// הספירות שמגיעות באותו מעבר אינדקס, אבל התוצאות חוזרות לתוסף במקום
+  /// להיפתח בטאב.
+  Future<Map<String, dynamic>> _runPluginSearch(
+    Map<String, dynamic> args,
+  ) async {
+    final request = PluginSearchRequest.fromArgs(args)..validateAgainstQuery();
+    final library = await DataRepository.instance.library;
+    final facets = PluginSearchApi.resolveFacets(
+      args,
+      findBook: (identity) => _findPluginBook(library, identity),
+    );
+
+    final results = <SearchResult>[];
+    int? totalCount;
+    int? groupCount;
+    var truncated = false;
+    Map<String, int>? bookCounts;
+
+    final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
+      request.sanitizedQuery,
+      facets,
+      request.limit,
+      offset: request.offset,
+      order: request.order,
+      searchMode: request.searchMode,
+      distance: request.distance,
+      negativeQuery: request.sanitizedNegativeQuery,
+      negativeDistance: request.negativeDistance,
+      scope: request.proximityScope,
+      negativeScope: request.negativeProximityScope,
+      customSpacing: request.effectiveCustomSpacing,
+      negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
+      alternativeWords: request.effectiveAlternativeWords,
+      negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
+      searchOptions: request.effectiveSearchOptions,
+      negativeSearchOptions: request.effectiveNegativeSearchOptions,
+      grouping: request.grouping,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
+    );
+
+    await for (final update in stream) {
+      if (update.totalCount != null) {
+        totalCount = update.totalCount;
+        groupCount = update.groupCount;
+        truncated = update.truncated;
+        bookCounts = update.bookCounts;
+      }
+      results.addAll(update.results);
+    }
+
+    final booksByPath = results.isEmpty && bookCounts == null
+        ? const <String, Book>{}
+        : PluginSearchApi.booksByIndexedFilePath(library);
+
+    return {
+      'results': [
+        for (final result in results)
+          PluginSearchApi.resultToJson(result, booksByPath[result.filePath]),
+      ],
+      'total': totalCount ?? results.length,
+      'groupCount': groupCount,
+      'truncated': truncated,
+      'limit': request.limit,
+      'offset': request.offset,
+      'facets': facets,
+      if (request.includeBookCounts)
+        'bookCounts': [
+          for (final entry in (bookCounts ?? const <String, int>{}).entries)
+            if (booksByPath[entry.key] case final Book book)
+              {
+                ...PluginBookIdentity.toJson(book),
+                'title': book.title,
+                'count': entry.value,
+              },
+        ],
+    };
   }
 
   // ----------------------------------------------------------------

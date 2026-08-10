@@ -40,6 +40,7 @@
 | `history.list` | ✓ | ✓ | ✓ |
 | `history.remove` | קלט | קלט | קלט |
 | `search.fullText` | ✗ (ראה הערה) | ✓ | — |
+| `search.query` | ✓ | ✓ | ✓ |
 | `library.getBookContent` | ✗ | ✗ | ✓ |
 | `library.getBookToc` | ✗ | ✗ | ✓ |
 | `library.getBookAltToc` | ✗ | ✗ | ✓ |
@@ -100,6 +101,8 @@ if (response.success) {
 | `network.fetch` | 0.9.93 |
 | `network.download` | 0.9.93 |
 | `search.fullText` | 0.9.89 |
+| `search.query` | 0.9.97 |
+| `search.getOptions` | 0.9.97 |
 | `reader.openBook` | 0.9.89 |
 | `reader.openBookAtRef` | 0.9.89 |
 | `reader.getCurrentState` | 0.9.89 |
@@ -561,7 +564,126 @@ const { data } = await Otzaria.call('search.fullText', {
 - `text` — קטע הטקסט
 - `index` — אינדקס השורה/עמוד בספר
 
-> **הערה:** `search.fullText` אינו מחזיר `id` כי מנוע החיפוש (Tantivy) אינו שומר את מזהה הספר מה-DB. כדי לקבל את `id` — יש לקרוא ל-`library.getBookMetadata({ bookId, type })` עם התוצאה.
+> **הערה:** `search.fullText` אינו מחזיר `id` כי מנוע החיפוש (Tantivy) אינו שומר את מזהה הספר מה-DB. כדי לקבל את `id` — יש לקרוא ל-`library.getBookMetadata({ bookId, type })` עם התוצאה. `search.query` (להלן) כן מחזיר זהות מלאה.
+
+### `search.query`
+**הרשאה:** `search.fulltext.read`
+
+חיפוש מלא עם **כל** הפרמטרים של מסך החיפוש של אוצריא — מצב, היקף, מדיניות
+התאמה, אפשרויות מילה, מילים חלופיות, מרווחים, שלילה, מיון, איחוד ודפדוף.
+החיפוש רץ באותו מסלול מנוע שהאפליקציה מריצה, אך התוצאות חוזרות לתוסף ואינן
+נפתחות בטאב.
+
+```javascript
+const { data } = await Otzaria.call('search.query', {
+  query: 'ואהבת לרעך',
+  mode: 'advanced',       // 'exact' (ברירת מחדל) | 'advanced' | 'fuzzy'
+  distance: 2,            // מרווח מילים מותר במצב מתקדם/מקורב
+  limit: 100,             // ברירת מחדל 50, מקסימום 500
+  offset: 0,              // דפדוף
+  order: 'relevance',     // 'relevance' (ברירת מחדל) | 'catalogue' | 'generation'
+  categories: ['/תנך/תורה'],
+  options: { 'קידומות דקדוקיות': true },
+  includeBookCounts: true
+});
+```
+
+**פרמטרים**
+
+| פרמטר | ברירת מחדל | משמעות |
+|-------|-----------|--------|
+| `query` | — (חובה) | מחרוזת החיפוש |
+| `negativeQuery` | `''` | מילים ש**לא** יופיעו בתוצאה |
+| `mode` | `'exact'` | `'exact'` מדויק, `'advanced'` מתקדם (אפשרויות/חלופות/מרווחים), `'fuzzy'` מקורב (מרחק עריכה) |
+| `limit` / `offset` | `50` / `0` | דפדוף. `limit` נחתך ל-500 |
+| `order` | `'relevance'` | `'relevance'` \| `'catalogue'` (סדר הספרייה) \| `'generation'` (סדר הדורות) |
+| `distance` | `0` | מספר המילים המותר בין מילות החיפוש |
+| `proximityScope` | `'wordDistance'` | `'wordDistance'` מרווח מילים \| `'sameParagraph'` באותה פסקה \| `'sameSection'` תחת אותה כותרת |
+| `wordMatchMode` | `'all'` | `'all'` \| `'anyWord'` \| `'mostWords'` \| `'atLeast'` |
+| `wordMatchCount` | `2` | מספר המילים הנדרש כאשר `wordMatchMode: 'atLeast'` |
+| `grouping` | `'none'` | `'none'` \| `'sameSection'` (איחוד לפי סעיף) \| `'identicalText'` (איחוד טקסט זהה) |
+| `options` | `{}` | אפשרויות מילה שחלות על **כל** מילות השאילתה |
+| `wordOptions` | `{}` | אפשרויות פר-מילה במפתח `"{מילה}_{אינדקס}"`; גובר על `options` |
+| `alternativeWords` | `{}` | מילים חלופיות לפי אינדקס מילה: `{ "0": ["אהבת", "יאהב"] }` |
+| `customSpacing` | `{}` | מרווח ידני בין זוג מילים **סמוכות**: `{ "0-1": "3" }` |
+| `negativeDistance`, `negativeProximityScope`, `negativeOptions`, `negativeWordOptions`, `negativeAlternativeWords`, `negativeCustomSpacing` | כמו החיוביים | אותם פרמטרים עבור `negativeQuery` |
+| `includeBookCounts` | `false` | להחזיר גם ספירת תוצאות לפי ספר |
+
+**היקף החיפוש** (ניתן לשלב; ריק = כל הספרייה):
+
+| פרמטר | דוגמה |
+|-------|-------|
+| `categories` | `['/תנך/תורה', '/הלכה']` — נתיב קטגוריה |
+| `books` | `[{ id: 183, type: 'text' }]` — זהות ספר כמו בשאר ה-APIs |
+| `authors` | `['רש"י']` |
+| `eras` | `['ראשונים']` — הערכים החוקיים מ-`search.getOptions` |
+| `baseBooksOnly` | `true` — ספרי יסוד בלבד |
+| `facets` | `['/תנך']` — נתיבי facet גולמיים (שימוש מתקדם) |
+
+היקפים מאותו סוג מתחברים ב-OR; סוגים שונים מתחברים ב-AND (למשל `eras` + `categories`
+= ספרי אותה תקופה שבאותה קטגוריה).
+
+**פלט**
+
+```javascript
+{
+  results: [{
+    id: 183, type: 'text', bookId: 'ויקרא', source: 'library',
+    book: 'ויקרא',
+    reference: 'ויקרא, פרק יט',
+    text: 'ואהבת לרעך כמוך...',
+    index: 1234,          // אינדקס השורה/עמוד לפתיחה עם reader.openBook
+    mergedCount: 1,       // מספר התוצאות שאוחדו לכרטיס (במצב grouping)
+    merged: [{ book, reference, index }]   // רק כשיש איחוד
+  }],
+  total: 812,             // סך ההתאמות (לא רק העמוד הנוכחי)
+  groupCount: null,       // מספר הקבוצות כש-grouping פעיל, אחרת null
+  truncated: false,       // true = שאילתה רחבה מדי, התוצאות והספירה חלקיות
+  limit: 100, offset: 0,
+  facets: ['/תנך/תורה'],  // ההיקף כפי שנפתר בפועל
+  bookCounts: [{ id, type, bookId, source, title, count }]  // רק עם includeBookCounts
+}
+```
+
+**מפתחות פר-מילה** — `wordOptions`, `alternativeWords` ו-`customSpacing` נבדקים
+מול פיצול המילים של השאילתה: מפתח `"{מילה}_{אינדקס}"` שאינו תואם, אינדקס מחוץ
+לטווח או זוג מרווח שאינו סמוך מוחזרים כ-`error.invalid_params` (ולא נבלעים
+בשקט כמו במנוע).
+
+שגיאות אפשריות: `error.invalid_params` (פרמטר או ערך לא מוכר, פרמטר שאינו
+נתמך במצב שנבחר, או מפתח פר-מילה שאינו תואם לשאילתה), `error.not_found`
+(ספר שנשלח ב-`books` לא נמצא), `error.timeout` (שאילתה רחבה מדי — צמצמו את
+ההיקף או את `limit`).
+
+### `search.getOptions`
+**הרשאה:** `search.fulltext.read`
+
+מחזיר את כל הערכים החוקיים לפרמטרים של `search.query` — כדי לבנות מסך חיפוש
+בתוסף בלי לקבע רשימות שעלולות להשתנות.
+
+```javascript
+const { data } = await Otzaria.call('search.getOptions', {});
+// {
+//   modes: ['exact', 'advanced', 'fuzzy'],
+//   orders: ['relevance', 'catalogue', 'generation'],
+//   proximityScopes: ['wordDistance', 'sameParagraph', 'sameSection'],
+//   grouping: ['none', 'sameSection', 'identicalText'],
+//   wordMatchModes: ['all', 'anyWord', 'mostWords', 'atLeast'],
+//   wordOptions: {
+//     exact: ['קידומות דקדוקיות', ...],      // האפשרויות שהמצב המדויק תומך בהן
+//     advanced: ['קידומות', 'ראשי תיבות', ...],
+//     vocalized: ['ניקוד', 'טעמים']
+//   },
+//   eras: ['חז"ל', 'ראשונים', 'אחרונים', 'מחברי זמננו'],
+//   maxLimit: 500, defaultLimit: 50
+// }
+```
+
+> פרמטר שהמצב הנבחר אינו מריץ **נדחה** ב-`error.invalid_params` ולא נבלע
+> בשקט: `negativeQuery`, `alternativeWords`, `customSpacing`, `proximityScope`,
+> `wordMatchMode` וכל פרמטרי ה-`negative*` דורשים `mode: 'advanced'`; המצב
+> `'fuzzy'` אינו מקבל אפשרויות מילה כלל; המצב `'exact'` מקבל רק את
+> `wordOptions.exact` שלמעלה.
 
 ---
 
