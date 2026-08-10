@@ -72,8 +72,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   /// הרשאות שהתוסף מבקש לראשונה (אין עליהן החלטה שמורה).
   late List<String> _newPermissions;
 
-  /// הרשאות מוכרות שמתחילות כבויות — החלטת עבר של המשתמש, ברירת מחדל
-  /// כבויה, או כיבוי הרשת במצב 'מנותק'.
+  /// הרשאות מוכרות שמתחילות כבויות או שאינן זמינות זמנית במצב מנותק.
   late List<String> _revokedPermissions;
 
   @override
@@ -93,7 +92,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         .where(
           (p) =>
               widget.previousGrantedPermissions.containsKey(p) &&
-              _permissionToggles[p] == false,
+              (_permissionToggles[p] == false || _isTemporarilyUnavailable(p)),
         )
         .toList();
     _allowOrderBeforeBuiltInsGranted =
@@ -101,18 +100,20 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         widget.manifest.allowOrderBeforeBuiltIns;
   }
 
-  /// מצב ה-toggle ההתחלתי: ניתוק כופה כיבוי רשת, אחריו החלטת עבר, ולבסוף
-  /// ברירת המחדל של ההרשאה.
+  /// החלטת עבר נשמרת גם כשהגישה עצמה אינה זמינה זמנית במצב מנותק.
   bool _initialGrantFor(String permission) {
-    if (widget.isOfflineMode && permission == pluginNetworkAccessPermission) {
-      return false;
-    }
     return widget.previousGrantedPermissions[permission] ??
         pluginPermissionDefaultGrant(
           permission,
           isOfflineMode: widget.isOfflineMode,
         );
   }
+
+  bool _isTemporarilyUnavailable(String permission) =>
+      widget.isUpdate &&
+      widget.isOfflineMode &&
+      permission == pluginNetworkAccessPermission &&
+      widget.previousGrantedPermissions[permission] == true;
 
   /// בעדכון מוצגות רק הרשאות חדשות או כבויות; בהתקנה ראשונה — הכול.
   List<String> get _visiblePermissions =>
@@ -179,7 +180,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
 
   Widget _permissionTile(String permission, ColorScheme colorScheme) {
     final info = getPermissionInfo(permission, manifest: widget.manifest);
-    final isGranted = _permissionToggles[permission] ?? true;
+    final isTemporarilyUnavailable = _isTemporarilyUnavailable(permission);
+    final isGranted =
+        !isTemporarilyUnavailable && (_permissionToggles[permission] ?? true);
     final isSensitive = permission == pluginRunOnStartupPermission;
     final isCritical = permission == pluginBackgroundKeepAlivePermission;
     final iconData = isSensitive || isCritical
@@ -197,8 +200,11 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           ? colorScheme.tertiary
           : (isGranted ? colorScheme.primary : colorScheme.error),
       title: info.label,
-      subtitle: info.description,
+      subtitle: isTemporarilyUnavailable
+          ? '${info.description}\nחסומה זמנית במצב מנותק; ההרשאה השמורה תישמר.'
+          : info.description,
       value: isGranted,
+      enabled: !isTemporarilyUnavailable,
       onChanged: (val) {
         setState(() {
           _permissionToggles[permission] = val;

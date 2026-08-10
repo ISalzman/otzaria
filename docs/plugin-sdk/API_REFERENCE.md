@@ -595,12 +595,12 @@ const { data } = await Otzaria.call('search.query', {
 | `query` | — (חובה) | מחרוזת החיפוש |
 | `negativeQuery` | `''` | מילים ש**לא** יופיעו בתוצאה |
 | `mode` | `'exact'` | `'exact'` מדויק, `'advanced'` מתקדם (אפשרויות/חלופות/מרווחים), `'fuzzy'` מקורב (מרחק עריכה) |
-| `limit` / `offset` | `50` / `0` | דפדוף. `limit` נחתך ל-500 |
+| `limit` / `offset` | `50` / `0` | דפדוף. `limit` נחתך ל-500, ו-`offset + limit` הממשיים אינם יכולים לעלות על 10,000 |
 | `order` | `'relevance'` | `'relevance'` \| `'catalogue'` (סדר הספרייה) \| `'generation'` (סדר הדורות) |
-| `distance` | `0` | מספר המילים המותר בין מילות החיפוש |
+| `distance` | `0` | מספר המילים המותר בין מילות החיפוש; במצב `'fuzzy'` הטווח הוא 0–2 |
 | `proximityScope` | `'wordDistance'` | `'wordDistance'` מרווח מילים \| `'sameParagraph'` באותה פסקה \| `'sameSection'` תחת אותה כותרת |
 | `wordMatchMode` | `'all'` | `'all'` \| `'anyWord'` \| `'mostWords'` \| `'atLeast'` |
-| `wordMatchCount` | `2` | מספר המילים הנדרש כאשר `wordMatchMode: 'atLeast'` |
+| `wordMatchCount` | `2` | מספר המילים הנדרש; ניתן לשלוח רק עם `mode: 'advanced'` ו-`wordMatchMode: 'atLeast'` |
 | `grouping` | `'none'` | `'none'` \| `'sameSection'` (איחוד לפי סעיף) \| `'identicalText'` (איחוד טקסט זהה) |
 | `options` | `{}` | אפשרויות מילה שחלות על **כל** מילות השאילתה |
 | `wordOptions` | `{}` | אפשרויות פר-מילה במפתח `"{מילה}_{אינדקס}"`; גובר על `options` |
@@ -634,7 +634,8 @@ const { data } = await Otzaria.call('search.query', {
     text: 'ואהבת לרעך כמוך...',
     index: 1234,          // אינדקס השורה/עמוד לפתיחה עם reader.openBook
     mergedCount: 1,       // מספר התוצאות שאוחדו לכרטיס (במצב grouping)
-    merged: [{ book, reference, index }]   // רק כשיש איחוד
+    merged: [{ id, type, bookId, source, book, reference, index }]
+                            // רק כשיש איחוד; לכל אח זהות ספר מלאה
   }],
   total: 812,             // סך ההתאמות (לא רק העמוד הנוכחי)
   groupCount: null,       // מספר הקבוצות כש-grouping פעיל, אחרת null
@@ -649,6 +650,9 @@ const { data } = await Otzaria.call('search.query', {
 מול פיצול המילים של השאילתה: מפתח `"{מילה}_{אינדקס}"` שאינו תואם, אינדקס מחוץ
 לטווח או זוג מרווח שאינו סמוך מוחזרים כ-`error.invalid_params` (ולא נבלעים
 בשקט כמו במנוע).
+
+רק הפרמטרים המתועדים מתקבלים; מפתח עליון לא מוכר או מבנה ערך שגוי (למשל
+רשימה שאינה מכילה מחרוזות) נדחים במפורש ולא נבלעים בשקט.
 
 שגיאות אפשריות: `error.invalid_params` (פרמטר או ערך לא מוכר, פרמטר שאינו
 נתמך במצב שנבחר, או מפתח פר-מילה שאינו תואם לשאילתה), `error.not_found`
@@ -675,7 +679,8 @@ const { data } = await Otzaria.call('search.getOptions', {});
 //     vocalized: ['ניקוד', 'טעמים']
 //   },
 //   eras: ['חז"ל', 'ראשונים', 'אחרונים', 'מחברי זמננו'],
-//   maxLimit: 500, defaultLimit: 50
+//   maxLimit: 500, maxResultWindow: 10000,
+//   fuzzyMaxDistance: 2, defaultLimit: 50
 // }
 ```
 

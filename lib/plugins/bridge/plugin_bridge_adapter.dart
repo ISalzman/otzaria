@@ -410,9 +410,18 @@ class PluginBridgeAdapter {
   final Map<PluginBookIdentityKey, String> _bookContentCache = {};
   static const int _bookContentCacheMaxEntries = 4;
 
+  Library? _bookIndexLibrary;
+  Map<int, List<Book>> _booksById = const {};
+  Map<String, List<Book>> _booksByTitle = const {};
+  Map<String, Book> _booksByIndexedPath = const {};
+
   void dispose() {
     _networkFetchService?.dispose();
     _fileDownloadService?.dispose();
+    _bookIndexLibrary = null;
+    _booksById = const {};
+    _booksByTitle = const {};
+    _booksByIndexedPath = const {};
   }
 
   /// טוען את הטקסט המלא של ספר עבור `getBookContent`, עם מטמון LRU קצר
@@ -817,26 +826,47 @@ class PluginBridgeAdapter {
 
   /// מחזיר את סוג הספר כמחרוזת עבור ה-Plugin SDK.
   Book? _findPluginBook(Library library, Map<String, dynamic> args) {
+    _ensureBookIndex(library);
     final id = PluginBookIdentity.parseId(args['id']);
     final bookId = (args['bookId'] ?? args['title']) as String?;
     final type = args['type'] as String?;
     final source = args['source'] as String?;
     if (id == null && bookId == null) return null;
-    final matches = library.getAllBooks().where(
-      (book) => PluginBookIdentity.matches(
-        book,
-        id: id,
-        bookId: bookId,
-        type: type,
-        source: source,
-      ),
-    );
-    final found = matches.toList();
+    final candidates = id != null
+        ? (_booksById[id] ?? const <Book>[])
+        : (_booksByTitle[bookId] ?? const <Book>[]);
+    final found = candidates
+        .where(
+          (book) => PluginBookIdentity.matches(
+            book,
+            id: id,
+            bookId: bookId,
+            type: type,
+            source: source,
+          ),
+        )
+        .toList();
     if (found.isEmpty) return null;
     if ((id != null || type != null || source != null) && found.length != 1) {
       return null;
     }
     return found.first;
+  }
+
+  void _ensureBookIndex(Library library) {
+    if (identical(_bookIndexLibrary, library)) return;
+    final byId = <int, List<Book>>{};
+    final byTitle = <String, List<Book>>{};
+    for (final book in library.getAllBooks()) {
+      if (book.id case final int id) {
+        (byId[id] ??= []).add(book);
+      }
+      (byTitle[book.title] ??= []).add(book);
+    }
+    _bookIndexLibrary = library;
+    _booksById = byId;
+    _booksByTitle = byTitle;
+    _booksByIndexedPath = PluginSearchApi.booksByIndexedFilePath(library);
   }
 
   // ----------------------------------------------------------------
@@ -892,9 +922,8 @@ class PluginBridgeAdapter {
     }
   }
 
-  /// מריץ את `search.query` — אותו מסלול מנוע שמסך החיפוש מריץ, כולל
-  /// הספירות שמגיעות באותו מעבר אינדקס, אבל התוצאות חוזרות לתוסף במקום
-  /// להיפתח בטאב.
+  /// מריץ את `search.query` באותו מסלול מנוע של מסך החיפוש. ספירות לפי
+  /// ספר נאספות רק כשהתוסף מבקש אותן.
   Future<Map<String, dynamic>> _runPluginSearch(
     Map<String, dynamic> args,
   ) async {
@@ -911,47 +940,81 @@ class PluginBridgeAdapter {
     var truncated = false;
     Map<String, int>? bookCounts;
 
-    final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
-      request.sanitizedQuery,
-      facets,
-      request.limit,
-      offset: request.offset,
-      order: request.order,
-      searchMode: request.searchMode,
-      distance: request.distance,
-      negativeQuery: request.sanitizedNegativeQuery,
-      negativeDistance: request.negativeDistance,
-      scope: request.proximityScope,
-      negativeScope: request.negativeProximityScope,
-      customSpacing: request.effectiveCustomSpacing,
-      negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
-      alternativeWords: request.effectiveAlternativeWords,
-      negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
-      searchOptions: request.effectiveSearchOptions,
-      negativeSearchOptions: request.effectiveNegativeSearchOptions,
-      grouping: request.grouping,
-      wordMatchMode: request.wordMatchMode,
-      wordMatchCount: request.wordMatchCount,
-    );
+    if (request.includeBookCounts) {
+      final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
+        request.sanitizedQuery,
+        facets,
+        request.limit,
+        offset: request.offset,
+        order: request.order,
+        searchMode: request.searchMode,
+        distance: request.distance,
+        negativeQuery: request.sanitizedNegativeQuery,
+        negativeDistance: request.negativeDistance,
+        scope: request.proximityScope,
+        negativeScope: request.negativeProximityScope,
+        customSpacing: request.effectiveCustomSpacing,
+        negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
+        alternativeWords: request.effectiveAlternativeWords,
+        negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
+        searchOptions: request.effectiveSearchOptions,
+        negativeSearchOptions: request.effectiveNegativeSearchOptions,
+        grouping: request.grouping,
+        wordMatchMode: request.wordMatchMode,
+        wordMatchCount: request.wordMatchCount,
+      );
 
-    await for (final update in stream) {
-      if (update.totalCount != null) {
-        totalCount = update.totalCount;
-        groupCount = update.groupCount;
-        truncated = update.truncated;
-        bookCounts = update.bookCounts;
+      await for (final update in stream) {
+        if (update.totalCount != null) {
+          totalCount = update.totalCount;
+          groupCount = update.groupCount;
+          truncated = update.truncated;
+          bookCounts = update.bookCounts;
+        }
+        results.addAll(update.results);
       }
-      results.addAll(update.results);
+    } else {
+      final page = await _dependencies.searchRepository.searchTextsAndCount(
+        request.sanitizedQuery,
+        facets,
+        request.limit,
+        offset: request.offset,
+        order: request.order,
+        searchMode: request.searchMode,
+        distance: request.distance,
+        negativeQuery: request.sanitizedNegativeQuery,
+        negativeDistance: request.negativeDistance,
+        scope: request.proximityScope,
+        negativeScope: request.negativeProximityScope,
+        customSpacing: request.effectiveCustomSpacing,
+        negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
+        alternativeWords: request.effectiveAlternativeWords,
+        negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
+        searchOptions: request.effectiveSearchOptions,
+        negativeSearchOptions: request.effectiveNegativeSearchOptions,
+        grouping: request.grouping,
+        wordMatchMode: request.wordMatchMode,
+        wordMatchCount: request.wordMatchCount,
+      );
+      results.addAll(page.results);
+      totalCount = page.totalCount;
+      groupCount = page.groupCount;
+      truncated = page.truncated;
     }
 
-    final booksByPath = results.isEmpty && bookCounts == null
-        ? const <String, Book>{}
-        : PluginSearchApi.booksByIndexedFilePath(library);
+    if (results.isNotEmpty || bookCounts != null) {
+      _ensureBookIndex(library);
+    }
+    final booksByPath = _booksByIndexedPath;
 
     return {
       'results': [
         for (final result in results)
-          PluginSearchApi.resultToJson(result, booksByPath[result.filePath]),
+          PluginSearchApi.resultToJson(
+            result,
+            booksByPath[result.filePath],
+            booksByPath: booksByPath,
+          ),
       ],
       'total': totalCount ?? results.length,
       'groupCount': groupCount,

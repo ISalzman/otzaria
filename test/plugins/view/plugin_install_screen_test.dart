@@ -796,30 +796,43 @@ void main() {
     );
   });
 
-  testWidgets('עדכון במצב מנותק — הרשאת הרשת מוצגת כבויה גם אם הוענקה בעבר', (
-    tester,
-  ) async {
-    await _openDialog(
-      tester,
-      bloc,
-      _manifest(permissions: [pluginNetworkAccessPermission]),
-      previousVersion: '1.0.0',
-      previousGrantedPermissions: const {
-        pluginNetworkAccessPermission: true,
-      },
-      isOfflineMode: true,
-    );
+  testWidgets(
+    'עדכון מנותק מציג רשת כחסומה זמנית ושומר את ההרשאה הקודמת',
+    (tester) async {
+      await _openDialog(
+        tester,
+        bloc,
+        _manifest(permissions: [pluginNetworkAccessPermission]),
+        previousVersion: '1.0.0',
+        previousGrantedPermissions: const {
+          pluginNetworkAccessPermission: true,
+        },
+        isOfflineMode: true,
+      );
 
-    expect(find.text('הרשאות כבויות'), findsOneWidget);
-    final rowFinder = find.ancestor(
-      of: find.text('גישה לאינטרנט'),
-      matching: find.byType(ListTile),
-    );
-    final sw = tester.widget<CustomSwitch>(
-      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
-    );
-    expect(sw.value, isFalse);
-  });
+      expect(find.text('הרשאות כבויות'), findsOneWidget);
+      final rowFinder = find.ancestor(
+        of: find.text('גישה לאינטרנט'),
+        matching: find.byType(ListTile),
+      );
+      final sw = tester.widget<CustomSwitch>(
+        find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+      );
+      expect(sw.value, isFalse);
+      expect(sw.onChanged, isNull);
+      expect(find.textContaining('ההרשאה השמורה תישמר'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('עדכן'));
+      await tester.tap(find.text('עדכן'));
+      await tester.pumpAndSettle();
+
+      final permissions = bloc.capturedEvents
+          .whereType<ConfirmPluginInstall>()
+          .first
+          .grantedPermissions;
+      expect(permissions[pluginNetworkAccessPermission], isTrue);
+    },
+  );
 
   // ── payload של ConfirmPluginInstall ──────────────────────────────────────
   //

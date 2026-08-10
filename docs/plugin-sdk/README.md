@@ -306,6 +306,9 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `search.query` | `search.fulltext.read` | `{ query, mode?, distance?, proximityScope?, order?, grouping?, wordMatchMode?, options?, wordOptions?, alternativeWords?, customSpacing?, negativeQuery?, categories?, books?, authors?, eras?, baseBooksOnly?, limit?, offset?, includeBookCounts? }` | `{ results, total, groupCount, truncated, facets, bookCounts? }` |
 | `search.getOptions` | `search.fulltext.read` | `{}` | הערכים החוקיים לכל פרמטר של `search.query` |
 
+ב-`search.query`, גודל עמוד מוגבל ל-500 וחלון הדפדוף (`offset + limit`
+לאחר החיתוך) מוגבל ל-10,000 כדי למנוע הקצאת זיכרון לא חסומה במנוע.
+
 ### reader.*
 
 | Method | הרשאה | פרמטרים | החזרה |

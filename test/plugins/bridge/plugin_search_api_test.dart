@@ -64,6 +64,34 @@ Future<void> main() async {
       );
     });
 
+    test('חלון דפדוף מוגבל כדי למנוע הקצאה לא חסומה במנוע', () {
+      final boundary = PluginSearchRequest.fromArgs({
+        'query': 'א',
+        'limit': PluginSearchApi.maxLimit,
+        'offset': PluginSearchApi.maxResultWindow - PluginSearchApi.maxLimit,
+      });
+      expect(
+        boundary.offset + boundary.limit,
+        PluginSearchApi.maxResultWindow,
+      );
+
+      expect(
+        () => PluginSearchRequest.fromArgs({
+          'query': 'א',
+          'limit': PluginSearchApi.maxLimit,
+          'offset':
+              PluginSearchApi.maxResultWindow - PluginSearchApi.maxLimit + 1,
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (error) => error.toString(),
+            'message',
+            contains('offset + limit'),
+          ),
+        ),
+      );
+    });
+
     test('negativeDistance/negativeProximityScope יורשים מהחיוביים', () {
       final request = PluginSearchRequest.fromArgs({
         'query': 'א',
@@ -143,6 +171,56 @@ Future<void> main() async {
         }),
         throwsA(isA<Exception>()),
       );
+    });
+
+    test('חיפוש מקורב דוחה מרחק שהמנוע ממילא היה חותך', () {
+      expect(
+        () => PluginSearchRequest.fromArgs({
+          'query': 'א',
+          'mode': 'fuzzy',
+          'distance': PluginSearchApi.fuzzyMaxDistance + 1,
+        }),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('wordMatchCount חוקי רק עם atLeast בחיפוש מתקדם', () {
+      expect(
+        () => PluginSearchRequest.fromArgs({
+          'query': 'א ב',
+          'wordMatchCount': 1,
+        }),
+        throwsA(isA<Exception>()),
+      );
+
+      final request = PluginSearchRequest.fromArgs({
+        'query': 'א ב',
+        'mode': 'advanced',
+        'wordMatchMode': 'atLeast',
+        'wordMatchCount': 1,
+      });
+      expect(request.wordMatchCount, 1);
+    });
+
+    test('פרמטר לא מוכר וטיפוסי קלט שגויים נדחים', () {
+      for (final args in <Map<String, dynamic>>[
+        {'query': 'א', 'limti': 5},
+        {'query': 7},
+        {'query': 'א', 'includeBookCounts': 'true'},
+        {
+          'query': 'א',
+          'mode': 'advanced',
+          'alternativeWords': {
+            '0': [7],
+          },
+        },
+      ]) {
+        expect(
+          () => PluginSearchRequest.fromArgs(args),
+          throwsA(isA<Exception>()),
+          reason: '$args',
+        );
+      }
     });
 
     test('פרמטרים בלעדיים-למתקדם נדחים במצב שאינו מתקדם', () {
@@ -235,6 +313,22 @@ Future<void> main() async {
 
       expect(request.effectiveSearchOptions, {
         'ואהבת_0': {'סיומות': true},
+      });
+    });
+
+    test('אפשרות פר-מילה אינה מוחקת אפשרויות גלובליות ממילים אחרות', () {
+      final request = PluginSearchRequest.fromArgs({
+        'query': 'ואהבת לרעך',
+        'mode': 'advanced',
+        'options': {'קידומות': true},
+        'wordOptions': {
+          'ואהבת_0': {'סיומות': true},
+        },
+      });
+
+      expect(request.effectiveSearchOptions, {
+        'ואהבת_0': {'סיומות': true},
+        'לרעך_1': {'קידומות': true},
       });
     });
 
@@ -423,6 +517,46 @@ Future<void> main() async {
       expect(json['type'], 'text');
       expect(json['bookId'], 'בראשית');
     });
+
+    test('תוצאה מאוחדת נושאת זהות מלאה של הספר האח', () {
+      final result = engine.SearchResult(
+        title: 'בראשית',
+        reference: 'בראשית, פרק א',
+        text: 'בראשית ברא',
+        id: BigInt.one,
+        segment: BigInt.from(12),
+        isPdf: false,
+        filePath: 'id:7',
+        mergedCount: 2,
+        merged: [
+          engine.MergedSibling(
+            title: 'מהדורה אחרת',
+            reference: 'פרק א',
+            id: BigInt.two,
+            segment: BigInt.from(4),
+            isPdf: true,
+            filePath: 'id:8',
+          ),
+        ],
+      );
+
+      final json = PluginSearchApi.resultToJson(
+        result,
+        TextBook(id: 7, title: 'בראשית'),
+        booksByPath: {
+          'id:8': PdfBook(
+            id: 8,
+            title: 'מהדורה אחרת',
+            path: '/tmp/other.pdf',
+          ),
+        },
+      );
+      final sibling = (json['merged'] as List).single as Map;
+      expect(sibling['id'], 8);
+      expect(sibling['type'], 'pdf');
+      expect(sibling['bookId'], 'מהדורה אחרת');
+      expect(sibling['source'], 'library');
+    });
   });
 
   test('describeOptions מכסה את כל הערכים החוקיים', () {
@@ -432,5 +566,7 @@ Future<void> main() async {
     expect(options['orders'], contains('generation'));
     expect(options['eras'], contains('ראשונים'));
     expect(options['maxLimit'], PluginSearchApi.maxLimit);
+    expect(options['maxResultWindow'], PluginSearchApi.maxResultWindow);
+    expect(options['fuzzyMaxDistance'], PluginSearchApi.fuzzyMaxDistance);
   });
 }

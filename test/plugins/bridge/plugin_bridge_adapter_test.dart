@@ -43,6 +43,7 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
         MergedSibling,
         ResultGrouping,
         ResultsOrder,
+        SearchPageResult,
         SearchResult,
         SearchScope,
         SearchStreamUpdate,
@@ -89,6 +90,84 @@ class _MockSearchRepository extends Mock implements SearchRepository {}
 class _StubSearchRepository extends SearchRepository {
   Map<String, dynamic>? captured;
   List<SearchStreamUpdate> updates = const [];
+  SearchPageResult pageResult = const SearchPageResult(
+    totalCount: 0,
+    results: [],
+    truncated: false,
+  );
+  int pageCalls = 0;
+  int streamWithCountsCalls = 0;
+
+  void _capture(
+    String query,
+    List<String> facets,
+    int limit, {
+    required int offset,
+    required ResultsOrder order,
+    required SearchMode searchMode,
+    required int distance,
+    required SearchScope scope,
+    required ResultGrouping? grouping,
+    required WordMatchMode wordMatchMode,
+    required Map<String, Map<String, bool>>? searchOptions,
+  }) {
+    captured = {
+      'query': query,
+      'facets': facets,
+      'limit': limit,
+      'offset': offset,
+      'order': order,
+      'searchMode': searchMode,
+      'distance': distance,
+      'scope': scope,
+      'grouping': grouping,
+      'wordMatchMode': wordMatchMode,
+      'searchOptions': searchOptions,
+    };
+  }
+
+  @override
+  Future<SearchPageResult> searchTextsAndCount(
+    String query,
+    List<String> facets,
+    int limit, {
+    int offset = 0,
+    ResultsOrder order = ResultsOrder.relevance,
+    bool fuzzy = false,
+    int distance = 0,
+    String negativeQuery = '',
+    int? negativeDistance,
+    SearchScope scope = SearchScope.wordDistance,
+    SearchScope? negativeScope,
+    SearchMode searchMode = SearchMode.exact,
+    Map<String, String>? customSpacing,
+    Map<String, String>? negativeCustomSpacing,
+    Map<int, List<String>>? alternativeWords,
+    Map<int, List<String>>? negativeAlternativeWords,
+    Map<String, Map<String, bool>>? searchOptions,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
+    bool matchNikud = false,
+    bool matchTaamim = false,
+    ResultGrouping? grouping,
+    WordMatchMode wordMatchMode = WordMatchMode.all,
+    int? wordMatchCount,
+  }) async {
+    pageCalls++;
+    _capture(
+      query,
+      facets,
+      limit,
+      offset: offset,
+      order: order,
+      searchMode: searchMode,
+      distance: distance,
+      scope: scope,
+      grouping: grouping,
+      wordMatchMode: wordMatchMode,
+      searchOptions: searchOptions,
+    );
+    return pageResult;
+  }
 
   @override
   Stream<SearchStreamUpdate> searchTextsStreamWithCounts(
@@ -117,19 +196,20 @@ class _StubSearchRepository extends SearchRepository {
     WordMatchMode wordMatchMode = WordMatchMode.all,
     int? wordMatchCount,
   }) {
-    captured = {
-      'query': query,
-      'facets': facets,
-      'limit': limit,
-      'offset': offset,
-      'order': order,
-      'searchMode': searchMode,
-      'distance': distance,
-      'scope': scope,
-      'grouping': grouping,
-      'wordMatchMode': wordMatchMode,
-      'searchOptions': searchOptions,
-    };
+    streamWithCountsCalls++;
+    _capture(
+      query,
+      facets,
+      limit,
+      offset: offset,
+      order: order,
+      searchMode: searchMode,
+      distance: distance,
+      scope: scope,
+      grouping: grouping,
+      wordMatchMode: wordMatchMode,
+      searchOptions: searchOptions,
+    );
     return Stream.fromIterable(updates);
   }
 }
@@ -2207,6 +2287,8 @@ Future<void> main() async {
         expect(stub.captured!['scope'], SearchScope.sameParagraph);
         expect(stub.captured!['grouping'], ResultGrouping.sameSection);
         expect(stub.captured!['wordMatchMode'], WordMatchMode.mostWords);
+        expect(stub.streamWithCountsCalls, 1);
+        expect(stub.pageCalls, 0);
 
         expect(result['total'], 812);
         expect(result['truncated'], isFalse);
@@ -2242,6 +2324,8 @@ Future<void> main() async {
                 as Map<String, dynamic>;
 
         expect(stub.captured!['facets'], ['/']);
+        expect(stub.pageCalls, 1);
+        expect(stub.streamWithCountsCalls, 0);
         expect(result['facets'], ['/']);
         expect(result['total'], 0);
       },

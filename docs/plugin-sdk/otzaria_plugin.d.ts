@@ -184,12 +184,16 @@ export interface SearchQueryParams {
   negativeQuery?: string;
   mode?: SearchMode;
   order?: SearchOrder;
+  /** נחתך ל-500; יחד עם offset אסור לעבור את חלון 10,000 התוצאות. */
   limit?: number;
+  /** יחד עם limit הממשי אסור לעבור את חלון 10,000 התוצאות. */
   offset?: number;
+  /** במצב fuzzy הטווח הנתמך הוא 0–2. */
   distance?: number;
   proximityScope?: SearchProximityScope;
   grouping?: SearchGrouping;
   wordMatchMode?: SearchWordMatchMode;
+  /** חוקי רק ב-advanced יחד עם wordMatchMode: 'atLeast'. */
   wordMatchCount?: number;
   /** אפשרויות מילה שחלות על כל מילות השאילתה. */
   options?: Record<string, boolean>;
@@ -218,7 +222,9 @@ export interface SearchQueryHit extends BookIdentity {
   text: string;
   index: number;
   mergedCount: number;
-  merged?: Array<{ book: string; reference: string; index: number }>;
+  merged?: Array<
+    BookIdentity & { book: string; reference: string; index: number }
+  >;
 }
 
 export interface SearchQueryResponse {
@@ -242,6 +248,8 @@ export interface SearchOptionsCatalog {
   wordOptions: { exact: string[]; advanced: string[]; vocalized: string[] };
   eras: string[];
   maxLimit: number;
+  maxResultWindow: number;
+  fuzzyMaxDistance: number;
   defaultLimit: number;
 }
 

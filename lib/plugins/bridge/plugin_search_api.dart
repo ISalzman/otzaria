@@ -18,6 +18,12 @@ class PluginSearchApi {
   /// תקרת התוצאות לקריאה אחת. דפדוף מעבר לכך דרך `offset`.
   static const int maxLimit = 500;
 
+  /// חלון התוצאות המרבי שהמנוע רשאי להחזיק בזיכרון עבור דפדוף.
+  static const int maxResultWindow = 10000;
+
+  /// המרחק המרבי שנתמך בפועל בחיפוש מקורב.
+  static const int fuzzyMaxDistance = 2;
+
   static const int defaultLimit = 50;
 
   static const Map<String, SearchMode> searchModes = {
@@ -85,6 +91,8 @@ class PluginSearchApi {
     },
     'eras': eraNames,
     'maxLimit': maxLimit,
+    'maxResultWindow': maxResultWindow,
+    'fuzzyMaxDistance': fuzzyMaxDistance,
     'defaultLimit': defaultLimit,
   };
 
@@ -159,12 +167,21 @@ class PluginSearchApi {
     if (raw is! Map) _invalid('$name must be an object keyed by word index');
     final result = <int, List<String>>{};
     raw.forEach((key, value) {
-      final index = key is num ? key.toInt() : int.tryParse(key.toString());
+      final index = switch (key) {
+        int value => value,
+        num value when value.isFinite && value == value.truncate() =>
+          value.toInt(),
+        String value => int.tryParse(value),
+        _ => null,
+      };
       if (index == null || index < 0) {
         _invalid('$name has a non-numeric word index "$key"');
       }
       if (value is! List) _invalid('$name["$key"] must be an array of strings');
-      result[index] = [for (final word in value) word.toString()];
+      if (value.any((word) => word is! String)) {
+        _invalid('$name["$key"] must be an array of strings');
+      }
+      result[index] = value.cast<String>();
     });
     return result;
   }
@@ -196,7 +213,27 @@ class PluginSearchApi {
   static List<String> _stringList(Object? raw, String name) {
     if (raw == null) return const [];
     if (raw is! List) _invalid('$name must be an array');
-    return [for (final item in raw) item.toString()];
+    if (raw.any((item) => item is! String)) {
+      _invalid('$name must be an array of strings');
+    }
+    return raw.cast<String>();
+  }
+
+  static void _validateBookIdentity(Map<String, dynamic> identity) {
+    final rawId = identity['id'];
+    if (rawId != null && PluginBookIdentity.parseId(rawId) == null) {
+      _invalid('book id must be a whole number');
+    }
+    for (final key in ['bookId', 'title', 'type', 'source']) {
+      if (identity[key] != null && identity[key] is! String) {
+        _invalid('book $key must be a string');
+      }
+    }
+    if (rawId == null &&
+        identity['bookId'] == null &&
+        identity['title'] == null) {
+      _invalid('book identity requires id or bookId');
+    }
   }
 
   /// בונה את רשימת ה-facets שנשלחת למנוע מתוך תיאור ההיקף של התוסף.
@@ -228,6 +265,7 @@ class PluginSearchApi {
       for (final entry in books) {
         if (entry is! Map) _invalid('books entries must be objects');
         final identity = Map<String, dynamic>.from(entry);
+        _validateBookIdentity(identity);
         final book = findBook(identity);
         if (book == null) {
           throw Exception(
@@ -272,8 +310,9 @@ class PluginSearchApi {
   /// `search.fullText` הישן לא ידע לעשות.
   static Map<String, dynamic> resultToJson(
     engine.SearchResult result,
-    Book? book,
-  ) => {
+    Book? book, {
+    Map<String, Book> booksByPath = const {},
+  }) => {
     if (book != null)
       ...PluginBookIdentity.toJson(book)
     else ...{
@@ -291,6 +330,14 @@ class PluginSearchApi {
       'merged': [
         for (final sibling in result.merged)
           {
+            if (booksByPath[sibling.filePath] case final Book siblingBook)
+              ...PluginBookIdentity.toJson(siblingBook)
+            else ...{
+              'id': null,
+              'type': sibling.isPdf ? 'pdf' : 'text',
+              'bookId': sibling.title,
+              'source': null,
+            },
             'book': sibling.title,
             'reference': sibling.reference,
             'index': sibling.segment.toInt(),
@@ -382,6 +429,37 @@ class PluginSearchRequest {
     'customSpacing',
   ];
 
+  static const Set<String> _allowedKeys = {
+    'query',
+    'negativeQuery',
+    'mode',
+    'order',
+    'limit',
+    'offset',
+    'distance',
+    'negativeDistance',
+    'proximityScope',
+    'negativeProximityScope',
+    'grouping',
+    'wordMatchMode',
+    'wordMatchCount',
+    'includeBookCounts',
+    'options',
+    'negativeOptions',
+    'wordOptions',
+    'negativeWordOptions',
+    'alternativeWords',
+    'negativeAlternativeWords',
+    'customSpacing',
+    'negativeCustomSpacing',
+    'facets',
+    'categories',
+    'books',
+    'authors',
+    'eras',
+    'baseBooksOnly',
+  };
+
   static bool _isPresent(Object? value) => switch (value) {
     null => false,
     String value => value.trim().isNotEmpty,
@@ -444,7 +522,23 @@ class PluginSearchRequest {
   }
 
   factory PluginSearchRequest.fromArgs(Map<String, dynamic> args) {
-    final query = args['query']?.toString().trim() ?? '';
+    final unknownKeys = args.keys.where((key) => !_allowedKeys.contains(key));
+    if (unknownKeys.isNotEmpty) {
+      PluginSearchApi._invalid('unknown parameter "${unknownKeys.first}"');
+    }
+    if (args['query'] is! String) {
+      PluginSearchApi._invalid('query must be a string');
+    }
+    if (args['negativeQuery'] != null && args['negativeQuery'] is! String) {
+      PluginSearchApi._invalid('negativeQuery must be a string');
+    }
+    for (final key in ['includeBookCounts', 'baseBooksOnly']) {
+      if (args[key] != null && args[key] is! bool) {
+        PluginSearchApi._invalid('$key must be a boolean');
+      }
+    }
+
+    final query = (args['query'] as String).trim();
     if (query.isEmpty) {
       throw Exception('error.invalid_params: query required');
     }
@@ -456,28 +550,51 @@ class PluginSearchRequest {
     );
     _rejectParametersUnsupportedByMode(args, searchMode);
 
-    final limit = PluginSearchApi._intArg(
+    final rawLimit = PluginSearchApi._intArg(
       args['limit'],
       'limit',
       fallback: PluginSearchApi.defaultLimit,
       min: 1,
     );
+    final limit = rawLimit > PluginSearchApi.maxLimit
+        ? PluginSearchApi.maxLimit
+        : rawLimit;
     final offset = PluginSearchApi._intArg(
       args['offset'],
       'offset',
       fallback: 0,
     );
+    if (offset > PluginSearchApi.maxResultWindow - limit) {
+      PluginSearchApi._invalid(
+        'offset + limit must not exceed ${PluginSearchApi.maxResultWindow}',
+      );
+    }
 
     final distance = PluginSearchApi._intArg(
       args['distance'],
       'distance',
       fallback: 0,
+      max: searchMode == SearchMode.fuzzy
+          ? PluginSearchApi.fuzzyMaxDistance
+          : PluginSearchApi._uint32Max,
     );
     final proximityScope = PluginSearchApi._enumArg(
       PluginSearchApi.proximityScopes,
       args['proximityScope'],
       engine.SearchScope.wordDistance,
     );
+    final wordMatchMode = PluginSearchApi._enumArg(
+      PluginSearchApi.wordMatchModes,
+      args['wordMatchMode'],
+      engine.WordMatchMode.all,
+    );
+    if (args['wordMatchCount'] != null &&
+        (searchMode != SearchMode.advanced ||
+            wordMatchMode != engine.WordMatchMode.atLeast)) {
+      PluginSearchApi._invalid(
+        'wordMatchCount requires mode: "advanced" and wordMatchMode: "atLeast"',
+      );
+    }
     final wordMatchCount = PluginSearchApi._intArg(
       args['wordMatchCount'],
       'wordMatchCount',
@@ -487,10 +604,8 @@ class PluginSearchRequest {
 
     return PluginSearchRequest(
       query: query,
-      negativeQuery: args['negativeQuery']?.toString() ?? '',
-      limit: limit > PluginSearchApi.maxLimit
-          ? PluginSearchApi.maxLimit
-          : limit,
+      negativeQuery: args['negativeQuery'] as String? ?? '',
+      limit: limit,
       offset: offset,
       searchMode: searchMode,
       order: PluginSearchApi._enumArg(
@@ -515,11 +630,7 @@ class PluginSearchRequest {
         args['grouping'],
         ResultGroupingMode.none,
       ).engineGrouping,
-      wordMatchMode: PluginSearchApi._enumArg(
-        PluginSearchApi.wordMatchModes,
-        args['wordMatchMode'],
-        engine.WordMatchMode.all,
-      ),
+      wordMatchMode: wordMatchMode,
       wordMatchCount: wordMatchCount,
       includeBookCounts: args['includeBookCounts'] == true,
       globalOptions: PluginSearchApi._boolMap(args['options'], 'options'),
@@ -581,9 +692,14 @@ class PluginSearchRequest {
     Map<String, Map<String, bool>> perWord,
     String query,
   ) {
-    if (perWord.isNotEmpty) return perWord;
-    if (global.isEmpty || query.isEmpty) return const {};
-    return SearchQueryBuilder.expandGlobalOptionsToWords(query, global);
+    if (query.isEmpty) return const {};
+    final merged = global.isEmpty
+        ? <String, Map<String, bool>>{}
+        : SearchQueryBuilder.expandGlobalOptionsToWords(query, global);
+    for (final entry in perWord.entries) {
+      merged[entry.key] = entry.value;
+    }
+    return merged;
   }
 
   /// מוודא שהמפות הפר-מיליות מתאימות לפיצול המילים של השאילתה: מפתח
