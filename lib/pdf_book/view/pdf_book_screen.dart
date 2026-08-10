@@ -4639,7 +4639,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
         // הכפתורים שבראש תפריט ה-"...".
         menuHeaderActions: widget.isInCombinedView
-            ? _buildNavigationActions(context)
+            ? _buildNavigationActions()
             : null,
         maxVisibleButtons: maxButtons,
       ),
@@ -4827,7 +4827,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   /// פעולות הניווט לשורה שבראש תפריט ה-"..." — בתצוגה מפוצלת בלבד.
   /// בתצוגה רגילה הניווט מוצג במרכז הסרגל דרך [_buildPdfCenter].
-  List<ActionButtonData> _buildNavigationActions(BuildContext context) {
+  List<ActionButtonData> _buildNavigationActions() {
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
         widget: const SizedBox.shrink(),

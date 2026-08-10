@@ -1555,7 +1555,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
           // הכפתורים שבראש תפריט ה-"...".
           menuHeaderActions: widget.isInCombinedView
-              ? _buildNavigationActions(context)
+              ? _buildNavigationActions()
               : null,
           maxVisibleButtons: maxButtons,
         ),
@@ -1873,10 +1873,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     ];
   }
 
-  /// פעולות הניווט לשורה שבראש תפריט ה-"...". הפעולות עוברות דרך עוטפי
-  /// המצב-החי, כי התפריט נשאר פתוח בין לחיצות ו-state שנתפס בבנייה מתיישן
-  /// (readingSegments משתנה כתוצאה מהגלילה של הלחיצה הקודמת).
-  List<ActionButtonData> _buildNavigationActions(BuildContext context) {
+  /// פעולות הניווט קוראות מצב עדכני כי התפריט נשאר פתוח בין לחיצות.
+  List<ActionButtonData> _buildNavigationActions() {
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
         widget: const SizedBox.shrink(),

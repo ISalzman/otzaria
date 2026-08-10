@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// מחשב כמה כפתורי פעולה ניתן להציג בסרגל הקריאה לפי רוחב המסך.
 ///
@@ -36,10 +37,8 @@ class ResponsiveActionBar extends StatefulWidget {
   /// [מצב ישן] הסדר המקורי של הכפתורים (לתצוגה עקבית)
   final List<ActionButtonData>? originalOrder;
 
-  /// פעולות ניווט שמוצגות כשורת כפתורי אייקון אחת בראש תפריט ה-"..." (עם
-  /// tooltip), במקום שורת טקסט נפרדת לכל פעולה. לכל פעולה חייב להיות
-  /// [ActionButtonData.icon]. לחיצה משאירה את התפריט פתוח — מעבר קטע נלחץ
-  /// שוב ושוב, וסגירה בכל לחיצה הייתה מחייבת פתיחה מחדש בכל קטע.
+  /// פעולות ניווט שמוצגות כשורת אייקונים בראש התפריט במקום כפריטים נפרדים.
+  /// לחיצה עליהן משאירה את התפריט פתוח; לכל פעולה נדרש [ActionButtonData.icon].
   final List<ActionButtonData>? menuHeaderActions;
 
   /// מספר מקסימלי של כפתורים להציג לפני מעבר לתפריט "..."
@@ -118,10 +117,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     final totalButtons = widget.actions.length;
     int effectiveMaxVisible = widget.maxVisibleButtons;
 
-    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
-    // עדיף פשוט להציג את כל הכפתורים.
-    // החרגה: כשהתפריט קיים ממילא (alwaysInMenu או שורת הניווט), הצגת כל
-    // הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
+    // כפתור יחיד נשאר גלוי, אלא אם התפריט נדרש ממילא ואז הוא עלול לגרום לגלישה.
     if (totalButtons - widget.maxVisibleButtons == 1 &&
         widget.alwaysInMenu!.isEmpty &&
         _headerActions.isEmpty) {
@@ -347,9 +343,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
   }
 }
 
-/// שורת כפתורי ניווט אחת בראש תפריט ה-"..." — במקום שורת טקסט לכל פעולה.
-/// התפריט נשאר פתוח בלחיצה, ולכן ה-callbacks חייבים לקרוא מצב חי ולא ערך
-/// שנקרא בזמן בניית התפריט.
+/// שורת כפתורי ניווט בראש התפריט שאינה סוגרת אותו בלחיצה.
 class _MenuIconActionRow extends StatelessWidget {
   final List<ActionButtonData> actions;
 
@@ -361,6 +355,14 @@ class _MenuIconActionRow extends StatelessWidget {
   /// גובה השורה בתפריט — [AppMenuRowEntry] מדווח עליו, ו-showAnchoredAppMenu
   /// מסתמך על סכום הגבהים כדי לבחור כיוון פתיחה.
   static const double rowHeight = _buttonSize + 8;
+
+  static Widget _buildIcon(IconData? icon) {
+    if (icon == FluentIcons.chevron_left_24_regular ||
+        icon == FluentIcons.chevron_right_24_regular) {
+      return RtlIcon(icon!, size: _iconSize);
+    }
+    return Icon(icon, size: _iconSize);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +380,7 @@ class _MenuIconActionRow extends StatelessWidget {
             IconButton(
               onPressed: action.onPressed,
               tooltip: action.tooltip,
-              icon: Icon(action.icon, size: _iconSize),
+              icon: _buildIcon(action.icon),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(
                 minWidth: _buttonSize,

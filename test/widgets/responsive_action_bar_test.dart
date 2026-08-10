@@ -178,6 +178,16 @@ void main() {
       return glyph.text.style?.color;
     }
 
+    IconData? glyphIcon(WidgetTester tester, String tooltip) {
+      final glyph = tester.widget<Icon>(
+        find.descendant(
+          of: find.byTooltip(tooltip),
+          matching: find.byType(Icon),
+        ),
+      );
+      return glyph.icon;
+    }
+
     testWidgets('כל פעולות הניווט מוצגות ככפתורי אייקון עם tooltip', (
       tester,
     ) async {
@@ -186,7 +196,13 @@ void main() {
 
       for (final entry in navIcons.entries) {
         expect(find.byTooltip(entry.key), findsOneWidget);
-        expect(find.byIcon(entry.value), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byTooltip(entry.key),
+            matching: find.byType(Icon),
+          ),
+          findsOneWidget,
+        );
         // לא שורת טקסט לכל פעולה — זו הבעיה שהשורה באה לפתור
         expect(find.text(entry.key), findsNothing);
       }
@@ -218,6 +234,20 @@ void main() {
       for (var i = 1; i < centers.length; i++) {
         expect(centers[i], lessThan(centers[i - 1]));
       }
+    });
+
+    testWidgets('חצי הקטע מתהפכים ב-RTL כמו בסרגל הרגיל', (tester) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      expect(
+        glyphIcon(tester, 'הקטע הקודם'),
+        FluentIcons.chevron_right_24_regular,
+      );
+      expect(
+        glyphIcon(tester, 'הקטע הבא'),
+        FluentIcons.chevron_left_24_regular,
+      );
     });
 
     testWidgets('השורה מופיעה מעל שאר פריטי התפריט', (tester) async {
