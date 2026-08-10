@@ -30,6 +30,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   bool _refreshInFlight = false;
   bool _refreshPending = false;
   final Set<String> _pendingChangedKeys = {};
+  final Set<int> _pendingRequestIds = {};
   RefreshSource _pendingSource = RefreshSource.customFoldersScan;
 
   LibraryBloc() : super(LibraryState.initial()) {
@@ -121,6 +122,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     if (_refreshInFlight) {
       _refreshPending = true;
       _pendingChangedKeys.addAll(event.changedBookKeys);
+      _pendingRequestIds.addAll(event.requestIds);
       if (event.source == RefreshSource.general) {
         _pendingSource = RefreshSource.general;
       }
@@ -138,9 +140,11 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       final mergedEvent = RefreshLibrary(
         changedBookKeys: Set<String>.from(_pendingChangedKeys),
         source: _pendingSource,
+        requestIds: Set<int>.from(_pendingRequestIds),
       );
       _refreshPending = false;
       _pendingChangedKeys.clear();
+      _pendingRequestIds.clear();
       _pendingSource = RefreshSource.customFoldersScan;
       add(mergedEvent);
     }
@@ -227,6 +231,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           newBooksToIndex: newBooksToIndex.isNotEmpty ? newBooksToIndex : null,
           changedBooksToIndex: changedBooksToIndex.isNotEmpty
               ? changedBooksToIndex
+              : null,
+          // רענון שנכשל אינו מדווח requestIds — בקשת reindex לא תרוץ על קטלוג ישן.
+          completedRefreshRequestIds: event.requestIds.isNotEmpty
+              ? event.requestIds
               : null,
         ),
       );

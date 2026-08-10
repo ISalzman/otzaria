@@ -1421,5 +1421,38 @@ void main() {
         );
       });
     });
+
+    group('library/reindex', () {
+      test('reindex → ReindexLibraryAction', () {
+        final action = ExternalUriRouter.parseUri(
+          Uri.parse('otzaria://library/reindex'),
+        );
+        expect(action, isA<ReindexLibraryAction>());
+      });
+
+      test('אינו רגיש לאותיות גדולות/קטנות', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('OTZARIA://LIBRARY/REINDEX')),
+          isA<ReindexLibraryAction>(),
+        );
+      });
+
+      test('נתיב לא מוכר תחת library — מוחזר null', () {
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://library/refresh')),
+          isNull,
+        );
+        expect(
+          ExternalUriRouter.parseUri(Uri.parse('otzaria://library')),
+          isNull,
+        );
+        expect(
+          ExternalUriRouter.parseUri(
+            Uri.parse('otzaria://library/reindex/extra'),
+          ),
+          isNull,
+        );
+      });
+    });
   });
 }

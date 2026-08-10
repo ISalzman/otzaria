@@ -307,6 +307,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
   // מסומן אחרי הורדה מלאה: אין דיווח אילו ספרים השתנו, ולכן אחרי הטעינה
   // מחדש מריצים reconcile — השוואת טביעות-אצבע ואינדוקס מחדש של השונים.
   bool _reconcileAfterLibraryReload = false;
+  // בקשות otzaria://library/reindex שממתינות לסיום הרענון שקלט אותן —
+  // האינדוקס רץ רק כשמזהה הבקשה מדווח ב-completedRefreshRequestIds.
+  int _nextExternalReindexRequestId = 1;
+  final Set<int> _pendingExternalReindexRequestIds = {};
   // אחרי עדכון DB, StartIndexing מכסה את כל הספרייה; ה-gate מונע מ-listener
   // ה-newBooksToIndex להריץ מסלול אינדוקס שני על אותו refresh.
   bool _dbUpdateTriggeredFullIndex = false;
@@ -1147,6 +1151,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
           const NavigateToScreen(Screen.settings),
         );
         _settingsScreenController.openTab(SettingsTab.tools);
+        return true;
+      case ReindexLibraryAction():
+        // רענון הקטלוג מהדיסק; ה-listener על completedRefreshRequestIds מריץ
+        // StartIndexing + ReconcileIndex כשהרענון שקלט את הבקשה מסתיים.
+        final requestId = _nextExternalReindexRequestId++;
+        _pendingExternalReindexRequestIds.add(requestId);
+        context.read<LibraryBloc>().add(
+          RefreshLibrary(requestIds: {requestId}),
+        );
         return true;
       case OpenDailyPageAction():
         final Daf daf = getDafYomi(DateTime.now());
@@ -2275,6 +2288,29 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   _tourStartedAutomaticallyThisLaunch = true;
                 }
               }
+            },
+          ),
+          // אינדוקס בעקבות otzaria://library/reindex — רץ רק על הרענון שקלט
+          // את הבקשה (לפי requestId), גם כשעדכון אינדקס אוטומטי כבוי.
+          BlocListener<LibraryBloc, LibraryState>(
+            listenWhen: (previous, current) =>
+                current.completedRefreshRequestIds?.isNotEmpty ?? false,
+            listener: (context, state) {
+              final completed = state.completedRefreshRequestIds!;
+              if (!_pendingExternalReindexRequestIds.any(completed.contains)) {
+                return;
+              }
+              _pendingExternalReindexRequestIds.removeAll(completed);
+              final library = state.library;
+              if (library == null) return;
+              // StartIndexing מכסה גם את הספרים החדשים של הרענון הזה — מסמן
+              // ל-listener של newBooksToIndex לדלג על מסלול אינדוקס כפול.
+              if (state.newBooksToIndex?.isNotEmpty ?? false) {
+                _dbUpdateTriggeredFullIndex = true;
+              }
+              final indexingBloc = context.read<IndexingBloc>();
+              indexingBloc.add(StartIndexing(library));
+              indexingBloc.add(ReconcileIndex(library));
             },
           ),
           BlocListener<LibraryBloc, LibraryState>(

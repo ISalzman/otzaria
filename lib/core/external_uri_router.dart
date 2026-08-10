@@ -152,6 +152,12 @@ class OpenDailyPageAction extends ExternalUriAction {
   const OpenDailyPageAction();
 }
 
+/// רענון הספרייה מהדיסק ועדכון אינדקס החיפוש (ספרים חדשים + ספרים שתוכנם
+/// השתנה). מיועד לתוכנה חיצונית שמעדכנת את קבצי הספרייה.
+class ReindexLibraryAction extends ExternalUriAction {
+  const ReindexLibraryAction();
+}
+
 /// מפענח קישורי `otzaria://...` לפעולה דומיין.
 ///
 /// סכמות וכתובות נתמכות:
@@ -201,6 +207,8 @@ class OpenDailyPageAction extends ExternalUriAction {
 /// * `otzaria://plugin/install-local?path=<abs-path>` – התקנת תוסף מקובץ מקומי
 ///   (משמש לשיוך קובץ `.otzplugin` במערכת ההפעלה). הנתיב חייב להיות מוחלט,
 ///   להסתיים ב-`.otzplugin`, ואינו נתיב UNC/התקן (ראה `_isSafeLocalPluginPath`).
+/// * `otzaria://library/reindex`            – רענון הספרייה מהדיסק ועדכון האינדקס
+///   (מיועד לתוכנה חיצונית שמעדכנת את קבצי הספרייה)
 ///
 /// הסכמה, ה-host והתת-נתיב הראשון אינם רגישים לאותיות גדולות/קטנות.
 class ExternalUriRouter {
@@ -284,6 +292,15 @@ class ExternalUriRouter {
     final host = uri.host.toLowerCase();
     if (host == 'open') {
       return _parseOpen(uri);
+    }
+    if (host == 'library') {
+      final segments = uri.pathSegments
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+      if (segments.length == 1 && segments.first.toLowerCase() == 'reindex') {
+        return const ReindexLibraryAction();
+      }
+      return null;
     }
     if (host == 'plugin') {
       final localPath = _parseLocalInstall(uri);
