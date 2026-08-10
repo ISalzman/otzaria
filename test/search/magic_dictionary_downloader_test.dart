@@ -133,11 +133,11 @@ void main() {
   });
 
   test('אחרי הורדה מוצלחת הסימון הוא ה-digest של הנכס', () async {
-    const sha = 'dd44ee55ff66';
     final temp = await Directory.systemTemp.createTemp('magic-dict-dl-');
     addTearDown(() => temp.delete(recursive: true));
     final dest = p.join(temp.path, 'lexical.db');
     final body = List.filled(8, 7);
+    final sha = sha256.convert(body).toString();
     final client = MockClient((request) async {
       if (request.url.toString() ==
           MagicDictionaryDownloader.latestReleaseApi) {
@@ -157,6 +157,34 @@ void main() {
     expect(await dl.ensureLatest(), isTrue);
     expect(await File(dest).readAsBytes(), body);
     expect(await File('$dest.version').readAsString(), sha);
+  });
+
+  test('גוף בגודל הנכון עם sha256 שגוי נדחה ולא נכתב marker', () async {
+    final temp = await Directory.systemTemp.createTemp('magic-dict-hash-');
+    addTearDown(() => temp.delete(recursive: true));
+    final dest = p.join(temp.path, 'lexical.db');
+    final body = List.filled(8, 7);
+    final wrongSha = sha256.convert(List.filled(8, 8)).toString();
+    final client = MockClient((request) async {
+      if (request.url.toString() ==
+          MagicDictionaryDownloader.latestReleaseApi) {
+        return http.Response(
+          latestJson(assetSize: body.length, digest: 'sha256:$wrongSha'),
+          200,
+        );
+      }
+      return http.Response.bytes(body, 200);
+    });
+    final dl = MagicDictionaryDownloader(
+      client: client,
+      destinationProvider: () async => dest,
+    );
+    addTearDown(dl.dispose);
+
+    expect(await dl.ensureLatest(), isFalse);
+    expect(File(dest).existsSync(), isFalse);
+    expect(File('$dest.part').existsSync(), isFalse);
+    expect(File('$dest.version').existsSync(), isFalse);
   });
 
   test('fetchLatestRelease זורק כשאין נכס lexical.db', () async {

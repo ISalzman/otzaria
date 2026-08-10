@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -49,6 +50,9 @@ class MagicDictionaryDownloader {
   static const String _assetSuffix = '/lexical.db';
 
   static const int _maxRedirects = 5;
+  static final RegExp _sha256DigestPattern = RegExp(
+    r'^sha256:[0-9a-fA-F]{64}$',
+  );
 
   final http.Client _client;
   final bool _ownsClient;
@@ -146,8 +150,8 @@ class MagicDictionaryDownloader {
       downloadUrl: Uri.parse(asset['browser_download_url'] as String),
       sizeBytes: (asset['size'] as num?)?.toInt(),
       sha256: switch (asset['digest']) {
-        final String digest when digest.startsWith('sha256:') =>
-          digest.substring('sha256:'.length),
+        final String digest when _sha256DigestPattern.hasMatch(digest) =>
+          digest.substring('sha256:'.length).toLowerCase(),
         _ => null,
       },
     );
@@ -184,6 +188,15 @@ class MagicDictionaryDownloader {
     final outFile = File('$dest.part');
     await outFile.parent.create(recursive: true);
     final sink = outFile.openWrite();
+    final digestOutput = AccumulatorSink<Digest>();
+    final digestInput = sha256.startChunkedConversion(digestOutput);
+    var digestClosed = false;
+    void closeDigest() {
+      if (digestClosed) return;
+      digestInput.close();
+      digestClosed = true;
+    }
+
     var received = 0;
     try {
       await for (final chunk in response.stream.timeout(_stallTimeout)) {
@@ -193,6 +206,7 @@ class MagicDictionaryDownloader {
           );
         }
         sink.add(chunk);
+        digestInput.add(chunk);
         received += chunk.length;
         if (onProgress != null && expectedSize != null && expectedSize > 0) {
           onProgress(received / expectedSize);
@@ -200,14 +214,21 @@ class MagicDictionaryDownloader {
       }
       await sink.flush();
       await sink.close();
+      closeDigest();
       if (expectedSize != null && received != expectedSize) {
         throw Exception(
           'הורדת המילון נקטעה: צפויים $expectedSize בייטים, התקבלו $received',
         );
       }
+      final expectedSha256 = release.sha256;
+      final downloadedSha256 = digestOutput.events.single.toString();
+      if (expectedSha256 != null && downloadedSha256 != expectedSha256) {
+        throw Exception('ה-sha256 של המילון שהורד אינו תואם ל-release');
+      }
 
       await replaceDownloadedFile(outFile, dest);
     } catch (_) {
+      closeDigest();
       try {
         await sink.close();
       } catch (_) {}
