@@ -3,7 +3,6 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// מחשב כמה כפתורי פעולה ניתן להציג בסרגל הקריאה לפי רוחב המסך.
 ///
@@ -356,14 +355,6 @@ class _MenuIconActionRow extends StatelessWidget {
   /// מסתמך על סכום הגבהים כדי לבחור כיוון פתיחה.
   static const double rowHeight = _buttonSize + 8;
 
-  static Widget _buildIcon(IconData? icon) {
-    if (icon == FluentIcons.chevron_left_24_regular ||
-        icon == FluentIcons.chevron_right_24_regular) {
-      return RtlIcon(icon!, size: _iconSize);
-    }
-    return Icon(icon, size: _iconSize);
-  }
-
   @override
   Widget build(BuildContext context) {
     assert(
@@ -380,7 +371,7 @@ class _MenuIconActionRow extends StatelessWidget {
             IconButton(
               onPressed: action.onPressed,
               tooltip: action.tooltip,
-              icon: _buildIcon(action.icon),
+              icon: Icon(action.icon, size: _iconSize),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(
                 minWidth: _buttonSize,

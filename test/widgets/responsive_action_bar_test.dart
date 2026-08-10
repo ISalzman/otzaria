@@ -236,18 +236,18 @@ void main() {
       }
     });
 
-    testWidgets('חצי הקטע מתהפכים ב-RTL כמו בסרגל הרגיל', (tester) async {
+    testWidgets('חצי הניווט נשארים כמו בסרגל הרגיל — היפוך יחיד ב-RTL', (
+      tester,
+    ) async {
       await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
       await openMenu(tester);
 
-      expect(
-        glyphIcon(tester, 'הקטע הקודם'),
-        FluentIcons.chevron_right_24_regular,
-      );
-      expect(
-        glyphIcon(tester, 'הקטע הבא'),
-        FluentIcons.chevron_left_24_regular,
-      );
+      // לאייקוני Fluent יש matchTextDirection:true — Icon כבר מהפך אותם ב-RTL.
+      // החלפה נוספת ל-IconData הנגדי מהפכת פעמיים ומחזירה לכיוון LTR.
+      for (final entry in navIcons.entries) {
+        expect(glyphIcon(tester, entry.key), entry.value);
+        expect(entry.value.matchTextDirection, isTrue);
+      }
     });
 
     testWidgets('השורה מופיעה מעל שאר פריטי התפריט', (tester) async {
