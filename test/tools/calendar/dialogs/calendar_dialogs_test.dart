@@ -297,8 +297,20 @@ void main() {
         await tester.pump();
       }
       await tester.pumpAndSettle();
-      expect(find.text('09'), findsOneWidget);
-      expect(find.text('45'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('time-hour')),
+          matching: find.text('09'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('time-minute')),
+          matching: find.text('45'),
+        ),
+        findsOneWidget,
+      );
 
       // ✕ מנקה חזרה ל'הוספת שעה'
       await tester.tap(find.byTooltip('כל היום'));
