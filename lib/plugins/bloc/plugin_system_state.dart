@@ -99,6 +99,9 @@ class PluginSystemInstallRequiresPermissions extends PluginSystemState {
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
   final bool? previousAllowOrderBeforeBuiltInsGranted;
+
+  /// החלטות ההרשאה השמורות של הגרסה המותקנת. הרשאה שאינה במפה היא חדשה.
+  final Map<String, bool> previousGrantedPermissions;
   final PluginInstallReportContext? reportContext;
 
   const PluginSystemInstallRequiresPermissions({
@@ -106,6 +109,7 @@ class PluginSystemInstallRequiresPermissions extends PluginSystemState {
     required this.tempDirPath,
     this.previousVersion,
     this.previousAllowOrderBeforeBuiltInsGranted,
+    this.previousGrantedPermissions = const {},
     this.reportContext,
   });
 
@@ -117,6 +121,7 @@ class PluginSystemInstallRequiresPermissions extends PluginSystemState {
     tempDirPath,
     previousVersion,
     previousAllowOrderBeforeBuiltInsGranted,
+    previousGrantedPermissions,
     reportContext?.token,
     reportContext?.callbackUrl,
   ];

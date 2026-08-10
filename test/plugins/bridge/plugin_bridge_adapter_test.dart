@@ -36,7 +36,18 @@ import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show
+        MergedSibling,
+        ResultGrouping,
+        ResultsOrder,
+        SearchPageResult,
+        SearchResult,
+        SearchScope,
+        SearchStreamUpdate,
+        WordMatchMode;
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -47,6 +58,8 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+
+import '../../support/search_engine_test_init.dart';
 
 class _MockHistoryBloc extends Mock implements HistoryBloc {}
 
@@ -71,6 +84,135 @@ class _StubCalendarCubit extends Mock implements CalendarCubit {
 class _MockWorkspaceBloc extends Mock implements WorkspaceBloc {}
 
 class _MockSearchRepository extends Mock implements SearchRepository {}
+
+/// לוכד את פרמטרי `searchTextsStreamWithCounts` ומחזיר stream קבוע —
+/// כדי לבדוק את התרגום של `search.query` בלי מנוע חיפוש אמיתי.
+class _StubSearchRepository extends SearchRepository {
+  Map<String, dynamic>? captured;
+  List<SearchStreamUpdate> updates = const [];
+  SearchPageResult pageResult = const SearchPageResult(
+    totalCount: 0,
+    results: [],
+    truncated: false,
+  );
+  int pageCalls = 0;
+  int streamWithCountsCalls = 0;
+
+  void _capture(
+    String query,
+    List<String> facets,
+    int limit, {
+    required int offset,
+    required ResultsOrder order,
+    required SearchMode searchMode,
+    required int distance,
+    required SearchScope scope,
+    required ResultGrouping? grouping,
+    required WordMatchMode wordMatchMode,
+    required Map<String, Map<String, bool>>? searchOptions,
+  }) {
+    captured = {
+      'query': query,
+      'facets': facets,
+      'limit': limit,
+      'offset': offset,
+      'order': order,
+      'searchMode': searchMode,
+      'distance': distance,
+      'scope': scope,
+      'grouping': grouping,
+      'wordMatchMode': wordMatchMode,
+      'searchOptions': searchOptions,
+    };
+  }
+
+  @override
+  Future<SearchPageResult> searchTextsAndCount(
+    String query,
+    List<String> facets,
+    int limit, {
+    int offset = 0,
+    ResultsOrder order = ResultsOrder.relevance,
+    bool fuzzy = false,
+    int distance = 0,
+    String negativeQuery = '',
+    int? negativeDistance,
+    SearchScope scope = SearchScope.wordDistance,
+    SearchScope? negativeScope,
+    SearchMode searchMode = SearchMode.exact,
+    Map<String, String>? customSpacing,
+    Map<String, String>? negativeCustomSpacing,
+    Map<int, List<String>>? alternativeWords,
+    Map<int, List<String>>? negativeAlternativeWords,
+    Map<String, Map<String, bool>>? searchOptions,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
+    bool matchNikud = false,
+    bool matchTaamim = false,
+    ResultGrouping? grouping,
+    WordMatchMode wordMatchMode = WordMatchMode.all,
+    int? wordMatchCount,
+  }) async {
+    pageCalls++;
+    _capture(
+      query,
+      facets,
+      limit,
+      offset: offset,
+      order: order,
+      searchMode: searchMode,
+      distance: distance,
+      scope: scope,
+      grouping: grouping,
+      wordMatchMode: wordMatchMode,
+      searchOptions: searchOptions,
+    );
+    return pageResult;
+  }
+
+  @override
+  Stream<SearchStreamUpdate> searchTextsStreamWithCounts(
+    String query,
+    List<String> facets,
+    int limit, {
+    int offset = 0,
+    int chunkSize = 50,
+    ResultsOrder order = ResultsOrder.relevance,
+    bool fuzzy = false,
+    int distance = 0,
+    String negativeQuery = '',
+    int? negativeDistance,
+    SearchScope scope = SearchScope.wordDistance,
+    SearchScope? negativeScope,
+    SearchMode searchMode = SearchMode.exact,
+    Map<String, String>? customSpacing,
+    Map<String, String>? negativeCustomSpacing,
+    Map<int, List<String>>? alternativeWords,
+    Map<int, List<String>>? negativeAlternativeWords,
+    Map<String, Map<String, bool>>? searchOptions,
+    Map<String, Map<String, bool>>? negativeSearchOptions,
+    bool matchNikud = false,
+    bool matchTaamim = false,
+    ResultGrouping? grouping,
+    WordMatchMode wordMatchMode = WordMatchMode.all,
+    int? wordMatchCount,
+  }) {
+    streamWithCountsCalls++;
+    _capture(
+      query,
+      facets,
+      limit,
+      offset: offset,
+      order: order,
+      searchMode: searchMode,
+      distance: distance,
+      scope: scope,
+      grouping: grouping,
+      wordMatchMode: wordMatchMode,
+      searchOptions: searchOptions,
+    );
+    return Stream.fromIterable(updates);
+  }
+}
 
 class _MockPersonalNotesRepository extends Mock
     implements PersonalNotesRepository {}
@@ -177,7 +319,11 @@ PluginBridgeDependencies _buildNetworkDeps() {
   );
 }
 
-void main() {
+Future<void> main() async {
+  // search.query מנקה את השאילתה דרך sanitizeQuery שמאציל למנוע ה-Rust;
+  // הבדיקות שלו מדולגות כשאין build נייטיבי זמין.
+  final engineReady = await tryInitSearchEngine();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: _MemoryCacheProvider());
   });
@@ -2035,6 +2181,7 @@ void main() {
       required List<Book> books,
       List<OpenedTab> tabs = const [],
       int currentTabIndex = 0,
+      SearchRepository? searchRepository,
     }) {
       tabsBloc = _StubTabsBloc();
       if (tabs.isNotEmpty) {
@@ -2069,7 +2216,7 @@ void main() {
             _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
           ),
           workspaceBloc: _MockWorkspaceBloc(),
-          searchRepository: _MockSearchRepository(),
+          searchRepository: searchRepository ?? _MockSearchRepository(),
           personalNotesRepository: _MockPersonalNotesRepository(),
           bookOpenCoordinator: mockCoordinator,
           themePayloadBuilder: () => <String, dynamic>{},
@@ -2081,6 +2228,145 @@ void main() {
         pluginRepository: _StubPluginRegistryRepository(),
       );
     }
+
+    // --- search.query ---
+
+    test(
+      'search.query מעביר את כל הפרמטרים ומחזיר זהות ספר מלאה',
+      () async {
+        final stub = _StubSearchRepository()
+          ..updates = [
+            const SearchStreamUpdate(
+              totalCount: 812,
+              bookCounts: {'id:10': 812},
+              results: [],
+              truncated: false,
+            ),
+            SearchStreamUpdate(
+              results: [
+                SearchResult(
+                  title: 'בראשית',
+                  reference: 'בראשית, פרק א',
+                  text: 'בראשית ברא',
+                  id: BigInt.one,
+                  segment: BigInt.from(12),
+                  isPdf: false,
+                  filePath: 'id:10',
+                  mergedCount: 1,
+                  merged: const <MergedSibling>[],
+                ),
+              ],
+              truncated: false,
+            ),
+          ];
+        final adapter = buildAdapter(
+          books: [TextBook(id: 10, title: 'בראשית')],
+          searchRepository: stub,
+        );
+
+        final result =
+            await adapter.execute('search', 'query', {
+                  'query': 'בראשית',
+                  'mode': 'advanced',
+                  'distance': 3,
+                  'proximityScope': 'sameParagraph',
+                  'order': 'catalogue',
+                  'grouping': 'sameSection',
+                  'wordMatchMode': 'mostWords',
+                  'limit': 10,
+                  'offset': 5,
+                  'includeBookCounts': true,
+                })
+                as Map<String, dynamic>;
+
+        expect(stub.captured!['limit'], 10);
+        expect(stub.captured!['offset'], 5);
+        expect(stub.captured!['order'], ResultsOrder.catalogue);
+        expect(stub.captured!['searchMode'], SearchMode.advanced);
+        expect(stub.captured!['distance'], 3);
+        expect(stub.captured!['scope'], SearchScope.sameParagraph);
+        expect(stub.captured!['grouping'], ResultGrouping.sameSection);
+        expect(stub.captured!['wordMatchMode'], WordMatchMode.mostWords);
+        expect(stub.streamWithCountsCalls, 1);
+        expect(stub.pageCalls, 0);
+
+        expect(result['total'], 812);
+        expect(result['truncated'], isFalse);
+        final hit = (result['results'] as List).single as Map;
+        expect(hit['id'], 10);
+        expect(hit['type'], 'text');
+        expect(hit['index'], 12);
+        expect(hit['reference'], 'בראשית, פרק א');
+        expect((result['bookCounts'] as List).single, {
+          'id': 10,
+          'type': 'text',
+          'bookId': 'בראשית',
+          'source': 'library',
+          'title': 'בראשית',
+          'count': 812,
+        });
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+
+    test(
+      'search.query בלי היקף מחפש בכל הספרייה',
+      () async {
+        final stub = _StubSearchRepository()
+          ..updates = [const SearchStreamUpdate(results: [], truncated: false)];
+        final adapter = buildAdapter(
+          books: [TextBook(id: 10, title: 'בראשית')],
+          searchRepository: stub,
+        );
+
+        final result =
+            await adapter.execute('search', 'query', {'query': 'בראשית'})
+                as Map<String, dynamic>;
+
+        expect(stub.captured!['facets'], ['/']);
+        expect(stub.pageCalls, 1);
+        expect(stub.streamWithCountsCalls, 0);
+        expect(result['facets'], ['/']);
+        expect(result['total'], 0);
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+
+    test(
+      'search.query מצמצם את ההיקף לספר שנשלח',
+      () async {
+        final stub = _StubSearchRepository()
+          ..updates = [const SearchStreamUpdate(results: [], truncated: false)];
+        final adapter = buildAdapter(
+          books: [TextBook(id: 10, title: 'בראשית', topics: 'תנך, תורה')],
+          searchRepository: stub,
+        );
+
+        await adapter.execute('search', 'query', {
+          'query': 'בראשית',
+          'books': [
+            {'id': 10},
+          ],
+        });
+
+        expect(
+          (stub.captured!['facets'] as List).single,
+          startsWith('/תנך/תורה/'),
+        );
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+
+    test('search.getOptions מחזיר את הערכים החוקיים', () async {
+      final adapter = buildAdapter(books: [TextBook(id: 10, title: 'בראשית')]);
+
+      final options =
+          await adapter.execute('search', 'getOptions', {})
+              as Map<String, dynamic>;
+
+      expect(options['modes'], containsAll(['exact', 'advanced', 'fuzzy']));
+      expect(options['eras'], contains('ראשונים'));
+    });
 
     // --- library.findBooks ---
 

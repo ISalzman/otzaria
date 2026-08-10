@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -36,6 +37,18 @@ class FakePluginRegistryRepository extends Mock
   Future<void> setPermission(String id, String perm, bool granted) async {
     permissions['$id|$perm'] = granted;
   }
+
+  @override
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [
+    for (final entry in permissions.entries)
+      if (entry.key.startsWith('$id|') && entry.value != null)
+        PluginPermissionGrant(
+          pluginId: id,
+          permission: entry.key.substring(id.length + 1),
+          granted: entry.value!,
+          grantedAt: DateTime(2024),
+        ),
+  ];
 
   @override
   Future<int?> getNextUserOrderForNewPlugin() async =>
@@ -271,6 +284,140 @@ void main() {
       },
     );
 
+    test('prepareInstall collects the previous permission decisions', () async {
+      const pluginId = 'test.previous.grants';
+      repository.plugin = InstalledPlugin(
+        pluginId: pluginId,
+        name: 'Prev Grants',
+        version: '1.0.0',
+        installPath: tempDir.path,
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: _buildInstalledManifest(
+          id: pluginId,
+          version: '1.0.0',
+          name: 'Prev Grants',
+          permissions: const ['app.info.read', 'notes.read'],
+        ),
+        installedAt: DateTime(2024),
+        updatedAt: DateTime(2024),
+      );
+      repository.permissions['$pluginId|app.info.read'] = true;
+      repository.permissions['$pluginId|notes.read'] = false;
+
+      final archivePath = _writeArchive(tempDir, 'prev_grants.zip', {
+        'schemaVersion': 1,
+        'id': pluginId,
+        'version': '1.0.1',
+        'name': 'Prev Grants',
+        'entrypoint': 'index.html',
+        'permissions': ['app.info.read', 'notes.read', 'ui.feedback'],
+      });
+
+      final prepared = await installer.prepareInstall(archivePath);
+
+      expect(
+        prepared.previousGrantedPermissions,
+        {
+          'app.info.read': true,
+          'notes.read': false,
+        },
+        reason: 'ui.feedback חדשה — אין עליה החלטה קודמת',
+      );
+      await Directory(prepared.tempDirPath).delete(recursive: true);
+    });
+
+    test('prepareInstall reports no previous order decision when the old '
+        'manifest never asked for it', () async {
+      const pluginId = 'test.order.first.request';
+      repository.plugin = InstalledPlugin(
+        pluginId: pluginId,
+        name: 'Order First',
+        version: '1.0.0',
+        installPath: tempDir.path,
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: _buildInstalledManifest(
+          id: pluginId,
+          version: '1.0.0',
+          name: 'Order First',
+        ),
+        installedAt: DateTime(2024),
+        updatedAt: DateTime(2024),
+      );
+
+      final archivePath = _writeArchive(tempDir, 'order_first.zip', {
+        'schemaVersion': 1,
+        'id': pluginId,
+        'version': '1.0.1',
+        'name': 'Order First',
+        'entrypoint': 'index.html',
+        'contributes': {
+          'toolTab': {
+            'title': 'Order First',
+            'allowOrderBeforeBuiltIns': true,
+          },
+        },
+      });
+
+      final prepared = await installer.prepareInstall(archivePath);
+
+      expect(
+        prepared.previousAllowOrderBeforeBuiltInsGranted,
+        isNull,
+        reason:
+            'InstalledPlugin stores false when the manifest never asked — '
+            'a first-time request must not look like a past refusal',
+      );
+      await Directory(prepared.tempDirPath).delete(recursive: true);
+    });
+
+    test(
+      'prepareInstall keeps a real past refusal of the order request',
+      () async {
+        const pluginId = 'test.order.refused';
+        repository.plugin = InstalledPlugin(
+          pluginId: pluginId,
+          name: 'Order Refused',
+          version: '1.0.0',
+          installPath: tempDir.path,
+          entrypointPath: 'index.html',
+          enabled: true,
+          pinned: false,
+          allowOrderBeforeBuiltInsGranted: false,
+          manifest: _buildInstalledManifest(
+            id: pluginId,
+            version: '1.0.0',
+            name: 'Order Refused',
+            allowOrderBeforeBuiltIns: true,
+          ),
+          installedAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+
+        final archivePath = _writeArchive(tempDir, 'order_refused.zip', {
+          'schemaVersion': 1,
+          'id': pluginId,
+          'version': '1.0.1',
+          'name': 'Order Refused',
+          'entrypoint': 'index.html',
+          'contributes': {
+            'toolTab': {
+              'title': 'Order Refused',
+              'allowOrderBeforeBuiltIns': true,
+            },
+          },
+        });
+
+        final prepared = await installer.prepareInstall(archivePath);
+
+        expect(prepared.previousAllowOrderBeforeBuiltInsGranted, isFalse);
+        await Directory(prepared.tempDirPath).delete(recursive: true);
+      },
+    );
+
     test('finalizeInstall preserves existingPlugin.userOrder on update — '
         'manual reorder must survive plugin updates/reinstalls', () async {
       const pluginId = 'test.reorder.persist';
@@ -484,10 +631,26 @@ void main() {
   });
 }
 
+/// כותב חבילת תוסף מינימלית (manifest + entrypoint) ומחזיר את נתיב ה-zip.
+String _writeArchive(
+  Directory dir,
+  String fileName,
+  Map<String, dynamic> manifest,
+) {
+  final archive = Archive()
+    ..addFile(ArchiveFile.string('manifest.json', jsonEncode(manifest)))
+    ..addFile(ArchiveFile.string('index.html', '<html></html>'));
+  final archivePath = p.join(dir.path, fileName);
+  File(archivePath).writeAsBytesSync(ZipEncoder().encode(archive));
+  return archivePath;
+}
+
 PluginManifest _buildInstalledManifest({
   required String id,
   required String version,
   required String name,
+  List<String> permissions = const [],
+  bool allowOrderBeforeBuiltIns = false,
 }) {
   return PluginManifest(
     schemaVersion: 1,
@@ -500,11 +663,12 @@ PluginManifest _buildInstalledManifest({
     entrypoint: 'index.html',
     minAppVersion: '0.0.0',
     sdkVersion: '1.x',
-    permissions: const [],
+    permissions: permissions,
     networkEnabled: false,
     networkAllowlist: const [],
     toolTabTitle: name,
     toolTabOrder: 900,
+    allowOrderBeforeBuiltIns: allowOrderBeforeBuiltIns,
     defaultPinned: false,
     publishedDataTypes: const [],
   );

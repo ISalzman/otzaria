@@ -161,6 +161,98 @@ export interface SearchResult {
   index: number;
 }
 
+/** זהות ספר קנונית. בקלט די באחד מ-`id`/`bookId`; שדות שנשלחים יחד חייבים להתאים. */
+export interface BookIdentity {
+  id?: number | null;
+  bookId?: string;
+  type?: 'text' | 'pdf' | 'docx' | 'epub' | 'external' | null;
+  source?: 'library' | 'user' | 'external' | null;
+}
+
+export type SearchMode = 'exact' | 'advanced' | 'fuzzy';
+export type SearchOrder = 'relevance' | 'catalogue' | 'generation';
+export type SearchProximityScope =
+  | 'wordDistance'
+  | 'sameParagraph'
+  | 'sameSection';
+export type SearchGrouping = 'none' | 'sameSection' | 'identicalText';
+export type SearchWordMatchMode = 'all' | 'anyWord' | 'mostWords' | 'atLeast';
+
+/** פרמטרי `search.query` — כל מה שמסך החיפוש של אוצריא שולח למנוע. */
+export interface SearchQueryParams {
+  query: string;
+  negativeQuery?: string;
+  mode?: SearchMode;
+  order?: SearchOrder;
+  /** נחתך ל-500; יחד עם offset אסור לעבור את חלון 10,000 התוצאות. */
+  limit?: number;
+  /** יחד עם limit הממשי אסור לעבור את חלון 10,000 התוצאות. */
+  offset?: number;
+  /** במצב fuzzy הטווח הנתמך הוא 0–2. */
+  distance?: number;
+  proximityScope?: SearchProximityScope;
+  grouping?: SearchGrouping;
+  wordMatchMode?: SearchWordMatchMode;
+  /** חוקי רק ב-advanced יחד עם wordMatchMode: 'atLeast'. */
+  wordMatchCount?: number;
+  /** אפשרויות מילה שחלות על כל מילות השאילתה. */
+  options?: Record<string, boolean>;
+  /** אפשרויות פר-מילה במפתח `"{מילה}_{אינדקס}"`; גובר על `options`. */
+  wordOptions?: Record<string, Record<string, boolean>>;
+  alternativeWords?: Record<string, string[]>;
+  customSpacing?: Record<string, string>;
+  negativeDistance?: number;
+  negativeProximityScope?: SearchProximityScope;
+  negativeOptions?: Record<string, boolean>;
+  negativeWordOptions?: Record<string, Record<string, boolean>>;
+  negativeAlternativeWords?: Record<string, string[]>;
+  negativeCustomSpacing?: Record<string, string>;
+  categories?: string[];
+  books?: BookIdentity[];
+  authors?: string[];
+  eras?: string[];
+  baseBooksOnly?: boolean;
+  facets?: string[];
+  includeBookCounts?: boolean;
+}
+
+export interface SearchQueryHit extends BookIdentity {
+  book: string;
+  reference: string;
+  text: string;
+  index: number;
+  mergedCount: number;
+  merged?: Array<
+    BookIdentity & { book: string; reference: string; index: number }
+  >;
+}
+
+export interface SearchQueryResponse {
+  results: SearchQueryHit[];
+  total: number;
+  groupCount: number | null;
+  /** `true` = שאילתה רחבה מדי; התוצאות והספירה חלקיות. */
+  truncated: boolean;
+  limit: number;
+  offset: number;
+  facets: string[];
+  bookCounts?: Array<BookIdentity & { title: string; count: number }>;
+}
+
+export interface SearchOptionsCatalog {
+  modes: SearchMode[];
+  orders: SearchOrder[];
+  proximityScopes: SearchProximityScope[];
+  grouping: SearchGrouping[];
+  wordMatchModes: SearchWordMatchMode[];
+  wordOptions: { exact: string[]; advanced: string[]; vocalized: string[] };
+  eras: string[];
+  maxLimit: number;
+  maxResultWindow: number;
+  fuzzyMaxDistance: number;
+  defaultLimit: number;
+}
+
 export interface TocEntry {
   text: string;
   index: number;
@@ -870,6 +962,8 @@ export type OtzariaMethod =
   | 'library.listBookAltStructures'
   | 'library.getBookAltToc'
   | 'search.fullText'
+  | 'search.query'
+  | 'search.getOptions'
   | 'reader.openBook'
   | 'reader.openBookAtRef'
   | 'reader.getCurrentState'

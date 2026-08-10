@@ -237,6 +237,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           previousVersion: prepareInfo.previousVersion,
           previousAllowOrderBeforeBuiltInsGranted:
               prepareInfo.previousAllowOrderBeforeBuiltInsGranted,
+          previousGrantedPermissions: prepareInfo.previousGrantedPermissions,
         ),
       );
     } on PluginOverwriteException catch (e) {
@@ -283,6 +284,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           previousVersion: prepareInfo.previousVersion,
           previousAllowOrderBeforeBuiltInsGranted:
               prepareInfo.previousAllowOrderBeforeBuiltInsGranted,
+          previousGrantedPermissions: prepareInfo.previousGrantedPermissions,
           reportContext: event.reportContext,
         ),
       );
