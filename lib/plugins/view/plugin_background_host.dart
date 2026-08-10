@@ -540,6 +540,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         allowUniversalAccessFromFileURLs: false,
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
+        // נדרש כדי ש-onDownloadStarting ייקרא (הקוד ה-native בודק את הדגל
+        // לפני העברת אירוע DownloadStarting ל-Dart).
+        useOnDownloadStart: true,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: kDebugMode,
       ),
@@ -550,6 +553,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         ),
         buildPluginDropGuardScript(),
       ]),
+      onDownloadStarting: (controller, request) async {
+        // תוסף רקע מוסתר - חלונית ההורדות של WebView2 הייתה נפתחת בתוך
+        // WebView בלתי-נראה, ללא שום חיווי למשתמש. מסתירים אותה ומציגים
+        // הודעת הצלחה; ההורדה ממשיכה כרגיל אל תיקיית ההורדות.
+        UiSnack.showSuccess('הקובץ נשמר בהצלחה!');
+        return DownloadStartResponse(handled: true);
+      },
       onWebViewCreated: (controller) {
         try {
           _controller = controller;
