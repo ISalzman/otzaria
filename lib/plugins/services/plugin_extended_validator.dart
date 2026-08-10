@@ -80,6 +80,7 @@ const Set<String> _knownApiMethods = {
   'reader.clearAllHighlights',
   'navigation.goTo',
   'plugin.openSelf',
+  'plugin.backgroundDone',
   'notes.list',
   'notes.getBookNotesSummary',
   'notes.add',
@@ -354,6 +355,8 @@ const Map<String, String> _methodMinVersion = {
   'plugin.openSelf': '0.9.96',
   'library.listBookAltStructures': '0.9.96',
   'library.getBookAltToc': '0.9.96',
+  // 0.9.97
+  'plugin.backgroundDone': '0.9.97',
   'app.getConnectivity': '0.9.96',
 };
 

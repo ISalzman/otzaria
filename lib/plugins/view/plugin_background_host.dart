@@ -550,6 +550,8 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           dialogTitle: title,
         );
       },
+      onBackgroundInstanceDone: () => PluginLazyActivationService.instance
+          .requestImmediateTeardown(widget.plugin.pluginId),
       pickFile: ({List<String>? allowedExtensions, String? title}) async {
         final ctx = navigatorKey.currentContext;
         if (ctx == null) return null;
@@ -698,6 +700,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         );
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
+        // רשת דפדפנית ישירה (fetch רגיל) אינה עוברת ב-Bridge — נספרת
+        // כפעילות כאן, כדי שהכיבוי העצל לא יקטע בקשה ארוכה.
+        PluginLazyActivationService.instance.notifyActivity(
+          widget.plugin.pluginId,
+        );
         try {
           final uri = navigationAction.request.url;
           if (uri == null) return NavigationActionPolicy.CANCEL;
@@ -744,6 +751,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         }
       },
       shouldInterceptRequest: (controller, request) async {
+        PluginLazyActivationService.instance.notifyActivity(
+          widget.plugin.pluginId,
+        );
         try {
           final uri = request.url;
           if (uri.scheme == 'file') {

@@ -99,6 +99,27 @@ class PluginLazyActivationService {
     if (wasTracked) backgroundDeactivator?.call(pluginId);
   }
 
+  /// כיבוי מיידי לבקשת התוסף (`plugin.backgroundDone`) — בלי להמתין לשעון
+  /// חוסר-הפעילות. חל רק על מופע שהוער עצל: מופעי העלייה הישנים ודף התוסף
+  /// אינם במעקב ולכן אינם מושפעים. מחזיר האם הבקשה התקבלה.
+  bool requestImmediateTeardown(String pluginId) {
+    if (!_idleTracked.contains(pluginId)) return false;
+    _idleTimers.remove(pluginId)?.cancel();
+    // השהיה קצרה — שתשובת ה-RPC תספיק לחזור לתוסף לפני השמדת ה-WebView.
+    Timer(const Duration(milliseconds: 300), () {
+      if (!_idleTracked.contains(pluginId)) return;
+      // עבודה חדשה החלה בינתיים (RPC פתוח או אירועים בתור) — לא קוטעים;
+      // חוזרים לשעון הרגיל.
+      if ((_busyCounts[pluginId] ?? 0) > 0 ||
+          _pending[pluginId]?.isNotEmpty == true) {
+        _restartIdleTimer(pluginId);
+        return;
+      }
+      backgroundDeactivator?.call(pluginId);
+    });
+    return true;
+  }
+
   /// האם המופע של [pluginId] בתהליך הרמה (הופעל אך טרם סיים boot).
   bool isBootPending(String pluginId) => _activating.contains(pluginId);
 

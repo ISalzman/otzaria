@@ -195,6 +195,41 @@ void main() {
       expect(deactivations, ['p1']);
     });
 
+    test(
+      'backgroundDone tears down immediately, without the idle wait',
+      () async {
+        // שעון ארוך בכוונה — הכיבוי חייב להגיע מהבקשה המפורשת, לא מהשעון.
+        service.idleDelayOverride = const Duration(seconds: 30);
+        service.trackIdleTeardown('p1');
+        await service.onBackgroundInstanceReady('p1');
+
+        expect(service.requestImmediateTeardown('p1'), isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        expect(deactivations, ['p1']);
+      },
+    );
+
+    test('backgroundDone on an untracked instance is a safe no-op', () async {
+      expect(service.requestImmediateTeardown('p1'), isFalse);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(deactivations, isEmpty);
+    });
+
+    test('backgroundDone defers when new work started meanwhile', () async {
+      service.idleDelayOverride = const Duration(milliseconds: 50);
+      service.trackIdleTeardown('p1');
+      await service.onBackgroundInstanceReady('p1');
+
+      expect(service.requestImmediateTeardown('p1'), isTrue);
+      service.beginWork('p1');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(deactivations, isEmpty, reason: 'RPC חדש נפתח — לא קוטעים');
+
+      service.endWork('p1');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(deactivations, ['p1'], reason: 'ומשם — השעון הרגיל');
+    });
+
     test('a torn-down plugin can be re-activated by the next click', () async {
       service.trackIdleTeardown('p1');
       await service.onBackgroundInstanceReady('p1');

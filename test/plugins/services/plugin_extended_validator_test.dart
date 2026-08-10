@@ -306,7 +306,12 @@ void main() {
       // שומר מפני רגרסיה: כל API שנוסף ל-knownApiMethods חייב להופיע גם
       // ב-methodRequiredPermissions, אלא אם ה-runtime לא דורש עבורו הרשאה.
       // fs.extractZip/deleteFile מגודרים ע"י ui.pickFolder, לא ע"י manifest.
-      const noManifestPermission = {'fs.extractZip', 'fs.deleteFile'};
+      // plugin.backgroundDone הוא ניהול-עצמי של מופע הרקע — נטול הרשאה בכוונה.
+      const noManifestPermission = {
+        'fs.extractZip',
+        'fs.deleteFile',
+        'plugin.backgroundDone',
+      };
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))
           .where(

@@ -307,6 +307,11 @@ class PluginBridgeDependencies {
   final Future<List<AltTocEntryRow>> Function(int structureId)?
   altTocEntriesProvider;
 
+  /// `plugin.backgroundDone` — התוסף מכריז שסיים את עבודת הרקע. מחווט רק
+  /// במופע הרקע (PluginBackgroundHost); בדף התוסף נשאר null, כך שקריאה
+  /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
+  final bool Function()? onBackgroundInstanceDone;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -326,6 +331,7 @@ class PluginBridgeDependencies {
     this.resolveRefToLine,
     this.altStructuresProvider,
     this.altTocEntriesProvider,
+    this.onBackgroundInstanceDone,
   });
 }
 
@@ -2834,6 +2840,8 @@ class PluginBridgeAdapter {
           payload: {'param': args['param']},
         );
         return true;
+      case 'backgroundDone':
+        return _dependencies.onBackgroundInstanceDone?.call() ?? false;
       default:
         throw Exception('Unknown action in plugin: $action');
     }

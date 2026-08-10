@@ -922,6 +922,7 @@ export type OtzariaMethod =
   | 'network.download'
   | 'shortcut.create'
   | 'plugin.openSelf'
+  | 'plugin.backgroundDone'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.updateContextMenuItem'
