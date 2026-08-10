@@ -197,19 +197,22 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     } catch (e, st) {
       if (_isStale(opId)) return;
       _logUpdateError('applyDeltaPlan', e, st);
-      // תוכן ה-DB סטה מהקנוני — כל ניסיון דלתא חוזר ייכשל באותה נקודה,
-      // לכן מציעים הורדה מלאה במקום להשאיר את המשתמש בלולאת נסה-שוב.
+      // אי-התאמת hash הופכת את מסלול הדלתא ללא בטוח; הורדה מלאה עוקפת אותו.
       if (e is PatchApplyException && e.isContentMismatch) {
+        final mismatchReason =
+            e.hashMismatchStage == PatchHashMismatchStage.toContentHash
+            ? 'תוצאת עדכון הדלתא אינה תואמת לגרסה הצפויה'
+            : 'תוכן הספרייה המקומית שונה מהצפוי';
         final fallback = plan.toFullDownloadFallback(
-          reason: 'תוכן הספרייה המקומית שונה מהצפוי',
+          reason: mismatchReason,
         );
         if (fallback != null) {
           emit(
             LibraryUpdateState(
               status: LibraryUpdateStatus.needsFullConfirmation,
               message:
-                  'תוכן הספרייה המקומית שונה מהצפוי — נדרשת הורדה '
-                  'מלאה (${_formatSize(fallback.totalDownloadSize)})',
+                  '$mismatchReason — נדרשת הורדה מלאה '
+                  '(${_formatSize(fallback.totalDownloadSize)})',
               plan: fallback,
             ),
           );
