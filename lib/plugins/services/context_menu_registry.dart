@@ -10,6 +10,9 @@ class ContextMenuRegistry extends ChangeNotifier {
   @visibleForTesting
   ContextMenuRegistry.forTesting();
 
+  /// מופע מנותק לפרסינג-יבש בוולידציה (אריזה/התקנה) — לא נוגע ב-UI.
+  ContextMenuRegistry.detached();
+
   final Map<String, List<PluginContextMenuItem>> _items = {};
 
   void register(String pluginId, PluginContextMenuItem item) {
@@ -236,7 +239,33 @@ class ContextMenuRegistry extends ChangeNotifier {
       colors: colors,
       openPlugin: json['openPlugin'] == true,
       param: json['param'],
+      showWhenContainsAny: _parseShowWhen(json['showWhen']),
     );
+  }
+
+  /// `showWhen: {selectionContainsAny: [...]}` — עד 50 מילים, כל אחת עד 100
+  /// תווים. בכוונה רשימת מילים ולא regex: ביטוי של תוסף היה רץ על כל סימון
+  /// ופותח פתח ל-ReDoS.
+  List<String> _parseShowWhen(Object? value) {
+    if (value == null) return const [];
+    if (value is! Map) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'showWhen must be an object',
+      );
+    }
+    final words = value['selectionContainsAny'];
+    if (words == null) return const [];
+    if (words is! List || words.isEmpty || words.length > 50) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'showWhen.selectionContainsAny must contain 1-50 strings',
+      );
+    }
+    return [
+      for (final word in words)
+        _safeText(word, field: 'showWhen.selectionContainsAny', maxLength: 100),
+    ];
   }
 
   String _safeText(

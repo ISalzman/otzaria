@@ -33,18 +33,32 @@ class PluginBridgeHandler {
   final RateLimiter _rateLimiter;
   final PluginRegistryRepository _registry;
 
+  /// מופעלים בתחילת ובסוף כל RPC — מאפשרים למופע רקע לאותת "אני עסוק"
+  /// למנגנון הכיבוי אחרי חוסר פעילות, בלי לקטוע RPC ארוך באמצעו.
+  final void Function()? onWorkStarted;
+  final void Function()? onWorkEnded;
+
   PluginBridgeHandler(
     this.plugin, {
     required this.adapter,
     PluginRegistryRepository? registry,
     RateLimiter? rateLimiter,
+    this.onWorkStarted,
+    this.onWorkEnded,
   }) : _registry = registry ?? PluginRegistryRepository(),
        _rateLimiter = rateLimiter ?? RateLimiter();
 
   void register(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
       handlerName: 'otzaria_rpc',
-      callback: _handleRpc,
+      callback: (args) async {
+        onWorkStarted?.call();
+        try {
+          return await _handleRpc(args);
+        } finally {
+          onWorkEnded?.call();
+        }
+      },
     );
   }
 

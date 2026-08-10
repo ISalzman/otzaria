@@ -421,7 +421,7 @@ void main() {
     );
 
     final rowFinder = find.ancestor(
-      of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
+      of: find.text('ריצה ברקע ללא פתיחת התוסף'),
       matching: find.byType(ListTile),
     );
     expect(rowFinder, findsOneWidget);
@@ -652,7 +652,7 @@ void main() {
       );
 
       final rowFinder = find.ancestor(
-        of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
+        of: find.text('ריצה ברקע ללא פתיחת התוסף'),
         matching: find.byType(ListTile),
       );
       await tester.ensureVisible(rowFinder);

@@ -3,11 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 
@@ -23,6 +30,28 @@ class _FakeRegistryRepo extends Fake implements PluginRegistryRepository {
   @override
   Future<bool?> getPermission(String pluginId, String permission) async =>
       this.permission;
+}
+
+// ── fake repository לסנכרון תרומות עלייה (הרשאות מוענקות, בלי SQLite) ──────
+class _ContributionsRepo extends Fake implements PluginRegistryRepository {
+  @override
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [
+    for (final permission in const [
+      'app.startup_contributions',
+      'reader.toolbar',
+    ])
+      PluginPermissionGrant(
+        pluginId: id,
+        permission: permission,
+        granted: true,
+        grantedAt: DateTime(2026),
+      ),
+  ];
+
+  @override
+  Future<List<PluginPublishedRecord>> getPluginPublishedRecords(
+    String pluginId,
+  ) async => const [];
 }
 
 class _FakeWebViewController extends Fake implements InAppWebViewController {
@@ -898,6 +927,110 @@ void main() {
 
       expect(a.pauseCalls, 1);
       expect(a.jsEvents, contains(contains('suspended')));
+    });
+  });
+
+  group('אירוע ממוקד לתוסף בלי מנוע חי', () {
+    late List<String> opened;
+
+    setUp(() {
+      opened = [];
+      PluginPageLauncher.instance.navigator = opened.add;
+    });
+
+    tearDown(() {
+      PluginPageLauncher.instance.navigator = null;
+    });
+
+    test('בלי הרשאת ריצה ברקע — לחיצה נופלת לפתיחת דף התוסף', () async {
+      addTearDown(
+        () => PluginPageLauncher.instance.markPageClosed('lazy-none'),
+      );
+
+      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+        'lazy-none',
+        'reader.toolbar_item_clicked',
+        {'itemId': 'b1'},
+        preferBackground: true,
+      );
+
+      expect(opened, ['lazy-none']);
+    });
+
+    test('פריט דקלרטיבי שורד סגירת מופע רקע (כיבוי עצל)', () async {
+      const pid = 'contrib.survives';
+      final repo = _ContributionsRepo();
+      final plugin = InstalledPlugin(
+        pluginId: pid,
+        name: 'Test',
+        version: '1.0.0',
+        installPath: '/plugins/$pid',
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: PluginManifest.fromJson({
+          'schemaVersion': 1,
+          'id': pid,
+          'name': 'Test',
+          'version': '1.0.0',
+          'entrypoint': 'index.html',
+          'permissions': const <String>[],
+          'contributes': {
+            'startup': {
+              'toolbarItems': [
+                {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+              ],
+            },
+          },
+        }),
+        installedAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+      await PluginStartupContributionsService.instance.sync([plugin], repo);
+      addTearDown(() async {
+        await PluginStartupContributionsService.instance.sync(const [], repo);
+        PluginToolbarRegistry.instance.removeAll(pid);
+      });
+
+      PluginRuntimeDispatcher.instance.registerController(
+        pid,
+        _FakeController(),
+        instanceId: 'background',
+      );
+      PluginRuntimeDispatcher.instance.unregisterController(
+        pid,
+        instanceId: 'background',
+      );
+
+      expect(
+        PluginToolbarRegistry.instance.getAll().where(
+          (record) => record.$1 == pid,
+        ),
+        hasLength(1),
+        reason:
+            'ניקוי ה-registries בסגירת ה-controller חייב להחזיר '
+            'רישומים דקלרטיביים',
+      );
+    });
+
+    test('עם הרשאת ריצה ברקע — האירוע נכנס לתור ההערה ולא נפתח דף', () async {
+      PluginLazyActivationService.instance.syncPlugin(
+        'lazy-ok',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+      );
+      addTearDown(
+        () => PluginLazyActivationService.instance.removePlugin('lazy-ok'),
+      );
+
+      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+        'lazy-ok',
+        'reader.toolbar_item_clicked',
+        {'itemId': 'b1'},
+        preferBackground: true,
+      );
+
+      expect(opened, isEmpty);
     });
   });
 }

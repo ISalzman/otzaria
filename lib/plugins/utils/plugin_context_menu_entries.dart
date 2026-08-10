@@ -12,9 +12,11 @@ List<AppContextMenuEntry> buildPluginContextMenuEntries({
   PluginRuntimeDispatcher? dispatcher,
 }) {
   final runtime = dispatcher ?? PluginRuntimeDispatcher.instance;
+  final selectedText = _selectedTextOf(selection);
   return [
     for (final record in records)
-      if (record.$2.contexts.contains(context))
+      if (record.$2.contexts.contains(context) &&
+          record.$2.isVisibleForSelection(selectedText))
         _buildEntry(
           pluginId: record.$1,
           item: record.$2,
@@ -24,6 +26,9 @@ List<AppContextMenuEntry> buildPluginContextMenuEntries({
         ),
   ];
 }
+
+String _selectedTextOf(Map<String, dynamic> selection) =>
+    (selection['renderedSelectedText'] ?? selection['text'] ?? '').toString();
 
 AppContextMenuEntry _buildEntry({
   required String pluginId,
@@ -62,7 +67,8 @@ AppContextMenuEntry _buildEntry({
       icon: fluentIconFromName(item.icon),
       children: [
         for (final child in item.children)
-          if (child.contexts.contains(context))
+          if (child.contexts.contains(context) &&
+              child.isVisibleForSelection(_selectedTextOf(selection)))
             _buildEntry(
               pluginId: pluginId,
               item: child,

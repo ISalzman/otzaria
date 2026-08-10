@@ -1,0 +1,392 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_published_record.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
+import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+
+class _FakeRepo implements PluginRegistryRepository {
+  final Map<String, Set<String>> grantedByPlugin = {};
+  final List<PluginPublishedRecord> records = [];
+  int publishCalls = 0;
+
+  @override
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [
+    for (final permission in grantedByPlugin[id] ?? const <String>{})
+      PluginPermissionGrant(
+        pluginId: id,
+        permission: permission,
+        granted: true,
+        grantedAt: DateTime(2026),
+      ),
+  ];
+
+  @override
+  Future<void> publishRecord(
+    String pluginId,
+    String type,
+    String scope,
+    String recordKey,
+    String payloadJson,
+    String? expiresAt,
+  ) async {
+    publishCalls++;
+    records.removeWhere(
+      (r) =>
+          r.pluginId == pluginId &&
+          r.type == type &&
+          r.scope == scope &&
+          r.key == recordKey,
+    );
+    records.add(
+      PluginPublishedRecord(
+        pluginId: pluginId,
+        type: type,
+        scope: scope,
+        key: recordKey,
+        payloadJson: payloadJson,
+        version: 1,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      ),
+    );
+  }
+
+  @override
+  Future<void> unpublishRecord(
+    String pluginId,
+    String type,
+    String scope,
+    String recordKey,
+  ) async {
+    records.removeWhere(
+      (r) =>
+          r.pluginId == pluginId &&
+          r.type == type &&
+          r.scope == scope &&
+          r.key == recordKey,
+    );
+  }
+
+  @override
+  Future<List<PluginPublishedRecord>> getPluginPublishedRecords(
+    String pluginId,
+  ) async => records.where((r) => r.pluginId == pluginId).toList();
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+InstalledPlugin _plugin({
+  String id = 'p1',
+  bool enabled = true,
+  Map<String, dynamic>? startup,
+}) {
+  final manifest = PluginManifest.fromJson({
+    'schemaVersion': 1,
+    'id': id,
+    'name': 'Test',
+    'version': '1.0.0',
+    'entrypoint': 'index.html',
+    'permissions': const <String>[],
+    'contributes': {'startup': ?startup},
+  });
+  return InstalledPlugin(
+    pluginId: id,
+    name: 'Test',
+    version: '1.0.0',
+    installPath: '/plugins/$id',
+    entrypointPath: 'index.html',
+    enabled: enabled,
+    pinned: false,
+    manifest: manifest,
+    installedAt: DateTime(2026),
+    updatedAt: DateTime(2026),
+  );
+}
+
+Map<String, dynamic> _fullStartup() => {
+  'toolbarItems': [
+    {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+  ],
+  'contextMenuItems': [
+    {'id': 'm1', 'title': 'פריט'},
+  ],
+  'publishedData': [
+    {
+      'type': 'calendar.event',
+      'key': 'k1',
+      'payload': {'title': 'אירוע'},
+    },
+  ],
+  'activationEvents': ['reader.sectionContentChanged'],
+};
+
+const _allPermissions = {
+  'app.startup_contributions',
+  'reader.toolbar',
+  'reader.context_menu',
+  'published_data.write',
+  'events.subscribe:reader.sectionContentChanged',
+};
+
+void main() {
+  late PluginToolbarRegistry toolbar;
+  late ContextMenuRegistry contextMenu;
+  late PluginLazyActivationService activation;
+  late PluginStartupContributionsService service;
+  late _FakeRepo repo;
+
+  setUp(() {
+    toolbar = PluginToolbarRegistry.forTesting();
+    contextMenu = ContextMenuRegistry.forTesting();
+    activation = PluginLazyActivationService.forTesting();
+    service = PluginStartupContributionsService.forTesting(
+      toolbarRegistry: toolbar,
+      contextMenuRegistry: contextMenu,
+      activationService: activation,
+    );
+    repo = _FakeRepo();
+  });
+
+  test('registers all contributions when permissions are granted', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(toolbar.getAll().single.$2.id, 'b1');
+    expect(contextMenu.getAll().single.$2.id, 'm1');
+    final record = repo.records.single;
+    expect(record.key, 'manifest:k1');
+    expect(jsonDecode(record.payloadJson), {'title': 'אירוע'});
+    expect(
+      activation.queueTargetedEvent('p1', 'click', {}),
+      isFalse,
+      reason: 'בלי app.run_on_startup אין הערה שקטה — לחיצה תפתח את הדף',
+    );
+  });
+
+  test('lazy activation requires the app.run_on_startup permission', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions, 'app.run_on_startup'};
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(activation.queueTargetedEvent('p1', 'click', {}), isTrue);
+
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(
+      activation.queueTargetedEvent('p1', 'click', {}),
+      isFalse,
+      reason: 'שלילת ההרשאה מבטלת את יכולת ההערה',
+    );
+    expect(toolbar.getAll(), hasLength(1), reason: 'הרישומים נשארים');
+  });
+
+  test('without app.startup_contributions nothing is registered', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions}
+      ..remove('app.startup_contributions');
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(contextMenu.getAll(), isEmpty);
+    expect(repo.records, isEmpty);
+    expect(activation.queueTargetedEvent('p1', 'click', {}), isFalse);
+  });
+
+  test('each category is gated by its domain permission', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions}..remove('reader.toolbar');
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(contextMenu.getAll(), hasLength(1));
+    expect(repo.records, hasLength(1));
+  });
+
+  test('revoking the permission on a later sync removes everything', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    final plugin = _plugin(startup: _fullStartup());
+    await service.sync([plugin], repo);
+    expect(toolbar.getAll(), hasLength(1));
+
+    repo.grantedByPlugin['p1'] = {};
+    await service.sync([plugin], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(contextMenu.getAll(), isEmpty);
+    expect(repo.records, isEmpty);
+  });
+
+  test('a disabled plugin contributes nothing', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+
+    await service.sync([
+      _plugin(startup: _fullStartup(), enabled: false),
+    ], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(repo.records, isEmpty);
+  });
+
+  test('an uninstalled plugin is cleaned up on the next sync', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+    expect(toolbar.getAll(), hasLength(1));
+
+    await service.sync(const [], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(repo.records, isEmpty);
+  });
+
+  test('a plugin update removes stale items and seeded records', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    final updated = _plugin(
+      startup: {
+        'toolbarItems': [
+          {'id': 'b2', 'title': 'חדש', 'icon': 'apps_24_regular'},
+        ],
+        'publishedData': [
+          {
+            'type': 'calendar.event',
+            'key': 'k2',
+            'payload': {'title': 'אחר'},
+          },
+        ],
+      },
+    );
+    await service.sync([updated], repo);
+
+    expect(toolbar.getAll().single.$2.id, 'b2');
+    expect(contextMenu.getAll(), isEmpty);
+    expect(repo.records.single.key, 'manifest:k2');
+  });
+
+  test('replacing both declarative items with new ids succeeds', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    Map<String, dynamic> pair(String a, String b) => {
+      'toolbarItems': [
+        {'id': a, 'title': a, 'icon': 'apps_24_regular'},
+        {'id': b, 'title': b, 'icon': 'apps_24_regular'},
+      ],
+    };
+
+    await service.sync([_plugin(startup: pair('a1', 'a2'))], repo);
+    await service.sync([_plugin(startup: pair('b1', 'b2'))], repo);
+
+    expect(
+      toolbar.getAll().map((record) => record.$2.id).toSet(),
+      {'b1', 'b2'},
+    );
+  });
+
+  test('an unchanged publishedData seed is not rewritten', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    final plugin = _plugin(startup: _fullStartup());
+
+    await service.sync([plugin], repo);
+    expect(repo.publishCalls, 1);
+
+    await service.sync([plugin], repo);
+    await service.sync([plugin], repo);
+    expect(repo.publishCalls, 1, reason: 'תוכן זהה — אסור לכתוב שוב');
+  });
+
+  test('runtime (non-seeded) published records are never touched', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    await repo.publishRecord(
+      'p1',
+      'calendar.event',
+      'global',
+      'runtime-key',
+      '{}',
+      null,
+    );
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+    repo.grantedByPlugin['p1'] = {};
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(repo.records.single.key, 'runtime-key');
+  });
+
+  test(
+    'app.startup activation requires the app.run_on_startup permission',
+    () async {
+      var startupScheduled = false;
+      activation.backgroundActivator = (_) async {
+        startupScheduled = true;
+      };
+      activation.startupDelayOverride = Duration.zero;
+      final startup = {
+        'toolbarItems': [
+          {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+        ],
+        'activationEvents': ['app.startup'],
+      };
+
+      repo.grantedByPlugin['p1'] = {
+        'app.startup_contributions',
+        'reader.toolbar',
+      }; // בכוונה בלי app.run_on_startup
+      await service.sync([_plugin(startup: startup)], repo);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(startupScheduled, isFalse, reason: 'בלי ההרשאה הרגישה אין הערה');
+      expect(toolbar.getAll(), hasLength(1), reason: 'הרישומים כן חלים');
+
+      repo.grantedByPlugin['p2'] = {
+        'app.startup_contributions',
+        'app.run_on_startup',
+      };
+      await service.sync(
+        [
+          _plugin(
+            id: 'p2',
+            startup: {
+              'activationEvents': ['app.startup'],
+            },
+          ),
+        ],
+        repo,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(startupScheduled, isTrue);
+    },
+  );
+
+  test('an invalid item is skipped without breaking the rest', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    final startup = _fullStartup();
+    (startup['toolbarItems'] as List).insert(0, {
+      'id': 'bad',
+    }); // חסר title+icon
+
+    await service.sync([_plugin(startup: startup)], repo);
+
+    expect(toolbar.getAll().single.$2.id, 'b1');
+    expect(contextMenu.getAll(), hasLength(1));
+  });
+
+  test('reapply restores declarative items after a registry wipe', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    toolbar.removeAll('p1');
+    contextMenu.removeAll('p1');
+    service.reapply('p1');
+
+    expect(toolbar.getAll(), hasLength(1));
+    expect(contextMenu.getAll(), hasLength(1));
+  });
+}

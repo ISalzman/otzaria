@@ -6,6 +6,9 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 
 enum _PluginRuntimeShutdownMode { idle, restart, exit }
 
@@ -101,6 +104,9 @@ class PluginRuntimeDispatcher {
       _permissionCache.remove(pluginId);
       ContextMenuRegistry.instance.removeAll(pluginId);
       PluginToolbarRegistry.instance.removeAll(pluginId);
+      // רישומים דקלרטיביים מהמניפסט אינם תלויים במנוע חי — נשארים גם אחרי
+      // כיבוי עצל של מופע הרקע (אחרת הפקדים היו נעלמים אחרי 3 דקות).
+      PluginStartupContributionsService.instance.reapply(pluginId);
     }
     // ה-controller ה-foreground נסגר (טאב נסגר) — לא נחזיק מצביע מת.
     if (instanceId == 'default') {
@@ -361,6 +367,8 @@ class PluginRuntimeDispatcher {
     ContextMenuRegistry.instance.removeAll(pluginId);
     PluginToolbarRegistry.instance.removeAll(pluginId);
     PluginHighlightRegistry.instance.removePlugin(pluginId);
+    // רישומים דקלרטיביים מהמניפסט אינם תלויים ב-JS — מוחזרים מיד.
+    PluginStartupContributionsService.instance.reapply(pluginId);
     final callbacks = _reloadCallbacks[pluginId];
     if (callbacks == null || callbacks.isEmpty) return;
     // עותק כדי לא לקרוס אם callback משתמש ב-unregister באמצעו
@@ -410,6 +418,7 @@ class PluginRuntimeDispatcher {
           instances,
           preferBackground: _backgroundEventTopics.contains(topic),
         );
+        _notifyBackgroundActivity(pluginId, instances, targetControllers);
         for (final controller in targetControllers) {
           try {
             await controller.evaluateJavascript(
@@ -424,6 +433,24 @@ class PluginRuntimeDispatcher {
         debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
       }
     }
+
+    // הערה עצלה: תוסף עם contributes.startup שהצהיר על הנושא ואין לו מופע
+    // שמסוגל לקבל אותו — מקבל מנוע רק עכשיו, כשהאירוע באמת קרה.
+    PluginLazyActivationService.instance.onBroadcast(
+      topic,
+      payload,
+      hasUsableInstance: (pluginId) {
+        final instances = _controllersByPlugin[pluginId];
+        if (instances == null || instances.isEmpty) return false;
+        // מופע רקע באמצע boot עוד לא מסוגל לקבל אירועים.
+        if (instances.containsKey('background') &&
+            !PluginLazyActivationService.instance.isBootPending(pluginId)) {
+          return true;
+        }
+        return instances.containsKey('default') &&
+            !_suspendedForegroundIds.contains(pluginId);
+      },
+    );
   }
 
   /// שולח event לפלאגין ספציפי בלבד (ללא בדיקת הרשאת subscribe).
@@ -436,8 +463,35 @@ class PluginRuntimeDispatcher {
     bool resumeForegroundIfNeeded = false,
   }) async {
     if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
+    // מופע רקע שנרשם אך טרם סיים boot: eval היה נבלע — האירוע ממתין בתור.
+    if (PluginLazyActivationService.instance.queueIfBootPending(
+      pluginId,
+      topic,
+      payload,
+    )) {
+      return;
+    }
     final instances = _controllersByPlugin[pluginId];
-    if (instances == null || instances.isEmpty) return;
+    if (instances == null || instances.isEmpty) {
+      // אין מנוע חי — עם הרשאת ריצה ברקע התוסף מוּעָר בעצלנות והאירוע ממתין
+      // בתור עד ה-boot; בלעדיה (false) לחיצה נופלת לפתיחת דף התוסף, שם
+      // הדלקת המנוע גלויה למשתמש.
+      if (!PluginLazyActivationService.instance.queueTargetedEvent(
+            pluginId,
+            topic,
+            payload,
+          ) &&
+          preferBackground) {
+        PluginPageLauncher.instance.open(
+          pluginId,
+          topic: topic,
+          payload: payload,
+        );
+      }
+      return;
+    }
+    // foreground מושהה בלי מופע רקע מטופל בהמשך ע"י החייאת הטאב המושהה
+    // (_dispatchToSuspendedForeground) — עדיף על הקמת מנוע רקע נוסף.
     try {
       final isEnabled =
           _enabledCache[pluginId] ?? await _repository.getIsEnabled(pluginId);
@@ -461,6 +515,7 @@ class PluginRuntimeDispatcher {
         instances,
         preferBackground: preferBackground,
       );
+      _notifyBackgroundActivity(pluginId, instances, targetControllers);
       for (final controller in targetControllers) {
         try {
           await controller.evaluateJavascript(
@@ -507,6 +562,18 @@ class PluginRuntimeDispatcher {
         }
       }
     });
+  }
+
+  /// אירוע שנמסר למופע הרקע נחשב פעילות — מאפס את שעון הכיבוי העצל שלו.
+  void _notifyBackgroundActivity(
+    String pluginId,
+    Map<PluginInstanceId, InAppWebViewController> instances,
+    List<InAppWebViewController> targets,
+  ) {
+    final background = instances['background'];
+    if (background != null && targets.contains(background)) {
+      PluginLazyActivationService.instance.notifyActivity(pluginId);
+    }
   }
 
   /// [pluginId] נדרש כדי לדעת אם ה-instance ה-foreground מושהה: `evaluateJavascript`

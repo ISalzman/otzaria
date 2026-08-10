@@ -12,6 +12,9 @@ class PluginToolbarRegistry extends ChangeNotifier {
   @visibleForTesting
   PluginToolbarRegistry.forTesting();
 
+  /// מופע מנותק לפרסינג-יבש בוולידציה (אריזה/התקנה) — לא נוגע ב-UI.
+  PluginToolbarRegistry.detached();
+
   final Map<String, List<PluginToolbarItem>> _items = {};
 
   void register(String pluginId, PluginToolbarItem item) {

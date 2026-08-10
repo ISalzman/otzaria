@@ -1,0 +1,109 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
+
+Map<String, dynamic> _manifestJson({Map<String, dynamic>? startup}) => {
+  'schemaVersion': 1,
+  'id': 'test.startup',
+  'name': 'Test',
+  'version': '1.0.0',
+  'entrypoint': 'index.html',
+  'permissions': const <String>[],
+  'contributes': {'startup': ?startup},
+};
+
+void main() {
+  test('manifest without contributes.startup yields null', () {
+    final manifest = PluginManifest.fromJson(_manifestJson());
+    expect(manifest.startup, isNull);
+  });
+
+  test('parses all startup contribution categories', () {
+    final manifest = PluginManifest.fromJson(
+      _manifestJson(
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+          'contextMenuItems': [
+            {
+              'id': 'm1',
+              'title': 'פריט',
+              'showWhen': {
+                'selectionContainsAny': ['רש"י'],
+              },
+            },
+          ],
+          'publishedData': [
+            {
+              'type': 'calendar.event',
+              'key': 'k1',
+              'payload': {'title': 'אירוע'},
+            },
+          ],
+          'activationEvents': ['app.startup', 'reader.sectionContentChanged'],
+        },
+      ),
+    );
+
+    final startup = manifest.startup!;
+    expect(startup.isEmpty, isFalse);
+    expect(startup.toolbarItems.single['id'], 'b1');
+    expect(startup.contextMenuItems.single['showWhen'], isA<Map>());
+    expect(startup.publishedData.single['key'], 'k1');
+    expect(startup.activationEvents, [
+      PluginStartupContributions.startupActivationTopic,
+      'reader.sectionContentChanged',
+    ]);
+  });
+
+  test('toJson roundtrips through PluginManifest', () {
+    final original = PluginManifest.fromJson(
+      _manifestJson(
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+          'activationEvents': ['app.startup'],
+        },
+      ),
+    );
+
+    final reparsed = PluginManifest.fromJson(original.toJson());
+    expect(reparsed.startup, isNotNull);
+    expect(reparsed.startup!.toolbarItems.single['id'], 'b1');
+    expect(reparsed.startup!.activationEvents, ['app.startup']);
+    expect(reparsed.startup!.contextMenuItems, isEmpty);
+  });
+
+  test('wrong-typed values are skipped without throwing', () {
+    final manifest = PluginManifest.fromJson(
+      _manifestJson(
+        startup: {
+          'toolbarItems': 'not-a-list',
+          'contextMenuItems': ['not-a-map'],
+          'activationEvents': ['ok', 17],
+        },
+      ),
+    );
+
+    final startup = manifest.startup!;
+    expect(startup.toolbarItems, isEmpty);
+    expect(startup.contextMenuItems, isEmpty);
+    expect(startup.activationEvents, ['ok']);
+  });
+
+  test('a non-map contributes.startup parses as null', () {
+    final json = _manifestJson();
+    json['contributes'] = <String, dynamic>{'startup': 'oops'};
+    expect(PluginManifest.fromJson(json).startup, isNull);
+  });
+
+  test('empty startup section parses as empty contributions', () {
+    final manifest = PluginManifest.fromJson(
+      _manifestJson(startup: <String, dynamic>{}),
+    );
+    expect(manifest.startup, isNotNull);
+    expect(manifest.startup!.isEmpty, isTrue);
+  });
+}

@@ -9,6 +9,7 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
+import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'package:otzaria/plugins/services/plugin_download_service.dart';
@@ -99,6 +100,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       final plugins = await repository.getAllPlugins();
       devWatchService.syncWatchers(await repository.getDevelopmentPlugins());
       _registerPluginShortcuts(plugins);
+      await PluginStartupContributionsService.instance.sync(
+        plugins,
+        repository,
+      );
       emit(PluginSystemLoaded(plugins));
     } catch (e) {
       emit(PluginSystemError(e.toString()));

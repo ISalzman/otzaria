@@ -58,6 +58,7 @@ import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
@@ -822,17 +823,20 @@ Future<void> _runDeferredCacheWarmups() async {
 Future<void> _preWarmWebViewEnvironment() async {
   if (kIsWeb || !Platform.isWindows) return;
   try {
-    // בדיקה לפני pre-warm: אם המשתמש לא התקין שום תוסף, ה-WebView2
-    // environment הוא בזבוז של ~100MB RAM (5-7 תהליכי Edge ילדים).
-    // הבדיקה זולה: השאילתה ל-plugin DB כבר רצה בbootstrap (b-
-    // `initPluginDatabaseSources`), השאילתה כאן רק קוראת את התוצאה.
-    // משתמש שיתקין תוסף מאוחר יותר ייעלם משם את ה-pre-warm רק
-    // בהפעלה הבאה — בפעם הראשונה בכל מקרה יש את ההשהיה של 1-2
-    // שניות שהיא העלות הרגילה של יצירת environment.
+    // pre-warm רק כשקיים תוסף שבאמת ירוץ בעלייה (app.run_on_startup מאושרת)
+    // — אחרת ה-WebView2 environment הוא בזבוז של ~100MB RAM (5-7 תהליכי
+    // Edge ילדים). תוספי contributes.startup לא נכללים בכוונה: המנוע שלהם
+    // קם בעצלנות בלחיצה/אירוע, וההשהיה החד-פעמית של 1-2 שניות נסבלת שם.
     final installed = await PluginRegistryRepository().getAllPlugins();
-    if (installed.isEmpty) {
+    final hasStartupRunner = installed.any(
+      (p) =>
+          p.enabled &&
+          p.runOnStartupGranted &&
+          p.manifest.permissions.contains(pluginRunOnStartupPermission),
+    );
+    if (!hasStartupRunner) {
       if (kDebugMode) {
-        debugPrint('WebView2 pre-warm skipped: no plugins installed');
+        debugPrint('WebView2 pre-warm skipped: no startup plugins');
       }
       return;
     }

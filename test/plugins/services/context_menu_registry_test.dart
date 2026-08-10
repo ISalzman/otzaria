@@ -244,5 +244,62 @@ void main() {
         ),
       );
     });
+
+    test('parses showWhen.selectionContainsAny', () {
+      final item = registry.registerPayload('dict', {
+        'id': 'lookup',
+        'title': 'Lookup',
+        'showWhen': {
+          'selectionContainsAny': ['רש"י', 'תוספות'],
+        },
+      });
+
+      expect(item.showWhenContainsAny, ['רש"י', 'תוספות']);
+      expect(item.isVisibleForSelection('דברי רש"י כאן'), isTrue);
+      expect(item.isVisibleForSelection('טקסט אחר'), isFalse);
+      expect(
+        item.toJson()['showWhen'],
+        {
+          'selectionContainsAny': ['רש"י', 'תוספות'],
+        },
+      );
+    });
+
+    test('rejects invalid showWhen payloads', () {
+      Matcher throwsInvalidParams() => throwsA(
+        isA<PluginContextMenuException>().having(
+          (error) => error.code,
+          'code',
+          'error.invalid_params',
+        ),
+      );
+
+      expect(
+        () => registry.registerPayload('dict', {
+          'id': 'bad1',
+          'title': 'Bad',
+          'showWhen': 'not-a-map',
+        }),
+        throwsInvalidParams(),
+      );
+      expect(
+        () => registry.registerPayload('dict', {
+          'id': 'bad2',
+          'title': 'Bad',
+          'showWhen': {'selectionContainsAny': []},
+        }),
+        throwsInvalidParams(),
+      );
+      expect(
+        () => registry.registerPayload('dict', {
+          'id': 'bad3',
+          'title': 'Bad',
+          'showWhen': {
+            'selectionContainsAny': List.filled(51, 'מ'),
+          },
+        }),
+        throwsInvalidParams(),
+      );
+    });
   });
 }
