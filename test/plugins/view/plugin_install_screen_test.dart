@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -78,6 +79,7 @@ PluginManifest _manifest({
   List<String> permissions = const [],
   String version = '1.0.0',
   bool allowOrderBeforeBuiltIns = false,
+  PluginStartupContributions? startup,
 }) => PluginManifest(
   schemaVersion: 1,
   id: 'test.plugin',
@@ -97,6 +99,7 @@ PluginManifest _manifest({
   allowOrderBeforeBuiltIns: allowOrderBeforeBuiltIns,
   defaultPinned: true,
   publishedDataTypes: [],
+  startup: startup,
 );
 
 /// פותח את PluginInstallScreen כ-Dialog (כמו בקוד האמיתי) ומחזיר את ה-Widget.
@@ -410,6 +413,111 @@ void main() {
     );
   });
 
+  testWidgets('תוסף דקלרטיבי מציג את אירועי ההפעלה ואת מגבלת שלוש הדקות', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(
+        permissions: [pluginRunOnStartupPermission],
+        startup: const PluginStartupContributions(
+          contextMenuItems: [
+            {'id': 'lookup', 'title': 'חיפוש'},
+          ],
+          activationEvents: ['app.startup'],
+        ),
+      ),
+      screenHeight: 1400,
+    );
+
+    expect(
+      find.textContaining('לחיצה על פריט בתפריט הטקסט'),
+      findsWidgets,
+    );
+    expect(find.textContaining('3 דקות ללא פעילות'), findsWidgets);
+    expect(find.text('הפעלה ברקע לפי אירוע'), findsOneWidget);
+  });
+
+  testWidgets('תוסף סטטי בלבד מציג שהרשאת הרקע אינה בשימוש', (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(
+        permissions: [pluginRunOnStartupPermission],
+        startup: const PluginStartupContributions(
+          publishedData: [
+            {'type': 'calendar.event', 'key': 'static', 'payload': {}},
+          ],
+        ),
+      ),
+      screenHeight: 1400,
+    );
+
+    expect(
+      find.text('הרשאת הרקע אינה בשימוש בגרסה זו של התוסף'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('אינם מפעילים WebView'), findsOneWidget);
+    expect(find.textContaining('התוסף מבקש לפעול ברקע כאשר:'), findsNothing);
+  });
+
+  testWidgets('בקשת keepAlive מוצגת בנפרד ומתחילה כבויה', (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(
+        permissions: [
+          pluginRunOnStartupPermission,
+          pluginBackgroundKeepAlivePermission,
+        ],
+        startup: const PluginStartupContributions(
+          activationEvents: ['app.startup'],
+          keepAlive: true,
+        ),
+      ),
+      screenHeight: 1700,
+    );
+
+    expect(
+      find.text('התוסף מבקש למנוע את כיבוי מנוע הרקע'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ללא הגבלת זמן'), findsWidgets);
+    final rowFinder = find.ancestor(
+      of: find.text('מניעת כיבוי מנוע הרקע'),
+      matching: find.byType(ListTile),
+    );
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
+  });
+
+  testWidgets('הרשאות כבויות כברירת מחדל מוצגות לפני האחרות', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(
+        permissions: [
+          'notes.read',
+          pluginRunOnStartupPermission,
+          'ui.feedback',
+        ],
+      ),
+      screenHeight: 1400,
+    );
+
+    final sensitiveY = tester.getTopLeft(find.text('טעינה אוטומטית ברקע')).dy;
+    final notesY = tester.getTopLeft(find.text('צפייה בהערות')).dy;
+    final feedbackY = tester.getTopLeft(find.text('הודעות ודיאלוגים')).dy;
+    expect(sensitiveY, lessThan(notesY));
+    expect(sensitiveY, lessThan(feedbackY));
+    expect(notesY, lessThan(feedbackY), reason: 'סדר המניפסט נשמר בין השאר');
+  });
+
   testWidgets('הרשאת app.run_on_startup — Switch מתחיל כבוי ברירת מחדל', (
     tester,
   ) async {
@@ -421,7 +529,7 @@ void main() {
     );
 
     final rowFinder = find.ancestor(
-      of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
+      of: find.text('טעינה אוטומטית ברקע'),
       matching: find.byType(ListTile),
     );
     expect(rowFinder, findsOneWidget);
@@ -652,7 +760,7 @@ void main() {
       );
 
       final rowFinder = find.ancestor(
-        of: find.text('טעינה אוטומטית עם עליית האפליקציה'),
+        of: find.text('טעינה אוטומטית ברקע'),
         matching: find.byType(ListTile),
       );
       await tester.ensureVisible(rowFinder);

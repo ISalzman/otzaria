@@ -84,6 +84,63 @@ void main() {
     }
   });
 
+  test('showWhen hides items whose words are absent from the selection', () {
+    const conditional = PluginContextMenuItem(
+      id: 'lookup',
+      label: 'Lookup',
+      showWhenContainsAny: ['רש"י', 'תוספות'],
+    );
+    const always = PluginContextMenuItem(id: 'always', label: 'Always');
+
+    final without = buildPluginContextMenuEntries(
+      records: const [('dict', conditional), ('dict', always)],
+      selection: const {'text': 'טקסט רגיל'},
+    );
+    expect(without.single.label, 'Always');
+
+    final withMatch = buildPluginContextMenuEntries(
+      records: const [('dict', conditional), ('dict', always)],
+      selection: const {'text': 'פירוש רש"י על הפסוק'},
+    );
+    expect(withMatch.map((e) => e.label), ['Lookup', 'Always']);
+  });
+
+  test('showWhen prefers renderedSelectedText over raw text', () {
+    const conditional = PluginContextMenuItem(
+      id: 'lookup',
+      label: 'Lookup',
+      showWhenContainsAny: ['מילה'],
+    );
+
+    final entries = buildPluginContextMenuEntries(
+      records: const [('dict', conditional)],
+      selection: const {'renderedSelectedText': 'יש כאן מילה', 'text': 'אחר'},
+    );
+    expect(entries, hasLength(1));
+  });
+
+  test('showWhen filters submenu children individually', () {
+    const item = PluginContextMenuItem(
+      id: 'menu',
+      type: 'submenu',
+      label: 'Menu',
+      children: [
+        PluginContextMenuItem(id: 'always', label: 'Always'),
+        PluginContextMenuItem(
+          id: 'conditional',
+          label: 'Conditional',
+          showWhenContainsAny: ['חסר'],
+        ),
+      ],
+    );
+
+    final entry = buildPluginContextMenuEntries(
+      records: const [('dict', item)],
+      selection: const {'text': 'טקסט'},
+    ).single;
+    expect(entry.children!.map((child) => child.label), ['Always']);
+  });
+
   test('filters submenu children by their inherited or explicit context', () {
     const item = PluginContextMenuItem(
       id: 'menu',

@@ -87,6 +87,7 @@ import 'package:otzaria/widgets/misc/app_cursors.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
+import 'package:otzaria/plugins/services/plugin_background_policy.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
@@ -654,20 +655,7 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
 
-  // פרי-וורם של WebView2 environment ברקע. הפעם הראשונה שיוצרים סביבת
-  // WebView2 ב-Windows מצמיחה כמה תהליכי-בן של Edge ולוקחת 1-2 שניות
-  // CPU + רישות I/O. אם המשתמש פותח תוסף בפעם הראשונה — הוא רואה את
-  // ההשהיה הזו כטאב לבן/קפוא. ביצוע ה-init פה, אחרי שכל שאר ה-bootstrap
-  // סיים, מעביר את העלות לרקע בעוד ה-UI מציג את המסך הראשי.
-  //
-  // קריאה מקבילית לאותה initialize ע"י plugin_tab_page (כשהמשתמש פותח
-  // תוסף לפני שה-pre-warm הסתיים) בטוחה — ה-WebViewEnvironmentHolder
-  // עצמו עוטף את ה-init הראשון ב-future ששמור, וקוראים מאוחרים יחלקו
-  // את אותו future. אין סיכוי לכפילות של Edge process trees.
-  //
-  // אנחנו לא await כדי לא לעכב את ה-bootstrap; השגיאה הופכת ל-non-fatal.
-  // עלות: ~100MB RAM לתהליכי Edge הילדים, מנוקים ע"י ה-Job Object
-  // בעת סגירת התהליך — אז לא יוותרו זומבים גם אם המשתמש לעולם לא יפתח תוסף.
+  // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
 }
 
@@ -822,17 +810,12 @@ Future<void> _runDeferredCacheWarmups() async {
 Future<void> _preWarmWebViewEnvironment() async {
   if (kIsWeb || !Platform.isWindows) return;
   try {
-    // בדיקה לפני pre-warm: אם המשתמש לא התקין שום תוסף, ה-WebView2
-    // environment הוא בזבוז של ~100MB RAM (5-7 תהליכי Edge ילדים).
-    // הבדיקה זולה: השאילתה ל-plugin DB כבר רצה בbootstrap (b-
-    // `initPluginDatabaseSources`), השאילתה כאן רק קוראת את התוצאה.
-    // משתמש שיתקין תוסף מאוחר יותר ייעלם משם את ה-pre-warm רק
-    // בהפעלה הבאה — בפעם הראשונה בכל מקרה יש את ההשהיה של 1-2
-    // שניות שהיא העלות הרגילה של יצירת environment.
+    // תוסף דקלרטיבי נשאר עצל גם אם אושרה לו הפעלה ברקע.
     final installed = await PluginRegistryRepository().getAllPlugins();
-    if (installed.isEmpty) {
+    final hasStartupRunner = installed.any(usesLegacyStartupRunner);
+    if (!hasStartupRunner) {
       if (kDebugMode) {
-        debugPrint('WebView2 pre-warm skipped: no plugins installed');
+        debugPrint('WebView2 pre-warm skipped: no startup plugins');
       }
       return;
     }

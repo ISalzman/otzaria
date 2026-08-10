@@ -671,7 +671,7 @@ void main() {
       expect(_rowButton('תוסף-A', 'הסתר מהממשק'), findsNothing);
       expect(_rowButton('תוסף-A', 'הצמד לסרגל הניווט'), findsNothing);
       expect(_rowButton('תוסף-A', 'אישור גישה לרשת'), findsNothing);
-      expect(_rowButton('תוסף-A', 'הפעלת טעינה בעלייה'), findsNothing);
+      expect(_rowButton('תוסף-A', 'אישור הפעלה ברקע'), findsNothing);
 
       // האייקון והגרסה נשארים מוצגים — גובה השורה זהה לשורת תוסף פעיל.
       final row = find.ancestor(
@@ -744,7 +744,7 @@ void main() {
       );
       expect(
         buttonWithTooltip(
-          'הפעלת טעינה בעלייה',
+          'אישור הפעלה ברקע',
         ).style?.backgroundColor?.resolve({}),
         isNotNull,
       );
@@ -821,7 +821,7 @@ void main() {
       final gesture = await _hoverRow(tester, 'תוסף-A');
       addTearDown(() => gesture.removePointer());
 
-      await tester.tap(_rowButton('תוסף-A', 'ביטול טעינה בעלייה'));
+      await tester.tap(_rowButton('תוסף-A', 'ביטול הפעלה ברקע'));
       await tester.pumpAndSettle();
 
       final events = pluginBloc.dispatched
@@ -1201,7 +1201,7 @@ void main() {
   );
 
   testWidgets(
-    'startup button — tapping "טעינה רגילה" dispatches granted:false',
+    'startup button — disabling background activation dispatches granted:false',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1200, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1225,8 +1225,7 @@ void main() {
       await _enterSelectionMode(tester);
       await _selectPlugin(tester, 'תוסף-A');
 
-      // כשהטעינה בעלייה מופעלת — הכפתור מציג "טעינה רגילה" ושולח granted:false
-      await tester.tap(find.text('טעינה רגילה'));
+      await tester.tap(find.text('ביטול הפעלה ברקע'));
       await tester.pumpAndSettle();
 
       final events = pluginBloc.dispatched

@@ -121,6 +121,7 @@ if (response.success) {
 | `reader.clearAllHighlights` | 0.9.89 |
 | `navigation.goTo` | 0.9.89 |
 | `plugin.openSelf` | 0.9.96 |
+| `plugin.backgroundDone` | 0.9.97 |
 | `notes.list` | 0.9.89 |
 | `notes.getBookNotesSummary` | 0.9.89 |
 | `notes.add` | 0.9.89 |
@@ -815,6 +816,36 @@ Otzaria.on('plugin.page_opened', (data) => {
 **הערות:**
 - אם דף התוסף עדיין לא נטען, האירוע יישלח מיד אחרי ה-boot שלו — אין צורך בהמתנה מיוחדת.
 - תוסף יכול לפתוח רק את הדף של עצמו, לא של תוספים אחרים.
+
+---
+
+### `plugin.backgroundDone`
+**הרשאה:** אין | **מגרסה:** 0.9.97
+
+מופע רקע שהוער בעצלנות (`contributes.startup`) מכריז שסיים את עבודתו —
+ואוצריא מכבה אותו מיד, בלי להמתין לשעון חוסר-הפעילות (3 דקות). זהו הסיום
+האידיומטי לעבודה חד-פעמית כמו בדיקת עדכונים ב-`app.startup`:
+
+```javascript
+Otzaria.on('plugin.boot', async (payload) => {
+  if (payload.app.runMode !== 'background') return;
+  try {
+    await checkForUpdates(payload);
+  } finally {
+    await Otzaria.call('plugin.backgroundDone');  // כיבוי מיידי
+  }
+});
+// true — הכיבוי תוזמן; false — הקריאה לא חלה (ראו הערות)
+```
+
+**הערות:**
+- חל **רק על מופע רקע שהוער עצל**. קריאה מדף התוסף הנראה, או ממופע רקע
+  של המסלול הישן (טעינה בעלייה), היא no-op בטוח שמחזיר `false` — דף
+  התוסף ותוספים אחרים לעולם אינם מושפעים.
+- אם בינתיים החלה עבודה חדשה (RPC פתוח או אירוע ממתין) — הכיבוי נדחה
+  לשעון הרגיל במקום לקטוע אותה.
+- אין צורך לקרוא לזה אחרי טיפול באירוע רגיל — שעון חוסר-הפעילות מטפל בזה;
+  זה קיצור לעבודות חד-פעמיות שמסיימות מהר.
 
 ---
 
@@ -1894,7 +1925,122 @@ async function scheduleReminder(title, body, dateTime) {
 
 ---
 
-## ריצת רקע (app.run\_on\_startup)
+## תרומות עלייה דקלרטיביות (contributes.startup)
+
+**זו הדרך המומלצת** לתוסף להיות נוכח מיד עם עליית אוצריא — בלי שאוצריא תרים עבורו מנוע JS. במקום קוד שרץ בעלייה, התוסף מצהיר במניפסט מה להציג ולרשום, ואוצריא קוראת את ההצהרה ב-Dart. קוד התוסף מופעל **בעצלנות** — רק כשמשתמש לוחץ על פקד, או כשקורה אירוע שהתוסף ביקש להתעורר עליו.
+
+דורש את ההרשאה `app.startup_contributions` (ברירת מחדל: **דלוקה** — לא רץ שום קוד תוסף, רק פרסינג JSON מוולד), וכל קטגוריה דורשת גם את הרשאת התחום שלה.
+
+```json
+{
+  "permissions": [
+    "app.startup_contributions",
+    "app.run_on_startup",
+    "reader.toolbar",
+    "reader.context_menu",
+    "published_data.write"
+  ],
+  "contributes": {
+    "startup": {
+      "toolbarItems": [
+        {
+          "id": "my-button",
+          "title": "הכלי שלי",
+          "icon": "sparkle_24_regular",
+          "contexts": ["reader-text"],
+          "openPlugin": true
+        }
+      ],
+      "contextMenuItems": [
+        {
+          "id": "lookup",
+          "title": "חפש במילון",
+          "showWhen": { "selectionContainsAny": ["רש\"י", "תוס'"] }
+        }
+      ],
+      "publishedData": [
+        {
+          "type": "calendar.event",
+          "key": "daily-reminder",
+          "scope": "global",
+          "payload": {
+            "title": "תזכורת",
+            "startsAt": "2026-08-10T18:00:00+03:00",
+            "importance": "normal"
+          }
+        }
+      ],
+      "activationEvents": ["app.startup", "reader.sectionContentChanged"],
+      "keepAlive": false
+    }
+  }
+}
+```
+
+### הקטגוריות
+
+| שדה | סכימה | הרשאת תחום נדרשת |
+|---|---|---|
+| `toolbarItems` | זהה ל-`reader.addToolbarItem` | `reader.toolbar` |
+| `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
+| `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
+| `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
+| `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
+
+### הפעלה עצלה
+
+**עיקרון:** כל הדלקת מנוע שלא דרך כניסה גלויה לדף התוסף — דורשת **גם** את ההרשאה `app.run_on_startup` (כבויה כברירת מחדל, עם הבאנר הבולט בהתקנה). המשתמש לא אמור להריץ קוד תוסף בלי לדעת.
+
+- **לחיצה על פקד/פריט** שנרשם דקלרטיבית: אם הוגדר `openPlugin: true` — נפתח דף התוסף והאירוע נמסר לו. אחרת: עם `app.run_on_startup` — אוצריא מרימה מופע רקע שקט באותו רגע ואירוע הלחיצה נמסר אחרי ה-boot; **בלי** ההרשאה — הלחיצה נופלת לפתיחת דף התוסף (כמו `openPlugin: true`), כך שהפקד תמיד עובד וההפעלה גלויה.
+- **`activationEvents`**: כשאירוע מהרשימה קורה ואין לתוסף מנוע חי — מופע הרקע קם והאירוע נמסר לו. דורש `app.run_on_startup`, וכל נושא רגיל דורש בנוסף את הרשאת `events.subscribe:<topic>` שלו.
+- **`app.startup`**: טריגר מיוחד — מופע הרקע קם פעם אחת, כמה שניות **אחרי** שעליית אוצריא הסתיימה (לא מתחרה בעלייה). מיועד לתוספים שחייבים קוד בעלייה (למשל בדיקת עדכונים). דורש `app.run_on_startup` כמו כל הפעלה שקטה.
+
+### כיבוי אוטומטי אחרי חוסר פעילות
+
+מופע רקע שהוער עצל ולא הראה פעילות (קריאת API, רשת, או אירוע נכנס) במשך כ-3 דקות — **מכובה אוטומטית** ומשחרר את משאבי ה-WebView. זה שקוף לתוסף: הטריגר הבא (לחיצה, אירוע מוכרז) יעיר אותו מחדש, והרישומים הדקלרטיביים ממילא לא תלויים בו. עבודה חד-פעמית שמסיימת מהר יכולה לקצר את ההמתנה לאפס עם `plugin.backgroundDone`. השלכות למפתח:
+
+- אל תסתמכו על `setTimeout`/`setInterval` ארוכים במופע הרקע — לתזמון השתמשו ב-`notifications.scheduleSystem`, ולמעקב מתמשך ב-`activationEvents`.
+- שמרו state שצריך לשרוד ב-`storage.set` (או ב-`localStorage`, שנשמר בפרופיל) — משתני JS בזיכרון אובדים בכיבוי.
+- מופעי `app.run_on_startup` במסלול הישן (טעינה בעלייה) אינם מכובים — רק מופעים שהוערו עצל.
+
+תוסף שחייב לשמור מנוע חי יכול להצהיר `"keepAlive": true`. עליו להצהיר גם על
+`app.background_keep_alive`, והמשתמש חייב לאשר אותה בנפרד. זו הרשאה רגישה,
+כבויה כברירת מחדל ומוצגת באדום, משום שהיא מאפשרת ל-WebView לצרוך משאבים ללא
+הגבלת זמן. `plugin.backgroundDone` עדיין מכבה את המופע מיד כשהתוסף מבקש זאת.
+
+### showWhen — פריט תפריט תלוי-תוכן
+
+פריט `contextMenuItems` יכול להופיע רק כשהטקסט המסומן מכיל אחת מרשימת מילים:
+
+```json
+{ "showWhen": { "selectionContainsAny": ["מילה", "ביטוי אחר"] } }
+```
+
+עד 50 מחרוזות, כל אחת עד 100 תווים. אין תמיכה ב-regex (בכוונה). ה-`showWhen` עובד גם ברישום דינמי דרך `reader.addContextMenuItem`.
+
+### רשומות publishedData זרועות
+
+מפתחות הרשומות נשמרים עם קידומת `manifest:` (למשל `manifest:daily-reminder`) — הן בבעלות המניפסט: מתעדכנות בכל עלייה, ומוסרות אוטומטית כשהסעיף/ההרשאה מוסרים או בעדכון גרסה שמשמיט אותן. אל תעדכן אותן בזמן ריצה — הערך מהמניפסט ידרוס בכל עלייה.
+
+---
+
+## ריצת רקע (app.run\_on\_startup) — מיושן
+
+> ⚠️ **מיושן — מוסר ב-0.9.98:** מסלול הטעינה המיידית (WebView מלא שקם בעליית אוצריא לכל תוסף רקע) עובד בפעם האחרונה בגרסה 0.9.97. **החל מ-0.9.98 תוסף שלא עבר ל-`contributes.startup` פשוט לא ירוץ בעלייה** — בלי שגיאה, ההרשאה תישאר אך לא יקום עבורה מנוע.
+
+### מדריך מעבר למפתחי תוספים (חובה עד 0.9.98)
+
+1. **הוסיפו למניפסט** `contributes.startup` ואת ההרשאה `app.startup_contributions` (לצד `app.run_on_startup` הקיימת — היא נשארת, ומשמעותה מעתה "מותר לרוץ ברקע בלי פתיחה").
+2. **רישומים סטטיים** (`reader.addToolbarItem` / `reader.addContextMenuItem` שרצים ב-`plugin.boot` של הרקע) — העבירו את אותו JSON בדיוק אל `startup.toolbarItems` / `startup.contextMenuItems` ומחקו את הקריאות מקובץ הרקע. רישומים דינמיים בדף הנראה ממשיכים לעבוד כרגיל.
+3. **נתונים קבועים** (`publishedData.upsert` בעלייה) — העבירו אל `startup.publishedData`.
+4. **קוד שחייב לרוץ בעלייה** (בדיקת עדכונים וכד') — הצהירו `activationEvents: ["app.startup"]`; קובץ הרקע שלכם ייטען כמה שניות אחרי העלייה ויקבל `plugin.boot` כרגיל, כך שקוד קיים שמסתנן לפי `runMode === 'background'` עובד ללא שינוי.
+5. **האזנה מתמשכת לאירועים** — הצהירו את הנושאים ב-`activationEvents`; המופע יוער כשאירוע באמת קורה במקום לחיות כל הסשן.
+6. **עדכנו `minAppVersion` ל-0.9.97** ומעלה — הסעיף אינו מוכר בגרסאות ישנות יותר.
+7. שימו לב לכיבוי האוטומטי אחרי חוסר פעילות (סעיף קודם) — בלי טיימרים ארוכים, state ששורד ב-`storage`.
+
+תוסף שהצהיר `contributes.startup` יוצא ממסלול הטעינה המיידית כבר ב-0.9.97 — אין מצב ביניים של ריצה כפולה.
+
+התיעוד שלהלן מתאר את המסלול הישן, לתחזוקת תוספים שטרם עברו. יש להסירו יחד עם המימוש הישן ב-0.9.98.
 
 הרשאה `app.run_on_startup` מאפשרת לתוסף להיטען ולרוץ ברקע **מיד עם עליית אוצריא**, לפני שהמשתמש נכנס למסך "כלים".
 
@@ -1981,6 +2127,8 @@ Otzaria.on('plugin.boot', async (payload) => {
     "notifications.send",
     "notifications.system",
     "app.run_on_startup",
+    "app.background_keep_alive",
+    "app.startup_contributions",
     "database.read",
     "events.subscribe:navigation.changed",
     "events.subscribe:reader.current_book_changed",
@@ -2215,7 +2363,9 @@ await Otzaria.call('reader.addToolbarItem', {
 **הערות:**
 - `type` יכול להיות `button` (ברירת מחדל) או `menu`. תפריט חייב `children`
   (עד 20 ילדים, לחצנים בלבד — אין קינון תפריטים)
-- הפקדים נשמרים בזיכרון בלבד — יש לרשום מחדש בכל `plugin.boot`
+- הפקדים נשמרים בזיכרון בלבד — יש לרשום מחדש בכל `plugin.boot`. לפקד קבוע
+  שקיים גם בלי שהתוסף רץ, העדיפו רישום דקלרטיבי ב-`contributes.startup`
+  (ראו "תרומות עלייה דקלרטיביות")
 - `contexts` הוא מערך ויכול להכיל את `reader-text` (ספר טקסט), את
   `reader-pdf` (ספר PDF), או את שניהם. פקד שלא מגדיר `contexts` מופיע
   בשני ההקשרים. ילד יורש את הקשרי אביו, וילד שמגדיר `contexts` במפורש

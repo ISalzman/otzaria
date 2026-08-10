@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
+import 'package:otzaria/plugins/services/plugin_extended_validator.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'dart:isolate';
@@ -71,7 +72,9 @@ class PluginInstallerService {
         throw Exception('manifest.json לא נמצא בחבילת התוסף');
       }
 
-      final manifestJson = jsonDecode(await manifestFile.readAsString());
+      final manifestJson = Map<String, dynamic>.from(
+        jsonDecode(await manifestFile.readAsString()) as Map,
+      );
       final manifest = PluginManifest.fromJson(manifestJson);
 
       bool isOverwrite = false;
@@ -99,6 +102,16 @@ class PluginInstallerService {
         directoryPath: tempDir.path,
         currentAppVersion: packageInfo.version,
       );
+      final extendedReport = await Isolate.run(
+        () => PluginExtendedValidator.validate(
+          manifest: manifest,
+          manifestJson: manifestJson,
+          directoryPath: tempDir.path,
+        ),
+      );
+      if (extendedReport.hasErrors) {
+        throw Exception(extendedReport.errors.join('\n'));
+      }
 
       return PreparedInstall(
         manifest,

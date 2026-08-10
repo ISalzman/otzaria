@@ -1,3 +1,7 @@
+import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+
 /// מידע תצוגה עבור הרשאת תוסף — שם עברי ותיאור קצר
 class PluginPermissionInfo {
   /// שם קצר בעברית (מוצג כותרת)
@@ -11,12 +15,104 @@ class PluginPermissionInfo {
 
 /// מחזיר מידע תצוגה עבור הרשאה בשמה הטכני.
 /// אם ההרשאה אינה מוכרת, מחזיר את שמה הטכני עם תיאור גנרי.
-PluginPermissionInfo getPermissionInfo(String permissionKey) {
+PluginPermissionInfo getPermissionInfo(
+  String permissionKey, {
+  PluginManifest? manifest,
+}) {
+  if (permissionKey == pluginRunOnStartupPermission && manifest != null) {
+    final startup = manifest.startup;
+    if (startup != null && !startup.isEmpty) {
+      if (!startup.hasBackgroundActivationTrigger) {
+        return const PluginPermissionInfo(
+          label: 'הפעלה ברקע לפי אירוע',
+          description:
+              'לא הוגדר אירוע שמפעיל מנוע רקע, ולכן הרשאה זו אינה בשימוש '
+              'בגרסה הנוכחית של התוסף.',
+        );
+      }
+      final reasons = pluginBackgroundActivationReasons(manifest).join(', ');
+      return PluginPermissionInfo(
+        label: 'הפעלה ברקע לפי אירוע',
+        description:
+            'התוסף יפעיל מנוע WebView ברקע כאשר: $reasons. המנוע יכובה אחרי '
+            '3 דקות ללא פעילות, אלא אם תאושר גם מניעת הכיבוי.',
+      );
+    }
+  }
   return _permissionLabels[permissionKey] ??
       PluginPermissionInfo(
         label: permissionKey,
         description: 'גישה לפונקציונליות: $permissionKey',
       );
+}
+
+/// מחזיר תיאור ידידותי של האירועים שעשויים להפעיל את מנוע התוסף ברקע.
+List<String> pluginBackgroundActivationReasons(PluginManifest manifest) {
+  final startup = manifest.startup;
+  if (startup == null || startup.isEmpty) return const ['עליית אוצריא'];
+
+  final reasons = <String>{};
+  if (startup.toolbarItems.any(_toolbarItemActivatesBackground)) {
+    reasons.add('לחיצה על פקד בשורת העיון');
+  }
+  if (startup.contextMenuItems.any(_contextMenuItemActivatesBackground)) {
+    reasons.add('לחיצה על פריט בתפריט הטקסט');
+  }
+  for (final topic in startup.activationEvents) {
+    if (topic == PluginStartupContributions.startupActivationTopic) {
+      reasons.add('עליית אוצריא');
+      continue;
+    }
+    reasons.add(
+      _permissionLabels['events.subscribe:$topic']?.label ?? 'האירוע $topic',
+    );
+  }
+  return List.unmodifiable(reasons);
+}
+
+bool _toolbarItemActivatesBackground(Map<String, dynamic> item) =>
+    PluginStartupContributions(
+      toolbarItems: [
+        item,
+      ],
+    ).hasBackgroundActivationTrigger;
+
+bool _contextMenuItemActivatesBackground(Map<String, dynamic> item) =>
+    PluginStartupContributions(
+      contextMenuItems: [
+        item,
+      ],
+    ).hasBackgroundActivationTrigger;
+
+/// האם הרשאה מתחילה מאושרת במסך ההתקנה.
+bool pluginPermissionDefaultGrant(
+  String permission, {
+  required bool isOfflineMode,
+}) {
+  if (permission == pluginRunOnStartupPermission ||
+      permission == pluginBackgroundKeepAlivePermission) {
+    return false;
+  }
+  return !(isOfflineMode && permission == pluginNetworkAccessPermission);
+}
+
+/// מסדר הרשאות רגישות לפני שאר הרשאות המניפסט.
+List<String> orderedPluginPermissions(
+  List<String> permissions, {
+  required bool isOfflineMode,
+}) {
+  int rank(String permission) => switch (permission) {
+    pluginRunOnStartupPermission => 0,
+    pluginBackgroundKeepAlivePermission => 1,
+    pluginNetworkAccessPermission when isOfflineMode => 2,
+    _ => 3,
+  };
+  final indexed = permissions.indexed.toList();
+  indexed.sort((a, b) {
+    final rankComparison = rank(a.$2).compareTo(rank(b.$2));
+    return rankComparison != 0 ? rankComparison : a.$1.compareTo(b.$1);
+  });
+  return indexed.map((entry) => entry.$2).toList(growable: false);
 }
 
 /// מיפוי מלא של כל ההרשאות התקפות לשם ותיאור בעברית
@@ -36,9 +132,20 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
         'פתיחת כתובות אינטרנט (http/https) בדפדפן ברירת המחדל של מערכת ההפעלה',
   ),
   'app.run_on_startup': PluginPermissionInfo(
-    label: 'טעינה אוטומטית עם עליית האפליקציה',
+    label: 'טעינה אוטומטית ברקע',
     description:
-        'התוסף ייטען ויפעל ברקע מיד עם עליית אוצריא, גם בלי להיכנס למסך "כלים". מומלץ רק לתוספים שצריכים לעקוב אחרי אירועים או לתזמן פעולות.',
+        'תוסף מדור קודם ייטען עם עליית אוצריא ויישאר פעיל כל עוד התוכנה פתוחה.',
+  ),
+  'app.background_keep_alive': PluginPermissionInfo(
+    label: 'מניעת כיבוי מנוע הרקע',
+    description:
+        'התוסף מבקש להשאיר את מנוע ה-WebView פעיל ללא הגבלת זמן. הדבר מגדיל '
+        'את צריכת הזיכרון והמעבד; אשר רק לתוסף מהימן שחייב להאזין ברציפות.',
+  ),
+  'app.startup_contributions': PluginPermissionInfo(
+    label: 'פקדים ונתונים בעליית האפליקציה',
+    description:
+        'הלחצנים, פריטי התפריט והנתונים שהתוסף הגדיר יופיעו מיד עם עליית אוצריא, בלי להריץ את התוסף עצמו. בלי הרשאת ריצה ברקע, לחיצה על פקד תפתח את דף התוסף.',
   ),
 
   // ===== ספרייה =====
@@ -197,5 +304,9 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   'events.subscribe:reader.sectionContentChanged': PluginPermissionInfo(
     label: 'אירועי שינוי תוכן בקורא',
     description: 'קבלת עדכון כאשר נוסח של סעיף או אופן ההצגה שלו משתנים בקורא',
+  ),
+  'events.subscribe:reader.selection_changed': PluginPermissionInfo(
+    label: 'אירועי סימון טקסט',
+    description: 'קבלת עדכון בכל פעם שהטקסט המסומן בקורא משתנה',
   ),
 };

@@ -1,0 +1,51 @@
+name: Windows WebView2 Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - ".github/workflows/webview2_smoke.yml"
+      - "integration_test/webview_render_check_test.dart"
+      - "lib/core/window_listener.dart"
+      - "lib/main.dart"
+      - "lib/plugins/**"
+      - "lib/settings/dialogs/change_location_dialog.dart"
+      - "lib/settings/tabs/system_settings_tab.dart"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "windows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webview2-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Live WebView2 lifecycle
+    runs-on: windows-2022
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run live WebView2 smoke test
+        run: >-
+          flutter test integration_test/webview_render_check_test.dart
+          -d windows --timeout 3m

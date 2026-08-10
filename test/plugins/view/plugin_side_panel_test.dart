@@ -10,6 +10,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
@@ -203,6 +204,24 @@ class FakePluginRegistryRepository extends Mock
   Future<int?> getNextUserOrderForNewPlugin() async => null;
 }
 
+/// ה-isolate של הוולידטור נבדק בבדיקות השירות; FakeAsync של testWidgets אינו
+/// מוסר את תשובת ה-isolate ל-BLoC, לכן כאן מבודדים רק את קריאת המניפסט.
+class _WidgetTestDevLoader extends PluginDevLoaderService {
+  _WidgetTestDevLoader(PluginRegistryRepository repository)
+    : super(repository: repository);
+
+  @override
+  Future<PluginManifest> fetchDevelopmentManifest(String directoryPath) async {
+    final json = Map<String, dynamic>.from(
+      jsonDecode(
+            File(p.join(directoryPath, 'manifest.json')).readAsStringSync(),
+          )
+          as Map,
+    );
+    return PluginManifest.fromJson(json);
+  }
+}
+
 void main() {
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -256,7 +275,10 @@ void main() {
     await PackageInfo.fromPlatform();
 
     final mockRepo = FakePluginRegistryRepository();
-    final bloc = PluginSystemBloc(repository: mockRepo);
+    final bloc = PluginSystemBloc(
+      repository: mockRepo,
+      devLoader: _WidgetTestDevLoader(mockRepo),
+    );
 
     final tempDir = Directory.systemTemp.createTempSync(
       'otzaria_test_sidepanel',
@@ -306,7 +328,9 @@ void main() {
     await tester.tap(find.byIcon(FluentIcons.folder_add_24_regular));
     await tester.pump();
 
-    await tester.runAsync(() => permExpectation);
+    await tester.runAsync(
+      () => permExpectation.timeout(const Duration(seconds: 10)),
+    );
 
     // Step 2: Simulate dialog confirmation — dispatch ConfirmDevPluginInstall
     // with the manifest the BLoC already fetched and stored in the state.
@@ -327,7 +351,9 @@ void main() {
       ),
     );
 
-    await tester.runAsync(() => loadedExpectation);
+    await tester.runAsync(
+      () => loadedExpectation.timeout(const Duration(seconds: 10)),
+    );
 
     // Flush the UiSnack overlay timer so the test teardown doesn't complain.
     await tester.pumpAndSettle();

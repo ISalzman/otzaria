@@ -3,12 +3,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
+import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'package:otzaria/plugins/services/plugin_download_service.dart';
@@ -39,7 +42,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
        devLoader = devLoader ?? PluginDevLoaderService(repository: repository),
        devWatchService = devWatchService ?? PluginDevWatchService(),
        super(PluginSystemInitial()) {
-    on<LoadPlugins>(_onLoadPlugins);
+    on<LoadPlugins>(_onLoadPlugins, transformer: sequential());
     on<InstallPluginRequested>(_onInstallPluginRequested);
     on<InstallRemotePluginRequested>(_onInstallRemotePluginRequested);
     on<ConfirmPluginInstall>(_onConfirmPluginInstall);
@@ -56,7 +59,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     );
     on<EnablePluginRequested>(_onEnablePluginRequested);
     on<DisablePluginRequested>(_onDisablePluginRequested);
-    on<SetPluginPermissionRequested>(_onSetPluginPermissionRequested);
+    on<SetPluginPermissionRequested>(
+      _onSetPluginPermissionRequested,
+      transformer: sequential(),
+    );
     on<RefreshPlugins>((event, emit) => add(LoadPlugins()));
     on<LoadDevelopmentPluginRequested>(_onLoadDevelopmentPluginRequested);
     on<DetachDevelopmentPluginRequested>(_onDetachDevelopmentPluginRequested);
@@ -99,6 +105,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       final plugins = await repository.getAllPlugins();
       devWatchService.syncWatchers(await repository.getDevelopmentPlugins());
       _registerPluginShortcuts(plugins);
+      await PluginStartupContributionsService.instance.sync(
+        plugins,
+        repository,
+      );
       emit(PluginSystemLoaded(plugins));
     } catch (e) {
       emit(PluginSystemError(e.toString()));
@@ -428,6 +438,10 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         }
         if (event.permission == 'reader.context_menu') {
           ContextMenuRegistry.instance.removeAll(event.pluginId);
+        }
+        if (event.permission == pluginRunOnStartupPermission ||
+            event.permission == pluginStartupContributionsPermission) {
+          PluginLazyActivationService.instance.removePlugin(event.pluginId);
         }
       }
       PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);

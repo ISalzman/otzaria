@@ -1,3 +1,5 @@
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
+
 class PluginManifest {
   /// תבנית של שם אייקון תקין: למשל `'book_24_regular'` או `'calendar_24_filled'`.
   static final RegExp toolTabIconNamePattern = RegExp(
@@ -46,6 +48,10 @@ class PluginManifest {
   /// מקורות מסד נתונים שהתוסף מצהיר עליהם (מהשדה contributes.databaseSources)
   final List<Map<String, dynamic>> databaseSources;
 
+  /// תרומות עלייה דקלרטיביות (contributes.startup) — מופעלות ע"י Flutter
+  /// בעליית התוכנה בלי מנוע JS. דורשות הרשאת `app.startup_contributions`.
+  final PluginStartupContributions? startup;
+
   PluginManifest({
     required this.schemaVersion,
     required this.id,
@@ -70,6 +76,7 @@ class PluginManifest {
     this.toolTabIconName,
     required this.publishedDataTypes,
     this.databaseSources = const [],
+    this.startup,
   });
 
   factory PluginManifest.fromJson(Map<String, dynamic> json) {
@@ -77,6 +84,11 @@ class PluginManifest {
     final contributes = json['contributes'] as Map<String, dynamic>? ?? {};
     final toolTab = contributes['toolTab'] as Map<String, dynamic>? ?? {};
     final background = contributes['background'] as Map<String, dynamic>? ?? {};
+    // סובלני לטיפוס שגוי — ה-validator מדווח עליו, הטעינה לא נופלת.
+    final startupRaw = contributes['startup'];
+    final startup = startupRaw is Map
+        ? Map<String, dynamic>.from(startupRaw)
+        : null;
 
     return PluginManifest(
       schemaVersion: json['schemaVersion'] as int? ?? 1,
@@ -119,6 +131,9 @@ class PluginManifest {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],
+      startup: startup == null
+          ? null
+          : PluginStartupContributions.fromJson(startup),
     );
   }
 
@@ -153,6 +168,7 @@ class PluginManifest {
         'databaseSources': databaseSources,
         if (backgroundEntrypoint != null)
           'background': {'entrypoint': backgroundEntrypoint},
+        if (startup != null) 'startup': startup!.toJson(),
       },
     };
   }

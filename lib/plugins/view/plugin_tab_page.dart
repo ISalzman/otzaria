@@ -316,10 +316,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
       // Perform strict manifest validation
       final manifest = PluginManifest.fromJson(manifestJson);
 
+      // תוסף פיתוח פטור מבדיקת תאימות גרסה — כמו במסלול הטעינה
+      // (PluginDevLoaderService), כדי לאפשר בדיקה מול גרסאות עתידיות.
       await PluginManifestValidator.validateManifest(
         manifest: manifest,
         directoryPath: widget.plugin.resolvedRootPath,
-        currentAppVersion: _cachedPackageInfo?.version,
+        skipAppVersionValidation: true,
       );
 
       if (manifest.id != widget.plugin.pluginId) {

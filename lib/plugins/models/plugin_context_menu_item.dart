@@ -39,6 +39,10 @@ class PluginContextMenuItem {
   /// ערך חופשי שהתוסף מסר ברישום — מוחזר לו כלשונו ב-payload של אירוע הלחיצה.
   final Object? param;
 
+  /// הפריט מוצג רק כשהטקסט המסומן מכיל לפחות אחת מהמילים (ריק = תמיד).
+  /// מאפשר פריט תלוי-תוכן גם כשהתוסף אינו רץ (רישום דקלרטיבי מהמניפסט).
+  final List<String> showWhenContainsAny;
+
   const PluginContextMenuItem({
     required this.id,
     this.type = 'item',
@@ -52,7 +56,14 @@ class PluginContextMenuItem {
     this.colors = const [],
     this.openPlugin = false,
     this.param,
+    this.showWhenContainsAny = const [],
   }) : title = title ?? label;
+
+  /// האם להציג את הפריט עבור [selectedText] לפי [showWhenContainsAny].
+  bool isVisibleForSelection(String selectedText) {
+    if (showWhenContainsAny.isEmpty) return true;
+    return showWhenContainsAny.any(selectedText.contains);
+  }
 
   String get label => title ?? '';
 
@@ -70,6 +81,8 @@ class PluginContextMenuItem {
       'colors': colors.map((color) => color.toJson()).toList(),
     if (openPlugin) 'openPlugin': true,
     if (param != null) 'param': param,
+    if (showWhenContainsAny.isNotEmpty)
+      'showWhen': {'selectionContainsAny': showWhenContainsAny},
   };
 }
 

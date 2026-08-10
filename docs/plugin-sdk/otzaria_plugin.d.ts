@@ -520,6 +520,18 @@ export interface ContextMenuItem {
   openPlugin?: boolean;
   /** Free-form value echoed back as `param` in the click event payload. */
   param?: unknown;
+  /** Show the item only when the selected text matches. Available from 0.9.97. */
+  showWhen?: ContextMenuShowWhen;
+}
+
+/**
+ * Content-dependent visibility for a context-menu item. Word list only —
+ * regex is intentionally unsupported.
+ */
+export interface ContextMenuShowWhen {
+  /** Show only when the selection contains at least one of these strings
+   * (1-50 strings, each up to 100 characters). */
+  selectionContainsAny: string[];
 }
 
 export interface UpdateContextMenuItemArgs {
@@ -910,6 +922,7 @@ export type OtzariaMethod =
   | 'network.download'
   | 'shortcut.create'
   | 'plugin.openSelf'
+  | 'plugin.backgroundDone'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.updateContextMenuItem'

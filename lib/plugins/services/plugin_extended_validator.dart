@@ -4,7 +4,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 import 'package:path/path.dart' as p;
 
@@ -77,6 +80,7 @@ const Set<String> _knownApiMethods = {
   'reader.clearAllHighlights',
   'navigation.goTo',
   'plugin.openSelf',
+  'plugin.backgroundDone',
   'notes.list',
   'notes.getBookNotesSummary',
   'notes.add',
@@ -351,6 +355,8 @@ const Map<String, String> _methodMinVersion = {
   'plugin.openSelf': '0.9.96',
   'library.listBookAltStructures': '0.9.96',
   'library.getBookAltToc': '0.9.96',
+  // 0.9.97
+  'plugin.backgroundDone': '0.9.97',
   'app.getConnectivity': '0.9.96',
 };
 
@@ -396,6 +402,13 @@ class PluginExtendedValidator {
     final declaredPermissions = manifest.permissions.toSet();
 
     _validateNetwork(manifestJson, declaredPermissions, errors, warnings);
+    _validateStartupContributions(
+      manifest,
+      manifestJson,
+      declaredPermissions,
+      errors,
+      warnings,
+    );
     _checkNameVsToolTabTitle(manifestJson, warnings);
 
     final files = _collectScannableFiles(directoryPath);
@@ -507,6 +520,203 @@ class PluginExtendedValidator {
   }
 
   // ===== Manifest checks =====
+
+  /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
+  static const String _startupContributionsMinVersion = '0.9.97';
+
+  /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
+  /// הרשאות נדרשות וגרסת מינימום.
+  static void _validateStartupContributions(
+    PluginManifest manifest,
+    Map<String, dynamic> manifestJson,
+    Set<String> declaredPermissions,
+    List<String> errors,
+    List<String> warnings,
+  ) {
+    final contributes = manifestJson['contributes'];
+    final startupRaw = contributes is Map ? contributes['startup'] : null;
+    if (startupRaw == null) return;
+    if (startupRaw is! Map) {
+      errors.add('contributes.startup חייב להיות אובייקט');
+      return;
+    }
+    final startupMap = Map<String, dynamic>.from(startupRaw);
+
+    // בדיקות טיפוס על ה-JSON הגולמי: הפרסינג במודל סובלני (מדלג על ערכים
+    // שגויים), ולכן טיפוס שגוי חייב להתגלות כאן ולא להיעלם בשקט.
+    var hasTypeErrors = false;
+    void checkListField(
+      String field,
+      bool Function(Object?) elementOk,
+      String elementDescription,
+    ) {
+      final value = startupMap[field];
+      if (value == null) return;
+      if (value is! List) {
+        errors.add('contributes.startup.$field חייב להיות מערך');
+        hasTypeErrors = true;
+        return;
+      }
+      if (value.any((element) => !elementOk(element))) {
+        errors.add(
+          'contributes.startup.$field מכיל ערך שאינו $elementDescription',
+        );
+        hasTypeErrors = true;
+      }
+    }
+
+    checkListField('toolbarItems', (e) => e is Map, 'אובייקט');
+    checkListField('contextMenuItems', (e) => e is Map, 'אובייקט');
+    checkListField('publishedData', (e) => e is Map, 'אובייקט');
+    checkListField('activationEvents', (e) => e is String, 'מחרוזת');
+    final keepAliveRaw = startupMap['keepAlive'];
+    if (keepAliveRaw != null && keepAliveRaw is! bool) {
+      errors.add('contributes.startup.keepAlive חייב להיות bool');
+      hasTypeErrors = true;
+    }
+    if (hasTypeErrors) return;
+
+    final startup = manifest.startup;
+    if (startup == null) return;
+    if (startup.keepAlive && !startup.hasBackgroundActivationTrigger) {
+      errors.add(
+        'contributes.startup.keepAlive דורש פקד או אירוע שמפעיל מנוע רקע',
+      );
+      return;
+    }
+    if (startup.isEmpty) {
+      warnings.add('contributes.startup ריק — הסר אותו או הוסף תרומות');
+      return;
+    }
+
+    if (!declaredPermissions.contains(pluginStartupContributionsPermission)) {
+      errors.add(
+        'contributes.startup דורש את ההרשאה '
+        '"$pluginStartupContributionsPermission" ב-manifest',
+      );
+    }
+    try {
+      if (PluginVersionUtils.compareCoreVersions(
+            _startupContributionsMinVersion,
+            manifest.minAppVersion,
+          ) >
+          0) {
+        errors.add(
+          'contributes.startup נתמך החל מגרסה '
+          '$_startupContributionsMinVersion, אך minAppVersion שהוצהר הוא '
+          '${manifest.minAppVersion}. עדכן את minAppVersion',
+        );
+      }
+    } on PluginVersionFormatException {
+      // minAppVersion לא חוקי — נתפס ב-PluginManifestValidator.
+    }
+
+    if (startup.toolbarItems.isNotEmpty) {
+      if (!declaredPermissions.contains('reader.toolbar')) {
+        warnings.add(
+          'contributes.startup.toolbarItems דורש את ההרשאה "reader.toolbar" '
+          'שלא הוכרזה ב-manifest',
+        );
+      }
+      final registry = PluginToolbarRegistry.detached();
+      for (final item in startup.toolbarItems) {
+        try {
+          registry.registerPayload(manifest.id, item);
+        } catch (e) {
+          errors.add('contributes.startup.toolbarItems לא תקין: $e');
+        }
+      }
+    }
+
+    if (startup.contextMenuItems.isNotEmpty) {
+      if (!declaredPermissions.contains('reader.context_menu')) {
+        warnings.add(
+          'contributes.startup.contextMenuItems דורש את ההרשאה '
+          '"reader.context_menu" שלא הוכרזה ב-manifest',
+        );
+      }
+      final registry = ContextMenuRegistry.detached();
+      for (final item in startup.contextMenuItems) {
+        try {
+          registry.registerPayload(manifest.id, item);
+        } catch (e) {
+          errors.add('contributes.startup.contextMenuItems לא תקין: $e');
+        }
+      }
+    }
+
+    if (startup.publishedData.isNotEmpty) {
+      if (!declaredPermissions.contains('published_data.write')) {
+        warnings.add(
+          'contributes.startup.publishedData דורש את ההרשאה '
+          '"published_data.write" שלא הוכרזה ב-manifest',
+        );
+      }
+      for (final record in startup.publishedData) {
+        final type = record['type'];
+        final key = record['key'];
+        final scope = record['scope'];
+        if (type is! String ||
+            type.isEmpty ||
+            key is! String ||
+            key.isEmpty ||
+            record['payload'] == null ||
+            (scope != null && scope is! String)) {
+          errors.add(
+            'רשומת contributes.startup.publishedData חייבת לכלול type, key '
+            'ו-payload (ו-scope מחרוזת אם צוין): ${jsonEncode(record)}',
+          );
+        }
+      }
+    }
+
+    if (startup.activationEvents.isNotEmpty &&
+        !declaredPermissions.contains(pluginRunOnStartupPermission)) {
+      warnings.add(
+        'contributes.startup.activationEvents מדליק את מנוע התוסף בלי כניסה '
+        'לדף שלו, ולכן דורש גם את ההרשאה "$pluginRunOnStartupPermission" '
+        'שלא הוכרזה ב-manifest',
+      );
+    }
+    if (startup.keepAlive) {
+      if (!declaredPermissions.contains(pluginRunOnStartupPermission)) {
+        errors.add(
+          'contributes.startup.keepAlive דורש את ההרשאה '
+          '"$pluginRunOnStartupPermission"',
+        );
+      }
+      if (!declaredPermissions.contains(pluginBackgroundKeepAlivePermission)) {
+        errors.add(
+          'contributes.startup.keepAlive דורש את ההרשאה '
+          '"$pluginBackgroundKeepAlivePermission"',
+        );
+      }
+    } else if (declaredPermissions.contains(
+      pluginBackgroundKeepAlivePermission,
+    )) {
+      warnings.add(
+        'ההרשאה "$pluginBackgroundKeepAlivePermission" הוצהרה ללא '
+        'contributes.startup.keepAlive: true',
+      );
+    }
+    for (final topic in startup.activationEvents) {
+      if (topic == PluginStartupContributions.startupActivationTopic) continue;
+      if (!_knownEvents.contains(topic)) {
+        warnings.add(
+          'contributes.startup.activationEvents — נושא לא מוכר: $topic',
+        );
+        continue;
+      }
+      final permission = 'events.subscribe:$topic';
+      if (pluginValidPermissions.contains(permission) &&
+          !declaredPermissions.contains(permission)) {
+        warnings.add(
+          'activation event "$topic" דורש את ההרשאה "$permission" '
+          'שלא הוכרזה ב-manifest',
+        );
+      }
+    }
+  }
 
   /// בדיקות network — כל הליקויים כאן מסווגים כ-warnings, כי לפי התיעוד
   /// הרשמי `network.allowlist` הוא "שדה הצהרתי בלבד" (ברירת מחדל `[]`)

@@ -27,6 +27,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
@@ -102,6 +103,13 @@ const String _sdkStub = r'''
 /// את הרשאת [pluginRunOnStartupPermission], ומחזיק עבור כל אחד מהם
 /// WebView מוסתר (Offstage) שטעון מ-disk וריצה תחת אותו bridge רגיל.
 ///
+/// בנוסף משרת את המנגנון החדש (`contributes.startup`): מרים מופע רקע
+/// **לפי דרישה** דרך [PluginLazyActivationService] — רק כשלחיצה או אירוע
+/// שהתוסף הצהיר עליו באמת קרו, במקום מנוע שחי מהעלייה.
+///
+/// TODO(0.9.98): להסיר את מסלול app.run_on_startup (הטעינה בעלייה) — יישאר
+/// רק המסלול לפי-דרישה; למחוק אז גם את מדריך המעבר ב-API_REFERENCE.md.
+///
 /// ה-instance הזה רשום אצל ה-Dispatcher תחת `instanceId: 'background'`,
 /// כך שהוא חי במקביל ל-PluginTabPage רגיל אם המשתמש נכנס למסך "כלים".
 class PluginBackgroundHost extends StatefulWidget {
@@ -117,6 +125,14 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   /// תוספים שהוטענו ברקע כרגע. שמירת מזהים שאינם משתנים תוך כדי build
   /// היא הכרחית כדי שה-WebView לא ייהרס ויקום מחדש בכל rebuild.
   final Map<String, InstalledPlugin> _activeBackgroundPlugins = {};
+
+  /// מופעים שהורמו לפי דרישה (contributes.startup) — אינם כפופים לתנאי
+  /// הרשאת run_on_startup של מסלול העלייה, ולכן הסנכרון מדלג עליהם.
+  final Set<String> _onDemandPluginIds = {};
+  final Map<String, int> _onDemandGenerations = {};
+
+  /// הרשימה האחרונה מהבלוק — נדרשת להפעלה לפי דרישה בין סנכרונים.
+  List<InstalledPlugin> _latestPlugins = const [];
 
   /// תוספים שכבר טעננו בהם את ההרשאה מ-SQLite אך עוד לא הוחלט עליהם.
   /// משמש כדי למנוע בקשות חוזרות מקבילות.
@@ -139,6 +155,10 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   @override
   void initState() {
     super.initState();
+    PluginLazyActivationService.instance.backgroundActivator =
+        _activateOnDemand;
+    PluginLazyActivationService.instance.backgroundDeactivator =
+        _deactivateOnDemand;
     // BlocListener מופעל רק על שינויי state. אם הבלוק כבר ב-PluginSystemLoaded
     // כשה-widget נבנה (מסלול נפוץ — LoadPlugins ב-main.dart), הסנכרון לא יופעל.
     // addPostFrameCallback מבטיח שה-context בשל לפני שאנחנו קוראים לבלוק.
@@ -149,6 +169,23 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
         _queueBackgroundSync(state.plugins);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    if (identical(
+      PluginLazyActivationService.instance.backgroundActivator,
+      _activateOnDemand,
+    )) {
+      PluginLazyActivationService.instance.backgroundActivator = null;
+    }
+    if (identical(
+      PluginLazyActivationService.instance.backgroundDeactivator,
+      _deactivateOnDemand,
+    )) {
+      PluginLazyActivationService.instance.backgroundDeactivator = null;
+    }
+    super.dispose();
   }
 
   @override
@@ -180,7 +217,11 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
                     ),
                     width: 1,
                     height: 1,
-                    child: _BackgroundPluginRunner(plugin: plugin),
+                    child: _BackgroundPluginRunner(
+                      plugin: plugin,
+                      activationGeneration:
+                          _onDemandGenerations[plugin.pluginId],
+                    ),
                   ),
               ],
             ),
@@ -191,6 +232,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   }
 
   void _queueBackgroundSync(List<InstalledPlugin> plugins) {
+    _latestPlugins = List<InstalledPlugin>.of(plugins);
     _pendingPlugins = List<InstalledPlugin>.of(plugins);
     if (_syncInProgress) return;
     unawaited(_drainBackgroundSyncQueue());
@@ -245,12 +287,30 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
       setState(() {
         for (final id in toRemove) {
           _activeBackgroundPlugins.remove(id);
+          _onDemandPluginIds.remove(id);
         }
       });
     }
 
     // עבור כל תוסף enabled — בדוק האם ההרשאה ל-startup הוענקה
     for (final plugin in enabledById.values) {
+      // מופע לפי-דרישה (contributes.startup) אינו כפוף למסלול run_on_startup;
+      // רק מרעננים את פרטי התוסף אם השתנו.
+      if (_onDemandPluginIds.contains(plugin.pluginId)) {
+        _refreshActivePluginDetails(plugin);
+        continue;
+      }
+      // תוסף שהצהיר contributes.startup עבר למנגנון החדש — המנוע שלו קם
+      // עצל בלבד (לחיצה/אירוע/app.startup), לא במסלול הטעינה-בעלייה הישן.
+      final startup = plugin.manifest.startup;
+      if (startup != null && !startup.isEmpty) {
+        if (_activeBackgroundPlugins.containsKey(plugin.pluginId)) {
+          setState(() {
+            _activeBackgroundPlugins.remove(plugin.pluginId);
+          });
+        }
+        continue;
+      }
       // לא שולחים לרקע תוסף שלא הצהיר על ההרשאה ב-manifest
       if (!plugin.manifest.permissions.contains(pluginRunOnStartupPermission)) {
         if (_activeBackgroundPlugins.containsKey(plugin.pluginId)) {
@@ -282,24 +342,92 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
             _activeBackgroundPlugins.remove(plugin.pluginId);
           });
         } else if (shouldRun && isRunning) {
-          // אם פרטים על התוסף השתנו (גרסה/נתיב) - נחליף את הרשומה כך שתשתמש
-          // בנתונים החדשים בלי לאלץ דקונסטרקציה של WebView.
-          final existing = _activeBackgroundPlugins[plugin.pluginId]!;
-          if (existing.version != plugin.version ||
-              existing.installPath != plugin.installPath ||
-              existing.entrypointPath != plugin.entrypointPath ||
-              existing.backgroundEntrypointPath !=
-                  plugin.backgroundEntrypointPath ||
-              existing.devRootPath != plugin.devRootPath) {
-            setState(() {
-              _activeBackgroundPlugins[plugin.pluginId] = plugin;
-            });
-          }
+          _refreshActivePluginDetails(plugin);
         }
       } finally {
         _pluginsBeingEvaluated.remove(plugin.pluginId);
       }
     }
+  }
+
+  /// אם פרטים על התוסף השתנו (גרסה/נתיב) — מחליפים את הרשומה כך שתשתמש
+  /// בנתונים החדשים בלי לאלץ דקונסטרקציה של WebView.
+  void _refreshActivePluginDetails(InstalledPlugin plugin) {
+    final existing = _activeBackgroundPlugins[plugin.pluginId];
+    if (existing == null) return;
+    if (existing.version != plugin.version ||
+        existing.installPath != plugin.installPath ||
+        existing.entrypointPath != plugin.entrypointPath ||
+        existing.backgroundEntrypointPath != plugin.backgroundEntrypointPath ||
+        existing.devRootPath != plugin.devRootPath) {
+      setState(() {
+        _activeBackgroundPlugins[plugin.pluginId] = plugin;
+      });
+    }
+  }
+
+  /// מרים מופע רקע לפי דרישה עבור תוסף עם contributes.startup — נקרא ע"י
+  /// [PluginLazyActivationService] כשלחיצה/אירוע דורשים מנוע ואין אחד חי.
+  /// זריקה כאן מודיעה לשירות לנקות את תור האירועים הממתין.
+  Future<void> _activateOnDemand(String pluginId) async {
+    if (!mounted) throw StateError('background host is not mounted');
+    if (_activeBackgroundPlugins.containsKey(pluginId)) return;
+    final lazyActivation = PluginLazyActivationService.instance;
+    final activationGeneration = lazyActivation.activationGeneration(pluginId);
+    if (!lazyActivation.isActivationCurrent(
+      pluginId,
+      activationGeneration,
+    )) {
+      throw StateError('background activation was revoked');
+    }
+    InstalledPlugin? plugin;
+    for (final candidate in _latestPlugins) {
+      if (candidate.pluginId == pluginId && candidate.enabled) {
+        plugin = candidate;
+        break;
+      }
+    }
+    if (plugin == null) {
+      throw StateError('plugin $pluginId is not installed or disabled');
+    }
+    if (!_runtimeAvailable) {
+      _runtimeAvailable = await WebViewEnvironmentHolder.isRuntimeAvailable();
+      if (!lazyActivation.isActivationCurrent(
+        pluginId,
+        activationGeneration,
+      )) {
+        throw StateError('background activation was revoked during init');
+      }
+      if (!_runtimeAvailable) {
+        throw StateError('WebView2 Runtime is not available');
+      }
+    }
+    if (!await _ensureWebViewEnvironment()) {
+      throw StateError('WebView2 environment init failed');
+    }
+    if (!mounted) throw StateError('background host disposed during init');
+    if (!lazyActivation.trackIdleTeardown(
+      pluginId,
+      generation: activationGeneration,
+    )) {
+      throw StateError('background activation was revoked during init');
+    }
+    setState(() {
+      _onDemandPluginIds.add(pluginId);
+      _onDemandGenerations[pluginId] = activationGeneration;
+      _activeBackgroundPlugins[pluginId] = plugin!;
+    });
+  }
+
+  /// מכבה מופע שהוער עצל ולא הראה פעילות — משחרר את תהליכי ה-WebView2.
+  /// הטריגר הבא (לחיצה/אירוע) יעיר אותו מחדש בלי לאבד דבר.
+  void _deactivateOnDemand(String pluginId) {
+    if (!mounted || !_onDemandPluginIds.contains(pluginId)) return;
+    setState(() {
+      _onDemandPluginIds.remove(pluginId);
+      _onDemandGenerations.remove(pluginId);
+      _activeBackgroundPlugins.remove(pluginId);
+    });
   }
 
   /// מאתחל את סביבת WebView2 עם userDataFolder הניתן לכתיבה. בלעדיה WebView2
@@ -323,8 +451,12 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
 /// ה-instances).
 class _BackgroundPluginRunner extends StatefulWidget {
   final InstalledPlugin plugin;
+  final int? activationGeneration;
 
-  const _BackgroundPluginRunner({required this.plugin});
+  const _BackgroundPluginRunner({
+    required this.plugin,
+    this.activationGeneration,
+  });
 
   @override
   State<_BackgroundPluginRunner> createState() =>
@@ -448,6 +580,8 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           dialogTitle: title,
         );
       },
+      onBackgroundInstanceDone: () => PluginLazyActivationService.instance
+          .requestImmediateTeardown(widget.plugin.pluginId),
       pickFile: ({List<String>? allowedExtensions, String? title}) async {
         final ctx = navigatorKey.currentContext;
         if (ctx == null) return null;
@@ -474,6 +608,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       widget.plugin,
       adapter: _adapter,
       registry: pluginRegistryRepository,
+      onWorkStarted: () => PluginLazyActivationService.instance.beginWork(
+        widget.plugin.pluginId,
+      ),
+      onWorkEnded: () => PluginLazyActivationService.instance.endWork(
+        widget.plugin.pluginId,
+      ),
     );
     _ensurePackageInfo();
 
@@ -509,6 +649,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   @override
   void dispose() {
     _adapter.dispose();
+    PluginLazyActivationService.instance.onBackgroundInstanceClosed(
+      widget.plugin.pluginId,
+      generation: widget.activationGeneration,
+    );
     PluginRuntimeDispatcher.instance.unregisterController(
       widget.plugin.pluginId,
       instanceId: _backgroundInstanceId,
@@ -571,6 +715,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           debugPrint(
             'Background plugin [${widget.plugin.pluginId}] init error: $e',
           );
+          PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+            widget.plugin.pluginId,
+            generation: widget.activationGeneration,
+          );
         }
       },
       onProcessFailed: (controller, detail) {
@@ -585,8 +733,17 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             'Process': detail.processDescription,
           },
         );
+        PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+          widget.plugin.pluginId,
+          generation: widget.activationGeneration,
+        );
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
+        // רשת דפדפנית ישירה (fetch רגיל) אינה עוברת ב-Bridge — נספרת
+        // כפעילות כאן, כדי שהכיבוי העצל לא יקטע בקשה ארוכה.
+        PluginLazyActivationService.instance.notifyActivity(
+          widget.plugin.pluginId,
+        );
         try {
           final uri = navigationAction.request.url;
           if (uri == null) return NavigationActionPolicy.CANCEL;
@@ -633,6 +790,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         }
       },
       shouldInterceptRequest: (controller, request) async {
+        PluginLazyActivationService.instance.notifyActivity(
+          widget.plugin.pluginId,
+        );
         try {
           final uri = request.url;
           if (uri.scheme == 'file') {
@@ -757,6 +917,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
 })();
 ''',
           );
+          // המופע מוכן — מוסר אירועים שהמתינו להפעלה עצלה (contributes.startup).
+          unawaited(
+            PluginLazyActivationService.instance.onBackgroundInstanceReady(
+              widget.plugin.pluginId,
+              generation: widget.activationGeneration,
+            ),
+          );
         } catch (e, st) {
           debugPrint(
             'Background plugin [${widget.plugin.pluginId}] boot error: $e\n$st',
@@ -765,6 +932,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             widget.plugin.pluginId,
             'ERROR',
             'Background boot failed: $e',
+          );
+          PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+            widget.plugin.pluginId,
+            generation: widget.activationGeneration,
           );
         }
       },

@@ -139,6 +139,56 @@ void main() {
     });
 
     test(
+      'prepareInstall rejects malformed declarative startup fields',
+      () async {
+        final archivePath = p.join(tempDir.path, 'plugin_invalid_startup.zip');
+        final archive = Archive()
+          ..addFile(
+            ArchiveFile.string(
+              'manifest.json',
+              jsonEncode({
+                'schemaVersion': 1,
+                'id': 'test.invalid.startup',
+                'version': '1.0.0',
+                'name': 'Bad Startup',
+                'entrypoint': 'index.html',
+                'minAppVersion': '0.9.97',
+                'permissions': ['app.startup_contributions'],
+                'contributes': {
+                  'startup': {
+                    'toolbarItems': [
+                      {
+                        'id': 'button',
+                        'title': 'Button',
+                        'icon': 'apps_24_regular',
+                      },
+                    ],
+                    'keepAlive': 'yes',
+                  },
+                },
+              }),
+            ),
+          )
+          ..addFile(ArchiveFile.string('index.html', '<html></html>'));
+
+        final zipData = ZipEncoder().encode(archive);
+        expect(zipData, isNotNull);
+        File(archivePath).writeAsBytesSync(zipData);
+
+        expect(
+          () => installer.prepareInstall(archivePath),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('keepAlive חייב להיות bool'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
       'prepareInstall parses allowOrderBeforeBuiltIns from manifest',
       () async {
         final archivePath = p.join(tempDir.path, 'plugin_allow_before.zip');
