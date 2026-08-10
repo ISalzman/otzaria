@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
@@ -711,6 +712,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
               // (כמו שער סיסמה) רק במצב פיתוח ולא בפרודקשן.
               'devMode': widget.plugin.isDevelopment,
             },
+            'connectivity': ConnectivityStatusService.instance.bootPayload(),
             'theme': theme,
             'permissions': permissions
                 .where((permission) => permission.granted)

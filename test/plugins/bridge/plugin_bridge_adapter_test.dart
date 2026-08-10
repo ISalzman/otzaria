@@ -11,6 +11,7 @@ import 'package:http/testing.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:path/path.dart' as p;
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
@@ -340,6 +341,122 @@ void main() {
         expect(response['permissions'], ['app.info.read', 'reader.open']);
       },
     );
+
+    group('app.getConnectivity', () {
+      late ConnectivityStatusService original;
+
+      setUp(() => original = ConnectivityStatusService.instance);
+      tearDown(() => ConnectivityStatusService.instance = original);
+
+      void useService({required bool offline, required bool reachable}) {
+        ConnectivityStatusService.instance = ConnectivityStatusService(
+          offlineModeReader: () => offline,
+          networkProbe: () async => reachable,
+        );
+      }
+
+      test('מחזיר מחובר כשיש רשת ואין מצב מנותק', () async {
+        useService(offline: false, reachable: true);
+
+        final response =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+
+        expect(response, {
+          'isOfflineMode': false,
+          'hasNetwork': true,
+          'isOnline': true,
+        });
+      });
+
+      test('מחזיר מנותק כשאין רשת', () async {
+        useService(offline: false, reachable: false);
+
+        final response =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+
+        expect(response['isOnline'], isFalse);
+        expect(response['isOfflineMode'], isFalse);
+      });
+
+      test('מצב מנותק בהגדרות גובר על רשת זמינה', () async {
+        useService(offline: true, reachable: true);
+
+        final response =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+
+        expect(response['isOfflineMode'], isTrue);
+        expect(response['isOnline'], isFalse);
+      });
+
+      test('אינו מחזיר null — התוסף מקבל תשובה ודאית', () async {
+        useService(offline: false, reachable: true);
+
+        final response =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+
+        expect(response.values.every((v) => v != null), isTrue);
+      });
+
+      test('קריאות חוזרות אינן פותחות בדיקת רשת נוספת', () async {
+        var probes = 0;
+        ConnectivityStatusService.instance = ConnectivityStatusService(
+          offlineModeReader: () => false,
+          networkProbe: () async {
+            probes++;
+            return true;
+          },
+        );
+
+        for (var i = 0; i < 10; i++) {
+          await adapter.execute('app', 'getConnectivity', {});
+        }
+
+        expect(probes, 1);
+      });
+
+      test('forceRefresh מועבר לשירות', () async {
+        var reachable = false;
+        ConnectivityStatusService.instance = ConnectivityStatusService(
+          offlineModeReader: () => false,
+          networkProbe: () async => reachable,
+        );
+
+        final first =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+        reachable = true;
+        final refreshed =
+            await adapter.execute('app', 'getConnectivity', {
+                  'forceRefresh': true,
+                })
+                as Map<String, Object?>;
+
+        expect(first['isOnline'], isFalse);
+        expect(refreshed['isOnline'], isTrue);
+      });
+
+      test('forceRefresh שאינו boolean נדחה', () async {
+        useService(offline: false, reachable: true);
+
+        await expectLater(
+          adapter.execute('app', 'getConnectivity', {'forceRefresh': 'yes'}),
+          throwsA(
+            predicate((e) => e.toString().contains('error.invalid_params')),
+          ),
+        );
+      });
+
+      test('פעולה לא מוכרת ב-app עדיין נדחית', () async {
+        await expectLater(
+          adapter.execute('app', 'getConnectivityStatus', {}),
+          throwsA(predicate((e) => e.toString().contains('Unknown action'))),
+        );
+      });
+    });
 
     test('app.openUrl דוחה סכמה שאינה http/https (לפני שיגור)', () async {
       // file://, otzaria:// וכו' היו מאפשרים הרצת פעולות מחוץ לדפדפן.

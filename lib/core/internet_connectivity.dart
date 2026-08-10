@@ -3,14 +3,22 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// יעדים ניטרליים בכוונה ולא שרתי העדכון — אחרת תקלה ב-GitHub הייתה נראית
-/// כמו היעדר אינטרנט ואיש לא היה מדווח עליה. היעד הראשון הוא שם מתחם ולא
-/// כתובת IP גולמית: ברשתות מסוננות חיבור ישיר ל-IP ולפורט 53 חסום, ומשתמש
-/// מחובר לגמרי היה מסווג כמנותק.
-const _kProbeTargets = <(String, int)>[
+/// יעדים ניטרליים ולא שרתי העדכון — אחרת תקלה ב-GitHub נראית כהיעדר אינטרנט.
+/// שם מתחם ולא IP גולמי: ברשתות מסוננות חיבור ישיר ל-IP ולפורט 53 חסום.
+const kNeutralProbeTargets = <(String, int)>[
   ('www.google.com', 443),
   ('1.1.1.1', 443),
   ('8.8.8.8', 53),
+];
+
+/// יעדי השאלה "האם יש רשת שימושית" (מצב הקישוריות לתוספים). `otzaria.org`
+/// פתוח ברשתות מסוננות רבות שחוסמות את השאר, ודי בכך שיעד אחד עונה.
+///
+/// מוחרג בכוונה ממסלול העדכונים: שם "מחובר" גורר הודעת שגיאה, ולמשתמש שרק
+/// אוצריא פתוחה אצלו בדיקת העדכון מול GitHub תיכשל ותרעיש בכל עלייה.
+const kOtzariaProbeTargets = <(String, int)>[
+  ('otzaria.org', 443),
+  ...kNeutralProbeTargets,
 ];
 
 const _kProbeTimeout = Duration(seconds: 3);
@@ -27,13 +35,27 @@ debugSocketConnect;
 /// הפונקציה נקראת ממסלולי כשל, ולכן לעולם אינה זורקת בעצמה.
 Future<bool> hasInternetConnection({
   Duration timeout = _kProbeTimeout,
+  List<(String, int)> targets = kNeutralProbeTargets,
 }) async {
+  if (targets.isEmpty) return false;
+
   final connect = debugSocketConnect ?? _connect;
-  final results = await Future.wait([
-    for (final (host, port) in _kProbeTargets)
-      _isReachable(connect, host, port, timeout),
-  ]);
-  return results.any((reachable) => reachable);
+  final result = Completer<bool>();
+  var failedTargets = 0;
+  for (final (host, port) in targets) {
+    unawaited(
+      _isReachable(connect, host, port, timeout).then((reachable) {
+        if (result.isCompleted) return;
+        if (reachable) {
+          result.complete(true);
+          return;
+        }
+        failedTargets++;
+        if (failedTargets == targets.length) result.complete(false);
+      }),
+    );
+  }
+  return result.future;
 }
 
 Future<bool> _isReachable(

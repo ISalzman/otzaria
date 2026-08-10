@@ -5,9 +5,14 @@ import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
+import '../support/search_engine_test_init.dart';
 import '../test_helpers/memory_cache_provider.dart';
 
 Future<void> main() async {
+  // הווידג'ט קורא ל-splitQueryWords שמאציל למנוע ה-Rust; ב-CI שלא בונה
+  // את הספרייה הנייטיבית הבדיקה מדולגת כמו יתר בדיקות החיפוש התלויות בה.
+  final engineReady = await tryInitSearchEngine();
+
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
@@ -43,7 +48,7 @@ Future<void> main() async {
       tester.widget<RtlTextField>(_alternativeFieldFinder).enabled,
       isTrue,
     );
-  });
+  }, skip: !engineReady);
 }
 
 final _alternativeFieldFinder = find.byWidgetPredicate(

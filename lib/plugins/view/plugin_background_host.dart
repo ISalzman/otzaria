@@ -10,6 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -714,6 +715,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               // בתוסף ארוז זה false.
               'devMode': widget.plugin.isDevelopment,
             },
+            'connectivity': ConnectivityStatusService.instance.bootPayload(),
             'theme': theme,
             'permissions': permissions
                 .where((permission) => permission.granted)

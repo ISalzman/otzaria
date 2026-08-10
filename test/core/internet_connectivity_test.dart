@@ -13,6 +13,19 @@ void main() {
       expect(await hasInternetConnection(), isTrue);
     });
 
+    test('הצלחה ביעד אחד אינה ממתינה ליעדים שתקועים', () async {
+      final blocked = Completer<bool>();
+      debugSocketConnect = (host, port, timeout) =>
+          host == 'otzaria.org' ? Future.value(true) : blocked.future;
+
+      final result = await hasInternetConnection(
+        targets: kOtzariaProbeTargets,
+      ).timeout(const Duration(milliseconds: 100));
+
+      expect(result, isTrue);
+      blocked.complete(false);
+    });
+
     test('כשכל היעדים אינם נענים — אין אינטרנט', () async {
       debugSocketConnect = (host, port, timeout) async => false;
 
@@ -69,6 +82,65 @@ void main() {
         expect(probed.any((host) => host.contains('github')), isFalse);
       },
     );
+
+    test(
+      'ברירת המחדל אינה כוללת את otzaria.org — מסלול העדכונים לא מושפע',
+      () async {
+        // "מחובר" במסלול העדכונים גורר הודעת שגיאה. משתמש שרק אוצריא פתוחה
+        // אצלו היה מקבל אותה בכל עלייה, על כשל מול GitHub שלא בידיו לתקן.
+        final probed = <String>[];
+        debugSocketConnect = (host, port, timeout) async {
+          probed.add(host);
+          return false;
+        };
+
+        await hasInternetConnection();
+
+        expect(probed, isNot(contains('otzaria.org')));
+      },
+    );
+
+    test('otzaria.org נבדק ביעדי הקישוריות של התוספים', () async {
+      final probed = <String>[];
+      debugSocketConnect = (host, port, timeout) async {
+        probed.add(host);
+        return false;
+      };
+
+      await hasInternetConnection(targets: kOtzariaProbeTargets);
+
+      expect(probed, contains('otzaria.org'));
+    });
+
+    test('יעדי התוספים כוללים גם את הניטרליים כגיבוי', () async {
+      expect(kOtzariaProbeTargets, containsAll(kNeutralProbeTargets));
+      expect(kOtzariaProbeTargets.first.$1, 'otzaria.org');
+    });
+
+    test('די ב-otzaria.org לבדו כדי לקבוע שיש רשת', () async {
+      // רשת מסוננת שחוסמת את השאר — זה הרוב אצל משתמשי אוצריא.
+      debugSocketConnect = (host, port, timeout) async => host == 'otzaria.org';
+
+      expect(
+        await hasInternetConnection(targets: kOtzariaProbeTargets),
+        isTrue,
+      );
+    });
+
+    test('תקלה ב-otzaria.org לבדו אינה מסווגת משתמש מחובר כמנותק', () async {
+      debugSocketConnect = (host, port, timeout) async => host != 'otzaria.org';
+
+      expect(
+        await hasInternetConnection(targets: kOtzariaProbeTargets),
+        isTrue,
+      );
+    });
+
+    test('רשימת יעדים ריקה מחזירה false ולא זורקת', () async {
+      debugSocketConnect = (host, port, timeout) async => true;
+
+      expect(await hasInternetConnection(targets: const []), isFalse);
+    });
 
     test('חיבור שנתקע מסתיים ב-timeout ולא מקפיא את הקורא', () async {
       debugSocketConnect = (host, port, timeout) =>

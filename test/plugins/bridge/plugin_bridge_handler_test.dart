@@ -117,6 +117,11 @@ List<dynamic> _openUrlRequest() => [
   },
 ];
 
+/// בקשת RPC ל-app.getConnectivity.
+List<dynamic> _getConnectivityRequest() => [
+  {'method': 'app.getConnectivity', 'payload': <String, dynamic>{}},
+];
+
 void main() {
   group('PluginBridgeHandler.isRateLimitExempt', () {
     test('library.getBookContent מוחרג ממגביל הקצב', () {
@@ -289,6 +294,47 @@ void main() {
       expect(adapter.executeCalls, 1);
       expect(adapter.lastDomain, 'app');
       expect(adapter.lastAction, 'openUrl');
+    });
+
+    test('app.getConnectivity ללא app.info.read → permission_denied', () async {
+      final adapter = _FakeAdapter();
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: true,
+        adapter: adapter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(_getConnectivityRequest())
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isFalse);
+      expect(resp['error']['code'], 'permission_denied');
+      expect(adapter.executeCalls, 0);
+    });
+
+    test('app.getConnectivity עם app.info.read → execute נקרא', () async {
+      final adapter = _FakeAdapter(
+        result: const {
+          'isOfflineMode': false,
+          'hasNetwork': true,
+          'isOnline': true,
+        },
+      );
+      final handler = buildHandler(
+        declaredPermissions: const ['app.info.read'],
+        granted: true,
+        adapter: adapter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(_getConnectivityRequest())
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.lastDomain, 'app');
+      expect(adapter.lastAction, 'getConnectivity');
+      expect(resp['data']['isOnline'], isTrue);
     });
 
     test('הרשאה הוצהרה והוענקה → הצלחה, adapter.execute נקרא', () async {

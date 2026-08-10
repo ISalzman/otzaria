@@ -19,6 +19,7 @@ import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -535,6 +536,14 @@ class PluginBridgeAdapter {
           throw Exception('error.internal: failed to open URL');
         }
         return true;
+      case 'getConnectivity':
+        final forceRefresh = args['forceRefresh'];
+        if (forceRefresh != null && forceRefresh is! bool) {
+          throw Exception('error.invalid_params: forceRefresh must be boolean');
+        }
+        return (await ConnectivityStatusService.instance.snapshot(
+          forceRefresh: forceRefresh as bool? ?? false,
+        )).toJson();
       case 'getGrantedPermissions':
         return {'permissions': await _getGrantedPermissions()};
       default:

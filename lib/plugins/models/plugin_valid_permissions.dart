@@ -23,6 +23,7 @@ const Map<String, String> apiCallToPermissionHint = {
   'app.getTheme': 'app.info.read',
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
+  'app.getConnectivity': 'app.info.read',
 
   // feedback.*
   'feedback.sendEmail': 'feedback.send_email',
