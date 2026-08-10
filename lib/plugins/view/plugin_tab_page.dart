@@ -43,6 +43,7 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
@@ -498,6 +499,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
         allowUniversalAccessFromFileURLs: false,
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
+        // נדרש כדי ש-onDownloadStarting ייקרא (הקוד ה-native בודק את הדגל
+        // לפני העברת אירוע DownloadStarting ל-Dart).
+        useOnDownloadStart: true,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: widget.plugin.isDevelopment || kDebugMode,
       ),
@@ -546,6 +550,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
           );
           if (mounted) setState(() => _hasError = true);
         }
+      },
+      onDownloadStarting: (controller, request) async {
+        // קובץ שהתוסף מוריד (למשל ייצוא PDF): מסתירים את חלונית ההורדות
+        // המובנית של WebView2 - כפתור "פתח קובץ" שבה מנסה לנווט בתוך
+        // ה-WebView ותוקע את התוסף. ההורדה עצמה ממשיכה כרגיל אל תיקיית
+        // ההורדות, בשם שהתוסף קבע.
+        UiSnack.showSuccess('הקובץ נשמר בהצלחה!');
+        return DownloadStartResponse(handled: true);
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         try {
