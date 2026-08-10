@@ -110,6 +110,9 @@ if (response.success) {
 | `reader.addContextMenuItem` | 0.9.89 |
 | `reader.removeContextMenuItem` | 0.9.89 |
 | `reader.updateContextMenuItem` | 0.9.95 |
+| `reader.addToolbarItem` | 0.9.97 |
+| `reader.removeToolbarItem` | 0.9.97 |
+| `reader.updateToolbarItem` | 0.9.97 |
 | `reader.setHighlight` | 0.9.89 |
 | `reader.updateHighlight` | 0.9.95 |
 | `reader.getHighlights` | 0.9.89 |
@@ -2175,6 +2178,116 @@ Otzaria.on('reader.context_menu_item_clicked', (data) => {
 
 ---
 
+### `reader.addToolbarItem`
+**הרשאה:** `reader.toolbar`
+
+**זמין מגרסה:** `0.9.97`
+
+רישום פקד בשורת הפקדים של מסך העיון (ספר טקסט ו-PDF) — לחצן בודד או
+תפריט נפתח, באותו מראה של הפקדים המובנים. כל תוסף יכול לרשום לכל היותר
+**שני פקדים**; עדכון פקד קיים באותו `id` אינו צורך מקום נוסף במכסה.
+כשאין מקום בשורה, הפקד נבלע אוטומטית בתפריט "עוד פעולות" (overflow).
+
+```javascript
+// לחצן בודד
+await Otzaria.call('reader.addToolbarItem', {
+  id: 'my-button',              // מזהה ייחודי (חובה)
+  title: 'שמור מראה מקום',      // tooltip + טקסט בתפריט ה-overflow (חובה)
+  icon: 'bookmark_24_regular',  // שם אייקון FluentUI System Icons (חובה בפקד עליון)
+  openPlugin: true,             // לחיצה תפתח את דף התוסף (אופציונלי)
+  param: 'save-mode'            // ערך חופשי שיוחזר ב-payload של הלחיצה (אופציונלי)
+});
+
+// תפריט נפתח
+await Otzaria.call('reader.addToolbarItem', {
+  id: 'my-menu',
+  type: 'menu',
+  title: 'סימון',
+  icon: 'highlight_24_regular',
+  children: [
+    { id: 'add-mark', title: 'הוסף סימון', icon: 'add_24_regular' },
+    { id: 'clear-marks', title: 'נקה סימונים', onClickEvent: 'marks.clear' }
+  ]
+});
+// true
+```
+
+**הערות:**
+- `type` יכול להיות `button` (ברירת מחדל) או `menu`. תפריט חייב `children`
+  (עד 20 ילדים, לחצנים בלבד — אין קינון תפריטים)
+- הפקדים נשמרים בזיכרון בלבד — יש לרשום מחדש בכל `plugin.boot`
+- `contexts` הוא מערך ויכול להכיל את `reader-text` (ספר טקסט), את
+  `reader-pdf` (ספר PDF), או את שניהם. פקד שלא מגדיר `contexts` מופיע
+  בשני ההקשרים. ילד יורש את הקשרי אביו, וילד שמגדיר `contexts` במפורש
+  חייב תת־קבוצה של הקשרי האב
+- אם פקד עם אותו `id` כבר קיים, הוא יוחלף
+- עם `openPlugin: true`, לחיצה מעבירה את המשתמש לדף התוסף ואירוע הלחיצה
+  נמסר לדף גם אם הוא נטען רק עכשיו (כמו בתפריט ההקשר)
+- אפשר להגדיר `onClickEvent` מותאם אישית לכל פקד או ילד; בהיעדרו נורה
+  האירוע `reader.toolbar_item_clicked`
+
+---
+
+### `reader.removeToolbarItem`
+**הרשאה:** `reader.toolbar`
+
+**זמין מגרסה:** `0.9.97`
+
+הסרת פקד שנרשם קודם משורת הפקדים.
+
+```javascript
+await Otzaria.call('reader.removeToolbarItem', {
+  id: 'my-button'
+});
+// true
+```
+
+---
+
+### `reader.updateToolbarItem`
+**הרשאה:** `reader.toolbar`
+
+**זמין מגרסה:** `0.9.97`
+
+מעדכן פקד של התוסף הקורא ללא רישום מחדש. ניסיון לעדכן פקד שאינו קיים או
+שאינו שייך לתוסף מחזיר `error.not_found`.
+
+```javascript
+await Otzaria.call('reader.updateToolbarItem', {
+  id: 'my-button',
+  patch: { title: 'שמור שוב', icon: 'bookmark_add_24_regular' }
+});
+```
+
+---
+
+### `reader.toolbar_item_clicked` (Event)
+**הרשאה:** אין צורך בהרשאה נוספת — נשלח רק לפלאגין שרשם את הפקד
+
+נורה כאשר המשתמש לוחץ על פקד (או על פריט בתפריט נפתח) שהפלאגין רשם.
+
+```javascript
+Otzaria.on('reader.toolbar_item_clicked', (data) => {
+  console.log('נלחץ פקד:', data.itemId);   // בתפריט — ה-id של הילד שנבחר
+  console.log('הקשר:', data.context);       // 'reader-text' או 'reader-pdf'
+  console.log('מיקום:', data.currentRef);
+  console.log('ספר:', data.currentBook);
+});
+// {
+//   itemId: "my-button",
+//   context: "reader-text",
+//   currentBook: "בראשית",
+//   currentBookId: "בראשית",
+//   currentId: 123,
+//   currentType: "text",
+//   currentIndex: 40,
+//   currentRef: "בראשית פרק א",
+//   param: "save-mode"   // הערך שנמסר ברישום (null אם לא נמסר)
+// }
+```
+
+---
+
 ### `reader.selection_changed` (Event)
 **הרשאה:** `events.subscribe:reader.selection_changed`
 
@@ -2343,6 +2456,7 @@ await Otzaria.call('reader.clearAllHighlights', {});
 {
   "permissions": [
     "reader.context_menu",
+    "reader.toolbar",
     "reader.highlight",
     "events.subscribe:reader.selection_changed"
   ]

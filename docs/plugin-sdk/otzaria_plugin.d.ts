@@ -547,6 +547,54 @@ export interface ContextMenuColorClickedEvent {
   selection: ReaderSelection;
 }
 
+export type ToolbarContext = 'reader-text' | 'reader-pdf';
+
+/**
+ * A reader-toolbar registration: a single button or a dropdown menu whose
+ * children are buttons. A plugin may register at most two top-level items;
+ * replacing the same `id` does not consume another slot. Available from 0.9.97.
+ */
+export interface ToolbarItem {
+  id: string;
+  type?: 'button' | 'menu';
+  /** Tooltip on the visible button and label in the overflow menu. */
+  title: string;
+  /** FluentUI icon name. Required on top-level items, optional on children. */
+  icon?: string;
+  /** One or more reader contexts. Children inherit this when omitted; an
+   * explicit child value must be a subset of its parent's contexts. */
+  contexts?: ToolbarContext[];
+  /** Custom event dispatched only to the owning plugin. */
+  onClickEvent?: string;
+  /** Menu children (`type: 'menu'` only, up to 20 buttons, no nesting). */
+  children?: ToolbarItem[];
+  /** When true, clicking opens the plugin page and the click event is
+   * delivered to it after boot. */
+  openPlugin?: boolean;
+  /** Free-form value echoed back as `param` in the click event payload. */
+  param?: unknown;
+}
+
+export interface UpdateToolbarItemArgs {
+  id: string;
+  patch: Partial<Omit<ToolbarItem, 'id'>>;
+}
+
+export interface ToolbarItemClickedEvent {
+  /** For a menu click this is the id of the selected child. */
+  itemId: string;
+  context: ToolbarContext;
+  currentBook: string | null;
+  currentBookId: string | null;
+  currentId: number | null;
+  currentType: string | null;
+  currentSource: string | null;
+  currentIndex: number;
+  currentRef: string | null;
+  /** The `param` value passed to `reader.addToolbarItem`, or null. */
+  param: unknown;
+}
+
 export type ApiErrorCategory =
   | 'permission'
   | 'validation'
@@ -657,6 +705,8 @@ export interface OtzariaEventMap {
   'contextMenu.itemClicked': ContextMenuItemClickedEvent;
   /** Standard color-row click event. Sent only to the owning plugin. */
   'contextMenu.colorClicked': ContextMenuColorClickedEvent;
+  /** User clicked a plugin-registered toolbar item. Sent only to the registering plugin. */
+  'reader.toolbar_item_clicked': ToolbarItemClickedEvent;
   'reader.sectionContentChanged': ReaderSectionContentChangedEvent;
 }
 
@@ -863,6 +913,9 @@ export type OtzariaMethod =
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.updateContextMenuItem'
+  | 'reader.addToolbarItem'
+  | 'reader.removeToolbarItem'
+  | 'reader.updateToolbarItem'
   | 'reader.setHighlight'
   | 'reader.updateHighlight'
   | 'reader.getHighlights'

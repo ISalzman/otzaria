@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
@@ -367,6 +368,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   ) async {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
+      PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
       await _installerService.uninstallPlugin(event.pluginId);
       add(LoadPlugins());
@@ -397,6 +399,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   ) async {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
+      PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
       final plugin = await repository.getPlugin(event.pluginId);
       if (plugin != null) {
@@ -419,6 +422,14 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         event.permission,
         event.granted,
       );
+      if (!event.granted) {
+        if (event.permission == 'reader.toolbar') {
+          PluginToolbarRegistry.instance.removeAll(event.pluginId);
+        }
+        if (event.permission == 'reader.context_menu') {
+          ContextMenuRegistry.instance.removeAll(event.pluginId);
+        }
+      }
       PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
       final permissions = await repository.getPluginPermissions(event.pluginId);
       final grantedPermissions = permissions
@@ -479,6 +490,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   ) async {
     try {
       ContextMenuRegistry.instance.removeAll(event.pluginId);
+      PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
       await repository.detachDevelopmentPlugin(event.pluginId);
       devWatchService.stopWatcher(event.pluginId);

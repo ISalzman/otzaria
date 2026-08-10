@@ -1,0 +1,54 @@
+/// פריט שתוסף רושם בשורת הפקדים של מסך העיון.
+///
+/// `type == 'button'` — לחצן בודד; `type == 'menu'` — תפריט נפתח שילדיו
+/// הם לחצנים ([children]).
+class PluginToolbarItem {
+  final String id;
+  final String type;
+  final String title;
+  final String? icon;
+  final List<String> contexts;
+  final String? onClickEvent;
+  final List<PluginToolbarItem> children;
+
+  /// לחיצה על הפריט תפתח את דף התוסף, ואירוע הלחיצה יימסר לו לאחר הטעינה.
+  final bool openPlugin;
+
+  /// ערך חופשי שהתוסף מסר ברישום — מוחזר לו כלשונו ב-payload של אירוע הלחיצה.
+  final Object? param;
+
+  const PluginToolbarItem({
+    required this.id,
+    this.type = 'button',
+    required this.title,
+    this.icon,
+    this.contexts = const ['reader-text', 'reader-pdf'],
+    this.onClickEvent,
+    this.children = const [],
+    this.openPlugin = false,
+    this.param,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'type': type,
+    'title': title,
+    if (icon != null) 'icon': icon,
+    'contexts': contexts,
+    if (onClickEvent != null) 'onClickEvent': onClickEvent,
+    if (children.isNotEmpty)
+      'children': children.map((child) => child.toJson()).toList(),
+    if (openPlugin) 'openPlugin': true,
+    if (param != null) 'param': param,
+  };
+}
+
+class PluginToolbarException implements Exception {
+  final String code;
+  final String message;
+
+  const PluginToolbarException(this.code, this.message);
+
+  @override
+  String toString() => '$code: $message';
+}

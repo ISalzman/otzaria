@@ -70,6 +70,9 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
+import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'pdf_zoom_bar.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
@@ -4621,29 +4624,47 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
 
     return [
-      ResponsiveActionBar(
-        key: const ValueKey('pdf_actions'),
-        overflowMenuOffset: const Offset(0, 8),
-        overflowButtonKey: widget.enableTourTargets
-            ? pdfBookOverflowTourTargetKey
-            : null,
-        menuItemKeysByTooltip: widget.enableTourTargets
-            ? {
-                'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
-                'חיפוש': pdfBookOverflowSearchTourTargetKey,
-                'הדפס': pdfBookOverflowPrintTourTargetKey,
-              }
-            : null,
-        actions: _buildDisplayOrderPdfActions(context),
-        alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
-        // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
-        // הכפתורים שבראש תפריט ה-"...".
-        menuHeaderActions: widget.isInCombinedView
-            ? _buildNavigationActions()
-            : null,
-        maxVisibleButtons: maxButtons,
+      ListenableBuilder(
+        listenable: PluginToolbarRegistry.instance,
+        builder: (context, _) => ResponsiveActionBar(
+          key: const ValueKey('pdf_actions'),
+          overflowMenuOffset: const Offset(0, 8),
+          overflowButtonKey: widget.enableTourTargets
+              ? pdfBookOverflowTourTargetKey
+              : null,
+          menuItemKeysByTooltip: widget.enableTourTargets
+              ? {
+                  'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
+                  'חיפוש': pdfBookOverflowSearchTourTargetKey,
+                  'הדפס': pdfBookOverflowPrintTourTargetKey,
+                }
+              : null,
+          actions: [
+            ..._buildDisplayOrderPdfActions(context),
+            ..._buildPluginActions(context),
+          ],
+          alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
+          // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+          // הכפתורים שבראש תפריט ה-"...".
+          menuHeaderActions: widget.isInCombinedView
+              ? _buildNavigationActions()
+              : null,
+          maxVisibleButtons: maxButtons,
+        ),
       ),
     ];
+  }
+
+  List<ActionButtonData> _buildPluginActions(BuildContext context) {
+    final records = PluginToolbarRegistry.instance.getAll();
+    if (records.isEmpty) return const [];
+    return buildPluginToolbarActions(
+      records: records,
+      context: 'reader-pdf',
+      compact: context.read<SettingsBloc>().state.compactMenuMode,
+      locationPayload: () async =>
+          (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
+    );
   }
 
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {

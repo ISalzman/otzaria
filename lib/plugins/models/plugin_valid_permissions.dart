@@ -59,6 +59,9 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.addContextMenuItem': 'reader.context_menu',
   'reader.removeContextMenuItem': 'reader.context_menu',
   'reader.updateContextMenuItem': 'reader.context_menu',
+  'reader.addToolbarItem': 'reader.toolbar',
+  'reader.removeToolbarItem': 'reader.toolbar',
+  'reader.updateToolbarItem': 'reader.toolbar',
   'reader.findTextOccurrences': 'reader.open',
   'reader.getSectionTextMap': 'reader.open',
   'reader.setHighlight': 'reader.highlight',
@@ -116,6 +119,9 @@ const pluginValidPermissions = <String>[
 
   /// הוספת פריטים לתפריט ההקשר של הקורא
   'reader.context_menu',
+
+  /// הוספת לחצנים ותפריטים לשורת הפקדים של מסך העיון
+  'reader.toolbar',
 
   /// הוספה וניהול של הדגשות צבעוניות בטקסט
   'reader.highlight',
