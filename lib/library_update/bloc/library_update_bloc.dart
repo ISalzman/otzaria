@@ -1,4 +1,4 @@
-﻿import 'package:bloc/bloc.dart';
+import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/error_log_file.dart';
@@ -268,11 +268,16 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     try {
       return await service.verifyAndUpdate(
         isCancelled: () => _isStale(opId),
-        onStatus: (message) {
+        onStatus: (message, phase) {
           if (_isStale(opId)) return;
           emit(
             state.copyWith(
-              status: LibraryUpdateStatus.checking,
+              status: switch (phase) {
+                CompanionAssetPhase.checking => LibraryUpdateStatus.checking,
+                CompanionAssetPhase.downloading =>
+                  LibraryUpdateStatus.downloading,
+                CompanionAssetPhase.applying => LibraryUpdateStatus.applying,
+              },
               message: message,
             ),
           );
@@ -309,10 +314,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     );
   }
 
-  void _onCancel(
-    CancelLibraryUpdate event,
-    Emitter<LibraryUpdateState> emit,
-  ) {
+  void _onCancel(CancelLibraryUpdate event, Emitter<LibraryUpdateState> emit) {
     // משלב כתיבת ה-DB ואילך ביטול אסור: ה-DB מתעדכן אטומית והריענון כבר בדרך,
     // וביטול כאן היה משאיר קטלוג ואינדקס ישנים עד restart.
     if (!_canCancel(state)) return;
@@ -342,10 +344,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     }
   }
 
-  void _onReset(
-    ResetLibraryUpdate event,
-    Emitter<LibraryUpdateState> emit,
-  ) {
+  void _onReset(ResetLibraryUpdate event, Emitter<LibraryUpdateState> emit) {
     _operationId++;
     _pendingCompleted = null;
     emit(const LibraryUpdateState());
@@ -372,10 +371,12 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       LibraryUpdatePhase.done => 'מסיים',
     };
     final status = switch (p.phase) {
+      LibraryUpdatePhase.checking => LibraryUpdateStatus.checking,
       LibraryUpdatePhase.downloading => LibraryUpdateStatus.downloading,
+      LibraryUpdatePhase.verifying => LibraryUpdateStatus.applying,
       LibraryUpdatePhase.applying => LibraryUpdateStatus.applying,
       LibraryUpdatePhase.refreshing => LibraryUpdateStatus.refreshing,
-      _ => LibraryUpdateStatus.checking,
+      LibraryUpdatePhase.done => LibraryUpdateStatus.checking,
     };
     emit(
       state.copyWith(

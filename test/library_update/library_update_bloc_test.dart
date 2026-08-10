@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +51,23 @@ class _FakeService implements LibraryUpdateService {
   }) async {
     fullCalled = true;
     if (throwOnApply) throw Exception('full failed');
+  }
+}
+
+class _FullVerifyingService extends _FakeService {
+  _FullVerifyingService(super.plan);
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    fullCalled = true;
+    onProgress?.call(
+      const LibraryUpdateProgress(phase: LibraryUpdatePhase.verifying),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 10));
   }
 }
 
@@ -180,13 +197,13 @@ class _FakeCompanionService extends CompanionAssetsService {
 
   @override
   Future<bool> verifyAndUpdate({
-    void Function(String message)? onStatus,
+    CompanionAssetStatusCallback? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function()? isCancelled,
   }) async {
     calls++;
     if (throwOnRun) throw Exception('companion failed');
-    onStatus?.call('בודק את התלמוד הבבלי');
+    onStatus?.call('בודק את התלמוד הבבלי', CompanionAssetPhase.checking);
     return changed;
   }
 }
@@ -201,11 +218,14 @@ class _GatedCompanionService extends CompanionAssetsService {
 
   @override
   Future<bool> verifyAndUpdate({
-    void Function(String message)? onStatus,
+    CompanionAssetStatusCallback? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function()? isCancelled,
   }) async {
-    onStatus?.call('מוריד את התלמוד הבבלי');
+    onStatus?.call(
+      'מוריד את התלמוד הבבלי',
+      CompanionAssetPhase.downloading,
+    );
     await gate.future;
     return changed;
   }
@@ -221,13 +241,16 @@ class _RaceCompanionService extends CompanionAssetsService {
 
   @override
   Future<bool> verifyAndUpdate({
-    void Function(String message)? onStatus,
+    CompanionAssetStatusCallback? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function()? isCancelled,
   }) async {
     calls++;
     if (calls == 1) {
-      onStatus?.call('מוריד את התלמוד הבבלי');
+      onStatus?.call(
+        'מוריד את התלמוד הבבלי',
+        CompanionAssetPhase.downloading,
+      );
       await firstGate.future;
       return true;
     }
@@ -470,6 +493,32 @@ void main() {
           (s) => s.status,
           'status',
           LibraryUpdateStatus.error,
+        ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'אימות DB מלא נשאר מצב עבודה גלוי',
+      build: () => _bloc(_FullVerifyingService(fullPlan)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      wait: const Duration(milliseconds: 30),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.downloading,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.applying)
+            .having((s) => s.message, 'message', 'מאמת קובץ עדכון'),
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.completed,
         ),
       ],
     );

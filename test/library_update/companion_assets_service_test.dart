@@ -119,7 +119,7 @@ void main() {
   group('תלמוד בבלי', () {
     test('תיקייה חסרה → מוריד, מחלץ לתיקיית האב, וכותב סימון גרסה', () async {
       final extractions = <({String archive, String outputDir})>[];
-      final statuses = <String>[];
+      final statuses = <({String message, CompanionAssetPhase phase})>[];
       final progress = <int>[];
       var libraryInvalidated = 0;
       final changed =
@@ -127,7 +127,8 @@ void main() {
             extractions: extractions,
             invalidateLibrary: () => libraryInvalidated++,
           ).verifyAndUpdate(
-            onStatus: statuses.add,
+            onStatus: (message, phase) =>
+                statuses.add((message: message, phase: phase)),
             onDownloadProgress: (done, total) => progress.add(done),
           );
 
@@ -145,8 +146,20 @@ void main() {
         reason: 'בלי ניקוי ה-cache הריענון לא יגלה את התיקייה החדשה',
       );
       // מד בזמן החילוץ (שלב ה-zst), ומעבר לספינר בשלב פריסת ה-tar.
-      expect(statuses, contains('מחלץ את התלמוד הבבלי'));
-      expect(statuses, contains('פורס את קבצי התלמוד'));
+      expect(
+        statuses,
+        contains((
+          message: 'מחלץ את התלמוד הבבלי',
+          phase: CompanionAssetPhase.applying,
+        )),
+      );
+      expect(
+        statuses,
+        contains((
+          message: 'פורס את קבצי התלמוד',
+          phase: CompanionAssetPhase.applying,
+        )),
+      );
       expect(progress, contains(5000));
     });
 
@@ -254,89 +267,83 @@ void main() {
       },
     );
 
-    test(
-      'FileSystemException בשלב החילוץ משאיר את ה-temp — '
-      'בלי הורדת גוף מלאה חוזרת',
-      () async {
-        final talmudTemp = File(
-          p.join(
-            Directory.systemTemp.path,
-            'otzaria_${DatabaseConstants.talmudBavliArchiveFileName}',
-          ),
-        );
-        cleanupTalmudTemp(talmudTemp);
-        addTearDown(() => cleanupTalmudTemp(talmudTemp));
+    test('FileSystemException בשלב החילוץ משאיר את ה-temp — '
+        'בלי הורדת גוף מלאה חוזרת', () async {
+      final talmudTemp = File(
+        p.join(
+          Directory.systemTemp.path,
+          'otzaria_${DatabaseConstants.talmudBavliArchiveFileName}',
+        ),
+      );
+      cleanupTalmudTemp(talmudTemp);
+      addTearDown(() => cleanupTalmudTemp(talmudTemp));
 
-        final ranges = <String?>[];
-        final client = MockClient((request) async {
-          if (request.url.path.contains('releases/latest')) {
+      final ranges = <String?>[];
+      final client = MockClient((request) async {
+        if (request.url.path.contains('releases/latest')) {
+          return http.Response(
+            jsonEncode({
+              'tag_name': tag,
+              'assets': [
+                {
+                  'name': DatabaseConstants.talmudBavliArchiveFileName,
+                  'browser_download_url': assetUrl,
+                  'size': 100,
+                  'id': 1,
+                  'updated_at': 't1',
+                },
+              ],
+            }),
+            200,
+          );
+        }
+        if (request.url.toString() == assetUrl) {
+          ranges.add(request.headers['range']);
+          if (request.headers['range'] != null) {
             return http.Response(
-              jsonEncode({
-                'tag_name': tag,
-                'assets': [
-                  {
-                    'name': DatabaseConstants.talmudBavliArchiveFileName,
-                    'browser_download_url': assetUrl,
-                    'size': 100,
-                    'id': 1,
-                    'updated_at': 't1',
-                  },
-                ],
-              }),
-              200,
+              '',
+              416,
+              headers: const {'content-range': 'bytes */100'},
             );
           }
-          if (request.url.toString() == assetUrl) {
-            ranges.add(request.headers['range']);
-            if (request.headers['range'] != null) {
-              return http.Response(
-                '',
-                416,
-                headers: const {'content-range': 'bytes */100'},
-              );
-            }
-            return http.Response.bytes(
-              List.filled(100, 5),
-              200,
-              headers: const {'etag': '"e1"'},
-            );
-          }
-          return http.Response('not found', 404);
-        });
+          return http.Response.bytes(
+            List.filled(100, 5),
+            200,
+            headers: const {'etag': '"e1"'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
 
-        // הרצה 1: ההורדה מצליחה אך המחלץ זורק FileSystemException (מדמה קובץ
-        // יעד נעול) — הארכיון הזמני נשמר כדי שההרצה הבאה לא תוריד שוב ~440MB.
-        await service(
-          client: client,
-          extractionError: const FileSystemException('קובץ נעול'),
-        ).verifyAndUpdate();
-        expect(readMarker(), CompanionAssetsService.talmudInstallingMarker);
-        expect(
-          talmudTemp.existsSync(),
-          isTrue,
-          reason: 'כשל נעילה אינו ארכיון פגום — אין למחוק את ההורדה',
-        );
+      // הרצה 1: ההורדה מצליחה אך המחלץ זורק FileSystemException (מדמה קובץ
+      // יעד נעול) — הארכיון הזמני נשמר כדי שההרצה הבאה לא תוריד שוב ~440MB.
+      await service(
+        client: client,
+        extractionError: const FileSystemException('קובץ נעול'),
+      ).verifyAndUpdate();
+      expect(readMarker(), CompanionAssetsService.talmudInstallingMarker);
+      expect(
+        talmudTemp.existsSync(),
+        isTrue,
+        reason: 'כשל נעילה אינו ארכיון פגום — אין למחוק את ההורדה',
+      );
 
-        // הרצה 2: הנעילה שוחררה — החילוץ מצליח מהשריד, בלי הורדת גוף נוספת.
-        final extractions = <({String archive, String outputDir})>[];
-        await service(
-          client: client,
-          extractions: extractions,
-        ).verifyAndUpdate();
-        expect(extractions, hasLength(1));
-        expect(readMarker(), tag);
-        expect(
-          ranges.where((r) => r == null),
-          hasLength(1),
-          reason: 'הגוף המלא הורד פעם אחת בלבד — ההרצה השנייה השתמשה בשריד',
-        );
-        expect(
-          talmudTemp.existsSync(),
-          isFalse,
-          reason: 'אחרי חילוץ מוצלח הקובץ הזמני נמחק',
-        );
-      },
-    );
+      // הרצה 2: הנעילה שוחררה — החילוץ מצליח מהשריד, בלי הורדת גוף נוספת.
+      final extractions = <({String archive, String outputDir})>[];
+      await service(client: client, extractions: extractions).verifyAndUpdate();
+      expect(extractions, hasLength(1));
+      expect(readMarker(), tag);
+      expect(
+        ranges.where((r) => r == null),
+        hasLength(1),
+        reason: 'הגוף המלא הורד פעם אחת בלבד — ההרצה השנייה השתמשה בשריד',
+      );
+      expect(
+        talmudTemp.existsSync(),
+        isFalse,
+        reason: 'אחרי חילוץ מוצלח הקובץ הזמני נמחק',
+      );
+    });
 
     test(
       'קובץ יעד נעול באמת בזמן ניקוי הקבצים הישנים משאיר את ה-temp',
@@ -1086,17 +1093,20 @@ void main() {
   group('קטלוג otzar-HB', () {
     test('קיים → בודק עדכון; עדכון בפועל מרענן את הקאש', () async {
       final catalog = _FakeCatalogRepository(exists: true, updateResult: true);
+      final phases = <CompanionAssetPhase>[];
       var invalidated = 0;
       createTalmudDir(markerTag: tag);
       final changed = await service(
         catalog: catalog,
         invalidate: () => invalidated++,
-      ).verifyAndUpdate();
+      ).verifyAndUpdate(onStatus: (_, phase) => phases.add(phase));
 
       expect(catalog.updateCalled, isTrue);
       expect(catalog.downloadCalled, isFalse);
       expect(invalidated, 1);
       expect(changed, isTrue);
+      expect(phases, contains(CompanionAssetPhase.checking));
+      expect(phases, contains(CompanionAssetPhase.downloading));
     });
 
     test('קיים ומעודכן → לא מדווח שינוי', () async {
@@ -1137,8 +1147,11 @@ class _FakeCatalogRepository extends ExternalCatalogRepository {
   Future<bool> databaseExists() async => exists;
 
   @override
-  Future<bool> updateDatabaseIfNeeded() async {
+  Future<bool> updateDatabaseIfNeeded({
+    void Function()? onUpdateAvailable,
+  }) async {
     updateCalled = true;
+    if (updateResult) onUpdateAvailable?.call();
     return updateResult;
   }
 

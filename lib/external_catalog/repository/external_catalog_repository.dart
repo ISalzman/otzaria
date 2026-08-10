@@ -52,18 +52,12 @@ class ExternalCatalogRepository {
 
   /// מחזיר את ספרי אוצר החכמה מתוך מסד הקטלוגים החיצוני.
   Future<List<ExternalLibraryBook>> getOtzarBooks() async {
-    return _loadBooks(
-      tableName: 'otzar_hahochma',
-      mapper: _mapOtzarBook,
-    );
+    return _loadBooks(tableName: 'otzar_hahochma', mapper: _mapOtzarBook);
   }
 
   /// מחזיר את ספרי היברובוקס מתוך מסד הקטלוגים החיצוני.
   Future<List<Book>> getHebrewBooks() async {
-    return _loadBooks(
-      tableName: 'hebrew_books',
-      mapper: _mapHebrewBook,
-    );
+    return _loadBooks(tableName: 'hebrew_books', mapper: _mapHebrewBook);
   }
 
   /// מחזיר ספרי היברובוקס לפי קבוצת מזהים בלבד (`id_book`).
@@ -117,7 +111,7 @@ class ExternalCatalogRepository {
   /// מעדכן את מסד הקטלוגים רק אם קיימת גרסה חדשה יותר.
   ///
   /// מחזיר `true` אם בוצע עדכון בפועל.
-  Future<bool> updateDatabaseIfNeeded() async {
+  Future<bool> updateDatabaseIfNeeded({VoidCallback? onUpdateAvailable}) async {
     if (!await databaseExists()) {
       return false;
     }
@@ -130,6 +124,7 @@ class ExternalCatalogRepository {
       return false;
     }
 
+    onUpdateAvailable?.call();
     await _downloadReleaseDatabase(release.databaseAsset);
     _ensureVersionStamped(latestVersion);
     return true;
@@ -154,10 +149,10 @@ class ExternalCatalogRepository {
           parseVersionText(result.first['value']?.toString()) != null) {
         return;
       }
-      db.execute(
-        'INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)',
-        [_versionMetaKey, version.toString()],
-      );
+      db.execute('INSERT OR REPLACE INTO db_meta (key, value) VALUES (?, ?)', [
+        _versionMetaKey,
+        version.toString(),
+      ]);
     } catch (e) {
       debugPrint('Error stamping external catalog DB version: $e');
     } finally {

@@ -27,6 +27,11 @@ typedef TalmudRelease = ({
   String? sha256,
 });
 
+enum CompanionAssetPhase { checking, downloading, applying }
+
+typedef CompanionAssetStatusCallback =
+    void Function(String message, CompanionAssetPhase phase);
+
 /// נזרק כשסריקת ה-releases הושלמה בלי למצוא את נכס התלמוד באף אחד מהם —
 /// להבדיל מכשל רשת/API, שבו ייתכן שהנכס קיים אך לא ניתן היה לאתרו.
 class TalmudAssetNotFoundException implements Exception {
@@ -99,7 +104,7 @@ class CompanionAssetsService {
   /// מילון. מחזיר האם תוכן הספרייה השתנה (תלמוד/קטלוג הותקנו או עודכנו) —
   /// אז נדרש ריענון ספרייה; עדכון מילון אינו משנה את הספרייה.
   Future<bool> verifyAndUpdate({
-    void Function(String message)? onStatus,
+    CompanionAssetStatusCallback? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function()? isCancelled,
   }) async {
@@ -123,7 +128,7 @@ class CompanionAssetsService {
     if (cancelled()) return libraryChanged;
 
     try {
-      onStatus?.call('בודק מילון חיפוש');
+      onStatus?.call('בודק מילון חיפוש', CompanionAssetPhase.checking);
       final downloader = _dictionaryFactory();
       try {
         // ensureLatest מדווח 1.0 גם כשהמילון כבר מעודכן — לא מציגים "מוריד".
@@ -133,7 +138,10 @@ class CompanionAssetsService {
             if (progress >= 1.0) return;
             if (!announced) {
               announced = true;
-              onStatus?.call('מוריד מילון לחיפוש המקורב');
+              onStatus?.call(
+                'מוריד מילון לחיפוש המקורב',
+                CompanionAssetPhase.downloading,
+              );
             }
             onDownloadProgress?.call((progress * 10000).round(), 10000);
           },
@@ -151,11 +159,11 @@ class CompanionAssetsService {
 
   /// מחזיר `true` רק כשהתלמוד הורד והותקן בפועל.
   Future<bool> _ensureTalmud(
-    void Function(String message)? onStatus,
+    CompanionAssetStatusCallback? onStatus,
     void Function(int received, int? total)? onDownloadProgress,
     bool Function() cancelled,
   ) async {
-    onStatus?.call('בודק את התלמוד הבבלי');
+    onStatus?.call('בודק את התלמוד הבבלי', CompanionAssetPhase.checking);
     final dirs = _talmudDirsProvider();
     final existingDir = dirs.where((d) {
       // תיקייה שאינה נגישה לקריאה (הרשאות, אחסון חיצוני) נחשבת כלא קיימת.
@@ -190,7 +198,7 @@ class CompanionAssetsService {
       }
       if (cancelled()) return false;
 
-      onStatus?.call('מוריד את התלמוד הבבלי');
+      onStatus?.call('מוריד את התלמוד הבבלי', CompanionAssetPhase.downloading);
       final targetDir = existingDir ?? dirs.first;
       final tempPath = p.join(
         Directory.systemTemp.path,
@@ -211,7 +219,7 @@ class CompanionAssetsService {
       );
       if (cancelled()) return false;
 
-      onStatus?.call('מחלץ את התלמוד הבבלי');
+      onStatus?.call('מחלץ את התלמוד הבבלי', CompanionAssetPhase.applying);
       final dir = Directory(targetDir);
       dir.createSync(recursive: true);
       final markerFile = File(p.join(targetDir, talmudVersionFileName));
@@ -233,7 +241,7 @@ class CompanionAssetsService {
           if (zstDone) return;
           if (progress >= 0.999) {
             zstDone = true;
-            onStatus?.call('פורס את קבצי התלמוד');
+            onStatus?.call('פורס את קבצי התלמוד', CompanionAssetPhase.applying);
           } else {
             onDownloadProgress?.call((progress * 10000).round(), 10000);
           }
@@ -420,15 +428,20 @@ class CompanionAssetsService {
   // ── קטלוג otzar-HB ────────────────────────────────────────────────────
 
   /// מחזיר `true` כשהקטלוג הורד או עודכן בפועל.
-  Future<bool> _ensureCatalog(void Function(String message)? onStatus) async {
+  Future<bool> _ensureCatalog(CompanionAssetStatusCallback? onStatus) async {
     final repository = _catalogRepository();
     if (await repository.databaseExists()) {
-      onStatus?.call('בודק עדכון קטלוגים');
-      final updated = await repository.updateDatabaseIfNeeded();
+      onStatus?.call('בודק עדכון קטלוגים', CompanionAssetPhase.checking);
+      final updated = await repository.updateDatabaseIfNeeded(
+        onUpdateAvailable: () => onStatus?.call(
+          'מוריד את הקטלוגים',
+          CompanionAssetPhase.downloading,
+        ),
+      );
       if (updated) _invalidateExternalBooksCache();
       return updated;
     }
-    onStatus?.call('מוריד את הקטלוגים');
+    onStatus?.call('מוריד את הקטלוגים', CompanionAssetPhase.downloading);
     await repository.downloadLatestDatabase();
     _invalidateExternalBooksCache();
     return true;
