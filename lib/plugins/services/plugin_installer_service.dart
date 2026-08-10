@@ -38,7 +38,13 @@ class PreparedInstall {
 
   /// גרסה מותקנת קודמת — null אם זו התקנה ראשונה.
   final String? previousVersion;
+
+  /// החלטת המשתמש על ההקדמה — null כשהמניפסט הקודם כלל לא ביקש אותה,
+  /// שאם לא כן בקשה חדשה הייתה נראית כסירוב קודם.
   final bool? previousAllowOrderBeforeBuiltInsGranted;
+
+  /// החלטות ההרשאה השמורות של הגרסה המותקנת. הרשאה שאינה במפה היא חדשה.
+  final Map<String, bool> previousGrantedPermissions;
 
   PreparedInstall(
     this.manifest,
@@ -46,6 +52,7 @@ class PreparedInstall {
     this.isOverwrite, {
     this.previousVersion,
     this.previousAllowOrderBeforeBuiltInsGranted,
+    this.previousGrantedPermissions = const {},
   });
 }
 
@@ -113,13 +120,21 @@ class PluginInstallerService {
         throw Exception(extendedReport.errors.join('\n'));
       }
 
+      final previousGrants = existingPlugin == null
+          ? const <String, bool>{}
+          : await _grantsFor(existingPlugin);
+
       return PreparedInstall(
         manifest,
         tempDir.path,
         isOverwrite,
         previousVersion: existingPlugin?.version,
         previousAllowOrderBeforeBuiltInsGranted:
-            existingPlugin?.allowOrderBeforeBuiltInsGranted,
+            existingPlugin != null &&
+                existingPlugin.manifest.allowOrderBeforeBuiltIns
+            ? existingPlugin.allowOrderBeforeBuiltInsGranted
+            : null,
+        previousGrantedPermissions: previousGrants,
       );
     } catch (e) {
       if (await tempDir.exists()) {
@@ -183,12 +198,9 @@ class PluginInstallerService {
       // - Only grant permissions that did NOT previously have an explicit decision.
       //   This preserves user revokes across updates.
       // - Remove grants for permissions that no longer exist in the new manifest.
-      final existingGrants = <String, bool>{};
+      var existingGrants = const <String, bool>{};
       if (existingPlugin != null) {
-        for (final perm in existingPlugin.manifest.permissions) {
-          final granted = await _repository.getPermission(manifest.id, perm);
-          if (granted != null) existingGrants[perm] = granted;
-        }
+        existingGrants = await _grantsFor(existingPlugin);
         // Clean up grants for permissions removed from the new manifest.
         for (final oldPerm in existingPlugin.manifest.permissions) {
           if (!manifest.permissions.contains(oldPerm)) {
@@ -206,6 +218,16 @@ class PluginInstallerService {
         await tempDir.delete(recursive: true);
       }
     }
+  }
+
+  /// החלטות ההרשאה השמורות של תוסף מותקן, מסוננות למניפסט שלו.
+  Future<Map<String, bool>> _grantsFor(InstalledPlugin plugin) async {
+    final grants = await _repository.getPluginPermissions(plugin.pluginId);
+    return {
+      for (final grant in grants)
+        if (plugin.manifest.permissions.contains(grant.permission))
+          grant.permission: grant.granted,
+    };
   }
 
   Future<void> cancelInstall(String tempDirPath) async {

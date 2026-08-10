@@ -23,6 +23,10 @@ class PluginInstallScreen extends StatefulWidget {
   /// בחירה קודמת של המשתמש לגבי הקדמת התוסף לפני כלים מובנים.
   /// `null` = אין החלטה קודמת (התקנה ראשונה או תוסף ישן לפני הפיצ'ר).
   final bool? previousAllowOrderBeforeBuiltInsGranted;
+
+  /// החלטות ההרשאה השמורות של הגרסה המותקנת. בעדכון מוצגות רק הרשאות
+  /// שאינן במפה — אלה שהמשתמש טרם החליט לגביהן.
+  final Map<String, bool> previousGrantedPermissions;
   final PluginInstallReportContext? reportContext;
 
   /// כאשר מסופק, נקרא במקום שליחת ConfirmPluginInstall לבלוק (למשל בתוסף פיתוח).
@@ -44,6 +48,7 @@ class PluginInstallScreen extends StatefulWidget {
     required this.tempDirPath,
     this.previousVersion,
     this.previousAllowOrderBeforeBuiltInsGranted,
+    this.previousGrantedPermissions = const {},
     this.reportContext,
     this.onConfirm,
     this.onCancel,
@@ -61,34 +66,82 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   late Map<String, bool> _permissionToggles;
   late bool _allowOrderBeforeBuiltInsGranted;
 
-  /// ההרשאות בסדר הצגה: קודם אלה שכבויות כברירת מחדל (דורשות החלטה מודעת),
-  /// אחר כך השאר בסדר המניפסט.
+  /// הרשאות המניפסט בסדר ההצגה — הרגישות ראשונות.
   late List<String> _orderedPermissions;
+
+  /// הרשאות שהתוסף מבקש לראשונה (אין עליהן החלטה שמורה).
+  late List<String> _newPermissions;
+
+  /// הרשאות מוכרות שמתחילות כבויות — החלטת עבר של המשתמש, ברירת מחדל
+  /// כבויה, או כיבוי הרשת במצב 'מנותק'.
+  late List<String> _revokedPermissions;
 
   @override
   void initState() {
     super.initState();
     _permissionToggles = {
-      for (final p in widget.manifest.permissions)
-        p: pluginPermissionDefaultGrant(
-          p,
-          isOfflineMode: widget.isOfflineMode,
-        ),
+      for (final p in widget.manifest.permissions) p: _initialGrantFor(p),
     };
     _orderedPermissions = orderedPluginPermissions(
       widget.manifest.permissions,
       isOfflineMode: widget.isOfflineMode,
     );
+    _newPermissions = _orderedPermissions
+        .where((p) => !widget.previousGrantedPermissions.containsKey(p))
+        .toList();
+    _revokedPermissions = _orderedPermissions
+        .where(
+          (p) =>
+              widget.previousGrantedPermissions.containsKey(p) &&
+              _permissionToggles[p] == false,
+        )
+        .toList();
     _allowOrderBeforeBuiltInsGranted =
         widget.previousAllowOrderBeforeBuiltInsGranted ??
         widget.manifest.allowOrderBeforeBuiltIns;
   }
 
-  bool get _requestsRunOnStartup =>
-      widget.manifest.permissions.contains(pluginRunOnStartupPermission);
+  /// מצב ה-toggle ההתחלתי: ניתוק כופה כיבוי רשת, אחריו החלטת עבר, ולבסוף
+  /// ברירת המחדל של ההרשאה.
+  bool _initialGrantFor(String permission) {
+    if (widget.isOfflineMode && permission == pluginNetworkAccessPermission) {
+      return false;
+    }
+    return widget.previousGrantedPermissions[permission] ??
+        pluginPermissionDefaultGrant(
+          permission,
+          isOfflineMode: widget.isOfflineMode,
+        );
+  }
 
+  /// בעדכון מוצגות רק הרשאות חדשות או כבויות; בהתקנה ראשונה — הכול.
+  List<String> get _visiblePermissions =>
+      widget.isUpdate ? _newPermissions : _orderedPermissions;
+
+  /// באנר האזהרה מוצג רק כשההחלטה על ההרשאה שמאחוריו פתוחה בדיאלוג הזה.
+  bool _showsPermission(String permission) =>
+      _visiblePermissions.contains(permission) ||
+      _revokedPermissions.contains(permission);
+
+  bool get _requestsRunOnStartup =>
+      _showsPermission(pluginRunOnStartupPermission);
+
+  /// המניפסט מחייב את הרשאת keep_alive, ולכן די בהצגתה כדי לגזור את הבאנר.
+  bool get _requestsKeepAlive =>
+      widget.manifest.startup?.keepAlive == true &&
+      _showsPermission(pluginBackgroundKeepAlivePermission);
+
+  /// שאלת המיקום נשאלת רק כשאין עליה החלטה קודמת.
   bool get _requestsOrderBeforeBuiltIns =>
-      widget.manifest.allowOrderBeforeBuiltIns;
+      widget.manifest.allowOrderBeforeBuiltIns &&
+      widget.previousAllowOrderBeforeBuiltInsGranted == null;
+
+  /// עדכון שאינו דורש שום החלטה — מוצג כאישור עדכון בלבד.
+  bool get _isPlainUpdate =>
+      widget.isUpdate &&
+      _newPermissions.isEmpty &&
+      _revokedPermissions.isEmpty &&
+      !_requestsOrderBeforeBuiltIns;
 
   void _onInstall() {
     if (widget.onConfirm != null) {
@@ -122,6 +175,36 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
       );
     }
     Navigator.of(context).pop();
+  }
+
+  Widget _permissionTile(String permission, ColorScheme colorScheme) {
+    final info = getPermissionInfo(permission, manifest: widget.manifest);
+    final isGranted = _permissionToggles[permission] ?? true;
+    final isSensitive = permission == pluginRunOnStartupPermission;
+    final isCritical = permission == pluginBackgroundKeepAlivePermission;
+    final iconData = isSensitive || isCritical
+        ? (isGranted
+              ? FluentIcons.warning_24_filled
+              : FluentIcons.warning_24_regular)
+        : (isGranted
+              ? FluentIcons.shield_checkmark_24_regular
+              : FluentIcons.shield_error_24_regular);
+    return SettingsActionTile.switchTile(
+      icon: iconData,
+      iconColor: isCritical
+          ? colorScheme.error
+          : isSensitive
+          ? colorScheme.tertiary
+          : (isGranted ? colorScheme.primary : colorScheme.error),
+      title: info.label,
+      subtitle: info.description,
+      value: isGranted,
+      onChanged: (val) {
+        setState(() {
+          _permissionToggles[permission] = val;
+        });
+      },
+    );
   }
 
   @override
@@ -180,7 +263,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
             const SizedBox(height: 16),
           ],
 
-          if (widget.manifest.startup?.keepAlive == true) ...[
+          if (_requestsKeepAlive) ...[
             _KeepAliveBanner(colorScheme: colorScheme),
             const SizedBox(height: 16),
           ],
@@ -214,7 +297,19 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           ],
 
           // ===== הרשאות =====
-          if (!hasPermissions)
+          if (_isPlainUpdate)
+            SettingsCard(
+              title: 'הרשאות',
+              children: [
+                SettingsActionTile.text(
+                  icon: FluentIcons.shield_checkmark_24_regular,
+                  iconColor: colorScheme.primary,
+                  title: 'העדכון אינו מבקש הרשאות חדשות',
+                  subtitle: 'ההרשאות שהענקת לתוסף יישמרו כפי שהן',
+                ),
+              ],
+            )
+          else if (!hasPermissions)
             SettingsCard(
               title: 'הרשאות',
               children: [
@@ -227,52 +322,36 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
               ],
             )
           else ...[
-            SettingsCard(
-              title: 'הרשאות נדרשות',
-              subtitle: 'הרשאות רגישות מתחילות כבויות ודורשות אישור מפורש',
-              children: [
-                ..._orderedPermissions.map((permission) {
-                  final info = getPermissionInfo(
-                    permission,
-                    manifest: widget.manifest,
-                  );
-                  final isGranted = _permissionToggles[permission] ?? true;
-                  final isSensitive =
-                      permission == pluginRunOnStartupPermission;
-                  final isCritical =
-                      permission == pluginBackgroundKeepAlivePermission;
-                  final iconData = isSensitive || isCritical
-                      ? (isGranted
-                            ? FluentIcons.warning_24_filled
-                            : FluentIcons.warning_24_regular)
-                      : (isGranted
-                            ? FluentIcons.shield_checkmark_24_regular
-                            : FluentIcons.shield_error_24_regular);
-                  final iconColor = isCritical
-                      ? colorScheme.error
-                      : isSensitive
-                      ? colorScheme.tertiary
-                      : (isGranted ? colorScheme.primary : colorScheme.error);
-                  return SettingsActionTile.switchTile(
-                    icon: iconData,
-                    iconColor: iconColor,
-                    title: info.label,
-                    subtitle: info.description,
-                    value: isGranted,
-                    onChanged: (val) {
-                      setState(() {
-                        _permissionToggles[permission] = val;
-                      });
-                    },
-                  );
-                }),
-                SettingsActionTile.text(
-                  icon: FluentIcons.info_24_regular,
-                  iconColor: colorScheme.onSurfaceVariant,
-                  title: 'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
-                ),
-              ],
-            ),
+            if (_visiblePermissions.isNotEmpty)
+              SettingsCard(
+                title: isUpdate ? 'הרשאות חדשות' : 'הרשאות נדרשות',
+                subtitle: isUpdate
+                    ? 'הרשאות שהתוסף מבקש לראשונה בגרסה זו'
+                    : 'הרשאות רגישות מתחילות כבויות ודורשות אישור מפורש',
+                children: [
+                  ..._visiblePermissions.map(
+                    (permission) => _permissionTile(permission, colorScheme),
+                  ),
+                  SettingsActionTile.text(
+                    icon: FluentIcons.info_24_regular,
+                    iconColor: colorScheme.onSurfaceVariant,
+                    title: 'ניתן לשנות הרשאות בכל עת מהגדרות התוסף',
+                  ),
+                ],
+              ),
+            if (isUpdate && _revokedPermissions.isNotEmpty) ...[
+              if (_visiblePermissions.isNotEmpty) const SizedBox(height: 16),
+              SettingsCard(
+                title: 'הרשאות כבויות',
+                subtitle:
+                    'הרשאות מוכרות שאינן מוענקות כרגע — אינן חדשות בגרסה זו',
+                children: [
+                  ..._revokedPermissions.map(
+                    (permission) => _permissionTile(permission, colorScheme),
+                  ),
+                ],
+              ),
+            ],
           ],
 
           const SizedBox(height: 32),

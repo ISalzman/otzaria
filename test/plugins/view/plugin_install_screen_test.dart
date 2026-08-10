@@ -112,6 +112,7 @@ Future<void> _openDialog(
   PluginManifest manifest, {
   String? previousVersion,
   bool? previousAllowOrderBeforeBuiltInsGranted,
+  Map<String, bool> previousGrantedPermissions = const {},
   PluginInstallReportContext? reportContext,
   bool isOfflineMode = false,
   double screenHeight = 900,
@@ -143,6 +144,7 @@ Future<void> _openDialog(
                       previousVersion: previousVersion,
                       previousAllowOrderBeforeBuiltInsGranted:
                           previousAllowOrderBeforeBuiltInsGranted,
+                      previousGrantedPermissions: previousGrantedPermissions,
                       reportContext: reportContext,
                       isOfflineMode: isOfflineMode,
                     ),
@@ -672,7 +674,7 @@ void main() {
   });
 
   testWidgets(
-    'בעדכון נשמרת הבחירה הקודמת של המשתמש לגבי הקדמת התוסף לפני כלים מובנים',
+    'בעדכון שאלת ההקדמה לא נשאלת שוב, והבחירה הקודמת נשלחת ב-ConfirmPluginInstall',
     (tester) async {
       await _openDialog(
         tester,
@@ -682,17 +684,142 @@ void main() {
         previousAllowOrderBeforeBuiltInsGranted: false,
       );
 
-      final rowFinder = find.ancestor(
-        of: find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
-        matching: find.byType(ListTile),
+      expect(
+        find.text('אפשר לתוסף להופיע לפני הכלים המובנים'),
+        findsNothing,
       );
-      expect(rowFinder, findsOneWidget);
-      final sw = tester.widget<CustomSwitch>(
-        find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+
+      await tester.ensureVisible(find.text('עדכן'));
+      await tester.tap(find.text('עדכן'));
+      await tester.pumpAndSettle();
+
+      expect(
+        bloc.capturedEvents
+            .whereType<ConfirmPluginInstall>()
+            .first
+            .allowOrderBeforeBuiltInsGranted,
+        isFalse,
       );
-      expect(sw.value, isFalse);
     },
   );
+
+  // ── עדכון: רק הרשאות חדשות/כבויות ──
+
+  testWidgets('עדכון ללא הרשאות חדשות — דיאלוג אישור עדכון בלבד', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: ['app.info.read', 'notes.read']),
+      previousVersion: '1.0.0',
+      previousGrantedPermissions: const {
+        'app.info.read': true,
+        'notes.read': true,
+      },
+    );
+
+    expect(find.text('העדכון אינו מבקש הרשאות חדשות'), findsOneWidget);
+    expect(find.text('הרשאות חדשות'), findsNothing);
+    expect(find.text('מידע אפליקציה'), findsNothing);
+    expect(find.text('צפייה בהערות'), findsNothing);
+  });
+
+  testWidgets('עדכון — מוצגת רק ההרשאה החדשה, לא זו שכבר הוענקה', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: ['app.info.read', 'notes.read']),
+      previousVersion: '1.0.0',
+      previousGrantedPermissions: const {'app.info.read': true},
+    );
+
+    expect(find.text('הרשאות חדשות'), findsOneWidget);
+    expect(find.text('צפייה בהערות'), findsOneWidget);
+    expect(find.text('מידע אפליקציה'), findsNothing);
+  });
+
+  testWidgets('עדכון — הרשאה שהמשתמש כיבה מוצגת בכרטיס "הרשאות כבויות"', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: ['app.info.read', 'notes.read']),
+      previousVersion: '1.0.0',
+      previousGrantedPermissions: const {
+        'app.info.read': true,
+        'notes.read': false,
+      },
+      screenHeight: 1400,
+    );
+
+    expect(find.text('הרשאות כבויות'), findsOneWidget);
+    expect(find.text('הרשאות חדשות'), findsNothing);
+    final rowFinder = find.ancestor(
+      of: find.text('צפייה בהערות'),
+      matching: find.byType(ListTile),
+    );
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
+  });
+
+  testWidgets('עדכון — החלטת עבר נשמרת ונשלחת ב-ConfirmPluginInstall', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: ['app.info.read', 'notes.read']),
+      previousVersion: '1.0.0',
+      previousGrantedPermissions: const {'app.info.read': false},
+      screenHeight: 1400,
+    );
+
+    await tester.ensureVisible(find.text('עדכן'));
+    await tester.tap(find.text('עדכן'));
+    await tester.pumpAndSettle();
+
+    final perms = bloc.capturedEvents
+        .whereType<ConfirmPluginInstall>()
+        .first
+        .grantedPermissions;
+    expect(perms['app.info.read'], isFalse, reason: 'החלטת העבר נשמרת');
+    expect(
+      perms['notes.read'],
+      isTrue,
+      reason: 'הרשאה חדשה מוענקת כברירת מחדל',
+    );
+  });
+
+  testWidgets('עדכון במצב מנותק — הרשאת הרשת מוצגת כבויה גם אם הוענקה בעבר', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: [pluginNetworkAccessPermission]),
+      previousVersion: '1.0.0',
+      previousGrantedPermissions: const {
+        pluginNetworkAccessPermission: true,
+      },
+      isOfflineMode: true,
+    );
+
+    expect(find.text('הרשאות כבויות'), findsOneWidget);
+    final rowFinder = find.ancestor(
+      of: find.text('גישה לאינטרנט'),
+      matching: find.byType(ListTile),
+    );
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
+  });
 
   // ── payload של ConfirmPluginInstall ──────────────────────────────────────
   //
