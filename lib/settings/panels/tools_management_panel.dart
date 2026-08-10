@@ -524,7 +524,9 @@ class _ActionBar extends StatelessWidget {
                   ? FluentIcons.power_24_filled
                   : FluentIcons.power_24_regular,
               text: context.settingsText(
-                _allSelectedHaveStartupEnabled ? 'טעינה רגילה' : 'טעינה בעליה',
+                _allSelectedHaveStartupEnabled
+                    ? 'ביטול הפעלה ברקע'
+                    : 'אישור הפעלה ברקע',
               ),
               onPressed: hasSelection && _anySelectedHasStartupPermission
                   ? () => _setRunOnStartup(
@@ -961,8 +963,8 @@ class _PluginRowState extends State<_PluginRow> {
           offBg: cs.errorContainer,
           offFg: cs.onErrorContainer,
           label: plugin.runOnStartupGranted
-              ? context.settingsText('ביטול טעינה בעלייה')
-              : context.settingsText('הפעלת טעינה בעלייה'),
+              ? context.settingsText('ביטול הפעלה ברקע')
+              : context.settingsText('אישור הפעלה ברקע'),
           onTap: widget.onToggleRunOnStartup,
         ),
       _RowAction(

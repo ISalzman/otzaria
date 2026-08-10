@@ -1935,6 +1935,7 @@ async function scheduleReminder(title, body, dateTime) {
 {
   "permissions": [
     "app.startup_contributions",
+    "app.run_on_startup",
     "reader.toolbar",
     "reader.context_menu",
     "published_data.write"
@@ -1962,10 +1963,15 @@ async function scheduleReminder(title, body, dateTime) {
           "type": "calendar.event",
           "key": "daily-reminder",
           "scope": "global",
-          "payload": { "title": "תזכורת", "importance": "normal" }
+          "payload": {
+            "title": "תזכורת",
+            "startsAt": "2026-08-10T18:00:00+03:00",
+            "importance": "normal"
+          }
         }
       ],
-      "activationEvents": ["app.startup", "reader.sectionContentChanged"]
+      "activationEvents": ["app.startup", "reader.sectionContentChanged"],
+      "keepAlive": false
     }
   }
 }
@@ -1979,6 +1985,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
+| `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
 
 ### הפעלה עצלה
 
@@ -1995,6 +2002,11 @@ async function scheduleReminder(title, body, dateTime) {
 - אל תסתמכו על `setTimeout`/`setInterval` ארוכים במופע הרקע — לתזמון השתמשו ב-`notifications.scheduleSystem`, ולמעקב מתמשך ב-`activationEvents`.
 - שמרו state שצריך לשרוד ב-`storage.set` (או ב-`localStorage`, שנשמר בפרופיל) — משתני JS בזיכרון אובדים בכיבוי.
 - מופעי `app.run_on_startup` במסלול הישן (טעינה בעלייה) אינם מכובים — רק מופעים שהוערו עצל.
+
+תוסף שחייב לשמור מנוע חי יכול להצהיר `"keepAlive": true`. עליו להצהיר גם על
+`app.background_keep_alive`, והמשתמש חייב לאשר אותה בנפרד. זו הרשאה רגישה,
+כבויה כברירת מחדל ומוצגת באדום, משום שהיא מאפשרת ל-WebView לצרוך משאבים ללא
+הגבלת זמן. `plugin.backgroundDone` עדיין מכבה את המופע מיד כשהתוסף מבקש זאת.
 
 ### showWhen — פריט תפריט תלוי-תוכן
 
@@ -2028,7 +2040,7 @@ async function scheduleReminder(title, body, dateTime) {
 
 תוסף שהצהיר `contributes.startup` יוצא ממסלול הטעינה המיידית כבר ב-0.9.97 — אין מצב ביניים של ריצה כפולה.
 
-התיעוד שלהלן מתאר את המסלול הישן, לתחזוקת תוספים שטרם עברו: <!-- TODO: למחוק את הסעיף הזה כולו (כולל מדריך המעבר) בהסרת המסלול הישן ב-0.9.98 -->
+התיעוד שלהלן מתאר את המסלול הישן, לתחזוקת תוספים שטרם עברו. יש להסירו יחד עם המימוש הישן ב-0.9.98.
 
 הרשאה `app.run_on_startup` מאפשרת לתוסף להיטען ולרוץ ברקע **מיד עם עליית אוצריא**, לפני שהמשתמש נכנס למסך "כלים".
 
@@ -2115,6 +2127,7 @@ Otzaria.on('plugin.boot', async (payload) => {
     "notifications.send",
     "notifications.system",
     "app.run_on_startup",
+    "app.background_keep_alive",
     "app.startup_contributions",
     "database.read",
     "events.subscribe:navigation.changed",

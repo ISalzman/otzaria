@@ -129,6 +129,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   /// מופעים שהורמו לפי דרישה (contributes.startup) — אינם כפופים לתנאי
   /// הרשאת run_on_startup של מסלול העלייה, ולכן הסנכרון מדלג עליהם.
   final Set<String> _onDemandPluginIds = {};
+  final Map<String, int> _onDemandGenerations = {};
 
   /// הרשימה האחרונה מהבלוק — נדרשת להפעלה לפי דרישה בין סנכרונים.
   List<InstalledPlugin> _latestPlugins = const [];
@@ -216,7 +217,11 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
                     ),
                     width: 1,
                     height: 1,
-                    child: _BackgroundPluginRunner(plugin: plugin),
+                    child: _BackgroundPluginRunner(
+                      plugin: plugin,
+                      activationGeneration:
+                          _onDemandGenerations[plugin.pluginId],
+                    ),
                   ),
               ],
             ),
@@ -367,6 +372,14 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
   Future<void> _activateOnDemand(String pluginId) async {
     if (!mounted) throw StateError('background host is not mounted');
     if (_activeBackgroundPlugins.containsKey(pluginId)) return;
+    final lazyActivation = PluginLazyActivationService.instance;
+    final activationGeneration = lazyActivation.activationGeneration(pluginId);
+    if (!lazyActivation.isActivationCurrent(
+      pluginId,
+      activationGeneration,
+    )) {
+      throw StateError('background activation was revoked');
+    }
     InstalledPlugin? plugin;
     for (final candidate in _latestPlugins) {
       if (candidate.pluginId == pluginId && candidate.enabled) {
@@ -379,6 +392,12 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
     }
     if (!_runtimeAvailable) {
       _runtimeAvailable = await WebViewEnvironmentHolder.isRuntimeAvailable();
+      if (!lazyActivation.isActivationCurrent(
+        pluginId,
+        activationGeneration,
+      )) {
+        throw StateError('background activation was revoked during init');
+      }
       if (!_runtimeAvailable) {
         throw StateError('WebView2 Runtime is not available');
       }
@@ -387,9 +406,15 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
       throw StateError('WebView2 environment init failed');
     }
     if (!mounted) throw StateError('background host disposed during init');
-    PluginLazyActivationService.instance.trackIdleTeardown(pluginId);
+    if (!lazyActivation.trackIdleTeardown(
+      pluginId,
+      generation: activationGeneration,
+    )) {
+      throw StateError('background activation was revoked during init');
+    }
     setState(() {
       _onDemandPluginIds.add(pluginId);
+      _onDemandGenerations[pluginId] = activationGeneration;
       _activeBackgroundPlugins[pluginId] = plugin!;
     });
   }
@@ -400,6 +425,7 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
     if (!mounted || !_onDemandPluginIds.contains(pluginId)) return;
     setState(() {
       _onDemandPluginIds.remove(pluginId);
+      _onDemandGenerations.remove(pluginId);
       _activeBackgroundPlugins.remove(pluginId);
     });
   }
@@ -425,8 +451,12 @@ class _PluginBackgroundHostState extends State<PluginBackgroundHost> {
 /// ה-instances).
 class _BackgroundPluginRunner extends StatefulWidget {
   final InstalledPlugin plugin;
+  final int? activationGeneration;
 
-  const _BackgroundPluginRunner({required this.plugin});
+  const _BackgroundPluginRunner({
+    required this.plugin,
+    this.activationGeneration,
+  });
 
   @override
   State<_BackgroundPluginRunner> createState() =>
@@ -621,6 +651,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     _adapter.dispose();
     PluginLazyActivationService.instance.onBackgroundInstanceClosed(
       widget.plugin.pluginId,
+      generation: widget.activationGeneration,
     );
     PluginRuntimeDispatcher.instance.unregisterController(
       widget.plugin.pluginId,
@@ -684,6 +715,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           debugPrint(
             'Background plugin [${widget.plugin.pluginId}] init error: $e',
           );
+          PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+            widget.plugin.pluginId,
+            generation: widget.activationGeneration,
+          );
         }
       },
       onProcessFailed: (controller, detail) {
@@ -697,6 +732,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             'ExitCode': detail.exitCode?.toString(),
             'Process': detail.processDescription,
           },
+        );
+        PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+          widget.plugin.pluginId,
+          generation: widget.activationGeneration,
         );
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
@@ -882,6 +921,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           unawaited(
             PluginLazyActivationService.instance.onBackgroundInstanceReady(
               widget.plugin.pluginId,
+              generation: widget.activationGeneration,
             ),
           );
         } catch (e, st) {
@@ -892,6 +932,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             widget.plugin.pluginId,
             'ERROR',
             'Background boot failed: $e',
+          );
+          PluginLazyActivationService.instance.onBackgroundInstanceFailed(
+            widget.plugin.pluginId,
+            generation: widget.activationGeneration,
           );
         }
       },

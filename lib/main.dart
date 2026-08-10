@@ -58,7 +58,6 @@ import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
-import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
@@ -88,6 +87,7 @@ import 'package:otzaria/widgets/misc/app_cursors.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
+import 'package:otzaria/plugins/services/plugin_background_policy.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
@@ -655,20 +655,7 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
 
-  // פרי-וורם של WebView2 environment ברקע. הפעם הראשונה שיוצרים סביבת
-  // WebView2 ב-Windows מצמיחה כמה תהליכי-בן של Edge ולוקחת 1-2 שניות
-  // CPU + רישות I/O. אם המשתמש פותח תוסף בפעם הראשונה — הוא רואה את
-  // ההשהיה הזו כטאב לבן/קפוא. ביצוע ה-init פה, אחרי שכל שאר ה-bootstrap
-  // סיים, מעביר את העלות לרקע בעוד ה-UI מציג את המסך הראשי.
-  //
-  // קריאה מקבילית לאותה initialize ע"י plugin_tab_page (כשהמשתמש פותח
-  // תוסף לפני שה-pre-warm הסתיים) בטוחה — ה-WebViewEnvironmentHolder
-  // עצמו עוטף את ה-init הראשון ב-future ששמור, וקוראים מאוחרים יחלקו
-  // את אותו future. אין סיכוי לכפילות של Edge process trees.
-  //
-  // אנחנו לא await כדי לא לעכב את ה-bootstrap; השגיאה הופכת ל-non-fatal.
-  // עלות: ~100MB RAM לתהליכי Edge הילדים, מנוקים ע"י ה-Job Object
-  // בעת סגירת התהליך — אז לא יוותרו זומבים גם אם המשתמש לעולם לא יפתח תוסף.
+  // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
 }
 
@@ -823,17 +810,9 @@ Future<void> _runDeferredCacheWarmups() async {
 Future<void> _preWarmWebViewEnvironment() async {
   if (kIsWeb || !Platform.isWindows) return;
   try {
-    // pre-warm רק כשקיים תוסף שבאמת ירוץ בעלייה (app.run_on_startup מאושרת)
-    // — אחרת ה-WebView2 environment הוא בזבוז של ~100MB RAM (5-7 תהליכי
-    // Edge ילדים). תוספי contributes.startup לא נכללים בכוונה: המנוע שלהם
-    // קם בעצלנות בלחיצה/אירוע, וההשהיה החד-פעמית של 1-2 שניות נסבלת שם.
+    // תוסף דקלרטיבי נשאר עצל גם אם אושרה לו הפעלה ברקע.
     final installed = await PluginRegistryRepository().getAllPlugins();
-    final hasStartupRunner = installed.any(
-      (p) =>
-          p.enabled &&
-          p.runOnStartupGranted &&
-          p.manifest.permissions.contains(pluginRunOnStartupPermission),
-    );
+    final hasStartupRunner = installed.any(usesLegacyStartupRunner);
     if (!hasStartupRunner) {
       if (kDebugMode) {
         debugPrint('WebView2 pre-warm skipped: no startup plugins');

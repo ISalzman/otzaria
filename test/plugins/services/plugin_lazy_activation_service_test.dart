@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 
@@ -101,6 +103,35 @@ void main() {
     expect(activations, isEmpty);
   });
 
+  test(
+    'revocation invalidates an activation already waiting on init',
+    () async {
+      final initGate = Completer<void>();
+      var attachedAfterInit = false;
+      service.backgroundActivator = (pluginId) async {
+        final generation = service.activationGeneration(pluginId);
+        await initGate.future;
+        attachedAfterInit = service.trackIdleTeardown(
+          pluginId,
+          generation: generation,
+        );
+      };
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+      );
+
+      service.queueTargetedEvent('p1', 'click', {});
+      service.removePlugin('p1');
+      initGate.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(attachedAfterInit, isFalse);
+      expect(service.isBootPending('p1'), isFalse);
+    },
+  );
+
   group('idle teardown', () {
     late List<String> deactivations;
 
@@ -134,6 +165,43 @@ void main() {
       expect(deactivations, isEmpty);
 
       await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(deactivations, ['p1']);
+    });
+
+    test('keepAlive prevents idle teardown until it is revoked', () async {
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+        keepAlive: true,
+      );
+      service.trackIdleTeardown('p1');
+      await service.onBackgroundInstanceReady('p1');
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(deactivations, isEmpty);
+
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(deactivations, ['p1']);
+    });
+
+    test('backgroundDone still tears down a keepAlive instance', () async {
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+        keepAlive: true,
+      );
+      service.trackIdleTeardown('p1');
+      await service.onBackgroundInstanceReady('p1');
+
+      expect(service.requestImmediateTeardown('p1'), isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
       expect(deactivations, ['p1']);
     });
 
@@ -279,5 +347,48 @@ void main() {
     // הפעלה חוזרת אפשרית אחרי הכשל.
     service.queueTargetedEvent('p1', 'click', {'n': 2});
     expect(activations, hasLength(2));
+  });
+
+  test('failed background boot clears pending state and allows retry', () {
+    service.syncPlugin(
+      'p1',
+      broadcastTopics: const {},
+      scheduleStartup: false,
+    );
+
+    service.queueTargetedEvent('p1', 'click', {'n': 1});
+    expect(service.isBootPending('p1'), isTrue);
+
+    service.onBackgroundInstanceFailed('p1');
+    expect(service.isBootPending('p1'), isFalse);
+
+    service.queueTargetedEvent('p1', 'click', {'n': 2});
+    expect(activations, ['p1', 'p1']);
+  });
+
+  test('late close from a failed generation does not cancel its retry', () {
+    service.syncPlugin(
+      'p1',
+      broadcastTopics: const {},
+      scheduleStartup: false,
+    );
+    final failedGeneration = service.activationGeneration('p1');
+    service.queueTargetedEvent('p1', 'click', {'n': 1});
+
+    service.onBackgroundInstanceFailed(
+      'p1',
+      generation: failedGeneration,
+    );
+    expect(service.activationGeneration('p1'), failedGeneration + 1);
+    service.queueTargetedEvent('p1', 'click', {'n': 2});
+    expect(service.isBootPending('p1'), isTrue);
+
+    service.onBackgroundInstanceClosed(
+      'p1',
+      generation: failedGeneration,
+    );
+
+    expect(service.isBootPending('p1'), isTrue);
+    expect(activations, ['p1', 'p1']);
   });
 }

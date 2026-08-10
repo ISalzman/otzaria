@@ -49,7 +49,7 @@ class PluginLazyActivationService {
   /// פעילות. ההרס עצמו (dispose של ה-WebView) באחריות ה-host.
   void Function(String pluginId)? backgroundDeactivator;
 
-  /// תוספים שמותר להעיר בעצלנות (הרשאת startup contributions הוענקה).
+  /// תוספים שמותר להעיר בעצלנות לפי ההרשאות והתרומות שסונכרנו.
   final Set<String> _activatable = {};
 
   /// נושאי שידור שמעירים כל תוסף (מסונכרן כולל בדיקת הרשאת subscribe).
@@ -57,7 +57,8 @@ class PluginLazyActivationService {
 
   final Map<String, List<({String topic, Map<String, dynamic> payload})>>
   _pending = {};
-  final Set<String> _activating = {};
+  final Map<String, int> _activating = {};
+  final Map<String, int> _activationGenerations = {};
 
   /// טריגר `app.startup` מופעל פעם אחת לכל סשן — נשמר גם אחרי removePlugin
   /// כדי שסנכרון חוזר (LoadPlugins) לא יפעיל את התוסף שוב.
@@ -67,6 +68,7 @@ class PluginLazyActivationService {
   /// (מופעי run_on_startup הישנים, שנטענים בעלייה, אינם כאן).
   final Set<String> _idleTracked = {};
   final Map<String, Timer> _idleTimers = {};
+  final Set<String> _keepAlive = {};
 
   /// מונה RPC שעדיין רצים פר תוסף — כל עוד חיובי, פקיעת שעון הכיבוי רק
   /// מחדשת אותו, כדי לא לקטוע פעולה ארוכה (download/extractZip).
@@ -76,9 +78,18 @@ class PluginLazyActivationService {
     String pluginId, {
     required Set<String> broadcastTopics,
     required bool scheduleStartup,
+    bool keepAlive = false,
   }) {
+    _activationGenerations.putIfAbsent(pluginId, () => 0);
     _activatable.add(pluginId);
     _broadcastTopics[pluginId] = Set.unmodifiable(broadcastTopics);
+    if (keepAlive) {
+      _keepAlive.add(pluginId);
+      _idleTimers.remove(pluginId)?.cancel();
+    } else {
+      _keepAlive.remove(pluginId);
+      if (_idleTracked.contains(pluginId)) _restartIdleTimer(pluginId);
+    }
     if (scheduleStartup && _startupFired.add(pluginId)) {
       Timer(startupDelayOverride ?? startupActivationDelay, () {
         if (_activatable.contains(pluginId)) _activate(pluginId);
@@ -87,10 +98,16 @@ class PluginLazyActivationService {
   }
 
   void removePlugin(String pluginId) {
+    _activationGenerations.update(
+      pluginId,
+      (value) => value + 1,
+      ifAbsent: () => 1,
+    );
     _activatable.remove(pluginId);
     _broadcastTopics.remove(pluginId);
     _pending.remove(pluginId);
     _activating.remove(pluginId);
+    _keepAlive.remove(pluginId);
     final wasTracked = _idleTracked.contains(pluginId);
     _stopIdleTracking(pluginId);
     _busyCounts.remove(pluginId);
@@ -121,7 +138,15 @@ class PluginLazyActivationService {
   }
 
   /// האם המופע של [pluginId] בתהליך הרמה (הופעל אך טרם סיים boot).
-  bool isBootPending(String pluginId) => _activating.contains(pluginId);
+  bool isBootPending(String pluginId) => _activating.containsKey(pluginId);
+
+  /// דור ההפעלה הנוכחי. משתנה בכל שלילת זכאות, כדי לבטל Future שכבר ממתין.
+  int activationGeneration(String pluginId) =>
+      _activationGenerations[pluginId] ?? 0;
+
+  bool isActivationCurrent(String pluginId, int generation) =>
+      _activatable.contains(pluginId) &&
+      activationGeneration(pluginId) == generation;
 
   /// אירוע ממוקד שהגיע בזמן שהמופע עוד עולה — נכנס לתור וימסר אחרי ה-boot.
   /// שליחה ישירה ב-evaluateJavascript לפני שה-SDK נטען הייתה נבלעת בשקט.
@@ -139,13 +164,19 @@ class PluginLazyActivationService {
 
   /// מסמן שמופע הרקע של [pluginId] הוער עצל — נקרא ע"י ה-host בעת הפעלה
   /// לפי דרישה. שעון הכיבוי מתחיל לרוץ רק אחרי שה-boot הסתיים.
-  void trackIdleTeardown(String pluginId) {
+  bool trackIdleTeardown(String pluginId, {int? generation}) {
+    if (generation != null && !isActivationCurrent(pluginId, generation)) {
+      return false;
+    }
     _idleTracked.add(pluginId);
+    return true;
   }
 
   /// פעילות של המופע (RPC מהתוסף או אירוע שנמסר אליו) — מאפסת את השעון.
   void notifyActivity(String pluginId) {
-    if (!_idleTracked.contains(pluginId)) return;
+    if (!_idleTracked.contains(pluginId) || _keepAlive.contains(pluginId)) {
+      return;
+    }
     _restartIdleTimer(pluginId);
   }
 
@@ -168,6 +199,7 @@ class PluginLazyActivationService {
 
   void _restartIdleTimer(String pluginId) {
     _idleTimers.remove(pluginId)?.cancel();
+    if (_keepAlive.contains(pluginId)) return;
     _idleTimers[pluginId] = Timer(idleDelayOverride ?? idleTeardownDelay, () {
       _idleTimers.remove(pluginId);
       if (!_idleTracked.contains(pluginId)) return;
@@ -215,12 +247,14 @@ class PluginLazyActivationService {
   }
 
   void _activate(String pluginId) {
-    if (_activating.contains(pluginId)) return;
+    if (_activating.containsKey(pluginId)) return;
     final activator = backgroundActivator;
     if (activator == null) return;
-    _activating.add(pluginId);
+    final generation = activationGeneration(pluginId);
+    _activating[pluginId] = generation;
     unawaited(
       activator(pluginId).catchError((Object e) {
+        if (_activating[pluginId] != generation) return;
         _activating.remove(pluginId);
         _pending.remove(pluginId);
         debugPrint(
@@ -233,9 +267,20 @@ class PluginLazyActivationService {
 
   /// נקרא ע"י ה-runner של מופע הרקע אחרי שה-boot הסתיים — מוסר את
   /// האירועים הממתינים בסדרם.
-  Future<void> onBackgroundInstanceReady(String pluginId) async {
+  Future<void> onBackgroundInstanceReady(
+    String pluginId, {
+    int? generation,
+  }) async {
+    if (generation != null && !isActivationCurrent(pluginId, generation)) {
+      if (_activating[pluginId] == generation) _activating.remove(pluginId);
+      _pending.remove(pluginId);
+      backgroundDeactivator?.call(pluginId);
+      return;
+    }
     _activating.remove(pluginId);
-    if (_idleTracked.contains(pluginId)) _restartIdleTimer(pluginId);
+    if (_idleTracked.contains(pluginId) && !_keepAlive.contains(pluginId)) {
+      _restartIdleTimer(pluginId);
+    }
     final pending = _pending.remove(pluginId);
     if (pending == null) return;
     for (final event in pending) {
@@ -253,7 +298,23 @@ class PluginLazyActivationService {
     }
   }
 
-  void onBackgroundInstanceClosed(String pluginId) {
+  /// מסמן שכשל boot של מופע רקע ומאפשר לטריגר הבא לנסות שוב.
+  void onBackgroundInstanceFailed(String pluginId, {int? generation}) {
+    if (generation != null && !isActivationCurrent(pluginId, generation)) {
+      return;
+    }
+    final failedGeneration = generation ?? activationGeneration(pluginId);
+    _activationGenerations[pluginId] = failedGeneration + 1;
+    _activating.remove(pluginId);
+    _pending.remove(pluginId);
+    _stopIdleTracking(pluginId);
+    backgroundDeactivator?.call(pluginId);
+  }
+
+  void onBackgroundInstanceClosed(String pluginId, {int? generation}) {
+    if (generation != null && !isActivationCurrent(pluginId, generation)) {
+      return;
+    }
     _activating.remove(pluginId);
     // המופע נסגר — עוצרים את השעון בלי לגעת ביכולת ההערה: הטריגר הבא
     // יעיר את התוסף מחדש ויירשם למעקב שוב דרך ה-host.

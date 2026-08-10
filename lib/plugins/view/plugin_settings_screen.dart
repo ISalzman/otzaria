@@ -80,11 +80,13 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
     Map<String, bool> map = {};
     for (final p in widget.plugin.manifest.permissions) {
       final granted = await _repo.getPermission(widget.plugin.pluginId, p);
-      // הרשאות רגישות (כמו טעינה ברקע) ברירת מחדל = false;
-      // שאר ההרשאות ברירת מחדל = true כפי שמטופל בגשר.
-      final defaultValue = p != pluginRunOnStartupPermission;
+      final defaultValue = pluginPermissionDefaultGrant(
+        p,
+        isOfflineMode: false,
+      );
       map[p] = granted ?? defaultValue;
     }
+    if (!mounted) return;
     setState(() {
       _permissions = map;
     });
@@ -118,42 +120,58 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                 SettingsCard(
                   title: 'ניהול הרשאות',
                   subtitle: 'אפשר או חסום הרשאות ספציפיות כפי שנדרש במניפסט',
-                  children: currentPlugin.manifest.permissions.map((p) {
-                    final info = getPermissionInfo(p);
-                    final defaultValue = p != pluginRunOnStartupPermission;
-                    final isGranted = _permissions[p] ?? defaultValue;
-                    final isSensitive = p == pluginRunOnStartupPermission;
-                    final colorScheme = Theme.of(context).colorScheme;
-                    final iconData = isSensitive
-                        ? (isGranted
-                              ? FluentIcons.warning_24_filled
-                              : FluentIcons.warning_24_regular)
-                        : (isGranted
-                              ? FluentIcons.shield_checkmark_24_regular
-                              : FluentIcons.shield_error_24_regular);
-                    final iconColor = isSensitive
-                        ? colorScheme.tertiary
-                        : (isGranted ? colorScheme.primary : colorScheme.error);
-                    return SettingsActionTile.switchTile(
-                      icon: iconData,
-                      iconColor: iconColor,
-                      title: info.label,
-                      subtitle: info.description,
-                      value: isGranted,
-                      onChanged: (val) async {
-                        context.read<PluginSystemBloc>().add(
-                          SetPluginPermissionRequested(
-                            pluginId: currentPlugin.pluginId,
-                            permission: p,
-                            granted: val,
-                          ),
+                  children:
+                      orderedPluginPermissions(
+                        currentPlugin.manifest.permissions,
+                        isOfflineMode: false,
+                      ).map((p) {
+                        final info = getPermissionInfo(
+                          p,
+                          manifest: currentPlugin.manifest,
                         );
-                        setState(() {
-                          _permissions[p] = val;
-                        });
-                      },
-                    );
-                  }).toList(),
+                        final defaultValue = pluginPermissionDefaultGrant(
+                          p,
+                          isOfflineMode: false,
+                        );
+                        final isGranted = _permissions[p] ?? defaultValue;
+                        final isSensitive = p == pluginRunOnStartupPermission;
+                        final isCritical =
+                            p == pluginBackgroundKeepAlivePermission;
+                        final colorScheme = Theme.of(context).colorScheme;
+                        final iconData = isSensitive || isCritical
+                            ? (isGranted
+                                  ? FluentIcons.warning_24_filled
+                                  : FluentIcons.warning_24_regular)
+                            : (isGranted
+                                  ? FluentIcons.shield_checkmark_24_regular
+                                  : FluentIcons.shield_error_24_regular);
+                        final iconColor = isCritical
+                            ? colorScheme.error
+                            : isSensitive
+                            ? colorScheme.tertiary
+                            : (isGranted
+                                  ? colorScheme.primary
+                                  : colorScheme.error);
+                        return SettingsActionTile.switchTile(
+                          icon: iconData,
+                          iconColor: iconColor,
+                          title: info.label,
+                          subtitle: info.description,
+                          value: isGranted,
+                          onChanged: (val) async {
+                            context.read<PluginSystemBloc>().add(
+                              SetPluginPermissionRequested(
+                                pluginId: currentPlugin.pluginId,
+                                permission: p,
+                                granted: val,
+                              ),
+                            );
+                            setState(() {
+                              _permissions[p] = val;
+                            });
+                          },
+                        );
+                      }).toList(),
                 ),
               ],
               const SizedBox(height: 32),

@@ -569,10 +569,22 @@ class PluginExtendedValidator {
     checkListField('contextMenuItems', (e) => e is Map, 'אובייקט');
     checkListField('publishedData', (e) => e is Map, 'אובייקט');
     checkListField('activationEvents', (e) => e is String, 'מחרוזת');
+    final keepAliveRaw = startupMap['keepAlive'];
+    if (keepAliveRaw != null && keepAliveRaw is! bool) {
+      errors.add('contributes.startup.keepAlive חייב להיות bool');
+      hasTypeErrors = true;
+    }
     if (hasTypeErrors) return;
 
     final startup = manifest.startup;
-    if (startup == null || startup.isEmpty) {
+    if (startup == null) return;
+    if (startup.keepAlive && !startup.hasBackgroundActivationTrigger) {
+      errors.add(
+        'contributes.startup.keepAlive דורש פקד או אירוע שמפעיל מנוע רקע',
+      );
+      return;
+    }
+    if (startup.isEmpty) {
       warnings.add('contributes.startup ריק — הסר אותו או הוסף תרומות');
       return;
     }
@@ -664,6 +676,27 @@ class PluginExtendedValidator {
         'contributes.startup.activationEvents מדליק את מנוע התוסף בלי כניסה '
         'לדף שלו, ולכן דורש גם את ההרשאה "$pluginRunOnStartupPermission" '
         'שלא הוכרזה ב-manifest',
+      );
+    }
+    if (startup.keepAlive) {
+      if (!declaredPermissions.contains(pluginRunOnStartupPermission)) {
+        errors.add(
+          'contributes.startup.keepAlive דורש את ההרשאה '
+          '"$pluginRunOnStartupPermission"',
+        );
+      }
+      if (!declaredPermissions.contains(pluginBackgroundKeepAlivePermission)) {
+        errors.add(
+          'contributes.startup.keepAlive דורש את ההרשאה '
+          '"$pluginBackgroundKeepAlivePermission"',
+        );
+      }
+    } else if (declaredPermissions.contains(
+      pluginBackgroundKeepAlivePermission,
+    )) {
+      warnings.add(
+        'ההרשאה "$pluginBackgroundKeepAlivePermission" הוצהרה ללא '
+        'contributes.startup.keepAlive: true',
       );
     }
     for (final topic in startup.activationEvents) {

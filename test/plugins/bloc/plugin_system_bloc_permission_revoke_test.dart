@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 
 class _FakeRepo implements PluginRegistryRepository {
@@ -39,6 +40,8 @@ void main() {
   tearDown(() {
     PluginToolbarRegistry.instance.removeAll('p1');
     ContextMenuRegistry.instance.removeAll('p1');
+    PluginLazyActivationService.instance.removePlugin('p1');
+    PluginLazyActivationService.instance.backgroundDeactivator = null;
   });
 
   Future<void> revoke(String permission) async {
@@ -79,4 +82,29 @@ void main() {
     expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
     expect(ContextMenuRegistry.instance.getAll(), hasLength(1));
   });
+
+  for (final permission in [
+    'app.run_on_startup',
+    'app.startup_contributions',
+  ]) {
+    test(
+      'revoking $permission immediately tears down a lazy instance',
+      () async {
+        final deactivations = <String>[];
+        final lazy = PluginLazyActivationService.instance
+          ..backgroundDeactivator = deactivations.add
+          ..syncPlugin(
+            'p1',
+            broadcastTopics: const {},
+            scheduleStartup: false,
+          )
+          ..trackIdleTeardown('p1');
+        await lazy.onBackgroundInstanceReady('p1');
+
+        await revoke(permission);
+
+        expect(deactivations, ['p1']);
+      },
+    );
+  }
 }

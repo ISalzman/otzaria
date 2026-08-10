@@ -2719,6 +2719,26 @@ class MainWindowScreenState extends State<MainWindowScreen>
             },
           ),
           BlocListener<PluginSystemBloc, PluginSystemState>(
+            listenWhen: (_, current) => current is PluginSystemLoaded,
+            listener: (context, _) async {
+              try {
+                await _calendarCubit.refreshPluginEvents(
+                  currentWorkspaceId: context
+                      .read<WorkspaceBloc>()
+                      .state
+                      .activeWorkspaceId,
+                  currentBookId: context
+                      .read<TabsBloc>()
+                      .state
+                      .readingPane
+                      ?.title,
+                );
+              } catch (error) {
+                debugPrint('Plugin calendar refresh failed: $error');
+              }
+            },
+          ),
+          BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) =>
                 current is PluginSystemInstallRequiresPermissions ||
                 current is PluginSystemDevInstallRequiresPermissions ||

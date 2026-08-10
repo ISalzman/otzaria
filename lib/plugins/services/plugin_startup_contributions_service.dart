@@ -10,6 +10,8 @@ import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 
+typedef _PublishedRecordId = ({String type, String scope, String key});
+
 /// מפעיל את תרומות העלייה הדקלרטיביות של תוספים (`contributes.startup`)
 /// בלי להרים מנוע JS: פרסינג המניפסט ב-Dart והזנת ה-registries הקיימים.
 ///
@@ -35,10 +37,13 @@ class PluginStartupContributionsService {
   final PluginToolbarRegistry _toolbar;
   final ContextMenuRegistry _contextMenu;
   final PluginLazyActivationService _lazyActivation;
+  Future<void> _syncTail = Future<void>.value();
 
   /// קידומת המפתח של רשומות publishedData שנזרעו מהמניפסט — מבדילה אותן
   /// מרשומות שהתוסף כותב בזמן ריצה, ומאפשרת ניקוי גם אחרי עדכון גרסה.
   static const String seededKeyPrefix = 'manifest:';
+  static const String _metadataNamespace = 'otzaria.startup';
+  static const String _publishedRecordsMetadataKey = 'published-records';
 
   /// מה הוחל בפועל — לצורך הסרה נקייה (בלי לגעת ברישומים דינמיים של
   /// התוסף) ולצורך reapply אחרי reload של תוסף פיתוח.
@@ -52,6 +57,17 @@ class PluginStartupContributionsService {
   /// מסנכרן את כל התרומות מול רשימת התוספים הנוכחית. לעולם אינו זורק —
   /// תוסף עם סעיף פגום נרשם ללוג וממשיכים הלאה.
   Future<void> sync(
+    List<InstalledPlugin> plugins,
+    PluginRegistryRepository repository,
+  ) {
+    final operation = _syncTail.then(
+      (_) => _syncSafely(List<InstalledPlugin>.of(plugins), repository),
+    );
+    _syncTail = operation;
+    return operation;
+  }
+
+  Future<void> _syncSafely(
     List<InstalledPlugin> plugins,
     PluginRegistryRepository repository,
   ) async {
@@ -139,6 +155,10 @@ class PluginStartupContributionsService {
         _lazyActivation.removePlugin(plugin.pluginId);
         continue;
       }
+      if (!startup.hasBackgroundActivationTrigger) {
+        _lazyActivation.removePlugin(plugin.pluginId);
+        continue;
+      }
       final broadcastTopics = <String>{};
       var scheduleStartup = false;
       for (final topic in startup.activationEvents) {
@@ -157,6 +177,9 @@ class PluginStartupContributionsService {
         plugin.pluginId,
         broadcastTopics: broadcastTopics,
         scheduleStartup: scheduleStartup,
+        keepAlive:
+            startup.keepAlive &&
+            granted.contains(pluginBackgroundKeepAlivePermission),
       );
     }
 
@@ -252,7 +275,11 @@ class PluginStartupContributionsService {
       for (final record in existing)
         '${record.type}|${record.scope}|${record.key}': record.payloadJson,
     };
-    final currentIds = <String>{};
+    final previousOwned = await _loadOwnedPublishedRecords(
+      pluginId,
+      repository,
+    );
+    final currentOwned = <_PublishedRecordId>{};
     for (final record in records) {
       final type = record['type'];
       final key = record['key'];
@@ -265,10 +292,19 @@ class PluginStartupContributionsService {
         );
         continue;
       }
-      final scope = record['scope'] as String? ?? 'global';
+      final scopeValue = record['scope'];
+      if (scopeValue != null && scopeValue is! String) {
+        PluginSystemDatabase.instance.writeLog(
+          pluginId,
+          'ERROR',
+          'startup publishedData scope must be a string',
+        );
+        continue;
+      }
+      final scope = scopeValue as String? ?? 'global';
       final prefixedKey = '$seededKeyPrefix$key';
       final id = '$type|$scope|$prefixedKey';
-      currentIds.add(id);
+      currentOwned.add((type: type, scope: scope, key: prefixedKey));
       final payloadJson = jsonEncode(payload);
       if (existingPayloads[id] == payloadJson) continue;
       await repository.publishRecord(
@@ -280,10 +316,7 @@ class PluginStartupContributionsService {
         null,
       );
     }
-    for (final record in existing) {
-      if (!record.key.startsWith(seededKeyPrefix)) continue;
-      final id = '${record.type}|${record.scope}|${record.key}';
-      if (currentIds.contains(id)) continue;
+    for (final record in previousOwned.difference(currentOwned)) {
       await repository.unpublishRecord(
         pluginId,
         record.type,
@@ -291,27 +324,15 @@ class PluginStartupContributionsService {
         record.key,
       );
     }
+    await _saveOwnedPublishedRecords(pluginId, currentOwned, repository);
   }
 
   Future<void> _removeSeededData(
     String pluginId,
     PluginRegistryRepository repository,
   ) async {
-    await _removeStaleSeededRecords(pluginId, repository, keep: const {});
-  }
-
-  /// מוחק רשומות זרועות-מניפסט (לפי הקידומת) שאינן בסט הנוכחי — מכסה גם
-  /// שאריות מגרסה קודמת של התוסף, כי הזיהוי הוא במסד ולא בזיכרון.
-  Future<void> _removeStaleSeededRecords(
-    String pluginId,
-    PluginRegistryRepository repository, {
-    required Set<String> keep,
-  }) async {
-    final existing = await repository.getPluginPublishedRecords(pluginId);
-    for (final record in existing) {
-      if (!record.key.startsWith(seededKeyPrefix)) continue;
-      final id = '${record.type}|${record.scope}|${record.key}';
-      if (keep.contains(id)) continue;
+    final owned = await _loadOwnedPublishedRecords(pluginId, repository);
+    for (final record in owned) {
       await repository.unpublishRecord(
         pluginId,
         record.type,
@@ -319,6 +340,78 @@ class PluginStartupContributionsService {
         record.key,
       );
     }
+    await repository.removeKV(
+      pluginId,
+      _metadataNamespace,
+      _publishedRecordsMetadataKey,
+    );
+  }
+
+  Future<Set<_PublishedRecordId>> _loadOwnedPublishedRecords(
+    String pluginId,
+    PluginRegistryRepository repository,
+  ) async {
+    final encoded = await repository.getKV(
+      pluginId,
+      _metadataNamespace,
+      _publishedRecordsMetadataKey,
+    );
+    if (encoded == null) return const {};
+    Object? decoded;
+    try {
+      decoded = jsonDecode(encoded);
+    } catch (error) {
+      PluginSystemDatabase.instance.writeLog(
+        pluginId,
+        'ERROR',
+        'startup publishedData ownership metadata is invalid: $error',
+      );
+      return const {};
+    }
+    if (decoded is! List) return const {};
+    return {
+      for (final entry in decoded)
+        if (entry is Map &&
+            entry['type'] is String &&
+            entry['scope'] is String &&
+            entry['key'] is String)
+          (
+            type: entry['type'] as String,
+            scope: entry['scope'] as String,
+            key: entry['key'] as String,
+          ),
+    };
+  }
+
+  Future<void> _saveOwnedPublishedRecords(
+    String pluginId,
+    Set<_PublishedRecordId> records,
+    PluginRegistryRepository repository,
+  ) async {
+    if (records.isEmpty) {
+      await repository.removeKV(
+        pluginId,
+        _metadataNamespace,
+        _publishedRecordsMetadataKey,
+      );
+      return;
+    }
+    final sorted = records.toList()
+      ..sort((a, b) {
+        final typeComparison = a.type.compareTo(b.type);
+        if (typeComparison != 0) return typeComparison;
+        final scopeComparison = a.scope.compareTo(b.scope);
+        return scopeComparison != 0 ? scopeComparison : a.key.compareTo(b.key);
+      });
+    await repository.setKV(
+      pluginId,
+      _metadataNamespace,
+      _publishedRecordsMetadataKey,
+      jsonEncode([
+        for (final record in sorted)
+          {'type': record.type, 'scope': record.scope, 'key': record.key},
+      ]),
+    );
   }
 
   Future<void> _removePlugin(

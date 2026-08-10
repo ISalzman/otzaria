@@ -57,9 +57,7 @@ class PluginInstallScreen extends StatefulWidget {
 }
 
 class _PluginInstallScreenState extends State<PluginInstallScreen> {
-  /// מצב toggle לכל הרשאה — ברירת מחדל: הכל מופעל, פרט להרשאות רגישות
-  /// ([pluginRunOnStartupPermission]) שמתחילות כבויות, ול-network.access
-  /// שמתחיל כבוי בהתקנה במצב 'מנותק'.
+  /// מצב toggle לכל הרשאה, לפי ברירת המחדל המשותפת למסכי ההרשאות.
   late Map<String, bool> _permissionToggles;
   late bool _allowOrderBeforeBuiltInsGranted;
 
@@ -71,23 +69,19 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   void initState() {
     super.initState();
     _permissionToggles = {
-      for (final p in widget.manifest.permissions) p: _defaultGrantFor(p),
+      for (final p in widget.manifest.permissions)
+        p: pluginPermissionDefaultGrant(
+          p,
+          isOfflineMode: widget.isOfflineMode,
+        ),
     };
-    _orderedPermissions = [
-      ...widget.manifest.permissions.where((p) => !_defaultGrantFor(p)),
-      ...widget.manifest.permissions.where(_defaultGrantFor),
-    ];
+    _orderedPermissions = orderedPluginPermissions(
+      widget.manifest.permissions,
+      isOfflineMode: widget.isOfflineMode,
+    );
     _allowOrderBeforeBuiltInsGranted =
         widget.previousAllowOrderBeforeBuiltInsGranted ??
         widget.manifest.allowOrderBeforeBuiltIns;
-  }
-
-  bool _defaultGrantFor(String permission) {
-    if (permission == pluginRunOnStartupPermission) return false;
-    if (widget.isOfflineMode && permission == pluginNetworkAccessPermission) {
-      return false;
-    }
-    return true;
   }
 
   bool get _requestsRunOnStartup =>
@@ -179,7 +173,15 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
 
           // ===== באנר בולט: בקשת טעינה אוטומטית עם עליית האפליקציה =====
           if (_requestsRunOnStartup) ...[
-            _RunOnStartupBanner(colorScheme: colorScheme),
+            _BackgroundActivationBanner(
+              colorScheme: colorScheme,
+              manifest: widget.manifest,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          if (widget.manifest.startup?.keepAlive == true) ...[
+            _KeepAliveBanner(colorScheme: colorScheme),
             const SizedBox(height: 16),
           ],
 
@@ -227,22 +229,28 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           else ...[
             SettingsCard(
               title: 'הרשאות נדרשות',
-              subtitle:
-                  'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
+              subtitle: 'הרשאות רגישות מתחילות כבויות ודורשות אישור מפורש',
               children: [
                 ..._orderedPermissions.map((permission) {
-                  final info = getPermissionInfo(permission);
+                  final info = getPermissionInfo(
+                    permission,
+                    manifest: widget.manifest,
+                  );
                   final isGranted = _permissionToggles[permission] ?? true;
                   final isSensitive =
                       permission == pluginRunOnStartupPermission;
-                  final iconData = isSensitive
+                  final isCritical =
+                      permission == pluginBackgroundKeepAlivePermission;
+                  final iconData = isSensitive || isCritical
                       ? (isGranted
                             ? FluentIcons.warning_24_filled
                             : FluentIcons.warning_24_regular)
                       : (isGranted
                             ? FluentIcons.shield_checkmark_24_regular
                             : FluentIcons.shield_error_24_regular);
-                  final iconColor = isSensitive
+                  final iconColor = isCritical
+                      ? colorScheme.error
+                      : isSensitive
                       ? colorScheme.tertiary
                       : (isGranted ? colorScheme.primary : colorScheme.error);
                   return SettingsActionTile.switchTile(
@@ -274,17 +282,22 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   }
 }
 
-/// באנר בולט שמודיע למשתמש שהתוסף מבקש לרוץ ברקע עם עליית האפליקציה.
-///
-/// ההרשאה כבויה ברירת מחדל; הבאנר מסביר מה ההשלכות ומנחה להפעיל
-/// רק תוספים מהימנים.
-class _RunOnStartupBanner extends StatelessWidget {
+class _BackgroundActivationBanner extends StatelessWidget {
   final ColorScheme colorScheme;
+  final PluginManifest manifest;
 
-  const _RunOnStartupBanner({required this.colorScheme});
+  const _BackgroundActivationBanner({
+    required this.colorScheme,
+    required this.manifest,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final startup = manifest.startup;
+    final isDeclarative = startup != null && !startup.isEmpty;
+    final hasBackgroundTrigger =
+        startup?.hasBackgroundActivationTrigger == true;
+    final reasons = pluginBackgroundActivationReasons(manifest).join(', ');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -309,7 +322,11 @@ class _RunOnStartupBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'התוסף מבקש לפעול ברקע עם עליית האפליקציה',
+                  isDeclarative && !hasBackgroundTrigger
+                      ? 'הרשאת הרקע אינה בשימוש בגרסה זו של התוסף'
+                      : isDeclarative
+                      ? 'התוסף מבקש לפעול ברקע כאשר: $reasons'
+                      : 'התוסף מבקש לפעול ברקע עם עליית האפליקציה',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -318,14 +335,73 @@ class _RunOnStartupBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'אם תאשר את ההרשאה, התוסף ייטען וירוץ ברקע בכל פעם '
-                  'שאוצריא נטענת, גם בלי שתיכנס למסך "כלים". '
-                  'הדבר עלול להכביד על זמן העלייה ועל צריכת המשאבים של האפליקציה. '
-                  'ברירת המחדל היא שההרשאה כבויה — הענק אותה רק לתוספים '
-                  'שאתה סומך עליהם.',
+                  isDeclarative && !hasBackgroundTrigger
+                      ? 'לא הוגדר אירוע שמפעיל מנוע רקע. פקדים שפותחים את '
+                            'דף התוסף ונתונים סטטיים אינם מפעילים WebView.'
+                      : isDeclarative
+                      ? 'בעת אחד מהאירועים האלה אוצריא תפעיל WebView נסתר '
+                            'עבור התוסף. הוא יכובה לאחר 3 דקות ללא פעילות. '
+                            'ההרשאה כבויה כברירת מחדל.'
+                      : 'מסלול תאימות זה טוען WebView נסתר עם עליית אוצריא '
+                            'ומשאיר אותו פעיל כל עוד התוכנה פתוחה. ההרשאה '
+                            'כבויה כברירת מחדל.',
                   style: TextStyle(
                     fontSize: 13,
                     color: colorScheme.onTertiaryContainer,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KeepAliveBanner extends StatelessWidget {
+  final ColorScheme colorScheme;
+
+  const _KeepAliveBanner({required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: AppTokens.borderRadiusAll,
+        border: Border.all(color: colorScheme.error, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            FluentIcons.warning_24_filled,
+            color: colorScheme.error,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'התוסף מבקש למנוע את כיבוי מנוע הרקע',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'אישור הבקשה ישאיר WebView פעיל ללא הגבלת זמן ויגדיל את '
+                  'צריכת הזיכרון והמעבד. אפשרות זו כבויה כברירת מחדל.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onErrorContainer,
                     height: 1.4,
                   ),
                 ),

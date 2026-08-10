@@ -14,7 +14,11 @@ import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 class _FakeRepo implements PluginRegistryRepository {
   final Map<String, Set<String>> grantedByPlugin = {};
   final List<PluginPublishedRecord> records = [];
+  final Map<String, String> kv = {};
   int publishCalls = 0;
+
+  String _kvKey(String pluginId, String namespace, String key) =>
+      '$pluginId|$namespace|$key';
 
   @override
   Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [
@@ -78,6 +82,25 @@ class _FakeRepo implements PluginRegistryRepository {
   Future<List<PluginPublishedRecord>> getPluginPublishedRecords(
     String pluginId,
   ) async => records.where((r) => r.pluginId == pluginId).toList();
+
+  @override
+  Future<String?> getKV(String pluginId, String namespace, String key) async =>
+      kv[_kvKey(pluginId, namespace, key)];
+
+  @override
+  Future<void> setKV(
+    String pluginId,
+    String namespace,
+    String key,
+    String valueJson,
+  ) async {
+    kv[_kvKey(pluginId, namespace, key)] = valueJson;
+  }
+
+  @override
+  Future<void> removeKV(String pluginId, String namespace, String key) async {
+    kv.remove(_kvKey(pluginId, namespace, key));
+  }
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
@@ -303,6 +326,17 @@ void main() {
     expect(repo.publishCalls, 1, reason: 'תוכן זהה — אסור לכתוב שוב');
   });
 
+  test('corrupt ownership metadata does not abort contribution sync', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+    repo.kv['p1|otzaria.startup|published-records'] = 'not-json';
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(toolbar.getAll(), hasLength(1));
+    expect(repo.records.single.key, 'manifest:k1');
+    expect(repo.kv['p1|otzaria.startup|published-records'], isNot('not-json'));
+  });
+
   test('runtime (non-seeded) published records are never touched', () async {
     repo.grantedByPlugin['p1'] = {..._allPermissions};
     await repo.publishRecord(
@@ -320,6 +354,66 @@ void main() {
 
     expect(repo.records.single.key, 'runtime-key');
   });
+
+  test(
+    'a runtime record with the manifest prefix is not treated as owned',
+    () async {
+      repo.grantedByPlugin['p1'] = {..._allPermissions};
+      await repo.publishRecord(
+        'p1',
+        'calendar.event',
+        'global',
+        'manifest:runtime-key',
+        '{}',
+        null,
+      );
+
+      await service.sync([_plugin(startup: _fullStartup())], repo);
+      repo.grantedByPlugin['p1'] = {};
+      await service.sync([_plugin(startup: _fullStartup())], repo);
+
+      expect(repo.records.single.key, 'manifest:runtime-key');
+    },
+  );
+
+  test(
+    'keepAlive applies only when its independent grant is present',
+    () async {
+      activation.idleDelayOverride = const Duration(milliseconds: 30);
+      final deactivations = <String>[];
+      activation.backgroundDeactivator = deactivations.add;
+      final startup = {
+        'toolbarItems': [
+          {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+        ],
+        'keepAlive': true,
+      };
+
+      repo.grantedByPlugin['p1'] = {
+        'app.startup_contributions',
+        'app.run_on_startup',
+        'reader.toolbar',
+      };
+      await service.sync([_plugin(startup: startup)], repo);
+      activation.trackIdleTeardown('p1');
+      await activation.onBackgroundInstanceReady('p1');
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(deactivations, ['p1']);
+      activation.onBackgroundInstanceClosed('p1');
+
+      repo.grantedByPlugin['p2'] = {
+        'app.startup_contributions',
+        'app.run_on_startup',
+        'app.background_keep_alive',
+        'reader.toolbar',
+      };
+      await service.sync([_plugin(id: 'p2', startup: startup)], repo);
+      activation.trackIdleTeardown('p2');
+      await activation.onBackgroundInstanceReady('p2');
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(deactivations, ['p1']);
+    },
+  );
 
   test(
     'app.startup activation requires the app.run_on_startup permission',

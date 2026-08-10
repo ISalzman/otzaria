@@ -12,6 +12,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
@@ -69,6 +70,7 @@ InstalledPlugin _plugin({
   String entrypointPath = 'index.html',
   String? devRootPath,
   List<String> permissions = const [],
+  PluginStartupContributions? startup,
 }) => InstalledPlugin(
   pluginId: id,
   name: 'Test Plugin',
@@ -97,6 +99,7 @@ InstalledPlugin _plugin({
     toolTabOrder: 0,
     defaultPinned: false,
     publishedDataTypes: const [],
+    startup: startup,
   ),
   installedAt: DateTime(2025),
   updatedAt: DateTime(2025),
@@ -416,6 +419,28 @@ void main() {
       await pumpHost(tester);
 
       expect(initializeCalls, 0);
+    });
+
+    testWidgets('תוסף דקלרטיבי לא מאתחל WebView גם כשהרקע מאושר', (
+      tester,
+    ) async {
+      final plugin = _plugin(
+        permissions: const [pluginRunOnStartupPermission],
+        startup: const PluginStartupContributions(
+          activationEvents: ['app.startup'],
+        ),
+      );
+      await PluginRegistryRepository().setPermission(
+        plugin.pluginId,
+        pluginRunOnStartupPermission,
+        true,
+      );
+
+      bloc.testEmit(PluginSystemLoaded([plugin]));
+      await pumpHost(tester);
+
+      expect(initializeCalls, 0);
+      expect(find.byType(InAppWebView), findsNothing);
     });
 
     testWidgets('כשל באתחול — לא נבנה WebView ברקע', (tester) async {

@@ -227,4 +227,125 @@ void main() {
     expect(report.errors, isEmpty);
     expect(report.warnings, contains(contains('contributes.startup ריק')));
   });
+
+  test('keepAlive requires both background permissions', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+          'keepAlive': true,
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('app.run_on_startup')));
+    expect(report.errors, contains(contains('app.background_keep_alive')));
+  });
+
+  test('keepAlive with both permissions is valid', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        permissions: const [
+          'app.startup_contributions',
+          'app.run_on_startup',
+          'app.background_keep_alive',
+          'reader.toolbar',
+        ],
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+          'keepAlive': true,
+        },
+      ),
+    );
+
+    expect(report.errors, isEmpty);
+  });
+
+  test('keepAlive with a non-boolean value is rejected cleanly', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+          'keepAlive': 'yes',
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('keepAlive חייב להיות bool')));
+  });
+
+  test('keepAlive permission without the flag produces a warning', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        permissions: const [
+          'app.startup_contributions',
+          'app.background_keep_alive',
+          'reader.toolbar',
+        ],
+        startup: {
+          'toolbarItems': [
+            {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+          ],
+        },
+      ),
+    );
+
+    expect(report.errors, isEmpty);
+    expect(
+      report.warnings,
+      contains(contains('ללא contributes.startup.keepAlive')),
+    );
+  });
+
+  test('keepAlive without any contribution or trigger is rejected', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        permissions: const [
+          'app.startup_contributions',
+          'app.run_on_startup',
+          'app.background_keep_alive',
+        ],
+        startup: {'keepAlive': true},
+      ),
+    );
+
+    expect(report.errors, contains(contains('מפעיל מנוע רקע')));
+  });
+
+  test('keepAlive with static data only is rejected', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        permissions: const [
+          'app.startup_contributions',
+          'app.run_on_startup',
+          'app.background_keep_alive',
+          'published_data.write',
+        ],
+        startup: {
+          'publishedData': [
+            {
+              'type': 'calendar.event',
+              'key': 'static',
+              'payload': {'title': 'אירוע'},
+            },
+          ],
+          'keepAlive': true,
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('מפעיל מנוע רקע')));
+  });
 }

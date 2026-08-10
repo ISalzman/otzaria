@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:path/path.dart' as p;
 
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
+import 'package:otzaria/plugins/services/plugin_extended_validator.dart';
 
 bool _isLocalhostUri(String url) {
   final uri = Uri.tryParse(url);
@@ -23,15 +25,24 @@ class PluginDevLoaderService {
   Future<void> _validateDevelopmentManifest(
     PluginManifest manifest,
     String directoryPath, {
+    required Map<String, dynamic> manifestJson,
     bool skipFileValidation = false,
-  }) {
+  }) async {
     // תוסף פיתוח פטור מבדיקת תאימות גרסה כדי לאפשר בדיקה מול גרסאות עתידיות.
-    return PluginManifestValidator.validateManifest(
+    await PluginManifestValidator.validateManifest(
       manifest: manifest,
       directoryPath: directoryPath,
       skipFileValidation: skipFileValidation,
       skipAppVersionValidation: true,
     );
+    final report = await Isolate.run(
+      () => PluginExtendedValidator.validate(
+        manifest: manifest,
+        manifestJson: manifestJson,
+        directoryPath: directoryPath,
+      ),
+    );
+    if (report.hasErrors) throw Exception(report.errors.join('\n'));
   }
 
   /// קורא את manifest.json מתיקייה ומאמת אותו. לא שומר לDB.
@@ -45,8 +56,15 @@ class PluginDevLoaderService {
       throw Exception('manifest.json לא נמצא בתיקיית התוסף');
     }
     final manifestStr = manifestFile.readAsStringSync();
-    final manifest = PluginManifest.fromJson(jsonDecode(manifestStr));
-    await _validateDevelopmentManifest(manifest, directoryPath);
+    final manifestJson = Map<String, dynamic>.from(
+      jsonDecode(manifestStr) as Map,
+    );
+    final manifest = PluginManifest.fromJson(manifestJson);
+    await _validateDevelopmentManifest(
+      manifest,
+      directoryPath,
+      manifestJson: manifestJson,
+    );
     return manifest;
   }
 
@@ -70,9 +88,15 @@ class PluginDevLoaderService {
         throw Exception('manifest.json לא נמצא בתיקיית התוסף');
       }
       final manifestStr = manifestFile.readAsStringSync();
-      final manifestJson = jsonDecode(manifestStr);
+      final manifestJson = Map<String, dynamic>.from(
+        jsonDecode(manifestStr) as Map,
+      );
       manifest = PluginManifest.fromJson(manifestJson);
-      await _validateDevelopmentManifest(manifest, directoryPath);
+      await _validateDevelopmentManifest(
+        manifest,
+        directoryPath,
+        manifestJson: manifestJson,
+      );
     }
 
     final existingPlugin = await _repository.getPlugin(manifest.id);
@@ -168,10 +192,14 @@ class PluginDevLoaderService {
           '• webpack: תיקיית static/ או CopyWebpackPlugin',
         );
       }
-      final manifest = PluginManifest.fromJson(jsonDecode(manifestStr));
+      final manifestJson = Map<String, dynamic>.from(
+        jsonDecode(manifestStr) as Map,
+      );
+      final manifest = PluginManifest.fromJson(manifestJson);
       await _validateDevelopmentManifest(
         manifest,
         normalizedUrl,
+        manifestJson: manifestJson,
         skipFileValidation: true,
       );
       return manifest;

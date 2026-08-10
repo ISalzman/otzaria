@@ -1,7 +1,6 @@
 /// תרומות עלייה דקלרטיביות של תוסף (`contributes.startup` במניפסט).
 ///
-/// נקראות ומופעלות ע"י Flutter בעליית התוכנה בלי להרים מנוע JS — בניגוד
-/// ל-`app.run_on_startup` שמריץ WebView נסתר. דורשות את ההרשאה
+/// נקראות ומופעלות ע"י Flutter בלי להרים מנוע JS. דורשות את ההרשאה
 /// `app.startup_contributions`, וכל קטגוריה כפופה גם להרשאת התחום שלה
 /// (`reader.toolbar` / `reader.context_menu` / `published_data.write`).
 class PluginStartupContributions {
@@ -23,11 +22,16 @@ class PluginStartupContributions {
   /// עד שאירוע כזה קורה בפועל), או [startupActivationTopic].
   final List<String> activationEvents;
 
+  /// האם התוסף מבקש להשאיר מופע רקע עצל פעיל ללא כיבוי אוטומטי.
+  /// הבקשה חלה רק אם המשתמש אישר את ההרשאה המתאימה.
+  final bool keepAlive;
+
   const PluginStartupContributions({
     this.toolbarItems = const [],
     this.contextMenuItems = const [],
     this.publishedData = const [],
     this.activationEvents = const [],
+    this.keepAlive = false,
   });
 
   bool get isEmpty =>
@@ -35,6 +39,46 @@ class PluginStartupContributions {
       contextMenuItems.isEmpty &&
       publishedData.isEmpty &&
       activationEvents.isEmpty;
+
+  /// האם קיימת פעולה שבאמת עשויה להרים את מנוע הרקע.
+  bool get hasBackgroundActivationTrigger =>
+      activationEvents.isNotEmpty ||
+      toolbarItems.any(_toolbarItemActivatesBackground) ||
+      contextMenuItems.any(_contextMenuItemActivatesBackground);
+
+  static bool _toolbarItemActivatesBackground(Map<String, dynamic> item) {
+    if (item['type'] == 'menu') {
+      final children = item['children'];
+      return children is List &&
+          children.whereType<Map>().any(
+            (child) => _toolbarItemActivatesBackground(
+              Map<String, dynamic>.from(child),
+            ),
+          );
+    }
+    return item['openPlugin'] != true;
+  }
+
+  static bool _contextMenuItemActivatesBackground(
+    Map<String, dynamic> item,
+  ) {
+    switch (item['type']) {
+      case 'separator':
+        return false;
+      case 'submenu':
+        final children = item['children'];
+        return children is List &&
+            children.whereType<Map>().any(
+              (child) => _contextMenuItemActivatesBackground(
+                Map<String, dynamic>.from(child),
+              ),
+            );
+      case 'color-row':
+        return true;
+      default:
+        return item['openPlugin'] != true;
+    }
+  }
 
   /// פרסינג סובלני: ערכים בטיפוס שגוי מדולגים ולא מפילים את טעינת המניפסט.
   /// הדיווח למפתח על טיפוס שגוי הוא באחריות ה-validator (אריזה/התקנה).
@@ -59,6 +103,7 @@ class PluginStartupContributions {
                 if (entry is String) entry,
             ]
           : const [],
+      keepAlive: json['keepAlive'] == true,
     );
   }
 
@@ -67,5 +112,6 @@ class PluginStartupContributions {
     if (contextMenuItems.isNotEmpty) 'contextMenuItems': contextMenuItems,
     if (publishedData.isNotEmpty) 'publishedData': publishedData,
     if (activationEvents.isNotEmpty) 'activationEvents': activationEvents,
+    if (keepAlive) 'keepAlive': true,
   };
 }

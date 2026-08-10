@@ -154,6 +154,9 @@ my-plugin/
 | `contributes.toolTab.iconName` | `null` | שם אייקון FluentUI 24px שיוצג בטאב, למשל `"book_24_regular"` |
 | `contributes.publishedDataTypes` | `[]` | סוגי נתונים שהתוסף מפרסם |
 | `contributes.background.entrypoint` | `null` | נתיב יחסי לקובץ HTML קליל (ללא UI) שייטען ברקע במקום ה-`entrypoint` המלא. רלוונטי רק לתוסף עם `app.run_on_startup`. ראה §ריצת רקע. |
+| `contributes.startup` | `null` | פקדים, פריטי תפריט ונתונים שאוצריא טוענת ישירות מהמניפסט בלי להפעיל WebView. |
+| `contributes.startup.activationEvents` | `[]` | אירועים שמעירים את מנוע הרקע בעצלנות; כל נושא דורש גם הרשאת subscribe מתאימה. |
+| `contributes.startup.keepAlive` | `false` | בקשה למנוע כיבוי אוטומטי; דורשת אישור נפרד של `app.background_keep_alive`. |
 
 `homepage` הוא שדה אופציונלי, אבל מומלץ מאוד כשמעלים תוסף לחנות. זה המקום לשים קישור לעמוד ה־GitHub של התוסף, לתיעוד, לאתר הפרויקט, או לכל דף רשמי אחר שמסביר על התוסף ונותן למשתמש מקום לקבל מידע נוסף.
 
@@ -507,7 +510,9 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
-| `app.run_on_startup` | **הרשאה רגישה** — טעינת התוסף ברקע עם כל עליית אוצריא, גם ללא כניסה למסך "כלים". ברירת מחדל: **כבויה**. ראה §ריצת רקע. |
+| `app.run_on_startup` | **הרשאה רגישה** — הפעלת WebView ברקע לפי אירוע שהוצהר ב-`contributes.startup`. ברירת מחדל: **כבויה**. בתוסף ישן ללא `contributes.startup`, מפעילה זמנית בעליית אוצריא עד 0.9.97. |
+| `app.background_keep_alive` | **הרשאה רגישה מאוד** — מניעת כיבוי אוטומטי של WebView רקע עצל. דורשת `startup.keepAlive: true`; כבויה כברירת מחדל ומוצגת באדום. |
+| `app.startup_contributions` | הזרקת פקדים ונתונים סטטיים מהמניפסט בלי להפעיל את התוסף. ברירת מחדל: **מופעלת**. |
 
 > **עיקרון מינימום הרשאות:** בקש רק את מה שאתה צריך בפועל.
 
@@ -515,24 +520,37 @@ const { data: keys } = await Otzaria.call('storage.list');
 
 ## ריצת רקע (app.run\_on\_startup)
 
-הרשאה זו מאפשרת לתוסף להיטען ולרוץ ברקע **מיד עם עליית אוצריא**, עוד לפני שהמשתמש נכנס למסך "כלים". היא מיועדת לתוספים שצריכים לבצע פעולות בזמן פתיחת האפליקציה — למשל שליחת הודעת ברוכים הבאים, טעינת נתונים ראשוניים, תזמון התראה, וכו'.
+הדרך המומלצת היא להצהיר על `contributes.startup`. אוצריא קוראת את הפקדים,
+פריטי התפריט והנתונים הסטטיים ב-Dart, ולכן WebView כלל לא נוצר בעלייה. אם נדרש
+קוד JavaScript, `app.run_on_startup` מתירה להפעיל WebView רק כשמתרחש אירוע
+שהוצהר: לחיצה על תרומה, `app.startup`, או נושא מתוך `activationEvents`.
+
+מנוע כזה נסגר אחרי כשלוש דקות ללא פעילות, והאירוע הבא יפעיל אותו מחדש. אפשר
+לסיים מוקדם באמצעות `plugin.backgroundDone`. רק צורך אמיתי במנוע רציף מצדיק
+`startup.keepAlive: true` ואת ההרשאה הנפרדת `app.background_keep_alive`.
 
 ### הצהרה במניפסט
 
 ```json
 {
   "permissions": [
+    "app.startup_contributions",
     "app.run_on_startup",
     "notifications.send"
-  ]
+  ],
+  "contributes": {
+    "startup": { "activationEvents": ["app.startup"] }
+  }
 }
 ```
 
 ### התנהגות ברירת מחדל
 
-בניגוד לשאר ההרשאות (שמתחילות **מופעלות**), `app.run_on_startup` מתחילה **כבויה** — המשתמש צריך להפעיל אותה בכוונה במסך ההתקנה.
+`app.startup_contributions` מתחילה מופעלת; היא אינה מריצה JavaScript.
+`app.run_on_startup` ו-`app.background_keep_alive` מתחילות כבויות ודורשות אישור מכוון.
 
-במסך ההתקנה יוצג **באנר כתום בולט** שמסביר למשתמש שהתוסף מבקש לרוץ ברקע.
+מסך ההתקנה מציג למשתמש אילו אירועים עשויים להפעיל את התוסף. בקשת keep-alive
+מוצגת בנפרד באדום ומבהירה שהמנוע עשוי להישאר פעיל ללא הגבלת זמן.
 
 ### זיהוי מצב רקע ב-JavaScript
 
@@ -547,7 +565,7 @@ Otzaria.on('plugin.boot', async (payload) => {
   const hasStartupPerm = payload.permissions.includes('app.run_on_startup');
 
   if (isBackground && hasStartupPerm) {
-    // רץ פעם אחת בעת עליית האפליקציה
+    // רץ כשהאירוע המוצהר מעיר את מופע הרקע
     await Otzaria.call('notifications.showInApp', {
       message: 'שלום! התוסף נטען בהצלחה עם עליית אוצריא',
       type: 'success'
@@ -589,14 +607,22 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 > 💡 זהו אותו רעיון של "service worker" בתוספי דפדפן: דף קליל לרקע, נפרד מדף ה-UI.
 
-### מחזור החיים של instance הרקע
+### מחזור החיים של מופע רקע עצל
 
 | מצב | מה קורה |
 |-----|---------|
-| אוצריא נפתחת + הרשאה מאושרת | WebView נסתר נוצר, `plugin.boot` נורה עם `runMode: 'background'` |
+| אוצריא נפתחת | תרומות סטטיות נטענות ללא WebView |
+| אירוע מוצהר + הרשאת רקע מאושרת | WebView נסתר נוצר, `plugin.boot` נורה עם `runMode: 'background'`, ואז האירוע נמסר |
 | המשתמש נכנס ללשונית התוסף | **instance נוסף** נוצר (foreground), ה-background נמשך במקביל |
 | ההרשאה מבוטלת בהגדרות | ה-instance הרקע נסגר מיידית |
+| אין פעילות במשך כ-3 דקות | המופע נסגר, אלא אם אושרה הרשאת keep-alive |
 | התוסף מוסר | שני ה-instances נסגרים |
+
+### תאימות זמנית לתוספים ישנים
+
+ב-0.9.97 בלבד, תוסף שמבקש `app.run_on_startup` אך אינו מצהיר על
+`contributes.startup` עדיין נטען בעליית אוצריא ונשאר פעיל לאורך הסשן. המסלול
+הישן יוסר ב-0.9.98; תוסף שלא יעבור להצהרות דקלרטיביות לא יופעל עוד ברקע.
 
 ---
 

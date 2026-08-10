@@ -42,6 +42,7 @@ void main() {
             },
           ],
           'activationEvents': ['app.startup', 'reader.sectionContentChanged'],
+          'keepAlive': true,
         },
       ),
     );
@@ -55,6 +56,7 @@ void main() {
       PluginStartupContributions.startupActivationTopic,
       'reader.sectionContentChanged',
     ]);
+    expect(startup.keepAlive, isTrue);
   });
 
   test('toJson roundtrips through PluginManifest', () {
@@ -65,6 +67,7 @@ void main() {
             {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
           ],
           'activationEvents': ['app.startup'],
+          'keepAlive': true,
         },
       ),
     );
@@ -73,6 +76,7 @@ void main() {
     expect(reparsed.startup, isNotNull);
     expect(reparsed.startup!.toolbarItems.single['id'], 'b1');
     expect(reparsed.startup!.activationEvents, ['app.startup']);
+    expect(reparsed.startup!.keepAlive, isTrue);
     expect(reparsed.startup!.contextMenuItems, isEmpty);
   });
 
@@ -105,5 +109,55 @@ void main() {
     );
     expect(manifest.startup, isNotNull);
     expect(manifest.startup!.isEmpty, isTrue);
+    expect(manifest.startup!.keepAlive, isFalse);
+  });
+
+  test('keepAlive alone does not make an empty startup section actionable', () {
+    final manifest = PluginManifest.fromJson(
+      _manifestJson(startup: {'keepAlive': true}),
+    );
+
+    expect(manifest.startup!.keepAlive, isTrue);
+    expect(manifest.startup!.isEmpty, isTrue);
+  });
+
+  test('background trigger ignores static data and foreground-only items', () {
+    const startup = PluginStartupContributions(
+      toolbarItems: [
+        {'id': 'open', 'type': 'button', 'openPlugin': true},
+      ],
+      contextMenuItems: [
+        {'id': 'separator', 'type': 'separator'},
+        {'id': 'open', 'type': 'item', 'openPlugin': true},
+      ],
+      publishedData: [
+        {'type': 'calendar.event', 'key': 'static', 'payload': {}},
+      ],
+    );
+
+    expect(startup.hasBackgroundActivationTrigger, isFalse);
+  });
+
+  test('background trigger finds actionable nested items and color rows', () {
+    const toolbar = PluginStartupContributions(
+      toolbarItems: [
+        {
+          'id': 'menu',
+          'type': 'menu',
+          'children': [
+            {'id': 'open', 'openPlugin': true},
+            {'id': 'background'},
+          ],
+        },
+      ],
+    );
+    const contextMenu = PluginStartupContributions(
+      contextMenuItems: [
+        {'id': 'colors', 'type': 'color-row'},
+      ],
+    );
+
+    expect(toolbar.hasBackgroundActivationTrigger, isTrue);
+    expect(contextMenu.hasBackgroundActivationTrigger, isTrue);
   });
 }
