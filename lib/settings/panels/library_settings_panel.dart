@@ -158,8 +158,7 @@ class _LibrarySettingsPanelState extends State<LibrarySettingsPanel> {
               cardId: 'library.external',
               title: context.settingsText('ספריות חיצוניות'),
               subtitle: context.settingsText(
-                'ניתן לחפש ספר במסך ספריה או להציג ספרים מתיקיית ספרים של אוצר החכמה והיברובוקס\n'
-                'החיפוש בספריה מתבצע מתוך קטלוג, הגדרות מיקום והעדכונים לקטלוג מוגדרים דרך ספריית אוצריא',
+                'ניתן לחפש ספר במסך ספריה או להציג ספרים מתיקיית ספרים של אוצר החכמה והיברובוקס',
               ),
               children: [
                 // מיקום היברובוקס (יוצג ראשון במידה והועבר לו ווידג'ט - דסקטופ בלבד)

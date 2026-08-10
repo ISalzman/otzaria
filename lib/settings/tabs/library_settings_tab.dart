@@ -451,7 +451,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         cardId: 'library.repository',
                         title: context.settingsText('מאגר הספרים וחיפוש'),
                         subtitle: context.settingsText(
-                          'התיקיה שבה נמצאים תיקיות הספרים והאינדקס',
+                          'תיקיות הספרים והאינדקס ומצב האינדקס',
                         ),
                         children: [
                           ..._buildRepositoryCardChildren(
