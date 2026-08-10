@@ -217,6 +217,16 @@ const aboutAdditionalSources = <Map<String, String>>[
     'logo': 'assets/logo_books/tashma.svg',
   },
   {
+    'name': 'מיקרופדיה תלמודית',
+    'url': 'https://www.yadharavherzog.net/',
+    'logo': 'assets/logo_books/mikrapedia_talmudit_logo.svg',
+  },
+  {
+    'name': 'מכון שלמה אומן',
+    'url': 'https://www.machonso.org/',
+    'logo': 'assets/logo_books/machonso_logo.svg',
+  },
+  {
     'name': 'פרויקט בן י.',
     'url': 'https://github.com/projectbenyehuda/public_domain_dump',
   },
