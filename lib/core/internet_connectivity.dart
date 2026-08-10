@@ -37,12 +37,25 @@ Future<bool> hasInternetConnection({
   Duration timeout = _kProbeTimeout,
   List<(String, int)> targets = kNeutralProbeTargets,
 }) async {
+  if (targets.isEmpty) return false;
+
   final connect = debugSocketConnect ?? _connect;
-  final results = await Future.wait([
-    for (final (host, port) in targets)
-      _isReachable(connect, host, port, timeout),
-  ]);
-  return results.any((reachable) => reachable);
+  final result = Completer<bool>();
+  var failedTargets = 0;
+  for (final (host, port) in targets) {
+    unawaited(
+      _isReachable(connect, host, port, timeout).then((reachable) {
+        if (result.isCompleted) return;
+        if (reachable) {
+          result.complete(true);
+          return;
+        }
+        failedTargets++;
+        if (failedTargets == targets.length) result.complete(false);
+      }),
+    );
+  }
+  return result.future;
 }
 
 Future<bool> _isReachable(

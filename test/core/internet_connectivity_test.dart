@@ -13,6 +13,19 @@ void main() {
       expect(await hasInternetConnection(), isTrue);
     });
 
+    test('הצלחה ביעד אחד אינה ממתינה ליעדים שתקועים', () async {
+      final blocked = Completer<bool>();
+      debugSocketConnect = (host, port, timeout) =>
+          host == 'otzaria.org' ? Future.value(true) : blocked.future;
+
+      final result = await hasInternetConnection(
+        targets: kOtzariaProbeTargets,
+      ).timeout(const Duration(milliseconds: 100));
+
+      expect(result, isTrue);
+      blocked.complete(false);
+    });
+
     test('כשכל היעדים אינם נענים — אין אינטרנט', () async {
       debugSocketConnect = (host, port, timeout) async => false;
 

@@ -418,6 +418,38 @@ void main() {
         expect(probes, 1);
       });
 
+      test('forceRefresh מועבר לשירות', () async {
+        var reachable = false;
+        ConnectivityStatusService.instance = ConnectivityStatusService(
+          offlineModeReader: () => false,
+          networkProbe: () async => reachable,
+        );
+
+        final first =
+            await adapter.execute('app', 'getConnectivity', {})
+                as Map<String, Object?>;
+        reachable = true;
+        final refreshed =
+            await adapter.execute('app', 'getConnectivity', {
+                  'forceRefresh': true,
+                })
+                as Map<String, Object?>;
+
+        expect(first['isOnline'], isFalse);
+        expect(refreshed['isOnline'], isTrue);
+      });
+
+      test('forceRefresh שאינו boolean נדחה', () async {
+        useService(offline: false, reachable: true);
+
+        await expectLater(
+          adapter.execute('app', 'getConnectivity', {'forceRefresh': 'yes'}),
+          throwsA(
+            predicate((e) => e.toString().contains('error.invalid_params')),
+          ),
+        );
+      });
+
       test('פעולה לא מוכרת ב-app עדיין נדחית', () async {
         await expectLater(
           adapter.execute('app', 'getConnectivityStatus', {}),

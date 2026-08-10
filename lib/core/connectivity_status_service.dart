@@ -29,23 +29,31 @@ class ConnectivitySnapshot {
   };
 }
 
-/// מספק מצב קישוריות יציב לתוספים, בלי קריאת רשת לכל שאילתה.
+/// מספק מצב קישוריות יציב לזמן קצר, בלי קריאת רשת לכל שאילתה.
 ///
-/// הבדיקה נקבעת פעם אחת ונשמרת: תוסף שמסתיר כפתור מקוון צריך תשובה קבועה,
-/// אחרת הכפתור מהבהב בין רינדורים. במצב מנותק לא מתבצעת בדיקה כלל.
+/// התוצאה נשמרת בחלון זמן קצוב כדי למנוע הבהוב בין רינדורים, ומתחדשת לאחריו.
+/// במצב מנותק לא מתבצעת בדיקה כלל.
 class ConnectivityStatusService {
   ConnectivityStatusService({
     bool Function()? offlineModeReader,
     Future<bool> Function()? networkProbe,
+    Duration cacheTtl = const Duration(seconds: 30),
+    DateTime Function()? clock,
   }) : _offlineModeReader = offlineModeReader ?? _readOfflineModeSetting,
-       _networkProbe = networkProbe ?? _probeOtzariaTargets;
+       _networkProbe = networkProbe ?? _probeOtzariaTargets,
+       _cacheTtl = cacheTtl,
+       _clock = clock ?? DateTime.now,
+       assert(!cacheTtl.isNegative);
 
   static ConnectivityStatusService instance = ConnectivityStatusService();
 
   final bool Function() _offlineModeReader;
   final Future<bool> Function() _networkProbe;
+  final Duration _cacheTtl;
+  final DateTime Function() _clock;
 
   bool? _cachedHasNetwork;
+  DateTime? _cachedAt;
   Future<bool>? _pendingProbe;
 
   static bool _readOfflineModeSetting() =>
@@ -54,20 +62,18 @@ class ConnectivityStatusService {
   static Future<bool> _probeOtzariaTargets() =>
       hasInternetConnection(targets: kOtzariaProbeTargets);
 
-  /// מצב הקישוריות הנוכחי. מריצה בדיקת רשת רק בפעם הראשונה שנדרשת.
-  Future<ConnectivitySnapshot> snapshot() async {
+  /// מצב הקישוריות הנוכחי. תוצאה טרייה נשמרת לזמן קצוב בין קריאות.
+  Future<ConnectivitySnapshot> snapshot({bool forceRefresh = false}) async {
     if (_offlineModeReader()) {
       // לא מקבעים `false` בקאש: המשתמש עשוי לכבות את המצב המנותק תוך כדי
       // ריצה, ואז הבדיקה הראשונה אמורה לרוץ באמת.
-      return const ConnectivitySnapshot(
-        isOfflineMode: true,
-        hasNetwork: false,
-      );
+      return const ConnectivitySnapshot(isOfflineMode: true, hasNetwork: false);
     }
-    return ConnectivitySnapshot(
-      isOfflineMode: false,
-      hasNetwork: await _resolveHasNetwork(),
-    );
+    final hasNetwork = await _resolveHasNetwork(forceRefresh: forceRefresh);
+    if (_offlineModeReader()) {
+      return const ConnectivitySnapshot(isOfflineMode: true, hasNetwork: false);
+    }
+    return ConnectivitySnapshot(isOfflineMode: false, hasNetwork: hasNetwork);
   }
 
   /// תמונת המצב אם היא כבר מוכנה, בלי להמתין לבדיקה. `null` = טרם הוכרעה.
@@ -75,7 +81,7 @@ class ConnectivityStatusService {
     if (_offlineModeReader()) {
       return const ConnectivitySnapshot(isOfflineMode: true, hasNetwork: false);
     }
-    final hasNetwork = _cachedHasNetwork;
+    final hasNetwork = _freshCachedHasNetwork;
     if (hasNetwork == null) return null;
     return ConnectivitySnapshot(isOfflineMode: false, hasNetwork: hasNetwork);
   }
@@ -94,16 +100,23 @@ class ConnectivityStatusService {
     final snapshot = cached;
     if (snapshot != null) return snapshot.toJson();
     prewarm();
-    return {
-      'isOfflineMode': false,
-      'hasNetwork': null,
-      'isOnline': null,
-    };
+    return {'isOfflineMode': false, 'hasNetwork': null, 'isOnline': null};
   }
 
-  Future<bool> _resolveHasNetwork() {
+  bool? get _freshCachedHasNetwork {
     final cached = _cachedHasNetwork;
-    if (cached != null) return Future.value(cached);
+    final cachedAt = _cachedAt;
+    if (cached == null || cachedAt == null) return null;
+    final age = _clock().difference(cachedAt);
+    if (age.isNegative || age >= _cacheTtl) return null;
+    return cached;
+  }
+
+  Future<bool> _resolveHasNetwork({bool forceRefresh = false}) {
+    if (!forceRefresh) {
+      final cached = _freshCachedHasNetwork;
+      if (cached != null) return Future.value(cached);
+    }
 
     // בדיקות מקבילות מתלכדות לבדיקה אחת — פתיחת כמה תוספים יחד לא פותחת
     // כמה חיבורים.
@@ -122,9 +135,11 @@ class ConnectivityStatusService {
     try {
       final result = await _networkProbe();
       _cachedHasNetwork = result;
+      _cachedAt = _clock();
       return result;
     } catch (_) {
       _cachedHasNetwork = false;
+      _cachedAt = _clock();
       return false;
     }
   }
@@ -133,6 +148,7 @@ class ConnectivityStatusService {
   @visibleForTesting
   void resetCache() {
     _cachedHasNetwork = null;
+    _cachedAt = null;
     _pendingProbe = null;
   }
 }

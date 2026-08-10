@@ -240,7 +240,7 @@ void main() {
   });
 
   group('ConnectivityStatusService — קאש ויציבות', () {
-    test('התוצאה נקבעת פעם אחת ונשמרת לכל הריצה', () async {
+    test('התוצאה נשמרת בתוך חלון הקאש', () async {
       var probes = 0;
       final service = ConnectivityStatusService(
         offlineModeReader: () => false,
@@ -257,7 +257,7 @@ void main() {
       expect(probes, 1, reason: 'קריאה מרינדור לא תפתח חיבור בכל פעם');
     });
 
-    test('התשובה אינה מתהפכת גם אם הרשת נופלת אחרי ההכרעה', () async {
+    test('התשובה אינה מתהפכת בתוך חלון הקאש', () async {
       var reachable = true;
       final service = ConnectivityStatusService(
         offlineModeReader: () => false,
@@ -270,7 +270,7 @@ void main() {
       expect(
         (await service.snapshot()).isOnline,
         isTrue,
-        reason: 'תשובה יציבה — אחרת כפתור בתוסף מהבהב בין רינדורים',
+        reason: 'קריאות סמוכות לא אמורות להבהב בין רינדורים',
       );
     });
 
@@ -287,7 +287,70 @@ void main() {
       await service.snapshot();
       await service.snapshot();
 
-      expect(probes, 1, reason: 'בלי רשת הבדיקה יקרה — אסור לחזור עליה');
+      expect(
+        probes,
+        1,
+        reason: 'בלי רשת הבדיקה יקרה — אין לחזור עליה בתוך חלון הקאש',
+      );
+    });
+
+    test('תוצאה שפג תוקפה נבדקת מחדש', () async {
+      var now = DateTime(2026);
+      var reachable = false;
+      var probes = 0;
+      final service = ConnectivityStatusService(
+        offlineModeReader: () => false,
+        networkProbe: () async {
+          probes++;
+          return reachable;
+        },
+        clock: () => now,
+      );
+
+      expect((await service.snapshot()).isOnline, isFalse);
+      reachable = true;
+      now = now.add(const Duration(seconds: 31));
+
+      expect((await service.snapshot()).isOnline, isTrue);
+      expect(probes, 2);
+    });
+
+    test('forceRefresh מרענן גם תוצאה טרייה', () async {
+      var reachable = false;
+      var probes = 0;
+      final service = ConnectivityStatusService(
+        offlineModeReader: () => false,
+        networkProbe: () async {
+          probes++;
+          return reachable;
+        },
+      );
+
+      expect((await service.snapshot()).isOnline, isFalse);
+      reachable = true;
+
+      expect((await service.snapshot(forceRefresh: true)).isOnline, isTrue);
+      expect(probes, 2);
+    });
+
+    test('forceRefresh מצטרף לבדיקה שכבר רצה', () async {
+      var probes = 0;
+      final completer = Completer<bool>();
+      final service = ConnectivityStatusService(
+        offlineModeReader: () => false,
+        networkProbe: () {
+          probes++;
+          return completer.future;
+        },
+      );
+
+      final first = service.snapshot();
+      final refreshed = service.snapshot(forceRefresh: true);
+      completer.complete(true);
+
+      expect((await first).isOnline, isTrue);
+      expect((await refreshed).isOnline, isTrue);
+      expect(probes, 1);
     });
 
     test('קריאות מקבילות מתלכדות לבדיקה אחת', () async {
@@ -397,10 +460,8 @@ void main() {
     test('אינו ממתין גם כשהבדיקה נמשכת זמן רב', () async {
       final service = ConnectivityStatusService(
         offlineModeReader: () => false,
-        networkProbe: () => Future<bool>.delayed(
-          const Duration(seconds: 30),
-          () => true,
-        ),
+        networkProbe: () =>
+            Future<bool>.delayed(const Duration(seconds: 30), () => true),
       );
 
       // סינכרוני לחלוטין: הקריאה מחזירה ערך בלי await ולכן לא יכולה לעכב.

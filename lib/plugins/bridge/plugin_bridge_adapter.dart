@@ -537,7 +537,13 @@ class PluginBridgeAdapter {
         }
         return true;
       case 'getConnectivity':
-        return (await ConnectivityStatusService.instance.snapshot()).toJson();
+        final forceRefresh = args['forceRefresh'];
+        if (forceRefresh != null && forceRefresh is! bool) {
+          throw Exception('error.invalid_params: forceRefresh must be boolean');
+        }
+        return (await ConnectivityStatusService.instance.snapshot(
+          forceRefresh: forceRefresh as bool? ?? false,
+        )).toJson();
       case 'getGrantedPermissions':
         return {'permissions': await _getGrantedPermissions()};
       default:
