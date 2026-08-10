@@ -49,7 +49,6 @@ void main() {
 
     test('מצבי עבודה יוצרים פריט רץ עם המזהה הקבוע', () {
       for (final status in [
-        LibraryUpdateStatus.checking,
         LibraryUpdateStatus.downloading,
         LibraryUpdateStatus.applying,
         LibraryUpdateStatus.refreshing,
@@ -61,6 +60,18 @@ void main() {
         expect(result.kind, WorkStatusKind.running, reason: '$status');
         expect(result.id, kLibraryUpdateWorkStatusId);
       }
+    });
+
+    test('בדיקת העדכון עצמה שקטה — אחרת החיווי קופץ בכל פתיחה', () {
+      expect(
+        item(
+          const LibraryUpdateState(
+            status: LibraryUpdateStatus.checking,
+            message: 'בודק עדכוני ספרייה',
+          ),
+        ),
+        isNull,
+      );
     });
 
     test('מצבי מנוחה אינם יוצרים פריט', () {
