@@ -164,4 +164,19 @@ void main() {
       expect(parsed.hasCategoryToken, isFalse);
     });
   });
+
+  group('categoryQueryPart', () {
+    test('ללא @ — מחזיר את הטקסט כמות שהוא', () {
+      expect(categoryQueryPart('שלום עולם'), 'שלום עולם');
+    });
+
+    test('עם @ — מחזיר את החלק שלפניו ללא trim (שימור אופסטים)', () {
+      expect(categoryQueryPart('שלום @תורה'), 'שלום ');
+      expect(categoryQueryPart('שלום@רשי@רמבן'), 'שלום');
+    });
+
+    test('@ בתחילת הטקסט — מחזיר ריק', () {
+      expect(categoryQueryPart('@תורה'), '');
+    });
+  });
 }

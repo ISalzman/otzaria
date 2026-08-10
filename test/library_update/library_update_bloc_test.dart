@@ -11,6 +11,9 @@ class _FakeService implements LibraryUpdateService {
   final LibraryUpdatePlan plan;
   final bool throwOnCheck;
   final bool throwOnApply;
+
+  /// שגיאה ספציפית לזריקה מ-applyDeltaPlan (קודמת ל-[throwOnApply]).
+  final Object? applyError;
   bool applyCalled = false;
   bool fullCalled = false;
 
@@ -18,6 +21,7 @@ class _FakeService implements LibraryUpdateService {
     this.plan, {
     this.throwOnCheck = false,
     this.throwOnApply = false,
+    this.applyError,
   });
 
   @override
@@ -39,6 +43,7 @@ class _FakeService implements LibraryUpdateService {
     bool Function()? isCancelled,
   }) async {
     applyCalled = true;
+    if (applyError != null) throw applyError!;
     if (throwOnApply) throw Exception('apply failed');
     return {7, 12};
   }
@@ -292,6 +297,17 @@ void main() {
       size: 1200000000,
     ),
     releaseTag: 'v3',
+  );
+  final deltaWithFallbackPlan = LibraryUpdatePlan.delta(
+    localVersion: 1,
+    targetVersion: 3,
+    steps: const [],
+    fullDbAsset: const ReleaseAsset(
+      name: 'seforim.db.zst',
+      downloadUrl: 'https://x',
+      size: 1200000000,
+    ),
+    fullDbReleaseTag: 'v3',
   );
   final blockedPlan = LibraryUpdatePlan.blocked(
     localVersion: 1,
@@ -969,6 +985,105 @@ void main() {
         isA<LibraryUpdateState>()
             .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
             .having((s) => s.hasUpdate, 'hasUpdate', false),
+      ],
+    );
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'סטיית תוכן ב-apply עם fallback → needsFullConfirmation עם תוכנית מלאה',
+      build: () => _bloc(
+        _FakeService(
+          deltaWithFallbackPlan,
+          applyError: const PatchApplyException(
+            'hash לא תואם',
+            hashMismatchStage: PatchHashMismatchStage.fromContentHash,
+          ),
+        ),
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.needsFullConfirmation,
+            )
+            .having(
+              (s) => s.plan?.kind,
+              'plan.kind',
+              LibraryUpdatePlanKind.fullDownload,
+            )
+            .having(
+              (s) => s.message,
+              'message',
+              contains('תוכן הספרייה המקומית שונה'),
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל hash אחרי apply אינו מוצג בטעות כסטיית DB מקומי',
+      build: () => _bloc(
+        _FakeService(
+          deltaWithFallbackPlan,
+          applyError: const PatchApplyException(
+            'hash תוצאה לא תואם',
+            hashMismatchStage: PatchHashMismatchStage.toContentHash,
+          ),
+        ),
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.needsFullConfirmation,
+            )
+            .having(
+              (s) => s.message,
+              'message',
+              contains('תוצאת עדכון הדלתא אינה תואמת'),
+            )
+            .having(
+              (s) => s.message,
+              'message',
+              isNot(contains('תוכן הספרייה המקומית')),
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'סטיית תוכן בלי DB מלא בתוכנית → error',
+      build: () => _bloc(
+        _FakeService(
+          deltaPlan,
+          applyError: const PatchApplyException(
+            'hash לא תואם',
+            isContentMismatch: true,
+          ),
+        ),
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.error,
+        ),
       ],
     );
   });

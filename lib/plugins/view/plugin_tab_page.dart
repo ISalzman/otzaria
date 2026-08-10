@@ -43,6 +43,7 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/plugins/services/plugin_download_handler.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
@@ -498,6 +499,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         allowUniversalAccessFromFileURLs: false,
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
+        useOnDownloadStart: PluginDownloadHandler.isSupported,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: widget.plugin.isDevelopment || kDebugMode,
       ),
@@ -547,6 +549,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (mounted) setState(() => _hasError = true);
         }
       },
+      onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         try {
           final uri = navigationAction.request.url;

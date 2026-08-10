@@ -197,6 +197,28 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     } catch (e, st) {
       if (_isStale(opId)) return;
       _logUpdateError('applyDeltaPlan', e, st);
+      // אי-התאמת hash הופכת את מסלול הדלתא ללא בטוח; הורדה מלאה עוקפת אותו.
+      if (e is PatchApplyException && e.isContentMismatch) {
+        final mismatchReason =
+            e.hashMismatchStage == PatchHashMismatchStage.toContentHash
+            ? 'תוצאת עדכון הדלתא אינה תואמת לגרסה הצפויה'
+            : 'תוכן הספרייה המקומית שונה מהצפוי';
+        final fallback = plan.toFullDownloadFallback(
+          reason: mismatchReason,
+        );
+        if (fallback != null) {
+          emit(
+            LibraryUpdateState(
+              status: LibraryUpdateStatus.needsFullConfirmation,
+              message:
+                  '$mismatchReason — נדרשת הורדה מלאה '
+                  '(${_formatSize(fallback.totalDownloadSize)})',
+              plan: fallback,
+            ),
+          );
+          return;
+        }
+      }
       emit(
         LibraryUpdateState(
           status: LibraryUpdateStatus.error,

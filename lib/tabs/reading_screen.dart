@@ -58,14 +58,15 @@ class _ReadingScreenState extends State<ReadingScreen>
   // של הילד עצמו, כך שהזזה שומרת על ה-State.
   PageController? _pageController;
 
-  /// סף ההפעלה (בפיקסלים לוגיים) של החלקה אופקית למעבר טאב בדסקטופ.
-  static const double _kTabSwipeThreshold = 80.0;
+  /// מהירות שחרור (פיקסלים לוגיים/שנייה) שמעליה ההחלקה נחשבת הנפה
+  /// ומעבירה טאב גם לפני מחצית הדרך.
+  static const double _kTabSwipeFlingVelocity = 250.0;
 
-  /// הצטברות ה-dx מתחילת מחוות ההחלקה הנוכחית.
-  double _swipeAccum = 0;
+  /// העמוד (השבור) שבו הייתה התצוגה בתחילת מחוות ההחלקה הנוכחית.
+  double _swipeStartPage = 0;
 
-  /// האם המחווה הנוכחית כבר הפעילה מעבר טאב.
-  bool _swipeFired = false;
+  /// האם מחוות החלקה גוררת כעת את ה-PageView.
+  bool _swipeDragging = false;
 
   /// מדכא את [_syncPageController] בזמן אנימציית מעבר מהחלקה, כדי
   /// ש-jumpToPage של הסנכרון לא יקטע את האנימציה באמצע.
@@ -134,6 +135,8 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   /// מזהה החלקה בין טאבים בדסקטופ באמצעות trackpad בלבד.
   /// החרגת touch מונעת תחרות בזירת המחוות עם הגלילה האנכית של התוכן.
+  /// הגרירה מזיזה את ה-PageView באופן הדרגתי, ובשחרור מתיישבים על
+  /// הטאב הקרוב (או הסמוך, בהנפה מהירה) — כמו PageScrollPhysics במובייל.
   Widget _wrapWithDesktopTabSwipe(Widget child) {
     if (Platform.isAndroid || Platform.isIOS) return child;
     return RawGestureDetector(
@@ -148,27 +151,37 @@ class _ReadingScreenState extends State<ReadingScreen>
               (recognizer) {
                 recognizer
                   ..onStart = (_) {
-                    _swipeAccum = 0;
-                    _swipeFired = false;
+                    final controller = _pageController;
+                    if (controller == null || !controller.hasClients) return;
+                    _swipeDragging = true;
+                    _swipeStartPage = controller.page ?? 0;
                   }
                   ..onUpdate = (details) {
-                    if (_swipeFired) return;
-                    _swipeAccum += details.delta.dx;
-                    if (_swipeAccum.abs() >= _kTabSwipeThreshold) {
-                      _swipeFired = true;
-                      _switchTabBySwipe(
-                        tabSwipeDirection(
-                          accumulatedDx: _swipeAccum,
-                          textDirection: Directionality.of(context),
-                        ),
-                      );
+                    final controller = _pageController;
+                    if (!_swipeDragging ||
+                        controller == null ||
+                        !controller.hasClients) {
+                      return;
                     }
+                    final position = controller.position;
+                    final offsetDelta =
+                        details.delta.dx.abs() *
+                        tabSwipeDirection(
+                          accumulatedDx: details.delta.dx,
+                          textDirection: Directionality.of(context),
+                        );
+                    position.jumpTo(
+                      (position.pixels + offsetDelta).clamp(
+                        position.minScrollExtent,
+                        position.maxScrollExtent,
+                      ),
+                    );
                   }
-                  ..onEnd = (_) {
-                    _swipeFired = false;
+                  ..onEnd = (details) {
+                    _settleSwipe(details.velocity.pixelsPerSecond.dx);
                   }
                   ..onCancel = () {
-                    _swipeFired = false;
+                    _settleSwipe(0);
                   };
               },
             ),
@@ -177,18 +190,35 @@ class _ReadingScreenState extends State<ReadingScreen>
     );
   }
 
-  /// מעבר לטאב סמוך בעקבות מחוות החלקה. [direction] הוא `1` לטאב הבא
-  /// או `-1` לטאב הקודם (כפי שחושב ב-[tabSwipeDirection]).
-  Future<void> _switchTabBySwipe(int direction) async {
-    final state = context.read<TabsBloc>().state;
-    if (!state.hasOpenTabs) return;
-    final target = state.currentTabIndex + direction;
-    if (target < 0 || target >= state.tabs.length) return;
+  /// משלים מחוות החלקה: מתיישב על הטאב הקרוב למיקום הנוכחי, או על
+  /// הסמוך כשהשחרור היה בהנפה מהירה, ומעדכן את ה-bloc בהתאם.
+  Future<void> _settleSwipe(double velocityDx) async {
+    if (!_swipeDragging) return;
+    _swipeDragging = false;
     final controller = _pageController;
     if (controller == null || !controller.hasClients) return;
+    final state = context.read<TabsBloc>().state;
+    if (!state.hasOpenTabs) return;
+    final page = controller.page ?? _swipeStartPage;
+    // המרת מהירות ה-dx למרחב העמודים (אותה המרה כמו לדלתא של הגרירה).
+    final pageVelocity =
+        velocityDx.abs() *
+        tabSwipeDirection(
+          accumulatedDx: velocityDx,
+          textDirection: Directionality.of(context),
+        );
+    int target;
+    if (velocityDx != 0 && pageVelocity.abs() >= _kTabSwipeFlingVelocity) {
+      target = pageVelocity > 0 ? page.floor() + 1 : page.ceil() - 1;
+    } else {
+      target = page.round();
+    }
+    target = target.clamp(0, state.tabs.length - 1);
     // עדכון ה-bloc קודם כדי שההדגשה בשורת הטאבים תגיב מיד; הסנכרון
     // (jumpToPage) מדוכא בינתיים כדי שהאנימציה תושלם בלי קטיעה.
-    context.read<TabsBloc>().add(SetCurrentTab(target));
+    if (target != state.currentTabIndex) {
+      context.read<TabsBloc>().add(SetCurrentTab(target));
+    }
     _suppressPageSync = true;
     try {
       await controller.animateToPage(

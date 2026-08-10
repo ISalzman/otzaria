@@ -39,6 +39,13 @@ class ParsedCategoryQuery {
   bool get categoryFound => hasCategoryToken && notFoundNames.isEmpty;
 }
 
+/// החלק שלפני ה-`@` הראשון, ללא trim — האופסטים בטקסט הגולמי נשמרים,
+/// כך שניתוח מילים חי (spans לפי מיקום הסמן) יכול לרוץ עליו ישירות.
+String categoryQueryPart(String rawQuery) {
+  final atIndex = rawQuery.indexOf('@');
+  return atIndex < 0 ? rawQuery : rawQuery.substring(0, atIndex);
+}
+
 /// מפענח שאילתה בתבנית `מונח@שם@שם...` (קטגוריות או ספרים).
 ///
 /// מחזיר את השאילתה הנקייה (ללא חלק הצמצום) ואת נתיבי ה-facet של כל הקטגוריות
