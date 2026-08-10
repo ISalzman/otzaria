@@ -99,6 +99,8 @@ class PluginRuntimeDispatcher {
     if (_controllersByPlugin[pluginId] == null) {
       _enabledCache.remove(pluginId);
       _permissionCache.remove(pluginId);
+      ContextMenuRegistry.instance.removeAll(pluginId);
+      PluginToolbarRegistry.instance.removeAll(pluginId);
     }
     // ה-controller ה-foreground נסגר (טאב נסגר) — לא נחזיק מצביע מת.
     if (instanceId == 'default') {
@@ -268,6 +270,7 @@ class PluginRuntimeDispatcher {
   ) async {
     _shutdownMode = shutdownMode;
     final allControllers = <InAppWebViewController>[];
+    final pluginIds = _controllersByPlugin.keys.toList(growable: false);
     for (final instances in _controllersByPlugin.values) {
       allControllers.addAll(instances.values);
     }
@@ -284,12 +287,15 @@ class PluginRuntimeDispatcher {
     _lastThemePayload = null;
     _lifecycleLock = Future.value();
 
+    for (final pluginId in pluginIds) {
+      ContextMenuRegistry.instance.removeAll(pluginId);
+      PluginToolbarRegistry.instance.removeAll(pluginId);
+    }
+
     for (final controller in allControllers) {
       try {
         await controller.loadUrl(
-          urlRequest: URLRequest(
-            url: WebUri.uri(Uri.parse('about:blank')),
-          ),
+          urlRequest: URLRequest(url: WebUri.uri(Uri.parse('about:blank'))),
         );
       } catch (e) {
         // The underlying WebView may already be tearing down.
@@ -427,6 +433,7 @@ class PluginRuntimeDispatcher {
     String topic,
     Map<String, dynamic> payload, {
     bool preferBackground = false,
+    bool resumeForegroundIfNeeded = false,
   }) async {
     if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
     final instances = _controllersByPlugin[pluginId];
@@ -437,6 +444,16 @@ class PluginRuntimeDispatcher {
       _enabledCache[pluginId] = isEnabled;
       if (!isEnabled) return;
       final jsonPayload = jsonEncode(payload);
+      final foregroundSuspended = _suspendedForegroundIds.contains(pluginId);
+      final shouldResumeForeground =
+          foregroundSuspended &&
+          instances.containsKey('default') &&
+          (resumeForegroundIfNeeded ||
+              (preferBackground && !instances.containsKey('background')));
+      if (shouldResumeForeground) {
+        await _dispatchToSuspendedForeground(pluginId, topic, jsonPayload);
+        return;
+      }
       // אירועים ממוקדים (למשל לחיצה בתפריט הקשר) חייבים להגיע למנוע הפעיל.
       // ה-foreground עשוי להישאר רשום אך מושהה, ולכן הבחירה מתחשבת בכך.
       final targetControllers = _selectEventControllers(
@@ -457,6 +474,39 @@ class PluginRuntimeDispatcher {
     } catch (e) {
       debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
     }
+  }
+
+  Future<void> _dispatchToSuspendedForeground(
+    String pluginId,
+    String topic,
+    String jsonPayload,
+  ) {
+    return _serializeLifecycle(() async {
+      final controller = _controllersByPlugin[pluginId]?['default'];
+      if (controller == null) return;
+      try {
+        await _resumeForeground(pluginId);
+        await controller.evaluateJavascript(
+          source:
+              "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));",
+        );
+      } catch (e) {
+        debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
+      } finally {
+        final stillRegistered = identical(
+          _controllersByPlugin[pluginId]?['default'],
+          controller,
+        );
+        if (_desiredForegroundIds.contains(pluginId) && stillRegistered) {
+          _runningForegroundPluginIds = {
+            ..._runningForegroundPluginIds,
+            pluginId,
+          };
+        } else {
+          await _suspendForeground(pluginId);
+        }
+      }
+    });
   }
 
   /// [pluginId] נדרש כדי לדעת אם ה-instance ה-foreground מושהה: `evaluateJavascript`

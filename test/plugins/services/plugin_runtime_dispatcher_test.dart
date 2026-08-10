@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 
 // ── fake repository לשליטה ב-enabled/permission בלי SQLite ────────────────
 class _FakeRegistryRepo extends Fake implements PluginRegistryRepository {
@@ -148,10 +150,24 @@ void main() {
     () async {
       final firstController = _FakeWebViewController();
       dispatcher.registerController('plugin-a', firstController);
+      ContextMenuRegistry.instance.register(
+        'plugin-a',
+        const PluginContextMenuItem(id: 'context', label: 'Context'),
+      );
+      PluginToolbarRegistry.instance.register(
+        'plugin-a',
+        const PluginToolbarItem(
+          id: 'toolbar',
+          title: 'Toolbar',
+          icon: 'apps_24_regular',
+        ),
+      );
 
       await dispatcher.prepareForAppShutdown();
 
       expect(firstController.loadUrlCalls, 1);
+      expect(ContextMenuRegistry.instance.getAll(), isEmpty);
+      expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
       expect(
         firstController.lastUrlRequest?.url?.toString(),
         'about:blank',
@@ -199,6 +215,50 @@ void main() {
 
     test('invalidatePlugin על plugin לא רשום אינו קורס', () {
       expect(() => _d.invalidatePlugin('no.such.plugin'), returnsNormally);
+    });
+
+    test('סגירת ה-controller האחרון מנקה תרומות UI של התוסף', () {
+      ContextMenuRegistry.instance.register(
+        _kPid,
+        const PluginContextMenuItem(id: 'context', label: 'Context'),
+      );
+      PluginToolbarRegistry.instance.register(
+        _kPid,
+        const PluginToolbarItem(
+          id: 'toolbar',
+          title: 'Toolbar',
+          icon: 'apps_24_regular',
+        ),
+      );
+      _d.registerController(_kPid, _FakeController());
+
+      _d.unregisterController(_kPid);
+
+      expect(ContextMenuRegistry.instance.getAll(), isEmpty);
+      expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
+    });
+
+    test('סגירת foreground אינה מנקה תרומות כל עוד background פעיל', () {
+      PluginToolbarRegistry.instance.register(
+        _kPid,
+        const PluginToolbarItem(
+          id: 'toolbar',
+          title: 'Toolbar',
+          icon: 'apps_24_regular',
+        ),
+      );
+      _d.registerController(_kPid, _FakeController());
+      _d.registerController(
+        _kPid,
+        _FakeController(),
+        instanceId: 'background',
+      );
+
+      _d.unregisterController(_kPid);
+      expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
+
+      _d.unregisterController(_kPid, instanceId: 'background');
+      expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
     });
   });
 
@@ -604,6 +664,61 @@ void main() {
       await pumpEventQueue();
 
       expect(a.pauseCalls, 1);
+    });
+
+    test('אירוע ממוקד מחדש foreground מושהה כשאין background', () async {
+      _d.repositoryForTesting = _FakeRegistryRepo(enabled: true);
+      final a = _LifecycleFakeController();
+      _d.registerController(pidA, a);
+
+      _d.setVisiblePluginTabs({pidA});
+      await pumpEventQueue();
+      _d.setVisiblePluginTabs(const {});
+      await pumpEventQueue();
+      final resumeCalls = a.resumeCalls;
+      final pauseCalls = a.pauseCalls;
+      a.jsEvents.clear();
+
+      await _d.dispatchEventToPlugin(
+        pidA,
+        'reader.toolbar_item_clicked',
+        {'itemId': 'mark'},
+        preferBackground: true,
+      );
+
+      expect(a.resumeCalls, resumeCalls + 1);
+      expect(a.pauseCalls, pauseCalls + 1);
+      expect(a.jsEvents, hasLength(3));
+      expect(a.jsEvents[0], contains('plugin.resumed'));
+      expect(a.jsEvents[1], contains('reader.toolbar_item_clicked'));
+      expect(a.jsEvents[2], contains('plugin.suspended'));
+    });
+
+    test('פתיחת תוסף מוסרת את האירוע ל-foreground המושהה', () async {
+      _d.repositoryForTesting = _FakeRegistryRepo(enabled: true);
+      final foreground = _LifecycleFakeController();
+      final background = _LifecycleFakeController();
+      _d.registerController(pidA, foreground);
+      _d.registerController(pidA, background, instanceId: 'background');
+
+      _d.setVisiblePluginTabs({pidA});
+      await pumpEventQueue();
+      _d.setVisiblePluginTabs(const {});
+      await pumpEventQueue();
+      foreground.jsEvents.clear();
+
+      await _d.dispatchEventToPlugin(
+        pidA,
+        'reader.toolbar_item_clicked',
+        {'itemId': 'mark'},
+        resumeForegroundIfNeeded: true,
+      );
+
+      expect(
+        foreground.jsEvents,
+        contains(contains('reader.toolbar_item_clicked')),
+      );
+      expect(background.jsEvents, isEmpty);
     });
 
     test(
