@@ -47,7 +47,9 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
@@ -1094,6 +1096,29 @@ class PluginBridgeAdapter {
           );
         }
         ContextMenuRegistry.instance.update(
+          plugin.pluginId,
+          id,
+          Map<String, dynamic>.from(patch),
+        );
+        return true;
+      case 'addToolbarItem':
+        PluginToolbarRegistry.instance.registerPayload(plugin.pluginId, args);
+        return true;
+      case 'removeToolbarItem':
+        final id = args['id'] as String?;
+        if (id == null) throw Exception('error.invalid_params: id required');
+        PluginToolbarRegistry.instance.remove(plugin.pluginId, id);
+        return true;
+      case 'updateToolbarItem':
+        final id = args['id'];
+        final patch = args['patch'];
+        if (id is! String || patch is! Map) {
+          throw const PluginToolbarException(
+            'error.invalid_params',
+            'id and patch are required',
+          );
+        }
+        PluginToolbarRegistry.instance.update(
           plugin.pluginId,
           id,
           Map<String, dynamic>.from(patch),

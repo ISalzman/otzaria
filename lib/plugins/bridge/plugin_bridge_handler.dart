@@ -208,6 +208,10 @@ class PluginBridgeHandler {
           case 'removeContextMenuItem':
           case 'updateContextMenuItem':
             return 'reader.context_menu';
+          case 'addToolbarItem':
+          case 'removeToolbarItem':
+          case 'updateToolbarItem':
+            return 'reader.toolbar';
           case 'findTextOccurrences':
           case 'getSectionTextMap':
             return 'reader.open';

@@ -28,6 +28,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
@@ -1971,6 +1972,58 @@ void main() {
       final item = ContextMenuRegistry.instance.getAll().single.$2;
       expect(item.openPlugin, isFalse);
       expect(item.param, isNull);
+    });
+  });
+
+  group('PluginBridgeAdapter — reader.addToolbarItem', () {
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['reader.toolbar']),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    tearDown(() {
+      PluginToolbarRegistry.instance.removeAll('test.plugin');
+    });
+
+    test('addToolbarItem רושם לחצן ב-registry עם openPlugin ו-param', () async {
+      final result = await adapter.execute('reader', 'addToolbarItem', {
+        'id': 'mark',
+        'title': 'סמן',
+        'icon': 'bookmark_24_regular',
+        'openPlugin': true,
+        'param': 'my-param',
+      });
+
+      expect(result, isTrue);
+      final records = PluginToolbarRegistry.instance.getAll();
+      expect(records.single.$1, 'test.plugin');
+      expect(records.single.$2.openPlugin, isTrue);
+      expect(records.single.$2.param, 'my-param');
+    });
+
+    test('updateToolbarItem מעדכן ו-removeToolbarItem מסיר', () async {
+      await adapter.execute('reader', 'addToolbarItem', {
+        'id': 'mark',
+        'title': 'סמן',
+        'icon': 'bookmark_24_regular',
+      });
+
+      await adapter.execute('reader', 'updateToolbarItem', {
+        'id': 'mark',
+        'patch': {'title': 'סמן מחדש'},
+      });
+      expect(
+        PluginToolbarRegistry.instance.getAll().single.$2.title,
+        'סמן מחדש',
+      );
+
+      await adapter.execute('reader', 'removeToolbarItem', {'id': 'mark'});
+      expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
     });
   });
 

@@ -68,6 +68,9 @@ import 'package:otzaria/utils/ui/image_decode_size.dart';
 
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
+import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
@@ -1534,33 +1537,51 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
 
     return [
-      Consumer<ShamorZachorDataProvider>(
-        builder: (context, _, _) => ResponsiveActionBar(
-          key: const ValueKey('responsive_actions'),
-          overflowMenuOffset: const Offset(0, 8),
-          overflowButtonKey: widget.enableTourTargets
-              ? textBookOverflowTourTargetKey
-              : null,
-          menuItemKeysByTooltip: widget.enableTourTargets
-              ? {
-                  _getViewModeTooltip(state):
-                      textBookOverflowCommentatorsTourTargetKey,
-                  'סימניות בספר זה': textBookOverflowBookmarkTourTargetKey,
-                  'חיפוש': textBookOverflowSearchTourTargetKey,
-                  'הדפסה': textBookOverflowPrintTourTargetKey,
-                }
-              : null,
-          actions: _buildDisplayOrderActions(context, state),
-          alwaysInMenu: _buildAlwaysInMenuActions(context, state),
-          // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
-          // הכפתורים שבראש תפריט ה-"...".
-          menuHeaderActions: widget.isInCombinedView
-              ? _buildNavigationActions()
-              : null,
-          maxVisibleButtons: maxButtons,
+      ListenableBuilder(
+        listenable: PluginToolbarRegistry.instance,
+        builder: (context, _) => Consumer<ShamorZachorDataProvider>(
+          builder: (context, _, _) => ResponsiveActionBar(
+            key: const ValueKey('responsive_actions'),
+            overflowMenuOffset: const Offset(0, 8),
+            overflowButtonKey: widget.enableTourTargets
+                ? textBookOverflowTourTargetKey
+                : null,
+            menuItemKeysByTooltip: widget.enableTourTargets
+                ? {
+                    _getViewModeTooltip(state):
+                        textBookOverflowCommentatorsTourTargetKey,
+                    'סימניות בספר זה': textBookOverflowBookmarkTourTargetKey,
+                    'חיפוש': textBookOverflowSearchTourTargetKey,
+                    'הדפסה': textBookOverflowPrintTourTargetKey,
+                  }
+                : null,
+            actions: [
+              ..._buildDisplayOrderActions(context, state),
+              ..._buildPluginActions(context),
+            ],
+            alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+            // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+            // הכפתורים שבראש תפריט ה-"...".
+            menuHeaderActions: widget.isInCombinedView
+                ? _buildNavigationActions()
+                : null,
+            maxVisibleButtons: maxButtons,
+          ),
         ),
       ),
     ];
+  }
+
+  List<ActionButtonData> _buildPluginActions(BuildContext context) {
+    final records = PluginToolbarRegistry.instance.getAll();
+    if (records.isEmpty) return const [];
+    return buildPluginToolbarActions(
+      records: records,
+      context: 'reader-text',
+      compact: context.read<SettingsBloc>().state.compactMenuMode,
+      locationPayload: () async =>
+          (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
+    );
   }
 
   /// בניית רשימת כפתורים בסדר ההצגה (מימין לשמאל ב-RTL)

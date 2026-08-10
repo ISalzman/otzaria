@@ -67,6 +67,7 @@ class PluginPageLauncher {
         pluginId,
         topic,
         payload,
+        resumeForegroundIfNeeded: true,
       ),
     );
     // catchError כדי ששגיאה במסירה אחת לא תחסום את הבאות בשרשרת.

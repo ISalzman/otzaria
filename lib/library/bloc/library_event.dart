@@ -27,13 +27,18 @@ class RefreshLibrary extends LibraryEvent {
 
   final RefreshSource source;
 
+  /// מזהי בקשה שידווחו ב-completedRefreshRequestIds בסיום הרענון שקלט אותם
+  /// (גם אחרי מיזוג רענונים מקבילים). רענון שנכשל אינו מדווח אותם.
+  final Set<int> requestIds;
+
   const RefreshLibrary({
     this.changedBookKeys = const {},
     this.source = RefreshSource.general,
+    this.requestIds = const {},
   });
 
   @override
-  List<Object?> get props => [changedBookKeys, source];
+  List<Object?> get props => [changedBookKeys, source, requestIds];
 }
 
 class UpdateLibraryPath extends LibraryEvent {

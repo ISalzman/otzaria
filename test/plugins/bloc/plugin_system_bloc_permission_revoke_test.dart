@@ -1,0 +1,82 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+
+class _FakeRepo implements PluginRegistryRepository {
+  @override
+  Future<void> setPermission(String id, String perm, bool granted) async {}
+
+  @override
+  Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async =>
+      [];
+
+  @override
+  Future<List<InstalledPlugin>> getAllPlugins() async => [];
+
+  @override
+  Future<List<InstalledPlugin>> getDevelopmentPlugins() async => [];
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+void main() {
+  const toolbarItem = PluginToolbarItem(
+    id: 'button',
+    title: 'Button',
+    icon: 'apps_24_regular',
+  );
+  const menuItem = PluginContextMenuItem(id: 'item', label: 'Item');
+
+  tearDown(() {
+    PluginToolbarRegistry.instance.removeAll('p1');
+    ContextMenuRegistry.instance.removeAll('p1');
+  });
+
+  Future<void> revoke(String permission) async {
+    final bloc = PluginSystemBloc(repository: _FakeRepo());
+    addTearDown(bloc.close);
+    bloc.add(
+      SetPluginPermissionRequested(
+        pluginId: 'p1',
+        permission: permission,
+        granted: false,
+      ),
+    );
+    await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+  }
+
+  test('revoking reader.toolbar removes the plugin toolbar items', () async {
+    PluginToolbarRegistry.instance.register('p1', toolbarItem);
+
+    await revoke('reader.toolbar');
+
+    expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
+  });
+
+  test('revoking reader.context_menu removes the context menu items', () async {
+    ContextMenuRegistry.instance.register('p1', menuItem);
+
+    await revoke('reader.context_menu');
+
+    expect(ContextMenuRegistry.instance.getAll(), isEmpty);
+  });
+
+  test('revoking an unrelated permission keeps the registrations', () async {
+    PluginToolbarRegistry.instance.register('p1', toolbarItem);
+    ContextMenuRegistry.instance.register('p1', menuItem);
+
+    await revoke('notes.read');
+
+    expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
+    expect(ContextMenuRegistry.instance.getAll(), hasLength(1));
+  });
+}
