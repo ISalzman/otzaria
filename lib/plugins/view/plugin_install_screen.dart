@@ -63,12 +63,20 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   late Map<String, bool> _permissionToggles;
   late bool _allowOrderBeforeBuiltInsGranted;
 
+  /// ההרשאות בסדר הצגה: קודם אלה שכבויות כברירת מחדל (דורשות החלטה מודעת),
+  /// אחר כך השאר בסדר המניפסט.
+  late List<String> _orderedPermissions;
+
   @override
   void initState() {
     super.initState();
     _permissionToggles = {
       for (final p in widget.manifest.permissions) p: _defaultGrantFor(p),
     };
+    _orderedPermissions = [
+      ...widget.manifest.permissions.where((p) => !_defaultGrantFor(p)),
+      ...widget.manifest.permissions.where(_defaultGrantFor),
+    ];
     _allowOrderBeforeBuiltInsGranted =
         widget.previousAllowOrderBeforeBuiltInsGranted ??
         widget.manifest.allowOrderBeforeBuiltIns;
@@ -222,7 +230,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
               subtitle:
                   'בחר אילו הרשאות להעניק לתוסף זה (ברירת מחדל: הכל מופעל)',
               children: [
-                ...widget.manifest.permissions.map((permission) {
+                ..._orderedPermissions.map((permission) {
                   final info = getPermissionInfo(permission);
                   final isGranted = _permissionToggles[permission] ?? true;
                   final isSensitive =

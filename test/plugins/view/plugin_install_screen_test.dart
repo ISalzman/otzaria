@@ -410,6 +410,32 @@ void main() {
     );
   });
 
+  testWidgets('הרשאות כבויות כברירת מחדל מוצגות לפני האחרות', (
+    tester,
+  ) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(
+        permissions: [
+          'notes.read',
+          pluginRunOnStartupPermission,
+          'ui.feedback',
+        ],
+      ),
+      screenHeight: 1400,
+    );
+
+    final sensitiveY = tester
+        .getTopLeft(find.text('ריצה ברקע ללא פתיחת התוסף'))
+        .dy;
+    final notesY = tester.getTopLeft(find.text('צפייה בהערות')).dy;
+    final feedbackY = tester.getTopLeft(find.text('הודעות ודיאלוגים')).dy;
+    expect(sensitiveY, lessThan(notesY));
+    expect(sensitiveY, lessThan(feedbackY));
+    expect(notesY, lessThan(feedbackY), reason: 'סדר המניפסט נשמר בין השאר');
+  });
+
   testWidgets('הרשאת app.run_on_startup — Switch מתחיל כבוי ברירת מחדל', (
     tester,
   ) async {
