@@ -1552,6 +1552,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               : null,
           actions: _buildDisplayOrderActions(context, state),
           alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+          // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+          // הכפתורים שבראש תפריט ה-"...".
+          menuHeaderActions: widget.isInCombinedView
+              ? _buildNavigationActions()
+              : null,
           maxVisibleButtons: maxButtons,
         ),
       ),
@@ -1706,11 +1711,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
-    final navigationActions = _buildNavigationActions(context, state);
     return [
-      // כפתורי ניווט - רק בתצוגה משולבת
-      if (widget.isInCombinedView) ...navigationActions,
-
       // הצגת סימניות הספר הנוכחי (הוספת סימניה עברה לתפריט ההקשר בטקסט)
       ActionButtonData(
         widget: KeyedSubtree(
@@ -1872,30 +1873,28 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     ];
   }
 
-  List<ActionButtonData> _buildNavigationActions(
-    BuildContext context,
-    TextBookLoaded state,
-  ) {
+  /// פעולות הניווט קוראות מצב עדכני כי התפריט נשאר פתוח בין לחיצות.
+  List<ActionButtonData> _buildNavigationActions() {
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
-        widget: _buildPreviousTocButton(context, state),
+        widget: const SizedBox.shrink(),
         tooltip: 'הדף/פרק הקודם',
-        onPressed: () => _navigateToPreviousToc(state),
+        onPressed: _onNavPreviousToc,
       ),
       previousAction: buildBookViewPreviousNavigationAction(
-        widget: _buildPreviousPageButton(context, state),
+        widget: const SizedBox.shrink(),
         tooltip: 'הקטע הקודם',
-        onPressed: () => _scrollToPreviousSegment(state),
+        onPressed: _onNavPreviousSegment,
       ),
       nextAction: buildBookViewNextNavigationAction(
-        widget: _buildNextPageButton(context, state),
+        widget: const SizedBox.shrink(),
         tooltip: 'הקטע הבא',
-        onPressed: () => _scrollToNextSegment(state),
+        onPressed: _onNavNextSegment,
       ),
       lastAction: buildBookViewLastNavigationAction(
-        widget: _buildNextTocButton(context, state),
+        widget: const SizedBox.shrink(),
         tooltip: 'הדף/פרק הבא',
-        onPressed: () => _navigateToNextToc(state),
+        onPressed: _onNavNextToc,
       ),
     );
   }
@@ -2146,16 +2145,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildPreviousPageButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: 'הקטע הקודם',
-      icon: FluentIcons.chevron_left_24_regular,
-      compact: isCompact,
-      onPressed: () => _scrollToPreviousSegment(state),
-    );
-  }
-
   /// מריץ פעולת ניווט מקיצור מקלדת מול ה-state הנוכחי, אם הספר כבר נטען.
   void _runNavigation(void Function(TextBookLoaded) action) {
     if (!mounted) return;
@@ -2183,16 +2172,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     state.scrollController.scrollTo(
       duration: const Duration(milliseconds: 300),
       index: _bottommostVisibleIndex(state) + 1,
-    );
-  }
-
-  Widget _buildNextPageButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: 'הקטע הבא',
-      icon: FluentIcons.chevron_right_24_regular,
-      compact: isCompact,
-      onPressed: () => _scrollToNextSegment(state),
     );
   }
 
@@ -2308,26 +2287,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         duration: const Duration(milliseconds: 300),
       );
     }
-  }
-
-  Widget _buildPreviousTocButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: 'הדף/פרק הקודם',
-      icon: FluentIcons.arrow_previous_24_filled,
-      compact: isCompact,
-      onPressed: () => _navigateToPreviousToc(state),
-    );
-  }
-
-  Widget _buildNextTocButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: 'הדף/פרק הבא',
-      icon: FluentIcons.arrow_next_24_filled,
-      compact: isCompact,
-      onPressed: () => _navigateToNextToc(state),
-    );
   }
 
   Widget _buildPrintButton(

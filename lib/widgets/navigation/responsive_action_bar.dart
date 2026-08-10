@@ -3,6 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// מחשב כמה כפתורי פעולה ניתן להציג בסרגל הקריאה לפי רוחב המסך.
 ///
@@ -36,6 +37,10 @@ class ResponsiveActionBar extends StatefulWidget {
   /// [מצב ישן] הסדר המקורי של הכפתורים (לתצוגה עקבית)
   final List<ActionButtonData>? originalOrder;
 
+  /// פעולות ניווט שמוצגות כשורת אייקונים בראש התפריט במקום כפריטים נפרדים.
+  /// לחיצה עליהן משאירה את התפריט פתוח; לכל פעולה נדרש [ActionButtonData.icon].
+  final List<ActionButtonData>? menuHeaderActions;
+
   /// מספר מקסימלי של כפתורים להציג לפני מעבר לתפריט "..."
   final int maxVisibleButtons;
 
@@ -53,6 +58,7 @@ class ResponsiveActionBar extends StatefulWidget {
     required this.actions,
     this.alwaysInMenu,
     this.originalOrder,
+    this.menuHeaderActions,
     required this.maxVisibleButtons,
     this.overflowOnRight = false,
     this.overflowMenuOffset = const Offset(0, 4),
@@ -71,6 +77,9 @@ class ResponsiveActionBar extends StatefulWidget {
 class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
   bool _menuOpenRequested = false;
 
+  List<ActionButtonData> get _headerActions =>
+      widget.menuHeaderActions ?? const <ActionButtonData>[];
+
   @override
   void didUpdateWidget(covariant ResponsiveActionBar oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -85,7 +94,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     final hasAlwaysInMenu =
         widget.alwaysInMenu != null && widget.alwaysInMenu!.isNotEmpty;
 
-    if (widget.actions.isEmpty && !hasAlwaysInMenu) {
+    if (widget.actions.isEmpty && !hasAlwaysInMenu && _headerActions.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -108,12 +117,10 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     final totalButtons = widget.actions.length;
     int effectiveMaxVisible = widget.maxVisibleButtons;
 
-    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
-    // עדיף פשוט להציג את כל הכפתורים.
-    // החרגה: כשיש alwaysInMenu, כפתור ה-overflow קיים ממילא, ולכן הצגת
-    // כל הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
+    // כפתור יחיד נשאר גלוי, אלא אם התפריט נדרש ממילא ואז הוא עלול לגרום לגלישה.
     if (totalButtons - widget.maxVisibleButtons == 1 &&
-        widget.alwaysInMenu!.isEmpty) {
+        widget.alwaysInMenu!.isEmpty &&
+        _headerActions.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 
@@ -141,7 +148,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
     // מסך הספר: תפריט בצד שמאל, כפתורים מימין לשמאל (RTL)
     // תמיד מציגים כפתור "..." אם יש כפתורים בתפריט
-    if (allHiddenActions.isNotEmpty) {
+    if (allHiddenActions.isNotEmpty || _headerActions.isNotEmpty) {
       children.add(_buildOverflowButton(allHiddenActions));
     }
     // הופכים את הסדר כך שהכפתור הראשון ברשימה (PDF) יהיה ימני ביותר
@@ -154,14 +161,15 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     );
   }
 
-  /// מצב ישן: כפתורים נעלמים לפי עדיxxxxxxפריט רק אם צריך
+  /// מצב ישן: כפתורים נעלמים לפי עדיפות, ותפריט רק אם צריך
   Widget _buildOldMode(BuildContext context) {
     final totalButtons = widget.originalOrder!.length;
     int effectiveMaxVisible = widget.maxVisibleButtons;
 
-    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
-    // עדיף פשוט להציג את כל הכפתורים.
-    if (totalButtons - widget.maxVisibleButtons == 1) {
+    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו —
+    // אלא אם התפריט קיים ממילא בשביל שורת הניווט.
+    if (totalButtons - widget.maxVisibleButtons == 1 &&
+        _headerActions.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 
@@ -201,15 +209,18 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     final alwaysInMenu = widget.alwaysInMenu ?? const <ActionButtonData>[];
     final allHiddenActions = [...hiddenActions, ...alwaysInMenu];
 
+    final showOverflow =
+        allHiddenActions.isNotEmpty || _headerActions.isNotEmpty;
+
     if (widget.overflowOnRight) {
       // מסך הספרייה: תפריט בצד ימין. הסדר החזותי R->L דורש היפוך הרשימה.
       children.addAll(visibleWidgets.reversed);
-      if (allHiddenActions.isNotEmpty) {
+      if (showOverflow) {
         children.add(_buildOverflowButton(allHiddenActions));
       }
     } else {
       // תפריט בצד שמאל
-      if (allHiddenActions.isNotEmpty) {
+      if (showOverflow) {
         children.add(_buildOverflowButton(allHiddenActions));
       }
       children.addAll(visibleWidgets);
@@ -225,7 +236,8 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
   Widget _buildOverflowButton(List<ActionButtonData> hiddenActions) {
     // יצירת key ייחודי על סמך הכפתורים הנסתרים כדי למנוע בעיות context
     final uniqueKey =
-        'overflow_${hiddenActions.map((a) => a.tooltip).join('_')}';
+        'overflow_${_headerActions.map((a) => a.tooltip).join('_')}'
+        '_${hiddenActions.map((a) => a.tooltip).join('_')}';
 
     return Builder(
       key: ValueKey(uniqueKey),
@@ -243,57 +255,78 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
             action.onPressed?.call();
           },
           itemBuilder: (context) {
-            return hiddenActions.map((action) {
-              // אם יש submenuItems, נבנה תת-תפריט
-              if (action.submenuItems != null &&
-                  action.submenuItems!.isNotEmpty) {
-                final subEntries = action.submenuItems!
-                    .map(
-                      (subAction) => buildAppPopupMenuItem<ActionButtonData>(
-                        context,
-                        AppMenuEntry<ActionButtonData>(
-                          value: subAction,
-                          label: subAction.tooltip ?? '',
-                          icon: subAction.icon,
-                          enabled: subAction.onPressed != null,
-                        ),
-                        menuMetrics,
-                        null,
-                        key: widget
-                            .menuItemKeysByTooltip?[subAction.tooltip ?? ''],
-                      ),
-                    )
-                    .toList();
-                return buildAppSubmenuPopupMenuItem<ActionButtonData>(
-                  context: context,
-                  metrics: menuMetrics,
-                  label: action.tooltip ?? '',
-                  icon: action.icon,
-                  menuChildren: subEntries,
-                  onSelected: (subAction) => subAction.onPressed?.call(),
+            final headerActions = _headerActions;
+            final items = <PopupMenuEntry<ActionButtonData>>[];
+
+            if (headerActions.isNotEmpty) {
+              items.add(
+                AppMenuRowEntry<ActionButtonData>(
+                  height: _MenuIconActionRow.rowHeight,
+                  child: _MenuIconActionRow(actions: headerActions),
+                ),
+              );
+              if (hiddenActions.isNotEmpty) {
+                items.add(
+                  PopupMenuDivider(height: menuMetrics.dividerHeight),
                 );
               }
+            }
 
-              // פריט רגיל ללא submenu
-              return buildAppPopupMenuItem<ActionButtonData>(
-                context,
-                AppMenuEntry<ActionButtonData>(
-                  value: action,
-                  label: action.tooltip ?? '',
-                  icon: action.icon,
-                  enabled: action.onPressed != null,
-                ),
-                menuMetrics,
-                null,
-                key: widget.menuItemKeysByTooltip?[action.tooltip ?? ''],
-              );
-            }).toList();
+            items.addAll(
+              hiddenActions.map((action) {
+                // אם יש submenuItems, נבנה תת-תפריט
+                if (action.submenuItems != null &&
+                    action.submenuItems!.isNotEmpty) {
+                  final subEntries = action.submenuItems!
+                      .map(
+                        (subAction) => buildAppPopupMenuItem<ActionButtonData>(
+                          context,
+                          AppMenuEntry<ActionButtonData>(
+                            value: subAction,
+                            label: subAction.tooltip ?? '',
+                            icon: subAction.icon,
+                            enabled: subAction.onPressed != null,
+                          ),
+                          menuMetrics,
+                          null,
+                          key: widget
+                              .menuItemKeysByTooltip?[subAction.tooltip ?? ''],
+                        ),
+                      )
+                      .toList();
+                  return buildAppSubmenuPopupMenuItem<ActionButtonData>(
+                    context: context,
+                    metrics: menuMetrics,
+                    label: action.tooltip ?? '',
+                    icon: action.icon,
+                    menuChildren: subEntries,
+                    onSelected: (subAction) => subAction.onPressed?.call(),
+                  );
+                }
+
+                // פריט רגיל ללא submenu
+                return buildAppPopupMenuItem<ActionButtonData>(
+                  context,
+                  AppMenuEntry<ActionButtonData>(
+                    value: action,
+                    label: action.tooltip ?? '',
+                    icon: action.icon,
+                    enabled: action.onPressed != null,
+                  ),
+                  menuMetrics,
+                  null,
+                  key: widget.menuItemKeysByTooltip?[action.tooltip ?? ''],
+                );
+              }),
+            );
+
+            return items;
           },
         );
 
         if (widget.openOverflowMenu &&
             !_menuOpenRequested &&
-            hiddenActions.isNotEmpty) {
+            (hiddenActions.isNotEmpty || _headerActions.isNotEmpty)) {
           _menuOpenRequested = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || !widget.openOverflowMenu) {
@@ -306,6 +339,62 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
         return menuButton;
       },
+    );
+  }
+}
+
+/// שורת כפתורי ניווט בראש התפריט שאינה סוגרת אותו בלחיצה.
+class _MenuIconActionRow extends StatelessWidget {
+  final List<ActionButtonData> actions;
+
+  const _MenuIconActionRow({required this.actions});
+
+  static const double _buttonSize = 48;
+  static const double _iconSize = 20;
+
+  /// גובה השורה בתפריט — [AppMenuRowEntry] מדווח עליו, ו-showAnchoredAppMenu
+  /// מסתמך על סכום הגבהים כדי לבחור כיוון פתיחה.
+  static const double rowHeight = _buttonSize + 8;
+
+  static Widget _buildIcon(IconData? icon) {
+    if (icon == FluentIcons.chevron_left_24_regular ||
+        icon == FluentIcons.chevron_right_24_regular) {
+      return RtlIcon(icon!, size: _iconSize);
+    }
+    return Icon(icon, size: _iconSize);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    assert(
+      actions.every((action) => action.icon != null),
+      'menuHeaderActions requires an icon for every action',
+    );
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (final action in actions)
+            IconButton(
+              onPressed: action.onPressed,
+              tooltip: action.tooltip,
+              icon: _buildIcon(action.icon),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: _buttonSize,
+                minHeight: _buttonSize,
+              ),
+              style: IconButton.styleFrom(
+                // צבע פריט תפריט רגיל, לא הגוון המושתק של כפתור סרגל.
+                foregroundColor: colorScheme.onSurface,
+                shape: const CircleBorder(),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

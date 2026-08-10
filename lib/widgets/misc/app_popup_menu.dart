@@ -1217,6 +1217,37 @@ PopupMenuEntry<T> buildAppCustomPopupMenuItem<T>({
   );
 }
 
+/// שורה בתפריט שאינה פריט בחירה — למשל שורת כפתורי אייקון.
+/// הרקע בולע לחיצות והילדים שומרים על סמנטיקה עצמאית.
+class AppMenuRowEntry<T> extends PopupMenuEntry<T> {
+  final Widget child;
+
+  @override
+  final double height;
+
+  const AppMenuRowEntry({
+    super.key,
+    required this.child,
+    required this.height,
+  });
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<AppMenuRowEntry<T>> createState() => _AppMenuRowEntryState<T>();
+}
+
+class _AppMenuRowEntryState<T> extends State<AppMenuRowEntry<T>> {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(height: widget.height, child: widget.child),
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // buildAppSubmenuItemStyle
 // ═══════════════════════════════════════════════════════════════════════════

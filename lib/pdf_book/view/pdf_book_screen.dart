@@ -4636,6 +4636,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             : null,
         actions: _buildDisplayOrderPdfActions(context),
         alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
+        // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+        // הכפתורים שבראש תפריט ה-"...".
+        menuHeaderActions: widget.isInCombinedView
+            ? _buildNavigationActions()
+            : null,
         maxVisibleButtons: maxButtons,
       ),
     ];
@@ -4701,9 +4706,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    final navigationActions = _buildNavigationActions(context);
     return [
-      if (widget.isInCombinedView) ...navigationActions,
       ActionButtonData(
         widget: BarButton.icon(
           tooltip: 'הצג הערות אישיות',
@@ -4822,52 +4825,28 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  /// כפתורי ניווט לתפריט overflow — בשימוש בתצוגה משולבת (isInCombinedView) בלבד.
+  /// פעולות הניווט לשורה שבראש תפריט ה-"..." — בתצוגה מפוצלת בלבד.
   /// בתצוגה רגילה הניווט מוצג במרכז הסרגל דרך [_buildPdfCenter].
-  List<ActionButtonData> _buildNavigationActions(BuildContext context) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
+  List<ActionButtonData> _buildNavigationActions() {
     return buildBookViewNavigationActions(
       firstAction: buildBookViewFirstNavigationAction(
-        widget: BarButton.icon(
-          tooltip:
-              'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
-          icon: FluentIcons.arrow_previous_24_filled,
-          compact: isCompact,
-          onPressed: () => _goToPageWithSpreadLock(1),
-        ),
+        widget: const SizedBox.shrink(),
         tooltip:
             'תחילת הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+home')})',
         onPressed: () => _goToPageWithSpreadLock(1),
       ),
       previousAction: buildBookViewPreviousNavigationAction(
-        widget: BarButton.icon(
-          tooltip: 'הקודם',
-          icon: FluentIcons.chevron_left_24_regular,
-          compact: isCompact,
-          onPressed: _goPreviousPage,
-        ),
+        widget: const SizedBox.shrink(),
         tooltip: 'הקודם',
         onPressed: _goPreviousPage,
       ),
       nextAction: buildBookViewNextNavigationAction(
-        widget: BarButton.icon(
-          tooltip: 'הבא',
-          icon: FluentIcons.chevron_right_24_regular,
-          compact: isCompact,
-          onPressed: _goNextPage,
-        ),
+        widget: const SizedBox.shrink(),
         tooltip: 'הבא',
         onPressed: _goNextPage,
       ),
       lastAction: buildBookViewLastNavigationAction(
-        widget: BarButton.icon(
-          tooltip:
-              'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
-          icon: FluentIcons.arrow_next_24_filled,
-          compact: isCompact,
-          onPressed: () =>
-              _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
-        ),
+        widget: const SizedBox.shrink(),
         tooltip:
             'סוף הספר (${ShortcutHelper.formatShortcutForDisplay('ctrl+end')})',
         onPressed: () =>
