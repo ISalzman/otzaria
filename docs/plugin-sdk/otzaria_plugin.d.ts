@@ -121,10 +121,28 @@ export interface BootPayload {
     textDirection: 'ltr' | 'rtl';
   };
   theme: ThemePayload;
+  /** Connectivity as known at boot, without ever blocking on the network.
+   *  `hasNetwork`/`isOnline` are `null` when the check has not resolved yet
+   *  (first plugin opened in this run) — call `app.getConnectivity()` to await
+   *  the real answer. Start online UI hidden and reveal it on `isOnline === true`
+   *  so it never flashes for users without a connection. */
+  connectivity: ConnectivityStatus;
   /** Currently granted permissions at boot time.
    *  For a fresh runtime snapshot, call `app.getGrantedPermissions()` or
    *  listen to `plugin.permissions_changed`. */
   permissions: string[];
+}
+
+/** Result of `app.getConnectivity`, and the `connectivity` field of `plugin.boot`. */
+export interface ConnectivityStatus {
+  /** The user turned on "no internet access" in Otzaria's settings.
+   *  No network check runs at all in this mode. */
+  isOfflineMode: boolean;
+  /** A connection was found. `null` only in `plugin.boot`, meaning "not resolved yet". */
+  hasNetwork: boolean | null;
+  /** `!isOfflineMode && hasNetwork` — the only flag most plugins need.
+   *  `null` only in `plugin.boot`, meaning "not resolved yet". */
+  isOnline: boolean | null;
 }
 
 export interface PermissionSnapshot {
@@ -780,6 +798,7 @@ export type OtzariaMethod =
   | 'app.getLocale'
   | 'app.getUserEmail'
   | 'app.getGrantedPermissions'
+  | 'app.getConnectivity'
   | 'app.openUrl'
   | 'library.findBooks'
   | 'library.getBookMetadata'

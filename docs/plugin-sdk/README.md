@@ -235,6 +235,7 @@ Otzaria.on('plugin.boot', (payload) => {
   payload.app.textDirection  // 'rtl'
   payload.app.runMode        // 'foreground' | 'background' — ראה §ריצת רקע
   payload.theme              // ThemePayload (ראה §ניהול ערכת נושא)
+  payload.connectivity       // { isOfflineMode, hasNetwork, isOnline } — ראה app.getConnectivity
   payload.permissions        // string[] — הרשאות שאושרו
 });
 ```
@@ -280,6 +281,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `app.getTheme` | `app.info.read` | ערכת נושא מלאה (colorScheme + typography) |
 | `app.getLocale` | `app.info.read` | locale ו-textDirection |
 | `app.openUrl` | `app.open_url` | פתיחת כתובת http/https בדפדפן המערכת |
+| `app.getConnectivity` | `app.info.read` | האם יש אינטרנט — להסתרת יכולות מקוונות |
 
 ### library.*
 
@@ -820,6 +822,7 @@ if (typeof Otzaria === 'undefined') {
           typography: { fontFamily: 'Frank Ruhl Libre', fontSize: 18, lineHeight: 1.5,
             commentatorsFontFamily: 'Shofar', commentatorsFontSize: 14 },
         },
+        connectivity: { isOfflineMode: false, hasNetwork: true, isOnline: true },
         permissions: ['app.info.read', 'library.books.read', 'calendar.read',
           'plugin.storage.read', 'plugin.storage.write', 'ui.feedback'],
       },

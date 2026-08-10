@@ -88,6 +88,7 @@ if (response.success) {
 | `app.getUserEmail` | 0.9.89 |
 | `app.getGrantedPermissions` | 0.9.89 |
 | `app.openUrl` | 0.9.95 |
+| `app.getConnectivity` | 0.9.96 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.listRecentBooks` | 0.9.89 |
@@ -255,6 +256,44 @@ const { data } = await Otzaria.call('app.getGrantedPermissions');
 ```
 
 הערה: בשדה `permissions` של `plugin.boot` מתקבל snapshot בזמן העלייה בלבד. אם אתם צריכים מצב עדכני אחרי שהמשתמש שינה הרשאות, השתמשו ב-API הזה או האזינו ל-`plugin.permissions_changed`.
+
+### `app.getConnectivity`
+**הרשאה:** `app.info.read`
+
+מחזיר את מצב הקישוריות של אוצריא — כדי שתוכלו להסתיר יכולות מקוונות ממשתמש שאין לו אינטרנט, במקום להציג לו כפתור שנכשל בלחיצה.
+
+```javascript
+const { data } = await Otzaria.call('app.getConnectivity');
+// { isOfflineMode: false, hasNetwork: true, isOnline: true }
+```
+
+| שדה | משמעות |
+|-----|---------|
+| `isOfflineMode` | המשתמש סימן "ללא גישה לאינטרנט" בהגדרות אוצריא |
+| `hasNetwork` | נמצא חיבור בפועל |
+| `isOnline` | `!isOfflineMode && hasNetwork` — הדגל היחיד שרוב התוספים צריכים |
+
+**חשוב לדעת על ההתנהגות:**
+
+- **בדיקת הרשת מתבצעת פעם אחת בלבד בכל ריצת התוכנה**, ותוצאתה נשמרת. `hasNetwork` לא יתהפך באמצע — גם אם החיבור נופל אחרי הבדיקה.
+- **`isOfflineMode` כן יכול להשתנות תוך כדי ריצה**, אם המשתמש משנה את ההגדרה. לכן קראו שוב בנקודות מעבר משמעותיות (למשל כשהמשתמש נכנס למסך מקוון), ולא רק פעם אחת בעלייה.
+- **אל תקראו לזה מכל רינדור.** הקריאה עצמה זולה בצד אוצריא, אבל היא נספרת במגביל הקצב של ה-RPC (כ-50 קריאות בפרץ), וקריאה מכל פריים תחזיר `error.rate_limited`. שמרו את הערך במשתנה ורעננו לפי צורך.
+- **במצב מנותק לא מתבצעת בדיקת רשת כלל** — התשובה מיידית, `hasNetwork` תמיד `false`.
+- הבדיקה מנסה את `otzaria.org` וגם יעדים ניטרליים. די בכך שאחד עונה, ולכן תקלה זמנית בשרת של אוצריא לא מסמנת את כל המשתמשים כמנותקים.
+
+**הדפוס המומלץ — בלי הבהוב.** מצב הקישוריות מגיע כבר ב-`plugin.boot`, אבל בתוסף הראשון שנפתח בריצה הוא עשוי להיות `null` ("טרם הוכרע") — אוצריא לא מעכבת את פתיחת התוסף כדי להמתין לרשת. לכן התחילו כשהיכולת המקוונת **מוסתרת**, וחשפו אותה רק כשהתשובה חיובית:
+
+```javascript
+Otzaria.on('plugin.boot', async (payload) => {
+  // מוסתר כברירת מחדל — ככה הכפתור לא מופיע ונעלם למי שאין לו רשת
+  let online = payload.connectivity.isOnline;
+  if (online === null) {
+    const { data } = await Otzaria.call('app.getConnectivity');
+    online = data.isOnline;
+  }
+  if (online) document.getElementById('online-section').hidden = false;
+});
+```
 
 ### `app.openUrl`
 **הרשאה נדרשת:** `app.open_url`
@@ -1698,7 +1737,7 @@ Otzaria.on('event.name', (data) => {
 
 **הרשאה נדרשת:** כל אירוע מצריך הרשאה מתאימה מסוג `events.subscribe:<event_name>`
 
-- `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה). ה-payload כולל `app.runMode: 'foreground' | 'background'` — ראה §ריצת רקע.
+- `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה). ה-payload כולל `app.runMode: 'foreground' | 'background'` — ראה §ריצת רקע — וכן `connectivity` (מצב האינטרנט; ראה [`app.getConnectivity`](#appgetconnectivity)).
 - `plugin.ready` - נורה אחרי boot (ללא הרשאה)
 - `plugin.suspended` - התוסף הושהה (יציאה מלשונית התוסף / מעבר לרקע). ללא הרשאה — ראה §השהיה ברקע ב-README
 - `plugin.resumed` - התוסף חזר מהשהיה (ללא הרשאה)
