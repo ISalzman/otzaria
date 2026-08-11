@@ -99,17 +99,24 @@ class HtmlLinkHandler {
     return title;
   }
 
+  /// מפצל את חלק הכותרות של הקישור לרמות, ומסיר רמות ריקות.
+  static List<String> _headerSegments(String raw) => [
+    for (final part in raw.split('#')) _safeDecode(part).trim(),
+  ]..removeWhere((segment) => segment.isEmpty);
+
   /// מטפל בלחיצה על קישור HTML
   ///
   /// הפונקציה מפרשת קישורים בפורמטים הבאים:
-  /// - book://שם_הסxxxxxxxxח ספר בתחילת הספר
+  /// - book://שם_הספר - פותח ספר בתחילתו
   /// - book://שם_הספר#כותרת - פותח ספר ומנווט לכותרת ספציפית
-  /// - #כותרת - מנווט לכותרת באותו ספר
+  /// - book://שם_הספר#כותרת#תת-כותרת#... - נתיב היררכי בעץ תוכן העניינים
+  /// - #כותרת (וכן #כותרת#תת-כותרת) - מנווט לכותרת באותו ספר
   /// - otzaria://inline-link?path={path}&index={index}&ref={ref} - קישור מבוסס תווים
   ///
   /// דוגמאות:
   /// - <a href="book://ברכות">ברכות</a>
   /// - <a href="book://ברכות#דף ב">ברכות דף ב</a>
+  /// - <a href="book://בית יוסף#אורח חיים#סימן א">בית יוסף או"ח סימן א</a>
   /// - <a href="#דף ג">דף ג</a>
   static Future<bool> handleLink(
     BuildContext context,
@@ -125,41 +132,23 @@ class HtmlLinkHandler {
 
       // בדיקה אם זה קישור פנימי לכותרת באותו ספר
       if (url.startsWith('#')) {
-        final headerName = _safeDecode(url.substring(1));
-        await _navigateToHeader(context, headerName);
+        await _navigateToHeader(context, _headerSegments(url.substring(1)));
         return true;
       }
 
       // בדיקה אם זה קישור לספר
       if (url.startsWith('book://')) {
         final bookUrl = url.substring(7); // הסרת "book://"
-
-        String bookTitle;
-        String? headerName;
-
-        // בדיקה אם יש כותרת ספציפית
-        if (bookUrl.contains('#')) {
-          final parts = bookUrl.split('#');
-          bookTitle = _safeDecode(parts[0]);
-
-          // טיפול במבנה תלמודי: ספר#דף#צד
-          if (parts.length >= 2) {
-            if (parts.length == 3) {
-              // מבנה מלא: ספר#דף#צד
-              headerName = _safeDecode('${parts[1]} ${parts[2]}');
-            } else {
-              // מבנה רגיל: ספר#כותרת
-              headerName = _safeDecode(parts[1]);
-            }
-          }
-        } else {
-          bookTitle = _safeDecode(bookUrl);
-        }
+        final separatorIndex = bookUrl.indexOf('#');
 
         await _openBookWithHeader(
           context,
-          bookTitle,
-          headerName,
+          _safeDecode(
+            separatorIndex < 0 ? bookUrl : bookUrl.substring(0, separatorIndex),
+          ),
+          separatorIndex < 0
+              ? const <String>[]
+              : _headerSegments(bookUrl.substring(separatorIndex + 1)),
           openBookCallback,
         );
         return true;
@@ -183,8 +172,9 @@ class HtmlLinkHandler {
   /// מנווט לכותרת באותו ספר הנוכחי
   static Future<void> _navigateToHeader(
     BuildContext context,
-    String headerName,
+    List<String> segments,
   ) async {
+    final headerName = segments.join(', ');
     try {
       // נקבל את הספר הנוכחי מה-BLoC
       final textBookBloc = context.read<TextBookBloc>();
@@ -197,26 +187,33 @@ class HtmlLinkHandler {
       // חיפוש הכותרת בתוכן הספציפי
       final viewportExtent =
           context.size?.height ?? MediaQuery.sizeOf(context).height;
-      final index = await _findHeaderIndex(state.book, headerName);
+      final resolved = await _findHeaderPath(state.book, segments);
 
-      if (index != null) {
+      if (resolved.index != null) {
         // ניווט לאינדקס שנמצא
         await scrollToSourceLine(
           scrollController: state.scrollController,
           scrollOffsetController: state.scrollOffsetController,
           positionsListener: state.positionsListener,
           segments: state.readingSegments,
-          lineIndex: index,
+          lineIndex: resolved.index!,
           viewportExtent: viewportExtent,
           duration: const Duration(milliseconds: 250),
           curve: Curves.ease,
         );
 
         if (context.mounted) {
-          UiSnack.show(CommonMessages.navigatedToHeader(headerName));
+          UiSnack.show(
+            resolved.missingSegment == null
+                ? CommonMessages.navigatedToHeader(headerName)
+                : CommonMessages.navigatedToPartialHeader(
+                    resolved.reachedHeader ?? headerName,
+                    resolved.missingSegment!,
+                  ),
+          );
         }
       } else {
-        throw Exception('לא נמצאה הכותרת: $headerName');
+        throw Exception('לא נמצאה הכותרת: ${resolved.missingSegment}');
       }
     } catch (e) {
       debugPrint('שגיאה בניווט לכותרת: $e');
@@ -227,11 +224,11 @@ class HtmlLinkHandler {
     }
   }
 
-  /// פותח ספר ומנווט לכותרת ספציפית (אם צוינה)
+  /// פותח ספר ומנווט לנתיב הכותרות שצוין (אם צוין)
   static Future<void> _openBookWithHeader(
     BuildContext context,
     String bookTitle,
-    String? headerName,
+    List<String> segments,
     Function(TextBookTab) openBookCallback,
   ) async {
     try {
@@ -266,27 +263,14 @@ class HtmlLinkHandler {
       }
 
       final book = foundBook;
-      int startIndex = 0;
-
-      // אם צוינה כותרת, נחפש את האינדקס שלה
-      if (headerName != null && headerName.isNotEmpty) {
-        final headerIndex = await _findHeaderIndex(book, headerName);
-        if (headerIndex != null) {
-          startIndex = headerIndex;
-        } else {
-          // אם לא נמצאה הכותרת, נציג אזהרה אבל עדיין נפתח את הספר
-          if (context.mounted) {
-            UiSnack.show(
-              CommonMessages.headerNotFoundOpeningStart(headerName, bookTitle),
-            );
-          }
-        }
-      }
+      final resolved = segments.isEmpty
+          ? const HeaderPathResult()
+          : await _findHeaderPath(book, segments);
 
       // פתיחת הספר
       final tab = TextBookTab(
         book: book,
-        index: startIndex,
+        index: resolved.index ?? 0,
         openLeftPane:
             (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
@@ -294,8 +278,28 @@ class HtmlLinkHandler {
 
       openBookCallback(tab);
 
-      if (context.mounted && headerName != null && headerName.isNotEmpty) {
+      if (!context.mounted || segments.isEmpty) return;
+
+      // הודעה אחת בלבד, שמשקפת לאן הקישור הגיע בפועל: הצלחה מלאה, נחיתה על
+      // רמה חלקית, או כישלון שפתח את תחילת הספר.
+      final headerName = segments.join(', ');
+      if (resolved.missingSegment == null) {
         UiSnack.show(CommonMessages.openedBookAtHeader(bookTitle, headerName));
+      } else if (resolved.index != null) {
+        UiSnack.show(
+          CommonMessages.openedBookAtPartialHeader(
+            bookTitle,
+            resolved.reachedHeader ?? headerName,
+            resolved.missingSegment!,
+          ),
+        );
+      } else {
+        UiSnack.show(
+          CommonMessages.headerNotFoundOpeningStart(
+            resolved.missingSegment!,
+            bookTitle,
+          ),
+        );
       }
     } catch (e) {
       debugPrint('שגיאה בפתיחת ספר: $e');
@@ -306,63 +310,140 @@ class HtmlLinkHandler {
     }
   }
 
-  /// מחפש את האינדקס של כותרת בספר
-  static Future<int?> _findHeaderIndex(TextBook book, String headerName) async {
+  /// מפענח נתיב כותרות בספר.
+  ///
+  /// [segments] - רמות הכותרות לפי הסדר, למשל ['אורח חיים', 'סימן א'].
+  /// מחזיר [HeaderPathResult] עם האינדקס העמוק שנמצא והרמה הראשונה שלא נמצאה.
+  @visibleForTesting
+  static HeaderPathResult resolveHeaderPath(
+    List<TocEntry> roots,
+    List<String> segments,
+  ) => _resolveHeaderPath(roots, segments);
+
+  static Future<HeaderPathResult> _findHeaderPath(
+    TextBook book,
+    List<String> segments,
+  ) async {
+    if (segments.isEmpty) return const HeaderPathResult();
+
     try {
-      // קבלת תוכן הספציפי
       final tableOfContents = await book.tableOfContents;
+      final hierarchical = _resolveHeaderPath(tableOfContents, segments);
+      if (hierarchical.missingSegment == null) return hierarchical;
 
-      // חיפוש בתוכן העניינים - קודם חיפוש מדויק
-      for (final entry in tableOfContents) {
-        if (isHeaderMatch(entry.text, headerName)) {
-          return entry.index;
+      // תאימות לאחור: קישור בן שתי רמות שנכתב לפני התמיכה בנתיב היררכי התייחס
+      // לכותרת אחת שמורכבת משתיהן עם רווח (מבנה "דף ב" + "עמוד א" בגמרא).
+      if (segments.length == 2) {
+        final joined = segments.join(' ');
+        final legacyIndex =
+            _findSingleHeader(tableOfContents, joined) ??
+            await _findHeaderInContent(book, joined);
+        if (legacyIndex != null) {
+          return HeaderPathResult(index: legacyIndex, reachedHeader: joined);
         }
       }
 
-      // אם לא נמצא, ננסה לחפש רק לפי מספר הדף (בלי עמוד)
-      // זה עוזר כשהקישור כולל עמוד שלא קיים בתוכן העניינים
-      final pageOnlyMatch = _extractPageNumber(headerName);
-      if (pageOnlyMatch != null) {
-        for (final entry in tableOfContents) {
-          final entryPageMatch = _extractPageNumber(entry.text);
-          if (entryPageMatch != null && entryPageMatch == pageOnlyMatch) {
-            return entry.index;
-          }
+      // חיפוש בגוף הספר אינו יכול לשמור על ענף ההורה, ולכן הוא בטוח רק
+      // כשבקישור יש כותרת אחת.
+      if (segments.length == 1) {
+        final fromContent = await _findHeaderInContent(book, segments.single);
+        if (fromContent != null) {
+          return HeaderPathResult(
+            index: fromContent,
+            reachedHeader: segments.single,
+          );
         }
       }
 
-      // אם לא נמצא בתוכן העניינים, נחפש בתוכן הספר עצמו
-      final content = await book.text;
-      final lines = content.split('\n');
-
-      // חיפוש מדויק
-      for (int i = 0; i < lines.length; i++) {
-        final line = lines[i];
-        final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-
-        if (isHeaderMatch(cleanLine, headerName)) {
-          return i;
-        }
-      }
-
-      // חיפוש לפי דף בלבד
-      if (pageOnlyMatch != null) {
-        for (int i = 0; i < lines.length; i++) {
-          final line = lines[i];
-          final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-          final linePageMatch = _extractPageNumber(cleanLine);
-
-          if (linePageMatch != null && linePageMatch == pageOnlyMatch) {
-            return i;
-          }
-        }
-      }
-
-      return null;
+      return hierarchical;
     } catch (e) {
       debugPrint('שגיאה בחיפוש כותרת: $e');
-      return null;
+      return const HeaderPathResult();
     }
+  }
+
+  /// הולך במורד עץ תוכן העניינים לפי [segments], רמה אחר רמה.
+  static HeaderPathResult _resolveHeaderPath(
+    List<TocEntry> roots,
+    List<String> segments,
+  ) {
+    var candidates = roots;
+    int? deepestIndex;
+    String? reachedHeader;
+
+    for (final segment in segments) {
+      final match = _matchInSubtree(candidates, segment);
+      if (match == null) {
+        return HeaderPathResult(
+          index: deepestIndex,
+          reachedHeader: reachedHeader,
+          missingSegment: segment,
+        );
+      }
+      deepestIndex = match.index;
+      reachedHeader = match.text;
+      candidates = match.children;
+    }
+
+    return HeaderPathResult(index: deepestIndex, reachedHeader: reachedHeader);
+  }
+
+  /// מאתר כותרת בין [candidates], ואם אינה שם - בכל תת-העץ שמתחתיהם.
+  /// החיפוש בתת-העץ מאפשר לקישור לדלג על רמות ביניים שכותב הקישור לא הכיר,
+  /// וההתאמה המדויקת מבטיחה שלא יקפוץ לענף אחר.
+  static TocEntry? _matchInSubtree(List<TocEntry> candidates, String segment) {
+    for (final entry in candidates) {
+      if (isHeaderMatch(entry.text, segment)) return entry;
+    }
+    for (final entry in flattenToc(candidates)) {
+      if (isHeaderMatch(entry.text, segment)) return entry;
+    }
+    return null;
+  }
+
+  /// מחפש כותרת יחידה בכל עץ תוכן העניינים, כולל התאמה לפי מספר דף בלבד.
+  static int? _findSingleHeader(List<TocEntry> roots, String headerName) {
+    final entries = flattenToc(roots);
+    for (final entry in entries) {
+      if (isHeaderMatch(entry.text, headerName)) return entry.index;
+    }
+
+    // אם לא נמצא, ננסה לחפש רק לפי מספר הדף (בלי עמוד)
+    // זה עוזר כשהקישור כולל עמוד שלא קיים בתוכן העניינים
+    final pageOnlyMatch = _extractPageNumber(headerName);
+    if (pageOnlyMatch == null) return null;
+    for (final entry in entries) {
+      if (_extractPageNumber(entry.text) == pageOnlyMatch) return entry.index;
+    }
+    return null;
+  }
+
+  /// מחפש כותרת בשורות הספר עצמן, כשאינה מופיעה בתוכן העניינים.
+  static Future<int?> _findHeaderInContent(
+    TextBook book,
+    String headerName,
+  ) async {
+    final content = await book.text;
+    final lines = content.split('\n');
+    final tagPattern = RegExp(r'<[^>]*>');
+
+    for (int i = 0; i < lines.length; i++) {
+      if (isHeaderMatch(
+        lines[i].replaceAll(tagPattern, '').trim(),
+        headerName,
+      )) {
+        return i;
+      }
+    }
+
+    // חיפוש לפי דף בלבד
+    final pageOnlyMatch = _extractPageNumber(headerName);
+    if (pageOnlyMatch == null) return null;
+    for (int i = 0; i < lines.length; i++) {
+      final cleanLine = lines[i].replaceAll(tagPattern, '').trim();
+      if (_extractPageNumber(cleanLine) == pageOnlyMatch) return i;
+    }
+    return null;
   }
 
   /// מחלץ את מספר הדף מכותרת (למשל "דף כג א" -> "כג")
@@ -392,4 +473,17 @@ class HtmlLinkHandler {
     final cleanHeader = headerName.trim().replaceAll(RegExp(r'\s+'), '');
     return cleanText == cleanHeader;
   }
+}
+
+/// תוצאת פענוח נתיב כותרות בקישור.
+///
+/// [index] - שורת היעד שנמצאה (null כשאף רמה לא נמצאה).
+/// [reachedHeader] - טקסט הכותרת העמוקה שאליה הגענו.
+/// [missingSegment] - הרמה הראשונה שלא נמצאה; null כשכל הנתיב נמצא.
+class HeaderPathResult {
+  final int? index;
+  final String? reachedHeader;
+  final String? missingSegment;
+
+  const HeaderPathResult({this.index, this.reachedHeader, this.missingSegment});
 }
