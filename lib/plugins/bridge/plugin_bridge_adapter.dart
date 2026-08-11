@@ -3187,6 +3187,17 @@ class PluginBridgeAdapter {
           throw Exception('error.invalid_params: invalid method');
         }
         final requestBody = args['body'] as String?;
+        final rawTimeoutMs = args['timeoutMs'];
+        if (rawTimeoutMs != null &&
+            (rawTimeoutMs is! int ||
+                rawTimeoutMs <= 0 ||
+                rawTimeoutMs >
+                    PluginNetworkFetchService.maxTimeout.inMilliseconds)) {
+          throw Exception(
+            'error.invalid_params: timeoutMs must be a positive integer '
+            'up to ${PluginNetworkFetchService.maxTimeout.inMilliseconds}',
+          );
+        }
         final rawHeaders = args['headers'];
         final headers = <String, String>{};
         if (rawHeaders is Map) {
@@ -3202,6 +3213,9 @@ class PluginBridgeAdapter {
           method: method,
           headers: headers.isEmpty ? null : headers,
           body: requestBody,
+          timeout: rawTimeoutMs == null
+              ? PluginNetworkFetchService.defaultTimeout
+              : Duration(milliseconds: rawTimeoutMs),
         );
         return {'status': result.status, 'ok': result.ok, 'body': result.body};
 

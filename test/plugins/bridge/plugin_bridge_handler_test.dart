@@ -149,14 +149,14 @@ void main() {
   });
 
   group('PluginBridgeHandler.hasOwnTimeout', () {
-    test('download/extractZip מוחרגות מ-timeout ברירת המחדל', () {
+    test('פעולות עם timeout פנימי מוחרגות מ-timeout ברירת המחדל', () {
       // פעולות I/O ארוכות שנחתכו על קבצים גדולים ע"י ה-30 שניות.
+      expect(PluginBridgeHandler.hasOwnTimeout('network.fetch'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.download'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('fs.extractZip'), isTrue);
     });
 
     test('שאר הקריאות נשארות תחת timeout ברירת המחדל', () {
-      expect(PluginBridgeHandler.hasOwnTimeout('network.fetch'), isFalse);
       expect(PluginBridgeHandler.hasOwnTimeout('fs.deleteFile'), isFalse);
       expect(
         PluginBridgeHandler.hasOwnTimeout('library.getBookContent'),

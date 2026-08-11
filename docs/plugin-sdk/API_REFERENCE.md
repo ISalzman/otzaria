@@ -497,7 +497,8 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 (במיוחד `POST`) יש להשתמש בו ולא ב-`fetch()` ישיר.
 
 פרמטרים: `url` (חובה), `method` (ברירת מחדל `GET`), `headers` (אובייקט,
-אופציונלי), `body` (מחרוזת, אופציונלי).
+אופציונלי), `body` (מחרוזת, אופציונלי), `timeoutMs` (מספר שלם חיובי;
+ברירת מחדל 30,000 ומקסימום 120,000 מילישניות).
 
 ```javascript
 // GET פשוט
@@ -511,7 +512,8 @@ const res = await Otzaria.call('network.fetch', {
   url: 'https://api.example.com/endpoint',
   method: 'POST',
   headers: { 'Content-Type': 'application/json;charset=UTF-8' },
-  body: JSON.stringify({ key: 'value' })
+  body: JSON.stringify({ key: 'value' }),
+  timeoutMs: 120000
 });
 if (res.success && res.data.ok) {
   const parsed = JSON.parse(res.data.body);

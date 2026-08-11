@@ -76,15 +76,12 @@ class PluginBridgeHandler {
   static bool isRateLimitExempt(String method) =>
       method == 'library.getBookContent';
 
-  /// קובע אם קריאת RPC מוחרגת מ-timeout ברירת המחדל של 30 שניות.
-  ///
-  /// `network.download` ו-`fs.extractZip` הן פעולות I/O ארוכות מטבען (הזרמת
-  /// קובץ לדיסק, חילוץ ארכיון), ו-30 שניות חתכו אותן באמצע על קבצים גדולים.
-  /// ההורדה אוכפת timeout על *תקיעה* (היעדר בייטים נכנסים) בתוך שירות ההורדה,
-  /// כך שהורדה איטית נמשכת כל עוד יש התקדמות; החילוץ אוכף בתוך השירות תקרת גודל
-  /// מחולץ ומספר רשומות (הגנת zip bomb), ולכן חסום בלי תלות ב-timeout הגנרי.
+  /// האם הקריאה מנהלת חסם זמן או משאבים בתוך השירות שלה,
+  /// ולכן אינה כפופה ל-timeout הגנרי של 30 שניות.
   static bool hasOwnTimeout(String method) =>
-      method == 'network.download' || method == 'fs.extractZip';
+      method == 'network.fetch' ||
+      method == 'network.download' ||
+      method == 'fs.extractZip';
 
   Future<dynamic> _handleRpc(List<dynamic> args) async {
     if (args.isEmpty) {

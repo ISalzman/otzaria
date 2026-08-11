@@ -1638,6 +1638,32 @@ Future<void> main() async {
       );
       expect(hit, isFalse);
     });
+
+    test('timeoutMs מעל התקרה נדחה לפני ביצוע הבקשה', () async {
+      var hit = false;
+      final fetchService = PluginNetworkFetchService(
+        client: MockClient((req) async {
+          hit = true;
+          return http.Response('', 200);
+        }),
+      );
+      final adapter = buildAdapter(fetchService);
+
+      await expectLater(
+        () => adapter.execute('network', 'fetch', const {
+          'url': 'https://nakdan.dicta.org.il/api',
+          'timeoutMs': 120001,
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('timeoutMs'),
+          ),
+        ),
+      );
+      expect(hit, isFalse);
+    });
   });
 
   group('PluginBridgeAdapter fs + pickFolder + download.destPath', () {
