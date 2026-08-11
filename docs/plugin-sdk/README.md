@@ -378,7 +378,8 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | Method | הרשאה | החזרה |
 |--------|-------|-------|
 | `calendar.getSelectedDate` | `calendar.read` | `string` (ISO 8601) |
-| `calendar.getDailyTimes`   | `calendar.read` | `Record<string, string>` — מ-0.9.97 מקבל `{ date?, city? }` |
+| `calendar.getDailyTimes`   | `calendar.read` | `Record<string, string>` — מ-0.9.97 מקבל `{ date?, city?, lat?, lng?, elevation?, timezone?, inIsrael? }` |
+| `calendar.getHalachicTimes`| `calendar.read` | `Record<string, string>` — אותם פרמטרים כמו `calendar.getDailyTimes` (מ-0.9.97) |
 | `calendar.getCities`       | `calendar.read` | `CityInfo[]` (מ-0.9.97) |
 | `calendar.getJewishDate`   | `calendar.read` | `JewishDate` |
 | `calendar.getEvents`       | `calendar.read` | `CalendarEvent[]` |

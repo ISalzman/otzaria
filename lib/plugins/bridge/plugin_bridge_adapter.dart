@@ -2199,14 +2199,25 @@ class PluginBridgeAdapter {
     // inIsrael אופציונליים). בלי אף פרמטר מוחזרים זמני התאריך והעיר הנבחרים
     // בלוח (התנהגות הגרסאות הקודמות).
     Map<String, String> resolveDailyTimes() {
-      final dateArg = args['date'] != null
-          ? DateTime.tryParse(args['date'] as String)
-          : null;
+      final rawDate = args['date'];
+      if (rawDate != null && rawDate is! String) {
+        throw Exception('Date must be an ISO-8601 string');
+      }
+      final dateArg = rawDate == null ? null : DateTime.tryParse(rawDate);
+      if (rawDate != null && dateArg == null) {
+        throw Exception('Invalid date: $rawDate');
+      }
       final cityArg = (args['city'] as String?)?.trim();
       final latArg = args['lat'], lngArg = args['lng'];
       final date = dateArg ?? calendarState.selectedGregorianDate;
 
-      if (latArg is num && lngArg is num) {
+      if ((latArg == null) != (lngArg == null)) {
+        throw Exception('Both lat and lng are required');
+      }
+      if (latArg != null && lngArg != null) {
+        if (latArg is! num || lngArg is! num) {
+          throw Exception('Coordinates must be numbers');
+        }
         if (cityArg != null && cityArg.isNotEmpty) {
           throw Exception('Pass either city or lat/lng, not both');
         }

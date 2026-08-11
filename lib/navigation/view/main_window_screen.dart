@@ -597,7 +597,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _setupFullscreenSync();
 
     // Listen to calendar changes for plugin dispatch
-    String? lastDispatchedCity;
+    var lastDispatchedCity = _calendarCubit.state.selectedCity;
     _calendarCubit.stream.listen((state) {
       PluginRuntimeDispatcher.instance.dispatchEvent('calendar.date_changed', {
         'date': state.selectedGregorianDate.toIso8601String(),
@@ -605,9 +605,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
       // שינוי העיר הנבחרת — אירוע נפרד, נשלח רק כשהעיר באמת משתנה
       if (state.selectedCity != lastDispatchedCity) {
         lastDispatchedCity = state.selectedCity;
-        PluginRuntimeDispatcher.instance.dispatchEvent('calendar.city_changed', {
-          'city': state.selectedCity,
-        });
+        PluginRuntimeDispatcher.instance.dispatchEvent(
+          'calendar.city_changed',
+          {
+            'city': state.selectedCity,
+          },
+        );
       }
     });
 

@@ -339,8 +339,8 @@ const Map<String, String> _methodMinVersion = {
   'settings.get': '0.9.89',
   'settings.getMany': '0.9.89',
   'calendar.getSelectedDate': '0.9.89',
-  'calendar.getDailyTimes': '0.9.89',
-  'calendar.getHalachicTimes': '0.9.89',
+  'calendar.getDailyTimes': '0.9.97',
+  'calendar.getHalachicTimes': '0.9.97',
   'calendar.getJewishDate': '0.9.89',
   'calendar.getEvents': '0.9.89',
   // 0.9.97 — זמנים לפי תאריך/עיר שרירותיים ורשימת הערים.

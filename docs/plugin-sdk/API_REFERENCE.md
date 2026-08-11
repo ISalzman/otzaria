@@ -161,8 +161,8 @@ if (response.success) {
 | `settings.get` | 0.9.89 |
 | `settings.getMany` | 0.9.89 |
 | `calendar.getSelectedDate` | 0.9.89 |
-| `calendar.getDailyTimes` | 0.9.89 |
-| `calendar.getHalachicTimes` | 0.9.89 |
+| `calendar.getDailyTimes` | 0.9.97 |
+| `calendar.getHalachicTimes` | 0.9.97 |
 | `calendar.getJewishDate` | 0.9.89 |
 | `calendar.getEvents` | 0.9.89 |
 | `calendar.getCities` | 0.9.97 |
@@ -1559,7 +1559,7 @@ const { data } = await Otzaria.call('calendar.getSelectedDate');
 ```
 
 ### `calendar.getDailyTimes`
-**הרשאה:** `calendar.read`
+**הרשאה:** `calendar.read` · **מגרסה:** 0.9.97
 
 קבלת זמנים הלכתיים ליום.
 
@@ -1595,9 +1595,12 @@ const { data } = await Otzaria.call('calendar.getDailyTimes', {
 ```
 
 ### `calendar.getHalachicTimes`
-**הרשאה:** `calendar.read`
+**הרשאה:** `calendar.read` · **מגרסה:** 0.9.97
 
 קבלת זמנים הלכתיים מלאים ליום (זהה ל-`getDailyTimes`).
+
+מקבל את אותם הפרמטרים האופציונליים (`date`, `city`, או `lat` ו-`lng`) כמו
+`calendar.getDailyTimes`.
 
 ```javascript
 const { data } = await Otzaria.call('calendar.getHalachicTimes');
