@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -54,7 +55,16 @@ class PluginBridgeHandler {
       callback: (args) async {
         onWorkStarted?.call();
         try {
-          return await _handleRpc(args);
+          return await _handleRpc(
+            args,
+            eventSink: (topic, payload) async {
+              await controller.evaluateJavascript(
+                source:
+                    'window.dispatchEvent(new CustomEvent('
+                    '${jsonEncode(topic)}, { detail: ${jsonEncode(payload)} }));',
+              );
+            },
+          );
         } finally {
           onWorkEnded?.call();
         }
@@ -65,7 +75,10 @@ class PluginBridgeHandler {
   /// נקודת כניסה לבדיקות בלבד: מריצה את אותו נתיב RPC שמופעל מ-JavaScript,
   /// כדי לבדוק את אכיפת ההרשאות וצימוד ההחרגה-מ-throttle ב-[_handleRpc].
   @visibleForTesting
-  Future<dynamic> handleRpcForTesting(List<dynamic> args) => _handleRpc(args);
+  Future<dynamic> handleRpcForTesting(
+    List<dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) => _handleRpc(args, eventSink: eventSink);
 
   /// קובע אם קריאת RPC מוחרגת ממגביל הקצב.
   ///
@@ -79,11 +92,15 @@ class PluginBridgeHandler {
   /// האם הקריאה מנהלת חסם זמן או משאבים בתוך השירות שלה,
   /// ולכן אינה כפופה ל-timeout הגנרי של 30 שניות.
   static bool hasOwnTimeout(String method) =>
+      method == 'search.query' ||
       method == 'network.fetch' ||
       method == 'network.download' ||
       method == 'fs.extractZip';
 
-  Future<dynamic> _handleRpc(List<dynamic> args) async {
+  Future<dynamic> _handleRpc(
+    List<dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) async {
     if (args.isEmpty) {
       return _errorResp("error.invalid_params", "No arguments provided");
     }
@@ -114,6 +131,9 @@ class PluginBridgeHandler {
     // permission_denied. כדי לא להוסיף קריאת DB לכל RPC, ההקדמה הזו מתבצעת רק
     // לקריאות תוכן; שאר הקריאות נבדקות כרגיל בהמשך.
     final isContentRead = isRateLimitExempt(request.method);
+    final isSearchCancellation =
+        request.method == 'search.query' &&
+        PluginBridgeAdapter.isSearchCancellationPayload(request.payload);
     bool? grantedEarly;
     if (isContentRead && declaresPermission && requiredPermission != null) {
       grantedEarly =
@@ -121,7 +141,8 @@ class PluginBridgeHandler {
           true;
     }
 
-    final exempt = isContentRead && (grantedEarly ?? false);
+    final exempt =
+        (isContentRead && (grantedEarly ?? false)) || isSearchCancellation;
     if (!exempt && !_rateLimiter.consume()) {
       return _errorResp("error.rate_limited", "Rate limit exceeded");
     }
@@ -149,9 +170,13 @@ class PluginBridgeHandler {
         }
       }
 
-      // פעולות I/O ארוכות (download/extractZip) מנהלות בעצמן את חסם הזמן; שאר
-      // הקריאות אמורות להיות מהירות ולכן נחתכות אחרי 30 שניות.
-      final execution = adapter.execute(domain, action, request.payload);
+      // פעולות ארוכות מנהלות בעצמן חסם זמן; היתר נחתכות אחרי 30 שניות.
+      final execution = adapter.execute(
+        domain,
+        action,
+        request.payload,
+        eventSink: eventSink,
+      );
       final result = hasOwnTimeout(request.method)
           ? await execution
           : await execution.timeout(const Duration(seconds: 30));

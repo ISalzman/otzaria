@@ -595,7 +595,7 @@ const { data } = await Otzaria.call('search.fullText', {
 נפתחות בטאב.
 
 ```javascript
-const { data } = await Otzaria.call('search.query', {
+const chunks = Otzaria.call('search.query', {
   query: 'ואהבת לרעך',
   mode: 'advanced',       // 'exact' (ברירת מחדל) | 'advanced' | 'fuzzy'
   distance: 2,            // מרווח מילים מותר במצב מתקדם/מקורב
@@ -606,6 +606,11 @@ const { data } = await Otzaria.call('search.query', {
   options: { 'קידומות דקדוקיות': true },
   includeBookCounts: true
 });
+
+for await (const chunk of chunks) {
+  appendResults(chunk.results);
+  updateTotal(chunk.total);
+}
 ```
 
 **פרמטרים**
@@ -643,10 +648,15 @@ const { data } = await Otzaria.call('search.query', {
 היקפים מאותו סוג מתחברים ב-OR; סוגים שונים מתחברים ב-AND (למשל `eras` + `categories`
 = ספרי אותה תקופה שבאותה קטגוריה).
 
-**פלט**
+**פלט — `AsyncIterable` של chunks**
+
+הקריאה אינה מחזירה `Promise` ואינה ממתינה לכל התוצאות. משתמשים ב־`for await`;
+הפסקת הלולאה (`break` או `return`) מבטלת את החיפוש בצד אוצריא. ה־chunk הראשון
+נושא את הספירות, והבאים נושאים עד 50 תוצאות כל אחד.
 
 ```javascript
 {
+  sequence: 0,
   results: [{
     id: 183, type: 'text', bookId: 'ויקרא', source: 'library',
     book: 'ויקרא', categoryPath: '/הלכה/משנה תורה',
@@ -657,7 +667,7 @@ const { data } = await Otzaria.call('search.query', {
     merged: [{ id, type, bookId, source, book, categoryPath, reference, index }]
                             // רק כשיש איחוד; לכל אח זהות וקטגוריה מלאות
   }],
-  total: 812,             // סך ההתאמות (לא רק העמוד הנוכחי)
+  total: 812,             // סך ההתאמות; זמין מה-chunk הראשון
   groupCount: null,       // מספר הקבוצות כש-grouping פעיל, אחרת null
   truncated: false,       // true = שאילתה רחבה מדי, התוצאות והספירה חלקיות
   limit: 100, offset: 0,
@@ -665,6 +675,10 @@ const { data } = await Otzaria.call('search.query', {
   bookCounts: [{ id, type, bookId, source, title, count }]  // רק עם includeBookCounts
 }
 ```
+
+אין לצבור את כל התוצאות לפני ציור המסך: יש להוסיף כל `results` מיד עם הגעת
+ה־chunk. אם החיפוש נכשל, האיטרטור זורק שגיאה; chunks שכבר התקבלו נשארים בידי
+התוסף.
 
 **מפתחות פר-מילה** — `wordOptions`, `alternativeWords` ו-`customSpacing` נבדקים
 מול פיצול המילים של השאילתה: מפתח `"{מילה}_{אינדקס}"` שאינו תואם, אינדקס מחוץ

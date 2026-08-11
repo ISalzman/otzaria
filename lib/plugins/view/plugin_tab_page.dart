@@ -56,10 +56,19 @@ const String _sdkStub = r'''
 (function () {
   var _queue = [];
   var _realSdk = null;
+  var _notReadySearchStream = function () {
+    return {
+      next: function () {
+        return Promise.reject(new Error('Otzaria SDK not ready yet'));
+      },
+      [Symbol.asyncIterator]: function () { return this; }
+    };
+  };
 
   window.Otzaria = {
     call: function (method, payload) {
       if (_realSdk) return _realSdk.call(method, payload);
+      if (method === 'search.query') return _notReadySearchStream();
       return Promise.reject(new Error('Otzaria SDK not ready yet'));
     },
     on: function (event, cb) {
@@ -741,12 +750,95 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
   } catch (e) { console.error('font-face inject failed', e); }
   var _ls = {};
+  var _searchStreams = {};
+  var _searchSequence = 0;
+  var _searchEvent = '__otzaria.search.query.chunk';
+  var rpc = function (method, payload) {
+    return window.flutter_inappwebview.callHandler('otzaria_rpc', {
+      method: method,
+      payload: payload || {}
+    });
+  };
+  window.addEventListener(_searchEvent, function (event) {
+    var detail = event.detail || {};
+    var stream = _searchStreams[detail.streamId];
+    if (stream) stream.push(detail.chunk);
+  });
+  var createSearchStream = function (payload) {
+    var streamId = 'search_' + Date.now().toString(36) + '_' + (++_searchSequence).toString(36);
+    var queue = [];
+    var waiters = [];
+    var ended = false;
+    var failure = null;
+    var flush = function () {
+      while (waiters.length && queue.length) {
+        waiters.shift().resolve({ value: queue.shift(), done: false });
+      }
+      if (queue.length || !ended) return;
+      while (waiters.length) {
+        var waiter = waiters.shift();
+        if (failure) waiter.reject(failure);
+        else waiter.resolve({ value: undefined, done: true });
+      }
+    };
+    var session = {
+      push: function (chunk) {
+        if (ended) return;
+        queue.push(chunk);
+        flush();
+      },
+      finish: function () {
+        if (ended) return;
+        ended = true;
+        delete _searchStreams[streamId];
+        flush();
+      },
+      fail: function (error) {
+        if (ended) return;
+        failure = error instanceof Error ? error : new Error(String(error));
+        ended = true;
+        delete _searchStreams[streamId];
+        flush();
+      }
+    };
+    _searchStreams[streamId] = session;
+    var request = Object.assign({}, payload || {}, { __streamId: streamId });
+    rpc('search.query', request).then(function (response) {
+      if (!response || response.success !== true) {
+        var message = response && response.error && response.error.message;
+        session.fail(new Error(message || 'Search failed'));
+        return;
+      }
+      session.finish();
+    }, session.fail);
+    return {
+      next: function () {
+        if (queue.length) return Promise.resolve({ value: queue.shift(), done: false });
+        if (ended) {
+          return failure
+            ? Promise.reject(failure)
+            : Promise.resolve({ value: undefined, done: true });
+        }
+        return new Promise(function (resolve, reject) {
+          waiters.push({ resolve: resolve, reject: reject });
+        });
+      },
+      return: function () {
+        if (!ended) {
+          ended = true;
+          delete _searchStreams[streamId];
+          flush();
+          void rpc('search.query', { __cancelStreamId: streamId });
+        }
+        return Promise.resolve({ value: undefined, done: true });
+      },
+      [Symbol.asyncIterator]: function () { return this; }
+    };
+  };
   var realSdk = {
     call: function (method, payload) {
-      return window.flutter_inappwebview.callHandler('otzaria_rpc', {
-        method: method,
-        payload: payload || {}
-      });
+      if (method === 'search.query') return createSearchStream(payload);
+      return rpc(method, payload);
     },
     on: function (event, cb) {
       if (!_ls[event]) _ls[event] = [];

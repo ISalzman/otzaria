@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
@@ -22,8 +24,9 @@ class _FakeAdapter implements PluginBridgeAdapter {
   Future<dynamic> execute(
     String domain,
     String action,
-    Map<String, dynamic> args,
-  ) async {
+    Map<String, dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) async {
     executeCalls++;
     lastDomain = domain;
     lastAction = action;
@@ -122,6 +125,16 @@ List<dynamic> _getConnectivityRequest() => [
   {'method': 'app.getConnectivity', 'payload': <String, dynamic>{}},
 ];
 
+List<dynamic> _cancelSearchRequest({bool includeExtraKey = false}) => [
+  {
+    'method': 'search.query',
+    'payload': {
+      '__cancelStreamId': 'search_test_1',
+      if (includeExtraKey) 'query': 'בדיקה',
+    },
+  },
+];
+
 void main() {
   group('PluginBridgeHandler.isRateLimitExempt', () {
     test('library.getBookContent מוחרג ממגביל הקצב', () {
@@ -151,6 +164,7 @@ void main() {
   group('PluginBridgeHandler.hasOwnTimeout', () {
     test('פעולות עם timeout פנימי מוחרגות מ-timeout ברירת המחדל', () {
       // פעולות I/O ארוכות שנחתכו על קבצים גדולים ע"י ה-30 שניות.
+      expect(PluginBridgeHandler.hasOwnTimeout('search.query'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.fetch'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.download'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('fs.extractZip'), isTrue);
@@ -387,6 +401,58 @@ void main() {
       },
     );
 
+    test('ביטול stream תקין עוקף throttle אך עדיין דורש הרשאת חיפוש', () async {
+      final adapter = _FakeAdapter(result: const {'cancelled': true});
+      final limiter = _BlockingRateLimiter();
+      final handler = buildHandler(
+        declaredPermissions: const ['search.fulltext.read'],
+        granted: true,
+        adapter: adapter,
+        rateLimiter: limiter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(_cancelSearchRequest())
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(limiter.consumeCalls, 0);
+
+      final deniedAdapter = _FakeAdapter();
+      final denied = buildHandler(
+        declaredPermissions: const ['search.fulltext.read'],
+        granted: false,
+        adapter: deniedAdapter,
+        rateLimiter: _BlockingRateLimiter(),
+      );
+      final deniedResp =
+          await denied.handleRpcForTesting(_cancelSearchRequest()) as Map;
+      expect(deniedResp['error']['code'], 'permission_denied');
+      expect(deniedAdapter.executeCalls, 0);
+    });
+
+    test('payload דמוי ביטול עם מפתח נוסף אינו עוקף throttle', () async {
+      final adapter = _FakeAdapter();
+      final limiter = _BlockingRateLimiter();
+      final handler = buildHandler(
+        declaredPermissions: const ['search.fulltext.read'],
+        granted: true,
+        adapter: adapter,
+        rateLimiter: limiter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(
+                _cancelSearchRequest(includeExtraKey: true),
+              )
+              as Map<String, dynamic>;
+
+      expect(resp['error']['code'], 'error.rate_limited');
+      expect(adapter.executeCalls, 0);
+      expect(limiter.consumeCalls, 1);
+    });
+
     test('תוסף ללא הרשאה מוענקת אינו עוקף את ה-throttle: מגביל מרוקן + הרשאה לא '
         'מוענקת → rate_limited (עובר דרך המגביל)', () async {
       // grantedEarly=false ⇒ exempt=false ⇒ הקריאה עוברת דרך consume, שמרוקן
@@ -495,6 +561,34 @@ void main() {
 
       expect(resp['error']['code'], 'error.internal');
     });
+
+    test(
+      'TimeoutException פנימי של search.query מוחזר כ-error.timeout',
+      () async {
+        final handler = PluginBridgeHandler(
+          _buildInstalledPlugin(
+            permissions: const ['search.fulltext.read'],
+          ),
+          adapter: _FakeAdapter(errorToThrow: TimeoutException('search')),
+          registry: _StubRegistry(true),
+        );
+
+        final resp =
+            await handler.handleRpcForTesting([
+                  {
+                    'method': 'search.query',
+                    'payload': {
+                      'query': 'בדיקה',
+                      '__streamId': 'search_test_1',
+                    },
+                  },
+                ])
+                as Map;
+
+        expect(resp['success'], isFalse);
+        expect(resp['error']['code'], 'error.timeout');
+      },
+    );
   });
 
   // פעולות הקבצים האישיים (pickUserFile וכו') דורשות הרשאת manifest
