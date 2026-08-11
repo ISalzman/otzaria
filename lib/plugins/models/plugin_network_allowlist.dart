@@ -83,6 +83,9 @@ const List<String> pluginNetworkAllowlist = <String>[
 
   // תוספי הביוגרפיות (יאיר דניאל) — דיווח שגיאות תוכן מתוך התוסף
   'https://api.emailjs.com/api/v1.0/email/send',
+
+  // תוסף MDY
+  'https://github.com/yair-yair/mdy-images-updated',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.

@@ -70,3 +70,6 @@ https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/otza
 
 # תוספי הביוגרפיות (יאיר דניאל) — דיווח שגיאות תוכן מתוך התוסף
 https://api.emailjs.com/api/v1.0/email/send
+
+# תוסף MDY
+https://github.com/yair-yair/mdy-images-updated
