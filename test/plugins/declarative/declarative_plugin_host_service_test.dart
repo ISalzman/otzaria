@@ -95,6 +95,41 @@ void main() {
     expect(fixture.toolbar.getAll(), isEmpty);
     expect(fixture.errors, hasLength(1));
   });
+
+  test('grant ישן אינו עוקף הרשאה שהוסרה מהמניפסט', () async {
+    final fixture = _Fixture(
+      declaredPermissions: const ['reader.toolbar', 'reader.open'],
+    );
+    addTearDown(fixture.dispose);
+
+    await fixture.host.syncPlugins([fixture.plugin]);
+    await fixture.host.readerBookChanged(
+      TextBook(id: 1, title: 'ספר נוכחי'),
+      context: 'reader-text',
+    );
+
+    expect(fixture.toolbar.getAll(), isEmpty);
+    expect(fixture.errors, hasLength(1));
+  });
+
+  test('פקד Host דורש reader.toolbar גם בהצהרת המניפסט', () async {
+    final fixture = _Fixture(
+      declaredPermissions: const [
+        'app.startup_contributions',
+        'reader.open',
+      ],
+    );
+    addTearDown(fixture.dispose);
+
+    await fixture.host.syncPlugins([fixture.plugin]);
+    await fixture.host.readerBookChanged(
+      TextBook(id: 1, title: 'ספר נוכחי'),
+      context: 'reader-text',
+    );
+
+    expect(fixture.toolbar.getAll(), isEmpty);
+    expect(fixture.errors, hasLength(1));
+  });
 }
 
 class _Fixture {
@@ -109,8 +144,14 @@ class _Fixture {
   late final InstalledPlugin plugin;
   late final DeclarativePluginHostService host;
 
-  _Fixture({bool invalidProgram = false}) {
-    plugin = _plugin(invalidProgram: invalidProgram);
+  _Fixture({
+    bool invalidProgram = false,
+    List<String>? declaredPermissions,
+  }) {
+    plugin = _plugin(
+      invalidProgram: invalidProgram,
+      declaredPermissions: declaredPermissions,
+    );
     host = DeclarativePluginHostService(
       loadPlugin: (pluginId) async =>
           pluginId == plugin.pluginId ? plugin : null,
@@ -144,7 +185,10 @@ class _BookAccess implements DeclarativeBookResolver, DeclarativeBookOpener {
   }
 }
 
-InstalledPlugin _plugin({required bool invalidProgram}) {
+InstalledPlugin _plugin({
+  required bool invalidProgram,
+  List<String>? declaredPermissions,
+}) {
   final now = DateTime(2026);
   final program = <String, dynamic>{
     'id': 'book-links',
@@ -193,11 +237,13 @@ InstalledPlugin _plugin({required bool invalidProgram}) {
       'version': '1.0.0',
       'entrypoint': 'index.html',
       'minAppVersion': '0.9.98',
-      'permissions': [
-        'app.startup_contributions',
-        'reader.toolbar',
-        'reader.open',
-      ],
+      'permissions':
+          declaredPermissions ??
+          [
+            'app.startup_contributions',
+            'reader.toolbar',
+            'reader.open',
+          ],
       'contributes': {
         'startup': {
           'programs': [program],

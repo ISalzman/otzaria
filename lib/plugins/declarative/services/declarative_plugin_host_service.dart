@@ -207,6 +207,30 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
     Set<String> grantedPermissions,
   ) {
     final startup = plugin.manifest.startup!;
+    final declaredPermissions = plugin.manifest.permissions.toSet();
+    if (!declaredPermissions.contains(pluginStartupContributionsPermission)) {
+      throw const DeclarativeProgramException(
+        'declarative.permission_not_declared',
+        'Host contributions require app.startup_contributions',
+      );
+    }
+    if (startup.toolbarItems.length >
+        PluginToolbarRegistry.maxTopLevelItemsPerPlugin) {
+      throw const DeclarativeProgramException(
+        'declarative.too_many_toolbar_items',
+        'A plugin may declare at most 2 toolbar items',
+      );
+    }
+    final toolbarIds = startup.toolbarItems
+        .map((item) => item['id'])
+        .whereType<String>()
+        .toList();
+    if (toolbarIds.toSet().length != toolbarIds.length) {
+      throw const DeclarativeProgramException(
+        'declarative.duplicate_toolbar_item',
+        'Toolbar item ids must be unique across all contribution types',
+      );
+    }
     if (startup.programs.length > 8) {
       throw const DeclarativeProgramException(
         'declarative.too_many_programs',
@@ -218,7 +242,7 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
         if (source['id'] is String) source['id'] as String,
     };
     final compiler = DeclarativeProgramCompiler(
-      declaredPermissions: plugin.manifest.permissions.toSet(),
+      declaredPermissions: declaredPermissions,
       declaredSourceIds: sourceIds,
     );
     final programs = <CompiledDeclarativeProgram>[];
@@ -237,8 +261,15 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
     final rawTemplates = startup.toolbarItems
         .where(DeclarativeToolbarTemplateCompiler.isDeclarative)
         .toList();
+    if (rawTemplates.isNotEmpty &&
+        !declaredPermissions.contains('reader.toolbar')) {
+      throw const DeclarativeProgramException(
+        'declarative.permission_not_declared',
+        'Declarative toolbar items require reader.toolbar',
+      );
+    }
     final templates = DeclarativeToolbarTemplateCompiler(
-      declaredPermissions: plugin.manifest.permissions.toSet(),
+      declaredPermissions: declaredPermissions,
       programs: programsById,
     ).compileAll(plugin.pluginId, rawTemplates);
     return _CompiledPluginRegistration(
