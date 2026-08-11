@@ -810,6 +810,78 @@ void main() {
       );
     });
 
+    testWidgets('ה-X של טאב צר תחת ריחוף שורד בנייה מחדש של שורת הטאבים', (
+      tester,
+    ) async {
+      // בטאב צר שאינו נבחר ה-X מוצג רק בריחוף. כשמצב הריחוף לא שרד בנייה מחדש
+      // של השורה, ה-IconButton נמחק מתחת לסמן ולחיצה עליו לא סגרה את הטאב.
+      final tabs = List.generate(10, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final historyBloc = _TestHistoryBloc();
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+        await historyBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(900, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+        historyBloc: historyBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final hoveredTab = find.ancestor(
+        of: find.text('ספר מספר 3'),
+        matching: find.byType(Tab),
+      );
+      final closeButton = find.descendant(
+        of: hoveredTab,
+        matching: find.byIcon(FluentIcons.dismiss_24_regular),
+      );
+      expect(closeButton, findsNothing, reason: 'בטאב צר לא-נבחר ה-X מוסתר');
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: tester.getCenter(hoveredTab));
+      addTearDown(gesture.removePointer);
+      await tester.pumpAndSettle();
+      expect(closeButton, findsOneWidget, reason: 'ריחוף חושף את ה-X');
+
+      // בנייה מחדש של השורה מסיבה חיצונית — כמו setState של המסך העוטף.
+      tester.element(find.byType(CustomTitleBar)).markNeedsBuild();
+      await tester.pumpAndSettle();
+
+      expect(
+        closeButton,
+        findsOneWidget,
+        reason: 'ה-X חייב להישאר תחת הסמן גם אחרי בנייה מחדש',
+      );
+      tester
+          .widget<IconButton>(
+            find.ancestor(of: closeButton, matching: find.byType(IconButton)),
+          )
+          .onPressed!();
+      await tester.pump();
+      expect(
+        tabsBloc.addedEvents.whereType<RemoveTab>().map((e) => e.tab),
+        contains(same(tabs[3])),
+      );
+    });
+
     testWidgets('בצפיפות הטאב הנבחר שומר רוחב מזערי וכפתור ה-X שלו נשאר', (
       tester,
     ) async {
