@@ -111,9 +111,9 @@ Widget _tileHost(ToolTile tile, {double size = 100}) => MaterialApp(
   ),
 );
 
-/// רוחב התוכן בפאנל שבברירת מחדל: `ContextOverlayPanel` ברוחב 400, פחות
+/// רוחב התוכן בפאנל שבברירת מחדל: `ContextOverlayPanel` ברוחב 440, פחות
 /// `contentPadding` של 16 מכל צד.
-const double _kDefaultPanelContentWidth = 368;
+const double _kDefaultPanelContentWidth = 408;
 
 Widget _launcherHost({
   required SettingsBloc settingsBloc,
@@ -554,19 +554,20 @@ void main() {
       expect(find.text('לוח שנה'), findsOneWidget);
     });
 
-    // הקובייה יושבת ישירות על משטח הפאנל — בלי כרטיס לבן סביב האייקון והכתב.
-    testWidgets('בנויה מעל AppCard שקוף — בלי רקע כרטיס', (tester) async {
+    // אותו כרטיס כמו בקוביות הספרייה — צבע הכרטיס שבערכת הנושא, בלי מסגרת.
+    testWidgets('הקובייה על צבע הכרטיס של הספרייה', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
       expect(find.byType(AppCard), findsOneWidget);
-      expect(tester.widget<AppCard>(find.byType(AppCard)).transparent, isTrue);
 
+      final context = tester.element(find.byType(ToolTile));
       final material = tester.widget<Material>(
         find.descendant(
           of: find.byType(AppCard),
           matching: find.byType(Material),
         ),
       );
-      expect(material.color, Colors.transparent);
+      expect(material.color, AppSurfaces.card(context));
+      expect(material.shape, isNull);
     });
 
     // סדר גודל של סמל תוכנה: בקובייה רגילה האייקון מגיע לגודלו המרבי.
@@ -888,6 +889,14 @@ void main() {
         lessThan(openMark.center.dx),
         reason: 'סימן "פתוח" יושב בפינה הנגדית ואינו מתנגש בכפתור',
       );
+      // האייקון קטן משטח הלחיצה — הכפתור נשאר נוח ללחיצה גם כשהנקודות זעירות.
+      expect(button.width, lessThan(ToolTile.menuButtonSize));
+      expect(
+        tester
+            .widget<Icon>(find.byIcon(FluentIcons.more_vertical_24_regular))
+            .size,
+        ToolTile.menuIconSize,
+      );
     });
 
     testWidgets('פעולה עם תת-פעולות נפתחת כתת-תפריט', (tester) async {
@@ -1088,8 +1097,8 @@ void main() {
       );
     });
 
-    // ברוחב הפאנל שבברירת מחדל נכנסות ארבע קוביות בשורה, והאייקון הגדול
-    // עדיין נכנס בהן בשלמותו יחד עם שתי שורות התווית.
+    // ברוחב הפאנל שבברירת מחדל נכנסות ארבע קוביות בשורה, הקובייה נשארת
+    // ריבוע, והאייקון נכנס בה בשלמותו יחד עם שתי שורות התווית.
     testWidgets('ברוחב הפאנל שבברירת מחדל — 4 קוביות בשורה', (tester) async {
       await pumpPanel(tester, width: _kDefaultPanelContentWidth);
       expect(tester.takeException(), isNull);
@@ -1098,9 +1107,12 @@ void main() {
         final delegate =
             grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
         expect(delegate.crossAxisCount, 4);
+        expect(delegate.childAspectRatio, 1.0);
       }
 
-      final tileHeight = tester.getSize(find.byType(ToolTile).first).height;
+      final tileSize = tester.getSize(find.byType(ToolTile).first);
+      expect(tileSize.width, moreOrLessEquals(tileSize.height, epsilon: 0.01));
+      final tileHeight = tileSize.height;
       final icon = tester.widget<Icon>(
         find.descendant(
           of: find.byType(ToolTile).first,
