@@ -122,7 +122,6 @@ void main() {
         kDefaultEnabledZmanim,
         containsAll([
           'sunrise',
-          'seaLevelSunrise',
           'sunset',
           'seaLevelSunset',
           'chatzos',
