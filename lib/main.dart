@@ -59,6 +59,9 @@ import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/declarative/services/declarative_library_book_access.dart';
+import 'package:otzaria/plugins/declarative/services/declarative_plugin_host_service.dart';
+import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -1158,9 +1161,37 @@ class _AppBootstrapState extends State<AppBootstrap> {
             ),
           ),
           BlocProvider<PluginSystemBloc>(
-            create: (_) => PluginSystemBloc(
-              repository: PluginRegistryRepository(),
-            )..add(LoadPlugins()),
+            create: (context) {
+              final repository = PluginRegistryRepository();
+              final tabsBloc = context.read<TabsBloc>();
+              final coordinator = BookOpenCoordinator(
+                tabsBloc: tabsBloc,
+                historyBloc: context.read<HistoryBloc>(),
+                navigationBloc: context.read<NavigationBloc>(),
+              );
+              final bookAccess = DeclarativeLibraryBookAccess.otzaria(
+                coordinator,
+              );
+              final host = DeclarativePluginHostService(
+                loadPlugin: repository.getPlugin,
+                loadPermissions: (pluginId) async =>
+                    (await repository.getPluginPermissions(pluginId))
+                        .where((permission) => permission.granted)
+                        .map((permission) => permission.permission)
+                        .toSet(),
+                bookResolver: bookAccess,
+                bookOpener: bookAccess,
+                onError: (pluginId, error, stackTrace) => debugPrint(
+                  'Declarative plugin host [$pluginId]: $error\n$stackTrace',
+                ),
+              );
+              return PluginSystemBloc(
+                repository: repository,
+                declarativeHost: host,
+                readerStates: tabsBloc.stream,
+                initialReaderState: tabsBloc.state,
+              )..add(LoadPlugins());
+            },
           ),
         ],
         child: const App(),

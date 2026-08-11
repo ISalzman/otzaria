@@ -1,11 +1,15 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
+
+typedef PluginHostActionDispatcher =
+    Future<void> Function(String pluginId, CompiledDeclarativeAction action);
 
 /// בונה את פקדי התוספים לשורת הפקדים של מסך העיון.
 ///
@@ -17,6 +21,7 @@ List<ActionButtonData> buildPluginToolbarActions({
   required bool compact,
   required Future<Map<String, dynamic>> Function() locationPayload,
   PluginRuntimeDispatcher? dispatcher,
+  PluginHostActionDispatcher? hostActionDispatcher,
 }) {
   final runtime = dispatcher ?? PluginRuntimeDispatcher.instance;
   return [
@@ -29,6 +34,7 @@ List<ActionButtonData> buildPluginToolbarActions({
           compact: compact,
           locationPayload: locationPayload,
           dispatcher: runtime,
+          hostActionDispatcher: hostActionDispatcher,
         ),
   ];
 }
@@ -40,6 +46,7 @@ ActionButtonData _buildAction({
   required bool compact,
   required Future<Map<String, dynamic>> Function() locationPayload,
   required PluginRuntimeDispatcher dispatcher,
+  required PluginHostActionDispatcher? hostActionDispatcher,
 }) {
   final icon =
       fluentIconFromName(item.icon) ?? FluentIcons.puzzle_piece_24_regular;
@@ -57,6 +64,7 @@ ActionButtonData _buildAction({
         item: child,
         context: context,
         locationPayload: locationPayload,
+        hostActionDispatcher: hostActionDispatcher,
       );
     }
 
@@ -98,6 +106,7 @@ ActionButtonData _buildAction({
       item: item,
       context: context,
       locationPayload: locationPayload,
+      hostActionDispatcher: hostActionDispatcher,
     ),
   );
 }
@@ -108,7 +117,13 @@ Future<void> _dispatchItemClick({
   required PluginToolbarItem item,
   required String context,
   required Future<Map<String, dynamic>> Function() locationPayload,
+  required PluginHostActionDispatcher? hostActionDispatcher,
 }) async {
+  final hostAction = item.hostAction;
+  if (hostAction != null) {
+    await hostActionDispatcher?.call(pluginId, hostAction);
+    return;
+  }
   final payload = <String, dynamic>{
     'itemId': item.id,
     'context': context,

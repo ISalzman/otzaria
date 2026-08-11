@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_template_compiler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
@@ -107,11 +108,15 @@ class PluginStartupContributionsService {
       }
       _managedPlugins.add(plugin.pluginId);
 
-      if (startup.toolbarItems.isNotEmpty &&
-          granted.contains('reader.toolbar')) {
+      final legacyToolbarItems = startup.toolbarItems
+          .where(
+            (item) => !DeclarativeToolbarTemplateCompiler.isDeclarative(item),
+          )
+          .toList();
+      if (legacyToolbarItems.isNotEmpty && granted.contains('reader.toolbar')) {
         _applyItems(
           plugin.pluginId,
-          startup.toolbarItems,
+          legacyToolbarItems,
           applied: _appliedToolbar,
           register: (id, item) => _toolbar.registerPayload(id, item),
           removeItem: _toolbar.remove,

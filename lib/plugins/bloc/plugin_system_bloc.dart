@@ -16,7 +16,11 @@ import 'package:otzaria/plugins/services/plugin_dev_loader_service.dart';
 import 'package:otzaria/plugins/services/plugin_dev_watch_service.dart';
 import 'package:otzaria/plugins/services/plugin_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
+import 'package:otzaria/plugins/declarative/services/declarative_plugin_host_service.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
+import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -28,7 +32,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   final PluginDownloadService _downloadService;
   final PluginDevLoaderService devLoader;
   final PluginDevWatchService devWatchService;
+  final DeclarativePluginHost? declarativeHost;
   StreamSubscription<PluginDevFsChange>? _devWatchSub;
+  StreamSubscription<TabsState>? _readerStateSub;
 
   PluginSystemBloc({
     required this.repository,
@@ -36,6 +42,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     PluginDownloadService? downloadService,
     PluginDevLoaderService? devLoader,
     PluginDevWatchService? devWatchService,
+    this.declarativeHost,
+    Stream<TabsState>? readerStates,
+    TabsState? initialReaderState,
   }) : _installerService =
            installerService ?? PluginInstallerService(repository: repository),
        _downloadService = downloadService ?? PluginDownloadService(),
@@ -87,13 +96,21 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         );
       }
     });
+    if (declarativeHost != null) {
+      if (initialReaderState != null) {
+        _syncDeclarativeReaderContext(initialReaderState);
+      }
+      _readerStateSub = readerStates?.listen(_syncDeclarativeReaderContext);
+    }
   }
 
   @override
-  Future<void> close() {
-    _devWatchSub?.cancel();
+  Future<void> close() async {
+    await _devWatchSub?.cancel();
+    await _readerStateSub?.cancel();
     devWatchService.dispose();
-    return super.close();
+    declarativeHost?.dispose();
+    await super.close();
   }
 
   Future<void> _onLoadPlugins(
@@ -109,6 +126,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         plugins,
         repository,
       );
+      await declarativeHost?.syncPlugins(plugins);
       emit(PluginSystemLoaded(plugins));
     } catch (e) {
       emit(PluginSystemError(e.toString()));
@@ -125,6 +143,31 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           ShortcutValidator.openPluginShortcutKey(p.pluginId):
               'פתיחת ${p.name}',
     });
+  }
+
+  void _syncDeclarativeReaderContext(TabsState state) {
+    final pane = state.readingPane;
+    if (pane is TextBookTab) {
+      unawaited(
+        declarativeHost?.readerBookChanged(
+          pane.book,
+          context: 'reader-text',
+        ),
+      );
+      return;
+    }
+    if (pane is PdfBookTab) {
+      unawaited(
+        declarativeHost?.readerBookChanged(
+          pane.book,
+          context: 'reader-pdf',
+        ),
+      );
+      return;
+    }
+    unawaited(
+      declarativeHost?.readerBookChanged(null, context: 'reader-text'),
+    );
   }
 
   Future<void> _onPinPluginRequested(
@@ -329,22 +372,12 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
-      // finalizeInstall מגרנט את כל ההרשאות כברירת מחדל
       await _installerService.finalizeInstall(
         event.tempDirPath,
         event.manifest,
         allowOrderBeforeBuiltInsGranted: event.allowOrderBeforeBuiltInsGranted,
+        grantedPermissions: event.grantedPermissions,
       );
-
-      // כתוב את כל בחירות המשתמש במפורש (גם true וגם false) —
-      // כך הבחירה הנוכחית גוברת על החלטות עבר בהתקנה חוזרת/עדכון
-      for (final entry in event.grantedPermissions.entries) {
-        await repository.setPermission(
-          event.manifest.id,
-          entry.key,
-          entry.value,
-        );
-      }
 
       UiSnack.showSuccess(PluginMessages.pluginInstalledSuccess);
       _reportInstallResult(event.reportContext, success: true);
@@ -379,6 +412,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
+      declarativeHost?.removePlugin(event.pluginId);
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
@@ -410,6 +444,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
+      declarativeHost?.removePlugin(event.pluginId);
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
@@ -429,6 +464,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
+      declarativeHost?.removePlugin(event.pluginId);
       await repository.setPermission(
         event.pluginId,
         event.permission,
@@ -505,6 +541,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
+      declarativeHost?.removePlugin(event.pluginId);
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       PluginToolbarRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
@@ -588,30 +625,17 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         await devLoader.loadLocalhostPlugin(
           event.sourcePath,
           preValidatedManifest: event.manifest,
+          grantedPermissions: event.grantedPermissions,
+          allowOrderBeforeBuiltInsGranted:
+              event.allowOrderBeforeBuiltInsGranted,
         );
       } else {
         await devLoader.loadDevelopmentPlugin(
           event.sourcePath,
           preValidatedManifest: event.manifest,
-        );
-      }
-      // דרוס הרשאות ו-allowOrderBeforeBuiltInsGranted בבחירות המשתמש המפורשות
-      for (final entry in event.grantedPermissions.entries) {
-        await repository.setPermission(
-          event.manifest.id,
-          entry.key,
-          entry.value,
-        );
-      }
-      final saved = await repository.getPlugin(event.manifest.id);
-      if (saved != null &&
-          saved.allowOrderBeforeBuiltInsGranted !=
-              event.allowOrderBeforeBuiltInsGranted) {
-        await repository.savePlugin(
-          saved.copyWith(
-            allowOrderBeforeBuiltInsGranted:
-                event.allowOrderBeforeBuiltInsGranted,
-          ),
+          grantedPermissions: event.grantedPermissions,
+          allowOrderBeforeBuiltInsGranted:
+              event.allowOrderBeforeBuiltInsGranted,
         );
       }
       add(LoadPlugins());

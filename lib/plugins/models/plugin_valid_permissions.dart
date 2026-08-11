@@ -85,8 +85,7 @@ const pluginBackgroundKeepAlivePermission = 'app.background_keep_alive';
 
 /// שם ההרשאה לתרומות עלייה דקלרטיביות (`contributes.startup` במניפסט):
 /// פקדים, פריטי תפריט הקשר ונתונים שנטענים ע"י Flutter בלי מנוע JS,
-/// והפעלה עצלה של מופע הרקע בלחיצה/אירוע. ברירת מחדל: דלוקה — לא רץ
-/// קוד תוסף בעלייה, רק פרסינג JSON מוולד.
+/// והפעלה עצלה של מופע הרקע בלחיצה/אירוע. ברירת המחדל כבויה.
 const pluginStartupContributionsPermission = 'app.startup_contributions';
 
 /// שם ההרשאה לגישה לאינטרנט. מטופלת בנפרד בממשק: במצב 'מנותק' היא מתחילה

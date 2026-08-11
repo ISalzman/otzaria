@@ -1696,6 +1696,14 @@ API זה מאפשר לתוסף לקרוא נתונים ממסדי נתונים S
 }
 ```
 
+בכל רשומת `databaseSources` מותרים רק `id`,‏ `label` ו־`required`. נתיב הקובץ
+וה־policy נקבעים בלעדית על ידי אוצריא; שדה כמו `path` יגרום לדחיית המניפסט.
+
+המקור המובנה `external_catalog` חושף לקריאה את טבלת ההתאמה
+`otzaria_hebrew_books` ואת העמודות `id_book`,‏ `title`,‏ `author` של
+`hebrew_books`. הוא מוגבל ל־20 שורות ול־join יחיד על
+`otzaria_hebrew_books.hb_id = hebrew_books.id_book`.
+
 ---
 
 ### `database.listSources`
@@ -2111,8 +2119,198 @@ async function scheduleReminder(title, body, dateTime) {
 | `toolbarItems` | זהה ל-`reader.addToolbarItem` | `reader.toolbar` |
 | `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
+| `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
+
+### תכניות Host ללא WebView
+
+החל מ־`minAppVersion: 0.9.96`, `startup.programs` מאפשר לחשב תרומת UI מתוך
+הקשר הקורא וממקורות DB שאוצריא אישרה. התכנית עוברת קומפילציה ואימות ב־Dart,
+ואינה טוענת HTML או JavaScript. בגרסה הנוכחית ה־trigger הנתמך הוא
+`reader.activeBookChanged` בלבד.
+
+דוגמה שמוצאת מהדורות היברובוקס המקבילות לספר הטקסט הפעיל:
+
+```json
+{
+  "permissions": [
+    "app.startup_contributions",
+    "database.read",
+    "reader.toolbar",
+    "reader.open"
+  ],
+  "contributes": {
+    "databaseSources": [
+      {
+        "id": "external_catalog",
+        "label": "קטלוגים חיצוניים",
+        "required": true
+      }
+    ],
+    "startup": {
+      "programs": [
+        {
+          "id": "hebrewbooks-editions",
+          "version": 1,
+          "triggers": ["reader.activeBookChanged"],
+          "when": {
+            "op": "exists",
+            "value": { "$context": "reader.book.id" }
+          },
+          "commands": [
+            {
+              "id": "matches",
+              "type": "database.select",
+              "args": {
+                "sourceId": "external_catalog",
+                "from": {
+                  "table": "otzaria_hebrew_books",
+                  "alias": "m"
+                },
+                "select": [
+                  { "expr": "m.hb_id", "as": "hb_id" },
+                  { "expr": "m.is_best", "as": "is_best" },
+                  { "expr": "h.title", "as": "title" }
+                ],
+                "joins": [
+                  {
+                    "table": "hebrew_books",
+                    "alias": "h",
+                    "type": "left",
+                    "on": [
+                      {
+                        "left": "m.hb_id",
+                        "op": "=",
+                        "right": "h.id_book"
+                      }
+                    ]
+                  }
+                ],
+                "where": {
+                  "op": "=",
+                  "left": "m.otzaria_id",
+                  "value": { "$context": "reader.book.id" }
+                },
+                "orderBy": [
+                  { "expr": "m.is_best", "direction": "desc" }
+                ],
+                "limit": 20,
+                "rowFormat": "object"
+              }
+            },
+            {
+              "id": "editions",
+              "type": "data.map",
+              "args": {
+                "items": { "$result": "matches.rows" },
+                "maxItems": 20,
+                "template": {
+                  "title": { "$row": "title" },
+                  "identity": {
+                    "external": {
+                      "provider": "hebrewbooks",
+                      "id": { "$row": "hb_id" }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "default-edition",
+              "type": "data.first",
+              "args": {
+                "items": { "$result": "editions" }
+              }
+            }
+          ],
+          "outputs": {
+            "defaultEdition": { "$result": "default-edition" },
+            "editions": { "$result": "editions" }
+          }
+        }
+      ],
+      "toolbarItems": [
+        {
+          "id": "open-default-hb",
+          "type": "button",
+          "title": "פתח במהדורת היברובוקס",
+          "icon": "book_24_regular",
+          "contexts": ["reader-text", "reader-pdf"],
+          "binding": {
+            "program": "hebrewbooks-editions",
+            "visibleOutput": "defaultEdition"
+          },
+          "action": {
+            "type": "reader.openBook",
+            "args": {
+              "identity": {
+                "$output": "defaultEdition.identity"
+              }
+            }
+          }
+        },
+        {
+          "id": "open-hb-edition",
+          "type": "menu",
+          "title": "בחר מהדורת היברובוקס",
+          "icon": "book_24_regular",
+          "contexts": ["reader-text", "reader-pdf"],
+          "binding": {
+            "program": "hebrewbooks-editions",
+            "visibleOutput": "editions"
+          },
+          "childrenBinding": {
+            "itemsOutput": "editions",
+            "maxItems": 20,
+            "itemTemplate": {
+              "id": {
+                "$concat": [
+                  "hb-",
+                  { "$item": "identity.external.id" }
+                ]
+              },
+              "title": { "$item": "title" },
+              "action": {
+                "type": "reader.openBook",
+                "args": {
+                  "identity": { "$item": "identity" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+#### פקודות חישוב
+
+| פקודה | הרשאה | תיאור הפלט |
+|---|---|---|
+| `database.select` | `database.read` | `{rows, columns, meta}`; בתכנית נדרש `rowFormat: "object"` |
+| `data.first` | — | האיבר הראשון ברשימה, או `null` |
+| `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
+| `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
+
+ערכים יכולים להפנות אל `$context`,‏ `$result` של פקודה קודמת, או `$row`
+בתוך תבנית שורה. `$concat` מחבר עד שמונה חלקים, ו־`$literal` מונע פירוש של
+אובייקט כ־reference. ההפניות הן לאחור בלבד; אין SQL חופשי, נתיב קובץ או URL.
+
+#### binding לשורת הפקדים
+
+- `binding.program` מפנה לתכנית באותו manifest.
+- `binding.visibleOutput` מציג את הפקד רק כשהפלט קיים ואינו ריק.
+- כפתור משתמש ב־`action` עם `reader.openBook`.
+- תפריט משתמש ב־`childrenBinding.itemsOutput` וב־`itemTemplate`; בתוך התבנית
+  זמינה ההפניה `$item`.
+- לתוסף מותר להציג לכל היותר שני פקדים עליונים. הקבוצה מוחלפת אטומית: בתחילת
+  חישוב חדש שני הפקדים מוסתרים, ורק תוצאה מלאה ועדכנית מחזירה אותם.
+- ההרשאות נבדקות בקומפילציה, בזמן החישוב ושוב בלחיצה. הפעולה אינה עוברת דרך
+  `PluginRuntimeDispatcher`, אינה מפעילה WebView ואינה דורשת
+  `app.run_on_startup`.
 
 ### הפעלה עצלה
 
@@ -2162,10 +2360,10 @@ async function scheduleReminder(title, body, dateTime) {
 3. **נתונים קבועים** (`publishedData.upsert` בעלייה) — העבירו אל `startup.publishedData`.
 4. **קוד שחייב לרוץ בעלייה** (בדיקת עדכונים וכד') — הצהירו `activationEvents: ["app.startup"]`; קובץ הרקע שלכם ייטען כמה שניות אחרי העלייה ויקבל `plugin.boot` כרגיל, כך שקוד קיים שמסתנן לפי `runMode === 'background'` עובד ללא שינוי.
 5. **האזנה מתמשכת לאירועים** — הצהירו את הנושאים ב-`activationEvents`; המופע יוער כשאירוע באמת קורה במקום לחיות כל הסשן.
-6. **עדכנו `minAppVersion` ל-0.9.97** ומעלה — הסעיף אינו מוכר בגרסאות ישנות יותר.
+6. **עדכנו `minAppVersion` ל-0.9.96** ומעלה — הסעיף אינו מוכר בגרסאות ישנות יותר.
 7. שימו לב לכיבוי האוטומטי אחרי חוסר פעילות (סעיף קודם) — בלי טיימרים ארוכים, state ששורד ב-`storage`.
 
-תוסף שהצהיר `contributes.startup` יוצא ממסלול הטעינה המיידית כבר ב-0.9.97 — אין מצב ביניים של ריצה כפולה.
+תוסף שהצהיר `contributes.startup` יוצא ממסלול הטעינה המיידית כבר ב-0.9.96 — אין מצב ביניים של ריצה כפולה.
 
 התיעוד שלהלן מתאר את המסלול הישן, לתחזוקת תוספים שטרם עברו. יש להסירו יחד עם המימוש הישן ב-0.9.98.
 

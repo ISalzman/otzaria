@@ -49,6 +49,7 @@ class _FakeInstallerService extends PluginInstallerService {
     String tempDirPath,
     dynamic manifest, {
     required bool allowOrderBeforeBuiltInsGranted,
+    required Map<String, bool> grantedPermissions,
   }) async {}
 }
 
@@ -505,6 +506,7 @@ void main() {
       _manifest(
         permissions: [
           'notes.read',
+          pluginStartupContributionsPermission,
           pluginRunOnStartupPermission,
           'ui.feedback',
         ],
@@ -513,11 +515,33 @@ void main() {
     );
 
     final sensitiveY = tester.getTopLeft(find.text('טעינה אוטומטית ברקע')).dy;
+    final contributionsY = tester
+        .getTopLeft(find.text('הוספת רכיבים לתוכנה'))
+        .dy;
     final notesY = tester.getTopLeft(find.text('צפייה בהערות')).dy;
     final feedbackY = tester.getTopLeft(find.text('הודעות ודיאלוגים')).dy;
     expect(sensitiveY, lessThan(notesY));
+    expect(contributionsY, lessThan(notesY));
     expect(sensitiveY, lessThan(feedbackY));
     expect(notesY, lessThan(feedbackY), reason: 'סדר המניפסט נשמר בין השאר');
+  });
+
+  testWidgets('הרשאת הוספת רכיבים מתחילה כבויה ברירת מחדל', (tester) async {
+    await _openDialog(
+      tester,
+      bloc,
+      _manifest(permissions: [pluginStartupContributionsPermission]),
+      screenHeight: 1400,
+    );
+
+    final rowFinder = find.ancestor(
+      of: find.text('הוספת רכיבים לתוכנה'),
+      matching: find.byType(ListTile),
+    );
+    final sw = tester.widget<CustomSwitch>(
+      find.descendant(of: rowFinder, matching: find.byType(CustomSwitch)),
+    );
+    expect(sw.value, isFalse);
   });
 
   testWidgets('הרשאת app.run_on_startup — Switch מתחיל כבוי ברירת מחדל', (

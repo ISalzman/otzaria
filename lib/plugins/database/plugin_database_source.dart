@@ -36,14 +36,29 @@ class PluginDatabasePolicy {
   /// מספר שאילתות מקסימלי ב-batch
   final int maxBatchQueries;
 
-  /// זמן ריצה מקסימלי לשאילתה
-  final Duration maxQueryDuration;
-
   /// מספר joins מקסימלי בשאילתה
   final int maxJoins;
 
   /// מספר עמודות מקסימלי ב-select
   final int maxColumns;
+
+  /// חלון התוצאות המקסימלי שמותר לדלג עליו
+  final int maxOffset;
+
+  /// מספר תנאי WHERE מקסימלי, כולל קבוצות and/or
+  final int maxWhereConditions;
+
+  /// מספר ערכים מקסימלי בתנאי IN
+  final int maxInValues;
+
+  /// גודל מקסימלי של ערך פרמטר יחיד
+  final int maxParameterBytes;
+
+  /// גודל משוער מקסימלי של פלט השאילתה
+  final int maxResultBytes;
+
+  /// משך הריצה המקסימלי של שאילתה לפני עצירת ה-isolate
+  final Duration maxQueryDuration;
 
   const PluginDatabasePolicy({
     required this.tables,
@@ -51,9 +66,14 @@ class PluginDatabasePolicy {
     required this.allowedJoins,
     this.maxLimit = 5000,
     this.maxBatchQueries = 5,
-    this.maxQueryDuration = const Duration(milliseconds: 1500),
     this.maxJoins = 4,
     this.maxColumns = 32,
+    this.maxOffset = 10000,
+    this.maxWhereConditions = 32,
+    this.maxInValues = 100,
+    this.maxParameterBytes = 64 * 1024,
+    this.maxResultBytes = 4 * 1024 * 1024,
+    this.maxQueryDuration = const Duration(seconds: 3),
   });
 
   /// בודק אם טבלה מותרת

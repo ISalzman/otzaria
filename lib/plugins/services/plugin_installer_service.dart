@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -148,21 +149,31 @@ class PluginInstallerService {
     String tempDirPath,
     PluginManifest manifest, {
     required bool allowOrderBeforeBuiltInsGranted,
+    required Map<String, bool> grantedPermissions,
   }) async {
     final tempDir = Directory(tempDirPath);
+    Directory? stagedInstallDir;
+    var installCommitted = false;
     try {
+      final requestedPermissions = manifest.permissions.toSet();
+      if (grantedPermissions.keys
+              .toSet()
+              .difference(requestedPermissions)
+              .isNotEmpty ||
+          requestedPermissions
+              .difference(grantedPermissions.keys.toSet())
+              .isNotEmpty) {
+        throw ArgumentError(
+          'Permission decisions must exactly match manifest permissions',
+        );
+      }
       final existingPlugin = await _repository.getPlugin(manifest.id);
 
-      // 3. Move to install path
-      final installPath = await AppPaths.getPluginInstallPath(manifest.id);
-      final installDir = Directory(installPath);
-      if (await installDir.exists()) {
-        await installDir.delete(recursive: true);
-      }
-      await installDir.create(recursive: true);
-
-      // We move files by copying
-      await _copyDirectory(tempDir, installDir);
+      final canonicalPath = await AppPaths.getPluginInstallPath(manifest.id);
+      final installParent = Directory(p.dirname(canonicalPath));
+      await installParent.create(recursive: true);
+      stagedInstallDir = await installParent.createTemp('.release-');
+      await _copyDirectory(tempDir, stagedInstallDir);
 
       // 4. Save to DB
       // לעדכון/התקנה-מחדש: שומרים את הסדר הידני של המשתמש.
@@ -176,7 +187,7 @@ class PluginInstallerService {
         pluginId: manifest.id,
         name: manifest.name,
         version: manifest.version,
-        installPath: installPath,
+        installPath: stagedInstallDir.path,
         entrypointPath: manifest.entrypoint,
         iconPath: manifest.icon,
         enabled: existingPlugin?.enabled ?? true,
@@ -189,31 +200,37 @@ class PluginInstallerService {
         userOrder: newUserOrder,
       );
 
-      await _repository.savePlugin(plugin);
+      await _repository.savePluginWithPermissions(
+        plugin,
+        Map.unmodifiable(grantedPermissions),
+      );
+      installCommitted = true;
+
+      final pluginInstallRoot = p.dirname(canonicalPath);
+      final oldInstallDir =
+          existingPlugin == null || existingPlugin.isDevelopment
+          ? null
+          : Directory(existingPlugin.installPath);
+      if (oldInstallDir != null &&
+          p.isWithin(pluginInstallRoot, oldInstallDir.path) &&
+          !p.isWithin(oldInstallDir.path, stagedInstallDir.path) &&
+          oldInstallDir.path != stagedInstallDir.path &&
+          await oldInstallDir.exists()) {
+        try {
+          await oldInstallDir.delete(recursive: true);
+        } catch (error) {
+          debugPrint('Failed to remove previous plugin release: $error');
+        }
+      }
 
       // אם התוסף היה ב-quarantine (קרס בטעינה קודמת), שדרוג מוצלח מוריד אותו.
       await PluginCrashGuard.retry(manifest.id);
-
-      // Seed grants: for new installs, grant all. For updates:
-      // - Only grant permissions that did NOT previously have an explicit decision.
-      //   This preserves user revokes across updates.
-      // - Remove grants for permissions that no longer exist in the new manifest.
-      var existingGrants = const <String, bool>{};
-      if (existingPlugin != null) {
-        existingGrants = await _grantsFor(existingPlugin);
-        // Clean up grants for permissions removed from the new manifest.
-        for (final oldPerm in existingPlugin.manifest.permissions) {
-          if (!manifest.permissions.contains(oldPerm)) {
-            await _repository.setPermission(manifest.id, oldPerm, false);
-          }
-        }
-      }
-      for (final perm in manifest.permissions) {
-        // If user already made a decision on this permission, keep it.
-        if (existingGrants.containsKey(perm)) continue;
-        await _repository.setPermission(manifest.id, perm, true);
-      }
     } finally {
+      if (!installCommitted &&
+          stagedInstallDir != null &&
+          await stagedInstallDir.exists()) {
+        await stagedInstallDir.delete(recursive: true);
+      }
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }

@@ -15,7 +15,14 @@ PluginManifest _manifest({Map<String, dynamic>? startup}) =>
     });
 
 void main() {
-  test('background permissions are off by default', () {
+  test('sensitive startup permissions are off by default', () {
+    expect(
+      pluginPermissionDefaultGrant(
+        pluginStartupContributionsPermission,
+        isOfflineMode: false,
+      ),
+      isFalse,
+    );
     expect(
       pluginPermissionDefaultGrant(
         pluginRunOnStartupPermission,
@@ -36,12 +43,13 @@ void main() {
     );
   });
 
-  test('background activation is first and keepAlive is second', () {
+  test('startup permissions are first and preserve their priority', () {
     expect(
       orderedPluginPermissions(
         const [
           'notes.read',
           pluginBackgroundKeepAlivePermission,
+          pluginStartupContributionsPermission,
           'ui.feedback',
           pluginRunOnStartupPermission,
         ],
@@ -49,11 +57,20 @@ void main() {
       ),
       const [
         pluginRunOnStartupPermission,
+        pluginStartupContributionsPermission,
         pluginBackgroundKeepAlivePermission,
         'notes.read',
         'ui.feedback',
       ],
     );
+  });
+
+  test('host contributions wording also covers actions without WebView', () {
+    final info = getPermissionInfo(pluginStartupContributionsPermission);
+
+    expect(info.label, 'הוספת רכיבים לתוכנה');
+    expect(info.description, contains('בלי לפתוח את דף התוסף'));
+    expect(info.description, isNot(contains('לחיצה על פקד תפתח')));
   });
 
   test('declarative background text lists actual activation reasons', () {

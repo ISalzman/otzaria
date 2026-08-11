@@ -472,6 +472,36 @@ void main() {
     expect(contextMenu.getAll(), hasLength(1));
   });
 
+  test('פקד Host דקלרטיבי אינו נרשם במסלול ה-toolbar הישן', () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions};
+
+    await service.sync([
+      _plugin(
+        startup: {
+          'toolbarItems': [
+            {
+              'id': 'host-only',
+              'title': 'Host',
+              'icon': 'book_24_regular',
+              'binding': {
+                'program': 'links',
+                'visibleOutput': 'book',
+              },
+              'action': {
+                'type': 'reader.openBook',
+                'args': {
+                  'identity': {r'$output': 'book'},
+                },
+              },
+            },
+          ],
+        },
+      ),
+    ], repo);
+
+    expect(toolbar.getAll(), isEmpty);
+  });
+
   test('reapply restores declarative items after a registry wipe', () async {
     repo.grantedByPlugin['p1'] = {..._allPermissions};
     await service.sync([_plugin(startup: _fullStartup())], repo);

@@ -31,6 +31,15 @@ class FakePluginRegistryRepository extends Mock
   }
 
   @override
+  Future<void> saveDevelopmentPluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) async {
+    savedPlugin = plugin;
+    recordedGrants = Map.of(permissions);
+  }
+
+  @override
   Future<InstalledPlugin?> getPlugin(String id) async => mockExistingPlugin;
 
   @override
@@ -118,6 +127,23 @@ void main() {
         );
       },
     );
+
+    test('explicit development grants are saved with the plugin', () async {
+      final manifest = await devLoader.fetchDevelopmentManifest(tempDir.path);
+
+      await devLoader.loadDevelopmentPlugin(
+        tempDir.path,
+        preValidatedManifest: manifest,
+        grantedPermissions: const {'app.info.read': false},
+        allowOrderBeforeBuiltInsGranted: false,
+      );
+
+      expect(fakeRepo.recordedGrants, {'app.info.read': false});
+      expect(
+        fakeRepo.savedPlugin!.allowOrderBeforeBuiltInsGranted,
+        isFalse,
+      );
+    });
 
     test(
       'loadDevelopmentPlugin loads a plugin whose minAppVersion is newer '
@@ -355,22 +381,10 @@ void main() {
 
         await devLoader.loadDevelopmentPlugin(tempDir.path);
 
-        // ASSERT 1: network.request was removed from new manifest →
-        // setPermission(false) must have been called to explicitly revoke it.
-        expect(
-          fakeRepo.recordedGrants['network.request'],
-          false,
-          reason: 'network.request נמחק מהמניפסט החדש – חייב להתאפס ל-false',
-        );
-
-        // ASSERT 2: app.info.read existed in recordedGrants (returned by getPermission) →
-        // service should NOT call setPermission again (it skips permissions already in existingGrants).
-        // Therefore recordedGrants['app.info.read'] stays at its original value (true), not reset.
+        expect(fakeRepo.recordedGrants, isNot(contains('network.request')));
         expect(
           fakeRepo.recordedGrants['app.info.read'],
           true,
-          reason:
-              'app.info.read כבר היה קיים ב-recordedGrants – לא אמור להיות נכתב מחדש',
         );
       },
     );

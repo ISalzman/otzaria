@@ -1,3 +1,5 @@
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
+
 /// פריט שתוסף רושם בשורת הפקדים של מסך העיון.
 ///
 /// `type == 'button'` — לחצן בודד; `type == 'menu'` — תפריט נפתח שילדיו
@@ -17,6 +19,9 @@ class PluginToolbarItem {
   /// ערך חופשי שהתוסף מסר ברישום — מוחזר לו כלשונו ב-payload של אירוע הלחיצה.
   final Object? param;
 
+  /// פעולה שה-Host מבצע ישירות, בלי להעיר את מנוע התוסף.
+  final CompiledDeclarativeAction? hostAction;
+
   const PluginToolbarItem({
     required this.id,
     this.type = 'button',
@@ -27,6 +32,7 @@ class PluginToolbarItem {
     this.children = const [],
     this.openPlugin = false,
     this.param,
+    this.hostAction,
   });
 
   Map<String, dynamic> toJson() => {

@@ -18,6 +18,9 @@ class PluginStartupContributions {
   /// המפתח נשמר עם קידומת `manifest:` — רשומות אלו בבעלות המניפסט.
   final List<Map<String, dynamic>> publishedData;
 
+  /// תכניות חישוב שה-Host מריץ ללא מנוע JavaScript.
+  final List<Map<String, dynamic>> programs;
+
   /// נושאי אירועים שמעירים את מופע הרקע של התוסף בעצלנות (בלי מנוע חי
   /// עד שאירוע כזה קורה בפועל), או [startupActivationTopic].
   final List<String> activationEvents;
@@ -30,6 +33,7 @@ class PluginStartupContributions {
     this.toolbarItems = const [],
     this.contextMenuItems = const [],
     this.publishedData = const [],
+    this.programs = const [],
     this.activationEvents = const [],
     this.keepAlive = false,
   });
@@ -38,6 +42,7 @@ class PluginStartupContributions {
       toolbarItems.isEmpty &&
       contextMenuItems.isEmpty &&
       publishedData.isEmpty &&
+      programs.isEmpty &&
       activationEvents.isEmpty;
 
   /// האם קיימת פעולה שבאמת עשויה להרים את מנוע הרקע.
@@ -47,6 +52,11 @@ class PluginStartupContributions {
       contextMenuItems.any(_contextMenuItemActivatesBackground);
 
   static bool _toolbarItemActivatesBackground(Map<String, dynamic> item) {
+    if (item.containsKey('binding') ||
+        item.containsKey('action') ||
+        item.containsKey('childrenBinding')) {
+      return false;
+    }
     if (item['type'] == 'menu') {
       final children = item['children'];
       return children is List &&
@@ -97,6 +107,7 @@ class PluginStartupContributions {
       toolbarItems: mapList('toolbarItems'),
       contextMenuItems: mapList('contextMenuItems'),
       publishedData: mapList('publishedData'),
+      programs: mapList('programs'),
       activationEvents: events is List
           ? [
               for (final entry in events)
@@ -111,6 +122,7 @@ class PluginStartupContributions {
     if (toolbarItems.isNotEmpty) 'toolbarItems': toolbarItems,
     if (contextMenuItems.isNotEmpty) 'contextMenuItems': contextMenuItems,
     if (publishedData.isNotEmpty) 'publishedData': publishedData,
+    if (programs.isNotEmpty) 'programs': programs,
     if (activationEvents.isNotEmpty) 'activationEvents': activationEvents,
     if (keepAlive) 'keepAlive': true,
   };

@@ -90,6 +90,7 @@ bool pluginPermissionDefaultGrant(
   required bool isOfflineMode,
 }) {
   if (permission == pluginRunOnStartupPermission ||
+      permission == pluginStartupContributionsPermission ||
       permission == pluginBackgroundKeepAlivePermission) {
     return false;
   }
@@ -103,9 +104,10 @@ List<String> orderedPluginPermissions(
 }) {
   int rank(String permission) => switch (permission) {
     pluginRunOnStartupPermission => 0,
-    pluginBackgroundKeepAlivePermission => 1,
-    pluginNetworkAccessPermission when isOfflineMode => 2,
-    _ => 3,
+    pluginStartupContributionsPermission => 1,
+    pluginBackgroundKeepAlivePermission => 2,
+    pluginNetworkAccessPermission when isOfflineMode => 3,
+    _ => 4,
   };
   final indexed = permissions.indexed.toList();
   indexed.sort((a, b) {
@@ -143,9 +145,10 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
         'את צריכת הזיכרון והמעבד; אשר רק לתוסף מהימן שחייב להאזין ברציפות.',
   ),
   'app.startup_contributions': PluginPermissionInfo(
-    label: 'פקדים ונתונים בעליית האפליקציה',
+    label: 'הוספת רכיבים לתוכנה',
     description:
-        'הלחצנים, פריטי התפריט והנתונים שהתוסף הגדיר יופיעו מיד עם עליית אוצריא, בלי להריץ את התוסף עצמו. בלי הרשאת ריצה ברקע, לחיצה על פקד תפתח את דף התוסף.',
+        'מאפשר לתוסף להוסיף פקדים, פריטי תפריט ונתונים שמנוהלים בידי אוצריא. '
+        'פעולות מובנות עשויות להתבצע בלי לפתוח את דף התוסף.',
   ),
 
   // ===== ספרייה =====

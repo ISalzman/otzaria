@@ -1,7 +1,10 @@
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'plugin_database_registry.dart';
 import 'plugin_database_source.dart';
+
+const String pluginExternalCatalogSourceId = 'external_catalog';
 
 /// אתחול מקורות נתונים SQLite לתוספים.
 ///
@@ -14,6 +17,50 @@ Future<void> initPluginDatabaseSources() async {
   final libraryPath = await AppPaths.getLibraryPath();
 
   _registerTalmudSynopsis(libraryPath);
+  PluginDatabaseRegistry.instance.register(
+    buildExternalCatalogPluginSource(
+      DatabaseConstants.getExternalCatalogDatabasePath(),
+    ),
+  );
+}
+
+PluginDatabaseSource buildExternalCatalogPluginSource(String databasePath) {
+  return PluginDatabaseSource(
+    sourceId: pluginExternalCatalogSourceId,
+    label: 'קטלוגים חיצוניים',
+    databasePath: databasePath,
+    readOnly: true,
+    policy: PluginDatabasePolicy(
+      tables: const {'otzaria_hebrew_books', 'hebrew_books'},
+      columnsByTable: const {
+        'otzaria_hebrew_books': {
+          'hb_id',
+          'otzaria_id',
+          'otzaria_title',
+          'is_best',
+          'confidence',
+        },
+        'hebrew_books': {'id_book', 'title', 'author'},
+      },
+      allowedJoins: const [
+        PluginJoinRule(
+          tableA: 'otzaria_hebrew_books',
+          columnA: 'hb_id',
+          tableB: 'hebrew_books',
+          columnB: 'id_book',
+        ),
+      ],
+      maxLimit: 20,
+      maxBatchQueries: 2,
+      maxJoins: 1,
+      maxColumns: 8,
+      maxOffset: 0,
+      maxWhereConditions: 8,
+      maxInValues: 20,
+      maxParameterBytes: 4096,
+      maxResultBytes: 64 * 1024,
+    ),
+  );
 }
 
 void _registerTalmudSynopsis(String libraryPath) {

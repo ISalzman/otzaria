@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
@@ -17,6 +18,7 @@ class FakePluginRegistryRepository extends Mock
   InstalledPlugin? plugin;
   final List<InstalledPlugin> savedPlugins = [];
   final Map<String, bool?> permissions = {};
+  bool failAtomicSave = false;
 
   /// מה ש-getNextUserOrderForNewPlugin יחזיר. ברירת מחדל null = אין סדר ידני.
   int? nextUserOrderForNewPlugin;
@@ -27,6 +29,19 @@ class FakePluginRegistryRepository extends Mock
   @override
   Future<void> savePlugin(InstalledPlugin plugin) async {
     savedPlugins.add(plugin);
+  }
+
+  @override
+  Future<void> savePluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> grants,
+  ) async {
+    if (failAtomicSave) throw StateError('forced atomic save failure');
+    savedPlugins.add(plugin);
+    permissions.removeWhere((key, _) => key.startsWith('${plugin.pluginId}|'));
+    for (final entry in grants.entries) {
+      permissions['${plugin.pluginId}|${entry.key}'] = entry.value;
+    }
   }
 
   @override
@@ -72,6 +87,7 @@ void main() {
 
     setUp(() {
       tempDir = Directory.systemTemp.createTempSync('otzaria_installer_test_');
+      AppPaths.debugOverrideDataRootPath(tempDir.path);
       repository = FakePluginRegistryRepository();
       installer = PluginInstallerService(
         repository: repository,
@@ -79,6 +95,7 @@ void main() {
     });
 
     tearDown(() {
+      AppPaths.debugOverrideDataRootPath(null);
       if (tempDir.existsSync()) {
         tempDir.deleteSync(recursive: true);
       }
@@ -418,6 +435,177 @@ void main() {
       },
     );
 
+    test('finalizeInstall stores the explicit permission decisions', () async {
+      const pluginId = 'test.explicit.grants';
+      final stagedDir = Directory.systemTemp.createTempSync(
+        'otzaria_install_staging_',
+      );
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+      final manifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '1.0.0',
+        name: 'Explicit Grants',
+        permissions: const [
+          'app.startup_contributions',
+          'reader.open',
+        ],
+      );
+
+      await installer.finalizeInstall(
+        stagedDir.path,
+        manifest,
+        allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {
+          'app.startup_contributions': false,
+          'reader.open': true,
+        },
+      );
+
+      expect(repository.permissions, {
+        '$pluginId|app.startup_contributions': false,
+        '$pluginId|reader.open': true,
+      });
+    });
+
+    test('finalizeInstall rejects an incomplete permission map', () async {
+      const pluginId = 'test.incomplete.grants';
+      final stagedDir = Directory.systemTemp.createTempSync(
+        'otzaria_install_staging_',
+      );
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+      final manifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '1.0.0',
+        name: 'Incomplete Grants',
+        permissions: const ['app.startup_contributions'],
+      );
+
+      await expectLater(
+        installer.finalizeInstall(
+          stagedDir.path,
+          manifest,
+          allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {},
+        ),
+        throwsArgumentError,
+      );
+
+      expect(repository.savedPlugins, isEmpty);
+      expect(repository.permissions, isEmpty);
+    });
+
+    test('כשל בשמירה משאיר את קבצי הגרסה הישנה פעילים', () async {
+      const pluginId = 'test.filesystem.rollback';
+      final oldInstallPath = await AppPaths.getPluginInstallPath(pluginId);
+      final oldEntrypoint = File(p.join(oldInstallPath, 'index.html'));
+      await oldEntrypoint.create(recursive: true);
+      await oldEntrypoint.writeAsString('old-version');
+      repository.plugin = InstalledPlugin(
+        pluginId: pluginId,
+        name: 'Filesystem Rollback',
+        version: '1.0.0',
+        installPath: oldInstallPath,
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: _buildInstalledManifest(
+          id: pluginId,
+          version: '1.0.0',
+          name: 'Filesystem Rollback',
+          permissions: const ['app.startup_contributions'],
+        ),
+        installedAt: DateTime(2024),
+        updatedAt: DateTime(2024),
+      );
+      repository.permissions['$pluginId|app.startup_contributions'] = true;
+      repository.failAtomicSave = true;
+      final stagedDir = Directory(p.join(tempDir.path, 'new-release'))
+        ..createSync();
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync(
+        'new-version',
+      );
+      final newManifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '2.0.0',
+        name: 'Filesystem Rollback',
+        permissions: const ['app.startup_contributions'],
+      );
+
+      await expectLater(
+        installer.finalizeInstall(
+          stagedDir.path,
+          newManifest,
+          allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {'app.startup_contributions': false},
+        ),
+        throwsStateError,
+      );
+
+      expect(await oldEntrypoint.readAsString(), 'old-version');
+      expect(repository.savedPlugins, isEmpty);
+      expect(
+        repository.permissions['$pluginId|app.startup_contributions'],
+        isTrue,
+      );
+      final releases = Directory(p.dirname(oldInstallPath))
+          .listSync()
+          .whereType<Directory>()
+          .where(
+            (directory) => p.basename(directory.path).startsWith('.release-'),
+          );
+      expect(releases, isEmpty);
+    });
+
+    test('commit מוצלח מצביע ל-release חדש ורק אז מוחק את הישן', () async {
+      const pluginId = 'test.release.swap';
+      final oldInstallPath = await AppPaths.getPluginInstallPath(pluginId);
+      final oldEntrypoint = File(p.join(oldInstallPath, 'index.html'));
+      await oldEntrypoint.create(recursive: true);
+      await oldEntrypoint.writeAsString('old-version');
+      repository.plugin = InstalledPlugin(
+        pluginId: pluginId,
+        name: 'Release Swap',
+        version: '1.0.0',
+        installPath: oldInstallPath,
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: _buildInstalledManifest(
+          id: pluginId,
+          version: '1.0.0',
+          name: 'Release Swap',
+        ),
+        installedAt: DateTime(2024),
+        updatedAt: DateTime(2024),
+      );
+      final sourceDir = Directory(p.join(tempDir.path, 'swap-source'))
+        ..createSync();
+      File(p.join(sourceDir.path, 'index.html')).writeAsStringSync(
+        'new-version',
+      );
+      final newManifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '2.0.0',
+        name: 'Release Swap',
+      );
+
+      await installer.finalizeInstall(
+        sourceDir.path,
+        newManifest,
+        allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {},
+      );
+
+      final activePath = repository.savedPlugins.single.installPath;
+      expect(activePath, isNot(oldInstallPath));
+      expect(p.dirname(activePath), p.dirname(oldInstallPath));
+      expect(
+        await File(p.join(activePath, 'index.html')).readAsString(),
+        'new-version',
+      );
+      expect(await Directory(oldInstallPath).exists(), isFalse);
+    });
+
     test('finalizeInstall preserves existingPlugin.userOrder on update — '
         'manual reorder must survive plugin updates/reinstalls', () async {
       const pluginId = 'test.reorder.persist';
@@ -466,6 +654,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: true,
+        grantedPermissions: const {},
       );
 
       expect(repository.savedPlugins, hasLength(1));
@@ -511,6 +700,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {},
       );
 
       expect(
@@ -557,6 +747,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {},
       );
 
       expect(
@@ -613,6 +804,7 @@ void main() {
           stagedDir.path,
           newManifest,
           allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {},
         );
 
         expect(

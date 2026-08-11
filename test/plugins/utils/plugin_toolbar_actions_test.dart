@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
@@ -123,5 +124,44 @@ void main() {
       textActions.last.submenuItems!.map((child) => child.tooltip),
       ['Both'],
     );
+  });
+
+  test('פעולת Host אינה בונה payload ואינה נשלחת למנוע התוסף', () async {
+    const hostAction = CompiledDeclarativeAction(
+      type: 'reader.openBook',
+      args: {
+        'identity': {'id': 10},
+      },
+      requiredPermission: 'reader.open',
+      contextSignature: 'book-7',
+      programGeneration: 7,
+    );
+    const item = PluginToolbarItem(
+      id: 'open-default',
+      title: 'Open default',
+      icon: 'book_24_regular',
+      hostAction: hostAction,
+    );
+    var locationCalls = 0;
+    final dispatched = <CompiledDeclarativeAction>[];
+    final action = buildPluginToolbarActions(
+      records: const [('marker', item)],
+      context: 'reader-text',
+      compact: false,
+      locationPayload: () async {
+        locationCalls++;
+        throw StateError('legacy payload must not be built');
+      },
+      hostActionDispatcher: (pluginId, action) async {
+        expect(pluginId, 'marker');
+        dispatched.add(action);
+      },
+    ).single;
+
+    action.onPressed!();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(dispatched, [hostAction]);
+    expect(locationCalls, 0);
   });
 }
