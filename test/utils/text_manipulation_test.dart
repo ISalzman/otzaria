@@ -955,4 +955,69 @@ Future<void> main() async {
     },
     skip: engineReady ? false : searchEngineSkipReason,
   );
+
+  group('formatTextWithParentheses', () {
+    test('עוטף טקסט בסוגריים ב-small', () {
+      expect(
+        formatTextWithParentheses('אמר (רש"י) שם'),
+        'אמר <small>(רש"י)</small> שם',
+      );
+    });
+
+    test('סוגריים מקוננים - רק הפנימיים נעטפים', () {
+      expect(
+        formatTextWithParentheses('א (ב (ג) ד) ה'),
+        'א (ב <small>(ג)</small> ד) ה',
+      );
+    });
+
+    test('סוגר פותח בלי סוגר סוגר נשאר כפי שהוא', () {
+      expect(formatTextWithParentheses('אמר (רש"י שם'), 'אמר (רש"י שם');
+    });
+
+    test('סוגריים ב-style אינם נעטפים - rgb', () {
+      const input = '<span style="color:rgb(200,30,30);">אדום</span>';
+      expect(formatTextWithParentheses(input), input);
+    });
+
+    test('סוגריים ב-style אינם נעטפים - rgba ו-hsl', () {
+      const rgba = '<span style="background-color:rgba(255,0,0,0.2);">א</span>';
+      const hsl = '<span style="color:hsl(120,60%,35%);">ב</span>';
+      expect(formatTextWithParentheses(rgba), rgba);
+      expect(formatTextWithParentheses(hsl), hsl);
+    });
+
+    test('סוגריים ב-href אינם נעטפים', () {
+      const input = '<a href="otzaria://inline-link?ref=בראשית (א)">כאן</a>';
+      expect(formatTextWithParentheses(input), input);
+    });
+
+    test('סוגריים בטקסט נעטפים גם כשלתג שעוטף אותם יש סוגריים ב-style', () {
+      expect(
+        formatTextWithParentheses(
+          '<span style="color:rgb(1,2,3);">אמר (רש"י) שם</span>',
+        ),
+        '<span style="color:rgb(1,2,3);">אמר <small>(רש"י)</small> שם</span>',
+      );
+    });
+
+    test('תג בתוך הסוגריים אינו מפריע לזיהוי הסוגר הסוגר', () {
+      expect(
+        formatTextWithParentheses('(אמר <b>רש"י</b>) שם'),
+        '<small>(אמר <b>רש"י</b>)</small> שם',
+      );
+    });
+
+    test('סוגר סוגר שנמצא רק בתוך תג אינו נחשב סוגר', () {
+      const input = '(אמר <span style="color:rgb(1,2,3);">רש"י</span> שם';
+      expect(formatTextWithParentheses(input), input);
+    });
+
+    test('סימן קטן-מ בודד בלי תג אינו בולע את השורה', () {
+      expect(
+        formatTextWithParentheses('א < ב (ג) ד'),
+        'א < ב <small>(ג)</small> ד',
+      );
+    });
+  });
 }

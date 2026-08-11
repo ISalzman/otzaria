@@ -1065,6 +1065,17 @@ String formatTextWithParentheses(String text) {
   int i = 0;
 
   while (i < text.length) {
+    // תגי HTML עוברים כמכלול - אחרת סוגריים בתוך attribute (למשל
+    // style="color:rgb(0,0,0)") נעטפים ב-<small> וההגדרה נהרסת.
+    if (text[i] == '<') {
+      final tagEnd = text.indexOf('>', i);
+      if (tagEnd != -1) {
+        result.write(text.substring(i, tagEnd + 1));
+        i = tagEnd + 1;
+        continue;
+      }
+    }
+
     if (text[i] == '(') {
       // מחפשים את הסוגר הסוגר המתאים
       int openCount = 1;
@@ -1073,6 +1084,13 @@ String formatTextWithParentheses(String text) {
 
       // בודקים אם יש סוגר פותח נוסף בפנים
       while (j < text.length && openCount > 0) {
+        if (text[j] == '<') {
+          final tagEnd = text.indexOf('>', j);
+          if (tagEnd != -1) {
+            j = tagEnd + 1;
+            continue;
+          }
+        }
         if (text[j] == '(') {
           if (innerOpenIndex == -1) {
             innerOpenIndex = j; // שומרים את המיקום של הסוגר הפנימי הראשון
