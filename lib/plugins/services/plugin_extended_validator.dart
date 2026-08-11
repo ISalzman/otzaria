@@ -624,11 +624,18 @@ class PluginExtendedValidator {
     }
 
     if (startup.toolbarItems.isNotEmpty) {
+      final hasDeclarativeItems = startup.toolbarItems.any(
+        DeclarativeToolbarTemplateCompiler.isDeclarative,
+      );
       if (!declaredPermissions.contains('reader.toolbar')) {
-        warnings.add(
-          'contributes.startup.toolbarItems דורש את ההרשאה "reader.toolbar" '
-          'שלא הוכרזה ב-manifest',
-        );
+        final message =
+            'contributes.startup.toolbarItems דורש את ההרשאה "reader.toolbar" '
+            'שלא הוכרזה ב-manifest';
+        if (hasDeclarativeItems) {
+          errors.add(message);
+        } else {
+          warnings.add(message);
+        }
       }
       if (startup.toolbarItems.length >
           PluginToolbarRegistry.maxTopLevelItemsPerPlugin) {

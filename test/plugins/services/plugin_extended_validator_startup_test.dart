@@ -421,6 +421,22 @@ void main() {
     expect(report.errors, isEmpty);
   });
 
+  test('פקד Host דקלרטיבי ללא reader.toolbar נדחה בהתקנה', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        minAppVersion: '0.9.98',
+        permissions: const ['app.startup_contributions', 'reader.open'],
+        startup: {
+          'programs': [_toolbarProgram()],
+          'toolbarItems': _declarativeToolbarItems(),
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('reader.toolbar')));
+  });
+
   test('פקד דקלרטיבי שמפנה לפלט חסר נדחה', () {
     final items = _declarativeToolbarItems();
     (items.first['binding'] as Map<String, dynamic>)['visibleOutput'] =
