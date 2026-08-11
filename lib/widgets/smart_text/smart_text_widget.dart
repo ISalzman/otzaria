@@ -255,22 +255,17 @@ class SmartTextWidget extends StatelessWidget {
           if (headingWeight != null) {
             return {'font-weight': headingWeight};
           }
+          // הסמנים מוקטנים אך נשארים על קו הבסיס: הגבהה ב-fwfh אפשרית רק דרך
+          // vertical-align, שבונה WidgetSpan — וזה מחזיר את היפוך הסדר ב-RTL.
           if (element.localName == 'span' &&
               element.classes.contains('footnote-marker-number')) {
-            return {
-              'font-size': '0.75em',
-              'font-style': 'italic',
-              'position': 'relative',
-              'top': '-0.55em',
-            };
+            return {'font-size': '0.75em', 'font-style': 'italic'};
           }
           if (element.localName == 'a' &&
               element.classes.contains('book-note-marker')) {
             return {
               'font-size': '0.75em',
               'font-style': 'italic',
-              'position': 'relative',
-              'top': '-0.55em',
               'color': anchorColorCss,
               'text-decoration': 'none',
             };
@@ -281,14 +276,12 @@ class SmartTextWidget extends StatelessWidget {
               element.classes.contains('numbered-note-marker')) {
             return {'color': anchorLinkColorCss, 'text-decoration': 'none'};
           }
-          // סמן-אות של מפרש (עוגן-נקודה): אות קטנה מורמת בצבע ה-primary, עם
+          // סמן-אות של מפרש (עוגן-נקודה): אות קטנה בצבע ה-primary, עם
           // וריאנט טיפוגרפי קבוע לכל מפרש (ראו anchorStyleIndexByCommentator).
           if ((element.localName == 'span' || element.localName == 'a') &&
               element.classes.contains('link-anchor')) {
             final style = <String, String>{
               'font-size': '${kLinkAnchorMarkerScale}em',
-              'position': 'relative',
-              'top': '-0.55em',
               'white-space': 'nowrap',
               'color': anchorLinkColorCss,
               'text-decoration': 'none',
