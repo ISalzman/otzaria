@@ -541,37 +541,37 @@ class _CommentatorsSelectionPanelState
               children: [
                 if (!NavPanelSearch.isHoisted(context))
                   NavPanelLocalSearchField(delegate: delegate),
-                if (_commentatorsList.isNotEmpty)
-                  Padding(
-                    padding: kNavTreeListPadding,
-                    child: NavTreeGroupCard(
-                      isGroupStart: true,
-                      isGroupEnd: true,
-                      child: NavTreeTile.category(
-                        title: 'הצג את כל המפרשים',
-                        level: 0,
-                        isSelected: _allVisibleSelected,
-                        trailing: _selectionCheckbox(
-                          value: _allVisibleSelected,
-                          onChanged: _toggleAllVisible,
-                        ),
-                        onTap: () => _toggleAllVisible(!_allVisibleSelected),
-                      ),
-                    ),
-                  ),
                 Expanded(
                   child: NavTreeFocusGroup(
                     child: ListView.builder(
                       padding: kNavTreeListPadding,
-                      // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
-                      itemCount: _commentatorsList.length + 1,
+                      // +2: הכותרת הראשית וכרטיס "הצג את כל המפרשים" נגללים
+                      // עם הרשימה ואינם רצועה קבועה מעליה.
+                      itemCount: _commentatorsList.length + 2,
                       itemBuilder: (context, listIndex) {
                         if (listIndex == 0) {
                           return NavTreeHeader(
                             title: 'מפרשים על ${widget.bookTitle}',
                           );
                         }
-                        final index = listIndex - 1;
+                        if (listIndex == 1) {
+                          return NavTreeGroupCard(
+                            isGroupStart: true,
+                            isGroupEnd: true,
+                            child: NavTreeTile.category(
+                              title: 'הצג את כל המפרשים',
+                              level: 0,
+                              isSelected: _allVisibleSelected,
+                              trailing: _selectionCheckbox(
+                                value: _allVisibleSelected,
+                                onChanged: _toggleAllVisible,
+                              ),
+                              onTap: () =>
+                                  _toggleAllVisible(!_allVisibleSelected),
+                            ),
+                          );
+                        }
+                        final index = listIndex - 2;
                         final item = _commentatorsList[index];
 
                         // כותרת דור — יושבת על רקע החלונית, מחוץ לכרטיס הקבוצה.
