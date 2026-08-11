@@ -40,11 +40,29 @@ class PluginBookIdentity {
     source: sourceOf(book),
   );
 
+  static ({String provider, Object id})? externalOf(Book book) {
+    final value = book.externalLibraryId?.trim();
+    if (value == null || value.isEmpty) return null;
+    final separator = value.indexOf(':');
+    if (separator <= 0 || separator == value.length - 1) return null;
+    final prefix = value.substring(0, separator).toLowerCase();
+    final rawId = value.substring(separator + 1).trim();
+    final provider = switch (prefix) {
+      'hb' || 'hebrew' || 'hebrewbooks' => 'hebrewbooks',
+      'oh' || 'otz' || 'otzar' => 'otzar',
+      _ => null,
+    };
+    if (provider == null || rawId.isEmpty) return null;
+    return (provider: provider, id: int.tryParse(rawId) ?? rawId);
+  }
+
   static Map<String, dynamic> toJson(Book book) => {
     'id': book.id,
     'type': typeOf(book),
     'bookId': book.title,
     'source': sourceOf(book),
+    if (externalOf(book) case final external?)
+      'external': {'provider': external.provider, 'id': external.id},
   };
 
   static bool matches(
