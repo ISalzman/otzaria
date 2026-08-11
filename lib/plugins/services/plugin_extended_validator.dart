@@ -544,6 +544,7 @@ class PluginExtendedValidator {
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
   static const String _startupContributionsMinVersion = '0.9.96';
   static const String _declarativeProgramsMinVersion = '0.9.96';
+  static const String _searchSubmitRoutingMinVersion = '0.9.97';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.
@@ -729,6 +730,25 @@ class PluginExtendedValidator {
           'contributes.startup.searchDialogItems מוגבל ל-'
           '${PluginSearchDialogItem.maxItemsPerPlugin} פריטים',
         );
+      }
+      if (startup.searchDialogItems.any(
+        (item) => item['openPluginOnSubmit'] == true,
+      )) {
+        try {
+          if (PluginVersionUtils.compareCoreVersions(
+                _searchSubmitRoutingMinVersion,
+                manifest.minAppVersion,
+              ) >
+              0) {
+            errors.add(
+              'openPluginOnSubmit נתמך החל מגרסה '
+              '$_searchSubmitRoutingMinVersion, אך minAppVersion שהוצהר הוא '
+              '${manifest.minAppVersion}. עדכן את minAppVersion',
+            );
+          }
+        } on PluginVersionFormatException {
+          // minAppVersion נבדק ב-PluginManifestValidator.
+        }
       }
       final itemIds = <String>{};
       for (final item in startup.searchDialogItems) {

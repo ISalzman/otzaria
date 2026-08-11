@@ -647,13 +647,13 @@ const { data } = await Otzaria.call('search.query', {
 {
   results: [{
     id: 183, type: 'text', bookId: 'ויקרא', source: 'library',
-    book: 'ויקרא',
+    book: 'ויקרא', categoryPath: '/הלכה/משנה תורה',
     reference: 'ויקרא, פרק יט',
     text: 'ואהבת לרעך כמוך...',
     index: 1234,          // אינדקס השורה/עמוד לפתיחה עם reader.openBook
     mergedCount: 1,       // מספר התוצאות שאוחדו לכרטיס (במצב grouping)
-    merged: [{ id, type, bookId, source, book, reference, index }]
-                            // רק כשיש איחוד; לכל אח זהות ספר מלאה
+    merged: [{ id, type, bookId, source, book, categoryPath, reference, index }]
+                            // רק כשיש איחוד; לכל אח זהות וקטגוריה מלאות
   }],
   total: 812,             // סך ההתאמות (לא רק העמוד הנוכחי)
   groupCount: null,       // מספר הקבוצות כש-grouping פעיל, אחרת null
@@ -2418,7 +2418,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `type` | כן | כעת רק `"checkbox"`. |
 | `title` | כן | הכיתוב המוצג למשתמש (עד 120 תווים). |
 | `defaultValue` | לא | ערך התחלתי, `false` כברירת מחדל. |
-| `openPluginOnSubmit` | לא | אם `true`, אישור חיפוש כשהשורה מסומנת פותח את דף התוסף ושולח אליו `search.requested`. |
+| `openPluginOnSubmit` | לא | מגרסה 0.9.97: אם `true`, אישור חיפוש כשהשורה מסומנת פותח את דף התוסף ושולח אליו `search.requested`. |
 | `visibleInModes` | לא | מערך לא-ריק מתוך `"exact"`, `"advanced"`, `"fuzzy"`; ברירת המחדל היא כל המצבים. |
 | `disabledSearchOptions` | לא | אובייקט `מצב → מזהי אפשרויות מילה` להשבתה כשה-checkbox מסומן. |
 

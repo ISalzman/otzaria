@@ -1101,6 +1101,7 @@ class PluginBridgeAdapter {
               _identityFields(args),
               index: index,
               searchQuery: searchQuery,
+              navigateToPositionIfReused: navigateToPositionIfReused,
             );
           }
           final book = _findPluginBook(

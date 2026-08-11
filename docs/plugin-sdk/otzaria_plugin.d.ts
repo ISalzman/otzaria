@@ -230,7 +230,12 @@ export interface SearchQueryHit extends BookIdentity {
   index: number;
   mergedCount: number;
   merged?: Array<
-    BookIdentity & { book: string; reference: string; index: number }
+    BookIdentity & {
+      book: string;
+      categoryPath?: string | null;
+      reference: string;
+      index: number;
+    }
   >;
 }
 
