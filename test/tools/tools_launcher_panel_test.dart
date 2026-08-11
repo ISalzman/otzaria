@@ -1088,12 +1088,17 @@ void main() {
 
     // ── פס הגלילה ───────────────────────────────────────────────────────────
 
-    testWidgets('הרשת שומרת מרווח בימין לפס הגלילה', (tester) async {
+    testWidgets('הרשת שומרת מרווח בימין לפס הגלילה ומתחת לסרגל הצף', (
+      tester,
+    ) async {
       await pumpPanel(tester);
       final listView = tester.widget<ListView>(find.byType(ListView));
       expect(
         listView.padding,
-        const EdgeInsets.only(right: kToolGridScrollbarGutter),
+        EdgeInsets.only(
+          right: kToolGridScrollbarGutter,
+          bottom: AppInputTokens.height(false) + AppTokens.spaceMD,
+        ),
       );
     });
 

@@ -518,9 +518,36 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
           _buildSearchField(entries),
           const SizedBox(height: AppTokens.spaceMD),
           Expanded(
-            child: entries.isEmpty
-                ? _buildEmptyState(settingsState.isOfflineMode, allEntries)
-                : _buildGrid(entries, openToolIds),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: entries.isEmpty
+                      ? _buildEmptyState(
+                          settingsState.isOfflineMode,
+                          allEntries,
+                        )
+                      : _buildGrid(
+                          entries,
+                          openToolIds,
+                          bottomInset:
+                              AppInputTokens.height(
+                                settingsState.compactMenuMode,
+                              ) +
+                              AppTokens.spaceMD,
+                        ),
+                ),
+                PositionedDirectional(
+                  bottom: AppTokens.spaceSM,
+                  start: kToolGridScrollbarGutter,
+                  child: _PluginsToolbar(
+                    showDevTools: widget.showDevTools,
+                    onInstall: _installPlugin,
+                    onLoadFolder: _loadDevPlugin,
+                    onLoadLocalhost: _loadLocalhostPlugin,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -536,12 +563,6 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   Widget _buildHeader() {
     return Row(
       children: [
-        IconButton(
-          icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
-          tooltip: 'סגור',
-          visualDensity: VisualDensity.compact,
-          onPressed: widget.onClose,
-        ),
         const Expanded(
           child: Text(
             'כלים ותוספים',
@@ -552,25 +573,11 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
           ),
         ),
         IconButton(
-          icon: const Icon(FluentIcons.add_24_regular, size: 20),
-          tooltip: 'התקן תוסף חדש',
+          icon: const Icon(FluentIcons.dismiss_24_regular, size: 20),
+          tooltip: 'סגור',
           visualDensity: VisualDensity.compact,
-          onPressed: _installPlugin,
+          onPressed: widget.onClose,
         ),
-        if (widget.showDevTools) ...[
-          IconButton(
-            icon: const Icon(FluentIcons.folder_add_24_regular, size: 20),
-            tooltip: 'טען תיקיית תוסף',
-            visualDensity: VisualDensity.compact,
-            onPressed: _loadDevPlugin,
-          ),
-          IconButton(
-            icon: const Icon(FluentIcons.globe_add_24_regular, size: 20),
-            tooltip: 'טען תוסף מ-localhost',
-            visualDensity: VisualDensity.compact,
-            onPressed: _loadLocalhostPlugin,
-          ),
-        ],
       ],
     );
   }
@@ -592,7 +599,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       children: [
         Expanded(child: field),
         const SizedBox(width: AppTokens.spaceXS),
-        FieldIconButton(
+        SquareIconButton.field(
           icon: FluentIcons.arrow_sync_24_regular,
           tooltip: 'רענן תוספים',
           onPressed: () =>
@@ -624,7 +631,11 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     );
   }
 
-  Widget _buildGrid(List<ToolCatalogEntry> entries, Set<String> openToolIds) {
+  Widget _buildGrid(
+    List<ToolCatalogEntry> entries,
+    Set<String> openToolIds, {
+    required double bottomInset,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = toolGridColumns(
@@ -643,7 +654,10 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
             child: ListView(
               controller: _gridScrollController,
               // הרווח בימין שמור לפס הגלילה, כדי שלא יעלה על הקוביות.
-              padding: const EdgeInsets.only(right: kToolGridScrollbarGutter),
+              padding: EdgeInsets.only(
+                right: kToolGridScrollbarGutter,
+                bottom: bottomInset,
+              ),
               children: [
                 for (var i = 0; i < groups.length; i++) ...[
                   // קבוצות עוקבות באותה תווית (תוספים לפני/אחרי הכלים המובנים)
@@ -757,6 +771,55 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
           ),
         ),
         onTap: () => widget.onToolSelected(entry),
+      ),
+    );
+  }
+}
+
+/// סרגל צף לפעולות התוספים, בתחתית תחילת החלונית — באותו עיצוב של סרגל
+/// התצוגה המקדימה בספריה.
+class _PluginsToolbar extends StatelessWidget {
+  final bool showDevTools;
+  final VoidCallback onInstall;
+  final VoidCallback onLoadFolder;
+  final VoidCallback onLoadLocalhost;
+
+  const _PluginsToolbar({
+    required this.showDevTools,
+    required this.onInstall,
+    required this.onLoadFolder,
+    required this.onLoadLocalhost,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHigh,
+      shape: AppTokens.roundedShape,
+      elevation: AppTokens.elevation1,
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SquareIconButton.toolbar(
+            icon: FluentIcons.add_24_regular,
+            tooltip: 'התקן תוסף חדש',
+            onPressed: onInstall,
+          ),
+          if (showDevTools) ...[
+            SquareIconButton.toolbar(
+              icon: FluentIcons.folder_add_24_regular,
+              tooltip: 'טען תיקיית תוסף',
+              onPressed: onLoadFolder,
+            ),
+            SquareIconButton.toolbar(
+              icon: FluentIcons.globe_add_24_regular,
+              tooltip: 'טען תוסף מ-localhost',
+              onPressed: onLoadLocalhost,
+            ),
+          ],
+        ],
       ),
     );
   }

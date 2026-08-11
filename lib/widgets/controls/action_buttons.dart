@@ -286,26 +286,38 @@ class _BalancedText extends StatelessWidget {
   }
 }
 
-// ── FieldIconButton ───────────────────────────────────────────────────────────
+// ── SquareIconButton ──────────────────────────────────────────────────────────
 
-/// כפתור אייקון מרובע (פינות מעוגלות) בגובה שדה קלט, לשימוש בשורה אחת עם
-/// [OtzariaSearchField] וכדומה.
+enum _SquareVariant { field, toolbar }
+
+/// כפתור אייקון מרובע (פינות מעוגלות ברדיוס האחיד) בגובה שדה קלט:
+/// - [SquareIconButton.field] — רקע tonal, לשורה אחת עם [OtzariaSearchField]
+/// - [SquareIconButton.toolbar] — רקע שקוף, בתוך סרגל צף שכבר צבוע
 ///
 /// [slim] = null: יורש מ-[SettingsBloc.compactMenuMode], בדיוק כמו שדה החיפוש,
 /// כדי שהגבהים יישארו זהים בשני המצבים.
-class FieldIconButton extends StatelessWidget {
+class SquareIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
   final String? tooltip;
   final bool? slim;
+  final _SquareVariant _variant;
 
-  const FieldIconButton({
+  const SquareIconButton.field({
     super.key,
     required this.icon,
     required this.onPressed,
     this.tooltip,
     this.slim,
-  });
+  }) : _variant = _SquareVariant.field;
+
+  const SquareIconButton.toolbar({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.slim,
+  }) : _variant = _SquareVariant.toolbar;
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +336,9 @@ class FieldIconButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         visualDensity: VisualDensity.compact,
         style: IconButton.styleFrom(
-          backgroundColor: cs.surfaceContainerHighest,
+          backgroundColor: _variant == _SquareVariant.field
+              ? cs.surfaceContainerHighest
+              : Colors.transparent,
           foregroundColor: cs.onSurfaceVariant,
           shape: const RoundedRectangleBorder(
             borderRadius: AppTokens.borderRadiusAll,
