@@ -10,6 +10,7 @@ void main() {
       'type': 'checkbox',
       'title': 'חפש גם במקור חיצוני',
       'defaultValue': true,
+      'openPluginOnSubmit': true,
       'visibleInModes': ['exact', 'advanced'],
     };
     if (disabledSearchOptions != null) {
@@ -28,6 +29,7 @@ void main() {
     );
 
     expect(parsed.defaultValue, isTrue);
+    expect(parsed.openPluginOnSubmit, isTrue);
     expect(parsed.isVisibleIn(SearchMode.exact), isTrue);
     expect(parsed.isVisibleIn(SearchMode.advanced), isTrue);
     expect(parsed.isVisibleIn(SearchMode.fuzzy), isFalse);
@@ -35,6 +37,16 @@ void main() {
       'word.partial',
       'word.typo-tolerance',
     });
+  });
+
+  test('rejects a non-boolean openPluginOnSubmit value', () {
+    expect(
+      () => PluginSearchDialogItem.fromPayload({
+        ...item(),
+        'openPluginOnSubmit': 'yes',
+      }),
+      throwsA(isA<PluginSearchDialogItemException>()),
+    );
   });
 
   test('rejects an unknown native search option id', () {

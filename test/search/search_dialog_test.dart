@@ -190,6 +190,94 @@ Future<void> main() async {
     },
   );
 
+  testWidgets(
+    'אישור שורת תוסף מנתב אליו payload מלא במקום לפתוח טאב חיפוש',
+    (
+      WidgetTester tester,
+    ) async {
+      final historyBloc = MockHistoryBloc();
+      final indexingBloc = MockIndexingBloc();
+      final navigationBloc = MockNavigationBloc();
+      final registry = PluginSearchDialogRegistry.forTesting();
+      final tab = SearchingTab(
+        'חיפוש',
+        'חכמה בינה',
+        initialConfiguration: const SearchConfiguration(
+          searchMode: SearchMode.exact,
+          distance: 4,
+        ),
+      );
+      tab.globalSearchOptions['קידומות דקדוקיות'] = true;
+      final launches = <(String, Map<String, dynamic>)>[];
+
+      registry.registerPayload('test.plugin', {
+        'id': 'include-external',
+        'type': 'checkbox',
+        'title': 'חפש גם במקור חיצוני',
+        'defaultValue': true,
+        'openPluginOnSubmit': true,
+        'visibleInModes': ['exact'],
+      });
+      whenListen(
+        historyBloc,
+        const Stream<HistoryState>.empty(),
+        initialState: HistoryLoaded([]),
+      );
+      whenListen(
+        indexingBloc,
+        const Stream<IndexingState>.empty(),
+        initialState: IndexingInitial(),
+      );
+      whenListen(
+        navigationBloc,
+        const Stream<NavigationState>.empty(),
+        initialState: const NavigationState(currentScreen: Screen.search),
+      );
+
+      addTearDown(() async {
+        registry.dispose();
+        tab.dispose();
+        await historyBloc.close();
+        await indexingBloc.close();
+        await navigationBloc.close();
+      });
+
+      await tester.pumpWidget(
+        _buildDialogHarness(
+          theme: ThemeData(useMaterial3: true),
+          historyBloc: historyBloc,
+          indexingBloc: indexingBloc,
+          navigationBloc: navigationBloc,
+          dialog: SearchDialog(
+            existingTab: tab,
+            pluginSearchDialogRegistry: registry,
+            pluginSearchSubmitLauncher: (pluginId, payload) {
+              launches.add((pluginId, payload));
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('חפש'));
+      await tester.pump();
+
+      expect(launches, hasLength(1));
+      expect(launches.single.$1, 'test.plugin');
+      expect(launches.single.$2['itemId'], 'include-external');
+      final request = launches.single.$2['request'] as Map<String, dynamic>;
+      expect(request['query'], 'חכמה בינה');
+      expect(request['mode'], 'exact');
+      expect(request['distance'], 4);
+      expect(request['facets'], ['/']);
+      expect(request['wordOptions'], {
+        'חכמה_0': {'קידומות דקדוקיות': true},
+        'בינה_1': {'קידומות דקדוקיות': true},
+      });
+    },
+    skip: !engineReady,
+  );
+
   testWidgets('תפריט ההיסטוריה משתמש ברקע של הדיאלוג', (
     WidgetTester tester,
   ) async {

@@ -57,6 +57,7 @@ const Set<String> _knownApiMethods = {
   'app.openUrl',
   'library.findBooks',
   'library.getBookMetadata',
+  'library.resolveBooks',
   'library.listRecentBooks',
   'library.getBookContent',
   'library.getBookToc',
@@ -170,6 +171,7 @@ const Set<String> _knownEvents = {
   'workspace.changed',
   'settings.changed',
   'plugin.permissions_changed',
+  'search.requested',
 };
 
 /// מיפוי `method -> permission` נדרשת (תואם METHOD_REQUIRED_PERMISSION ב-JS).
@@ -183,6 +185,7 @@ const Map<String, String> _methodRequiredPermission = {
   'app.openUrl': 'app.open_url',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
+  'library.resolveBooks': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
   'library.getTree': 'library.books.read',
   'library.getBookContent': 'library.content.read',
@@ -284,6 +287,7 @@ const Map<String, String> _methodMinVersion = {
   'app.getGrantedPermissions': '0.9.89',
   'library.findBooks': '0.9.89',
   'library.getBookMetadata': '0.9.89',
+  'library.resolveBooks': '0.9.97',
   'library.listRecentBooks': '0.9.89',
   'library.getBookContent': '0.9.89',
   'library.getBookToc': '0.9.89',

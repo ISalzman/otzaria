@@ -11,6 +11,7 @@ class PluginSearchDialogItem {
   final String id;
   final String title;
   final bool defaultValue;
+  final bool openPluginOnSubmit;
   final Set<SearchMode> visibleInModes;
   final Map<SearchMode, Set<String>> disabledSearchOptionIds;
 
@@ -18,6 +19,7 @@ class PluginSearchDialogItem {
     required this.id,
     required this.title,
     required this.defaultValue,
+    required this.openPluginOnSubmit,
     required this.visibleInModes,
     required this.disabledSearchOptionIds,
   });
@@ -33,6 +35,7 @@ class PluginSearchDialogItem {
       'type',
       'title',
       'defaultValue',
+      'openPluginOnSubmit',
       'visibleInModes',
       'disabledSearchOptions',
     };
@@ -67,6 +70,12 @@ class PluginSearchDialogItem {
         'defaultValue must be a bool',
       );
     }
+    final openPluginOnSubmit = payload['openPluginOnSubmit'];
+    if (openPluginOnSubmit != null && openPluginOnSubmit is! bool) {
+      throw const PluginSearchDialogItemException(
+        'openPluginOnSubmit must be a bool',
+      );
+    }
 
     final visibleInModes = _parseModes(
       payload['visibleInModes'],
@@ -81,6 +90,7 @@ class PluginSearchDialogItem {
       id: id,
       title: title,
       defaultValue: defaultValue as bool? ?? false,
+      openPluginOnSubmit: openPluginOnSubmit as bool? ?? false,
       visibleInModes: Set.unmodifiable(visibleInModes),
       disabledSearchOptionIds: Map.unmodifiable({
         for (final entry in disabledSearchOptionIds.entries)

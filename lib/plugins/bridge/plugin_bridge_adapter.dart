@@ -72,9 +72,11 @@ import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_reveal_service.dart';
 import 'package:otzaria/plugins/models/plugin_text_normalization.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/plugins/declarative/services/declarative_library_book_access.dart';
 import 'package:otzaria/plugins/services/plugin_section_text_map_service.dart';
 import 'package:otzaria/plugins/services/plugin_text_occurrence_service.dart';
 import 'package:otzaria/plugins/services/text_source_map_service.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 
 // ===================================================================
@@ -619,7 +621,37 @@ class PluginBridgeAdapter {
             ...PluginBookIdentity.toJson(book),
             'title': book.title,
             'topics': book.topics,
+            'categoryPath': FacetHelper.resolveCategoryPath(book),
           };
+        }
+      case 'resolveBooks':
+        {
+          final rawItems = args['items'];
+          if (rawItems is! List || rawItems.length > 100) {
+            throw Exception('items must be an array with at most 100 entries');
+          }
+          final identities = <Map<String, dynamic>>[];
+          for (final item in rawItems) {
+            if (item is! Map) {
+              throw Exception('items entries must be objects');
+            }
+            identities.add(Map<String, dynamic>.from(item));
+          }
+          final access = DeclarativeLibraryBookAccess.otzaria(
+            _dependencies.bookOpenCoordinator,
+          );
+          final books = await access.findUniqueBooks(identities);
+          return [
+            for (final book in books)
+              if (book == null)
+                null
+              else
+                {
+                  ...PluginBookIdentity.toJson(book),
+                  'title': book.title,
+                  'categoryPath': FacetHelper.resolveCategoryPath(book),
+                },
+          ];
         }
       case 'listRecentBooks':
         final historyState = _dependencies.historyBloc.state;
@@ -1057,8 +1089,19 @@ class PluginBridgeAdapter {
           final navigateToPositionIfReused =
               args['navigateToPositionIfReused'] as bool? ?? false;
           if (PluginBookIdentity.parseId(args['id']) == null &&
-              bookId == null) {
+              bookId == null &&
+              args['external'] == null) {
             throw Exception('id or bookId required');
+          }
+          if (args['external'] != null) {
+            final access = DeclarativeLibraryBookAccess.otzaria(
+              _dependencies.bookOpenCoordinator,
+            );
+            return access.openUnique(
+              _identityFields(args),
+              index: index,
+              searchQuery: searchQuery,
+            );
           }
           final book = _findPluginBook(
             await DataRepository.instance.library,
@@ -1429,6 +1472,11 @@ class PluginBridgeAdapter {
         throw Exception('Unknown action in reader: $action');
     }
   }
+
+  Map<String, dynamic> _identityFields(Map<String, dynamic> args) => {
+    for (final key in ['id', 'bookId', 'type', 'source', 'external'])
+      if (args.containsKey(key)) key: args[key],
+  };
 
   Future<Map<String, dynamic>> _findTextOccurrences(
     Map<String, dynamic> args,

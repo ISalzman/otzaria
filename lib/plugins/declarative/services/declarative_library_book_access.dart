@@ -48,7 +48,7 @@ class DeclarativeLibraryBookAccess
   Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
     List<Map<String, dynamic>> identities,
   ) async {
-    final books = await _findUniqueBatch(identities);
+    final books = await findUniqueBooks(identities);
     return [
       for (final book in books)
         if (book == null) null else PluginBookIdentity.toJson(book),
@@ -58,7 +58,7 @@ class DeclarativeLibraryBookAccess
   Future<Map<String, dynamic>?> resolveUnique(
     Map<String, dynamic> identity,
   ) async {
-    final book = (await _findUniqueBatch([identity])).single;
+    final book = (await findUniqueBooks([identity])).single;
     return book == null ? null : PluginBookIdentity.toJson(book);
   }
 
@@ -68,13 +68,14 @@ class DeclarativeLibraryBookAccess
     required int index,
     required String searchQuery,
   }) async {
-    final book = (await _findUniqueBatch([identity])).single;
+    final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
     _openBook(book, index, searchQuery);
     return true;
   }
 
-  Future<List<Book?>> _findUniqueBatch(
+  /// פותר אצווה של זהויות לספרים בלי לחשוף נתיבים או לבצע פתיחה.
+  Future<List<Book?>> findUniqueBooks(
     List<Map<String, dynamic>> identities,
   ) async {
     final parsed = [
