@@ -532,8 +532,8 @@ class PluginExtendedValidator {
   // ===== Manifest checks =====
 
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
-  static const String _startupContributionsMinVersion = '0.9.97';
-  static const String _declarativeProgramsMinVersion = '0.9.98';
+  static const String _startupContributionsMinVersion = '0.9.96';
+  static const String _declarativeProgramsMinVersion = '0.9.96';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.

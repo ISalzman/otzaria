@@ -13,7 +13,7 @@ Map<String, dynamic> _manifest({
     'reader.context_menu',
     'published_data.write',
   ],
-  String minAppVersion = '0.9.97',
+  String minAppVersion = '0.9.96',
   Map<String, dynamic>? startup,
 }) => {
   'schemaVersion': 1,
@@ -103,7 +103,7 @@ void main() {
     );
   });
 
-  test('minAppVersion below 0.9.97 is a blocking error', () {
+  test('minAppVersion below 0.9.96 is a blocking error', () {
     final report = _run(
       tempDir,
       _manifest(minAppVersion: '0.9.95', startup: validStartup()),
@@ -355,7 +355,7 @@ void main() {
     final report = _run(
       tempDir,
       _manifest(
-        minAppVersion: '0.9.98',
+        minAppVersion: '0.9.96',
         permissions: const ['app.startup_contributions'],
         startup: {
           'programs': [_validHostProgram()],
@@ -376,7 +376,7 @@ void main() {
     final report = _run(
       tempDir,
       _manifest(
-        minAppVersion: '0.9.98',
+        minAppVersion: '0.9.96',
         permissions: const ['app.startup_contributions'],
         startup: {
           'programs': [program],
@@ -387,10 +387,11 @@ void main() {
     expect(report.errors, contains(contains('unknown_command')));
   });
 
-  test('תכנית דקלרטיבית דורשת minAppVersion עדכני', () {
+  test('תכנית דקלרטיבית דורשת minAppVersion 0.9.96', () {
     final report = _run(
       tempDir,
       _manifest(
+        minAppVersion: '0.9.95',
         permissions: const ['app.startup_contributions'],
         startup: {
           'programs': [_validHostProgram()],
@@ -398,14 +399,14 @@ void main() {
       ),
     );
 
-    expect(report.errors, contains(contains('0.9.98')));
+    expect(report.errors, contains(contains('0.9.96')));
   });
 
   test('שני פקדי Host דקלרטיביים עוברים ולידציה', () {
     final report = _run(
       tempDir,
       _manifest(
-        minAppVersion: '0.9.98',
+        minAppVersion: '0.9.96',
         permissions: const [
           'app.startup_contributions',
           'reader.toolbar',
@@ -425,7 +426,7 @@ void main() {
     final report = _run(
       tempDir,
       _manifest(
-        minAppVersion: '0.9.98',
+        minAppVersion: '0.9.96',
         permissions: const ['app.startup_contributions', 'reader.open'],
         startup: {
           'programs': [_toolbarProgram()],
@@ -444,7 +445,7 @@ void main() {
     final report = _run(
       tempDir,
       _manifest(
-        minAppVersion: '0.9.98',
+        minAppVersion: '0.9.96',
         permissions: const [
           'app.startup_contributions',
           'reader.toolbar',
