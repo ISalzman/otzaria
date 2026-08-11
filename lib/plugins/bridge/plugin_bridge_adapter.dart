@@ -2907,7 +2907,10 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // database.*
   // ----------------------------------------------------------------
-  dynamic _handleDatabase(String action, Map<String, dynamic> args) {
+  Future<dynamic> _handleDatabase(
+    String action,
+    Map<String, dynamic> args,
+  ) async {
     switch (action) {
       case 'listSources':
         final sources = _databaseService.listSourcesForPlugin(plugin);
@@ -2924,7 +2927,7 @@ class PluginBridgeAdapter {
         return _databaseService.describeSource(plugin, sourceId);
 
       case 'query':
-        return _databaseService.query(plugin, args);
+        return await _databaseService.query(plugin, args);
 
       case 'batchQuery':
         final queries = (args['queries'] as List<dynamic>?)
@@ -2935,7 +2938,7 @@ class PluginBridgeAdapter {
             '"queries" list is required',
           );
         }
-        final results = _databaseService.batchQuery(plugin, queries);
+        final results = await _databaseService.batchQuery(plugin, queries);
         return {'results': results};
 
       default:

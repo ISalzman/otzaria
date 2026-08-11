@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -59,7 +60,7 @@ void main() {
     final plugin = _pluginWithSource(sourceId);
 
     expect(
-      _firstTitle(service.query(plugin, _titleQuery(sourceId))),
+      _firstTitle(await service.query(plugin, _titleQuery(sourceId))),
       'ספר בדיקה',
     );
 
@@ -67,9 +68,40 @@ void main() {
     _createDatabase(databasePath, 'ספר מעודכן');
 
     expect(
-      _firstTitle(service.query(plugin, _titleQuery(sourceId))),
+      _firstTitle(await service.query(plugin, _titleQuery(sourceId))),
       'ספר מעודכן',
     );
+  });
+
+  test('שאילתת SQLite אינה חוסמת את לולאת האירועים הראשית', () async {
+    _registerSource(sourceId: sourceId, databasePath: databasePath);
+    var eventLoopAdvanced = false;
+    Timer.run(() => eventLoopAdvanced = true);
+
+    final result = await PluginDatabaseService().query(
+      _pluginWithSource(sourceId),
+      _titleQuery(sourceId),
+    );
+
+    expect(_firstTitle(result), 'ספר בדיקה');
+    expect(eventLoopAdvanced, isTrue);
+  });
+
+  test('timeout עוצר את worker ומשחרר את קובץ ה-DB', () async {
+    _registerSource(
+      sourceId: sourceId,
+      databasePath: databasePath,
+      policy: _policy(maxQueryDuration: Duration.zero),
+    );
+
+    await expectLater(
+      PluginDatabaseService().query(
+        _pluginWithSource(sourceId),
+        _titleQuery(sourceId),
+      ),
+      _throwsDatabaseError('database.query_timeout'),
+    );
+    await File(databasePath).rename('$databasePath.after-timeout');
   });
 
   test('alias כפול נדחה', () {
@@ -229,7 +261,10 @@ void _registerSource({
   );
 }
 
-PluginDatabasePolicy _policy({int maxInValues = 100}) {
+PluginDatabasePolicy _policy({
+  int maxInValues = 100,
+  Duration maxQueryDuration = const Duration(seconds: 3),
+}) {
   return PluginDatabasePolicy(
     tables: const {'books', 'authors'},
     columnsByTable: const {
@@ -245,6 +280,7 @@ PluginDatabasePolicy _policy({int maxInValues = 100}) {
       ),
     ],
     maxInValues: maxInValues,
+    maxQueryDuration: maxQueryDuration,
   );
 }
 

@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' show min;
 import 'dart:typed_data';
+
 import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3_pkg;
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'plugin_database_source.dart';
@@ -71,12 +74,13 @@ class PluginDatabaseService {
       'limits': {
         'maxLimit': policy.maxLimit,
         'maxBatchQueries': policy.maxBatchQueries,
+        'maxQueryDurationMs': policy.maxQueryDuration.inMilliseconds,
       },
     };
   }
 
   /// ביצוע שאילתה דקלרטיבית
-  Map<String, dynamic> query(
+  Future<Map<String, dynamic>> query(
     InstalledPlugin plugin,
     Map<String, dynamic> spec,
   ) {
@@ -102,84 +106,29 @@ class PluginDatabaseService {
         : policy.maxLimit;
     final offset = spec['offset'] as int? ?? 0;
 
-    // Execute (sqlite3 is synchronous — fetch limit+1 to detect hasMore)
-    final db = _openConnection(source);
     final fetchLimit = effectiveLimit + 1;
     final compiledWithProbe = _compileSpec(spec, fetchLimit, offset);
-    final sw = Stopwatch()..start();
-    try {
-      final resultSet = db.select(
-        compiledWithProbe.sql,
-        compiledWithProbe.params,
-      );
-      sw.stop();
-
-      final rowFormat = spec['rowFormat'] as String? ?? 'array';
-      final columns = resultSet.columnNames;
-      final hasMore = resultSet.length > effectiveLimit;
-      final rawRows = hasMore
-          ? resultSet.take(effectiveLimit).toList()
-          : resultSet.toList();
-      var resultBytes = 0;
-
-      Object? checkedValue(Object? value) {
-        resultBytes += _estimateValueBytes(value);
-        if (resultBytes > policy.maxResultBytes) {
-          throw PluginDatabaseException(
-            'database.query_too_large',
-            'Query result exceeds maxResultBytes (${policy.maxResultBytes})',
-          );
-        }
-        return value;
-      }
-
-      final List<dynamic> rows;
-      if (rowFormat == 'object') {
-        final seen = <String>{};
-        for (final col in columns) {
-          if (!seen.add(col)) {
-            throw PluginDatabaseException(
-              'database.invalid_spec',
-              'Duplicate column name "$col" in result set — add "as" aliases to disambiguate',
-            );
-          }
-        }
-        rows = rawRows.map((row) {
-          final obj = <String, dynamic>{};
-          for (var i = 0; i < columns.length; i++) {
-            obj[columns[i]] = checkedValue(row.columnAt(i));
-          }
-          return obj;
-        }).toList();
-      } else {
-        rows = rawRows
-            .map((row) => row.values.map(checkedValue).toList())
-            .toList();
-      }
-
-      return {
-        'meta': {
-          'sourceId': sourceId,
-          'rowCount': rows.length,
-          'limit': effectiveLimit,
-          'offset': offset,
-          'hasMore': hasMore,
-          'elapsedMs': sw.elapsedMilliseconds,
-        },
-        'columns': columns.map((c) => {'name': c}).toList(),
-        'rows': rows,
-      };
-    } finally {
-      db.close();
-    }
+    return _runDatabaseQueryWorker(
+      _DatabaseQueryRequest(
+        databasePath: source.databasePath,
+        sourceId: sourceId,
+        sql: compiledWithProbe.sql,
+        params: compiledWithProbe.params,
+        rowFormat: spec['rowFormat'] as String? ?? 'array',
+        effectiveLimit: effectiveLimit,
+        offset: offset,
+        maxResultBytes: policy.maxResultBytes,
+      ),
+      timeout: policy.maxQueryDuration,
+    );
   }
 
   /// ביצוע batch של שאילתות
-  List<Map<String, dynamic>> batchQuery(
+  Future<List<Map<String, dynamic>>> batchQuery(
     InstalledPlugin plugin,
     List<Map<String, dynamic>> queries,
   ) {
-    if (queries.isEmpty) return [];
+    if (queries.isEmpty) return Future.value(const []);
 
     for (final querySpec in queries) {
       final sourceId = querySpec['sourceId'];
@@ -193,7 +142,7 @@ class PluginDatabaseService {
       }
     }
 
-    return queries.map((q) => query(plugin, q)).toList();
+    return Future.wait(queries.map((querySpec) => query(plugin, querySpec)));
   }
 
   // ----------------------------------------------------------------
@@ -231,15 +180,6 @@ class PluginDatabaseService {
       );
     }
     return source;
-  }
-
-  sqlite3_pkg.Database _openConnection(PluginDatabaseSource source) {
-    final database = sqlite3_pkg.sqlite3.open(
-      source.databasePath,
-      mode: sqlite3_pkg.OpenMode.readOnly,
-    );
-    database.execute('PRAGMA query_only = ON');
-    return database;
   }
 
   // ----------------------------------------------------------------
@@ -758,13 +698,6 @@ class PluginDatabaseService {
     }
   }
 
-  int _estimateValueBytes(Object? value) {
-    if (value == null) return 0;
-    if (value is String) return value.codeUnits.length * 2;
-    if (value is Uint8List) return value.length;
-    return 8;
-  }
-
   // ----------------------------------------------------------------
   // Private: SQL compilation
   // ----------------------------------------------------------------
@@ -888,4 +821,233 @@ class _CompiledQuery {
   final List<Object?> params;
 
   _CompiledQuery(this.sql, this.params);
+}
+
+class _DatabaseQueryRequest {
+  final String databasePath;
+  final String sourceId;
+  final String sql;
+  final List<Object?> params;
+  final String rowFormat;
+  final int effectiveLimit;
+  final int offset;
+  final int maxResultBytes;
+
+  const _DatabaseQueryRequest({
+    required this.databasePath,
+    required this.sourceId,
+    required this.sql,
+    required this.params,
+    required this.rowFormat,
+    required this.effectiveLimit,
+    required this.offset,
+    required this.maxResultBytes,
+  });
+}
+
+class _DatabaseQueryWorkerMessage {
+  final SendPort responsePort;
+  final _DatabaseQueryRequest request;
+
+  const _DatabaseQueryWorkerMessage(this.responsePort, this.request);
+}
+
+Future<Map<String, dynamic>> _runDatabaseQueryWorker(
+  _DatabaseQueryRequest request, {
+  required Duration timeout,
+}) {
+  final responsePort = ReceivePort();
+  final errorPort = ReceivePort();
+  final completer = Completer<Map<String, dynamic>>();
+  Isolate? isolate;
+  var disposed = false;
+
+  responsePort.listen((message) {
+    if (completer.isCompleted || message is! Map) return;
+    final response = Map<String, dynamic>.from(message);
+    final error = response['error'];
+    if (error is Map) {
+      final errorMap = Map<String, dynamic>.from(error);
+      completer.completeError(
+        PluginDatabaseException(
+          errorMap['code'] as String? ?? 'database.query_failed',
+          errorMap['message'] as String? ?? 'Database query failed',
+        ),
+      );
+      return;
+    }
+    final result = response['result'];
+    if (result is Map) {
+      completer.complete(Map<String, dynamic>.from(result));
+      return;
+    }
+    completer.completeError(
+      const PluginDatabaseException(
+        'database.query_failed',
+        'Database worker returned an invalid response',
+      ),
+    );
+  });
+  errorPort.listen((message) {
+    if (completer.isCompleted) return;
+    final parts = message is List ? message : const [];
+    completer.completeError(
+      PluginDatabaseException(
+        'database.query_failed',
+        parts.isEmpty ? 'Database worker failed' : '${parts.first}',
+      ),
+    );
+  });
+
+  final timeoutTimer = Timer(timeout, () {
+    if (!completer.isCompleted) {
+      completer.completeError(
+        PluginDatabaseException(
+          'database.query_timeout',
+          'Database query exceeded ${timeout.inMilliseconds}ms',
+        ),
+      );
+    }
+  });
+  final result = completer.future.whenComplete(() {
+    disposed = true;
+    timeoutTimer.cancel();
+    isolate?.kill(priority: Isolate.immediate);
+    responsePort.close();
+    errorPort.close();
+  });
+
+  try {
+    final spawn = Isolate.spawn(
+      _databaseQueryWorkerMain,
+      _DatabaseQueryWorkerMessage(responsePort.sendPort, request),
+      onError: errorPort.sendPort,
+      errorsAreFatal: true,
+    );
+    unawaited(
+      spawn.then<void>(
+        (worker) {
+          isolate = worker;
+          if (disposed) worker.kill(priority: Isolate.immediate);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!completer.isCompleted) {
+            completer.completeError(
+              PluginDatabaseException(
+                'database.query_failed',
+                'Failed to start database worker: $error',
+              ),
+              stackTrace,
+            );
+          }
+        },
+      ),
+    );
+  } catch (error, stackTrace) {
+    if (!completer.isCompleted) {
+      completer.completeError(
+        PluginDatabaseException(
+          'database.query_failed',
+          'Failed to start database worker: $error',
+        ),
+        stackTrace,
+      );
+    }
+  }
+  return result;
+}
+
+void _databaseQueryWorkerMain(_DatabaseQueryWorkerMessage message) {
+  try {
+    message.responsePort.send({
+      'result': _executeDatabaseQuery(message.request),
+    });
+  } on PluginDatabaseException catch (error) {
+    message.responsePort.send({
+      'error': {'code': error.code, 'message': error.message},
+    });
+  } catch (error) {
+    message.responsePort.send({
+      'error': {
+        'code': 'database.query_failed',
+        'message': 'Database query failed: $error',
+      },
+    });
+  }
+}
+
+Map<String, dynamic> _executeDatabaseQuery(_DatabaseQueryRequest request) {
+  final database = sqlite3_pkg.sqlite3.open(
+    request.databasePath,
+    mode: sqlite3_pkg.OpenMode.readOnly,
+  );
+  final stopwatch = Stopwatch()..start();
+  try {
+    database.execute('PRAGMA query_only = ON');
+    final resultSet = database.select(request.sql, request.params);
+    stopwatch.stop();
+    final columns = resultSet.columnNames;
+    final hasMore = resultSet.length > request.effectiveLimit;
+    final rawRows = hasMore
+        ? resultSet.take(request.effectiveLimit).toList()
+        : resultSet.toList();
+    var resultBytes = 0;
+
+    Object? checkedValue(Object? value) {
+      resultBytes += _estimateValueBytes(value);
+      if (resultBytes > request.maxResultBytes) {
+        throw PluginDatabaseException(
+          'database.query_too_large',
+          'Query result exceeds maxResultBytes (${request.maxResultBytes})',
+        );
+      }
+      return value;
+    }
+
+    final List<dynamic> rows;
+    if (request.rowFormat == 'object') {
+      final seen = <String>{};
+      for (final column in columns) {
+        if (!seen.add(column)) {
+          throw PluginDatabaseException(
+            'database.invalid_spec',
+            'Duplicate column name "$column" in result set — add "as" aliases to disambiguate',
+          );
+        }
+      }
+      rows = rawRows.map((row) {
+        final object = <String, dynamic>{};
+        for (var index = 0; index < columns.length; index++) {
+          object[columns[index]] = checkedValue(row.columnAt(index));
+        }
+        return object;
+      }).toList();
+    } else {
+      rows = rawRows
+          .map((row) => row.values.map(checkedValue).toList())
+          .toList();
+    }
+
+    return {
+      'meta': {
+        'sourceId': request.sourceId,
+        'rowCount': rows.length,
+        'limit': request.effectiveLimit,
+        'offset': request.offset,
+        'hasMore': hasMore,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+      'columns': columns.map((column) => {'name': column}).toList(),
+      'rows': rows,
+    };
+  } finally {
+    database.close();
+  }
+}
+
+int _estimateValueBytes(Object? value) {
+  if (value == null) return 0;
+  if (value is String) return value.codeUnits.length * 2;
+  if (value is Uint8List) return value.length;
+  return 8;
 }

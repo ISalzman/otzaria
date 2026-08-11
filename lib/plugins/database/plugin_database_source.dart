@@ -57,6 +57,9 @@ class PluginDatabasePolicy {
   /// גודל משוער מקסימלי של פלט השאילתה
   final int maxResultBytes;
 
+  /// משך הריצה המקסימלי של שאילתה לפני עצירת ה-isolate
+  final Duration maxQueryDuration;
+
   const PluginDatabasePolicy({
     required this.tables,
     required this.columnsByTable,
@@ -70,6 +73,7 @@ class PluginDatabasePolicy {
     this.maxInValues = 100,
     this.maxParameterBytes = 64 * 1024,
     this.maxResultBytes = 4 * 1024 * 1024,
+    this.maxQueryDuration = const Duration(seconds: 3),
   });
 
   /// בודק אם טבלה מותרת
