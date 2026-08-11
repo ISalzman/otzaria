@@ -22,14 +22,8 @@ Widget wrap(Widget child) => MaterialApp(
 
 class _NavPanelTabHeaderHost extends StatefulWidget {
   final int initialIndex;
-  final bool showPin;
-  final bool isPinned;
 
-  const _NavPanelTabHeaderHost({
-    this.initialIndex = 0,
-    this.showPin = false,
-    this.isPinned = false,
-  });
+  const _NavPanelTabHeaderHost({this.initialIndex = 0});
 
   @override
   State<_NavPanelTabHeaderHost> createState() => _NavPanelTabHeaderHostState();
@@ -71,24 +65,14 @@ class _NavPanelTabHeaderHostState extends State<_NavPanelTabHeaderHost>
           label: 'הערות',
         ),
       ],
-      isPinned: widget.isPinned,
-      onTogglePin: widget.showPin ? () {} : null,
     );
   }
 }
 
-Widget _wrap({
-  int initialIndex = 0,
-  bool showPin = false,
-  bool isPinned = false,
-}) {
+Widget _wrap({int initialIndex = 0}) {
   return MaterialApp(
     home: Scaffold(
-      body: _NavPanelTabHeaderHost(
-        initialIndex: initialIndex,
-        showPin: showPin,
-        isPinned: isPinned,
-      ),
+      body: _NavPanelTabHeaderHost(initialIndex: initialIndex),
     ),
   );
 }
@@ -211,37 +195,6 @@ void main() {
 
       expect(find.byIcon(FluentIcons.note_24_filled), findsOneWidget);
       expect(find.byIcon(FluentIcons.link_24_regular), findsOneWidget);
-    });
-  });
-
-  group('NavPanelTabHeader - כפתור pin', () {
-    testWidgets('onTogglePin=null — כפתור pin לא מוצג', (tester) async {
-      await tester.pumpWidget(_wrap(showPin: false));
-      await tester.pump();
-
-      expect(find.byType(NavPanelPinButton), findsNothing);
-    });
-
-    testWidgets('onTogglePin מסופק — כפתור pin מוצג', (tester) async {
-      await tester.pumpWidget(_wrap(showPin: true));
-      await tester.pump();
-
-      expect(find.byType(NavPanelPinButton), findsOneWidget);
-    });
-
-    testWidgets('isPinned=true — אייקון pin filled מוצג', (tester) async {
-      await tester.pumpWidget(_wrap(showPin: true, isPinned: true));
-      await tester.pump();
-
-      expect(find.byIcon(FluentIcons.pin_24_filled), findsOneWidget);
-    });
-
-    testWidgets('isPinned=false — אייקון pin regular מוצג', (tester) async {
-      await tester.pumpWidget(_wrap(showPin: true, isPinned: false));
-      await tester.pump();
-
-      // globalPin=false (Settings לא מוגדר), isPinned=false
-      expect(find.byIcon(FluentIcons.pin_24_regular), findsOneWidget);
     });
   });
 }

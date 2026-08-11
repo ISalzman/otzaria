@@ -787,6 +787,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             host: _searchHost,
             isOpen: _navPaneOpen || _pinLeftPane,
             paneWidth: _kNavPaneWidth,
+            isPinned: _pinLeftPane,
+            onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
           ),
         ),
         AppTopBarItem(
@@ -988,8 +990,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
               label: 'חיפוש',
             ),
           ],
-          isPinned: _pinLeftPane,
-          onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
         ),
         Expanded(
           child: TabBarView(

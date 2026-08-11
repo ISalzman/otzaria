@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import '../helpers/memory_settings_cache.dart';
 
 /// חלונית מדומה: סרגל בסרגל העליון + שתי לשוניות שמפרסמות פעולות חיפוש.
 class _Host extends StatefulWidget {
   final bool isOpen;
+  final bool showPin;
+  final bool isPinned;
 
-  const _Host({this.isOpen = true});
+  const _Host({
+    this.isOpen = true,
+    this.showPin = false,
+    this.isPinned = false,
+  });
 
   @override
   State<_Host> createState() => _HostState();
@@ -48,7 +59,10 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
                 host: host,
                 isOpen: widget.isOpen,
                 paneWidth: 300,
+                isPinned: widget.isPinned,
+                onTogglePin: widget.showPin ? () {} : null,
               ),
+              // אייקון הפתיחה/סגירה — מחוץ לרוחב הסרגל.
               const Icon(Icons.menu),
             ],
           ),
@@ -117,6 +131,13 @@ Widget wrap(Widget child) => MaterialApp(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // NavPanelPinButton קורא את הגדרת הנעיצה הגלובלית.
+  setUpAll(() async {
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
   testWidgets('הסרגל מציג את פעולת הלשונית הפעילה ומתחלף במעבר לשונית', (
     tester,
   ) async {
@@ -143,11 +164,18 @@ void main() {
     expect(tester.getSize(find.byType(NavPanelSearchBar)).width, 0);
   });
 
-  testWidgets('חלונית פתוחה — הסרגל ברוחב החלונית', (tester) async {
+  testWidgets('חלונית פתוחה — הסרגל ברוחב החלונית (פחות ריווח הסרגל העליון)', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap(const _Host()));
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(find.byType(NavPanelSearchBar)).width, 300);
+    // הסרגל העליון מרווח את פריטיו מהדופן, ולכן הרוחב מפצה עליו כדי
+    // שהשפה הפנימית תתיישר לשפת החלונית.
+    expect(
+      tester.getSize(find.byType(NavPanelSearchBar)).width,
+      300 - AppTopBar.horizontalPadding(false),
+    );
   });
 
   testWidgets('מחוץ לחלונית ניווט אין הגבהה — הלשונית מציירת שדה מקומי', (
@@ -193,7 +221,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // הסרגל לא נעלם ולא התכווץ — רק התוכן שבתוכו הושבת.
-    expect(tester.getSize(find.byType(NavPanelSearchBar)).width, 300);
+    expect(
+      tester.getSize(find.byType(NavPanelSearchBar)).width,
+      300 - AppTopBar.horizontalPadding(false),
+    );
     final field = tester.widget<OtzariaSearchField>(
       find.byType(OtzariaSearchField),
     );
@@ -216,5 +247,60 @@ void main() {
       same(elementBefore),
       reason: 'הסרגל נשאר מורכב; רק התוכן הפנימי שלו מתחלף',
     );
+  });
+
+  testWidgets('כפתור הנעיצה יושב בסרגל, בתוך רוחב החלונית', (tester) async {
+    await tester.pumpWidget(
+      wrap(const _Host(showPin: true, isPinned: true)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavPanelPinButton), findsOneWidget);
+    expect(find.byIcon(FluentIcons.pin_24_filled), findsOneWidget);
+
+    final bar = tester.getRect(find.byType(NavPanelSearchBar));
+    final pin = tester.getRect(find.byType(NavPanelPinButton));
+    expect(bar.contains(pin.center), isTrue);
+
+    // אייקון הפתיחה נשאר מחוץ לסרגל.
+    final toggle = tester.getRect(find.byIcon(Icons.menu));
+    expect(bar.contains(toggle.center), isFalse);
+  });
+
+  testWidgets('onTogglePin=null — אין כפתור נעיצה', (tester) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavPanelPinButton), findsNothing);
+  });
+
+  testWidgets('בלי נעיצה: השדה מתיישר לשוליים של תוכן החלונית משני הצדדים', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+
+    final bar = tester.getRect(find.byType(NavPanelSearchBar));
+    final field = tester.getRect(find.byType(OtzariaSearchField));
+    expect(bar.right - field.right, greaterThan(0));
+    expect(field.left - bar.left, greaterThan(0));
+  });
+
+  testWidgets('עם נעיצה: רווח בין השדה לכפתור, והכפתור גולש אל השוליים', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const _Host(showPin: true)));
+    await tester.pumpAndSettle();
+
+    final bar = tester.getRect(find.byType(NavPanelSearchBar));
+    final field = tester.getRect(find.byType(OtzariaSearchField));
+    final pin = tester.getRect(find.byType(NavPanelPinButton));
+
+    // הכפתור אינו נצמד לשדה...
+    expect(field.left - pin.right, greaterThan(0));
+    // ...וגולש אל השוליים הפנימיים, כדי לא להתרחק מאייקון הסגירה.
+    expect(pin.left, bar.left);
+    // השדה מוותר על השוליים החיצוניים לטובת הרווח הזה.
+    expect(bar.right, field.right);
   });
 }

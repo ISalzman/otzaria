@@ -79,22 +79,19 @@ class NavSidePanel extends StatelessWidget {
   }
 }
 
-/// הכותרת האחידה של חלונית הניווט — לשוניות וכפתור נעיצה.
+/// שורת הלשוניות של חלונית הניווט.
 ///
 /// אייקון הלשונית הנבחרת מתחלף ל-filled כשסופק [NavPanelTab.iconFilled].
-/// [onTogglePin] null = הכפתור מוסתר (למשל במסך צר).
+/// כפתור הנעיצה אינו כאן — הוא פעולה של החלונית כולה ולכן יושב בסרגל שמעליה
+/// ([NavPanelSearchBar]).
 class NavPanelTabHeader extends StatefulWidget {
   final TabController controller;
   final List<NavPanelTab> tabs;
-  final bool isPinned;
-  final VoidCallback? onTogglePin;
 
   const NavPanelTabHeader({
     super.key,
     required this.controller,
     required this.tabs,
-    this.isPinned = false,
-    this.onTogglePin,
   });
 
   @override
@@ -133,23 +130,12 @@ class _NavPanelTabHeaderState extends State<NavPanelTabHeader> {
     final sel = widget.controller.index;
     return SizedBox(
       height: AppTokens.panelTabHeight,
-      child: Row(
-        children: [
-          Expanded(
-            child: TabBar(
-              controller: widget.controller,
-              splashBorderRadius: AppTokens.borderRadiusAll,
-              tabs: [
-                for (var i = 0; i < widget.tabs.length; i++)
-                  _tab(widget.tabs[i], i == sel),
-              ],
-            ),
-          ),
-          if (widget.onTogglePin != null)
-            NavPanelPinButton(
-              isPinned: widget.isPinned,
-              onToggle: widget.onTogglePin,
-            ),
+      child: TabBar(
+        controller: widget.controller,
+        splashBorderRadius: AppTokens.borderRadiusAll,
+        tabs: [
+          for (var i = 0; i < widget.tabs.length; i++)
+            _tab(widget.tabs[i], i == sel),
         ],
       ),
     );

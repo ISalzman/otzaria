@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/theme/theme_exports.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/navigation/app_top_bar.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 /// פעולת החיפוש של לשונית אחת בחלונית הניווט.
@@ -218,11 +223,14 @@ class NavPanelLocalSearchField extends StatelessWidget {
   }
 }
 
-/// סרגל החיפוש של חלונית הניווט, בתוך הסרגל העליון.
+/// סרגל החלונית שבתוך הסרגל העליון: שדה החיפוש של הלשונית הפעילה וכפתור
+/// הנעיצה. הוא תופס בדיוק את רוחב החלונית שמתחתיו, עם אותם שוליים אופקיים של
+/// תוכן החלונית ([kNavTreeSideInset]) — כדי שלא ייראה כמרחף מעל תוכן הקריאה.
+/// אייקון הפתיחה/סגירה נשאר מחוץ לרוחב הזה, כפריט הבא בסרגל.
 ///
 /// נפתח באנימציה מרוחב 0 (מקום אייקון הפתיחה) לרוחב החלונית, ולכן הוא דוחק
 /// את האייקון פנימה ו"נמשך" ממנו. הפעולה שבתוכו מתחלפת לפי הלשונית הנבחרת,
-/// והסרגל נשאר מעל החלונית כל עוד היא פתוחה.
+/// והסרגל נשאר מוצג ומורכב כל עוד החלונית פתוחה.
 class NavPanelSearchBar extends StatefulWidget {
   final NavPanelSearchHost host;
 
@@ -232,11 +240,18 @@ class NavPanelSearchBar extends StatefulWidget {
   /// רוחב החלונית שמעליה הסרגל יושב.
   final double paneWidth;
 
+  /// מצב נעיצת החלונית. [onTogglePin] null = הכפתור מוסתר (למשל במסך צר, או
+  /// בחלונית שאין בה נעיצה).
+  final bool isPinned;
+  final VoidCallback? onTogglePin;
+
   const NavPanelSearchBar({
     super.key,
     required this.host,
     required this.isOpen,
     required this.paneWidth,
+    this.isPinned = false,
+    this.onTogglePin,
   });
 
   @override
@@ -256,43 +271,77 @@ class _NavPanelSearchBarState extends State<NavPanelSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    // כמו ב-OtzariaSearchField: קריאה סובלנית, כדי שהסרגל יעבוד גם בהקשר
+    // שאין בו SettingsBloc.
+    final isCompact =
+        context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+    // הסרגל העליון מרווח את פריטיו מהדופן, והחלונית צמודה אליה — לכן הרוחב
+    // והשוליים מפצים על אותו ריווח, ושפת הסרגל מתיישרת לשפת החלונית.
+    final barInset = AppTopBar.horizontalPadding(isCompact);
+    final width = (widget.paneWidth - barInset).clamp(0.0, double.infinity);
+    final hasPin = widget.onTogglePin != null;
+    // בלי נעיצה השדה מתיישר לשוליים של תוכן החלונית משני הצדדים. עם נעיצה
+    // השוליים נשמרים לשדה בלבד: הוא מוותר על השוליים החיצוניים (שם הסרגל
+    // העליון עמוס בכל מקרה), וכפתור הנעיצה גולש אל השוליים הפנימיים — כך
+    // הוא לא נצמד לשדה ולא מתרחק מאייקון הסגירה.
+    final fieldStartInset = hasPin
+        ? 0.0
+        : (kNavTreeSideInset - barInset).clamp(0.0, double.infinity);
+    final fieldEndInset = hasPin ? AppTokens.spaceXS : kNavTreeSideInset;
+
     // IntrinsicHeight: ה-OverflowBox דורש גובה חסום, וסרגל עליון עשוי לתת
     // גובה חופשי (Row בתוך Column).
     return IntrinsicHeight(
       child: AnimatedContainer(
         duration: AppTokens.animPanelSlide,
         curve: Curves.easeInOut,
-        width: widget.isOpen ? widget.paneWidth : 0,
+        width: widget.isOpen ? width : 0,
         child: ClipRect(
           child: OverflowBox(
-            maxWidth: widget.paneWidth,
+            maxWidth: width,
             minWidth: 0,
             alignment: AlignmentDirectional.centerStart,
             child: SizedBox(
-              width: widget.paneWidth,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                // רק תוכן השדה מתחלף לפי הלשונית — הסרגל עצמו נשאר מוצג
-                // ומורכב כל עוד החלונית פתוחה, ואינו נבנה מחדש.
-                child: ListenableBuilder(
-                  listenable: widget.host,
-                  builder: (context, _) {
-                    final delegate = widget.host.active;
-                    return OtzariaSearchField(
-                      controller: delegate?.controller ?? _idleController,
-                      focusNode: delegate?.focusNode,
-                      enabled: delegate != null,
-                      hintText: delegate?.hintText ?? 'אין חיפוש בלשונית זו',
-                      onChanged: delegate?.onChanged,
-                      onSubmitted: delegate?.onSubmitted,
-                      onClear: delegate?.onClear,
-                      trailingActions:
-                          delegate == null || delegate.trailingActions.isEmpty
-                          ? null
-                          : delegate.trailingActions,
-                    );
-                  },
-                ),
+              width: width,
+              child: Row(
+                children: [
+                  // רק תוכן השדה מתחלף לפי הלשונית — הסרגל עצמו נשאר מוצג
+                  // ומורכב כל עוד החלונית פתוחה, ואינו נבנה מחדש.
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsetsDirectional.only(
+                        start: fieldStartInset,
+                        end: fieldEndInset,
+                      ),
+                      child: ListenableBuilder(
+                        listenable: widget.host,
+                        builder: (context, _) {
+                          final delegate = widget.host.active;
+                          return OtzariaSearchField(
+                            controller: delegate?.controller ?? _idleController,
+                            focusNode: delegate?.focusNode,
+                            enabled: delegate != null,
+                            hintText:
+                                delegate?.hintText ?? 'אין חיפוש בלשונית זו',
+                            onChanged: delegate?.onChanged,
+                            onSubmitted: delegate?.onSubmitted,
+                            onClear: delegate?.onClear,
+                            trailingActions:
+                                delegate == null ||
+                                    delegate.trailingActions.isEmpty
+                                ? null
+                                : delegate.trailingActions,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  if (hasPin)
+                    NavPanelPinButton(
+                      isPinned: widget.isPinned,
+                      onToggle: widget.onTogglePin,
+                    ),
+                ],
               ),
             ),
           ),

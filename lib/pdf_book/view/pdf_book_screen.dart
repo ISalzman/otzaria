@@ -3863,12 +3863,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       }
                       return true;
                     },
-                    builder: (context, state) => NavPanelSearchBar(
-                      host: _searchHost,
-                      isOpen: state is PdfBookLoaded && state.showLeftPane,
-                      paneWidth: state is PdfBookLoaded
-                          ? state.sidebarWidth
-                          : 300.0,
+                    builder: (context, state) => ValueListenableBuilder<bool>(
+                      valueListenable: widget.tab.pinLeftPane,
+                      builder: (context, isPinned, _) => NavPanelSearchBar(
+                        host: _searchHost,
+                        isOpen: state is PdfBookLoaded && state.showLeftPane,
+                        paneWidth: state is PdfBookLoaded
+                            ? state.sidebarWidth
+                            : 300.0,
+                        isPinned: isPinned,
+                        onTogglePin: MediaQuery.of(context).size.width >= 600
+                            ? () => widget.tab.pinLeftPane.value = !isPinned
+                            : null,
+                      ),
                     ),
                   ),
                 ),
@@ -4300,35 +4307,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       host: _searchHost,
       child: Column(
         children: [
-          ValueListenableBuilder(
-            valueListenable: widget.tab.pinLeftPane,
-            builder: (context, pinLeftPanel, child) => NavPanelTabHeader(
-              controller: _leftPaneTabController!,
-              tabs: const [
-                (
-                  icon: OtzariaIcons.list_24_regular,
-                  iconFilled: OtzariaIcons.list_24_filled,
-                  label: 'ניווט',
-                ),
-                (
-                  icon: FluentIcons.search_24_regular,
-                  iconFilled: FluentIcons.search_24_filled,
-                  label: 'חיפוש',
-                ),
-                (
-                  icon: FluentIcons.document_multiple_24_regular,
-                  iconFilled: FluentIcons.document_multiple_24_filled,
-                  label: 'דפים',
-                ),
-              ],
-              isPinned: pinLeftPanel,
-              onTogglePin: MediaQuery.of(context).size.width >= 600
-                  ? () {
-                      widget.tab.pinLeftPane.value =
-                          !widget.tab.pinLeftPane.value;
-                    }
-                  : null,
-            ),
+          NavPanelTabHeader(
+            controller: _leftPaneTabController!,
+            tabs: const [
+              (
+                icon: OtzariaIcons.list_24_regular,
+                iconFilled: OtzariaIcons.list_24_filled,
+                label: 'ניווט',
+              ),
+              (
+                icon: FluentIcons.search_24_regular,
+                iconFilled: FluentIcons.search_24_filled,
+                label: 'חיפוש',
+              ),
+              (
+                icon: FluentIcons.document_multiple_24_regular,
+                iconFilled: FluentIcons.document_multiple_24_filled,
+                label: 'דפים',
+              ),
+            ],
           ),
           Expanded(
             child: TabBarView(

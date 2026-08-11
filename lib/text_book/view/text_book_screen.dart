@@ -1541,6 +1541,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         host: _searchHost,
         isOpen: state.showLeftPane,
         paneWidth: paneWidth,
+        isPinned: state.pinLeftPane,
+        onTogglePin: MediaQuery.of(context).size.width >= 600
+            ? () => context.read<TextBookBloc>().add(
+                TogglePinLeftPane(!state.pinLeftPane),
+              )
+            : null,
       ),
     );
   }
@@ -2833,12 +2839,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               label: 'חיפוש',
             ),
           ],
-          isPinned: state.pinLeftPane,
-          onTogglePin: MediaQuery.of(context).size.width >= 600
-              ? () => context.read<TextBookBloc>().add(
-                  TogglePinLeftPane(!state.pinLeftPane),
-                )
-              : null,
         ),
         Expanded(
           child: TabBarView(

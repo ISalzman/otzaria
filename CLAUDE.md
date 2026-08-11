@@ -455,11 +455,9 @@ NavPanelToggleButton(              // the ONE icon that opens/closes it
   onToggle: () => setState(() => _isNavVisible = !_isNavVisible),
 )
 
-NavPanelTabHeader(                 // tabs + pin, when the panel has tabs
+NavPanelTabHeader(                 // tabs only — the pin is NOT here
   controller: _tabController,
   tabs: const [(icon: ..., iconFilled: ..., label: 'ניווט')],
-  isPinned: _pinned,
-  onTogglePin: () => setState(() => _pinned = !_pinned),
 )
 ```
 
@@ -468,6 +466,7 @@ NavPanelTabHeader(                 // tabs + pin, when the panel has tabs
 - each `TabBarView` child is wrapped in `NavPanelSearchSlot(index: i, …)`
 - a tab publishes its own action with `NavPanelSearchPublisher(delegate: NavPanelSearchDelegate(...))` and draws a local field only when `!NavPanelSearch.isHoisted(context)` (i.e. outside a panel — dialog, other screen), via `NavPanelLocalSearchField`
 - the bar stays mounted for as long as the panel is open: only the field's *content* swaps per tab. A tab with no search action leaves it visible but disabled — do NOT key or rebuild the bar per tab
+- the **pin** lives in this bar (`isPinned` / `onTogglePin`), not in the tab row — it is a panel-level action. The bar spans exactly the panel's width (minus `AppTopBar.horizontalPadding`) with `kNavTreeSideInset` insets, so it sits over the panel only; the open/close icon stays outside it as the next `leadingItems` entry
 - never build a bare `OtzariaSearchField` inside a nav-panel tab
 
 **Panel content** is built from `lib/widgets/lists/nav_tree_tile.dart`:

@@ -1011,6 +1011,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             host: _searchHost,
             isOpen: _navPaneOpen || _pinLeftPane,
             paneWidth: _kNavPaneWidth,
+            isPinned: _pinLeftPane,
+            onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
           ),
         ),
         AppTopBarItem(
@@ -1254,8 +1256,6 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               label: 'חיפוש',
             ),
           ],
-          isPinned: _pinLeftPane,
-          onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
         ),
         // ─── תוכן TabBarView ──────────────────────────────────────────
         Expanded(
