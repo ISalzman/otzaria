@@ -61,6 +61,16 @@ class DeclarativeProgramRepository extends ChangeNotifier {
     _registrations.remove(pluginId);
   }
 
+  void clearContexts() {
+    final changed = _outputs.isNotEmpty || _contextSignatures.isNotEmpty;
+    for (final pluginId in _registrations.keys) {
+      _generations[pluginId] = (_generations[pluginId] ?? 0) + 1;
+    }
+    _outputs.clear();
+    _contextSignatures.clear();
+    if (changed) notifyListeners();
+  }
+
   Future<void> runTrigger({
     required String trigger,
     required Map<String, dynamic> context,
