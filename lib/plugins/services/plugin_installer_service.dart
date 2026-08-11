@@ -148,9 +148,22 @@ class PluginInstallerService {
     String tempDirPath,
     PluginManifest manifest, {
     required bool allowOrderBeforeBuiltInsGranted,
+    required Map<String, bool> grantedPermissions,
   }) async {
     final tempDir = Directory(tempDirPath);
     try {
+      final requestedPermissions = manifest.permissions.toSet();
+      if (grantedPermissions.keys
+              .toSet()
+              .difference(requestedPermissions)
+              .isNotEmpty ||
+          requestedPermissions
+              .difference(grantedPermissions.keys.toSet())
+              .isNotEmpty) {
+        throw ArgumentError(
+          'Permission decisions must exactly match manifest permissions',
+        );
+      }
       final existingPlugin = await _repository.getPlugin(manifest.id);
 
       // 3. Move to install path
@@ -189,30 +202,13 @@ class PluginInstallerService {
         userOrder: newUserOrder,
       );
 
-      await _repository.savePlugin(plugin);
+      await _repository.savePluginWithPermissions(
+        plugin,
+        Map.unmodifiable(grantedPermissions),
+      );
 
       // אם התוסף היה ב-quarantine (קרס בטעינה קודמת), שדרוג מוצלח מוריד אותו.
       await PluginCrashGuard.retry(manifest.id);
-
-      // Seed grants: for new installs, grant all. For updates:
-      // - Only grant permissions that did NOT previously have an explicit decision.
-      //   This preserves user revokes across updates.
-      // - Remove grants for permissions that no longer exist in the new manifest.
-      var existingGrants = const <String, bool>{};
-      if (existingPlugin != null) {
-        existingGrants = await _grantsFor(existingPlugin);
-        // Clean up grants for permissions removed from the new manifest.
-        for (final oldPerm in existingPlugin.manifest.permissions) {
-          if (!manifest.permissions.contains(oldPerm)) {
-            await _repository.setPermission(manifest.id, oldPerm, false);
-          }
-        }
-      }
-      for (final perm in manifest.permissions) {
-        // If user already made a decision on this permission, keep it.
-        if (existingGrants.containsKey(perm)) continue;
-        await _repository.setPermission(manifest.id, perm, true);
-      }
     } finally {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);

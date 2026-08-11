@@ -30,6 +30,18 @@ class FakePluginRegistryRepository extends Mock
   }
 
   @override
+  Future<void> savePluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> grants,
+  ) async {
+    savedPlugins.add(plugin);
+    permissions.removeWhere((key, _) => key.startsWith('${plugin.pluginId}|'));
+    for (final entry in grants.entries) {
+      permissions['${plugin.pluginId}|${entry.key}'] = entry.value;
+    }
+  }
+
+  @override
   Future<bool?> getPermission(String id, String perm) async =>
       permissions['$id|$perm'];
 
@@ -418,6 +430,65 @@ void main() {
       },
     );
 
+    test('finalizeInstall stores the explicit permission decisions', () async {
+      const pluginId = 'test.explicit.grants';
+      final stagedDir = Directory.systemTemp.createTempSync(
+        'otzaria_install_staging_',
+      );
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+      final manifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '1.0.0',
+        name: 'Explicit Grants',
+        permissions: const [
+          'app.startup_contributions',
+          'reader.open',
+        ],
+      );
+
+      await installer.finalizeInstall(
+        stagedDir.path,
+        manifest,
+        allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {
+          'app.startup_contributions': false,
+          'reader.open': true,
+        },
+      );
+
+      expect(repository.permissions, {
+        '$pluginId|app.startup_contributions': false,
+        '$pluginId|reader.open': true,
+      });
+    });
+
+    test('finalizeInstall rejects an incomplete permission map', () async {
+      const pluginId = 'test.incomplete.grants';
+      final stagedDir = Directory.systemTemp.createTempSync(
+        'otzaria_install_staging_',
+      );
+      File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+      final manifest = _buildInstalledManifest(
+        id: pluginId,
+        version: '1.0.0',
+        name: 'Incomplete Grants',
+        permissions: const ['app.startup_contributions'],
+      );
+
+      await expectLater(
+        installer.finalizeInstall(
+          stagedDir.path,
+          manifest,
+          allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {},
+        ),
+        throwsArgumentError,
+      );
+
+      expect(repository.savedPlugins, isEmpty);
+      expect(repository.permissions, isEmpty);
+    });
+
     test('finalizeInstall preserves existingPlugin.userOrder on update — '
         'manual reorder must survive plugin updates/reinstalls', () async {
       const pluginId = 'test.reorder.persist';
@@ -466,6 +537,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: true,
+        grantedPermissions: const {},
       );
 
       expect(repository.savedPlugins, hasLength(1));
@@ -511,6 +583,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {},
       );
 
       expect(
@@ -557,6 +630,7 @@ void main() {
         stagedDir.path,
         newManifest,
         allowOrderBeforeBuiltInsGranted: false,
+        grantedPermissions: const {},
       );
 
       expect(
@@ -613,6 +687,7 @@ void main() {
           stagedDir.path,
           newManifest,
           allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {},
         );
 
         expect(

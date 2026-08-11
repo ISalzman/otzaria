@@ -55,6 +55,13 @@ class PluginRegistryRepository {
     await _db.insertOrUpdatePlugin(plugin);
   }
 
+  Future<void> savePluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) async {
+    await _db.insertOrUpdatePluginWithPermissions(plugin, permissions);
+  }
+
   Future<void> deletePlugin(String pluginId) async {
     final plugin = await getPlugin(pluginId);
     if (plugin != null && plugin.isDevelopment) {

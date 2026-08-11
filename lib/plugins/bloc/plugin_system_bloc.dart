@@ -372,22 +372,12 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     Emitter<PluginSystemState> emit,
   ) async {
     try {
-      // finalizeInstall מגרנט את כל ההרשאות כברירת מחדל
       await _installerService.finalizeInstall(
         event.tempDirPath,
         event.manifest,
         allowOrderBeforeBuiltInsGranted: event.allowOrderBeforeBuiltInsGranted,
+        grantedPermissions: event.grantedPermissions,
       );
-
-      // כתוב את כל בחירות המשתמש במפורש (גם true וגם false) —
-      // כך הבחירה הנוכחית גוברת על החלטות עבר בהתקנה חוזרת/עדכון
-      for (final entry in event.grantedPermissions.entries) {
-        await repository.setPermission(
-          event.manifest.id,
-          entry.key,
-          entry.value,
-        );
-      }
 
       UiSnack.showSuccess(PluginMessages.pluginInstalledSuccess);
       _reportInstallResult(event.reportContext, success: true);

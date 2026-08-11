@@ -167,6 +167,48 @@ class PluginSystemDatabase {
 
   Future<void> insertOrUpdatePlugin(InstalledPlugin plugin) async {
     final db = await database;
+    _insertOrUpdatePlugin(db, plugin);
+  }
+
+  Future<void> insertOrUpdatePluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) async {
+    final db = await database;
+    applyPluginInstall(db, plugin, permissions);
+  }
+
+  @visibleForTesting
+  static void applyPluginInstall(
+    Database db,
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) {
+    const savepoint = 'sp_plugin_install';
+    db.execute('SAVEPOINT $savepoint');
+    try {
+      _insertOrUpdatePlugin(db, plugin);
+      db.execute(
+        'DELETE FROM plugin_permission_grant WHERE plugin_id = ?',
+        [plugin.pluginId],
+      );
+      final grantedAt = DateTime.now().toIso8601String();
+      for (final entry in permissions.entries) {
+        db.execute(
+          'INSERT INTO plugin_permission_grant '
+          '(plugin_id, permission, granted, granted_at) VALUES (?, ?, ?, ?)',
+          [plugin.pluginId, entry.key, entry.value ? 1 : 0, grantedAt],
+        );
+      }
+      db.execute('RELEASE SAVEPOINT $savepoint');
+    } catch (_) {
+      db.execute('ROLLBACK TO SAVEPOINT $savepoint');
+      db.execute('RELEASE SAVEPOINT $savepoint');
+      rethrow;
+    }
+  }
+
+  static void _insertOrUpdatePlugin(Database db, InstalledPlugin plugin) {
     final m = plugin.toDbMap();
     final cols = m.keys.join(', ');
     final placeholders = List.filled(m.length, '?').join(', ');

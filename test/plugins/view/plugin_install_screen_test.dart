@@ -49,6 +49,7 @@ class _FakeInstallerService extends PluginInstallerService {
     String tempDirPath,
     dynamic manifest, {
     required bool allowOrderBeforeBuiltInsGranted,
+    required Map<String, bool> grantedPermissions,
   }) async {}
 }
 
