@@ -10,6 +10,7 @@ class DeclarativeProgramCompiler {
   static const int maxValueNodes = 256;
   static const int maxListLength = 100;
   static const int maxStringLength = 4096;
+  static const int maxDatabaseWhereDepth = 5;
 
   static const supportedTriggers = {'reader.activeBookChanged'};
 
@@ -317,6 +318,13 @@ class DeclarativeProgramCompiler {
     _ValueBudget budget, {
     required int depth,
   }) {
+    if (depth > maxDatabaseWhereDepth) {
+      throw const DeclarativeProgramException(
+        'declarative.value_too_large',
+        'database.select.where is too deeply nested',
+      );
+    }
+    budget.visit(depth);
     final where = _requiredMap(value, 'database.select.where');
     final op = _requiredString(where['op'], 'database.select.where.op');
     if (op == 'and' || op == 'or') {
@@ -334,6 +342,7 @@ class DeclarativeProgramCompiler {
           'database.select.where.conditions must contain 1 to 32 items',
         );
       }
+      budget.visit(depth + 1);
       for (final condition in conditions) {
         _validateDatabaseWhere(
           condition,
@@ -418,6 +427,7 @@ class DeclarativeProgramCompiler {
         'Condition is too deeply nested',
       );
     }
+    budget.visit(depth);
     final condition = _requiredMap(value, 'condition');
     final op = _requiredString(condition['op'], 'condition.op');
     switch (op) {
@@ -433,6 +443,7 @@ class DeclarativeProgramCompiler {
             'condition.conditions must contain 1 to 16 items',
           );
         }
+        budget.visit(depth + 1);
         for (final child in conditions) {
           _validateCondition(
             child,

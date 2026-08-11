@@ -144,8 +144,60 @@ void main() {
         _throwsProgramError('declarative.type_mismatch'),
       );
     });
+
+    test('עץ WHERE עמוק נדחה לפני הקפאת התוכנית', () {
+      final program = _validProgram();
+      final args = _databaseArgs(program);
+      Object where = _leafWhere();
+      for (var index = 0; index < 7; index++) {
+        where = {
+          'op': 'and',
+          'conditions': [where],
+        };
+      }
+      args['where'] = where;
+
+      expect(
+        () => _compiler().compile(program),
+        _throwsProgramError('declarative.value_too_large'),
+      );
+    });
+
+    test('עץ WHERE רחב כפוף לתקציב הצמתים הכללי', () {
+      final program = _validProgram();
+      final args = _databaseArgs(program);
+      args['where'] = {
+        'op': 'or',
+        'conditions': [
+          for (var group = 0; group < 9; group++)
+            {
+              'op': 'and',
+              'conditions': [
+                for (var item = 0; item < 32; item++) _leafWhere(),
+              ],
+            },
+        ],
+      };
+
+      expect(
+        () => _compiler().compile(program),
+        _throwsProgramError('declarative.value_too_large'),
+      );
+    });
   });
 }
+
+Map<String, dynamic> _databaseArgs(Map<String, dynamic> program) {
+  final command =
+      (program['commands'] as List<dynamic>).first as Map<String, dynamic>;
+  return command['args'] as Map<String, dynamic>;
+}
+
+Map<String, dynamic> _leafWhere() => {
+  'op': '=',
+  'left': 'm.internal_id',
+  'value': {r'$literal': 1},
+};
 
 DeclarativeProgramCompiler _compiler() => const DeclarativeProgramCompiler(
   declaredPermissions: {
