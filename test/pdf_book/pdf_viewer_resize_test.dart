@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
-import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart'
     show PdfLayoutMode;
 import 'package:pdfrx/pdfrx.dart';
@@ -81,7 +81,15 @@ void main() {
         child: SizedBox(
           width: width,
           height: 700,
-          child: DualAdaptiveReaderPane(
+          // אותה הרכבה שבמסך ה-PDF: חלונית המפרשים עוטפת את הקורא.
+          child: AdaptiveSidePane(
+            isOpen: showRightPane,
+            alignment: AlignmentDirectional.centerStart,
+            paneContent: const SizedBox.shrink(),
+            paneWidth: 240,
+            minPaneWidth: 180,
+            onClose: () => onShowRightPaneChanged(false),
+            minMainContentWidth: 500,
             mainContent: PdfViewer(
               PdfDocumentRefDirect(document),
               controller: controller,
@@ -96,17 +104,6 @@ void main() {
                 ),
               ),
             ),
-            showLeftPane: false,
-            leftPaneContent: const SizedBox.shrink(),
-            leftPaneWidth: 220,
-            leftMinPaneWidth: 180,
-            onCloseLeftPane: () {},
-            showRightPane: showRightPane,
-            rightPaneContent: const SizedBox.shrink(),
-            rightPaneWidth: 240,
-            rightMinPaneWidth: 180,
-            onCloseRightPane: () => onShowRightPaneChanged(false),
-            minMainContentWidth: 500,
           ),
         ),
       ),

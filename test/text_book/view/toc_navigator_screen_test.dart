@@ -1,12 +1,13 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/misc/expanding_chevron.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../support/search_engine_test_init.dart';
@@ -291,12 +292,13 @@ Future<void> main() async {
     await tester.pump();
 
     expect(find.text('unique-child'), findsOneWidget);
-    await tester.tap(find.byIcon(FluentIcons.chevron_up_24_regular).first);
-    await tester.pump();
+    // הצ'ברן של שורת עץ הניווט (ExpandingChevron) — סוגר ופותח את הענף.
+    await tester.tap(find.byType(ExpandingChevron).first);
+    await tester.pumpAndSettle();
     expect(find.text('unique-child'), findsNothing);
 
-    await tester.tap(find.byIcon(FluentIcons.chevron_down_24_regular).first);
-    await tester.pump();
+    await tester.tap(find.byType(ExpandingChevron).first);
+    await tester.pumpAndSettle();
     expect(find.text('unique-child'), findsOneWidget);
   });
 
@@ -551,5 +553,37 @@ Future<void> main() async {
 
     expect(find.text('unique-a'), findsOneWidget);
     expect(find.text('unique-b'), findsOneWidget);
+  });
+
+  testWidgets('שורות העץ בעיצוב הספרייה: NavTreeTile בתוך כרטיס מקובץ', (
+    tester,
+  ) async {
+    final parent = TocEntry(text: 'שער', index: 0, level: 1);
+    parent.children.add(
+      TocEntry(text: 'סימן א', index: 1, level: 2, parent: parent),
+    );
+    final bloc = _TestTextBookBloc(
+      _loadedState(toc: [parent], visibleIndices: const [0]),
+    );
+    addTearDown(bloc.close);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        TocViewer(
+          scrollController: ItemScrollController(),
+          closeLeftPaneCallback: () {},
+          focusNode: focusNode,
+        ),
+        bloc,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(NavTreeGroupCard), findsWidgets);
+    // ערך עם ילדים = שורת קטגוריה; עלה = שורת פריט.
+    expect(find.widgetWithText(NavTreeTile, 'שער'), findsOneWidget);
+    expect(find.widgetWithText(NavTreeTile, 'סימן א'), findsOneWidget);
   });
 }

@@ -72,7 +72,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
+import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
@@ -3899,21 +3899,22 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   final showRightPane = state is PdfBookLoaded
                       ? state.showRightPane
                       : false;
-                  return DualAdaptiveReaderPane(
-                    // חלונית הניווט מקבלת את עיצוב חלונית הניווט האחיד;
-                    // חלונית המפרשים נשארת צפה.
-                    attachLeftPaneToTopEdge: true,
-                    mainContent: _buildReaderMainContent(),
-                    showLeftPane: showLeftPane,
-                    leftPaneContent: _buildLeftPaneContent(showLeftPane),
-                    leftPaneWidth: leftPaneWidth,
-                    leftMinPaneWidth: 200,
-                    leftMaxPaneWidth: 600,
-                    onLeftPaneWidthChanged: (nextWidth) {
+                  // כל חלונית מנוהלת בנפרד, כמו בספרי טקסט: חלונית הניווט
+                  // (NavSidePanel) עוטפת את חלונית המפרשים, שעוטפת את הקורא.
+                  return NavSidePanel(
+                    isOpen: showLeftPane,
+                    alignment: AlignmentDirectional.centerEnd,
+                    paneWidth: leftPaneWidth,
+                    minMainContentWidth: 200,
+                    onClose: () => _setLeftPaneVisibility(false),
+                    isResizable: true,
+                    minPaneWidth: 200,
+                    maxPaneWidth: 600,
+                    autoHandleResponsiveVisibility: false,
+                    onPaneWidthChanged: (nextWidth) {
                       _bloc.add(pdf_events.UpdateSidebarWidth(nextWidth));
                     },
-                    onCloseLeftPane: () => _setLeftPaneVisibility(false),
-                    onLeftPaneResizeEnd: () {
+                    onPaneResizeEnd: () {
                       final current = _bloc.state;
                       if (current is PdfBookLoaded) {
                         context.read<SettingsBloc>().add(
@@ -3921,26 +3922,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                         );
                       }
                     },
-                    showRightPane: showRightPane,
-                    rightPaneContent: _buildRightPaneContent(),
-                    rightPaneWidth: rightPaneWidth,
-                    rightMinPaneWidth: 250,
-                    rightMaxPaneWidth: 600,
-                    onRightPaneWidthChanged: (nextWidth) {
-                      _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
-                    },
-                    onCloseRightPane: () {
-                      _bloc.add(const pdf_events.ToggleRightPane(show: false));
-                    },
-                    onRightPaneResizeEnd: () {
-                      final current = _bloc.state;
-                      if (current is PdfBookLoaded) {
-                        context.read<SettingsBloc>().add(
-                          UpdateCommentaryPaneWidth(current.rightPaneWidth),
-                        );
-                      }
-                    },
-                    minMainContentWidth: 200,
+                    paneContent: _buildLeftPaneContent(showLeftPane),
+                    mainContent: AdaptiveSidePane(
+                      isOpen: showRightPane,
+                      alignment: AlignmentDirectional.centerStart,
+                      paneWidth: rightPaneWidth,
+                      minMainContentWidth: 200,
+                      onClose: () => _bloc.add(
+                        const pdf_events.ToggleRightPane(show: false),
+                      ),
+                      isResizable: true,
+                      minPaneWidth: 250,
+                      maxPaneWidth: 600,
+                      autoHandleResponsiveVisibility: false,
+                      onPaneWidthChanged: (nextWidth) {
+                        _bloc.add(pdf_events.UpdateRightPaneWidth(nextWidth));
+                      },
+                      onPaneResizeEnd: () {
+                        final current = _bloc.state;
+                        if (current is PdfBookLoaded) {
+                          context.read<SettingsBloc>().add(
+                            UpdateCommentaryPaneWidth(current.rightPaneWidth),
+                          );
+                        }
+                      },
+                      paneContent: _buildRightPaneContent(),
+                      mainContent: _buildReaderMainContent(),
+                    ),
                   );
                 },
               ),
@@ -4304,6 +4312,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 valueListenable: widget.tab.outline,
                 builder: (context, outline, child) => OutlineView(
                   outline: outline,
+                  title: widget.tab.book.title,
                   controller: widget.tab.pdfViewerController,
                   focusNode: _navigationFieldFocusNode,
                   isPaneOpen: showLeftPane,

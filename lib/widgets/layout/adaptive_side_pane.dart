@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
-import 'package:otzaria/widgets/layout/concave_corner_fillet.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
@@ -473,11 +472,13 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
           top: 0,
           right: paneOnRight ? occupied : null,
           left: paneOnRight ? null : occupied,
-          width: ConcaveCornerFillet.size,
-          height: ConcaveCornerFillet.size,
-          child: ConcaveCornerFillet(
-            color: _effectivePaneColor(context),
-            paneOnRight: paneOnRight,
+          width: AppTokens.radius,
+          height: AppTokens.radius,
+          child: CustomPaint(
+            painter: _ConcaveCornerPainter(
+              color: _effectivePaneColor(context),
+              paneOnRight: paneOnRight,
+            ),
           ),
         );
       },
@@ -591,4 +592,30 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       ],
     );
   }
+}
+
+/// מצייר עיגול קעור (fillet) בפינה הפנימית-עליונה של החלונית: ריבוע בצבע
+/// החלונית שממנו נגרעת רבע-עיגול בצד התוכן, כך שהמפגש מתעגל כלפי החלון הגדול.
+class _ConcaveCornerPainter extends CustomPainter {
+  final Color color;
+  final bool paneOnRight;
+
+  const _ConcaveCornerPainter({required this.color, required this.paneOnRight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width;
+    // הפינה הפנימית של החלון (שממנה נגרע רבע-העיגול) הפוכה לצד החלונית.
+    final carveCenter = paneOnRight ? Offset(0, r) : Offset(r, r);
+    canvas.clipRect(Offset.zero & size);
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Rect.fromLTWH(0, 0, r, r))
+      ..addOval(Rect.fromCircle(center: carveCenter, radius: r));
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_ConcaveCornerPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.paneOnRight != paneOnRight;
 }

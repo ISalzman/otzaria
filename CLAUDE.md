@@ -436,6 +436,44 @@ Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap th
 - **`lib/navigation/`** — the fixed navigation rail and the title-bar screen names, because the settings screen is reached from them.
 - **`lib/tour/`** — the guided tour and the live tips. **Every new tour step title/body and every live-tip title/description needs an ARB entry**, same as a settings string; see `docs/guided_tour_developer_guide.md`. Two rules specific to the tour: a step's `body` must stay a plain string literal (a variable value goes in as a placeholder — a keyboard shortcut via `shortcut:` filling `{shortcut}`), and coverage is guarded by `test/settings/l10n/settings_variable_labels_test.dart`, which builds the steps for real, so a step with no translation fails there rather than rendering Hebrew.
 
+### 10. Navigation Side Panel — ONLY `NavSidePanel`
+
+Every navigation panel in the app (search facets, notes, Shamor Zachor, text/PDF book, commentators tabs) uses the **same** widgets from `lib/widgets/navigation/nav_side_panel.dart`. It is the single source of truth for that panel's look — attachment to the top bar, background color, and the concave corner where it meets the content.
+
+```dart
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
+
+NavSidePanel(                      // wraps AdaptiveSidePane; never pass
+  isOpen: _isNavVisible,           // attachToTopEdge / paneColor / scrollbarTopMargin yourself
+  onClose: () => setState(() => _isNavVisible = false),
+  paneContent: _buildTree(),
+  mainContent: _buildContent(),
+)
+
+NavPanelToggleButton(              // the ONE icon that opens/closes it
+  isOpen: _isNavVisible,
+  onToggle: () => setState(() => _isNavVisible = !_isNavVisible),
+)
+
+NavPanelTabHeader(                 // tabs + pin, when the panel has tabs
+  controller: _tabController,
+  tabs: const [(icon: ..., iconFilled: ..., label: 'ניווט')],
+  isPinned: _pinned,
+  onTogglePin: () => setState(() => _pinned = !_pinned),
+)
+```
+
+**Panel content** is built from `NavTreeTile.category` / `NavTreeTile.book` / `NavTreeHeader` / `NavTreeGroupCard` (`lib/widgets/lists/nav_tree_tile.dart`), inside a list with `EdgeInsets.symmetric(horizontal: 8, vertical: 4)` padding. A continuous group of rows shares one card (`isGroupStart` / `isGroupEnd` at its edges).
+
+**Never:**
+- `AdaptiveSidePane` directly for a *navigation* panel — it is the mechanism (responsive layout, drag, overlay) and stays for other panel kinds
+- A hand-rolled `TabBar` + `AnimatedPinButton` row as a panel header
+- A per-screen open icon (`text_continuous`, `line_horizontal_3`, …) — the toggle is `NavPanelToggleButton`
+- Hand-built tree rows with `Border(bottom:)`, explicit `fontSize`, or `primary`-colored icons
+- Passing `paneColor` / `attachToTopEdge` to a nav panel — `NavSidePanel` owns them
+- Adding a per-panel list `padding` for the tree — the inset lives in `NavTreeGroupCard` / `NavTreeHeader` (`kNavTreeSideInset`), and lists use `kNavTreeListPadding`
+- A per-panel search field built from `RtlTextField` + `InputDecoration` — every field inside a nav panel is `OtzariaSearchField`
+
 ## Code Guidelines
 
 ### RTL Support (Critical!)
@@ -721,9 +759,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Context overlay panel | `test/widgets/context_overlay_panel_test.dart` |
 | Context menu (incl. hover preview + pinning) | `test/widgets/app_context_menu_test.dart` |
 | Link preview panel (placement, pin, scroll anchor) | `test/widgets/link_preview_overlay_test.dart` |
-| Dual adaptive reader pane | `test/widgets/dual_adaptive_reader_pane_test.dart` |
 | Nav rail item | `test/widgets/nav_rail_item_test.dart` |
-| Reader side panel shell | `test/widgets/reader_side_panel_shell_test.dart` |
 | Responsive action bar | `test/widgets/responsive_action_bar_test.dart` |
 | רוחב עמודת הטקסט (בסיס אזור הקריאה, יציב בפתיחת חלונית) | `test/widgets/layout/reading_area_width_test.dart` |
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
@@ -859,6 +895,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 6. **Dialogs** - Only through `custom_ui_components` (SingleActionDialog, TwoActionsDialog, WarningDialog)
 7. **Action buttons** - Only `ActionButton.recommended` / `.neutral` / `.ghost` from `widgets_exports.dart`
 8. **Settings cards** - Only `SettingsCard` from `settings_card.dart`
+8a. **Navigation panels** - Only `NavSidePanel` + `NavPanelToggleButton` + `NavPanelTabHeader` from `nav_side_panel.dart`, with `NavTreeTile`/`NavTreeGroupCard` content
 9. **Color theming** - NEVER use hardcoded colors (Colors.red, Colors.blue, etc.), ALWAYS use `Theme.of(context).colorScheme`
 10. **Hover effects** - Remove from ListTile rows with buttons (`hoverColor: Colors.transparent`)
 11. **No color overrides outside `lib/theme/`** - NEVER add `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` in feature files — define them in `lib/theme/` only

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
-import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
@@ -21,7 +19,6 @@ import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/widgets/commentary/commentary_search_results_list.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
@@ -34,6 +31,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -175,12 +173,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   void _scrollNavToSelectedHeading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_navScrollController.isAttached) return;
-      final listIdx = _navFilteredIndices(
+      final headingIdx = _navFilteredIndices(
         _navSearchController.text,
       ).indexOf(_selectedHeadingIdx);
-      if (listIdx < 0) return;
+      if (headingIdx < 0) return;
       _navScrollController.scrollTo(
-        index: listIdx,
+        // +1: פריט 0 הוא הכותרת הראשית.
+        index: headingIdx + 1,
         alignment: 0.4,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -1074,110 +1073,122 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: RtlTextField(
+              child: OtzariaSearchField(
                 controller: _navSearchController,
-                decoration: InputDecoration(
-                  hintText: 'איתור כותרת...',
-                  prefixIcon: const Icon(FluentIcons.search_24_regular),
-                  suffixIcon: val.text.trim().isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(FluentIcons.dismiss_24_regular),
-                          onPressed: () => _navSearchController.clear(),
-                        )
-                      : null,
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: AppTokens.borderRadiusAll,
-                  ),
-                ),
+                hintText: 'איתור כותרת...',
+                onClear: () {},
               ),
             ),
             Expanded(
-              child: ScrollablePositionedList.builder(
-                itemScrollController: _navScrollController,
-                itemCount: filteredIdx.length,
-                itemBuilder: (context, listIdx) {
-                  final idx = filteredIdx[listIdx];
-                  final isActiveHeading = idx == _selectedHeadingIdx;
-                  final isExpanded = _expandedHeadings.contains(idx);
-                  final paras = _getParagraphs(idx);
+              child: NavTreeFocusGroup(
+                child: ScrollablePositionedList.builder(
+                  itemScrollController: _navScrollController,
+                  // +1 עבור הכותרת הראשית, שנגללת עם הרשימה (פריט 0).
+                  itemCount: filteredIdx.length + 1,
+                  padding: kNavTreeListPadding,
+                  itemBuilder: (context, listIdx) {
+                    if (listIdx == 0) {
+                      return NavTreeHeader(
+                        title: widget.tab.sourceTab.book.title,
+                      );
+                    }
+                    final idx = filteredIdx[listIdx - 1];
+                    final isGroupStart = listIdx == 1;
+                    final isGroupEnd = listIdx == filteredIdx.length;
+                    final isActiveHeading = idx == _selectedHeadingIdx;
+                    final isExpanded = _expandedHeadings.contains(idx);
+                    final paras = _getParagraphs(idx);
 
-                  final headingRow = _buildHeadingRow(
-                    context: context,
-                    headingText: headings[idx].key,
-                    // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
-                    isSelected:
-                        (isActiveHeading &&
-                            _selectedParagraphIdx == _kAllPara) ||
-                        _isNavItemInMulti(idx, _kAllPara),
-                    isExpanded: isExpanded,
-                    hasChildren: paras.isNotEmpty,
-                    // לחיצה על גוף הכותרת = בחירת כל הכותרת (כל המפרשים) + הרחבה
-                    onTap: () {
-                      if (_isCtrlPressed()) {
-                        _ctrlToggleNavItem(idx, _kAllPara);
-                        return;
-                      }
-                      setState(() {
-                        _selectedHeadingIdx = idx;
-                        _selectedParagraphIdx = _kAllPara;
-                        if (paras.isNotEmpty) _expandedHeadings.add(idx);
-                        _searchController.clear();
-                        _extraLines.clear();
-                      });
-                    },
-                    // לחיצה על החץ = הרחבה/כיווץ בלבד, בלי לשנות את הבחירה
-                    onToggleExpand: paras.isNotEmpty
-                        ? () {
-                            setState(() {
-                              if (isExpanded) {
-                                _expandedHeadings.remove(idx);
-                              } else {
-                                _expandedHeadings.add(idx);
-                              }
-                            });
-                          }
-                        : null,
-                  );
-
-                  if (paras.isEmpty || !isExpanded) {
-                    return headingRow;
-                  }
-
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      headingRow,
-                      ...List.generate(paras.length, (pi) {
-                        final words = paras[pi].text
-                            .split(RegExp(r'\s+'))
-                            .where((w) => w.isNotEmpty)
-                            .take(4)
-                            .join(' ');
-                        final isParaSelected =
-                            (isActiveHeading && _selectedParagraphIdx == pi) ||
-                            _isNavItemInMulti(idx, pi);
-                        return _buildParagraphRow(
-                          context: context,
-                          text: words,
-                          isSelected: isParaSelected,
-                          onTap: () {
-                            if (_isCtrlPressed()) {
-                              _ctrlToggleNavItem(idx, pi);
-                              return;
+                    final headingRow = _buildHeadingRow(
+                      context: context,
+                      headingText: headings[idx].key,
+                      // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
+                      isSelected:
+                          (isActiveHeading &&
+                              _selectedParagraphIdx == _kAllPara) ||
+                          _isNavItemInMulti(idx, _kAllPara),
+                      isExpanded: isExpanded,
+                      hasChildren: paras.isNotEmpty,
+                      // לחיצה על גוף הכותרת = בחירת כל הכותרת (כל המפרשים) + הרחבה
+                      onTap: () {
+                        if (_isCtrlPressed()) {
+                          _ctrlToggleNavItem(idx, _kAllPara);
+                          return;
+                        }
+                        setState(() {
+                          _selectedHeadingIdx = idx;
+                          _selectedParagraphIdx = _kAllPara;
+                          if (paras.isNotEmpty) _expandedHeadings.add(idx);
+                          _searchController.clear();
+                          _extraLines.clear();
+                        });
+                      },
+                      // לחיצה על החץ = הרחבה/כיווץ בלבד, בלי לשנות את הבחירה
+                      onToggleExpand: paras.isNotEmpty
+                          ? () {
+                              setState(() {
+                                if (isExpanded) {
+                                  _expandedHeadings.remove(idx);
+                                } else {
+                                  _expandedHeadings.add(idx);
+                                }
+                              });
                             }
-                            setState(() {
-                              _selectedHeadingIdx = idx;
-                              _selectedParagraphIdx = pi;
-                              _searchController.clear();
-                              _extraLines.clear();
-                            });
-                          },
-                        );
-                      }),
-                    ],
-                  );
-                },
+                          : null,
+                    );
+
+                    if (paras.isEmpty || !isExpanded) {
+                      return NavTreeGroupCard(
+                        isGroupStart: isGroupStart,
+                        isGroupEnd: isGroupEnd,
+                        child: headingRow,
+                      );
+                    }
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        NavTreeGroupCard(
+                          isGroupStart: isGroupStart,
+                          isGroupEnd: false,
+                          child: headingRow,
+                        ),
+                        ...List.generate(paras.length, (pi) {
+                          final words = paras[pi].text
+                              .split(RegExp(r'\s+'))
+                              .where((w) => w.isNotEmpty)
+                              .take(4)
+                              .join(' ');
+                          final isParaSelected =
+                              (isActiveHeading &&
+                                  _selectedParagraphIdx == pi) ||
+                              _isNavItemInMulti(idx, pi);
+                          return NavTreeGroupCard(
+                            isGroupStart: false,
+                            isGroupEnd: isGroupEnd && pi == paras.length - 1,
+                            child: _buildParagraphRow(
+                              context: context,
+                              text: words,
+                              isSelected: isParaSelected,
+                              onTap: () {
+                                if (_isCtrlPressed()) {
+                                  _ctrlToggleNavItem(idx, pi);
+                                  return;
+                                }
+                                setState(() {
+                                  _selectedHeadingIdx = idx;
+                                  _selectedParagraphIdx = pi;
+                                  _searchController.clear();
+                                  _extraLines.clear();
+                                });
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -1195,58 +1206,14 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     required VoidCallback onTap,
     VoidCallback? onToggleExpand,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
+    return NavTreeTile.category(
+      title: headingText,
+      level: 0,
+      isSelected: isSelected,
+      isExpanded: isExpanded,
+      hasChildren: hasChildren,
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.only(right: 16, left: 8, top: 12, bottom: 12),
-        child: Row(
-          children: [
-            Icon(
-              FluentIcons.book_24_regular,
-              color: colorScheme.primary,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                headingText,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: colorScheme.primary,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-            if (hasChildren)
-              IconButton(
-                icon: Icon(
-                  isExpanded
-                      ? FluentIcons.chevron_up_24_regular
-                      : FluentIcons.chevron_down_24_regular,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 20,
-                ),
-                onPressed: onToggleExpand,
-                tooltip: isExpanded ? 'כווץ' : 'הרחב',
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              ),
-          ],
-        ),
-      ),
+      onToggleExpand: onToggleExpand,
     );
   }
 
@@ -1256,47 +1223,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
+    return NavTreeTile.book(
+      title: text,
+      level: 1,
+      isSelected: isSelected,
+      icon: FluentIcons.text_bullet_list_24_regular,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(
-          right: 16.0 + 24.0,
-          left: 16,
-          top: 10,
-          bottom: 10,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              FluentIcons.text_bullet_list_24_regular,
-              color: colorScheme.secondary,
-              size: 18,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

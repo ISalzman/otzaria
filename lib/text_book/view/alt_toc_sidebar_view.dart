@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,7 +20,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class AltTocSidebarView extends StatefulWidget {
@@ -501,27 +501,15 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: RtlTextField(
+          child: OtzariaSearchField(
             controller: _searchController,
+            hintText: 'איתור כותרת...',
             // ללא autofocus: הפוקוס מנוהל אך ורק דרך focusNode מהמסך האב
             // (_focusActiveTabSearchField), שמכבד את ההגנה מפני פוקוס אוטומטי
             // באנדרואיד. autofocus היה עוקף הגנה זו וקופץ מקלדת.
             focusNode: widget.focusNode,
             onChanged: _onSearchChanged,
-            decoration: InputDecoration(
-              hintText: 'איתור כותרת...',
-              prefixIcon: const Icon(FluentIcons.search_24_regular),
-              suffixIcon: isSearching
-                  ? IconButton(
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                      onPressed: _clearSearch,
-                    )
-                  : null,
-              isDense: true,
-              border: OutlineInputBorder(
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-            ),
+            onClear: _clearSearch,
           ),
         ),
         Expanded(
@@ -591,12 +579,16 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
                       }
                       return false;
                     },
-                    child: ListView.builder(
-                      controller: _sidebarScrollController,
-                      itemCount: _structures.length,
-                      itemBuilder: (context, index) {
-                        return _buildStructureItem(_structures[index]);
-                      },
+                    child: NavTreeFocusGroup(
+                      child: ListView.builder(
+                        controller: _sidebarScrollController,
+                        padding: kNavTreeListPadding,
+                        // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
+                        itemCount: _structures.length + 1,
+                        itemBuilder: (context, index) => index == 0
+                            ? NavTreeHeader(title: widget.book.title)
+                            : _buildStructureItem(_structures[index - 1]),
+                      ),
                     ),
                   ),
                 ),
@@ -616,60 +608,26 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
       );
     }
 
-    return ListView.builder(
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final (:structureId, :entry) = matches[index];
-        final isSelected = entry.id == _activeEntryId;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : null,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
+    return NavTreeFocusGroup(
+      child: ListView.builder(
+        padding: kNavTreeListPadding,
+        itemCount: matches.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) return NavTreeHeader(title: widget.book.title);
+          final (:structureId, :entry) = matches[index - 1];
+          return NavTreeGroupCard(
+            isGroupStart: index == 1,
+            isGroupEnd: index == matches.length,
+            child: NavTreeTile.book(
+              title: entry.text ?? '',
+              level: 0,
+              isSelected: entry.id == _activeEntryId,
+              icon: FluentIcons.text_bullet_list_24_regular,
+              onTap: () => _handleEntryTap(structureId, entry),
             ),
-          ),
-          child: InkWell(
-            onTap: () => _handleEntryTap(structureId, entry),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 12.0,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    FluentIcons.text_bullet_list_24_regular,
-                    color: Theme.of(context).colorScheme.secondary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      entry.text ?? '',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -679,175 +637,77 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
 
     return Column(
       children: [
-        // Structure Header (Root of this tree)
-        Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              // Navigation Zone (Icon + Title)
-              Expanded(
-                child: InkWell(
-                  onTap: () => _handleStructureTap(structure),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 12.0,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          FluentIcons.book_24_regular,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            structure.heTitle ??
-                                structure.title ??
-                                structure.key,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Expansion Zone (Arrow)
-              InkWell(
-                onTap: () => _toggleStructure(structure),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 12.0,
-                  ),
-                  child: Icon(
-                    isExpanded
-                        ? FluentIcons.chevron_up_24_regular
-                        : FluentIcons.chevron_down_24_regular,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    size: 16,
-                  ),
-                ),
-              ),
-            ],
+        // כותרת המבנה — שורש העץ הזה, כרטיס עומד בפני עצמו.
+        NavTreeGroupCard(
+          isGroupStart: true,
+          isGroupEnd: true,
+          child: NavTreeTile.category(
+            title: structure.heTitle ?? structure.title ?? structure.key,
+            level: 0,
+            isExpanded: isExpanded,
+            hasChildren: roots.isNotEmpty,
+            onTap: () => _handleStructureTap(structure),
+            onToggleExpand: () => _toggleStructure(structure),
           ),
         ),
-
-        // Children (The actual TOC)
+        // כל כותרת ראשית עם כותרות המשנה שלה היא כרטיס נפרד, ולא רצף אחד.
         if (isExpanded)
-          ...roots.map((entry) => _buildEntryItem(structure.id, entry)),
+          ...roots.map(
+            (root) => _buildEntryItem(structure.id, root, isGroupStart: true),
+          ),
       ],
     );
   }
 
-  Widget _buildEntryItem(int structureId, AltTocEntry entry) {
+  Widget _buildEntryItem(
+    int structureId,
+    AltTocEntry entry, {
+    bool isGroupStart = false,
+    bool isGroupEnd = true,
+  }) {
     final itemKey = _itemKeys.putIfAbsent(entry.id, () => GlobalKey());
 
     final children = _structureChildren[structureId]?[entry.id];
     final hasChildren = children != null && children.isNotEmpty;
     final isExpanded = _entryExpanded[entry.id] ?? false;
     final isSelected = entry.id == _activeEntryId;
+    // רמת המבנה היא 0, ולכן ערכי ה-TOC מוזחים רמה אחת פנימה.
+    final level = entry.level + 1;
 
-    final level = entry.level;
+    final tile = hasChildren
+        ? NavTreeTile.category(
+            title: entry.text ?? '',
+            level: level,
+            isSelected: isSelected,
+            isExpanded: isExpanded,
+            hasChildren: true,
+            onTap: () => _handleEntryTap(structureId, entry),
+            onToggleExpand: () => _toggleEntryExpanded(entry.id),
+          )
+        : NavTreeTile.book(
+            title: entry.text ?? '',
+            level: level,
+            isSelected: isSelected,
+            icon: FluentIcons.text_bullet_list_24_regular,
+            onTap: () => _handleEntryTap(structureId, entry),
+          );
 
     return Column(
       key: itemKey,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : null,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
+        NavTreeGroupCard(
+          isGroupStart: isGroupStart,
+          isGroupEnd: isGroupEnd && !(hasChildren && isExpanded),
+          child: tile,
+        ),
+        if (hasChildren && isExpanded)
+          ...children.asMap().entries.map(
+            (e) => _buildEntryItem(
+              structureId,
+              e.value,
+              isGroupEnd: isGroupEnd && e.key == children.length - 1,
             ),
           ),
-          child: Row(
-            children: [
-              // Content Area (Navigation Only)
-              Expanded(
-                child: InkWell(
-                  onTap: () => _handleEntryTap(structureId, entry),
-                  child: Container(
-                    padding: EdgeInsets.only(
-                      right: 16.0 + (level * 24.0),
-                      left: 8.0,
-                      top: 12.0,
-                      bottom: 12.0,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          FluentIcons.text_bullet_list_24_regular,
-                          color: Theme.of(context).colorScheme.secondary,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            entry.text ?? '',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Expansion Arrow (if children exist) (Toggle Only)
-              if (hasChildren)
-                InkWell(
-                  onTap: () => _toggleEntryExpanded(entry.id),
-                  child: Container(
-                    padding: const EdgeInsets.only(
-                      left: 16.0,
-                      right: 8.0,
-                      top: 12.0,
-                      bottom: 12.0,
-                    ),
-                    child: Icon(
-                      isExpanded
-                          ? FluentIcons.chevron_up_24_regular
-                          : FluentIcons.chevron_down_24_regular,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 20,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        // Children
-        if (hasChildren && isExpanded)
-          ...children.map((child) => _buildEntryItem(structureId, child)),
       ],
     );
   }

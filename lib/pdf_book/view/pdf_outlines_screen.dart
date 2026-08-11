@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/app_tokens.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 /// מחזירה האם כותרת סימנייה תואמת לשאילתת החיפוש, עם נורמליזציה כמו באיתור
 /// (הסרת ניקוד וגרשיים) כך שכותרות עבריות יימצאו גם ללא תווים אלו.
@@ -23,6 +23,7 @@ class OutlineView extends StatefulWidget {
     required this.outline,
     required this.controller,
     required this.focusNode,
+    this.title,
     this.isPaneOpen = true,
     this.onNavigateToPage,
   });
@@ -30,6 +31,9 @@ class OutlineView extends StatefulWidget {
   final List<PdfOutlineNode>? outline;
   final PdfViewerController controller;
   final FocusNode focusNode;
+
+  /// כותרת ראשית מעל הרשימה (שם הספר).
+  final String? title;
 
   /// האם הפאנל הצדדי פתוח. כשהוא סגור אין לגלול (הגלילה נכשלת ומשבשת
   /// את ה-guard), וברגע הפתיחה יש לגלול למיקום הנוכחי.
@@ -262,35 +266,14 @@ class _OutlineViewState extends State<OutlineView>
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: RtlTextField(
+          child: OtzariaSearchField(
             controller: searchController,
+            hintText: 'חיפוש סימניה...',
             focusNode: widget.focusNode,
             autofocus: true,
             onChanged: (value) => setState(() {}),
-            onSubmitted: (_) {
-              widget.focusNode.requestFocus();
-            },
-            decoration: InputDecoration(
-              hintText: 'חיפוש סימניה...',
-              prefixIcon: const Icon(FluentIcons.search_24_regular),
-              suffixIcon: searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(FluentIcons.dismiss_24_regular),
-                      onPressed: () {
-                        setState(() {
-                          searchController.clear();
-                        });
-                      },
-                    )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 12.0,
-              ),
-            ),
+            onSubmitted: (_) => widget.focusNode.requestFocus(),
+            onClear: () => setState(() {}),
           ),
         ),
         Expanded(
@@ -318,16 +301,26 @@ class _OutlineViewState extends State<OutlineView>
   }
 
   Widget _buildOutlineList(List<PdfOutlineNode> outline) {
-    return SingleChildScrollView(
-      controller: _tocScrollController,
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: outline.length,
-        itemBuilder: (context, index) => _buildOutlineItem(
-          outline[index],
-          level: 0,
-          isFirstChild: index == 0,
+    return NavTreeFocusGroup(
+      child: SingleChildScrollView(
+        controller: _tocScrollController,
+        padding: kNavTreeListPadding,
+        child: Column(
+          children: [
+            if (widget.title != null) NavTreeHeader(title: widget.title!),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: outline.length,
+              itemBuilder: (context, index) => _buildOutlineItem(
+                outline[index],
+                level: 0,
+                isFirstChild: index == 0,
+                isGroupStart: index == 0,
+                isGroupEnd: index == outline.length - 1,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -354,15 +347,25 @@ class _OutlineViewState extends State<OutlineView>
         )
         .toList();
 
-    return SingleChildScrollView(
-      controller: _tocScrollController,
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: filteredNodes.length,
-        itemBuilder: (context, index) => _buildOutlineItem(
-          filteredNodes[index].node,
-          level: filteredNodes[index].level,
+    return NavTreeFocusGroup(
+      child: SingleChildScrollView(
+        controller: _tocScrollController,
+        padding: kNavTreeListPadding,
+        child: Column(
+          children: [
+            if (widget.title != null) NavTreeHeader(title: widget.title!),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filteredNodes.length,
+              itemBuilder: (context, index) => _buildOutlineItem(
+                filteredNodes[index].node,
+                level: filteredNodes[index].level,
+                isGroupStart: index == 0,
+                isGroupEnd: index == filteredNodes.length - 1,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -372,6 +375,8 @@ class _OutlineViewState extends State<OutlineView>
     PdfOutlineNode node, {
     int level = 0,
     bool isFirstChild = false,
+    bool isGroupStart = false,
+    bool isGroupEnd = false,
   }) {
     final itemKey = _tocItemKeys.putIfAbsent(node, () => GlobalKey());
     Future<void> navigateToEntry() async {
@@ -398,165 +403,52 @@ class _OutlineViewState extends State<OutlineView>
         node.dest?.pageNumber == widget.controller.pageNumber;
 
     if (node.children.isEmpty) {
-      return InkWell(
-        key: itemKey,
-        onTap: () async => navigateToEntry(),
-        child: Container(
-          padding: EdgeInsets.only(
-            right: 16.0 + (level * 24.0),
-            left: 16.0,
-            top: 10.0,
-            bottom: 10.0,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : null,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                // רמה 0 (רמה 1 בספירה רגילה) מקבלת אייקון ספר
-                level == 0
-                    ? FluentIcons.book_24_regular
-                    : FluentIcons.text_bullet_list_24_regular,
-                color: level == 0
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.secondary,
-                size: level == 0 ? 20 : 18,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  node.title,
-                  style: TextStyle(
-                    fontSize: level == 0 ? 15 : 14,
-                    fontWeight: level == 0
-                        ? FontWeight.w600
-                        : (selected ? FontWeight.w600 : FontWeight.normal),
-                    color: level == 0
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                ),
-              ),
-            ],
+      return NavTreeGroupCard(
+        isGroupStart: isGroupStart,
+        isGroupEnd: isGroupEnd,
+        child: KeyedSubtree(
+          key: itemKey,
+          child: NavTreeTile.book(
+            title: node.title,
+            level: level,
+            isSelected: selected,
+            icon: FluentIcons.text_bullet_list_24_regular,
+            onTap: navigateToEntry,
           ),
         ),
       );
-    } else {
-      final bool isExpanded = _expanded[node] ?? (level == 0 || isFirstChild);
+    }
 
-      return Column(
-        key: itemKey,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: selected
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                  : null,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                // אזור הטקסט לניווט
-                Expanded(
-                  child: InkWell(
-                    onTap: () async => navigateToEntry(),
-                    child: Container(
-                      padding: EdgeInsets.only(
-                        right: 16.0 + (level * 24.0),
-                        left: 8.0,
-                        top: 12.0,
-                        bottom: 12.0,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            // רמה 0 (רמה 1 בספירה רגילה) מקבלת אייקון ספר
-                            level == 0
-                                ? FluentIcons.book_24_regular
-                                : FluentIcons.text_bullet_list_24_regular,
-                            color: level == 0
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.secondary,
-                            size: level == 0 ? 20 : 18,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              node.title,
-                              style: TextStyle(
-                                fontSize: level == 0 ? 15 : 14,
-                                fontWeight: level == 0
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: level == 0
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                // כפתור החץ לפתיחה/סגירה
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _expanded[node] = !isExpanded;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.only(
-                      left: 16.0,
-                      right: 8.0,
-                      top: 12.0,
-                      bottom: 12.0,
-                    ),
-                    child: Icon(
-                      isExpanded
-                          ? FluentIcons.chevron_up_24_regular
-                          : FluentIcons.chevron_down_24_regular,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ],
+    final bool isExpanded = _expanded[node] ?? (level == 0 || isFirstChild);
+
+    return Column(
+      key: itemKey,
+      children: [
+        NavTreeGroupCard(
+          isGroupStart: isGroupStart,
+          isGroupEnd: isGroupEnd && !isExpanded,
+          child: NavTreeTile.category(
+            title: node.title,
+            level: level,
+            isSelected: selected,
+            isExpanded: isExpanded,
+            hasChildren: true,
+            onTap: navigateToEntry,
+            onToggleExpand: () => setState(() {
+              _expanded[node] = !isExpanded;
+            }),
+          ),
+        ),
+        if (isExpanded)
+          ...node.children.asMap().entries.map(
+            (e) => _buildOutlineItem(
+              e.value,
+              level: level + 1,
+              isFirstChild: isFirstChild && e.key == 0,
+              isGroupEnd: isGroupEnd && e.key == node.children.length - 1,
             ),
           ),
-          if (isExpanded)
-            ...node.children.asMap().entries.map(
-              (e) => _buildOutlineItem(
-                e.value,
-                level: level + 1,
-                isFirstChild: isFirstChild && e.key == 0,
-              ),
-            ),
-        ],
-      );
-    }
+      ],
+    );
   }
 }

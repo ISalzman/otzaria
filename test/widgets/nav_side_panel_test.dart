@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
@@ -152,7 +153,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byIcon(FluentIcons.panel_right_contract_24_regular),
+      find.byIcon(OtzariaIcons.text_continuous_24_filled),
       findsOneWidget,
     );
     expect(find.byTooltip('הסתר ניווט'), findsOneWidget);
@@ -160,7 +161,10 @@ void main() {
     await tester.tap(find.byType(IconButton));
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(FluentIcons.panel_right_24_regular), findsOneWidget);
+    expect(
+      find.byIcon(OtzariaIcons.text_continuous_24_regular),
+      findsOneWidget,
+    );
     expect(find.byTooltip('הצג ניווט'), findsOneWidget);
     expect(isOpen, isFalse);
   });

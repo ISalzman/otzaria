@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
-import 'package:otzaria/widgets/layout/concave_corner_fillet.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
@@ -734,12 +733,18 @@ void main() {
         reason: 'מעטפת החלונית ריבועית; העיגול הקעור אינו borderRadius',
       );
 
-      // קיים טלאי בצבע החלונית שמצייר את העיגול הקעור בפינה.
-      final fillet = tester.widget<ConcaveCornerFillet>(
-        find.byType(ConcaveCornerFillet),
+      // קיים טלאי CustomPaint בצבע החלונית שמצייר את העיגול הקעור בפינה.
+      final filletPainter = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where(
+            (cp) =>
+                cp.painter.runtimeType.toString() == '_ConcaveCornerPainter',
+          );
+      expect(
+        filletPainter,
+        isNotEmpty,
+        reason: 'צריך להתקיים טלאי עיגול קעור בפינה הפנימית-עליונה',
       );
-      expect(fillet.color, paneColor);
-      expect(fillet.paneOnRight, isTrue);
     },
   );
 

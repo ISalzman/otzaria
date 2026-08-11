@@ -4,6 +4,31 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
+/// עוטף רשימת עץ ניווט כך שכניסת הפוקוס אליה (Tab) נופלת על השורה המסומנת
+/// ולא על השורה הראשונה: [NavTreeTile] מסומנת מקבלת עדיפות מעבר (order -1),
+/// ושאר השורות נשמרות בסדר הקריאה הרגיל.
+class NavTreeFocusGroup extends StatelessWidget {
+  final Widget child;
+
+  const NavTreeFocusGroup({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusTraversalGroup(
+      policy: OrderedTraversalPolicy(),
+      child: child,
+    );
+  }
+}
+
+/// שוליים אופקיים בין תוכן עץ הניווט לדופן החלונית. מוגדר כאן פעם אחת —
+/// [NavTreeGroupCard] ו-[NavTreeHeader] מיישמים אותו, ואין להוסיף שוליים
+/// אופקיים לרשימה בכל חלונית בנפרד.
+const double kNavTreeSideInset = 14;
+
+/// שוליים אנכיים בקצות רשימת עץ הניווט.
+const EdgeInsets kNavTreeListPadding = EdgeInsets.symmetric(vertical: 6);
+
 /// שורת ניווט מרכזית בעיצוב מסך הספרייה: קופסת אייקון עם
 /// [ColorScheme.secondaryContainer], כותרת, מונה ו-[ExpandingChevron].
 /// משמשת בעץ ניווט תוצאות החיפוש, בהערות אישיות ובשמור וזכור.
@@ -185,7 +210,7 @@ class NavTreeTile extends StatelessWidget {
             onFilter: onFilter!,
           );
 
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
       child: Container(
         color: isSelected ? cs.secondaryContainer.withValues(alpha: 0.4) : null,
@@ -254,6 +279,13 @@ class NavTreeTile extends StatelessWidget {
         ),
       ),
     );
+
+    if (!isSelected) return row;
+    // בתוך [NavTreeFocusGroup] העדיפות הזו מביאה את הפוקוס לשורה המסומנת.
+    return FocusTraversalOrder(
+      order: const NumericFocusOrder(-1),
+      child: row,
+    );
   }
 }
 
@@ -281,8 +313,14 @@ class NavTreeHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final hasFilter = onClearFilter != null;
 
+    // הכותרת מיושרת לטקסט שבתוך הכרטיסים: שוליי הכרטיס + הזחת השורה.
     final content = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      padding: const EdgeInsets.fromLTRB(
+        kNavTreeSideInset + 12,
+        10,
+        kNavTreeSideInset + 12,
+        8,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -327,6 +365,44 @@ class NavTreeHeader extends StatelessWidget {
   }
 }
 
+/// שורה בכרטיס עץ הניווט שתוכנה חופשי (למשל קטע של תוצאת חיפוש) — מרווחים
+/// ורקע בחירה זהים ל-[NavTreeTile], כדי שלשונית החיפוש תיראה כמו לשוניות העץ.
+class NavTreeContentRow extends StatelessWidget {
+  final Widget child;
+  final bool isSelected;
+  final VoidCallback? onTap;
+
+  const NavTreeContentRow({
+    super.key,
+    required this.child,
+    this.isSelected = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = InkWell(
+      onTap: onTap,
+      child: Container(
+        color: isSelected ? AppSurfaces.cardSelectionOverlay(context) : null,
+        padding: const EdgeInsetsDirectional.only(
+          start: 12,
+          end: 12,
+          top: 10,
+          bottom: 10,
+        ),
+        child: child,
+      ),
+    );
+
+    if (!isSelected) return row;
+    return FocusTraversalOrder(
+      order: const NumericFocusOrder(-1),
+      child: row,
+    );
+  }
+}
+
 /// עוטף שורת-ניווט בעיצוב הכרטיס המקובץ של מסך הספרייה: רקע [AppSurfaces.card],
 /// מפריד בין שורות ([AppCard.sectionDivider]) ופינות מעוגלות בקצות הקבוצה — כך
 /// קבוצה עליונה שלמה (תיקייה + צאצאיה) נראית ככרטיס אחד רציף. משותף לחיפוש,
@@ -350,6 +426,8 @@ class NavTreeGroupCard extends StatelessWidget {
       padding: EdgeInsets.only(
         top: isGroupStart ? 2 : 0,
         bottom: isGroupEnd ? 2 : 0,
+        left: kNavTreeSideInset,
+        right: kNavTreeSideInset,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.vertical(

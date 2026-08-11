@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -9,7 +8,6 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
-import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,6 +33,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
@@ -42,7 +41,6 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -1249,6 +1247,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                 context,
                 chapters: chapters,
                 content: state.content,
+                title: state.book.title,
               ),
               _buildCommentatorsSelectionPanel(context, state),
               _buildCommentarySearchPanel(context),
@@ -1400,41 +1399,22 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     BuildContext context, {
     required List<TocEntry> chapters,
     required List<String> content,
+    required String title,
   }) {
     if (chapters.isEmpty) {
       return const Center(
         child: Text('אין תוכן עניינים'),
       );
     }
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _tocSearchController,
-            builder: (_, val, _) => RtlTextField(
-              controller: _tocSearchController,
-              decoration: InputDecoration(
-                hintText: 'איתור כותרת...',
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                suffixIcon: val.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () => _tocSearchController.clear(),
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: AppTokens.borderRadiusAll,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 12,
-                ),
-              ),
-            ),
+          child: OtzariaSearchField(
+            controller: _tocSearchController,
+            hintText: 'איתור כותרת...',
+            onClear: () {},
           ),
         ),
         Expanded(
@@ -1445,117 +1425,65 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               final filteredChapters = query.isEmpty
                   ? chapters
                   : chapters.where((ch) => ch.text.contains(query)).toList();
-              final items = _buildVisibleTocItems(
-                filteredChapters,
-                chapters,
-                content,
-              );
+              final items = [
+                _TocListItem.header(title),
+                ..._buildVisibleTocItems(filteredChapters, chapters, content),
+              ];
               _navItems = items;
-              return ScrollablePositionedList.builder(
-                itemScrollController: _navScrollController,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  if (item.isChapter) {
-                    final ch = item.chapter!;
-                    final isSelected = ch == _selectedChapter;
-                    final isExpandedInNav = ch == _navExpandedChapter;
-
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppSurfaces.selectedItem(colorScheme)
-                            : null,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 0.5,
+              return NavTreeFocusGroup(
+                child: ScrollablePositionedList.builder(
+                  itemScrollController: _navScrollController,
+                  itemCount: items.length,
+                  padding: kNavTreeListPadding,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    final isGroupStart = index == 0;
+                    final isGroupEnd = index == items.length - 1;
+                    if (item.isChapter) {
+                      final ch = item.chapter!;
+                      return NavTreeGroupCard(
+                        isGroupStart: isGroupStart,
+                        isGroupEnd: isGroupEnd,
+                        child: NavTreeTile.category(
+                          title: ch.text,
+                          level: 0,
+                          isSelected: ch == _selectedChapter,
+                          isExpanded: ch == _navExpandedChapter,
+                          hasChildren: true,
+                          // לחיצה על גוף השורה בוחרת את הפרק (טעינת מפרשים);
+                          // הצ'ברן משנה רק את תצוגת תתי-הפריטים בניווט.
+                          onTap: () {
+                            // no-op כשהפרק כבר נבחר — מונע טעינה כפולה של links.
+                            final current = debugNavSelection;
+                            if (identical(
+                              reduceChapterBodyTap(current, ch),
+                              current,
+                            )) {
+                              return;
+                            }
+                            _onChapterSelected(ch, chapters);
+                          },
+                          onToggleExpand: () => _applyNavSelection(
+                            reduceChevronTap(debugNavSelection, ch),
+                            clearMulti: false,
                           ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          // אזור לחיצה ראשי — בחירת הפרק לטעינת מפרשים.
-                          Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                // no-op כשהפרק כבר נבחר — מונע טעינה כפולה
-                                // של links. _onChapterSelected יחיל את ה-state
-                                // הסופי דרך הרדוסר reduceSubItemTap.
-                                final current = debugNavSelection;
-                                if (identical(
-                                  reduceChapterBodyTap(current, ch),
-                                  current,
-                                )) {
-                                  return;
-                                }
-                                _onChapterSelected(ch, chapters);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 16,
-                                  top: 12,
-                                  bottom: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      FluentIcons.book_24_regular,
-                                      color: colorScheme.primary,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        ch.text,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                          color: colorScheme.primary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          // חץ הכיווץ/פתיחה — אזור לחיצה נפרד שמשנה רק את
-                          // תצוגת תתי-הפריטים בניווט, ללא ביטול בחירת הפרק.
-                          IconButton(
-                            onPressed: () => _applyNavSelection(
-                              reduceChevronTap(debugNavSelection, ch),
-                              clearMulti: false,
-                            ),
-                            icon: Icon(
-                              isExpandedInNav
-                                  ? FluentIcons.chevron_up_24_regular
-                                  : FluentIcons.chevron_down_24_regular,
-                              color: colorScheme.onSurfaceVariant,
-                              size: 20,
-                            ),
-                            tooltip: isExpandedInNav
-                                ? 'כווץ תתי-פריטים'
-                                : 'הצג תתי-פריטים',
-                          ),
-                        ],
+                      );
+                    }
+
+                    return NavTreeGroupCard(
+                      isGroupStart: isGroupStart,
+                      isGroupEnd: isGroupEnd,
+                      child: _buildSubItem(
+                        context,
+                        text: item.text!,
+                        isSelected: item.isSelected,
+                        onTap: item.onTap!,
+                        isAllChapter: item.isAllChapter,
                       ),
                     );
-                  }
-
-                  return _buildSubItem(
-                    context,
-                    text: item.text!,
-                    isSelected: item.isSelected,
-                    onTap: item.onTap!,
-                    colorScheme: colorScheme,
-                    isAllChapter: item.isAllChapter,
-                  );
-                },
+                  },
+                ),
               );
             },
           ),
@@ -1784,51 +1712,16 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required String text,
     required bool isSelected,
     required VoidCallback onTap,
-    required ColorScheme colorScheme,
     bool isAllChapter = false,
   }) {
-    return InkWell(
+    return NavTreeTile.book(
+      title: text,
+      level: 1,
+      isSelected: isSelected,
+      icon: isAllChapter
+          ? FluentIcons.book_24_regular
+          : FluentIcons.text_bullet_list_24_regular,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(
-          right: 16.0 + 24.0,
-          left: 16,
-          top: 10,
-          bottom: 10,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isAllChapter
-                  ? FluentIcons.book_24_regular
-                  : FluentIcons.text_bullet_list_24_regular,
-              color: colorScheme.secondary,
-              size: 18,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1841,18 +1734,31 @@ class _TocListItem {
   final bool isAllChapter;
   final VoidCallback? onTap;
 
+  /// הכותרת הראשית של הרשימה — פריט אמיתי, כדי שחישובי האינדקס לגלילה
+  /// יישארו נכונים גם כשהכותרת נגללת עם הרשימה.
+  final bool isHeader;
+
+  const _TocListItem.header(this.text)
+    : chapter = null,
+      isSelected = false,
+      isAllChapter = false,
+      onTap = null,
+      isHeader = true;
+
   const _TocListItem.chapter(this.chapter)
     : text = null,
       isSelected = false,
       isAllChapter = false,
-      onTap = null;
+      onTap = null,
+      isHeader = false;
 
   const _TocListItem.subItem({
     required this.text,
     required this.isSelected,
     required this.onTap,
     this.isAllChapter = false,
-  }) : chapter = null;
+  }) : chapter = null,
+       isHeader = false;
 
   bool get isChapter => chapter != null;
 }

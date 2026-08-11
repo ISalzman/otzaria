@@ -631,11 +631,12 @@ class _PersonalNotesManagerScreenState
           rows[lastGrouped!].isGroupEnd = true;
         }
 
-        return ListView.builder(
-          // שוליים אופקיים — הכרטיסים לא נוגעים בקצה, וקו הגלילה ברווח.
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          itemCount: rows.length,
-          itemBuilder: (context, index) => _buildNotesNavRow(rows[index]),
+        return NavTreeFocusGroup(
+          child: ListView.builder(
+            padding: kNavTreeListPadding,
+            itemCount: rows.length,
+            itemBuilder: (context, index) => _buildNotesNavRow(rows[index]),
+          ),
         );
       },
     );

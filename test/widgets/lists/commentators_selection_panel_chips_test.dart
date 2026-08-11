@@ -2,6 +2,7 @@
 // ציר הסוגים אופציונלי — פאנלי ה-PDF אינם מעבירים אותו כלל.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
@@ -241,9 +242,9 @@ void main() {
     testWidgets('בלי בחירת סוג — כל המפרשים ברשימה', (tester) async {
       await pumpWithTypes(tester, selectedTypeChips: const {});
 
-      expect(find.widgetWithText(CheckboxListTile, 'רש"י'), findsOneWidget);
+      expect(find.widgetWithText(NavTreeTile, 'רש"י'), findsOneWidget);
       expect(
-        find.widgetWithText(CheckboxListTile, 'קצות החושן'),
+        find.widgetWithText(NavTreeTile, 'קצות החושן'),
         findsOneWidget,
       );
     });
@@ -251,8 +252,8 @@ void main() {
     testWidgets('בחירת "תרגום" משאירה רק את המפרש מאותו סוג', (tester) async {
       await pumpWithTypes(tester, selectedTypeChips: const {'TARGUM'});
 
-      expect(find.widgetWithText(CheckboxListTile, 'רש"י'), findsOneWidget);
-      expect(find.widgetWithText(CheckboxListTile, 'קצות החושן'), findsNothing);
+      expect(find.widgetWithText(NavTreeTile, 'רש"י'), findsOneWidget);
+      expect(find.widgetWithText(NavTreeTile, 'קצות החושן'), findsNothing);
     });
 
     testWidgets('בחירת שני סוגים = איחוד הרשימות', (tester) async {
@@ -261,9 +262,9 @@ void main() {
         selectedTypeChips: const {'TARGUM', 'MIDRASH'},
       );
 
-      expect(find.widgetWithText(CheckboxListTile, 'רש"י'), findsOneWidget);
+      expect(find.widgetWithText(NavTreeTile, 'רש"י'), findsOneWidget);
       expect(
-        find.widgetWithText(CheckboxListTile, 'קצות החושן'),
+        find.widgetWithText(NavTreeTile, 'קצות החושן'),
         findsOneWidget,
       );
     });
@@ -275,11 +276,11 @@ void main() {
 
       // 'רש"י' בראשונים נשאר, ולכן קצות החושן ('אחרונים') נושר עם הכפתור שלו.
       expect(
-        find.widgetWithText(CheckboxListTile, 'הצג את כל הראשונים'),
+        find.widgetWithText(NavTreeTile, 'הצג את כל הראשונים'),
         findsOneWidget,
       );
       expect(
-        find.widgetWithText(CheckboxListTile, 'הצג את כל האחרונים'),
+        find.widgetWithText(NavTreeTile, 'הצג את כל האחרונים'),
         findsNothing,
       );
     });
@@ -293,9 +294,9 @@ void main() {
         commentatorsByType: const {},
       );
 
-      expect(find.widgetWithText(CheckboxListTile, 'רש"י'), findsOneWidget);
+      expect(find.widgetWithText(NavTreeTile, 'רש"י'), findsOneWidget);
       expect(
-        find.widgetWithText(CheckboxListTile, 'קצות החושן'),
+        find.widgetWithText(NavTreeTile, 'קצות החושן'),
         findsOneWidget,
       );
     });
@@ -319,8 +320,8 @@ void main() {
         commentatorsByType: freshMap(),
       );
 
-      expect(find.widgetWithText(CheckboxListTile, 'רש"י'), findsOneWidget);
-      expect(find.widgetWithText(CheckboxListTile, 'קצות החושן'), findsNothing);
+      expect(find.widgetWithText(NavTreeTile, 'רש"י'), findsOneWidget);
+      expect(find.widgetWithText(NavTreeTile, 'קצות החושן'), findsNothing);
     });
 
     testWidgets('שינוי אמיתי במפה כן מרענן את הרשימה', (tester) async {
@@ -331,7 +332,7 @@ void main() {
           'TARGUM': {'רש"י'},
         },
       );
-      expect(find.widgetWithText(CheckboxListTile, 'קצות החושן'), findsNothing);
+      expect(find.widgetWithText(NavTreeTile, 'קצות החושן'), findsNothing);
 
       await pumpWithTypes(
         tester,
@@ -342,7 +343,7 @@ void main() {
       );
 
       expect(
-        find.widgetWithText(CheckboxListTile, 'קצות החושן'),
+        find.widgetWithText(NavTreeTile, 'קצות החושן'),
         findsOneWidget,
       );
     });
@@ -350,13 +351,13 @@ void main() {
     testWidgets('שינוי הבחירה מבחוץ מעדכן את הרשימה מיד', (tester) async {
       await pumpWithTypes(tester, selectedTypeChips: const {});
       expect(
-        find.widgetWithText(CheckboxListTile, 'קצות החושן'),
+        find.widgetWithText(NavTreeTile, 'קצות החושן'),
         findsOneWidget,
       );
 
       await pumpWithTypes(tester, selectedTypeChips: const {'TARGUM'});
 
-      expect(find.widgetWithText(CheckboxListTile, 'קצות החושן'), findsNothing);
+      expect(find.widgetWithText(NavTreeTile, 'קצות החושן'), findsNothing);
     });
   });
 
