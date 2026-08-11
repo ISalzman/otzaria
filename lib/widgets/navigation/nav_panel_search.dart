@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -50,6 +51,34 @@ class NavPanelSearchHost extends ChangeNotifier {
   bool _disposed = false;
   bool _notifyScheduled = false;
 
+  /// ה-scope של תוכן החלונית. חץ למטה/למעלה בסרגל החיפוש מעביר אליו את
+  /// הפוקוס, ומשם החצים מנווטים בין שורות הרשימה (traversal רגיל של Flutter).
+  final FocusScopeNode paneFocusScope = FocusScopeNode(
+    debugLabel: 'navPanelContent',
+  );
+
+  /// מעביר את הפוקוס אל תוכן החלונית: אל השורה שהפוקוס היה עליה, ואם אין —
+  /// אל הראשונה לפי מדיניות המעבר (השורה המסומנת, ראה [NavTreeTile]).
+  bool focusPaneContent() {
+    if (_disposed) return false;
+    final focusedChild = paneFocusScope.focusedChild;
+    if (focusedChild != null) {
+      focusedChild.requestFocus();
+      return true;
+    }
+    final context = paneFocusScope.context;
+    if (context == null) return false;
+    final policy =
+        FocusTraversalGroup.maybeOf(context) ?? ReadingOrderTraversalPolicy();
+    final first = policy.findFirstFocus(
+      paneFocusScope,
+      ignoreCurrentFocus: true,
+    );
+    if (first == null) return false;
+    first.requestFocus();
+    return true;
+  }
+
   int get activeTab => _activeTab;
 
   set activeTab(int value) {
@@ -91,7 +120,28 @@ class NavPanelSearchHost extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    paneFocusScope.dispose();
     super.dispose();
+  }
+}
+
+/// עוטף את תוכן החלונית ב-scope הפוקוס שלה ובמדיניות מעבר ממוינת, כדי
+/// שכניסת הפוקוס מסרגל החיפוש תגיע לשורות הרשימה ולא ללשוניות.
+class _NavPanelContentFocus extends StatelessWidget {
+  final NavPanelSearchHost host;
+  final Widget child;
+
+  const _NavPanelContentFocus({required this.host, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusScope(
+      node: host.paneFocusScope,
+      child: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: child,
+      ),
+    );
   }
 }
 
@@ -99,11 +149,13 @@ class NavPanelSearchHost extends ChangeNotifier {
 class NavPanelSearchScope extends InheritedWidget {
   final NavPanelSearchHost host;
 
-  const NavPanelSearchScope({
+  NavPanelSearchScope({
     super.key,
     required this.host,
-    required super.child,
-  });
+    required Widget child,
+  }) : super(
+         child: _NavPanelContentFocus(host: host, child: child),
+       );
 
   static NavPanelSearchHost? hostOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<NavPanelSearchScope>()?.host;
@@ -269,6 +321,20 @@ class _NavPanelSearchBarState extends State<NavPanelSearchBar> {
     super.dispose();
   }
 
+  KeyEventResult _handleFieldKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key != LogicalKeyboardKey.arrowDown &&
+        key != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    return widget.host.focusPaneContent()
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     // כמו ב-OtzariaSearchField: קריאה סובלנית, כדי שהסרגל יעבוד גם בהקשר
@@ -313,26 +379,34 @@ class _NavPanelSearchBarState extends State<NavPanelSearchBar> {
                         start: fieldStartInset,
                         end: fieldEndInset,
                       ),
-                      child: ListenableBuilder(
-                        listenable: widget.host,
-                        builder: (context, _) {
-                          final delegate = widget.host.active;
-                          return OtzariaSearchField(
-                            controller: delegate?.controller ?? _idleController,
-                            focusNode: delegate?.focusNode,
-                            enabled: delegate != null,
-                            hintText:
-                                delegate?.hintText ?? 'אין חיפוש בלשונית זו',
-                            onChanged: delegate?.onChanged,
-                            onSubmitted: delegate?.onSubmitted,
-                            onClear: delegate?.onClear,
-                            trailingActions:
-                                delegate == null ||
-                                    delegate.trailingActions.isEmpty
-                                ? null
-                                : delegate.trailingActions,
-                          );
-                        },
+                      // חץ למטה/למעלה מעביר את הפוקוס אל שורות החלונית; ימין
+                      // ושמאל נשארים לעריכת הטקסט. ה-handler יושב מעל השדה
+                      // ולכן הוא מקבל את המקש לפני קיצורי עריכת הטקסט.
+                      child: Focus(
+                        canRequestFocus: false,
+                        onKeyEvent: _handleFieldKey,
+                        child: ListenableBuilder(
+                          listenable: widget.host,
+                          builder: (context, _) {
+                            final delegate = widget.host.active;
+                            return OtzariaSearchField(
+                              controller:
+                                  delegate?.controller ?? _idleController,
+                              focusNode: delegate?.focusNode,
+                              enabled: delegate != null,
+                              hintText:
+                                  delegate?.hintText ?? 'אין חיפוש בלשונית זו',
+                              onChanged: delegate?.onChanged,
+                              onSubmitted: delegate?.onSubmitted,
+                              onClear: delegate?.onClear,
+                              trailingActions:
+                                  delegate == null ||
+                                      delegate.trailingActions.isEmpty
+                                  ? null
+                                  : delegate.trailingActions,
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),

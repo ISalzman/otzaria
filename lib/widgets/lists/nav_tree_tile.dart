@@ -12,11 +12,18 @@ class NavTreeFocusGroup extends StatelessWidget {
 
   const NavTreeFocusGroup({super.key, required this.child});
 
+  /// עדיפות הרשימה בתוך החלונית — לפני שורת הלשוניות, כדי שכניסת פוקוס
+  /// לחלונית (חץ למטה מסרגל החיפוש) תגיע לשורות ולא ללשוניות.
+  static const FocusOrder traversalOrder = NumericFocusOrder(0);
+
   @override
   Widget build(BuildContext context) {
-    return FocusTraversalGroup(
-      policy: OrderedTraversalPolicy(),
-      child: child,
+    return FocusTraversalOrder(
+      order: traversalOrder,
+      child: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: child,
+      ),
     );
   }
 }

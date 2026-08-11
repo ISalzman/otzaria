@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -91,7 +93,23 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
                             controller: navController,
                             hintText: 'איתור כותרת...',
                           ),
-                          child: const Text('תוכן ניווט'),
+                          child: NavTreeFocusGroup(
+                            child: ListView(
+                              children: [
+                                for (var i = 0; i < 3; i++)
+                                  NavTreeGroupCard(
+                                    isGroupStart: i == 0,
+                                    isGroupEnd: i == 2,
+                                    child: NavTreeTile.category(
+                                      title: 'שורה $i',
+                                      level: 0,
+                                      isSelected: i == 1,
+                                      onTap: () {},
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       NavPanelSearchSlot(
@@ -302,5 +320,66 @@ void main() {
     expect(pin.left, bar.left);
     // השדה מוותר על השוליים החיצוניים לטובת הרווח הזה.
     expect(bar.right, field.right);
+  });
+
+  testWidgets('חץ למטה מסרגל החיפוש מעביר פוקוס לשורה המסומנת', (tester) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+
+    // הפוקוס בשדה החיפוש שבסרגל.
+    final field = tester.widget<OtzariaSearchField>(
+      find.byType(OtzariaSearchField),
+    );
+    field.controller.text = '';
+    await tester.tap(find.byType(OtzariaSearchField));
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(EditableText).evaluate().isNotEmpty &&
+          tester.binding.focusManager.primaryFocus?.context
+                  ?.findAncestorWidgetOfExactType<OtzariaSearchField>() !=
+              null,
+      isTrue,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+
+    // הפוקוס עבר לשורה המסומנת (שורה 1) ולא לראשונה או ללשוניות.
+    String? focusedRowTitle() => tester
+        .binding
+        .focusManager
+        .primaryFocus
+        ?.context
+        ?.findAncestorWidgetOfExactType<NavTreeTile>()
+        ?.title;
+
+    expect(focusedRowTitle(), 'שורה 1');
+
+    // ומכאן החצים מנווטים בין השורות.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(focusedRowTitle(), 'שורה 2');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(focusedRowTitle(), 'שורה 1');
+  });
+
+  testWidgets('חץ ימין/שמאל נשארים בטקסט של שדה החיפוש', (tester) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(OtzariaSearchField));
+    await tester.enterText(find.byType(OtzariaSearchField), 'אבג');
+    await tester.pumpAndSettle();
+    final beforeFocus = tester.binding.focusManager.primaryFocus;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+
+    // הפוקוס לא יצא מהשדה, והטקסט לא נפגע.
+    expect(tester.binding.focusManager.primaryFocus, beforeFocus);
+    expect(find.text('אבג'), findsOneWidget);
   });
 }

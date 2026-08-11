@@ -128,15 +128,19 @@ class _NavPanelTabHeaderState extends State<NavPanelTabHeader> {
   @override
   Widget build(BuildContext context) {
     final sel = widget.controller.index;
-    return SizedBox(
-      height: AppTokens.panelTabHeight,
-      child: TabBar(
-        controller: widget.controller,
-        splashBorderRadius: AppTokens.borderRadiusAll,
-        tabs: [
-          for (var i = 0; i < widget.tabs.length; i++)
-            _tab(widget.tabs[i], i == sel),
-        ],
+    // הלשוניות נסרקות אחרי שורות הרשימה (NavTreeFocusGroup.traversalOrder).
+    return FocusTraversalOrder(
+      order: const NumericFocusOrder(1),
+      child: SizedBox(
+        height: AppTokens.panelTabHeight,
+        child: TabBar(
+          controller: widget.controller,
+          splashBorderRadius: AppTokens.borderRadiusAll,
+          tabs: [
+            for (var i = 0; i < widget.tabs.length; i++)
+              _tab(widget.tabs[i], i == sel),
+          ],
+        ),
       ),
     );
   }

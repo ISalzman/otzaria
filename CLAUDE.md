@@ -468,12 +468,13 @@ NavPanelTabHeader(                 // tabs only — the pin is NOT here
 - the bar stays mounted for as long as the panel is open: only the field's *content* swaps per tab. A tab with no search action leaves it visible but disabled — do NOT key or rebuild the bar per tab
 - the **pin** lives in this bar (`isPinned` / `onTogglePin`), not in the tab row — it is a panel-level action. The bar spans exactly the panel's width (minus `AppTopBar.horizontalPadding`) with `kNavTreeSideInset` insets, so it sits over the panel only; the open/close icon stays outside it as the next `leadingItems` entry
 - never build a bare `OtzariaSearchField` inside a nav-panel tab
+- keyboard: Left/Right stay in the text; Up/Down move focus into the panel's rows (`NavPanelSearchHost.paneFocusScope`), and from there Flutter's directional traversal walks the rows and Enter activates — same behavior as the bookmarks/history dialogs
 
 **Panel content** is built from `lib/widgets/lists/nav_tree_tile.dart`:
 - `NavTreeHeader` — the main title above the list (primary color, bold) and any sub-tree root
 - `NavTreeTile.category` / `NavTreeTile.book` — tree rows; `NavTreeContentRow` for free-form rows (search snippets)
 - `NavTreeGroupCard` — a continuous run of rows shares one card (`isGroupStart` / `isGroupEnd` at its edges); a heading that owns sub-rows is its own standalone card
-- `NavTreeFocusGroup` — wrap the list so Tab lands on the **selected** row, not the first
+- `NavTreeFocusGroup` — wrap the list so Tab lands on the **selected** row, not the first; it also sorts before the tab row, so Arrow-Down from the search bar enters the rows
 - Horizontal inset comes from `kNavTreeSideInset` inside the card/header; lists pass only `kNavTreeListPadding`
 
 **Never:**
