@@ -111,18 +111,23 @@ Widget _tileHost(ToolTile tile, {double size = 100}) => MaterialApp(
   ),
 );
 
+/// רוחב התוכן בפאנל שבברירת מחדל: `ContextOverlayPanel` ברוחב 400, פחות
+/// `contentPadding` של 16 מכל צד.
+const double _kDefaultPanelContentWidth = 368;
+
 Widget _launcherHost({
   required SettingsBloc settingsBloc,
   required PluginSystemBloc pluginSystemBloc,
   required TabsBloc tabsBloc,
   required ValueChanged<ToolCatalogEntry> onToolSelected,
+  double width = 520,
 }) => MaterialApp(
   theme: ThemeData(colorSchemeSeed: Colors.blue),
   home: Directionality(
     textDirection: TextDirection.rtl,
     child: Scaffold(
       body: SizedBox(
-        width: 520,
+        width: width,
         height: 600,
         child: MultiBlocProvider(
           providers: [
@@ -564,10 +569,8 @@ void main() {
       expect(material.color, Colors.transparent);
     });
 
-    // סדר גודל של סמל תוכנה: האייקון תופס את המקום שנשאר אחרי התווית.
-    testWidgets('האייקון גדול ותופס את המקום שנשאר אחרי התווית', (
-      tester,
-    ) async {
+    // סדר גודל של סמל תוכנה: בקובייה רגילה האייקון מגיע לגודלו המרבי.
+    testWidgets('האייקון מגיע לגודל המרבי בקובייה רגילה', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
 
       final icon = tester.widget<Icon>(
@@ -854,7 +857,7 @@ void main() {
     });
 
     // מקום הכפתור נבחר כך שלא יתנגש בסימן "פתוח" שבפינה הנגדית.
-    testWidgets('כפתור ⋯ יושב בפינה הימנית-עליונה של הקובייה', (tester) async {
+    testWidgets('כפתור ⋯ יושב בפינה השמאלית-עליונה של הקובייה', (tester) async {
       await tester.pumpWidget(
         _tileHost(
           buildTile(
@@ -878,11 +881,11 @@ void main() {
       final openMark = tester.getRect(
         find.byIcon(FluentIcons.checkmark_circle_16_filled),
       );
-      expect(button.center.dx, greaterThan(tile.center.dx));
+      expect(button.center.dx, lessThan(tile.center.dx));
       expect(button.center.dy, lessThan(tile.center.dy));
       expect(
         button.center.dx,
-        greaterThan(openMark.center.dx),
+        lessThan(openMark.center.dx),
         reason: 'סימן "פתוח" יושב בפינה הנגדית ואינו מתנגש בכפתור',
       );
     });
@@ -983,6 +986,7 @@ void main() {
       WidgetTester tester, {
       SettingsState? settings,
       PluginSystemState? pluginState,
+      double width = 520,
     }) async {
       settingsBloc = _RecordingSettingsBloc(
         settings ?? SettingsState.initial(),
@@ -1004,6 +1008,7 @@ void main() {
           pluginSystemBloc: pluginSystemBloc,
           tabsBloc: tabsBloc,
           onToolSelected: selected.add,
+          width: width,
         ),
       );
       await tester.pump();
@@ -1080,6 +1085,32 @@ void main() {
       expect(
         listView.padding,
         const EdgeInsets.only(right: kToolGridScrollbarGutter),
+      );
+    });
+
+    // ברוחב הפאנל שבברירת מחדל נכנסות ארבע קוביות בשורה, והאייקון הגדול
+    // עדיין נכנס בהן בשלמותו יחד עם שתי שורות התווית.
+    testWidgets('ברוחב הפאנל שבברירת מחדל — 4 קוביות בשורה', (tester) async {
+      await pumpPanel(tester, width: _kDefaultPanelContentWidth);
+      expect(tester.takeException(), isNull);
+
+      for (final grid in tester.widgetList<GridView>(find.byType(GridView))) {
+        final delegate =
+            grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+        expect(delegate.crossAxisCount, 4);
+      }
+
+      final tileHeight = tester.getSize(find.byType(ToolTile).first).height;
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byType(ToolTile).first,
+          matching: find.byIcon(FluentIcons.calendar_24_regular),
+        ),
+      );
+      expect(icon.size, ToolTile.maxIconSize);
+      expect(
+        ToolTile.maxIconSize + AppTokens.spaceXS + ToolTile.labelBlockHeight,
+        lessThan(tileHeight - AppTokens.spaceXS * 2),
       );
     });
 

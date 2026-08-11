@@ -89,9 +89,9 @@ List<ToolCatalogEntry> orderedToolEntries(List<ToolCatalogEntry> entries) => [
   for (final group in groupToolEntries(entries)) ...group.entries,
 ];
 
-/// רוחב היעד לקובייה.
+/// רוחב היעד לקובייה — ברוחב הפאנל שבברירת מחדל נכנסות ארבע קוביות בשורה.
 @visibleForTesting
-const double kToolTileTargetWidth = 104;
+const double kToolTileTargetWidth = 88;
 
 /// המרווח בקצה ימין שמפנה מקום לפס הגלילה, כדי שלא יעלה על הקוביות.
 @visibleForTesting
@@ -1005,7 +1005,7 @@ class _ToolDragFeedback extends StatelessWidget {
 
 /// קובייה בודדת ברשת הכלים.
 class ToolTile extends StatelessWidget {
-  static const double maxIconSize = 48;
+  static const double maxIconSize = 40;
   static const double minIconSize = 20;
   static const double menuButtonSize = 26;
 
@@ -1095,7 +1095,7 @@ class ToolTile extends StatelessWidget {
             if (actions.isNotEmpty)
               PositionedDirectional(
                 top: 0,
-                start: 0,
+                end: 0,
                 child: _buildMenuButton(cs),
               ),
             if (entry.isDevelopment)
@@ -1107,7 +1107,7 @@ class ToolTile extends StatelessWidget {
             if (isOpen)
               PositionedDirectional(
                 top: 4,
-                end: 4,
+                start: 4,
                 child: Icon(
                   FluentIcons.checkmark_circle_16_filled,
                   size: 12,
