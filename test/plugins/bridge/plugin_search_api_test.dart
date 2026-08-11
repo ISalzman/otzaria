@@ -301,36 +301,44 @@ Future<void> main() async {
       expect(request.grouping, engine.ResultGrouping.identicalText);
     });
 
-    test('אפשרויות פר-מילה גוברות על הגלובליות', () {
-      final request = PluginSearchRequest.fromArgs({
-        'query': 'ואהבת',
-        'mode': 'advanced',
-        'options': {'קידומות': true},
-        'wordOptions': {
+    test(
+      'אפשרויות פר-מילה גוברות על הגלובליות',
+      () {
+        final request = PluginSearchRequest.fromArgs({
+          'query': 'ואהבת',
+          'mode': 'advanced',
+          'options': {'קידומות': true},
+          'wordOptions': {
+            'ואהבת_0': {'סיומות': true},
+          },
+        });
+
+        expect(request.effectiveSearchOptions, {
           'ואהבת_0': {'סיומות': true},
-        },
-      });
+        });
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
 
-      expect(request.effectiveSearchOptions, {
-        'ואהבת_0': {'סיומות': true},
-      });
-    });
+    test(
+      'אפשרות פר-מילה אינה מוחקת אפשרויות גלובליות ממילים אחרות',
+      () {
+        final request = PluginSearchRequest.fromArgs({
+          'query': 'ואהבת לרעך',
+          'mode': 'advanced',
+          'options': {'קידומות': true},
+          'wordOptions': {
+            'ואהבת_0': {'סיומות': true},
+          },
+        });
 
-    test('אפשרות פר-מילה אינה מוחקת אפשרויות גלובליות ממילים אחרות', () {
-      final request = PluginSearchRequest.fromArgs({
-        'query': 'ואהבת לרעך',
-        'mode': 'advanced',
-        'options': {'קידומות': true},
-        'wordOptions': {
+        expect(request.effectiveSearchOptions, {
           'ואהבת_0': {'סיומות': true},
-        },
-      });
-
-      expect(request.effectiveSearchOptions, {
-        'ואהבת_0': {'סיומות': true},
-        'לרעך_1': {'קידומות': true},
-      });
-    });
+          'לרעך_1': {'קידומות': true},
+        });
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
 
     test('המצב המדויק מקבל את אפשרויות המילה שלו', () {
       final request = PluginSearchRequest.fromArgs({
