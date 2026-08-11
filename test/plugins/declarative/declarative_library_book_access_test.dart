@@ -28,6 +28,27 @@ void main() {
     expect(identity, isNot(contains('filePath')));
   });
 
+  test('טוען מהקטלוג החיצוני רק לפי הספק והמזהה המבוקשים', () async {
+    final loads = <(String, Object)>[];
+    final external = ExternalLibraryBook(
+      title: 'ספר חיצוני',
+      id: 10,
+      link: '',
+      externalLibraryId: 'hb:10',
+    );
+    final access = _access(
+      library: [],
+      hebrewBooks: [external],
+      externalLoads: loads,
+    );
+
+    await access.resolveUnique({
+      'external': {'provider': 'hebrewbooks', 'id': 10},
+    });
+
+    expect(loads, [('hebrewbooks', 10)]);
+  });
+
   test('זהות עמומה אינה נפתרת ואינה פותחת ספר', () async {
     final opened = <Book>[];
     final access = _access(
@@ -120,10 +141,14 @@ DeclarativeLibraryBookAccess _access({
   List<Book> hebrewBooks = const [],
   List<Book>? opened,
   List<(int, String)>? positions,
+  List<(String, Object)>? externalLoads,
 }) {
   return DeclarativeLibraryBookAccess(
     () async => library,
-    (provider) async => provider == 'hebrewbooks' ? hebrewBooks : const [],
+    (provider, externalId) async {
+      externalLoads?.add((provider, externalId));
+      return provider == 'hebrewbooks' ? hebrewBooks : const [];
+    },
     (book, index, searchQuery) {
       opened?.add(book);
       positions?.add((index, searchQuery));

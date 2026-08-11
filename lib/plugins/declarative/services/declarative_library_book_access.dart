@@ -1,4 +1,5 @@
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_program_executor.dart';
@@ -7,7 +8,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 typedef DeclarativeBookListLoader = Future<List<Book>> Function();
 typedef DeclarativeExternalBookListLoader =
-    Future<List<Book>> Function(String provider);
+    Future<List<Book>> Function(String provider, Object externalId);
 typedef DeclarativeBookOpen =
     void Function(Book book, int index, String searchQuery);
 
@@ -28,8 +29,8 @@ class DeclarativeLibraryBookAccess
   ) {
     return DeclarativeLibraryBookAccess(
       () async => (await DataRepository.instance.library).getAllBooks(),
-      (provider) => switch (provider) {
-        'hebrewbooks' => DataRepository.instance.hebrewBooks,
+      (provider, externalId) => switch (provider) {
+        'hebrewbooks' => _loadHebrewBooksById(externalId),
         'otzar' => DataRepository.instance.otzarBooks,
         _ => Future.value(const <Book>[]),
       },
@@ -82,7 +83,7 @@ class DeclarativeLibraryBookAccess
 
     final books = external == null
         ? await _libraryBooks()
-        : await _externalBooks(external.provider);
+        : await _externalBooks(external.provider, external.id);
     final matches = <Book>[];
     for (final book in books) {
       if (!PluginBookIdentity.matches(
@@ -119,4 +120,17 @@ class DeclarativeLibraryBookAccess
     }
     return (provider: provider, id: id);
   }
+}
+
+Future<List<Book>> _loadHebrewBooksById(Object externalId) async {
+  final id = PluginBookIdentity.parseId(externalId);
+  if (id == null) return const [];
+  final localMatches = (await DataRepository.instance.localHebrewBooks).where((
+    book,
+  ) {
+    final external = PluginBookIdentity.externalOf(book);
+    return external?.provider == 'hebrewbooks' && external?.id == id;
+  }).toList();
+  if (localMatches.isNotEmpty) return localMatches;
+  return ExternalCatalogRepository.instance.getHebrewBooksByIds([id]);
 }
