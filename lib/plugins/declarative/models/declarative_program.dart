@@ -61,11 +61,13 @@ class CompiledDeclarativeAction {
   final Map<String, dynamic> args;
   final String requiredPermission;
   final String contextSignature;
+  final int programGeneration;
 
   const CompiledDeclarativeAction({
     required this.type,
     required this.args,
     required this.requiredPermission,
     required this.contextSignature,
+    required this.programGeneration,
   });
 }

@@ -203,6 +203,7 @@ class DeclarativeToolbarBindingService {
         ).compileResolved(
           Map<String, dynamic>.from(value),
           contextSignature: contextSignature,
+          programGeneration: programRepository.getGeneration(plugin.pluginId),
         );
     final registration = _registrations[plugin.pluginId];
     if (registration == null ||

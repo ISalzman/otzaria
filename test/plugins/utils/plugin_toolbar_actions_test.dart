@@ -134,6 +134,7 @@ void main() {
       },
       requiredPermission: 'reader.open',
       contextSignature: 'book-7',
+      programGeneration: 7,
     );
     const item = PluginToolbarItem(
       id: 'open-default',

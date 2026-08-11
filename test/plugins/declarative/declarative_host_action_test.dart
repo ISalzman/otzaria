@@ -18,6 +18,7 @@ void main() {
           plugin: _plugin(),
           grantedPermissions: const {'reader.open'},
           currentContextSignature: 'book-7',
+          currentProgramGeneration: 7,
         );
 
     expect(opened, isTrue);
@@ -27,12 +28,16 @@ void main() {
 
   test('פעולה עם נתיב קובץ נדחית בזמן קומפילציה', () {
     expect(
-      () => _compiler().compileResolved({
-        'type': 'reader.openBook',
-        'args': {
-          'identity': {'id': 10, 'filePath': '/tmp/book.pdf'},
+      () => _compiler().compileResolved(
+        {
+          'type': 'reader.openBook',
+          'args': {
+            'identity': {'id': 10, 'filePath': '/tmp/book.pdf'},
+          },
         },
-      }, contextSignature: 'book-7'),
+        contextSignature: 'book-7',
+        programGeneration: 7,
+      ),
       _throwsProgramError('declarative.unknown_field'),
     );
   });
@@ -42,12 +47,16 @@ void main() {
       () =>
           const DeclarativeActionCompiler(
             declaredPermissions: {},
-          ).compileResolved({
-            'type': 'reader.openBook',
-            'args': {
-              'identity': {'id': 10},
+          ).compileResolved(
+            {
+              'type': 'reader.openBook',
+              'args': {
+                'identity': {'id': 10},
+              },
             },
-          }, contextSignature: 'book-7'),
+            contextSignature: 'book-7',
+            programGeneration: 7,
+          ),
       _throwsProgramError('declarative.permission_not_declared'),
     );
   });
@@ -61,6 +70,23 @@ void main() {
         plugin: _plugin(),
         grantedPermissions: const {'reader.open'},
         currentContextSignature: 'book-8',
+        currentProgramGeneration: 7,
+      ),
+      _throwsProgramError('declarative.stale_action'),
+    );
+    expect(opener.identities, isEmpty);
+  });
+
+  test('דור תוכנית ישן חוסם גם כאשר הקשר לא השתנה', () async {
+    final opener = _BookOpener();
+
+    await expectLater(
+      DeclarativeHostActionExecutor(bookOpener: opener).execute(
+        action: _compileAction(),
+        plugin: _plugin(),
+        grantedPermissions: const {'reader.open'},
+        currentContextSignature: 'book-7',
+        currentProgramGeneration: 8,
       ),
       _throwsProgramError('declarative.stale_action'),
     );
@@ -76,6 +102,7 @@ void main() {
         plugin: _plugin(),
         grantedPermissions: const {},
         currentContextSignature: 'book-7',
+        currentProgramGeneration: 7,
       ),
       _throwsProgramError('declarative.permission_denied'),
     );
@@ -101,13 +128,17 @@ DeclarativeActionCompiler _compiler() => const DeclarativeActionCompiler(
   declaredPermissions: {'reader.open'},
 );
 
-CompiledDeclarativeAction _compileAction() => _compiler().compileResolved({
-  'type': 'reader.openBook',
-  'args': {
-    'identity': {'id': 10, 'type': 'pdf'},
-    'index': 1,
+CompiledDeclarativeAction _compileAction() => _compiler().compileResolved(
+  {
+    'type': 'reader.openBook',
+    'args': {
+      'identity': {'id': 10, 'type': 'pdf'},
+      'index': 1,
+    },
   },
-}, contextSignature: 'book-7');
+  contextSignature: 'book-7',
+  programGeneration: 7,
+);
 
 InstalledPlugin _plugin() {
   final now = DateTime(2026);

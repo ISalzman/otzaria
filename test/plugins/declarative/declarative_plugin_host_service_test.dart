@@ -43,6 +43,27 @@ void main() {
     expect(fixture.access.opened, isEmpty);
   });
 
+  test('סנכרון הרשאות פוסל פעולה ישנה גם כשהספר לא השתנה', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await fixture.host.syncPlugins([fixture.plugin]);
+    await fixture.host.readerBookChanged(
+      TextBook(id: 1, title: 'ספר נוכחי'),
+      context: 'reader-text',
+    );
+    final oldAction = fixture.toolbar.getAll().first.$2.hostAction!;
+
+    fixture.permissions.remove('reader.toolbar');
+    await fixture.host.syncPlugins([fixture.plugin]);
+
+    expect(fixture.toolbar.getAll(), isEmpty);
+    await expectLater(
+      fixture.host.executeAction(fixture.plugin.pluginId, oldAction),
+      _throwsProgramError('declarative.stale_action'),
+    );
+    expect(fixture.access.opened, isEmpty);
+  });
+
   test('הסרה מבטלת את ההקשר ומוחקת את שני הפקדים מיד', () async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);

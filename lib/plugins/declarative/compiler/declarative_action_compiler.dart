@@ -11,12 +11,19 @@ class DeclarativeActionCompiler {
   CompiledDeclarativeAction compileResolved(
     Map<String, dynamic> json, {
     required String contextSignature,
+    required int programGeneration,
   }) {
     _assertOnlyKeys(json, const {'type', 'args'}, 'action');
     if (contextSignature.isEmpty) {
       throw const DeclarativeProgramException(
         'declarative.invalid_action',
         'Action context signature must not be empty',
+      );
+    }
+    if (programGeneration < 1) {
+      throw const DeclarativeProgramException(
+        'declarative.invalid_action',
+        'Action program generation must be positive',
       );
     }
     final type = _requiredString(json['type'], 'action.type');
@@ -64,6 +71,7 @@ class DeclarativeActionCompiler {
       args: _freezeMap(args),
       requiredPermission: permission,
       contextSignature: contextSignature,
+      programGeneration: programGeneration,
     );
   }
 

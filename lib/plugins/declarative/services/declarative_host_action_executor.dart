@@ -19,6 +19,7 @@ class DeclarativeHostActionExecutor {
     required InstalledPlugin plugin,
     required Set<String> grantedPermissions,
     required String currentContextSignature,
+    required int currentProgramGeneration,
   }) async {
     if (!plugin.enabled) {
       throw const DeclarativeProgramException(
@@ -32,10 +33,11 @@ class DeclarativeHostActionExecutor {
         'The action permission is no longer granted',
       );
     }
-    if (currentContextSignature != action.contextSignature) {
+    if (currentContextSignature != action.contextSignature ||
+        currentProgramGeneration != action.programGeneration) {
       throw const DeclarativeProgramException(
         'declarative.stale_action',
-        'The action belongs to an outdated reader context',
+        'The action belongs to an outdated program generation',
       );
     }
     switch (action.type) {

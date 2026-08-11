@@ -115,6 +115,8 @@ class DeclarativeProgramRepository extends ChangeNotifier {
 
   String? getContextSignature(String pluginId) => _contextSignatures[pluginId];
 
+  int getGeneration(String pluginId) => _generations[pluginId] ?? 0;
+
   Future<void> _runPluginGeneration({
     required _ProgramRegistration registration,
     required List<CompiledDeclarativeProgram> programs,
