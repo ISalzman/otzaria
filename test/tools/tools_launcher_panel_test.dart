@@ -17,6 +17,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 import 'package:otzaria/tools/view/tools_launcher_panel.dart';
@@ -110,18 +111,23 @@ Widget _tileHost(ToolTile tile, {double size = 100}) => MaterialApp(
   ),
 );
 
+/// רוחב התוכן בפאנל שבברירת מחדל: `ContextOverlayPanel` ברוחב 400, פחות
+/// `contentPadding` של 16 מכל צד.
+const double _kDefaultPanelContentWidth = 368;
+
 Widget _launcherHost({
   required SettingsBloc settingsBloc,
   required PluginSystemBloc pluginSystemBloc,
   required TabsBloc tabsBloc,
   required ValueChanged<ToolCatalogEntry> onToolSelected,
+  double width = 520,
 }) => MaterialApp(
   theme: ThemeData(colorSchemeSeed: Colors.blue),
   home: Directionality(
     textDirection: TextDirection.rtl,
     child: Scaffold(
       body: SizedBox(
-        width: 520,
+        width: width,
         height: 600,
         child: MultiBlocProvider(
           providers: [
@@ -548,50 +554,68 @@ void main() {
       expect(find.text('לוח שנה'), findsOneWidget);
     });
 
-    testWidgets('בנוי מעל AppCard — אותו כרטיס כמו בספרייה', (tester) async {
+    // הקובייה יושבת ישירות על משטח הפאנל — בלי כרטיס לבן סביב האייקון והכתב.
+    testWidgets('בנויה מעל AppCard שקוף — בלי רקע כרטיס', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
       expect(find.byType(AppCard), findsOneWidget);
-    });
+      expect(tester.widget<AppCard>(find.byType(AppCard)).transparent, isTrue);
 
-    testWidgets('האייקון יושב בריבוע 32 והוא בגודל 16', (tester) async {
-      await tester.pumpWidget(_tileHost(buildTile()));
-
-      final iconBox = tester.getSize(
-        find.ancestor(
-          of: find.byIcon(FluentIcons.calendar_24_regular),
-          matching: find.byType(Container),
+      final material = tester.widget<Material>(
+        find.descendant(
+          of: find.byType(AppCard),
+          matching: find.byType(Material),
         ),
       );
-      expect(iconBox, const Size(ToolTile.iconBoxSize, ToolTile.iconBoxSize));
+      expect(material.color, Colors.transparent);
+    });
+
+    // סדר גודל של סמל תוכנה: בקובייה רגילה האייקון מגיע לגודלו המרבי.
+    testWidgets('האייקון מגיע לגודל המרבי בקובייה רגילה', (tester) async {
+      await tester.pumpWidget(_tileHost(buildTile()));
 
       final icon = tester.widget<Icon>(
         find.byIcon(FluentIcons.calendar_24_regular),
       );
-      expect(icon.size, ToolTile.iconSize);
+      expect(icon.size, ToolTile.iconSizeFor(100 - AppTokens.spaceXS * 2));
+      expect(icon.size, ToolTile.maxIconSize);
     });
 
-    testWidgets('צבעי הריבוע והאייקון נלקחים מ-secondaryContainer', (
-      tester,
-    ) async {
+    // בפאנל מצומצם האייקון מתכווץ, אחרת שתי שורות התווית נחתכות.
+    testWidgets('קובייה קטנה מקבלת אייקון קטן ללא חריגת פריסה', (tester) async {
+      await tester.pumpWidget(_tileHost(buildTile(), size: 70));
+      expect(tester.takeException(), isNull);
+
+      final icon = tester.widget<Icon>(
+        find.byIcon(FluentIcons.calendar_24_regular),
+      );
+      expect(icon.size, lessThan(ToolTile.maxIconSize));
+      expect(icon.size, greaterThanOrEqualTo(ToolTile.minIconSize));
+    });
+
+    // התווית קטנה מברירת המחדל של bodySmall, כדי לפנות מקום לאייקון.
+    testWidgets('תווית הקובייה בגודל 11', (tester) async {
+      await tester.pumpWidget(_tileHost(buildTile()));
+      final label = tester.widget<Text>(find.text('לוח שנה'));
+      expect(label.style?.fontSize, ToolTile.labelFontSize);
+    });
+
+    // האייקון עומד על רקע הכרטיס עצמו — בלי מעטפת מרובעת סביבו.
+    testWidgets('האייקון בצבע primary ובלי מעטפת מרובעת', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
       final context = tester.element(find.byType(ToolTile));
       final cs = Theme.of(context).colorScheme;
 
-      final container = tester.widget<Container>(
+      final icon = tester.widget<Icon>(
+        find.byIcon(FluentIcons.calendar_24_regular),
+      );
+      expect(icon.color, cs.primary);
+      expect(
         find.ancestor(
           of: find.byIcon(FluentIcons.calendar_24_regular),
           matching: find.byType(Container),
         ),
+        findsNothing,
       );
-      expect(
-        (container.decoration as BoxDecoration).color,
-        cs.secondaryContainer,
-      );
-
-      final icon = tester.widget<Icon>(
-        find.byIcon(FluentIcons.calendar_24_regular),
-      );
-      expect(icon.color, cs.onSecondaryContainer);
     });
 
     testWidgets('האייקון והטקסט ממורכזים אופקית בקובייה', (tester) async {
@@ -613,10 +637,7 @@ void main() {
 
       final tileCenter = tester.getCenter(find.byType(ToolTile));
       final iconBoxRect = tester.getRect(
-        find.ancestor(
-          of: find.byIcon(FluentIcons.calendar_24_regular),
-          matching: find.byType(Container),
-        ),
+        find.byIcon(FluentIcons.calendar_24_regular),
       );
       final textRect = tester.getRect(find.text('לוח שנה'));
 
@@ -651,7 +672,7 @@ void main() {
       );
       expect(find.byType(ImageIcon), findsOneWidget);
       final imageIcon = tester.widget<ImageIcon>(find.byType(ImageIcon));
-      expect(imageIcon.size, ToolTile.iconSize);
+      expect(imageIcon.size, ToolTile.iconSizeFor(100 - AppTokens.spaceXS * 2));
     });
 
     testWidgets('לחיצה מפעילה את onTap', (tester) async {
@@ -836,7 +857,7 @@ void main() {
     });
 
     // מקום הכפתור נבחר כך שלא יתנגש בסימן "פתוח" שבפינה הנגדית.
-    testWidgets('כפתור ⋯ יושב בפינה הימנית-עליונה של הקובייה', (tester) async {
+    testWidgets('כפתור ⋯ יושב בפינה השמאלית-עליונה של הקובייה', (tester) async {
       await tester.pumpWidget(
         _tileHost(
           buildTile(
@@ -860,11 +881,11 @@ void main() {
       final openMark = tester.getRect(
         find.byIcon(FluentIcons.checkmark_circle_16_filled),
       );
-      expect(button.center.dx, greaterThan(tile.center.dx));
+      expect(button.center.dx, lessThan(tile.center.dx));
       expect(button.center.dy, lessThan(tile.center.dy));
       expect(
         button.center.dx,
-        greaterThan(openMark.center.dx),
+        lessThan(openMark.center.dx),
         reason: 'סימן "פתוח" יושב בפינה הנגדית ואינו מתנגש בכפתור',
       );
     });
@@ -965,6 +986,7 @@ void main() {
       WidgetTester tester, {
       SettingsState? settings,
       PluginSystemState? pluginState,
+      double width = 520,
     }) async {
       settingsBloc = _RecordingSettingsBloc(
         settings ?? SettingsState.initial(),
@@ -986,6 +1008,7 @@ void main() {
           pluginSystemBloc: pluginSystemBloc,
           tabsBloc: tabsBloc,
           onToolSelected: selected.add,
+          width: width,
         ),
       );
       await tester.pump();
@@ -1062,6 +1085,32 @@ void main() {
       expect(
         listView.padding,
         const EdgeInsets.only(right: kToolGridScrollbarGutter),
+      );
+    });
+
+    // ברוחב הפאנל שבברירת מחדל נכנסות ארבע קוביות בשורה, והאייקון הגדול
+    // עדיין נכנס בהן בשלמותו יחד עם שתי שורות התווית.
+    testWidgets('ברוחב הפאנל שבברירת מחדל — 4 קוביות בשורה', (tester) async {
+      await pumpPanel(tester, width: _kDefaultPanelContentWidth);
+      expect(tester.takeException(), isNull);
+
+      for (final grid in tester.widgetList<GridView>(find.byType(GridView))) {
+        final delegate =
+            grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+        expect(delegate.crossAxisCount, 4);
+      }
+
+      final tileHeight = tester.getSize(find.byType(ToolTile).first).height;
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byType(ToolTile).first,
+          matching: find.byIcon(FluentIcons.calendar_24_regular),
+        ),
+      );
+      expect(icon.size, ToolTile.maxIconSize);
+      expect(
+        ToolTile.maxIconSize + AppTokens.spaceXS + ToolTile.labelBlockHeight,
+        lessThan(tileHeight - AppTokens.spaceXS * 2),
       );
     });
 
