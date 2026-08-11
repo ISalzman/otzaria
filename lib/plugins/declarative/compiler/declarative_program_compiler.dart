@@ -11,13 +11,7 @@ class DeclarativeProgramCompiler {
   static const int maxListLength = 100;
   static const int maxStringLength = 4096;
 
-  static const supportedTriggers = {
-    'reader.activeBookChanged',
-    'reader.bookIdentityChanged',
-    'plugin.enabledChanged',
-    'plugin.permissionsChanged',
-    'database.sourceChanged',
-  };
+  static const supportedTriggers = {'reader.activeBookChanged'};
 
   static const contextValueKinds = {
     'reader.context': DeclarativeValueKind.scalar,

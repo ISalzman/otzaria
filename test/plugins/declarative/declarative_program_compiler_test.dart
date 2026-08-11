@@ -37,6 +37,16 @@ void main() {
       );
     });
 
+    test('trigger שעדיין אינו מחווט בזמן ריצה נדחה', () {
+      final program = _validProgram();
+      program['triggers'] = ['database.sourceChanged'];
+
+      expect(
+        () => _compiler().compile(program),
+        _throwsProgramError('declarative.invalid_trigger'),
+      );
+    });
+
     test('reference לפקודה עתידית נדחה', () {
       final program = _validProgram();
       (program['commands'] as List<dynamic>).insert(0, {
@@ -149,7 +159,7 @@ DeclarativeProgramCompiler _compiler() => const DeclarativeProgramCompiler(
 Map<String, dynamic> _validProgram() => {
   'id': 'parallel-editions',
   'version': 1,
-  'triggers': ['reader.activeBookChanged', 'database.sourceChanged'],
+  'triggers': ['reader.activeBookChanged'],
   'when': {
     'op': 'equals',
     'left': {r'$context': 'reader.book.type'},

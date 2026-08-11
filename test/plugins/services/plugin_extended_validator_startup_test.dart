@@ -448,7 +448,7 @@ void main() {
 Map<String, dynamic> _validHostProgram() => {
   'id': 'host-program',
   'version': 1,
-  'triggers': ['plugin.enabledChanged'],
+  'triggers': ['reader.activeBookChanged'],
   'commands': [
     {
       'id': 'first',

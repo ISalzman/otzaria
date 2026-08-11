@@ -45,7 +45,7 @@ void main() {
             {
               'id': 'p1',
               'version': 1,
-              'triggers': ['plugin.enabledChanged'],
+              'triggers': ['reader.activeBookChanged'],
               'commands': [],
               'outputs': {},
             },
