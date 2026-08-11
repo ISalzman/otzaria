@@ -165,6 +165,7 @@ if (response.success) {
 | `calendar.getHalachicTimes` | 0.9.89 |
 | `calendar.getJewishDate` | 0.9.89 |
 | `calendar.getEvents` | 0.9.89 |
+| `calendar.getCities` | 0.9.97 |
 | `publishedData.upsert` | 0.9.89 |
 | `publishedData.remove` | 0.9.89 |
 | `publishedData.listOwn` | 0.9.89 |
@@ -1567,6 +1568,32 @@ const { data } = await Otzaria.call('calendar.getDailyTimes');
 // { sunrise: "06:23", sunset: "19:11", tzet: "19:45", ... }
 ```
 
+מגרסה 0.9.97 אפשר לבקש זמנים לתאריך ולמיקום שרירותיים — עיר מתוך
+`calendar.getCities`, או קואורדינטות למקום שאינו ברשימה; בלי הפרמטרים
+מוחזרים זמני התאריך והעיר הנבחרים בלוח, כבגרסאות קודמות. עיר לא מוכרת או
+אזור זמן לא מוכר מחזירים שגיאה; אין להעביר גם `city` וגם `lat`/`lng`.
+
+```javascript
+// לפי עיר מרשימת הלוח
+const { data } = await Otzaria.call('calendar.getDailyTimes', {
+  date: '2026-08-14',      // אופציונלי — ברירת מחדל: התאריך הנבחר בלוח
+  city: 'ניו יורק',        // אופציונלי — ברירת מחדל: העיר הנבחרת בלוח
+});
+
+// לפי קואורדינטות (מקום שאינו ברשימת הערים)
+const { data } = await Otzaria.call('calendar.getDailyTimes', {
+  date: '2026-08-14',
+  lat: 43.6,               // חובה יחד עם lng
+  lng: -79.4,
+  elevation: 76,           // אופציונלי (מטרים; ברירת מחדל 0)
+  timezone: 'America/Toronto', // אופציונלי — מזהה IANA; בלעדיו נגזר אזור
+                               // נומינלי מקו האורך (Etc/GMT±n)
+  inIsrael: false,         // אופציונלי — לזמנים תלויי יו"ט שני
+});
+// בקואורדינטות: קידוש לבנה מושמט, הדלקת נרות לפי ברירת המחדל (30 דק'),
+// וחצות הלילה בקירוב (חצות היום + 12 שעות).
+```
+
 ### `calendar.getHalachicTimes`
 **הרשאה:** `calendar.read`
 
@@ -1575,6 +1602,20 @@ const { data } = await Otzaria.call('calendar.getDailyTimes');
 ```javascript
 const { data } = await Otzaria.call('calendar.getHalachicTimes');
 // { sunrise: "06:23", sunset: "19:11", tzet: "19:45", ... }
+```
+
+### `calendar.getCities`
+**הרשאה:** `calendar.read` · **מגרסה:** 0.9.97
+
+רשימת הערים שהלוח מכיר — לשימוש עם `calendar.getDailyTimes { city }`.
+
+```javascript
+const { data } = await Otzaria.call('calendar.getCities');
+// [
+//   { name: "ירושלים", country: "ארץ ישראל", lat: 31.7784, lng: 35.2354,
+//     elevation: 800.0, timezone: "Asia/Jerusalem", inIsrael: true },
+//   ...
+// ]
 ```
 
 ### `calendar.getJewishDate`
@@ -1922,6 +1963,7 @@ Otzaria.on('event.name', (data) => {
 - `reader.current_book_changed` - שינוי הספר/טאב הפעיל בלבד (הרשאה: `events.subscribe:reader.current_book_changed`)
 - `reader.current_ref_changed` - שינוי מיקום הקריאה הנוכחי (דף, פרק, סעיף) - **זה האירוע למעקב אחרי מיקום!** (הרשאה: `events.subscribe:reader.current_ref_changed`)
 - `calendar.date_changed` - שינוי התאריך בלוח השנה (הרשאה: `events.subscribe:calendar.date_changed`)
+- `calendar.city_changed` - שינוי העיר הנבחרת בלוח השנה; payload: `{ city: string }` (הרשאה: `events.subscribe:calendar.city_changed`, מגרסה 0.9.97)
 - `workspace.changed` - שינוי סביבת העבודה (הרשאה: `events.subscribe:workspace.changed`)
 - `settings.changed` - שינוי הגדרה (הרשאה: `events.subscribe:settings.changed`)
 - `plugin.permissions_changed` - שינוי הרשאות (מחזיר `{ permissions: string[] }` - רשימת כל ההרשאות המאושרות) (הרשאה: `events.subscribe:plugin.permissions_changed`)

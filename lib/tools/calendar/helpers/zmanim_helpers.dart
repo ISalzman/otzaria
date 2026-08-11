@@ -17,13 +17,28 @@ ZmanimCalendarContext? buildZmanimCalendarContext(DateTime date, String city) {
   final cityData = getCityData(city);
   if (cityData == null) return null;
 
-  final latitude = cityData['lat']!;
-  final longitude = cityData['lng']!;
-  final elevation = cityData['elevation']!;
-  final timeZoneId = cityData['timezone'] as String? ?? 'Asia/Jerusalem';
+  return buildZmanimCalendarContextForCoordinates(
+    date,
+    name: city,
+    latitude: (cityData['lat'] as num).toDouble(),
+    longitude: (cityData['lng'] as num).toDouble(),
+    elevation: (cityData['elevation'] as num).toDouble(),
+    timeZoneId: cityData['timezone'] as String? ?? 'Asia/Jerusalem',
+  );
+}
 
+/// בונה הקשר חישוב לקואורדינטות שרירותיות (מקום שאינו ברשימת הערים).
+/// [timeZoneId] חייב להיות מזהה IANA חוקי (זורק אם לא).
+ZmanimCalendarContext buildZmanimCalendarContextForCoordinates(
+  DateTime date, {
+  required double latitude,
+  required double longitude,
+  double elevation = 0,
+  String timeZoneId = 'Asia/Jerusalem',
+  String name = '',
+}) {
   final location = GeoLocation();
-  location.setLocationName(city);
+  location.setLocationName(name);
   location.setLatitude(latitude: latitude);
   location.setLongitude(longitude: longitude);
   location.setElevation(elevation > 0 ? elevation : 0);
@@ -54,12 +69,52 @@ ZmanimCalendarContext? buildZmanimCalendarContext(DateTime date, String city) {
 Map<String, String> calculateDailyTimes(DateTime date, String city) {
   final context = buildZmanimCalendarContext(date, city);
   if (context == null) return {};
+  return _computeDailyTimes(
+    context: context,
+    date: date,
+    city: city,
+    inIsrael: isCityInIsrael(city),
+  );
+}
+
+/// זמני היום לקואורדינטות שרירותיות — מקום שאינו ברשימת הערים.
+/// זמנים תלויי-עיר מחושבים עם ברירות מחדל: קידוש לבנה מושמט (אין נתוני
+/// עיר), הדלקת נרות לפי ברירת המחדל (30 דק'), וחצות הלילה בקירוב
+/// (חצות היום + 12 שעות).
+Map<String, String> calculateDailyTimesForCoordinates(
+  DateTime date, {
+  required double latitude,
+  required double longitude,
+  double elevation = 0,
+  String timeZoneId = 'Asia/Jerusalem',
+  bool inIsrael = false,
+}) {
+  final context = buildZmanimCalendarContextForCoordinates(
+    date,
+    latitude: latitude,
+    longitude: longitude,
+    elevation: elevation,
+    timeZoneId: timeZoneId,
+  );
+  return _computeDailyTimes(
+    context: context,
+    date: date,
+    city: '',
+    inIsrael: inIsrael,
+  );
+}
+
+Map<String, String> _computeDailyTimes({
+  required ZmanimCalendarContext context,
+  required DateTime date,
+  required String city,
+  required bool inIsrael,
+}) {
   final zmanimCalendar = context.zmanimCalendar;
   final tzLocation = context.tzLocation;
 
-  final bool isInIsrael = isCityInIsrael(city);
   final jewishCalendar = JewishCalendar.fromDateTime(date);
-  jewishCalendar.inIsrael = isInIsrael;
+  jewishCalendar.inIsrael = inIsrael;
 
   final ctx = ZmanComputeContext(
     cal: zmanimCalendar,

@@ -233,6 +233,9 @@ const pluginValidPermissions = <String>[
   /// הרשמה לאירועי שינוי תאריך בלוח השנה
   'events.subscribe:calendar.date_changed',
 
+  /// הרשמה לאירועי שינוי העיר הנבחרת בלוח השנה
+  'events.subscribe:calendar.city_changed',
+
   /// הרשמה לאירועי שינוי סביבת עבודה
   'events.subscribe:workspace.changed',
 

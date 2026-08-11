@@ -44,7 +44,11 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
+import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
+    as zmanim_helpers;
+import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
@@ -2190,14 +2194,82 @@ class PluginBridgeAdapter {
   ) async {
     final calendarState = _dependencies.calendarCubit.state;
 
+    // getDailyTimes/getHalachicTimes מקבלים אופציונלית date (ISO) ומיקום —
+    // עיר מרשימת הלוח (city) או קואורדינטות (lat+lng, עם elevation/timezone/
+    // inIsrael אופציונליים). בלי אף פרמטר מוחזרים זמני התאריך והעיר הנבחרים
+    // בלוח (התנהגות הגרסאות הקודמות).
+    Map<String, String> resolveDailyTimes() {
+      final dateArg = args['date'] != null
+          ? DateTime.tryParse(args['date'] as String)
+          : null;
+      final cityArg = (args['city'] as String?)?.trim();
+      final latArg = args['lat'], lngArg = args['lng'];
+      final date = dateArg ?? calendarState.selectedGregorianDate;
+
+      if (latArg is num && lngArg is num) {
+        if (cityArg != null && cityArg.isNotEmpty) {
+          throw Exception('Pass either city or lat/lng, not both');
+        }
+        final lat = latArg.toDouble(), lng = lngArg.toDouble();
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          throw Exception('Coordinates out of range');
+        }
+        // בלי אזור זמן מפורש — אזור נומינלי מקו האורך (Etc/GMT הפוך-סימן:
+        // Etc/GMT-3 הוא UTC+3). מומלץ להעביר מזהה IANA אמיתי.
+        final tzArg = (args['timezone'] as String?)?.trim();
+        final nominalOffset = -(lng / 15).round();
+        final tzId = (tzArg == null || tzArg.isEmpty)
+            ? 'Etc/GMT${nominalOffset >= 0 ? '+' : ''}$nominalOffset'
+            : tzArg;
+        try {
+          return zmanim_helpers.calculateDailyTimesForCoordinates(
+            date,
+            latitude: lat,
+            longitude: lng,
+            elevation: (args['elevation'] as num?)?.toDouble() ?? 0,
+            timeZoneId: tzId,
+            inIsrael: args['inIsrael'] as bool? ?? false,
+          );
+        } on tz.LocationNotFoundException {
+          throw Exception('Unknown timezone: $tzId');
+        }
+      }
+
+      if (dateArg == null && (cityArg == null || cityArg.isEmpty)) {
+        return calendarState.dailyTimes;
+      }
+      final city = (cityArg == null || cityArg.isEmpty)
+          ? calendarState.selectedCity
+          : cityArg;
+      if (getCityData(city) == null) {
+        throw Exception('Unknown city: $city');
+      }
+      return zmanim_helpers.calculateDailyTimes(date, city);
+    }
+
     switch (action) {
       case 'getSelectedDate':
         return calendarState.selectedGregorianDate.toIso8601String();
       case 'getDailyTimes':
-        return calendarState.dailyTimes;
+        return resolveDailyTimes();
       case 'getHalachicTimes':
         // dailyTimes contains all halachic times (shekia, tzet haochavim, etc.)
-        return calendarState.dailyTimes;
+        return resolveDailyTimes();
+      case 'getCities':
+        // רשימת הערים שהלוח מכיר — לבחירת עיר ב-getDailyTimes {city}
+        return [
+          for (final country in cityCoordinates.entries)
+            for (final city in country.value.entries)
+              {
+                'name': city.key,
+                'country': country.key,
+                'lat': city.value['lat'],
+                'lng': city.value['lng'],
+                'elevation': city.value['elevation'],
+                'timezone': city.value['timezone'],
+                'inIsrael': country.key == 'ארץ ישראל',
+              },
+        ];
       case 'getJewishDate':
         final dateArg = args['date'] != null
             ? DateTime.tryParse(args['date'] as String)
