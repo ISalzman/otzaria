@@ -35,6 +35,21 @@ enum SettingsLanguage {
   }
 }
 
+/// ייצוג השפה הפעילה עבור ממשק התוספים (plugin.boot / app.getLocale).
+/// [code] — הערך השמור בהגדרות (או null לזיהוי אוטומטי). 'locale' נשאר
+/// he-IL עבור עברית לתאימות עם תוספים קיימים.
+/// [systemLocale] נמסר במפורש בבדיקות (כמו ב-[resolveSettingsLanguage]).
+Map<String, String> pluginLocalePayload({String? code, Locale? systemLocale}) {
+  final resolved = resolveSettingsLanguage(code, systemLocale: systemLocale);
+  return {
+    'locale': resolved == SettingsLanguage.hebrew ? 'he-IL' : resolved.code,
+    'language': resolved.code,
+    'textDirection': resolved.textDirection == TextDirection.rtl
+        ? 'rtl'
+        : 'ltr',
+  };
+}
+
 /// הקוד שנשמר ונבחר כשהשפה מותאמת אוטומטית לשפת המערכת.
 const String kSettingsLanguageSystemCode = 'system';
 

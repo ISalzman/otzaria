@@ -238,12 +238,52 @@ const { data } = await Otzaria.call('app.getTheme');
 > **גופנים מוטמעים אוטומטית:** השמות שמגיעים ב-`typography.fontFamily` ו-`typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`, `NotoRashiHebrew`) נטענים אוטומטית ב-WebView של התוסף כ-`@font-face` עוד לפני ה-`plugin.boot`. אין צורך לארוז את קבצי הגופן בתוסף — מספיק להפנות לשם שהתקבל ב-CSS: `font-family: 'FrankRuhlCLM', serif;`. אם המשתמש בחר גופן מערכת (לא מובנה), ההזרקה האוטומטית מדלגת עליו וה-WebView ייפול חזרה ל-fallback של מערכת ההפעלה.
 
 ### `app.getLocale`
-מחזיר את השפה וכיוון הטקסט.
+מחזיר את שפת הממשק שבחר המשתמש (או שפת המערכת, בזיהוי אוטומטי) ואת כיוון
+הטקסט שלה. עד 0.9.96 הוחזר תמיד `he-IL`; מ-0.9.97 הערך משקף את הגדרת השפה
+באפליקציה, ונוסף שדה `language` עם קוד השפה הנקי.
 
 ```javascript
 const { data } = await Otzaria.call('app.getLocale');
-// { locale: "he-IL", textDirection: "rtl" }
+// { locale: "he-IL", language: "he", textDirection: "rtl" }
+// באנגלית: { locale: "en", language: "en", textDirection: "ltr" }
 ```
+
+אותם שדות מגיעים גם ב-`payload.app` של אירוע `plugin.boot`. שינוי שפה תוך
+כדי ריצה נמסר באירוע `settings.changed` עם המפתח `key-settings-language`
+(ראו § תוסף רב-לשוני).
+
+### תוסף רב-לשוני (i18n)
+
+עברית היא שפת הבסיס של אוצריא — תוסף כותב את ממשקו בעברית, ומוסיף תרגום
+לכל שפה שירצה. העיקרון:
+
+1. **קובץ תרגום לכל שפה**, מוטמע בתוסף (ללא רשת), למשל `i18n/en.js` הרושם
+   מילון תחת `window.TRANSLATIONS.en`. המפתחות הם מחרוזות המקור בעברית:
+
+   ```javascript
+   // i18n/en.js
+   window.TRANSLATIONS = window.TRANSLATIONS || {};
+   window.TRANSLATIONS.en = {
+     'הגדרות': 'Settings',
+     'הצג': 'Show',
+   };
+   ```
+
+2. **בחירת השפה** — מ-`payload.app.language` שבאירוע `plugin.boot` (או
+   `app.getLocale`). אם אין מילון לשפה — נשארים בעברית:
+
+   ```javascript
+   const dict = window.TRANSLATIONS[payload.app.language] || null;
+   const t = s => (dict && dict[s]) || s;   // נפילה טבעית לעברית
+   ```
+
+3. **כיוון** — כש-`textDirection` הוא `ltr`, קבעו
+   `document.documentElement.dir = 'ltr'` בזמן ריצה (ה-HTML הסטטי נשאר
+   `dir="rtl"`, כדרישת ולידציית העיצוב).
+
+4. **עדכון חי** — האזינו ל-`settings.changed` (הרשאת
+   `events.subscribe:settings.changed`) ובדקו `key === 'key-settings-language'`;
+   או הסתפקו בשפה שנקבעה ב-boot.
 
 ### `app.getUserEmail`
 **הרשאה נדרשת:** `app.user_email.read`
@@ -1612,6 +1652,7 @@ const { data } = await Otzaria.call('settings.getMany', {
 - `key-line-height`
 - `key-selected-city`
 - `key-calendar-type`
+- `key-settings-language` (מ-0.9.97 — שפת הממשק שנבחרה, או `system`)
 - `key-show-teamim`
 - `key-default-nikud`
 - `key-remove-nikud-tanach`

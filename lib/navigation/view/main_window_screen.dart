@@ -2452,7 +2452,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   previous.replaceHolyNames != current.replaceHolyNames ||
                   previous.libraryViewMode != current.libraryViewMode ||
                   previous.copyWithHeaders != current.copyWithHeaders ||
-                  previous.copyHeaderFormat != current.copyHeaderFormat;
+                  previous.copyHeaderFormat != current.copyHeaderFormat ||
+                  previous.settingsLanguageCode != current.settingsLanguageCode;
             },
             listener: (context, current) {
               final previous = _prevSettingsState ?? SettingsState.initial();
@@ -2468,6 +2469,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
               if (previous.isDarkMode != current.isDarkMode) {
                 dispatch(SettingsRepository.keyDarkMode, current.isDarkMode);
+              }
+              if (previous.settingsLanguageCode !=
+                  current.settingsLanguageCode) {
+                dispatch(
+                  SettingsRepository.keySettingsLanguage,
+                  current.settingsLanguageCode,
+                );
               }
               if (previous.followSystemTheme != current.followSystemTheme) {
                 dispatch(

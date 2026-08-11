@@ -10,11 +10,14 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
@@ -877,8 +880,12 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             'app': {
               'version': packageInfo.version,
               'platform': Platform.operatingSystem,
-              'locale': 'he-IL',
-              'textDirection': 'rtl',
+              // שפת הממשק הפעילה (he-IL לתאימות; 'language' — קוד השפה)
+              ...pluginLocalePayload(
+                code: Settings.getValue<String>(
+                  SettingsRepository.keySettingsLanguage,
+                ),
+              ),
               // סימון לתוסף שהוא רץ ברקע — מאפשר לקוד התוסף להתנהג אחרת
               // (למשל לא לבצע ניווט יזום) כשאין UI גלוי.
               'runMode': 'background',
