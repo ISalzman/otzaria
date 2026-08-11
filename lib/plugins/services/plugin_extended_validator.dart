@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_program_compiler.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_template_compiler.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
+import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
@@ -529,6 +533,7 @@ class PluginExtendedValidator {
 
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
   static const String _startupContributionsMinVersion = '0.9.97';
+  static const String _declarativeProgramsMinVersion = '0.9.98';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.
@@ -574,6 +579,7 @@ class PluginExtendedValidator {
     checkListField('toolbarItems', (e) => e is Map, 'אובייקט');
     checkListField('contextMenuItems', (e) => e is Map, 'אובייקט');
     checkListField('publishedData', (e) => e is Map, 'אובייקט');
+    checkListField('programs', (e) => e is Map, 'אובייקט');
     checkListField('activationEvents', (e) => e is String, 'מחרוזת');
     final keepAliveRaw = startupMap['keepAlive'];
     if (keepAliveRaw != null && keepAliveRaw is! bool) {
@@ -624,8 +630,24 @@ class PluginExtendedValidator {
           'שלא הוכרזה ב-manifest',
         );
       }
+      if (startup.toolbarItems.length >
+          PluginToolbarRegistry.maxTopLevelItemsPerPlugin) {
+        errors.add(
+          'contributes.startup.toolbarItems מוגבל ל-'
+          '${PluginToolbarRegistry.maxTopLevelItemsPerPlugin} פריטים',
+        );
+      }
+      final toolbarIds = startup.toolbarItems
+          .map((item) => item['id'])
+          .whereType<String>()
+          .toList();
+      if (toolbarIds.toSet().length != toolbarIds.length) {
+        errors.add('contributes.startup.toolbarItems מכיל מזהה כפול');
+      }
       final registry = PluginToolbarRegistry.detached();
-      for (final item in startup.toolbarItems) {
+      for (final item in startup.toolbarItems.where(
+        (item) => !DeclarativeToolbarTemplateCompiler.isDeclarative(item),
+      )) {
         try {
           registry.registerPayload(manifest.id, item);
         } catch (e) {
@@ -673,6 +695,67 @@ class PluginExtendedValidator {
             'ו-payload (ו-scope מחרוזת אם צוין): ${jsonEncode(record)}',
           );
         }
+      }
+    }
+
+    final compiledPrograms = <String, CompiledDeclarativeProgram>{};
+    if (startup.programs.isNotEmpty) {
+      if (startup.programs.length > 8) {
+        errors.add('contributes.startup.programs מוגבל ל-8 תכניות');
+      }
+      try {
+        if (PluginVersionUtils.compareCoreVersions(
+              _declarativeProgramsMinVersion,
+              manifest.minAppVersion,
+            ) >
+            0) {
+          errors.add(
+            'contributes.startup.programs נתמך החל מגרסה '
+            '$_declarativeProgramsMinVersion, אך minAppVersion שהוצהר הוא '
+            '${manifest.minAppVersion}',
+          );
+        }
+      } on PluginVersionFormatException {
+        // minAppVersion נבדק ב-PluginManifestValidator.
+      }
+      final sourceIds = {
+        for (final source in manifest.databaseSources)
+          if (source['id'] is String) source['id'] as String,
+      };
+      final compiler = DeclarativeProgramCompiler(
+        declaredPermissions: declaredPermissions,
+        declaredSourceIds: sourceIds,
+      );
+      final programIds = <String>{};
+      for (final program in startup.programs) {
+        try {
+          final compiled = compiler.compile(program);
+          if (!programIds.add(compiled.id)) {
+            errors.add(
+              'contributes.startup.programs מכיל מזהה כפול: ${compiled.id}',
+            );
+          } else {
+            compiledPrograms[compiled.id] = compiled;
+          }
+        } on DeclarativeProgramException catch (error) {
+          errors.add('contributes.startup.programs לא תקין: $error');
+        }
+      }
+    }
+
+    final declarativeToolbarItems = startup.toolbarItems
+        .where(DeclarativeToolbarTemplateCompiler.isDeclarative)
+        .toList();
+    if (declarativeToolbarItems.isNotEmpty) {
+      try {
+        DeclarativeToolbarTemplateCompiler(
+          declaredPermissions: declaredPermissions,
+          programs: compiledPrograms,
+        ).compileAll(manifest.id, declarativeToolbarItems);
+      } on DeclarativeProgramException catch (error) {
+        errors.add('contributes.startup.toolbarItems לא תקין: $error');
+      } on PluginToolbarException catch (error) {
+        errors.add('contributes.startup.toolbarItems לא תקין: $error');
       }
     }
 

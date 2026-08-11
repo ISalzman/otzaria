@@ -213,12 +213,14 @@ void main() {
         startup: {
           'toolbarItems': 'not-a-list',
           'contextMenuItems': ['not-a-map'],
+          'programs': ['not-a-map'],
           'activationEvents': [17],
         },
       ),
     );
     expect(report.errors, contains(contains('toolbarItems')));
     expect(report.errors, contains(contains('contextMenuItems')));
+    expect(report.errors, contains(contains('programs')));
     expect(report.errors, contains(contains('activationEvents')));
   });
 
@@ -348,4 +350,192 @@ void main() {
 
     expect(report.errors, contains(contains('מפעיל מנוע רקע')));
   });
+
+  test('תכנית Host תקינה עוברת ולידציה בלי להפעיל מנוע רקע', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        minAppVersion: '0.9.98',
+        permissions: const ['app.startup_contributions'],
+        startup: {
+          'programs': [_validHostProgram()],
+        },
+      ),
+    );
+
+    expect(report.errors, isEmpty);
+  });
+
+  test('פקודה דקלרטיבית לא מוכרת היא שגיאה חוסמת', () {
+    final program = _validHostProgram();
+    (program['commands'] as List<dynamic>)[0] = {
+      'id': 'unsafe',
+      'type': 'database.rawSql',
+      'args': {'sql': 'DELETE FROM books'},
+    };
+    final report = _run(
+      tempDir,
+      _manifest(
+        minAppVersion: '0.9.98',
+        permissions: const ['app.startup_contributions'],
+        startup: {
+          'programs': [program],
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('unknown_command')));
+  });
+
+  test('תכנית דקלרטיבית דורשת minAppVersion עדכני', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        permissions: const ['app.startup_contributions'],
+        startup: {
+          'programs': [_validHostProgram()],
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('0.9.98')));
+  });
+
+  test('שני פקדי Host דקלרטיביים עוברים ולידציה', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        minAppVersion: '0.9.98',
+        permissions: const [
+          'app.startup_contributions',
+          'reader.toolbar',
+          'reader.open',
+        ],
+        startup: {
+          'programs': [_toolbarProgram()],
+          'toolbarItems': _declarativeToolbarItems(),
+        },
+      ),
+    );
+
+    expect(report.errors, isEmpty);
+  });
+
+  test('פקד דקלרטיבי שמפנה לפלט חסר נדחה', () {
+    final items = _declarativeToolbarItems();
+    (items.first['binding'] as Map<String, dynamic>)['visibleOutput'] =
+        'missing';
+    final report = _run(
+      tempDir,
+      _manifest(
+        minAppVersion: '0.9.98',
+        permissions: const [
+          'app.startup_contributions',
+          'reader.toolbar',
+          'reader.open',
+        ],
+        startup: {
+          'programs': [_toolbarProgram()],
+          'toolbarItems': items,
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('output_not_found')));
+  });
 }
+
+Map<String, dynamic> _validHostProgram() => {
+  'id': 'host-program',
+  'version': 1,
+  'triggers': ['plugin.enabledChanged'],
+  'commands': [
+    {
+      'id': 'first',
+      'type': 'data.first',
+      'args': {
+        'items': {
+          r'$literal': [1],
+        },
+      },
+    },
+  ],
+  'outputs': {
+    'first': {r'$result': 'first'},
+  },
+};
+
+Map<String, dynamic> _toolbarProgram() => {
+  'id': 'book-links',
+  'version': 1,
+  'triggers': ['reader.activeBookChanged'],
+  'commands': [
+    {
+      'id': 'first',
+      'type': 'data.first',
+      'args': {
+        'items': {
+          r'$literal': [
+            {'id': 1, 'title': 'מהדורה'},
+          ],
+        },
+      },
+    },
+  ],
+  'outputs': {
+    'defaultEdition': {r'$result': 'first'},
+    'editions': {
+      r'$literal': [
+        {'id': 1, 'title': 'מהדורה'},
+      ],
+    },
+  },
+};
+
+List<Map<String, dynamic>> _declarativeToolbarItems() => [
+  {
+    'id': 'default',
+    'title': 'פתח מהדורת ברירת מחדל',
+    'icon': 'book_24_regular',
+    'binding': {
+      'program': 'book-links',
+      'visibleOutput': 'defaultEdition',
+    },
+    'action': {
+      'type': 'reader.openBook',
+      'args': {
+        'identity': {r'$output': 'defaultEdition'},
+      },
+    },
+  },
+  {
+    'id': 'editions',
+    'type': 'menu',
+    'title': 'פתח מהדורה אחרת',
+    'icon': 'book_24_regular',
+    'binding': {
+      'program': 'book-links',
+      'visibleOutput': 'editions',
+    },
+    'childrenBinding': {
+      'itemsOutput': 'editions',
+      'itemTemplate': {
+        'id': {
+          r'$concat': [
+            'edition-',
+            {r'$item': 'id'},
+          ],
+        },
+        'title': {r'$item': 'title'},
+        'action': {
+          'type': 'reader.openBook',
+          'args': {
+            'identity': {
+              'id': {r'$item': 'id'},
+            },
+          },
+        },
+      },
+    },
+  },
+];

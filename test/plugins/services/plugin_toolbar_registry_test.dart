@@ -259,5 +259,60 @@ void main() {
 
       expect(registry.getAll().single.$1, 'second');
     });
+
+    test('מחליף ומסתיר קבוצת פקדים בהתראה אטומית אחת', () {
+      const managedIds = {'default', 'editions'};
+      registry.replaceManagedItems(
+        'marker',
+        managedIds: managedIds,
+        items: const [
+          PluginToolbarItem(
+            id: 'default',
+            title: 'Old default',
+            icon: 'apps_24_regular',
+          ),
+          PluginToolbarItem(
+            id: 'editions',
+            title: 'Old editions',
+            icon: 'apps_24_regular',
+          ),
+        ],
+      );
+      final snapshots = <List<String>>[];
+      registry.addListener(() {
+        snapshots.add([
+          for (final record in registry.getAll()) record.$2.title,
+        ]);
+      });
+
+      registry.replaceManagedItems(
+        'marker',
+        managedIds: managedIds,
+        items: const [
+          PluginToolbarItem(
+            id: 'default',
+            title: 'New default',
+            icon: 'apps_24_regular',
+          ),
+          PluginToolbarItem(
+            id: 'editions',
+            title: 'New editions',
+            icon: 'apps_24_regular',
+          ),
+        ],
+      );
+
+      expect(snapshots, [
+        ['New default', 'New editions'],
+      ]);
+
+      registry.replaceManagedItems(
+        'marker',
+        managedIds: managedIds,
+        items: const [],
+      );
+      expect(snapshots.last, isEmpty);
+      expect(snapshots, hasLength(2));
+    });
   });
 }

@@ -75,6 +75,39 @@ class PluginToolbarRegistry extends ChangeNotifier {
     if (_items.remove(pluginId) != null) notifyListeners();
   }
 
+  /// מחליף קבוצת פריטים מנוהלת בעדכון יחיד, בלי לגעת בפריטים אחרים.
+  void replaceManagedItems(
+    String pluginId, {
+    required Set<String> managedIds,
+    required List<PluginToolbarItem> items,
+  }) {
+    if (items.any((item) => !managedIds.contains(item.id)) ||
+        items.map((item) => item.id).toSet().length != items.length) {
+      throw const PluginToolbarException(
+        'error.invalid_params',
+        'managed toolbar items must have unique declared ids',
+      );
+    }
+    final next = [
+      for (final item in _items[pluginId] ?? const <PluginToolbarItem>[])
+        if (!managedIds.contains(item.id)) item,
+      ...items,
+    ];
+    if (next.length > maxTopLevelItemsPerPlugin ||
+        next.map((item) => item.id).toSet().length != next.length) {
+      throw const PluginToolbarException(
+        'error.invalid_params',
+        'a plugin can register at most 2 unique toolbar items',
+      );
+    }
+    if (next.isEmpty) {
+      _items.remove(pluginId);
+    } else {
+      _items[pluginId] = next;
+    }
+    notifyListeners();
+  }
+
   List<(String pluginId, PluginToolbarItem item)> getAll() {
     return List.unmodifiable([
       for (final entry in _items.entries)

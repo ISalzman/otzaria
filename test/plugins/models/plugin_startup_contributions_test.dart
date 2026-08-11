@@ -41,6 +41,15 @@ void main() {
               'payload': {'title': 'אירוע'},
             },
           ],
+          'programs': [
+            {
+              'id': 'p1',
+              'version': 1,
+              'triggers': ['plugin.enabledChanged'],
+              'commands': [],
+              'outputs': {},
+            },
+          ],
           'activationEvents': ['app.startup', 'reader.sectionContentChanged'],
           'keepAlive': true,
         },
@@ -52,6 +61,7 @@ void main() {
     expect(startup.toolbarItems.single['id'], 'b1');
     expect(startup.contextMenuItems.single['showWhen'], isA<Map>());
     expect(startup.publishedData.single['key'], 'k1');
+    expect(startup.programs.single['id'], 'p1');
     expect(startup.activationEvents, [
       PluginStartupContributions.startupActivationTopic,
       'reader.sectionContentChanged',
@@ -132,6 +142,29 @@ void main() {
       ],
       publishedData: [
         {'type': 'calendar.event', 'key': 'static', 'payload': {}},
+      ],
+      programs: [
+        {'id': 'host-only'},
+      ],
+    );
+
+    expect(startup.hasBackgroundActivationTrigger, isFalse);
+  });
+
+  test('פקדי Host דקלרטיביים אינם מפעילים מנוע רקע', () {
+    const startup = PluginStartupContributions(
+      toolbarItems: [
+        {
+          'id': 'default',
+          'binding': {'program': 'links', 'visibleOutput': 'default'},
+          'action': {'type': 'reader.openBook', 'args': <String, Object?>{}},
+        },
+        {
+          'id': 'editions',
+          'type': 'menu',
+          'binding': {'program': 'links', 'visibleOutput': 'editions'},
+          'childrenBinding': {'itemsOutput': 'editions'},
+        },
       ],
     );
 
