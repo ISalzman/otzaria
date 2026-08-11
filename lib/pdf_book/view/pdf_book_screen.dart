@@ -71,6 +71,7 @@ import 'package:otzaria/widgets/layout/dual_adaptive_reader_pane.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
@@ -4664,6 +4665,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       compact: context.read<SettingsBloc>().state.compactMenuMode,
       locationPayload: () async =>
           (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
+      hostActionDispatcher: context
+          .read<PluginSystemBloc>()
+          .declarativeHost
+          ?.dispatchAction,
     );
   }
 

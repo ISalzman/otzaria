@@ -23,7 +23,22 @@ typedef DeclarativePermissionLoader =
 typedef DeclarativeHostErrorHandler =
     void Function(String pluginId, Object error, StackTrace stackTrace);
 
-class DeclarativePluginHostService {
+abstract interface class DeclarativePluginHost {
+  Future<void> syncPlugins(List<InstalledPlugin> plugins);
+
+  void removePlugin(String pluginId);
+
+  Future<void> readerBookChanged(Book? book, {required String context});
+
+  Future<void> dispatchAction(
+    String pluginId,
+    CompiledDeclarativeAction action,
+  );
+
+  void dispose();
+}
+
+class DeclarativePluginHostService implements DeclarativePluginHost {
   final DeclarativePluginLoader _loadPlugin;
   final DeclarativePermissionLoader _loadPermissions;
   final DeclarativeHostErrorHandler? onError;
@@ -79,6 +94,7 @@ class DeclarativePluginHostService {
   Book? _readerBook;
   String? _readerContext;
 
+  @override
   Future<void> syncPlugins(List<InstalledPlugin> plugins) async {
     final generation = ++_syncGeneration;
     final idsToClear = {
@@ -126,6 +142,7 @@ class DeclarativePluginHostService {
     await _evaluateReaderContext(force: true);
   }
 
+  @override
   void removePlugin(String pluginId) {
     _syncGeneration++;
     _registeredPluginIds.remove(pluginId);
@@ -133,6 +150,7 @@ class DeclarativePluginHostService {
     toolbarBinding.removePlugin(pluginId);
   }
 
+  @override
   Future<void> readerBookChanged(Book? book, {required String context}) async {
     _readerBook = book;
     _readerContext = book == null ? null : context;
@@ -159,6 +177,19 @@ class DeclarativePluginHostService {
     );
   }
 
+  @override
+  Future<void> dispatchAction(
+    String pluginId,
+    CompiledDeclarativeAction action,
+  ) async {
+    try {
+      await executeAction(pluginId, action);
+    } catch (error, stackTrace) {
+      onError?.call(pluginId, error, stackTrace);
+    }
+  }
+
+  @override
   void dispose() {
     _syncGeneration++;
     for (final pluginId in _registeredPluginIds.toList()) {

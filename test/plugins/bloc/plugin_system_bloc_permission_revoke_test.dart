@@ -10,6 +10,9 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
+import 'package:otzaria/plugins/declarative/services/declarative_plugin_host_service.dart';
+import 'package:otzaria/models/books.dart';
 
 class _FakeRepo implements PluginRegistryRepository {
   @override
@@ -27,6 +30,28 @@ class _FakeRepo implements PluginRegistryRepository {
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _FakeDeclarativeHost implements DeclarativePluginHost {
+  final removed = <String>[];
+
+  @override
+  void removePlugin(String pluginId) => removed.add(pluginId);
+
+  @override
+  Future<void> syncPlugins(List<InstalledPlugin> plugins) async {}
+
+  @override
+  Future<void> readerBookChanged(Book? book, {required String context}) async {}
+
+  @override
+  Future<void> dispatchAction(
+    String pluginId,
+    CompiledDeclarativeAction action,
+  ) async {}
+
+  @override
+  void dispose() {}
 }
 
 void main() {
@@ -81,6 +106,26 @@ void main() {
 
     expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
     expect(ContextMenuRegistry.instance.getAll(), hasLength(1));
+  });
+
+  test('כל שינוי הרשאה מבטל מיד תרומה דקלרטיבית פעילה', () async {
+    final host = _FakeDeclarativeHost();
+    final bloc = PluginSystemBloc(
+      repository: _FakeRepo(),
+      declarativeHost: host,
+    );
+    addTearDown(bloc.close);
+
+    bloc.add(
+      const SetPluginPermissionRequested(
+        pluginId: 'p1',
+        permission: 'reader.open',
+        granted: false,
+      ),
+    );
+    await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+
+    expect(host.removed, ['p1']);
   });
 
   for (final permission in [
