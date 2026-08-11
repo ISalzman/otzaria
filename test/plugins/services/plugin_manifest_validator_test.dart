@@ -288,5 +288,40 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+
+    test('דוחה נתיב או שדה לא מוכר בהצהרת מקור DB', () async {
+      final manifest = PluginManifest(
+        schemaVersion: 1,
+        id: 'test.validator.database',
+        name: 'Validator',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        permissions: const ['database.read'],
+        networkEnabled: false,
+        networkAllowlist: const [],
+        toolTabTitle: 'Validator',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+        databaseSources: const [
+          {'id': 'app.library.main', 'path': '/private/library.db'},
+        ],
+      );
+
+      await expectLater(
+        PluginManifestValidator.validateManifest(
+          manifest: manifest,
+          directoryPath: '/',
+          skipAppVersionValidation: true,
+          skipFileValidation: true,
+        ),
+        throwsA(predicate((error) => error.toString().contains('path'))),
+      );
+    });
   });
 }

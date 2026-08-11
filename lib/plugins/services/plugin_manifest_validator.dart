@@ -89,6 +89,15 @@ class PluginManifestValidator {
     }
 
     for (final source in manifest.databaseSources) {
+      final unknownFields = source.keys
+          .where((key) => !const {'id', 'label', 'required'}.contains(key))
+          .toList();
+      if (unknownFields.isNotEmpty) {
+        throw Exception(
+          'שדות לא מוכרים ב-contributes.databaseSources: '
+          '${unknownFields.join(', ')}',
+        );
+      }
       final id = source['id'];
       final label = source['label'];
       final required = source['required'];
