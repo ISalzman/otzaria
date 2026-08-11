@@ -95,6 +95,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
@@ -368,6 +369,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   late PdfDocumentRefFile _pdfDocumentRef;
   PdfTextSearcher? textSearcher;
   TabController? _leftPaneTabController;
+
+  /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   int _currentLeftPaneTabIndex = 0;
   final FocusNode _searchFieldFocusNode = FocusNode();
   final FocusNode _navigationFieldFocusNode = FocusNode();
@@ -725,6 +729,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     // הגדרת listeners עם שמות לצורך הסרה נכונה ב-dispose
     _leftPaneTabControllerListener = () {
+      _searchHost.activeTab = _leftPaneTabController!.index;
       if (_currentLeftPaneTabIndex != _leftPaneTabController!.index) {
         setState(() {
           _currentLeftPaneTabIndex = _leftPaneTabController!.index;
@@ -3564,6 +3569,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
     widget.tab.toggleTextViewNotifier.removeListener(_toggleTextViewListener);
     _leftPaneTabController?.dispose();
+    _searchHost.dispose();
     _openFilterRequest.dispose();
     _searchFieldFocusNode.dispose();
     _navigationFieldFocusNode.dispose();
@@ -3848,6 +3854,24 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           children: [
             AppTopBar(
               leadingItems: [
+                AppTopBarItem(
+                  widget: BlocBuilder<PdfBookBloc, PdfBookState>(
+                    buildWhen: (prev, curr) {
+                      if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
+                        return prev.showLeftPane != curr.showLeftPane ||
+                            prev.sidebarWidth != curr.sidebarWidth;
+                      }
+                      return true;
+                    },
+                    builder: (context, state) => NavPanelSearchBar(
+                      host: _searchHost,
+                      isOpen: state is PdfBookLoaded && state.showLeftPane,
+                      paneWidth: state is PdfBookLoaded
+                          ? state.sidebarWidth
+                          : 300.0,
+                    ),
+                  ),
+                ),
                 AppTopBarItem(
                   widget: NavPanelToggleButton(
                     key: widget.enableTourTargets
@@ -4272,96 +4296,111 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildLeftPaneContent(bool showLeftPane) {
-    return Column(
-      children: [
-        ValueListenableBuilder(
-          valueListenable: widget.tab.pinLeftPane,
-          builder: (context, pinLeftPanel, child) => NavPanelTabHeader(
-            controller: _leftPaneTabController!,
-            tabs: const [
-              (
-                icon: OtzariaIcons.list_24_regular,
-                iconFilled: OtzariaIcons.list_24_filled,
-                label: 'ניווט',
-              ),
-              (
-                icon: FluentIcons.search_24_regular,
-                iconFilled: FluentIcons.search_24_filled,
-                label: 'חיפוש',
-              ),
-              (
-                icon: FluentIcons.document_multiple_24_regular,
-                iconFilled: FluentIcons.document_multiple_24_filled,
-                label: 'דפים',
-              ),
-            ],
-            isPinned: pinLeftPanel,
-            onTogglePin: MediaQuery.of(context).size.width >= 600
-                ? () {
-                    widget.tab.pinLeftPane.value =
-                        !widget.tab.pinLeftPane.value;
-                  }
-                : null,
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _leftPaneTabController,
-            children: [
-              ValueListenableBuilder(
-                valueListenable: widget.tab.outline,
-                builder: (context, outline, child) => OutlineView(
-                  outline: outline,
-                  title: widget.tab.book.title,
-                  controller: widget.tab.pdfViewerController,
-                  focusNode: _navigationFieldFocusNode,
-                  isPaneOpen: showLeftPane,
-                  onNavigateToPage: _goToPageWithSpreadLock,
+    return NavPanelSearchScope(
+      host: _searchHost,
+      child: Column(
+        children: [
+          ValueListenableBuilder(
+            valueListenable: widget.tab.pinLeftPane,
+            builder: (context, pinLeftPanel, child) => NavPanelTabHeader(
+              controller: _leftPaneTabController!,
+              tabs: const [
+                (
+                  icon: OtzariaIcons.list_24_regular,
+                  iconFilled: OtzariaIcons.list_24_filled,
+                  label: 'ניווט',
                 ),
-              ),
-              ValueListenableBuilder(
-                valueListenable: widget.tab.documentRef,
-                builder: (context, documentRef, child) {
-                  if (widget.tab.searchController.text.isNotEmpty) {
-                    _lastProcessedSearchSessionId = null;
-                  }
-                  return child!;
-                },
-                child: textSearcher != null
-                    ? PdfBookSearchView(
-                        textSearcher: textSearcher!,
-                        searchController: widget.tab.searchController,
-                        focusNode: _searchFieldFocusNode,
-                        outline: widget.tab.outline.value,
-                        bookTitle: widget.tab.book.title,
-                        bookTopics: widget.tab.book.topics,
-                        bookCategoryPath: widget.tab.book.categoryPath,
-                        pdfFilePath: _resolvedPdfPath,
-                        initialSearchText: widget.tab.searchText,
-                        initialSearchOptions: widget.tab.searchOptions,
-                        initialAlternativeWords: widget.tab.alternativeWords,
-                        initialSpacingValues: widget.tab.spacingValues,
-                        initialSearchMode: widget.tab.searchMode,
-                        initialSearchDistance: widget.tab.searchDistance,
-                        initialMatchPolicy: widget.tab.matchPolicy,
-                        incomingSearchConfiguration:
-                            widget.tab.incomingSearchConfiguration,
-                        onSearchResultNavigated: _ensureSearchTabIsActive,
-                      )
-                    : const Center(child: CircularProgressIndicator()),
-              ),
-              ValueListenableBuilder(
-                valueListenable: widget.tab.documentRef,
-                builder: (context, documentRef, child) => child!,
-                child: ThumbnailsView(
-                  documentRef: widget.tab.documentRef.value,
-                  controller: widget.tab.pdfViewerController,
+                (
+                  icon: FluentIcons.search_24_regular,
+                  iconFilled: FluentIcons.search_24_filled,
+                  label: 'חיפוש',
                 ),
-              ),
-            ],
+                (
+                  icon: FluentIcons.document_multiple_24_regular,
+                  iconFilled: FluentIcons.document_multiple_24_filled,
+                  label: 'דפים',
+                ),
+              ],
+              isPinned: pinLeftPanel,
+              onTogglePin: MediaQuery.of(context).size.width >= 600
+                  ? () {
+                      widget.tab.pinLeftPane.value =
+                          !widget.tab.pinLeftPane.value;
+                    }
+                  : null,
+            ),
           ),
-        ),
-      ],
+          Expanded(
+            child: TabBarView(
+              controller: _leftPaneTabController,
+              children: [
+                NavPanelSearchSlot(
+                  index: 0,
+                  child: ValueListenableBuilder(
+                    valueListenable: widget.tab.outline,
+                    builder: (context, outline, child) => OutlineView(
+                      outline: outline,
+                      title: widget.tab.book.title,
+                      controller: widget.tab.pdfViewerController,
+                      focusNode: _navigationFieldFocusNode,
+                      isPaneOpen: showLeftPane,
+                      onNavigateToPage: _goToPageWithSpreadLock,
+                    ),
+                  ),
+                ),
+                NavPanelSearchSlot(
+                  index: 1,
+                  child: ValueListenableBuilder(
+                    valueListenable: widget.tab.documentRef,
+                    builder: (context, documentRef, child) {
+                      if (widget.tab.searchController.text.isNotEmpty) {
+                        _lastProcessedSearchSessionId = null;
+                      }
+                      return child!;
+                    },
+                    child: textSearcher != null
+                        ? PdfBookSearchView(
+                            textSearcher: textSearcher!,
+                            searchController: widget.tab.searchController,
+                            focusNode: _searchFieldFocusNode,
+                            outline: widget.tab.outline.value,
+                            bookTitle: widget.tab.book.title,
+                            bookTopics: widget.tab.book.topics,
+                            bookCategoryPath: widget.tab.book.categoryPath,
+                            pdfFilePath: _resolvedPdfPath,
+                            initialSearchText: widget.tab.searchText,
+                            initialSearchOptions: widget.tab.searchOptions,
+                            initialAlternativeWords:
+                                widget.tab.alternativeWords,
+                            initialSpacingValues: widget.tab.spacingValues,
+                            initialSearchMode: widget.tab.searchMode,
+                            initialSearchDistance: widget.tab.searchDistance,
+                            initialMatchPolicy: widget.tab.matchPolicy,
+                            incomingSearchConfiguration:
+                                widget.tab.incomingSearchConfiguration,
+                            onSearchResultNavigated: _ensureSearchTabIsActive,
+                          )
+                        : const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                  ),
+                ),
+                NavPanelSearchSlot(
+                  index: 2,
+                  child: ValueListenableBuilder(
+                    valueListenable: widget.tab.documentRef,
+                    builder: (context, documentRef, child) => child!,
+                    child: ThumbnailsView(
+                      documentRef: widget.tab.documentRef.value,
+                      controller: widget.tab.pdfViewerController,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

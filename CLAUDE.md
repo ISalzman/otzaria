@@ -463,6 +463,13 @@ NavPanelTabHeader(                 // tabs + pin, when the panel has tabs
 )
 ```
 
+**Search inside a panel** lives in ONE bar above the panel, not in the tabs (`lib/widgets/navigation/nav_panel_search.dart`):
+- the screen owns a `NavPanelSearchHost`, keeps `activeTab` in sync with its `TabController`, renders `NavPanelSearchBar` as the **first** `leadingItems` entry of `AppTopBar` (so it opens from the toggle icon and pushes it inward), and wraps `paneContent` in `NavPanelSearchScope`
+- each `TabBarView` child is wrapped in `NavPanelSearchSlot(index: i, …)`
+- a tab publishes its own action with `NavPanelSearchPublisher(delegate: NavPanelSearchDelegate(...))` and draws a local field only when `!NavPanelSearch.isHoisted(context)` (i.e. outside a panel — dialog, other screen), via `NavPanelLocalSearchField`
+- the bar stays mounted for as long as the panel is open: only the field's *content* swaps per tab. A tab with no search action leaves it visible but disabled — do NOT key or rebuild the bar per tab
+- never build a bare `OtzariaSearchField` inside a nav-panel tab
+
 **Panel content** is built from `lib/widgets/lists/nav_tree_tile.dart`:
 - `NavTreeHeader` — the main title above the list (primary color, bold) and any sub-tree root
 - `NavTreeTile.category` / `NavTreeTile.book` — tree rows; `NavTreeContentRow` for free-form rows (search snippets)

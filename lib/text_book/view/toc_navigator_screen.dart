@@ -9,7 +9,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/toc_filter.dart';
 import 'package:otzaria/text_book/view/toc_navigator_internals.dart';
@@ -523,80 +523,86 @@ class _TocViewerState extends State<TocViewer>
           final display = _displayDataFor(state.tableOfContents);
           final bool useFlat = display.totalCount > _kTocFlattenThreshold;
 
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: OtzariaSearchField(
-                  controller: searchController,
-                  hintText: 'איתור כותרת...',
-                  onChanged: _onSearchChanged,
-                  // ללא autofocus: הפוקוס מנוהל אך ורק דרך focusNode מהמסך
-                  // האב (_focusActiveTabSearchField), שמכבד את ההגנה מפני
-                  // פוקוס אוטומטי באנדרואיד. autofocus היה עוקף הגנה זו.
-                  focusNode: widget.focusNode,
-                  onSubmitted: (_) => widget.focusNode.requestFocus(),
-                  onClear: () => _onSearchChanged(''),
-                ),
-              ),
-              Expanded(
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification is ScrollStartNotification &&
-                        notification.dragDetails != null) {
-                      setState(() {
-                        _isManuallyScrolling = true;
-                      });
-                    } else if (notification is ScrollEndNotification) {
-                      setState(() {
-                        _isManuallyScrolling = false;
-                      });
-                    }
-                    return false;
-                  },
-                  child: NavTreeFocusGroup(
-                    child: useFlat
-                        ? _buildVirtualizedTocList(
-                            _flatItemsFor(display),
-                            activeIndex,
-                            isSearching: display.isSearching,
-                            title: state.book.title,
-                          )
-                        : SingleChildScrollView(
-                            controller: _tocScrollController,
-                            padding: kNavTreeListPadding,
-                            child: Column(
-                              children: [
-                                NavTreeHeader(title: state.book.title),
-                                ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: display.entries.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildTocItem(
-                                        display.entries[index],
-                                        isFirstChild: index == 0,
-                                        isGroupStart: index == 0,
-                                        isGroupEnd:
-                                            index == display.entries.length - 1,
-                                        showFullText: display.isSearching,
-                                        defaultExpanded: display.isSearching
-                                            ? shouldExpandInSearch(
-                                                _expanded[display
-                                                    .entries[index]
-                                                    .index],
-                                              )
-                                            : null,
-                                        activeIndex: activeIndex,
-                                      ),
-                                ),
-                              ],
+          // שדה החיפוש עצמו מצויר בסרגל שמעל החלונית; כאן רק מפרסמים את
+          // הפעולה שלו. הפוקוס עדיין מנוהל דרך focusNode מהמסך האב
+          // (_focusActiveTabSearchField), שמכבד את ההגנה מפני פוקוס אוטומטי
+          // באנדרואיד — ראה resolveLeftPaneSearchFocus.
+          final delegate = NavPanelSearchDelegate(
+            controller: searchController,
+            hintText: 'איתור כותרת...',
+            focusNode: widget.focusNode,
+            onChanged: _onSearchChanged,
+            onSubmitted: (_) => widget.focusNode.requestFocus(),
+            onClear: () => _onSearchChanged(''),
+          );
+          final hoisted = NavPanelSearch.isHoisted(context);
+
+          return NavPanelSearchPublisher(
+            delegate: delegate,
+            child: Column(
+              children: [
+                if (!hoisted) NavPanelLocalSearchField(delegate: delegate),
+                Expanded(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification is ScrollStartNotification &&
+                          notification.dragDetails != null) {
+                        setState(() {
+                          _isManuallyScrolling = true;
+                        });
+                      } else if (notification is ScrollEndNotification) {
+                        setState(() {
+                          _isManuallyScrolling = false;
+                        });
+                      }
+                      return false;
+                    },
+                    child: NavTreeFocusGroup(
+                      child: useFlat
+                          ? _buildVirtualizedTocList(
+                              _flatItemsFor(display),
+                              activeIndex,
+                              isSearching: display.isSearching,
+                              title: state.book.title,
+                            )
+                          : SingleChildScrollView(
+                              controller: _tocScrollController,
+                              padding: kNavTreeListPadding,
+                              child: Column(
+                                children: [
+                                  NavTreeHeader(title: state.book.title),
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: display.entries.length,
+                                    itemBuilder: (context, index) =>
+                                        _buildTocItem(
+                                          display.entries[index],
+                                          isFirstChild: index == 0,
+                                          isGroupStart: index == 0,
+                                          isGroupEnd:
+                                              index ==
+                                              display.entries.length - 1,
+                                          showFullText: display.isSearching,
+                                          defaultExpanded: display.isSearching
+                                              ? shouldExpandInSearch(
+                                                  _expanded[display
+                                                      .entries[index]
+                                                      .index],
+                                                )
+                                              : null,
+                                          activeIndex: activeIndex,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),

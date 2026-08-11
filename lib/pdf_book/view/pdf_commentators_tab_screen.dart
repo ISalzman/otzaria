@@ -32,6 +32,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -46,6 +47,9 @@ import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 const int _kAllPara = -1;
 
 /// מסך כרטסיית המפרשים של PDF — עצמאי לחלוטין, כמו CommentatorsTabScreen.
+/// רוחב חלונית הניווט בכרטיסיית המפרשים.
+const double _kNavPaneWidth = 320;
+
 class PdfCommentatorsTabScreen extends StatefulWidget {
   final PdfCommentatorsTab tab;
 
@@ -89,6 +93,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
 
   /// סרגל 3 הלשוניות בפאנל הצד (זהה לכרטיסיית הטקסט): ניווט / מפרשים / חיפוש
   late final TabController _navTabController;
+
+  /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   static const int _commentatorsTabIndex = 1;
   static const int _searchTabIndex = 2;
 
@@ -147,6 +154,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// מרענן את הדגשת כפתורי הסרגל בעת מעבר לשונית, וממקד את שדה החיפוש.
   void _handleTabChanged() {
     if (!mounted) return;
+    _searchHost.activeTab = _navTabController.index;
     setState(() {});
     if (_navTabController.index == _searchTabIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -474,6 +482,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     widget.tab.sourceTab.currentTitle.removeListener(_syncWithSourceTab);
     _navTabController.removeListener(_handleTabChanged);
     _navTabController.dispose();
+    _searchHost.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _navSearchController.dispose();
@@ -606,11 +615,14 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 child: NavSidePanel(
                   isOpen: _navPaneOpen || _pinLeftPane,
                   alignment: AlignmentDirectional.centerEnd,
-                  paneWidth: 320,
+                  paneWidth: _kNavPaneWidth,
                   onClose: () {
                     if (!_pinLeftPane) setState(() => _navPaneOpen = false);
                   },
-                  paneContent: _buildSidePane(context),
+                  paneContent: NavPanelSearchScope(
+                    host: _searchHost,
+                    child: _buildSidePane(context),
+                  ),
                   mainContent: ValueListenableBuilder<bool>(
                     valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
                     builder: (context, linksLoading, _) => PdfCommentaryPanel(
@@ -770,6 +782,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return AppTopBar(
       leadingItems: [
+        AppTopBarItem(
+          widget: NavPanelSearchBar(
+            host: _searchHost,
+            isOpen: _navPaneOpen || _pinLeftPane,
+            paneWidth: _kNavPaneWidth,
+          ),
+        ),
         AppTopBarItem(
           widget: NavPanelToggleButton(
             isOpen: _navPaneOpen,
@@ -976,9 +995,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           child: TabBarView(
             controller: _navTabController,
             children: [
-              _buildNavPanel(),
-              _buildCommentatorsSelectionTab(),
-              _buildSearchPanel(),
+              NavPanelSearchSlot(index: 0, child: _buildNavPanel()),
+              NavPanelSearchSlot(
+                index: 1,
+                child: _buildCommentatorsSelectionTab(),
+              ),
+              NavPanelSearchSlot(index: 2, child: _buildSearchPanel()),
             ],
           ),
         ),
@@ -1069,129 +1091,132 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       builder: (context, val, _) {
         final filteredIdx = _navFilteredIndices(val.text);
 
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: OtzariaSearchField(
-                controller: _navSearchController,
-                hintText: 'איתור כותרת...',
-                onClear: () {},
-              ),
-            ),
-            Expanded(
-              child: NavTreeFocusGroup(
-                child: ScrollablePositionedList.builder(
-                  itemScrollController: _navScrollController,
-                  // +1 עבור הכותרת הראשית, שנגללת עם הרשימה (פריט 0).
-                  itemCount: filteredIdx.length + 1,
-                  padding: kNavTreeListPadding,
-                  itemBuilder: (context, listIdx) {
-                    if (listIdx == 0) {
-                      return NavTreeHeader(
-                        title: widget.tab.sourceTab.book.title,
-                      );
-                    }
-                    final idx = filteredIdx[listIdx - 1];
-                    final isGroupStart = listIdx == 1;
-                    final isGroupEnd = listIdx == filteredIdx.length;
-                    final isActiveHeading = idx == _selectedHeadingIdx;
-                    final isExpanded = _expandedHeadings.contains(idx);
-                    final paras = _getParagraphs(idx);
+        final delegate = NavPanelSearchDelegate(
+          controller: _navSearchController,
+          hintText: 'איתור כותרת...',
+          onClear: () {},
+        );
 
-                    final headingRow = _buildHeadingRow(
-                      context: context,
-                      headingText: headings[idx].key,
-                      // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
-                      isSelected:
-                          (isActiveHeading &&
-                              _selectedParagraphIdx == _kAllPara) ||
-                          _isNavItemInMulti(idx, _kAllPara),
-                      isExpanded: isExpanded,
-                      hasChildren: paras.isNotEmpty,
-                      // לחיצה על גוף הכותרת = בחירת כל הכותרת (כל המפרשים) + הרחבה
-                      onTap: () {
-                        if (_isCtrlPressed()) {
-                          _ctrlToggleNavItem(idx, _kAllPara);
-                          return;
-                        }
-                        setState(() {
-                          _selectedHeadingIdx = idx;
-                          _selectedParagraphIdx = _kAllPara;
-                          if (paras.isNotEmpty) _expandedHeadings.add(idx);
-                          _searchController.clear();
-                          _extraLines.clear();
-                        });
-                      },
-                      // לחיצה על החץ = הרחבה/כיווץ בלבד, בלי לשנות את הבחירה
-                      onToggleExpand: paras.isNotEmpty
-                          ? () {
-                              setState(() {
-                                if (isExpanded) {
-                                  _expandedHeadings.remove(idx);
-                                } else {
-                                  _expandedHeadings.add(idx);
-                                }
-                              });
-                            }
-                          : null,
-                    );
+        return NavPanelSearchPublisher(
+          delegate: delegate,
+          child: Column(
+            children: [
+              if (!NavPanelSearch.isHoisted(context))
+                NavPanelLocalSearchField(delegate: delegate),
+              Expanded(
+                child: NavTreeFocusGroup(
+                  child: ScrollablePositionedList.builder(
+                    itemScrollController: _navScrollController,
+                    // +1 עבור הכותרת הראשית, שנגללת עם הרשימה (פריט 0).
+                    itemCount: filteredIdx.length + 1,
+                    padding: kNavTreeListPadding,
+                    itemBuilder: (context, listIdx) {
+                      if (listIdx == 0) {
+                        return NavTreeHeader(
+                          title: widget.tab.sourceTab.book.title,
+                        );
+                      }
+                      final idx = filteredIdx[listIdx - 1];
+                      final isGroupStart = listIdx == 1;
+                      final isGroupEnd = listIdx == filteredIdx.length;
+                      final isActiveHeading = idx == _selectedHeadingIdx;
+                      final isExpanded = _expandedHeadings.contains(idx);
+                      final paras = _getParagraphs(idx);
 
-                    if (paras.isEmpty || !isExpanded) {
-                      return NavTreeGroupCard(
-                        isGroupStart: isGroupStart,
-                        isGroupEnd: isGroupEnd,
-                        child: headingRow,
-                      );
-                    }
-
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        NavTreeGroupCard(
-                          isGroupStart: isGroupStart,
-                          isGroupEnd: false,
-                          child: headingRow,
-                        ),
-                        ...List.generate(paras.length, (pi) {
-                          final words = paras[pi].text
-                              .split(RegExp(r'\s+'))
-                              .where((w) => w.isNotEmpty)
-                              .take(4)
-                              .join(' ');
-                          final isParaSelected =
-                              (isActiveHeading &&
-                                  _selectedParagraphIdx == pi) ||
-                              _isNavItemInMulti(idx, pi);
-                          return NavTreeGroupCard(
-                            isGroupStart: false,
-                            isGroupEnd: isGroupEnd && pi == paras.length - 1,
-                            child: _buildParagraphRow(
-                              context: context,
-                              text: words,
-                              isSelected: isParaSelected,
-                              onTap: () {
-                                if (_isCtrlPressed()) {
-                                  _ctrlToggleNavItem(idx, pi);
-                                  return;
-                                }
+                      final headingRow = _buildHeadingRow(
+                        context: context,
+                        headingText: headings[idx].key,
+                        // מודגש כשנבחרה "כל הכותרת", או כשהיא בריבוי-הבחירה.
+                        isSelected:
+                            (isActiveHeading &&
+                                _selectedParagraphIdx == _kAllPara) ||
+                            _isNavItemInMulti(idx, _kAllPara),
+                        isExpanded: isExpanded,
+                        hasChildren: paras.isNotEmpty,
+                        // לחיצה על גוף הכותרת = בחירת כל הכותרת (כל המפרשים) + הרחבה
+                        onTap: () {
+                          if (_isCtrlPressed()) {
+                            _ctrlToggleNavItem(idx, _kAllPara);
+                            return;
+                          }
+                          setState(() {
+                            _selectedHeadingIdx = idx;
+                            _selectedParagraphIdx = _kAllPara;
+                            if (paras.isNotEmpty) _expandedHeadings.add(idx);
+                            _searchController.clear();
+                            _extraLines.clear();
+                          });
+                        },
+                        // לחיצה על החץ = הרחבה/כיווץ בלבד, בלי לשנות את הבחירה
+                        onToggleExpand: paras.isNotEmpty
+                            ? () {
                                 setState(() {
-                                  _selectedHeadingIdx = idx;
-                                  _selectedParagraphIdx = pi;
-                                  _searchController.clear();
-                                  _extraLines.clear();
+                                  if (isExpanded) {
+                                    _expandedHeadings.remove(idx);
+                                  } else {
+                                    _expandedHeadings.add(idx);
+                                  }
                                 });
-                              },
-                            ),
-                          );
-                        }),
-                      ],
-                    );
-                  },
+                              }
+                            : null,
+                      );
+
+                      if (paras.isEmpty || !isExpanded) {
+                        return NavTreeGroupCard(
+                          isGroupStart: isGroupStart,
+                          isGroupEnd: isGroupEnd,
+                          child: headingRow,
+                        );
+                      }
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          NavTreeGroupCard(
+                            isGroupStart: isGroupStart,
+                            isGroupEnd: false,
+                            child: headingRow,
+                          ),
+                          ...List.generate(paras.length, (pi) {
+                            final words = paras[pi].text
+                                .split(RegExp(r'\s+'))
+                                .where((w) => w.isNotEmpty)
+                                .take(4)
+                                .join(' ');
+                            final isParaSelected =
+                                (isActiveHeading &&
+                                    _selectedParagraphIdx == pi) ||
+                                _isNavItemInMulti(idx, pi);
+                            return NavTreeGroupCard(
+                              isGroupStart: false,
+                              isGroupEnd: isGroupEnd && pi == paras.length - 1,
+                              child: _buildParagraphRow(
+                                context: context,
+                                text: words,
+                                isSelected: isParaSelected,
+                                onTap: () {
+                                  if (_isCtrlPressed()) {
+                                    _ctrlToggleNavItem(idx, pi);
+                                    return;
+                                  }
+                                  setState(() {
+                                    _selectedHeadingIdx = idx;
+                                    _selectedParagraphIdx = pi;
+                                    _searchController.clear();
+                                    _extraLines.clear();
+                                  });
+                                },
+                              ),
+                            );
+                          }),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

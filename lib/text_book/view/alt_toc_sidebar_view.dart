@@ -20,7 +20,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
-import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class AltTocSidebarView extends StatefulWidget {
@@ -497,103 +497,106 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
 
     final isSearching = _searchController.text.isNotEmpty;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: OtzariaSearchField(
-            controller: _searchController,
-            hintText: 'איתור כותרת...',
-            // ללא autofocus: הפוקוס מנוהל אך ורק דרך focusNode מהמסך האב
-            // (_focusActiveTabSearchField), שמכבד את ההגנה מפני פוקוס אוטומטי
-            // באנדרואיד. autofocus היה עוקף הגנה זו וקופץ מקלדת.
-            focusNode: widget.focusNode,
-            onChanged: _onSearchChanged,
-            onClear: _clearSearch,
-          ),
-        ),
-        Expanded(
-          child: isSearching
-              ? _buildSearchResults()
-              : BlocListener<TextBookBloc, TextBookState>(
-                  listenWhen: (previous, current) {
-                    // Only trigger on visibleIndices changes, NOT selectedIndex
-                    // This prevents interference with text selection
-                    if (current is! TextBookLoaded) return false;
-                    if (previous is! TextBookLoaded) return true;
+    // שדה החיפוש מצויר בסרגל שמעל החלונית; הפוקוס ממשיך להיות מנוהל דרך
+    // focusNode מהמסך האב, שמכבד את ההגנה מפני פוקוס אוטומטי באנדרואיד.
+    final delegate = NavPanelSearchDelegate(
+      controller: _searchController,
+      hintText: 'איתור כותרת...',
+      focusNode: widget.focusNode,
+      onChanged: _onSearchChanged,
+      onClear: _clearSearch,
+    );
 
-                    final prevVisibleIndex = previous.visibleIndices.isNotEmpty
-                        ? previous.visibleIndices.first
-                        : -1;
-                    final currVisibleIndex = current.visibleIndices.isNotEmpty
-                        ? current.visibleIndices.first
-                        : -1;
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          if (!NavPanelSearch.isHoisted(context))
+            NavPanelLocalSearchField(delegate: delegate),
+          Expanded(
+            child: isSearching
+                ? _buildSearchResults()
+                : BlocListener<TextBookBloc, TextBookState>(
+                    listenWhen: (previous, current) {
+                      // Only trigger on visibleIndices changes, NOT selectedIndex
+                      // This prevents interference with text selection
+                      if (current is! TextBookLoaded) return false;
+                      if (previous is! TextBookLoaded) return true;
 
-                    return prevVisibleIndex != currVisibleIndex ||
-                        previous.showLeftPane != current.showLeftPane;
-                  },
-                  listener: (context, state) {
-                    if (state is! TextBookLoaded ||
-                        context.read<TextBookBloc>().isClosed) {
-                      return;
-                    }
-                    if (!state.showLeftPane) {
-                      _wasLeftPaneShown = false;
-                      return;
-                    }
-                    final justOpened = !_wasLeftPaneShown;
-                    _wasLeftPaneShown = true;
-                    if (_isManuallyScrolling) return;
+                      final prevVisibleIndex =
+                          previous.visibleIndices.isNotEmpty
+                          ? previous.visibleIndices.first
+                          : -1;
+                      final currVisibleIndex = current.visibleIndices.isNotEmpty
+                          ? current.visibleIndices.first
+                          : -1;
 
-                    // Use only visibleIndices, not selectedIndex
-                    final index = state.visibleIndices.isNotEmpty
-                        ? state.visibleIndices.first
-                        : null;
-                    if (index == null) return;
-
-                    if (justOpened) {
-                      // פתיחת הפאנל: גלילה מיידית למיקום הפעיל (ה-guard
-                      // עלול לחסום אחרת אם נשבש ברקע בזמן שהפאנל היה סגור).
-                      _lastScrolledEntryId = null;
-                      _findAndHighlightEntry(index);
-                    } else {
-                      // Debounce to prevent rapid updates during fast scrolling
-                      _debounceTimer?.cancel();
-                      _debounceTimer = Timer(
-                        const Duration(milliseconds: 300),
-                        () {
-                          if (mounted) {
-                            _findAndHighlightEntry(index);
-                          }
-                        },
-                      );
-                    }
-                  },
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification is ScrollStartNotification &&
-                          notification.dragDetails != null) {
-                        _isManuallyScrolling = true;
-                      } else if (notification is ScrollEndNotification) {
-                        _isManuallyScrolling = false;
-                      }
-                      return false;
+                      return prevVisibleIndex != currVisibleIndex ||
+                          previous.showLeftPane != current.showLeftPane;
                     },
-                    child: NavTreeFocusGroup(
-                      child: ListView.builder(
-                        controller: _sidebarScrollController,
-                        padding: kNavTreeListPadding,
-                        // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
-                        itemCount: _structures.length + 1,
-                        itemBuilder: (context, index) => index == 0
-                            ? NavTreeHeader(title: widget.book.title)
-                            : _buildStructureItem(_structures[index - 1]),
+                    listener: (context, state) {
+                      if (state is! TextBookLoaded ||
+                          context.read<TextBookBloc>().isClosed) {
+                        return;
+                      }
+                      if (!state.showLeftPane) {
+                        _wasLeftPaneShown = false;
+                        return;
+                      }
+                      final justOpened = !_wasLeftPaneShown;
+                      _wasLeftPaneShown = true;
+                      if (_isManuallyScrolling) return;
+
+                      // Use only visibleIndices, not selectedIndex
+                      final index = state.visibleIndices.isNotEmpty
+                          ? state.visibleIndices.first
+                          : null;
+                      if (index == null) return;
+
+                      if (justOpened) {
+                        // פתיחת הפאנל: גלילה מיידית למיקום הפעיל (ה-guard
+                        // עלול לחסום אחרת אם נשבש ברקע בזמן שהפאנל היה סגור).
+                        _lastScrolledEntryId = null;
+                        _findAndHighlightEntry(index);
+                      } else {
+                        // Debounce to prevent rapid updates during fast scrolling
+                        _debounceTimer?.cancel();
+                        _debounceTimer = Timer(
+                          const Duration(milliseconds: 300),
+                          () {
+                            if (mounted) {
+                              _findAndHighlightEntry(index);
+                            }
+                          },
+                        );
+                      }
+                    },
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification &&
+                            notification.dragDetails != null) {
+                          _isManuallyScrolling = true;
+                        } else if (notification is ScrollEndNotification) {
+                          _isManuallyScrolling = false;
+                        }
+                        return false;
+                      },
+                      child: NavTreeFocusGroup(
+                        child: ListView.builder(
+                          controller: _sidebarScrollController,
+                          padding: kNavTreeListPadding,
+                          // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
+                          itemCount: _structures.length + 1,
+                          itemBuilder: (context, index) => index == 0
+                              ? NavTreeHeader(title: widget.book.title)
+                              : _buildStructureItem(_structures[index - 1]),
+                        ),
                       ),
                     ),
                   ),
-                ),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 

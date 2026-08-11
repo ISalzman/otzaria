@@ -5,7 +5,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
-import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
 @visibleForTesting
 const Key commentatorEraChipsGroupKey = Key('commentator_era_chips_group');
@@ -524,120 +524,123 @@ class _CommentatorsSelectionPanelState
           );
     }
 
-    return Column(
-      children: [
-        _buildChipsRow(context),
-        Expanded(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: OtzariaSearchField(
-                  controller: _searchController,
-                  hintText: 'סינון מפרשים...',
-                  onChanged: (_) => _update(),
-                  onClear: _update,
-                ),
-              ),
-              if (_commentatorsList.isNotEmpty)
-                Padding(
-                  padding: kNavTreeListPadding,
-                  child: NavTreeGroupCard(
-                    isGroupStart: true,
-                    isGroupEnd: true,
-                    child: NavTreeTile.category(
-                      title: 'הצג את כל המפרשים',
-                      level: 0,
-                      isSelected: _allVisibleSelected,
-                      trailing: _selectionCheckbox(
-                        value: _allVisibleSelected,
-                        onChanged: _toggleAllVisible,
+    final delegate = NavPanelSearchDelegate(
+      controller: _searchController,
+      hintText: 'סינון מפרשים...',
+      onChanged: (_) => _update(),
+      onClear: _update,
+    );
+
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          _buildChipsRow(context),
+          Expanded(
+            child: Column(
+              children: [
+                if (!NavPanelSearch.isHoisted(context))
+                  NavPanelLocalSearchField(delegate: delegate),
+                if (_commentatorsList.isNotEmpty)
+                  Padding(
+                    padding: kNavTreeListPadding,
+                    child: NavTreeGroupCard(
+                      isGroupStart: true,
+                      isGroupEnd: true,
+                      child: NavTreeTile.category(
+                        title: 'הצג את כל המפרשים',
+                        level: 0,
+                        isSelected: _allVisibleSelected,
+                        trailing: _selectionCheckbox(
+                          value: _allVisibleSelected,
+                          onChanged: _toggleAllVisible,
+                        ),
+                        onTap: () => _toggleAllVisible(!_allVisibleSelected),
                       ),
-                      onTap: () => _toggleAllVisible(!_allVisibleSelected),
                     ),
                   ),
-                ),
-              Expanded(
-                child: NavTreeFocusGroup(
-                  child: ListView.builder(
-                    padding: kNavTreeListPadding,
-                    // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
-                    itemCount: _commentatorsList.length + 1,
-                    itemBuilder: (context, listIndex) {
-                      if (listIndex == 0) {
-                        return NavTreeHeader(
-                          title: 'מפרשים על ${widget.bookTitle}',
-                        );
-                      }
-                      final index = listIndex - 1;
-                      final item = _commentatorsList[index];
+                Expanded(
+                  child: NavTreeFocusGroup(
+                    child: ListView.builder(
+                      padding: kNavTreeListPadding,
+                      // +1 עבור הכותרת הראשית, שנגללת עם הרשימה.
+                      itemCount: _commentatorsList.length + 1,
+                      itemBuilder: (context, listIndex) {
+                        if (listIndex == 0) {
+                          return NavTreeHeader(
+                            title: 'מפרשים על ${widget.bookTitle}',
+                          );
+                        }
+                        final index = listIndex - 1;
+                        final item = _commentatorsList[index];
 
-                      // כותרת דור — יושבת על רקע החלונית, מחוץ לכרטיס הקבוצה.
-                      if (item.startsWith('__TITLE_')) {
-                        return NavTreeHeader(title: _titleTextForToken(item));
-                      }
+                        // כותרת דור — יושבת על רקע החלונית, מחוץ לכרטיס הקבוצה.
+                        if (item.startsWith('__TITLE_')) {
+                          return NavTreeHeader(title: _titleTextForToken(item));
+                        }
 
-                      final groupToken = _groupForButtonToken(item);
-                      final isGroupStart =
-                          index == 0 ||
-                          _commentatorsList[index - 1].startsWith('__TITLE_');
-                      final isGroupEnd =
-                          index == _commentatorsList.length - 1 ||
-                          _commentatorsList[index + 1].startsWith('__TITLE_');
+                        final groupToken = _groupForButtonToken(item);
+                        final isGroupStart =
+                            index == 0 ||
+                            _commentatorsList[index - 1].startsWith('__TITLE_');
+                        final isGroupEnd =
+                            index == _commentatorsList.length - 1 ||
+                            _commentatorsList[index + 1].startsWith('__TITLE_');
 
-                      if (groupToken != null) {
-                        final selected = groupToken.commentators.every(
-                          widget.selectedCommentators.contains,
+                        if (groupToken != null) {
+                          final selected = groupToken.commentators.every(
+                            widget.selectedCommentators.contains,
+                          );
+                          return NavTreeGroupCard(
+                            isGroupStart: isGroupStart,
+                            isGroupEnd: isGroupEnd,
+                            child: NavTreeTile.category(
+                              title: groupToken.label,
+                              level: 0,
+                              isSelected: selected,
+                              trailing: _selectionCheckbox(
+                                value: selected,
+                                onChanged: (checked) => _toggleGroup(
+                                  groupToken.commentators,
+                                  checked,
+                                ),
+                              ),
+                              onTap: () => _toggleGroup(
+                                groupToken.commentators,
+                                !selected,
+                              ),
+                            ),
+                          );
+                        }
+
+                        final selected = widget.selectedCommentators.contains(
+                          item,
                         );
                         return NavTreeGroupCard(
                           isGroupStart: isGroupStart,
                           isGroupEnd: isGroupEnd,
-                          child: NavTreeTile.category(
-                            title: groupToken.label,
+                          child: NavTreeTile.book(
+                            title: item,
                             level: 0,
                             isSelected: selected,
                             trailing: _selectionCheckbox(
                               value: selected,
-                              onChanged: (checked) => _toggleGroup(
-                                groupToken.commentators,
-                                checked,
-                              ),
+                              onChanged: (checked) =>
+                                  _toggleSingleCommentator(item, checked),
                             ),
-                            onTap: () => _toggleGroup(
-                              groupToken.commentators,
-                              !selected,
-                            ),
+                            onTap: () =>
+                                _toggleSingleCommentator(item, !selected),
                           ),
                         );
-                      }
-
-                      final selected = widget.selectedCommentators.contains(
-                        item,
-                      );
-                      return NavTreeGroupCard(
-                        isGroupStart: isGroupStart,
-                        isGroupEnd: isGroupEnd,
-                        child: NavTreeTile.book(
-                          title: item,
-                          level: 0,
-                          isSelected: selected,
-                          trailing: _selectionCheckbox(
-                            value: selected,
-                            onChanged: (checked) =>
-                                _toggleSingleCommentator(item, checked),
-                          ),
-                          onTap: () =>
-                              _toggleSingleCommentator(item, !selected),
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

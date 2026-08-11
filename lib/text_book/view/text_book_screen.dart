@@ -86,6 +86,7 @@ import 'package:otzaria/text_book/utils/link_processing.dart'
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
@@ -243,6 +244,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   final FocusNode altTitlesSearchFocusNode = FocusNode();
   final FocusNode _bookContentFocusNode = FocusNode(); // FocusNode לתוכן הספר
   late TabController tabController;
+
+  /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
@@ -869,6 +873,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           }
 
           tabController.dispose();
+          _searchHost.dispose();
           tabController = TabController(
             length: newLength,
             vsync: this,
@@ -885,6 +890,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// מאזין למעבר בין לשוניות הפאנל הצדדי. מעביר פוקוס לשדה החיפוש של
   /// הלשונית החדשה רק לאחר שהמעבר הושלם (לא במהלך אנימציית המעבר).
   void _handleTabChange() {
+    _searchHost.activeTab = tabController.index;
     if (tabController.indexIsChanging) return;
     _focusActiveTabSearchField();
   }
@@ -1364,6 +1370,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     return AppTopBar(
       leadingItems: [
+        AppTopBarItem(widget: _buildPaneSearchBar(state)),
         AppTopBarItem(widget: _buildMenuButton(context, state)),
         if (state.showPageShapeView)
           AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
@@ -1522,6 +1529,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       isOpen: state.showLeftPane,
       onToggle: () =>
           context.read<TextBookBloc>().add(ToggleLeftPane(!state.showLeftPane)),
+    );
+  }
+
+  /// סרגל החיפוש שמעל החלונית — פריט ראשון בסרגל העליון, ולכן הוא נפתח
+  /// מכיוון הדופן ודוחק את אייקון הפתיחה פנימה.
+  Widget _buildPaneSearchBar(TextBookLoaded state) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _sidebarWidth,
+      builder: (context, paneWidth, _) => NavPanelSearchBar(
+        host: _searchHost,
+        isOpen: state.showLeftPane,
+        paneWidth: paneWidth,
+      ),
     );
   }
 
@@ -2661,9 +2681,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       minMainContentWidth: 520,
       onClose: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-      paneContent: TextBookNavPanelTourTarget(
-        isActiveTab: widget.enableTourTargets,
-        child: _buildLeftPaneContent(state),
+      paneContent: NavPanelSearchScope(
+        host: _searchHost,
+        child: TextBookNavPanelTourTarget(
+          isActiveTab: widget.enableTourTargets,
+          child: _buildLeftPaneContent(state),
+        ),
       ),
       mainContent: _buildHTMLViewer(state),
       isResizable: true,
@@ -2821,15 +2844,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           child: TabBarView(
             controller: tabController,
             children: [
-              _buildTocViewer(context, state),
+              NavPanelSearchSlot(
+                index: 0,
+                child: _buildTocViewer(context, state),
+              ),
               if (_hasAltTitles)
-                AltTocSidebarView(
-                  book: widget.tab.book,
-                  focusNode: altTitlesSearchFocusNode,
-                  closeLeftPaneCallback: () => context.read<TextBookBloc>().add(
-                    const ToggleLeftPane(false),
+                NavPanelSearchSlot(
+                  index: 1,
+                  child: AltTocSidebarView(
+                    book: widget.tab.book,
+                    focusNode: altTitlesSearchFocusNode,
+                    closeLeftPaneCallback: () =>
+                        context.read<TextBookBloc>().add(
+                          const ToggleLeftPane(false),
+                        ),
+                    scrollController: state.scrollController,
                   ),
-                  scrollController: state.scrollController,
                 ),
               Builder(
                 builder: (context) {
@@ -2841,19 +2871,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     textSearchFocusNode.requestFocus();
                   }
 
-                  return CallbackShortcuts(
-                    bindings: <ShortcutActivator, VoidCallback>{
-                      LogicalKeySet(
-                        LogicalKeyboardKey.control,
-                        LogicalKeyboardKey.keyF,
-                      ): openSearch,
-                      // Mac: Cmd+F
-                      LogicalKeySet(
-                        LogicalKeyboardKey.meta,
-                        LogicalKeyboardKey.keyF,
-                      ): openSearch,
-                    },
-                    child: _buildSearchView(context, state),
+                  return NavPanelSearchSlot(
+                    index: _hasAltTitles ? 2 : 1,
+                    child: CallbackShortcuts(
+                      bindings: <ShortcutActivator, VoidCallback>{
+                        LogicalKeySet(
+                          LogicalKeyboardKey.control,
+                          LogicalKeyboardKey.keyF,
+                        ): openSearch,
+                        // Mac: Cmd+F
+                        LogicalKeySet(
+                          LogicalKeyboardKey.meta,
+                          LogicalKeyboardKey.keyF,
+                        ): openSearch,
+                      },
+                      child: _buildSearchView(context, state),
+                    ),
                   );
                 },
               ),

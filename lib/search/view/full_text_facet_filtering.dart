@@ -16,7 +16,7 @@ import 'package:otzaria/search/view/search_navigation_tree.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
-import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
 // Constants
 const double _kMinQueryLength = 2;
@@ -216,19 +216,14 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     );
   }
 
-  Widget _buildSearchField() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: OtzariaSearchField(
-        controller: _filterQuery,
-        hintText: 'איתור ספר…',
-        slim: true,
-        onChanged: _onQueryChanged,
-        onClear: _clearFilter,
-        trailingActions: [_buildDimensionFilterButton()],
-      ),
-    );
-  }
+  /// פעולת החיפוש של החלונית — מצוירת בסרגל שמעליה ולא כאן.
+  NavPanelSearchDelegate _searchDelegate() => NavPanelSearchDelegate(
+    controller: _filterQuery,
+    hintText: 'איתור ספר…',
+    onChanged: _onQueryChanged,
+    onClear: _clearFilter,
+    trailingActions: [_buildDimensionFilterButton()],
+  );
 
   /// כפתור סינון בשדה — פותח תפריט שטוח (בלי תתי-תפריטים) של מאפייני הספר:
   /// ספרי יסוד ותקופות. סימון מרובה נשמר פתוח (closeOnActivate: false).
@@ -403,13 +398,18 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Column(
-      children: [
-        _buildSearchField(),
-        Expanded(
-          child: _buildFacetTree(),
-        ),
-      ],
+    final delegate = _searchDelegate();
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          if (!NavPanelSearch.isHoisted(context))
+            NavPanelLocalSearchField(delegate: delegate),
+          Expanded(
+            child: _buildFacetTree(),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 class SearchPaneBase extends StatefulWidget {
@@ -92,8 +93,32 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
     return false;
   }
 
+  /// פעולת החיפוש שמפורסמת לסרגל שמעל החלונית (במקום שדה מקומי).
+  NavPanelSearchDelegate get _delegate => NavPanelSearchDelegate(
+    controller: widget.searchController,
+    focusNode: widget.focusNode,
+    hintText: widget.hintText ?? '',
+    onChanged: (value) =>
+        _debounce(() => widget.onSearchTextChanged?.call(value)),
+    onSubmitted: (_) {
+      widget.onSubmitted?.call();
+      widget.focusNode.requestFocus();
+    },
+    onClear: () {
+      widget.onSearchTextChanged?.call('');
+      widget.resetSearchCallback();
+      widget.focusNode.requestFocus();
+    },
+    trailingActions: [
+      if (widget.onAdvancedSearch != null)
+        OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
+    // בתוך חלונית ניווט השדה מצויר בסרגל שמעליה, ולכן מפרסמים ולא מציירים.
+    final hoisted = NavPanelSearch.isHoisted(context);
     final searchField = Padding(
       key: const ValueKey('searchField'),
       padding: const EdgeInsets.all(8.0),
@@ -167,18 +192,19 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
         widget.resultToolbar != null ||
         (!_isCompact && widget.resultCountString != null);
 
-    return Column(
+    final pane = Column(
       children: [
         if (widget.progressWidget != null) widget.progressWidget!,
-        AnimatedAlign(
-          key: const ValueKey('searchFieldAlign'),
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          alignment: _isCompact
-              ? AlignmentDirectional.centerEnd
-              : AlignmentDirectional.center,
-          child: searchField,
-        ),
+        if (!hoisted)
+          AnimatedAlign(
+            key: const ValueKey('searchFieldAlign'),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            alignment: _isCompact
+                ? AlignmentDirectional.centerEnd
+                : AlignmentDirectional.center,
+            child: searchField,
+          ),
         if (shouldShowToolbarRow)
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -215,5 +241,8 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
         ),
       ],
     );
+
+    if (!hoisted) return pane;
+    return NavPanelSearchPublisher(delegate: _delegate, child: pane);
   }
 }

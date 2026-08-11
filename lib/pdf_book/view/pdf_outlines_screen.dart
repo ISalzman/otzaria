@@ -4,7 +4,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
-import 'package:otzaria/widgets/text/otzaria_search_field.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
 /// מחזירה האם כותרת סימנייה תואמת לשאילתת החיפוש, עם נורמליזציה כמו באיתור
 /// (הסרת ניקוד וגרשיים) כך שכותרות עבריות יימצאו גם ללא תווים אלו.
@@ -262,41 +262,43 @@ class _OutlineViewState extends State<OutlineView>
       );
     }
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: OtzariaSearchField(
-            controller: searchController,
-            hintText: 'חיפוש סימניה...',
-            focusNode: widget.focusNode,
-            autofocus: true,
-            onChanged: (value) => setState(() {}),
-            onSubmitted: (_) => widget.focusNode.requestFocus(),
-            onClear: () => setState(() {}),
+    final delegate = NavPanelSearchDelegate(
+      controller: searchController,
+      hintText: 'חיפוש סימניה...',
+      focusNode: widget.focusNode,
+      onChanged: (value) => setState(() {}),
+      onSubmitted: (_) => widget.focusNode.requestFocus(),
+      onClear: () => setState(() {}),
+    );
+
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          if (!NavPanelSearch.isHoisted(context))
+            NavPanelLocalSearchField(delegate: delegate),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollStartNotification &&
+                    notification.dragDetails != null) {
+                  setState(() {
+                    _isManuallyScrolling = true;
+                  });
+                } else if (notification is ScrollEndNotification) {
+                  setState(() {
+                    _isManuallyScrolling = false;
+                  });
+                }
+                return false;
+              },
+              child: searchController.text.isEmpty
+                  ? _buildOutlineList(outline)
+                  : _buildFilteredOutlineList(outline),
+            ),
           ),
-        ),
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is ScrollStartNotification &&
-                  notification.dragDetails != null) {
-                setState(() {
-                  _isManuallyScrolling = true;
-                });
-              } else if (notification is ScrollEndNotification) {
-                setState(() {
-                  _isManuallyScrolling = false;
-                });
-              }
-              return false;
-            },
-            child: searchController.text.isEmpty
-                ? _buildOutlineList(outline)
-                : _buildFilteredOutlineList(outline),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

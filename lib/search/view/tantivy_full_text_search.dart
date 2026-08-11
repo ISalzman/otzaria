@@ -20,6 +20,7 @@ import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
@@ -80,6 +81,15 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   bool _appliedNarrowLeftPaneDefault = false;
   // רוחב חי של פאנל הסינון בזמן גרירה; נשמר להגדרות ב-onPaneResizeEnd.
   double? _facetPaneWidthOverride;
+
+  /// פעולת החיפוש של חלונית הסינון — מוזנת לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
+
+  @override
+  void dispose() {
+    _searchHost.dispose();
+    super.dispose();
+  }
 
   void _openEditDialog() {
     showDialog(
@@ -320,7 +330,11 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             builder: (context, state) {
               return Column(
                 children: [
-                  _buildSearchTopBar(state, collapseMenus: collapseMenus),
+                  _buildSearchTopBar(
+                    state,
+                    collapseMenus: collapseMenus,
+                    showPaneSearchBar: true,
+                  ),
                   if (_shouldShowFacetFilterBanner(state))
                     _buildFacetFilterBanner(context, state),
                   Expanded(
@@ -339,8 +353,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                               isOpen: isOpen,
                               alignment: AlignmentDirectional.centerEnd,
                               mainContent: _buildResultsContent(context),
-                              paneContent: SearchFacetFiltering(
-                                tab: widget.tab,
+                              paneContent: NavPanelSearchScope(
+                                host: _searchHost,
+                                child: NavPanelSearchSlot(
+                                  index: 0,
+                                  child: SearchFacetFiltering(
+                                    tab: widget.tab,
+                                  ),
+                                ),
                               ),
                               paneWidth: paneWidth,
                               minMainContentWidth: 300,
@@ -569,10 +589,36 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
 
   /// הסרגל העליון של מסך החיפוש — זהה בכל רוחבי המסך.
   /// [collapseMenus] מכווץ את בוררי המיון והאיחוד לכפתורי אייקון.
-  Widget _buildSearchTopBar(SearchState state, {required bool collapseMenus}) {
+  /// [showPaneSearchBar] — רק בפריסה הרחבה, שבה חלונית הסינון היא
+  /// [NavSidePanel] ושדה "איתור ספר" עולה לסרגל. בפריסה הצרה החלונית מציירת
+  /// אותו בעצמה.
+  Widget _buildSearchTopBar(
+    SearchState state, {
+    required bool collapseMenus,
+    bool showPaneSearchBar = false,
+  }) {
     final hasQuery = state.searchQuery.isNotEmpty;
     return AppTopBar(
       leadingItems: [
+        if (showPaneSearchBar)
+          AppTopBarItem(
+            widget: ValueListenableBuilder<bool>(
+              valueListenable: widget.tab.isLeftPaneOpen,
+              builder: (context, isOpen, _) =>
+                  BlocBuilder<SettingsBloc, SettingsState>(
+                    buildWhen: (p, c) =>
+                        p.facetFilteringWidth != c.facetFilteringWidth,
+                    builder: (context, settingsState) => NavPanelSearchBar(
+                      host: _searchHost,
+                      isOpen: isOpen,
+                      paneWidth:
+                          (_facetPaneWidthOverride ??
+                                  settingsState.facetFilteringWidth)
+                              .clamp(220.0, 600.0),
+                    ),
+                  ),
+            ),
+          ),
         AppTopBarItem(
           widget: ValueListenableBuilder<bool>(
             valueListenable: widget.tab.isLeftPaneOpen,
