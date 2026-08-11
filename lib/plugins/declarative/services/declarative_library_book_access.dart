@@ -8,7 +8,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 typedef DeclarativeBookListLoader = Future<List<Book>> Function();
 typedef DeclarativeExternalBookListLoader =
-    Future<List<Book>> Function(String provider, Object externalId);
+    Future<List<Book>> Function(String provider, Set<Object> externalIds);
 typedef DeclarativeBookOpen =
     void Function(Book book, int index, String searchQuery);
 
@@ -29,8 +29,8 @@ class DeclarativeLibraryBookAccess
   ) {
     return DeclarativeLibraryBookAccess(
       () async => (await DataRepository.instance.library).getAllBooks(),
-      (provider, externalId) => switch (provider) {
-        'hebrewbooks' => _loadHebrewBooksById(externalId),
+      (provider, externalIds) => switch (provider) {
+        'hebrewbooks' => _loadHebrewBooksByIds(externalIds),
         'otzar' => DataRepository.instance.otzarBooks,
         _ => Future.value(const <Book>[]),
       },
@@ -45,10 +45,20 @@ class DeclarativeLibraryBookAccess
   }
 
   @override
+  Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
+    List<Map<String, dynamic>> identities,
+  ) async {
+    final books = await _findUniqueBatch(identities);
+    return [
+      for (final book in books)
+        if (book == null) null else PluginBookIdentity.toJson(book),
+    ];
+  }
+
   Future<Map<String, dynamic>?> resolveUnique(
     Map<String, dynamic> identity,
   ) async {
-    final book = await _findUnique(identity);
+    final book = (await _findUniqueBatch([identity])).single;
     return book == null ? null : PluginBookIdentity.toJson(book);
   }
 
@@ -58,13 +68,54 @@ class DeclarativeLibraryBookAccess
     required int index,
     required String searchQuery,
   }) async {
-    final book = await _findUnique(identity);
+    final book = (await _findUniqueBatch([identity])).single;
     if (book == null) return false;
     _openBook(book, index, searchQuery);
     return true;
   }
 
-  Future<Book?> _findUnique(Map<String, dynamic> identity) async {
+  Future<List<Book?>> _findUniqueBatch(
+    List<Map<String, dynamic>> identities,
+  ) async {
+    final parsed = [
+      for (final identity in identities) _parseIdentity(identity),
+    ];
+    final needsLibrary = parsed.any(
+      (identity) => identity != null && identity.external == null,
+    );
+    final externalIds = <String, Set<Object>>{};
+    for (final identity in parsed) {
+      final external = identity?.external;
+      if (external != null) {
+        externalIds.putIfAbsent(external.provider, () => {}).add(external.id);
+      }
+    }
+
+    final libraryFuture = needsLibrary ? _libraryBooks() : null;
+    final externalFutures = {
+      for (final entry in externalIds.entries)
+        entry.key: _externalBooks(entry.key, Set.unmodifiable(entry.value)),
+    };
+    final libraryIndex = libraryFuture == null
+        ? null
+        : _BookLookupIndex(await libraryFuture);
+    final externalIndexes = <String, _BookLookupIndex>{};
+    for (final entry in externalFutures.entries) {
+      externalIndexes[entry.key] = _BookLookupIndex(await entry.value);
+    }
+
+    return [
+      for (final identity in parsed)
+        if (identity == null)
+          null
+        else if (identity.external case final external?)
+          externalIndexes[external.provider]?.findUnique(identity)
+        else
+          libraryIndex?.findUnique(identity),
+    ];
+  }
+
+  _ParsedBookIdentity? _parseIdentity(Map<String, dynamic> identity) {
     const allowed = {'id', 'bookId', 'type', 'source', 'external'};
     if (identity.keys.any((key) => !allowed.contains(key))) return null;
     final id = PluginBookIdentity.parseId(identity['id']);
@@ -80,33 +131,13 @@ class DeclarativeLibraryBookAccess
     final external = _parseExternal(identity['external']);
     if (identity['external'] != null && external == null) return null;
     if (id == null && bookId == null && external == null) return null;
-
-    final books = external == null
-        ? await _libraryBooks()
-        : await _externalBooks(external.provider, external.id);
-    final matches = <Book>[];
-    for (final book in books) {
-      if (!PluginBookIdentity.matches(
-        book,
-        id: id,
-        bookId: bookId as String?,
-        type: type as String?,
-        source: source as String?,
-      )) {
-        continue;
-      }
-      if (external != null) {
-        final candidate = PluginBookIdentity.externalOf(book);
-        if (candidate == null ||
-            candidate.provider != external.provider ||
-            candidate.id.toString() != external.id.toString()) {
-          continue;
-        }
-      }
-      matches.add(book);
-      if (matches.length > 1) return null;
-    }
-    return matches.isEmpty ? null : matches.first;
+    return (
+      id: id,
+      bookId: bookId as String?,
+      type: type as String?,
+      source: source as String?,
+      external: external,
+    );
   }
 
   ({String provider, Object id})? _parseExternal(Object? value) {
@@ -122,15 +153,86 @@ class DeclarativeLibraryBookAccess
   }
 }
 
-Future<List<Book>> _loadHebrewBooksById(Object externalId) async {
-  final id = PluginBookIdentity.parseId(externalId);
-  if (id == null) return const [];
+typedef _ParsedBookIdentity = ({
+  int? id,
+  String? bookId,
+  String? type,
+  String? source,
+  ({String provider, Object id})? external,
+});
+
+class _BookLookupIndex {
+  final Map<int, List<Book>> _byId = {};
+  final Map<String, List<Book>> _byBookId = {};
+  final Map<String, List<Book>> _byExternal = {};
+
+  _BookLookupIndex(List<Book> books) {
+    for (final book in books) {
+      if (book.id case final id?) {
+        _byId.putIfAbsent(id, () => []).add(book);
+      }
+      _byBookId.putIfAbsent(book.title, () => []).add(book);
+      if (PluginBookIdentity.externalOf(book) case final external?) {
+        _byExternal.putIfAbsent(_externalKey(external), () => []).add(book);
+      }
+    }
+  }
+
+  Book? findUnique(_ParsedBookIdentity identity) {
+    final List<Book>? candidates;
+    if (identity.external case final external?) {
+      candidates = _byExternal[_externalKey(external)];
+    } else if (identity.id case final id?) {
+      candidates = _byId[id];
+    } else if (identity.bookId case final bookId?) {
+      candidates = _byBookId[bookId];
+    } else {
+      candidates = null;
+    }
+    if (candidates == null) return null;
+    Book? match;
+    for (final book in candidates) {
+      if (!PluginBookIdentity.matches(
+        book,
+        id: identity.id,
+        bookId: identity.bookId,
+        type: identity.type,
+        source: identity.source,
+      )) {
+        continue;
+      }
+      if (match != null) return null;
+      match = book;
+    }
+    return match;
+  }
+
+  static String _externalKey(({String provider, Object id}) external) =>
+      '${external.provider}:${external.id}';
+}
+
+Future<List<Book>> _loadHebrewBooksByIds(Set<Object> externalIds) async {
+  final ids = externalIds.map(PluginBookIdentity.parseId).nonNulls.toSet();
+  if (ids.isEmpty) return const [];
   final localMatches = (await DataRepository.instance.localHebrewBooks).where((
     book,
   ) {
     final external = PluginBookIdentity.externalOf(book);
-    return external?.provider == 'hebrewbooks' && external?.id == id;
+    return external?.provider == 'hebrewbooks' &&
+        ids.contains(PluginBookIdentity.parseId(external?.id));
   }).toList();
-  if (localMatches.isNotEmpty) return localMatches;
-  return ExternalCatalogRepository.instance.getHebrewBooksByIds([id]);
+  final localIds = localMatches
+      .map(PluginBookIdentity.externalOf)
+      .nonNulls
+      .map((external) => PluginBookIdentity.parseId(external.id))
+      .nonNulls
+      .toSet();
+  final missingIds = ids.difference(localIds);
+  if (missingIds.isEmpty) return localMatches;
+  return [
+    ...localMatches,
+    ...await ExternalCatalogRepository.instance.getHebrewBooksByIds(
+      missingIds,
+    ),
+  ];
 }

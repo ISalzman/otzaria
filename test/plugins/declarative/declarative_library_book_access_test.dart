@@ -29,7 +29,7 @@ void main() {
   });
 
   test('טוען מהקטלוג החיצוני רק לפי הספק והמזהה המבוקשים', () async {
-    final loads = <(String, Object)>[];
+    final loads = <(String, Set<Object>)>[];
     final external = ExternalLibraryBook(
       title: 'ספר חיצוני',
       id: 10,
@@ -46,7 +46,56 @@ void main() {
       'external': {'provider': 'hebrewbooks', 'id': 10},
     });
 
-    expect(loads, [('hebrewbooks', 10)]);
+    expect(loads, hasLength(1));
+    expect(loads.single.$1, 'hebrewbooks');
+    expect(loads.single.$2, {10});
+  });
+
+  test('פותר כמה זהויות באצווה וטוען כל מקור פעם אחת', () async {
+    var libraryLoads = 0;
+    final externalLoads = <(String, Set<Object>)>[];
+    final access = DeclarativeLibraryBookAccess(
+      () async {
+        libraryLoads++;
+        return [TextBook(id: 1, title: 'א'), TextBook(id: 2, title: 'ב')];
+      },
+      (provider, ids) async {
+        externalLoads.add((provider, ids));
+        return [
+          ExternalLibraryBook(
+            id: 10,
+            title: 'חיצוני א',
+            link: '',
+            externalLibraryId: 'hb:10',
+          ),
+          ExternalLibraryBook(
+            id: 11,
+            title: 'חיצוני ב',
+            link: '',
+            externalLibraryId: 'hb:11',
+          ),
+        ];
+      },
+      (_, _, _) {},
+    );
+
+    final resolved = await access.resolveUniqueBatch([
+      {'id': 1},
+      {'bookId': 'ב'},
+      {
+        'external': {'provider': 'hebrewbooks', 'id': 10},
+      },
+      {
+        'external': {'provider': 'hebrewbooks', 'id': 11},
+      },
+    ]);
+
+    expect(resolved, hasLength(4));
+    expect(resolved.map((identity) => identity?['id']), [1, 2, 10, 11]);
+    expect(libraryLoads, 1);
+    expect(externalLoads, hasLength(1));
+    expect(externalLoads.single.$1, 'hebrewbooks');
+    expect(externalLoads.single.$2, {10, 11});
   });
 
   test('זהות עמומה אינה נפתרת ואינה פותחת ספר', () async {
@@ -141,12 +190,12 @@ DeclarativeLibraryBookAccess _access({
   List<Book> hebrewBooks = const [],
   List<Book>? opened,
   List<(int, String)>? positions,
-  List<(String, Object)>? externalLoads,
+  List<(String, Set<Object>)>? externalLoads,
 }) {
   return DeclarativeLibraryBookAccess(
     () async => library,
-    (provider, externalId) async {
-      externalLoads?.add((provider, externalId));
+    (provider, externalIds) async {
+      externalLoads?.add((provider, externalIds));
       return provider == 'hebrewbooks' ? hebrewBooks : const [];
     },
     (book, index, searchQuery) {

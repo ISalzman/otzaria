@@ -191,9 +191,9 @@ class _BookAccess implements DeclarativeBookResolver, DeclarativeBookOpener {
   final opened = <Map<String, dynamic>>[];
 
   @override
-  Future<Map<String, dynamic>?> resolveUnique(
-    Map<String, dynamic> identity,
-  ) async => identity;
+  Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
+    List<Map<String, dynamic>> identities,
+  ) async => identities;
 
   @override
   Future<bool> openUnique(

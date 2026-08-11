@@ -5,9 +5,9 @@ import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 
 abstract interface class DeclarativeBookResolver {
-  /// מחזיר זהות קנונית רק כאשר נמצא ספר יחיד שמתאים לזהות החלקית.
-  Future<Map<String, dynamic>?> resolveUnique(
-    Map<String, dynamic> identity,
+  /// מחזיר זהויות קנוניות לפי סדר הקלט; התאמה שאינה יחידה מוחזרת כ-null.
+  Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
+    List<Map<String, dynamic>> identities,
   );
 }
 
@@ -131,7 +131,8 @@ class DeclarativeProgramExecutor {
         );
         final limit = command.args['limit'] as int? ?? 20;
         final keepInputFields = command.args['keepInputFields'] == true;
-        final resolvedBooks = <Map<String, dynamic>>[];
+        final rows = <Object?>[];
+        final identities = <Map<String, dynamic>>[];
         for (final row in items.take(limit)) {
           final identityValue = _resolveValue(
             command.args['identity'],
@@ -140,9 +141,21 @@ class DeclarativeProgramExecutor {
             row: row,
           );
           if (identityValue is! Map) continue;
-          final identity = Map<String, dynamic>.from(identityValue);
-          final canonical = await resolver.resolveUnique(identity);
+          rows.add(row);
+          identities.add(Map<String, dynamic>.from(identityValue));
+        }
+        final canonicalBooks = await resolver.resolveUniqueBatch(identities);
+        if (canonicalBooks.length != identities.length) {
+          throw const DeclarativeProgramException(
+            'declarative.service_invalid_result',
+            'library.resolveBooks returned an invalid result count',
+          );
+        }
+        final resolvedBooks = <Map<String, dynamic>>[];
+        for (var index = 0; index < canonicalBooks.length; index++) {
+          final canonical = canonicalBooks[index];
           if (canonical == null) continue;
+          final row = rows[index];
           final output = <String, dynamic>{};
           if (keepInputFields && row is Map) {
             output.addAll(Map<String, dynamic>.from(row));

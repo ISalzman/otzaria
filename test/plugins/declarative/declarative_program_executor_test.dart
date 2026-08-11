@@ -70,6 +70,7 @@ void main() {
       containsPair('identity', containsPair('id', 10)),
     );
     expect(resolver.identities, hasLength(2));
+    expect(resolver.batchCalls, 1);
     expect(() => editions.add('unsafe'), throwsUnsupportedError);
   });
 
@@ -123,16 +124,25 @@ void main() {
 
 class _TestBookResolver implements DeclarativeBookResolver {
   final identities = <Map<String, dynamic>>[];
+  int batchCalls = 0;
 
   @override
-  Future<Map<String, dynamic>?> resolveUnique(
-    Map<String, dynamic> identity,
+  Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
+    List<Map<String, dynamic>> requestedIdentities,
   ) async {
-    identities.add(identity);
-    final external = identity['external'] as Map<String, dynamic>;
-    final id = external['id'];
-    if (id == 11) return null;
-    return {'id': id, 'type': 'pdf', 'source': 'library'};
+    batchCalls++;
+    identities.addAll(requestedIdentities);
+    return [
+      for (final identity in requestedIdentities)
+        if ((identity['external'] as Map<String, dynamic>)['id'] == 11)
+          null
+        else
+          {
+            'id': (identity['external'] as Map<String, dynamic>)['id'],
+            'type': 'pdf',
+            'source': 'library',
+          },
+    ];
   }
 }
 
