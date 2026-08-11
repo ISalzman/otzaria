@@ -27,6 +27,7 @@ class DeclarativeToolbarBindingService {
   void syncPlugin({
     required InstalledPlugin plugin,
     required List<CompiledDeclarativeToolbarTemplate> templates,
+    required Set<String> grantedPermissions,
   }) {
     final previousIds = _registrations[plugin.pluginId]?.managedIds ?? const {};
     final nextIds = templates.map((template) => template.baseItem.id).toSet();
@@ -43,6 +44,7 @@ class DeclarativeToolbarBindingService {
       plugin: plugin,
       templates: List.unmodifiable(templates),
       managedIds: Set.unmodifiable(nextIds),
+      grantedPermissions: Set.unmodifiable(grantedPermissions),
     );
     _rebuildPlugin(plugin.pluginId);
   }
@@ -194,12 +196,22 @@ class DeclarativeToolbarBindingService {
         'Resolved toolbar action must be an object',
       );
     }
-    return DeclarativeActionCompiler(
-      declaredPermissions: plugin.manifest.permissions.toSet(),
-    ).compileResolved(
-      Map<String, dynamic>.from(value),
-      contextSignature: contextSignature,
-    );
+    final action =
+        DeclarativeActionCompiler(
+          declaredPermissions: plugin.manifest.permissions.toSet(),
+        ).compileResolved(
+          Map<String, dynamic>.from(value),
+          contextSignature: contextSignature,
+        );
+    final registration = _registrations[plugin.pluginId];
+    if (registration == null ||
+        !registration.grantedPermissions.contains(action.requiredPermission)) {
+      throw DeclarativeProgramException(
+        'declarative.permission_denied',
+        'Action requires granted permission "${action.requiredPermission}"',
+      );
+    }
+    return action;
   }
 
   Object? _resolveExpression(
@@ -294,10 +306,12 @@ class _ToolbarRegistration {
   final InstalledPlugin plugin;
   final List<CompiledDeclarativeToolbarTemplate> templates;
   final Set<String> managedIds;
+  final Set<String> grantedPermissions;
 
   const _ToolbarRegistration({
     required this.plugin,
     required this.templates,
     required this.managedIds,
+    required this.grantedPermissions,
   });
 }

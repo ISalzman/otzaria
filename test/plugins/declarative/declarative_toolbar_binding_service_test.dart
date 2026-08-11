@@ -29,6 +29,7 @@ void main() {
     binding.syncPlugin(
       plugin: plugin,
       templates: _compiledTemplates(),
+      grantedPermissions: const {'reader.open'},
     );
 
     final run = programs.runTrigger(
@@ -69,6 +70,7 @@ void main() {
       binding.syncPlugin(
         plugin: plugin,
         templates: _compiledTemplates(),
+        grantedPermissions: const {'reader.open'},
       );
       final snapshots = <int>[];
       toolbar.addListener(() => snapshots.add(toolbar.getAll().length));
@@ -120,7 +122,11 @@ void main() {
       programs: [_program()],
       grantedPermissions: const {'reader.open'},
     );
-    binding.syncPlugin(plugin: plugin, templates: _compiledTemplates());
+    binding.syncPlugin(
+      plugin: plugin,
+      templates: _compiledTemplates(),
+      grantedPermissions: const {'reader.open'},
+    );
     final run = programs.runTrigger(
       trigger: 'reader.activeBookChanged',
       context: const {},
@@ -136,7 +142,43 @@ void main() {
       programs: [_program()],
       grantedPermissions: const {'reader.open'},
     );
-    binding.syncPlugin(plugin: disabled, templates: _compiledTemplates());
+    binding.syncPlugin(
+      plugin: disabled,
+      templates: _compiledTemplates(),
+      grantedPermissions: const {'reader.open'},
+    );
+
+    expect(toolbar.getAll(), isEmpty);
+  });
+
+  test('פעולה שהרשאתה לא הוענקה מסתירה את כל הקבוצה', () async {
+    final runner = _RunQueue();
+    final programs = DeclarativeProgramRepository(runProgram: runner.call);
+    final toolbar = PluginToolbarRegistry.forTesting();
+    final binding = DeclarativeToolbarBindingService(
+      programRepository: programs,
+      toolbarRegistry: toolbar,
+    );
+    addTearDown(binding.dispose);
+    final plugin = _plugin();
+    programs.syncPlugin(
+      plugin: plugin,
+      programs: [_program()],
+      grantedPermissions: const {},
+    );
+    binding.syncPlugin(
+      plugin: plugin,
+      templates: _compiledTemplates(),
+      grantedPermissions: const {},
+    );
+
+    final run = programs.runTrigger(
+      trigger: 'reader.activeBookChanged',
+      context: const {},
+      contextSignature: 'book-1',
+    );
+    runner.completeNext(_outputs());
+    await run;
 
     expect(toolbar.getAll(), isEmpty);
   });
