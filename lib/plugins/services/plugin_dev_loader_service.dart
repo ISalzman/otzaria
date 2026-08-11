@@ -73,6 +73,8 @@ class PluginDevLoaderService {
   Future<void> loadDevelopmentPlugin(
     String directoryPath, {
     PluginManifest? preValidatedManifest,
+    Map<String, bool>? grantedPermissions,
+    bool? allowOrderBeforeBuiltInsGranted,
   }) async {
     final dir = Directory(directoryPath);
     if (!dir.existsSync()) {
@@ -123,6 +125,7 @@ class PluginDevLoaderService {
       pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
       pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
       allowOrderBeforeBuiltInsGranted:
+          allowOrderBeforeBuiltInsGranted ??
           existingPlugin?.allowOrderBeforeBuiltInsGranted ??
           manifest.allowOrderBeforeBuiltIns,
       manifest: manifest,
@@ -133,31 +136,15 @@ class PluginDevLoaderService {
       userOrder: newUserOrder,
     );
 
-    await _repository.saveDevelopmentPlugin(plugin);
-
-    final existingGrants = <String, bool>{};
-
-    if (existingPlugin != null) {
-      for (final perm in existingPlugin.manifest.permissions) {
-        final granted = await _repository.getPermission(manifest.id, perm);
-        if (granted != null) existingGrants[perm] = granted;
-      }
-      for (final oldPerm in existingPlugin.manifest.permissions) {
-        if (!manifest.permissions.contains(oldPerm)) {
-          await _repository.setPermission(manifest.id, oldPerm, false);
-        }
-      }
-    }
-    for (final perm in manifest.permissions) {
-      if (existingGrants.containsKey(perm)) continue;
-      // הרשאה חדשה: בהתקנה ראשונה מאשרים (ConfirmDevPluginInstall ידרוס אחר כך),
-      // בעדכון — שוללים כברירת מחדל עד שהמשתמש יאשר מפורשות.
-      await _repository.setPermission(
-        manifest.id,
-        perm,
-        existingPlugin == null,
-      );
-    }
+    final permissions = await _resolvePermissionDecisions(
+      manifest,
+      existingPlugin,
+      grantedPermissions,
+    );
+    await _repository.saveDevelopmentPluginWithPermissions(
+      plugin,
+      permissions,
+    );
   }
 
   /// טוען manifest.json מ-localhost ומאמת אותו. לא שומר לDB.
@@ -213,6 +200,8 @@ class PluginDevLoaderService {
   Future<void> loadLocalhostPlugin(
     String baseUrl, {
     PluginManifest? preValidatedManifest,
+    Map<String, bool>? grantedPermissions,
+    bool? allowOrderBeforeBuiltInsGranted,
   }) async {
     final normalizedUrl = baseUrl.replaceAll(RegExp(r'/+$'), '');
     final manifest =
@@ -240,6 +229,7 @@ class PluginDevLoaderService {
       pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
       pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
       allowOrderBeforeBuiltInsGranted:
+          allowOrderBeforeBuiltInsGranted ??
           existingPlugin?.allowOrderBeforeBuiltInsGranted ??
           manifest.allowOrderBeforeBuiltIns,
       manifest: manifest,
@@ -250,28 +240,47 @@ class PluginDevLoaderService {
       userOrder: newUserOrder,
     );
 
-    await _repository.saveDevelopmentPlugin(plugin);
+    final permissions = await _resolvePermissionDecisions(
+      manifest,
+      existingPlugin,
+      grantedPermissions,
+    );
+    await _repository.saveDevelopmentPluginWithPermissions(
+      plugin,
+      permissions,
+    );
+  }
+
+  Future<Map<String, bool>> _resolvePermissionDecisions(
+    PluginManifest manifest,
+    InstalledPlugin? existingPlugin,
+    Map<String, bool>? explicitDecisions,
+  ) async {
+    final requested = manifest.permissions.toSet();
+    if (explicitDecisions != null) {
+      final supplied = explicitDecisions.keys.toSet();
+      if (supplied.difference(requested).isNotEmpty ||
+          requested.difference(supplied).isNotEmpty) {
+        throw ArgumentError(
+          'Permission decisions must exactly match manifest permissions',
+        );
+      }
+      return Map.unmodifiable(explicitDecisions);
+    }
 
     final existingGrants = <String, bool>{};
     if (existingPlugin != null) {
-      for (final perm in existingPlugin.manifest.permissions) {
-        final granted = await _repository.getPermission(manifest.id, perm);
-        if (granted != null) existingGrants[perm] = granted;
-      }
-      for (final oldPerm in existingPlugin.manifest.permissions) {
-        if (!manifest.permissions.contains(oldPerm)) {
-          await _repository.setPermission(manifest.id, oldPerm, false);
-        }
+      for (final permission in existingPlugin.manifest.permissions) {
+        final granted = await _repository.getPermission(
+          manifest.id,
+          permission,
+        );
+        if (granted != null) existingGrants[permission] = granted;
       }
     }
-    for (final perm in manifest.permissions) {
-      if (existingGrants.containsKey(perm)) continue;
-      // הרשאה חדשה: בהתקנה ראשונה מאשרים, בעדכון — שוללים עד לאישור מפורש.
-      await _repository.setPermission(
-        manifest.id,
-        perm,
-        existingPlugin == null,
-      );
-    }
+    return Map.unmodifiable({
+      for (final permission in manifest.permissions)
+        permission: existingGrants[permission] ?? (existingPlugin == null),
+    });
   }
 }

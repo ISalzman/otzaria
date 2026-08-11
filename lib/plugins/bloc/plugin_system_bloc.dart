@@ -625,30 +625,17 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         await devLoader.loadLocalhostPlugin(
           event.sourcePath,
           preValidatedManifest: event.manifest,
+          grantedPermissions: event.grantedPermissions,
+          allowOrderBeforeBuiltInsGranted:
+              event.allowOrderBeforeBuiltInsGranted,
         );
       } else {
         await devLoader.loadDevelopmentPlugin(
           event.sourcePath,
           preValidatedManifest: event.manifest,
-        );
-      }
-      // דרוס הרשאות ו-allowOrderBeforeBuiltInsGranted בבחירות המשתמש המפורשות
-      for (final entry in event.grantedPermissions.entries) {
-        await repository.setPermission(
-          event.manifest.id,
-          entry.key,
-          entry.value,
-        );
-      }
-      final saved = await repository.getPlugin(event.manifest.id);
-      if (saved != null &&
-          saved.allowOrderBeforeBuiltInsGranted !=
-              event.allowOrderBeforeBuiltInsGranted) {
-        await repository.savePlugin(
-          saved.copyWith(
-            allowOrderBeforeBuiltInsGranted:
-                event.allowOrderBeforeBuiltInsGranted,
-          ),
+          grantedPermissions: event.grantedPermissions,
+          allowOrderBeforeBuiltInsGranted:
+              event.allowOrderBeforeBuiltInsGranted,
         );
       }
       add(LoadPlugins());

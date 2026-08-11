@@ -87,6 +87,19 @@ class PluginRegistryRepository {
     await _db.insertOrUpdatePlugin(plugin);
   }
 
+  Future<void> saveDevelopmentPluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) async {
+    if (!plugin.isDevelopment) {
+      throw ArgumentError('Cannot save a packaged plugin as development');
+    }
+    if (plugin.devRootPath == null || plugin.devRootPath!.trim().isEmpty) {
+      throw ArgumentError('Development plugin must have a valid devRootPath');
+    }
+    await _db.insertOrUpdatePluginWithPermissions(plugin, permissions);
+  }
+
   Future<void> detachDevelopmentPlugin(String pluginId) async {
     final plugin = await getPlugin(pluginId);
     if (plugin != null && !plugin.isDevelopment) {

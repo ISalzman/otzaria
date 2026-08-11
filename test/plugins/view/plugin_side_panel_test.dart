@@ -188,6 +188,14 @@ class FakePluginRegistryRepository extends Mock
   }
 
   @override
+  Future<void> saveDevelopmentPluginWithPermissions(
+    InstalledPlugin plugin,
+    Map<String, bool> permissions,
+  ) async {
+    plugins.add(plugin);
+  }
+
+  @override
   Future<List<InstalledPlugin>> getAllPlugins() async => plugins;
   @override
   Future<List<InstalledPlugin>> getDevelopmentPlugins() async => plugins;
@@ -332,8 +340,6 @@ void main() {
       () => permExpectation.timeout(const Duration(seconds: 10)),
     );
 
-    // Step 2: Simulate dialog confirmation — dispatch ConfirmDevPluginInstall
-    // with the manifest the BLoC already fetched and stored in the state.
     final permState = bloc.state as PluginSystemDevInstallRequiresPermissions;
 
     final loadedExpectation = expectLater(
@@ -355,13 +361,11 @@ void main() {
       () => loadedExpectation.timeout(const Duration(seconds: 10)),
     );
 
-    // Flush the UiSnack overlay timer so the test teardown doesn't complain.
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
 
     expect(find.byIcon(FluentIcons.folder_add_24_regular), findsOneWidget);
 
-    // Deep verification: the repository received the correct plugin data.
     expect(mockRepo.plugins.isNotEmpty, isTrue);
     expect(mockRepo.plugins.first.pluginId, 'test.ui.plugin');
     expect(mockRepo.plugins.first.name, 'UI Dev Plugin');
