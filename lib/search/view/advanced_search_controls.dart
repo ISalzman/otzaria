@@ -38,6 +38,9 @@ class AdvancedSearchControls extends StatefulWidget {
   /// ואין להציג עבורו אפשרויות פר-מילה.
   final bool supportsCategorySyntax;
 
+  /// אפשרויות מילה שתוסף פעיל סימן כלא תואמות למנוע החיצוני שלו.
+  final Set<String> disabledWordOptionIds;
+
   const AdvancedSearchControls({
     super.key,
     required this.tab,
@@ -56,6 +59,7 @@ class AdvancedSearchControls extends StatefulWidget {
     this.spacingValuesChanged,
     this.enableSavedAlternatives = true,
     this.supportsCategorySyntax = false,
+    this.disabledWordOptionIds = const {},
   });
 
   @override
@@ -415,17 +419,22 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
                 CheckboxMenuButton(
                   value: defaults[key] ?? false,
                   closeOnActivate: false,
-                  onChanged: (checked) {
-                    setState(() {
-                      SearchDefaults.saveDefaults({
-                        ...defaults,
-                        key: checked ?? false,
-                      });
-                      // שינוי ברירת מחדל מוחל מיד גם על הריבוע בחלונית הפתוחה
-                      _globalSearchOptions[key] = checked ?? false;
-                    });
-                    _searchOptionsChanged.value++;
-                  },
+                  onChanged:
+                      widget.disabledWordOptionIds.contains(
+                        SearchQueryBuilder.pluginOptionIdByWordOptionKey[key],
+                      )
+                      ? null
+                      : (checked) {
+                          setState(() {
+                            SearchDefaults.saveDefaults({
+                              ...defaults,
+                              key: checked ?? false,
+                            });
+                            // שינוי ברירת מחדל מוחל מיד גם על הריבוע בחלונית הפתוחה
+                            _globalSearchOptions[key] = checked ?? false;
+                          });
+                          _searchOptionsChanged.value++;
+                        },
                   child: Text(key),
                 ),
             ],
@@ -784,11 +793,16 @@ class _AdvancedSearchControlsState extends State<AdvancedSearchControls> {
         }
       }
 
+      final disabled =
+          !isEnabled ||
+          widget.disabledWordOptionIds.contains(
+            SearchQueryBuilder.pluginOptionIdByWordOptionKey[option],
+          );
       final chip = FilterChip(
         label: Text(option),
         visualDensity: VisualDensity.compact,
         selected: isChecked,
-        onSelected: isEnabled
+        onSelected: !disabled
             ? (selected) {
                 setState(() {
                   if (useGlobal) {

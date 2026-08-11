@@ -166,6 +166,10 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'חיפוש טקסט מלא',
     description: 'ביצוע חיפושי טקסט ברחבי כל הספרייה',
   ),
+  'search.dialog': PluginPermissionInfo(
+    label: 'רכיבים בחלון החיפוש',
+    description: 'הוספת שורות סטטיות לדיאלוג החיפוש, ללא הפעלת קוד התוסף ברקע',
+  ),
 
   // ===== קורא =====
   'reader.open': PluginPermissionInfo(

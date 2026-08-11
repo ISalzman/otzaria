@@ -119,6 +119,12 @@ class SearchConfiguration {
   /// מספר המילים הנדרש כש-[wordMatchMode] הוא atLeast.
   final int wordMatchCount;
 
+  /// בחירות של שורות חיפוש סטטיות שתוספים הזריקו לדיאלוג.
+  ///
+  /// המפתח הוא `${pluginId}/${itemId}` והערך נשמר עם טאב החיפוש כדי שספק
+  /// תוצאות חיצוני עתידי יקבל את אותה בחירה שאושרה בדיאלוג.
+  final Map<String, bool> pluginSearchSelections;
+
   // חיפוש מנוקד (ניקוד/טעמים) אינו דגל גלובלי: הוא אפשרות פר-מילה במפות
   // searchOptions של הטאב, כמו שאר אפשרויות החיפוש המתקדם — ראה
   // SearchQueryBuilder.vocalizedWordOptionKeys.
@@ -142,6 +148,7 @@ class SearchConfiguration {
     this.resultGrouping = ResultGroupingMode.none,
     this.wordMatchMode = WordMatchMode.all,
     this.wordMatchCount = 2,
+    this.pluginSearchSelections = const {},
     // ערכי ברירת מחדל לרגקס
     this.regexEnabled = false,
     this.caseSensitive = false,
@@ -186,6 +193,7 @@ class SearchConfiguration {
     ResultGroupingMode? resultGrouping,
     WordMatchMode? wordMatchMode,
     int? wordMatchCount,
+    Map<String, bool>? pluginSearchSelections,
     bool? regexEnabled,
     bool? caseSensitive,
     bool? multiline,
@@ -203,6 +211,8 @@ class SearchConfiguration {
       resultGrouping: resultGrouping ?? this.resultGrouping,
       wordMatchMode: wordMatchMode ?? this.wordMatchMode,
       wordMatchCount: wordMatchCount ?? this.wordMatchCount,
+      pluginSearchSelections:
+          pluginSearchSelections ?? this.pluginSearchSelections,
       regexEnabled: regexEnabled ?? this.regexEnabled,
       caseSensitive: caseSensitive ?? this.caseSensitive,
       multiline: multiline ?? this.multiline,
@@ -224,6 +234,7 @@ class SearchConfiguration {
       'resultGrouping': resultGrouping.index,
       'wordMatchMode': wordMatchMode.index,
       'wordMatchCount': wordMatchCount,
+      'pluginSearchSelections': pluginSearchSelections,
       'regexEnabled': regexEnabled,
       'caseSensitive': caseSensitive,
       'multiline': multiline,
@@ -275,6 +286,14 @@ class SearchConfiguration {
         final int count when count >= 1 => count,
         _ => 2,
       },
+      pluginSearchSelections: switch (map['pluginSearchSelections']) {
+        final Map values => {
+          for (final entry in values.entries)
+            if (entry.key is String && entry.value is bool)
+              entry.key as String: entry.value as bool,
+        },
+        _ => const {},
+      },
       regexEnabled: map['regexEnabled'] ?? false,
       caseSensitive: map['caseSensitive'] ?? false,
       multiline: map['multiline'] ?? false,
@@ -314,6 +333,8 @@ class SearchConfiguration {
         other.resultGrouping == resultGrouping &&
         other.wordMatchMode == wordMatchMode &&
         other.wordMatchCount == wordMatchCount &&
+        other.pluginSearchSelections.toString() ==
+            pluginSearchSelections.toString() &&
         other.regexEnabled == regexEnabled &&
         other.caseSensitive == caseSensitive &&
         other.multiline == multiline &&
@@ -334,6 +355,7 @@ class SearchConfiguration {
       resultGrouping,
       wordMatchMode,
       wordMatchCount,
+      pluginSearchSelections.toString(),
       regexEnabled,
       caseSensitive,
       multiline,
@@ -352,6 +374,7 @@ class SearchConfiguration {
         'numResults: $numResults, '
         'facets: $currentFacets, '
         'scope: $searchScopeFacets, '
+        'pluginSearchSelections: $pluginSearchSelections, '
         'regex: $regexEnabled, '
         'caseSensitive: $caseSensitive, '
         'multiline: $multiline, '

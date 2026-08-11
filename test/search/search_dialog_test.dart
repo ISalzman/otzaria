@@ -20,6 +20,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
@@ -82,6 +83,112 @@ Future<void> main() async {
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
+
+  testWidgets(
+    'תרומה סטטית של תוסף מופיעה רק במצבים המותרים ומשביתה אפשרויות שהוגדרו',
+    (WidgetTester tester) async {
+      final historyBloc = MockHistoryBloc();
+      final indexingBloc = MockIndexingBloc();
+      final navigationBloc = MockNavigationBloc();
+      final registry = PluginSearchDialogRegistry.forTesting();
+      registry.registerPayload('test.plugin', {
+        'id': 'include-external',
+        'type': 'checkbox',
+        'title': 'חפש גם במקור חיצוני',
+        'defaultValue': true,
+        'visibleInModes': ['exact', 'advanced'],
+        'disabledSearchOptions': {
+          'advanced': ['word.partial'],
+        },
+      });
+      final theme = ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
+      );
+
+      whenListen(
+        historyBloc,
+        const Stream<HistoryState>.empty(),
+        initialState: HistoryLoaded([]),
+      );
+      whenListen(
+        indexingBloc,
+        const Stream<IndexingState>.empty(),
+        initialState: IndexingInitial(),
+      );
+      whenListen(
+        navigationBloc,
+        const Stream<NavigationState>.empty(),
+        initialState: const NavigationState(currentScreen: Screen.search),
+      );
+
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        registry.dispose();
+        await historyBloc.close();
+        await indexingBloc.close();
+        await navigationBloc.close();
+      });
+
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      await tester.pumpWidget(
+        _buildDialogHarness(
+          theme: theme,
+          historyBloc: historyBloc,
+          indexingBloc: indexingBloc,
+          navigationBloc: navigationBloc,
+          dialog: SearchDialog(
+            initialSearchMode: SearchMode.exact,
+            pluginSearchDialogRegistry: registry,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final contribution = find.byKey(
+        const ValueKey('plugin-search-dialog-test.plugin-include-external'),
+      );
+      expect(contribution, findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(contribution).value, isTrue);
+
+      await tester.tap(find.text('מתקדם').first);
+      await tester.pumpAndSettle();
+      expect(contribution, findsOneWidget);
+
+      final partialChip = find.byWidgetPredicate(
+        (widget) =>
+            widget is FilterChip && (widget.label as Text).data == 'חלק ממילה',
+      );
+      expect(tester.widget<FilterChip>(partialChip).onSelected, isNull);
+
+      await tester.ensureVisible(contribution);
+      await tester.tap(contribution);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilterChip>(partialChip).onSelected, isNotNull);
+
+      final fuzzyMode = find.text('מקורב').first;
+      await tester.ensureVisible(fuzzyMode);
+      await tester.tap(fuzzyMode);
+      await tester.pumpAndSettle();
+      expect(contribution, findsNothing);
+
+      await tester.pumpWidget(
+        _buildDialogHarness(
+          theme: theme,
+          historyBloc: historyBloc,
+          indexingBloc: indexingBloc,
+          navigationBloc: navigationBloc,
+          dialog: SearchDialog(
+            initialSearchMode: SearchMode.exact,
+            pluginSearchDialogRegistry: registry,
+            onSearch: (_, _, _, _, _, _) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(contribution, findsNothing);
+    },
+  );
 
   testWidgets('תפריט ההיסטוריה משתמש ברקע של הדיאלוג', (
     WidgetTester tester,

@@ -22,6 +22,8 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/saved_alternatives_store.dart';
+import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
@@ -51,6 +53,7 @@ class SearchDialogResult {
     required this.searchMode,
     required this.distance,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.pluginSearchSelections = const {},
   });
 
   final String query;
@@ -62,6 +65,9 @@ class SearchDialogResult {
 
   /// טווח הקרבה ומצב התאמת המילים שנבחרו בדיאלוג — ראו [SearchMatchPolicy].
   final SearchMatchPolicy matchPolicy;
+
+  /// בחירות של שורות החיפוש הסטטיות שהיו פעילות בעת אישור הדיאלוג.
+  final Map<String, bool> pluginSearchSelections;
 }
 
 /// דיאלוג חיפוש מתקדם - מכיל את כל פקדי החיפוש וההגדרות
@@ -84,6 +90,7 @@ class SearchDialog extends StatefulWidget {
   final String? bookTitle;
   final bool returnResultOnSubmit;
   final SearchMode? initialSearchMode;
+  final PluginSearchDialogRegistry? pluginSearchDialogRegistry;
 
   const SearchDialog({
     super.key,
@@ -93,6 +100,7 @@ class SearchDialog extends StatefulWidget {
     this.bookTitle,
     this.returnResultOnSubmit = false,
     this.initialSearchMode,
+    this.pluginSearchDialogRegistry,
   });
 
   @override
@@ -111,11 +119,20 @@ class _SearchDialogState extends State<SearchDialog> {
   final MenuController _historyMenuController = MenuController();
   late final VoidCallback _queryListener;
   late final bool _ownsSearchTab;
+  late final PluginSearchDialogRegistry _pluginSearchDialogRegistry;
+  late final Map<String, bool> _pluginSearchSelections;
 
   bool get _usesStagedSubmit =>
       widget.onSearch != null ||
       widget.returnResultOnSubmit ||
       widget.editTab != null;
+
+  /// תרומות סטטיות מיועדות לחיפוש הספרייה, שבו בחירתן נשמרת עם טאב התוצאות.
+  /// בחיפוש בתוך ספר ה-callback הקיים אינו נושא את הבחירות הלאה.
+  bool get _supportsPluginSearchDialogItems =>
+      widget.bookTitle == null &&
+      widget.onSearch == null &&
+      !widget.returnResultOnSubmit;
 
   /// תיבות "ניקוד/טעמים" (ברשת אפשרויות החיפוש המתקדם) מוצגות רק במסלולים
   /// שמריצים חיפוש אינדקס (טאב חדש או עריכת טאב קיים). במסלולי החזרת-תוצאה
@@ -127,6 +144,9 @@ class _SearchDialogState extends State<SearchDialog> {
   @override
   void initState() {
     super.initState();
+    _pluginSearchDialogRegistry =
+        widget.pluginSearchDialogRegistry ??
+        PluginSearchDialogRegistry.instance;
 
     // יצירת טאב עם ההקלדה האחרונה
     _ownsSearchTab = widget.existingTab == null;
@@ -160,6 +180,9 @@ class _SearchDialogState extends State<SearchDialog> {
       // (או מצב הסשן הנוכחי) — לכל מצב חיפוש ברירות מחדל משלו
       _searchTab.globalSearchOptions.addAll(_initialOptionsForMode(searchMode));
     }
+    _pluginSearchSelections = Map<String, bool>.from(
+      _searchTab.searchBloc.state.configuration.pluginSearchSelections,
+    );
 
     final persisted = SearchScopePreferences.load();
     final initialScopeFacets = _searchTab.searchBloc.state.searchScopeFacets;
@@ -230,7 +253,7 @@ class _SearchDialogState extends State<SearchDialog> {
   /// דקדוקיות, כתיב מלא/חסר וחלק ממילה — מוחלות גלובלית על כל מילות
   /// השאילתה. בקשה עם אפשרות פעילה רצה בפועל דרך המסלול המתקדם של המנוע
   /// (ראה gateway), כך שאין צורך בשינוי מנוע.
-  Widget _buildExactOptionsRow() {
+  Widget _buildExactOptionsRow(Set<String> disabledOptionIds) {
     return Align(
       alignment: AlignmentDirectional.centerStart,
       child: Wrap(
@@ -242,14 +265,19 @@ class _SearchDialogState extends State<SearchDialog> {
               label: Text(key),
               visualDensity: VisualDensity.compact,
               selected: _searchTab.globalSearchOptions[key] ?? false,
-              onSelected: (selected) {
-                setState(() {
-                  _searchTab.globalSearchOptions[key] = selected;
-                  // במצב הרגיל אין עורך פר-מילה — הסימון תמיד גלובלי.
-                  _searchTab.useGlobalSearchOptions.value = true;
-                });
-                _searchTab.searchOptionsChanged.value++;
-              },
+              onSelected:
+                  disabledOptionIds.contains(
+                    SearchQueryBuilder.pluginOptionIdByWordOptionKey[key],
+                  )
+                  ? null
+                  : (selected) {
+                      setState(() {
+                        _searchTab.globalSearchOptions[key] = selected;
+                        // במצב הרגיל אין עורך פר-מילה — הסימון תמיד גלובלי.
+                        _searchTab.useGlobalSearchOptions.value = true;
+                      });
+                      _searchTab.searchOptionsChanged.value++;
+                    },
             ),
         ],
       ),
@@ -260,7 +288,10 @@ class _SearchDialogState extends State<SearchDialog> {
   /// אבל עצמאי לחלוטין: קובע רק את ברירות המחדל של החיפוש הרגיל, ורק
   /// לפרמטרים הקיימים בו (חמש אפשרויות המילה והמרווח בין מילים). ברירות
   /// המחדל של המצב המתקדם נקבעות בתפריט המקביל שבמסך המתקדם.
-  Widget _buildExactDefaultsRow(SearchState state) {
+  Widget _buildExactDefaultsRow(
+    SearchState state,
+    Set<String> disabledOptionIds,
+  ) {
     final defaults = SearchDefaults.loadExactDefaults();
     final savedDistance = SearchDefaults.loadDistanceDefault();
     return Align(
@@ -274,18 +305,24 @@ class _SearchDialogState extends State<SearchDialog> {
                 CheckboxMenuButton(
                   value: defaults[key] ?? false,
                   closeOnActivate: false,
-                  onChanged: (checked) {
-                    setState(() {
-                      SearchDefaults.saveExactDefaults({
-                        ...defaults,
-                        key: checked ?? false,
-                      });
-                      // שינוי ברירת מחדל מוחל מיד גם על התיבה בחלונית הפתוחה
-                      _searchTab.globalSearchOptions[key] = checked ?? false;
-                      _searchTab.useGlobalSearchOptions.value = true;
-                    });
-                    _searchTab.searchOptionsChanged.value++;
-                  },
+                  onChanged:
+                      disabledOptionIds.contains(
+                        SearchQueryBuilder.pluginOptionIdByWordOptionKey[key],
+                      )
+                      ? null
+                      : (checked) {
+                          setState(() {
+                            SearchDefaults.saveExactDefaults({
+                              ...defaults,
+                              key: checked ?? false,
+                            });
+                            // שינוי ברירת מחדל מוחל מיד גם על התיבה בחלונית הפתוחה
+                            _searchTab.globalSearchOptions[key] =
+                                checked ?? false;
+                            _searchTab.useGlobalSearchOptions.value = true;
+                          });
+                          _searchTab.searchOptionsChanged.value++;
+                        },
                   child: Text(key),
                 ),
               const Divider(height: 8),
@@ -597,6 +634,7 @@ class _SearchDialogState extends State<SearchDialog> {
           searchMode: currentMode,
           distance: _searchTab.searchBloc.state.distance,
           matchPolicy: currentState.configuration.matchPolicy,
+          pluginSearchSelections: _allPluginSearchSelections(),
         ),
       );
       return;
@@ -666,6 +704,7 @@ class _SearchDialogState extends State<SearchDialog> {
         proximityScope: proximityScope,
         currentFacets: facetsToSearch,
         searchScopeFacets: facetsToSearch,
+        pluginSearchSelections: _allPluginSearchSelections(),
       ),
     );
 
@@ -801,6 +840,9 @@ class _SearchDialogState extends State<SearchDialog> {
     target.searchBloc.add(SetSearchModeWithoutSearch(mode));
     target.searchBloc.add(UpdateDistanceWithoutSearch(distance));
     target.searchBloc.add(UpdateProximityScopeWithoutSearch(proximityScope));
+    target.searchBloc.add(
+      UpdatePluginSearchSelectionsWithoutSearch(_allPluginSearchSelections()),
+    );
     // facetsToSearch כבר כולל את ממדי הסינון שנבחרו בדיאלוג (הם אותחלו
     // מה-state של טאב היעד וניתנים לעריכה בדיאלוג עצמו).
     target.searchBloc.add(SetFacetsWithoutSearch(facetsToSearch));
@@ -1257,6 +1299,7 @@ class _SearchDialogState extends State<SearchDialog> {
   /// תוכן האזור התחתון לפי מצב החיפוש: אפשרויות המילה (מדויק), פקדי
   /// המצב המתקדם, או רמז למצב המקורב. בחירת ההיקף עברה כולה לתפריט הסינון.
   Widget _buildModeContent(SearchState state) {
+    final disabledOptionIds = _disabledSearchOptionIds(state);
     final Widget controls;
     if (!state.isAdvancedSearchEnabled) {
       final isExact = state.configuration.searchMode == SearchMode.exact;
@@ -1270,9 +1313,9 @@ class _SearchDialogState extends State<SearchDialog> {
                     child: _sectionLabel('אפשרויות מילה'),
                   ),
                   const SizedBox(height: 8),
-                  _buildExactOptionsRow(),
+                  _buildExactOptionsRow(disabledOptionIds),
                   const SizedBox(height: 4),
-                  _buildExactDefaultsRow(state),
+                  _buildExactDefaultsRow(state, disabledOptionIds),
                 ],
               ),
             )
@@ -1288,6 +1331,7 @@ class _SearchDialogState extends State<SearchDialog> {
               inputFocusNotifier: _advancedControlsHasFocus,
               supportsVocalized: _supportsVocalizedSearch,
               supportsCategorySyntax: true,
+              disabledWordOptionIds: disabledOptionIds,
             ),
             if (widget.onSearch == null && !widget.returnResultOnSubmit) ...[
               const SizedBox(height: 12),
@@ -1303,6 +1347,84 @@ class _SearchDialogState extends State<SearchDialog> {
     return SingleChildScrollView(
       key: const ValueKey('search-mode-controls'),
       child: controls,
+    );
+  }
+
+  String _pluginSelectionKey(String pluginId, String itemId) =>
+      '$pluginId/$itemId';
+
+  bool _pluginSelectionValue(String pluginId, PluginSearchDialogItem item) =>
+      _pluginSearchSelections[_pluginSelectionKey(pluginId, item.id)] ??
+      item.defaultValue;
+
+  Map<String, bool> _allPluginSearchSelections() {
+    final selections = Map<String, bool>.from(_pluginSearchSelections);
+    for (final record in _pluginSearchDialogRegistry.getAll()) {
+      selections.putIfAbsent(
+        _pluginSelectionKey(record.$1, record.$2.id),
+        () => record.$2.defaultValue,
+      );
+    }
+    return selections;
+  }
+
+  Set<String> _disabledSearchOptionIds(SearchState state) {
+    if (!_supportsPluginSearchDialogItems) return const {};
+    final mode = state.configuration.searchMode;
+    return {
+      for (final record in _pluginSearchDialogRegistry.getAll())
+        if (record.$2.isVisibleIn(mode) &&
+            _pluginSelectionValue(record.$1, record.$2))
+          ...record.$2.disabledOptionsFor(mode),
+    };
+  }
+
+  void _updatePluginSearchSelection(
+    String pluginId,
+    PluginSearchDialogItem item,
+    bool value,
+  ) {
+    setState(() {
+      _pluginSearchSelections[_pluginSelectionKey(pluginId, item.id)] = value;
+    });
+    _searchTab.searchBloc.add(
+      UpdatePluginSearchSelectionsWithoutSearch(_allPluginSearchSelections()),
+    );
+  }
+
+  Widget _buildPluginSearchRows(SearchState state) {
+    if (!_supportsPluginSearchDialogItems) return const SizedBox.shrink();
+    final mode = state.configuration.searchMode;
+    final visibleItems = _pluginSearchDialogRegistry
+        .getAll()
+        .where((record) => record.$2.isVisibleIn(mode))
+        .toList();
+    if (visibleItems.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Divider(height: 1),
+          for (final record in visibleItems)
+            CheckboxListTile(
+              key: ValueKey(
+                'plugin-search-dialog-${record.$1}-${record.$2.id}',
+              ),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              title: Text(record.$2.title),
+              value: _pluginSelectionValue(record.$1, record.$2),
+              onChanged: (value) => _updatePluginSearchSelection(
+                record.$1,
+                record.$2,
+                value ?? false,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1399,43 +1521,48 @@ class _SearchDialogState extends State<SearchDialog> {
                 _buildHeader(),
                 const Divider(height: 1),
                 Expanded(
-                  child: BlocBuilder<SearchBloc, SearchState>(
-                    builder: (context, state) {
-                      return Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          16,
-                          horizontalPadding,
-                          0,
-                        ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: constraints.maxHeight,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    _buildIndexWarning(),
-                                    _buildSearchComposer(state),
-                                    const SizedBox(height: 12),
-                                    SizedBox(
-                                      height: 260,
-                                      child: _buildModeContent(state),
+                  child: ListenableBuilder(
+                    listenable: _pluginSearchDialogRegistry,
+                    builder: (context, _) =>
+                        BlocBuilder<SearchBloc, SearchState>(
+                          builder: (context, state) {
+                            return Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                16,
+                                horizontalPadding,
+                                0,
+                              ),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          _buildIndexWarning(),
+                                          _buildSearchComposer(state),
+                                          const SizedBox(height: 12),
+                                          SizedBox(
+                                            height: 260,
+                                            child: _buildModeContent(state),
+                                          ),
+                                          _buildPluginSearchRows(state),
+                                          const SizedBox(height: 16),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 16),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             );
                           },
                         ),
-                      );
-                    },
                   ),
                 ),
                 const Divider(height: 1),

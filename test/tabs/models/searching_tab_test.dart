@@ -54,6 +54,28 @@ Future<void> main() async {
       );
     });
 
+    test('toJson/fromJson משחזר בחירות חיפוש של תוספים', () {
+      final source = SearchingTab(
+        'חיפוש',
+        'שלום',
+        initialConfiguration: const SearchConfiguration(
+          pluginSearchSelections: {
+            'org.hebrewbooks2026.otzaria-search/include-hebrewbooks': true,
+            'org.example.other/include-catalog': false,
+          },
+        ),
+      );
+      addTearDown(source.dispose);
+
+      final restored = SearchingTab.fromJson(source.toJson());
+      addTearDown(restored.dispose);
+
+      expect(
+        restored.searchBloc.state.configuration.pluginSearchSelections,
+        source.searchBloc.state.configuration.pluginSearchSelections,
+      );
+    });
+
     test('toJson/fromJson משחזר searchOptions פר-מילה', () {
       final source = SearchingTab('חיפוש', 'צדיק גאולה');
       addTearDown(source.dispose);
@@ -224,6 +246,9 @@ Future<void> main() async {
           sortBy: ResultsOrder.relevance,
           currentFacets: ['/חסידות'],
           searchScopeFacets: ['/חסידות'],
+          pluginSearchSelections: {
+            'org.hebrewbooks2026.otzaria-search/include-hebrewbooks': true,
+          },
         ),
       );
       addTearDown(source.dispose);
@@ -241,6 +266,9 @@ Future<void> main() async {
       expect(config.numResults, 250);
       expect(config.sortBy, ResultsOrder.relevance);
       expect(config.searchScopeFacets, ['/חסידות']);
+      expect(config.pluginSearchSelections, {
+        'org.hebrewbooks2026.otzaria-search/include-hebrewbooks': true,
+      });
       expect(cloned.searchOptions['צדיק_0']?['חלק ממילה'], true);
       expect(cloned.queryController.text, 'צדיק');
     });

@@ -90,6 +90,12 @@ class SetSearchModeWithoutSearch extends SearchEvent {
   SetSearchModeWithoutSearch(this.searchMode);
 }
 
+/// עדכון בחירות של רכיבי חיפוש סטטיים מתוספים, ללא הרצת חיפוש מקומי.
+class UpdatePluginSearchSelectionsWithoutSearch extends SearchEvent {
+  final Map<String, bool> selections;
+  const UpdatePluginSearchSelectionsWithoutSearch(this.selections);
+}
+
 class UpdateBooksToSearch extends SearchEvent {
   final Set<Book> books;
   UpdateBooksToSearch(this.books);

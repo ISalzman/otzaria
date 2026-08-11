@@ -88,6 +88,36 @@ class SearchQueryBuilder {
     matchTaamimOptionKey,
   ];
 
+  /// מזהים יציבים לתוספים עבור אפשרויות המילה הניתנות להשבתה בדיאלוג.
+  ///
+  /// הכותרות בעברית נשארות פרט מימוש של הממשק; תוסף אינו מפנה אליהן.
+  static const Map<String, String> pluginOptionIdByWordOptionKey = {
+    'קידומות דקדוקיות': 'word.grammatical-prefixes',
+    'סיומות דקדוקיות': 'word.grammatical-suffixes',
+    'קידומות': 'word.prefixes',
+    'סיומות': 'word.suffixes',
+    'כתיב מלא/חסר': 'word.full-or-defective-spelling',
+    'חלק ממילה': 'word.partial',
+    typoToleranceOptionKey: 'word.typo-tolerance',
+    'קידומות ארמיות': 'word.aramaic-prefixes',
+    'סיומות ארמיות': 'word.aramaic-suffixes',
+    'התעלם מגרשיים': 'word.ignore-quotes',
+    'תרגום ארמי': 'word.aramaic-translation',
+    'ראשי תיבות': 'word.acronyms',
+    matchNikudOptionKey: 'word.nikud',
+    matchTaamimOptionKey: 'word.taamim',
+  };
+
+  static bool isPluginControllableOptionId(String id) =>
+      pluginOptionIdByWordOptionKey.containsValue(id);
+
+  static String? wordOptionKeyForPluginOptionId(String id) {
+    for (final entry in pluginOptionIdByWordOptionKey.entries) {
+      if (entry.value == id) return entry.key;
+    }
+    return null;
+  }
+
   /// האם אפשרויות פר-מילה מבקשות חיפוש מנוקד (מפתח ניקוד/טעמים דלוק
   /// באחת המילים). קובע אם מותר למחוק ניקוד מהשאילתה לפני החיפוש.
   static bool optionsRequestVocalized(Map<String, Map<String, bool>> options) {

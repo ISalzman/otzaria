@@ -2120,6 +2120,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
+| `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
 | `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
 
@@ -2311,6 +2312,76 @@ async function scheduleReminder(title, body, dateTime) {
 - ההרשאות נבדקות בקומפילציה, בזמן החישוב ושוב בלחיצה. הפעולה אינה עוברת דרך
   `PluginRuntimeDispatcher`, אינה מפעילה WebView ואינה דורשת
   `app.run_on_startup`.
+
+### שורות בדיאלוג החיפוש
+
+`startup.searchDialogItems` מוסיף שורות checkbox סטטיות בתחתית דיאלוג
+**החיפוש בספרייה**, מעל כפתורי "ביטול" ו"חפש". הן אינן מוצגות בחיפוש
+בתוך ספר, שחוזה התוצאות שלו אינו נושא בחירות תוסף. הן נבנות ישירות מהמניפסט: פתיחת
+הדיאלוג, החלפת מצב, ולחיצה על ה-checkbox **אינן** מפעילות WebView ואינן
+שולחות אירוע לתוסף.
+
+```json
+{
+  "permissions": [
+    "app.startup_contributions",
+    "search.dialog"
+  ],
+  "contributes": {
+    "startup": {
+      "searchDialogItems": [
+        {
+          "id": "include-external-source",
+          "type": "checkbox",
+          "title": "חפש גם במקור חיצוני",
+          "defaultValue": true,
+          "visibleInModes": ["exact", "advanced"],
+          "disabledSearchOptions": {
+            "advanced": [
+              "word.partial",
+              "word.typo-tolerance"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+| שדה | חובה | תיאור |
+|---|---:|---|
+| `id` | כן | מזהה ייחודי בתוסף; אותיות ASCII, מספרים, `.`, `_`, `-`. |
+| `type` | כן | כעת רק `"checkbox"`. |
+| `title` | כן | הכיתוב המוצג למשתמש (עד 120 תווים). |
+| `defaultValue` | לא | ערך התחלתי, `false` כברירת מחדל. |
+| `visibleInModes` | לא | מערך לא-ריק מתוך `"exact"`, `"advanced"`, `"fuzzy"`; ברירת המחדל היא כל המצבים. |
+| `disabledSearchOptions` | לא | אובייקט `מצב → מזהי אפשרויות מילה` להשבתה כשה-checkbox מסומן. |
+
+הבחירה נשמרת בקונפיגורציית טאב החיפוש במפתח
+`"<pluginId>/<itemId>"`, כדי שספק תוצאות מאוחד עתידי יוכל לקרוא בדיוק את
+מה שהמשתמש אישר. מצב `fuzzy` יכול פשוט להיעדר מ־`visibleInModes`.
+
+`disabledSearchOptions` משפיע רק על ממשק האפשרויות: הוא מאפיר את ה-chip
+ואת אותה אפשרות בתפריט ברירות המחדל, ואינו מוחק בחירה קיימת של המשתמש
+בחיפוש המקומי. ההשבתה פעילה רק כששורת אותו תוסף מסומנת. אין דרך לתוסף לשנות
+ערכים, להריץ קוד, או להשבית פקדים שאינם ברשימת היתר זו.
+
+מזהי האפשרויות המותרים כיום:
+
+| מזהה | אפשרות באוצריא |
+|---|---|
+| `word.grammatical-prefixes` | קידומות דקדוקיות |
+| `word.grammatical-suffixes` | סיומות דקדוקיות |
+| `word.prefixes` / `word.suffixes` | קידומות / סיומות |
+| `word.full-or-defective-spelling` | כתיב מלא/חסר |
+| `word.partial` | חלק ממילה |
+| `word.typo-tolerance` | שגיאות כתיב |
+| `word.aramaic-prefixes` / `word.aramaic-suffixes` | קידומות / סיומות ארמיות |
+| `word.ignore-quotes` | התעלם מגרשיים |
+| `word.aramaic-translation` | תרגום ארמי |
+| `word.acronyms` | ראשי תיבות |
+| `word.nikud` / `word.taamim` | ניקוד / טעמים |
 
 ### הפעלה עצלה
 
