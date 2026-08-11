@@ -137,6 +137,47 @@ void main() {
     expect(supportedVersion.errors, isEmpty);
   });
 
+  test('data.choose דורש minAppVersion 0.9.97', () {
+    final startup = {
+      'programs': [
+        {
+          'id': 'choose-data',
+          'version': 1,
+          'triggers': ['reader.activeBookChanged'],
+          'commands': [
+            {
+              'id': 'selected',
+              'type': 'data.choose',
+              'args': {
+                'condition': {
+                  'op': 'exists',
+                  'value': {r'$context': 'reader.book.id'},
+                },
+                'whenTrue': {r'$literal': 'yes'},
+                'whenFalse': {r'$literal': 'no'},
+              },
+            },
+          ],
+          'outputs': {
+            'selected': {r'$result': 'selected'},
+          },
+        },
+      ],
+    };
+
+    final oldVersion = _run(
+      tempDir,
+      _manifest(minAppVersion: '0.9.96', startup: startup),
+    );
+    expect(oldVersion.errors, contains(contains('0.9.97')));
+
+    final supportedVersion = _run(
+      tempDir,
+      _manifest(minAppVersion: '0.9.97', startup: startup),
+    );
+    expect(supportedVersion.errors, isEmpty);
+  });
+
   test('an invalid toolbar item (missing icon) is a blocking error', () {
     final report = _run(
       tempDir,

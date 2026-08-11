@@ -145,6 +145,27 @@ void main() {
       );
     });
 
+    test('data.choose בוחר ערך באמצעות תנאי מובנה', () {
+      final program = _validProgram();
+      (program['commands'] as List<dynamic>).insert(3, {
+        'id': 'selectedEditions',
+        'type': 'data.choose',
+        'args': {
+          'condition': {
+            'op': 'equals',
+            'left': {r'$context': 'reader.book.type'},
+            'right': {r'$literal': 'text'},
+          },
+          'whenTrue': {r'$result': 'menuItems'},
+          'whenFalse': {r'$literal': <Object>[]},
+        },
+      });
+
+      final compiled = _compiler().compile(program);
+
+      expect(compiled.commands[3].type, 'data.choose');
+    });
+
     test('עץ WHERE עמוק נדחה לפני הקפאת התוכנית', () {
       final program = _validProgram();
       final args = _databaseArgs(program);
