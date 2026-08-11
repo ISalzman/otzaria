@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_templat
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
+import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
 import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
@@ -580,6 +581,7 @@ class PluginExtendedValidator {
     checkListField('contextMenuItems', (e) => e is Map, 'אובייקט');
     checkListField('publishedData', (e) => e is Map, 'אובייקט');
     checkListField('programs', (e) => e is Map, 'אובייקט');
+    checkListField('searchDialogItems', (e) => e is Map, 'אובייקט');
     checkListField('activationEvents', (e) => e is String, 'מחרוזת');
     final keepAliveRaw = startupMap['keepAlive'];
     if (keepAliveRaw != null && keepAliveRaw is! bool) {
@@ -701,6 +703,33 @@ class PluginExtendedValidator {
             'רשומת contributes.startup.publishedData חייבת לכלול type, key '
             'ו-payload (ו-scope מחרוזת אם צוין): ${jsonEncode(record)}',
           );
+        }
+      }
+    }
+
+    if (startup.searchDialogItems.isNotEmpty) {
+      if (!declaredPermissions.contains('search.dialog')) {
+        errors.add(
+          'contributes.startup.searchDialogItems דורש את ההרשאה '
+          '"search.dialog" שלא הוכרזה ב-manifest',
+        );
+      }
+      if (startup.searchDialogItems.length >
+          PluginSearchDialogItem.maxItemsPerPlugin) {
+        errors.add(
+          'contributes.startup.searchDialogItems מוגבל ל-'
+          '${PluginSearchDialogItem.maxItemsPerPlugin} פריטים',
+        );
+      }
+      final itemIds = <String>{};
+      for (final item in startup.searchDialogItems) {
+        try {
+          final parsed = PluginSearchDialogItem.fromPayload(item);
+          if (!itemIds.add(parsed.id)) {
+            errors.add('contributes.startup.searchDialogItems מכיל מזהה כפול');
+          }
+        } on PluginSearchDialogItemException catch (error) {
+          errors.add('contributes.startup.searchDialogItems לא תקין: $error');
         }
       }
     }

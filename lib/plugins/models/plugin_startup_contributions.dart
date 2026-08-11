@@ -2,7 +2,8 @@
 ///
 /// נקראות ומופעלות ע"י Flutter בלי להרים מנוע JS. דורשות את ההרשאה
 /// `app.startup_contributions`, וכל קטגוריה כפופה גם להרשאת התחום שלה
-/// (`reader.toolbar` / `reader.context_menu` / `published_data.write`).
+/// (`reader.toolbar` / `reader.context_menu` / `search.dialog` /
+/// `published_data.write`).
 class PluginStartupContributions {
   /// נושא הפעלה מדומה ב-[activationEvents]: מרים את מופע הרקע של התוסף
   /// זמן קצר אחרי שעליית התוכנה הסתיימה (ולא כחלק ממנה).
@@ -21,6 +22,9 @@ class PluginStartupContributions {
   /// תכניות חישוב שה-Host מריץ ללא מנוע JavaScript.
   final List<Map<String, dynamic>> programs;
 
+  /// שורות סטטיות שמוצגות בתחתית דיאלוג החיפוש.
+  final List<Map<String, dynamic>> searchDialogItems;
+
   /// נושאי אירועים שמעירים את מופע הרקע של התוסף בעצלנות (בלי מנוע חי
   /// עד שאירוע כזה קורה בפועל), או [startupActivationTopic].
   final List<String> activationEvents;
@@ -34,6 +38,7 @@ class PluginStartupContributions {
     this.contextMenuItems = const [],
     this.publishedData = const [],
     this.programs = const [],
+    this.searchDialogItems = const [],
     this.activationEvents = const [],
     this.keepAlive = false,
   });
@@ -43,6 +48,7 @@ class PluginStartupContributions {
       contextMenuItems.isEmpty &&
       publishedData.isEmpty &&
       programs.isEmpty &&
+      searchDialogItems.isEmpty &&
       activationEvents.isEmpty;
 
   /// האם קיימת פעולה שבאמת עשויה להרים את מנוע הרקע.
@@ -108,6 +114,7 @@ class PluginStartupContributions {
       contextMenuItems: mapList('contextMenuItems'),
       publishedData: mapList('publishedData'),
       programs: mapList('programs'),
+      searchDialogItems: mapList('searchDialogItems'),
       activationEvents: events is List
           ? [
               for (final entry in events)
@@ -123,6 +130,7 @@ class PluginStartupContributions {
     if (contextMenuItems.isNotEmpty) 'contextMenuItems': contextMenuItems,
     if (publishedData.isNotEmpty) 'publishedData': publishedData,
     if (programs.isNotEmpty) 'programs': programs,
+    if (searchDialogItems.isNotEmpty) 'searchDialogItems': searchDialogItems,
     if (activationEvents.isNotEmpty) 'activationEvents': activationEvents,
     if (keepAlive) 'keepAlive': true,
   };

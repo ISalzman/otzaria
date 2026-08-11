@@ -12,6 +12,7 @@ Map<String, dynamic> _manifest({
     'reader.toolbar',
     'reader.context_menu',
     'published_data.write',
+    'search.dialog',
   ],
   String minAppVersion = '0.9.96',
   Map<String, dynamic>? startup,
@@ -78,6 +79,14 @@ void main() {
       },
     ],
     'activationEvents': ['app.startup'],
+    'searchDialogItems': [
+      {
+        'id': 'include-external',
+        'type': 'checkbox',
+        'title': 'חפש גם במקור חיצוני',
+        'visibleInModes': ['exact', 'advanced'],
+      },
+    ],
   };
 
   test('a valid startup section passes without errors', () {
@@ -137,6 +146,28 @@ void main() {
       ),
     );
     expect(report.errors, contains(contains('publishedData')));
+  });
+
+  test('unknown static search option id is a blocking error', () {
+    final report = _run(
+      tempDir,
+      _manifest(
+        startup: {
+          'searchDialogItems': [
+            {
+              'id': 'include-external',
+              'type': 'checkbox',
+              'title': 'חפש גם במקור חיצוני',
+              'disabledSearchOptions': {
+                'advanced': ['word.not-a-real-option'],
+              },
+            },
+          ],
+        },
+      ),
+    );
+
+    expect(report.errors, contains(contains('searchDialogItems')));
   });
 
   test('unknown activation event is a warning, not an error', () {

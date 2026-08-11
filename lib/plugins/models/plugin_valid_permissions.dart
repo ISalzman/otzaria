@@ -125,6 +125,9 @@ const pluginValidPermissions = <String>[
   /// ביצוע חיפוש טקסט מלא
   'search.fulltext.read',
 
+  /// הוספת שורות סטטיות לדיאלוג החיפוש.
+  'search.dialog',
+
   // ===== קורא =====
   /// פתיחת ספרים במצב קריאה
   'reader.open',

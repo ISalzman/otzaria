@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
+import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 
@@ -24,6 +25,7 @@ class PluginStartupContributionsService {
   PluginStartupContributionsService._()
     : _toolbar = PluginToolbarRegistry.instance,
       _contextMenu = ContextMenuRegistry.instance,
+      _searchDialog = PluginSearchDialogRegistry.instance,
       _lazyActivation = PluginLazyActivationService.instance;
 
   @visibleForTesting
@@ -31,12 +33,16 @@ class PluginStartupContributionsService {
     required PluginToolbarRegistry toolbarRegistry,
     required ContextMenuRegistry contextMenuRegistry,
     required PluginLazyActivationService activationService,
+    PluginSearchDialogRegistry? searchDialogRegistry,
   }) : _toolbar = toolbarRegistry,
        _contextMenu = contextMenuRegistry,
+       _searchDialog =
+           searchDialogRegistry ?? PluginSearchDialogRegistry.instance,
        _lazyActivation = activationService;
 
   final PluginToolbarRegistry _toolbar;
   final ContextMenuRegistry _contextMenu;
+  final PluginSearchDialogRegistry _searchDialog;
   final PluginLazyActivationService _lazyActivation;
   Future<void> _syncTail = Future<void>.value();
 
@@ -50,6 +56,7 @@ class PluginStartupContributionsService {
   /// התוסף) ולצורך reapply אחרי reload של תוסף פיתוח.
   final Map<String, List<Map<String, dynamic>>> _appliedToolbar = {};
   final Map<String, List<Map<String, dynamic>>> _appliedContextMenu = {};
+  final Map<String, List<Map<String, dynamic>>> _appliedSearchDialog = {};
 
   /// תוספים שסונכרנו עם תרומות פעילות בסשן הנוכחי — מאפשר לדלג על ניקוי DB
   /// עבור שאר התוספים (הרוב), שלא נזרע להם דבר.
@@ -142,6 +149,23 @@ class PluginStartupContributionsService {
         );
       }
 
+      if (startup.searchDialogItems.isNotEmpty &&
+          granted.contains('search.dialog')) {
+        _applyItems(
+          plugin.pluginId,
+          startup.searchDialogItems,
+          applied: _appliedSearchDialog,
+          register: (id, item) => _searchDialog.registerPayload(id, item),
+          removeItem: _searchDialog.remove,
+        );
+      } else {
+        _removeApplied(
+          plugin.pluginId,
+          _appliedSearchDialog,
+          _searchDialog.remove,
+        );
+      }
+
       if (startup.publishedData.isNotEmpty &&
           granted.contains('published_data.write')) {
         await _seedPublishedData(
@@ -207,6 +231,13 @@ class PluginStartupContributionsService {
         pluginId,
         item,
         (id, i) => _contextMenu.registerPayload(id, i),
+      );
+    }
+    for (final item in _appliedSearchDialog[pluginId] ?? const []) {
+      _tryRegister(
+        pluginId,
+        item,
+        (id, i) => _searchDialog.registerPayload(id, i),
       );
     }
   }
@@ -426,6 +457,7 @@ class PluginStartupContributionsService {
     _managedPlugins.remove(pluginId);
     _removeApplied(pluginId, _appliedToolbar, _toolbar.remove);
     _removeApplied(pluginId, _appliedContextMenu, _contextMenu.remove);
+    _removeApplied(pluginId, _appliedSearchDialog, _searchDialog.remove);
     _lazyActivation.removePlugin(pluginId);
     await _removeSeededData(pluginId, repository);
   }

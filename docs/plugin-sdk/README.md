@@ -156,6 +156,7 @@ my-plugin/
 | `contributes.background.entrypoint` | `null` | נתיב יחסי לקובץ HTML קליל (ללא UI) שייטען ברקע במקום ה-`entrypoint` המלא. רלוונטי רק לתוסף עם `app.run_on_startup`. ראה §ריצת רקע. |
 | `contributes.startup` | `null` | פקדים, פריטי תפריט ונתונים שאוצריא טוענת ישירות מהמניפסט בלי להפעיל WebView. |
 | `contributes.startup.programs` | `[]` | תכניות חישוב Host מוולדות, ללא JavaScript; ראו `API_REFERENCE.md` §תכניות Host ללא WebView. |
+| `contributes.startup.searchDialogItems` | `[]` | שורות checkbox סטטיות בתחתית דיאלוג החיפוש; ראו `API_REFERENCE.md` §שורות בדיאלוג החיפוש. |
 | `contributes.startup.activationEvents` | `[]` | אירועים שמעירים את מנוע הרקע בעצלנות; כל נושא דורש גם הרשאת subscribe מתאימה. |
 | `contributes.startup.keepAlive` | `false` | בקשה למנוע כיבוי אוטומטי; דורשת אישור נפרד של `app.background_keep_alive`. |
 
