@@ -54,7 +54,7 @@ TextSpan _withForeignRun(TextStyle base) => TextSpan(
       text: '1',
       style: TextStyle(fontFamily: 'Rubik'),
     ),
-    const TextSpan(text: ' אל העם'),
+    TextSpan(text: ' אל העם'),
   ],
 );
 
