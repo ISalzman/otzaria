@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -91,5 +92,56 @@ void main() {
       ),
       throwsA(isA<TimeoutException>()),
     );
+  });
+
+  test('fetchStream מזרים UTF-8 תקין גם כשהתו נחצה בין מקטעים', () async {
+    final responseBody = StreamController<List<int>>();
+    final service = PluginNetworkFetchService(
+      client: MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          responseBody.stream,
+          206,
+          headers: {'content-type': 'application/x-ndjson'},
+        );
+      }),
+    );
+
+    final response = await service.fetchStream(
+      Uri.parse('https://api.example.com/stream'),
+    );
+    final chunks = response.body.toList();
+    final encoded = utf8.encode('א\nב');
+    responseBody
+      ..add(encoded.sublist(0, 1))
+      ..add(encoded.sublist(1, 3))
+      ..add(encoded.sublist(3));
+    await responseBody.close();
+
+    expect(response.status, 206);
+    expect(response.ok, isTrue);
+    expect(response.headers['content-type'], 'application/x-ndjson');
+    expect((await chunks).join(), 'א\nב');
+  });
+
+  test('fetchStream משתמש בבקשה שניתנת לביטול', () async {
+    final abort = Completer<void>();
+    final requestStarted = Completer<void>();
+    final service = PluginNetworkFetchService(
+      client: MockClient.streaming((request, bodyStream) async {
+        final abortable = request as http.AbortableRequest;
+        requestStarted.complete();
+        await abortable.abortTrigger;
+        throw http.RequestAbortedException(request.url);
+      }),
+    );
+
+    final response = service.fetchStream(
+      Uri.parse('https://api.example.com/stream'),
+      abortTrigger: abort.future,
+    );
+    await requestStarted.future;
+    abort.complete();
+
+    await expectLater(response, throwsA(isA<http.RequestAbortedException>()));
   });
 }

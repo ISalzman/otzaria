@@ -68,7 +68,7 @@ const String _sdkStub = r'''
 (function () {
   var _queue = [];
   var _realSdk = null;
-  var _notReadySearchStream = function () {
+  var _notReadyStream = function () {
     return {
       next: function () {
         return Promise.reject(new Error('Otzaria SDK not ready yet'));
@@ -80,7 +80,9 @@ const String _sdkStub = r'''
   window.Otzaria = {
     call: function (method, payload) {
       if (_realSdk) return _realSdk.call(method, payload);
-      if (method === 'search.query') return _notReadySearchStream();
+      if (method === 'search.query' || method === 'network.fetchStream') {
+        return _notReadyStream();
+      }
       return Promise.reject(new Error('Otzaria SDK not ready yet'));
     },
     on: function (event, cb) {
@@ -900,6 +902,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   var _searchStreams = {};
   var _searchSequence = 0;
   var _searchEvent = '__otzaria.search.query.chunk';
+  var _networkStreams = {};
+  var _networkSequence = 0;
+  var _networkEvent = '__otzaria.network.fetchStream.chunk';
   var rpc = function (method, payload) {
     return window.flutter_inappwebview.callHandler('otzaria_rpc', {
       method: method,
@@ -911,8 +916,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     var stream = _searchStreams[detail.streamId];
     if (stream) stream.push(detail.chunk);
   });
-  var createSearchStream = function (payload) {
-    var streamId = 'search_' + Date.now().toString(36) + '_' + (++_searchSequence).toString(36);
+  window.addEventListener(_networkEvent, function (event) {
+    var detail = event.detail || {};
+    var stream = _networkStreams[detail.streamId];
+    if (stream) stream.push(detail.chunk);
+  });
+  var createRpcStream = function (method, payload, streams, streamId) {
+    var maxQueuedChunks = 256;
     var queue = [];
     var waiters = [];
     var ended = false;
@@ -931,29 +941,34 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     var session = {
       push: function (chunk) {
         if (ended) return;
+        if (queue.length >= maxQueuedChunks) {
+          session.fail(new Error('Stream consumer is too slow'));
+          void rpc(method, { __cancelStreamId: streamId });
+          return;
+        }
         queue.push(chunk);
         flush();
       },
       finish: function () {
         if (ended) return;
         ended = true;
-        delete _searchStreams[streamId];
+        delete streams[streamId];
         flush();
       },
       fail: function (error) {
         if (ended) return;
         failure = error instanceof Error ? error : new Error(String(error));
         ended = true;
-        delete _searchStreams[streamId];
+        delete streams[streamId];
         flush();
       }
     };
-    _searchStreams[streamId] = session;
+    streams[streamId] = session;
     var request = Object.assign({}, payload || {}, { __streamId: streamId });
-    rpc('search.query', request).then(function (response) {
+    rpc(method, request).then(function (response) {
       if (!response || response.success !== true) {
         var message = response && response.error && response.error.message;
-        session.fail(new Error(message || 'Search failed'));
+        session.fail(new Error(message || 'Stream failed'));
         return;
       }
       session.finish();
@@ -973,18 +988,27 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       return: function () {
         if (!ended) {
           ended = true;
-          delete _searchStreams[streamId];
+          delete streams[streamId];
           flush();
-          void rpc('search.query', { __cancelStreamId: streamId });
+          void rpc(method, { __cancelStreamId: streamId });
         }
         return Promise.resolve({ value: undefined, done: true });
       },
       [Symbol.asyncIterator]: function () { return this; }
     };
   };
+  var createSearchStream = function (payload) {
+    var id = 'search_' + Date.now().toString(36) + '_' + (++_searchSequence).toString(36);
+    return createRpcStream('search.query', payload, _searchStreams, id);
+  };
+  var createNetworkFetchStream = function (payload) {
+    var id = 'network_' + Date.now().toString(36) + '_' + (++_networkSequence).toString(36);
+    return createRpcStream('network.fetchStream', payload, _networkStreams, id);
+  };
   var realSdk = {
     call: function (method, payload) {
       if (method === 'search.query') return createSearchStream(payload);
+      if (method === 'network.fetchStream') return createNetworkFetchStream(payload);
       return rpc(method, payload);
     },
     on: function (event, cb) {

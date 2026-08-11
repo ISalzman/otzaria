@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -9,6 +10,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -351,6 +353,22 @@ typedef PluginRpcEventSink =
       Map<String, dynamic> payload,
     );
 
+class _PluginNetworkRequest {
+  final Uri uri;
+  final String method;
+  final Map<String, String>? headers;
+  final String? body;
+  final Duration timeout;
+
+  const _PluginNetworkRequest({
+    required this.uri,
+    required this.method,
+    required this.headers,
+    required this.body,
+    required this.timeout,
+  });
+}
+
 // ===================================================================
 // Bridge Adapter - strict 1:1 with plugin_system_plan.md
 // ===================================================================
@@ -412,7 +430,7 @@ class PluginBridgeAdapter {
   /// `dispose` (טעינה/השבתה מחדש של התוסף).
   final Set<String> _grantedFolders = <String>{};
 
-  // שירות בקשות HTTP (network.fetch) — מופע יחיד לכל adapter; ניתן להזרקה
+  // שירות בקשות HTTP — מופע יחיד לכל adapter; ניתן להזרקה
   // לבדיקות, נוצר עם השימוש הראשון אם לא הוזרק, ומשוחרר ב-dispose.
   PluginNetworkFetchService? _networkFetchService;
   PluginNetworkFetchService get _fetchService =>
@@ -429,16 +447,27 @@ class PluginBridgeAdapter {
   Map<String, Book> _booksByIndexedPath = const {};
   final Map<String, Future<void> Function()> _activeSearchStreams = {};
   final Set<String> _pendingSearchCancellations = {};
+  final Map<String, Future<void> Function()> _activeNetworkFetchStreams = {};
+  final Set<String> _pendingNetworkFetchCancellations = {};
 
   static const _searchStreamEvent = '__otzaria.search.query.chunk';
+  static const _networkFetchStreamEvent = '__otzaria.network.fetchStream.chunk';
   static const _streamIdKey = '__streamId';
   static const _cancelStreamIdKey = '__cancelStreamId';
   static const _maxConcurrentSearchStreams = 4;
+  static const _maxConcurrentNetworkFetchStreams = 4;
+  static const _maxNetworkFetchChunkCodeUnits = 32 * 1024;
   static const _maxSearchDuration = Duration(minutes: 2);
   static const _searchIdleTimeout = Duration(seconds: 30);
   static final _streamIdPattern = RegExp(r'^[A-Za-z0-9_-]{1,64}$');
 
   static bool isSearchCancellationPayload(Map<String, dynamic> args) {
+    if (args.length != 1) return false;
+    final streamId = args[_cancelStreamIdKey];
+    return streamId is String && _streamIdPattern.hasMatch(streamId);
+  }
+
+  static bool isNetworkFetchCancellationPayload(Map<String, dynamic> args) {
     if (args.length != 1) return false;
     final streamId = args[_cancelStreamIdKey];
     return streamId is String && _streamIdPattern.hasMatch(streamId);
@@ -450,6 +479,11 @@ class PluginBridgeAdapter {
     }
     _activeSearchStreams.clear();
     _pendingSearchCancellations.clear();
+    for (final cancel in _activeNetworkFetchStreams.values) {
+      unawaited(cancel());
+    }
+    _activeNetworkFetchStreams.clear();
+    _pendingNetworkFetchCancellations.clear();
     _networkFetchService?.dispose();
     _fileDownloadService?.dispose();
     _bookIndexLibrary = null;
@@ -534,7 +568,7 @@ class PluginBridgeAdapter {
       case 'database':
         return _handleDatabase(action, args);
       case 'network':
-        return await _handleNetwork(action, args);
+        return await _handleNetwork(action, args, eventSink: eventSink);
       case 'fs':
         return await _handleFs(action, args);
       case 'shortcut':
@@ -3200,89 +3234,104 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // network.*
   // ----------------------------------------------------------------
-  Future<dynamic> _handleNetwork(
-    String action,
+  Future<_PluginNetworkRequest> _prepareNetworkRequest(
     Map<String, dynamic> args,
   ) async {
+    if (!plugin.manifest.networkEnabled) {
+      throw Exception(
+        'error.permission_denied: '
+        'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
+      );
+    }
+
+    final url = args['url'] as String?;
+    if (url == null) throw Exception('error.invalid_params: url required');
+    final uri = Uri.tryParse(url);
+    if (uri == null) throw Exception('error.invalid_params: invalid URL');
+
+    final requiredPermission = requiredNetworkPermissionFor(uri);
+    final granted = await _pluginRepo.getPermission(
+      plugin.pluginId,
+      requiredPermission,
+    );
+    if (granted != true) {
+      final what = requiredPermission == 'network.localhost'
+          ? 'גישה לשירותים מקומיים (localhost)'
+          : 'גישה לאינטרנט';
+      throw Exception(
+        'error.permission_denied: '
+        'לתוסף אין הרשאת $what. '
+        'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
+      );
+    }
+
+    final allowed = await PluginNetworkAccessResolver.instance
+        .isUriAllowedForPlugin(uri, plugin.manifest);
+    if (!allowed) {
+      throw Exception(
+        'error.forbidden: הכתובת אינה ברשימת ההיתר לגישת רשת של תוספים',
+      );
+    }
+
+    final method = (args['method'] as String? ?? 'GET').toUpperCase();
+    if (!RegExp(r'^[A-Z]+$').hasMatch(method)) {
+      throw Exception('error.invalid_params: invalid method');
+    }
+    final rawTimeoutMs = args['timeoutMs'];
+    if (rawTimeoutMs != null &&
+        (rawTimeoutMs is! int ||
+            rawTimeoutMs <= 0 ||
+            rawTimeoutMs >
+                PluginNetworkFetchService.maxTimeout.inMilliseconds)) {
+      throw Exception(
+        'error.invalid_params: timeoutMs must be a positive integer '
+        'up to ${PluginNetworkFetchService.maxTimeout.inMilliseconds}',
+      );
+    }
+    final rawHeaders = args['headers'];
+    final headers = <String, String>{};
+    if (rawHeaders is Map) {
+      rawHeaders.forEach((key, value) {
+        if (key is String && value != null) {
+          headers[key] = value.toString();
+        }
+      });
+    }
+
+    return _PluginNetworkRequest(
+      uri: uri,
+      method: method,
+      headers: headers.isEmpty ? null : headers,
+      body: args['body'] as String?,
+      timeout: rawTimeoutMs == null
+          ? PluginNetworkFetchService.defaultTimeout
+          : Duration(milliseconds: rawTimeoutMs),
+    );
+  }
+
+  Future<dynamic> _handleNetwork(
+    String action,
+    Map<String, dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) async {
     switch (action) {
       case 'fetch':
-        if (!plugin.manifest.networkEnabled) {
-          throw Exception(
-            'error.permission_denied: '
-            'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
-          );
-        }
-
-        final url = args['url'] as String?;
-        if (url == null) throw Exception('error.invalid_params: url required');
-
-        final uri = Uri.tryParse(url);
-        if (uri == null) throw Exception('error.invalid_params: invalid URL');
-
-        final requiredPermission = requiredNetworkPermissionFor(uri);
-        final granted = await _pluginRepo.getPermission(
-          plugin.pluginId,
-          requiredPermission,
-        );
-        if (granted != true) {
-          final what = requiredPermission == 'network.localhost'
-              ? 'גישה לשירותים מקומיים (localhost)'
-              : 'גישה לאינטרנט';
-          throw Exception(
-            'error.permission_denied: '
-            'לתוסף אין הרשאת $what. '
-            'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
-          );
-        }
-
-        final allowed = await PluginNetworkAccessResolver.instance
-            .isUriAllowedForPlugin(uri, plugin.manifest);
-        if (!allowed) {
-          throw Exception(
-            'error.forbidden: הכתובת אינה ברשימת ההיתר לגישת רשת של תוספים',
-          );
-        }
-
-        // method/headers/body אופציונליים. הניתוב דרך הגשר נחוץ לתוספים
-        // שקוראים ל-APIs חיצוניים (כמו דיקטה) ב-POST: fetch ישיר מה-WebView
-        // (origin file://) נחסם ב-CORS, ואילו לקוח ה-HTTP של Flutter אינו
-        // כפוף ל-CORS.
-        final method = (args['method'] as String? ?? 'GET').toUpperCase();
-        if (!RegExp(r'^[A-Z]+$').hasMatch(method)) {
-          throw Exception('error.invalid_params: invalid method');
-        }
-        final requestBody = args['body'] as String?;
-        final rawTimeoutMs = args['timeoutMs'];
-        if (rawTimeoutMs != null &&
-            (rawTimeoutMs is! int ||
-                rawTimeoutMs <= 0 ||
-                rawTimeoutMs >
-                    PluginNetworkFetchService.maxTimeout.inMilliseconds)) {
-          throw Exception(
-            'error.invalid_params: timeoutMs must be a positive integer '
-            'up to ${PluginNetworkFetchService.maxTimeout.inMilliseconds}',
-          );
-        }
-        final rawHeaders = args['headers'];
-        final headers = <String, String>{};
-        if (rawHeaders is Map) {
-          rawHeaders.forEach((key, value) {
-            if (key is String && value != null) {
-              headers[key] = value.toString();
-            }
-          });
-        }
-
+        // TODO(0.9.98): להסיר את network.fetch לאחר מעבר התוספים ל-fetchStream.
+        final request = await _prepareNetworkRequest(args);
         final result = await _fetchService.fetch(
-          uri,
-          method: method,
-          headers: headers.isEmpty ? null : headers,
-          body: requestBody,
-          timeout: rawTimeoutMs == null
-              ? PluginNetworkFetchService.defaultTimeout
-              : Duration(milliseconds: rawTimeoutMs),
+          request.uri,
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+          timeout: request.timeout,
         );
         return {'status': result.status, 'ok': result.ok, 'body': result.body};
+
+      case 'fetchStream':
+        if (args[_cancelStreamIdKey] case final String streamId) {
+          return _cancelPluginNetworkFetch(streamId);
+        }
+        return _runPluginNetworkFetchStream(args, eventSink: eventSink);
 
       case 'download':
         // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
@@ -3361,4 +3410,154 @@ class PluginBridgeAdapter {
         throw Exception('Unknown action in network: $action');
     }
   }
+
+  Future<Map<String, dynamic>> _runPluginNetworkFetchStream(
+    Map<String, dynamic> args, {
+    required PluginRpcEventSink? eventSink,
+  }) async {
+    final streamId = args[_streamIdKey];
+    if (streamId is! String || !_streamIdPattern.hasMatch(streamId)) {
+      throw Exception('error.invalid_params: invalid internal stream id');
+    }
+    if (eventSink == null) {
+      throw Exception('error.internal: network stream transport unavailable');
+    }
+    if (_pendingNetworkFetchCancellations.remove(streamId)) {
+      return {'completed': false, 'cancelled': true};
+    }
+    if (_activeNetworkFetchStreams.containsKey(streamId)) {
+      throw Exception('error.invalid_params: duplicate network stream id');
+    }
+    if (_activeNetworkFetchStreams.length >=
+        _maxConcurrentNetworkFetchStreams) {
+      throw Exception(
+        'error.rate_limited: too many active network fetch streams',
+      );
+    }
+
+    final publicArgs = Map<String, dynamic>.of(args)..remove(_streamIdKey);
+    final request = await _prepareNetworkRequest(publicArgs);
+    if (_pendingNetworkFetchCancellations.remove(streamId)) {
+      return {'completed': false, 'cancelled': true};
+    }
+
+    final abort = Completer<void>();
+    final cancellation = Completer<void>();
+    StreamIterator<String>? iterator;
+    var cancelled = false;
+    var expired = false;
+    Future<void> cancel() async {
+      cancelled = true;
+      if (!abort.isCompleted) abort.complete();
+      if (!cancellation.isCompleted) cancellation.complete();
+      await iterator?.cancel();
+    }
+
+    _activeNetworkFetchStreams[streamId] = cancel;
+    final deadline = Timer(request.timeout, () {
+      expired = true;
+      unawaited(cancel());
+    });
+    var sequence = 0;
+    try {
+      final response = await Future.any<PluginNetworkFetchStreamResponse?>([
+        _fetchService
+            .fetchStream(
+              request.uri,
+              method: request.method,
+              headers: request.headers,
+              body: request.body,
+              abortTrigger: abort.future,
+            )
+            .then<PluginNetworkFetchStreamResponse?>((value) => value),
+        cancellation.future.then<PluginNetworkFetchStreamResponse?>(
+          (_) => null,
+        ),
+      ]);
+      if (response == null) {
+        if (expired) throw TimeoutException('Network stream timed out');
+        return {'completed': false, 'cancelled': true};
+      }
+
+      await eventSink(_networkFetchStreamEvent, {
+        'streamId': streamId,
+        'chunk': {
+          'sequence': sequence++,
+          'type': 'response',
+          'status': response.status,
+          'ok': response.ok,
+          'headers': response.headers,
+        },
+      });
+
+      iterator = StreamIterator<String>(response.body);
+      while (!cancelled && await iterator.moveNext()) {
+        final body = iterator.current;
+        if (body.isEmpty) continue;
+        for (final fragment in _splitNetworkFetchChunk(body)) {
+          if (cancelled) break;
+          await eventSink(_networkFetchStreamEvent, {
+            'streamId': streamId,
+            'chunk': {
+              'sequence': sequence++,
+              'type': 'data',
+              'body': fragment,
+            },
+          });
+        }
+      }
+      if (expired) throw TimeoutException('Network stream timed out');
+      return {
+        'completed': !cancelled,
+        'cancelled': cancelled,
+        'chunks': sequence,
+      };
+    } on http.RequestAbortedException {
+      if (expired) throw TimeoutException('Network stream timed out');
+      if (cancelled) return {'completed': false, 'cancelled': true};
+      rethrow;
+    } finally {
+      deadline.cancel();
+      _activeNetworkFetchStreams.remove(streamId);
+      await iterator?.cancel();
+    }
+  }
+
+  Map<String, dynamic> _cancelPluginNetworkFetch(String streamId) {
+    if (!_streamIdPattern.hasMatch(streamId)) {
+      throw Exception('error.invalid_params: invalid internal stream id');
+    }
+    final cancel = _activeNetworkFetchStreams[streamId];
+    if (cancel == null) {
+      if (_pendingNetworkFetchCancellations.length < 16) {
+        _pendingNetworkFetchCancellations.add(streamId);
+      }
+      return {'cancelled': false};
+    }
+    unawaited(cancel());
+    return {'cancelled': true};
+  }
+
+  Iterable<String> _splitNetworkFetchChunk(String value) sync* {
+    var start = 0;
+    while (start < value.length) {
+      var end = math.min(
+        start + _maxNetworkFetchChunkCodeUnits,
+        value.length,
+      );
+      if (end < value.length &&
+          _isHighSurrogate(value.codeUnitAt(end - 1)) &&
+          _isLowSurrogate(value.codeUnitAt(end))) {
+        end--;
+      }
+      yield value.substring(start, end);
+      start = end;
+    }
+  }
+
+  bool _isHighSurrogate(int codeUnit) =>
+      codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
+
+  bool _isLowSurrogate(int codeUnit) =>
+      codeUnit >= 0xDC00 && codeUnit <= 0xDFFF;
 }

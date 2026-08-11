@@ -209,6 +209,7 @@ void main() {
           'index.html': '<html lang="he" dir="rtl"></html>',
           'app.js':
               "Otzaria.call('network.fetch', {url: 'x'});"
+              "Otzaria.call('network.fetchStream', {url: 'x'});"
               "Otzaria.call('network.download', {url: 'y'});",
         },
       );
@@ -223,7 +224,7 @@ void main() {
       );
     });
 
-    test('network.localhost מספיקה ל-network.fetch ללא network.access', () {
+    test('network.localhost מספיקה ל-fetch ול-fetchStream', () {
       final report = _runOn(
         tempDir,
         manifestOverride: _baseManifest(
@@ -236,12 +237,20 @@ void main() {
         files: {
           'index.html': '<html lang="he" dir="rtl"></html>',
           'app.js':
-              "Otzaria.call('network.fetch', {url: 'http://127.0.0.1:11434/api/tags'});",
+              "Otzaria.call('network.fetch', {url: 'http://127.0.0.1:11434/api/tags'});"
+              "Otzaria.call('network.fetchStream', {url: 'http://127.0.0.1:11434/api/tags'});",
         },
       );
       expect(
         report.warnings.any(
           (w) => w.contains('network.fetch') && w.contains('network.access'),
+        ),
+        isFalse,
+      );
+      expect(
+        report.warnings.any(
+          (w) =>
+              w.contains('network.fetchStream') && w.contains('network.access'),
         ),
         isFalse,
       );
@@ -749,6 +758,27 @@ void main() {
   });
 
   group('minAppVersion vs גרסת ה-API (שגיאה חוסמת)', () {
+    test('network.fetchStream דורש minAppVersion 0.9.97', () {
+      PluginValidationReport run(String minAppVersion) => _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['network.access'],
+          minAppVersion: minAppVersion,
+          network: const {
+            'enabled': true,
+            'allowlist': ['https://example.com'],
+          },
+        ),
+        files: const {
+          'index.html': '<!doctype html><html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('network.fetchStream', {url: 'x'});",
+        },
+      );
+
+      expect(run('0.9.96').errors, contains(contains('0.9.97')));
+      expect(run('0.9.97').errors, isEmpty);
+    });
+
     test('שגיאה כשמשתמשים ב-API חדש מ-minAppVersion שהוצהר', () {
       final report = _runOn(
         tempDir,

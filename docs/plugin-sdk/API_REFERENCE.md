@@ -100,6 +100,7 @@ if (response.success) {
 | `library.getBookAltToc` | 0.9.96 |
 | `library.getTree` | 0.9.93 |
 | `network.fetch` | 0.9.93 |
+| `network.fetchStream` | 0.9.97 |
 | `network.download` | 0.9.93 |
 | `search.fullText` | 0.9.89 |
 | `search.query` | 0.9.97 |
@@ -485,8 +486,50 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 
 > כל גישת רשת מוגבלת לרשימת ההיתר של אוצריא — ראו [⚠️ הרשאת `network.access`](#️-הרשאת-networkaccess--דרישה-מיוחדת-pr-לאוצריא).
 
+### `network.fetchStream`
+**הרשאה:** `network.access` (או `network.localhost` ליעד מקומי) · **מגרסה:** 0.9.97
+
+מבצעת בקשת HTTP בצד אוצריא ומחזירה `AsyncIterable` מיד עם קבלת כותרות
+התשובה. הפרמטרים זהים ל-`network.fetch`: `url`, `method`, `headers`, `body`
+ו-`timeoutMs`. חסם הזמן חל על הבקשה כולה, כולל קריאת הגוף; ברירת המחדל היא
+30,000 והמקסימום 120,000 מילישניות.
+
+הפריט הראשון הוא תמיד `{ type: "response", sequence, status, ok, headers }`.
+אחריו מתקבלים פריטי `{ type: "data", sequence, body }`. כל `body` הוא מקטע
+UTF-8 תקין, אך גבול המקטע אינו מבטיח סוף שורה או אובייקט JSON שלם. יציאה
+מוקדמת מ-`for await` מבטלת את בקשת ה-HTTP. יש לצרוך את האיטרטור ברציפות;
+תור של 256 מקטעים מגן מפני צרכן תקוע, ולאחריו הזרם נכשל והבקשה מבוטלת.
+
+```javascript
+const chunks = Otzaria.call('network.fetchStream', {
+  url: 'http://127.0.0.1:5000/search',
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: 'בראשית' }),
+  timeoutMs: 120000
+});
+
+let pending = '';
+for await (const chunk of chunks) {
+  if (chunk.type === 'response') {
+    if (!chunk.ok) throw new Error(`HTTP ${chunk.status}`);
+    continue;
+  }
+  pending += chunk.body;
+  const lines = pending.split('\n');
+  pending = lines.pop() ?? '';
+  for (const line of lines) {
+    if (line.trim()) consumeResult(JSON.parse(line));
+  }
+}
+if (pending.trim()) consumeResult(JSON.parse(pending));
+```
+
 ### `network.fetch`
 **הרשאה:** `network.access` (או `network.localhost` ליעד מקומי — ראו [שירותים מקומיים](#שירותים-מקומיים-localhost--הרשאת-networklocalhost))
+
+> **מיושן — מוסר ב-0.9.98:** השתמשו ב-`network.fetchStream`. ה-API הישן
+> ממתין לכל גוף התשובה ומחזיר אותו כמחרוזת אחת.
 
 שליפת תוכן מ-URL מותר (ללא מעקב אחר redirects). מחזירה את גוף התשובה כטקסט.
 

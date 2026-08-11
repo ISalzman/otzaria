@@ -94,6 +94,7 @@ class PluginBridgeHandler {
   static bool hasOwnTimeout(String method) =>
       method == 'search.query' ||
       method == 'network.fetch' ||
+      method == 'network.fetchStream' ||
       method == 'network.download' ||
       method == 'fs.extractZip';
 
@@ -134,6 +135,9 @@ class PluginBridgeHandler {
     final isSearchCancellation =
         request.method == 'search.query' &&
         PluginBridgeAdapter.isSearchCancellationPayload(request.payload);
+    final isNetworkFetchCancellation =
+        request.method == 'network.fetchStream' &&
+        PluginBridgeAdapter.isNetworkFetchCancellationPayload(request.payload);
     bool? grantedEarly;
     if (isContentRead && declaresPermission && requiredPermission != null) {
       grantedEarly =
@@ -142,7 +146,9 @@ class PluginBridgeHandler {
     }
 
     final exempt =
-        (isContentRead && (grantedEarly ?? false)) || isSearchCancellation;
+        (isContentRead && (grantedEarly ?? false)) ||
+        isSearchCancellation ||
+        isNetworkFetchCancellation;
     if (!exempt && !_rateLimiter.consume()) {
       return _errorResp("error.rate_limited", "Rate limit exceeded");
     }

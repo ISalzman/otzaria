@@ -268,6 +268,31 @@ export interface SearchOptionsCatalog {
   defaultLimit: number;
 }
 
+export interface NetworkFetchParams {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  /** ברירת מחדל 30,000; מקסימום 120,000 מילישניות. */
+  timeoutMs?: number;
+}
+
+export type NetworkFetchStreamChunk =
+  | {
+      sequence: number;
+      type: 'response';
+      status: number;
+      ok: boolean;
+      /** שמות הכותרות מוחזרים באותיות קטנות. */
+      headers: Record<string, string>;
+    }
+  | {
+      sequence: number;
+      type: 'data';
+      /** מקטע UTF-8; גבול המקטע אינו בהכרח גבול שורה. */
+      body: string;
+    };
+
 export interface TocEntry {
   text: string;
   index: number;
@@ -1063,6 +1088,7 @@ export type OtzariaMethod =
   | 'database.query'
   | 'database.batchQuery'
   | 'network.fetch'
+  | 'network.fetchStream'
   | 'network.download'
   | 'shortcut.create'
   | 'plugin.openSelf'
@@ -1090,6 +1116,12 @@ export interface OtzariaGlobal {
     method: 'search.query',
     payload: SearchQueryParams
   ): AsyncIterable<SearchQueryChunk>;
+
+  /** בקשת HTTP שמזרימה כותרות ומקטעי גוף עם הגעתם. */
+  call(
+    method: 'network.fetchStream',
+    payload: NetworkFetchParams
+  ): AsyncIterable<NetworkFetchStreamChunk>;
 
   /**
    * Call a Host API method.
