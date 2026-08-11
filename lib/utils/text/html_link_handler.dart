@@ -343,16 +343,16 @@ class HtmlLinkHandler {
         }
       }
 
-      // הרמה שלא נמצאה בעץ עשויה להופיע בגוף הספר בלי תגית כותרת.
-      final fromContent = await _findHeaderInContent(
-        book,
-        hierarchical.missingSegment!,
-      );
-      if (fromContent != null) {
-        return HeaderPathResult(
-          index: fromContent,
-          reachedHeader: hierarchical.missingSegment,
-        );
+      // חיפוש בגוף הספר אינו יכול לשמור על ענף ההורה, ולכן הוא בטוח רק
+      // כשבקישור יש כותרת אחת.
+      if (segments.length == 1) {
+        final fromContent = await _findHeaderInContent(book, segments.single);
+        if (fromContent != null) {
+          return HeaderPathResult(
+            index: fromContent,
+            reachedHeader: segments.single,
+          );
+        }
       }
 
       return hierarchical;

@@ -1068,7 +1068,7 @@ String formatTextWithParentheses(String text) {
     // תגי HTML עוברים כמכלול - אחרת סוגריים בתוך attribute (למשל
     // style="color:rgb(0,0,0)") נעטפים ב-<small> וההגדרה נהרסת.
     if (text[i] == '<') {
-      final tagEnd = text.indexOf('>', i);
+      final tagEnd = _htmlTagEnd(text, i);
       if (tagEnd != -1) {
         result.write(text.substring(i, tagEnd + 1));
         i = tagEnd + 1;
@@ -1085,7 +1085,7 @@ String formatTextWithParentheses(String text) {
       // בודקים אם יש סוגר פותח נוסף בפנים
       while (j < text.length && openCount > 0) {
         if (text[j] == '<') {
-          final tagEnd = text.indexOf('>', j);
+          final tagEnd = _htmlTagEnd(text, j);
           if (tagEnd != -1) {
             j = tagEnd + 1;
             continue;
@@ -1131,6 +1131,36 @@ String formatTextWithParentheses(String text) {
   }
 
   return result.toString();
+}
+
+int _htmlTagEnd(String text, int start) {
+  if (text.startsWith('<!--', start)) {
+    final commentEnd = text.indexOf('-->', start + 4);
+    return commentEnd == -1 ? -1 : commentEnd + 2;
+  }
+
+  if (start + 1 >= text.length) return -1;
+  final first = text[start + 1];
+  final firstCode = first.codeUnitAt(0);
+  final startsWithLetter =
+      (firstCode >= 65 && firstCode <= 90) ||
+      (firstCode >= 97 && firstCode <= 122);
+  if (!startsWithLetter && first != '!' && first != '/' && first != '?') {
+    return -1;
+  }
+
+  String? quote;
+  for (var i = start + 1; i < text.length; i++) {
+    final char = text[i];
+    if (quote != null) {
+      if (char == quote) quote = null;
+    } else if (char == '"' || char == "'") {
+      quote = char;
+    } else if (char == '>') {
+      return i;
+    }
+  }
+  return -1;
 }
 
 String replaceHolyNames(String s) {

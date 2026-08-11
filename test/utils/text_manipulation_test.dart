@@ -992,6 +992,26 @@ Future<void> main() async {
       expect(formatTextWithParentheses(input), input);
     });
 
+    test('סוגריים בתג עם סוגר זוויתי במאפיין אינם נעטפים', () {
+      const input = '<span title="> (א)">טקסט</span>';
+      expect(formatTextWithParentheses(input), input);
+    });
+
+    test('סוגריים אחרי סימני השוואה אינם נחשבים תג HTML', () {
+      expect(
+        formatTextWithParentheses('א < (ב) > ג'),
+        'א < <small>(ב)</small> > ג',
+      );
+    });
+
+    test('סוגריים בתגובת HTML אינם נעטפים', () {
+      const input = '<!-- (הערה) --> אמר (רש"י)';
+      expect(
+        formatTextWithParentheses(input),
+        '<!-- (הערה) --> אמר <small>(רש"י)</small>',
+      );
+    });
+
     test('סוגריים בטקסט נעטפים גם כשלתג שעוטף אותם יש סוגריים ב-style', () {
       expect(
         formatTextWithParentheses(
