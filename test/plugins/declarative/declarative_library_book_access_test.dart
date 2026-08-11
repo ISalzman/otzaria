@@ -63,6 +63,15 @@ void main() {
     );
   });
 
+  test('id לא חוקי אינו מושמט לטובת התאמה לפי כותרת', () async {
+    final access = _access(library: [TextBook(id: 1, title: 'ספר')]);
+
+    expect(
+      await access.resolveUnique({'id': 'invalid', 'bookId': 'ספר'}),
+      isNull,
+    );
+  });
+
   test('ספר יחיד נפתח עם המיקום המבוקש', () async {
     final opened = <Book>[];
     final positions = <(int, String)>[];

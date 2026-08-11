@@ -67,6 +67,7 @@ class DeclarativeLibraryBookAccess
     const allowed = {'id', 'bookId', 'type', 'source', 'external'};
     if (identity.keys.any((key) => !allowed.contains(key))) return null;
     final id = PluginBookIdentity.parseId(identity['id']);
+    if (identity.containsKey('id') && id == null) return null;
     final bookId = identity['bookId'];
     final type = identity['type'];
     final source = identity['source'];
