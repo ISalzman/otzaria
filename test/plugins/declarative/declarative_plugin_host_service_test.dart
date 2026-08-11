@@ -53,6 +53,7 @@ void main() {
     );
     expect(fixture.toolbar.getAll(), hasLength(2));
 
+    final oldAction = fixture.toolbar.getAll().first.$2.hostAction!;
     fixture.host.removePlugin(fixture.plugin.pluginId);
 
     expect(fixture.toolbar.getAll(), isEmpty);
@@ -60,6 +61,11 @@ void main() {
       fixture.host.programRepository.getPluginOutputs(fixture.plugin.pluginId),
       isEmpty,
     );
+    await expectLater(
+      fixture.host.executeAction(fixture.plugin.pluginId, oldAction),
+      _throwsProgramError('declarative.stale_action'),
+    );
+    expect(fixture.access.opened, isEmpty);
   });
 
   test('יציאה ממסך ספר מוחקת פלט ופקדים', () async {

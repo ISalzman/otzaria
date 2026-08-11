@@ -86,7 +86,8 @@ class DeclarativeToolbarBindingService {
         );
         if (outputs == null ||
             !_isVisible(_readPath(outputs, template.visibleOutput))) {
-          continue;
+          _replace(registration, const []);
+          return;
         }
         items.add(
           _buildItem(

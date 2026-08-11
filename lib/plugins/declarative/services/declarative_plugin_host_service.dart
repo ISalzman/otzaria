@@ -173,7 +173,8 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
       action: action,
       plugin: plugin,
       grantedPermissions: permissions,
-      currentContextSignature: _readerContextSignature ?? '',
+      currentContextSignature:
+          programRepository.getContextSignature(pluginId) ?? '',
     );
   }
 

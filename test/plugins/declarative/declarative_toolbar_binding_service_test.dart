@@ -182,6 +182,42 @@ void main() {
 
     expect(toolbar.getAll(), isEmpty);
   });
+
+  test('פלט חלקי אינו מפרסם פקד יחיד', () async {
+    final runner = _RunQueue();
+    final programs = DeclarativeProgramRepository(runProgram: runner.call);
+    final toolbar = PluginToolbarRegistry.forTesting();
+    final binding = DeclarativeToolbarBindingService(
+      programRepository: programs,
+      toolbarRegistry: toolbar,
+    );
+    addTearDown(binding.dispose);
+    final plugin = _plugin();
+    programs.syncPlugin(
+      plugin: plugin,
+      programs: [_program()],
+      grantedPermissions: const {'reader.open'},
+    );
+    binding.syncPlugin(
+      plugin: plugin,
+      templates: _compiledTemplates(),
+      grantedPermissions: const {'reader.open'},
+    );
+    final snapshots = <int>[];
+    toolbar.addListener(() => snapshots.add(toolbar.getAll().length));
+
+    final run = programs.runTrigger(
+      trigger: 'reader.activeBookChanged',
+      context: const {},
+      contextSignature: 'book-1',
+    );
+    final outputs = _outputs()..['editions'] = const [];
+    runner.completeNext(outputs);
+    await run;
+
+    expect(toolbar.getAll(), isEmpty);
+    expect(snapshots, isNot(contains(1)));
+  });
 }
 
 class _RunQueue {
