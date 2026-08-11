@@ -383,6 +383,14 @@ class SearchingTab extends OpenedTab {
       searchScopeFacets: initialScopeFacets,
       wordMatchMode: initialWordMatchMode,
       wordMatchCount: initialWordMatchCount,
+      pluginSearchSelections: switch (json['pluginSearchSelections']) {
+        final Map values => {
+          for (final entry in values.entries)
+            if (entry.key is String && entry.value is bool)
+              entry.key as String: entry.value as bool,
+        },
+        _ => defaultConfig.pluginSearchSelections,
+      },
       regexEnabled: json['regexEnabled'] == true,
       caseSensitive: json['caseSensitive'] == true,
       multiline: json['multiline'] == true,
@@ -558,6 +566,7 @@ class SearchingTab extends OpenedTab {
       'searchScopeFacets': config.searchScopeFacets,
       'wordMatchMode': config.wordMatchMode.index,
       'wordMatchCount': config.wordMatchCount,
+      'pluginSearchSelections': config.pluginSearchSelections,
       'regexEnabled': config.regexEnabled,
       'caseSensitive': config.caseSensitive,
       'multiline': config.multiline,
