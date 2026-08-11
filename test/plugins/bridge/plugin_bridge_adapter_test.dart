@@ -421,6 +421,29 @@ Future<void> main() async {
         ),
       );
     });
+
+    test('rejects incomplete location coordinates', () async {
+      await expectLater(
+        adapter.execute('calendar', 'getDailyTimes', {'lat': 31.7784}),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('returns the calendar cities for plugins', () async {
+      final cities =
+          await adapter.execute('calendar', 'getCities', {}) as List<dynamic>;
+
+      expect(
+        cities,
+        contains(
+          allOf(
+            containsPair('name', 'ירושלים'),
+            containsPair('timezone', 'Asia/Jerusalem'),
+            containsPair('inIsrael', true),
+          ),
+        ),
+      );
+    });
   });
 
   group('PluginBridgeAdapter runtime snapshots', () {

@@ -301,6 +301,35 @@ export interface CalendarEvent {
   description: string;
 }
 
+/** Arguments for `calendar.getDailyTimes` and `calendar.getHalachicTimes`. */
+export interface CalendarTimesArgs {
+  /** ISO 8601 date. Defaults to the calendar's selected date. */
+  date?: string;
+  /** A city returned by `calendar.getCities`. Mutually exclusive with coordinates. */
+  city?: string;
+  /** Latitude. Must be supplied together with `lng`. */
+  lat?: number;
+  /** Longitude. Must be supplied together with `lat`. */
+  lng?: number;
+  /** Elevation in metres. Defaults to 0. */
+  elevation?: number;
+  /** IANA time-zone identifier. */
+  timezone?: string;
+  /** Whether to use the Israel holiday calendar. */
+  inIsrael?: boolean;
+}
+
+/** A city supported by the built-in calendar. */
+export interface CityInfo {
+  name: string;
+  country: string;
+  lat: number;
+  lng: number;
+  elevation: number;
+  timezone: string;
+  inIsrael: boolean;
+}
+
 export interface ReaderState {
   currentBook: string | null;
   currentBookId: string | null;
@@ -778,6 +807,8 @@ export interface OtzariaEventMap {
   };
   /** Selected calendar date changed. */
   'calendar.date_changed': { date: string };
+  /** Selected calendar city changed. */
+  'calendar.city_changed': { city: string };
   /** Active workspace changed. */
   'workspace.changed': { workspaceId: string };
   /** A whitelisted app setting changed. */
@@ -991,6 +1022,7 @@ export type OtzariaMethod =
   | 'calendar.getSelectedDate'
   | 'calendar.getDailyTimes'
   | 'calendar.getHalachicTimes'
+  | 'calendar.getCities'
   | 'calendar.getJewishDate'
   | 'calendar.getEvents'
   | 'publishedData.upsert'

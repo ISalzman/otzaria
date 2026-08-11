@@ -300,6 +300,10 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'אירועי שינוי תאריך',
     description: 'קבלת עדכון בכל פעם שמשתמש מחליף תאריך בלוח השנה',
   ),
+  'events.subscribe:calendar.city_changed': PluginPermissionInfo(
+    label: 'אירועי שינוי עיר',
+    description: 'קבלת עדכון בכל פעם שמשתמש מחליף את העיר הנבחרת בלוח השנה',
+  ),
   'events.subscribe:workspace.changed': PluginPermissionInfo(
     label: 'אירועי סביבת עבודה',
     description: 'קבלת עדכון בכל פעם שמשתמש מחליף סביבת עבודה',

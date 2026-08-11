@@ -97,6 +97,22 @@ void main() {
     });
   });
 
+  group('calculateDailyTimesForCoordinates', () {
+    test('מחשב זמנים לקואורדינטות בלי זמני קידוש לבנה תלויי-עיר', () {
+      final times = calculateDailyTimesForCoordinates(
+        summerDate,
+        latitude: 43.6532,
+        longitude: -79.3832,
+        timeZoneId: 'America/Toronto',
+      );
+
+      expect(times['sunrise'], isNotNull);
+      expect(times['sunset'], isNotNull);
+      expect(times.keys, isNot(contains('tchilasKidushLevana3')));
+      expect(times.keys, isNot(contains('sofKidushLevana15')));
+    });
+  });
+
   group('calculateDailyTimes — פורמט וחוקיות', () {
     test('כל הזמנים בפורמט HH:MM עם סימן שניות (למעט קידוש לבנה)', () {
       final times = calculateDailyTimes(summerDate, city);

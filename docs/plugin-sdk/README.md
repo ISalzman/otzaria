@@ -224,6 +224,7 @@ Otzaria.off('calendar.date_changed', handler); // חייב להיות אותו r
 | `navigation.changed` | 🔁 חוזר | `{ screen: string }` |
 | `reader.current_book_changed` | 🔁 חוזר | `{ bookId: string, id: number?, type: string?, source: string?, index: number }` |
 | `calendar.date_changed` | 🔁 חוזר | `{ date: string }` |
+| `calendar.city_changed` | 🔁 חוזר | `{ city: string }` |
 | `workspace.changed` | 🔁 חוזר | `{ workspaceId: string }` |
 | `settings.changed` | 🔁 חוזר | `{ key: string, newValue: * }` |
 | `plugin.permissions_changed` | 🔁 חוזר | `{ permissions: string[] }` |
@@ -377,7 +378,9 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | Method | הרשאה | החזרה |
 |--------|-------|-------|
 | `calendar.getSelectedDate` | `calendar.read` | `string` (ISO 8601) |
-| `calendar.getDailyTimes`   | `calendar.read` | `Record<string, string>` |
+| `calendar.getDailyTimes`   | `calendar.read` | `Record<string, string>` — מ-0.9.97 מקבל `{ date?, city?, lat?, lng?, elevation?, timezone?, inIsrael? }` |
+| `calendar.getHalachicTimes`| `calendar.read` | `Record<string, string>` — אותם פרמטרים כמו `calendar.getDailyTimes` (מ-0.9.97) |
+| `calendar.getCities`       | `calendar.read` | `CityInfo[]` (מ-0.9.97) |
 | `calendar.getJewishDate`   | `calendar.read` | `JewishDate` |
 | `calendar.getEvents`       | `calendar.read` | `CalendarEvent[]` |
 
