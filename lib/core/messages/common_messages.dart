@@ -43,6 +43,19 @@ abstract class CommonMessages {
   static String openedBookAtHeader(String bookTitle, String header) =>
       'פתח ספר: $bookTitle - $header';
 
+  static String openedBookAtPartialHeader(
+    String bookTitle,
+    String reachedHeader,
+    String missingHeader,
+  ) =>
+      'פתח ספר: $bookTitle - $reachedHeader. '
+      'הכותרת "$missingHeader" לא נמצאה';
+
+  static String navigatedToPartialHeader(
+    String reachedHeader,
+    String missingHeader,
+  ) => 'נווט ל: $reachedHeader. הכותרת "$missingHeader" לא נמצאה';
+
   static String cannotOpenBook(String bookTitle) =>
       'לא ניתן לפתוח את הספר: $bookTitle';
 
