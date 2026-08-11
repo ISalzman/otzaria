@@ -138,6 +138,7 @@ const Set<String> _knownApiMethods = {
   'database.query',
   'database.batchQuery',
   'network.fetch',
+  'network.fetchStream',
   'network.download',
   'shortcut.create',
 };
@@ -265,6 +266,7 @@ const Map<String, String> _methodRequiredPermission = {
   'database.query': 'database.read',
   'database.batchQuery': 'database.read',
   'network.fetch': 'network.access',
+  'network.fetchStream': 'network.access',
   'network.download': 'network.access',
   'shortcut.create': 'ui.create_shortcut',
 };
@@ -359,6 +361,7 @@ const Map<String, String> _methodMinVersion = {
   // 0.9.93
   'library.getTree': '0.9.93',
   'network.fetch': '0.9.93',
+  'network.fetchStream': '0.9.97',
   'network.download': '0.9.93',
   'fs.deleteFile': '0.9.93',
   'fs.extractZip': '0.9.93',
@@ -477,7 +480,7 @@ class PluginExtendedValidator {
       final required = _methodRequiredPermission[method];
       if (required == null) continue;
       if (declaredPermissions.contains(required)) continue;
-      // קריאות רשת (network.fetch/download) מסתפקות גם ב-network.localhost
+      // קריאות רשת מסתפקות גם ב-network.localhost
       // (גישה לשירות מקומי), לא רק ב-network.access.
       if (required == 'network.access' &&
           declaredPermissions.contains('network.localhost')) {

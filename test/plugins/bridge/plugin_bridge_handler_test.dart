@@ -135,6 +135,16 @@ List<dynamic> _cancelSearchRequest({bool includeExtraKey = false}) => [
   },
 ];
 
+List<dynamic> _cancelNetworkFetchRequest({bool includeExtraKey = false}) => [
+  {
+    'method': 'network.fetchStream',
+    'payload': {
+      '__cancelStreamId': 'network_test_1',
+      if (includeExtraKey) 'url': 'https://example.com',
+    },
+  },
+];
+
 void main() {
   group('PluginBridgeHandler.isRateLimitExempt', () {
     test('library.getBookContent מוחרג ממגביל הקצב', () {
@@ -166,6 +176,7 @@ void main() {
       // פעולות I/O ארוכות שנחתכו על קבצים גדולים ע"י ה-30 שניות.
       expect(PluginBridgeHandler.hasOwnTimeout('search.query'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.fetch'), isTrue);
+      expect(PluginBridgeHandler.hasOwnTimeout('network.fetchStream'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.download'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('fs.extractZip'), isTrue);
     });
@@ -450,6 +461,33 @@ void main() {
 
       expect(resp['error']['code'], 'error.rate_limited');
       expect(adapter.executeCalls, 0);
+      expect(limiter.consumeCalls, 1);
+    });
+
+    test('רק payload ביטול מדויק של fetchStream עוקף throttle', () async {
+      final adapter = _FakeAdapter(result: const {'cancelled': true});
+      final limiter = _BlockingRateLimiter();
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: null,
+        adapter: adapter,
+        rateLimiter: limiter,
+      );
+
+      final cancelled =
+          await handler.handleRpcForTesting(_cancelNetworkFetchRequest())
+              as Map<String, dynamic>;
+      expect(cancelled['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(limiter.consumeCalls, 0);
+
+      final fakeCancellation =
+          await handler.handleRpcForTesting(
+                _cancelNetworkFetchRequest(includeExtraKey: true),
+              )
+              as Map<String, dynamic>;
+      expect(fakeCancellation['error']['code'], 'error.rate_limited');
+      expect(adapter.executeCalls, 1);
       expect(limiter.consumeCalls, 1);
     });
 
