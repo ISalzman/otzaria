@@ -233,29 +233,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                         // כפתורי פעולה (היסטוריה וכו') - תמיד מוצגים
                         SizedBox(
                           height: 40,
-                          child: Stack(
-                            children: [
-                              Center(
-                                child: _buildActionButtons(context),
-                              ),
-                              if (useReaderStyle)
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Align(
-                                    alignment: AlignmentDirectional.bottomStart,
-                                    child: Container(
-                                      width: 74,
-                                      height: 1,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outlineVariant
-                                          .withValues(alpha: 0.6),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          child: Center(
+                            child: _buildActionButtons(context),
                           ),
                         ),
 
