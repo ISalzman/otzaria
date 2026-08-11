@@ -98,6 +98,20 @@ class DeclarativeProgramExecutor {
           commandType: command.type,
         );
         return items.firstOrNull;
+      case 'data.choose':
+        final selected =
+            _evaluateCondition(
+              command.args['condition'],
+              context: context,
+              results: results,
+            )
+            ? command.args['whenTrue']
+            : command.args['whenFalse'];
+        return _resolveValue(
+          selected,
+          context: context,
+          results: results,
+        );
       case 'data.map':
         final items = _resolveItems(
           command.args['items'],

@@ -544,6 +544,7 @@ class PluginExtendedValidator {
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
   static const String _startupContributionsMinVersion = '0.9.96';
   static const String _declarativeProgramsMinVersion = '0.9.96';
+  static const String _dataChooseMinVersion = '0.9.97';
   static const String _searchSubmitRoutingMinVersion = '0.9.97';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
@@ -782,6 +783,29 @@ class PluginExtendedValidator {
         }
       } on PluginVersionFormatException {
         // minAppVersion נבדק ב-PluginManifestValidator.
+      }
+      final usesDataChoose = startup.programs.any((program) {
+        final commands = program['commands'];
+        return commands is List &&
+            commands.whereType<Map>().any(
+              (command) => command['type'] == 'data.choose',
+            );
+      });
+      if (usesDataChoose) {
+        try {
+          if (PluginVersionUtils.compareCoreVersions(
+                _dataChooseMinVersion,
+                manifest.minAppVersion,
+              ) >
+              0) {
+            errors.add(
+              'data.choose נתמך החל מגרסה $_dataChooseMinVersion, אך '
+              'minAppVersion שהוצהר הוא ${manifest.minAppVersion}',
+            );
+          }
+        } on PluginVersionFormatException {
+          // minAppVersion נבדק ב-PluginManifestValidator.
+        }
       }
       final sourceIds = {
         for (final source in manifest.databaseSources)

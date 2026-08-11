@@ -54,6 +54,13 @@ class DeclarativeCommandRegistry {
       requiredArgs: {'items'},
       outputKind: DeclarativeValueKind.any,
     ),
+    'data.choose': DeclarativeCommandDefinition(
+      type: 'data.choose',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: null,
+      requiredArgs: {'condition', 'whenTrue', 'whenFalse'},
+      outputKind: DeclarativeValueKind.any,
+    ),
     'data.map': DeclarativeCommandDefinition(
       type: 'data.map',
       phase: DeclarativeCommandPhase.computation,

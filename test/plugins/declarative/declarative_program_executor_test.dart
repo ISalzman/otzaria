@@ -120,6 +120,27 @@ void main() {
     expect(result.outputs, isEmpty);
     expect(resolver.identities, isEmpty);
   });
+
+  test('data.choose מחזיר רק את הענף המתאים להקשר', () async {
+    final program = _compile(sourceId, _choiceProgram());
+    final executor = DeclarativeProgramExecutor();
+
+    final textResult = await executor.execute(
+      program: program,
+      plugin: plugin,
+      grantedPermissions: const {},
+      context: _readerContext(bookId: 7, type: 'text'),
+    );
+    final pdfResult = await executor.execute(
+      program: program,
+      plugin: plugin,
+      grantedPermissions: const {},
+      context: _readerContext(bookId: 7, type: 'pdf'),
+    );
+
+    expect(textResult.outputs['selected'], ['text-edition']);
+    expect(pdfResult.outputs['selected'], ['pdf-edition']);
+  });
 }
 
 class _TestBookResolver implements DeclarativeBookResolver {
@@ -244,6 +265,34 @@ Map<String, dynamic> _program(String sourceId) => {
   'outputs': {
     'editions': {r'$result': 'menuItems'},
     'defaultEdition': {r'$result': 'defaultEdition'},
+  },
+};
+
+Map<String, dynamic> _choiceProgram() => {
+  'id': 'choose-editions',
+  'version': 1,
+  'triggers': ['reader.activeBookChanged'],
+  'commands': [
+    {
+      'id': 'selected',
+      'type': 'data.choose',
+      'args': {
+        'condition': {
+          'op': 'equals',
+          'left': {r'$context': 'reader.book.type'},
+          'right': {r'$literal': 'text'},
+        },
+        'whenTrue': {
+          r'$literal': ['text-edition'],
+        },
+        'whenFalse': {
+          r'$literal': ['pdf-edition'],
+        },
+      },
+    },
+  ],
+  'outputs': {
+    'selected': {r'$result': 'selected'},
   },
 };
 

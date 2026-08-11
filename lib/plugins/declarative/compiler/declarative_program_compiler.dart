@@ -202,6 +202,27 @@ class DeclarativeProgramCompiler {
           allowRow: false,
           expectedKind: DeclarativeValueKind.list,
         );
+      case 'data.choose':
+        _validateCondition(
+          args['condition'],
+          previousCommands,
+          budget,
+          depth: 0,
+        );
+        _validateValue(
+          args['whenTrue'],
+          previousCommands,
+          budget,
+          depth: 0,
+          allowRow: false,
+        );
+        _validateValue(
+          args['whenFalse'],
+          previousCommands,
+          budget,
+          depth: 0,
+          allowRow: false,
+        );
       case 'data.map':
         _validateValue(
           args['items'],

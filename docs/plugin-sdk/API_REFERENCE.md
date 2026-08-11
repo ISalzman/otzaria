@@ -2355,6 +2355,7 @@ async function scheduleReminder(title, body, dateTime) {
 |---|---|---|
 | `database.select` | `database.read` | `{rows, columns, meta}`; בתכנית נדרש `rowFormat: "object"` |
 | `data.first` | — | האיבר הראשון ברשימה, או `null` |
+| `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
 
