@@ -155,6 +155,71 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  OtzariaSearchDisplayBar
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// סרגל בעיצוב [OtzariaSearchField] המציג תוכן קבוע, ולחיצה עליו — בכל
+/// שטחו — מפעילה את [onTap].
+///
+/// [child] — התוכן המוצג (טקסט / תצוגת מילות חיפוש).
+/// [icon] — האייקון בראש הסרגל, ומרמז על הפעולה שהלחיצה מבצעת.
+/// [slim] = null: יורש אוטומטית מ-[SettingsBloc.compactMenuMode].
+class OtzariaSearchDisplayBar extends StatelessWidget {
+  final Widget child;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final bool? slim;
+
+  const OtzariaSearchDisplayBar({
+    super.key,
+    required this.child,
+    this.icon = FluentIcons.search_24_regular,
+    this.onTap,
+    this.tooltip,
+    this.slim,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isSlim =
+        slim ?? context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+
+    Widget bar = Container(
+      height: isSlim ? _ST.heightSlim : _ST.height,
+      padding: const EdgeInsets.symmetric(horizontal: AppTokens.spaceSM),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: isSlim ? 18 : 20, color: cs.onSurfaceVariant),
+          const SizedBox(width: AppTokens.spaceSM),
+          Flexible(child: child),
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      bar = InkWell(
+        onTap: onTap,
+        borderRadius: AppTokens.borderRadiusAll,
+        child: bar,
+      );
+    }
+    if (tooltip != null) {
+      bar = Tooltip(message: tooltip!, child: bar);
+    }
+
+    return Material(
+      color: cs.onSurface.withValues(alpha: _ST.fillAlphaUnfocused),
+      borderRadius: AppTokens.borderRadiusAll,
+      clipBehavior: Clip.antiAlias,
+      child: bar,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  OtzariaSearchField
 // ─────────────────────────────────────────────────────────────────────────────
 
