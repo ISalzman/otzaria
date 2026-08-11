@@ -10,7 +10,12 @@ typedef DeclarativeBookListLoader = Future<List<Book>> Function();
 typedef DeclarativeExternalBookListLoader =
     Future<List<Book>> Function(String provider, Set<Object> externalIds);
 typedef DeclarativeBookOpen =
-    void Function(Book book, int index, String searchQuery);
+    void Function(
+      Book book,
+      int index,
+      String searchQuery, {
+      required bool navigateToPositionIfReused,
+    });
 
 class DeclarativeLibraryBookAccess
     implements DeclarativeBookResolver, DeclarativeBookOpener {
@@ -34,13 +39,15 @@ class DeclarativeLibraryBookAccess
         'otzar' => DataRepository.instance.otzarBooks,
         _ => Future.value(const <Book>[]),
       },
-      (book, index, searchQuery) => coordinator.openBook(
-        book,
-        index,
-        searchQuery,
-        ignoreHistory: true,
-        requiresStableLayout: book is PdfBook,
-      ),
+      (book, index, searchQuery, {required navigateToPositionIfReused}) =>
+          coordinator.openBook(
+            book,
+            index,
+            searchQuery,
+            ignoreHistory: true,
+            requiresStableLayout: book is PdfBook,
+            navigateToPositionIfReused: navigateToPositionIfReused,
+          ),
     );
   }
 
@@ -48,7 +55,7 @@ class DeclarativeLibraryBookAccess
   Future<List<Map<String, dynamic>?>> resolveUniqueBatch(
     List<Map<String, dynamic>> identities,
   ) async {
-    final books = await _findUniqueBatch(identities);
+    final books = await findUniqueBooks(identities);
     return [
       for (final book in books)
         if (book == null) null else PluginBookIdentity.toJson(book),
@@ -58,7 +65,7 @@ class DeclarativeLibraryBookAccess
   Future<Map<String, dynamic>?> resolveUnique(
     Map<String, dynamic> identity,
   ) async {
-    final book = (await _findUniqueBatch([identity])).single;
+    final book = (await findUniqueBooks([identity])).single;
     return book == null ? null : PluginBookIdentity.toJson(book);
   }
 
@@ -67,14 +74,21 @@ class DeclarativeLibraryBookAccess
     Map<String, dynamic> identity, {
     required int index,
     required String searchQuery,
+    bool navigateToPositionIfReused = false,
   }) async {
-    final book = (await _findUniqueBatch([identity])).single;
+    final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
-    _openBook(book, index, searchQuery);
+    _openBook(
+      book,
+      index,
+      searchQuery,
+      navigateToPositionIfReused: navigateToPositionIfReused,
+    );
     return true;
   }
 
-  Future<List<Book?>> _findUniqueBatch(
+  /// פותר אצווה של זהויות לספרים בלי לחשוף נתיבים או לבצע פתיחה.
+  Future<List<Book?>> findUniqueBooks(
     List<Map<String, dynamic>> identities,
   ) async {
     final parsed = [

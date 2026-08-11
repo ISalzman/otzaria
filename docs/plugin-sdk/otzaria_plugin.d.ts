@@ -150,9 +150,14 @@ export interface PermissionSnapshot {
 }
 
 export interface BookMeta {
+  id?: number | null;
   bookId: string;
   title: string;
+  type?: 'text' | 'pdf' | 'docx' | 'epub' | 'external' | null;
+  source?: 'library' | 'user' | 'external' | null;
   topics?: string[];
+  categoryPath?: string | null;
+  external?: { provider: 'hebrewbooks' | 'otzar'; id: number | string };
 }
 
 export interface SearchResult {
@@ -167,6 +172,7 @@ export interface BookIdentity {
   bookId?: string;
   type?: 'text' | 'pdf' | 'docx' | 'epub' | 'external' | null;
   source?: 'library' | 'user' | 'external' | null;
+  external?: { provider: 'hebrewbooks' | 'otzar'; id: number | string };
 }
 
 export type SearchMode = 'exact' | 'advanced' | 'fuzzy';
@@ -218,12 +224,18 @@ export interface SearchQueryParams {
 
 export interface SearchQueryHit extends BookIdentity {
   book: string;
+  categoryPath?: string | null;
   reference: string;
   text: string;
   index: number;
   mergedCount: number;
   merged?: Array<
-    BookIdentity & { book: string; reference: string; index: number }
+    BookIdentity & {
+      book: string;
+      categoryPath?: string | null;
+      reference: string;
+      index: number;
+    }
   >;
 }
 
@@ -836,6 +848,8 @@ export interface OtzariaEventMap {
   };
   /** The plugin page was opened via `plugin.openSelf`. Carries the param passed to the call. */
   'plugin.page_opened': { param: unknown };
+  /** A checked static search row routed submission to its owning plugin. */
+  'search.requested': { itemId: string; request: SearchQueryParams };
   /** Standard context-menu click event. Sent only to the owning plugin. */
   'contextMenu.itemClicked': ContextMenuItemClickedEvent;
   /** Standard color-row click event. Sent only to the owning plugin. */
@@ -987,6 +1001,7 @@ export type OtzariaMethod =
   | 'app.openUrl'
   | 'library.findBooks'
   | 'library.getBookMetadata'
+  | 'library.resolveBooks'
   | 'library.listRecentBooks'
   | 'library.getBookContent'
   | 'library.getBookToc'

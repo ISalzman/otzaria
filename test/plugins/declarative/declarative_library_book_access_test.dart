@@ -76,7 +76,7 @@ void main() {
           ),
         ];
       },
-      (_, _, _) {},
+      (_, _, _, {required navigateToPositionIfReused}) {},
     );
 
     final resolved = await access.resolveUniqueBatch([
@@ -145,22 +145,26 @@ void main() {
   test('ספר יחיד נפתח עם המיקום המבוקש', () async {
     final opened = <Book>[];
     final positions = <(int, String)>[];
+    final navigationFlags = <bool>[];
     final book = TextBook(id: 7, title: 'ספר');
     final access = _access(
       library: [book],
       opened: opened,
       positions: positions,
+      navigationFlags: navigationFlags,
     );
 
     final result = await access.openUnique(
       {'id': 7, 'type': 'text'},
       index: 12,
       searchQuery: 'חיפוש',
+      navigateToPositionIfReused: true,
     );
 
     expect(result, isTrue);
     expect(opened, [book]);
     expect(positions, [(12, 'חיפוש')]);
+    expect(navigationFlags, [true]);
   });
 
   test('PluginBookIdentity מפענח ספק חיצוני מוכר בלבד', () {
@@ -190,6 +194,7 @@ DeclarativeLibraryBookAccess _access({
   List<Book> hebrewBooks = const [],
   List<Book>? opened,
   List<(int, String)>? positions,
+  List<bool>? navigationFlags,
   List<(String, Set<Object>)>? externalLoads,
 }) {
   return DeclarativeLibraryBookAccess(
@@ -198,9 +203,10 @@ DeclarativeLibraryBookAccess _access({
       externalLoads?.add((provider, externalIds));
       return provider == 'hebrewbooks' ? hebrewBooks : const [];
     },
-    (book, index, searchQuery) {
+    (book, index, searchQuery, {required navigateToPositionIfReused}) {
       opened?.add(book);
       positions?.add((index, searchQuery));
+      navigationFlags?.add(navigateToPositionIfReused);
     },
   );
 }

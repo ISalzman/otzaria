@@ -57,6 +57,7 @@ const Set<String> _knownApiMethods = {
   'app.openUrl',
   'library.findBooks',
   'library.getBookMetadata',
+  'library.resolveBooks',
   'library.listRecentBooks',
   'library.getBookContent',
   'library.getBookToc',
@@ -170,6 +171,7 @@ const Set<String> _knownEvents = {
   'workspace.changed',
   'settings.changed',
   'plugin.permissions_changed',
+  'search.requested',
 };
 
 /// מיפוי `method -> permission` נדרשת (תואם METHOD_REQUIRED_PERMISSION ב-JS).
@@ -183,6 +185,7 @@ const Map<String, String> _methodRequiredPermission = {
   'app.openUrl': 'app.open_url',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
+  'library.resolveBooks': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
   'library.getTree': 'library.books.read',
   'library.getBookContent': 'library.content.read',
@@ -284,6 +287,7 @@ const Map<String, String> _methodMinVersion = {
   'app.getGrantedPermissions': '0.9.89',
   'library.findBooks': '0.9.89',
   'library.getBookMetadata': '0.9.89',
+  'library.resolveBooks': '0.9.97',
   'library.listRecentBooks': '0.9.89',
   'library.getBookContent': '0.9.89',
   'library.getBookToc': '0.9.89',
@@ -540,6 +544,7 @@ class PluginExtendedValidator {
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
   static const String _startupContributionsMinVersion = '0.9.96';
   static const String _declarativeProgramsMinVersion = '0.9.96';
+  static const String _searchSubmitRoutingMinVersion = '0.9.97';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.
@@ -725,6 +730,25 @@ class PluginExtendedValidator {
           'contributes.startup.searchDialogItems מוגבל ל-'
           '${PluginSearchDialogItem.maxItemsPerPlugin} פריטים',
         );
+      }
+      if (startup.searchDialogItems.any(
+        (item) => item['openPluginOnSubmit'] == true,
+      )) {
+        try {
+          if (PluginVersionUtils.compareCoreVersions(
+                _searchSubmitRoutingMinVersion,
+                manifest.minAppVersion,
+              ) >
+              0) {
+            errors.add(
+              'openPluginOnSubmit נתמך החל מגרסה '
+              '$_searchSubmitRoutingMinVersion, אך minAppVersion שהוצהר הוא '
+              '${manifest.minAppVersion}. עדכן את minAppVersion',
+            );
+          }
+        } on PluginVersionFormatException {
+          // minAppVersion נבדק ב-PluginManifestValidator.
+        }
       }
       final itemIds = <String>{};
       for (final item in startup.searchDialogItems) {

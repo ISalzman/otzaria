@@ -156,7 +156,7 @@ my-plugin/
 | `contributes.background.entrypoint` | `null` | נתיב יחסי לקובץ HTML קליל (ללא UI) שייטען ברקע במקום ה-`entrypoint` המלא. רלוונטי רק לתוסף עם `app.run_on_startup`. ראה §ריצת רקע. |
 | `contributes.startup` | `null` | פקדים, פריטי תפריט ונתונים שאוצריא טוענת ישירות מהמניפסט בלי להפעיל WebView. |
 | `contributes.startup.programs` | `[]` | תכניות חישוב Host מוולדות, ללא JavaScript; ראו `API_REFERENCE.md` §תכניות Host ללא WebView. |
-| `contributes.startup.searchDialogItems` | `[]` | שורות checkbox סטטיות בתחתית דיאלוג החיפוש; ראו `API_REFERENCE.md` §שורות בדיאלוג החיפוש. |
+| `contributes.startup.searchDialogItems` | `[]` | שורות checkbox סטטיות; `openPluginOnSubmit` יכול לנתב את אישור החיפוש לתוסף. |
 | `contributes.startup.activationEvents` | `[]` | אירועים שמעירים את מנוע הרקע בעצלנות; כל נושא דורש גם הרשאת subscribe מתאימה. |
 | `contributes.startup.keepAlive` | `false` | בקשה למנוע כיבוי אוטומטי; דורשת אישור נפרד של `app.background_keep_alive`. |
 
@@ -295,6 +295,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 |--------|-------|----------|-------|
 | `library.findBooks` | `library.books.read` | `{ query, limit? }` | `BookMeta[]` |
 | `library.getBookMetadata` | `library.books.read` | `{ bookId }` | `BookMeta \| null` |
+| `library.resolveBooks` | `library.books.read` | `{ items: BookIdentity[] }` (עד 100) | `(BookMeta \| null)[]` |
 | `library.listRecentBooks` | `library.books.read` | — | `{ bookId, title, ref }[]` |
 | `library.getBookContent` | `library.content.read` | `{ bookId, offset?, limit?, section? }` | `string` (max 5000 תווים) |
 | `library.getBookToc` | `library.content.read` | `{ bookId }` | `TocEntry[]` |

@@ -322,6 +322,7 @@ class PluginSearchApi {
       'source': null,
     },
     'book': result.title,
+    if (book != null) 'categoryPath': FacetHelper.resolveCategoryPath(book),
     'reference': result.reference,
     'text': result.text,
     'index': result.segment.toInt(),
@@ -339,6 +340,8 @@ class PluginSearchApi {
               'source': null,
             },
             'book': sibling.title,
+            if (booksByPath[sibling.filePath] case final Book siblingBook)
+              'categoryPath': FacetHelper.resolveCategoryPath(siblingBook),
             'reference': sibling.reference,
             'index': sibling.segment.toInt(),
           },

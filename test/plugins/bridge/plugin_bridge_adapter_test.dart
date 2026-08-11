@@ -2504,6 +2504,30 @@ Future<void> main() async {
       },
     );
 
+    test('library.resolveBooks פותר זהויות באצווה ומחזיר קטגוריה', () async {
+      final adapter = buildAdapter(
+        books: [
+          TextBook(
+            id: 42,
+            title: 'שמות',
+            categoryPath: 'תנך, תורה',
+          ),
+        ],
+      );
+
+      final result =
+          await adapter.execute('library', 'resolveBooks', {
+                'items': [
+                  {'id': 42, 'source': 'library'},
+                  {'id': 999, 'source': 'library'},
+                ],
+              })
+              as List;
+
+      expect(result.first, containsPair('categoryPath', '/תנך/תורה'));
+      expect(result.last, isNull);
+    });
+
     // --- reader.openBook ---
 
     test('reader.openBook פותח לפי id בלבד', () async {

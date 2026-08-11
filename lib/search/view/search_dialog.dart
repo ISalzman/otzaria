@@ -23,6 +23,7 @@ import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/saved_alternatives_store.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -43,6 +44,9 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/tour/tour_target_keys.dart';
+
+typedef PluginSearchSubmitLauncher =
+    void Function(String pluginId, Map<String, dynamic> payload);
 
 class SearchDialogResult {
   const SearchDialogResult({
@@ -91,6 +95,7 @@ class SearchDialog extends StatefulWidget {
   final bool returnResultOnSubmit;
   final SearchMode? initialSearchMode;
   final PluginSearchDialogRegistry? pluginSearchDialogRegistry;
+  final PluginSearchSubmitLauncher? pluginSearchSubmitLauncher;
 
   const SearchDialog({
     super.key,
@@ -101,6 +106,7 @@ class SearchDialog extends StatefulWidget {
     this.returnResultOnSubmit = false,
     this.initialSearchMode,
     this.pluginSearchDialogRegistry,
+    this.pluginSearchSubmitLauncher,
   });
 
   @override
@@ -677,6 +683,20 @@ class _SearchDialogState extends State<SearchDialog> {
     final distance = _searchTab.searchBloc.state.distance;
     final proximityScope = currentState.configuration.proximityScope;
 
+    if (_openSelectedPluginSearchTargets(
+      query: query,
+      negativeQuery: negativeQuery,
+      mode: currentMode,
+      distance: distance,
+      proximityScope: proximityScope,
+      facets: facetsToSearch,
+      normalizedParameters: normalizedParameters,
+      normalizedNegativeParameters: normalizedNegativeParameters,
+    )) {
+      Navigator.of(context).pop();
+      return;
+    }
+
     if (widget.editTab != null) {
       _applyEditToTarget(
         query: query,
@@ -774,6 +794,77 @@ class _SearchDialogState extends State<SearchDialog> {
     // מעבר למסך העיון
     navigationBloc.add(const NavigateToScreen(Screen.search));
   }
+
+  bool _openSelectedPluginSearchTargets({
+    required String query,
+    required String negativeQuery,
+    required SearchMode mode,
+    required int distance,
+    required SearchScope proximityScope,
+    required List<String> facets,
+    required SearchModeScopedParameters normalizedParameters,
+    required SearchModeScopedParameters normalizedNegativeParameters,
+  }) {
+    final selections = _allPluginSearchSelections();
+    final targets = _pluginSearchDialogRegistry.getAll().where((record) {
+      final item = record.$2;
+      return item.openPluginOnSubmit &&
+          item.isVisibleIn(mode) &&
+          selections[_pluginSelectionKey(record.$1, item.id)] == true;
+    }).toList();
+    if (targets.isEmpty) return false;
+
+    final configuration = _searchTab.searchBloc.state.configuration;
+    final request = <String, dynamic>{
+      'query': query,
+      'mode': mode.name,
+      'order': configuration.sortBy.name,
+      'limit': configuration.numResults,
+      'distance': distance,
+      'facets': facets,
+      if (normalizedParameters.searchOptions.isNotEmpty)
+        'wordOptions': normalizedParameters.searchOptions,
+      if (mode == SearchMode.advanced) ...{
+        if (negativeQuery.isNotEmpty) 'negativeQuery': negativeQuery,
+        'proximityScope': proximityScope.name,
+        'wordMatchMode': configuration.wordMatchMode.name,
+        if (configuration.wordMatchMode == WordMatchMode.atLeast)
+          'wordMatchCount': configuration.wordMatchCount,
+        'grouping': configuration.resultGrouping.name,
+        if (normalizedParameters.alternativeWords.isNotEmpty)
+          'alternativeWords': _stringKeyed(
+            normalizedParameters.alternativeWords,
+          ),
+        if (normalizedParameters.customSpacing.isNotEmpty)
+          'customSpacing': normalizedParameters.customSpacing,
+        if (normalizedNegativeParameters.searchOptions.isNotEmpty)
+          'negativeWordOptions': normalizedNegativeParameters.searchOptions,
+        if (normalizedNegativeParameters.alternativeWords.isNotEmpty)
+          'negativeAlternativeWords': _stringKeyed(
+            normalizedNegativeParameters.alternativeWords,
+          ),
+        if (normalizedNegativeParameters.customSpacing.isNotEmpty)
+          'negativeCustomSpacing': normalizedNegativeParameters.customSpacing,
+      },
+    };
+    final launch =
+        widget.pluginSearchSubmitLauncher ??
+        (String pluginId, Map<String, dynamic> payload) {
+          PluginPageLauncher.instance.open(
+            pluginId,
+            topic: 'search.requested',
+            payload: payload,
+          );
+        };
+    for (final target in targets) {
+      launch(target.$1, {'itemId': target.$2.id, 'request': request});
+    }
+    return true;
+  }
+
+  Map<String, List<String>> _stringKeyed(Map<int, List<String>> values) => {
+    for (final entry in values.entries) entry.key.toString(): entry.value,
+  };
 
   /// מחיל את פרמטרי הדיאלוג על טאב התוצאות הנערך ומריץ בו את החיפוש מחדש.
   void _applyEditToTarget({

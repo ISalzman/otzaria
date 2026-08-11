@@ -92,6 +92,7 @@ if (response.success) {
 | `app.getConnectivity` | 0.9.96 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
+| `library.resolveBooks` | 0.9.97 |
 | `library.listRecentBooks` | 0.9.89 |
 | `library.getBookContent` | 0.9.89 |
 | `library.getBookToc` | 0.9.89 |
@@ -348,7 +349,23 @@ const { data } = await Otzaria.call('library.findBooks', {
 const { data } = await Otzaria.call('library.getBookMetadata', {
   bookId: 'בראשית'
 });
-// { bookId: "בראשית", title: "בראשית", topics: ["תנ\"ך", "תורה"] }
+// { id: 1, bookId: "בראשית", title: "בראשית", categoryPath: "/תנך/תורה", topics: [...] }
+```
+
+### `library.resolveBooks`
+**הרשאה:** `library.books.read`
+
+פותר עד 100 זהויות ספר באצווה, לרבות זהות חיצונית, בלי לחשוף נתיבים. סדר
+התשובות זהה לסדר הקלט; זהות שאינה קיימת או אינה חד־משמעית מוחזרת כ־`null`.
+
+```javascript
+const { data } = await Otzaria.call('library.resolveBooks', {
+  items: [
+    { id: 183, type: 'text' },
+    { external: { provider: 'hebrewbooks', id: 42 } }
+  ]
+});
+// [{ id, type, source, bookId, title, categoryPath, external? }, ...]
 ```
 
 ### `library.listRecentBooks`
@@ -630,13 +647,13 @@ const { data } = await Otzaria.call('search.query', {
 {
   results: [{
     id: 183, type: 'text', bookId: 'ויקרא', source: 'library',
-    book: 'ויקרא',
+    book: 'ויקרא', categoryPath: '/הלכה/משנה תורה',
     reference: 'ויקרא, פרק יט',
     text: 'ואהבת לרעך כמוך...',
     index: 1234,          // אינדקס השורה/עמוד לפתיחה עם reader.openBook
     mergedCount: 1,       // מספר התוצאות שאוחדו לכרטיס (במצב grouping)
-    merged: [{ id, type, bookId, source, book, reference, index }]
-                            // רק כשיש איחוד; לכל אח זהות ספר מלאה
+    merged: [{ id, type, bookId, source, book, categoryPath, reference, index }]
+                            // רק כשיש איחוד; לכל אח זהות וקטגוריה מלאות
   }],
   total: 812,             // סך ההתאמות (לא רק העמוד הנוכחי)
   groupCount: null,       // מספר הקבוצות כש-grouping פעיל, אחרת null
@@ -2380,6 +2397,7 @@ async function scheduleReminder(title, body, dateTime) {
           "type": "checkbox",
           "title": "חפש גם במקור חיצוני",
           "defaultValue": true,
+          "openPluginOnSubmit": true,
           "visibleInModes": ["exact", "advanced"],
           "disabledSearchOptions": {
             "advanced": [
@@ -2400,12 +2418,16 @@ async function scheduleReminder(title, body, dateTime) {
 | `type` | כן | כעת רק `"checkbox"`. |
 | `title` | כן | הכיתוב המוצג למשתמש (עד 120 תווים). |
 | `defaultValue` | לא | ערך התחלתי, `false` כברירת מחדל. |
+| `openPluginOnSubmit` | לא | מגרסה 0.9.97: אם `true`, אישור חיפוש כשהשורה מסומנת פותח את דף התוסף ושולח אליו `search.requested`. |
 | `visibleInModes` | לא | מערך לא-ריק מתוך `"exact"`, `"advanced"`, `"fuzzy"`; ברירת המחדל היא כל המצבים. |
 | `disabledSearchOptions` | לא | אובייקט `מצב → מזהי אפשרויות מילה` להשבתה כשה-checkbox מסומן. |
 
-הבחירה נשמרת בקונפיגורציית טאב החיפוש במפתח
-`"<pluginId>/<itemId>"`, כדי שספק תוצאות מאוחד עתידי יוכל לקרוא בדיוק את
-מה שהמשתמש אישר. מצב `fuzzy` יכול פשוט להיעדר מ־`visibleInModes`.
+בלי `openPluginOnSubmit`, הבחירה נשמרת בקונפיגורציית טאב החיפוש במפתח
+`"<pluginId>/<itemId>"`. כשהשדה פעיל, פתיחת הדיאלוג והסימון עדיין סטטיים;
+רק לחיצה על "חפש" פותחת את התוסף ומוסרת `{itemId, request}`. `request` הוא
+חוזה חוקי של `search.query`, אחרי נרמול המצב והאפשרויות. אם כמה שורות פעילות
+מבקשות ניתוב, כל תוסף נפתח ומקבל את הבקשה. מצב `fuzzy` יכול פשוט להיעדר
+מ־`visibleInModes`.
 
 `disabledSearchOptions` משפיע רק על ממשק האפשרויות: הוא מאפיר את ה-chip
 ואת אותה אפשרות בתפריט ברירות המחדל, ואינו מוחק בחירה קיימת של המשתמש

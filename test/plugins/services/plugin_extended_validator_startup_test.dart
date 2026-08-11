@@ -120,6 +120,23 @@ void main() {
     expect(report.errors, contains(contains('minAppVersion')));
   });
 
+  test('openPluginOnSubmit דורש minAppVersion 0.9.97', () {
+    final startup = validStartup();
+    (startup['searchDialogItems'] as List).single['openPluginOnSubmit'] = true;
+
+    final oldVersion = _run(
+      tempDir,
+      _manifest(minAppVersion: '0.9.96', startup: startup),
+    );
+    expect(oldVersion.errors, contains(contains('0.9.97')));
+
+    final supportedVersion = _run(
+      tempDir,
+      _manifest(minAppVersion: '0.9.97', startup: startup),
+    );
+    expect(supportedVersion.errors, isEmpty);
+  });
+
   test('an invalid toolbar item (missing icon) is a blocking error', () {
     final report = _run(
       tempDir,

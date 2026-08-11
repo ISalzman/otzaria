@@ -507,7 +507,7 @@ Future<void> main() async {
     test('תוצאה עם ספר מזוהה נושאת זהות מלאה', () {
       final json = PluginSearchApi.resultToJson(
         buildResult(),
-        TextBook(id: 7, title: 'בראשית'),
+        TextBook(id: 7, title: 'בראשית', categoryPath: '/תנך/תורה'),
       );
 
       expect(json['id'], 7);
@@ -515,6 +515,7 @@ Future<void> main() async {
       expect(json['source'], 'library');
       expect(json['index'], 12);
       expect(json['reference'], 'בראשית, פרק א');
+      expect(json['categoryPath'], '/תנך/תורה');
       expect(json.containsKey('merged'), isFalse);
     });
 
