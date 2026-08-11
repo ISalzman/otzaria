@@ -3996,10 +3996,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final splitInset = SplitPaneContentInset.of(
       context,
     ).resolve(Directionality.of(context));
+    // פסי הגלילה צפים מעל התוכן (כמו בספרי טקסט) — בלי תעלה נפרדת, כדי
+    // שלא ייראה פס רקע לצד הדף.
     final readerContentPadding = EdgeInsets.only(
       left: splitInset.left,
-      right: _verticalScrollbarGutter + _scrollbarGutterGap + splitInset.right,
-      bottom: _horizontalScrollbarGutter + _scrollbarGutterGap,
+      right: splitInset.right,
     );
 
     return BlocListener<PdfBookBloc, PdfBookState>(
@@ -4172,7 +4173,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 ),
                 Positioned(
                   left: splitInset.left,
-                  right: readerContentPadding.right,
+                  right:
+                      _verticalScrollbarGutter +
+                      _scrollbarGutterGap +
+                      splitInset.right,
                   bottom: 0,
                   child: RepaintBoundary(
                     child: PdfHorizontalScrollbar(
