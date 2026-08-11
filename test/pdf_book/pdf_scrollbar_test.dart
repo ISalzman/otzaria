@@ -93,7 +93,6 @@ Widget _buildVerticalScrollbarHarness(
             orientation: ScrollbarOrientation.right,
             trackThickness: 16,
             thumbMinSize: 40,
-            trackColor: Colors.black,
             thumbColor: Colors.green,
             scrollBoundsBuilder: (_) => const Rect.fromLTWH(0, 0, 100, 1000),
             freezeThumb: freezeThumb,
@@ -569,7 +568,7 @@ void main() {
 
   // ─── עיצוב וצבעים ─────────────────────────────────────────────────────────
   group('PdfScrollbar - עיצוב', () {
-    testWidgets('PdfScrollbar עם trackColor ו-thumbColor מותאמים', (
+    testWidgets('PdfScrollbar עם thumbColor מותאם', (
       tester,
     ) async {
       final controller = PdfViewerController();
@@ -579,7 +578,6 @@ void main() {
             body: PdfScrollbar(
               controller: controller,
               orientation: ScrollbarOrientation.right,
-              trackColor: Colors.grey,
               thumbColor: Colors.blue,
               trackThickness: 16,
               thumbMinSize: 50,

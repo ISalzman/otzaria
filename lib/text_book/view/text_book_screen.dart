@@ -873,7 +873,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           }
 
           tabController.dispose();
-          _searchHost.dispose();
           tabController = TabController(
             length: newLength,
             vsync: this,
@@ -1021,6 +1020,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     widget.tab.navNextTocNotifier.removeListener(_onNavNextToc);
 
     tabController.dispose();
+    _searchHost.dispose();
     textSearchFocusNode.dispose();
     navigationSearchFocusNode.dispose();
     altTitlesSearchFocusNode.dispose();

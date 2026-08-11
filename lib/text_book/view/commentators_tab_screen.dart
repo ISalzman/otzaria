@@ -1467,7 +1467,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     padding: kNavTreeListPadding,
                     itemBuilder: (context, index) {
                       final item = items[index];
-                      final isGroupStart = index == 0;
+                      if (item.isHeader) {
+                        return NavTreeHeader(title: item.text!);
+                      }
+                      final isGroupStart = index == 1;
                       final isGroupEnd = index == items.length - 1;
                       if (item.isChapter) {
                         final ch = item.chapter!;
