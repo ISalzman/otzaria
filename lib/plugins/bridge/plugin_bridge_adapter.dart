@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -26,7 +27,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
-    show SearchResult;
+    show SearchStreamUpdate;
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -344,6 +345,12 @@ class PluginBridgeDependencies {
   });
 }
 
+typedef PluginRpcEventSink =
+    Future<void> Function(
+      String topic,
+      Map<String, dynamic> payload,
+    );
+
 // ===================================================================
 // Bridge Adapter - strict 1:1 with plugin_system_plan.md
 // ===================================================================
@@ -420,8 +427,29 @@ class PluginBridgeAdapter {
   Map<int, List<Book>> _booksById = const {};
   Map<String, List<Book>> _booksByTitle = const {};
   Map<String, Book> _booksByIndexedPath = const {};
+  final Map<String, Future<void> Function()> _activeSearchStreams = {};
+  final Set<String> _pendingSearchCancellations = {};
+
+  static const _searchStreamEvent = '__otzaria.search.query.chunk';
+  static const _streamIdKey = '__streamId';
+  static const _cancelStreamIdKey = '__cancelStreamId';
+  static const _maxConcurrentSearchStreams = 4;
+  static const _maxSearchDuration = Duration(minutes: 2);
+  static const _searchIdleTimeout = Duration(seconds: 30);
+  static final _streamIdPattern = RegExp(r'^[A-Za-z0-9_-]{1,64}$');
+
+  static bool isSearchCancellationPayload(Map<String, dynamic> args) {
+    if (args.length != 1) return false;
+    final streamId = args[_cancelStreamIdKey];
+    return streamId is String && _streamIdPattern.hasMatch(streamId);
+  }
 
   void dispose() {
+    for (final cancel in _activeSearchStreams.values) {
+      unawaited(cancel());
+    }
+    _activeSearchStreams.clear();
+    _pendingSearchCancellations.clear();
     _networkFetchService?.dispose();
     _fileDownloadService?.dispose();
     _bookIndexLibrary = null;
@@ -471,15 +499,16 @@ class PluginBridgeAdapter {
   Future<dynamic> execute(
     String domain,
     String action,
-    Map<String, dynamic> args,
-  ) async {
+    Map<String, dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) async {
     switch (domain) {
       case 'app':
         return await _handleApp(action, args);
       case 'library':
         return await _handleLibrary(action, args);
       case 'search':
-        return await _handleSearch(action, args);
+        return await _handleSearch(action, args, eventSink: eventSink);
       case 'reader':
         return await _handleReader(action, args);
       case 'navigation':
@@ -927,8 +956,9 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   Future<dynamic> _handleSearch(
     String action,
-    Map<String, dynamic> args,
-  ) async {
+    Map<String, dynamic> args, {
+    PluginRpcEventSink? eventSink,
+  }) async {
     switch (action) {
       case 'fullText':
         final query = args['query'] as String?;
@@ -952,123 +982,158 @@ class PluginBridgeAdapter {
       case 'getOptions':
         return PluginSearchApi.describeOptions();
       case 'query':
-        return await _runPluginSearch(args);
+        if (args[_cancelStreamIdKey] case final String streamId) {
+          return _cancelPluginSearch(streamId);
+        }
+        return await _runPluginSearch(args, eventSink: eventSink);
       default:
         throw Exception("Unknown action in search: $action");
     }
   }
 
-  /// מריץ את `search.query` באותו מסלול מנוע של מסך החיפוש. ספירות לפי
-  /// ספר נאספות רק כשהתוסף מבקש אותן.
+  /// מזרים את `search.query` באותו מסלול chunks של מסך החיפוש.
   Future<Map<String, dynamic>> _runPluginSearch(
-    Map<String, dynamic> args,
-  ) async {
-    final request = PluginSearchRequest.fromArgs(args)..validateAgainstQuery();
+    Map<String, dynamic> args, {
+    required PluginRpcEventSink? eventSink,
+  }) async {
+    final streamId = args[_streamIdKey];
+    if (streamId is! String || !_streamIdPattern.hasMatch(streamId)) {
+      throw Exception('error.invalid_params: invalid internal stream id');
+    }
+    if (eventSink == null) {
+      throw Exception('error.internal: search stream transport unavailable');
+    }
+    if (_pendingSearchCancellations.remove(streamId)) {
+      return {'completed': false, 'cancelled': true};
+    }
+    if (_activeSearchStreams.containsKey(streamId)) {
+      throw Exception('error.invalid_params: duplicate search stream id');
+    }
+    if (_activeSearchStreams.length >= _maxConcurrentSearchStreams) {
+      throw Exception('error.rate_limited: too many active search streams');
+    }
+
+    final publicArgs = Map<String, dynamic>.of(args)..remove(_streamIdKey);
+    final request = PluginSearchRequest.fromArgs(publicArgs)
+      ..validateAgainstQuery();
     final library = await DataRepository.instance.library;
     final facets = PluginSearchApi.resolveFacets(
-      args,
+      publicArgs,
       findBook: (identity) => _findPluginBook(library, identity),
     );
+    final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
+      request.sanitizedQuery,
+      facets,
+      request.limit,
+      offset: request.offset,
+      chunkSize: 50,
+      order: request.order,
+      searchMode: request.searchMode,
+      distance: request.distance,
+      negativeQuery: request.sanitizedNegativeQuery,
+      negativeDistance: request.negativeDistance,
+      scope: request.proximityScope,
+      negativeScope: request.negativeProximityScope,
+      customSpacing: request.effectiveCustomSpacing,
+      negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
+      alternativeWords: request.effectiveAlternativeWords,
+      negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
+      searchOptions: request.effectiveSearchOptions,
+      negativeSearchOptions: request.effectiveNegativeSearchOptions,
+      grouping: request.grouping,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
+    );
+    final iterator = StreamIterator<SearchStreamUpdate>(stream);
+    var cancelled = false;
+    var expired = false;
+    Future<void> cancel() async {
+      cancelled = true;
+      await iterator.cancel();
+    }
 
-    final results = <SearchResult>[];
+    if (_pendingSearchCancellations.remove(streamId)) {
+      await iterator.cancel();
+      return {'completed': false, 'cancelled': true};
+    }
+    _activeSearchStreams[streamId] = cancel;
+    final deadline = Timer(_maxSearchDuration, () {
+      expired = true;
+      unawaited(cancel());
+    });
+    var sequence = 0;
     int? totalCount;
     int? groupCount;
     var truncated = false;
-    Map<String, int>? bookCounts;
-
-    if (request.includeBookCounts) {
-      final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
-        request.sanitizedQuery,
-        facets,
-        request.limit,
-        offset: request.offset,
-        order: request.order,
-        searchMode: request.searchMode,
-        distance: request.distance,
-        negativeQuery: request.sanitizedNegativeQuery,
-        negativeDistance: request.negativeDistance,
-        scope: request.proximityScope,
-        negativeScope: request.negativeProximityScope,
-        customSpacing: request.effectiveCustomSpacing,
-        negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
-        alternativeWords: request.effectiveAlternativeWords,
-        negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
-        searchOptions: request.effectiveSearchOptions,
-        negativeSearchOptions: request.effectiveNegativeSearchOptions,
-        grouping: request.grouping,
-        wordMatchMode: request.wordMatchMode,
-        wordMatchCount: request.wordMatchCount,
-      );
-
-      await for (final update in stream) {
+    try {
+      while (await iterator.moveNext().timeout(_searchIdleTimeout)) {
+        final update = iterator.current;
         if (update.totalCount != null) {
           totalCount = update.totalCount;
           groupCount = update.groupCount;
           truncated = update.truncated;
-          bookCounts = update.bookCounts;
         }
-        results.addAll(update.results);
+        if (update.results.isNotEmpty || update.bookCounts != null) {
+          _ensureBookIndex(library);
+        }
+        final booksByPath = _booksByIndexedPath;
+        await eventSink(_searchStreamEvent, {
+          'streamId': streamId,
+          'chunk': {
+            'sequence': sequence++,
+            'results': [
+              for (final result in update.results)
+                PluginSearchApi.resultToJson(
+                  result,
+                  booksByPath[result.filePath],
+                  booksByPath: booksByPath,
+                ),
+            ],
+            'total': totalCount,
+            'groupCount': groupCount,
+            'truncated': truncated,
+            'limit': request.limit,
+            'offset': request.offset,
+            'facets': facets,
+            if (request.includeBookCounts && update.bookCounts != null)
+              'bookCounts': [
+                for (final entry in update.bookCounts!.entries)
+                  if (booksByPath[entry.key] case final Book book)
+                    {
+                      ...PluginBookIdentity.toJson(book),
+                      'title': book.title,
+                      'count': entry.value,
+                    },
+              ],
+          },
+        });
       }
-    } else {
-      final page = await _dependencies.searchRepository.searchTextsAndCount(
-        request.sanitizedQuery,
-        facets,
-        request.limit,
-        offset: request.offset,
-        order: request.order,
-        searchMode: request.searchMode,
-        distance: request.distance,
-        negativeQuery: request.sanitizedNegativeQuery,
-        negativeDistance: request.negativeDistance,
-        scope: request.proximityScope,
-        negativeScope: request.negativeProximityScope,
-        customSpacing: request.effectiveCustomSpacing,
-        negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
-        alternativeWords: request.effectiveAlternativeWords,
-        negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
-        searchOptions: request.effectiveSearchOptions,
-        negativeSearchOptions: request.effectiveNegativeSearchOptions,
-        grouping: request.grouping,
-        wordMatchMode: request.wordMatchMode,
-        wordMatchCount: request.wordMatchCount,
-      );
-      results.addAll(page.results);
-      totalCount = page.totalCount;
-      groupCount = page.groupCount;
-      truncated = page.truncated;
+      if (expired) throw TimeoutException('Search stream timed out');
+      return {
+        'completed': !cancelled,
+        'cancelled': cancelled,
+        'chunks': sequence,
+      };
+    } finally {
+      deadline.cancel();
+      _activeSearchStreams.remove(streamId);
+      await iterator.cancel();
     }
+  }
 
-    if (results.isNotEmpty || bookCounts != null) {
-      _ensureBookIndex(library);
+  Map<String, dynamic> _cancelPluginSearch(String streamId) {
+    if (!_streamIdPattern.hasMatch(streamId)) {
+      throw Exception('error.invalid_params: invalid internal stream id');
     }
-    final booksByPath = _booksByIndexedPath;
-
-    return {
-      'results': [
-        for (final result in results)
-          PluginSearchApi.resultToJson(
-            result,
-            booksByPath[result.filePath],
-            booksByPath: booksByPath,
-          ),
-      ],
-      'total': totalCount ?? results.length,
-      'groupCount': groupCount,
-      'truncated': truncated,
-      'limit': request.limit,
-      'offset': request.offset,
-      'facets': facets,
-      if (request.includeBookCounts)
-        'bookCounts': [
-          for (final entry in (bookCounts ?? const <String, int>{}).entries)
-            if (booksByPath[entry.key] case final Book book)
-              {
-                ...PluginBookIdentity.toJson(book),
-                'title': book.title,
-                'count': entry.value,
-              },
-        ],
-    };
+    final cancel = _activeSearchStreams[streamId];
+    if (cancel == null) {
+      if (_pendingSearchCancellations.length < 16) {
+        _pendingSearchCancellations.add(streamId);
+      }
+      return {'cancelled': false};
+    }
+    unawaited(cancel());
+    return {'cancelled': true};
   }
 
   // ----------------------------------------------------------------
@@ -3187,6 +3252,17 @@ class PluginBridgeAdapter {
           throw Exception('error.invalid_params: invalid method');
         }
         final requestBody = args['body'] as String?;
+        final rawTimeoutMs = args['timeoutMs'];
+        if (rawTimeoutMs != null &&
+            (rawTimeoutMs is! int ||
+                rawTimeoutMs <= 0 ||
+                rawTimeoutMs >
+                    PluginNetworkFetchService.maxTimeout.inMilliseconds)) {
+          throw Exception(
+            'error.invalid_params: timeoutMs must be a positive integer '
+            'up to ${PluginNetworkFetchService.maxTimeout.inMilliseconds}',
+          );
+        }
         final rawHeaders = args['headers'];
         final headers = <String, String>{};
         if (rawHeaders is Map) {
@@ -3202,6 +3278,9 @@ class PluginBridgeAdapter {
           method: method,
           headers: headers.isEmpty ? null : headers,
           body: requestBody,
+          timeout: rawTimeoutMs == null
+              ? PluginNetworkFetchService.defaultTimeout
+              : Duration(milliseconds: rawTimeoutMs),
         );
         return {'status': result.status, 'ok': result.ok, 'body': result.body};
 

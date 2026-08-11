@@ -30,6 +30,9 @@ class PluginNetworkFetchResult {
 ///
 /// בדיקת ההרשאה וה-allowlist מתבצעות אצל הקורא (האדפטר), לא כאן.
 class PluginNetworkFetchService {
+  static const defaultTimeout = Duration(seconds: 30);
+  static const maxTimeout = Duration(seconds: 120);
+
   final http.Client _client;
   late final FutureOr<void> Function() _closer = _client.close;
 
@@ -52,6 +55,21 @@ class PluginNetworkFetchService {
   Future<PluginNetworkFetchResult> fetch(
     Uri uri, {
     String method = 'GET',
+    Map<String, String>? headers,
+    String? body,
+    Duration timeout = defaultTimeout,
+  }) {
+    return _fetch(
+      uri,
+      method: method,
+      headers: headers,
+      body: body,
+    ).timeout(timeout);
+  }
+
+  Future<PluginNetworkFetchResult> _fetch(
+    Uri uri, {
+    required String method,
     Map<String, String>? headers,
     String? body,
   }) async {

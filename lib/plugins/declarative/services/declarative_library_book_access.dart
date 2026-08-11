@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/declarative/services/declarative_host_action_exe
 import 'package:otzaria/plugins/declarative/services/declarative_program_executor.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:otzaria/utils/navigation/otzar_utils.dart';
 
 typedef DeclarativeBookListLoader = Future<List<Book>> Function();
 typedef DeclarativeExternalBookListLoader =
@@ -16,18 +17,22 @@ typedef DeclarativeBookOpen =
       String searchQuery, {
       required bool navigateToPositionIfReused,
     });
+typedef DeclarativeExternalBookOpen =
+    Future<bool> Function(ExternalLibraryBook book);
 
 class DeclarativeLibraryBookAccess
     implements DeclarativeBookResolver, DeclarativeBookOpener {
   final DeclarativeBookListLoader _libraryBooks;
   final DeclarativeExternalBookListLoader _externalBooks;
   final DeclarativeBookOpen _openBook;
+  final DeclarativeExternalBookOpen externalBookOpener;
 
   DeclarativeLibraryBookAccess(
     this._libraryBooks,
     this._externalBooks,
-    this._openBook,
-  );
+    this._openBook, {
+    required this.externalBookOpener,
+  });
 
   factory DeclarativeLibraryBookAccess.otzaria(
     BookOpenCoordinator coordinator,
@@ -48,6 +53,7 @@ class DeclarativeLibraryBookAccess
             requiresStableLayout: book is PdfBook,
             navigateToPositionIfReused: navigateToPositionIfReused,
           ),
+      externalBookOpener: (book) => OtzarUtils.launchOtzarWeb(book.link),
     );
   }
 
@@ -78,6 +84,9 @@ class DeclarativeLibraryBookAccess
   }) async {
     final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
+    if (book is ExternalLibraryBook) {
+      return externalBookOpener(book);
+    }
     _openBook(
       book,
       index,

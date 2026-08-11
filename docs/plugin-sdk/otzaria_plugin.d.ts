@@ -46,7 +46,7 @@
 // Shared types
 // ---------------------------------------------------------------------------
 
-/** Response envelope returned by every `Otzaria.call()` invocation. */
+/** Response envelope returned by non-streaming `Otzaria.call()` invocations. */
 export interface OtzariaResponse<T = unknown> {
   success: boolean;
   data: T | null;
@@ -239,9 +239,12 @@ export interface SearchQueryHit extends BookIdentity {
   >;
 }
 
-export interface SearchQueryResponse {
+export interface SearchQueryChunk {
+  /** מספר ה-chunk, החל מ-0. */
+  sequence: number;
   results: SearchQueryHit[];
-  total: number;
+  /** זמין מה-chunk הראשון; null רק אם המנוע טרם החזיר ספירה. */
+  total: number | null;
   groupCount: number | null;
   /** `true` = שאילתה רחבה מדי; התוצאות והספירה חלקיות. */
   truncated: boolean;
@@ -1082,6 +1085,12 @@ export type OtzariaMethod =
 // ---------------------------------------------------------------------------
 
 export interface OtzariaGlobal {
+  /** חיפוש מלא שמזרים chunks ככל שהם מתקבלים מהמנוע. */
+  call(
+    method: 'search.query',
+    payload: SearchQueryParams
+  ): AsyncIterable<SearchQueryChunk>;
+
   /**
    * Call a Host API method.
    *

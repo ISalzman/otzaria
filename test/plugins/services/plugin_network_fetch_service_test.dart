@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -72,5 +74,22 @@ void main() {
     expect(result.status, 404);
     expect(result.ok, isFalse);
     expect(result.body, 'nope');
+  });
+
+  test('timeout מותאם מגביל גם את זמן ההמתנה לתשובה', () async {
+    final service = PluginNetworkFetchService(
+      client: MockClient((req) async {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        return http.Response('late', 200);
+      }),
+    );
+
+    await expectLater(
+      service.fetch(
+        Uri.parse('https://api.example.com/slow'),
+        timeout: const Duration(milliseconds: 5),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
   });
 }
