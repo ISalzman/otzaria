@@ -24,11 +24,12 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 import 'package:otzaria/tools/tool_order.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 const String kBuiltInToolsGroupLabel = 'כלים';
 const String kPluginsGroupLabel = 'תוספים';
@@ -569,36 +570,44 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
             visualDensity: VisualDensity.compact,
             onPressed: _loadLocalhostPlugin,
           ),
-          IconButton(
-            icon: const Icon(FluentIcons.arrow_sync_24_regular, size: 20),
-            tooltip: 'רענן תוספים',
-            visualDensity: VisualDensity.compact,
-            onPressed: () =>
-                context.read<PluginSystemBloc>().add(RefreshPlugins()),
-          ),
         ],
       ],
     );
   }
 
   Widget _buildSearchField(List<ToolCatalogEntry> entries) {
-    return RtlTextField(
+    final field = OtzariaSearchField(
       controller: _searchController,
       focusNode: _searchFocusNode,
       autofocus: true,
-      decoration: const InputDecoration(
-        hintText: 'חיפוש כלי או תוסף',
-        prefixIcon: Icon(FluentIcons.search_24_regular, size: 20),
-        isDense: true,
-        border: OutlineInputBorder(borderRadius: AppTokens.borderRadiusAll),
-      ),
-      onChanged: (value) => setState(() {
-        _query = value;
-        // בחיפוש התוצאה הראשונה מסומנת (Enter יפתח אותה); בלי חיפוש אין סימון.
-        _highlightedIndex = normalizeToolSearchText(value).isEmpty ? -1 : 0;
-      }),
+      hintText: 'חיפוש כלי או תוסף',
+      onChanged: _onQueryChanged,
+      onClear: () => _onQueryChanged(''),
       onSubmitted: (_) => _activateHighlighted(entries),
     );
+
+    if (!widget.showDevTools) return field;
+
+    return Row(
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: AppTokens.spaceXS),
+        FieldIconButton(
+          icon: FluentIcons.arrow_sync_24_regular,
+          tooltip: 'רענן תוספים',
+          onPressed: () =>
+              context.read<PluginSystemBloc>().add(RefreshPlugins()),
+        ),
+      ],
+    );
+  }
+
+  void _onQueryChanged(String value) {
+    setState(() {
+      _query = value;
+      // בחיפוש התוצאה הראשונה מסומנת (Enter יפתח אותה); בלי חיפוש אין סימון.
+      _highlightedIndex = normalizeToolSearchText(value).isEmpty ? -1 : 0;
+    });
   }
 
   Widget _buildEmptyState(bool isOfflineMode, List<ToolCatalogEntry> all) {

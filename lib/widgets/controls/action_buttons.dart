@@ -3,6 +3,9 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ── ActionButton ──────────────────────────────────────────────────────────────
@@ -279,6 +282,56 @@ class _BalancedText extends StatelessWidget {
 
         return Text(bestText, textAlign: textAlign);
       },
+    );
+  }
+}
+
+// ── FieldIconButton ───────────────────────────────────────────────────────────
+
+/// כפתור אייקון מרובע (פינות מעוגלות) בגובה שדה קלט, לשימוש בשורה אחת עם
+/// [OtzariaSearchField] וכדומה.
+///
+/// [slim] = null: יורש מ-[SettingsBloc.compactMenuMode], בדיוק כמו שדה החיפוש,
+/// כדי שהגבהים יישארו זהים בשני המצבים.
+class FieldIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+  final bool? slim;
+
+  const FieldIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.slim,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isSlim =
+        slim ?? context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+    final side = AppInputTokens.height(isSlim);
+
+    return SizedBox(
+      width: side,
+      height: side,
+      child: IconButton(
+        icon: Icon(icon, size: isSlim ? 18 : 20),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          backgroundColor: cs.surfaceContainerHighest,
+          foregroundColor: cs.onSurfaceVariant,
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppTokens.borderRadiusAll,
+          ),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
     );
   }
 }
