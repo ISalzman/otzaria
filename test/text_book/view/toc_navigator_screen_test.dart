@@ -581,6 +581,8 @@ Future<void> main() async {
     );
     await tester.pump();
 
+    // כותרת ראשית מעל הרשימה — בעיצוב הכותרת של תוצאות החיפוש.
+    expect(find.byType(NavTreeHeader), findsOneWidget);
     expect(find.byType(NavTreeGroupCard), findsWidgets);
     // ערך עם ילדים = שורת קטגוריה; עלה = שורת פריט.
     expect(find.widgetWithText(NavTreeTile, 'שער'), findsOneWidget);

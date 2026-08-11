@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:flutter/material.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -580,90 +580,78 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       resultCountString: _searchResults.isNotEmpty
           ? 'נמצאו ${_searchResults.length} תוצאות'
           : null,
-      resultsWidget: ScrollablePositionedList.builder(
-        itemScrollController: _resultsScrollController,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
+      resultsWidget: NavTreeFocusGroup(
+        child: ScrollablePositionedList.builder(
+          itemScrollController: _resultsScrollController,
+          padding: kNavTreeListPadding,
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            // הקבוצה נפתחת אחרי כותרת עמוד ונסגרת לפני הכותרת הבאה.
+            final isGroupStart = index == 0 || items[index - 1] is int;
+            final isGroupEnd =
+                index == items.length - 1 || items[index + 1] is int;
 
-          if (item is int) {
-            return BlocBuilder<SettingsBloc, SettingsState>(
-              builder: (context, settingsState) {
-                var text = _pageTitles[item]?.isNotEmpty == true
-                    ? _pageTitles[item]!
-                    : 'עמוד $item';
+            if (item is int) {
+              return BlocBuilder<SettingsBloc, SettingsState>(
+                builder: (context, settingsState) {
+                  var text = _pageTitles[item]?.isNotEmpty == true
+                      ? _pageTitles[item]!
+                      : 'עמוד $item';
 
-                if (settingsState.replaceHolyNames) {
-                  text = utils.replaceHolyNames(text);
-                }
+                  if (settingsState.replaceHolyNames) {
+                    text = utils.replaceHolyNames(text);
+                  }
 
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    top: 8.0,
-                    bottom: 8.0,
-                    right: 20.0,
-                    left: 20.0,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.picture_as_pdf,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          text,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          }
-
-          final result = item as SearchResult;
-          return SearchResultTile(
-            key: ValueKey('${result.segment}_${result.text.hashCode}'),
-            result: result,
-            onTap: () async {
-              final pageNumber = _getPdfPageNumber(result);
-              final controller = widget.textSearcher.controller;
-              if (controller != null &&
-                  controller.isReady &&
-                  controller.layout.pageLayouts.isNotEmpty) {
-                final layout = controller.layout;
-                final safePage = pageNumber.clamp(1, layout.pageLayouts.length);
-                final page = layout.pageLayouts[safePage - 1];
-                final halfViewHeight =
-                    controller.viewSize.height / 2 / controller.value.zoom;
-                await controller.goTo(
-                  controller.calcMatrixFor(
-                    page.topCenter.translate(0, halfViewHeight),
-                  ),
-                );
-              }
-
-              _schedulePdfHighlight(
-                _isSimpleSearch
-                    ? buildLiteralPattern(widget.searchController.text)?.regExp
-                    : _lastAdvancedHighlightPattern,
+                  return NavTreeHeader(title: text);
+                },
               );
-              widget.onSearchResultNavigated?.call();
-            },
-            height: 50,
-            query: widget.searchController.text,
-            isSimpleSearch: _isSimpleSearch,
-          );
-        },
+            }
+
+            final result = item as SearchResult;
+            return NavTreeGroupCard(
+              isGroupStart: isGroupStart,
+              isGroupEnd: isGroupEnd,
+              child: SearchResultTile(
+                key: ValueKey('${result.segment}_${result.text.hashCode}'),
+                result: result,
+                onTap: () async {
+                  final pageNumber = _getPdfPageNumber(result);
+                  final controller = widget.textSearcher.controller;
+                  if (controller != null &&
+                      controller.isReady &&
+                      controller.layout.pageLayouts.isNotEmpty) {
+                    final layout = controller.layout;
+                    final safePage = pageNumber.clamp(
+                      1,
+                      layout.pageLayouts.length,
+                    );
+                    final page = layout.pageLayouts[safePage - 1];
+                    final halfViewHeight =
+                        controller.viewSize.height / 2 / controller.value.zoom;
+                    await controller.goTo(
+                      controller.calcMatrixFor(
+                        page.topCenter.translate(0, halfViewHeight),
+                      ),
+                    );
+                  }
+
+                  _schedulePdfHighlight(
+                    _isSimpleSearch
+                        ? buildLiteralPattern(
+                            widget.searchController.text,
+                          )?.regExp
+                        : _lastAdvancedHighlightPattern,
+                  );
+                  widget.onSearchResultNavigated?.call();
+                },
+                height: 50,
+                query: widget.searchController.text,
+                isSimpleSearch: _isSimpleSearch,
+              ),
+            );
+          },
+        ),
       ),
       isNoResults:
           widget.searchController.text.isNotEmpty &&
@@ -770,31 +758,7 @@ class SearchResultTile extends StatelessWidget {
           context,
         );
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outline.withValues(alpha: 0.3),
-                width: 1,
-              ),
-              borderRadius: AppTokens.borderRadiusAll,
-            ),
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: AppTokens.borderRadiusAll,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: text,
-              ),
-            ),
-          ),
-        );
+        return NavTreeContentRow(onTap: onTap, child: text);
       },
     );
   }

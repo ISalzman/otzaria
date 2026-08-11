@@ -463,7 +463,12 @@ NavPanelTabHeader(                 // tabs + pin, when the panel has tabs
 )
 ```
 
-**Panel content** is built from `NavTreeTile.category` / `NavTreeTile.book` / `NavTreeHeader` / `NavTreeGroupCard` (`lib/widgets/lists/nav_tree_tile.dart`), inside a list with `EdgeInsets.symmetric(horizontal: 8, vertical: 4)` padding. A continuous group of rows shares one card (`isGroupStart` / `isGroupEnd` at its edges).
+**Panel content** is built from `lib/widgets/lists/nav_tree_tile.dart`:
+- `NavTreeHeader` — the main title above the list (primary color, bold) and any sub-tree root
+- `NavTreeTile.category` / `NavTreeTile.book` — tree rows; `NavTreeContentRow` for free-form rows (search snippets)
+- `NavTreeGroupCard` — a continuous run of rows shares one card (`isGroupStart` / `isGroupEnd` at its edges); a heading that owns sub-rows is its own standalone card
+- `NavTreeFocusGroup` — wrap the list so Tab lands on the **selected** row, not the first
+- Horizontal inset comes from `kNavTreeSideInset` inside the card/header; lists pass only `kNavTreeListPadding`
 
 **Never:**
 - `AdaptiveSidePane` directly for a *navigation* panel — it is the mechanism (responsive layout, drag, overlay) and stays for other panel kinds
