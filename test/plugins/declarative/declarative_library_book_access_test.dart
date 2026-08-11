@@ -77,6 +77,7 @@ void main() {
         ];
       },
       (_, _, _, {required navigateToPositionIfReused}) {},
+      externalBookOpener: (_) async => true,
     );
 
     final resolved = await access.resolveUniqueBatch([
@@ -167,6 +168,36 @@ void main() {
     expect(navigationFlags, [true]);
   });
 
+  test('ספר חיצוני שנפתר נפתח דרך הקישור החיצוני', () async {
+    final external = ExternalLibraryBook(
+      title: 'ספר חיצוני',
+      id: 10,
+      link: 'https://hebrewbooks.org/10',
+      externalLibraryId: 'hb:10',
+    );
+    final externallyOpened = <ExternalLibraryBook>[];
+    final locallyOpened = <Book>[];
+    final access = _access(
+      library: const [],
+      hebrewBooks: [external],
+      opened: locallyOpened,
+      externallyOpened: externallyOpened,
+    );
+    final identity = await access.resolveUnique({
+      'external': {'provider': 'hebrewbooks', 'id': 10},
+    });
+
+    final result = await access.openUnique(
+      identity!,
+      index: 0,
+      searchQuery: '',
+    );
+
+    expect(result, isTrue);
+    expect(externallyOpened, [external]);
+    expect(locallyOpened, isEmpty);
+  });
+
   test('PluginBookIdentity מפענח ספק חיצוני מוכר בלבד', () {
     final hb = ExternalLibraryBook(
       title: 'HB',
@@ -196,6 +227,7 @@ DeclarativeLibraryBookAccess _access({
   List<(int, String)>? positions,
   List<bool>? navigationFlags,
   List<(String, Set<Object>)>? externalLoads,
+  List<ExternalLibraryBook>? externallyOpened,
 }) {
   return DeclarativeLibraryBookAccess(
     () async => library,
@@ -207,6 +239,10 @@ DeclarativeLibraryBookAccess _access({
       opened?.add(book);
       positions?.add((index, searchQuery));
       navigationFlags?.add(navigateToPositionIfReused);
+    },
+    externalBookOpener: (book) async {
+      externallyOpened?.add(book);
+      return true;
     },
   );
 }
