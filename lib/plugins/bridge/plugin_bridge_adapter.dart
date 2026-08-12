@@ -1329,8 +1329,9 @@ class PluginBridgeAdapter {
         }
       case 'respondExternalSearch':
         // spec: respondExternalSearch({ requestId, results?, totalBooks?,
-        //   totalHits?, hasMore?, error? })
+        //   totalHits?, hasMore?, done?, error? })
         // תשובת הספק לאירוע search.external.requested; הניקוי נעשה בשירות.
+        // done: false — עדכון חלקי תוך כדי הזרמה; הבקשה נשארת פתוחה.
         {
           final requestId = args['requestId'];
           if (requestId is! String || requestId.isEmpty) {
@@ -1342,6 +1343,7 @@ class PluginBridgeAdapter {
             totalBooks: (args['totalBooks'] as num?)?.toInt() ?? 0,
             totalHits: (args['totalHits'] as num?)?.toInt() ?? 0,
             hasMore: args['hasMore'] == true,
+            done: args['done'] != false,
             error: args['error'] as String?,
           );
           return true;

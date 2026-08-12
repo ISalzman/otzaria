@@ -60,8 +60,10 @@ class PluginExternalSearchService {
 
   static const requestTopic = 'search.external.requested';
 
-  /// חיפוש מלא מול שירות חיצוני עשוי לקחת זמן (כולל חילוץ קטעי טקסט).
-  static const _timeout = Duration(seconds: 45);
+  /// חיפוש מלא מול שירות חיצוני עשוי לקחת זמן; הספק שולח תשובות חלקיות
+  /// (`done: false`) תוך כדי, ולכן הטיימאוט הוא חוסר-פעילות — הוא מתאפס
+  /// בכל עדכון חלקי במקום למדוד את משך החיפוש כולו.
+  static const _inactivityTimeout = Duration(seconds: 45);
 
   static const _maxResultsPerPage = 50;
   static const _maxTitleLength = 300;
@@ -69,8 +71,7 @@ class PluginExternalSearchService {
   static const _maxSnippetLength = 600;
 
   final Map<String, String> _providerToPlugin = {};
-  final Map<String, Completer<ExternalSearchPage>> _pending = {};
-  final Map<String, String> _pendingProvider = {};
+  final Map<String, _PendingExternalSearch> _pending = {};
   int _requestCounter = 0;
 
   /// רושם את [pluginId] כספק עבור [provider]. רישום חוזר מחליף את הקודם —
@@ -82,8 +83,10 @@ class PluginExternalSearchService {
 
   bool hasProvider(String provider) => _providerToPlugin.containsKey(provider);
 
-  /// שולח שאילתה מעומדת לספק של [provider] ומחזיר עמוד תוצאות.
-  /// זורק [TimeoutException] כשהתוסף לא ענה בזמן, או [StateError] כשאין ספק.
+  /// שולח שאילתה מעומדת לספק של [provider] ומחזיר את עמוד התוצאות הסופי.
+  /// עדכונים חלקיים תוך כדי החיפוש (`done: false` מהספק) נמסרים ל-[onUpdate]
+  /// עם ספירות שהן רף-תחתון. זורק [TimeoutException] כשהתוסף הפסיק לענות,
+  /// או [StateError] כשאין ספק.
   Future<ExternalSearchPage> search({
     required String provider,
     required String query,
@@ -91,15 +94,19 @@ class PluginExternalSearchService {
     int distance = 1,
     int offset = 0,
     int limit = 20,
+    void Function(ExternalSearchPage partial)? onUpdate,
   }) async {
     final pluginId = _providerToPlugin[provider];
     if (pluginId == null) {
       throw StateError('No external search provider for "$provider"');
     }
     final requestId = 'xs-${++_requestCounter}';
-    final completer = Completer<ExternalSearchPage>();
-    _pending[requestId] = completer;
-    _pendingProvider[requestId] = provider;
+    final pending = _PendingExternalSearch(
+      provider: provider,
+      onUpdate: onUpdate,
+      inactivityTimeout: _inactivityTimeout,
+    );
+    _pending[requestId] = pending;
     try {
       await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
         pluginId,
@@ -115,14 +122,15 @@ class PluginExternalSearchService {
         },
         preferBackground: true,
       );
-      return await completer.future.timeout(_timeout);
+      return await pending.completer.future;
     } finally {
+      pending.dispose();
       _pending.remove(requestId);
-      _pendingProvider.remove(requestId);
     }
   }
 
   /// תשובת התוסף לבקשה: רשימת תוצאות גולמית שעוברת ניקוי וקיצוץ כאן.
+  /// `done: false` מסמן עדכון חלקי — הבקשה נשארת פתוחה והטיימאוט מתאפס;
   /// תשובה לבקשה שכבר פגה מתעלמים ממנה.
   void respond(
     String requestId, {
@@ -130,28 +138,34 @@ class PluginExternalSearchService {
     int totalBooks = 0,
     int totalHits = 0,
     bool hasMore = false,
+    bool done = true,
     String? error,
   }) {
-    final pending = _pending.remove(requestId);
-    final provider = _pendingProvider.remove(requestId);
-    if (pending == null || pending.isCompleted || provider == null) return;
+    final pending = _pending[requestId];
+    if (pending == null || pending.completer.isCompleted) return;
     if (error != null && error.isNotEmpty) {
-      pending.completeError(StateError(error));
+      _pending.remove(requestId);
+      pending.completer.completeError(StateError(error));
       return;
     }
     final sanitized = <ExternalSearchResult>[];
     for (final raw in results.take(_maxResultsPerPage)) {
-      final result = _sanitizeResult(raw, provider);
+      final result = _sanitizeResult(raw, pending.provider);
       if (result != null) sanitized.add(result);
     }
-    pending.complete(
-      ExternalSearchPage(
-        results: sanitized,
-        totalBooks: totalBooks < 0 ? 0 : totalBooks,
-        totalHits: totalHits < 0 ? 0 : totalHits,
-        hasMore: hasMore,
-      ),
+    final page = ExternalSearchPage(
+      results: sanitized,
+      totalBooks: totalBooks < 0 ? 0 : totalBooks,
+      totalHits: totalHits < 0 ? 0 : totalHits,
+      hasMore: hasMore,
     );
+    if (!done) {
+      pending.touch();
+      pending.onUpdate?.call(page);
+      return;
+    }
+    _pending.remove(requestId);
+    pending.completer.complete(page);
   }
 
   ExternalSearchResult? _sanitizeResult(Object? raw, String provider) {
@@ -180,5 +194,40 @@ class PluginExternalSearchService {
     final text = value.replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ').trim();
     if (text.isEmpty) return null;
     return text.length <= maxLength ? text : text.substring(0, maxLength);
+  }
+}
+
+/// בקשה פתוחה: ה-completer לעמוד הסופי, callback לעדכונים חלקיים, וטיימר
+/// חוסר-פעילות שמתאפס בכל עדכון.
+class _PendingExternalSearch {
+  final String provider;
+  final void Function(ExternalSearchPage partial)? onUpdate;
+  final Duration inactivityTimeout;
+  final Completer<ExternalSearchPage> completer =
+      Completer<ExternalSearchPage>();
+  Timer? _timer;
+
+  _PendingExternalSearch({
+    required this.provider,
+    required this.onUpdate,
+    required this.inactivityTimeout,
+  }) {
+    touch();
+  }
+
+  void touch() {
+    _timer?.cancel();
+    _timer = Timer(inactivityTimeout, () {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          TimeoutException('External search provider stopped responding'),
+        );
+      }
+    });
+  }
+
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
   }
 }
