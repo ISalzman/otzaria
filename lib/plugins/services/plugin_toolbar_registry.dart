@@ -226,6 +226,28 @@ class PluginToolbarRegistry extends ChangeNotifier {
       );
     }
 
+    final rawOrder = json['order'];
+    if (rawOrder != null) {
+      if (isChild) {
+        throw const PluginToolbarException(
+          'error.invalid_params',
+          'order is only allowed on top-level items',
+        );
+      }
+      if (placement != 'overflow') {
+        throw const PluginToolbarException(
+          'error.invalid_params',
+          'order requires placement "overflow"',
+        );
+      }
+      if (rawOrder is! int || rawOrder < 0 || rawOrder > 10000) {
+        throw const PluginToolbarException(
+          'error.invalid_params',
+          'order must be an integer between 0 and 10000',
+        );
+      }
+    }
+
     return PluginToolbarItem(
       id: id,
       type: type,
@@ -237,6 +259,7 @@ class PluginToolbarRegistry extends ChangeNotifier {
       openPlugin: json['openPlugin'] == true,
       param: json['param'],
       placement: placement,
+      order: rawOrder as int? ?? PluginToolbarItem.defaultOrder,
     );
   }
 

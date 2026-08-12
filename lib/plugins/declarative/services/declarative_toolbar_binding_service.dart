@@ -129,6 +129,7 @@ class DeclarativeToolbarBindingService {
         contexts: base.contexts,
         hostAction: primaryAction,
         placement: base.placement,
+        order: base.order,
       );
     }
 
@@ -183,6 +184,7 @@ class DeclarativeToolbarBindingService {
       children: children,
       hostAction: primaryAction,
       placement: base.placement,
+      order: base.order,
     );
     PluginToolbarRegistry.detached().registerPayload(
       registration.plugin.pluginId,

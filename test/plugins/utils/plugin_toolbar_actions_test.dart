@@ -1,9 +1,11 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/controls/bar_button.dart';
 import 'package:otzaria/widgets/controls/bar_split_button.dart';
 
@@ -29,6 +31,66 @@ void main() {
     expect(action.widget, isA<BarButton>());
     expect(action.onPressed, isNotNull);
     expect(action.submenuItems, isNull);
+  });
+
+  test('buildOrderedPluginOverflowActions מחזיר רק overflow עם המשקל', () {
+    const items = [
+      ('a', PluginToolbarItem(id: 'bar', title: 'Bar', placement: 'primary')),
+      (
+        'a',
+        PluginToolbarItem(
+          id: 'mid',
+          title: 'Mid',
+          placement: 'overflow',
+          order: 55,
+        ),
+      ),
+      ('b', PluginToolbarItem(id: 'end', title: 'End', placement: 'overflow')),
+    ];
+
+    final ordered = buildOrderedPluginOverflowActions(
+      records: items,
+      context: 'reader-text',
+      compact: false,
+      locationPayload: emptyLocation,
+    );
+
+    expect(ordered.map((entry) => (entry.$1, entry.$2.tooltip)), [
+      (55, 'Mid'),
+      (PluginToolbarItem.defaultOrder, 'End'),
+    ]);
+  });
+
+  test('mergeOrderedMenuActions משבץ פריט תוסף לפני "הדפסה" ושומר יציבות', () {
+    ActionButtonData action(String tooltip) => ActionButtonData(
+      widget: const SizedBox.shrink(),
+      icon: FluentIcons.circle_24_regular,
+      tooltip: tooltip,
+      onPressed: null,
+    );
+
+    final merged = mergeOrderedMenuActions(
+      [
+        (10, action('סימניות')),
+        (60, action('הדפסה')),
+        (70, action('אודות')),
+      ],
+      [
+        (55, action('תוסף לפני הדפסה')),
+        (1000, action('תוסף בלי order')),
+        // שוויון משקלים: המובנה קודם, ותוספים לפי סדר הרישום.
+        (60, action('תוסף שווה להדפסה')),
+      ],
+    );
+
+    expect(merged.map((item) => item.tooltip), [
+      'סימניות',
+      'תוסף לפני הדפסה',
+      'הדפסה',
+      'תוסף שווה להדפסה',
+      'אודות',
+      'תוסף בלי order',
+    ]);
   });
 
   test('unknown icon name falls back to the puzzle piece icon', () {

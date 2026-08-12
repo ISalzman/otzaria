@@ -4680,10 +4680,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ..._buildDisplayOrderPdfActions(context),
             ..._buildPluginActions(context),
           ],
-          alwaysInMenu: [
-            ..._buildAlwaysInMenuPdfActions(context),
-            ..._buildPluginActions(context, placement: 'overflow'),
-          ],
+          // מיזוג לפי משקל: פריטי תוסף עם order משתבצים בין הפריטים המובנים.
+          alwaysInMenu: mergeOrderedMenuActions(
+            _buildAlwaysInMenuPdfActions(context),
+            _buildOrderedPluginOverflowActions(context),
+          ),
           // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
           // הכפתורים שבראש תפריט ה-"...".
           menuHeaderActions: widget.isInCombinedView
@@ -4695,17 +4696,31 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  List<ActionButtonData> _buildPluginActions(
-    BuildContext context, {
-    String placement = 'primary',
-  }) {
+  List<ActionButtonData> _buildPluginActions(BuildContext context) {
     final records = PluginToolbarRegistry.instance.getAll();
     if (records.isEmpty) return const [];
     return buildPluginToolbarActions(
       records: records,
       context: 'reader-pdf',
       compact: context.read<SettingsBloc>().state.compactMenuMode,
-      placement: placement,
+      locationPayload: () async =>
+          (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
+      hostActionDispatcher: context
+          .read<PluginSystemBloc>()
+          .declarativeHost
+          ?.dispatchAction,
+    );
+  }
+
+  List<(int, ActionButtonData)> _buildOrderedPluginOverflowActions(
+    BuildContext context,
+  ) {
+    final records = PluginToolbarRegistry.instance.getAll();
+    if (records.isEmpty) return const [];
+    return buildOrderedPluginOverflowActions(
+      records: records,
+      context: 'reader-pdf',
+      compact: context.read<SettingsBloc>().state.compactMenuMode,
       locationPayload: () async =>
           (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
       hostActionDispatcher: context
@@ -4721,8 +4736,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return [
       // מהדורה מקבילה — המובנית (מהדורת טקסט) כפעולה ראשית, ומהדורות
       // נוספות (היברובוקס מקומיות) בחץ שלצידה.
-      if (_parallelEditions.isNotEmpty)
-        _buildParallelEditionsAction(context),
+      if (_parallelEditions.isNotEmpty) _buildParallelEditionsAction(context),
       ActionButtonData.simple(
         icon: FluentIcons.open_24_regular,
         tooltip: 'פתח כרטיסיית מפרשים',
@@ -4768,123 +4782,152 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
+  /// פריטי תפריט "עוד פעולות" עם משקל מיון קבוע לכל פריט, כדי שפריטי
+  /// תוספים עם `order` ישתבצו ביניהם באופן יציב (הדפסה = 60 בכל המסכים).
+  List<(int, ActionButtonData)> _buildAlwaysInMenuPdfActions(
+    BuildContext context,
+  ) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return [
-      ActionButtonData(
-        widget: BarButton.icon(
-          tooltip: 'הצג הערות אישיות',
+      (
+        10,
+        ActionButtonData(
+          widget: BarButton.icon(
+            tooltip: 'הצג הערות אישיות',
+            icon: FluentIcons.note_24_regular,
+            compact: isCompact,
+            onPressed: _openPersonalNotesPane,
+          ),
           icon: FluentIcons.note_24_regular,
-          compact: isCompact,
+          tooltip: 'הצג הערות אישיות',
           onPressed: _openPersonalNotesPane,
         ),
-        icon: FluentIcons.note_24_regular,
-        tooltip: 'הצג הערות אישיות',
-        onPressed: _openPersonalNotesPane,
       ),
-      ActionButtonData.simple(
-        icon: FluentIcons.note_add_24_regular,
-        tooltip: 'הוסף הערה לעמוד זה',
-        onPressed: () => _handleAddNotePress(context),
-        compact: isCompact,
+      (
+        20,
+        ActionButtonData.simple(
+          icon: FluentIcons.note_add_24_regular,
+          tooltip: 'הוסף הערה לעמוד זה',
+          onPressed: () => _handleAddNotePress(context),
+          compact: isCompact,
+        ),
       ),
       // הצגת סימניות הספר (הוספת סימניה עברה לתפריט ההקשר בעמוד)
-      ActionButtonData(
-        widget: BarButton.icon(
-          key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
-          tooltip: 'סימניות בספר זה',
+      (
+        30,
+        ActionButtonData(
+          widget: BarButton.icon(
+            key: widget.enableTourTargets ? pdfBookBookmarkTourTargetKey : null,
+            tooltip: 'סימניות בספר זה',
+            icon: FluentIcons.bookmark_multiple_24_regular,
+            compact: isCompact,
+            onPressed: () => _showBookmarksForCurrentBook(context),
+          ),
           icon: FluentIcons.bookmark_multiple_24_regular,
-          compact: isCompact,
+          tooltip: 'סימניות בספר זה',
           onPressed: () => _showBookmarksForCurrentBook(context),
         ),
-        icon: FluentIcons.bookmark_multiple_24_regular,
-        tooltip: 'סימניות בספר זה',
-        onPressed: () => _showBookmarksForCurrentBook(context),
       ),
       if (!widget.isInCombinedView &&
           context.read<SettingsBloc>().state.enablePerBookSettings)
-        ActionButtonData.simple(
-          icon: FluentIcons.arrow_reset_24_regular,
-          tooltip: 'אפס הגדרות ספר זה',
-          onPressed: _resetPerBookSettings,
-          compact: isCompact,
+        (
+          40,
+          ActionButtonData.simple(
+            icon: FluentIcons.arrow_reset_24_regular,
+            tooltip: 'אפס הגדרות ספר זה',
+            onPressed: _resetPerBookSettings,
+            compact: isCompact,
+          ),
         ),
       if (!widget.isInCombinedView)
-        ActionButtonData.simple(
-          key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
-          icon: FluentIcons.print_24_regular,
-          tooltip: 'הדפס',
-          onPressed: () => _handlePrintPress(context),
-          compact: isCompact,
+        (
+          60,
+          ActionButtonData.simple(
+            key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
+            icon: FluentIcons.print_24_regular,
+            tooltip: 'הדפס',
+            onPressed: () => _handlePrintPress(context),
+            compact: isCompact,
+          ),
         ),
       // העתק קישור ישיר
-      ActionButtonData(
-        widget: const SizedBox.shrink(),
-        icon: FluentIcons.link_24_regular,
-        tooltip: widget.tab.book.id != null
-            ? 'העתק קישור ישיר'
-            : 'העתק קישור ישיר (לא זמין לספר זה)',
-        onPressed: null,
-        submenuItems: widget.tab.book.id != null
-            ? () {
-                final bookId = widget.tab.book.id!;
-                return [
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_24_regular,
-                    tooltip: 'העתק קישור ישיר לספר זה',
-                    onPressed: () =>
-                        copyLinkToClipboard(buildPdfBookLink(bookId)),
-                  ),
-                  ActionButtonData(
-                    widget: const SizedBox.shrink(),
-                    icon: FluentIcons.link_multiple_24_regular,
-                    tooltip: 'העתק קישור ישיר לעמוד זה',
-                    onPressed: () {
-                      final page =
-                          widget.tab.pdfViewerController.pageNumber ??
-                          widget.tab.pageNumber;
-                      copyLinkToClipboard(buildPdfPageLink(bookId, page));
-                    },
-                  ),
-                ];
-              }()
-            : null,
-      ),
-      if (!widget.isInCombinedView)
-        ActionButtonData.simple(
-          icon: FluentIcons.book_information_24_regular,
-          tooltip: 'אודות הספר',
-          onPressed: () => showBookDetailsDialog(context, widget.tab.book),
-          compact: isCompact,
-        ),
-      if (widget.isInCombinedView)
+      (
+        70,
         ActionButtonData(
           widget: const SizedBox.shrink(),
-          icon: FluentIcons.more_horizontal_24_regular,
-          tooltip: 'פעולות נוספות',
+          icon: FluentIcons.link_24_regular,
+          tooltip: widget.tab.book.id != null
+              ? 'העתק קישור ישיר'
+              : 'העתק קישור ישיר (לא זמין לספר זה)',
           onPressed: null,
-          submenuItems: [
-            if (context.read<SettingsBloc>().state.enablePerBookSettings)
+          submenuItems: widget.tab.book.id != null
+              ? () {
+                  final bookId = widget.tab.book.id!;
+                  return [
+                    ActionButtonData(
+                      widget: const SizedBox.shrink(),
+                      icon: FluentIcons.link_24_regular,
+                      tooltip: 'העתק קישור ישיר לספר זה',
+                      onPressed: () =>
+                          copyLinkToClipboard(buildPdfBookLink(bookId)),
+                    ),
+                    ActionButtonData(
+                      widget: const SizedBox.shrink(),
+                      icon: FluentIcons.link_multiple_24_regular,
+                      tooltip: 'העתק קישור ישיר לעמוד זה',
+                      onPressed: () {
+                        final page =
+                            widget.tab.pdfViewerController.pageNumber ??
+                            widget.tab.pageNumber;
+                        copyLinkToClipboard(buildPdfPageLink(bookId, page));
+                      },
+                    ),
+                  ];
+                }()
+              : null,
+        ),
+      ),
+      if (!widget.isInCombinedView)
+        (
+          80,
+          ActionButtonData.simple(
+            icon: FluentIcons.book_information_24_regular,
+            tooltip: 'אודות הספר',
+            onPressed: () => showBookDetailsDialog(context, widget.tab.book),
+            compact: isCompact,
+          ),
+        ),
+      if (widget.isInCombinedView)
+        (
+          90,
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.more_horizontal_24_regular,
+            tooltip: 'פעולות נוספות',
+            onPressed: null,
+            submenuItems: [
+              if (context.read<SettingsBloc>().state.enablePerBookSettings)
+                ActionButtonData(
+                  widget: const SizedBox.shrink(),
+                  icon: FluentIcons.arrow_reset_24_regular,
+                  tooltip: 'אפס הגדרות ספר זה',
+                  onPressed: () => _resetPerBookSettings(),
+                ),
               ActionButtonData(
                 widget: const SizedBox.shrink(),
-                icon: FluentIcons.arrow_reset_24_regular,
-                tooltip: 'אפס הגדרות ספר זה',
-                onPressed: () => _resetPerBookSettings(),
+                icon: FluentIcons.print_24_regular,
+                tooltip: 'הדפס',
+                onPressed: () => _handlePrintPress(context),
               ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.print_24_regular,
-              tooltip: 'הדפס',
-              onPressed: () => _handlePrintPress(context),
-            ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.book_information_24_regular,
-              tooltip: 'אודות הספר',
-              onPressed: () => showBookDetailsDialog(context, widget.tab.book),
-            ),
-          ],
+              ActionButtonData(
+                widget: const SizedBox.shrink(),
+                icon: FluentIcons.book_information_24_regular,
+                tooltip: 'אודות הספר',
+                onPressed: () =>
+                    showBookDetailsDialog(context, widget.tab.book),
+              ),
+            ],
+          ),
         ),
     ];
   }

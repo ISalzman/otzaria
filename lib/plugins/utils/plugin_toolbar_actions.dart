@@ -43,6 +43,55 @@ List<ActionButtonData> buildPluginToolbarActions({
   ];
 }
 
+/// כמו [buildPluginToolbarActions] עבור placement 'overflow', אבל מחזיר גם את
+/// משקל המיון שהתוסף הצהיר, כדי שהמסך ישבץ את הפריט בין הפריטים המובנים של
+/// תפריט "עוד פעולות" באמצעות [mergeOrderedMenuActions].
+List<(int order, ActionButtonData action)> buildOrderedPluginOverflowActions({
+  required List<(String pluginId, PluginToolbarItem item)> records,
+  required String context,
+  required bool compact,
+  required Future<Map<String, dynamic>> Function() locationPayload,
+  PluginRuntimeDispatcher? dispatcher,
+  PluginHostActionDispatcher? hostActionDispatcher,
+}) {
+  final runtime = dispatcher ?? PluginRuntimeDispatcher.instance;
+  return [
+    for (final record in records)
+      if (record.$2.contexts.contains(context) &&
+          record.$2.placement == 'overflow')
+        (
+          record.$2.order,
+          _buildAction(
+            pluginId: record.$1,
+            item: record.$2,
+            context: context,
+            compact: compact,
+            locationPayload: locationPayload,
+            dispatcher: runtime,
+            hostActionDispatcher: hostActionDispatcher,
+          ),
+        ),
+  ];
+}
+
+/// ממזג פריטים מובנים ופריטי תוספים לתפריט "עוד פעולות" לפי משקל, במיון
+/// יציב: בשוויון משקלים נשמר סדר הקלט — מובנים לפני תוספים, ותוספים לפי
+/// סדר הרישום.
+List<ActionButtonData> mergeOrderedMenuActions(
+  List<(int order, ActionButtonData action)> builtIn,
+  List<(int order, ActionButtonData action)> plugins,
+) {
+  final indexed = [
+    for (final (index, entry) in [...builtIn, ...plugins].indexed)
+      (entry.$1, index, entry.$2),
+  ];
+  indexed.sort((a, b) {
+    final byOrder = a.$1.compareTo(b.$1);
+    return byOrder != 0 ? byOrder : a.$2.compareTo(b.$2);
+  });
+  return [for (final entry in indexed) entry.$3];
+}
+
 ActionButtonData _buildAction({
   required String pluginId,
   required PluginToolbarItem item,

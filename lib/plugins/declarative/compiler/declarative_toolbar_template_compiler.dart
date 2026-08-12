@@ -50,6 +50,7 @@ class DeclarativeToolbarTemplateCompiler {
       'icon',
       'contexts',
       'placement',
+      'order',
       'binding',
       'action',
       'childrenBinding',
@@ -69,6 +70,7 @@ class DeclarativeToolbarTemplateCompiler {
         'icon',
         'contexts',
         'placement',
+        'order',
       ])
         if (json.containsKey(field)) field: json[field],
       if (type != 'button')

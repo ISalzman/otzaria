@@ -75,6 +75,60 @@ void main() {
       );
     });
 
+    test('order תקין נשמר, ודורש placement overflow ופריט עליון', () {
+      registry.registerPayload('marker', {
+        'id': 'before-print',
+        'title': 'Before print',
+        'icon': 'bookmark_24_regular',
+        'placement': 'overflow',
+        'order': 55,
+      });
+      expect(registry.getAll().single.$2.order, 55);
+
+      // ללא order — ברירת המחדל ממקמת אחרי כל הפריטים המובנים.
+      registry.removeAll('marker');
+      registry.registerPayload('marker', {
+        'id': 'no-order',
+        'title': 'No order',
+        'icon': 'bookmark_24_regular',
+        'placement': 'overflow',
+      });
+      expect(registry.getAll().single.$2.order, PluginToolbarItem.defaultOrder);
+
+      for (final invalid in [
+        {'placement': 'primary', 'order': 55}, // order בלי overflow
+        {'placement': 'overflow', 'order': -1},
+        {'placement': 'overflow', 'order': 10001},
+        {'placement': 'overflow', 'order': 'first'},
+      ]) {
+        expect(
+          () => registry.registerPayload('other', {
+            'id': 'bad-order',
+            'title': 'Bad',
+            'icon': 'bookmark_24_regular',
+            ...invalid,
+          }),
+          throwsA(isA<PluginToolbarException>()),
+          reason: 'payload $invalid היה אמור להידחות',
+        );
+      }
+
+      expect(
+        () => registry.registerPayload('other', {
+          'id': 'menu-with-child-order',
+          'type': 'menu',
+          'title': 'Menu',
+          'icon': 'bookmark_24_regular',
+          'placement': 'overflow',
+          'children': [
+            {'id': 'child', 'title': 'Child', 'order': 5},
+          ],
+        }),
+        throwsA(isA<PluginToolbarException>()),
+        reason: 'order על ילד היה אמור להידחות',
+      );
+    });
+
     test('requires an icon on a top-level item but not on children', () {
       expect(
         () => registry.registerPayload('marker', {
