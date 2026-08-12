@@ -36,7 +36,6 @@ import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -725,36 +724,33 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     children: [
                       _buildAppBar(context, state, chapters),
                       Expanded(
-                        child: Padding(
-                          padding: SplitPaneContentInset.of(context),
-                          child: Stack(
-                            children: [
-                              NavSidePanel(
-                                isOpen: _navPaneOpen || _pinLeftPane,
-                                onClose: () {
-                                  if (!_pinLeftPane) {
-                                    setState(() => _navPaneOpen = false);
-                                  }
-                                },
-                                alignment: AlignmentDirectional.centerEnd,
-                                paneWidth: _kNavPaneWidth,
-                                minMainContentWidth: 400,
-                                mainContent: _buildCommentaryMainContent(
+                        child: Stack(
+                          children: [
+                            NavSidePanel(
+                              isOpen: _navPaneOpen || _pinLeftPane,
+                              onClose: () {
+                                if (!_pinLeftPane) {
+                                  setState(() => _navPaneOpen = false);
+                                }
+                              },
+                              alignment: AlignmentDirectional.centerEnd,
+                              paneWidth: _kNavPaneWidth,
+                              minMainContentWidth: 400,
+                              mainContent: _buildCommentaryMainContent(
+                                context,
+                                state,
+                                effectiveIndexes,
+                              ),
+                              paneContent: NavPanelSearchScope(
+                                host: _searchHost,
+                                child: _buildNavPanel(
                                   context,
-                                  state,
-                                  effectiveIndexes,
-                                ),
-                                paneContent: NavPanelSearchScope(
-                                  host: _searchHost,
-                                  child: _buildNavPanel(
-                                    context,
-                                    state: state,
-                                    chapters: chapters,
-                                  ),
+                                  state: state,
+                                  chapters: chapters,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

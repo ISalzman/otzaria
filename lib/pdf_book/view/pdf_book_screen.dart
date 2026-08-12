@@ -73,7 +73,6 @@ import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -3991,18 +3990,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildReaderMainContent() {
-    // בתצוגת "זה לצד זה" מתווספים שוליי הדופן החיצוני לתוכן בלבד; הידית
-    // (Positioned(left:0)) נשארת צמודה לדופן החלון.
-    final splitInset = SplitPaneContentInset.of(
-      context,
-    ).resolve(Directionality.of(context));
-    // פסי הגלילה צפים מעל התוכן (כמו בספרי טקסט) — בלי תעלה נפרדת, כדי
-    // שלא ייראה פס רקע לצד הדף.
-    final readerContentPadding = EdgeInsets.only(
-      left: splitInset.left,
-      right: splitInset.right,
-    );
-
     return BlocListener<PdfBookBloc, PdfBookState>(
       listenWhen: (prev, curr) =>
           curr is PdfBookError &&
@@ -4025,66 +4012,63 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Padding(
-                  padding: readerContentPadding,
-                  child: RepaintBoundary(
-                    key: _pdfViewportBoundaryKey,
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        Colors.white,
-                        Provider.of<SettingsBloc>(
-                              context,
-                              listen: true,
-                            ).state.isDarkMode
-                            ? BlendMode.difference
-                            : BlendMode.dst,
-                      ),
-                      child: Stack(
-                        children: [
-                          _buildPdfViewerFromFile(_resolvedPdfPath),
-                          BlocBuilder<PdfBookBloc, PdfBookState>(
-                            buildWhen: (prev, curr) {
-                              if (prev is PdfBookLoaded &&
-                                  curr is PdfBookLoaded) {
-                                return prev.isLoading != curr.isLoading ||
-                                    prev.loadSucceeded != curr.loadSucceeded;
-                              }
-                              return true;
-                            },
-                            builder: (context, state) {
-                              // בזמן auto-retry נשאר הספינר על המסך
-                              if (state is PdfBookError && !state.autoRetry) {
-                                return const SizedBox.shrink();
-                              }
-                              if (state is PdfBookError ||
-                                  state is! PdfBookLoaded ||
-                                  state.isLoading) {
-                                // RepaintBoundary סביב הספינר בלבד: בלי הבידוד
-                                // כל טיק שלו מרסטר מחדש את כל שכבת ה-viewport
-                                // (כולל ה-ColorFiltered) — יקר בטעינות ארוכות.
-                                return const Positioned.fill(
-                                  child: ColoredBox(
-                                    color: AppColors.pageWhite,
-                                    child: Center(
-                                      child: RepaintBoundary(
-                                        child: CircularProgressIndicator(),
-                                      ),
+                RepaintBoundary(
+                  key: _pdfViewportBoundaryKey,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      Colors.white,
+                      Provider.of<SettingsBloc>(
+                            context,
+                            listen: true,
+                          ).state.isDarkMode
+                          ? BlendMode.difference
+                          : BlendMode.dst,
+                    ),
+                    child: Stack(
+                      children: [
+                        _buildPdfViewerFromFile(_resolvedPdfPath),
+                        BlocBuilder<PdfBookBloc, PdfBookState>(
+                          buildWhen: (prev, curr) {
+                            if (prev is PdfBookLoaded &&
+                                curr is PdfBookLoaded) {
+                              return prev.isLoading != curr.isLoading ||
+                                  prev.loadSucceeded != curr.loadSucceeded;
+                            }
+                            return true;
+                          },
+                          builder: (context, state) {
+                            // בזמן auto-retry נשאר הספינר על המסך
+                            if (state is PdfBookError && !state.autoRetry) {
+                              return const SizedBox.shrink();
+                            }
+                            if (state is PdfBookError ||
+                                state is! PdfBookLoaded ||
+                                state.isLoading) {
+                              // RepaintBoundary סביב הספינר בלבד: בלי הבידוד
+                              // כל טיק שלו מרסטר מחדש את כל שכבת ה-viewport
+                              // (כולל ה-ColorFiltered) — יקר בטעינות ארוכות.
+                              return const Positioned.fill(
+                                child: ColoredBox(
+                                  color: AppColors.pageWhite,
+                                  child: Center(
+                                    child: RepaintBoundary(
+                                      child: CircularProgressIndicator(),
                                     ),
                                   ),
-                                );
-                              }
-                              if (!state.loadSucceeded) {
-                                return const Positioned.fill(
-                                  child: Center(
-                                    child: Text('Failed to load PDF'),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                        ],
-                      ),
+                                ),
+                              );
+                            }
+                            if (!state.loadSucceeded) {
+                              return const Positioned.fill(
+                                child: Center(
+                                  child: Text('Failed to load PDF'),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -4101,59 +4085,50 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                       return const SizedBox.shrink();
                     }
                     return Positioned.fill(
-                      child: Padding(
-                        padding: readerContentPadding,
-                        child: ColoredBox(
-                          color: Theme.of(context).colorScheme.surface,
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  state.message,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                state.message,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
-                                const SizedBox(height: 16),
-                                ActionButton.recommended(
-                                  text: 'נסה שוב',
-                                  icon: FluentIcons.arrow_clockwise_24_regular,
-                                  onPressed: () {
-                                    setState(() {
-                                      _pdfDocumentRef = _createDocumentRef();
-                                    });
-                                    _bloc.add(const pdf_events.RetryLoad());
-                                  },
-                                ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 16),
+                              ActionButton.recommended(
+                                text: 'נסה שוב',
+                                icon: FluentIcons.arrow_clockwise_24_regular,
+                                onPressed: () {
+                                  setState(() {
+                                    _pdfDocumentRef = _createDocumentRef();
+                                  });
+                                  _bloc.add(const pdf_events.RetryLoad());
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     );
                   },
                 ),
-                Padding(
-                  padding: readerContentPadding,
-                  child: _buildPageTurnOverlay(context),
-                ),
+                _buildPageTurnOverlay(context),
                 // הלחצנים מעל שכבת האנימציה ומחוץ ל-boundary המצולם — כדי
                 // שיישארו גלויים ולחיצים גם בזמן דפדוף.
-                Padding(
-                  padding: readerContentPadding,
-                  child: ListenableBuilder(
-                    listenable: widget.tab.pdfViewerController,
-                    builder: (context, _) => LayoutBuilder(
-                      builder: (context, constraints) =>
-                          _buildBookViewTurnButtons(
-                            context,
-                            constraints.biggest,
-                          ),
-                    ),
+                ListenableBuilder(
+                  listenable: widget.tab.pdfViewerController,
+                  builder: (context, _) => LayoutBuilder(
+                    builder: (context, constraints) =>
+                        _buildBookViewTurnButtons(
+                          context,
+                          constraints.biggest,
+                        ),
                   ),
                 ),
                 ValueListenableBuilder<List<PdfOutlineNode>?>(
@@ -4172,11 +4147,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ),
                 ),
                 Positioned(
-                  left: splitInset.left,
-                  right:
-                      _verticalScrollbarGutter +
-                      _scrollbarGutterGap +
-                      splitInset.right,
+                  left: 0,
+                  right: _verticalScrollbarGutter + _scrollbarGutterGap,
                   bottom: 0,
                   child: RepaintBoundary(
                     child: PdfHorizontalScrollbar(

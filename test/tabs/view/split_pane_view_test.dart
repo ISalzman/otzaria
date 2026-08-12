@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 class _LeafTab extends OpenedTab {
   _LeafTab(super.title);
@@ -189,43 +188,37 @@ void main() {
   });
 
   group('שוליי תוכן', () {
-    Future<Map<String, EdgeInsets>> capture(
-      WidgetTester tester,
-      OpenedTab root,
+    // רגרסיה: תוכן החלונית קיבל שוליים בעובי המפריד בצד הדופן החיצונית, והם
+    // דחקו את פס הגלילה 12px מהדופן. התוכן חייב למלא את החלונית.
+    testWidgets('תוכן החלונית ממלא את רוחב החלונית, בלי שוליים מוזרקים', (
+      tester,
     ) async {
-      final insets = <String, EdgeInsets>{};
+      final rects = <String, Rect>{};
+      final right = _LeafTab('ימין');
+      final left = _LeafTab('שמאל');
       await tester.pumpWidget(
         _host(
-          root,
-          paneBuilder: (pane) => Builder(
-            builder: (context) {
-              insets[pane.title] = SplitPaneContentInset.of(
-                context,
-              ).resolve(TextDirection.rtl);
-              return Text(pane.title);
-            },
-          ),
+          CombinedTab(rightTab: right, leftTab: left),
+          paneBuilder: (pane) => SizedBox.expand(child: Text(pane.title)),
         ),
       );
-      return insets;
-    }
+      for (final pane in [right, left]) {
+        rects[pane.title] = tester.getRect(
+          find.byKey(GlobalObjectKey(pane)),
+        );
+      }
 
-    testWidgets('חלונית יחידה אינה מקבלת שוליים', (tester) async {
-      final insets = await capture(tester, _LeafTab('א'));
-      expect(insets['א'], EdgeInsets.zero);
-    });
-
-    testWidgets('כל חלונית מפוצה בצד הנגדי למפריד', (tester) async {
-      final insets = await capture(
-        tester,
-        CombinedTab(rightTab: _LeafTab('ימין'), leftTab: _LeafTab('שמאל')),
-      );
-
-      // הימנית גובלת במפריד בשמאלה ולכן מפוצה בימין, ולהפך.
-      expect(insets['ימין']!.right, kPaneDividerThickness);
-      expect(insets['ימין']!.left, 0);
-      expect(insets['שמאל']!.left, kPaneDividerThickness);
-      expect(insets['שמאל']!.right, 0);
+      final content = <String, Rect>{
+        for (final pane in [right, left])
+          pane.title: tester.getRect(find.text(pane.title)),
+      };
+      for (final title in ['ימין', 'שמאל']) {
+        expect(
+          content[title]!.width,
+          rects[title]!.width,
+          reason: '$title: התוכן חייב למלא את רוחב החלונית',
+        );
+      }
     });
   });
 

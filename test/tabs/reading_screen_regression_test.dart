@@ -309,11 +309,8 @@ void main() {
   });
 
   group('reading_screen — שוליים חיצוניים בתצוגה זה-לצד-זה', () {
-    // רגרסיה: הטקסט בתצוגה המפוצלת נצמד לדופן החלון. התיקון מזריק שוליים של 12
-    // (רוחב המפריד) לתוך *תוכן* כל חלונית בלבד, דרך SplitPaneContentInset,
-    // כך שכרטיס החלונית עצמו נשאר על הדופן — ידית פתיחת החלונית
-    // (Positioned(left:0)) יושבת עליו, בעוד הטקסט שומר 12px.
-    const dividerWidth = 12.0;
+    // רגרסיה: תוכן החלונית קיבל שוליים בעובי המפריד בצד הדופן החיצונית, והם
+    // דחקו את פס הגלילה 12px מהדופן. התוכן חייב למלא את כרטיס החלונית.
 
     /// שולי הכרטיס מהדופן: [kPaneCardMargin] ועוד עובי המסגרת.
     const cardEdge = kPaneCardMargin + 1.0;
@@ -323,7 +320,7 @@ void main() {
     });
 
     testWidgets(
-      'ReadingScreen עם CombinedTab: החלוניות צמודות לדופן והתוכן נשמר 12px פנימה',
+      'ReadingScreen עם CombinedTab: החלוניות צמודות לדופן והתוכן ממלא אותן',
       (tester) async {
         tester.view.physicalSize = const Size(1600, 900);
         tester.view.devicePixelRatio = 1.0;
@@ -410,15 +407,15 @@ void main() {
 
         expect(
           contentLeft,
-          cardEdge + dividerWidth,
+          cardEdge,
           reason:
-              'תוכן הקריאה חייב לשמור 12px מקצה הכרטיס; בלעדיהם '
-              'ה-SplitPaneContentInset לא הוזרק לתוכן',
+              'תוכן הקריאה ממלא את הכרטיס — בלי שוליים מוזרקים שדוחקים '
+              'את פס הגלילה מהדופן',
         );
         expect(
           contentRight,
-          1600 - cardEdge - dividerWidth,
-          reason: 'תוכן הקריאה חייב לשמור 12px מקצה הכרטיס',
+          1600 - cardEdge,
+          reason: 'תוכן הקריאה ממלא את הכרטיס בשני הצדדים',
         );
       },
     );

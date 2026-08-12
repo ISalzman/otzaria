@@ -6,7 +6,6 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 export 'pane_drop_geometry.dart'
     show
@@ -55,7 +54,7 @@ class SplitPaneView extends StatelessWidget {
   Widget build(BuildContext context) {
     final node = root;
     if (node is! CombinedTab) {
-      return buildPane(node, EdgeInsets.zero, paneBuilder);
+      return buildPane(node, paneBuilder);
     }
 
     return ColoredBox(
@@ -74,20 +73,16 @@ class SplitPaneView extends StatelessWidget {
     );
   }
 
-  /// עוטפת חלונית במפתח זהות ובשוליים למפריד.
+  /// עוטפת חלונית במפתח זהות.
   @visibleForTesting
   static Widget buildPane(
     OpenedTab pane,
-    EdgeInsetsGeometry contentInset,
     Widget Function(OpenedTab pane) paneBuilder,
   ) {
     return ClipRect(
-      child: SplitPaneContentInset(
-        contentInset: contentInset,
-        child: KeyedSubtree(
-          key: GlobalObjectKey(pane),
-          child: paneBuilder(pane),
-        ),
+      child: KeyedSubtree(
+        key: GlobalObjectKey(pane),
+        child: paneBuilder(pane),
       ),
     );
   }
@@ -250,12 +245,10 @@ class _SplitNodeState extends State<_SplitNode> {
     // שינוי יחס בונה רק את ה-Row, לא את תצוגות הספרים.
     final firstChild = SplitPaneView.buildPane(
       widget.node.rightTab,
-      EdgeInsetsDirectional.only(start: widget.thickness),
       widget.paneBuilder,
     );
     final secondChild = SplitPaneView.buildPane(
       widget.node.leftTab,
-      EdgeInsetsDirectional.only(end: widget.thickness),
       widget.paneBuilder,
     );
 

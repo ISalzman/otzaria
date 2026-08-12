@@ -34,7 +34,6 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
@@ -610,48 +609,43 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           children: [
             _buildAppTopBar(context),
             Expanded(
-              child: Padding(
-                padding: SplitPaneContentInset.of(context),
-                child: NavSidePanel(
-                  isOpen: _navPaneOpen || _pinLeftPane,
-                  alignment: AlignmentDirectional.centerEnd,
-                  paneWidth: _kNavPaneWidth,
-                  onClose: () {
-                    if (!_pinLeftPane) setState(() => _navPaneOpen = false);
-                  },
-                  paneContent: NavPanelSearchScope(
-                    host: _searchHost,
-                    child: _buildSidePane(context),
-                  ),
-                  mainContent: ValueListenableBuilder<bool>(
-                    valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
-                    builder: (context, linksLoading, _) => PdfCommentaryPanel(
-                      key: _panelKey,
-                      tab: widget.tab.sourceTab,
-                      linksCount: widget.tab.sourceTab.links.length,
-                      linksLoading: linksLoading,
-                      isFullScreen: true,
-                      enableInternalFilter: false,
-                      onSelectCommentatorsRequested: _openCommentatorsTab,
-                      lineStartOverride: range.start,
-                      lineEndOverride: range.end,
-                      extraLineIndices: _extraLines.isEmpty
-                          ? null
-                          : _extraLines,
-                      removeNikud: _removeNikud,
-                      removePunctuation: _removePunctuation,
-                      openBookCallback: (tab) => openPreparedTab(context, tab),
-                      fontSize: context
-                          .watch<SettingsBloc>()
-                          .state
-                          .commentatorsFontSize,
-                      externalSearchController: _searchController,
-                      externalTotalResultsNotifier: _totalResultsNotifier,
-                      externalCurrentIndexNotifier: _currentIdxNotifier,
-                      externalSearchSnippetsNotifier: _searchSnippetsNotifier,
-                      typeSelection: _typeSelection,
-                      externalAllExpandedNotifier: _allExpandedInChild,
-                    ),
+              child: NavSidePanel(
+                isOpen: _navPaneOpen || _pinLeftPane,
+                alignment: AlignmentDirectional.centerEnd,
+                paneWidth: _kNavPaneWidth,
+                onClose: () {
+                  if (!_pinLeftPane) setState(() => _navPaneOpen = false);
+                },
+                paneContent: NavPanelSearchScope(
+                  host: _searchHost,
+                  child: _buildSidePane(context),
+                ),
+                mainContent: ValueListenableBuilder<bool>(
+                  valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
+                  builder: (context, linksLoading, _) => PdfCommentaryPanel(
+                    key: _panelKey,
+                    tab: widget.tab.sourceTab,
+                    linksCount: widget.tab.sourceTab.links.length,
+                    linksLoading: linksLoading,
+                    isFullScreen: true,
+                    enableInternalFilter: false,
+                    onSelectCommentatorsRequested: _openCommentatorsTab,
+                    lineStartOverride: range.start,
+                    lineEndOverride: range.end,
+                    extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
+                    removeNikud: _removeNikud,
+                    removePunctuation: _removePunctuation,
+                    openBookCallback: (tab) => openPreparedTab(context, tab),
+                    fontSize: context
+                        .watch<SettingsBloc>()
+                        .state
+                        .commentatorsFontSize,
+                    externalSearchController: _searchController,
+                    externalTotalResultsNotifier: _totalResultsNotifier,
+                    externalCurrentIndexNotifier: _currentIdxNotifier,
+                    externalSearchSnippetsNotifier: _searchSnippetsNotifier,
+                    typeSelection: _typeSelection,
+                    externalAllExpandedNotifier: _allExpandedInChild,
                   ),
                 ),
               ),
