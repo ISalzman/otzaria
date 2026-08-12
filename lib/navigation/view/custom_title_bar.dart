@@ -108,6 +108,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // הבחירה נדחית לשחרור כדי שתחילת גרירה לא תחליף את התצוגה.
   OpenedTab? _pendingTabSelection;
 
+  // הטאב שהעכבר מעליו. שדה ולא משתנה מקומי ב-_buildTab: rebuild של ההורה היה
+  // מאפס אותו, וה-X שמוצג רק בריחוף היה נמחק מתחת לסמן לפני שהלחיצה נורית.
+  OpenedTab? _hoveredTab;
+
   /// המקש שמפעיל בחירה מרובה: Ctrl בכל הפלטפורמות, Command במק.
   bool get _isMultiSelectModifierPressed {
     final keyboard = HardwareKeyboard.instance;
@@ -756,7 +760,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
 
     bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
-    bool isTabHovered = false;
+    bool isTabHovered = identical(_hoveredTab, tab);
 
     // כותרת בשורה אחת שמוצגת מההתחלה (RTL: מימין) ונדהית רק בקצה הסוף, כמו
     // כרום. TextOverflow.fade/clip של פלאטר מציג בעברית את *סוף* הכותרת
@@ -1054,8 +1058,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         child: StatefulBuilder(
           builder: (context, setLocalState) {
             return MouseRegion(
-              onEnter: (_) => setLocalState(() => isTabHovered = true),
-              onExit: (_) => setLocalState(() => isTabHovered = false),
+              // setLocalState מצייר מחדש את הטאב הזה בלבד; השדה שומר את המצב
+              // כך שישרוד rebuild של שורת הטאבים.
+              onEnter: (_) => setLocalState(() {
+                isTabHovered = true;
+                _hoveredTab = tab;
+              }),
+              onExit: (_) => setLocalState(() {
+                isTabHovered = false;
+                if (identical(_hoveredTab, tab)) _hoveredTab = null;
+              }),
               child: buildTabAppearance(setLocalState),
             );
           },

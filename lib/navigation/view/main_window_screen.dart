@@ -2913,11 +2913,17 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         Column(
                           children: [
                             if (!isImmersive)
-                              CustomTitleBar(
-                                onReadingSettingsPressed:
-                                    _toggleReadingSettingsPanel,
-                                isReadingSettingsPanelOpen:
-                                    _isReadingSettingsPanelOpen,
+                              // מסגרת החלון יושבת מעל ה-scrim של פאנל הכלים;
+                              // Listener פסיבי סוגר בלי לחטוף את הלחיצה.
+                              Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (_) => _closeToolsLauncher(),
+                                child: CustomTitleBar(
+                                  onReadingSettingsPressed:
+                                      _toggleReadingSettingsPanel,
+                                  isReadingSettingsPanelOpen:
+                                      _isReadingSettingsPanelOpen,
+                                ),
                               ),
                             Expanded(
                               child: OrientationBuilder(
