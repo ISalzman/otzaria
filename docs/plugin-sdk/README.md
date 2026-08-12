@@ -379,7 +379,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 `keyLineHeight`, `keySelectedCity`, `keyCalendarType`, `keySettingsLanguage`, `keyShowTeamim`,
 `keyDefaultNikud`, `keyRemoveNikudFromTanach`, `keyReplaceHolyNames`,
 `keyLibraryViewMode`, `keyAlignTabsToRight`, `keyCopyWithHeaders`, `keyCopyHeaderFormat`,
-`keyHebrewBooksPath`
+`key-hebrew-books-path`
 
 > ⚠️ מפתחות לא-מורשים (סיסמאות, נתיבים אחרים ו־credentials) יחזירו `null` ולא ישלחו שגיאה.
 

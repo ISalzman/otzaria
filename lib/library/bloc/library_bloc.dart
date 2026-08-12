@@ -444,7 +444,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      await Settings.setValue<String>('key-hebrew-books-path', event.path);
+      await Settings.setValue<String>(
+        SettingsRepository.keyHebrewBooksPath,
+        event.path,
+      );
 
       // רענון הספרייה כדי לטעון את הספרים החדשים
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
@@ -460,6 +463,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           searchResults: null,
           searchQuery: null,
           selectedTopics: null,
+          changedHebrewBooksPath: event.path,
         ),
       );
     } catch (e) {
@@ -499,6 +503,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           searchResults: null,
           searchQuery: null,
           selectedTopics: null,
+          changedHebrewBooksPath: '',
         ),
       );
 
