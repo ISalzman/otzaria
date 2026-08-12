@@ -32,6 +32,20 @@ class ExternalSearchResult {
   });
 }
 
+/// רשומת אינדקס: תוצאה אחת בתמצות — מזהה, מופעים, וקטגוריית אוצריא
+/// המשוערת שהספק גזר מהקטלוג שלו (null כשאין לו סיווג).
+class ExternalSearchIndexEntry {
+  final int id;
+  final int hits;
+  final String? categoryPath;
+
+  const ExternalSearchIndexEntry({
+    required this.id,
+    required this.hits,
+    this.categoryPath,
+  });
+}
+
 /// עמוד תוצאות ממקור חיצוני.
 class ExternalSearchPage {
   final List<ExternalSearchResult> results;
@@ -39,11 +53,17 @@ class ExternalSearchPage {
   final int totalHits;
   final bool hasMore;
 
+  /// אינדקס כלל תוצאות החיפוש (לא רק העמוד) — נשלח על בקשת העמוד הראשון
+  /// ומשמש לבניית ספירות הקטגוריות בעץ החיפוש ולדפדוף מסונן. null כשהספק
+  /// לא צירף אינדקס לעדכון הזה.
+  final List<ExternalSearchIndexEntry>? index;
+
   const ExternalSearchPage({
     required this.results,
     required this.totalBooks,
     required this.totalHits,
     required this.hasMore,
+    this.index,
   });
 }
 
@@ -69,6 +89,9 @@ class PluginExternalSearchService {
   static const _maxTitleLength = 300;
   static const _maxMetaLength = 300;
   static const _maxSnippetLength = 600;
+  static const _maxIndexEntries = 20000;
+  static const _maxCategoryPathLength = 200;
+  static const _maxRequestedIds = 50;
 
   final Map<String, String> _providerToPlugin = {};
   final Map<String, _PendingExternalSearch> _pending = {};
@@ -94,16 +117,24 @@ class PluginExternalSearchService {
     int distance = 1,
     int offset = 0,
     int limit = 20,
+    List<int>? ids,
     void Function(ExternalSearchPage partial)? onUpdate,
   }) async {
     final pluginId = _providerToPlugin[provider];
     if (pluginId == null) {
       throw StateError('No external search provider for "$provider"');
     }
+    if (ids != null &&
+        (ids.isEmpty ||
+            ids.length > _maxRequestedIds ||
+            ids.any((id) => id <= 0))) {
+      throw ArgumentError('ids must hold 1-$_maxRequestedIds positive ids');
+    }
     final requestId = 'xs-${++_requestCounter}';
     debugPrint(
       'PluginExternalSearchService: → $requestId "$query" '
-      'offset=$offset limit=$limit provider=$provider',
+      '${ids != null ? 'ids=${ids.length}' : 'offset=$offset limit=$limit'} '
+      'provider=$provider',
     );
     final pending = _PendingExternalSearch(
       provider: provider,
@@ -119,6 +150,9 @@ class PluginExternalSearchService {
       'distance': distance,
       'offset': offset,
       'limit': limit,
+      // עמוד לפי מזהים מפורשים: דפדוף בתוצאות מסוננות-קטגוריה שהקורא
+      // חישב מהאינדקס. הספק מגיש אותם מהמטמון של החיפוש.
+      if (ids != null) 'ids': ids,
     };
     Timer? retryTimer;
     try {
@@ -176,11 +210,13 @@ class PluginExternalSearchService {
     int totalHits = 0,
     bool hasMore = false,
     bool done = true,
+    List<Object?>? index,
     String? error,
   }) {
     debugPrint(
       'PluginExternalSearchService: ← $requestId done=$done '
-      'results=${results.length} totalBooks=$totalBooks error=$error',
+      'results=${results.length} totalBooks=$totalBooks '
+      'index=${index?.length} error=$error',
     );
     final pending = _pending[requestId];
     if (pending == null || pending.completer.isCompleted) return;
@@ -200,6 +236,7 @@ class PluginExternalSearchService {
       totalBooks: totalBooks < 0 ? 0 : totalBooks,
       totalHits: totalHits < 0 ? 0 : totalHits,
       hasMore: hasMore,
+      index: _sanitizeIndex(index),
     );
     if (!done) {
       pending.touch();
@@ -229,6 +266,39 @@ class PluginExternalSearchService {
       provider: provider,
       externalId: externalId is num ? externalId.toInt() : externalId!,
     );
+  }
+
+  @visibleForTesting
+  List<ExternalSearchIndexEntry>? sanitizeIndexForTesting(List<Object?>? raw) =>
+      _sanitizeIndex(raw);
+
+  /// אינדקס גולמי מהספק: רשימת מערכים [id, hits] או [id, hits, category].
+  /// רשומות פגומות נזרקות; נתיב קטגוריה חייב להתחיל ב-'/' (בלי לוודא מול
+  /// הספרייה — זו אחריות הקורא, שממילא מאחד נתיבים לא מוכרים לדלי משלו).
+  List<ExternalSearchIndexEntry>? _sanitizeIndex(List<Object?>? raw) {
+    if (raw == null) return null;
+    final entries = <ExternalSearchIndexEntry>[];
+    for (final item in raw.take(_maxIndexEntries)) {
+      if (item is! List || item.length < 2 || item.length > 3) continue;
+      final id = item[0];
+      final hits = item[1];
+      if (id is! num || id < 1 || hits is! num || hits < 0) continue;
+      String? categoryPath;
+      if (item.length == 3) {
+        final path = _clip(item[2], _maxCategoryPathLength);
+        if (path != null && path.startsWith('/') && path.length > 1) {
+          categoryPath = path;
+        }
+      }
+      entries.add(
+        ExternalSearchIndexEntry(
+          id: id.toInt(),
+          hits: hits.toInt(),
+          categoryPath: categoryPath,
+        ),
+      );
+    }
+    return entries;
   }
 
   String? _clip(Object? value, int maxLength) {
