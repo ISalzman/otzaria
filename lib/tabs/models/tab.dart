@@ -1,6 +1,7 @@
 /* this is a representation of the tabs that could be open in the app.
 a tab is either a pdf book or a text book, or a full text search window*/
 
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -134,6 +135,7 @@ abstract class OpenedTab {
     String? pinpointHighlight,
     int? pinpointHighlightSectionIndex,
     String? dedupeKey,
+    ExternalBookMatches? externalMatches,
   }) {
     if (book is PdfBook) {
       return PdfBookTab(
@@ -144,6 +146,7 @@ abstract class OpenedTab {
         isPinned: isPinned,
         requiresStableLayout: requiresStableLayout,
         dedupeKey: dedupeKey,
+        externalMatches: externalMatches,
       );
     } else if (book is DocxBook || book is EpubBook) {
       // DOCX/EPUB רצים דרך זרימת TextBook — העטיפה דרך toTextBook

@@ -34,6 +34,8 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
@@ -1188,7 +1190,8 @@ class PluginBridgeAdapter {
   ) async {
     switch (action) {
       case 'openBook':
-        // spec: openBook({ id?, bookId?, type?, index?, searchQuery?, navigateToPositionIfReused? })
+        // spec: openBook({ id?, bookId?, type?, index?, searchQuery?,
+        //   navigateToPositionIfReused?, matchPages?, matchedTerms? })
         // also accepts legacy 'title' for back-compat; all supplied identity fields must match.
         {
           final bookId = (args['bookId'] ?? args['title']) as String?;
@@ -1197,6 +1200,7 @@ class PluginBridgeAdapter {
           final navigateToPositionIfReused =
               args['navigateToPositionIfReused'] as bool? ?? false;
           final openInSidePane = args['openInSidePane'] as bool? ?? false;
+          final externalMatches = _parseExternalMatches(args, searchQuery);
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
               args['external'] == null) {
@@ -1212,6 +1216,7 @@ class PluginBridgeAdapter {
               searchQuery: searchQuery,
               navigateToPositionIfReused: navigateToPositionIfReused,
               inSidePane: openInSidePane,
+              externalMatches: externalMatches,
             );
           }
           final book = _findPluginBook(
@@ -1227,6 +1232,44 @@ class PluginBridgeAdapter {
             requiresStableLayout: book is PdfBook,
             navigateToPositionIfReused: navigateToPositionIfReused,
             inSidePane: openInSidePane,
+            externalMatches: externalMatches,
+          );
+          return true;
+        }
+      case 'registerInBookSearchProvider':
+        // spec: registerInBookSearchProvider({ provider })
+        // רושם את התוסף כספק חיפוש-בתוך-ספר לספרים חיצוניים של provider.
+        {
+          final provider = args['provider'];
+          if (provider is! String || provider.isEmpty) {
+            throw Exception('provider required');
+          }
+          PluginInBookSearchService.instance.register(
+            provider,
+            plugin.pluginId,
+          );
+          return true;
+        }
+      case 'respondInBookSearch':
+        // spec: respondInBookSearch({ requestId, pages?, matchedTerms?, query?, error? })
+        // תשובת הספק לאירוע reader.inBookSearch.requested.
+        {
+          final requestId = args['requestId'];
+          if (requestId is! String || requestId.isEmpty) {
+            throw Exception('requestId required');
+          }
+          PluginInBookSearchService.instance.respond(
+            requestId,
+            pages: (args['pages'] as List? ?? const [])
+                .whereType<num>()
+                .map((page) => page.toInt())
+                .where((page) => page > 0)
+                .toList(),
+            matchedTerms: (args['matchedTerms'] as List? ?? const [])
+                .whereType<String>()
+                .toList(),
+            query: args['query'] as String? ?? '',
+            error: args['error'] as String?,
           );
           return true;
         }
@@ -1589,6 +1632,34 @@ class PluginBridgeAdapter {
     for (final key in ['id', 'bookId', 'type', 'source', 'external'])
       if (args.containsKey(key)) key: args[key],
   };
+
+  /// עמודי התאמה שהתוסף צירף לפתיחה (חיפוש חיצוני): רשימת עמודים חיוביים,
+  /// מוגבלת בגודל. ערך לא תקין נדחה בשקט — פתיחת הספר חשובה מההתאמות.
+  ExternalBookMatches? _parseExternalMatches(
+    Map<String, dynamic> args,
+    String searchQuery,
+  ) {
+    final rawPages = args['matchPages'];
+    if (rawPages is! List || rawPages.isEmpty || rawPages.length > 10000) {
+      return null;
+    }
+    final pages = rawPages
+        .whereType<num>()
+        .map((page) => page.toInt())
+        .where((page) => page > 0)
+        .toList();
+    if (pages.isEmpty) return null;
+    final terms = (args['matchedTerms'] as List? ?? const [])
+        .whereType<String>()
+        .where((term) => term.isNotEmpty && term.length <= 256)
+        .take(64)
+        .toList();
+    return ExternalBookMatches(
+      pages: pages,
+      matchedTerms: terms,
+      query: searchQuery,
+    );
+  }
 
   Future<Map<String, dynamic>> _findTextOccurrences(
     Map<String, dynamic> args,

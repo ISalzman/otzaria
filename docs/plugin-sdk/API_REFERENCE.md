@@ -829,7 +829,9 @@ await Otzaria.call('reader.openBook', {
   index: 0,             // אופציונלי, ברירת מחדל: 0
   searchQuery: '',      // אופציונלי, הדגשת טקסט
   navigateToPositionIfReused: false, // אופציונלי — אם הטאב פתוח, נווט אליו
-  openInSidePane: false  // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
+  openInSidePane: false, // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
+  matchPages: [8, 12],   // אופציונלי (PDF) — עמודי התאמה של חיפוש חיצוני
+  matchedTerms: ['שבת']  // אופציונלי — המונחים שנמצאו, לתצוגה בסרגל ההתאמות
 });
 // true — פתח בהצלחה; false — הספר לא נמצא או הזהות לא תואמת
 ```
@@ -838,7 +840,44 @@ await Otzaria.call('reader.openBook', {
 נוספת בטאב הנוכחי, לצד הספר שכבר פתוח (כמו "הצג לצד"). כשהטאב הנוכחי כבר
 מפוצל, או כשאין טאב פתוח, הספר נפתח ככרטיסייה רגילה.
 
+עם `matchPages` (בספר PDF) קורא ה-PDF מציג סרגל "עמודי התאמה" עם ניווט
+מופע קודם/הבא בין העמודים שסופקו — למשל תוצאות חיפוש של מנוע חיצוני שהתוסף
+מפעיל. העמודים מבוססי-1; רשימה ריקה או ערכים לא חיוביים נדחים.
+
 **כאשר נשלחים מספר שדות זהות (id + bookId + type), כולם חייבים להתאים לאותו ספר. אי-התאמה מחזירה `false`.**
+
+### `reader.registerInBookSearchProvider`
+**הרשאה:** `reader.open`
+
+רושם את התוסף כספק חיפוש-בתוך-ספר לספרים חיצוניים של `provider`
+(למשל `hebrewbooks`). מאותו רגע, כשהמשתמש מחפש בסרגל ההתאמות של קורא
+ה-PDF בספר חיצוני של אותו provider, אוצריא שולחת לתוסף אירוע ממוקד
+`reader.inBookSearch.requested` עם `{ requestId, provider, externalId, query }`.
+התוסף מריץ את החיפוש במנוע שלו ועונה עם `reader.respondInBookSearch`.
+
+```javascript
+await Otzaria.call('reader.registerInBookSearchProvider', {
+  provider: 'hebrewbooks',
+});
+
+window.addEventListener('reader.inBookSearch.requested', async (event) => {
+  const { requestId, externalId, query } = event.detail;
+  const result = await searchInMyEngine(externalId, query);
+  await Otzaria.call('reader.respondInBookSearch', {
+    requestId,
+    pages: result.pages,          // עמודי התאמה מבוססי-1
+    matchedTerms: result.terms,   // אופציונלי
+    query,
+  });
+});
+```
+
+### `reader.respondInBookSearch`
+**הרשאה:** `reader.open`
+
+תשובת הספק לאירוע `reader.inBookSearch.requested`. חובה להעביר את
+`requestId` מהאירוע; בכישלון מעבירים `error` עם הודעה קצרה במקום `pages`.
+בקשה שלא נענתה בתוך 30 שניות נכשלת בצד הקורא.
 
 ### `reader.openBookAtRef`
 **הרשאה:** `reader.open`

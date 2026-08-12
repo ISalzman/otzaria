@@ -82,7 +82,7 @@ class DeclarativeCommandRegistry {
       phase: DeclarativeCommandPhase.action,
       requiredPermission: 'reader.open',
       requiredArgs: {'identity'},
-      optionalArgs: {'index', 'searchQuery'},
+      optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
       outputKind: DeclarativeValueKind.any,
     ),
     'reader.openBookInSidePane': DeclarativeCommandDefinition(
@@ -90,7 +90,7 @@ class DeclarativeCommandRegistry {
       phase: DeclarativeCommandPhase.action,
       requiredPermission: 'reader.open',
       requiredArgs: {'identity'},
-      optionalArgs: {'index', 'searchQuery'},
+      optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
       outputKind: DeclarativeValueKind.any,
     ),
   };

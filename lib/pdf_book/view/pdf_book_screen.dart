@@ -40,6 +40,10 @@ import 'package:otzaria/widgets/misc/app_cursors.dart';
 import 'package:otzaria/pdf_book/view/page_turn_geometry.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
+import 'package:otzaria/pdf_book/view/pdf_external_matches_bar.dart';
+import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
@@ -3793,6 +3797,21 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     setState(() {});
   }
 
+  /// חיפוש-בתוך-ספר דרך ספק חיצוני (תוסף): זמין רק לספר עם זהות חיצונית
+  /// שספק רשום עבורה. מחזיר null כשאין — ושדה החיפוש בסרגל ההתאמות מוסתר.
+  Future<ExternalBookMatches?> Function(String query)?
+  _externalMatchesProviderSearch() {
+    final external = PluginBookIdentity.externalOf(widget.tab.book);
+    if (external == null) return null;
+    final service = PluginInBookSearchService.instance;
+    if (!service.hasProvider(external.provider)) return null;
+    return (query) => service.search(
+      provider: external.provider,
+      externalId: external.id,
+      query: query,
+    );
+  }
+
   Widget _buildContent(BuildContext context) {
     final wideScreen = MediaQuery.of(context).size.width >= 600;
     return CallbackShortcuts(
@@ -3857,6 +3876,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   ),
                 ),
               ],
+            ),
+            // עמודי התאמה ממנוע חיפוש חיצוני (תוסף): סרגל ניווט בין המופעים.
+            PdfExternalMatchesBar(
+              tab: widget.tab,
+              onNavigateToPage: _goToPageWithSpreadLock,
+              onProviderSearch: _externalMatchesProviderSearch(),
             ),
             Expanded(
               child: BlocBuilder<PdfBookBloc, PdfBookState>(

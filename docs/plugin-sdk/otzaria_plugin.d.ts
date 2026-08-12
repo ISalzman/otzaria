@@ -1041,6 +1041,8 @@ export type OtzariaMethod =
   | 'search.getOptions'
   | 'reader.openBook'
   | 'reader.openBookAtRef'
+  | 'reader.registerInBookSearchProvider'
+  | 'reader.respondInBookSearch'
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
   | 'reader.getSelection'

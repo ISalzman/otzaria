@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/declarative/services/declarative_program_executo
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 
 void main() {
   test('מסנכרן, מחשב ומפרסם שני פקדים ללא מנוע תוסף', () async {
@@ -201,6 +202,7 @@ class _BookAccess implements DeclarativeBookResolver, DeclarativeBookOpener {
     required int index,
     required String searchQuery,
     bool inSidePane = false,
+    ExternalBookMatches? externalMatches,
   }) async {
     opened.add(identity);
     return true;

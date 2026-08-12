@@ -376,12 +376,41 @@ class FileSystemData {
     return pdfFiles;
   }
 
+  /// בדיקה נקודתית: אילו מהמזהים המבוקשים קיימים כקובצי PDF בתיקייה המוגדרת.
+  ///
+  /// בניגוד ל-[_scanHebrewBooksPdfFiles] שסורק את כל התיקייה ונשמר במטמון,
+  /// כאן נבדקים רק המזהים המבוקשים — זול מספיק לקריאה בעת פתיחת ספר, ולכן
+  /// מזהה גם קובץ שירד אחרי הסריקה האחרונה (הורדות שרצות ברקע).
+  static Future<Map<String, String>> probeHebrewBooksPdfFilesByIds(
+    Set<int> ids,
+  ) async {
+    final hebrewBooksPath = Settings.getValue<String>(
+      SettingsRepository.keyHebrewBooksPath,
+    );
+    if (hebrewBooksPath == null || hebrewBooksPath.isEmpty || ids.isEmpty) {
+      return const {};
+    }
+    final roots = [hebrewBooksPath, path.join(hebrewBooksPath, 'Books')];
+    final pdfFiles = <String, String>{};
+    for (final id in ids) {
+      for (final name in ['$id.pdf', 'hebrewbooks_org_$id.pdf']) {
+        for (final root in roots) {
+          final file = File(path.join(root, name));
+          if (await file.exists()) {
+            pdfFiles.putIfAbsent(name, () => file.path);
+            break;
+          }
+        }
+      }
+    }
+    return pdfFiles;
+  }
+
   /// ממיר ספרי קטלוג ל-[PdfBook] עבור אלו שיש להם קובץ PDF מקומי.
   ///
   /// [pdfFilesByLowerName] - מפה משם קובץ (lowercase) לנתיב מלא.
   /// תומך בשתי תבניות שמות: `Hebrewbooks_org_<id>.pdf` ו-`<id>.pdf`.
   /// ספר ללא [Book.id] או ללא קובץ תואם מוחזר כמות שהוא.
-  @visibleForTesting
   static List<Book> mapHebrewBooksToLocal(
     List<Book> books,
     Map<String, String> pdfFilesByLowerName,

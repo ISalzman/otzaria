@@ -1,9 +1,11 @@
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_program_executor.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/navigation/otzar_utils.dart';
 
@@ -17,6 +19,7 @@ typedef DeclarativeBookOpen =
       String searchQuery, {
       required bool navigateToPositionIfReused,
       required bool inSidePane,
+      ExternalBookMatches? externalMatches,
     });
 typedef DeclarativeExternalBookOpen =
     Future<bool> Function(ExternalLibraryBook book);
@@ -51,6 +54,7 @@ class DeclarativeLibraryBookAccess
         searchQuery, {
         required navigateToPositionIfReused,
         required inSidePane,
+        externalMatches,
       }) => coordinator.openBook(
         book,
         index,
@@ -59,6 +63,7 @@ class DeclarativeLibraryBookAccess
         requiresStableLayout: book is PdfBook,
         navigateToPositionIfReused: navigateToPositionIfReused,
         inSidePane: inSidePane,
+        externalMatches: externalMatches,
       ),
       externalBookOpener: (book) => OtzarUtils.launchOtzarWeb(book.link),
     );
@@ -89,6 +94,7 @@ class DeclarativeLibraryBookAccess
     required String searchQuery,
     bool navigateToPositionIfReused = false,
     bool inSidePane = false,
+    ExternalBookMatches? externalMatches,
   }) async {
     final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
@@ -101,6 +107,7 @@ class DeclarativeLibraryBookAccess
       searchQuery,
       navigateToPositionIfReused: navigateToPositionIfReused,
       inSidePane: inSidePane,
+      externalMatches: externalMatches,
     );
     return true;
   }
@@ -261,10 +268,16 @@ Future<List<Book>> _loadHebrewBooksByIds(Set<Object> externalIds) async {
       .toSet();
   final missingIds = ids.difference(localIds);
   if (missingIds.isEmpty) return localMatches;
+  final catalogBooks = await ExternalCatalogRepository.instance
+      .getHebrewBooksByIds(missingIds);
+  // מטמון הסריקה מתיישן בזמן שהורדות רצות ברקע; בדיקה נקודתית של הקבצים
+  // המבוקשים מאפשרת לפתוח מקומית ספר שירד זה עתה, בלי רענון ספרייה.
+  final probed = await FileSystemData.probeHebrewBooksPdfFilesByIds(
+    missingIds,
+  );
+  if (probed.isEmpty) return [...localMatches, ...catalogBooks];
   return [
     ...localMatches,
-    ...await ExternalCatalogRepository.instance.getHebrewBooksByIds(
-      missingIds,
-    ),
+    ...FileSystemData.mapHebrewBooksToLocal(catalogBooks, probed),
   ];
 }
