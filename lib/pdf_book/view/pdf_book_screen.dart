@@ -138,6 +138,20 @@ int pdfImageCacheBytesForPanes(int pdfPaneCount) {
       : perPane;
 }
 
+/// מחזיר את מדיניות שינוי גודל ה-PDF לפי מצב התצוגה.
+@visibleForTesting
+PdfViewerSizeDelegateProvider pdfSizeDelegateProviderForLayoutMode(
+  PdfLayoutMode layoutMode,
+) {
+  return layoutMode.isBookView
+      ? const PdfViewerSizeDelegateProviderLegacy(maxScale: 20)
+      : const PdfViewerSizeDelegateProviderSmart(
+          maxScale: 20,
+          smartMaxScale: 20,
+          maxPagesVisible: 1,
+        );
+}
+
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
   final bool isInCombinedView;
@@ -1351,7 +1365,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       backgroundColor: _pdfViewerBgColor(),
       pageDropShadow: _pageDropShadow,
-      sizeDelegateProvider: PdfViewerSizeDelegateProviderLegacy(maxScale: 20),
+      sizeDelegateProvider: pdfSizeDelegateProviderForLayoutMode(layoutMode),
       maxImageBytesCachedOnMemory: pdfImageCacheBytesForPanes(
         widget.pdfPaneCount,
       ),
@@ -2021,10 +2035,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           // את סמן הגרירה עד לשחרור.
           if (_isInteractivePageTurn)
             Positioned.fill(
-              child: MouseRegion(
-                cursor: AppCursors.grabbing,
-                opaque: false,
-              ),
+              child: MouseRegion(cursor: AppCursors.grabbing, opaque: false),
             ),
         ],
       ),
@@ -3028,10 +3039,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       // Animation already in flight: queue this turn FIFO so it plays after
       // the current one finishes. Each click gets its own curl, in order.
       _pendingPageTurns.add(
-        _PendingBookPageTurn(
-          targetPage: targetPage,
-          direction: direction,
-        ),
+        _PendingBookPageTurn(targetPage: targetPage, direction: direction),
       );
       return;
     }
@@ -4311,9 +4319,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                             widget.tab.incomingSearchConfiguration,
                         onSearchResultNavigated: _ensureSearchTabIsActive,
                       )
-                    : const Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                    : const Center(child: CircularProgressIndicator()),
               ),
               ValueListenableBuilder(
                 valueListenable: widget.tab.documentRef,
@@ -5544,12 +5550,7 @@ class _BookPageTurnBackgroundPainter extends CustomPainter {
       canvas.clipPath(revealedPath);
       canvas.drawImageRect(
         target,
-        Rect.fromLTWH(
-          0,
-          0,
-          target.width.toDouble(),
-          target.height.toDouble(),
-        ),
+        Rect.fromLTWH(0, 0, target.width.toDouble(), target.height.toDouble()),
         destRect,
         Paint(),
       );
@@ -5798,9 +5799,7 @@ class _BookPageTurnPainter extends CustomPainter {
             begin: fadeLeft ? Alignment.centerRight : Alignment.centerLeft,
             end: fadeLeft ? Alignment.centerLeft : Alignment.centerRight,
             colors: [
-              shadowColor.withValues(
-                alpha: baseAlpha * geometry.shadeStrength,
-              ),
+              shadowColor.withValues(alpha: baseAlpha * geometry.shadeStrength),
               shadowColor.withValues(alpha: 0.0),
             ],
           ).createShader(shadowRect),
@@ -5992,10 +5991,7 @@ class _BookViewTurnButton extends StatelessWidget {
 /// resolver so the underlying pdfrx InteractiveViewer can claim it and zoom
 /// at the correct focal point (cursor position) instead of the viewport center.
 class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
-  const _PdfScrollOnlyListener({
-    required this.onPointerSignal,
-    super.child,
-  });
+  const _PdfScrollOnlyListener({required this.onPointerSignal, super.child});
 
   final void Function(PointerSignalEvent) onPointerSignal;
 
@@ -6013,9 +6009,8 @@ class _PdfScrollOnlyListener extends SingleChildRenderObjectWidget {
 }
 
 class _RenderPdfScrollOnlyListener extends RenderProxyBoxWithHitTestBehavior {
-  _RenderPdfScrollOnlyListener({
-    required this._onPointerSignal,
-  }) : super(behavior: HitTestBehavior.translucent);
+  _RenderPdfScrollOnlyListener({required this._onPointerSignal})
+    : super(behavior: HitTestBehavior.translucent);
 
   void Function(PointerSignalEvent) _onPointerSignal;
 
