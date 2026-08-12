@@ -247,6 +247,17 @@ class DeclarativeProgramCompiler {
           depth: 0,
           allowRow: true,
         );
+      case 'library.parallelEditions':
+        final parallelIdentity = _requiredMap(
+          args['identity'],
+          'library.parallelEditions.identity',
+        );
+        _validateBookIdentityTemplate(
+          parallelIdentity,
+          previousCommands,
+          budget,
+          allowRow: false,
+        );
       case 'library.resolveBooks':
         _validateValue(
           args['items'],
