@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 
 /// מחלקה לניהול הגדרות פר-ספר
 class PerBookSettings {
@@ -128,12 +129,12 @@ class PerBookSettings {
           (Settings.getValue<double>('key-font-size') ?? 25.0)) {
         cleaned.remove('fontSize');
       }
-      if (cleaned['removeNikud'] ==
-          (Settings.getValue<bool>('key-default-nikud') ?? false)) {
-        cleaned.remove('removeNikud');
-      }
-      _removeRedundantPunctuationFields(
+      _removeRedundantDisplayFields(
         cleaned,
+        defaultRemoveNikud:
+            Settings.getValue<bool>('key-default-nikud') ?? false,
+        removeNikudFromTanach:
+            Settings.getValue<bool>('key-remove-nikud-tanach') ?? false,
         defaultRemovePunctuation:
             Settings.getValue<bool>('key-default-remove-punctuation') ?? false,
       );
@@ -151,20 +152,36 @@ class PerBookSettings {
     }
   }
 
-  /// מסיר override של פיסוק ששווה לברירת המחדל האפקטיבית של הספר.
-  /// בתנ"ך (דגל isTanach שנשמר לצד ה-override) הסרת פיסוק אינה חלה —
-  /// ברירת המחדל האפקטיבית בו תמיד false, ללא תלות בהגדרה הגלובלית.
-  static void _removeRedundantPunctuationFields(
+  /// מסיר override של ניקוד/פיסוק ששווה לברירת המחדל האפקטיבית של הספר.
+  /// החרגות התנ"ך נגזרות מדגל isTanach שנשמר לצד ה-override.
+  static void _removeRedundantDisplayFields(
     Map<String, dynamic> cleaned, {
+    required bool defaultRemoveNikud,
+    required bool removeNikudFromTanach,
     required bool defaultRemovePunctuation,
   }) {
-    final effectiveDefault =
-        defaultRemovePunctuation && cleaned['isTanach'] != true;
-    if (cleaned['removePunctuation'] == effectiveDefault) {
+    final isTanach = cleaned['isTanach'] == true;
+
+    final effectiveNikud = shouldRemoveNikudForBook(
+      defaultRemoveNikud: defaultRemoveNikud,
+      removeNikudFromTanach: removeNikudFromTanach,
+      isTanach: isTanach,
+    );
+    if (cleaned['removeNikud'] == effectiveNikud) {
+      cleaned.remove('removeNikud');
+    }
+
+    final effectivePunctuation = shouldRemovePunctuationForBook(
+      defaultRemovePunctuation: defaultRemovePunctuation,
+      isTanach: isTanach,
+    );
+    if (cleaned['removePunctuation'] == effectivePunctuation) {
       cleaned.remove('removePunctuation');
     }
-    // הדגל הוא לוויין של ה-override; בלעדיו אין לו משמעות.
-    if (!cleaned.containsKey('removePunctuation')) {
+
+    // הדגל הוא לוויין של ה-overrides; בלעדיהם אין לו משמעות.
+    if (!cleaned.containsKey('removePunctuation') &&
+        !cleaned.containsKey('removeNikud')) {
       cleaned.remove('isTanach');
     }
   }
@@ -296,6 +313,7 @@ class PerBookSettings {
     required double defaultFontSize,
     required bool defaultRemoveNikud,
     required bool defaultShowSplitView,
+    bool removeNikudFromTanach = false,
     bool defaultRemovePunctuation = false,
     bool defaultContinuousReadingMode = false,
   }) async {
@@ -337,11 +355,10 @@ class PerBookSettings {
             if (cleaned['fontSize'] == defaultFontSize) {
               cleaned.remove('fontSize');
             }
-            if (cleaned['removeNikud'] == defaultRemoveNikud) {
-              cleaned.remove('removeNikud');
-            }
-            _removeRedundantPunctuationFields(
+            _removeRedundantDisplayFields(
               cleaned,
+              defaultRemoveNikud: defaultRemoveNikud,
+              removeNikudFromTanach: removeNikudFromTanach,
               defaultRemovePunctuation: defaultRemovePunctuation,
             );
             if (cleaned['commentatorsBelow'] == !defaultShowSplitView) {

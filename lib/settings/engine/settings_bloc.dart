@@ -636,6 +636,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       PerBookSettings.cleanupRedundantSettings(
         defaultFontSize: state.fontSize,
         defaultRemoveNikud: state.defaultRemoveNikud,
+        removeNikudFromTanach: state.removeNikudFromTanach,
         defaultRemovePunctuation: state.defaultRemovePunctuation,
         defaultShowSplitView:
             Settings.getValue<bool>('key-splited-view') ?? true,

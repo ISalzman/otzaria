@@ -314,9 +314,12 @@ void main() {
     Future<void> runCleanup({
       bool defaultContinuous = false,
       bool defaultRemovePunctuation = false,
+      bool defaultRemoveNikud = false,
+      bool removeNikudFromTanach = false,
     }) => PerBookSettings.cleanupRedundantSettings(
       defaultFontSize: 16,
-      defaultRemoveNikud: false,
+      defaultRemoveNikud: defaultRemoveNikud,
+      removeNikudFromTanach: removeNikudFromTanach,
       defaultRemovePunctuation: defaultRemovePunctuation,
       defaultShowSplitView: true,
       defaultContinuousReadingMode: defaultContinuous,
@@ -359,6 +362,61 @@ void main() {
       await runCleanup(defaultContinuous: true);
       expect(await PerBookSettings.loadSettings(key), isNull);
     });
+
+    test(
+      'override ניקוד של תנ"ך שורד את "הצג ניקוד בתנ"ך" (דגל isTanach)',
+      () async {
+        // בתנ"ך במצב "הצג ניקוד בתנ"ך" הברירה האפקטיבית היא false, ולכן
+        // override של true הוא בחירה אמיתית של המשתמש וחייב לשרוד.
+        const key = 'o__20__ישעיה';
+        await PerBookSettings.saveSettings(key, {
+          'removeNikud': true,
+          'isTanach': true,
+        });
+
+        await runCleanup(defaultRemoveNikud: true);
+
+        final json = await PerBookSettings.loadSettings(key);
+        expect(json?['removeNikud'], isTrue);
+        expect(json?['isTanach'], isTrue);
+      },
+    );
+
+    test('בתנ"ך removeNikud=false מיותר במצב "הצג ניקוד בתנ"ך"', () async {
+      const key = 'o__21__ירמיה';
+      await PerBookSettings.saveSettings(key, {
+        'removeNikud': false,
+        'isTanach': true,
+      });
+
+      await runCleanup(defaultRemoveNikud: true);
+
+      expect(await PerBookSettings.loadSettings(key), isNull);
+    });
+
+    test('במצב "אל תציג ניקוד" גם בתנ"ך override של true מיותר', () async {
+      const key = 'o__22__יחזקאל';
+      await PerBookSettings.saveSettings(key, {
+        'removeNikud': true,
+        'isTanach': true,
+      });
+
+      await runCleanup(defaultRemoveNikud: true, removeNikudFromTanach: true);
+
+      expect(await PerBookSettings.loadSettings(key), isNull);
+    });
+
+    test(
+      'בספר שאינו תנ"ך override ניקוד נמחק כשהוא שווה לברירת המחדל',
+      () async {
+        const key = 'o__23__ברכות';
+        await PerBookSettings.saveSettings(key, {'removeNikud': true});
+
+        await runCleanup(defaultRemoveNikud: true);
+
+        expect(await PerBookSettings.loadSettings(key), isNull);
+      },
+    );
 
     test('removePunctuation ששונה מברירת המחדל הגלובלית נשמר', () async {
       const key = 'o__4__במדבר';

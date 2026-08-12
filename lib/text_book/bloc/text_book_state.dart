@@ -187,6 +187,14 @@ class TextBookLoaded extends TextBookState {
   final bool removeNikud;
   final bool removePunctuation;
   final bool isTanach;
+
+  /// האם הספר קיבל ניקוד רק בזכות היותו תנ"ך ("הצג ניקוד בתנ"ך").
+  /// ראה [commentaryRemoveNikud].
+  final bool nikudExemptByTanach;
+
+  /// האם הספר קיבל פיסוק רק בזכות היותו תנ"ך.
+  /// ראה [commentaryRemovePunctuation].
+  final bool punctuationExemptByTanach;
   final bool supportsContinuousReadingMode;
   final bool continuousReadingMode;
 
@@ -274,6 +282,8 @@ class TextBookLoaded extends TextBookState {
     required this.removeNikud,
     this.removePunctuation = false,
     this.isTanach = false,
+    this.nikudExemptByTanach = false,
+    this.punctuationExemptByTanach = false,
     this.supportsContinuousReadingMode = false,
     this.continuousReadingMode = false,
     this.readingSegments = const [],
@@ -359,6 +369,15 @@ class TextBookLoaded extends TextBookState {
     );
   }
 
+  /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות. הם אינם תנ"ך,
+  /// ולכן פטור התנ"ך אינו חל עליהם — אך הסתרה יזומה בסרגל כן.
+  bool get commentaryRemoveNikud => removeNikud || nikudExemptByTanach;
+
+  /// מצב הפיסוק שחל על המפרשים, הקישורים והתצוגות המקדימות של הספר, באותו
+  /// היגיון של [commentaryRemoveNikud].
+  bool get commentaryRemovePunctuation =>
+      removePunctuation || punctuationExemptByTanach;
+
   TextBookLoaded copyWith({
     TextBook? book,
     List<String>? content,
@@ -380,6 +399,8 @@ class TextBookLoaded extends TextBookState {
     bool? removeNikud,
     bool? removePunctuation,
     bool? isTanach,
+    bool? nikudExemptByTanach,
+    bool? punctuationExemptByTanach,
     bool? supportsContinuousReadingMode,
     bool? continuousReadingMode,
     List<ReadingSegment>? readingSegments,
@@ -446,6 +467,9 @@ class TextBookLoaded extends TextBookState {
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach ?? this.isTanach,
+      nikudExemptByTanach: nikudExemptByTanach ?? this.nikudExemptByTanach,
+      punctuationExemptByTanach:
+          punctuationExemptByTanach ?? this.punctuationExemptByTanach,
       supportsContinuousReadingMode:
           supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
       continuousReadingMode:
@@ -555,6 +579,8 @@ class TextBookLoaded extends TextBookState {
     removeNikud,
     removePunctuation,
     isTanach,
+    nikudExemptByTanach,
+    punctuationExemptByTanach,
     supportsContinuousReadingMode,
     continuousReadingMode,
     readingSegments.length,

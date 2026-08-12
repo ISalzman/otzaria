@@ -815,10 +815,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         removeNikudFromTanach: removeNikudFromTanach,
         isTanach: isTanach,
       );
+      final nikudExemptByTanach = isNikudExemptByTanach(
+        defaultRemoveNikud: defaultRemoveNikud,
+        removeNikudFromTanach: removeNikudFromTanach,
+        isTanach: isTanach,
+      );
       // הסרת פיסוק אינה חלה על תנ"ך (הכפתור מוסתר שם).
-      final defaultRemovePunctuation =
-          !isTanach &&
-          (Settings.getValue<bool>('key-default-remove-punctuation') ?? false);
+      final globalRemovePunctuation =
+          Settings.getValue<bool>('key-default-remove-punctuation') ?? false;
+      final defaultRemovePunctuation = !isTanach && globalRemovePunctuation;
+      final punctuationExemptByTanach = isPunctuationExemptByTanach(
+        defaultRemovePunctuation: globalRemovePunctuation,
+        isTanach: isTanach,
+      );
 
       // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
       // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
@@ -956,6 +965,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? preservedRemovePunctuation
             : defaultRemovePunctuation,
         isTanach: isTanach,
+        nikudExemptByTanach: nikudExemptByTanach,
+        punctuationExemptByTanach: punctuationExemptByTanach,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
         readingSegments: readingSegments,
@@ -1302,6 +1313,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(
         currentState.copyWith(
           removeNikud: event.remove,
+          nikudExemptByTanach: event.applyToCommentaries ? false : null,
           selectedIndex: currentState.selectedIndex,
         ),
       );
@@ -1317,6 +1329,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(
         currentState.copyWith(
           removePunctuation: event.remove,
+          punctuationExemptByTanach: event.applyToCommentaries ? false : null,
           selectedIndex: currentState.selectedIndex,
         ),
       );

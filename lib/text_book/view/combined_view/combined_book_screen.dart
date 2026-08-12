@@ -471,8 +471,8 @@ class _CombinedViewState extends State<CombinedView> {
       link: link,
       globalPosition: globalPosition,
       hoverMode: hoverMode,
-      removeNikud: loaded?.removeNikud,
-      removePunctuation: loaded?.removePunctuation,
+      removeNikud: loaded?.commentaryRemoveNikud,
+      removePunctuation: loaded?.commentaryRemovePunctuation,
       onOpen: () => _openLinkTarget(link),
       onDismissed: activeAnchor == null
           ? null
@@ -1129,8 +1129,8 @@ class _CombinedViewState extends State<CombinedView> {
       ...paragraphLinks.map(
         (link) => buildLinkContextMenuEntry(
           link: link,
-          removeNikud: state.removeNikud,
-          removePunctuation: state.removePunctuation,
+          removeNikud: state.commentaryRemoveNikud,
+          removePunctuation: state.commentaryRemovePunctuation,
           onTap: () async {
             final tab = await buildLinkTargetTab(link);
             if (_disposed || !mounted) return;
@@ -1219,8 +1219,8 @@ class _CombinedViewState extends State<CombinedView> {
         final entry = _siblingController.buildEntry(
           lineIndex: paragraphIndex,
           sourceLink: sourceLink,
-          removeNikud: state.removeNikud,
-          removePunctuation: state.removePunctuation,
+          removeNikud: state.commentaryRemoveNikud,
+          removePunctuation: state.commentaryRemovePunctuation,
           onNavigate: (link) async {
             final tab = await buildLinkTargetTab(link);
             if (_disposed || !mounted) return;

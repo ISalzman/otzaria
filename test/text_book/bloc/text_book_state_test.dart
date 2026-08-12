@@ -109,6 +109,59 @@ void main() {
 
       expect(beforeEnrich, isNot(equals(afterEnrich)));
     });
+
+    test('changes when the Tanach nikud exemption changes', () {
+      expect(
+        _loadedState(nikudExemptByTanach: true),
+        isNot(equals(_loadedState())),
+      );
+    });
+  });
+
+  group('commentaryRemoveNikud', () {
+    test('hides nikud in commentaries of a Tanach book showing nikud', () {
+      // הבאג: "הצג ניקוד בתנ״ך" הותיר ניקוד גם במפרשי התנ״ך.
+      final state = _loadedState(
+        removeNikud: false,
+        nikudExemptByTanach: true,
+      );
+
+      expect(state.removeNikud, isFalse);
+      expect(state.commentaryRemoveNikud, isTrue);
+    });
+
+    test('keeps the exemption when the toolbar re-shows nikud', () {
+      final state = _loadedState(
+        removeNikud: false,
+        nikudExemptByTanach: true,
+      );
+
+      expect(state.copyWith(removeNikud: true).commentaryRemoveNikud, isTrue);
+      expect(state.copyWith(removeNikud: false).commentaryRemoveNikud, isTrue);
+    });
+
+    test('shows nikud once the exemption is cleared', () {
+      // מסלול הכפתור בכרטיסיית המפרשים: ToggleNikud(applyToCommentaries: true).
+      final state = _loadedState(
+        removeNikud: true,
+        nikudExemptByTanach: true,
+      );
+
+      final cleared = state.copyWith(
+        removeNikud: false,
+        nikudExemptByTanach: false,
+      );
+
+      expect(cleared.commentaryRemoveNikud, isFalse);
+    });
+
+    test('follows the tab when no exemption applies', () {
+      final showing = _loadedState(removeNikud: false);
+      final hiding = _loadedState(removeNikud: true);
+
+      expect(showing.commentaryRemoveNikud, isFalse);
+      expect(hiding.commentaryRemoveNikud, isTrue);
+    });
   });
 }
 
@@ -123,6 +176,8 @@ TextBookLoaded _loadedState({
   Set<int> selectedIndices = const {},
   Set<String> selectedLinkTypes = const {},
   String? heCategories,
+  bool removeNikud = false,
+  bool nikudExemptByTanach = false,
 }) {
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה', heCategories: heCategories),
@@ -139,7 +194,8 @@ TextBookLoaded _loadedState({
     selectedLinkTypes: selectedLinkTypes,
     linksByLine: const {},
     tableOfContents: const [],
-    removeNikud: false,
+    removeNikud: removeNikud,
+    nikudExemptByTanach: nikudExemptByTanach,
     visibleIndices: const [0],
     selectedIndices: selectedIndices,
     pinLeftPane: false,

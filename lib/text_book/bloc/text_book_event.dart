@@ -155,19 +155,27 @@ class UpdateLinkTypeFilter extends TextBookEvent {
 class ToggleNikud extends TextBookEvent {
   final bool remove;
 
-  const ToggleNikud(this.remove);
+  /// מבטל את הפטור שהתנ"ך מקבל מהגדרת "הצג ניקוד בתנ"ך", כך שההחלפה חלה גם
+  /// על המפרשים. נדרש בכרטיסיית המפרשים, שבה אין טקסט ראשי לשלוט בו.
+  final bool applyToCommentaries;
+
+  const ToggleNikud(this.remove, {this.applyToCommentaries = false});
 
   @override
-  List<Object?> get props => [remove];
+  List<Object?> get props => [remove, applyToCommentaries];
 }
 
 class TogglePunctuation extends TextBookEvent {
   final bool remove;
 
-  const TogglePunctuation(this.remove);
+  /// כמו ב-[ToggleNikud]: מבטל את הפטור שהתנ"ך מקבל, כך שההחלפה חלה גם על
+  /// המפרשים.
+  final bool applyToCommentaries;
+
+  const TogglePunctuation(this.remove, {this.applyToCommentaries = false});
 
   @override
-  List<Object?> get props => [remove];
+  List<Object?> get props => [remove, applyToCommentaries];
 }
 
 class UpdateVisibleIndecies extends TextBookEvent {
