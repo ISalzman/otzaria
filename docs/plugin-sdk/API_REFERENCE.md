@@ -927,6 +927,23 @@ window.addEventListener('search.external.requested', async (event) => {
 כותרת עד 300 תווים, קטע טקסט עד 600. בקשה שלא נענתה בתוך 45 שניות נכשלת
 בצד מסך החיפוש.
 
+### `reader.openSearchTab`
+**הרשאה:** `reader.open`
+
+פותח כרטיסיית חיפוש מובנית עם השאילתה — כך תוסף מפנה חיפוש שהתחיל אצלו אל
+מסך החיפוש הרגיל. `selectItems` (אופציונלי, עד 4 מזהים) מסמן שורות
+`searchDialogItems` של התוסף הקורא בכרטיסייה החדשה; יחד עם `resultsProvider`
+זה מפעיל בה את מדור התוצאות החיצוני. מפתחות הבחירה נגזרים תמיד מה-pluginId
+של הקורא — תוסף אינו יכול לסמן שורות של תוסף אחר.
+
+```javascript
+await Otzaria.call('reader.openSearchTab', {
+  query: 'ברכת המזון',
+  selectItems: ['include-hebrewbooks'],
+});
+// true
+```
+
 ### `reader.openBookAtRef`
 **הרשאה:** `reader.open`
 
