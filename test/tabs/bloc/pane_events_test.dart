@@ -40,6 +40,41 @@ void main() {
   List<String> titles(OpenedTab tab) =>
       leafPanes(tab).map((p) => p.title).toList();
 
+  group('OpenTabInSidePane — פתיחת ספר כחלונית בטאב הנוכחי', () {
+    test('הטאב הנוכחי נשאר במקומו והחדש נכנס לצידו כחלונית פעילה', () async {
+      final a = leaf('א');
+      final b = leaf('ב');
+      final incoming = leaf('חדש');
+      final bloc = await blocWith([a, b], current: 1);
+
+      bloc.add(OpenTabInSidePane(incoming));
+      await bloc.stream.firstWhere((s) => s.tabs[1] is CombinedTab);
+
+      expect(bloc.state.tabs, hasLength(2));
+      expect(bloc.state.tabs.first, same(a));
+      final combined = bloc.state.tabs[1] as CombinedTab;
+      expect(combined.rightTab, same(b));
+      expect(combined.leftTab, same(incoming));
+      expect(bloc.state.currentTabIndex, 1);
+      expect(bloc.state.activePane, same(incoming));
+
+      await bloc.close();
+    });
+
+    test('טאב שכבר מפוצל אינו מקבל חלונית שלישית', () async {
+      final combined = CombinedTab(rightTab: leaf('א'), leftTab: leaf('ב'));
+      final bloc = await blocWith([combined]);
+
+      bloc.add(OpenTabInSidePane(leaf('חדש')));
+      await settle();
+
+      expect(bloc.state.tabs.single, same(combined));
+      expect(titles(bloc.state.tabs.single), ['א', 'ב']);
+
+      await bloc.close();
+    });
+  });
+
   group('CreateCombinedTab — יצירת הפיצול', () {
     test('שני טאבים מתמזגים לטאב אחד ויוצאים משורת הכרטיסיות', () async {
       final a = leaf('א');

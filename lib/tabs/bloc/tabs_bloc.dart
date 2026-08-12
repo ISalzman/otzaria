@@ -75,6 +75,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       _onCreateCombinedTab,
       transformer: sequential(),
     );
+    on<OpenTabInSidePane>(
+      _onOpenTabInSidePane,
+      transformer: sequential(),
+    );
     on<ExpandCombinedTab>(
       _onExpandCombinedTab,
       transformer: sequential(),
@@ -1153,6 +1157,40 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       ),
     );
     await _repository.saveTabs(newTabs, newCurrentIndex);
+  }
+
+  Future<void> _onOpenTabInSidePane(
+    OpenTabInSidePane event,
+    Emitter<TabsState> emit,
+  ) async {
+    final index = state.currentTabIndex;
+    if (index < 0 || index >= state.tabs.length) return;
+    final current = state.tabs[index];
+    // פיצול הוא לשתי חלוניות בלבד, ואותו טאב בשני הצדדים יוצר מפתח כפול.
+    if (current is CombinedTab ||
+        event.tab is CombinedTab ||
+        identical(current, event.tab)) {
+      return;
+    }
+
+    final combinedTab = CombinedTab(
+      rightTab: current,
+      leftTab: event.tab,
+      isPinned: current.isPinned,
+    );
+    final newTabs = List<OpenedTab>.from(state.tabs)..[index] = combinedTab;
+
+    emit(
+      state.copyWith(
+        tabs: newTabs,
+        currentTabIndex: index,
+        forceUpdate: true,
+        selectedTabs: _normalizedSelection(newTabs),
+        // החלונית החדשה היא זו שהמשתמש ביקש לקרוא בה.
+        rawActivePane: event.tab,
+      ),
+    );
+    await _repository.saveTabs(newTabs, index);
   }
 
   Future<void> _onExpandCombinedTab(

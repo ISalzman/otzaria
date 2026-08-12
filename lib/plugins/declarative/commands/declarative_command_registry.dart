@@ -85,6 +85,14 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'index', 'searchQuery'},
       outputKind: DeclarativeValueKind.any,
     ),
+    'reader.openBookInSidePane': DeclarativeCommandDefinition(
+      type: 'reader.openBookInSidePane',
+      phase: DeclarativeCommandPhase.action,
+      requiredPermission: 'reader.open',
+      requiredArgs: {'identity'},
+      optionalArgs: {'index', 'searchQuery'},
+      outputKind: DeclarativeValueKind.any,
+    ),
   };
 
   static DeclarativeCommandDefinition require(String type) {

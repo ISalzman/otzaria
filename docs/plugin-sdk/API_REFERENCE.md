@@ -827,10 +827,15 @@ await Otzaria.call('reader.openBook', {
   type: 'text',         // אופציונלי — מוודא שמדובר בסוג הנכון
   index: 0,             // אופציונלי, ברירת מחדל: 0
   searchQuery: '',      // אופציונלי, הדגשת טקסט
-  navigateToPositionIfReused: false  // אופציונלי — אם הטאב פתוח, נווט אליו
+  navigateToPositionIfReused: false, // אופציונלי — אם הטאב פתוח, נווט אליו
+  openInSidePane: false  // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
 });
 // true — פתח בהצלחה; false — הספר לא נמצא או הזהות לא תואמת
 ```
+
+עם `openInSidePane: true` הספר אינו מחליף את מסך הקריאה אלא נפתח כחלונית
+נוספת בטאב הנוכחי, לצד הספר שכבר פתוח (כמו "הצג לצד"). כשהטאב הנוכחי כבר
+מפוצל, או כשאין טאב פתוח, הספר נפתח ככרטיסייה רגילה.
 
 **כאשר נשלחים מספר שדות זהות (id + bookId + type), כולם חייבים להתאים לאותו ספר. אי-התאמה מחזירה `false`.**
 
@@ -2467,7 +2472,10 @@ async function scheduleReminder(title, body, dateTime) {
 
 - `binding.program` מפנה לתכנית באותו manifest.
 - `binding.visibleOutput` מציג את הפקד רק כשהפלט קיים ואינו ריק.
-- כפתור משתמש ב־`action` עם `reader.openBook`.
+- כפתור משתמש ב־`action` עם `reader.openBook`, או עם
+  `reader.openBookInSidePane` — אותם ארגומנטים ואותה הרשאה (`reader.open`),
+  אלא שהספר נפתח כחלונית לצד הספר הנוכחי במקום להחליף אותו. בטאב שכבר מפוצל
+  הפעולה יורדת לפתיחה ככרטיסייה רגילה.
 - תפריט משתמש ב־`childrenBinding.itemsOutput` וב־`itemTemplate`; בתוך התבנית
   זמינה ההפניה `$item`.
 - לחצן מפוצל (`"type": "split"`) מצהיר על שניהם: `action` לפעולה הראשית

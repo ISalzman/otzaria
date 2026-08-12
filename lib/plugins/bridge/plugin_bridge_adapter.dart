@@ -1196,6 +1196,7 @@ class PluginBridgeAdapter {
           final searchQuery = args['searchQuery'] as String? ?? '';
           final navigateToPositionIfReused =
               args['navigateToPositionIfReused'] as bool? ?? false;
+          final openInSidePane = args['openInSidePane'] as bool? ?? false;
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
               args['external'] == null) {
@@ -1210,6 +1211,7 @@ class PluginBridgeAdapter {
               index: index,
               searchQuery: searchQuery,
               navigateToPositionIfReused: navigateToPositionIfReused,
+              inSidePane: openInSidePane,
             );
           }
           final book = _findPluginBook(
@@ -1224,6 +1226,7 @@ class PluginBridgeAdapter {
             ignoreHistory: true,
             requiresStableLayout: book is PdfBook,
             navigateToPositionIfReused: navigateToPositionIfReused,
+            inSidePane: openInSidePane,
           );
           return true;
         }

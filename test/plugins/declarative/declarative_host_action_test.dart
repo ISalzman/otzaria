@@ -23,8 +23,30 @@ void main() {
 
     expect(opened, isTrue);
     expect(opener.identities.single, {'id': 10, 'type': 'pdf'});
+    expect(opener.sidePaneFlags.single, isFalse);
     expect(() => action.args['index'] = 5, throwsUnsupportedError);
   });
+
+  test(
+    'reader.openBookInSidePane פותח את הספר כחלונית ולא ככרטיסייה',
+    () async {
+      final opener = _BookOpener();
+
+      final opened =
+          await DeclarativeHostActionExecutor(
+            bookOpener: opener,
+          ).execute(
+            action: _compileAction(type: 'reader.openBookInSidePane'),
+            plugin: _plugin(),
+            grantedPermissions: const {'reader.open'},
+            currentContextSignature: 'book-7',
+            currentProgramGeneration: 7,
+          );
+
+      expect(opened, isTrue);
+      expect(opener.sidePaneFlags.single, isTrue);
+    },
+  );
 
   test('פעולה עם נתיב קובץ נדחית בזמן קומפילציה', () {
     expect(
@@ -112,14 +134,17 @@ void main() {
 
 class _BookOpener implements DeclarativeBookOpener {
   final identities = <Map<String, dynamic>>[];
+  final sidePaneFlags = <bool>[];
 
   @override
   Future<bool> openUnique(
     Map<String, dynamic> identity, {
     required int index,
     required String searchQuery,
+    bool inSidePane = false,
   }) async {
     identities.add(identity);
+    sidePaneFlags.add(inSidePane);
     return true;
   }
 }
@@ -128,9 +153,11 @@ DeclarativeActionCompiler _compiler() => const DeclarativeActionCompiler(
   declaredPermissions: {'reader.open'},
 );
 
-CompiledDeclarativeAction _compileAction() => _compiler().compileResolved(
+CompiledDeclarativeAction _compileAction({
+  String type = 'reader.openBook',
+}) => _compiler().compileResolved(
   {
-    'type': 'reader.openBook',
+    'type': type,
     'args': {
       'identity': {'id': 10, 'type': 'pdf'},
       'index': 1,

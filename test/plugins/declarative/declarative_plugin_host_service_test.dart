@@ -200,6 +200,7 @@ class _BookAccess implements DeclarativeBookResolver, DeclarativeBookOpener {
     Map<String, dynamic> identity, {
     required int index,
     required String searchQuery,
+    bool inSidePane = false,
   }) async {
     opened.add(identity);
     return true;

@@ -6,6 +6,7 @@ abstract interface class DeclarativeBookOpener {
     Map<String, dynamic> identity, {
     required int index,
     required String searchQuery,
+    bool inSidePane,
   });
 }
 
@@ -42,10 +43,12 @@ class DeclarativeHostActionExecutor {
     }
     switch (action.type) {
       case 'reader.openBook':
+      case 'reader.openBookInSidePane':
         return bookOpener.openUnique(
           Map<String, dynamic>.from(action.args['identity'] as Map),
           index: action.args['index'] as int? ?? 0,
           searchQuery: action.args['searchQuery'] as String? ?? '',
+          inSidePane: action.type == 'reader.openBookInSidePane',
         );
       default:
         throw DeclarativeProgramException(

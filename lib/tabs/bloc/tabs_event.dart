@@ -221,6 +221,18 @@ class CreateCombinedTab extends TabsEvent {
   List<Object?> get props => [rightTab, leftTab];
 }
 
+/// פתיחת [tab] כחלונית נוספת בטאב הנוכחי, במקום ככרטיסייה חדשה.
+///
+/// הטאב הנוכחי נשאר במקומו כחלונית הימנית (ב-RTL) והחדש נכנס לצידו.
+class OpenTabInSidePane extends TabsEvent {
+  final OpenedTab tab;
+
+  const OpenTabInSidePane(this.tab);
+
+  @override
+  List<Object?> get props => [tab];
+}
+
 /// פירוק טאב מפוצל לשתי כרטיסיות עצמאיות.
 class ExpandCombinedTab extends TabsEvent {
   final int tabIndex;
