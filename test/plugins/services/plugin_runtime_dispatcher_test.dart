@@ -716,11 +716,13 @@ void main() {
       );
 
       expect(a.resumeCalls, resumeCalls + 1);
-      expect(a.pauseCalls, pauseCalls + 1);
-      expect(a.jsEvents, hasLength(3));
+      // אין הקפאה מיידית אחרי המסירה: אירוע ממוקד פותח לרוב טיפול אסינכרוני
+      // (למשל בקשת חיפוש שעונה דרך ה-bridge), והקפאה באמצע הייתה בולעת את
+      // התשובה. ההקפאה החוזרת נדחית לחלון חסד (טיימר, מחוץ לבדיקה הזו).
+      expect(a.pauseCalls, pauseCalls);
+      expect(a.jsEvents, hasLength(2));
       expect(a.jsEvents[0], contains('plugin.resumed'));
       expect(a.jsEvents[1], contains('reader.toolbar_item_clicked'));
-      expect(a.jsEvents[2], contains('plugin.suspended'));
     });
 
     test('פתיחת תוסף מוסרת את האירוע ל-foreground המושהה', () async {

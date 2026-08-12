@@ -111,6 +111,16 @@ class PluginExternalSearchService {
       inactivityTimeout: _inactivityTimeout,
     );
     _pending[requestId] = pending;
+    final eventPayload = {
+      'requestId': requestId,
+      'provider': provider,
+      'query': query,
+      'mode': mode,
+      'distance': distance,
+      'offset': offset,
+      'limit': limit,
+    };
+    Timer? retryTimer;
     try {
       // לא ממתינים ל-dispatch לפני ההאזנה לתשובה: מסלול ההעֲרָה (פתיחת דף
       // התוסף) עשוי לקחת זמן, וטיימאאוט שנורה בלי מאזין היה הופך לחריגה
@@ -118,15 +128,7 @@ class PluginExternalSearchService {
       final dispatch = PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
         pluginId,
         requestTopic,
-        {
-          'requestId': requestId,
-          'provider': provider,
-          'query': query,
-          'mode': mode,
-          'distance': distance,
-          'offset': offset,
-          'limit': limit,
-        },
+        eventPayload,
         preferBackground: true,
       );
       unawaited(
@@ -136,8 +138,29 @@ class PluginExternalSearchService {
           }
         }),
       );
+      // מסירה לתוסף שזה עתה הוּעַר עלולה להתנקז לדף שעוד לא רשם מאזינים
+      // (טעינה-מחדש באמצע resume) — האירוע אובד בשקט. אם אין שום תגובה
+      // תוך זמן קצר, משגרים שוב פעם אחת; הבקשה אידמפוטנטית (אותו requestId,
+      // והחיפוש עצמו נענה מהמטמון של התוסף).
+      retryTimer = Timer(const Duration(seconds: 8), () {
+        if (pending.completer.isCompleted || pending.sawActivity) return;
+        debugPrint(
+          'PluginExternalSearchService: retrying $requestId (no response)',
+        );
+        unawaited(
+          PluginRuntimeDispatcher.instance
+              .dispatchEventToPlugin(
+                pluginId,
+                requestTopic,
+                eventPayload,
+                preferBackground: true,
+              )
+              .catchError((_) {}),
+        );
+      });
       return await pending.completer.future;
     } finally {
+      retryTimer?.cancel();
       pending.dispose();
       _pending.remove(requestId);
     }
@@ -161,6 +184,7 @@ class PluginExternalSearchService {
     );
     final pending = _pending[requestId];
     if (pending == null || pending.completer.isCompleted) return;
+    pending.sawActivity = true;
     if (error != null && error.isNotEmpty) {
       _pending.remove(requestId);
       pending.completer.completeError(StateError(error));
@@ -223,6 +247,10 @@ class _PendingExternalSearch {
   final Duration inactivityTimeout;
   final Completer<ExternalSearchPage> completer =
       Completer<ExternalSearchPage>();
+
+  /// הגיעה תגובה כלשהי (חלקית/שגיאה) — מבטל את הניסיון החוזר.
+  bool sawActivity = false;
+
   Timer? _timer;
 
   _PendingExternalSearch({

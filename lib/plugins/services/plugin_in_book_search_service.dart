@@ -46,18 +46,20 @@ class PluginInBookSearchService {
     final requestId = 'ibs-${++_requestCounter}';
     final completer = Completer<ExternalBookMatches>();
     _pending[requestId] = completer;
+    final eventPayload = {
+      'requestId': requestId,
+      'provider': provider,
+      'externalId': externalId,
+      'query': query,
+    };
+    Timer? retryTimer;
     try {
       // לא ממתינים ל-dispatch לפני ההאזנה: מסלול ההעֲרָה של התוסף עשוי
       // לקחת זמן, והטיימאאוט חייב למדוד את הבקשה כולה עם מאזין מחובר.
       final dispatch = PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
         pluginId,
         requestTopic,
-        {
-          'requestId': requestId,
-          'provider': provider,
-          'externalId': externalId,
-          'query': query,
-        },
+        eventPayload,
         preferBackground: true,
       );
       unawaited(
@@ -67,8 +69,25 @@ class PluginInBookSearchService {
           }
         }),
       );
+      // אירוע שנמסר לדף שעוד לא רשם מאזינים (טעינה-מחדש בזמן העֲרָה) אובד
+      // בשקט — משגרים שוב פעם אחת אחרי שקט קצר; הבקשה אידמפוטנטית.
+      retryTimer = Timer(const Duration(seconds: 8), () {
+        if (completer.isCompleted) return;
+        debugPrint('PluginInBookSearchService: retrying $requestId');
+        unawaited(
+          PluginRuntimeDispatcher.instance
+              .dispatchEventToPlugin(
+                pluginId,
+                requestTopic,
+                eventPayload,
+                preferBackground: true,
+              )
+              .catchError((_) {}),
+        );
+      });
       return await completer.future.timeout(_timeout);
     } finally {
+      retryTimer?.cancel();
       _pending.remove(requestId);
     }
   }

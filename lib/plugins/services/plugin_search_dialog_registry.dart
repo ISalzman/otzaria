@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 
 /// רישום שורות חיפוש סטטיות של תוספים.
 ///
@@ -30,6 +31,15 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
         );
       }
       items.add(item);
+    }
+    // הצהרת resultsProvider היא מניפסט-בלבד, ולכן הספק נרשם כבר בסנכרון
+    // התוספים — טאב חיפוש משוחזר מפעיל את המדור מיד עם עליית האפליקציה,
+    // בלי להמתין ל-boot של התוסף (המנוע מוּעָר בעת הבקשה הראשונה).
+    if (item.resultsProvider != null && this == instance) {
+      PluginExternalSearchService.instance.register(
+        item.resultsProvider!,
+        pluginId,
+      );
     }
     notifyListeners();
   }

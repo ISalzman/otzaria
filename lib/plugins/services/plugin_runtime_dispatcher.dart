@@ -469,6 +469,7 @@ class PluginRuntimeDispatcher {
       topic,
       payload,
     )) {
+      debugPrint('PluginRuntimeDispatcher: $topic → queued (boot pending)');
       return;
     }
     final instances = _controllersByPlugin[pluginId];
@@ -476,17 +477,21 @@ class PluginRuntimeDispatcher {
       // אין מנוע חי — עם הרשאת ריצה ברקע התוסף מוּעָר בעצלנות והאירוע ממתין
       // בתור עד ה-boot; בלעדיה (false) לחיצה נופלת לפתיחת דף התוסף, שם
       // הדלקת המנוע גלויה למשתמש.
-      if (!PluginLazyActivationService.instance.queueTargetedEvent(
-            pluginId,
-            topic,
-            payload,
-          ) &&
-          preferBackground) {
+      if (PluginLazyActivationService.instance.queueTargetedEvent(
+        pluginId,
+        topic,
+        payload,
+      )) {
+        debugPrint('PluginRuntimeDispatcher: $topic → queued (lazy boot)');
+      } else if (preferBackground) {
+        debugPrint('PluginRuntimeDispatcher: $topic → page launcher');
         PluginPageLauncher.instance.open(
           pluginId,
           topic: topic,
           payload: payload,
         );
+      } else {
+        debugPrint('PluginRuntimeDispatcher: $topic → dropped (no engine)');
       }
       return;
     }
@@ -505,6 +510,7 @@ class PluginRuntimeDispatcher {
           (resumeForegroundIfNeeded ||
               (preferBackground && !instances.containsKey('background')));
       if (shouldResumeForeground) {
+        debugPrint('PluginRuntimeDispatcher: $topic → resume suspended tab');
         await _dispatchToSuspendedForeground(pluginId, topic, jsonPayload);
         return;
       }
@@ -516,6 +522,10 @@ class PluginRuntimeDispatcher {
         preferBackground: preferBackground,
       );
       _notifyBackgroundActivity(pluginId, instances, targetControllers);
+      debugPrint(
+        'PluginRuntimeDispatcher: $topic → eval to '
+        '${targetControllers.length} controller(s)',
+      );
       for (final controller in targetControllers) {
         try {
           await controller.evaluateJavascript(
