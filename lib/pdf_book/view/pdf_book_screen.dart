@@ -138,6 +138,20 @@ int pdfImageCacheBytesForPanes(int pdfPaneCount) {
       : perPane;
 }
 
+/// מחזיר את מדיניות שינוי גודל ה-PDF לפי מצב התצוגה.
+@visibleForTesting
+PdfViewerSizeDelegateProvider pdfSizeDelegateProviderForLayoutMode(
+  PdfLayoutMode layoutMode,
+) {
+  return layoutMode.isBookView
+      ? const PdfViewerSizeDelegateProviderLegacy(maxScale: 20)
+      : const PdfViewerSizeDelegateProviderSmart(
+          maxScale: 20,
+          smartMaxScale: 20,
+          maxPagesVisible: 1,
+        );
+}
+
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
   final bool isInCombinedView;
@@ -1351,13 +1365,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       backgroundColor: _pdfViewerBgColor(),
       pageDropShadow: _pageDropShadow,
-      sizeDelegateProvider: layoutMode.isBookView
-          ? const PdfViewerSizeDelegateProviderLegacy(maxScale: 20)
-          : const PdfViewerSizeDelegateProviderSmart(
-              maxScale: 20,
-              smartMaxScale: 20,
-              maxPagesVisible: 1,
-            ),
+      sizeDelegateProvider: pdfSizeDelegateProviderForLayoutMode(layoutMode),
       maxImageBytesCachedOnMemory: pdfImageCacheBytesForPanes(
         widget.pdfPaneCount,
       ),
