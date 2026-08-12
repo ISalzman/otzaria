@@ -210,6 +210,17 @@ LibraryPageBuildDecision resolveLibraryPageBuildDecision({
       : LibraryPageBuildDecision.usePlaceholder;
 }
 
+@visibleForTesting
+bool shouldDispatchHebrewBooksPathChange(
+  LibraryState current,
+) => current.changedHebrewBooksPath != null;
+
+@visibleForTesting
+Map<String, dynamic> hebrewBooksPathSettingsChangedPayload(String path) => {
+  'key': SettingsRepository.keyHebrewBooksPath,
+  'newValue': path,
+};
+
 /// אופן המעבר מהעמוד שה-PageController מציג כרגע אל עמוד היעד.
 enum PageTransitionKind { snap, slide, crossSlide }
 
@@ -2360,6 +2371,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   CheckIndexStatus(state.library!),
                 );
               }
+            },
+          ),
+          BlocListener<LibraryBloc, LibraryState>(
+            listenWhen: (previous, current) =>
+                shouldDispatchHebrewBooksPathChange(current),
+            listener: (context, state) {
+              PluginRuntimeDispatcher.instance.dispatchEvent(
+                'settings.changed',
+                hebrewBooksPathSettingsChangedPayload(
+                  state.changedHebrewBooksPath!,
+                ),
+              );
             },
           ),
           BlocListener<IndexingBloc, IndexingState>(

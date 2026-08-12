@@ -107,6 +107,7 @@ const _settingsAllowlist = {
   SettingsRepository.keyLibraryViewMode,
   SettingsRepository.keyCopyWithHeaders,
   SettingsRepository.keyCopyHeaderFormat,
+  SettingsRepository.keyHebrewBooksPath,
 };
 
 // keys a plugin CANNOT read even if attempted
@@ -118,7 +119,6 @@ const _settingsBlocklist = {
   SettingsRepository.keyLibraryPath,
   SettingsRepository.keyIndexPath,
   SettingsRepository.keyBackupPath,
-  SettingsRepository.keyHebrewBooksPath,
   SettingsRepository.keyErrorReportSenderEmail,
 };
 

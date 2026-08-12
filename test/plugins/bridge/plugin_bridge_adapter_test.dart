@@ -39,6 +39,7 @@ import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show
         MergedSibling,
@@ -447,6 +448,46 @@ Future<void> main() async {
           ),
         ),
       );
+    });
+  });
+
+  group('PluginBridgeAdapter.settings.get', () {
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(
+          permissions: const ['settings.read'],
+        ),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    test('מחזיר את מיקום HebrewBooks שהוגדר', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyHebrewBooksPath,
+        '/books/hebrewbooks',
+      );
+
+      final result = await adapter.execute('settings', 'get', {
+        'key': SettingsRepository.keyHebrewBooksPath,
+      });
+
+      expect(result, '/books/hebrewbooks');
+    });
+
+    test('מחזיר מחרוזת ריקה כשהמיקום לא הוגדר', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyHebrewBooksPath,
+        '',
+      );
+
+      final result = await adapter.execute('settings', 'get', {
+        'key': SettingsRepository.keyHebrewBooksPath,
+      });
+
+      expect(result, '');
     });
   });
 

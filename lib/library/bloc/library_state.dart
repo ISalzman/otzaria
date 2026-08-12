@@ -22,6 +22,9 @@ class LibraryState extends Equatable {
   /// מתאפס אחרי כל copyWith.
   final Set<int>? completedRefreshRequestIds;
 
+  /// נתיב HebrewBooks ששונה. מתאפס אחרי כל copyWith.
+  final String? changedHebrewBooksPath;
+
   /// האם חיפוש בספרייה רץ כעת. משמש להצגת סמל "טוען" באזור התוצאות.
   final bool isSearching;
 
@@ -37,6 +40,7 @@ class LibraryState extends Equatable {
     this.newBooksToIndex,
     this.changedBooksToIndex,
     this.completedRefreshRequestIds,
+    this.changedHebrewBooksPath,
     this.isSearching = false,
   });
 
@@ -228,6 +232,7 @@ class LibraryState extends Equatable {
     List<Book>? newBooksToIndex,
     List<Book>? changedBooksToIndex,
     Set<int>? completedRefreshRequestIds,
+    String? changedHebrewBooksPath,
     bool? isSearching,
   }) {
     return LibraryState(
@@ -242,6 +247,7 @@ class LibraryState extends Equatable {
       newBooksToIndex: newBooksToIndex, // null = אין ספרים לאינדוקס
       changedBooksToIndex: changedBooksToIndex, // null = אין ספרים שהשתנו
       completedRefreshRequestIds: completedRefreshRequestIds,
+      changedHebrewBooksPath: changedHebrewBooksPath,
       isSearching: isSearching ?? this.isSearching,
     );
   }
@@ -259,6 +265,7 @@ class LibraryState extends Equatable {
     newBooksToIndex,
     changedBooksToIndex,
     completedRefreshRequestIds,
+    changedHebrewBooksPath,
     isSearching,
   ];
 }

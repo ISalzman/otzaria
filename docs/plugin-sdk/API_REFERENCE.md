@@ -1666,6 +1666,8 @@ const { data } = await Otzaria.call('settings.getMany', {
 - `key-library-view-mode`
 - `key-align-tabs-to-right`
 - `key-copy-with-headers`, `key-copy-header-format`
+- `key-hebrew-books-path` — נתיב ספרי HebrewBooks, או `null`/מחרוזת ריקה
+  כשלא הוגדר מיקום
 
 ---
 
