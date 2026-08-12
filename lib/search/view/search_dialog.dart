@@ -25,6 +25,7 @@ import 'package:otzaria/search/saved_alternatives_store.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
+import 'package:otzaria/plugins/services/plugin_search_selection_preferences.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
@@ -127,6 +128,7 @@ class _SearchDialogState extends State<SearchDialog> {
   late final bool _ownsSearchTab;
   late final PluginSearchDialogRegistry _pluginSearchDialogRegistry;
   late final Map<String, bool> _pluginSearchSelections;
+  late final Map<String, bool> _persistedPluginSelections;
 
   bool get _usesStagedSubmit =>
       widget.onSearch != null ||
@@ -188,6 +190,9 @@ class _SearchDialogState extends State<SearchDialog> {
     }
     _pluginSearchSelections = Map<String, bool>.from(
       _searchTab.searchBloc.state.configuration.pluginSearchSelections,
+    );
+    _persistedPluginSelections = Map<String, bool>.from(
+      PluginSearchSelectionPreferences.load(),
     );
 
     final persisted = SearchScopePreferences.load();
@@ -1435,7 +1440,7 @@ class _SearchDialogState extends State<SearchDialog> {
       );
     }
 
-    return SingleChildScrollView(
+    return KeyedSubtree(
       key: const ValueKey('search-mode-controls'),
       child: controls,
     );
@@ -1444,16 +1449,21 @@ class _SearchDialogState extends State<SearchDialog> {
   String _pluginSelectionKey(String pluginId, String itemId) =>
       '$pluginId/$itemId';
 
-  bool _pluginSelectionValue(String pluginId, PluginSearchDialogItem item) =>
-      _pluginSearchSelections[_pluginSelectionKey(pluginId, item.id)] ??
-      item.defaultValue;
+  /// בחירת המשתמש בטאב הנוכחי גוברת על הבחירה האחרונה השמורה, וזו על
+  /// `defaultValue` שבמניפסט.
+  bool _pluginSelectionValue(String pluginId, PluginSearchDialogItem item) {
+    final key = _pluginSelectionKey(pluginId, item.id);
+    return _pluginSearchSelections[key] ??
+        _persistedPluginSelections[key] ??
+        item.defaultValue;
+  }
 
   Map<String, bool> _allPluginSearchSelections() {
     final selections = Map<String, bool>.from(_pluginSearchSelections);
     for (final record in _pluginSearchDialogRegistry.getAll()) {
       selections.putIfAbsent(
         _pluginSelectionKey(record.$1, record.$2.id),
-        () => record.$2.defaultValue,
+        () => _pluginSelectionValue(record.$1, record.$2),
       );
     }
     return selections;
@@ -1475,9 +1485,12 @@ class _SearchDialogState extends State<SearchDialog> {
     PluginSearchDialogItem item,
     bool value,
   ) {
+    final key = _pluginSelectionKey(pluginId, item.id);
     setState(() {
-      _pluginSearchSelections[_pluginSelectionKey(pluginId, item.id)] = value;
+      _pluginSearchSelections[key] = value;
     });
+    _persistedPluginSelections[key] = value;
+    PluginSearchSelectionPreferences.save(_persistedPluginSelections);
     _searchTab.searchBloc.add(
       UpdatePluginSearchSelectionsWithoutSearch(_allPluginSearchSelections()),
     );
@@ -1497,7 +1510,6 @@ class _SearchDialogState extends State<SearchDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Divider(height: 1),
           for (final record in visibleItems)
             CheckboxListTile(
               key: ValueKey(
@@ -1639,10 +1651,7 @@ class _SearchDialogState extends State<SearchDialog> {
                                           _buildIndexWarning(),
                                           _buildSearchComposer(state),
                                           const SizedBox(height: 12),
-                                          SizedBox(
-                                            height: 260,
-                                            child: _buildModeContent(state),
-                                          ),
+                                          _buildModeContent(state),
                                           _buildPluginSearchRows(state),
                                           const SizedBox(height: 16),
                                         ],
