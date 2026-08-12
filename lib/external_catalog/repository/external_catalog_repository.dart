@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -97,14 +98,27 @@ class ExternalCatalogRepository {
   /// המיפוי הטוב ביותר עבור קבוצת מזהי היברובוקס בבת אחת:
   /// hb_id ← otzaria_id, לפי `is_best` ואז `confidence` (בתוך כל מזהה).
   /// מזהים ללא מיפוי פשוט נעדרים מהתשובה; ללא DB מוחזרת מפה ריקה.
+  ///
+  /// רץ ב-isolate נפרד — הקלט עשוי להגיע לאלפי מזהים (אינדקס תוצאות של
+  /// ספק חיפוש חיצוני) והשאילתות היו תוקעות את ה-UI למאות מילישניות.
   Future<Map<int, int>> getBestOtzariaIdsForHebrewBookIds(
     Iterable<int> hbIds,
   ) async {
     final idList = hbIds.toList();
     if (idList.isEmpty || !await databaseExists()) return const {};
+    final path = databasePath;
+    try {
+      return await Isolate.run(() => _queryBestMapping(path, idList));
+    } catch (e) {
+      debugPrint('ExternalCatalogRepository: batch mapping query failed: $e');
+      return const {};
+    }
+  }
+
+  static Map<int, int> _queryBestMapping(String path, List<int> idList) {
     sqlite3.Database? db;
     try {
-      db = sqlite3.sqlite3.open(databasePath, mode: sqlite3.OpenMode.readOnly);
+      db = sqlite3.sqlite3.open(path, mode: sqlite3.OpenMode.readOnly);
       final best = <int, int>{};
       for (var i = 0; i < idList.length; i += _idChunkSize) {
         final end = (i + _idChunkSize < idList.length)
@@ -128,9 +142,6 @@ class ExternalCatalogRepository {
         }
       }
       return best;
-    } catch (e) {
-      debugPrint('ExternalCatalogRepository: batch mapping query failed: $e');
-      return const {};
     } finally {
       db?.close();
     }

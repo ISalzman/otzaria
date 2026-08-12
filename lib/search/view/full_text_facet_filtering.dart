@@ -321,7 +321,11 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                       bookCount,
                     ),
                   );
-                  if (summary.otherBooks > 0) {
+                  // הדלי מוצג גם בספירה 0 כשהוא הסינון הפעיל — אחרת אין
+                  // דרך לבטל אותו מהעץ (העץ עצמו יודע להציג שורה נבחרת).
+                  if (summary.otherBooks > 0 ||
+                      searchState.currentFacets
+                          .contains(summary.otherCategoryFacet)) {
                     FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
                     extraRoots = [
                       (
