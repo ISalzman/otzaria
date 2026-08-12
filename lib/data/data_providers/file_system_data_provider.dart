@@ -364,7 +364,7 @@ class FileSystemData {
     for (final directory in directories) {
       final normalized = path.normalize(directory.absolute.path);
       if (!visited.add(normalized) || !await directory.exists()) continue;
-      await for (final entity in directory.list(followLinks: false)) {
+      await for (final entity in directory.list()) {
         if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
           pdfFiles.putIfAbsent(
             path.basename(entity.path).toLowerCase(),

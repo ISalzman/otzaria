@@ -39,5 +39,26 @@ void main() {
 
       expect(files, {'456.pdf': pdf.path});
     });
+
+    test(
+      'מאתר PDF שהוא קישור סמלי',
+      () async {
+        final sourceDir = Directory(path.join(tempDir.path, 'source'));
+        await sourceDir.create();
+        final target = File(path.join(sourceDir.path, '789.pdf'));
+        await target.writeAsBytes(const [1]);
+        final link = Link(path.join(tempDir.path, '789.pdf'));
+        await link.create(target.path);
+
+        final files = await FileSystemData.scanHebrewBooksPdfFilesAtPath(
+          tempDir.path,
+        );
+
+        expect(files, {'789.pdf': link.path});
+      },
+      skip: Platform.isWindows
+          ? 'יצירת symlink דורשת הרשאה מיוחדת ב-Windows'
+          : false,
+    );
   });
 }
