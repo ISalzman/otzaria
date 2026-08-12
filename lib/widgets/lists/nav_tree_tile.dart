@@ -176,8 +176,22 @@ class NavTreeTile extends StatelessWidget {
     );
   }
 
-  static const double _iconBoxSize = 26;
-  static const double _iconSize = 14;
+  static const double iconBoxSize = 26;
+  static const double iconContentSize = 14;
+
+  /// קופסת האייקון התקנית של שורת העץ — ל-[leading] מותאם שתוכנו אינו
+  /// [IconData] (למשל לוגו או תמונה).
+  static Widget iconBox(BuildContext context, {required Widget child}) {
+    return Container(
+      width: iconBoxSize,
+      height: iconBoxSize,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: AppTokens.borderRadiusAll,
+      ),
+      child: Center(child: child),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,19 +206,12 @@ class NavTreeTile extends StatelessWidget {
 
     final Widget baseLeading =
         leading ??
-        Container(
-          width: _iconBoxSize,
-          height: _iconBoxSize,
-          decoration: BoxDecoration(
-            color: cs.secondaryContainer,
-            borderRadius: AppTokens.borderRadiusAll,
-          ),
-          child: Center(
-            child: Icon(
-              iconData,
-              color: cs.onSecondaryContainer,
-              size: _iconSize,
-            ),
+        iconBox(
+          context,
+          child: Icon(
+            iconData,
+            color: cs.onSecondaryContainer,
+            size: iconContentSize,
           ),
         );
 

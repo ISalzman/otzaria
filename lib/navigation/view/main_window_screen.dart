@@ -2983,8 +2983,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                         onClose: _closeToolsLauncher,
                                         alignment:
                                             AlignmentDirectional.centerStart,
-                                        // רחב מספיק שארבע הקוביות שבשורה יהיו
-                                        // מרווחות, ועדיין לא חמש.
+                                        // רחב מספיק שתוויות הכלים הארוכות
+                                        // ייכנסו בשורה בלי קיצור.
                                         width: 440,
                                         deferChildBuildOnOpen: true,
                                         child: ToolsLauncherPanel(
