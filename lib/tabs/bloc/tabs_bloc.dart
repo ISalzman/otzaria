@@ -1164,12 +1164,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     Emitter<TabsState> emit,
   ) async {
     final index = state.currentTabIndex;
-    if (index < 0 || index >= state.tabs.length) return;
+    if (index < 0 || index >= state.tabs.length) {
+      _disposeTabLater(event.tab);
+      return;
+    }
     final current = state.tabs[index];
-    // פיצול הוא לשתי חלוניות בלבד, ואותו טאב בשני הצדדים יוצר מפתח כפול.
+    // פיצול הוא לשתי חלוניות בלבד, ואותו ספר בשני הצדדים יוצר כפילות.
     if (current is CombinedTab ||
         event.tab is CombinedTab ||
-        identical(current, event.tab)) {
+        identical(current, event.tab) ||
+        _isSameBook(current, event.tab)) {
+      if (!identical(current, event.tab)) _disposeTabLater(event.tab);
       return;
     }
 

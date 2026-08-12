@@ -73,6 +73,20 @@ void main() {
 
       await bloc.close();
     });
+
+    test('אותו ספר באובייקט חדש אינו נפתח שוב כחלונית', () async {
+      final current = leaf('ספר זהה');
+      final incoming = leaf('ספר זהה');
+      final bloc = await blocWith([current]);
+
+      bloc.add(OpenTabInSidePane(incoming));
+      await settle();
+
+      expect(bloc.state.tabs.single, same(current));
+      expect(bloc.state.currentTabIndex, 0);
+
+      await bloc.close();
+    });
   });
 
   group('CreateCombinedTab — יצירת הפיצול', () {
