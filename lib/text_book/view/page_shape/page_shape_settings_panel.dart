@@ -134,6 +134,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
       _rightSingleCommentator = resolvePageShapeSingleCommentatorSelection(
         selection: widget.currentRight,
         availableCommentators: widget.availableCommentators,
+        commentedBookTitle: widget.bookTitle,
       );
       _bottomCommentator = widget.currentBottom;
       _bottomRightCommentator = widget.currentBottomRight;

@@ -336,6 +336,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       commentators = _resolveCommentatorNames(
         config,
         state.availableCommentators,
+        state.book.title,
       );
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
@@ -366,12 +367,14 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   Map<String, String?> _resolveCommentatorNames(
     Map<String, String?> config,
     List<String> availableCommentators,
+    String bookTitle,
   ) {
     return Map.fromEntries(
       config.entries.map((entry) {
         final resolved = resolvePageShapeCommentatorSelection(
           selection: entry.value,
           availableCommentators: availableCommentators,
+          commentedBookTitle: bookTitle,
         );
         return MapEntry(entry.key, resolved);
       }),
@@ -391,6 +394,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         _bottomCommentator,
         _bottomRightCommentator,
       ],
+      commentedBookTitle: state.book.title,
     );
   }
 
@@ -491,6 +495,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       final resolvedSingle = resolvePageShapeCommentatorSelection(
         selection: _rightCommentator,
         availableCommentators: selectableCommentators,
+        commentedBookTitle: state.book.title,
       );
       if (resolvedSingle == null) {
         return _buildEmptyColumnContent(
@@ -2073,6 +2078,20 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       }
 
       if (!mounted) return;
+
+      // מפרש שאינו מקושר לספר הנוכחי שייך לספר אחר, ו-BookLocator היה טוען
+      // אותו לפי שמו ומציג את הספר הזר. ההגדרה השמורה נשארת על כנה.
+      if (state is TextBookLoaded &&
+          state.availableCommentators.isNotEmpty &&
+          !state.availableCommentators.contains(widget.commentatorName)) {
+        _notifyCommentaryLoadFailed();
+        setState(() {
+          _reportBook = null;
+          _content = null;
+          _isLoading = false;
+        });
+        return;
+      }
 
       if (state is TextBookLoaded) {
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (COMMENTARY/TARGUM)

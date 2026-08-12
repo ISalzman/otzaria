@@ -1587,6 +1587,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       bottomRightSelection: configuration['bottomRight'],
       availableCommentators: candidateCommentators,
       columnVisibility: columnVisibility,
+      commentedBookTitle: state.book.title,
     );
 
     _cachedPageShapeTargetBookTitlesKey = cacheKey;

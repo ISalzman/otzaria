@@ -85,20 +85,17 @@ class PageShapeSettingsManager {
     return null;
   }
 
-  /// חילוץ שם בסיסי של מפרש (בלי "על X")
+  /// חילוץ שם בסיסי של מפרש (בלי שם הספר המפורש)
   /// למשל: "רמב"ן על ברכות" → "רמב"ן"
-  /// למשל: "השגות הראב"ד על משנה תורה, הלכות דעות" → "השגות הראב"ד"
-  static String? extractBaseCommentatorName(String? fullName) {
-    if (fullName == null) return null;
-
-    // מחפשים "על " ולוקחים את מה שלפניו
-    final onIndex = fullName.indexOf(' על ');
-    if (onIndex > 0) {
-      return fullName.substring(0, onIndex).trim();
-    }
-
-    // אם אין "על", מחזירים את השם כמו שהוא
-    return fullName;
+  /// למשל: "יכין מקואות" עם [commentedBookTitle] "משנה מקואות" → "יכין"
+  static String? extractBaseCommentatorName(
+    String? fullName, {
+    String? commentedBookTitle,
+  }) {
+    return pageShapeCommentatorBaseName(
+      fullName,
+      commentedBookTitle: commentedBookTitle,
+    );
   }
 
   // ==================== גודל גופן (גלובלי בלבד) ====================
@@ -281,9 +278,14 @@ class PageShapeSettingsManager {
         return MapEntry(
           key,
           encodePageShapeCommentatorsSelection(
-            decodePageShapeCommentatorsSelection(
-              value,
-            ).map(extractBaseCommentatorName).whereType<String>(),
+            decodePageShapeCommentatorsSelection(value)
+                .map(
+                  (name) => extractBaseCommentatorName(
+                    name,
+                    commentedBookTitle: bookTitle,
+                  ),
+                )
+                .whereType<String>(),
             forceMultipleMode: isPageShapeMultipleCommentatorsMode(value),
           ),
         );
