@@ -5,6 +5,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
 /// בונה פריט תפריט הקשר עבור קישור בודד בתת-תפריט "קישורים".
@@ -236,17 +237,23 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                         if (removePunctuation) {
                           measureText = utils.removePunctuation(measureText);
                         }
+                        final measureStyle = TextStyle(
+                          fontSize: fontSize,
+                          fontFamily: settingsState.commentatorsFontFamily,
+                          height: lineHeight,
+                          fontWeight: settingsState.commentatorsFontBold
+                              ? FontWeight.bold
+                              : null,
+                        );
+                        final measureSpan = TextSpan(
+                          text: measureText,
+                          style: measureStyle,
+                        );
                         final painter = TextPainter(
-                          text: TextSpan(
-                            text: measureText,
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              fontFamily: settingsState.commentatorsFontFamily,
-                              height: lineHeight,
-                              fontWeight: settingsState.commentatorsFontBold
-                                  ? FontWeight.bold
-                                  : null,
-                            ),
+                          text: measureSpan,
+                          strutStyle: exactLineHeightStrut(
+                            measureStyle,
+                            measureSpan,
                           ),
                           textDirection: TextDirection.rtl,
                           maxLines: null,

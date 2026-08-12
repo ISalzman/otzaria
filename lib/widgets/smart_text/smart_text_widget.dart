@@ -10,6 +10,7 @@ import 'package:otzaria/text_book/utils/link_preview_utils.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
@@ -48,7 +49,8 @@ class SmartTextWidget extends StatelessWidget {
   final void Function(String url)? onAnchorTap;
 
   /// callback לריחוף מעל עוגן-מילה — מקבל את ה-URL ואת מיקום הסמן הגלובלי.
-  /// כשמסופק, סמני העוגן מרונדרים כווידג'ט inline (ל-fwfh אין hover על <a>).
+  /// כשמסופק, onEnter/onExit מוזרקים ל-TextSpan של הסמן (ל-fwfh אין hover על
+  /// `<a>`), והסמן נשאר ספאן טקסט.
   final void Function(String url, Offset globalPosition)? onAnchorHover;
 
   /// callback ליציאת הסמן מעוגן-מילה.
@@ -209,6 +211,7 @@ class SmartTextWidget extends StatelessWidget {
             child: Text.rich(
               simpleSpan,
               style: textStyle,
+              strutStyle: exactLineHeightStrut(textStyle, simpleSpan),
               textAlign: settings.justifyText
                   ? TextAlign.justify
                   : TextAlign.right,
@@ -255,17 +258,22 @@ class SmartTextWidget extends StatelessWidget {
           if (headingWeight != null) {
             return {'font-weight': headingWeight};
           }
-          // הסמנים מוקטנים אך נשארים על קו הבסיס: הגבהה ב-fwfh אפשרית רק דרך
-          // vertical-align, שבונה WidgetSpan — וזה מחזיר את היפוך הסדר ב-RTL.
           if (element.localName == 'span' &&
               element.classes.contains('footnote-marker-number')) {
-            return {'font-size': '0.75em', 'font-style': 'italic'};
+            return {
+              'font-size': '0.75em',
+              'font-style': 'italic',
+              'position': 'relative',
+              'top': '-0.55em',
+            };
           }
           if (element.localName == 'a' &&
               element.classes.contains('book-note-marker')) {
             return {
               'font-size': '0.75em',
               'font-style': 'italic',
+              'position': 'relative',
+              'top': '-0.55em',
               'color': anchorColorCss,
               'text-decoration': 'none',
             };
@@ -276,12 +284,14 @@ class SmartTextWidget extends StatelessWidget {
               element.classes.contains('numbered-note-marker')) {
             return {'color': anchorLinkColorCss, 'text-decoration': 'none'};
           }
-          // סמן-אות של מפרש (עוגן-נקודה): אות קטנה בצבע ה-primary, עם
+          // סמן-אות של מפרש (עוגן-נקודה): אות קטנה מורמת בצבע ה-primary, עם
           // וריאנט טיפוגרפי קבוע לכל מפרש (ראו anchorStyleIndexByCommentator).
           if ((element.localName == 'span' || element.localName == 'a') &&
               element.classes.contains('link-anchor')) {
             final style = <String, String>{
               'font-size': '${kLinkAnchorMarkerScale}em',
+              'position': 'relative',
+              'top': '-0.55em',
               'white-space': 'nowrap',
               'color': anchorLinkColorCss,
               'text-decoration': 'none',
@@ -356,11 +366,12 @@ class SmartTextWidget extends StatelessWidget {
   }
 }
 
-/// WidgetFactory ל-fwfh עם שתי אחריות:
+/// WidgetFactory ל-fwfh עם שלוש אחריות:
 /// 1. בולד אמיתי לגופן משתנה — מזריק FontVariation('wght') לספאנים מודגשים.
 /// 2. ריחוף על עוגני-מילה — fwfh בונה recognizer לכל `<a>`; זוכרים אילו
 ///    recognizers שייכים ל-href של עוגן, וכשה-TextSpan נבנה מזריקים
 ///    onEnter/onExit לצד ה-recognizer הקיים.
+/// 3. קיבוע גובה השורה — ראו [buildText].
 class _SmartTextWidgetFactory extends WidgetFactory {
   final void Function(String url, Offset globalPosition)? onAnchorHover;
   final void Function(String url)? onAnchorHoverExit;
@@ -379,6 +390,62 @@ class _SmartTextWidgetFactory extends WidgetFactory {
       _previewHrefByRecognizer[recognizer] = href;
     }
     return recognizer;
+  }
+
+  /// ה-RichText של fwfh נבנה בלי strut ואין פרמטר להעביר אחד מבחוץ, לכן
+  /// בונים מחדש את מה ש-fwfh בנה עם [exactLineHeightStrut]. מבנה אחר מהצפוי
+  /// (גרסת fwfh חדשה) פשוט נשאר כפי שהוא — בלי קיבוע.
+  @override
+  Widget? buildText(
+    BuildTree tree,
+    InheritedProperties resolved,
+    InlineSpan text,
+  ) {
+    final built = super.buildText(tree, resolved, text);
+    final strutStyle = exactLineHeightStrut(resolved.prepareTextStyle(), text);
+    if (strutStyle == null || built is! Builder) {
+      return built;
+    }
+
+    return Builder(
+      builder: (context) {
+        final child = built.builder(context);
+        if (child is RichText) {
+          return _withStrutStyle(child, strutStyle);
+        }
+        if (child is MouseRegion && child.child is RichText) {
+          return MouseRegion(
+            onEnter: child.onEnter,
+            onExit: child.onExit,
+            onHover: child.onHover,
+            cursor: child.cursor,
+            opaque: child.opaque,
+            hitTestBehavior: child.hitTestBehavior,
+            child: _withStrutStyle(child.child! as RichText, strutStyle),
+          );
+        }
+        return child;
+      },
+    );
+  }
+
+  static RichText _withStrutStyle(RichText source, StrutStyle strutStyle) {
+    return RichText(
+      key: source.key,
+      text: source.text,
+      textAlign: source.textAlign,
+      textDirection: source.textDirection,
+      softWrap: source.softWrap,
+      overflow: source.overflow,
+      textScaler: source.textScaler,
+      maxLines: source.maxLines,
+      locale: source.locale,
+      strutStyle: strutStyle,
+      textWidthBasis: source.textWidthBasis,
+      textHeightBehavior: source.textHeightBehavior,
+      selectionRegistrar: source.selectionRegistrar,
+      selectionColor: source.selectionColor,
+    );
   }
 
   @override
