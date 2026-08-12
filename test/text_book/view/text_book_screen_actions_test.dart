@@ -11,6 +11,8 @@ import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/library/view/book_versions_dialog.dart';
+import 'package:otzaria/models/book_version.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
@@ -19,11 +21,13 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/book_version_pane.dart';
 import 'package:otzaria/text_book/view/splited_view/splited_view_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -120,6 +124,179 @@ void main() {
       expect(find.text('ייצוא הספר'), findsOneWidget);
       expect(find.text('הדפסה'), findsOneWidget);
       expect(find.text('אודות הספר'), findsOneWidget);
+      // ספר בלי מהדורות במאגר — אין מה להציע
+      expect(find.text('הצג נוסחאות נוספות'), findsNothing);
+    });
+
+    testWidgets('לספר עם נוסחאות התפריט פותח את רשימת הנוסחאות', (
+      tester,
+    ) async {
+      bookVersionsProbeForTesting = (_) async => true;
+      addTearDown(() => bookVersionsProbeForTesting = null);
+
+      final book = TextBook(title: 'ספר בדיקה', categoryId: 7);
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1600, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+      expect(find.text('הצג נוסחאות נוספות'), findsOneWidget);
+
+      await tester.tap(find.text('הצג נוסחאות נוספות'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('נוסחאות נוספות — ספר בדיקה'), findsOneWidget);
+      expect(
+        find.text('הנוסח שייבחר ייפתח בחלונית לצד הספר, באותו מיקום.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('בחירת נוסח פותחת אותו בחלונית לצד הספר, בשורה הנראית', (
+      tester,
+    ) async {
+      bookVersionsProbeForTesting = (_) async => true;
+      bookVersionsListProbeForTesting = (_) async => const [
+        BookVersionInfo(
+          versionTitle: 'Davidson',
+          heVersionTitle: 'מהדורת דיווידסון',
+          hasContent: true,
+        ),
+      ];
+      addTearDown(() {
+        bookVersionsProbeForTesting = null;
+        bookVersionsListProbeForTesting = null;
+      });
+
+      final book = TextBook(title: 'ספר בדיקה', categoryId: 7);
+      final state = _loadedState(book);
+      // הנוסח נפתח בשורה שגלולה כרגע לראש התצוגה, לא ב-tab.index שבו נפתח הספר.
+      (state.positionsListener.itemPositions as dynamic).value = const [
+        ItemPosition(index: 42, itemLeadingEdge: 0.1, itemTrailingEdge: 0.6),
+      ];
+      final bloc = _TestTextBookBloc(state);
+      final tab = TextBookTab(book: book, index: 0, blocOverride: bloc);
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1600, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('הצג נוסחאות נוספות'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('מהדורת דיווידסון'));
+      await tester.pumpAndSettle();
+
+      final event = tabsBloc.receivedEvents.whereType<OpenTabInSidePane>();
+      expect(event, hasLength(1));
+      final openedTab = event.single.tab as TextBookTab;
+      addTearDown(openedTab.dispose);
+      expect(openedTab.book.versionTitle, 'Davidson');
+      expect(openedTab.index, 42);
+    });
+
+    testWidgets('בכרטיסייה מפוצלת הפעולה אינה מוצעת — אין חלונית שלישית', (
+      tester,
+    ) async {
+      bookVersionsProbeForTesting = (_) async => true;
+      addTearDown(() => bookVersionsProbeForTesting = null);
+
+      final book = TextBook(title: 'ספר בדיקה', categoryId: 7);
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(book: book, index: 0, blocOverride: bloc);
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1600, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: true,
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+
+      expect(find.text('הצג נוסחאות נוספות'), findsNothing);
     });
 
     testWidgets(
@@ -771,6 +948,11 @@ class _TestSettingsBloc extends Bloc<SettingsEvent, SettingsState>
 
 class _TestTabsBloc extends Cubit<TabsState> implements TabsBloc {
   _TestTabsBloc(super.initialState);
+
+  final List<TabsEvent> receivedEvents = [];
+
+  @override
+  void add(TabsEvent event) => receivedEvents.add(event);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

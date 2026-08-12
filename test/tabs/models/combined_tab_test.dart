@@ -4,6 +4,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 
 import '../../helpers/memory_settings_cache.dart';
 
@@ -155,6 +156,29 @@ void main() {
       expect(leafPanes(restored).map((p) => p.title).toList(), ['א', 'ב']);
       expect(restored.splitRatio, 0.35);
       expect(restored.isPinned, isTrue);
+    });
+
+    test('חלונית של נוסח חלופי חוזרת עם שם המהדורה, ולא כנוסח הראשי', () {
+      final versionBook = TextBook(title: 'כתובות', categoryId: 5).copyWith(
+        versionTitle: 'Davidson',
+        heVersionTitle: 'מהדורת דיווידסון',
+      );
+      final versionPane = TextBookTab(book: versionBook, index: 12);
+      final original = CombinedTab(
+        rightTab: TextBookTab(book: TextBook(title: 'כתובות'), index: 12),
+        leftTab: versionPane,
+      );
+      addTearDown(original.dispose);
+
+      final restored = decodeCombinedTab(original.toJson()) as CombinedTab;
+      addTearDown(restored.dispose);
+
+      final restoredVersion = restored.leftTab as TextBookTab;
+      expect(restoredVersion.book.versionTitle, 'Davidson');
+      expect(restoredVersion.book.heVersionTitle, 'מהדורת דיווידסון');
+      expect(restoredVersion.title, 'כתובות (מהדורת דיווידסון)');
+      // הנוסח הראשי נשאר נפרד — אחרת שחזור היה מציג את אותו ספר פעמיים.
+      expect((restored.rightTab as TextBookTab).book.versionTitle, isNull);
     });
 
     test('מפתח ציר ישן בקובץ אינו מפיל את השחזור', () {

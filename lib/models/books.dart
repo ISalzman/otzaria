@@ -130,6 +130,10 @@ class TextBook extends Book {
   /// נטען מ-version_line במקום הטקסט הממוזג.
   final String? versionTitle;
 
+  /// שם המהדורה לתצוגה. [versionTitle] הוא מפתח ה-DB של ספריא ולרוב אנגלי,
+  /// ולכן אינו מוצג למשתמש כשיש שם עברי.
+  final String? heVersionTitle;
+
   TextBook({
     super.id,
     required super.title,
@@ -155,7 +159,11 @@ class TextBook extends Book {
     super.isUserBook,
     super.externalLibraryId,
     this.versionTitle,
+    this.heVersionTitle,
   });
+
+  /// שם המהדורה כפי שמוצג למשתמש, או null בנוסח הממוזג.
+  String? get versionDisplayTitle => heVersionTitle ?? versionTitle;
 
   /// Retrieves the table of contents of the book.
   ///
@@ -208,6 +216,7 @@ class TextBook extends Book {
     String? author,
     String? heEra,
     String? versionTitle,
+    String? heVersionTitle,
   }) {
     return TextBook(
       id: id ?? this.id,
@@ -234,6 +243,7 @@ class TextBook extends Book {
       isUserBook: isUserBook,
       externalLibraryId: externalLibraryId,
       versionTitle: versionTitle ?? this.versionTitle,
+      heVersionTitle: heVersionTitle ?? this.heVersionTitle,
     );
   }
 
@@ -254,6 +264,7 @@ class TextBook extends Book {
       isUserBook: json['isUserBook'] ?? false,
       externalLibraryId: json['externalLibraryId'],
       versionTitle: json['versionTitle'],
+      heVersionTitle: json['heVersionTitle'],
     );
   }
 
@@ -276,6 +287,7 @@ class TextBook extends Book {
       'isUserBook': isUserBook,
       'externalLibraryId': externalLibraryId,
       'versionTitle': versionTitle,
+      'heVersionTitle': heVersionTitle,
     };
   }
 }

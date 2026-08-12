@@ -17,7 +17,12 @@ class PerBookSettings {
     final scope = book.isUserBook ? 'u' : 'o';
     if (book is FileBook) return '${scope}__${book.path}';
     final cat = book.categoryId?.toString() ?? 'x';
-    return '${scope}__${cat}__${book.title}';
+    // נוסח חלופי הוא ספר נפרד לעניין ההגדרות: הוא נפתח בחלונית לצד הנוסח
+    // הראשי, ובמפתח משותף כל שינוי באחת מהן היה נכתב לקובץ שהשנייה קוראת.
+    final version = book is TextBook && book.versionTitle != null
+        ? '__v__${book.versionTitle}'
+        : '';
+    return '${scope}__${cat}__${book.title}$version';
   }
 
   /// שם קובץ יציב באורך קבוע מהמפתח (hash). מונע התנגשות מהמרה לא-חד-חד-ערכית
