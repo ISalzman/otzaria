@@ -32,8 +32,12 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
@@ -1271,6 +1275,41 @@ class PluginBridgeAdapter {
                 .toList(),
             query: args['query'] as String? ?? '',
             error: args['error'] as String?,
+          );
+          return true;
+        }
+      case 'openSearchTab':
+        // spec: openSearchTab({ query, selectItems? })
+        // פותח כרטיסיית חיפוש מובנית עם השאילתה; selectItems מסמן שורות
+        // דיאלוג של התוסף הקורא (מפתחי הבחירה נגזרים מ-pluginId שלו בלבד).
+        {
+          final query = (args['query'] as String? ?? '').trim();
+          if (query.isEmpty || query.length > 500) {
+            throw Exception('query required');
+          }
+          final selectItems = (args['selectItems'] as List? ?? const [])
+              .whereType<String>()
+              .where(
+                (id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id),
+              )
+              .take(4)
+              .toList();
+          final tab = SearchingTab(
+            SearchingTab.titleForQuery(query),
+            query,
+            initialConfiguration: SearchConfiguration(
+              pluginSearchSelections: {
+                for (final itemId in selectItems)
+                  '${plugin.pluginId}/$itemId': true,
+              },
+            ),
+          );
+          tab.searchBloc.add(UpdateSearchQuery(query));
+          final coordinator = _dependencies.bookOpenCoordinator;
+          coordinator.historyBloc.add(AddHistory(tab));
+          coordinator.tabsBloc.add(AddTab(tab));
+          coordinator.navigationBloc.add(
+            const NavigateToScreen(Screen.search),
           );
           return true;
         }
