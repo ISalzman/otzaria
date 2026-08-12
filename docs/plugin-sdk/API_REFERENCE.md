@@ -249,8 +249,9 @@ const { data } = await Otzaria.call('app.getLocale');
 ```
 
 אותם שדות מגיעים גם ב-`payload.app` של אירוע `plugin.boot`. שינוי שפה תוך
-כדי ריצה נמסר באירוע `settings.changed` עם המפתח `key-settings-language`
-(ראו § תוסף רב-לשוני).
+כדי ריצה נמסר באירוע `settings.changed` עם המפתח `key-settings-language` ועם
+קוד השפה האפקטיבי (`he` או `en`) ב-`newValue` — גם כאשר בחירת המשתמש היא
+`system` (ראו § תוסף רב-לשוני).
 
 ### תוסף רב-לשוני (i18n)
 

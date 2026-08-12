@@ -2474,7 +2474,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   current.settingsLanguageCode) {
                 dispatch(
                   SettingsRepository.keySettingsLanguage,
-                  current.settingsLanguageCode,
+                  pluginLocalePayload(
+                    code: current.settingsLanguageCode,
+                  )['language']!,
                 );
               }
               if (previous.followSystemTheme != current.followSystemTheme) {
