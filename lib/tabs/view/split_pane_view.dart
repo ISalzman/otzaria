@@ -192,7 +192,8 @@ class _SplitNodeState extends State<_SplitNode> {
     final minRatio = minPaneRatioFor(availableExtent);
     // אין לשנות יחס כשאין מקום לשתי חלוניות קריאות.
     if (minRatio >= 0.5) return;
-    _ratioNotifier.value = (_ratio + delta / availableExtent).clamp(
+    final effectiveRatio = _ratio.clamp(minRatio, 1 - minRatio);
+    _ratioNotifier.value = (effectiveRatio + delta / availableExtent).clamp(
       minRatio,
       1 - minRatio,
     );
@@ -381,6 +382,7 @@ class _PaneDividerState extends State<_PaneDivider> {
     // הגרירה אינה תובעת פוקוס: הוא היה נשאר על המפריד גם אחריה, והחצים
     // ו-Home היו מזיזים אותו במקום לגלול את הספר.
     void handleDragStart(DragStartDetails _) {
+      _focusNode.unfocus();
       _setDragging(true);
       widget.onDragStart();
     }

@@ -311,6 +311,9 @@ void main() {
       final root = horizontal();
       await tester.pumpWidget(host(root));
 
+      tester.widget<Focus>(dividerFocus()).focusNode!.requestFocus();
+      await tester.pump();
+
       await tester.drag(
         _horizontalDivider,
         const Offset(-40, 0),
@@ -334,6 +337,18 @@ void main() {
 
       expect(tester.widget<Focus>(dividerFocus()).focusNode!.hasFocus, isTrue);
       expect(reported, greaterThan(0.5));
+    });
+
+    testWidgets('הזזה ראשונה מנרמלת יחס ישן שנשמר מתחת לרצפה', (tester) async {
+      final root = horizontal(ratio: 0.03);
+      double? reported;
+      await tester.pumpWidget(
+        host(root, onRatioChanged: (ratio) => reported = ratio),
+      );
+
+      await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.arrowLeft);
+
+      expect(reported, greaterThan(kMinPaneRatio));
     });
   });
 
