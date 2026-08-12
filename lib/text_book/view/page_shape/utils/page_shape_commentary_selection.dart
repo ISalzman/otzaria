@@ -31,11 +31,54 @@ bool isPageShapeMultipleCommentatorsMode(String? value) {
       isPageShapeMultiCommentatorsValue(value);
 }
 
+/// מחזיר את שם המפרש בלי שם הספר שהוא מפרש.
+/// "רמב"ן על ברכות" → "רמב"ן"; "יכין מקואות" עם [commentedBookTitle]
+/// "משנה מקואות" → "יכין". יש משפחות מפרשים שאינן כוללות "על" בשם.
+String? pageShapeCommentatorBaseName(
+  String? fullName, {
+  String? commentedBookTitle,
+}) {
+  if (fullName == null) return null;
+
+  final onIndex = fullName.indexOf(' על ');
+  if (onIndex > 0) {
+    return fullName.substring(0, onIndex).trim();
+  }
+
+  if (commentedBookTitle == null || commentedBookTitle.isEmpty) {
+    return fullName;
+  }
+
+  final nameWords = _splitWords(fullName);
+  final bookWords = _splitWords(commentedBookTitle);
+
+  // שם שכולו שם הספר אינו נושא חלק-מפרש שאפשר לבודד.
+  if (nameWords.join(' ') == bookWords.join(' ')) return fullName;
+
+  var shared = 0;
+  while (shared < nameWords.length - 1 &&
+      shared < bookWords.length &&
+      nameWords[nameWords.length - 1 - shared] ==
+          bookWords[bookWords.length - 1 - shared]) {
+    shared++;
+  }
+
+  if (shared == 0) return fullName;
+  return nameWords.take(nameWords.length - shared).join(' ');
+}
+
+List<String> _splitWords(String value) =>
+    value.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).toList();
+
 /// מחפש את שם המפרש המלא מתוך רשימת המפרשים הזמינים.
+///
+/// [commentedBookTitle] מאפשר להתאים גם בחירה ישנה שנשמרה עם שם ספר אחר צרוב
+/// בתוכה ("יכין מקואות" בזמן קריאה במסכת נדה).
 String? findMatchingPageShapeCommentator(
   String? selection,
-  List<String> availableCommentators,
-) {
+  List<String> availableCommentators, {
+  String? commentedBookTitle,
+}) {
   if (selection == null) {
     return null;
   }
@@ -53,7 +96,43 @@ String? findMatchingPageShapeCommentator(
     }
   }
 
-  return null;
+  return _matchByCommentatorBase(
+    selection,
+    availableCommentators,
+    commentedBookTitle,
+  );
+}
+
+/// מתאים בחירה ישנה למפרש שחלק-המפרש שלו הוא מילות הפתיחה של הבחירה.
+/// דורש גבול-מילה מלא, ובוחר את ההתאמה הארוכה ביותר, כדי ש"תוספות רבי עקיבא
+/// איגר" לא ייקלט כ"תוספות יום טוב".
+String? _matchByCommentatorBase(
+  String selection,
+  List<String> availableCommentators,
+  String? commentedBookTitle,
+) {
+  if (commentedBookTitle == null || commentedBookTitle.isEmpty) {
+    return null;
+  }
+
+  String? best;
+  var bestLength = 0;
+
+  for (final commentator in availableCommentators) {
+    final base = pageShapeCommentatorBaseName(
+      commentator,
+      commentedBookTitle: commentedBookTitle,
+    );
+    if (base == null || base == commentator || base.length <= bestLength) {
+      continue;
+    }
+    if (selection.startsWith('$base ')) {
+      best = commentator;
+      bestLength = base.length;
+    }
+  }
+
+  return best;
 }
 
 List<String> _decodeMultiCommentators(String value) {
@@ -114,6 +193,7 @@ List<String> decodePageShapeCommentatorsSelection(String? value) {
 String? resolvePageShapeCommentatorSelection({
   required String? selection,
   required List<String> availableCommentators,
+  String? commentedBookTitle,
 }) {
   if (selection == null ||
       isPageShapeRemainingCommentatorsValue(selection) ||
@@ -122,7 +202,11 @@ String? resolvePageShapeCommentatorSelection({
   }
 
   if (!isPageShapeMultiCommentatorsValue(selection)) {
-    return findMatchingPageShapeCommentator(selection, availableCommentators) ??
+    return findMatchingPageShapeCommentator(
+          selection,
+          availableCommentators,
+          commentedBookTitle: commentedBookTitle,
+        ) ??
         selection;
   }
 
@@ -132,6 +216,7 @@ String? resolvePageShapeCommentatorSelection({
     final match = findMatchingPageShapeCommentator(
       commentator,
       availableCommentators,
+      commentedBookTitle: commentedBookTitle,
     );
     if (match != null && seen.add(match)) {
       resolved.add(match);
@@ -152,6 +237,7 @@ String? resolvePageShapeCommentatorSelection({
 String? resolvePageShapeSingleCommentatorSelection({
   required String? selection,
   required List<String> availableCommentators,
+  String? commentedBookTitle,
 }) {
   if (selection == null ||
       isPageShapeRemainingCommentatorsValue(selection) ||
@@ -160,7 +246,11 @@ String? resolvePageShapeSingleCommentatorSelection({
   }
 
   if (!isPageShapeMultiCommentatorsValue(selection)) {
-    return findMatchingPageShapeCommentator(selection, availableCommentators) ??
+    return findMatchingPageShapeCommentator(
+          selection,
+          availableCommentators,
+          commentedBookTitle: commentedBookTitle,
+        ) ??
         selection;
   }
 
@@ -168,6 +258,7 @@ String? resolvePageShapeSingleCommentatorSelection({
     final match = findMatchingPageShapeCommentator(
       commentator,
       availableCommentators,
+      commentedBookTitle: commentedBookTitle,
     );
     if (match != null) {
       return match;
@@ -182,10 +273,12 @@ List<String> resolvePageShapeSelectedCommentators({
   required String? selection,
   required List<String> availableCommentators,
   Iterable<String?> excludedCommentators = const [],
+  String? commentedBookTitle,
 }) {
   final normalizedSelection = resolvePageShapeCommentatorSelection(
     selection: selection,
     availableCommentators: availableCommentators,
+    commentedBookTitle: commentedBookTitle,
   );
 
   if (normalizedSelection == null) {
@@ -211,10 +304,12 @@ List<String> resolvePageShapeSelectedCommentators({
 String? _resolvePageShapeSingleCommentator({
   required String? selection,
   required List<String> availableCommentators,
+  String? commentedBookTitle,
 }) {
   final resolved = resolvePageShapeCommentatorSelection(
     selection: selection,
     availableCommentators: availableCommentators,
+    commentedBookTitle: commentedBookTitle,
   );
 
   if (resolved == null ||
@@ -243,18 +338,22 @@ List<String> resolvePageShapeDisplayedCommentators({
     'right': true,
     'bottom': true,
   },
+  String? commentedBookTitle,
 }) {
   final resolvedLeft = _resolvePageShapeSingleCommentator(
     selection: leftSelection,
     availableCommentators: availableCommentators,
+    commentedBookTitle: commentedBookTitle,
   );
   final resolvedBottom = _resolvePageShapeSingleCommentator(
     selection: bottomSelection,
     availableCommentators: availableCommentators,
+    commentedBookTitle: commentedBookTitle,
   );
   final resolvedBottomRight = _resolvePageShapeSingleCommentator(
     selection: bottomRightSelection,
     availableCommentators: availableCommentators,
+    commentedBookTitle: commentedBookTitle,
   );
 
   final excludedForRightPane = [
@@ -273,6 +372,7 @@ List<String> resolvePageShapeDisplayedCommentators({
           selection: rightSelection,
           availableCommentators: rightSelectableCommentators,
           excludedCommentators: excludedForRightPane,
+          commentedBookTitle: commentedBookTitle,
         );
 
   final displayedCommentators = <String>[];

@@ -208,6 +208,144 @@ void main() {
     expect(settingsPane(tester).isOpen, isFalse);
   });
 
+  testWidgets('בחירת קטגוריה שנשמרה עם שם מסכת אחרת מתעדכנת למסכת הנוכחית', (
+    tester,
+  ) async {
+    // "יכין מקואות" — משפחת מפרשים שאין ב שמה "על" — נשמרה כפי שהיא בהגדרת
+    // הקטגוריה, וכל מסכת אחרת הציגה את היכין של המסכת הראשונה.
+    await PageShapeSettingsManager.saveConfiguration(
+      'משנה מקואות',
+      const {
+        'left': 'יכין מקואות',
+        'right': null,
+        'bottom': null,
+        'bottomRight': null,
+      },
+      saveToCategory: 'משנה',
+    );
+
+    final openSettingsNotifier = ValueNotifier<int>(0);
+    addTearDown(openSettingsNotifier.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(
+              value: _TestTextBookBloc(
+                _loadedState(
+                  book: TextBook(
+                    title: 'משנה נדה',
+                    heCategories: 'אוצריא, משנה, סדר טהרות, נדה',
+                  ),
+                  availableCommentators: const [
+                    'ברטנורא על משנה נדה',
+                    'יכין נדה',
+                  ],
+                ),
+              ),
+            ),
+            BlocProvider<PersonalNotesBloc>.value(
+              value: _TestPersonalNotesBloc(
+                const PersonalNotesState(
+                  isLoading: false,
+                  bookId: 'משנה נדה',
+                  locatedNotes: [],
+                  missingNotes: [],
+                  errorMessage: null,
+                  filteredLocatedNotes: [],
+                  filteredMissingNotes: [],
+                ),
+              ),
+            ),
+            BlocProvider<SettingsBloc>.value(
+              value: _TestSettingsBloc(SettingsState.initial()),
+            ),
+          ],
+          child: PageShapeScreen(
+            openBookCallback: (_) {},
+            openSettingsNotifier: openSettingsNotifier,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    openSettingsNotifier.value++;
+    await tester.pump();
+    await tester.pump();
+
+    final panel = tester.widget<PageShapeSettingsPanel>(
+      find.byType(PageShapeSettingsPanel),
+    );
+    expect(panel.currentLeft, 'יכין נדה');
+  });
+
+  testWidgets('מפרש שאינו קיים בספר הנוכחי אינו נמחק מההגדרה', (tester) async {
+    // איפוס הבחירה ל-null היה נשמר חזרה מהפאנל ומוחק את המפרש מכל הקטגוריה.
+    await PageShapeSettingsManager.saveConfiguration(
+      'משנה נדה',
+      const {
+        'left': 'מלאכת שלמה על משנה מקואות',
+        'right': null,
+        'bottom': null,
+        'bottomRight': null,
+      },
+    );
+
+    final openSettingsNotifier = ValueNotifier<int>(0);
+    addTearDown(openSettingsNotifier.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(
+              value: _TestTextBookBloc(
+                _loadedState(
+                  book: TextBook(title: 'משנה נדה'),
+                  availableCommentators: const ['ברטנורא על משנה נדה'],
+                ),
+              ),
+            ),
+            BlocProvider<PersonalNotesBloc>.value(
+              value: _TestPersonalNotesBloc(
+                const PersonalNotesState(
+                  isLoading: false,
+                  bookId: 'משנה נדה',
+                  locatedNotes: [],
+                  missingNotes: [],
+                  errorMessage: null,
+                  filteredLocatedNotes: [],
+                  filteredMissingNotes: [],
+                ),
+              ),
+            ),
+            BlocProvider<SettingsBloc>.value(
+              value: _TestSettingsBloc(SettingsState.initial()),
+            ),
+          ],
+          child: PageShapeScreen(
+            openBookCallback: (_) {},
+            openSettingsNotifier: openSettingsNotifier,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    openSettingsNotifier.value++;
+    await tester.pump();
+    await tester.pump();
+
+    final panel = tester.widget<PageShapeSettingsPanel>(
+      find.byType(PageShapeSettingsPanel),
+    );
+    expect(panel.currentLeft, 'מלאכת שלמה על משנה מקואות');
+  });
+
   testWidgets('כשל טעינת מפרש תחתון אינו שומר הסתרה גלובלית', (tester) async {
     const missingCommentator = 'מפרש בדיקה שלא קיים במאגר';
 
@@ -271,9 +409,10 @@ void main() {
 
 TextBookLoaded _loadedState({
   List<String> availableCommentators = const ['רש"י על ספר בדיקה'],
+  TextBook? book,
 }) {
   return TextBookLoaded(
-    book: TextBook(title: 'ספר בדיקה'),
+    book: book ?? TextBook(title: 'ספר בדיקה'),
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,

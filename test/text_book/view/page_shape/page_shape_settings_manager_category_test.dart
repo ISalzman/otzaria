@@ -61,6 +61,94 @@ void main() {
     });
   });
 
+  group('extractBaseCommentatorName מפריד את שם הספר משם המפרש', () {
+    test('שם עם "על" — הקידומת היא שם המפרש', () {
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'ברטנורא על משנה נדה',
+          commentedBookTitle: 'משנה נדה',
+        ),
+        'ברטנורא',
+      );
+    });
+
+    test('שם בלי "על" — שם המסכת מוסר לפי שם הספר הנקרא', () {
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'יכין מקואות',
+          commentedBookTitle: 'משנה מקואות',
+        ),
+        'יכין',
+      );
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'ריף בבא מציעא',
+          commentedBookTitle: 'בבא מציעא',
+        ),
+        'ריף',
+      );
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'באר היטב אורח חיים',
+          commentedBookTitle: 'שולחן ערוך אורח חיים',
+        ),
+        'באר היטב',
+      );
+    });
+
+    test('מפרש שאינו נושא את שם הספר נשאר כמות שהוא', () {
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'משנה ברורה',
+          commentedBookTitle: 'שולחן ערוך אורח חיים',
+        ),
+        'משנה ברורה',
+      );
+    });
+
+    test('שם שכולו זהה לשם הספר אינו מתרוקן', () {
+      expect(
+        PageShapeSettingsManager.extractBaseCommentatorName(
+          'נדה',
+          commentedBookTitle: 'משנה נדה',
+        ),
+        'נדה',
+      );
+    });
+  });
+
+  test(
+    'רגרסיה: "יכין" נשמר לקטגוריה בלי שם המסכת ולכן מתעדכן במסכת אחרת',
+    () async {
+      // ספרי "יכין" נקראים "יכין <מסכת>" — בלי "על".
+      const mikvaotCategories = 'אוצריא, משנה, סדר טהרות, מקואות';
+
+      await PageShapeSettingsManager.saveConfiguration(
+        'משנה מקואות',
+        const {
+          'left': 'יכין מקואות',
+          'right': null,
+          'bottom': null,
+          'bottomRight': null,
+        },
+        saveToCategory: 'משנה',
+      );
+
+      final nidaConfig = PageShapeSettingsManager.loadConfiguration(
+        'משנה נדה',
+        heCategories: 'אוצריא, משנה, סדר טהרות, נדה',
+      );
+      expect(nidaConfig?['left'], 'יכין');
+
+      // גם בספר המקורי הבחירה נשארת תקפה.
+      final mikvaotConfig = PageShapeSettingsManager.loadConfiguration(
+        'משנה מקואות',
+        heCategories: mikvaotCategories,
+      );
+      expect(mikvaotConfig?['left'], 'יכין');
+    },
+  );
+
   test(
     'רגרסיה: שמירת מפרש לקטגוריה של ספר אחד לא מדליפה לספר אחר תחת קטגוריית-אב משותפת',
     () async {
