@@ -101,6 +101,10 @@ class PluginExternalSearchService {
       throw StateError('No external search provider for "$provider"');
     }
     final requestId = 'xs-${++_requestCounter}';
+    debugPrint(
+      'PluginExternalSearchService: → $requestId "$query" '
+      'offset=$offset limit=$limit provider=$provider',
+    );
     final pending = _PendingExternalSearch(
       provider: provider,
       onUpdate: onUpdate,
@@ -108,7 +112,10 @@ class PluginExternalSearchService {
     );
     _pending[requestId] = pending;
     try {
-      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+      // לא ממתינים ל-dispatch לפני ההאזנה לתשובה: מסלול ההעֲרָה (פתיחת דף
+      // התוסף) עשוי לקחת זמן, וטיימאאוט שנורה בלי מאזין היה הופך לחריגה
+      // לא-מטופלת והמדור היה נתקע בטעינה לנצח.
+      final dispatch = PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
         pluginId,
         requestTopic,
         {
@@ -121,6 +128,13 @@ class PluginExternalSearchService {
           'limit': limit,
         },
         preferBackground: true,
+      );
+      unawaited(
+        dispatch.catchError((Object error, StackTrace stackTrace) {
+          if (!pending.completer.isCompleted) {
+            pending.completer.completeError(error, stackTrace);
+          }
+        }),
       );
       return await pending.completer.future;
     } finally {
@@ -141,6 +155,10 @@ class PluginExternalSearchService {
     bool done = true,
     String? error,
   }) {
+    debugPrint(
+      'PluginExternalSearchService: ← $requestId done=$done '
+      'results=${results.length} totalBooks=$totalBooks error=$error',
+    );
     final pending = _pending[requestId];
     if (pending == null || pending.completer.isCompleted) return;
     if (error != null && error.isNotEmpty) {

@@ -47,7 +47,9 @@ class PluginInBookSearchService {
     final completer = Completer<ExternalBookMatches>();
     _pending[requestId] = completer;
     try {
-      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+      // לא ממתינים ל-dispatch לפני ההאזנה: מסלול ההעֲרָה של התוסף עשוי
+      // לקחת זמן, והטיימאאוט חייב למדוד את הבקשה כולה עם מאזין מחובר.
+      final dispatch = PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
         pluginId,
         requestTopic,
         {
@@ -57,6 +59,13 @@ class PluginInBookSearchService {
           'query': query,
         },
         preferBackground: true,
+      );
+      unawaited(
+        dispatch.catchError((Object error, StackTrace stackTrace) {
+          if (!completer.isCompleted) {
+            completer.completeError(error, stackTrace);
+          }
+        }),
       );
       return await completer.future.timeout(_timeout);
     } finally {

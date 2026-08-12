@@ -557,10 +557,44 @@ class PluginRuntimeDispatcher {
             ..._runningForegroundPluginIds,
             pluginId,
           };
+        } else if (stillRegistered) {
+          // אירוע ממוקד פותח לרוב טיפול אסינכרוני (בקשת חיפוש שעונה דרך
+          // ה-bridge); הקפאה מיידית הייתה מקפיאה את ה-JS באמצע והתשובה
+          // לא הייתה מגיעה לעולם. משהים מחדש רק אחרי חלון חסד.
+          _scheduleSuspendAfterGrace(pluginId, controller);
         } else {
           await _suspendForeground(pluginId);
         }
       }
+    });
+  }
+
+  /// חלון חסד להשלמת טיפול אסינכרוני לפני הקפאה חוזרת של טאב מושהה.
+  static const _suspendGrace = Duration(seconds: 90);
+  final Map<String, Timer> _suspendGraceTimers = {};
+
+  void _scheduleSuspendAfterGrace(
+    String pluginId,
+    InAppWebViewController controller,
+  ) {
+    // אירוע נוסף בתוך החלון מאריך אותו — הטאב עדיין בעבודה.
+    _suspendGraceTimers.remove(pluginId)?.cancel();
+    _suspendGraceTimers[pluginId] = Timer(_suspendGrace, () {
+      _suspendGraceTimers.remove(pluginId);
+      unawaited(
+        _serializeLifecycle(() async {
+          final stillRegistered = identical(
+            _controllersByPlugin[pluginId]?['default'],
+            controller,
+          );
+          if (!stillRegistered ||
+              _desiredForegroundIds.contains(pluginId) ||
+              _suspendedForegroundIds.contains(pluginId)) {
+            return;
+          }
+          await _suspendForeground(pluginId);
+        }),
+      );
     });
   }
 
