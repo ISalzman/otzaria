@@ -113,19 +113,21 @@ class DeclarativeToolbarBindingService {
   ) {
     final base = template.baseItem;
     final actionTemplate = template.actionTemplate;
-    if (actionTemplate != null) {
-      final action = _compileAction(
-        registration.plugin,
-        _resolveExpression(actionTemplate, outputs: outputs),
-        contextSignature,
-      );
+    final primaryAction = actionTemplate == null
+        ? null
+        : _compileAction(
+            registration.plugin,
+            _resolveExpression(actionTemplate, outputs: outputs),
+            contextSignature,
+          );
+    if (template.childrenBinding == null) {
       return PluginToolbarItem(
         id: base.id,
         type: 'button',
         title: base.title,
         icon: base.icon,
         contexts: base.contexts,
-        hostAction: action,
+        hostAction: primaryAction,
       );
     }
 
@@ -173,11 +175,12 @@ class DeclarativeToolbarBindingService {
     }
     final menu = PluginToolbarItem(
       id: base.id,
-      type: 'menu',
+      type: primaryAction == null ? 'menu' : 'split',
       title: base.title,
       icon: base.icon,
       contexts: base.contexts,
       children: children,
+      hostAction: primaryAction,
     );
     PluginToolbarRegistry.detached().registerPayload(
       registration.plugin.pluginId,

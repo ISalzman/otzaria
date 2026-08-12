@@ -50,7 +50,7 @@ ActionButtonData _buildAction({
 }) {
   final icon =
       fluentIconFromName(item.icon) ?? FluentIcons.puzzle_piece_24_regular;
-  if (item.type == 'menu') {
+  if (item.type == 'menu' || item.type == 'split') {
     final visibleChildren = [
       for (final child in item.children)
         if (child.contexts.contains(context)) child,
@@ -65,6 +65,33 @@ ActionButtonData _buildAction({
         context: context,
         locationPayload: locationPayload,
         hostActionDispatcher: hostActionDispatcher,
+      );
+    }
+
+    final childActions = [
+      for (final child in visibleChildren)
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: fluentIconFromName(child.icon),
+          tooltip: child.title,
+          onPressed: () => dispatchChild(child.id),
+        ),
+    ];
+
+    if (item.type == 'split') {
+      return ActionButtonData.split(
+        icon: icon,
+        tooltip: item.title,
+        compact: compact,
+        menuItems: childActions,
+        onPressed: () => _dispatchItemClick(
+          dispatcher: dispatcher,
+          pluginId: pluginId,
+          item: item,
+          context: context,
+          locationPayload: locationPayload,
+          hostActionDispatcher: hostActionDispatcher,
+        ),
       );
     }
 
@@ -85,15 +112,7 @@ ActionButtonData _buildAction({
       icon: icon,
       tooltip: item.title,
       // ב-overflow הפקד עצמו לא בנוי בעץ, לכן הילדים מוצגים כתת-תפריט
-      submenuItems: [
-        for (final child in visibleChildren)
-          ActionButtonData(
-            widget: const SizedBox.shrink(),
-            icon: fluentIconFromName(child.icon),
-            tooltip: child.title,
-            onPressed: () => dispatchChild(child.id),
-          ),
-      ],
+      submenuItems: childActions,
     );
   }
   return ActionButtonData.simple(

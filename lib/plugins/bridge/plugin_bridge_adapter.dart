@@ -53,6 +53,7 @@ import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
@@ -98,6 +99,7 @@ const _settingsAllowlist = {
   SettingsRepository.keyLineHeight,
   SettingsRepository.keySelectedCity,
   SettingsRepository.keyCalendarType,
+  SettingsRepository.keySettingsLanguage,
   SettingsRepository.keyShowTeamim,
   SettingsRepository.keyDefaultNikud,
   SettingsRepository.keyRemoveNikudFromTanach,
@@ -595,7 +597,14 @@ class PluginBridgeAdapter {
       case 'getTheme':
         return _dependencies.themePayloadBuilder();
       case 'getLocale':
-        return {'locale': 'he-IL', 'textDirection': 'rtl'};
+        // שפת הממשק שבחר המשתמש (או שפת המערכת בזיהוי אוטומטי) — לתוספים
+        // רב-לשוניים. 'language' הוא קוד השפה ('he'/'en'); 'locale' נשמר
+        // בצורתו הישנה (he-IL) לתאימות.
+        return pluginLocalePayload(
+          code: Settings.getValue<String>(
+            SettingsRepository.keySettingsLanguage,
+          ),
+        );
       case 'getUserEmail':
         final email =
             Settings.getValue<String>(
@@ -1187,6 +1196,7 @@ class PluginBridgeAdapter {
           final searchQuery = args['searchQuery'] as String? ?? '';
           final navigateToPositionIfReused =
               args['navigateToPositionIfReused'] as bool? ?? false;
+          final openInSidePane = args['openInSidePane'] as bool? ?? false;
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
               args['external'] == null) {
@@ -1201,6 +1211,7 @@ class PluginBridgeAdapter {
               index: index,
               searchQuery: searchQuery,
               navigateToPositionIfReused: navigateToPositionIfReused,
+              inSidePane: openInSidePane,
             );
           }
           final book = _findPluginBook(
@@ -1215,6 +1226,7 @@ class PluginBridgeAdapter {
             ignoreHistory: true,
             requiresStableLayout: book is PdfBook,
             navigateToPositionIfReused: navigateToPositionIfReused,
+            inSidePane: openInSidePane,
           );
           return true;
         }

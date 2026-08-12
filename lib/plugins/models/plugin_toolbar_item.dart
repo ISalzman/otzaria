@@ -3,7 +3,8 @@ import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 /// פריט שתוסף רושם בשורת הפקדים של מסך העיון.
 ///
 /// `type == 'button'` — לחצן בודד; `type == 'menu'` — תפריט נפתח שילדיו
-/// הם לחצנים ([children]).
+/// הם לחצנים ([children]); `type == 'split'` — לחצן מפוצל שפעולתו הראשית היא
+/// הפריט עצמו, ולצידה חץ שפותח את [children].
 class PluginToolbarItem {
   final String id;
   final String type;

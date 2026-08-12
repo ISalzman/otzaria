@@ -285,7 +285,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 |--------|-------|--------|
 | `app.getInfo` | `app.info.read` | גרסת האפליקציה, פלטפורמה |
 | `app.getTheme` | `app.info.read` | ערכת נושא מלאה (colorScheme + typography) |
-| `app.getLocale` | `app.info.read` | locale ו-textDirection |
+| `app.getLocale` | `app.info.read` | locale, language ו-textDirection (מ-0.9.97 — לפי שפת הממשק שנבחרה) |
 | `app.openUrl` | `app.open_url` | פתיחת כתובת http/https בדפדפן המערכת |
 | `app.getConnectivity` | `app.info.read` | האם יש אינטרנט — להסתרת יכולות מקוונות |
 
@@ -376,7 +376,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 **מפתחות מותרים:**
 `keyDarkMode`, `keyFollowSystemTheme`, `keySwatchColor`, `keyDarkSwatchColor`,
 `keyFontSize`, `keyFontFamily`, `keyCommentatorsFontFamily`, `keyCommentatorsFontSize`,
-`keyLineHeight`, `keySelectedCity`, `keyCalendarType`, `keyShowTeamim`,
+`keyLineHeight`, `keySelectedCity`, `keyCalendarType`, `keySettingsLanguage`, `keyShowTeamim`,
 `keyDefaultNikud`, `keyRemoveNikudFromTanach`, `keyReplaceHolyNames`,
 `keyLibraryViewMode`, `keyAlignTabsToRight`, `keyCopyWithHeaders`, `keyCopyHeaderFormat`
 

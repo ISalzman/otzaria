@@ -8,6 +8,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
@@ -35,6 +36,7 @@ class BookOpenCoordinator {
     bool insertAdjacent = false,
     List<String>? initialCommentators,
     bool navigateToPositionIfReused = false,
+    bool inSidePane = false,
   }) {
     final tab = buildTab(
       book,
@@ -51,6 +53,7 @@ class BookOpenCoordinator {
       tab,
       insertAdjacent: insertAdjacent,
       navigateToPositionIfReused: navigateToPositionIfReused,
+      inSidePane: inSidePane,
     );
   }
 
@@ -60,17 +63,26 @@ class BookOpenCoordinator {
     OpenedTab tab, {
     bool insertAdjacent = false,
     bool navigateToPositionIfReused = false,
+    bool inSidePane = false,
   }) {
     final tabsState = tabsBloc.state;
     if (tabsState.hasOpenTabs) {
       historyBloc.add(CaptureStateForHistory(tabsState.currentTab!));
     }
+    // בטאב שכבר מפוצל (או כשאין טאב פתוח) אין לאן להוסיף חלונית שלישית,
+    // ולכן הבקשה יורדת לפתיחה ככרטיסייה רגילה.
+    final canSplit =
+        tabsState.currentTab != null &&
+        tabsState.currentTab is! CombinedTab &&
+        tab is! CombinedTab;
     tabsBloc.add(
-      OpenOrFocusTab(
-        tab,
-        insertAdjacent: insertAdjacent,
-        navigateToPositionIfReused: navigateToPositionIfReused,
-      ),
+      inSidePane && canSplit
+          ? OpenTabInSidePane(tab)
+          : OpenOrFocusTab(
+              tab,
+              insertAdjacent: insertAdjacent,
+              navigateToPositionIfReused: navigateToPositionIfReused,
+            ),
     );
     navigationBloc.add(const NavigateToScreen(Screen.reading));
   }

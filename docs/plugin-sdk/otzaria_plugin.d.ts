@@ -723,13 +723,14 @@ export interface ContextMenuColorClickedEvent {
 export type ToolbarContext = 'reader-text' | 'reader-pdf';
 
 /**
- * A reader-toolbar registration: a single button or a dropdown menu whose
- * children are buttons. A plugin may register at most two top-level items;
+ * A reader-toolbar registration: a single button, a dropdown menu whose
+ * children are buttons, or a split button (a main action plus an arrow that
+ * opens the children). A plugin may register at most two top-level items;
  * replacing the same `id` does not consume another slot. Available from 0.9.97.
  */
 export interface ToolbarItem {
   id: string;
-  type?: 'button' | 'menu';
+  type?: 'button' | 'menu' | 'split';
   /** Tooltip on the visible button and label in the overflow menu. */
   title: string;
   /** FluentUI icon name. Required on top-level items, optional on children. */
@@ -739,7 +740,7 @@ export interface ToolbarItem {
   contexts?: ToolbarContext[];
   /** Custom event dispatched only to the owning plugin. */
   onClickEvent?: string;
-  /** Menu children (`type: 'menu'` only, up to 20 buttons, no nesting). */
+  /** Children (`type: 'menu'` or `'split'`, up to 20 buttons, no nesting). */
   children?: ToolbarItem[];
   /** When true, clicking opens the plugin page and the click event is
    * delivered to it after boot. */

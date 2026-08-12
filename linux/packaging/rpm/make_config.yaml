@@ -29,3 +29,8 @@ startup_notify: true
 
 # AppStream metainfo — נצרך ע"י GNOME Software במסך ההתקנה (סמל+תיאור)
 metainfo: linux/packaging/otzaria.metainfo.xml
+
+# רישום סכימת otzaria:// — בלעדיו קישורי deep-link (התקנת תוסף מהדפדפן)
+# לא מגיעים לאפליקציה. ה-runner מעביר את ה-URI כארגומנט ל-Dart דרך %U.
+supported_mime_type:
+  - x-scheme-handler/otzaria

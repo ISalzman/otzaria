@@ -59,6 +59,7 @@ class DeclarativeActionCompiler {
     }
     switch (type) {
       case 'reader.openBook':
+      case 'reader.openBookInSidePane':
         _validateOpenBookArgs(args);
       default:
         throw DeclarativeProgramException(

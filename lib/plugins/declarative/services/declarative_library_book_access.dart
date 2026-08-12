@@ -16,6 +16,7 @@ typedef DeclarativeBookOpen =
       int index,
       String searchQuery, {
       required bool navigateToPositionIfReused,
+      required bool inSidePane,
     });
 typedef DeclarativeExternalBookOpen =
     Future<bool> Function(ExternalLibraryBook book);
@@ -44,15 +45,21 @@ class DeclarativeLibraryBookAccess
         'otzar' => DataRepository.instance.otzarBooks,
         _ => Future.value(const <Book>[]),
       },
-      (book, index, searchQuery, {required navigateToPositionIfReused}) =>
-          coordinator.openBook(
-            book,
-            index,
-            searchQuery,
-            ignoreHistory: true,
-            requiresStableLayout: book is PdfBook,
-            navigateToPositionIfReused: navigateToPositionIfReused,
-          ),
+      (
+        book,
+        index,
+        searchQuery, {
+        required navigateToPositionIfReused,
+        required inSidePane,
+      }) => coordinator.openBook(
+        book,
+        index,
+        searchQuery,
+        ignoreHistory: true,
+        requiresStableLayout: book is PdfBook,
+        navigateToPositionIfReused: navigateToPositionIfReused,
+        inSidePane: inSidePane,
+      ),
       externalBookOpener: (book) => OtzarUtils.launchOtzarWeb(book.link),
     );
   }
@@ -81,6 +88,7 @@ class DeclarativeLibraryBookAccess
     required int index,
     required String searchQuery,
     bool navigateToPositionIfReused = false,
+    bool inSidePane = false,
   }) async {
     final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
@@ -92,6 +100,7 @@ class DeclarativeLibraryBookAccess
       index,
       searchQuery,
       navigateToPositionIfReused: navigateToPositionIfReused,
+      inSidePane: inSidePane,
     );
     return true;
   }

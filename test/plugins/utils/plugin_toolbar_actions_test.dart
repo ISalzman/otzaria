@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/controls/bar_button.dart';
+import 'package:otzaria/widgets/controls/bar_split_button.dart';
 
 void main() {
   Future<Map<String, dynamic>> emptyLocation() async => const {};
@@ -75,6 +76,35 @@ void main() {
       ['Add', 'Clear'],
     );
     expect(action.submenuItems!.first.onPressed, isNotNull);
+  });
+
+  test('builds a split button whose overflow starts with the main action', () {
+    const item = PluginToolbarItem(
+      id: 'split',
+      type: 'split',
+      title: 'Open edition',
+      icon: 'book_24_regular',
+      children: [
+        PluginToolbarItem(id: 'other', title: 'Other edition'),
+      ],
+    );
+
+    final action = buildPluginToolbarActions(
+      records: const [('marker', item)],
+      context: 'reader-text',
+      compact: false,
+      locationPayload: emptyLocation,
+    ).single;
+
+    expect(action.tooltip, 'Open edition');
+    expect(action.widget, isA<BarSplitButton<int>>());
+    expect(action.onPressed, isNotNull);
+    expect(
+      action.submenuItems!.map((child) => child.tooltip),
+      ['Open edition', 'Other edition'],
+    );
+    final split = action.widget as BarSplitButton<int>;
+    expect(split.entries.map((entry) => entry.label), ['Other edition']);
   });
 
   test('filters top-level items and menu children by reader context', () {

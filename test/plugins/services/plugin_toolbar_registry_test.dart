@@ -49,6 +49,32 @@ void main() {
       expect(item.children.last.onClickEvent, 'marker.clear');
     });
 
+    test('parses a split item and rejects one without children', () {
+      registry.registerPayload('marker', {
+        'id': 'split',
+        'type': 'split',
+        'title': 'Open edition',
+        'icon': 'book_24_regular',
+        'children': [
+          {'id': 'other', 'title': 'Other edition'},
+        ],
+      });
+
+      final item = registry.getAll().single.$2;
+      expect(item.type, 'split');
+      expect(item.children.single.id, 'other');
+
+      expect(
+        () => registry.registerPayload('marker', {
+          'id': 'lonely-split',
+          'type': 'split',
+          'title': 'No children',
+          'icon': 'book_24_regular',
+        }),
+        throwsA(isA<PluginToolbarException>()),
+      );
+    });
+
     test('requires an icon on a top-level item but not on children', () {
       expect(
         () => registry.registerPayload('marker', {

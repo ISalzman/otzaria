@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
@@ -718,8 +719,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
             'app': {
               'version': packageInfo.version,
               'platform': Platform.operatingSystem,
-              'locale': 'he-IL',
-              'textDirection': 'rtl',
+              // שפת הממשק הפעילה (he-IL לתאימות; 'language' — קוד השפה)
+              ...pluginLocalePayload(
+                code: Settings.getValue<String>(
+                  SettingsRepository.keySettingsLanguage,
+                ),
+              ),
               // חושף לתוסף אם הוא נטען כתוסף פיתוח (sourceType=development).
               // בתוסף ארוז זה false — מאפשר לתוסף לדלג על שערים פיתוחיים
               // (כמו שער סיסמה) רק במצב פיתוח ולא בפרודקשן.

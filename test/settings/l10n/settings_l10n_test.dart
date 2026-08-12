@@ -116,6 +116,61 @@ void main() {
     });
   });
 
+  // החוזה של ממשק התוספים: plugin.boot / app.getLocale בונים את המטען
+  // מ-pluginLocalePayload — הבדיקות כאן מקבעות אותו כך ששינוי עתידי לא
+  // יחזיר בטעות he-IL קבוע (כפי שהיה עד 0.9.96) בלי להיתפס.
+  group('pluginLocalePayload (plugin.boot / app.getLocale)', () {
+    test('עברית: locale נשאר he-IL לתאימות, עם קוד שפה וכיוון', () {
+      expect(pluginLocalePayload(code: 'he'), {
+        'locale': 'he-IL',
+        'language': 'he',
+        'textDirection': 'rtl',
+      });
+    });
+
+    test('אנגלית: locale הוא קוד השפה הנקי וכיוון ltr', () {
+      expect(pluginLocalePayload(code: 'en'), {
+        'locale': 'en',
+        'language': 'en',
+        'textDirection': 'ltr',
+      });
+    });
+
+    test('זיהוי אוטומטי עוקב אחרי שפת המערכת', () {
+      expect(
+        pluginLocalePayload(
+          code: kSettingsLanguageSystemCode,
+          systemLocale: const Locale('en', 'US'),
+        )['language'],
+        'en',
+      );
+      expect(
+        pluginLocalePayload(
+          code: kSettingsLanguageSystemCode,
+          systemLocale: const Locale('he', 'IL'),
+        ),
+        {'locale': 'he-IL', 'language': 'he', 'textDirection': 'rtl'},
+      );
+    });
+
+    test('קוד לא מוכר נופל לזיהוי אוטומטי (לא לעברית קבועה)', () {
+      expect(
+        pluginLocalePayload(
+          code: 'klingon',
+          systemLocale: const Locale('en', 'US'),
+        )['language'],
+        'en',
+      );
+    });
+
+    test('המטען מכיל בדיוק את שלושת השדות שהתוספים מצפים להם', () {
+      expect(
+        pluginLocalePayload(code: 'he').keys.toSet(),
+        {'locale', 'language', 'textDirection'},
+      );
+    });
+  });
+
   group('resolveSettingsText', () {
     const catalog = {
       'חיפוש': 'Search',

@@ -238,12 +238,53 @@ const { data } = await Otzaria.call('app.getTheme');
 > **גופנים מוטמעים אוטומטית:** השמות שמגיעים ב-`typography.fontFamily` ו-`typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`, `NotoRashiHebrew`) נטענים אוטומטית ב-WebView של התוסף כ-`@font-face` עוד לפני ה-`plugin.boot`. אין צורך לארוז את קבצי הגופן בתוסף — מספיק להפנות לשם שהתקבל ב-CSS: `font-family: 'FrankRuhlCLM', serif;`. אם המשתמש בחר גופן מערכת (לא מובנה), ההזרקה האוטומטית מדלגת עליו וה-WebView ייפול חזרה ל-fallback של מערכת ההפעלה.
 
 ### `app.getLocale`
-מחזיר את השפה וכיוון הטקסט.
+מחזיר את שפת הממשק שבחר המשתמש (או שפת המערכת, בזיהוי אוטומטי) ואת כיוון
+הטקסט שלה. עד 0.9.96 הוחזר תמיד `he-IL`; מ-0.9.97 הערך משקף את הגדרת השפה
+באפליקציה, ונוסף שדה `language` עם קוד השפה הנקי.
 
 ```javascript
 const { data } = await Otzaria.call('app.getLocale');
-// { locale: "he-IL", textDirection: "rtl" }
+// { locale: "he-IL", language: "he", textDirection: "rtl" }
+// באנגלית: { locale: "en", language: "en", textDirection: "ltr" }
 ```
+
+אותם שדות מגיעים גם ב-`payload.app` של אירוע `plugin.boot`. שינוי שפה תוך
+כדי ריצה נמסר באירוע `settings.changed` עם המפתח `key-settings-language` ועם
+קוד השפה האפקטיבי (`he` או `en`) ב-`newValue` — גם כאשר בחירת המשתמש היא
+`system` (ראו § תוסף רב-לשוני).
+
+### תוסף רב-לשוני (i18n)
+
+עברית היא שפת הבסיס של אוצריא — תוסף כותב את ממשקו בעברית, ומוסיף תרגום
+לכל שפה שירצה. העיקרון:
+
+1. **קובץ תרגום לכל שפה**, מוטמע בתוסף (ללא רשת), למשל `i18n/en.js` הרושם
+   מילון תחת `window.TRANSLATIONS.en`. המפתחות הם מחרוזות המקור בעברית:
+
+   ```javascript
+   // i18n/en.js
+   window.TRANSLATIONS = window.TRANSLATIONS || {};
+   window.TRANSLATIONS.en = {
+     'הגדרות': 'Settings',
+     'הצג': 'Show',
+   };
+   ```
+
+2. **בחירת השפה** — מ-`payload.app.language` שבאירוע `plugin.boot` (או
+   `app.getLocale`). אם אין מילון לשפה — נשארים בעברית:
+
+   ```javascript
+   const dict = window.TRANSLATIONS[payload.app.language] || null;
+   const t = s => (dict && dict[s]) || s;   // נפילה טבעית לעברית
+   ```
+
+3. **כיוון** — כש-`textDirection` הוא `ltr`, קבעו
+   `document.documentElement.dir = 'ltr'` בזמן ריצה (ה-HTML הסטטי נשאר
+   `dir="rtl"`, כדרישת ולידציית העיצוב).
+
+4. **עדכון חי** — האזינו ל-`settings.changed` (הרשאת
+   `events.subscribe:settings.changed`) ובדקו `key === 'key-settings-language'`;
+   או הסתפקו בשפה שנקבעה ב-boot.
 
 ### `app.getUserEmail`
 **הרשאה נדרשת:** `app.user_email.read`
@@ -787,10 +828,15 @@ await Otzaria.call('reader.openBook', {
   type: 'text',         // אופציונלי — מוודא שמדובר בסוג הנכון
   index: 0,             // אופציונלי, ברירת מחדל: 0
   searchQuery: '',      // אופציונלי, הדגשת טקסט
-  navigateToPositionIfReused: false  // אופציונלי — אם הטאב פתוח, נווט אליו
+  navigateToPositionIfReused: false, // אופציונלי — אם הטאב פתוח, נווט אליו
+  openInSidePane: false  // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
 });
 // true — פתח בהצלחה; false — הספר לא נמצא או הזהות לא תואמת
 ```
+
+עם `openInSidePane: true` הספר אינו מחליף את מסך הקריאה אלא נפתח כחלונית
+נוספת בטאב הנוכחי, לצד הספר שכבר פתוח (כמו "הצג לצד"). כשהטאב הנוכחי כבר
+מפוצל, או כשאין טאב פתוח, הספר נפתח ככרטיסייה רגילה.
 
 **כאשר נשלחים מספר שדות זהות (id + bookId + type), כולם חייבים להתאים לאותו ספר. אי-התאמה מחזירה `false`.**
 
@@ -1612,6 +1658,7 @@ const { data } = await Otzaria.call('settings.getMany', {
 - `key-line-height`
 - `key-selected-city`
 - `key-calendar-type`
+- `key-settings-language` (מ-0.9.97 — שפת הממשק שנבחרה, או `system`)
 - `key-show-teamim`
 - `key-default-nikud`
 - `key-remove-nikud-tanach`
@@ -2426,9 +2473,14 @@ async function scheduleReminder(title, body, dateTime) {
 
 - `binding.program` מפנה לתכנית באותו manifest.
 - `binding.visibleOutput` מציג את הפקד רק כשהפלט קיים ואינו ריק.
-- כפתור משתמש ב־`action` עם `reader.openBook`.
+- כפתור משתמש ב־`action` עם `reader.openBook`, או עם
+  `reader.openBookInSidePane` — אותם ארגומנטים ואותה הרשאה (`reader.open`),
+  אלא שהספר נפתח כחלונית לצד הספר הנוכחי במקום להחליף אותו. בטאב שכבר מפוצל
+  הפעולה יורדת לפתיחה ככרטיסייה רגילה.
 - תפריט משתמש ב־`childrenBinding.itemsOutput` וב־`itemTemplate`; בתוך התבנית
   זמינה ההפניה `$item`.
+- לחצן מפוצל (`"type": "split"`) מצהיר על שניהם: `action` לפעולה הראשית
+  ו־`childrenBinding` לפריטי החץ.
 - לתוסף מותר להציג לכל היותר שני פקדים עליונים. הקבוצה מוחלפת אטומית: בתחילת
   חישוב חדש שני הפקדים מוסתרים, ורק תוצאה מלאה ועדכנית מחזירה אותם.
 - ההרשאות נבדקות בקומפילציה, בזמן החישוב ושוב בלחיצה. הפעולה אינה עוברת דרך
@@ -2854,8 +2906,8 @@ Otzaria.on('reader.context_menu_item_clicked', (data) => {
 
 **זמין מגרסה:** `0.9.97`
 
-רישום פקד בשורת הפקדים של מסך העיון (ספר טקסט ו-PDF) — לחצן בודד או
-תפריט נפתח, באותו מראה של הפקדים המובנים. כל תוסף יכול לרשום לכל היותר
+רישום פקד בשורת הפקדים של מסך העיון (ספר טקסט ו-PDF) — לחצן בודד,
+תפריט נפתח או לחצן מפוצל, באותו מראה של הפקדים המובנים. כל תוסף יכול לרשום לכל היותר
 **שני פקדים**; עדכון פקד קיים באותו `id` אינו צורך מקום נוסף במכסה.
 כשאין מקום בשורה, הפקד נבלע אוטומטית בתפריט "עוד פעולות" (overflow).
 
@@ -2880,12 +2932,28 @@ await Otzaria.call('reader.addToolbarItem', {
     { id: 'clear-marks', title: 'נקה סימונים', onClickEvent: 'marks.clear' }
   ]
 });
+
+// לחצן מפוצל — פעולה ראשית, ולצידה חץ שפותח את הילדים
+await Otzaria.call('reader.addToolbarItem', {
+  id: 'open-edition',
+  type: 'split',
+  title: 'פתח במהדורה המועדפת',   // הפעולה הראשית: לחיצה על האייקון
+  icon: 'book_24_regular',
+  param: 'default',
+  children: [
+    { id: 'edition-a', title: 'מהדורת ורשה' },
+    { id: 'edition-b', title: 'מהדורת וילנא' }
+  ]
+});
 // true
 ```
 
 **הערות:**
-- `type` יכול להיות `button` (ברירת מחדל) או `menu`. תפריט חייב `children`
-  (עד 20 ילדים, לחצנים בלבד — אין קינון תפריטים)
+- `type` יכול להיות `button` (ברירת מחדל), `menu` או `split`. תפריט ולחצן
+  מפוצל חייבים `children` (עד 20 ילדים, לחצנים בלבד — אין קינון תפריטים)
+- בלחצן מפוצל, לחיצה על החלק הראשי שולחת אירוע לחיצה של הפקד עצמו (עם ה-`id`
+  וה-`param` שלו), ולחיצה על חץ התפריט שולחת את האירוע של הילד שנבחר. בתפריט
+  ה-overflow הפקד מוצג כתת-תפריט שהפעולה הראשית היא פריטו הראשון
 - הפקדים נשמרים בזיכרון בלבד — יש לרשום מחדש בכל `plugin.boot`. לפקד קבוע
   שקיים גם בלי שהתוסף רץ, העדיפו רישום דקלרטיבי ב-`contributes.startup`
   (ראו "תרומות עלייה דקלרטיביות")

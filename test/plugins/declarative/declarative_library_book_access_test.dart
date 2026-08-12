@@ -76,7 +76,7 @@ void main() {
           ),
         ];
       },
-      (_, _, _, {required navigateToPositionIfReused}) {},
+      (_, _, _, {required navigateToPositionIfReused, required inSidePane}) {},
       externalBookOpener: (_) async => true,
     );
 
@@ -226,6 +226,7 @@ DeclarativeLibraryBookAccess _access({
   List<Book>? opened,
   List<(int, String)>? positions,
   List<bool>? navigationFlags,
+  List<bool>? sidePaneFlags,
   List<(String, Set<Object>)>? externalLoads,
   List<ExternalLibraryBook>? externallyOpened,
 }) {
@@ -235,10 +236,17 @@ DeclarativeLibraryBookAccess _access({
       externalLoads?.add((provider, externalIds));
       return provider == 'hebrewbooks' ? hebrewBooks : const [];
     },
-    (book, index, searchQuery, {required navigateToPositionIfReused}) {
+    (
+      book,
+      index,
+      searchQuery, {
+      required navigateToPositionIfReused,
+      required inSidePane,
+    }) {
       opened?.add(book);
       positions?.add((index, searchQuery));
       navigationFlags?.add(navigateToPositionIfReused);
+      sidePaneFlags?.add(inSidePane);
     },
     externalBookOpener: (book) async {
       externallyOpened?.add(book);
