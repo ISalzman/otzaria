@@ -592,6 +592,29 @@ class PluginRuntimeDispatcher {
       pending.add((topic: topic, jsonPayload: jsonPayload, at: DateTime.now()));
       try {
         await _resumeForeground(pluginId);
+        // פינג לפני המסירה: השעיה נייטיבית עלולה להשאיר את הדף קפוא או
+        // מרוקן גם אחרי resume — ואז ההזרקה נבלעת בשקט. דף שאינו עונה
+        // נטען מחדש, והאירוע יימסר במסירה החוזרת אחרי ה-boot.
+        Object? pong;
+        try {
+          pong = await controller
+              .evaluateJavascript(source: '1 + 1')
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          pong = null;
+        }
+        if (pong != 2) {
+          debugPrint(
+            'PluginRuntimeDispatcher: $pluginId unresponsive after resume — '
+            'reloading',
+          );
+          try {
+            await controller.reload();
+          } catch (e) {
+            debugPrint('PluginRuntimeDispatcher: reload failed: $e');
+          }
+          return;
+        }
         await controller.evaluateJavascript(
           source:
               "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));",

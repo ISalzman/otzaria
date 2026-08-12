@@ -101,6 +101,9 @@ class _LifecycleFakeController extends Fake implements InAppWebViewController {
     required String source,
     ContentWorld? contentWorld,
   }) async {
+    // פינג הבריאות של הדיספצ'ר — דף חי עונה 2; בלי זה המסירה נחשבת
+    // כניסיון לדף קפוא והופכת לטעינה-מחדש.
+    if (source == '1 + 1') return 2;
     jsEvents.add(source);
     return null;
   }
