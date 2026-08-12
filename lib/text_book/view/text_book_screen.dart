@@ -36,6 +36,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -256,8 +257,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   int?
   _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
   Book? _pdfBook; // Companion PDF
-  bool _hasPdfBook = false;
   bool _hasResolvedCompanionPdf = false;
+  // מהדורות מקבילות ללחצן המובנה: המובנית ראשונה, אחריה היברובוקס מקומיות.
+  List<ParallelEdition> _parallelEditions = const [];
   bool _leftPaneAutoCloseQueuedByScroll = false;
   // מצב חלונית הצד שזוהה לאחרונה, לעיגון-מחדש של הטקסט בעת פתיחה/סגירה.
   bool _lastShowLeftPaneForReanchor = false;
@@ -905,22 +907,29 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  /// מאתר את ספר ה-PDF המלווה (לכפתור "פתח גרסת PDF") פעם אחת, אחרי שתוכן
-  /// הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה (~300ms CPU),
-  /// ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר בעלייה. עד שיתבצע,
-  /// כפתור ה-PDF פשוט מוסתר (`_hasPdfBook == false`).
+  /// מאתר את המהדורות המקבילות (לחצן "פתח מהדורה מקבילה") פעם אחת, אחרי
+  /// שתוכן הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה
+  /// (~300ms CPU), ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר
+  /// בעלייה. עד שיתבצע, הלחצן פשוט מוסתר.
   Future<void> _resolveCompanionPdf() async {
     if (_hasResolvedCompanionPdf) return;
     _hasResolvedCompanionPdf = true;
     try {
-      final library = await DataRepository.instance.library;
+      final editions = await ParallelEditionsService.find(widget.tab.book);
       if (!mounted) return;
       setState(() {
-        _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
-        _hasPdfBook = _pdfBook != null;
+        _parallelEditions = editions;
+        Book? companion;
+        for (final edition in editions) {
+          if (edition.isCompanion) {
+            companion = edition.book;
+            break;
+          }
+        }
+        _pdfBook = companion is PdfBook ? companion : null;
       });
     } catch (e, stackTrace) {
-      debugPrint('שגיאה בפתרון PDF מלווה: $e\n$stackTrace');
+      debugPrint('שגיאה בפתרון מהדורות מקבילות: $e\n$stackTrace');
     }
   }
 
@@ -1560,7 +1569,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               ..._buildDisplayOrderActions(context, state),
               ..._buildPluginActions(context),
             ],
-            alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+            alwaysInMenu: [
+              ..._buildAlwaysInMenuActions(context, state),
+              ..._buildPluginActions(context, placement: 'overflow'),
+            ],
             // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
             // הכפתורים שבראש תפריט ה-"...".
             menuHeaderActions: widget.isInCombinedView
@@ -1573,13 +1585,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     ];
   }
 
-  List<ActionButtonData> _buildPluginActions(BuildContext context) {
+  List<ActionButtonData> _buildPluginActions(
+    BuildContext context, {
+    String placement = 'primary',
+  }) {
     final records = PluginToolbarRegistry.instance.getAll();
     if (records.isEmpty) return const [];
     return buildPluginToolbarActions(
       records: records,
       context: 'reader-text',
       compact: context.read<SettingsBloc>().state.compactMenuMode,
+      placement: placement,
       locationPayload: () async =>
           (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
       hostActionDispatcher: context
@@ -1596,19 +1612,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
   ) {
     return [
-      // 1) PDF Button (ראשון מימין - יעלם אחרון!)
-      if (_hasPdfBook)
-        ActionButtonData(
-          widget: BarButton.icon(
-            tooltip: 'פתח ספר במהדורה מודפסת',
-            icon: FluentIcons.document_pdf_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: () => _handlePdfButtonPress(context, state),
-          ),
-          icon: FluentIcons.document_pdf_24_regular,
-          tooltip: 'פתח ספר במהדורה מודפסת',
-          onPressed: () => _handlePdfButtonPress(context, state),
-        ),
+      // 1) מהדורה מקבילה (ראשון מימין - יעלם אחרון!) — המובנית כפעולה
+      // ראשית, ומהדורות נוספות (היברובוקס מקומיות) בחץ שלצידה.
+      if (_parallelEditions.isNotEmpty)
+        _buildParallelEditionsAction(context, state),
 
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
@@ -2482,6 +2489,71 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       debugPrint('Stack trace: $stackTrace');
       UiSnack.showError(TextBookMessages.addBookToTrackingError(e));
     }
+  }
+
+  /// לחצן המהדורה המקבילה: הפעולה הראשית היא המהדורה הראשונה (המובנית
+  /// כשקיימת), וחץ עם רשימת כל המהדורות מוצג רק כשיש יותר מאחת.
+  ActionButtonData _buildParallelEditionsAction(
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
+    final compact = context.read<SettingsBloc>().state.compactMenuMode;
+    final primary = _parallelEditions.first;
+    const tooltip = 'פתח מהדורה מקבילה';
+    if (_parallelEditions.length == 1) {
+      return ActionButtonData(
+        widget: BarButton.icon(
+          tooltip: tooltip,
+          icon: FluentIcons.document_pdf_24_regular,
+          compact: compact,
+          onPressed: () => _openParallelEdition(context, state, primary),
+        ),
+        icon: FluentIcons.document_pdf_24_regular,
+        tooltip: tooltip,
+        onPressed: () => _openParallelEdition(context, state, primary),
+      );
+    }
+    return ActionButtonData.split(
+      icon: FluentIcons.document_pdf_24_regular,
+      tooltip: tooltip,
+      compact: compact,
+      onPressed: () => _openParallelEdition(context, state, primary),
+      menuItems: [
+        for (final edition in _parallelEditions)
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: edition.isCompanion
+                ? FluentIcons.document_pdf_24_regular
+                : FluentIcons.book_24_regular,
+            tooltip: edition.isCompanion
+                ? '${edition.book.title} — מהדורה מודפסת (אוצריא)'
+                : edition.book.title,
+            onPressed: () => _openParallelEdition(context, state, edition),
+          ),
+      ],
+    );
+  }
+
+  void _openParallelEdition(
+    BuildContext context,
+    TextBookLoaded state,
+    ParallelEdition edition,
+  ) {
+    // המהדורה המובנית עוברת המרת עמוד (שורת טקסט → עמוד PDF); מהדורת
+    // היברובוקס נפתחת מתחילת הספר — אין לה מיפוי עמודים.
+    if (edition.isCompanion && edition.book is PdfBook) {
+      _handlePdfButtonPress(context, state);
+      return;
+    }
+    openBook(
+      context,
+      edition.book,
+      1,
+      '',
+      ignoreHistory: true,
+      requiresStableLayout: true,
+      insertAdjacent: true,
+    );
   }
 
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח

@@ -212,6 +212,20 @@ class PluginToolbarRegistry extends ChangeNotifier {
       );
     }
 
+    final placement = json['placement'] as String? ?? 'primary';
+    if (isChild && json['placement'] != null) {
+      throw const PluginToolbarException(
+        'error.invalid_params',
+        'placement is only allowed on top-level items',
+      );
+    }
+    if (!const {'primary', 'overflow'}.contains(placement)) {
+      throw const PluginToolbarException(
+        'error.invalid_params',
+        'placement must be "primary" or "overflow"',
+      );
+    }
+
     return PluginToolbarItem(
       id: id,
       type: type,
@@ -222,6 +236,7 @@ class PluginToolbarRegistry extends ChangeNotifier {
       children: children,
       openPlugin: json['openPlugin'] == true,
       param: json['param'],
+      placement: placement,
     );
   }
 

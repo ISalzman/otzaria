@@ -2505,6 +2505,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
+| `library.parallelEditions` | `library.books.read` | מ־0.9.98: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות היברובוקס שקובצן קיים בתיקייה שהוגדרה; שורות `{title, isCompanion, identity}` |
 
 ערכים יכולים להפנות אל `$context`,‏ `$result` של פקודה קודמת, או `$row`
 בתוך תבנית שורה. `$concat` מחבר עד שמונה חלקים, ו־`$literal` מונע פירוש של
@@ -2524,6 +2525,9 @@ async function scheduleReminder(title, body, dateTime) {
   ו־`childrenBinding` לפריטי החץ.
 - לתוסף מותר להציג לכל היותר שני פקדים עליונים. הקבוצה מוחלפת אטומית: בתחילת
   חישוב חדש שני הפקדים מוסתרים, ורק תוצאה מלאה ועדכנית מחזירה אותם.
+- `placement` (אופציונלי, על פריט עליון בלבד): `"primary"` (ברירת מחדל) —
+  בשורת הפקדים, נדחס לתפריט כשאין מקום; `"overflow"` — תמיד בתוך תפריט
+  "עוד פעולות" (שלוש נקודות), כתת-תפריט כשיש ילדים.
 - ההרשאות נבדקות בקומפילציה, בזמן החישוב ושוב בלחיצה. הפעולה אינה עוברת דרך
   `PluginRuntimeDispatcher`, אינה מפעילה WebView ואינה דורשת
   `app.run_on_startup`.

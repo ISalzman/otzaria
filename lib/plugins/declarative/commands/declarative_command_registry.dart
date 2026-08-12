@@ -77,6 +77,14 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'keepInputFields', 'limit'},
       outputKind: DeclarativeValueKind.list,
     ),
+    'library.parallelEditions': DeclarativeCommandDefinition(
+      type: 'library.parallelEditions',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'library.books.read',
+      requiredArgs: {'identity'},
+      optionalArgs: {},
+      outputKind: DeclarativeValueKind.list,
+    ),
     'reader.openBook': DeclarativeCommandDefinition(
       type: 'reader.openBook',
       phase: DeclarativeCommandPhase.action,

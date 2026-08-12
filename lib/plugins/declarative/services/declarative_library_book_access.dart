@@ -1,5 +1,6 @@
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
@@ -110,6 +111,46 @@ class DeclarativeLibraryBookAccess
       externalMatches: externalMatches,
     );
     return true;
+  }
+
+  /// מהדורות מקבילות (מובנית + היברובוקס מקומיות) לזהות ספר, כשורות
+  /// דקלרטיביות `{title, isCompanion, identity}` — עבור הפקודה
+  /// `library.parallelEditions`. הזהות מנוקה משדות null לפני החיפוש:
+  /// כשיש זהות חיצונית היא מספיקה לבדה, אחרת נשמרים רק השדות שסופקו.
+  Future<List<Map<String, dynamic>>> parallelEditionsForIdentity(
+    Map<String, dynamic> identity,
+  ) async {
+    final sanitized = _sanitizeContextIdentity(identity);
+    if (sanitized == null) return const [];
+    final book = (await findUniqueBooks([sanitized])).single;
+    if (book == null) return const [];
+    final editions = await ParallelEditionsService.find(book);
+    return [
+      for (final edition in editions)
+        {
+          'title': edition.book.title,
+          'isCompanion': edition.isCompanion,
+          'identity': PluginBookIdentity.toJson(edition.book),
+        },
+    ];
+  }
+
+  /// זהות שנבנתה משדות `$context` עשויה לכלול null-ים (למשל external.provider
+  /// כשאין ספר חיצוני) — מנקים אותם כדי שהוולידציה של הזהות תעבור.
+  Map<String, dynamic>? _sanitizeContextIdentity(Map<String, dynamic> raw) {
+    final external = raw['external'];
+    if (external is Map &&
+        external['provider'] is String &&
+        external['id'] != null) {
+      return {
+        'external': {'provider': external['provider'], 'id': external['id']},
+      };
+    }
+    final sanitized = <String, dynamic>{
+      for (final field in const ['id', 'bookId', 'type', 'source'])
+        if (raw[field] != null) field: raw[field],
+    };
+    return sanitized.isEmpty ? null : sanitized;
   }
 
   /// פותר אצווה של זהויות לספרים בלי לחשוף נתיבים או לבצע פתיחה.

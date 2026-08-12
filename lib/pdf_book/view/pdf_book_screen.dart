@@ -40,6 +40,7 @@ import 'package:otzaria/widgets/misc/app_cursors.dart';
 import 'package:otzaria/pdf_book/view/page_turn_geometry.dart';
 import 'package:otzaria/pdf_book/view/pdf_page_number_display.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
+import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/pdf_book/view/pdf_external_matches_bar.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
@@ -494,6 +495,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // Named listeners for proper cleanup
   late final VoidCallback _leftPaneTabControllerListener;
   late final VoidCallback _showLeftPaneListener;
+
+  // מהדורות מקבילות ללחצן המובנה (מהדורת טקסט + היברובוקס מקומיות).
+  List<ParallelEdition> _parallelEditions = const [];
+  bool _resolvedParallelEditions = false;
   late final VoidCallback _toggleNavPaneListener;
   late final VoidCallback _toggleCommentatorsPaneListener;
 
@@ -4675,7 +4680,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             ..._buildDisplayOrderPdfActions(context),
             ..._buildPluginActions(context),
           ],
-          alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
+          alwaysInMenu: [
+            ..._buildAlwaysInMenuPdfActions(context),
+            ..._buildPluginActions(context, placement: 'overflow'),
+          ],
           // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
           // הכפתורים שבראש תפריט ה-"...".
           menuHeaderActions: widget.isInCombinedView
@@ -4687,13 +4695,17 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     ];
   }
 
-  List<ActionButtonData> _buildPluginActions(BuildContext context) {
+  List<ActionButtonData> _buildPluginActions(
+    BuildContext context, {
+    String placement = 'primary',
+  }) {
     final records = PluginToolbarRegistry.instance.getAll();
     if (records.isEmpty) return const [];
     return buildPluginToolbarActions(
       records: records,
       context: 'reader-pdf',
       compact: context.read<SettingsBloc>().state.compactMenuMode,
+      placement: placement,
       locationPayload: () async =>
           (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
       hostActionDispatcher: context
@@ -4705,17 +4717,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
+    unawaited(_resolveParallelEditions());
     return [
-      ActionButtonData(
-        widget: _buildTextButton(
-          context,
-          widget.tab.book,
-          widget.tab.pdfViewerController,
-        ),
-        icon: OtzariaIcons.document_column_24_regular,
-        tooltip: 'פתח ספר במהדורת טקסט',
-        onPressed: () => _handleTextButtonPress(context),
-      ),
+      // מהדורה מקבילה — המובנית (מהדורת טקסט) כפעולה ראשית, ומהדורות
+      // נוספות (היברובוקס מקומיות) בחץ שלצידה.
+      if (_parallelEditions.isNotEmpty)
+        _buildParallelEditionsAction(context),
       ActionButtonData.simple(
         icon: FluentIcons.open_24_regular,
         tooltip: 'פתח כרטיסיית מפרשים',
@@ -4954,6 +4961,76 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
+  /// מהדורות מקבילות ללחצן המובנה: המובנית ראשונה, אחריה היברובוקס מקומיות.
+  /// נפתרות פעם אחת ובעצלנות — `getCompanionBook` יקר (~300ms קטלוג מלא).
+  Future<void> _resolveParallelEditions() async {
+    if (_resolvedParallelEditions) return;
+    _resolvedParallelEditions = true;
+    try {
+      final editions = await ParallelEditionsService.find(widget.tab.book);
+      if (!mounted) return;
+      setState(() => _parallelEditions = editions);
+    } catch (e) {
+      debugPrint('שגיאה בפתרון מהדורות מקבילות: $e');
+    }
+  }
+
+  ActionButtonData _buildParallelEditionsAction(BuildContext context) {
+    final compact = context.read<SettingsBloc>().state.compactMenuMode;
+    final primary = _parallelEditions.first;
+    const tooltip = 'פתח מהדורה מקבילה';
+    if (_parallelEditions.length == 1) {
+      return ActionButtonData(
+        widget: BarButton.icon(
+          tooltip: tooltip,
+          icon: OtzariaIcons.document_column_24_regular,
+          compact: compact,
+          onPressed: () => _openParallelEdition(context, primary),
+        ),
+        icon: OtzariaIcons.document_column_24_regular,
+        tooltip: tooltip,
+        onPressed: () => _openParallelEdition(context, primary),
+      );
+    }
+    return ActionButtonData.split(
+      icon: OtzariaIcons.document_column_24_regular,
+      tooltip: tooltip,
+      compact: compact,
+      onPressed: () => _openParallelEdition(context, primary),
+      menuItems: [
+        for (final edition in _parallelEditions)
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: edition.isCompanion
+                ? OtzariaIcons.document_column_24_regular
+                : FluentIcons.book_24_regular,
+            tooltip: edition.isCompanion
+                ? '${edition.book.title} — מהדורת טקסט (אוצריא)'
+                : edition.book.title,
+            onPressed: () => _openParallelEdition(context, edition),
+          ),
+      ],
+    );
+  }
+
+  void _openParallelEdition(BuildContext context, ParallelEdition edition) {
+    // המהדורה המובנית עוברת המרת עמוד (עמוד PDF → שורת טקסט); מהדורת
+    // היברובוקס נפתחת מתחילת הספר — אין לה מיפוי עמודים.
+    if (edition.isCompanion) {
+      unawaited(_handleTextButtonPress(context));
+      return;
+    }
+    openBook(
+      context,
+      edition.book,
+      1,
+      '',
+      ignoreHistory: true,
+      requiresStableLayout: true,
+      insertAdjacent: true,
+    );
+  }
+
   Future<void> _handleTextButtonPress(BuildContext context) async {
     final currentPage = widget.tab.pdfViewerController.isReady
         ? widget.tab.pdfViewerController.pageNumber ?? 1
@@ -5149,53 +5226,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         }
       }
     }
-  }
-
-  Widget _buildTextButton(
-    BuildContext context,
-    PdfBook book,
-    PdfViewerController controller,
-  ) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return FutureBuilder(
-      future: DataRepository.instance.library.then(
-        (library) => library.getCompanionBook(book, TextBook),
-      ),
-      builder: (context, snapshot) => snapshot.hasData
-          ? BarButton.icon(
-              tooltip: 'פתח ספר במהדורת טקסט',
-              icon: OtzariaIcons.document_column_24_regular,
-              compact: isCompact,
-              onPressed: () async {
-                final currentPage = controller.isReady
-                    ? controller.pageNumber ?? 1
-                    : widget.tab.pageNumber;
-                widget.tab.pageNumber = currentPage;
-                final currentOutline = widget.tab.outline.value ?? [];
-
-                final index = await pdfToTextPage(
-                  book,
-                  currentOutline,
-                  currentPage,
-                );
-
-                if (!context.mounted) return;
-
-                if (index == null) {
-                  UiSnack.show(PdfMessages.textLocationNotFoundOpeningAtStart);
-                }
-                openBook(
-                  context,
-                  snapshot.data!,
-                  index ?? 0,
-                  '',
-                  ignoreHistory: true,
-                  insertAdjacent: true,
-                );
-              },
-            )
-          : const SizedBox.shrink(),
-    );
   }
 
   Widget _buildLayoutModeDropdown(BuildContext context, PdfBookLoaded state) {
