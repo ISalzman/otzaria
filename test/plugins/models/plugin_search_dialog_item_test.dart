@@ -39,6 +39,37 @@ void main() {
     });
   });
 
+  test('resultsProvider תקין נשמר עם כותרת מדור, וסותר openPluginOnSubmit', () {
+    final parsed = PluginSearchDialogItem.fromPayload({
+      ...item(),
+      'openPluginOnSubmit': false,
+      'resultsProvider': 'hebrewbooks',
+      'resultsTitle': 'היברובוקס',
+    });
+    expect(parsed.resultsProvider, 'hebrewbooks');
+    expect(parsed.resultsTitle, 'היברובוקס');
+
+    // ללא resultsTitle — הכותרת נופלת לכותרת השורה.
+    final untitled = PluginSearchDialogItem.fromPayload({
+      ...item(),
+      'openPluginOnSubmit': false,
+      'resultsProvider': 'hebrewbooks',
+    });
+    expect(untitled.resultsTitle, untitled.title);
+
+    for (final invalid in [
+      {'resultsProvider': 'hebrewbooks'}, // עם openPluginOnSubmit: true
+      {'openPluginOnSubmit': false, 'resultsProvider': 'Has Spaces'},
+      {'openPluginOnSubmit': false, 'resultsTitle': 'ללא ספק'},
+    ]) {
+      expect(
+        () => PluginSearchDialogItem.fromPayload({...item(), ...invalid}),
+        throwsA(isA<PluginSearchDialogItemException>()),
+        reason: '$invalid היה אמור להידחות',
+      );
+    }
+  });
+
   test('rejects a non-boolean openPluginOnSubmit value', () {
     expect(
       () => PluginSearchDialogItem.fromPayload({

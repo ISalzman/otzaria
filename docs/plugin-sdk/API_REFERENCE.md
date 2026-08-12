@@ -879,6 +879,54 @@ window.addEventListener('reader.inBookSearch.requested', async (event) => {
 `requestId` מהאירוע; בכישלון מעבירים `error` עם הודעה קצרה במקום `pages`.
 בקשה שלא נענתה בתוך 30 שניות נכשלת בצד הקורא.
 
+### `reader.registerExternalSearchProvider`
+**הרשאה:** `reader.open`
+
+רושם את התוסף כספק תוצאות חיצוני לטאב החיפוש המובנה. הספק מופעל דרך שורת
+דיאלוג חיפוש (`searchDialogItems`) שמצהירה `resultsProvider` עם אותו שם:
+כשהמשתמש מסמן את השורה ומחפש, נפתח טאב חיפוש רגיל ובראשו מדור תוצאות
+מהתוסף (בכותרת `resultsTitle`), לצד תוצאות המנוע המובנה. אוצריא שולחת
+לתוסף אירוע ממוקד `search.external.requested` עם
+`{ requestId, provider, query, mode, distance, offset, limit }`, והתוסף
+עונה עם `reader.respondExternalSearch`.
+
+```javascript
+await Otzaria.call('reader.registerExternalSearchProvider', {
+  provider: 'hebrewbooks',
+});
+
+window.addEventListener('search.external.requested', async (event) => {
+  const { requestId, query, offset, limit } = event.detail;
+  const page = await searchMyEngine(query, offset, limit);
+  await Otzaria.call('reader.respondExternalSearch', {
+    requestId,
+    results: page.items.map((item) => ({
+      title: item.name,          // חובה
+      meta: item.byline,         // אופציונלי — מחבר · מקום · שנה
+      snippet: item.snippet,     // אופציונלי — טקסט רגיל; ההדגשה בצד אוצריא
+      hitCount: item.hits,
+      firstPage: item.firstPage, // מבוסס-1
+      externalId: item.id,       // זהות חיצונית לפתיחת הספר
+    })),
+    totalBooks: page.totalBooks,
+    totalHits: page.totalHits,
+    hasMore: page.hasMore,
+  });
+});
+```
+
+לחיצה על תוצאה פותחת את הספר במציג המובנה לפי הזהות החיצונית
+(`external: { provider, id }`) — מקומית כשהקובץ קיים, אחרת בדפדפן — ועם
+עמודי ההתאמה כשהתוסף רשום גם כספק חיפוש-בתוך-ספר.
+
+### `reader.respondExternalSearch`
+**הרשאה:** `reader.open`
+
+תשובת הספק לאירוע `search.external.requested`. חובה להעביר את `requestId`;
+בכישלון מעבירים `error` במקום `results`. מגבלות: עד 50 תוצאות לעמוד,
+כותרת עד 300 תווים, קטע טקסט עד 600. בקשה שלא נענתה בתוך 45 שניות נכשלת
+בצד מסך החיפוש.
+
 ### `reader.openBookAtRef`
 **הרשאה:** `reader.open`
 
@@ -2586,6 +2634,8 @@ async function scheduleReminder(title, body, dateTime) {
 | `title` | כן | הכיתוב המוצג למשתמש (עד 120 תווים). |
 | `defaultValue` | לא | ערך התחלתי, `false` כברירת מחדל. |
 | `openPluginOnSubmit` | לא | מגרסה 0.9.97: אם `true`, אישור חיפוש כשהשורה מסומנת פותח את דף התוסף ושולח אליו `search.requested`. |
+| `resultsProvider` | לא | שם ספק תוצאות חיצוני (אותיות קטנות, עד 64 תווים). כשהשורה מסומנת, טאב החיפוש מציג מדור תוצאות מהתוסף דרך `search.external.requested` (ראו `reader.registerExternalSearchProvider`). סותר את `openPluginOnSubmit`. |
+| `resultsTitle` | לא | כותרת מדור התוצאות בטאב החיפוש (עד 120 תווים); דורש `resultsProvider`. ברירת המחדל: `title`. |
 | `visibleInModes` | לא | מערך לא-ריק מתוך `"exact"`, `"advanced"`, `"fuzzy"`; ברירת המחדל היא כל המצבים. |
 | `disabledSearchOptions` | לא | אובייקט `מצב → מזהי אפשרויות מילה` להשבתה כשה-checkbox מסומן. |
 

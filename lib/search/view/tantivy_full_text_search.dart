@@ -7,6 +7,7 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/view/external_search_results_section.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -626,8 +627,25 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות).
+  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות),
+  /// ומעליו מדור תוצאות ממקור חיצוני של תוסף כשהוא פעיל (מכווץ את עצמו
+  /// לכלום אחרת).
   Widget _buildResultsContent(
+    BuildContext context,
+    SearchState state,
+    bool showBlockingLoader,
+  ) {
+    return Column(
+      children: [
+        ExternalSearchResultsSection(tab: widget.tab),
+        Expanded(
+          child: _buildEngineResultsContent(context, state, showBlockingLoader),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEngineResultsContent(
     BuildContext context,
     SearchState state,
     bool showBlockingLoader,

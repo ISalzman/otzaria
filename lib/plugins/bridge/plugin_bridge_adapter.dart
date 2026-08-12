@@ -34,6 +34,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -1269,6 +1270,39 @@ class PluginBridgeAdapter {
                 .whereType<String>()
                 .toList(),
             query: args['query'] as String? ?? '',
+            error: args['error'] as String?,
+          );
+          return true;
+        }
+      case 'registerExternalSearchProvider':
+        // spec: registerExternalSearchProvider({ provider })
+        // רושם את התוסף כספק תוצאות חיצוני למסך החיפוש המובנה.
+        {
+          final provider = args['provider'];
+          if (provider is! String || provider.isEmpty) {
+            throw Exception('provider required');
+          }
+          PluginExternalSearchService.instance.register(
+            provider,
+            plugin.pluginId,
+          );
+          return true;
+        }
+      case 'respondExternalSearch':
+        // spec: respondExternalSearch({ requestId, results?, totalBooks?,
+        //   totalHits?, hasMore?, error? })
+        // תשובת הספק לאירוע search.external.requested; הניקוי נעשה בשירות.
+        {
+          final requestId = args['requestId'];
+          if (requestId is! String || requestId.isEmpty) {
+            throw Exception('requestId required');
+          }
+          PluginExternalSearchService.instance.respond(
+            requestId,
+            results: args['results'] as List? ?? const [],
+            totalBooks: (args['totalBooks'] as num?)?.toInt() ?? 0,
+            totalHits: (args['totalHits'] as num?)?.toInt() ?? 0,
+            hasMore: args['hasMore'] == true,
             error: args['error'] as String?,
           );
           return true;
