@@ -31,7 +31,7 @@ import 'package:otzaria/tabs/view/active_pane_marker.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
-import 'package:otzaria/search/view/full_text_search_screen.dart';
+import 'package:otzaria/search/view/tantivy_full_text_search.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
@@ -519,7 +519,11 @@ class _ReadingScreenState extends State<ReadingScreen>
         ),
       );
     } else if (tab is SearchingTab) {
-      return FullTextSearchScreen(key: ValueKey(tab), tab: tab);
+      return BlocProvider.value(
+        key: ValueKey(tab),
+        value: tab.searchBloc,
+        child: TantivyFullTextSearch(tab: tab),
+      );
     } else if (tab is CommentatorsTab) {
       return _TabVisibilityBridge(
         key: ValueKey(tab),
