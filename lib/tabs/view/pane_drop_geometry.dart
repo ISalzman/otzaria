@@ -5,6 +5,21 @@ import 'package:flutter/foundation.dart';
 /// המקום המזערי שחייב להישאר לכל חלונית — בפיצול ובגרירת המפריד כאחד.
 const double kMinPaneExtent = 140;
 
+/// חלקה המזערי של חלונית מהמקום הפנוי. רצפת [kMinPaneExtent] לבדה כמעט אינה
+/// מגבילה במסך רחב, ושם אפשר היה לכווץ ספר לרצועה.
+const double kMinPaneRatio = 0.2;
+
+/// היחס המזערי לחלונית כשיש [availableExtent] פיקסלים פנויים — הגדולה מבין
+/// שתי הרצפות, ולעולם לא מעל מחצית.
+double minPaneRatioFor(double availableExtent) {
+  if (availableExtent <= 0) return kMinPaneRatio;
+  final pixelFloor = kMinPaneExtent / availableExtent;
+  return (pixelFloor > kMinPaneRatio ? pixelFloor : kMinPaneRatio).clamp(
+    0.0,
+    0.5,
+  );
+}
+
 /// עובי רצועת המפריד בעכבר.
 const double kPaneDividerThickness = 12;
 

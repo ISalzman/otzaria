@@ -302,6 +302,41 @@ void main() {
     });
   });
 
+  group('פוקוס מקלדת', () {
+    Finder dividerFocus() => find
+        .ancestor(of: _horizontalDivider, matching: find.byType(Focus))
+        .first;
+
+    testWidgets('גרירה בעכבר אינה משאירה את הפוקוס על המפריד', (tester) async {
+      final root = horizontal();
+      await tester.pumpWidget(host(root));
+
+      await tester.drag(
+        _horizontalDivider,
+        const Offset(-40, 0),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      // פוקוס תקוע על המפריד היה גורם לחצים ול-Home להזיז אותו במקום לגלול.
+      expect(tester.widget<Focus>(dividerFocus()).focusNode!.hasFocus, isFalse);
+      expect(root.splitRatio, greaterThan(0.5), reason: 'הגרירה עצמה עבדה');
+    });
+
+    testWidgets('המפריד עדיין ניתן למיקוד ולשליטה במקלדת', (tester) async {
+      final root = horizontal();
+      double? reported;
+      await tester.pumpWidget(
+        host(root, onRatioChanged: (ratio) => reported = ratio),
+      );
+
+      await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.arrowLeft);
+
+      expect(tester.widget<Focus>(dividerFocus()).focusNode!.hasFocus, isTrue);
+      expect(reported, greaterThan(0.5));
+    });
+  });
+
   group('מגע', () {
     testWidgets('לחיצה ארוכה מאפסת את היחס', (tester) async {
       final root = horizontal(ratio: 0.75);
@@ -358,6 +393,41 @@ void main() {
       expect(semantics.properties.value, '40%');
       expect(semantics.properties.onIncrease, isNotNull);
       expect(semantics.properties.onDecrease, isNotNull);
+    });
+
+    testWidgets('ערכי ההזזה נכונים כבר בבנייה הראשונה', (tester) async {
+      // בבנייה הראשונה אין עדיין מידה ל-RenderBox; ערכי המחוון חייבים
+      // להיגזר מה-layout, אחרת הם מדווחים יחס שלא ניתן להגיע אליו.
+      await tester.pumpWidget(host(horizontal(ratio: 0.4)));
+
+      final semantics = tester.widget<Semantics>(_horizontalDivider);
+      expect(semantics.properties.increasedValue, isNot('40%'));
+      expect(semantics.properties.decreasedValue, isNot('40%'));
+    });
+
+    testWidgets('יחס שמור מתחת לרצפה מדווח כערך המצויר', (tester) async {
+      // יחס כזה נשמר בטאבים בתקופה שבה הרצפה הייתה בפיקסלים בלבד.
+      await tester.pumpWidget(host(horizontal(ratio: 0.03)));
+
+      final semantics = tester.widget<Semantics>(_horizontalDivider);
+      expect(semantics.properties.value, '20%');
+      expect(semantics.properties.decreasedValue, '20%');
+    });
+
+    testWidgets('המחוון אינו מדווח ערך מעבר לרצפה', (tester) async {
+      await tester.pumpWidget(host(horizontal()));
+
+      for (var i = 0; i < 40; i++) {
+        await pressKey(
+          tester,
+          _horizontalDivider,
+          LogicalKeyboardKey.arrowLeft,
+        );
+      }
+
+      final semantics = tester.widget<Semantics>(_horizontalDivider);
+      expect(semantics.properties.value, '80%');
+      expect(semantics.properties.increasedValue, '80%');
     });
 
     testWidgets('onIncrease ו-onDecrease מזיזים את המפריד', (tester) async {
