@@ -10,6 +10,8 @@ import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 export 'pane_drop_geometry.dart'
     show
+        kMinPaneExtent,
+        kMinPaneRatio,
         kPaneCardMargin,
         kPaneDividerThickness,
         kPaneDividerThicknessTouch,
@@ -187,11 +189,11 @@ class _SplitNodeState extends State<_SplitNode> {
     final availableExtent = _availableExtent;
     if (availableExtent == null) return;
 
-    // הגבול בפיקסלים שומר על חלונית קריאה בכל רוחב מסך.
-    final minRatio = (kMinPaneExtent / availableExtent).clamp(0.0, 0.5);
+    final minRatio = minPaneRatioFor(availableExtent);
     // אין לשנות יחס כשאין מקום לשתי חלוניות קריאות.
     if (minRatio >= 0.5) return;
-    _ratioNotifier.value = (_ratio + delta / availableExtent).clamp(
+    final effectiveRatio = _ratio.clamp(minRatio, 1 - minRatio);
+    _ratioNotifier.value = (effectiveRatio + delta / availableExtent).clamp(
       minRatio,
       1 - minRatio,
     );
@@ -215,14 +217,19 @@ class _SplitNodeState extends State<_SplitNode> {
     _commitDebounce = Timer(_kKeyboardCommitDelay, _commit);
   }
 
-  /// היחס שיושג בהזזה אחת, לדיווח לקורא מסך.
-  double _ratioAfterNudge({required bool towardFirst}) {
-    final extent = _availableExtent;
-    if (extent == null) return _ratio;
-    final minRatio = (kMinPaneExtent / extent).clamp(0.0, 0.5);
-    if (minRatio >= 0.5) return _ratio;
+  /// היחס שיושג בהזזה אחת מ-[from], לדיווח לקורא מסך.
+  /// [extent] מגיע מה-layout ולא מ-[_availableExtent], שאין לו מידה בבנייה
+  /// הראשונה — ואז המחוון היה מדווח יחס שלא ניתן להגיע אליו.
+  double _ratioAfterNudge(
+    double extent,
+    double from, {
+    required bool towardFirst,
+  }) {
+    if (extent <= 0) return from;
+    final minRatio = minPaneRatioFor(extent);
+    if (minRatio >= 0.5) return from;
     final delta = (towardFirst ? -_kKeyboardNudge : _kKeyboardNudge) / extent;
-    return (_ratio + delta).clamp(minRatio, 1 - minRatio);
+    return (from + delta).clamp(minRatio, 1 - minRatio);
   }
 
   void _commit() {
@@ -260,8 +267,14 @@ class _SplitNodeState extends State<_SplitNode> {
           // הרוחב לפיקסל שלם ומוחק את קו המסגרת של החלונית הפעילה.
           builder: (context, constraints) {
             final available = constraints.maxWidth - widget.thickness;
+            // גם יחס שנשמר לפני הרצפה היחסית לא יצייר רצועה במקום חלונית.
+            final minRatio = minPaneRatioFor(available);
+            final effectiveRatio = ratio.clamp(minRatio, 1 - minRatio);
             final firstWidth = available > 0
-                ? (available * ratio).roundToDouble().clamp(0.0, available)
+                ? (available * effectiveRatio).roundToDouble().clamp(
+                    0.0,
+                    available,
+                  )
                 : 0.0;
 
             return Row(
@@ -273,9 +286,18 @@ class _SplitNodeState extends State<_SplitNode> {
                 _PaneDivider(
                   thickness: widget.thickness,
                   isTouch: widget.thickness == kPaneDividerThicknessTouch,
-                  ratio: ratio,
-                  increasedRatio: _ratioAfterNudge(towardFirst: false),
-                  decreasedRatio: _ratioAfterNudge(towardFirst: true),
+                  // המחוון מדווח את היחס המצויר, לא יחס שמור שנחסם ברצפה.
+                  ratio: effectiveRatio,
+                  increasedRatio: _ratioAfterNudge(
+                    available,
+                    effectiveRatio,
+                    towardFirst: false,
+                  ),
+                  decreasedRatio: _ratioAfterNudge(
+                    available,
+                    effectiveRatio,
+                    towardFirst: true,
+                  ),
                   onDragStart: () => _dragging = true,
                   onDragUpdate: _onDragUpdate,
                   onDragEnd: _commit,
@@ -357,10 +379,11 @@ class _PaneDividerState extends State<_PaneDivider> {
     final colorScheme = Theme.of(context).colorScheme;
     final active = _hovering || _dragging || _focused;
 
+    // הגרירה אינה תובעת פוקוס: הוא היה נשאר על המפריד גם אחריה, והחצים
+    // ו-Home היו מזיזים אותו במקום לגלול את הספר.
     void handleDragStart(DragStartDetails _) {
+      _focusNode.unfocus();
       _setDragging(true);
-      // החצים ממשיכים לשלוט במפריד שנגרר.
-      _focusNode.requestFocus();
       widget.onDragStart();
     }
 

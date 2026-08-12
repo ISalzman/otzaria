@@ -81,6 +81,61 @@ void main() {
     });
   });
 
+  group('הרצפה של חלונית בגרירת המפריד', () {
+    test('במסך רחב הרצפה היחסית גוברת על זו שבפיקסלים', () {
+      // 140 פיקסלים מתוך 2400 הם פחות מ-6% — רצועה, לא חלונית.
+      expect(minPaneRatioFor(2400), kMinPaneRatio);
+      expect(minPaneRatioFor(1920), kMinPaneRatio);
+      expect(minPaneRatioFor(kMinPaneExtent / kMinPaneRatio), kMinPaneRatio);
+    });
+
+    test('במסך צר הרצפה בפיקסלים גוברת על היחסית', () {
+      expect(minPaneRatioFor(500), closeTo(kMinPaneExtent / 500, 1e-9));
+      expect(minPaneRatioFor(400), closeTo(kMinPaneExtent / 400, 1e-9));
+      expect(minPaneRatioFor(500), greaterThan(kMinPaneRatio));
+    });
+
+    test('הרצפה לעולם אינה עולה על מחצית', () {
+      for (final extent in [0.0, 1.0, 100.0, 200.0, 279.0, 280.0]) {
+        expect(minPaneRatioFor(extent), lessThanOrEqualTo(0.5));
+      }
+      expect(minPaneRatioFor(200), 0.5);
+    });
+
+    test('רוחב לא חוקי אינו מפיל ומחזיר את הרצפה היחסית', () {
+      expect(minPaneRatioFor(0), kMinPaneRatio);
+      expect(minPaneRatioFor(-10), kMinPaneRatio);
+    });
+
+    test('הרצפה משאירה תמיד מקום לשתי חלוניות', () {
+      for (final extent in [300.0, 700.0, 1280.0, 1920.0, 3840.0]) {
+        final min = minPaneRatioFor(extent);
+        expect(min, lessThanOrEqualTo(1 - min));
+        expect(extent * min, greaterThanOrEqualTo(0));
+      }
+    });
+
+    test('מעל סף הפיצול הרצפה נותנת חלונית קריאה', () {
+      // סף הפיצול מבטיח 140 לכל חלונית; הרצפה לא תיתן פחות מכך.
+      for (final extent in [300.0, 800.0, 1600.0, 2560.0]) {
+        expect(
+          extent * minPaneRatioFor(extent),
+          greaterThanOrEqualTo(kMinPaneExtent - 0.001),
+        );
+      }
+    });
+
+    test('הרצפה עולה מונוטונית ככל שהמסך צר יותר', () {
+      final widths = [3840.0, 2560.0, 1920.0, 1280.0, 800.0, 500.0, 400.0];
+      for (var i = 1; i < widths.length; i++) {
+        expect(
+          minPaneRatioFor(widths[i]),
+          greaterThanOrEqualTo(minPaneRatioFor(widths[i - 1])),
+        );
+      }
+    });
+  });
+
   group('תצוגה מקדימה', () {
     test('ב-RTL החלונית הראשונה מסומנת בחצי הימני', () {
       final rect = previewRectFor(
