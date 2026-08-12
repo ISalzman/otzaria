@@ -64,6 +64,10 @@ class AppSurfaces {
   static Color cardSelectionOverlay(BuildContext context) =>
       Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3);
 
+  /// רקע כפתור סרגל במצב נבחר (BarButton, BarSplitButton).
+  static Color barButtonSelected(ColorScheme cs) =>
+      cs.onSurface.withValues(alpha: 0.12);
+
   /// רקע פריט נבחר ברשימת ניווט (TOC, מפרשים וכד').
   ///
   /// 30% primaryContainer — מספק הדגשה עדינה שמסמנת בחירה

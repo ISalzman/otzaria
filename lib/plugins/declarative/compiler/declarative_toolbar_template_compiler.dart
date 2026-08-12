@@ -54,16 +54,16 @@ class DeclarativeToolbarTemplateCompiler {
       'childrenBinding',
     }, 'toolbarItems[$index]');
     final type = json['type'] ?? 'button';
-    if (type != 'button' && type != 'menu') {
+    if (type != 'button' && type != 'menu' && type != 'split') {
       throw const DeclarativeProgramException(
         'declarative.invalid_toolbar_item',
-        'Declarative toolbar type must be button or menu',
+        'Declarative toolbar type must be button, menu, or split',
       );
     }
     final basePayload = <String, dynamic>{
       for (final field in const ['id', 'type', 'title', 'icon', 'contexts'])
         if (json.containsKey(field)) field: json[field],
-      if (type == 'menu')
+      if (type != 'button')
         'children': [
           {'id': '__validation__', 'title': 'validation'},
         ],
@@ -95,8 +95,8 @@ class DeclarativeToolbarTemplateCompiler {
       'binding.visibleOutput',
     );
 
-    if (type == 'button') {
-      if (json['childrenBinding'] != null) {
+    if (type != 'menu') {
+      if (type == 'button' && json['childrenBinding'] != null) {
         throw const DeclarativeProgramException(
           'declarative.invalid_toolbar_item',
           'A button cannot declare childrenBinding',
@@ -116,7 +116,9 @@ class DeclarativeToolbarTemplateCompiler {
         programId: programId,
         visibleOutput: visibleOutput,
         actionTemplate: _freezeMap(action),
-        childrenBinding: null,
+        childrenBinding: type == 'split'
+            ? _compileChildrenBinding(json, program, index)
+            : null,
       );
     }
 
@@ -126,6 +128,20 @@ class DeclarativeToolbarTemplateCompiler {
         'A menu action belongs on its children',
       );
     }
+    return CompiledDeclarativeToolbarTemplate(
+      baseItem: baseItem,
+      programId: programId,
+      visibleOutput: visibleOutput,
+      actionTemplate: null,
+      childrenBinding: _compileChildrenBinding(json, program, index),
+    );
+  }
+
+  CompiledDeclarativeChildrenBinding _compileChildrenBinding(
+    Map<String, dynamic> json,
+    CompiledDeclarativeProgram program,
+    int index,
+  ) {
     final children = _requiredMap(
       json['childrenBinding'],
       'toolbarItems[$index].childrenBinding',
@@ -174,16 +190,10 @@ class DeclarativeToolbarTemplateCompiler {
       program,
       referenceKey: r'$item',
     );
-    return CompiledDeclarativeToolbarTemplate(
-      baseItem: baseItem,
-      programId: programId,
-      visibleOutput: visibleOutput,
-      actionTemplate: null,
-      childrenBinding: CompiledDeclarativeChildrenBinding(
-        itemsOutput: itemsOutput,
-        itemTemplate: _freezeMap(itemTemplate),
-        maxItems: maxItems,
-      ),
+    return CompiledDeclarativeChildrenBinding(
+      itemsOutput: itemsOutput,
+      itemTemplate: _freezeMap(itemTemplate),
+      maxItems: maxItems,
     );
   }
 

@@ -452,6 +452,55 @@ class ActionButtonData {
     );
   }
 
+  /// לחצן מפוצל: [onPressed] היא הפעולה הראשית, ו-[menuItems] נפתחים מהחץ
+  /// שלצידה. ב-overflow הפקד הופך לתת-תפריט שהפעולה הראשית היא פריטו הראשון.
+  factory ActionButtonData.split({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required List<ActionButtonData> menuItems,
+    required bool compact,
+    bool selected = false,
+    String? menuTooltip,
+    Key? key,
+  }) {
+    return ActionButtonData(
+      // הערך הוא אינדקס ולא ActionButtonData, כי השוואת ActionButtonData היא
+      // לפי tooltip ושני פריטים בעלי אותו כיתוב היו מפעילים את אותה פעולה.
+      widget: BarSplitButton<int>(
+        key: key,
+        icon: icon,
+        tooltip: tooltip,
+        compact: compact,
+        selected: selected,
+        onPressed: onPressed,
+        menuTooltip: menuTooltip ?? 'אפשרויות נוספות',
+        entries: [
+          for (var i = 0; i < menuItems.length; i++)
+            AppMenuEntry<int>(
+              value: i,
+              label: menuItems[i].tooltip ?? '',
+              icon: menuItems[i].icon,
+              enabled: menuItems[i].onPressed != null,
+            ),
+        ],
+        onSelected: (index) => menuItems[index].onPressed?.call(),
+      ),
+      icon: icon,
+      tooltip: tooltip,
+      onPressed: onPressed,
+      submenuItems: [
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: icon,
+          tooltip: tooltip,
+          onPressed: onPressed,
+        ),
+        ...menuItems,
+      ],
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

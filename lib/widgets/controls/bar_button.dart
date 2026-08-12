@@ -98,7 +98,7 @@ class BarButton extends StatelessWidget {
     final bool disabled = onPressed == null;
 
     final Color bg = selected && !disabled
-        ? cs.onSurface.withValues(alpha: 0.12)
+        ? AppSurfaces.barButtonSelected(cs)
         : Colors.transparent;
     final Color fg = disabled
         ? theme.disabledColor

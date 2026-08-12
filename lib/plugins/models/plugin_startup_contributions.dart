@@ -63,14 +63,18 @@ class PluginStartupContributions {
         item.containsKey('childrenBinding')) {
       return false;
     }
-    if (item['type'] == 'menu') {
+    final type = item['type'];
+    if (type == 'menu' || type == 'split') {
       final children = item['children'];
-      return children is List &&
+      final childActivates =
+          children is List &&
           children.whereType<Map>().any(
             (child) => _toolbarItemActivatesBackground(
               Map<String, dynamic>.from(child),
             ),
           );
+      // בלחצן מפוצל גם הפעולה הראשית עצמה מגיעה למנוע התוסף.
+      return childActivates || (type == 'split' && item['openPlugin'] != true);
     }
     return item['openPlugin'] != true;
   }

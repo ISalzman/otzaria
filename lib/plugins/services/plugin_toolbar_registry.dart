@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 
+/// סוגי פקד שילדיהם הם פריטי תפריט.
+const _typesWithChildren = {'menu', 'split'};
+
 /// רישום פקדי שורת הפקדים שתוספים הוסיפו (reader.addToolbarItem).
 class PluginToolbarRegistry extends ChangeNotifier {
   static const int maxTopLevelItemsPerPlugin = 2;
@@ -122,7 +125,9 @@ class PluginToolbarRegistry extends ChangeNotifier {
   }) {
     final id = _safeText(json['id'], field: 'id', maxLength: 128);
     final type = json['type'] as String? ?? 'button';
-    final allowedTypes = isChild ? const {'button'} : const {'button', 'menu'};
+    final allowedTypes = isChild
+        ? const {'button'}
+        : const {'button', 'menu', 'split'};
     if (!allowedTypes.contains(type)) {
       throw const PluginToolbarException(
         'error.invalid_params',
@@ -166,10 +171,10 @@ class PluginToolbarRegistry extends ChangeNotifier {
     final children = <PluginToolbarItem>[];
     final childrenValue = json['children'];
     if (childrenValue != null) {
-      if (type != 'menu') {
+      if (!_typesWithChildren.contains(type)) {
         throw const PluginToolbarException(
           'error.invalid_params',
-          'only menu items may declare children',
+          'only menu or split items may declare children',
         );
       }
       if (childrenValue is! List || childrenValue.length > maxMenuChildren) {
@@ -194,10 +199,10 @@ class PluginToolbarRegistry extends ChangeNotifier {
         );
       }
     }
-    if (type == 'menu' && children.isEmpty) {
-      throw const PluginToolbarException(
+    if (_typesWithChildren.contains(type) && children.isEmpty) {
+      throw PluginToolbarException(
         'error.invalid_params',
-        'menu requires children',
+        '$type requires children',
       );
     }
     if (children.map((child) => child.id).toSet().length != children.length) {

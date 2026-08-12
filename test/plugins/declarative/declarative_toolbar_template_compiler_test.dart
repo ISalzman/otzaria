@@ -13,6 +13,25 @@ void main() {
     expect(templates.last.childrenBinding!.maxItems, 10);
   });
 
+  test('פקד מפוצל מקמפל גם פעולה ראשית וגם ילדים, וחייב את שניהם', () {
+    final templates = _templates();
+    final split = Map<String, dynamic>.from(templates.first)
+      ..['type'] = 'split'
+      ..['childrenBinding'] = templates.last['childrenBinding'];
+
+    final compiled = _compiler().compileAll('test.plugin', [split]).single;
+    expect(compiled.baseItem.type, 'split');
+    expect(compiled.actionTemplate, isNotNull);
+    expect(compiled.childrenBinding, isNotNull);
+
+    final withoutChildren = Map<String, dynamic>.from(split)
+      ..remove('childrenBinding');
+    expect(
+      () => _compiler().compileAll('test.plugin', [withoutChildren]),
+      throwsA(isA<DeclarativeProgramException>()),
+    );
+  });
+
   test('פלט שאינו מוכר נדחה בזמן קומפילציה', () {
     final templates = _templates();
     (templates.first['binding'] as Map<String, dynamic>)['visibleOutput'] =
