@@ -58,6 +58,9 @@ TextSpan _withForeignRun(TextStyle base) => TextSpan(
   ],
 );
 
+TextSpan _withSuperscriptRun(TextStyle base) =>
+    TextSpan(text: 'ויאמר ¹² אל העם', style: base);
+
 /// שורה שבתוכה מילה ב-`<big>` — הסימון "גמ׳" בתלמוד.
 TextSpan _withBigRun(TextStyle base) => TextSpan(
   style: base,
@@ -91,6 +94,20 @@ void main() {
         _paragraphHeight(_withForeignRun(base)),
         greaterThan(_paragraphHeight(_plain(base))),
       );
+    });
+
+    test('ספרות עיליות נשארות בגובה שורה קבוע', () {
+      for (final family in _fontFiles.keys) {
+        final base = TextStyle(fontFamily: family, fontSize: 18, height: 1.5);
+        final content = _withSuperscriptRun(base);
+        final strutStyle = exactLineHeightStrut(base, content);
+        expect(strutStyle, isNotNull, reason: family);
+        expect(
+          _paragraphHeight(content, strutStyle: strutStyle),
+          _paragraphHeight(_plain(base)),
+          reason: family,
+        );
+      }
     });
 
     test('עם קיבוע — גובה השורה זהה לשורה שכולה בגופן הבסיס', () {
