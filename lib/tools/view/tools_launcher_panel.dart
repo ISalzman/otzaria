@@ -1005,9 +1005,10 @@ class _ToolDragFeedback extends StatelessWidget {
 
 /// קובייה בודדת ברשת הכלים.
 class ToolTile extends StatelessWidget {
-  static const double maxIconSize = 40;
+  static const double maxIconSize = 36;
   static const double minIconSize = 20;
-  static const double menuButtonSize = 26;
+  static const double menuButtonSize = 24;
+  static const double menuIconSize = 13;
 
   /// התווית קטנה ובשתי שורות, כדי שרוב הקובייה תישאר לאייקון.
   static const double labelFontSize = 11;
@@ -1058,8 +1059,6 @@ class ToolTile extends StatelessWidget {
       child: AppCard(
         onTap: onTap,
         selected: isHighlighted,
-        // הקובייה יושבת ישירות על משטח הפאנל, כמו סמל תוכנה בשולחן העבודה.
-        transparent: true,
         child: Stack(
           children: [
             // האייקון והכותרת ממורכזים כגוש אחד.
@@ -1128,7 +1127,7 @@ class ToolTile extends StatelessWidget {
         tooltip: 'אפשרויות נוספות',
         icon: Icon(
           FluentIcons.more_vertical_24_regular,
-          size: 15,
+          size: menuIconSize,
           color: cs.secondary,
         ),
         padding: EdgeInsets.zero,
