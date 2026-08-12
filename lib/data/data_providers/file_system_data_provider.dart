@@ -347,15 +347,30 @@ class FileSystemData {
       return const {};
     }
 
-    final dir = Directory(hebrewBooksPath);
-    if (!await dir.exists()) {
-      return const {};
-    }
+    return scanHebrewBooksPdfFilesAtPath(hebrewBooksPath);
+  }
 
+  /// סורק תיקיית PDF ישירה או את שורש נתוני HebrewBooks שמכיל `Books`.
+  @visibleForTesting
+  static Future<Map<String, String>> scanHebrewBooksPdfFilesAtPath(
+    String configuredPath,
+  ) async {
+    final configuredDir = Directory(configuredPath);
+    final booksDir = Directory(path.join(configuredPath, 'Books'));
+    final directories = [configuredDir, booksDir];
+    final visited = <String>{};
     final pdfFiles = <String, String>{};
-    await for (final entity in dir.list()) {
-      if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
-        pdfFiles[path.basename(entity.path).toLowerCase()] = entity.path;
+
+    for (final directory in directories) {
+      final normalized = path.normalize(directory.absolute.path);
+      if (!visited.add(normalized) || !await directory.exists()) continue;
+      await for (final entity in directory.list()) {
+        if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
+          pdfFiles.putIfAbsent(
+            path.basename(entity.path).toLowerCase(),
+            () => entity.path,
+          );
+        }
       }
     }
     return pdfFiles;
