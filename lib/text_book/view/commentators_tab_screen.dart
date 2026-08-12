@@ -776,7 +776,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     TextBookLoaded state,
     List<int>? effectiveIndexes,
   ) {
-    final listContent = NotificationListener<UserScrollNotification>(
+    Widget listContentWithWidth(
+      double? contentMaxWidth,
+    ) => NotificationListener<UserScrollNotification>(
       onNotification: (notification) {
         if (notification.direction != ScrollDirection.idle &&
             _navPaneOpen &&
@@ -823,6 +825,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           externalAllExpandedNotifier: _allExpandedInChild,
           typeSelection: _typeSelection,
           personalNotesLoader: loadStoredPersonalNotes,
+          contentMaxWidth: contentMaxWidth,
         ),
       ),
     );
@@ -837,18 +840,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               availableWidth: constraints.maxWidth,
             );
 
-            if (textMaxWidth > 0) {
-              // יישור לראש (topCenter) ולא Center — אחרת כשהמפרשים מכווצים
-              // הרשימה (shrinkWrap) נמוכה ומתמרכזת אנכית, ונוצר רווח למעלה.
-              return Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: textMaxWidth),
-                  child: listContent,
-                ),
-              );
-            }
-            return listContent;
+            // הרוחב עובר לתוך הרשימה ולא עוטף אותה מבחוץ, כדי שפס הגלילה
+            // יישאר צמוד לדופן החלון.
+            return listContentWithWidth(textMaxWidth > 0 ? textMaxWidth : null);
           },
         );
       },

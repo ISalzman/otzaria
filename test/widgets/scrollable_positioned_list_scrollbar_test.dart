@@ -109,6 +109,47 @@ void main() {
     expect(tester.getTopLeft(find.byKey(contentKey)).dx, 12.0);
   });
 
+  testWidgets('האגודל צמוד לדופן ההתחלה של החלונית ב-RTL', (tester) async {
+    final listener = ItemPositionsListener.create();
+    final controller = ItemScrollController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: ScrollablePositionedListScrollbar(
+              scrollController: controller,
+              itemPositionsListener: listener,
+              itemCount: 10,
+              child: const _ScrollableStub(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+        const [
+          ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+          ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+        ];
+    await tester.pump();
+
+    final thumb = find.descendant(
+      of: find.byType(ScrollablePositionedListScrollbar),
+      matching: find.byWidgetPredicate(
+        (w) => w is Container && w.decoration is BoxDecoration,
+      ),
+    );
+    final screenWidth = tester.getSize(find.byType(Scaffold)).width;
+    expect(
+      screenWidth - tester.getTopRight(thumb).dx,
+      2.0,
+      reason: 'ב-RTL ההתחלה היא ימין — האגודל חייב להיות 2px מדופן החלונית',
+    );
+  });
+
   testWidgets('פריט שגדל אחרי הפריים הראשון מחזיר את המסילה (חלונית המפרשים)', (
     tester,
   ) async {

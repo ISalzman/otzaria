@@ -2716,7 +2716,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   Widget _buildHTMLViewer(TextBookLoaded state) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 5, 5),
+      // ללא שוליים אופקיים: רוחב הטקסט נקבע ב-textMaxWidth, ושוליים כאן הרחיקו
+      // את פס הגלילה מדופן החלון בשונה משאר החלוניות.
+      padding: const EdgeInsets.only(bottom: 5),
       child: GestureDetector(
         onScaleUpdate: (details) {
           context.read<TextBookBloc>().add(

@@ -47,7 +47,12 @@ class ScrollablePositionedListScrollbar extends StatefulWidget {
 
 class _ScrollablePositionedListScrollbarState
     extends State<ScrollablePositionedListScrollbar> {
-  static const double _trackWidth = 12.0;
+  // הפס יושב בקצה ההתחלה של החלונית, ולכן _edgeGap הוא המרחק מדופן החלון —
+  // מקום אחד שקובע אותו לכל המסכים. שוליים אופקיים בהורה מרחיקים אותו ואסורים.
+  static const double _edgeGap = 2.0;
+  static const double _thumbThickness = 8.0;
+  static const double _contentGap = 2.0;
+  static const double _trackWidth = _edgeGap + _thumbThickness + _contentGap;
 
   double _thumbPosition = 0.0;
   double _thumbHeight = 0.1; // יחס גובה ברירת מחדל
@@ -518,10 +523,10 @@ class _ScrollablePositionedListScrollbarState
                       fit: StackFit.expand,
                       children: [
                         // ה"אגודל" (Thumb) עצמו
-                        Positioned(
+                        PositionedDirectional(
                           top: thumbPixelTop,
-                          left: 2, // רווח קטן מהקצה
-                          right: 2,
+                          start: _edgeGap,
+                          end: _contentGap,
                           height: thumbPixelHeight,
                           child: Container(
                             key: ScrollablePositionedListScrollbar.thumbKey,
