@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -15,6 +16,11 @@ class SearchingTab extends OpenedTab {
   final searchFieldFocusNode = FocusNode();
   late final ValueNotifier<String> titleNotifier;
   final ValueNotifier<bool> isLeftPaneOpen = ValueNotifier(true);
+
+  /// סיכום סיווג התוצאות של ספק החיפוש החיצוני (תוסף), כשפעיל — מזין את
+  /// ספירות הקטגוריות בעץ הסינון. נכתב ע"י מדור התוצאות החיצוני.
+  final ValueNotifier<ExternalSearchSummary?> externalSearchSummary =
+      ValueNotifier(null);
   final ItemScrollController scrollController = ItemScrollController();
   List<Book> allBooks = [];
 
@@ -319,6 +325,7 @@ class SearchingTab extends OpenedTab {
     negativeSpacingValuesChanged.dispose();
     useGlobalSearchOptions.dispose();
     useGlobalNegativeSearchOptions.dispose();
+    externalSearchSummary.dispose();
     // סגירת ה-bloc כדי למנוע דליפה
     searchBloc.close();
     super.dispose();

@@ -94,6 +94,48 @@ class ExternalCatalogRepository {
     );
   }
 
+  /// המיפוי הטוב ביותר עבור קבוצת מזהי היברובוקס בבת אחת:
+  /// hb_id ← otzaria_id, לפי `is_best` ואז `confidence` (בתוך כל מזהה).
+  /// מזהים ללא מיפוי פשוט נעדרים מהתשובה; ללא DB מוחזרת מפה ריקה.
+  Future<Map<int, int>> getBestOtzariaIdsForHebrewBookIds(
+    Iterable<int> hbIds,
+  ) async {
+    final idList = hbIds.toList();
+    if (idList.isEmpty || !await databaseExists()) return const {};
+    sqlite3.Database? db;
+    try {
+      db = sqlite3.sqlite3.open(databasePath, mode: sqlite3.OpenMode.readOnly);
+      final best = <int, int>{};
+      for (var i = 0; i < idList.length; i += _idChunkSize) {
+        final end = (i + _idChunkSize < idList.length)
+            ? i + _idChunkSize
+            : idList.length;
+        final chunk = idList.sublist(i, end);
+        final placeholders = List.filled(chunk.length, '?').join(',');
+        final rows = db.select(
+          'SELECT hb_id, otzaria_id FROM otzaria_hebrew_books '
+          'WHERE hb_id IN ($placeholders) '
+          'ORDER BY is_best DESC, confidence DESC',
+          chunk,
+        );
+        for (final row in rows) {
+          // המיון גלובלי לצ'אנק, ולכן השורה הראשונה לכל hb_id היא הטובה.
+          if (row['hb_id'] case final int hbId when !best.containsKey(hbId)) {
+            if (row['otzaria_id'] case final int otzariaId) {
+              best[hbId] = otzariaId;
+            }
+          }
+        }
+      }
+      return best;
+    } catch (e) {
+      debugPrint('ExternalCatalogRepository: batch mapping query failed: $e');
+      return const {};
+    } finally {
+      db?.close();
+    }
+  }
+
   Future<List<int>> _selectMappingColumn({
     required String select,
     required String where,

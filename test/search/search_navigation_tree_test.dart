@@ -56,6 +56,7 @@ void main() {
     void Function(String facet)? onSetFacet,
     void Function(String path, bool isExpanded)? onToggleExpand,
     VoidCallback? onClearAll,
+    List<({String title, int count})> extraRootCategories = const [],
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -76,12 +77,51 @@ void main() {
               onToggleExpand: onToggleExpand ?? (_, _) {},
               isMultiSelectPressed: () => false,
               onClearAll: onClearAll ?? () {},
+              extraRootCategories: extraRootCategories,
             ),
           ),
         ),
       ),
     );
   }
+
+  group('עץ הניווט — קטגוריות סינתטיות (ספק חיצוני)', () {
+    testWidgets('קטגוריה סינתטית מוצגת אחרי הקטגוריות ולחיצה בוחרת אותה', (
+      tester,
+    ) async {
+      String? selected;
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 12)],
+        onSetFacet: (facet) => selected = facet,
+      );
+
+      expect(find.text('עוד מהיברובוקס'), findsOneWidget);
+      expect(find.text('(12)'), findsOneWidget);
+      await tester.tap(find.text('עוד מהיברובוקס'));
+      expect(selected, '/עוד מהיברובוקס');
+    });
+
+    testWidgets('קטגוריה סינתטית בספירה 0 מוסתרת אלא אם היא נבחרה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 0)],
+      );
+      expect(find.text('עוד מהיברובוקס'), findsNothing);
+
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 0)],
+        selectedFacets: {'/עוד מהיברובוקס'},
+      );
+      expect(find.text('עוד מהיברובוקס'), findsOneWidget);
+    });
+  });
 
   group('עץ הניווט — התנהגות בסיסית', () {
     testWidgets('ללא סינון: כותרת השורש היא "ספריית אוצריא" והקטגוריה מוצגת', (
