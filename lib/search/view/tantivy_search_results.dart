@@ -425,7 +425,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         return BlocBuilder<SettingsBloc, SettingsState>(
           buildWhen: (p, c) => p.externalResultsFirst != c.externalResultsFirst,
           builder: (context, settings) {
+            // ה-key מאפשר ל-Flutter לזהות את המדור כשהוא נודד בין ראש
+            // הרשימה לסופה (החלפת "קודמות/מאוחרות"): בלעדיו ה-State היה
+            // מפורק ונבנה מחדש — והמדור היה יורה חיפוש חיצוני חדש במקום
+            // רק להחליף מקום.
             final externalSliver = ExternalSearchResultsSection(
+              key: const ValueKey('external-results-sliver'),
               tab: widget.tab,
             );
             final engineSlivers = _buildEngineSlivers(

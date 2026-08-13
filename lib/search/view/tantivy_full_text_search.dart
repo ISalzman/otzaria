@@ -456,10 +456,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   /// ספירת המקור החיצוני (ספרים ומופעים). שתי הספירות שונות במהותן (תוצאות
   /// מול ספרים), ולכן מוצגות שורה מעל שורה באותו מקום במקום מספר מאוחד.
   ///
-  /// שורת המקור החיצוני היא גם הכותרת של מדור התוצאות שלו: היא נושאת את
-  /// חיווי ההתקדמות בזמן החיפוש, ולחיצה עליה מכווצת ופורשת את המדור. כך
-  /// הספירות של שני המקורות יושבות זו מעל זו במקום אחד, ואזור התוצאות
-  /// מציג תוצאות בלבד.
+  /// שורת המקור החיצוני נושאת גם את חיווי ההתקדמות בזמן החיפוש. כך הספירות
+  /// של שני המקורות יושבות זו מעל זו במקום אחד, ואזור התוצאות מציג תוצאות
+  /// בלבד.
   Widget _buildResultCounts(BuildContext context, SearchState state) {
     final cs = Theme.of(context).colorScheme;
     final muted = TextStyle(fontSize: 14, color: cs.onSurfaceVariant);
@@ -498,55 +497,32 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         : status.isPending
         ? '${status.sourceTitle}: מחפש…'
         : '${status.sourceTitle}: $books$filteredNote, $hits';
-    return ValueListenableBuilder<bool>(
-      valueListenable: widget.tab.externalSectionExpanded,
-      builder: (context, expanded, _) {
-        return Tooltip(
-          message: expanded
-              ? 'הסתר את תוצאות ${status.sourceTitle}'
-              : 'הצג את תוצאות ${status.sourceTitle}',
-          child: ConstrainedBox(
-            // כותרת המקור מגיעה מתוסף; הסרגל העליון אינו יכול להתרחב בשבילה.
-            constraints: const BoxConstraints(
-              maxWidth: _externalCountLineMaxWidth,
-            ),
-            child: InkWell(
-              onTap: () => widget.tab.externalSectionExpanded.value = !expanded,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      line,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: style,
-                    ),
-                  ),
-                  if (status.loading) ...[
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: style.color,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 2),
-                  Icon(
-                    expanded
-                        ? FluentIcons.chevron_up_24_regular
-                        : FluentIcons.chevron_down_24_regular,
-                    size: 14,
-                    color: style.color,
-                  ),
-                ],
-              ),
+    return ConstrainedBox(
+      // כותרת המקור מגיעה מתוסף; הסרגל העליון אינו יכול להתרחב בשבילה.
+      constraints: const BoxConstraints(maxWidth: _externalCountLineMaxWidth),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              line,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
             ),
           ),
-        );
-      },
+          if (status.loading) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: style.color,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

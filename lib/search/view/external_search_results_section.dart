@@ -31,7 +31,7 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 ///
 /// הרכיב הוא sliver: הוא משתבץ בתוך רשימת הגלילה המאוחדת של
 /// [TantivySearchResults] — מסך אחד לשני המקורות, בלי מדור נפרד עם גלילה
-/// משלו. כשאין ספק פעיל (או שהמדור מכווץ) הוא מתכווץ ל-sliver ריק.
+/// משלו. כשאין ספק פעיל הוא מתכווץ ל-sliver ריק.
 ///
 /// המדור פעיל רק כשסומנה בדיאלוג החיפוש שורת תוסף שהצהירה `resultsProvider`
 /// והתוסף נרשם כספק. השאילתה נשלחת לתוסף כאירוע ממוקד — אוצריא עצמה אינה
@@ -550,14 +550,9 @@ class _ExternalSearchResultsSectionState
   }
 
   /// המדור מציג תוצאות בלבד: המקור, ההתקדמות והספירות שלו מוצגים בשורת
-  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]), ומשם גם מכווצים אותו.
-  Widget _buildSection(BuildContext context, SearchState state) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: widget.tab.externalSectionExpanded,
-      builder: (context, expanded, _) =>
-          expanded ? _buildBody(context, state) : _emptySliver,
-    );
-  }
+  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]).
+  Widget _buildSection(BuildContext context, SearchState state) =>
+      _buildBody(context, state);
 
   /// sliver ריק כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או
   /// מדור ריק לפני שהתקבלה תשובה כלשהי; אחרת נשאר רווח מת ברשימה.
