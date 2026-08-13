@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -45,8 +46,10 @@ const _tur = (
   acronyms: [
     'ארבעה טורים',
     'הטור',
-    'טור אורח חיים',
+    'טור או"ח',
+    'טור חו"מ',
     'טור חושן משפט',
+    'טור יו"ד',
     'טור יורה דעה',
   ],
 );
@@ -182,6 +185,69 @@ void main() {
         );
       },
     );
+
+    test('"טור אורח חיים יב" — שם החלק המלא מגיע לחיפוש ה-TOC', () async {
+      // ל"אורח חיים" אין ראש-תיבות מאוית ב-DB (רק "טור או״ח"), ולכן השאילתה
+      // יורדת ל-"טור" בלבד ושתי מילות החלק נשארות לחיפוש הפנימי.
+      seedLibrary(const [_tur]);
+      final seen = <List<String>?>[];
+      await buildFindRefRepo(
+        tocQueryTokensSeen: seen,
+      ).findRefs('טור אורח חיים יב');
+
+      expect(
+        seen.any((t) => listEquals(t, const ['אורח', 'חיים', 'יב'])),
+        isTrue,
+      );
+    });
+
+    test('"טור יורה דעה יב" — שם החלק מגיע לחיפוש ה-TOC ולא נבלע', () async {
+      // "טור יורה דעה" הוא ראש-תיבות *מלא* של הספר "טור" (rank 3), אבל
+      // "יורה דעה" הוא חלק פנימי שלו. בליעת שלושת הטוקנים השאירה רק "יב",
+      // שנחפש משורש ה-TOC (שם יושבים שמות החלקים) ולכן לא נמצא כלל.
+      seedLibrary(const [_tur]);
+      final seen = <List<String>?>[];
+      await buildFindRefRepo(
+        tocQueryTokensSeen: seen,
+      ).findRefs('טור יורה דעה יב');
+
+      expect(
+        seen.any((t) => listEquals(t, const ['יורה', 'דעה', 'יב'])),
+        isTrue,
+        reason: 'ה-TOC חייב להיחפש עם שם החלק, לא רק עם "יב"',
+      );
+    });
+
+    test('"טור יו״ד יב" — ראש-התיבות של החלק מגיע לחיפוש ה-TOC', () async {
+      seedLibrary(const [_tur]);
+      final seen = <List<String>?>[];
+      await buildFindRefRepo(tocQueryTokensSeen: seen).findRefs('טור יו"ד יב');
+
+      expect(
+        seen.any((t) => listEquals(t, const ['יוד', 'יב'])),
+        isTrue,
+        reason: '"יו״ד" מזהה את החלק "יורה דעה" ולכן חייב להישלח ל-TOC',
+      );
+    });
+
+    test('ראש-תיבות שכולו שם הספר אינו מוסיף טוקני-חלק', () async {
+      // "שוע אוח" מזהה את *כותרת* הספר במלואה — אין כאן חלק פנימי, ולכן
+      // חיפוש ה-TOC נשאר על טוקן הסימן בלבד.
+      seedLibrary(const [
+        (
+          id: 2,
+          title: 'שולחן ערוך אורח חיים',
+          acronyms: ['שו"ע או"ח', 'שו"ע'],
+        ),
+      ]);
+      final seen = <List<String>?>[];
+      await buildFindRefRepo(tocQueryTokensSeen: seen).findRefs('שו"ע או"ח יב');
+
+      expect(seen, isNotEmpty);
+      for (final tokens in seen) {
+        expect(tokens, equals(const ['יב']));
+      }
+    });
 
     test(
       'שאילתת מילה אחת ("רמב"ם") מחזירה את כל הספרים בלי חיפוש TOC',
