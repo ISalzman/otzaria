@@ -422,26 +422,38 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     return ValueListenableBuilder<ExternalSearchStatus?>(
       valueListenable: widget.tab.externalSearchStatus,
       builder: (context, externalStatus, _) {
-        final scrollView = CustomScrollView(
-          key: PageStorageKey(widget.tab),
-          controller: _scrollController,
-          slivers: [
-            // הבלוק החיצוני אחרי תוצאות המנוע — כמו מיקום הקטגוריה
-            // "עוד מ<מקור>" בסוף עץ הקטגוריות.
-            ..._buildEngineSlivers(state, hasExternal: externalStatus != null),
-            ExternalSearchResultsSection(tab: widget.tab),
-          ],
-        );
-        if (!state.resultsTruncated || state.results.isEmpty) {
-          return scrollView;
-        }
-        // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
-        // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
-        return Column(
-          children: [
-            _buildTruncatedBanner(context),
-            Expanded(child: scrollView),
-          ],
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          buildWhen: (p, c) => p.externalResultsFirst != c.externalResultsFirst,
+          builder: (context, settings) {
+            final externalSliver = ExternalSearchResultsSection(
+              tab: widget.tab,
+            );
+            final engineSlivers = _buildEngineSlivers(
+              state,
+              hasExternal: externalStatus != null,
+            );
+            final scrollView = CustomScrollView(
+              key: PageStorageKey(widget.tab),
+              controller: _scrollController,
+              // מיקום הבלוק החיצוני נשלט בהגדרה "קודמות/מאוחרות"
+              // (ExternalResultsPositionControl): כברירת מחדל אחרי תוצאות
+              // המנוע — כמו הקטגוריה "עוד מ<מקור>" בסוף עץ הקטגוריות.
+              slivers: settings.externalResultsFirst
+                  ? [externalSliver, ...engineSlivers]
+                  : [...engineSlivers, externalSliver],
+            );
+            if (!state.resultsTruncated || state.results.isEmpty) {
+              return scrollView;
+            }
+            // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
+            // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
+            return Column(
+              children: [
+                _buildTruncatedBanner(context),
+                Expanded(child: scrollView),
+              ],
+            );
+          },
         );
       },
     );

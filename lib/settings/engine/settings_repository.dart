@@ -42,6 +42,7 @@ class SettingsRepository {
   static const String keyPinSidebar = 'key-pin-sidebar';
   static const String keySidebarWidth = 'key-sidebar-width';
   static const String keyFacetFilteringWidth = 'key-facet-filtering-width';
+  static const String keyExternalResultsFirst = 'key-external-results-first';
   static const String keyCommentaryPaneWidth = 'key-commentary-pane-width';
   static const String keyCalendarType = 'key-calendar-type';
   static const String keyCalendarDayTransition = 'key-calendar-day-transition';
@@ -176,6 +177,7 @@ class SettingsRepository {
     keyPinSidebar,
     keySidebarWidth,
     keyFacetFilteringWidth,
+    keyExternalResultsFirst,
     keyCommentaryPaneWidth,
     keyCalendarType,
     keyCalendarDayTransition,
@@ -343,6 +345,10 @@ class SettingsRepository {
       'facetFilteringWidth': _settings.getValue<double>(
         keyFacetFilteringWidth,
         defaultValue: 235,
+      ),
+      'externalResultsFirst': _settings.getValue<bool>(
+        keyExternalResultsFirst,
+        defaultValue: false,
       ),
       'commentaryPaneWidth': _settings.getValue<double>(
         keyCommentaryPaneWidth,
@@ -624,6 +630,10 @@ class SettingsRepository {
 
   Future<void> updateFacetFilteringWidth(double value) async {
     await _settings.setValue(keyFacetFilteringWidth, value);
+  }
+
+  Future<void> updateExternalResultsFirst(bool value) async {
+    await _settings.setValue(keyExternalResultsFirst, value);
   }
 
   Future<void> updateCommentaryPaneWidth(double value) async {
@@ -1041,6 +1051,7 @@ class SettingsRepository {
     await _settings.setValue(keyPinSidebar, false);
     await _settings.setValue(keySidebarWidth, 300.0);
     await _settings.setValue(keyFacetFilteringWidth, 235.0);
+    await _settings.setValue(keyExternalResultsFirst, false);
     await _settings.setValue(keyCommentaryPaneWidth, 400.0);
     await _settings.setValue(keyCalendarType, 'combined');
     await _settings.setValue(keyCalendarDayTransition, 'sunset');

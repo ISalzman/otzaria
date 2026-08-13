@@ -42,6 +42,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdatePinSidebar>(_onUpdatePinSidebar);
     on<UpdateSidebarWidth>(_onUpdateSidebarWidth);
     on<UpdateFacetFilteringWidth>(_onUpdateFacetFilteringWidth);
+    on<UpdateExternalResultsFirst>(_onUpdateExternalResultsFirst);
     on<UpdateCommentaryPaneWidth>(_onUpdateCommentaryPaneWidth);
     on<UpdateCopyWithHeaders>(_onUpdateCopyWithHeaders);
     on<UpdateCopyHeaderFormat>(_onUpdateCopyHeaderFormat);
@@ -118,6 +119,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         pinSidebar: settings['pinSidebar'],
         sidebarWidth: settings['sidebarWidth'],
         facetFilteringWidth: settings['facetFilteringWidth'],
+        externalResultsFirst: settings['externalResultsFirst'] ?? false,
         commentaryPaneWidth: settings['commentaryPaneWidth'],
         copyWithHeaders: settings['copyWithHeaders'],
         copyHeaderFormat: settings['copyHeaderFormat'],
@@ -541,6 +543,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateFacetFilteringWidth(event.facetFilteringWidth);
     emit(state.copyWith(facetFilteringWidth: event.facetFilteringWidth));
+  }
+
+  Future<void> _onUpdateExternalResultsFirst(
+    UpdateExternalResultsFirst event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateExternalResultsFirst(event.externalResultsFirst);
+    emit(state.copyWith(externalResultsFirst: event.externalResultsFirst));
   }
 
   Future<void> _onUpdateCommentaryPaneWidth(

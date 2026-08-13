@@ -389,6 +389,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                             const AppTopBarItem(
                               widget: GroupingOfResults(),
                             ),
+                            // מיקום תוצאות המקור החיצוני (קודמות/מאוחרות) —
+                            // הפקד מסתיר את עצמו כשאין ספק חיצוני פעיל.
+                            AppTopBarItem(
+                              widget: ExternalResultsPositionControl(
+                                tab: widget.tab,
+                              ),
+                            ),
                           ],
                   ),
                   if (_shouldShowFacetFilterBanner(state))
@@ -724,6 +731,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             const SizedBox(width: 4),
             // איחוד תוצאות
             const GroupingOfResults(compact: true),
+            const SizedBox(width: 4),
+            // מיקום תוצאות המקור החיצוני — נסתר כשאין ספק חיצוני פעיל
+            ExternalResultsPositionControl(tab: widget.tab, compact: true),
           ],
         ],
       ),
