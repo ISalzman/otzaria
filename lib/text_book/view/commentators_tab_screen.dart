@@ -453,6 +453,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   @override
   void dispose() {
+    if (!widget.tab.bloc.isClosed) {
+      widget.tab.bloc.add(const ResetCommentaryDisplayOverrides());
+    }
     FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     _navTabController.dispose();
     _typeSelection.dispose();

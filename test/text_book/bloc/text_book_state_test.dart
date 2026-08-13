@@ -116,6 +116,13 @@ void main() {
         isNot(equals(_loadedState())),
       );
     });
+
+    test('changes when the commentary nikud override changes', () {
+      expect(
+        _loadedState(commentaryRemoveNikudOverride: false),
+        isNot(equals(_loadedState())),
+      );
+    });
   });
 
   group('commentaryRemoveNikud', () {
@@ -140,19 +147,18 @@ void main() {
       expect(state.copyWith(removeNikud: false).commentaryRemoveNikud, isTrue);
     });
 
-    test('shows nikud once the exemption is cleared', () {
-      // מסלול הכפתור בכרטיסיית המפרשים: ToggleNikud(applyToCommentaries: true).
+    test('commentary override does not change the main book', () {
       final state = _loadedState(
-        removeNikud: true,
+        removeNikud: false,
         nikudExemptByTanach: true,
       );
 
-      final cleared = state.copyWith(
-        removeNikud: false,
-        nikudExemptByTanach: false,
+      final showingCommentaries = state.copyWith(
+        commentaryRemoveNikudOverride: false,
       );
 
-      expect(cleared.commentaryRemoveNikud, isFalse);
+      expect(showingCommentaries.removeNikud, isFalse);
+      expect(showingCommentaries.commentaryRemoveNikud, isFalse);
     });
 
     test('follows the tab when no exemption applies', () {
@@ -178,6 +184,7 @@ TextBookLoaded _loadedState({
   String? heCategories,
   bool removeNikud = false,
   bool nikudExemptByTanach = false,
+  bool? commentaryRemoveNikudOverride,
 }) {
   return TextBookLoaded(
     book: TextBook(title: 'ספר בדיקה', heCategories: heCategories),
@@ -196,6 +203,7 @@ TextBookLoaded _loadedState({
     tableOfContents: const [],
     removeNikud: removeNikud,
     nikudExemptByTanach: nikudExemptByTanach,
+    commentaryRemoveNikudOverride: commentaryRemoveNikudOverride,
     visibleIndices: const [0],
     selectedIndices: selectedIndices,
     pinLeftPane: false,

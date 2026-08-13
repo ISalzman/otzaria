@@ -195,6 +195,12 @@ class TextBookLoaded extends TextBookState {
   /// האם הספר קיבל פיסוק רק בזכות היותו תנ"ך.
   /// ראה [commentaryRemovePunctuation].
   final bool punctuationExemptByTanach;
+
+  /// עקיפת ניקוד זמנית לכרטיסיית המפרשים בלבד.
+  final bool? commentaryRemoveNikudOverride;
+
+  /// עקיפת פיסוק זמנית לכרטיסיית המפרשים בלבד.
+  final bool? commentaryRemovePunctuationOverride;
   final bool supportsContinuousReadingMode;
   final bool continuousReadingMode;
 
@@ -284,6 +290,8 @@ class TextBookLoaded extends TextBookState {
     this.isTanach = false,
     this.nikudExemptByTanach = false,
     this.punctuationExemptByTanach = false,
+    this.commentaryRemoveNikudOverride,
+    this.commentaryRemovePunctuationOverride,
     this.supportsContinuousReadingMode = false,
     this.continuousReadingMode = false,
     this.readingSegments = const [],
@@ -369,14 +377,14 @@ class TextBookLoaded extends TextBookState {
     );
   }
 
-  /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות. הם אינם תנ"ך,
-  /// ולכן פטור התנ"ך אינו חל עליהם — אך הסתרה יזומה בסרגל כן.
-  bool get commentaryRemoveNikud => removeNikud || nikudExemptByTanach;
+  /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות.
+  bool get commentaryRemoveNikud =>
+      commentaryRemoveNikudOverride ?? (removeNikud || nikudExemptByTanach);
 
-  /// מצב הפיסוק שחל על המפרשים, הקישורים והתצוגות המקדימות של הספר, באותו
-  /// היגיון של [commentaryRemoveNikud].
+  /// מצב הפיסוק שחל על המפרשים, הקישורים והתצוגות המקדימות של הספר.
   bool get commentaryRemovePunctuation =>
-      removePunctuation || punctuationExemptByTanach;
+      commentaryRemovePunctuationOverride ??
+      (removePunctuation || punctuationExemptByTanach);
 
   TextBookLoaded copyWith({
     TextBook? book,
@@ -401,6 +409,10 @@ class TextBookLoaded extends TextBookState {
     bool? isTanach,
     bool? nikudExemptByTanach,
     bool? punctuationExemptByTanach,
+    bool? commentaryRemoveNikudOverride,
+    bool? commentaryRemovePunctuationOverride,
+    bool clearCommentaryRemoveNikudOverride = false,
+    bool clearCommentaryRemovePunctuationOverride = false,
     bool? supportsContinuousReadingMode,
     bool? continuousReadingMode,
     List<ReadingSegment>? readingSegments,
@@ -470,6 +482,15 @@ class TextBookLoaded extends TextBookState {
       nikudExemptByTanach: nikudExemptByTanach ?? this.nikudExemptByTanach,
       punctuationExemptByTanach:
           punctuationExemptByTanach ?? this.punctuationExemptByTanach,
+      commentaryRemoveNikudOverride: clearCommentaryRemoveNikudOverride
+          ? null
+          : (commentaryRemoveNikudOverride ??
+                this.commentaryRemoveNikudOverride),
+      commentaryRemovePunctuationOverride:
+          clearCommentaryRemovePunctuationOverride
+          ? null
+          : (commentaryRemovePunctuationOverride ??
+                this.commentaryRemovePunctuationOverride),
       supportsContinuousReadingMode:
           supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
       continuousReadingMode:
@@ -581,6 +602,8 @@ class TextBookLoaded extends TextBookState {
     isTanach,
     nikudExemptByTanach,
     punctuationExemptByTanach,
+    commentaryRemoveNikudOverride,
+    commentaryRemovePunctuationOverride,
     supportsContinuousReadingMode,
     continuousReadingMode,
     readingSegments.length,

@@ -59,15 +59,15 @@ void main() {
       expect(state.copyWith(removeNikud: false).commentaryRemoveNikud, isFalse);
     });
 
-    test('ביטול הפטור (כפתור כרטיסיית המפרשים) מחזיר ניקוד למפרשים', () {
+    test('עקיפת המפרשים מחזירה ניקוד בלי לשנות את ספר התנ״ך', () {
       final state = _load(nikud: NikudMode.tanachOnly, isTanach: true);
 
-      final cleared = state.copyWith(
-        removeNikud: false,
-        nikudExemptByTanach: false,
+      final showingCommentaries = state.copyWith(
+        commentaryRemoveNikudOverride: false,
       );
 
-      expect(cleared.commentaryRemoveNikud, isFalse);
+      expect(showingCommentaries.removeNikud, isFalse);
+      expect(showingCommentaries.commentaryRemoveNikud, isFalse);
     });
   });
 
@@ -116,15 +116,15 @@ void main() {
       expect(state.commentaryRemovePunctuation, isFalse);
     });
 
-    test('ביטול הפטור מחזיר פיסוק למפרשים', () {
+    test('עקיפת המפרשים מחזירה פיסוק בלי לשנות את ספר התנ״ך', () {
       final state = _load(removePunctuation: true, isTanach: true);
 
-      final cleared = state.copyWith(
-        removePunctuation: false,
-        punctuationExemptByTanach: false,
+      final showingCommentaries = state.copyWith(
+        commentaryRemovePunctuationOverride: false,
       );
 
-      expect(cleared.commentaryRemovePunctuation, isFalse);
+      expect(showingCommentaries.removePunctuation, isFalse);
+      expect(showingCommentaries.commentaryRemovePunctuation, isFalse);
     });
   });
 

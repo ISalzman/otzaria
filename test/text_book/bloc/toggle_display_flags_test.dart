@@ -14,8 +14,7 @@ class _FakeTextBookRepository extends TextBookRepository {
   _FakeTextBookRepository() : super(fileSystem: FileSystemData.instance);
 }
 
-/// ההחלפה היזומה בסרגל: בכרטיסיית הטקסט היא חלה על הספר בלבד, ובכרטיסיית
-/// המפרשים (`applyToCommentaries`) היא מבטלת את פטור התנ״ך וחלה על המפרשים.
+/// ההחלפה היזומה בכרטיסיית המפרשים חלה על המפרשים בלבד.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -82,26 +81,37 @@ void main() {
   );
 
   blocTest<TextBookBloc, TextBookState>(
-    'ToggleNikud עם applyToCommentaries מבטל את הפטור ומחזיר ניקוד למפרשים',
+    'ToggleNikud עם applyToCommentaries מחזיר ניקוד למפרשים בלבד',
     build: () => bloc,
     seed: () => seed(nikudExemptByTanach: true),
     act: (bloc) =>
         bloc.add(const ToggleNikud(false, applyToCommentaries: true)),
     expect: () => [
       isA<TextBookLoaded>()
-          .having((s) => s.nikudExemptByTanach, 'הפטור', isFalse)
+          .having((s) => s.removeNikud, 'הספר', isFalse)
+          .having((s) => s.nikudExemptByTanach, 'הפטור', isTrue)
+          .having(
+            (s) => s.commentaryRemoveNikudOverride,
+            'עקיפת המפרשים',
+            isFalse,
+          )
           .having((s) => s.commentaryRemoveNikud, 'המפרשים', isFalse),
     ],
   );
 
   blocTest<TextBookBloc, TextBookState>(
-    'ToggleNikud(true) עם applyToCommentaries מסתיר ניקוד בשניהם',
+    'ToggleNikud(true) עם applyToCommentaries מסתיר ניקוד במפרשים בלבד',
     build: () => bloc,
     seed: () => seed(nikudExemptByTanach: true),
     act: (bloc) => bloc.add(const ToggleNikud(true, applyToCommentaries: true)),
     expect: () => [
       isA<TextBookLoaded>()
-          .having((s) => s.removeNikud, 'removeNikud', isTrue)
+          .having((s) => s.removeNikud, 'הספר', isFalse)
+          .having(
+            (s) => s.commentaryRemoveNikudOverride,
+            'עקיפת המפרשים',
+            isTrue,
+          )
           .having((s) => s.commentaryRemoveNikud, 'המפרשים', isTrue),
     ],
   );
@@ -119,15 +129,68 @@ void main() {
   );
 
   blocTest<TextBookBloc, TextBookState>(
-    'TogglePunctuation עם applyToCommentaries מחזיר פיסוק למפרשים',
+    'TogglePunctuation עם applyToCommentaries מחזיר פיסוק למפרשים בלבד',
     build: () => bloc,
     seed: () => seed(punctuationExemptByTanach: true),
     act: (bloc) =>
         bloc.add(const TogglePunctuation(false, applyToCommentaries: true)),
     expect: () => [
       isA<TextBookLoaded>()
-          .having((s) => s.punctuationExemptByTanach, 'הפטור', isFalse)
+          .having((s) => s.removePunctuation, 'הספר', isFalse)
+          .having((s) => s.punctuationExemptByTanach, 'הפטור', isTrue)
+          .having(
+            (s) => s.commentaryRemovePunctuationOverride,
+            'עקיפת המפרשים',
+            isFalse,
+          )
           .having((s) => s.commentaryRemovePunctuation, 'המפרשים', isFalse),
+    ],
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'TogglePunctuation(true) עם applyToCommentaries מסתיר פיסוק במפרשים בלבד',
+    build: () => bloc,
+    seed: () => seed(punctuationExemptByTanach: true),
+    act: (bloc) =>
+        bloc.add(const TogglePunctuation(true, applyToCommentaries: true)),
+    expect: () => [
+      isA<TextBookLoaded>()
+          .having((s) => s.removePunctuation, 'הספר', isFalse)
+          .having(
+            (s) => s.commentaryRemovePunctuationOverride,
+            'עקיפת המפרשים',
+            isTrue,
+          )
+          .having((s) => s.commentaryRemovePunctuation, 'המפרשים', isTrue),
+    ],
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'סגירת כרטיסיית המפרשים מאפסת את העקיפות הזמניות',
+    build: () => bloc,
+    seed: () =>
+        seed(
+          nikudExemptByTanach: true,
+          punctuationExemptByTanach: true,
+        ).copyWith(
+          commentaryRemoveNikudOverride: false,
+          commentaryRemovePunctuationOverride: false,
+        ),
+    act: (bloc) => bloc.add(const ResetCommentaryDisplayOverrides()),
+    expect: () => [
+      isA<TextBookLoaded>()
+          .having(
+            (s) => s.commentaryRemoveNikudOverride,
+            'עקיפת הניקוד',
+            isNull,
+          )
+          .having(
+            (s) => s.commentaryRemovePunctuationOverride,
+            'עקיפת הפיסוק',
+            isNull,
+          )
+          .having((s) => s.commentaryRemoveNikud, 'המפרשים', isTrue)
+          .having((s) => s.commentaryRemovePunctuation, 'המפרשים', isTrue),
     ],
   );
 }

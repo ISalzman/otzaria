@@ -896,6 +896,48 @@ void main() {
     );
 
     test(
+      'LoadContent(preserveState:true) שומר עקיפות תצוגה של מפרשים',
+      () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const ToggleNikud(false, applyToCommentaries: true));
+        bloc.add(const TogglePunctuation(false, applyToCommentaries: true));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            preserveState: true,
+            loadCommentators: false,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final state = bloc.state as TextBookLoaded;
+        expect(state.commentaryRemoveNikudOverride, isFalse);
+        expect(state.commentaryRemovePunctuationOverride, isFalse);
+
+        await bloc.close();
+      },
+    );
+
+    test(
       'LoadContent(preserveRemoveNikud:false) מחיל ניקוד חדש מה-Settings',
       () async {
         final repository = _FakeTextBookRepository();
