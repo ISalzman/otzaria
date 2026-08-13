@@ -349,6 +349,27 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         errorMessage: 'התוסף כבר מותקן בגרסה זו',
       );
       add(LoadPlugins());
+    } on PluginStoreIncompatibleException catch (e) {
+      // tryParse מבטיח שלפחות אחד הגבולות קיים, לכן maxAppVersion אינו null כאן.
+      final String message;
+      if (e.isAboveCeiling || e.minAppVersion.isEmpty) {
+        message = PluginMessages.pluginRequiresOlderApp(e.maxAppVersion!);
+      } else {
+        final minSupported = e.minSupportedAppVersion;
+        message = minSupported == null
+            ? PluginMessages.pluginRequiresNewerApp(e.minAppVersion)
+            : PluginMessages.pluginRequiresNewerAppWithFallback(
+                e.minAppVersion,
+                minSupported,
+              );
+      }
+      UiSnack.showError(message);
+      _reportInstallResult(
+        event.reportContext,
+        success: false,
+        errorMessage: message,
+      );
+      add(LoadPlugins());
     } on PluginNewerVersionInstalledException catch (e) {
       UiSnack.show(
         PluginMessages.newerVersionInstalled(e.pluginName, e.installedVersion),

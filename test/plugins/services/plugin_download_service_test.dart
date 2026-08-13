@@ -36,11 +36,109 @@ void main() {
       expect(await File(path).readAsString(), 'archive-bytes');
     });
 
-    test('falls back to the latest version when none is compatible', () async {
-      // 404 מהחנות = אין גרסה תואמת. הנסיגה מורידה את הגרסה האחרונה כדי
-      // שבדיקת המניפסט תסביר למשתמש את דרישת התאימות.
+    test('reports incompatibility without a second download', () async {
       final service = serviceReturning([
-        http.Response('{"error":"No plugin version supports..."}', 404),
+        http.Response(
+          '{"error":"No plugin version supports the requested app version",'
+          '"appVersion":"0.9.90","latestVersion":"2.1.0",'
+          '"compatibleWith":"1.0.0","maxAppVersion":null}',
+          404,
+        ),
+      ]);
+
+      await expectLater(
+        service.downloadPluginArchive(
+          Uri.parse('https://otzaria.org/api/plugins/abc123/download'),
+          appVersion: '0.9.90',
+        ),
+        throwsA(
+          isA<PluginStoreIncompatibleException>()
+              .having((e) => e.minAppVersion, 'minAppVersion', '1.0.0')
+              .having((e) => e.latestVersion, 'latestVersion', '2.1.0')
+              .having((e) => e.isAboveCeiling, 'isAboveCeiling', isFalse),
+        ),
+      );
+      expect(requested, hasLength(1));
+    });
+
+    test('keeps the lowest floor when it differs from the latest', () async {
+      final service = serviceReturning([
+        http.Response(
+          '{"appVersion":"0.9.80","latestVersion":"2.1.0",'
+          '"compatibleWith":"1.0.0","minSupportedAppVersion":"0.9.89"}',
+          404,
+        ),
+      ]);
+
+      await expectLater(
+        service.downloadPluginArchive(
+          Uri.parse('https://otzaria.org/api/plugins/abc123/download'),
+          appVersion: '0.9.80',
+        ),
+        throwsA(
+          isA<PluginStoreIncompatibleException>().having(
+            (e) => e.minSupportedAppVersion,
+            'minSupportedAppVersion',
+            '0.9.89',
+          ),
+        ),
+      );
+    });
+
+    test('drops a lowest floor identical to the latest requirement', () async {
+      final service = serviceReturning([
+        http.Response(
+          '{"appVersion":"0.9.80","latestVersion":"2.1.0",'
+          '"compatibleWith":"1.0.0","minSupportedAppVersion":"1.0.0"}',
+          404,
+        ),
+      ]);
+
+      await expectLater(
+        service.downloadPluginArchive(
+          Uri.parse('https://otzaria.org/api/plugins/abc123/download'),
+          appVersion: '0.9.80',
+        ),
+        throwsA(
+          isA<PluginStoreIncompatibleException>().having(
+            (e) => e.minSupportedAppVersion,
+            'minSupportedAppVersion',
+            isNull,
+          ),
+        ),
+      );
+    });
+
+    test('detects an app version above the plugin ceiling', () async {
+      final service = serviceReturning([
+        http.Response(
+          '{"appVersion":"2.0.0","latestVersion":"1.4.0",'
+          '"compatibleWith":"0.9.0","maxAppVersion":"1.5.0"}',
+          404,
+        ),
+      ]);
+
+      await expectLater(
+        service.downloadPluginArchive(
+          Uri.parse('https://otzaria.org/api/plugins/abc123/download'),
+          appVersion: '2.0.0',
+        ),
+        throwsA(
+          isA<PluginStoreIncompatibleException>().having(
+            (e) => e.isAboveCeiling,
+            'isAboveCeiling',
+            isTrue,
+          ),
+        ),
+      );
+    });
+
+    test('retries without appVersion when the refusal is unrelated', () async {
+      final service = serviceReturning([
+        http.Response(
+          '{"error":"Cannot combine pending=1 with appVersion"}',
+          400,
+        ),
         http.Response('latest-bytes', 200),
       ]);
 

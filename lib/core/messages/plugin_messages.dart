@@ -11,6 +11,20 @@ abstract class PluginMessages {
     String installedVersion,
   ) => 'כבר מותקנת אצלך גרסה חדשה יותר של "$pluginName" ($installedVersion)';
 
+  static String pluginRequiresNewerApp(String minAppVersion) =>
+      'התוסף דורש אוצריא בגרסה $minAppVersion לפחות — עדכן את אוצריא כדי להתקינו';
+
+  /// כשגרסה ישנה של התוסף עוד תומכת באוצריא ישנה יותר מזו שהאחרונה דורשת.
+  static String pluginRequiresNewerAppWithFallback(
+    String minAppVersion,
+    String minSupportedAppVersion,
+  ) =>
+      'הגרסה האחרונה של התוסף דורשת אוצריא $minAppVersion, ולגרסה כלשהי שלו '
+      'נדרשת $minSupportedAppVersion לפחות — עדכן את אוצריא כדי להתקינו';
+
+  static String pluginRequiresOlderApp(String maxAppVersion) =>
+      'התוסף מיועד לאוצריא עד גרסה $maxAppVersion בלבד';
+
   static String installPluginError(Object error) =>
       'שגיאה בהתקנת התוסף: $error';
 
