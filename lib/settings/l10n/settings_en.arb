@@ -113,7 +113,7 @@
   "הגדר מיקום": "Set Location",
   "אפשרויות מיקום": "Folder Settings",
   "קבצי הספרייה הקיימת יועברו לתיקיית היעד": "The current library files will be moved to the target folder",
-  "מחיקה וייבוא ספרייה": "Delete and Import Library",
+  "החלפת הספרייה בספרייה אחרת": "Replace Library with a Different One",
   "הספרייה הקיימת תוחלף (עם גיבוי אוטומטי עד להצלחה)": "The current library will be replaced (with an automatic backup until the operation succeeds)",
   "קיצורים לפתיחה מהירה של כלי מתוך מסך הכלים": "Shortcuts to quickly open a tool from the Tools screen",
 

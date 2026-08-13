@@ -58,12 +58,11 @@ class _LibrarySetupViewState extends State<LibrarySetupView> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Container(
+    return CenteredScrollableState(
+      child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
-        padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               FluentIcons.library_24_regular,

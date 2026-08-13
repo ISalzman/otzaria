@@ -39,5 +39,26 @@ void main() {
 
       expect(find.text('לא נמצאה ספריית ספרים'), findsOneWidget);
     });
+
+    // חלון נמוך (טלפון לרוחב, מסך מפוצל): בלי גלילה הכפתור נחתך מחוץ למסך
+    // ואי אפשר בכלל להגדיר ספרייה.
+    testWidgets('בחלון נמוך הכפתור נשאר נגיש דרך גלילה', (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(640, 360);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(wrap(() async {}));
+      await tester.pump();
+
+      final button = find.byWidgetPredicate(
+        (w) => w is ActionButton && w.text == 'בחר מיקום או הורד ספריה',
+      );
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(button);
+      expect(button.hitTestable(), findsOneWidget);
+    });
   });
 }

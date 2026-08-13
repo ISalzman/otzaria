@@ -32,11 +32,16 @@ class PanelScrollableContent extends StatefulWidget {
   /// נדרש כשהקצה הטבעי של הגלילה מתנגש עם ידית שינוי-גודל של הפאנל.
   final bool scrollbarOnOppositeSide;
 
+  /// משאיר את פס הגלילה גלוי כל עוד יש תוכן לגלול, בלי להמתין לגרירה.
+  /// נדרש היכן שהתוכן החתוך אינו נראה לעין (דיאלוג בחלון נמוך).
+  final bool thumbVisibility;
+
   const PanelScrollableContent({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.symmetric(horizontal: 16),
     this.scrollbarOnOppositeSide = false,
+    this.thumbVisibility = false,
   });
 
   @override
@@ -70,7 +75,11 @@ class _PanelScrollableContentState extends State<PanelScrollableContent> {
       data: const ScrollbarThemeData(crossAxisMargin: 2),
       child: widget.scrollbarOnOppositeSide
           ? _buildOppositeSideScrollbar(context, scrollView)
-          : Scrollbar(controller: _scrollController, child: scrollView),
+          : Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: widget.thumbVisibility,
+              child: scrollView,
+            ),
     );
   }
 
@@ -84,6 +93,7 @@ class _PanelScrollableContentState extends State<PanelScrollableContent> {
       textDirection: scrollbarDirection,
       child: Scrollbar(
         controller: _scrollController,
+        thumbVisibility: widget.thumbVisibility,
         child: Directionality(
           textDirection: contentDirection,
           child: scrollView,

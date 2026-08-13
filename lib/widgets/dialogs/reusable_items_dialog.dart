@@ -122,7 +122,12 @@ class _AppCustomContentDialogState extends State<AppCustomContentDialog>
               const SizedBox(height: 16),
               Expanded(
                 child: widget.scrollable
-                    ? PanelScrollableContent(child: widget.child)
+                    // גובה הדיאלוג קבוע (80% מהמסך), כך שבחלון נמוך התוכן
+                    // נחתך בלי סימן — פס גלילה קבוע הוא הרמז היחיד שיש המשך.
+                    ? PanelScrollableContent(
+                        thumbVisibility: true,
+                        child: widget.child,
+                      )
                     : Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: widget.child,

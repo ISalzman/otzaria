@@ -691,7 +691,7 @@ class _LibrarySetupDialogContentState
                   // הורדה/בחירת קובץ מחליפות את הספרייה הקיימת — מקובצות תחת
                   // מקטע נפרש כדי להבליט שהן פעולות מחיקה-והחלפה.
                   ExpandableSection(
-                    title: context.settingsText('מחיקה וייבוא ספרייה'),
+                    title: context.settingsText('החלפת הספרייה בספרייה אחרת'),
                     subtitle: context.settingsText(
                       'הספרייה הקיימת תוחלף (עם גיבוי אוטומטי עד להצלחה)',
                     ),
