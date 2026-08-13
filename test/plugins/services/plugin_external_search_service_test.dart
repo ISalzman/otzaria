@@ -89,6 +89,28 @@ void main() {
       service.removePlugin('owner');
     });
 
+    test('עמוד המשך ועמוד לפי מזהים אינם מזמינים שמות — אין בהם אינדקס', () async {
+      service.register('hebrewbooks', 'owner');
+      final next = service.search(
+        provider: 'hebrewbooks',
+        query: 'שלום',
+        offset: 20,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(request.containsKey('indexTitles'), isFalse);
+      expect(next, throwsStateError);
+
+      final byIds = service.search(
+        provider: 'hebrewbooks',
+        query: 'שלום',
+        ids: const [1, 2],
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(request.containsKey('indexTitles'), isFalse);
+      expect(byIds, throwsStateError);
+      service.removePlugin('owner');
+    });
+
     test('רק בעל הספק יכול לענות לבקשה', () async {
       service.register('hebrewbooks', 'owner');
       final search = service.search(

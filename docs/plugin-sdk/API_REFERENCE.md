@@ -905,9 +905,9 @@ window.addEventListener('reader.inBookSearch.requested', async (event) => {
 כשהמשתמש מסמן את השורה ומחפש, נפתח טאב חיפוש רגיל ובראשו מדור תוצאות
 מהתוסף (בכותרת `resultsTitle`), לצד תוצאות המנוע המובנה. אוצריא שולחת
 לתוסף אירוע ממוקד `search.external.requested` עם
-`{ requestId, provider, query, mode, distance, offset, limit, indexTitles }`,
-והתוסף
-עונה עם `reader.respondExternalSearch`.
+`{ requestId, provider, query, mode, distance, offset, limit }` — ובבקשת
+העמוד הראשון גם `indexTitles` — והתוסף עונה עם
+`reader.respondExternalSearch`.
 שם ספק שייך לתוסף הראשון שרשם אותו; ניסיון של תוסף אחר לרשום אותו נדחה
 עם `error.conflict`.
 
@@ -966,6 +966,7 @@ window.addEventListener('search.external.requested', async (event) => {
 
 שלחו רשומות בנות ארבעה איברים **רק** כשהבקשה נשאה `indexTitles: true`:
 מארח ותיק אינו מכיר את השם וזורק רשומה כזו בסניטציה, ואיתה כל הסיווג.
+הדגל מגיע רק בבקשה שיכולה לשאת אינדקס (העמוד הראשון, בלי `ids`).
 
 **דפדוף לפי מזהים:** כשמסוננת קטגוריה בעץ, אוצריא שולחת בקשות
 `search.external.requested` עם שדה `ids` (עד 50 מזהים) במקום
