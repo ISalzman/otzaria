@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:otzaria/core/http_client_registry.dart';
+import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:path/path.dart' as p;
 
 class PluginDownloadService {
@@ -12,9 +13,25 @@ class PluginDownloadService {
     HttpClientRegistry.register(_client.close);
   }
 
-  Future<String> downloadPluginArchive(Uri downloadUri) async {
-    final request = http.Request('GET', downloadUri);
-    final response = await _client.send(request);
+  /// מורידה את ארכיון התוסף. [appVersion] — גרסת האוצריא הנוכחית; כשהכתובת
+  /// היא של החנות היא נשלחת אליה כדי לקבל גרסת תוסף תואמת (ראו
+  /// [PluginStoreLinkParser.appendAppVersion]).
+  Future<String> downloadPluginArchive(
+    Uri downloadUri, {
+    String? appVersion,
+  }) async {
+    final resolvedUri = PluginStoreLinkParser.appendAppVersion(
+      downloadUri,
+      appVersion,
+    );
+    var response = await _client.send(http.Request('GET', resolvedUri));
+
+    // לחנות אין גרסה תואמת לגרסת האוצריא הזו — מורידים את הגרסה האחרונה
+    // כדי שבדיקת המניפסט תציג למשתמש את דרישת התאימות המדויקת.
+    if (response.statusCode >= 400 && resolvedUri != downloadUri) {
+      await response.stream.drain<void>();
+      response = await _client.send(http.Request('GET', downloadUri));
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

@@ -25,6 +25,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/plugin_messages.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
   final PluginRegistryRepository repository;
@@ -311,8 +312,14 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     }
 
     try {
+      String? appVersion;
+      try {
+        appVersion = (await PackageInfo.fromPlatform()).version;
+      } catch (_) {}
+
       archivePath = await _downloadService.downloadPluginArchive(
         Uri.parse(event.downloadUrl),
+        appVersion: appVersion,
       );
 
       final prepareInfo = await _installerService.prepareInstall(
