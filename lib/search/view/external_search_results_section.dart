@@ -15,6 +15,7 @@ import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/view/search_result_source_tag.dart';
@@ -124,7 +125,6 @@ class _ExternalSearchResultsSectionState
   bool _hasMore = false;
   bool _loading = false;
   String? _error;
-  bool _expanded = true;
   Object? _openingId;
 
   /// חתימת הבקשה האחרונה — מזהה מתי צריך חיפוש חדש ומסנן תשובות ישנות.
@@ -188,8 +188,26 @@ class _ExternalSearchResultsSectionState
           .toList()
         ..sort();
 
+  /// מפרסם את מצב המדור לשורת המונים שבראש הטאב — המקום היחיד שבו ספירות
+  /// המקור החיצוני וההתקדמות שלו מוצגות.
+  void _publishStatus() {
+    if (_fetchSignature.isEmpty || _sourceTag.isEmpty) {
+      widget.tab.externalSearchStatus.value = null;
+      return;
+    }
+    widget.tab.externalSearchStatus.value = ExternalSearchStatus(
+      sourceTitle: _sourceTag,
+      loading: _loading,
+      books: _totalBooks,
+      hits: _totalHits,
+      ofTotalBooks: _filterActive ? _summary?.totalBooks : null,
+      failed: _error != null,
+    );
+  }
+
   void _syncWithState(SearchState state) {
     final active = _activeProvider(state);
+    if (active != null) _sourceTag = active.$2;
     final query = state.searchQuery.trim();
     final signature = active == null || query.isEmpty
         ? ''
@@ -226,6 +244,7 @@ class _ExternalSearchResultsSectionState
       _error = null;
       _loading = signature.isNotEmpty;
     });
+    _publishStatus();
     if (signature.isNotEmpty) {
       unawaited(_fetch(state, active!.$1, reset: true));
     }
@@ -252,6 +271,7 @@ class _ExternalSearchResultsSectionState
       }
       _loading = visible == null || visible.isNotEmpty;
     });
+    _publishStatus();
     if (visible == null || visible.isNotEmpty) {
       unawaited(_fetch(state, active.$1, reset: true));
     }
@@ -317,6 +337,7 @@ class _ExternalSearchResultsSectionState
         }
         _loading = !done;
       });
+      _publishStatus();
     }
 
     try {
@@ -339,6 +360,7 @@ class _ExternalSearchResultsSectionState
             ? 'החיפוש החיצוני לא ענה בזמן'
             : error.toString().replaceFirst('Bad state: ', '');
       });
+      _publishStatus();
     }
   }
 
@@ -411,6 +433,7 @@ class _ExternalSearchResultsSectionState
     final active = _activeProvider(state);
     if (active == null || _loading) return;
     setState(() => _loading = true);
+    _publishStatus();
     unawaited(_fetch(state, active.$1, reset: false));
   }
 
@@ -473,71 +496,33 @@ class _ExternalSearchResultsSectionState
           return const SizedBox.shrink();
         }
         _sourceTag = active.$2;
-        return _buildSection(context, state, active.$2);
+        return _buildSection(context, state);
       },
     );
   }
 
-  Widget _buildSection(BuildContext context, SearchState state, String title) {
+  /// המדור מציג תוצאות בלבד: המקור, ההתקדמות והספירות שלו מוצגים בשורת
+  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]), ומשם גם מכווצים אותו.
+  Widget _buildSection(BuildContext context, SearchState state) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildHeader(context, title),
-          if (_expanded) _buildBody(context, state),
-        ],
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.tab.externalSectionExpanded,
+      builder: (context, expanded, _) {
+        final body = expanded ? _buildBody(context, state) : null;
+        if (body == null) return const SizedBox.shrink();
+        return Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: body,
+        );
+      },
     );
   }
 
-  Widget _buildHeader(BuildContext context, String title) {
-    final cs = Theme.of(context).colorScheme;
-    final filteredNote = _filterActive && _summary != null
-        ? ' (מתוך ${_summary!.totalBooks})'
-        : '';
-    final summary = _totalBooks > 0
-        ? '$title — $_totalBooks ספרים$filteredNote, $_totalHits מופעים'
-        : title;
-    return InkWell(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        color: cs.secondaryContainer,
-        child: Row(
-          children: [
-            Icon(FluentIcons.globe_search_24_regular, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                summary,
-                style: Theme.of(context).textTheme.titleSmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (_loading)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            const SizedBox(width: 8),
-            Icon(
-              _expanded
-                  ? FluentIcons.chevron_up_24_regular
-                  : FluentIcons.chevron_down_24_regular,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context, SearchState state) {
+  /// null כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או מדור ריק
+  /// לפני שהתקבלה תשובה כלשהי; אחרת אזור התוצאות היה מותיר מסגרת ריקה.
+  Widget? _buildBody(BuildContext context, SearchState state) {
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.all(8),
@@ -562,9 +547,10 @@ class _ExternalSearchResultsSectionState
       );
     }
     if (_results.isEmpty) {
+      if (_loading) return null;
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(_loading ? 'מחפש…' : 'לא נמצאו תוצאות'),
+        child: Text('לא נמצאו תוצאות ב$_sourceTag'),
       );
     }
     return ConstrainedBox(
