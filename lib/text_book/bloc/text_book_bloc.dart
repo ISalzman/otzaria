@@ -169,6 +169,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateLinkTypeFilter>(_onUpdateLinkTypeFilter);
     on<ToggleNikud>(_onToggleNikud);
     on<TogglePunctuation>(_onTogglePunctuation);
+    on<ResetCommentaryDisplayOverrides>(_onResetCommentaryDisplayOverrides);
     on<ToggleContinuousReadingMode>(_onToggleContinuousReadingMode);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
     on<UpdateSelectedIndex>(_onUpdateSelectedIndex);
@@ -619,6 +620,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     List<CommentatorGroup> existingCommentatorGroups = const [];
     bool? preservedRemoveNikud;
     bool? preservedRemovePunctuation;
+    bool? preservedCommentaryRemoveNikudOverride;
+    bool? preservedCommentaryRemovePunctuationOverride;
     bool? preservedPinLeftPane;
 
     if (state is TextBookLoaded && event.preserveState) {
@@ -641,6 +644,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       existingCommentatorGroups = currentState.commentatorGroups;
       preservedRemoveNikud = currentState.removeNikud;
       preservedRemovePunctuation = currentState.removePunctuation;
+      preservedCommentaryRemoveNikudOverride =
+          currentState.commentaryRemoveNikudOverride;
+      preservedCommentaryRemovePunctuationOverride =
+          currentState.commentaryRemovePunctuationOverride;
       preservedPinLeftPane = currentState.pinLeftPane;
       pinpointHighlightIndex = currentState.pinpointHighlightIndex;
       pinpointHighlightText = currentState.pinpointHighlightText;
@@ -815,10 +822,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         removeNikudFromTanach: removeNikudFromTanach,
         isTanach: isTanach,
       );
+      final nikudExemptByTanach = isNikudExemptByTanach(
+        defaultRemoveNikud: defaultRemoveNikud,
+        removeNikudFromTanach: removeNikudFromTanach,
+        isTanach: isTanach,
+      );
       // הסרת פיסוק אינה חלה על תנ"ך (הכפתור מוסתר שם).
-      final defaultRemovePunctuation =
-          !isTanach &&
-          (Settings.getValue<bool>('key-default-remove-punctuation') ?? false);
+      final globalRemovePunctuation =
+          Settings.getValue<bool>('key-default-remove-punctuation') ?? false;
+      final defaultRemovePunctuation = !isTanach && globalRemovePunctuation;
+      final punctuationExemptByTanach = isPunctuationExemptByTanach(
+        defaultRemovePunctuation: globalRemovePunctuation,
+        isTanach: isTanach,
+      );
 
       // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
       // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
@@ -956,6 +972,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
             ? preservedRemovePunctuation
             : defaultRemovePunctuation,
         isTanach: isTanach,
+        nikudExemptByTanach: nikudExemptByTanach,
+        punctuationExemptByTanach: punctuationExemptByTanach,
+        commentaryRemoveNikudOverride: preservedCommentaryRemoveNikudOverride,
+        commentaryRemovePunctuationOverride:
+            preservedCommentaryRemovePunctuationOverride,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
         readingSegments: readingSegments,
@@ -1300,10 +1321,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
       emit(
-        currentState.copyWith(
-          removeNikud: event.remove,
-          selectedIndex: currentState.selectedIndex,
-        ),
+        event.applyToCommentaries
+            ? currentState.copyWith(
+                commentaryRemoveNikudOverride: event.remove,
+                selectedIndex: currentState.selectedIndex,
+              )
+            : currentState.copyWith(
+                removeNikud: event.remove,
+                selectedIndex: currentState.selectedIndex,
+              ),
       );
     }
   }
@@ -1315,12 +1341,36 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
       emit(
-        currentState.copyWith(
-          removePunctuation: event.remove,
-          selectedIndex: currentState.selectedIndex,
-        ),
+        event.applyToCommentaries
+            ? currentState.copyWith(
+                commentaryRemovePunctuationOverride: event.remove,
+                selectedIndex: currentState.selectedIndex,
+              )
+            : currentState.copyWith(
+                removePunctuation: event.remove,
+                selectedIndex: currentState.selectedIndex,
+              ),
       );
     }
+  }
+
+  void _onResetCommentaryDisplayOverrides(
+    ResetCommentaryDisplayOverrides event,
+    Emitter<TextBookState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! TextBookLoaded ||
+        (currentState.commentaryRemoveNikudOverride == null &&
+            currentState.commentaryRemovePunctuationOverride == null)) {
+      return;
+    }
+    emit(
+      currentState.copyWith(
+        clearCommentaryRemoveNikudOverride: true,
+        clearCommentaryRemovePunctuationOverride: true,
+        selectedIndex: currentState.selectedIndex,
+      ),
+    );
   }
 
   void _onToggleContinuousReadingMode(

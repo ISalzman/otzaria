@@ -52,8 +52,9 @@ class SelectedLineLinksView extends StatelessWidget {
             !identical(previous.links, current.links) ||
             previous.selectedLinkTypes != current.selectedLinkTypes ||
             previous.fontSize != current.fontSize ||
-            previous.removeNikud != current.removeNikud ||
-            previous.removePunctuation != current.removePunctuation;
+            previous.commentaryRemoveNikud != current.commentaryRemoveNikud ||
+            previous.commentaryRemovePunctuation !=
+                current.commentaryRemovePunctuation;
       },
       builder: (context, state) {
         return LinksListView(
@@ -65,8 +66,8 @@ class SelectedLineLinksView extends StatelessWidget {
               context.read<TextBookBloc>().add(UpdateLinkTypeFilter(types)),
           openBookCallback: openBookCallback,
           fontSize: fontSize,
-          removeNikud: state.removeNikud,
-          removePunctuation: state.removePunctuation,
+          removeNikud: state.commentaryRemoveNikud,
+          removePunctuation: state.commentaryRemovePunctuation,
           selectionSyncController: selectionSyncController,
         );
       },

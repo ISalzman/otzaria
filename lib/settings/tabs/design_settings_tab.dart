@@ -502,6 +502,8 @@ class DesignSettingsTab extends StatelessWidget {
                                 defaultFontSize: settingsBloc.state.fontSize,
                                 defaultRemoveNikud:
                                     settingsBloc.state.defaultRemoveNikud,
+                                removeNikudFromTanach:
+                                    settingsBloc.state.removeNikudFromTanach,
                                 defaultRemovePunctuation:
                                     settingsBloc.state.defaultRemovePunctuation,
                                 defaultShowSplitView: value,

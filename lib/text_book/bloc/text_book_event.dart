@@ -155,19 +155,33 @@ class UpdateLinkTypeFilter extends TextBookEvent {
 class ToggleNikud extends TextBookEvent {
   final bool remove;
 
-  const ToggleNikud(this.remove);
+  /// מחיל את ההחלפה זמנית על המפרשים בלבד, בלי לשנות את הטקסט הראשי.
+  final bool applyToCommentaries;
+
+  const ToggleNikud(this.remove, {this.applyToCommentaries = false});
 
   @override
-  List<Object?> get props => [remove];
+  List<Object?> get props => [remove, applyToCommentaries];
 }
 
 class TogglePunctuation extends TextBookEvent {
   final bool remove;
 
-  const TogglePunctuation(this.remove);
+  /// כמו ב-[ToggleNikud]: מחיל את ההחלפה זמנית על המפרשים בלבד.
+  final bool applyToCommentaries;
+
+  const TogglePunctuation(this.remove, {this.applyToCommentaries = false});
 
   @override
-  List<Object?> get props => [remove];
+  List<Object?> get props => [remove, applyToCommentaries];
+}
+
+/// מאפס את העקיפות הזמניות של כרטיסיית המפרשים בסגירתה.
+class ResetCommentaryDisplayOverrides extends TextBookEvent {
+  const ResetCommentaryDisplayOverrides();
+
+  @override
+  List<Object?> get props => [];
 }
 
 class UpdateVisibleIndecies extends TextBookEvent {

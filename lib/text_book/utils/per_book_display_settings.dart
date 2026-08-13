@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -24,9 +25,17 @@ Future<void> savePerBookDisplaySettings(
   }
 
   final defaultFontSize = settingsBloc.state.fontSize;
-  final defaultRemoveNikud = settingsBloc.state.defaultRemoveNikud;
-  final defaultRemovePunctuation =
-      settingsBloc.state.defaultRemovePunctuation && !state.isTanach;
+  // ברירות המחדל האפקטיביות של הספר, כולל החרגות התנ"ך — אחרת בחירה שסוטה
+  // מההחרגה נחשבת "כמו ברירת המחדל" ולא נשמרת.
+  final defaultRemoveNikud = shouldRemoveNikudForBook(
+    defaultRemoveNikud: settingsBloc.state.defaultRemoveNikud,
+    removeNikudFromTanach: settingsBloc.state.removeNikudFromTanach,
+    isTanach: state.isTanach,
+  );
+  final defaultRemovePunctuation = shouldRemovePunctuationForBook(
+    defaultRemovePunctuation: settingsBloc.state.defaultRemovePunctuation,
+    isTanach: state.isTanach,
+  );
   final defaultShowSplitView =
       Settings.getValue<bool>('key-splited-view') ?? true;
   final defaultContinuousReading =
@@ -60,9 +69,11 @@ Future<void> savePerBookDisplaySettings(
           ? null
           : removePunctuation;
     }
-    // דגל התנ"ך נשמר רק כלוויין של override פיסוק — הניקוי התקופתי משתמש בו
-    // לחישוב ברירת המחדל האפקטיבית של הספר (בתנ"ך היא תמיד false).
-    final bool? newIsTanach = (newRemovePunctuation != null && state.isTanach)
+    // דגל התנ"ך נשמר כלוויין של override ניקוד/פיסוק — הניקוי התקופתי משתמש
+    // בו לחישוב ברירת המחדל האפקטיבית של הספר, שבתנ"ך מוחרגת.
+    final bool? newIsTanach =
+        ((newRemovePunctuation != null || newRemoveNikud != null) &&
+            state.isTanach)
         ? true
         : null;
 

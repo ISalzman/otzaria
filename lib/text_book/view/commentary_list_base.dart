@@ -613,7 +613,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
-        removeNikud: blocState.removeNikud,
+        removeNikud: blocState.commentaryRemoveNikud,
         removeTaamim: removeTaamim,
       ),
     );
@@ -1154,9 +1154,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
     final blocState = context.read<TextBookBloc>().state;
     final removePunctuation =
-        blocState is TextBookLoaded && blocState.removePunctuation;
-    // מצב הניקוד של הטאב חל על כל המפרשים, ללא רזולוציה פר-יעד.
-    final removeNikud = blocState is TextBookLoaded && blocState.removeNikud;
+        blocState is TextBookLoaded && blocState.commentaryRemovePunctuation;
+    final removeNikud =
+        blocState is TextBookLoaded && blocState.commentaryRemoveNikud;
     final wantSnippets = widget.externalSearchSnippetsNotifier != null;
 
     for (final link in links) {
@@ -1316,8 +1316,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       isExpanded: isExpanded,
       fontSize: widget.fontSize,
       openBookCallback: widget.openBookCallback,
-      removeNikud: state.removeNikud,
-      removePunctuation: state.removePunctuation,
+      removeNikud: state.commentaryRemoveNikud,
+      removePunctuation: state.commentaryRemovePunctuation,
       showSearch: widget.showSearch,
       searchQueryListenable: _searchQueryNotifier,
       currentSearchIndexListenable: _currentSearchIndexNotifier,
@@ -1453,7 +1453,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             !setEquals(previous.selectedIndices, current.selectedIndices) ||
             previous.fontSize != current.fontSize ||
             previous.removeNikud != current.removeNikud ||
-            previous.removePunctuation != current.removePunctuation;
+            previous.commentaryRemoveNikud != current.commentaryRemoveNikud ||
+            previous.removePunctuation != current.removePunctuation ||
+            previous.commentaryRemovePunctuation !=
+                current.commentaryRemovePunctuation;
       },
       loadingWidget: const Center(),
       builder: (context, state) {

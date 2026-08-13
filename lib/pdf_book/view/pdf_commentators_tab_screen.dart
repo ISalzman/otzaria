@@ -33,8 +33,6 @@ import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
@@ -107,46 +105,20 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// משקף את מצב "הכל מורחב" מתוך PdfCommentaryPanel (לכפתור כיווץ/הרחבה בסרגל).
   final _allExpandedInChild = ValueNotifier<bool>(true);
 
-  /// הסרת ניקוד/פיסוק מהמפרשים (כמו בכרטיסיית הטקסט). חייב להיות מאותחל
-  /// מהגדרת התצוגה של המשתמש, אחרת מוצג ניקוד למי שכיבה אותו.
+  /// מאותחל מהגדרת התצוגה, אחרת מוצג ניקוד למי שכיבה אותו. החרגות התנ"ך
+  /// אינן חלות כאן: תוכן הכרטיסייה הוא מפרשים, ואינו תנ"ך.
   late bool _removeNikud;
   late bool _removePunctuation;
 
-  /// החרגות התנ"ך על הניקוד/פיסוק נפתרות אסינכרונית, ולכן הן מוחלות על הערך
-  /// ההתחלתי ברגע שהסיווג מגיע — כל עוד המשתמש לא שינה אותו בסרגל.
-  bool _displayFlagsTouchedByUser = false;
-
   void _toggleRemoveNikud() {
     setState(() {
-      _displayFlagsTouchedByUser = true;
       _removeNikud = !_removeNikud;
     });
   }
 
   void _toggleRemovePunctuation() {
     setState(() {
-      _displayFlagsTouchedByUser = true;
       _removePunctuation = !_removePunctuation;
-    });
-  }
-
-  Future<void> _resolveIsTanachBook(SettingsState settings) async {
-    final isTanach = await FileSystemData.instance.isTanachBook(
-      widget.tab.sourceTab.book.title,
-      categoryId: widget.tab.sourceTab.book.categoryId,
-      fileType: widget.tab.sourceTab.book.fileType,
-    );
-    if (!mounted || !isTanach || _displayFlagsTouchedByUser) return;
-    setState(() {
-      _removeNikud = shouldRemoveNikudForBook(
-        defaultRemoveNikud: settings.defaultRemoveNikud,
-        removeNikudFromTanach: settings.removeNikudFromTanach,
-        isTanach: true,
-      );
-      _removePunctuation = shouldRemovePunctuationForBook(
-        defaultRemovePunctuation: settings.defaultRemovePunctuation,
-        isTanach: true,
-      );
     });
   }
 
@@ -159,7 +131,6 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     final settings = context.read<SettingsBloc>().state;
     _removeNikud = settings.defaultRemoveNikud;
     _removePunctuation = settings.defaultRemovePunctuation;
-    _resolveIsTanachBook(settings);
     _navTabController = TabController(length: 3, vsync: this);
     _navTabController.addListener(_handleTabChanged);
     _initHeadings();

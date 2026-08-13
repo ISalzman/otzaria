@@ -602,7 +602,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _pdfViewFocusNode.canRequestFocus = _isActivePane(
       context.read<TabsBloc>().state,
     );
-    _resolveIsTanachBook();
     _pageTurnController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -3587,20 +3586,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _isJumping = false; // flag לציון שאנחנו בתהליך קפיצה
   bool _linksLoading = true; // true עד שטעינת הקישורים מסתיימת
 
-  /// האם הספר שייך לתנ"ך — קובע את החרגות הניקוד/פיסוק על תוכן המפרשים,
-  /// בדיוק כמו בכרטיסיית הטקסט.
-  bool _isTanachBook = false;
-
-  Future<void> _resolveIsTanachBook() async {
-    final isTanach = await FileSystemData.instance.isTanachBook(
-      widget.tab.book.title,
-      categoryId: widget.tab.book.categoryId,
-      fileType: widget.tab.book.fileType,
-    );
-    if (!mounted || isTanach == _isTanachBook) return;
-    setState(() => _isTanachBook = isTanach);
-  }
-
   // מסלול חלון-הקישורים (ספרי מסד): tab.links מחזיק רק חלון שורות סביב
   // המיקום הנוכחי ומתרענן בדפדוף — ראה PdfLinksWindowPolicy.
   TextBook? _linksTextBook; // לא-null רק כשמסלול החלון פעיל
@@ -4385,14 +4370,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       tab: widget.tab,
       linksCount: widget.tab.links.length,
       linksLoading: _linksLoading,
+      // המפרשים אינם תנ"ך, ולכן החרגת הניקוד של התנ"ך אינה חלה עליהם.
       removeNikud: shouldRemoveNikudForBook(
         defaultRemoveNikud: settingsState.defaultRemoveNikud,
         removeNikudFromTanach: settingsState.removeNikudFromTanach,
-        isTanach: _isTanachBook,
+        isTanach: false,
       ),
       removePunctuation: shouldRemovePunctuationForBook(
         defaultRemovePunctuation: settingsState.defaultRemovePunctuation,
-        isTanach: _isTanachBook,
+        isTanach: false,
       ),
       openBookCallback: (tab) =>
           openPreparedTab(context, tab, insertAdjacent: true),
