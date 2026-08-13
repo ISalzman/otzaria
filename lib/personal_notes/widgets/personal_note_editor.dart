@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_link_dialog.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 // RTL-aware arrow key shortcuts for QuillEditor.
 //
@@ -306,14 +307,12 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                   child: CallbackShortcuts(
                     bindings: {
                       if (widget.onSaveShortcut != null) ...{
-                        // Ctrl+Enter — קיצור השמירה המומלץ (ללא צליל מערכת).
-                        const SingleActivator(
-                          LogicalKeyboardKey.enter,
-                          control: true,
-                        ): widget.onSaveShortcut!,
+                        // Ctrl+Enter (במק Cmd+Enter) — קיצור השמירה המומלץ.
+                        ShortcutHelper.activatorFromShortcut('ctrl+enter')!:
+                            widget.onSaveShortcut!,
                         // Alt+Enter — נשמר לתאימות לאחור. ב-Windows מפיק
                         // צליל "דינג" של המערכת (מאפיין של צירופי Alt
-                        // ב-Flutter), ולכן Ctrl+Enter עדיף.
+                        // ב-Flutter), ולכן קיצור השמירה הראשי עדיף.
                         const SingleActivator(
                           LogicalKeyboardKey.enter,
                           alt: true,
@@ -330,7 +329,7 @@ class _PersonalNoteEditorBodyState extends State<PersonalNoteEditorBody> {
                         padding: const EdgeInsets.all(12),
                         placeholder:
                             widget.hintText ??
-                            'כתוב כאן... (Ctrl+Enter לשמירה)',
+                            'כתוב כאן... (${ShortcutHelper.formatShortcutForDisplay('ctrl+enter')} לשמירה)',
                         customShortcuts: _rtlArrowShortcuts,
                         // Quill מציגה אוטומטית תפריט סלקציה ב-desktop
                         // בסיום גרירה — בהערות אישיות זה מטריד.
