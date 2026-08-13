@@ -105,14 +105,16 @@ class _LifecycleFakeController extends Fake implements InAppWebViewController {
     return null;
   }
 
-  // פינג בריאות הגשר של הדיספצ'ר — גשר חי מחזיר true; בלי זה המסירה
-  // נחשבת כניסיון לדף קפוא/גשר מת והופכת לטעינה-מחדש.
+  // המסלול האסינכרוני של הדיספצ'ר: פינג בריאות הגשר ומסירת אירועים לטאב
+  // שהוחיה. גשר חי מחזיר true; בלי זה המסירה נחשבת כניסיון לדף קפוא/גשר
+  // מת והופכת לטעינה-מחדש. מסירות אירועים נרשמות ב-jsEvents כמו eval רגיל.
   @override
   Future<CallAsyncJavaScriptResult?> callAsyncJavaScript({
     required String functionBody,
     Map<String, dynamic> arguments = const <String, dynamic>{},
     ContentWorld? contentWorld,
   }) async {
+    if (functionBody.contains('dispatchEvent')) jsEvents.add(functionBody);
     return CallAsyncJavaScriptResult(value: true);
   }
 }

@@ -589,7 +589,12 @@ class PluginRuntimeDispatcher {
       // למסירה חוזרת כשה-boot של הדף יסתיים (onForegroundInstanceReady).
       final pending = _pendingRedeliveries.putIfAbsent(pluginId, () => []);
       if (pending.length >= _maxPendingRedeliveries) pending.removeAt(0);
-      pending.add((topic: topic, jsonPayload: jsonPayload, at: DateTime.now()));
+      final pendingEntry = (
+        topic: topic,
+        jsonPayload: jsonPayload,
+        at: DateTime.now(),
+      );
+      pending.add(pendingEntry);
       try {
         await _resumeForeground(pluginId);
         // פינג לפני המסירה: השעיה נייטיבית עלולה להשאיר את הדף קפוא, מרוקן,
@@ -618,10 +623,39 @@ class PluginRuntimeDispatcher {
           }
           return;
         }
-        await controller.evaluateJavascript(
-          source:
-              "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));",
-        );
+        // המסירה עצמה ב-callAsyncJavaScript ולא ב-evaluateJavascript: על טאב
+        // שה-platform view שלו הושמד בזמן ההסתרה, eval רגיל נבלע בשקט (נצפה
+        // בפועל: הפינג עבר אך מאזין בדף לא קיבל את האירוע) בעוד המסלול
+        // האסינכרוני עובד. הערך המוחזר מאמת שהאירוע אכן שוגר בדף; אחרת —
+        // reload, והמסירה החוזרת אחרי ה-boot תטפל.
+        Object? delivered;
+        try {
+          final dispatchResult = await controller
+              .callAsyncJavaScript(
+                functionBody:
+                    "window.dispatchEvent(new CustomEvent('$topic', "
+                    "{ detail: $jsonPayload })); return true;",
+              )
+              .timeout(const Duration(seconds: 3));
+          delivered = dispatchResult?.value;
+        } catch (_) {
+          delivered = null;
+        }
+        if (delivered == true) {
+          // המסירה אומתה — אין צורך במסירה חוזרת אם הדף ייטען מחדש בקרוב
+          // מסיבה אחרת (מונע טיפול כפול באותו requestId).
+          _pendingRedeliveries[pluginId]?.remove(pendingEntry);
+        } else {
+          debugPrint(
+            'PluginRuntimeDispatcher: $topic delivery to $pluginId not '
+            'confirmed — reloading',
+          );
+          try {
+            await controller.reload();
+          } catch (e) {
+            debugPrint('PluginRuntimeDispatcher: reload failed: $e');
+          }
+        }
       } catch (e) {
         debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
       } finally {
@@ -647,13 +681,20 @@ class PluginRuntimeDispatcher {
   }
 
   /// פינג round-trip דרך ערוץ הגשר JS→Dart (ה-handler `otzaria_bridge_ping`
-  /// שרושם PluginBridgeHandler). מחזיר true רק אם הערוץ חי בשני הכיוונים;
-  /// כשהערוץ מת ה-Promise לא נפתר לעולם — הקורא אחראי ל-timeout.
+  /// שרושם PluginBridgeHandler). מחזיר true רק אם הערוץ חי בשני הכיוונים
+  /// *וההרצה רואה את ה-world של הדף עצמו*: אחרי השמדת ה-platform view בזמן
+  /// שהטאב מוסתר, הרצות מ-Dart עלולות לרוץ ב-context שמנותק מהדף — הקוד רץ
+  /// ומחזיר ערכים, אבל window.dispatchEvent לא מגיע למאזיני התוסף (נצפה
+  /// בפועל דרך CDP). `window.Otzaria` מוצב ב-main world ב-document start
+  /// (ה-SDK stub), ולכן היעדרו מזהה את המצב הזה. כשהערוץ מת ה-Promise לא
+  /// נפתר לעולם — הקורא אחראי ל-timeout.
   Future<Object?> _bridgePing(InAppWebViewController controller) async {
     final result = await controller.callAsyncJavaScript(
       functionBody:
           "if (!window.flutter_inappwebview || "
           "!window.flutter_inappwebview.callHandler) { return 'no-bridge'; } "
+          "if (!window.Otzaria || window.Otzaria._booted !== true) { "
+          "return 'no-page-world'; } "
           "return await window.flutter_inappwebview"
           ".callHandler('otzaria_bridge_ping');",
     );

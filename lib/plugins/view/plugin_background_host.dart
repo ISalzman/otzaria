@@ -97,6 +97,8 @@ const String _sdkStub = r'''
     },
     _boot: function (sdk, payload) {
       _realSdk = sdk;
+      // סמן חיוּת לדיספצ'ר — ראו plugin_tab_page.dart.
+      window.Otzaria._booted = true;
       _queue.forEach(function (item) { sdk.on(item.event, item.cb); });
       _queue = [];
       window.dispatchEvent(new CustomEvent('plugin.boot', { detail: payload }));
