@@ -23,6 +23,11 @@ class SearchResultSourceTag extends StatelessWidget {
       ),
       child: Text(
         label,
+        // שם המדור של ספק חיצוני מגיע מהתוסף (עד 120 תווים) — התגית נחתכת
+        // ולא דוחקת את שאר השורה.
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(
           color: cs.onTertiaryContainer,
         ),

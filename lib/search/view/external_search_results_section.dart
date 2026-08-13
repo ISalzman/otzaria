@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/plugin_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -18,7 +17,7 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
-import 'package:otzaria/search/view/search_result_source_tag.dart';
+import 'package:otzaria/search/view/external_result_title_row.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -625,35 +624,11 @@ class _ExternalSearchResultsSectionState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            result.title,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: cs.primary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (result.hitCount > 0) ...[
-                          const SizedBox(width: 8),
-                          _buildHitCountPill(context, result.hitCount),
-                        ],
-                        const Spacer(),
-                        // תגית מקור בקצה השורה, באותו מקום שבו היא מופיעה
-                        // על תוצאות המנוע המובנה.
-                        if (_sourceTag.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          SearchResultSourceTag(label: _sourceTag),
-                        ],
-                        if (result.snippet != null) ...[
-                          const SizedBox(width: 4),
-                          _buildCopyButton(context, result.snippet!),
-                        ],
-                      ],
+                    ExternalResultTitleRow(
+                      title: result.title,
+                      hitCount: result.hitCount,
+                      sourceTag: _sourceTag,
+                      copyText: result.snippet,
                     ),
                     // result.meta (מחבר · מקום · שנה) אינו מוצג: כרטיס תוצאה
                     // של המנוע המובנה אינו נושא פרטי ספר, והשורה הזו רק
@@ -698,42 +673,4 @@ class _ExternalSearchResultsSectionState
     );
   }
 
-  /// מספר המופעים בספר, לצד שמו: מספר עירום בקצה הכרטיס לא אמר מה הוא סופר.
-  Widget _buildHitCountPill(BuildContext context, int hitCount) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        hitCount == 1 ? 'תוצאה אחת בספר' : '$hitCount תוצאות בספר',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: cs.onSecondaryContainer,
-        ),
-      ),
-    );
-  }
-
-  /// העתקת גזיר הטקסט, כמו בכרטיס תוצאה של המנוע המובנה — הגזיר כבר בידינו,
-  /// ואין סיבה שדווקא כאן יידרש לפתוח את הספר כדי להעתיק ממנו.
-  Widget _buildCopyButton(BuildContext context, String snippet) {
-    return IconButton(
-      icon: Icon(
-        FluentIcons.copy_24_regular,
-        size: 16,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      tooltip: 'העתק טקסט',
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-      onPressed: () {
-        Clipboard.setData(ClipboardData(text: snippet));
-        UiSnack.show(UiSnack.textCopied);
-      },
-    );
-  }
 }

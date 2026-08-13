@@ -642,6 +642,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 ),
                                 // תגית מקור: מבדילה את תוצאות המנוע המובנה
                                 // מתוצאות ספק חיצוני שמוצגות באותו מסך.
+                                const SizedBox(width: 8),
                                 const SearchResultSourceTag(label: 'אוצריא'),
                                 const SizedBox(width: 4),
                                 IconButton(
