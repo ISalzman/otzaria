@@ -287,6 +287,35 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     );
   }
 
+  ExternalSearchSummary? _extraRootsSource;
+  List<SearchTreeExtraCategory> _extraRoots = const [];
+
+  /// שורות הדלי החיצוני, נבנות מחדש רק כשהסיכום עצמו מתחלף. הדלי עשוי לשאת
+  /// אלפי ספרים, וה-builder שמסביב רץ בכל פעימת חיפוש ובכל תו שמוקלד בשדה
+  /// האיתור — שאז העץ כלל אינו מרונדר.
+  List<SearchTreeExtraCategory> _extraRootsFor(ExternalSearchSummary summary) {
+    if (identical(summary, _extraRootsSource)) return _extraRoots;
+    _extraRootsSource = summary;
+    _extraRoots = [
+      SearchTreeExtraCategory(
+        title: summary.otherCategoryTitle,
+        facet: summary.otherCategoryFacet,
+        count: summary.otherBooks,
+        // ספרי הדלי מגיעים מהספק (רק כשצירף שמות לאינדקס); בלעדיהם הדלי
+        // נשאר שורה שאי אפשר לפתוח.
+        books: [
+          for (final book in summary.namedOtherBooks)
+            SearchTreeExtraBook(
+              title: book.title,
+              facet: summary.bookFacetOf(book.id),
+              hits: book.hits,
+            ),
+        ],
+      ),
+    ];
+    return _extraRoots;
+  }
+
   Widget _buildFacetTree() {
     return BlocBuilder<LibraryBloc, LibraryState>(
       builder: (context, libraryState) {
@@ -331,23 +360,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                   );
                   if (summary.otherBooks > 0 || bucketFiltered) {
                     FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
-                    extraRoots = [
-                      SearchTreeExtraCategory(
-                        title: summary.otherCategoryTitle,
-                        facet: summary.otherCategoryFacet,
-                        count: summary.otherBooks,
-                        // ספרי הדלי מגיעים מהספק (רק כשצירף שמות לאינדקס);
-                        // בלעדיהם הדלי נשאר שורה שאי אפשר לפתוח.
-                        books: [
-                          for (final book in summary.namedOtherBooks)
-                            SearchTreeExtraBook(
-                              title: book.title,
-                              facet: summary.bookFacetOf(book.id),
-                              hits: book.hits,
-                            ),
-                        ],
-                      ),
-                    ];
+                    extraRoots = _extraRootsFor(summary);
                   }
                 }
                 return SearchNavigationTree(
