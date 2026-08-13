@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
 
 class PluginDevErrorView extends StatelessWidget {
   final InstalledPlugin plugin;
@@ -21,78 +22,76 @@ class PluginDevErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.warning_24_filled,
-              size: 64,
+    return CenteredScrollableState(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            FluentIcons.warning_24_filled,
+            size: 64,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'שגיאה בטעינת תוסף פיתוח',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: Theme.of(context).colorScheme.error,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'שגיאה בטעינת תוסף פיתוח',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'נתיב: ${plugin.resolvedRootPath}',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.ltr,
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: AppTokens.borderRadiusAll,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'נתיב: ${plugin.resolvedRootPath}',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
+            child: Text(
+              errorMessage,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
               textDirection: TextDirection.ltr,
             ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: AppTokens.borderRadiusAll,
+          ),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ActionButton.recommended(
+                text: 'נסה קריאה מחדש',
+                onPressed: () {
+                  context.read<PluginSystemBloc>().add(
+                    ReloadDevelopmentPluginRequested(plugin.pluginId),
+                  );
+                },
               ),
-              child: Text(
-                errorMessage,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onErrorContainer,
-                ),
-                textDirection: TextDirection.ltr,
+              const SizedBox(width: 16),
+              ActionButton.neutral(
+                text: 'הגדרות תוסף',
+                onPressed: () async {
+                  final result = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => BlocProvider<PluginSystemBloc>.value(
+                      value: context.read<PluginSystemBloc>(),
+                      child: PluginSettingsScreen(plugin: plugin),
+                    ),
+                  );
+                  if (result == true && context.mounted) {
+                    ToolsLauncherController.instance.open();
+                  }
+                },
               ),
-            ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ActionButton.recommended(
-                  text: 'נסה קריאה מחדש',
-                  onPressed: () {
-                    context.read<PluginSystemBloc>().add(
-                      ReloadDevelopmentPluginRequested(plugin.pluginId),
-                    );
-                  },
-                ),
-                const SizedBox(width: 16),
-                ActionButton.neutral(
-                  text: 'הגדרות תוסף',
-                  onPressed: () async {
-                    final result = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => BlocProvider<PluginSystemBloc>.value(
-                        value: context.read<PluginSystemBloc>(),
-                        child: PluginSettingsScreen(plugin: plugin),
-                      ),
-                    );
-                    if (result == true && context.mounted) {
-                      ToolsLauncherController.instance.open();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

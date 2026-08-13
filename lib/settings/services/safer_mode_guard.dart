@@ -5,6 +5,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/dialogs/safer_mode_password_dialog.dart';
+import 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
 
 /// Wrapper שבודק סיסמה לפני כניסה למסך מוגן במצב סייפר
 class SaferModeGuard extends StatefulWidget {
@@ -146,43 +147,40 @@ class _SaferModeGuardState extends State<SaferModeGuard> {
           ),
           automaticallyImplyLeading: true,
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  FluentIcons.lock_closed_24_regular,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.primary,
+        body: CenteredScrollableState(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                FluentIcons.lock_closed_24_regular,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'הנך במצב סייפר',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'נדרשת סיסמה כדי לגשת להגדרות',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'הנך במצב סייפר',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'נדרשת סיסמה כדי לגשת להגדרות',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                FilledButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _dialogShown = false;
-                    });
-                    _showPasswordDialog();
-                  },
-                  icon: const Icon(FluentIcons.key_24_regular),
-                  label: const Text('הזן סיסמה'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _dialogShown = false;
+                  });
+                  _showPasswordDialog();
+                },
+                icon: const Icon(FluentIcons.key_24_regular),
+                label: const Text('הזן סיסמה'),
+              ),
+            ],
           ),
         ),
       );

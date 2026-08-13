@@ -156,14 +156,14 @@ void main() {
       expect(find.text('העברת תוכן התיקייה'), findsOneWidget);
       // שימוש במקום אינו מחיקה-והחלפה — הוא יושב מחוץ למקטע הנפרש.
       expect(find.text('שימוש בספרייה קיימת במקומה'), findsOneWidget);
-      expect(find.text('מחיקה וייבוא ספרייה'), findsOneWidget);
+      expect(find.text('החלפת הספרייה בספרייה אחרת'), findsOneWidget);
       // המקטע מקופל כברירת מחדל — אפשרויות ההחלפה מוסתרות.
       expect(find.text('הורדת הספרייה מחדש'), findsNothing);
       expect(find.text('בחירת תיקייה מהמחשב'), findsNothing);
       expect(find.text('בחירת קובץ דחוס'), findsNothing);
 
       // פריסת המקטע חושפת את אפשרויות ההחלפה.
-      await _select(tester, 'מחיקה וייבוא ספרייה');
+      await _select(tester, 'החלפת הספרייה בספרייה אחרת');
       expect(find.text('הורדת הספרייה מחדש'), findsOneWidget);
       expect(find.text('בחירת תיקייה מהמחשב'), findsOneWidget);
       expect(find.text('בחירת קובץ דחוס'), findsOneWidget);
@@ -189,7 +189,7 @@ void main() {
         expect(_actionOnPressed(tester, 'אישור'), isNull);
 
         // מעבר ל"בחירת תיקייה" ללא בחירת מקור → אישור מושבת.
-        await _select(tester, 'מחיקה וייבוא ספרייה');
+        await _select(tester, 'החלפת הספרייה בספרייה אחרת');
         await _select(tester, 'בחירת תיקייה מהמחשב');
         expect(_actionOnPressed(tester, 'אישור'), isNull);
         // כפתור בחירת המקור מוצג.

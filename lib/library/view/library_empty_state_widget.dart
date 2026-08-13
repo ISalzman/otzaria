@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
 
 /// ווידג'ט המוצג כאשר אין תוצאות בספרייה.
 /// מציג הודעה ראשית ופעולות עזר לניווט וחיפוש.
@@ -51,7 +52,7 @@ class LibraryEmptyStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return CenteredScrollableState(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
