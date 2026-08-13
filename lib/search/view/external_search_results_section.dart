@@ -669,16 +669,9 @@ class _ExternalSearchResultsSectionState
                         ],
                       ],
                     ),
-                    if (result.meta != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          result.meta!,
-                          style: theme.textTheme.bodySmall!.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
+                    // result.meta (מחבר · מקום · שנה) אינו מוצג: כרטיס תוצאה
+                    // של המנוע המובנה אינו נושא פרטי ספר, והשורה הזו רק
+                    // הרחיקה את הגזיר מהכותרת.
                     if (result.snippet != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
