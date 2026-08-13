@@ -16,6 +16,7 @@ import 'package:otzaria/tools/calendar/helpers/daf_yomi_navigation.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
+import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/library/view/grid_items.dart';
@@ -876,7 +877,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           // אין ספרייה — התצוגה המקדימה סגורה כפויה (אין ספרים להציג).
           isOpen: !isLibraryEmpty && _isPreviewPanelVisible(settingsState),
           alignment: AlignmentDirectional.centerStart, // שמאל בעברית (RTL)
-          mainContent: RepaintBoundary(child: mainContent),
+          // פס הגלילה של הספרייה בקצה ימין: ברירת המחדל בעברית היא הקצה
+          // השמאלי, שם נפגש התוכן עם חלונית התצוגה המקדימה.
+          mainContent: RepaintBoundary(
+            child: ScrollConfiguration(
+              behavior: const EdgeScrollbarBehavior.right(),
+              child: mainContent,
+            ),
+          ),
           paneContent: _buildPreviewPane(settingsState),
           paneWidth: previewPaneWidths.paneWidth,
           minMainContentWidth: 200,
