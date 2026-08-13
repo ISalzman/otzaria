@@ -685,6 +685,42 @@ void main() {
       },
     );
 
+    test('font-size ב-px מותר בסלקטור פס הכותרת בלבד', () {
+      // DESIGN_GUIDE מחייב גדלים קשיחים ב-px בפס הכותרת (שלא יתנפח עם גופן
+      // הקריאה של המשתמש) — ולכן שם px מותר, ובכל שאר הכללים אסור.
+      final ok = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'styles.css': '''
+            header.topbar { height: 56px; }
+            header.topbar .brand { font-size: 16px; }
+          ''',
+        },
+      );
+      expect(
+        ok.design.violations.any((v) => v.contains('font-size')),
+        isFalse,
+        reason: ok.design.violations.join(' | '),
+      );
+
+      final flagged = _runOn(
+        tempDir,
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'styles.css': '''
+            .topbar { font-size: 16px; }
+            .card { font-size: 18px; }
+          ''',
+        },
+      );
+      expect(
+        flagged.design.violations.any((v) => v.contains('font-size')),
+        isTrue,
+        reason: 'כלל שאינו פס הכותרת חייב להיפסל',
+      );
+    });
+
     test('flags hex colors that are NOT inside CSS variable declarations', () {
       final report = _runOn(
         tempDir,

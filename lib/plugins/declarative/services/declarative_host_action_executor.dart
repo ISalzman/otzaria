@@ -1,5 +1,6 @@
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 
 abstract interface class DeclarativeBookOpener {
   Future<bool> openUnique(
@@ -7,6 +8,7 @@ abstract interface class DeclarativeBookOpener {
     required int index,
     required String searchQuery,
     bool inSidePane,
+    ExternalBookMatches? externalMatches,
   });
 }
 
@@ -44,11 +46,23 @@ class DeclarativeHostActionExecutor {
     switch (action.type) {
       case 'reader.openBook':
       case 'reader.openBookInSidePane':
+        final matchPages = (action.args['matchPages'] as List?)
+            ?.whereType<int>()
+            .toList();
         return bookOpener.openUnique(
           Map<String, dynamic>.from(action.args['identity'] as Map),
           index: action.args['index'] as int? ?? 0,
           searchQuery: action.args['searchQuery'] as String? ?? '',
           inSidePane: action.type == 'reader.openBookInSidePane',
+          externalMatches: matchPages == null || matchPages.isEmpty
+              ? null
+              : ExternalBookMatches(
+                  pages: matchPages,
+                  matchedTerms: (action.args['matchedTerms'] as List? ?? const [])
+                      .whereType<String>()
+                      .toList(),
+                  query: action.args['searchQuery'] as String? ?? '',
+                ),
         );
       default:
         throw DeclarativeProgramException(

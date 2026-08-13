@@ -84,6 +84,10 @@ const String _sdkStub = r'''
     /* Called by Flutter once the real SDK + boot payload are ready */
     _boot: function (sdk, payload) {
       _realSdk = sdk;
+      // סמן חיוּת לדיספצ'ר: קיים רק ב-context שבו התוסף באמת רץ. context
+      // טרי שנוצר אחרי השמדת ה-platform view מקבל את ה-stub מחדש אך לא את
+      // ה-boot — והיעדר הדגל מזוהה בפינג ומפעיל reload.
+      window.Otzaria._booted = true;
       // Re-register all listeners that were queued before boot
       _queue.forEach(function (item) { sdk.on(item.event, item.cb); });
       _queue = [];

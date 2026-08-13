@@ -36,6 +36,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -256,8 +257,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   int?
   _selectedColumnForNote; // עמודת הבחירה — לזיהוי המופע הנכון כשהטקסט חוזר בשורה
   Book? _pdfBook; // Companion PDF
-  bool _hasPdfBook = false;
   bool _hasResolvedCompanionPdf = false;
+  // מהדורות מקבילות ללחצן המובנה: המובנית ראשונה, אחריה היברובוקס מקומיות.
+  List<ParallelEdition> _parallelEditions = const [];
   bool _leftPaneAutoCloseQueuedByScroll = false;
   // מצב חלונית הצד שזוהה לאחרונה, לעיגון-מחדש של הטקסט בעת פתיחה/סגירה.
   bool _lastShowLeftPaneForReanchor = false;
@@ -905,22 +907,29 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
   }
 
-  /// מאתר את ספר ה-PDF המלווה (לכפתור "פתח גרסת PDF") פעם אחת, אחרי שתוכן
-  /// הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה (~300ms CPU),
-  /// ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר בעלייה. עד שיתבצע,
-  /// כפתור ה-PDF פשוט מוסתר (`_hasPdfBook == false`).
+  /// מאתר את המהדורות המקבילות (לחצן "פתח מהדורה מקבילה") פעם אחת, אחרי
+  /// שתוכן הספר כבר נטען. `getCompanionBook` דורש את כל קטלוג הספרייה
+  /// (~300ms CPU), ולכן הוא נדחה לכאן כדי לא לחנוק את שאילתת תוכן הספר
+  /// בעלייה. עד שיתבצע, הלחצן פשוט מוסתר.
   Future<void> _resolveCompanionPdf() async {
     if (_hasResolvedCompanionPdf) return;
     _hasResolvedCompanionPdf = true;
     try {
-      final library = await DataRepository.instance.library;
+      final editions = await ParallelEditionsService.find(widget.tab.book);
       if (!mounted) return;
       setState(() {
-        _pdfBook = library.getCompanionBook(widget.tab.book, PdfBook);
-        _hasPdfBook = _pdfBook != null;
+        _parallelEditions = editions;
+        Book? companion;
+        for (final edition in editions) {
+          if (edition.isCompanion) {
+            companion = edition.book;
+            break;
+          }
+        }
+        _pdfBook = companion is PdfBook ? companion : null;
       });
     } catch (e, stackTrace) {
-      debugPrint('שגיאה בפתרון PDF מלווה: $e\n$stackTrace');
+      debugPrint('שגיאה בפתרון מהדורות מקבילות: $e\n$stackTrace');
     }
   }
 
@@ -1560,7 +1569,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               ..._buildDisplayOrderActions(context, state),
               ..._buildPluginActions(context),
             ],
-            alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+            // מיזוג לפי משקל: פריטי תוסף עם order משתבצים בין המובנים.
+            alwaysInMenu: mergeOrderedMenuActions(
+              _buildAlwaysInMenuActions(context, state),
+              _buildOrderedPluginOverflowActions(context),
+            ),
             // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
             // הכפתורים שבראש תפריט ה-"...".
             menuHeaderActions: widget.isInCombinedView
@@ -1589,6 +1602,24 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
+  List<(int, ActionButtonData)> _buildOrderedPluginOverflowActions(
+    BuildContext context,
+  ) {
+    final records = PluginToolbarRegistry.instance.getAll();
+    if (records.isEmpty) return const [];
+    return buildOrderedPluginOverflowActions(
+      records: records,
+      context: 'reader-text',
+      compact: context.read<SettingsBloc>().state.compactMenuMode,
+      locationPayload: () async =>
+          (await resolveReaderLocation(widget.tab))?.toJson() ?? const {},
+      hostActionDispatcher: context
+          .read<PluginSystemBloc>()
+          .declarativeHost
+          ?.dispatchAction,
+    );
+  }
+
   /// בניית רשימת כפתורים בסדר ההצגה (מימין לשמאל ב-RTL)
   /// הכפתורים יוסתרו מהסוף לתחילה, כך שהכפתור הימני ביותר (ראשון ברשימה) יעלם אחרון
   List<ActionButtonData> _buildDisplayOrderActions(
@@ -1596,19 +1627,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
   ) {
     return [
-      // 1) PDF Button (ראשון מימין - יעלם אחרון!)
-      if (_hasPdfBook)
-        ActionButtonData(
-          widget: BarButton.icon(
-            tooltip: 'פתח ספר במהדורה מודפסת',
-            icon: FluentIcons.document_pdf_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: () => _handlePdfButtonPress(context, state),
-          ),
-          icon: FluentIcons.document_pdf_24_regular,
-          tooltip: 'פתח ספר במהדורה מודפסת',
-          onPressed: () => _handlePdfButtonPress(context, state),
-        ),
+      // 1) מהדורה מקבילה (ראשון מימין - יעלם אחרון!) — המובנית כפעולה
+      // ראשית, ומהדורות נוספות (היברובוקס מקומיות) בחץ שלצידה.
+      if (_parallelEditions.isNotEmpty)
+        _buildParallelEditionsAction(context, state),
 
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
@@ -1733,67 +1755,84 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// כפתורים שתמיד יהיו בתפריט "..." (בסדר הרצוי)
-  List<ActionButtonData> _buildAlwaysInMenuActions(
+  /// פריטי תפריט "עוד פעולות" עם משקל מיון קבוע לכל פריט, כדי שפריטי
+  /// תוספים עם `order` ישתבצו ביניהם באופן יציב (הדפסה = 60 בכל המסכים).
+  List<(int, ActionButtonData)> _buildAlwaysInMenuActions(
     BuildContext context,
     TextBookLoaded state,
   ) {
     return [
       // הצגת סימניות הספר הנוכחי (הוספת סימניה עברה לתפריט ההקשר בטקסט)
-      ActionButtonData(
-        widget: KeyedSubtree(
-          key: widget.enableTourTargets ? textBookBookmarkTourTargetKey : null,
-          child: BarButton.icon(
-            tooltip: 'סימניות בספר זה',
-            icon: FluentIcons.bookmark_multiple_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: () => _showBookmarksForCurrentBook(context, state.book),
+      (
+        10,
+        ActionButtonData(
+          widget: KeyedSubtree(
+            key: widget.enableTourTargets
+                ? textBookBookmarkTourTargetKey
+                : null,
+            child: BarButton.icon(
+              tooltip: 'סימניות בספר זה',
+              icon: FluentIcons.bookmark_multiple_24_regular,
+              compact: context.read<SettingsBloc>().state.compactMenuMode,
+              onPressed: () =>
+                  _showBookmarksForCurrentBook(context, state.book),
+            ),
           ),
+          icon: FluentIcons.bookmark_multiple_24_regular,
+          tooltip: 'סימניות בספר זה',
+          onPressed: () => _showBookmarksForCurrentBook(context, state.book),
         ),
-        icon: FluentIcons.bookmark_multiple_24_regular,
-        tooltip: 'סימניות בספר זה',
-        onPressed: () => _showBookmarksForCurrentBook(context, state.book),
       ),
 
       // 2) הצג הערות אישיות
-      ActionButtonData(
-        widget: BarButton.icon(
-          tooltip: 'הצג הערות אישיות',
+      (
+        20,
+        ActionButtonData(
+          widget: BarButton.icon(
+            tooltip: 'הצג הערות אישיות',
+            icon: FluentIcons.note_24_regular,
+            compact: context.read<SettingsBloc>().state.compactMenuMode,
+            onPressed: () => _openPersonalNotesForCurrentView(state),
+          ),
           icon: FluentIcons.note_24_regular,
-          compact: context.read<SettingsBloc>().state.compactMenuMode,
+          tooltip: 'הצג הערות אישיות',
           onPressed: () => _openPersonalNotesForCurrentView(state),
         ),
-        icon: FluentIcons.note_24_regular,
-        tooltip: 'הצג הערות אישיות',
-        onPressed: () => _openPersonalNotesForCurrentView(state),
       ),
 
       // 3) שמור וזכור - סמן כנלמד או הוסף למעקב
-      ActionButtonData(
-        widget: _buildShamorZachorButton(context, state),
-        icon: _isBookTrackedInShamorZachor(state.book)
-            ? FluentIcons.checkmark_circle_24_regular
-            : FluentIcons.add_circle_24_regular,
-        tooltip: _isBookTrackedInShamorZachor(state.book)
-            ? 'סמן קטע פתוח כנלמד בשמור וזכור'
-            : 'הוסף למעקב לימוד בשמור וזכור',
-        onPressed: () {
-          if (_isBookTrackedInShamorZachor(state.book)) {
-            _markShamorZachorProgress(state.book.title);
-          } else {
-            _addBookToShamorZachorTracking(state.book);
-          }
-        },
+      (
+        30,
+        ActionButtonData(
+          widget: _buildShamorZachorButton(context, state),
+          icon: _isBookTrackedInShamorZachor(state.book)
+              ? FluentIcons.checkmark_circle_24_regular
+              : FluentIcons.add_circle_24_regular,
+          tooltip: _isBookTrackedInShamorZachor(state.book)
+              ? 'סמן קטע פתוח כנלמד בשמור וזכור'
+              : 'הוסף למעקב לימוד בשמור וזכור',
+          onPressed: () {
+            if (_isBookTrackedInShamorZachor(state.book)) {
+              _markShamorZachorProgress(state.book.title);
+            } else {
+              _addBookToShamorZachorTracking(state.book);
+            }
+          },
+        ),
       ),
 
       // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת) - לא בתצוגה משולבת
       if (!widget.isInCombinedView &&
           context.read<SettingsBloc>().state.enablePerBookSettings)
-        ActionButtonData.simple(
-          icon: FluentIcons.arrow_reset_24_regular,
-          tooltip: 'אפס הגדרות ספר זה',
-          onPressed: _resetPerBookSettings,
-          compact: false,
-          visual: ActionButtonVisual.iconButton,
+        (
+          40,
+          ActionButtonData.simple(
+            icon: FluentIcons.arrow_reset_24_regular,
+            tooltip: 'אפס הגדרות ספר זה',
+            onPressed: _resetPerBookSettings,
+            compact: false,
+            visual: ActionButtonVisual.iconButton,
+          ),
         ),
 
       // [EDITING DISABLED]
@@ -1807,94 +1846,109 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       //   ),
 
       // העתק קישור ישיר לספר זה (קישור למקטע/הדגשה זמין בתפריט הלחיצה הימנית)
-      ActionButtonData(
-        widget: const SizedBox.shrink(),
-        icon: FluentIcons.link_24_regular,
-        tooltip: state.book.id != null
-            ? 'העתק קישור ישיר לספר זה'
-            : 'העתק קישור ישיר (לא זמין לספר זה)',
-        onPressed: state.book.id != null
-            ? () => copyLinkToClipboard(buildBookLink(state.book.id!))
-            : null,
+      (
+        45,
+        ActionButtonData(
+          widget: const SizedBox.shrink(),
+          icon: FluentIcons.link_24_regular,
+          tooltip: state.book.id != null
+              ? 'העתק קישור ישיר לספר זה'
+              : 'העתק קישור ישיר (לא זמין לספר זה)',
+          onPressed: state.book.id != null
+              ? () => copyLinkToClipboard(buildBookLink(state.book.id!))
+              : null,
+        ),
       ),
 
       // ייצוא הספר המלא - Word מעוצב או טקסט פשוט
       if (!widget.isInCombinedView)
-        ActionButtonData(
-          widget: const SizedBox.shrink(),
-          icon: FluentIcons.arrow_export_ltr_24_regular,
-          tooltip: 'ייצוא הספר',
-          onPressed: () => _exportWholeBook(state),
+        (
+          50,
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.arrow_export_ltr_24_regular,
+            tooltip: 'ייצוא הספר',
+            onPressed: () => _exportWholeBook(state),
+          ),
         ),
 
       // 6) הדפסה - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
-        ActionButtonData(
-          widget: _buildPrintButton(
-            context,
-            state,
-            key: widget.enableTourTargets ? textBookPrintTourTargetKey : null,
+        (
+          60,
+          ActionButtonData(
+            widget: _buildPrintButton(
+              context,
+              state,
+              key: widget.enableTourTargets ? textBookPrintTourTargetKey : null,
+            ),
+            icon: FluentIcons.print_24_regular,
+            tooltip: 'הדפסה',
+            onPressed: () => _handlePrintPress(state),
           ),
-          icon: FluentIcons.print_24_regular,
-          tooltip: 'הדפסה',
-          onPressed: () => _handlePrintPress(state),
         ),
 
       // 7) אודות הספר - לא בתצוגה משולבת
       if (!widget.isInCombinedView)
-        ActionButtonData(
-          widget: IconButton(
-            icon: const Icon(FluentIcons.book_information_24_regular),
+        (
+          70,
+          ActionButtonData(
+            widget: IconButton(
+              icon: const Icon(FluentIcons.book_information_24_regular),
+              tooltip: 'אודות הספר',
+              onPressed: () => _handleBookSourcePress(context, state),
+            ),
+            icon: FluentIcons.book_information_24_regular,
             tooltip: 'אודות הספר',
             onPressed: () => _handleBookSourcePress(context, state),
           ),
-          icon: FluentIcons.book_information_24_regular,
-          tooltip: 'אודות הספר',
-          onPressed: () => _handleBookSourcePress(context, state),
         ),
 
       // תת-תפריט "פעולות נוספות" - רק בתצוגה משולבת
       if (widget.isInCombinedView)
-        ActionButtonData(
-          widget: const SizedBox.shrink(), // לא נראה כי זה בתפריט
-          icon: FluentIcons.more_horizontal_24_regular,
-          tooltip: 'פעולות נוספות',
-          onPressed: null, // לא ניתן ללחיצה - זה submenu
-          submenuItems: [
-            // איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
-            if (context.read<SettingsBloc>().state.enablePerBookSettings)
+        (
+          80,
+          ActionButtonData(
+            widget: const SizedBox.shrink(), // לא נראה כי זה בתפריט
+            icon: FluentIcons.more_horizontal_24_regular,
+            tooltip: 'פעולות נוספות',
+            onPressed: null, // לא ניתן ללחיצה - זה submenu
+            submenuItems: [
+              // איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת)
+              if (context.read<SettingsBloc>().state.enablePerBookSettings)
+                ActionButtonData(
+                  widget: const SizedBox.shrink(),
+                  icon: FluentIcons.arrow_reset_24_regular,
+                  tooltip: 'אפס הגדרות ספר זה',
+                  onPressed: () => _resetPerBookSettings(),
+                ),
+              // [EDITING DISABLED]
+              // ActionButtonData(
+              //   widget: const SizedBox.shrink(),
+              //   icon: FluentIcons.document_edit_24_regular,
+              //   tooltip: 'ערוך את הספר',
+              //   onPressed: () => _handleFullFileEditorPress(context, state),
+              // ),
               ActionButtonData(
                 widget: const SizedBox.shrink(),
-                icon: FluentIcons.arrow_reset_24_regular,
-                tooltip: 'אפס הגדרות ספר זה',
-                onPressed: () => _resetPerBookSettings(),
+                icon: FluentIcons.print_24_regular,
+                tooltip: 'הדפסה',
+                onPressed: () => _handlePrintPress(state),
               ),
-            // [EDITING DISABLED]
-            // ActionButtonData(
-            //   widget: const SizedBox.shrink(),
-            //   icon: FluentIcons.document_edit_24_regular,
-            //   tooltip: 'ערוך את הספר',
-            //   onPressed: () => _handleFullFileEditorPress(context, state),
-            // ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.print_24_regular,
-              tooltip: 'הדפסה',
-              onPressed: () => _handlePrintPress(state),
-            ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.arrow_export_ltr_24_regular,
-              tooltip: 'ייצוא הספר',
-              onPressed: () => _exportWholeBook(state),
-            ),
-            ActionButtonData(
-              widget: const SizedBox.shrink(),
-              icon: FluentIcons.book_information_24_regular,
-              tooltip: 'אודות הספר',
-              onPressed: () => _handleBookSourcePress(context, state),
-            ),
-          ],
+              ActionButtonData(
+                widget: const SizedBox.shrink(),
+                icon: FluentIcons.arrow_export_ltr_24_regular,
+                tooltip: 'ייצוא הספר',
+                onPressed: () => _exportWholeBook(state),
+              ),
+              ActionButtonData(
+                widget: const SizedBox.shrink(),
+                icon: FluentIcons.book_information_24_regular,
+                tooltip: 'אודות הספר',
+                onPressed: () => _handleBookSourcePress(context, state),
+              ),
+            ],
+          ),
         ),
     ];
   }
@@ -2134,7 +2188,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return BarButton.icon(
       key: key,
-      tooltip: 'חיפוש (${shortcut.toUpperCase()})',
+      tooltip: 'חיפוש (${ShortcutHelper.formatShortcutForDisplay(shortcut)})',
       icon: FluentIcons.search_24_regular,
       compact: isCompact,
       onPressed: _openSearchFromToolbar,
@@ -2325,7 +2379,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       key: key,
       icon: const Icon(FluentIcons.print_24_regular),
-      tooltip: 'הדפסה (${shortcut.toUpperCase()})',
+      tooltip: 'הדפסה (${ShortcutHelper.formatShortcutForDisplay(shortcut)})',
       onPressed: () {
         context.read<TourCubit>().recordInteraction(
           TourInteraction(type: TourInteractionType.printUsed),
@@ -2482,6 +2536,71 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       debugPrint('Stack trace: $stackTrace');
       UiSnack.showError(TextBookMessages.addBookToTrackingError(e));
     }
+  }
+
+  /// לחצן המהדורה המקבילה: הפעולה הראשית היא המהדורה הראשונה (המובנית
+  /// כשקיימת), וחץ עם רשימת כל המהדורות מוצג רק כשיש יותר מאחת.
+  ActionButtonData _buildParallelEditionsAction(
+    BuildContext context,
+    TextBookLoaded state,
+  ) {
+    final compact = context.read<SettingsBloc>().state.compactMenuMode;
+    final primary = _parallelEditions.first;
+    const tooltip = 'פתח מהדורה מקבילה';
+    if (_parallelEditions.length == 1) {
+      return ActionButtonData(
+        widget: BarButton.icon(
+          tooltip: tooltip,
+          icon: FluentIcons.document_pdf_24_regular,
+          compact: compact,
+          onPressed: () => _openParallelEdition(context, state, primary),
+        ),
+        icon: FluentIcons.document_pdf_24_regular,
+        tooltip: tooltip,
+        onPressed: () => _openParallelEdition(context, state, primary),
+      );
+    }
+    return ActionButtonData.split(
+      icon: FluentIcons.document_pdf_24_regular,
+      tooltip: tooltip,
+      compact: compact,
+      onPressed: () => _openParallelEdition(context, state, primary),
+      menuItems: [
+        for (final edition in _parallelEditions)
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: edition.isCompanion
+                ? FluentIcons.document_pdf_24_regular
+                : FluentIcons.book_24_regular,
+            tooltip: edition.isCompanion
+                ? '${edition.book.title} — מהדורה מודפסת (אוצריא)'
+                : edition.book.title,
+            onPressed: () => _openParallelEdition(context, state, edition),
+          ),
+      ],
+    );
+  }
+
+  void _openParallelEdition(
+    BuildContext context,
+    TextBookLoaded state,
+    ParallelEdition edition,
+  ) {
+    // המהדורה המובנית עוברת המרת עמוד (שורת טקסט → עמוד PDF); מהדורת
+    // היברובוקס נפתחת מתחילת הספר — אין לה מיפוי עמודים.
+    if (edition.isCompanion && edition.book is PdfBook) {
+      _handlePdfButtonPress(context, state);
+      return;
+    }
+    openBook(
+      context,
+      edition.book,
+      1,
+      '',
+      ignoreHistory: true,
+      requiresStableLayout: true,
+      insertAdjacent: true,
+    );
   }
 
   /// פונקציות עזר לטיפול בלחיצות על כפתורים בתפריט הנפתח

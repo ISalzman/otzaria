@@ -128,6 +128,8 @@ class DeclarativeToolbarBindingService {
         icon: base.icon,
         contexts: base.contexts,
         hostAction: primaryAction,
+        placement: base.placement,
+        order: base.order,
       );
     }
 
@@ -181,6 +183,8 @@ class DeclarativeToolbarBindingService {
       contexts: base.contexts,
       children: children,
       hostAction: primaryAction,
+      placement: base.placement,
+      order: base.order,
     );
     PluginToolbarRegistry.detached().registerPayload(
       registration.plugin.pluginId,

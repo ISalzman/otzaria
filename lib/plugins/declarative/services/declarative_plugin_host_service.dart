@@ -53,12 +53,14 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
     required DeclarativeBookOpener bookOpener,
     PluginToolbarRegistry? toolbarRegistry,
     PluginDatabaseService? databaseService,
+    DeclarativeParallelEditionsFinder? parallelEditionsFinder,
     DeclarativeHostErrorHandler? onError,
   }) {
     final programs = DeclarativeProgramRepository(
       executor: DeclarativeProgramExecutor(
         databaseService: databaseService,
         bookResolver: bookResolver,
+        parallelEditionsFinder: parallelEditionsFinder,
       ),
       onError: (pluginId, _, error, stackTrace) {
         onError?.call(pluginId, error, stackTrace);

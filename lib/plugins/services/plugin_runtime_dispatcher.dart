@@ -149,8 +149,38 @@ class PluginRuntimeDispatcher {
   /// הסתיימה) — משהים אותו מיד; אחרת ה-boot ממשיך כרגיל.
   Future<void> onForegroundInstanceReady(String pluginId) {
     return _serializeLifecycle(() async {
+      // מסירה חוזרת: אירוע שהוזרק לטאב מושעה שההחייאה שלו גררה טעינת-דף
+      // מחדש (ה-WebView מושמד בהשעיה) נפל לדף בלי מאזינים. עכשיו, כשה-boot
+      // הסתיים, מזריקים אותו שוב — הבקשות אידמפוטנטיות (אותו requestId).
+      final controller = _controllersByPlugin[pluginId]?['default'];
+      final now = DateTime.now();
+      final fresh = (_pendingRedeliveries.remove(pluginId) ?? const [])
+          .where((event) => now.difference(event.at) < _redeliverWindow)
+          .toList();
+      if (controller != null && fresh.isNotEmpty) {
+        debugPrint(
+          'PluginRuntimeDispatcher: redelivering ${fresh.length} event(s) '
+          'to $pluginId',
+        );
+        for (final event in fresh) {
+          try {
+            await controller.evaluateJavascript(
+              source:
+                  "window.dispatchEvent(new CustomEvent('${event.topic}', "
+                  '{ detail: ${event.jsonPayload} }));',
+            );
+          } catch (e) {
+            debugPrint('Failed to redeliver ${event.topic} to $pluginId: $e');
+          }
+        }
+      }
       if (!_desiredForegroundIds.contains(pluginId)) {
-        await _suspendForeground(pluginId);
+        if (controller != null && fresh.isNotEmpty) {
+          // זה עתה נמסרו אירועים — הקפאה מיידית הייתה קוטעת את הטיפול בהם.
+          _scheduleSuspendAfterGrace(pluginId, controller);
+        } else {
+          await _suspendForeground(pluginId);
+        }
       } else {
         // התוסף נטען כשהוא כבר מוצג — מסירים סימון השהיה שנשאר ממופע קודם.
         _runningForegroundPluginIds = {
@@ -161,6 +191,12 @@ class PluginRuntimeDispatcher {
       }
     });
   }
+
+  /// אירועים שהוזרקו לטאב מושעה וממתינים למסירה חוזרת אם הדף ייטען מחדש.
+  static const _redeliverWindow = Duration(seconds: 30);
+  static const _maxPendingRedeliveries = 5;
+  final Map<String, List<({String topic, String jsonPayload, DateTime at})>>
+  _pendingRedeliveries = {};
 
   Future<void> _serializeLifecycle(Future<void> Function() action) {
     final next = _lifecycleLock.then((_) => action());
@@ -233,10 +269,14 @@ class PluginRuntimeDispatcher {
     if (payload == null) return;
     if (!await _canReceiveEvent(pluginId, 'theme.changed')) return;
     try {
-      await controller.evaluateJavascript(
-        source:
-            "window.dispatchEvent(new CustomEvent('theme.changed', { detail: ${jsonEncode(payload)} }));",
-      );
+      // timeout: eval על WebView תקוע עלול לא להשלים לעולם, וכל שרשרת
+      // ה-lifecycle (שרצה תחת מנעול) הייתה נתקעת איתו.
+      await controller
+          .evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('theme.changed', { detail: ${jsonEncode(payload)} }));",
+          )
+          .timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Failed to resync theme to plugin $pluginId: $e');
     }
@@ -248,10 +288,14 @@ class PluginRuntimeDispatcher {
     String topic,
   ) async {
     try {
-      await controller.evaluateJavascript(
-        source:
-            "window.dispatchEvent(new CustomEvent('$topic', { detail: null }));",
-      );
+      // timeout: ראו _resyncThemeOnResume — לא נותנים ל-WebView תקוע להקפיא
+      // את מנעול ה-lifecycle לצמיתות.
+      await controller
+          .evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('$topic', { detail: null }));",
+          )
+          .timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
     }
@@ -469,6 +513,7 @@ class PluginRuntimeDispatcher {
       topic,
       payload,
     )) {
+      debugPrint('PluginRuntimeDispatcher: $topic → queued (boot pending)');
       return;
     }
     final instances = _controllersByPlugin[pluginId];
@@ -476,17 +521,21 @@ class PluginRuntimeDispatcher {
       // אין מנוע חי — עם הרשאת ריצה ברקע התוסף מוּעָר בעצלנות והאירוע ממתין
       // בתור עד ה-boot; בלעדיה (false) לחיצה נופלת לפתיחת דף התוסף, שם
       // הדלקת המנוע גלויה למשתמש.
-      if (!PluginLazyActivationService.instance.queueTargetedEvent(
-            pluginId,
-            topic,
-            payload,
-          ) &&
-          preferBackground) {
+      if (PluginLazyActivationService.instance.queueTargetedEvent(
+        pluginId,
+        topic,
+        payload,
+      )) {
+        debugPrint('PluginRuntimeDispatcher: $topic → queued (lazy boot)');
+      } else if (preferBackground) {
+        debugPrint('PluginRuntimeDispatcher: $topic → page launcher');
         PluginPageLauncher.instance.open(
           pluginId,
           topic: topic,
           payload: payload,
         );
+      } else {
+        debugPrint('PluginRuntimeDispatcher: $topic → dropped (no engine)');
       }
       return;
     }
@@ -505,6 +554,7 @@ class PluginRuntimeDispatcher {
           (resumeForegroundIfNeeded ||
               (preferBackground && !instances.containsKey('background')));
       if (shouldResumeForeground) {
+        debugPrint('PluginRuntimeDispatcher: $topic → resume suspended tab');
         await _dispatchToSuspendedForeground(pluginId, topic, jsonPayload);
         return;
       }
@@ -516,6 +566,10 @@ class PluginRuntimeDispatcher {
         preferBackground: preferBackground,
       );
       _notifyBackgroundActivity(pluginId, instances, targetControllers);
+      debugPrint(
+        'PluginRuntimeDispatcher: $topic → eval to '
+        '${targetControllers.length} controller(s)',
+      );
       for (final controller in targetControllers) {
         try {
           await controller.evaluateJavascript(
@@ -539,12 +593,67 @@ class PluginRuntimeDispatcher {
     return _serializeLifecycle(() async {
       final controller = _controllersByPlugin[pluginId]?['default'];
       if (controller == null) return;
+      // ההזרקה שלהלן אובדת אם ההחייאה גוררת טעינת-דף מחדש — האירוע נרשם
+      // למסירה חוזרת כשה-boot של הדף יסתיים (onForegroundInstanceReady).
+      final pending = _pendingRedeliveries.putIfAbsent(pluginId, () => []);
+      if (pending.length >= _maxPendingRedeliveries) pending.removeAt(0);
+      pending.add((topic: topic, jsonPayload: jsonPayload, at: DateTime.now()));
       try {
         await _resumeForeground(pluginId);
-        await controller.evaluateJavascript(
-          source:
-              "window.dispatchEvent(new CustomEvent('$topic', { detail: $jsonPayload }));",
-        );
+        // בפלטפורמות בלי pause נייטיבי הדף מעולם לא הוקפא — מצב ה"זומבי"
+        // אינו קיים, ו-callAsyncJavaScript פחות בשל שם (Linux beta). מסלול
+        // ה-eval הרגיל מספיק.
+        if (!_supportsNativePauseResume) {
+          await controller.evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('$topic', "
+                "{ detail: $jsonPayload }));",
+          );
+          return;
+        }
+        // בדיקה ומסירה בקריאה אסינכרונית אחת (תקציב זמן אחד): השעיה נייטיבית
+        // עלולה להשאיר את הדף קפוא, מרוקן, או — המקרה הערמומי — context חדש
+        // שבו eval רץ ומחזיר ערכים אבל מאזיני הדף האמיתי לא רואים את האירוע
+        // (נצפה בפועל דרך CDP). לכן: (א) מוודאים שההרצה רואה את ה-world שבו
+        // התוסף באמת נטען (window.Otzaria._booted מוצב רק ב-_boot); (ב)
+        // משגרים את האירוע; (ג) מחזירים round-trip דרך ערוץ הגשר JS→Dart —
+        // ערוץ מת משאיר את ה-Promise תלוי וה-timeout מטפל. כל כשל → reload,
+        // והאירוע יימסר במסירה החוזרת אחרי ה-boot (onForegroundInstanceReady).
+        Object? outcome;
+        try {
+          final result = await controller
+              .callAsyncJavaScript(
+                functionBody:
+                    "if (!window.flutter_inappwebview || "
+                    "!window.flutter_inappwebview.callHandler) "
+                    "{ return 'no-bridge'; } "
+                    "if (!window.Otzaria || window.Otzaria._booted !== true) "
+                    "{ return 'no-page-world'; } "
+                    "window.dispatchEvent(new CustomEvent('$topic', "
+                    "{ detail: $jsonPayload })); "
+                    "return await window.flutter_inappwebview"
+                    ".callHandler('otzaria_bridge_ping');",
+              )
+              .timeout(const Duration(seconds: 3));
+          outcome = result?.value;
+        } catch (_) {
+          outcome = null;
+        }
+        if (outcome != true) {
+          debugPrint(
+            'PluginRuntimeDispatcher: $topic delivery to $pluginId not '
+            'confirmed ($outcome) — reloading',
+          );
+          // הדף בדרך ל-reload: מחזירים את דגל ההשעיה כדי שגם ניסיון חוזר
+          // של השירות (retry אחרי 8 שניות) יעבור דרך המסלול המאומת הזה
+          // ויירשם למסירה חוזרת — ולא ייבלע ב-eval רגיל על דף באמצע טעינה.
+          _suspendedForegroundIds.add(pluginId);
+          try {
+            await controller.reload();
+          } catch (e) {
+            debugPrint('PluginRuntimeDispatcher: reload failed: $e');
+          }
+        }
       } catch (e) {
         debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
       } finally {
@@ -557,10 +666,44 @@ class PluginRuntimeDispatcher {
             ..._runningForegroundPluginIds,
             pluginId,
           };
+        } else if (stillRegistered) {
+          // אירוע ממוקד פותח לרוב טיפול אסינכרוני (בקשת חיפוש שעונה דרך
+          // ה-bridge); הקפאה מיידית הייתה מקפיאה את ה-JS באמצע והתשובה
+          // לא הייתה מגיעה לעולם. משהים מחדש רק אחרי חלון חסד.
+          _scheduleSuspendAfterGrace(pluginId, controller);
         } else {
           await _suspendForeground(pluginId);
         }
       }
+    });
+  }
+
+  /// חלון חסד להשלמת טיפול אסינכרוני לפני הקפאה חוזרת של טאב מושהה.
+  static const _suspendGrace = Duration(seconds: 90);
+  final Map<String, Timer> _suspendGraceTimers = {};
+
+  void _scheduleSuspendAfterGrace(
+    String pluginId,
+    InAppWebViewController controller,
+  ) {
+    // אירוע נוסף בתוך החלון מאריך אותו — הטאב עדיין בעבודה.
+    _suspendGraceTimers.remove(pluginId)?.cancel();
+    _suspendGraceTimers[pluginId] = Timer(_suspendGrace, () {
+      _suspendGraceTimers.remove(pluginId);
+      unawaited(
+        _serializeLifecycle(() async {
+          final stillRegistered = identical(
+            _controllersByPlugin[pluginId]?['default'],
+            controller,
+          );
+          if (!stillRegistered ||
+              _desiredForegroundIds.contains(pluginId) ||
+              _suspendedForegroundIds.contains(pluginId)) {
+            return;
+          }
+          await _suspendForeground(pluginId);
+        }),
+      );
     });
   }
 

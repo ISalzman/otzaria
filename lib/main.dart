@@ -1181,6 +1181,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
                         .toSet(),
                 bookResolver: bookAccess,
                 bookOpener: bookAccess,
+                parallelEditionsFinder: bookAccess.parallelEditionsForIdentity,
                 onError: (pluginId, error, stackTrace) => debugPrint(
                   'Declarative plugin host [$pluginId]: $error\n$stackTrace',
                 ),

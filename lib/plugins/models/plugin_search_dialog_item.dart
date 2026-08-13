@@ -12,6 +12,15 @@ class PluginSearchDialogItem {
   final String title;
   final bool defaultValue;
   final bool openPluginOnSubmit;
+
+  /// כשמוגדר, סימון השורה אינו פותח את התוסף אלא מציג בטאב החיפוש המובנה
+  /// מדור תוצאות מהספק החיצוני הזה (התוסף חייב להירשם אליו עם
+  /// registerExternalSearchProvider). סותר את [openPluginOnSubmit].
+  final String? resultsProvider;
+
+  /// כותרת מדור התוצאות בטאב החיפוש; ברירת המחדל היא [title].
+  final String resultsTitle;
+
   final Set<SearchMode> visibleInModes;
   final Map<SearchMode, Set<String>> disabledSearchOptionIds;
 
@@ -20,9 +29,11 @@ class PluginSearchDialogItem {
     required this.title,
     required this.defaultValue,
     required this.openPluginOnSubmit,
+    this.resultsProvider,
+    String? resultsTitle,
     required this.visibleInModes,
     required this.disabledSearchOptionIds,
-  });
+  }) : resultsTitle = resultsTitle ?? title;
 
   bool isVisibleIn(SearchMode mode) => visibleInModes.contains(mode);
 
@@ -36,6 +47,8 @@ class PluginSearchDialogItem {
       'title',
       'defaultValue',
       'openPluginOnSubmit',
+      'resultsProvider',
+      'resultsTitle',
       'visibleInModes',
       'disabledSearchOptions',
     };
@@ -76,6 +89,31 @@ class PluginSearchDialogItem {
         'openPluginOnSubmit must be a bool',
       );
     }
+    final resultsProvider = payload['resultsProvider'];
+    if (resultsProvider != null &&
+        (resultsProvider is! String ||
+            !RegExp(r'^[a-z0-9._-]{1,64}$').hasMatch(resultsProvider))) {
+      throw const PluginSearchDialogItemException(
+        'resultsProvider must be a short lowercase identifier',
+      );
+    }
+    if (resultsProvider != null && openPluginOnSubmit == true) {
+      throw const PluginSearchDialogItemException(
+        'resultsProvider and openPluginOnSubmit are mutually exclusive',
+      );
+    }
+    final resultsTitle = payload['resultsTitle'] == null
+        ? null
+        : _requiredText(
+            payload['resultsTitle'],
+            field: 'resultsTitle',
+            maxLength: 120,
+          );
+    if (resultsTitle != null && resultsProvider == null) {
+      throw const PluginSearchDialogItemException(
+        'resultsTitle requires resultsProvider',
+      );
+    }
 
     final visibleInModes = _parseModes(
       payload['visibleInModes'],
@@ -91,6 +129,8 @@ class PluginSearchDialogItem {
       title: title,
       defaultValue: defaultValue as bool? ?? false,
       openPluginOnSubmit: openPluginOnSubmit as bool? ?? false,
+      resultsProvider: resultsProvider as String?,
+      resultsTitle: resultsTitle,
       visibleInModes: Set.unmodifiable(visibleInModes),
       disabledSearchOptionIds: Map.unmodifiable({
         for (final entry in disabledSearchOptionIds.entries)

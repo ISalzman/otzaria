@@ -4,6 +4,7 @@ import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 
 void main() {
   test('מקמפל ומבצע reader.openBook מורשה בהקשר הנכון', () async {
@@ -47,6 +48,55 @@ void main() {
       expect(opener.sidePaneFlags.single, isTrue);
     },
   );
+
+  test('matchPages מועברים לפותח כ-ExternalBookMatches ממוין וללא כפולים', () async {
+    final opener = _BookOpener();
+    final action = _compiler().compileResolved(
+      {
+        'type': 'reader.openBook',
+        'args': {
+          'identity': {'id': 10, 'type': 'pdf'},
+          'index': 7,
+          'searchQuery': 'שבת',
+          'matchPages': [12, 8, 12, 30],
+          'matchedTerms': ['שבת'],
+        },
+      },
+      contextSignature: 'book-7',
+      programGeneration: 7,
+    );
+
+    await DeclarativeHostActionExecutor(bookOpener: opener).execute(
+      action: action,
+      plugin: _plugin(),
+      grantedPermissions: const {'reader.open'},
+      currentContextSignature: 'book-7',
+      currentProgramGeneration: 7,
+    );
+
+    final matches = opener.externalMatches.single;
+    expect(matches, isNotNull);
+    expect(matches!.pages, [8, 12, 30]);
+    expect(matches.matchedTerms, ['שבת']);
+    expect(matches.query, 'שבת');
+  });
+
+  test('matchPages עם עמוד לא חיובי נדחה בזמן קומפילציה', () {
+    expect(
+      () => _compiler().compileResolved(
+        {
+          'type': 'reader.openBook',
+          'args': {
+            'identity': {'id': 10},
+            'matchPages': [3, 0],
+          },
+        },
+        contextSignature: 'book-7',
+        programGeneration: 7,
+      ),
+      _throwsProgramError('declarative.invalid_args'),
+    );
+  });
 
   test('פעולה עם נתיב קובץ נדחית בזמן קומפילציה', () {
     expect(
@@ -135,6 +185,7 @@ void main() {
 class _BookOpener implements DeclarativeBookOpener {
   final identities = <Map<String, dynamic>>[];
   final sidePaneFlags = <bool>[];
+  final externalMatches = <ExternalBookMatches?>[];
 
   @override
   Future<bool> openUnique(
@@ -142,9 +193,11 @@ class _BookOpener implements DeclarativeBookOpener {
     required int index,
     required String searchQuery,
     bool inSidePane = false,
+    ExternalBookMatches? externalMatches,
   }) async {
     identities.add(identity);
     sidePaneFlags.add(inSidePane);
+    this.externalMatches.add(externalMatches);
     return true;
   }
 }

@@ -96,9 +96,9 @@ void main() {
       ),
     );
 
-    expect(navigation, contains('הגדרות Ctrl+,'));
-    expect(navigation, contains('כלים Alt+M'));
-    expect(tools, 'Alt+M');
+    expect(navigation, contains('הגדרות CTRL + ,'));
+    expect(navigation, contains('כלים ALT + M'));
+    expect(tools, 'ALT + M');
   });
 
   testWidgets('תוויות הקיצורים מתורגמות לשפת ההגדרות', (tester) async {
@@ -118,7 +118,7 @@ void main() {
       ),
     );
 
-    expect(navigation, contains('Settings Ctrl+,'));
+    expect(navigation, contains('Settings CTRL + ,'));
     expect(navigation, isNot(contains('הגדרות')));
   });
 
@@ -1072,7 +1072,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('More Tools'), findsOneWidget);
-    expect(find.textContaining('Shortcut: Alt+M'), findsOneWidget);
+    expect(find.textContaining('Shortcut: ALT + M'), findsOneWidget);
     expect(find.text('Next'), findsOneWidget);
     expect(find.textContaining('{shortcut}'), findsNothing);
 

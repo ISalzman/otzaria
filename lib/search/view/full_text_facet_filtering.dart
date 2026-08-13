@@ -8,6 +8,7 @@ import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
@@ -304,21 +305,54 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               return const Center(child: Text('No library data available'));
             }
 
-            return SearchNavigationTree(
-              library: library,
-              facetCounts: searchState.facetCounts,
-              selectedFacets: searchState.currentFacets,
-              expansion: _expansionState,
-              filterQuery: _filterQuery.text,
-              isLoading: searchState.isLoading,
-              hasResults: searchState.results.isNotEmpty,
-              onSetFacet: (facet) => _setFacet(context, facet),
-              onToggleFacet: (facet) => _handleFacetToggle(context, facet),
-              onToggleExpand: (path, isExpanded) => setState(() {
-                _expansionState[path] = !isExpanded;
-              }),
-              isMultiSelectPressed: _isMultiSelectModifierPressed,
-              onClearAll: () => _clearAllScope(context),
+            // ספירות ספק חיצוני (תוסף) מתמזגות לספירות העץ, ודלי
+            // "עוד מ<מקור>" מוצג כקטגוריה סינתטית אחרי הקטגוריות.
+            return ValueListenableBuilder<ExternalSearchSummary?>(
+              valueListenable: widget.tab.externalSearchSummary,
+              builder: (context, summary, _) {
+                var counts = searchState.facetCounts;
+                var extraRoots = const <({String title, int count})>[];
+                if (summary != null) {
+                  counts = Map.of(counts);
+                  summary.categoryBookCounts.forEach(
+                    (path, bookCount) => FacetHelper.incrementFacetWithAncestors(
+                      counts,
+                      path,
+                      bookCount,
+                    ),
+                  );
+                  // הדלי מוצג גם בספירה 0 כשהוא הסינון הפעיל — אחרת אין
+                  // דרך לבטל אותו מהעץ (העץ עצמו יודע להציג שורה נבחרת).
+                  if (summary.otherBooks > 0 ||
+                      searchState.currentFacets
+                          .contains(summary.otherCategoryFacet)) {
+                    FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
+                    extraRoots = [
+                      (
+                        title: summary.otherCategoryTitle,
+                        count: summary.otherBooks,
+                      ),
+                    ];
+                  }
+                }
+                return SearchNavigationTree(
+                  library: library,
+                  facetCounts: counts,
+                  selectedFacets: searchState.currentFacets,
+                  expansion: _expansionState,
+                  filterQuery: _filterQuery.text,
+                  isLoading: searchState.isLoading,
+                  hasResults: searchState.results.isNotEmpty,
+                  onSetFacet: (facet) => _setFacet(context, facet),
+                  onToggleFacet: (facet) => _handleFacetToggle(context, facet),
+                  onToggleExpand: (path, isExpanded) => setState(() {
+                    _expansionState[path] = !isExpanded;
+                  }),
+                  isMultiSelectPressed: _isMultiSelectModifierPressed,
+                  onClearAll: () => _clearAllScope(context),
+                  extraRootCategories: extraRoots,
+                );
+              },
             );
           },
         );

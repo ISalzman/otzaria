@@ -23,6 +23,38 @@ void main() {
       );
     });
 
+    test('library.parallelEditions מתקמפלת כפקודת חישוב עם זהות מהקשר', () {
+      final compiled = _compiler().compile({
+        'id': 'native-editions',
+        'version': 1,
+        'triggers': ['reader.activeBookChanged'],
+        'commands': [
+          {
+            'id': 'editions',
+            'type': 'library.parallelEditions',
+            'args': {
+              'identity': {
+                'id': {r'$context': 'reader.book.id'},
+                'bookId': {r'$context': 'reader.book.bookId'},
+                'type': {r'$context': 'reader.book.type'},
+                'source': {r'$context': 'reader.book.source'},
+                'external': {
+                  'provider': {r'$context': 'reader.book.external.provider'},
+                  'id': {r'$context': 'reader.book.external.id'},
+                },
+              },
+            },
+          },
+        ],
+        'outputs': {
+          'editions': {r'$result': 'editions'},
+        },
+      });
+
+      expect(compiled.commands.single.type, 'library.parallelEditions');
+      expect(compiled.requiredPermissions, {'library.books.read'});
+    });
+
     test('פקודה לא מוכרת נדחית', () {
       final program = _validProgram();
       (program['commands'] as List<dynamic>)[0] = {

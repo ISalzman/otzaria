@@ -76,7 +76,14 @@ void main() {
           ),
         ];
       },
-      (_, _, _, {required navigateToPositionIfReused, required inSidePane}) {},
+      (
+        _,
+        _,
+        _, {
+        required navigateToPositionIfReused,
+        required inSidePane,
+        externalMatches,
+      }) {},
       externalBookOpener: (_) async => true,
     );
 
@@ -242,6 +249,7 @@ DeclarativeLibraryBookAccess _access({
       searchQuery, {
       required navigateToPositionIfReused,
       required inSidePane,
+      externalMatches,
     }) {
       opened?.add(book);
       positions?.add((index, searchQuery));

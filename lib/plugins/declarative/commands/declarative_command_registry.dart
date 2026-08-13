@@ -77,12 +77,20 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'keepInputFields', 'limit'},
       outputKind: DeclarativeValueKind.list,
     ),
+    'library.parallelEditions': DeclarativeCommandDefinition(
+      type: 'library.parallelEditions',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'library.books.read',
+      requiredArgs: {'identity'},
+      optionalArgs: {},
+      outputKind: DeclarativeValueKind.list,
+    ),
     'reader.openBook': DeclarativeCommandDefinition(
       type: 'reader.openBook',
       phase: DeclarativeCommandPhase.action,
       requiredPermission: 'reader.open',
       requiredArgs: {'identity'},
-      optionalArgs: {'index', 'searchQuery'},
+      optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
       outputKind: DeclarativeValueKind.any,
     ),
     'reader.openBookInSidePane': DeclarativeCommandDefinition(
@@ -90,7 +98,7 @@ class DeclarativeCommandRegistry {
       phase: DeclarativeCommandPhase.action,
       requiredPermission: 'reader.open',
       requiredArgs: {'identity'},
-      optionalArgs: {'index', 'searchQuery'},
+      optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
       outputKind: DeclarativeValueKind.any,
     ),
   };

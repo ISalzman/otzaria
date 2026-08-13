@@ -50,15 +50,20 @@ PluginDatabaseSource buildExternalCatalogPluginSource(String databasePath) {
           columnB: 'id_book',
         ),
       ],
-      maxLimit: 20,
-      maxBatchQueries: 2,
+      // מכסות bulk-lookup: ספק תוצאות חיצוני ממפה אינדקס של עד ~10K מזהים
+      // (hb_id → otzaria_id) בעת סיווג תוצאות לקטגוריות. השאילתות עצמן
+      // זולות — IN על עמודה מאונדקסת בטבלת מיפוי — ולכן המגבלה המשמעותית
+      // היא מספר המעברים על הגשר: 1000 ערכי IN × 10 שאילתות ב-batch אחד
+      // מכסים אינדקס שלם בקריאה אחת במקום מאות.
+      maxLimit: 1000,
+      maxBatchQueries: 10,
       maxJoins: 1,
       maxColumns: 8,
       maxOffset: 0,
       maxWhereConditions: 8,
-      maxInValues: 20,
-      maxParameterBytes: 4096,
-      maxResultBytes: 64 * 1024,
+      maxInValues: 1000,
+      maxParameterBytes: 16 * 1024,
+      maxResultBytes: 256 * 1024,
     ),
   );
 }

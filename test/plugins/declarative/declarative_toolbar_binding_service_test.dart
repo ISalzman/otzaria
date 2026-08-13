@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/declarative/repository/declarative_program_repos
 import 'package:otzaria/plugins/declarative/services/declarative_toolbar_binding_service.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 
 void main() {
@@ -48,6 +49,11 @@ void main() {
     expect(items.last.children.first.hostAction!.args['identity'], {'id': 101});
     expect(items.last.children.last.hostAction!.args['identity'], {'id': 102});
     expect(items.every((item) => item.onClickEvent == null), isTrue);
+    // placement ו-order מהתבנית מגיעים עד הפריט שנרשם בפועל.
+    expect(items.last.placement, 'overflow');
+    expect(items.last.order, 55);
+    expect(items.first.placement, 'primary');
+    expect(items.first.order, PluginToolbarItem.defaultOrder);
   });
 
   test(
@@ -290,6 +296,8 @@ List<Map<String, dynamic>> _templateJson() => [
     'type': 'menu',
     'title': 'פתח מהדורה אחרת',
     'icon': 'book_24_regular',
+    'placement': 'overflow',
+    'order': 55,
     'binding': {
       'program': 'book-links',
       'visibleOutput': 'editions',

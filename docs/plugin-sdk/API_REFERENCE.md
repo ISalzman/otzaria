@@ -93,6 +93,7 @@ if (response.success) {
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
+| `library.resolveCategoryPaths` | 0.9.97 |
 | `library.listRecentBooks` | 0.9.89 |
 | `library.getBookContent` | 0.9.89 |
 | `library.getBookToc` | 0.9.89 |
@@ -408,6 +409,20 @@ const { data } = await Otzaria.call('library.resolveBooks', {
   ]
 });
 // [{ id, type, source, bookId, title, categoryPath, external? }, ...]
+```
+
+### `library.resolveCategoryPaths`
+**הרשאה:** `library.books.read`
+
+נתיב הקטגוריה בעץ הספרייה לכל מזהה ספר, באצווה של עד 20,000 מזהים —
+מסלול bulk לסיווג אינדקס שלם של ספק תוצאות חיצוני בקריאה אחת. סדר
+התשובות זהה לסדר הקלט; מזהה לא מוכר מוחזר כ־`null`.
+
+```javascript
+const { data } = await Otzaria.call('library.resolveCategoryPaths', {
+  ids: [183, 42, 9999]
+});
+// ["/תנך/תורה", "/הלכה", null]
 ```
 
 ### `library.listRecentBooks`
@@ -829,7 +844,9 @@ await Otzaria.call('reader.openBook', {
   index: 0,             // אופציונלי, ברירת מחדל: 0
   searchQuery: '',      // אופציונלי, הדגשת טקסט
   navigateToPositionIfReused: false, // אופציונלי — אם הטאב פתוח, נווט אליו
-  openInSidePane: false  // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
+  openInSidePane: false, // אופציונלי — הצג בטאב הנוכחי כחלונית לצד הספר
+  matchPages: [8, 12],   // אופציונלי (PDF) — עמודי התאמה של חיפוש חיצוני
+  matchedTerms: ['שבת']  // אופציונלי — המונחים שנמצאו, לתצוגה בסרגל ההתאמות
 });
 // true — פתח בהצלחה; false — הספר לא נמצא או הזהות לא תואמת
 ```
@@ -838,7 +855,133 @@ await Otzaria.call('reader.openBook', {
 נוספת בטאב הנוכחי, לצד הספר שכבר פתוח (כמו "הצג לצד"). כשהטאב הנוכחי כבר
 מפוצל, או כשאין טאב פתוח, הספר נפתח ככרטיסייה רגילה.
 
+עם `matchPages` (בספר PDF) קורא ה-PDF מציג סרגל "עמודי התאמה" עם ניווט
+מופע קודם/הבא בין העמודים שסופקו — למשל תוצאות חיפוש של מנוע חיצוני שהתוסף
+מפעיל. העמודים מבוססי-1; רשימה ריקה או ערכים לא חיוביים נדחים.
+
 **כאשר נשלחים מספר שדות זהות (id + bookId + type), כולם חייבים להתאים לאותו ספר. אי-התאמה מחזירה `false`.**
+
+### `reader.registerInBookSearchProvider`
+**הרשאה:** `reader.open`
+
+רושם את התוסף כספק חיפוש-בתוך-ספר לספרים חיצוניים של `provider`
+(למשל `hebrewbooks`). מאותו רגע, כשהמשתמש מחפש בסרגל ההתאמות של קורא
+ה-PDF בספר חיצוני של אותו provider, אוצריא שולחת לתוסף אירוע ממוקד
+`reader.inBookSearch.requested` עם `{ requestId, provider, externalId, query }`.
+התוסף מריץ את החיפוש במנוע שלו ועונה עם `reader.respondInBookSearch`.
+שם ספק שייך לתוסף הראשון שרשם אותו; ניסיון של תוסף אחר לרשום אותו נדחה
+עם `error.conflict`.
+
+```javascript
+await Otzaria.call('reader.registerInBookSearchProvider', {
+  provider: 'hebrewbooks',
+});
+
+window.addEventListener('reader.inBookSearch.requested', async (event) => {
+  const { requestId, externalId, query } = event.detail;
+  const result = await searchInMyEngine(externalId, query);
+  await Otzaria.call('reader.respondInBookSearch', {
+    requestId,
+    pages: result.pages,          // עמודי התאמה מבוססי-1
+    matchedTerms: result.terms,   // אופציונלי
+    query,
+  });
+});
+```
+
+### `reader.respondInBookSearch`
+**הרשאה:** `reader.open`
+
+תשובת הספק לאירוע `reader.inBookSearch.requested`. חובה להעביר את
+`requestId` מהאירוע; בכישלון מעבירים `error` עם הודעה קצרה במקום `pages`.
+בקשה שלא נענתה בתוך 30 שניות נכשלת בצד הקורא.
+התשובה מתקבלת רק מהתוסף שאליו הבקשה נשלחה.
+
+### `reader.registerExternalSearchProvider`
+**הרשאה:** `reader.open`
+
+רושם את התוסף כספק תוצאות חיצוני לטאב החיפוש המובנה. הספק מופעל דרך שורת
+דיאלוג חיפוש (`searchDialogItems`) שמצהירה `resultsProvider` עם אותו שם:
+כשהמשתמש מסמן את השורה ומחפש, נפתח טאב חיפוש רגיל ובראשו מדור תוצאות
+מהתוסף (בכותרת `resultsTitle`), לצד תוצאות המנוע המובנה. אוצריא שולחת
+לתוסף אירוע ממוקד `search.external.requested` עם
+`{ requestId, provider, query, mode, distance, offset, limit }`, והתוסף
+עונה עם `reader.respondExternalSearch`.
+שם ספק שייך לתוסף הראשון שרשם אותו; ניסיון של תוסף אחר לרשום אותו נדחה
+עם `error.conflict`.
+
+```javascript
+await Otzaria.call('reader.registerExternalSearchProvider', {
+  provider: 'hebrewbooks',
+});
+
+window.addEventListener('search.external.requested', async (event) => {
+  const { requestId, query, offset, limit } = event.detail;
+  const page = await searchMyEngine(query, offset, limit);
+  await Otzaria.call('reader.respondExternalSearch', {
+    requestId,
+    results: page.items.map((item) => ({
+      title: item.name,          // חובה
+      meta: item.byline,         // אופציונלי — מחבר · מקום · שנה
+      snippet: item.snippet,     // אופציונלי — טקסט רגיל; ההדגשה בצד אוצריא
+      hitCount: item.hits,
+      firstPage: item.firstPage, // מבוסס-1
+      externalId: item.id,       // זהות חיצונית לפתיחת הספר
+    })),
+    totalBooks: page.totalBooks,
+    totalHits: page.totalHits,
+    hasMore: page.hasMore,
+  });
+});
+```
+
+לחיצה על תוצאה פותחת את הספר במציג המובנה לפי הזהות החיצונית
+(`external: { provider, id }`) — מקומית כשהקובץ קיים, אחרת בדפדפן — ועם
+עמודי ההתאמה כשהתוסף רשום גם כספק חיפוש-בתוך-ספר.
+
+### `reader.respondExternalSearch`
+**הרשאה:** `reader.open`
+
+תשובת הספק לאירוע `search.external.requested`. חובה להעביר את `requestId`;
+בכישלון מעבירים `error` במקום `results`. מגבלות: עד 50 תוצאות לעמוד,
+כותרת עד 300 תווים, קטע טקסט עד 600.
+התשובה מתקבלת רק מהתוסף שאליו הבקשה נשלחה.
+
+**הזרמה:** מותר לענות כמה פעמים לאותה בקשה עם `done: false` — כל תשובה
+כזו היא עדכון חלקי שמחליף את חלון העמוד במדור (הספירות נחשבות רף-תחתון),
+והבקשה נשארת פתוחה. התשובה האחרונה נשלחת בלי `done` (או `done: true`)
+וסוגרת את הבקשה. הטיימאוט (45 שניות) הוא חוסר-פעילות ומתאפס בכל עדכון
+חלקי.
+
+**אינדקס קטגוריות (אופציונלי):** על בקשת העמוד הראשון הספק יכול לצרף
+`index` — מערך תמציתי של **כלל** תוצאות החיפוש (עד 20,000 רשומות), כל
+רשומה `[id, hits]` או `[id, hits, categoryPath]` כשהנתיב הוא קטגוריית
+אוצריא משוערת (מתחיל ב-'/', עד 200 תווים). אוצריא בונה מהאינדקס ספירות
+בעץ הקטגוריות של טאב החיפוש, מעדנת מול קטלוג ההשוואות המקומי, ומציגה
+דלי "עוד מ<resultsTitle>" לתוצאות ללא סיווג. עדכון בלי `index` אינו מוחק
+אינדקס שכבר נשלח באותה בקשה.
+
+**דפדוף לפי מזהים:** כשמסוננת קטגוריה בעץ, אוצריא שולחת בקשות
+`search.external.requested` עם שדה `ids` (עד 50 מזהים) במקום
+`offset`/`limit` — הספק מחזיר את הספרים הללו בסדרם (מהמטמון של אותו
+חיפוש; `hasMore: false`).
+
+### `reader.openSearchTab`
+**הרשאה:** `reader.open`
+
+פותח כרטיסיית חיפוש מובנית עם השאילתה — כך תוסף מפנה חיפוש שהתחיל אצלו אל
+מסך החיפוש הרגיל. `selectItems` (אופציונלי, עד 4 מזהים) מסמן שורות
+`searchDialogItems` של התוסף הקורא בכרטיסייה החדשה; יחד עם `resultsProvider`
+זה מפעיל בה את מדור התוצאות החיצוני. מפתחות הבחירה נגזרים תמיד מה-pluginId
+של הקורא — תוסף אינו יכול לסמן שורות של תוסף אחר.
+
+```javascript
+await Otzaria.call('reader.openSearchTab', {
+  query: 'ברכת המזון',
+  selectItems: ['include-hebrewbooks'],
+});
+// true
+```
 
 ### `reader.openBookAtRef`
 **הרשאה:** `reader.open`
@@ -2291,6 +2434,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
+| `externalEditions` | קונפיגורציית מהדורות מקבילות חיצוניות (טבלת מיפוי במקור DB מוכרז) | `database.read` וגם `library.books.read` |
 | `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
 
@@ -2466,6 +2610,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
+| `library.parallelEditions` | `library.books.read` | מ־0.9.97: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות ספקים חיצוניים שנרשמו דרך `startup.externalEditions` ונפתחות מקומית; שורות `{title, isCompanion, identity}` |
 
 ערכים יכולים להפנות אל `$context`,‏ `$result` של פקודה קודמת, או `$row`
 בתוך תבנית שורה. `$concat` מחבר עד שמונה חלקים, ו־`$literal` מונע פירוש של
@@ -2485,6 +2630,19 @@ async function scheduleReminder(title, body, dateTime) {
   ו־`childrenBinding` לפריטי החץ.
 - לתוסף מותר להציג לכל היותר שני פקדים עליונים. הקבוצה מוחלפת אטומית: בתחילת
   חישוב חדש שני הפקדים מוסתרים, ורק תוצאה מלאה ועדכנית מחזירה אותם.
+- `placement` (אופציונלי, על פריט עליון בלבד): `"primary"` (ברירת מחדל) —
+  בשורת הפקדים, נדחס לתפריט כשאין מקום; `"overflow"` — תמיד בתוך תפריט
+  "עוד פעולות" (שלוש נקודות), כתת-תפריט כשיש ילדים.
+- `order` (אופציונלי, מספר שלם 0–10000; דורש `"placement": "overflow"`, על
+  פריט עליון בלבד): משקל מיון בתוך תפריט שלוש הנקודות. הפריטים המובנים
+  תופסים משקלים קבועים, כך שפריט תוסף משתבץ ביניהם לפי ערכו; ללא `order`
+  הפריט מוצג אחרי כל המובנים. בשוויון משקלים המובנה קודם, ותוספים לפי סדר
+  הרישום. המשקלים המובנים —
+  מסך טקסט: סימניות 10, הערות אישיות 20, שמור וזכור 30, אפס הגדרות 40,
+  העתק קישור 45, ייצוא הספר 50, **הדפסה 60**, אודות הספר 70;
+  מסך PDF: הערות אישיות 10, הוסף הערה 20, סימניות 30, אפס הגדרות 40,
+  **הדפס 60**, העתק קישור 70, אודות הספר 80. לדוגמה, `"order": 55` ממקם
+  את הפריט מיד לפני "הדפסה" בשני המסכים.
 - ההרשאות נבדקות בקומפילציה, בזמן החישוב ושוב בלחיצה. הפעולה אינה עוברת דרך
   `PluginRuntimeDispatcher`, אינה מפעילה WebView ואינה דורשת
   `app.run_on_startup`.
@@ -2533,6 +2691,8 @@ async function scheduleReminder(title, body, dateTime) {
 | `title` | כן | הכיתוב המוצג למשתמש (עד 120 תווים). |
 | `defaultValue` | לא | ערך התחלתי, `false` כברירת מחדל. |
 | `openPluginOnSubmit` | לא | מגרסה 0.9.97: אם `true`, אישור חיפוש כשהשורה מסומנת פותח את דף התוסף ושולח אליו `search.requested`. |
+| `resultsProvider` | לא | שם ספק תוצאות חיצוני (אותיות קטנות, עד 64 תווים). כשהשורה מסומנת, טאב החיפוש מציג מדור תוצאות מהתוסף דרך `search.external.requested` (ראו `reader.registerExternalSearchProvider`). סותר את `openPluginOnSubmit`. |
+| `resultsTitle` | לא | כותרת מדור התוצאות בטאב החיפוש (עד 120 תווים); דורש `resultsProvider`. ברירת המחדל: `title`. |
 | `visibleInModes` | לא | מערך לא-ריק מתוך `"exact"`, `"advanced"`, `"fuzzy"`; ברירת המחדל היא כל המצבים. |
 | `disabledSearchOptions` | לא | אובייקט `מצב → מזהי אפשרויות מילה` להשבתה כשה-checkbox מסומן. |
 
@@ -2563,6 +2723,53 @@ async function scheduleReminder(title, body, dateTime) {
 | `word.aramaic-translation` | תרגום ארמי |
 | `word.acronyms` | ראשי תיבות |
 | `word.nikud` / `word.taamim` | ניקוד / טעמים |
+
+### מהדורות מקבילות חיצוניות (externalEditions)
+
+מגרסה 0.9.97, `startup.externalEditions` מצהיר על טבלת מיפוי במקור נתונים
+מוכרז (`contributes.databaseSources`) שמקשרת מזהי ספק חיצוני לספרי אוצריא.
+לחצן "מהדורה מקבילה" המובנה — ופקודת `library.parallelEditions` בתכניות
+Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי המהדורה המובנית (טקסט↔PDF).
+נכללות רק מהדורות שנפתחות מקומית בקורא. הכול רץ ב-Dart בלי להעיר WebView,
+והשאילתות כפופות ל-policy של המקור. דורש את ההרשאות `database.read`
+ו-`library.books.read`. עד 2 תרומות לתוסף.
+
+```json
+{
+  "contributes": {
+    "startup": {
+      "externalEditions": [
+        {
+          "id": "hebrewbooks-editions",
+          "provider": "hebrewbooks",
+          "sourceId": "external_catalog",
+          "table": "otzaria_hebrew_books",
+          "externalIdColumn": "hb_id",
+          "otzariaIdColumn": "otzaria_id",
+          "orderBy": [
+            { "column": "is_best", "direction": "desc" },
+            { "column": "confidence", "direction": "desc" }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+| שדה | חובה | תיאור |
+|---|---:|---|
+| `id` | כן | מזהה ייחודי בתוסף; אותיות ASCII, מספרים, `.`, `_`, `-`. |
+| `provider` | כן | שם הספק כפי שמופיע בזהות `external.provider` של ספריו (אותיות קטנות, עד 64 תווים). |
+| `sourceId` | כן | מקור נתונים שהוכרז ב-`contributes.databaseSources`. |
+| `table` | כן | טבלת המיפוי (חייבת להיות מותרת ב-policy של המקור). |
+| `externalIdColumn` | כן | עמודת מזהה הספק החיצוני. |
+| `otzariaIdColumn` | כן | עמודת מזהה ספר אוצריא. |
+| `orderBy` | לא | עד 4 עמודות מיון של איכות ההתאמה: `{column, direction: asc/desc}`. |
+
+כשהספר הפתוח שייך לספק (זהות חיצונית תואמת), המנוע מוצא את ספרי האוצריא
+הממופים אליו ומהם את שאר מהדורות הספק (שני צעדים); כשהספר הפתוח הוא ספר
+ספרייה, המיפוי ישיר. הספר הפתוח עצמו לעולם אינו מוחזר כמהדורה.
 
 ### הפעלה עצלה
 

@@ -23,6 +23,18 @@ class PluginToolbarItem {
   /// פעולה שה-Host מבצע ישירות, בלי להעיר את מנוע התוסף.
   final CompiledDeclarativeAction? hostAction;
 
+  /// מיקום הפריט בסרגל: 'primary' — בשורת הפקדים (ברירת מחדל, נדחס לתפריט
+  /// כשאין מקום); 'overflow' — תמיד בתוך תפריט "עוד פעולות" (שלוש נקודות).
+  final String placement;
+
+  /// משקל מיון בתוך תפריט "עוד פעולות" (רלוונטי רק ל-placement 'overflow'):
+  /// הפריטים המובנים תופסים משקלים קבועים בקפיצות של 10 (הדפסה = 60 בשני
+  /// מסכי העיון), ופריט תוסף משתבץ ביניהם לפי ערכו. ברירת המחדל
+  /// [defaultOrder] ממקמת את הפריט אחרי כל הפריטים המובנים.
+  final int order;
+
+  static const int defaultOrder = 1000;
+
   const PluginToolbarItem({
     required this.id,
     this.type = 'button',
@@ -34,6 +46,8 @@ class PluginToolbarItem {
     this.openPlugin = false,
     this.param,
     this.hostAction,
+    this.placement = 'primary',
+    this.order = defaultOrder,
   });
 
   Map<String, dynamic> toJson() => {
@@ -47,6 +61,8 @@ class PluginToolbarItem {
       'children': children.map((child) => child.toJson()).toList(),
     if (openPlugin) 'openPlugin': true,
     if (param != null) 'param': param,
+    if (placement != 'primary') 'placement': placement,
+    if (order != defaultOrder) 'order': order,
   };
 }
 

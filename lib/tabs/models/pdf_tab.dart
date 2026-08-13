@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
@@ -48,6 +49,10 @@ class PdfBookTab extends OpenedTab {
   /// תצורת חיפוש חיצונית שממתינה להחלה בחלונית החיפוש.
   final ValueNotifier<ReadingTabSearchState?> incomingSearchConfiguration =
       ValueNotifier<ReadingTabSearchState?>(null);
+
+  /// עמודי התאמה ממנוע חיפוש חיצוני (תוסף) — ראו [ExternalBookMatches].
+  /// מתעדכן גם על-ידי חיפוש-בתוך-ספר שמנותב לספק חיצוני; null = אין.
+  final ValueNotifier<ExternalBookMatches?> externalMatches;
 
   final currentTitle = ValueNotifier<String>("");
 
@@ -123,7 +128,9 @@ class PdfBookTab extends OpenedTab {
     bool isPinned = false,
     String? dedupeKey,
     this.requiresStableLayout = false,
-  }) : super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
+    ExternalBookMatches? externalMatches,
+  }) : externalMatches = ValueNotifier<ExternalBookMatches?>(externalMatches),
+       super(book.title, isPinned: isPinned, dedupeKey: dedupeKey) {
     debugPrint(
       '🔧 PdfBookTab created: book=${book.title}, pageNumber=$pageNumber',
     );
@@ -199,6 +206,7 @@ class PdfBookTab extends OpenedTab {
       searchMode: searchState.searchMode,
       searchDistance: searchState.searchDistance,
       matchPolicy: searchState.matchPolicy,
+      externalMatches: ExternalBookMatches.fromJson(json['externalMatches']),
     );
 
     tab.savedLayoutMode = savedLayoutMode;
@@ -220,6 +228,7 @@ class PdfBookTab extends OpenedTab {
     toggleNavPaneNotifier.dispose();
     toggleCommentatorsPaneNotifier.dispose();
     incomingSearchConfiguration.dispose();
+    externalMatches.dispose();
     super.dispose();
   }
 
@@ -247,6 +256,8 @@ class PdfBookTab extends OpenedTab {
       'isPinned': isPinned,
       'type': 'PdfBookTab',
       'requiresStableLayout': requiresStableLayout,
+      if (externalMatches.value case final matches?)
+        'externalMatches': matches.toJson(),
       if (savedLayoutMode != null) 'savedLayoutMode': savedLayoutMode!.name,
       // שדה החיפוש עצמו הוא המצב המעודכן (הבנאי מאתחל אותו מ-searchText):
       // נפילה חזרה ל-searchText הייתה מחזירה חיפוש שהמשתמש כבר ניקה.

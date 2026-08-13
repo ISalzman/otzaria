@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:otzaria/core/http_client_registry.dart';
+import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
+import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 import 'package:path/path.dart' as p;
 
 class PluginDownloadService {
@@ -12,9 +15,31 @@ class PluginDownloadService {
     HttpClientRegistry.register(_client.close);
   }
 
-  Future<String> downloadPluginArchive(Uri downloadUri) async {
-    final request = http.Request('GET', downloadUri);
-    final response = await _client.send(request);
+  /// מורידה את ארכיון התוסף. [appVersion] — גרסת האוצריא הנוכחית; כשהכתובת
+  /// היא של החנות היא נשלחת אליה כדי לקבל גרסת תוסף תואמת (ראו
+  /// [PluginStoreLinkParser.appendAppVersion]).
+  Future<String> downloadPluginArchive(
+    Uri downloadUri, {
+    String? appVersion,
+  }) async {
+    final resolvedUri = PluginStoreLinkParser.appendAppVersion(
+      downloadUri,
+      appVersion,
+    );
+    var response = await _client.send(http.Request('GET', resolvedUri));
+
+    if (response.statusCode >= 400 && resolvedUri != downloadUri) {
+      final body = await response.stream.bytesToString();
+      // לחנות אין גרסה תואמת — פרטי התאימות כבר בגוף התשובה, ואין טעם
+      // להוריד ארכיון שממילא ייפסל.
+      final incompatible = PluginStoreIncompatibleException.tryParse(body);
+      if (incompatible != null) {
+        throw incompatible;
+      }
+      // סירוב מסיבה אחרת (למשל שילוב פרמטרים שהשרת דוחה) — מנסים שוב
+      // בכתובת המקורית, כדי לא לשבור התקנה שעבדה לפני הוספת appVersion.
+      response = await _client.send(http.Request('GET', downloadUri));
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
@@ -78,5 +103,80 @@ class PluginDownloadService {
     }
 
     return sanitized;
+  }
+}
+
+/// לחנות אין גרסה של התוסף שתואמת לגרסת האוצריא המותקנת. נבנית מגוף תשובת
+/// ה-404 של החנות, שכולל את פרטי התאימות — כך שאין צורך להוריד ארכיון כדי
+/// לדעת מה להציג למשתמש.
+class PluginStoreIncompatibleException implements Exception {
+  final String appVersion;
+  final String latestVersion;
+
+  /// גרסת האוצריא המינימלית שהגרסה האחרונה של התוסף דורשת ('' = ללא רצפה).
+  final String minAppVersion;
+
+  /// הגרסה המינימלית להרצת גרסה *כלשהי* של התוסף — נמוכה מ-[minAppVersion]
+  /// כשגרסאות ישנות יותר עוד תמכו באוצריא ישנה. null כשהחנות לא שלחה אותה.
+  final String? minSupportedAppVersion;
+
+  /// גרסת האוצריא המקסימלית שהיא תומכת בה (null = ללא תקרה).
+  final String? maxAppVersion;
+
+  const PluginStoreIncompatibleException({
+    required this.appVersion,
+    required this.latestVersion,
+    required this.minAppVersion,
+    this.minSupportedAppVersion,
+    this.maxAppVersion,
+  });
+
+  /// האם הכשל נובע מכך שהאוצריא *חדשה* מדי לתוסף (ולא ישנה מדי).
+  bool get isAboveCeiling {
+    final ceiling = maxAppVersion;
+    if (ceiling == null || ceiling.isEmpty) return false;
+    try {
+      return PluginVersionUtils.compareCoreVersions(appVersion, ceiling) > 0;
+    } on PluginVersionFormatException {
+      return false;
+    }
+  }
+
+  static PluginStoreIncompatibleException? tryParse(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) return null;
+      final appVersion = decoded['appVersion'];
+      final latestVersion = decoded['latestVersion'];
+      if (appVersion is! String || appVersion.isEmpty) return null;
+      if (latestVersion is! String || latestVersion.isEmpty) return null;
+      final rawMax = decoded['maxAppVersion'];
+      final maxAppVersion = rawMax is String && rawMax.isNotEmpty
+          ? rawMax
+          : null;
+      final rawMin = decoded['compatibleWith'];
+      final minAppVersion = rawMin is String ? rawMin : '';
+      // בלי אף גבול אין מה להציג למשתמש — עדיף המסלול הרגיל של הורדה ובדיקה.
+      if (minAppVersion.isEmpty && maxAppVersion == null) return null;
+
+      final rawMinSupported = decoded['minSupportedAppVersion'];
+      final minSupported =
+          rawMinSupported is String && rawMinSupported.isNotEmpty
+          ? rawMinSupported
+          : null;
+
+      return PluginStoreIncompatibleException(
+        appVersion: appVersion,
+        latestVersion: latestVersion,
+        minAppVersion: minAppVersion,
+        // זהה לדרישת הגרסה האחרונה — אין מה להוסיף למשתמש.
+        minSupportedAppVersion: minSupported == minAppVersion
+            ? null
+            : minSupported,
+        maxAppVersion: maxAppVersion,
+      );
+    } on FormatException {
+      return null;
+    }
   }
 }

@@ -879,6 +879,24 @@ export interface OtzariaEventMap {
   'plugin.page_opened': { param: unknown };
   /** A checked static search row routed submission to its owning plugin. */
   'search.requested': { itemId: string; request: SearchQueryParams };
+  /** External-search page request sent only to the plugin owning `provider`. */
+  'search.external.requested': {
+    requestId: string;
+    provider: string;
+    query: string;
+    mode: 'exact' | 'advanced' | 'fuzzy';
+    distance: number;
+    offset: number;
+    limit: number;
+    ids?: number[];
+  };
+  /** In-book search request sent only to the plugin owning `provider`. */
+  'reader.inBookSearch.requested': {
+    requestId: string;
+    provider: string;
+    externalId: number | string;
+    query: string;
+  };
   /** Standard context-menu click event. Sent only to the owning plugin. */
   'contextMenu.itemClicked': ContextMenuItemClickedEvent;
   /** Standard color-row click event. Sent only to the owning plugin. */
@@ -1041,6 +1059,11 @@ export type OtzariaMethod =
   | 'search.getOptions'
   | 'reader.openBook'
   | 'reader.openBookAtRef'
+  | 'reader.registerInBookSearchProvider'
+  | 'reader.respondInBookSearch'
+  | 'reader.openSearchTab'
+  | 'reader.registerExternalSearchProvider'
+  | 'reader.respondExternalSearch'
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
   | 'reader.getSelection'

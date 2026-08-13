@@ -94,6 +94,92 @@ void main() {
     expect(report.errors, isEmpty);
   });
 
+  group('externalEditions', () {
+    Map<String, dynamic> editionsManifest({
+      List<String> permissions = const [
+        'app.startup_contributions',
+        'database.read',
+        'library.books.read',
+      ],
+      String minAppVersion = '0.9.97',
+      String sourceId = 'mapping_source',
+      List<Map<String, dynamic>>? items,
+    }) {
+      final json = _manifest(
+        permissions: permissions,
+        minAppVersion: minAppVersion,
+        startup: {
+          'externalEditions':
+              items ??
+              [
+                {
+                  'id': 'editions-1',
+                  'provider': 'extlib',
+                  'sourceId': sourceId,
+                  'table': 'mapping',
+                  'externalIdColumn': 'ext_id',
+                  'otzariaIdColumn': 'otzaria_id',
+                },
+              ],
+        },
+      );
+      json['contributes'] = <String, dynamic>{
+        ...(json['contributes'] as Map),
+        'databaseSources': [
+          {'id': 'mapping_source', 'label': 'מיפוי', 'required': true},
+        ],
+      };
+      return json;
+    }
+
+    test('תרומה תקינה עוברת ללא שגיאות', () {
+      final report = _run(tempDir, editionsManifest());
+      expect(report.errors, isEmpty);
+    });
+
+    test('חסרה הרשאת database.read — שגיאה חוסמת', () {
+      final report = _run(
+        tempDir,
+        editionsManifest(
+          permissions: const [
+            'app.startup_contributions',
+            'library.books.read',
+          ],
+        ),
+      );
+      expect(report.errors, contains(contains('database.read')));
+    });
+
+    test('minAppVersion ישן מדי — שגיאה חוסמת', () {
+      final report = _run(tempDir, editionsManifest(minAppVersion: '0.9.96'));
+      expect(
+        report.errors,
+        contains(contains('externalEditions נתמך החל מגרסה')),
+      );
+    });
+
+    test('sourceId שלא הוכרז — שגיאה חוסמת', () {
+      final report = _run(tempDir, editionsManifest(sourceId: 'other_source'));
+      expect(report.errors, contains(contains('other_source')));
+    });
+
+    test('מזהה כפול — שגיאה חוסמת', () {
+      final item = {
+        'id': 'editions-1',
+        'provider': 'extlib',
+        'sourceId': 'mapping_source',
+        'table': 'mapping',
+        'externalIdColumn': 'ext_id',
+        'otzariaIdColumn': 'otzaria_id',
+      };
+      final report = _run(
+        tempDir,
+        editionsManifest(items: [item, Map.of(item)]),
+      );
+      expect(report.errors, contains(contains('מזהה כפול')));
+    });
+  });
+
   test('missing app.startup_contributions permission is a blocking error', () {
     final report = _run(
       tempDir,

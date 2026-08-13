@@ -1,9 +1,11 @@
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
+import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_program_executor.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/plugins/services/plugin_external_book_loader.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/navigation/otzar_utils.dart';
 
@@ -17,6 +19,7 @@ typedef DeclarativeBookOpen =
       String searchQuery, {
       required bool navigateToPositionIfReused,
       required bool inSidePane,
+      ExternalBookMatches? externalMatches,
     });
 typedef DeclarativeExternalBookOpen =
     Future<bool> Function(ExternalLibraryBook book);
@@ -40,17 +43,14 @@ class DeclarativeLibraryBookAccess
   ) {
     return DeclarativeLibraryBookAccess(
       () async => (await DataRepository.instance.library).getAllBooks(),
-      (provider, externalIds) => switch (provider) {
-        'hebrewbooks' => _loadHebrewBooksByIds(externalIds),
-        'otzar' => DataRepository.instance.otzarBooks,
-        _ => Future.value(const <Book>[]),
-      },
+      loadExternalBooksByProvider,
       (
         book,
         index,
         searchQuery, {
         required navigateToPositionIfReused,
         required inSidePane,
+        externalMatches,
       }) => coordinator.openBook(
         book,
         index,
@@ -59,6 +59,7 @@ class DeclarativeLibraryBookAccess
         requiresStableLayout: book is PdfBook,
         navigateToPositionIfReused: navigateToPositionIfReused,
         inSidePane: inSidePane,
+        externalMatches: externalMatches,
       ),
       externalBookOpener: (book) => OtzarUtils.launchOtzarWeb(book.link),
     );
@@ -89,6 +90,7 @@ class DeclarativeLibraryBookAccess
     required String searchQuery,
     bool navigateToPositionIfReused = false,
     bool inSidePane = false,
+    ExternalBookMatches? externalMatches,
   }) async {
     final book = (await findUniqueBooks([identity])).single;
     if (book == null) return false;
@@ -101,8 +103,49 @@ class DeclarativeLibraryBookAccess
       searchQuery,
       navigateToPositionIfReused: navigateToPositionIfReused,
       inSidePane: inSidePane,
+      externalMatches: externalMatches,
     );
     return true;
+  }
+
+  /// מהדורות מקבילות (מובנית + היברובוקס מקומיות) לזהות ספר, כשורות
+  /// דקלרטיביות `{title, isCompanion, identity}` — עבור הפקודה
+  /// `library.parallelEditions`. הזהות מנוקה משדות null לפני החיפוש:
+  /// כשיש זהות חיצונית היא מספיקה לבדה, אחרת נשמרים רק השדות שסופקו.
+  Future<List<Map<String, dynamic>>> parallelEditionsForIdentity(
+    Map<String, dynamic> identity,
+  ) async {
+    final sanitized = _sanitizeContextIdentity(identity);
+    if (sanitized == null) return const [];
+    final book = (await findUniqueBooks([sanitized])).single;
+    if (book == null) return const [];
+    final editions = await ParallelEditionsService.find(book);
+    return [
+      for (final edition in editions)
+        {
+          'title': edition.book.title,
+          'isCompanion': edition.isCompanion,
+          'identity': PluginBookIdentity.toJson(edition.book),
+        },
+    ];
+  }
+
+  /// זהות שנבנתה משדות `$context` עשויה לכלול null-ים (למשל external.provider
+  /// כשאין ספר חיצוני) — מנקים אותם כדי שהוולידציה של הזהות תעבור.
+  Map<String, dynamic>? _sanitizeContextIdentity(Map<String, dynamic> raw) {
+    final external = raw['external'];
+    if (external is Map &&
+        external['provider'] is String &&
+        external['id'] != null) {
+      return {
+        'external': {'provider': external['provider'], 'id': external['id']},
+      };
+    }
+    final sanitized = <String, dynamic>{
+      for (final field in const ['id', 'bookId', 'type', 'source'])
+        if (raw[field] != null) field: raw[field],
+    };
+    return sanitized.isEmpty ? null : sanitized;
   }
 
   /// פותר אצווה של זהויות לספרים בלי לחשוף נתיבים או לבצע פתיחה.
@@ -241,30 +284,4 @@ class _BookLookupIndex {
 
   static String _externalKey(({String provider, Object id}) external) =>
       '${external.provider}:${external.id}';
-}
-
-Future<List<Book>> _loadHebrewBooksByIds(Set<Object> externalIds) async {
-  final ids = externalIds.map(PluginBookIdentity.parseId).nonNulls.toSet();
-  if (ids.isEmpty) return const [];
-  final localMatches = (await DataRepository.instance.localHebrewBooks).where((
-    book,
-  ) {
-    final external = PluginBookIdentity.externalOf(book);
-    return external?.provider == 'hebrewbooks' &&
-        ids.contains(PluginBookIdentity.parseId(external?.id));
-  }).toList();
-  final localIds = localMatches
-      .map(PluginBookIdentity.externalOf)
-      .nonNulls
-      .map((external) => PluginBookIdentity.parseId(external.id))
-      .nonNulls
-      .toSet();
-  final missingIds = ids.difference(localIds);
-  if (missingIds.isEmpty) return localMatches;
-  return [
-    ...localMatches,
-    ...await ExternalCatalogRepository.instance.getHebrewBooksByIds(
-      missingIds,
-    ),
-  ];
 }

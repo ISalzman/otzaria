@@ -25,6 +25,11 @@ class PluginStartupContributions {
   /// שורות סטטיות שמוצגות בתחתית דיאלוג החיפוש.
   final List<Map<String, dynamic>> searchDialogItems;
 
+  /// קונפיגורציות מהדורות מקבילות חיצוניות — טבלת מיפוי של מקור נתונים
+  /// מוכרז שמקשרת מזהי ספק חיצוני לספרי אוצריא (ראו
+  /// PluginExternalEditionsRegistry).
+  final List<Map<String, dynamic>> externalEditions;
+
   /// נושאי אירועים שמעירים את מופע הרקע של התוסף בעצלנות (בלי מנוע חי
   /// עד שאירוע כזה קורה בפועל), או [startupActivationTopic].
   final List<String> activationEvents;
@@ -39,6 +44,7 @@ class PluginStartupContributions {
     this.publishedData = const [],
     this.programs = const [],
     this.searchDialogItems = const [],
+    this.externalEditions = const [],
     this.activationEvents = const [],
     this.keepAlive = false,
   });
@@ -49,6 +55,7 @@ class PluginStartupContributions {
       publishedData.isEmpty &&
       programs.isEmpty &&
       searchDialogItems.isEmpty &&
+      externalEditions.isEmpty &&
       activationEvents.isEmpty;
 
   /// האם קיימת פעולה שבאמת עשויה להרים את מנוע הרקע.
@@ -119,6 +126,7 @@ class PluginStartupContributions {
       publishedData: mapList('publishedData'),
       programs: mapList('programs'),
       searchDialogItems: mapList('searchDialogItems'),
+      externalEditions: mapList('externalEditions'),
       activationEvents: events is List
           ? [
               for (final entry in events)
@@ -135,6 +143,7 @@ class PluginStartupContributions {
     if (publishedData.isNotEmpty) 'publishedData': publishedData,
     if (programs.isNotEmpty) 'programs': programs,
     if (searchDialogItems.isNotEmpty) 'searchDialogItems': searchDialogItems,
+    if (externalEditions.isNotEmpty) 'externalEditions': externalEditions,
     if (activationEvents.isNotEmpty) 'activationEvents': activationEvents,
     if (keepAlive) 'keepAlive': true,
   };

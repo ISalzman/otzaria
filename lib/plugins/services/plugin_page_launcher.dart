@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
 /// מנווט את המשתמש לדף תוסף ומוסר לו payload כאירוע JS.
@@ -44,6 +45,10 @@ class PluginPageLauncher {
     _readyPages.add(pluginId);
     final pending = _pending.remove(pluginId);
     if (pending == null) return;
+    debugPrint(
+      'PluginPageLauncher: $pluginId ready, delivering ${pending.length} '
+      'pending event(s)',
+    );
     for (final event in pending) {
       _enqueueDelivery(pluginId, event.topic, event.payload);
     }

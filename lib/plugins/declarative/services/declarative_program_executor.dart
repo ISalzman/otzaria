@@ -11,13 +11,20 @@ abstract interface class DeclarativeBookResolver {
   );
 }
 
+/// מחזיר את המהדורות המקבילות (מובנית + היברובוקס מקומיות) לזהות ספר,
+/// כשורות `{title, isCompanion, identity}` — ראו ParallelEditionsService.
+typedef DeclarativeParallelEditionsFinder =
+    Future<List<Map<String, dynamic>>> Function(Map<String, dynamic> identity);
+
 class DeclarativeProgramExecutor {
   final PluginDatabaseService _databaseService;
   final DeclarativeBookResolver? bookResolver;
+  final DeclarativeParallelEditionsFinder? parallelEditionsFinder;
 
   DeclarativeProgramExecutor({
     PluginDatabaseService? databaseService,
     this.bookResolver,
+    this.parallelEditionsFinder,
   }) : _databaseService = databaseService ?? PluginDatabaseService();
 
   Future<DeclarativeProgramResult> execute({
@@ -129,6 +136,26 @@ class DeclarativeProgramExecutor {
               row: row,
             ),
         ];
+      case 'library.parallelEditions':
+        final finder = parallelEditionsFinder;
+        if (finder == null) {
+          throw const DeclarativeProgramException(
+            'declarative.service_unavailable',
+            'library.parallelEditions is not available',
+          );
+        }
+        final identity = _resolveValue(
+          command.args['identity'],
+          context: context,
+          results: results,
+        );
+        if (identity is! Map) {
+          throw const DeclarativeProgramException(
+            'declarative.type_mismatch',
+            'library.parallelEditions.identity must be an object',
+          );
+        }
+        return finder(Map<String, dynamic>.from(identity));
       case 'library.resolveBooks':
         final resolver = bookResolver;
         if (resolver == null) {

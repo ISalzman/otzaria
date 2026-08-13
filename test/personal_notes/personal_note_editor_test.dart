@@ -2,12 +2,53 @@ import 'dart:convert';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 void main() {
+  testWidgets('ב-Mac Cmd+Enter שומר, ו-placeholder מציג ⌘', (tester) async {
+    ShortcutHelper.isMacForTesting = true;
+    addTearDown(() => ShortcutHelper.isMacForTesting = null);
+
+    var saved = 0;
+    final focusNode = FocusNode();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PersonalNoteEditorBody(
+            controller: buildPersonalNoteEditorController(
+              initialContent: '',
+              initialFormat: PersonalNoteContentFormat.plain,
+            ),
+            focusNode: focusNode,
+            scrollController: ScrollController(),
+            autofocus: false,
+            linkableNotes: const [],
+            onSaveShortcut: () => saved++,
+          ),
+        ),
+      ),
+    );
+    focusNode.requestFocus();
+    await tester.pump();
+
+    final editor = tester.widget<quill.QuillEditor>(
+      find.byType(quill.QuillEditor),
+    );
+    expect(editor.config.placeholder, contains('⌘ + Enter'));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+
+    expect(saved, 1);
+  });
+
   testWidgets('כפתור bold פועל גם כ-toggle ומסיר עיצוב קיים', (tester) async {
     final controller = buildPersonalNoteEditorController(
       initialContent: 'שלום',

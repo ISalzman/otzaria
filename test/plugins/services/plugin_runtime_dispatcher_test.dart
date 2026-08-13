@@ -104,6 +104,28 @@ class _LifecycleFakeController extends Fake implements InAppWebViewController {
     jsEvents.add(source);
     return null;
   }
+
+  // המסלול האסינכרוני של הדיספצ'ר: בדיקת חיוּת + מסירת אירוע לטאב שהוחיה
+  // בקריאה אחת. ברירת המחדל מדמה דף חי (true); שינוי callAsyncOutcome מדמה
+  // דף זומבי ('no-page-world') או גשר מת (null דרך חריגה). מסירות נרשמות
+  // ב-jsEvents רק כשהדף חי — בדף זומבי האירוע לא מגיע למאזינים.
+  Object? callAsyncOutcome = true;
+  int reloadCalls = 0;
+
+  @override
+  Future<void> reload() async => reloadCalls++;
+
+  @override
+  Future<CallAsyncJavaScriptResult?> callAsyncJavaScript({
+    required String functionBody,
+    Map<String, dynamic> arguments = const <String, dynamic>{},
+    ContentWorld? contentWorld,
+  }) async {
+    if (callAsyncOutcome == true && functionBody.contains('dispatchEvent')) {
+      jsEvents.add(functionBody);
+    }
+    return CallAsyncJavaScriptResult(value: callAsyncOutcome);
+  }
 }
 
 // ── fake controller עם pause/resume שניתן לעכב (gate) — לבדיקת serialization.
@@ -716,11 +738,81 @@ void main() {
       );
 
       expect(a.resumeCalls, resumeCalls + 1);
-      expect(a.pauseCalls, pauseCalls + 1);
-      expect(a.jsEvents, hasLength(3));
+      // אין הקפאה מיידית אחרי המסירה: אירוע ממוקד פותח לרוב טיפול אסינכרוני
+      // (למשל בקשת חיפוש שעונה דרך ה-bridge), והקפאה באמצע הייתה בולעת את
+      // התשובה. ההקפאה החוזרת נדחית לחלון חסד (טיימר, מחוץ לבדיקה הזו).
+      expect(a.pauseCalls, pauseCalls);
+      expect(a.jsEvents, hasLength(2));
       expect(a.jsEvents[0], contains('plugin.resumed'));
       expect(a.jsEvents[1], contains('reader.toolbar_item_clicked'));
-      expect(a.jsEvents[2], contains('plugin.suspended'));
+    });
+
+    test('מסירה לטאב מושהה שאינה מאומתת — הדף נטען מחדש והאירוע ממתין '
+        'למסירה חוזרת', () async {
+      _d.repositoryForTesting = _FakeRegistryRepo(enabled: true);
+      final a = _LifecycleFakeController();
+      _d.registerController(pidA, a);
+
+      _d.setVisiblePluginTabs({pidA});
+      await pumpEventQueue();
+      _d.setVisiblePluginTabs(const {});
+      await pumpEventQueue();
+      a.jsEvents.clear();
+      // מדמה את מצב הזומבי: ההרצה רצה אך לא ב-world של הדף האמיתי.
+      a.callAsyncOutcome = 'no-page-world';
+
+      await _d.dispatchEventToPlugin(
+        pidA,
+        'reader.toolbar_item_clicked',
+        {'itemId': 'mark'},
+        preferBackground: true,
+      );
+
+      expect(a.reloadCalls, 1);
+      // אירוע ה-lifecycle (plugin.resumed) עדיין נשלח, אבל האירוע הממוקד
+      // עצמו לא נמסר לדף הזומבי.
+      expect(
+        a.jsEvents.where((e) => e.contains('reader.toolbar_item_clicked')),
+        isEmpty,
+      );
+
+      // אחרי ה-reload הדף חוזר בריא — boot מסתיים והאירוע שנרשם נמסר מחדש.
+      a.callAsyncOutcome = true;
+      await _d.onForegroundInstanceReady(pidA);
+      await pumpEventQueue();
+      expect(
+        a.jsEvents.where(
+          (e) => e.contains('reader.toolbar_item_clicked'),
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('מסירה מאומתת לטאב מושהה — בלי reload', () async {
+      _d.repositoryForTesting = _FakeRegistryRepo(enabled: true);
+      final a = _LifecycleFakeController();
+      _d.registerController(pidA, a);
+
+      _d.setVisiblePluginTabs({pidA});
+      await pumpEventQueue();
+      _d.setVisiblePluginTabs(const {});
+      await pumpEventQueue();
+      a.jsEvents.clear();
+
+      await _d.dispatchEventToPlugin(
+        pidA,
+        'reader.toolbar_item_clicked',
+        {'itemId': 'mark'},
+        preferBackground: true,
+      );
+
+      expect(a.reloadCalls, 0);
+      expect(
+        a.jsEvents.where(
+          (e) => e.contains('reader.toolbar_item_clicked'),
+        ),
+        hasLength(1),
+      );
     });
 
     test('פתיחת תוסף מוסרת את האירוע ל-foreground המושהה', () async {

@@ -126,6 +126,28 @@ class DeclarativeActionCompiler {
         'reader.openBook.searchQuery must be a short string',
       );
     }
+    final matchPages = args['matchPages'];
+    if (matchPages != null &&
+        (matchPages is! List ||
+            matchPages.length > 10000 ||
+            matchPages.any((page) => page is! int || page < 1))) {
+      throw const DeclarativeProgramException(
+        'declarative.invalid_args',
+        'reader.openBook.matchPages must be a list of positive page numbers',
+      );
+    }
+    final matchedTerms = args['matchedTerms'];
+    if (matchedTerms != null &&
+        (matchedTerms is! List ||
+            matchedTerms.length > 64 ||
+            matchedTerms.any(
+              (term) => term is! String || term.isEmpty || term.length > 256,
+            ))) {
+      throw const DeclarativeProgramException(
+        'declarative.invalid_args',
+        'reader.openBook.matchedTerms must be a list of short strings',
+      );
+    }
   }
 
   Map<String, dynamic> _requiredMap(Object? value, String context) {

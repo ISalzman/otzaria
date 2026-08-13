@@ -65,6 +65,49 @@ class PluginStoreLinkParser {
     );
   }
 
+  /// מארחי החנות הרשמית — רק אליהם נשלחת גרסת האוצריא.
+  static const _storeHosts = {'otzaria.org', 'www.otzaria.org'};
+
+  /// גרסה שהשרת מקבל: X[.Y[.Z[.W]]] עם סיומת prerelease/build אופציונלית.
+  static final _appVersionPattern = RegExp(
+    r'^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$',
+  );
+
+  /// מוסיפה `appVersion` לכתובת הורדה של החנות, כדי שהשרת יגיש את גרסת
+  /// התוסף הגבוהה ביותר שתואמת לגרסת האוצריא הזו במקום את הגרסה האחרונה.
+  ///
+  /// מחזירה את [downloadUri] כמו-שהוא כשההוספה לא מתאימה: מארח שאינו החנות
+  /// (אין לדלוף את גרסת האפליקציה לשרת זר), כתובת שאינה הורדת תוסף, גרסה
+  /// מפורשת בנתיב (`<id>@<version>`) או `pending` — שילובים שהשרת דוחה ב-400.
+  static Uri appendAppVersion(Uri downloadUri, String? appVersion) {
+    final version = appVersion?.trim();
+    if (version == null || !_appVersionPattern.hasMatch(version)) {
+      return downloadUri;
+    }
+    if (!_storeHosts.contains(downloadUri.host.toLowerCase())) {
+      return downloadUri;
+    }
+
+    final segments = downloadUri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.isEmpty || segments.last.toLowerCase() != 'download') {
+      return downloadUri;
+    }
+    if (segments.any((segment) => segment.contains('@'))) {
+      return downloadUri;
+    }
+
+    final query = downloadUri.queryParameters;
+    if (query.containsKey('appVersion') || query.containsKey('pending')) {
+      return downloadUri;
+    }
+
+    return downloadUri.replace(
+      queryParameters: {...query, 'appVersion': version},
+    );
+  }
+
   static bool _parseBoolFlag(String? value) {
     if (value == null) {
       return false;

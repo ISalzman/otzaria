@@ -1285,6 +1285,97 @@ Future<void> main() async {
     });
   });
 
+  group('PluginBridgeAdapter.library.resolveCategoryPaths', () {
+    late PluginBridgeAdapter adapter;
+
+    setUp(() {
+      final library = Library(
+        categories: [
+          Category(
+            title: 'בדיקה',
+            description: '',
+            shortDescription: '',
+            order: 0,
+            subCategories: const [],
+            books: [
+              TextBook(
+                id: 42,
+                title: 'בראשית',
+                categoryId: 1,
+                fileType: 'txt',
+                categoryPath: '/תנך/תורה',
+              ),
+              PdfBook(
+                id: 7,
+                title: 'שולחן ערוך',
+                path: '/tmp/shulchan.pdf',
+                categoryId: 2,
+                fileType: 'pdf',
+              ),
+            ],
+            parent: null,
+          ),
+        ],
+      );
+      DataRepository.instance.library = Future.value(library);
+
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['library.books.read']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: _StubTabsBloc(),
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: _MockBookOpenCoordinator(),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog:
+              ({required title, required content, required subtitle}) async =>
+                  true,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    test('מחזיר נתיבים מיושרים לסדר הקלט, עם null למזהה לא מוכר', () async {
+      final result = await adapter.execute(
+        'library',
+        'resolveCategoryPaths',
+        const {
+          'ids': [42, 9999, 7, 'לא-מספר'],
+        },
+      );
+
+      expect(result, isA<List>());
+      final paths = result as List;
+      expect(paths, hasLength(4));
+      expect(paths[0], '/תנך/תורה');
+      expect(paths[1], isNull);
+      // ספר בלי categoryPath — נפתר לפי עץ הקטגוריות או null; לא זורק.
+      expect(paths[3], isNull);
+    });
+
+    test('קלט שאינו מערך או גדול מדי — נדחה', () async {
+      expect(
+        () => adapter.execute('library', 'resolveCategoryPaths', const {
+          'ids': 'not-a-list',
+        }),
+        throwsA(isA<Exception>()),
+      );
+      expect(
+        () => adapter.execute('library', 'resolveCategoryPaths', {
+          'ids': List<int>.filled(20001, 1),
+        }),
+        throwsA(isA<Exception>()),
+      );
+    });
+  });
+
   group('PluginBridgeAdapter.library.getTree', () {
     late PluginBridgeAdapter adapter;
 

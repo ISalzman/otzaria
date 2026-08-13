@@ -32,8 +32,15 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
+import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
+import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
@@ -725,6 +732,28 @@ class PluginBridgeAdapter {
                 },
           ];
         }
+      case 'resolveCategoryPaths':
+        {
+          // spec: resolveCategoryPaths({ ids }) — נתיב הקטגוריה בעץ הספרייה
+          // לכל מזהה ספר, מיושר לסדר הקלט (null למזהה לא מוכר). מסלול bulk:
+          // ספק תוצאות חיצוני מסווג אינדקס שלם (עד תקרת האינדקס של מדור
+          // החיפוש) בקריאה אחת, במקום קריאת resolveBooks לכל 100 מזהים.
+          final rawIds = args['ids'];
+          if (rawIds is! List || rawIds.length > 20000) {
+            throw Exception('ids must be an array with at most 20000 entries');
+          }
+          final bookById = <int, Book>{
+            for (final book in library.getAllBooks())
+              if (book.id != null) book.id!: book,
+          };
+          return [
+            for (final raw in rawIds)
+              if (raw is int && bookById[raw] != null)
+                FacetHelper.resolveCategoryPath(bookById[raw]!)
+              else
+                null,
+          ];
+        }
       case 'listRecentBooks':
         final historyState = _dependencies.historyBloc.state;
         if (historyState is! HistoryLoaded) return [];
@@ -1188,7 +1217,8 @@ class PluginBridgeAdapter {
   ) async {
     switch (action) {
       case 'openBook':
-        // spec: openBook({ id?, bookId?, type?, index?, searchQuery?, navigateToPositionIfReused? })
+        // spec: openBook({ id?, bookId?, type?, index?, searchQuery?,
+        //   navigateToPositionIfReused?, matchPages?, matchedTerms? })
         // also accepts legacy 'title' for back-compat; all supplied identity fields must match.
         {
           final bookId = (args['bookId'] ?? args['title']) as String?;
@@ -1197,6 +1227,7 @@ class PluginBridgeAdapter {
           final navigateToPositionIfReused =
               args['navigateToPositionIfReused'] as bool? ?? false;
           final openInSidePane = args['openInSidePane'] as bool? ?? false;
+          final externalMatches = _parseExternalMatches(args, searchQuery);
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
               args['external'] == null) {
@@ -1212,6 +1243,7 @@ class PluginBridgeAdapter {
               searchQuery: searchQuery,
               navigateToPositionIfReused: navigateToPositionIfReused,
               inSidePane: openInSidePane,
+              externalMatches: externalMatches,
             );
           }
           final book = _findPluginBook(
@@ -1227,7 +1259,140 @@ class PluginBridgeAdapter {
             requiresStableLayout: book is PdfBook,
             navigateToPositionIfReused: navigateToPositionIfReused,
             inSidePane: openInSidePane,
+            externalMatches: externalMatches,
           );
+          return true;
+        }
+      case 'registerInBookSearchProvider':
+        // spec: registerInBookSearchProvider({ provider })
+        // רושם את התוסף כספק חיפוש-בתוך-ספר לספרים חיצוניים של provider.
+        {
+          final provider = args['provider'];
+          if (provider is! String || provider.isEmpty) {
+            throw Exception('error.invalid_params: provider required');
+          }
+          try {
+            PluginInBookSearchService.instance.register(
+              provider,
+              plugin.pluginId,
+            );
+          } on StateError {
+            throw Exception(
+              'error.conflict: provider is owned by another plugin',
+            );
+          }
+          return true;
+        }
+      case 'respondInBookSearch':
+        // spec: respondInBookSearch({ requestId, pages?, matchedTerms?, query?, error? })
+        // תשובת הספק לאירוע reader.inBookSearch.requested.
+        {
+          final requestId = args['requestId'];
+          if (requestId is! String || requestId.isEmpty) {
+            throw Exception('error.invalid_params: requestId required');
+          }
+          final accepted = PluginInBookSearchService.instance.respond(
+            plugin.pluginId,
+            requestId,
+            pages: (args['pages'] as List? ?? const [])
+                .whereType<num>()
+                .map((page) => page.toInt())
+                .where((page) => page > 0)
+                .toList(),
+            matchedTerms: (args['matchedTerms'] as List? ?? const [])
+                .whereType<String>()
+                .toList(),
+            query: args['query'] as String? ?? '',
+            error: args['error'] as String?,
+          );
+          if (!accepted) {
+            throw Exception(
+              'error.not_found: request does not belong to this plugin',
+            );
+          }
+          return true;
+        }
+      case 'openSearchTab':
+        // spec: openSearchTab({ query, selectItems? })
+        // פותח כרטיסיית חיפוש מובנית עם השאילתה; selectItems מסמן שורות
+        // דיאלוג של התוסף הקורא (מפתחי הבחירה נגזרים מ-pluginId שלו בלבד).
+        {
+          final query = (args['query'] as String? ?? '').trim();
+          if (query.isEmpty || query.length > 500) {
+            throw Exception('query required');
+          }
+          final selectItems = (args['selectItems'] as List? ?? const [])
+              .whereType<String>()
+              .where(
+                (id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id),
+              )
+              .take(4)
+              .toList();
+          final tab = SearchingTab(
+            SearchingTab.titleForQuery(query),
+            query,
+            initialConfiguration: SearchConfiguration(
+              pluginSearchSelections: {
+                for (final itemId in selectItems)
+                  '${plugin.pluginId}/$itemId': true,
+              },
+            ),
+          );
+          tab.searchBloc.add(UpdateSearchQuery(query));
+          final coordinator = _dependencies.bookOpenCoordinator;
+          coordinator.historyBloc.add(AddHistory(tab));
+          coordinator.tabsBloc.add(AddTab(tab));
+          coordinator.navigationBloc.add(
+            const NavigateToScreen(Screen.search),
+          );
+          return true;
+        }
+      case 'registerExternalSearchProvider':
+        // spec: registerExternalSearchProvider({ provider })
+        // רושם את התוסף כספק תוצאות חיצוני למסך החיפוש המובנה.
+        {
+          final provider = args['provider'];
+          if (provider is! String || provider.isEmpty) {
+            throw Exception('error.invalid_params: provider required');
+          }
+          try {
+            PluginExternalSearchService.instance.register(
+              provider,
+              plugin.pluginId,
+            );
+          } on StateError {
+            throw Exception(
+              'error.conflict: provider is owned by another plugin',
+            );
+          }
+          return true;
+        }
+      case 'respondExternalSearch':
+        // spec: respondExternalSearch({ requestId, results?, totalBooks?,
+        //   totalHits?, hasMore?, done?, index?, error? })
+        // תשובת הספק לאירוע search.external.requested; הניקוי נעשה בשירות.
+        // done: false — עדכון חלקי תוך כדי הזרמה; הבקשה נשארת פתוחה.
+        {
+          final requestId = args['requestId'];
+          if (requestId is! String || requestId.isEmpty) {
+            throw Exception('error.invalid_params: requestId required');
+          }
+          final accepted = PluginExternalSearchService.instance.respond(
+            plugin.pluginId,
+            requestId,
+            results: args['results'] as List? ?? const [],
+            totalBooks: (args['totalBooks'] as num?)?.toInt() ?? 0,
+            totalHits: (args['totalHits'] as num?)?.toInt() ?? 0,
+            hasMore: args['hasMore'] == true,
+            done: args['done'] != false,
+            index: args['index'] as List?,
+            error: args['error'] as String?,
+          );
+          if (!accepted) {
+            throw Exception(
+              'error.not_found: request does not belong to this plugin',
+            );
+          }
           return true;
         }
       case 'openBookAtRef':
@@ -1589,6 +1754,34 @@ class PluginBridgeAdapter {
     for (final key in ['id', 'bookId', 'type', 'source', 'external'])
       if (args.containsKey(key)) key: args[key],
   };
+
+  /// עמודי התאמה שהתוסף צירף לפתיחה (חיפוש חיצוני): רשימת עמודים חיוביים,
+  /// מוגבלת בגודל. ערך לא תקין נדחה בשקט — פתיחת הספר חשובה מההתאמות.
+  ExternalBookMatches? _parseExternalMatches(
+    Map<String, dynamic> args,
+    String searchQuery,
+  ) {
+    final rawPages = args['matchPages'];
+    if (rawPages is! List || rawPages.isEmpty || rawPages.length > 10000) {
+      return null;
+    }
+    final pages = rawPages
+        .whereType<num>()
+        .map((page) => page.toInt())
+        .where((page) => page > 0)
+        .toList();
+    if (pages.isEmpty) return null;
+    final terms = (args['matchedTerms'] as List? ?? const [])
+        .whereType<String>()
+        .where((term) => term.isNotEmpty && term.length <= 256)
+        .take(64)
+        .toList();
+    return ExternalBookMatches(
+      pages: pages,
+      matchedTerms: terms,
+      query: searchQuery,
+    );
+  }
 
   Future<Map<String, dynamic>> _findTextOccurrences(
     Map<String, dynamic> args,

@@ -269,7 +269,9 @@ class ShortcutHelper {
       .replaceAll('ARROWLEFT', '←')
       .replaceAll('ARROWRIGHT', '→')
       .replaceAll('PAGEUP', 'Page Up')
-      .replaceAll('PAGEDOWN', 'Page Down');
+      .replaceAll('PAGEDOWN', 'Page Down')
+      .replaceAll('COMMA', ',')
+      .replaceAll('ENTER', 'Enter');
 
   /// ממיר מחרוזת קיצור (כגון `'ctrl+f'`) ל-[ShortcutActivator].
   ///

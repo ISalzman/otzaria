@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 
 /// רישום שורות חיפוש סטטיות של תוספים.
 ///
@@ -21,14 +22,24 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
     final item = PluginSearchDialogItem.fromPayload(payload);
     final items = _items.putIfAbsent(pluginId, () => []);
     final existing = items.indexWhere((candidate) => candidate.id == item.id);
+    if (existing < 0 &&
+        items.length >= PluginSearchDialogItem.maxItemsPerPlugin) {
+      throw const PluginSearchDialogItemException(
+        'a plugin can register at most 4 search dialog items',
+      );
+    }
+    // הצהרת resultsProvider היא מניפסט-בלבד, ולכן הספק נרשם כבר בסנכרון
+    // התוספים — טאב חיפוש משוחזר מפעיל את המדור מיד עם עליית האפליקציה,
+    // בלי להמתין ל-boot של התוסף (המנוע מוּעָר בעת הבקשה הראשונה).
+    if (item.resultsProvider != null && this == instance) {
+      PluginExternalSearchService.instance.register(
+        item.resultsProvider!,
+        pluginId,
+      );
+    }
     if (existing >= 0) {
       items[existing] = item;
     } else {
-      if (items.length >= PluginSearchDialogItem.maxItemsPerPlugin) {
-        throw const PluginSearchDialogItemException(
-          'a plugin can register at most 4 search dialog items',
-        );
-      }
       items.add(item);
     }
     notifyListeners();

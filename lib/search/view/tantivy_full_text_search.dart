@@ -7,8 +7,10 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
+import 'package:otzaria/search/view/external_search_results_section.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -546,16 +548,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                         ? const []
                         : [
                             AppTopBarItem(
-                              widget: Text(
-                                state.totalGroups != null
-                                    ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
-                                    : '${state.results.length}/${state.totalResults} תוצאות',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(alpha: 0.7),
-                                ),
-                              ),
+                              widget: _buildResultCounts(context, state),
                             ),
                             AppTopBarItem(
                               dividerBefore: true,
@@ -626,8 +619,56 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות).
+  /// מוני התוצאות בשורת הפקדים: ספירת המנוע, ומתחתיה — כשספק חיצוני פעיל —
+  /// ספירת המקור החיצוני (ספרים ומופעים). שתי הספירות שונות במהותן (תוצאות
+  /// מול ספרים), ולכן מוצגות שורה מעל שורה באותו מקום במקום מספר מאוחד.
+  Widget _buildResultCounts(BuildContext context, SearchState state) {
+    final muted = TextStyle(
+      fontSize: 14,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final engineLine = state.totalGroups != null
+        ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
+        : '${state.results.length}/${state.totalResults} תוצאות';
+    return ValueListenableBuilder<ExternalSearchSummary?>(
+      valueListenable: widget.tab.externalSearchSummary,
+      builder: (context, summary, _) {
+        if (summary == null) return Text(engineLine, style: muted);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('אוצריא: $engineLine', style: muted.copyWith(fontSize: 12)),
+            Text(
+              '${summary.sourceTitle}: ${summary.totalBooks} ספרים, '
+              '${summary.totalHits} מופעים',
+              style: muted.copyWith(fontSize: 12),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות),
+  /// ומעליו מדור תוצאות ממקור חיצוני של תוסף כשהוא פעיל (מכווץ את עצמו
+  /// לכלום אחרת).
   Widget _buildResultsContent(
+    BuildContext context,
+    SearchState state,
+    bool showBlockingLoader,
+  ) {
+    return Column(
+      children: [
+        ExternalSearchResultsSection(tab: widget.tab),
+        Expanded(
+          child: _buildEngineResultsContent(context, state, showBlockingLoader),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEngineResultsContent(
     BuildContext context,
     SearchState state,
     bool showBlockingLoader,

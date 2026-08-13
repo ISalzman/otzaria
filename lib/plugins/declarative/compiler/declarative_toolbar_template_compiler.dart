@@ -49,6 +49,8 @@ class DeclarativeToolbarTemplateCompiler {
       'title',
       'icon',
       'contexts',
+      'placement',
+      'order',
       'binding',
       'action',
       'childrenBinding',
@@ -61,7 +63,15 @@ class DeclarativeToolbarTemplateCompiler {
       );
     }
     final basePayload = <String, dynamic>{
-      for (final field in const ['id', 'type', 'title', 'icon', 'contexts'])
+      for (final field in const [
+        'id',
+        'type',
+        'title',
+        'icon',
+        'contexts',
+        'placement',
+        'order',
+      ])
         if (json.containsKey(field)) field: json[field],
       if (type != 'button')
         'children': [

@@ -74,6 +74,52 @@ class ExternalCatalogRepository {
     );
   }
 
+  /// מזהי היברובוקס הממופים לספר אוצריא, מסודרים לפי איכות ההתאמה
+  /// (`is_best` ואז `confidence`). מחזיר רשימה ריקה כשאין מיפוי או DB.
+  Future<List<int>> getHebrewBookIdsForOtzariaId(int otzariaId) async {
+    return _selectMappingColumn(
+      select: 'hb_id',
+      where: 'otzaria_id = ?',
+      argument: otzariaId,
+    );
+  }
+
+  /// מזהי ספרי אוצריא הממופים לספר היברובוקס — הכיוון ההפוך של
+  /// [getHebrewBookIdsForOtzariaId].
+  Future<List<int>> getOtzariaIdsForHebrewBookId(int hbId) async {
+    return _selectMappingColumn(
+      select: 'otzaria_id',
+      where: 'hb_id = ?',
+      argument: hbId,
+    );
+  }
+
+  Future<List<int>> _selectMappingColumn({
+    required String select,
+    required String where,
+    required int argument,
+  }) async {
+    if (!await databaseExists()) return const [];
+    sqlite3.Database? db;
+    try {
+      db = sqlite3.sqlite3.open(databasePath, mode: sqlite3.OpenMode.readOnly);
+      final rows = db.select(
+        'SELECT $select FROM otzaria_hebrew_books WHERE $where '
+        'ORDER BY is_best DESC, confidence DESC LIMIT 20',
+        [argument],
+      );
+      return [
+        for (final row in rows)
+          if (row.values.first case final int id) id,
+      ];
+    } catch (e) {
+      debugPrint('ExternalCatalogRepository: mapping query failed: $e');
+      return const [];
+    } finally {
+      db?.close();
+    }
+  }
+
   /// מחזיר את גרסת מסד הקטלוגים המקומי, אם קיימת.
   Future<int?> getCurrentDatabaseVersion() async {
     if (!await databaseExists()) {

@@ -5,6 +5,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 class PersonalNoteEditorDialog extends StatefulWidget {
   final String initialContent;
@@ -181,10 +182,10 @@ class _PersonalNoteEditorDialogState extends State<PersonalNoteEditorDialog>
           return KeyEventResult.ignored;
         }
 
-        // Ctrl+Enter (מומלץ, ללא צליל) / Alt+Enter (תאימות לאחור) -
+        // Ctrl+Enter (במק Cmd+Enter) / Alt+Enter (תאימות לאחור) -
         // שליחת הטופס מכל מקום
-        if (event.logicalKey == LogicalKeyboardKey.enter &&
-            (HardwareKeyboard.instance.isControlPressed ||
+        if (ShortcutHelper.matchesShortcut(event, 'ctrl+enter') ||
+            (event.logicalKey == LogicalKeyboardKey.enter &&
                 HardwareKeyboard.instance.isAltPressed)) {
           _submit();
           return KeyEventResult.handled;
