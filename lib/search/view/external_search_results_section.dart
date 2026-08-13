@@ -20,6 +20,7 @@ import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -111,7 +112,7 @@ List<int> externalVisibleIdsFor({
 class _ExternalSearchResultsSectionState
     extends State<ExternalSearchResultsSection> {
   static const _pageSize = 20;
-  static const _listMaxHeight = 300.0;
+  static const _listMaxHeight = 420.0;
   static const _inBookMatchesTimeout = Duration(seconds: 15);
 
   final List<ExternalSearchResult> _results = [];
@@ -567,6 +568,7 @@ class _ExternalSearchResultsSectionState
       constraints: const BoxConstraints(maxHeight: _listMaxHeight),
       child: ListView.builder(
         shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
         itemCount: _results.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _results.length) {
@@ -585,6 +587,8 @@ class _ExternalSearchResultsSectionState
     );
   }
 
+  /// כרטיס תוצאה באותה שפה עיצובית של תוצאות הספרייה במסך הזה: מסגרת
+  /// מעוגלת, ריווח פנימי נדיב ושורת קטע בגובה קריא — ולא ListTile צפוף.
   Widget _buildResultRow(
     BuildContext context,
     SearchState state,
@@ -593,76 +597,127 @@ class _ExternalSearchResultsSectionState
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final opening = _openingId == result.externalId;
-    return ListTile(
-      dense: true,
-      enabled: _openingId == null || opening,
-      leading: opening
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(FluentIcons.book_open_24_regular, color: cs.primary),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              result.title,
-              style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (_sourceTag.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            // תגית מקור על כל תוצאה, כמו במסך החיפוש המאוחד של התוסף.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: cs.tertiaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(_sourceTag, style: theme.textTheme.labelSmall),
-            ),
-          ],
-        ],
+    final enabled = _openingId == null || opening;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outline.withValues(alpha: 0.3)),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (result.meta != null)
-            Text(result.meta!, style: theme.textTheme.bodySmall),
-          if (result.snippet != null)
-            RichText(
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                children: SnippetBuilder.highlightLiteral(
-                  plainText: result.snippet!,
-                  query: state.searchQuery.trim(),
-                  defaultStyle: theme.textTheme.bodyMedium!,
-                  highlightStyle: theme.textTheme.bodyMedium!.copyWith(
-                    fontWeight: FontWeight.bold,
-                    backgroundColor: cs.primaryContainer,
-                  ),
+      child: InkWell(
+        onTap: enabled ? () => unawaited(_openResult(result, state)) : null,
+        borderRadius: AppTokens.borderRadiusAll,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              opening
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      FluentIcons.book_open_24_regular,
+                      size: 20,
+                      color: cs.primary,
+                    ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            result.title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: cs.primary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_sourceTag.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          // תגית מקור על כל תוצאה, כמו במסך החיפוש המאוחד.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.tertiaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _sourceTag,
+                              style: theme.textTheme.labelSmall,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (result.meta != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          result.meta!,
+                          style: theme.textTheme.bodySmall!.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    if (result.snippet != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: RichText(
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.justify,
+                          text: TextSpan(
+                            children: SnippetBuilder.highlightLiteral(
+                              plainText: result.snippet!,
+                              query: state.searchQuery.trim(),
+                              defaultStyle: theme.textTheme.bodyMedium!
+                                  .copyWith(height: 1.5),
+                              highlightStyle: theme.textTheme.bodyMedium!
+                                  .copyWith(
+                                    height: 1.5,
+                                    fontWeight: FontWeight.bold,
+                                    backgroundColor: cs.primaryContainer,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-        ],
+              if (result.hitCount > 0) ...[
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${result.hitCount}',
+                    style: theme.textTheme.labelSmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
-      trailing: result.hitCount > 0
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${result.hitCount}',
-                style: theme.textTheme.labelSmall,
-              ),
-            )
-          : null,
-      onTap: () => unawaited(_openResult(result, state)),
     );
   }
 }
