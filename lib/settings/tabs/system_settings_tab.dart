@@ -1573,7 +1573,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       final isPartial =
           skipped.isNotEmpty ||
           missingFolders.isNotEmpty ||
-          result.hasLegacyPartialSettings;
+          result.hasLegacyPartialSettings ||
+          result.notesWithoutAnchor > 0;
       final content = [
         if (skipped.isEmpty)
           context.settingsText('הנתונים שוחזרו בהצלחה.')
@@ -1588,6 +1589,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             'שאינן בו לא שוחזרו — בהן קיצורי מקלדת, ברירות המחדל של החיפוש, '
             'התאמות צורת הדף והתאמות פר-ספר. יש לבדוק אם קיים גיבוי חדש יותר, '
             'או להגדיר אותן מחדש.',
+          ),
+        if (result.notesWithoutAnchor > 0)
+          context.settingsText(
+            'ב-{count} הערות קובץ הגיבוי אינו כולל את המילים שאליהן הן קושרו, '
+            'ולכן הן מסומנות כעת על הקטע כולו. הקישור למילים נכנס לגיבוי '
+            'בגרסה מאוחרת יותר.',
+            args: {'count': result.notesWithoutAnchor},
           ),
         if (missingFolders.isNotEmpty)
           context.settingsText(

@@ -67,6 +67,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'אפשרויות': 'Options',
     'אפשרויות מיקום': 'Folder Settings',
     'ארכיון': 'Archive',
+    'ב-{count} הערות קובץ הגיבוי אינו כולל את המילים שאליהן הן קושרו, ולכן הן מסומנות כעת על הקטע כולו. הקישור למילים נכנס לגיבוי בגרסה מאוחרת יותר.': 'For {count} notes the backup file does not include the words they were attached to, so they are now marked across the whole passage. Word-level attachment was added to the backup in a later version.',
     'באם שמכם אינו מופיע ברשימה או שאתם מעוניינים בשינוי, אנא פנו למייל המערכת.': 'If your name is missing from the list, or you would like it changed, please email us.',
     'בדיקת העדכונים הבאה תחפש גם גרסאות בדיקה — ייתכנו באגים': 'The next update check will also look for developers builds — expect bugs',
     'בדיקת העדכונים הבאה תחפש גרסאות יציבות בלבד': 'The next update check will look for stable builds only',

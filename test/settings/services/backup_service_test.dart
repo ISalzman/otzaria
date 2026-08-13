@@ -9,6 +9,8 @@ import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
+import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
@@ -826,6 +828,118 @@ void main() {
       final result = await BackupService.restoreFromBackup(path);
 
       expect(result.hasLegacyPartialSettings, isFalse);
+    });
+  });
+
+  // ─── עוגן ההערות בשחזור ────────────────────────────────────────────────────
+  // גיבוי מלפני שהעיגון נכנס אליו אינו נושא את שדות העוגן כלל, ו-insertNote
+  // הוא INSERT OR REPLACE — בלי שימור, הערה שהצביעה על מילה נמתחה על כל השורה.
+  group('שחזור הערות — שימור העוגן', () {
+    late Directory dataRoot;
+
+    PersonalNote anchoredNote() => PersonalNote(
+      id: 'note-1',
+      bookId: 'ספר',
+      lineNumber: 5,
+      anchorText: 'כוס',
+      anchorPrefix: 'לפני ',
+      anchorSuffix: ' אחרי',
+      anchorStart: 10,
+      anchorEnd: 13,
+      lastKnownLineNumber: null,
+      status: PersonalNoteStatus.located,
+      content: 'תוכן ההערה',
+      contentPlain: 'תוכן ההערה',
+      contentFormat: PersonalNoteContentFormat.plain,
+      createdAt: DateTime.parse('2026-06-14T13:36:57.000Z'),
+      updatedAt: DateTime.parse('2026-06-14T13:36:57.000Z'),
+    );
+
+    /// מניפסט גיבוי עם הערה אחת. [withAnchorKeys] false = פורמט מדור קודם.
+    Future<String> writeNotesBackup({required bool withAnchorKeys}) async {
+      final note = <String, dynamic>{
+        'id': 'note-1',
+        'bookId': 'ספר',
+        'lineNumber': 5,
+        'displayTitle': null,
+        'lastKnownLineNumber': null,
+        'status': 'located',
+        'content': 'תוכן ההערה',
+        'contentPlain': 'תוכן ההערה',
+        'contentFormat': 'plain',
+        'createdAt': '2026-06-14T13:36:57.000Z',
+        'updatedAt': '2026-06-14T13:36:57.000Z',
+        if (withAnchorKeys) ...{
+          'anchorText': null,
+          'anchorPrefix': null,
+          'anchorSuffix': null,
+          'anchorStart': null,
+          'anchorEnd': null,
+        },
+      };
+      final file = File(p.join(dataRoot.path, 'notes_backup.json'));
+      await file.writeAsString(
+        jsonEncode({
+          'version': '2.0',
+          'timestamp': '2026-07-06T00-00-00.000',
+          'includes': {'notes': true},
+          'notes': [
+            {
+              'bookId': 'ספר',
+              'notes': [note],
+            },
+          ],
+        }),
+      );
+      return file.path;
+    }
+
+    setUp(() async {
+      dataRoot = await Directory.systemTemp.createTemp('notes_anchor_test_');
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      await PersonalNotesDatabase.instance.close();
+      await PersonalNotesDatabase.instance.insertNote(anchoredNote());
+    });
+
+    tearDown(() async {
+      await PersonalNotesDatabase.instance.close();
+      AppPaths.debugOverrideDataRootPath(null);
+      try {
+        await dataRoot.delete(recursive: true);
+      } catch (_) {}
+    });
+
+    test('גיבוי מדור קודם אינו מוחק עוגן קיים, ומדווח', () async {
+      final path = await writeNotesBackup(withAnchorKeys: false);
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      final restored = await PersonalNotesDatabase.instance.getNote('note-1');
+      expect(restored!.anchorText, 'כוס');
+      expect(restored.anchorStart, 10);
+      expect(restored.content, 'תוכן ההערה');
+      expect(result.notesWithoutAnchor, 0);
+    });
+
+    test('גיבוי מדור קודם בלי עוגן קיים ב-DB — מדווח על ההערה', () async {
+      await PersonalNotesDatabase.instance.deleteNote('note-1');
+      final path = await writeNotesBackup(withAnchorKeys: false);
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      expect(result.notesWithoutAnchor, 1);
+      final restored = await PersonalNotesDatabase.instance.getNote('note-1');
+      expect(restored!.isWordAnchored, isFalse);
+    });
+
+    test('עוגן null מפורש הוא בחירת משתמש ומכובד', () async {
+      final path = await writeNotesBackup(withAnchorKeys: true);
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      final restored = await PersonalNotesDatabase.instance.getNote('note-1');
+      expect(restored!.anchorText, isNull);
+      expect(result.notesWithoutAnchor, 0);
     });
   });
 

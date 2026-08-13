@@ -538,11 +538,14 @@ class BackupService {
   /// [hasLegacyPartialSettings] — קובץ הגיבוי נוצר לפני שהגיבוי סרק את ה-Box,
   /// ולכן נשא רשימת מפתחות מוצהרת בלבד. כל השאר (קיצורי מקלדת, ברירות החיפוש,
   /// צורת הדף, התאמות פר-ספר) אינו בקובץ ואינו בר-שחזור — והמשתמש חייב לדעת.
+  /// [notesWithoutAnchor] — הערות שקובץ הגיבוי אינו יכול לבטא להן עיגון (נוצר
+  /// לפני שהעיגון נכנס לגיבוי), ולכן תסומנה על כל השורה במקום על המילים.
   static Future<
     ({
       List<String> skippedSections,
       List<String> missingCustomFolders,
       bool hasLegacyPartialSettings,
+      int notesWithoutAnchor,
     })
   >
   restoreFromBackup(String backupPath) async {
@@ -614,8 +617,9 @@ class BackupService {
     }
 
     // Restore notes
+    var notesWithoutAnchor = 0;
     if (includes['notes'] == true && backupData.containsKey('notes')) {
-      await _restoreNotes(
+      notesWithoutAnchor = await _restoreNotes(
         (backupData['notes'] as List).cast<Map<String, dynamic>>(),
       );
     }
@@ -670,6 +674,7 @@ class BackupService {
       skippedSections: allSkipped,
       missingCustomFolders: missingCustomFolders,
       hasLegacyPartialSettings: hasLegacyPartialSettings,
+      notesWithoutAnchor: notesWithoutAnchor,
     );
   }
 
@@ -776,11 +781,18 @@ class BackupService {
     await repo.saveHistory(history);
   }
 
-  /// Restore notes to SQLite database
-  static Future<void> _restoreNotes(
+  /// מפתח העיגון שנוכחותו מעידה שהגיבוי יודע לבטא עיגון להערה.
+  static const String _noteAnchorKey = 'anchorText';
+
+  /// Restore notes to SQLite database.
+  ///
+  /// מחזיר את מספר ההערות שקובץ הגיבוי אינו יכול לבטא להן עיגון (ראה
+  /// [_restoreNoteAnchoredAsBefore]) — הן תסומנה על כל השורה במקום על המילים.
+  static Future<int> _restoreNotes(
     List<Map<String, dynamic>> notesData,
   ) async {
     final database = PersonalNotesDatabase.instance;
+    var anchorlessNotes = 0;
 
     for (final entry in notesData) {
       try {
@@ -793,9 +805,12 @@ class BackupService {
           final notesList = entry['notes'] as List<dynamic>;
           for (final noteData in notesList) {
             try {
-              final note = _noteFromBackupJson(
-                noteData as Map<String, dynamic>,
-              );
+              final json = noteData as Map<String, dynamic>;
+              var note = _noteFromBackupJson(json);
+              if (!json.containsKey(_noteAnchorKey)) {
+                note = await _restoreNoteAnchoredAsBefore(database, note);
+                if (!note.isWordAnchored) anchorlessNotes++;
+              }
               await database.insertNote(note);
             } catch (e) {
               _logger.warning('Failed to restore single note from backup: $e');
@@ -805,6 +820,34 @@ class BackupService {
       } catch (e) {
         _logger.warning('Failed to restore note entry: $e');
       }
+    }
+
+    return anchorlessNotes;
+  }
+
+  /// משמר את עוגן ההערה הקיימת כששדות העיגון חסרים לגמרי בקובץ הגיבוי.
+  ///
+  /// גיבוי מלפני שהעיגון נכנס אליו אינו מבדיל בין "הערה על כל השורה" לבין
+  /// "הערה על מילה" — בשניהם המפתח נעדר. `insertNote` הוא `INSERT OR REPLACE`,
+  /// ולכן בלי השימור שחזור כזה מוחק עיגון קיים והערה שהצביעה על מילה מסוימת
+  /// נמתחת על כל השורה. מפתח שקיים בערך `null` הוא בחירת משתמש ומכובד.
+  static Future<PersonalNote> _restoreNoteAnchoredAsBefore(
+    PersonalNotesDatabase database,
+    PersonalNote note,
+  ) async {
+    try {
+      final existing = await database.getNote(note.id);
+      if (existing == null || !existing.isWordAnchored) return note;
+      return note.copyWith(
+        anchorText: existing.anchorText,
+        anchorPrefix: existing.anchorPrefix,
+        anchorSuffix: existing.anchorSuffix,
+        anchorStart: existing.anchorStart,
+        anchorEnd: existing.anchorEnd,
+      );
+    } catch (e) {
+      _logger.warning('Failed to preserve anchor for note ${note.id}: $e');
+      return note;
     }
   }
 
