@@ -17,6 +17,7 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -581,7 +582,10 @@ class _ExternalSearchResultsSectionState
               ),
             );
           }
-          return _buildResultRow(context, state, _results[index]);
+          return BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, settings) =>
+                _buildResultRow(context, state, _results[index], settings),
+          );
         },
       ),
     );
@@ -589,10 +593,15 @@ class _ExternalSearchResultsSectionState
 
   /// כרטיס תוצאה באותה שפה עיצובית של תוצאות הספרייה במסך הזה: מסגרת
   /// מעוגלת, ריווח פנימי נדיב ושורת קטע בגובה קריא — ולא ListTile צפוף.
+  ///
+  /// גזיר הטקסט נצבע בגופן הספרים של המשתמש ([SettingsState.fontFamily]
+  /// ובגודלו), כמו גזירי המנוע המובנה — אחרת אותה שאילתה מוצגת בשני גופנים
+  /// שונים באותו מסך.
   Widget _buildResultRow(
     BuildContext context,
     SearchState state,
     ExternalSearchResult result,
+    SettingsState settings,
   ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -682,14 +691,19 @@ class _ExternalSearchResultsSectionState
                             children: SnippetBuilder.highlightLiteral(
                               plainText: result.snippet!,
                               query: state.searchQuery.trim(),
-                              defaultStyle: theme.textTheme.bodyMedium!
-                                  .copyWith(height: 1.5),
-                              highlightStyle: theme.textTheme.bodyMedium!
-                                  .copyWith(
-                                    height: 1.5,
-                                    fontWeight: FontWeight.bold,
-                                    backgroundColor: cs.primaryContainer,
-                                  ),
+                              defaultStyle: TextStyle(
+                                fontSize: settings.fontSize,
+                                fontFamily: settings.fontFamily,
+                                color: cs.onSurface,
+                                height: 1.5,
+                              ),
+                              highlightStyle: TextStyle(
+                                fontSize: settings.fontSize,
+                                fontFamily: settings.fontFamily,
+                                height: 1.5,
+                                fontWeight: FontWeight.bold,
+                                backgroundColor: cs.primaryContainer,
+                              ),
                             ),
                           ),
                         ),
