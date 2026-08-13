@@ -311,7 +311,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               valueListenable: widget.tab.externalSearchSummary,
               builder: (context, summary, _) {
                 var counts = searchState.facetCounts;
-                var extraRoots = const <({String title, int count})>[];
+                var extraRoots = const <SearchTreeExtraCategory>[];
                 if (summary != null) {
                   counts = Map.of(counts);
                   summary.categoryBookCounts.forEach(
@@ -328,9 +328,20 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                           .contains(summary.otherCategoryFacet)) {
                     FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
                     extraRoots = [
-                      (
+                      SearchTreeExtraCategory(
                         title: summary.otherCategoryTitle,
+                        facet: summary.otherCategoryFacet,
                         count: summary.otherBooks,
+                        // ספרי הדלי מגיעים מהספק (רק כשצירף שמות לאינדקס);
+                        // בלעדיהם הדלי נשאר שורה שאי אפשר לפתוח.
+                        books: [
+                          for (final book in summary.namedOtherBooks)
+                            SearchTreeExtraBook(
+                              title: book.title,
+                              facet: summary.bookFacetOf(book.id),
+                              hits: book.hits,
+                            ),
+                        ],
                       ),
                     ];
                   }

@@ -43,9 +43,9 @@ class SearchNavigationTree extends StatelessWidget {
   final VoidCallback onClearAll;
 
   /// קטגוריות-על סינתטיות שאינן חלק מהספרייה (למשל "עוד מהיברובוקס" של
-  /// ספק תוצאות חיצוני), מוצגות אחרי הקטגוריות האמיתיות. ה-facet שלהן הוא
-  /// '/<title>' ולחיצה מסננת דרך אותם callbacks.
-  final List<({String title, int count})> extraRootCategories;
+  /// ספק תוצאות חיצוני), מוצגות אחרי הקטגוריות האמיתיות. לחיצה מסננת דרך
+  /// אותם callbacks של קטגוריה/ספר רגילים.
+  final List<SearchTreeExtraCategory> extraRootCategories;
 
   const SearchNavigationTree({
     super.key,
@@ -107,9 +107,28 @@ class SearchNavigationTree extends StatelessWidget {
     rows.add(_FlatRow.rootHeader(facetCounts[library.path] ?? 0));
     _flattenChildren(library, 0, rows, _selectedPaths());
     for (final extra in extraRootCategories) {
-      final facet = '/${extra.title}';
-      if (extra.count == 0 && !_isSelected(facet)) continue;
-      rows.add(_FlatRow.extraCategory(extra.title, facet, extra.count));
+      if (extra.count == 0 && !_isSelected(extra.facet)) continue;
+      // ספרי הקטגוריה הסינתטית מגיעים מהספק, ולא מהספרייה — לכן חץ ההרחבה
+      // כאן תלוי ברשימה שהוא צירף, ולא ב-facetCounts.
+      final hasChildren = extra.books.isNotEmpty;
+      final leadsToSelection = extra.books.any(
+        (book) => _isSelected(book.facet),
+      );
+      final isExpanded =
+          hasChildren && (expansion[extra.facet] ?? leadsToSelection);
+      rows.add(
+        _FlatRow.extraCategory(
+          extra.title,
+          extra.facet,
+          extra.count,
+          isExpanded,
+          hasChildren,
+        ),
+      );
+      if (!isExpanded) continue;
+      for (final book in extra.books) {
+        rows.add(_FlatRow.extraBook(book.title, book.facet, book.hits));
+      }
     }
     _markGroupBoundaries(rows);
     return rows;
@@ -254,7 +273,8 @@ class SearchNavigationTree extends StatelessWidget {
           ),
         );
       case _FlatRowKind.extraCategory:
-        // קטגוריה סינתטית (ספק חיצוני) — שורת קטגוריה עליונה בלי ילדים.
+        // קטגוריה סינתטית (ספק חיצוני) — שורת קטגוריה עליונה, שנפתחת
+        // לספרים שהספק צירף (אם צירף).
         return _wrapInGroupCard(
           context,
           row,
@@ -264,7 +284,29 @@ class SearchNavigationTree extends StatelessWidget {
               title: row.extraTitle!,
               level: 0,
               isSelected: _isSelected(row.facet!),
+              isExpanded: row.isExpanded,
+              hasChildren: row.hasChildren,
               count: row.count == -1 ? null : row.count,
+              onTap: () => isMultiSelectPressed()
+                  ? onToggleFacet(row.facet!)
+                  : onSetFacet(row.facet!),
+              onToggleExpand: () => onToggleExpand(row.facet!, row.isExpanded),
+            ),
+          ),
+        );
+      case _FlatRowKind.extraBook:
+        // ספר של הספק החיצוני: אין לו Book בספרייה, ולכן גם אין אייקון
+        // קטלוג או שם מחבר — רק שם ומספר המופעים שבו.
+        return _wrapInGroupCard(
+          context,
+          row,
+          KeyedSubtree(
+            key: ValueKey(row.facet),
+            child: NavTreeTile.book(
+              title: row.extraTitle!,
+              level: row.level - 1,
+              isSelected: _isSelected(row.facet!),
+              count: row.count,
               onTap: () => isMultiSelectPressed()
                   ? onToggleFacet(row.facet!)
                   : onSetFacet(row.facet!),
@@ -494,7 +536,36 @@ class _FilteredBook {
   const _FilteredBook(this.book, this.facet, this.count);
 }
 
-enum _FlatRowKind { rootHeader, category, book, extraCategory }
+/// קטגוריית-על סינתטית בעץ (דלי של ספק תוצאות חיצוני) והספרים שתחתיה.
+/// ה-facets נבנים בצד הקורא — העץ עצמו רק מציג ומדווח עליהם.
+class SearchTreeExtraCategory {
+  final String title;
+  final String facet;
+  final int count;
+  final List<SearchTreeExtraBook> books;
+
+  const SearchTreeExtraCategory({
+    required this.title,
+    required this.facet,
+    required this.count,
+    this.books = const [],
+  });
+}
+
+/// ספר של ספק חיצוני תחת קטגוריה סינתטית.
+class SearchTreeExtraBook {
+  final String title;
+  final String facet;
+  final int hits;
+
+  const SearchTreeExtraBook({
+    required this.title,
+    required this.facet,
+    required this.hits,
+  });
+}
+
+enum _FlatRowKind { rootHeader, category, book, extraCategory, extraBook }
 
 /// שורה משוטחת אחת ברשימת הניווט (לבנייה עצלה ב-ListView.builder).
 /// [isGroupStart]/[isGroupEnd] מסמנים גבולות קבוצה עליונה — לעיצוב הכרטיס
@@ -551,12 +622,28 @@ class _FlatRow {
         level: level,
       );
 
-  _FlatRow.extraCategory(String title, String facet, int count)
-    : this._(
+  _FlatRow.extraCategory(
+    String title,
+    String facet,
+    int count,
+    bool isExpanded,
+    bool hasChildren,
+  ) : this._(
         kind: _FlatRowKind.extraCategory,
         extraTitle: title,
         facet: facet,
         level: 1,
         count: count,
+        isExpanded: isExpanded,
+        hasChildren: hasChildren,
+      );
+
+  _FlatRow.extraBook(String title, String facet, int hits)
+    : this._(
+        kind: _FlatRowKind.extraBook,
+        extraTitle: title,
+        facet: facet,
+        level: 2,
+        count: hits,
       );
 }
