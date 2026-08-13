@@ -321,11 +321,15 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                       bookCount,
                     ),
                   );
-                  // הדלי מוצג גם בספירה 0 כשהוא הסינון הפעיל — אחרת אין
-                  // דרך לבטל אותו מהעץ (העץ עצמו יודע להציג שורה נבחרת).
-                  if (summary.otherBooks > 0 ||
-                      searchState.currentFacets
-                          .contains(summary.otherCategoryFacet)) {
+                  // הדלי מוצג גם בספירה 0 כשהוא (או ספר שתחתיו) הסינון
+                  // הפעיל — אחרת אין דרך לבטל אותו מהעץ. הבחירה שורדת חיפוש
+                  // חדש, וסיווג שונה עלול לרוקן את הדלי בדיוק אז.
+                  final bucketFiltered = searchState.currentFacets.any(
+                    (facet) =>
+                        facet == summary.otherCategoryFacet ||
+                        summary.bookIdOfFacet(facet) != null,
+                  );
+                  if (summary.otherBooks > 0 || bucketFiltered) {
                     FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
                     extraRoots = [
                       SearchTreeExtraCategory(

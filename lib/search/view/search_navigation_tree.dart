@@ -104,16 +104,20 @@ class SearchNavigationTree extends StatelessWidget {
 
   List<_FlatRow> _flattenRows() {
     final rows = <_FlatRow>[];
+    final selectedPaths = _selectedPaths();
     rows.add(_FlatRow.rootHeader(facetCounts[library.path] ?? 0));
-    _flattenChildren(library, 0, rows, _selectedPaths());
+    _flattenChildren(library, 0, rows, selectedPaths);
     for (final extra in extraRootCategories) {
-      if (extra.count == 0 && !_isSelected(extra.facet)) continue;
       // ספרי הקטגוריה הסינתטית מגיעים מהספק, ולא מהספרייה — לכן חץ ההרחבה
       // כאן תלוי ברשימה שהוא צירף, ולא ב-facetCounts.
       final hasChildren = extra.books.isNotEmpty;
-      final leadsToSelection = extra.books.any(
-        (book) => _isSelected(book.facet),
-      );
+      final leadsToSelection = _leadsToSelection(extra.facet, selectedPaths);
+      // כמו בענפי הספרייה: שורה שהיא הסינון הפעיל (או דרך אליו) נשארת גלויה
+      // גם בספירה 0 — אחרת הסינון אינו מיוצג בעץ ואין דרך לבטלו. ספר נבחר
+      // שכבר אינו ברשימת הספק משאיר את הדלי עצמו, בלי שורה משלו.
+      if (extra.count == 0 && !_isSelected(extra.facet) && !leadsToSelection) {
+        continue;
+      }
       final isExpanded =
           hasChildren && (expansion[extra.facet] ?? leadsToSelection);
       rows.add(
