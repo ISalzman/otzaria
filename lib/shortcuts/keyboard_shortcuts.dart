@@ -169,6 +169,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final openCommentatorsTabShortcut = shortcutOf(
       'key-shortcut-open-commentators-tab',
     );
+    final togglePdfViewShortcut = shortcutOf('key-shortcut-toggle-pdf-view');
     final prevSegmentShortcut = shortcutOf('key-shortcut-prev-segment');
     final nextSegmentShortcut = shortcutOf('key-shortcut-next-segment');
     final prevTocShortcut = shortcutOf('key-shortcut-prev-toc');
@@ -224,6 +225,19 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       }
       if (tab is PdfBookTab) {
         tab.toggleCommentatorsPaneNotifier.value++;
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // החלפת מצב תצוגה PDF→טקסט. הכיוון ההפוך מטופל במסך ספר הטקסט עצמו,
+    // שה-KeyboardListener שלו עוטף את כל המסך.
+    if (isReadingScreen &&
+        togglePdfViewShortcut.isNotEmpty &&
+        ShortcutHelper.matchesShortcut(event, togglePdfViewShortcut)) {
+      final tab = context.read<TabsBloc>().state.currentTab;
+      if (tab is PdfBookTab) {
+        tab.toggleTextViewNotifier.value++;
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;

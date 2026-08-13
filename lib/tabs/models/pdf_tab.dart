@@ -72,6 +72,10 @@ class PdfBookTab extends OpenedTab {
     0,
   );
 
+  /// counter שמתגלגל עם כל בקשה למעבר למהדורת הטקסט מקיצור מקלדת גלובלי.
+  /// המאזין הוא [PdfBookScreen] בלבד; כל הגדלה = מעבר יחיד.
+  final ValueNotifier<int> toggleTextViewNotifier = ValueNotifier<int>(0);
+
   /// PDF headings mapping for commentaries and links
   PdfHeadings? pdfHeadings;
 
@@ -227,6 +231,7 @@ class PdfBookTab extends OpenedTab {
     pinLeftPane.dispose();
     toggleNavPaneNotifier.dispose();
     toggleCommentatorsPaneNotifier.dispose();
+    toggleTextViewNotifier.dispose();
     incomingSearchConfiguration.dispose();
     externalMatches.dispose();
     super.dispose();
