@@ -102,7 +102,7 @@ void main() {
 
       expect(find.widgetWithText(SidebarNavItem, 'Appearance'), findsOneWidget);
       expect(
-        find.widgetWithText(SidebarNavItem, 'Keyboard shortcuts'),
+        find.widgetWithText(SidebarNavItem, 'Keyboard Shortcuts'),
         findsOneWidget,
       );
       expect(find.widgetWithText(SidebarNavItem, 'מראה'), findsNothing);
@@ -129,7 +129,7 @@ void main() {
       givenLanguageCode(SettingsLanguage.english.code);
       await pumpScreen(tester);
 
-      expect(find.text('Settings language'), findsWidgets);
+      expect(find.text('Settings Language'), findsWidgets);
       expect(find.text('Theme'), findsWidgets);
       expect(find.text('ערכת נושא'), findsNothing);
     });

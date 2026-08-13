@@ -1071,7 +1071,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('More tools'), findsOneWidget);
+    expect(find.text('More Tools'), findsOneWidget);
     expect(find.textContaining('Shortcut: Alt+M'), findsOneWidget);
     expect(find.text('Next'), findsOneWidget);
     expect(find.textContaining('{shortcut}'), findsNothing);
