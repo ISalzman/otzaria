@@ -35,6 +35,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
@@ -827,14 +828,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       builder: (context, constraints) {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
-            // אותו חישוב כמו בתצוגת הטקסט הראשית (combined_book_screen):
-            // ערך שלילי = רמה (95%/90%/...), ערך 0 = ללא הגבלה.
-            var textMaxWidth = settingsState.textMaxWidth;
-            if (textMaxWidth < 0) {
-              final level = (-textMaxWidth).toInt();
-              final widthPercent = 1.0 - (level * 0.05);
-              textMaxWidth = constraints.maxWidth * widthPercent;
-            }
+            final textMaxWidth = textColumnMaxWidthOf(
+              context,
+              setting: settingsState.textMaxWidth,
+              availableWidth: constraints.maxWidth,
+            );
 
             if (textMaxWidth > 0) {
               // יישור לראש (topCenter) ולא Center — אחרת כשהמפרשים מכווצים

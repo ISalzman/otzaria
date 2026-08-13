@@ -721,6 +721,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Nav rail item | `test/widgets/nav_rail_item_test.dart` |
 | Reader side panel shell | `test/widgets/reader_side_panel_shell_test.dart` |
 | Responsive action bar | `test/widgets/responsive_action_bar_test.dart` |
+| רוחב עמודת הטקסט (בסיס אזור הקריאה, יציב בפתיחת חלונית) | `test/widgets/layout/reading_area_width_test.dart` |
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
 | Smooth mouse-wheel scrolling | `test/widgets/smooth_wheel_scroll_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |

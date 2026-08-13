@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/floating_panel.dart';
+import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/layout/resizable_drag_handle.dart';
 
 /// חלונית צד אדפטיבית:
@@ -294,6 +295,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
           return _buildWideLayout(
             context,
             paneOnRight: paneOnRight,
+            areaWidth: constraints.maxWidth,
           );
         }
 
@@ -306,9 +308,19 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
     );
   }
 
+  /// עוטף את התוכן הראשי ברוחב אזור הקריאה המלא, כדי שרוחב עמודת הטקסט יחושב
+  /// ממנו ולא ישתנה כשהחלונית נפתחת ודוחקת את התוכן. פאנל מקונן לא דורס את
+  /// הבסיס של הפאנל שמעליו — הרוחב שהוא רואה כבר צומצם ע"י אותו פאנל.
+  Widget _mainContentWithAreaWidth(BuildContext context, double areaWidth) {
+    final base = ReadingAreaWidth.maybeOf(context) ?? areaWidth;
+    if (!base.isFinite) return widget.mainContent;
+    return ReadingAreaWidth(width: base, child: widget.mainContent);
+  }
+
   Widget _buildWideLayout(
     BuildContext context, {
     required bool paneOnRight,
+    required double areaWidth,
   }) {
     final showHandle =
         widget.isOpen &&
@@ -402,11 +414,13 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
       },
     );
 
+    final mainContent = _mainContentWithAreaWidth(context, areaWidth);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: paneOnRight
-          ? [paneSlot, Expanded(child: widget.mainContent)]
-          : [Expanded(child: widget.mainContent), paneSlot],
+          ? [paneSlot, Expanded(child: mainContent)]
+          : [Expanded(child: mainContent), paneSlot],
     );
   }
 
@@ -438,7 +452,7 @@ class _AdaptiveSidePaneState extends State<AdaptiveSidePane> {
 
     return Stack(
       children: [
-        Positioned.fill(child: widget.mainContent),
+        Positioned.fill(child: _mainContentWithAreaWidth(context, maxWidth)),
         IgnorePointer(
           ignoring: !widget.isOpen,
           child: Stack(
