@@ -22,6 +22,7 @@ import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/library/view/otzar_book_dialog.dart';
 import 'package:otzaria/library/view/book_preview_panel.dart';
 import 'package:otzaria/library/view/library_empty_state_widget.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/library/view/library_panel_controller.dart';
@@ -1095,7 +1096,11 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   void _openSearchDialog(BuildContext context, {String? searchQuery}) {
     final tab = searchQuery != null && searchQuery.isNotEmpty
-        ? SearchingTab('חיפוש', searchQuery)
+        ? SearchingTab(
+            'חיפוש',
+            searchQuery,
+            initialConfiguration: const SearchConfiguration(),
+          )
         : null;
     showDialog(
       context: context,
