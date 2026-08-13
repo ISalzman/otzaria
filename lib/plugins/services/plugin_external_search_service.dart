@@ -3,6 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
+typedef ExternalSearchEventDispatcher =
+    Future<void> Function(
+      String pluginId,
+      String topic,
+      Map<String, dynamic> payload, {
+      bool preferBackground,
+    });
+
 /// תוצאת ספר יחידה ממקור חיפוש חיצוני של תוסף (למשל היברובוקס).
 class ExternalSearchResult {
   final String title;
@@ -74,9 +82,19 @@ class ExternalSearchPage {
 /// מסך החיפוש שולח אליו בקשה כאירוע ממוקד `search.external.requested`,
 /// והתוסף עונה בקריאת bridge `reader.respondExternalSearch` עם עמוד תוצאות.
 class PluginExternalSearchService {
-  PluginExternalSearchService._();
+  PluginExternalSearchService._()
+    : _dispatch = ((pluginId, topic, payload, {preferBackground = false}) =>
+          PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+            pluginId,
+            topic,
+            payload,
+            preferBackground: preferBackground,
+          ));
   static final PluginExternalSearchService instance =
       PluginExternalSearchService._();
+
+  @visibleForTesting
+  PluginExternalSearchService.forTesting(this._dispatch);
 
   static const requestTopic = 'search.external.requested';
 
@@ -95,16 +113,35 @@ class PluginExternalSearchService {
 
   final Map<String, String> _providerToPlugin = {};
   final Map<String, _PendingExternalSearch> _pending = {};
+  final ExternalSearchEventDispatcher _dispatch;
   int _requestCounter = 0;
 
-  /// רושם את [pluginId] כספק עבור [provider]. רישום חוזר מחליף את הקודם —
-  /// תוסף נרשם מחדש בכל boot, כך שאין צורך במנגנון הסרה נפרד.
+  /// רושם את [pluginId] כספק הבלעדי של [provider].
   void register(String provider, String pluginId) {
+    final owner = _providerToPlugin[provider];
+    if (owner != null && owner != pluginId) {
+      throw StateError('Provider "$provider" is already owned by "$owner"');
+    }
     _providerToPlugin[provider] = pluginId;
     debugPrint('PluginExternalSearchService: $pluginId provides "$provider"');
   }
 
   bool hasProvider(String provider) => _providerToPlugin.containsKey(provider);
+
+  /// מסיר את כל הספקים של התוסף ומכשיל מיד בקשות פעילות שלו.
+  void removePlugin(String pluginId) {
+    _providerToPlugin.removeWhere((_, owner) => owner == pluginId);
+    for (final entry in _pending.entries.toList()) {
+      final pending = entry.value;
+      if (pending.pluginId != pluginId) continue;
+      _pending.remove(entry.key);
+      if (!pending.completer.isCompleted) {
+        pending.completer.completeError(
+          StateError('External search provider is no longer available'),
+        );
+      }
+    }
+  }
 
   /// שולח שאילתה מעומדת לספק של [provider] ומחזיר את עמוד התוצאות הסופי.
   /// עדכונים חלקיים תוך כדי החיפוש (`done: false` מהספק) נמסרים ל-[onUpdate]
@@ -137,6 +174,7 @@ class PluginExternalSearchService {
       'provider=$provider',
     );
     final pending = _PendingExternalSearch(
+      pluginId: pluginId,
       provider: provider,
       onUpdate: onUpdate,
       inactivityTimeout: _inactivityTimeout,
@@ -159,7 +197,7 @@ class PluginExternalSearchService {
       // לא ממתינים ל-dispatch לפני ההאזנה לתשובה: מסלול ההעֲרָה (פתיחת דף
       // התוסף) עשוי לקחת זמן, וטיימאאוט שנורה בלי מאזין היה הופך לחריגה
       // לא-מטופלת והמדור היה נתקע בטעינה לנצח.
-      final dispatch = PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+      final dispatch = _dispatch(
         pluginId,
         requestTopic,
         eventPayload,
@@ -182,14 +220,12 @@ class PluginExternalSearchService {
           'PluginExternalSearchService: retrying $requestId (no response)',
         );
         unawaited(
-          PluginRuntimeDispatcher.instance
-              .dispatchEventToPlugin(
-                pluginId,
-                requestTopic,
-                eventPayload,
-                preferBackground: true,
-              )
-              .catchError((_) {}),
+          _dispatch(
+            pluginId,
+            requestTopic,
+            eventPayload,
+            preferBackground: true,
+          ).catchError((_) {}),
         );
       });
       return await pending.completer.future;
@@ -202,8 +238,9 @@ class PluginExternalSearchService {
 
   /// תשובת התוסף לבקשה: רשימת תוצאות גולמית שעוברת ניקוי וקיצוץ כאן.
   /// `done: false` מסמן עדכון חלקי — הבקשה נשארת פתוחה והטיימאוט מתאפס;
-  /// תשובה לבקשה שכבר פגה מתעלמים ממנה.
-  void respond(
+  /// תשובה לבקשה שכבר פגה או שאינה שייכת ל-[pluginId] נדחית.
+  bool respond(
+    String pluginId,
     String requestId, {
     List<Object?> results = const [],
     int totalBooks = 0,
@@ -219,12 +256,16 @@ class PluginExternalSearchService {
       'index=${index?.length} error=$error',
     );
     final pending = _pending[requestId];
-    if (pending == null || pending.completer.isCompleted) return;
+    if (pending == null ||
+        pending.pluginId != pluginId ||
+        pending.completer.isCompleted) {
+      return false;
+    }
     pending.sawActivity = true;
     if (error != null && error.isNotEmpty) {
       _pending.remove(requestId);
       pending.completer.completeError(StateError(error));
-      return;
+      return true;
     }
     final sanitized = <ExternalSearchResult>[];
     for (final raw in results.take(_maxResultsPerPage)) {
@@ -241,10 +282,11 @@ class PluginExternalSearchService {
     if (!done) {
       pending.touch();
       pending.onUpdate?.call(page);
-      return;
+      return true;
     }
     _pending.remove(requestId);
     pending.completer.complete(page);
+    return true;
   }
 
   ExternalSearchResult? _sanitizeResult(Object? raw, String provider) {
@@ -312,6 +354,7 @@ class PluginExternalSearchService {
 /// בקשה פתוחה: ה-completer לעמוד הסופי, callback לעדכונים חלקיים, וטיימר
 /// חוסר-פעילות שמתאפס בכל עדכון.
 class _PendingExternalSearch {
+  final String pluginId;
   final String provider;
   final void Function(ExternalSearchPage partial)? onUpdate;
   final Duration inactivityTimeout;
@@ -324,6 +367,7 @@ class _PendingExternalSearch {
   Timer? _timer;
 
   _PendingExternalSearch({
+    required this.pluginId,
     required this.provider,
     required this.onUpdate,
     required this.inactivityTimeout,

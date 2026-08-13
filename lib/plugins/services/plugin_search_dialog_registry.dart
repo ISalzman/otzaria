@@ -22,15 +22,11 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
     final item = PluginSearchDialogItem.fromPayload(payload);
     final items = _items.putIfAbsent(pluginId, () => []);
     final existing = items.indexWhere((candidate) => candidate.id == item.id);
-    if (existing >= 0) {
-      items[existing] = item;
-    } else {
-      if (items.length >= PluginSearchDialogItem.maxItemsPerPlugin) {
-        throw const PluginSearchDialogItemException(
-          'a plugin can register at most 4 search dialog items',
-        );
-      }
-      items.add(item);
+    if (existing < 0 &&
+        items.length >= PluginSearchDialogItem.maxItemsPerPlugin) {
+      throw const PluginSearchDialogItemException(
+        'a plugin can register at most 4 search dialog items',
+      );
     }
     // הצהרת resultsProvider היא מניפסט-בלבד, ולכן הספק נרשם כבר בסנכרון
     // התוספים — טאב חיפוש משוחזר מפעיל את המדור מיד עם עליית האפליקציה,
@@ -40,6 +36,11 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
         item.resultsProvider!,
         pluginId,
       );
+    }
+    if (existing >= 0) {
+      items[existing] = item;
+    } else {
+      items.add(item);
     }
     notifyListeners();
   }

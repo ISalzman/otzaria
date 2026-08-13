@@ -1269,12 +1269,18 @@ class PluginBridgeAdapter {
         {
           final provider = args['provider'];
           if (provider is! String || provider.isEmpty) {
-            throw Exception('provider required');
+            throw Exception('error.invalid_params: provider required');
           }
-          PluginInBookSearchService.instance.register(
-            provider,
-            plugin.pluginId,
-          );
+          try {
+            PluginInBookSearchService.instance.register(
+              provider,
+              plugin.pluginId,
+            );
+          } on StateError {
+            throw Exception(
+              'error.conflict: provider is owned by another plugin',
+            );
+          }
           return true;
         }
       case 'respondInBookSearch':
@@ -1283,9 +1289,10 @@ class PluginBridgeAdapter {
         {
           final requestId = args['requestId'];
           if (requestId is! String || requestId.isEmpty) {
-            throw Exception('requestId required');
+            throw Exception('error.invalid_params: requestId required');
           }
-          PluginInBookSearchService.instance.respond(
+          final accepted = PluginInBookSearchService.instance.respond(
+            plugin.pluginId,
             requestId,
             pages: (args['pages'] as List? ?? const [])
                 .whereType<num>()
@@ -1298,6 +1305,11 @@ class PluginBridgeAdapter {
             query: args['query'] as String? ?? '',
             error: args['error'] as String?,
           );
+          if (!accepted) {
+            throw Exception(
+              'error.not_found: request does not belong to this plugin',
+            );
+          }
           return true;
         }
       case 'openSearchTab':
@@ -1341,12 +1353,18 @@ class PluginBridgeAdapter {
         {
           final provider = args['provider'];
           if (provider is! String || provider.isEmpty) {
-            throw Exception('provider required');
+            throw Exception('error.invalid_params: provider required');
           }
-          PluginExternalSearchService.instance.register(
-            provider,
-            plugin.pluginId,
-          );
+          try {
+            PluginExternalSearchService.instance.register(
+              provider,
+              plugin.pluginId,
+            );
+          } on StateError {
+            throw Exception(
+              'error.conflict: provider is owned by another plugin',
+            );
+          }
           return true;
         }
       case 'respondExternalSearch':
@@ -1357,9 +1375,10 @@ class PluginBridgeAdapter {
         {
           final requestId = args['requestId'];
           if (requestId is! String || requestId.isEmpty) {
-            throw Exception('requestId required');
+            throw Exception('error.invalid_params: requestId required');
           }
-          PluginExternalSearchService.instance.respond(
+          final accepted = PluginExternalSearchService.instance.respond(
+            plugin.pluginId,
             requestId,
             results: args['results'] as List? ?? const [],
             totalBooks: (args['totalBooks'] as num?)?.toInt() ?? 0,
@@ -1369,6 +1388,11 @@ class PluginBridgeAdapter {
             index: args['index'] as List?,
             error: args['error'] as String?,
           );
+          if (!accepted) {
+            throw Exception(
+              'error.not_found: request does not belong to this plugin',
+            );
+          }
           return true;
         }
       case 'openBookAtRef':

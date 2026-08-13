@@ -869,6 +869,8 @@ await Otzaria.call('reader.openBook', {
 ה-PDF בספר חיצוני של אותו provider, אוצריא שולחת לתוסף אירוע ממוקד
 `reader.inBookSearch.requested` עם `{ requestId, provider, externalId, query }`.
 התוסף מריץ את החיפוש במנוע שלו ועונה עם `reader.respondInBookSearch`.
+שם ספק שייך לתוסף הראשון שרשם אותו; ניסיון של תוסף אחר לרשום אותו נדחה
+עם `error.conflict`.
 
 ```javascript
 await Otzaria.call('reader.registerInBookSearchProvider', {
@@ -893,6 +895,7 @@ window.addEventListener('reader.inBookSearch.requested', async (event) => {
 תשובת הספק לאירוע `reader.inBookSearch.requested`. חובה להעביר את
 `requestId` מהאירוע; בכישלון מעבירים `error` עם הודעה קצרה במקום `pages`.
 בקשה שלא נענתה בתוך 30 שניות נכשלת בצד הקורא.
+התשובה מתקבלת רק מהתוסף שאליו הבקשה נשלחה.
 
 ### `reader.registerExternalSearchProvider`
 **הרשאה:** `reader.open`
@@ -904,6 +907,8 @@ window.addEventListener('reader.inBookSearch.requested', async (event) => {
 לתוסף אירוע ממוקד `search.external.requested` עם
 `{ requestId, provider, query, mode, distance, offset, limit }`, והתוסף
 עונה עם `reader.respondExternalSearch`.
+שם ספק שייך לתוסף הראשון שרשם אותו; ניסיון של תוסף אחר לרשום אותו נדחה
+עם `error.conflict`.
 
 ```javascript
 await Otzaria.call('reader.registerExternalSearchProvider', {
@@ -940,6 +945,7 @@ window.addEventListener('search.external.requested', async (event) => {
 תשובת הספק לאירוע `search.external.requested`. חובה להעביר את `requestId`;
 בכישלון מעבירים `error` במקום `results`. מגבלות: עד 50 תוצאות לעמוד,
 כותרת עד 300 תווים, קטע טקסט עד 600.
+התשובה מתקבלת רק מהתוסף שאליו הבקשה נשלחה.
 
 **הזרמה:** מותר לענות כמה פעמים לאותה בקשה עם `done: false` — כל תשובה
 כזו היא עדכון חלקי שמחליף את חלון העמוד במדור (הספירות נחשבות רף-תחתון),

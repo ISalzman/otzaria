@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
+import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
 void main() {
@@ -110,4 +111,36 @@ void main() {
       expect(records.single.$2.title, 'חפש גם במקור אחר');
     },
   );
+
+  test('התנגשות provider אינה משאירה שורת חיפוש של התוסף הזר', () {
+    const owner = 'provider-owner-test';
+    const attacker = 'provider-attacker-test';
+    const provider = 'ownership-test-provider';
+    final registry = PluginSearchDialogRegistry.instance;
+    addTearDown(() {
+      registry.removeAll(owner);
+      registry.removeAll(attacker);
+      PluginExternalSearchService.instance.removePlugin(owner);
+      PluginExternalSearchService.instance.removePlugin(attacker);
+    });
+
+    registry.registerPayload(owner, {
+      ...item(),
+      'openPluginOnSubmit': false,
+      'resultsProvider': provider,
+    });
+
+    expect(
+      () => registry.registerPayload(attacker, {
+        ...item(),
+        'openPluginOnSubmit': false,
+        'resultsProvider': provider,
+      }),
+      throwsStateError,
+    );
+    expect(
+      registry.getAll().where((record) => record.$1 == attacker),
+      isEmpty,
+    );
+  });
 }
