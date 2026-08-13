@@ -428,4 +428,61 @@ void main() {
       expect(find.text('נקה סינון'), findsOneWidget);
     });
   });
+
+  group('קטגוריה עם ספירה חיצונית בלבד — בלי חץ הרחבה', () {
+    // ספירת היברובוקס יכולה לשבת על קטגוריה שאין תחתיה שום שורה נראית
+    // (הענף העמוק לא בקטלוג, או שהספר אינו ספר ספרייה). חץ שנפתח לריק
+    // מבלבל — לכן הוא מוצג רק כשיש ילד נראה; הלחיצה על השורה מסננת.
+    Library twoBranchLibrary() => makeLibraryFrom([
+      makeCategory(
+        'תלמוד ירושלמי',
+        subCategories: [makeCategory('סדר זרעים')],
+      ),
+      makeCategory(
+        'תנ"ך',
+        subCategories: [makeCategory('כתובים')],
+      ),
+    ]);
+
+    Finder chevronOf(String title) => find.descendant(
+      of: find.ancestor(
+        of: find.text(title),
+        matching: find.byType(NavTreeTile),
+      ),
+      matching: find.byType(IconButton),
+    );
+
+    testWidgets('ספירה על הקטגוריה בלבד — אין חץ; עם ילד בעל ספירה — יש', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: twoBranchLibrary(),
+        facetCounts: const {
+          '/': 3,
+          // רק האב קיבל ספירה (הזרקת ספק חיצוני) — תת-הקטגוריה בספירה 0.
+          '/תלמוד ירושלמי': 1,
+          // ענף רגיל: גם הילד נספר.
+          '/תנ"ך': 2,
+          '/תנ"ך/כתובים': 2,
+        },
+      );
+
+      expect(chevronOf('תלמוד ירושלמי'), findsNothing);
+      expect(chevronOf('תנ"ך'), findsOneWidget);
+    });
+
+    testWidgets('קטגוריה בלי חץ אינה נפתחת גם כשהיא מסומנת כפתוחה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: twoBranchLibrary(),
+        facetCounts: const {'/': 1, '/תלמוד ירושלמי': 1},
+        expansion: const {'/תלמוד ירושלמי': true},
+      );
+
+      expect(find.text('סדר זרעים'), findsNothing);
+    });
+  });
 }
