@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:path/path.dart' as p;
@@ -810,6 +811,77 @@ void main() {
       final result = await BackupService.restoreFromBackup(path);
 
       expect(result.hasLegacyPartialSettings, isTrue);
+    });
+
+    test('גיבוי שלם מלפני החתימה אינו מדווח כחלקי', () async {
+      // page_shape_* אינו מפתח מוצהר, ולכן רק סריקת ה-Box מייצרת אותו.
+      await box.put('page_shape_book_בראשית', 'left|רש"י');
+      final path = await createSettingsBackup();
+      final backupFile = File(path);
+      final json =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      json.remove('settingsSource');
+      await backupFile.writeAsString(jsonEncode(json));
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      expect(result.hasLegacyPartialSettings, isFalse);
+    });
+  });
+
+  // ─── זיהוי סעיף הגדרות חלקי ────────────────────────────────────────────────
+  group('isPartialSettingsSection', () {
+    final declaredOnly = {
+      SettingsRepository.keyFontSize: 25.0,
+      SettingsRepository.keyLibraryViewMode: 'grid',
+    };
+    final scanned = {
+      ...declaredOnly,
+      'page_shape_view_mode_בראשית': true,
+    };
+
+    test('חתימת box שוללת חלקיות', () {
+      expect(
+        BackupService.isPartialSettingsSection(declaredOnly, 'box'),
+        isFalse,
+      );
+    });
+
+    test('חתימת declared-keys מצהירה על חלקיות', () {
+      expect(
+        BackupService.isPartialSettingsSection(scanned, 'declared-keys'),
+        isTrue,
+      );
+    });
+
+    test('בלי חתימה: רק מפתחות מוצהרים = חלקי', () {
+      expect(
+        BackupService.isPartialSettingsSection(declaredOnly, null),
+        isTrue,
+      );
+    });
+
+    test('בלי חתימה: מפתח שאינו מוצהר מוכיח סריקת Box', () {
+      expect(BackupService.isPartialSettingsSection(scanned, null), isFalse);
+    });
+
+    test('בלי חתימה: קיצור מקלדת לבדו אינו מוכיח סריקה', () {
+      // הקיצורים היו בתוך רשימת הנסיגה, ולכן אינם עדות לסריקת Box.
+      final withShortcut = {
+        ...declaredOnly,
+        ...{
+          for (final key in ShortcutValidator.shortcutKeys.take(1))
+            key: 'ctrl+a',
+        },
+      };
+      expect(
+        BackupService.isPartialSettingsSection(withShortcut, null),
+        isTrue,
+      );
+    });
+
+    test('סעיף הגדרות ריק אינו מדווח כשלם', () {
+      expect(BackupService.isPartialSettingsSection(const {}, null), isTrue);
     });
   });
 

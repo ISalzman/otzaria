@@ -10,11 +10,19 @@ import 'package:otzaria/settings/services/backup_service.dart';
 /// בלי השומר, מקום שמירה חדש נשמט מהגיבוי בשקט — כך אבדו ההתאמות הפר-ספריות,
 /// שיושבות בקבצי JSON מחוץ ל-Hive ולכן לא נתפסו על ידי שומר מפתחות ההגדרות.
 ///
-/// היקף הסריקה: Hive boxes, ומקומות שנבנים מ*שורש הנתונים*. יעד שנבנה מנתיב
-/// בסיס אחר (יומני הריצה, שנופלים ל-temp כשאין שורש נתונים) אינו בתחום.
+/// היקף הסריקה: Hive boxes (בשם מילולי או דרך קבוע באותו קובץ), ומקומות
+/// שנבנים מ*שורש הנתונים* דרך `p.join`. שני דפוסים אינם בתחום ולא ייתפסו:
+/// נתיב שנבנה באינטרפולציה (`'$root/x'`), ו-`p.join` על משתנה שאין בשמו
+/// `dataRoot`. יעד שנבנה מנתיב בסיס אחר (יומני הריצה, שנופלים ל-temp כשאין
+/// שורש נתונים) אינו בתחום אף הוא.
 void main() {
   /// שמות ה-Hive boxes שנפתחים בקוד: `openBox…('name')`.
   final boxPattern = RegExp(r"""openBox[^(]*\(\s*'([^']+)'""");
+
+  /// `openBox…(kBoxName)` — השם מגיע מקבוע, ונפתר מהצהרתו באותו קובץ.
+  final boxViaIdentifierPattern = RegExp(
+    r"""openBox[^(]*\(\s*([A-Za-z_]\w*)\s*[,)]""",
+  );
 
   /// תיקיות שנוצרות ישירות תחת שורש הנתונים: `p.join(<dataRoot>, 'name')`.
   final dataRootDirPattern = RegExp(
@@ -39,6 +47,12 @@ void main() {
         for (final match in pattern.allMatches(source)) {
           names.add(match.group(1)!);
         }
+      }
+      for (final match in boxViaIdentifierPattern.allMatches(source)) {
+        final resolved = RegExp(
+          RegExp.escape(match.group(1)!) + r"""\s*=\s*'([^']+)'""",
+        ).firstMatch(source);
+        if (resolved != null) names.add(resolved.group(1)!);
       }
     }
     discovered = names;

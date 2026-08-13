@@ -582,9 +582,13 @@ class BackupService {
     // Restore settings
     var hasLegacyPartialSettings = false;
     if (includes['settings'] == true && backupData.containsKey('settings')) {
-      await _restoreSettings(backupData['settings'] as Map<String, dynamic>);
+      final settings = backupData['settings'] as Map<String, dynamic>;
+      await _restoreSettings(settings);
       missingCustomFolders.addAll(await findMissingCustomFolders());
-      hasLegacyPartialSettings = backupData['settingsSource'] == null;
+      hasLegacyPartialSettings = isPartialSettingsSection(
+        settings,
+        backupData['settingsSource'],
+      );
       await _restorePerBookSettings(
         (backupData['perBookSettings'] as Map?)?.cast<String, dynamic>() ??
             const {},
@@ -696,6 +700,24 @@ class BackupService {
         _logger.warning('Failed to restore per-book settings ${entry.key}: $e');
       }
     }
+  }
+
+  /// האם סעיף ההגדרות נאסף מרשימת מפתחות מוצהרת ולכן חסר את השאר.
+  ///
+  /// [source] הוא `settingsSource` מהמניפסט: `'declared-keys'` מצהיר על עצמו,
+  /// ו-`'box'` שולל. גיבוי מלפני שהשדה נוסף אינו נושא אותו כלל, ולכן ההכרעה
+  /// נופלת על התוכן: אוסף מרשימה מוצהרת יכול להכיל רק מפתחות מתוכה
+  /// (ראה [fallbackSettingsKeys]), ולכן מפתח אחד מחוצה לה מוכיח סריקת Box.
+  /// בלי הבדיקה הזאת גם גיבוי שלם מלפני התיקון היה מתריע התראת שקר.
+  @visibleForTesting
+  static bool isPartialSettingsSection(
+    Map<String, dynamic> settings,
+    Object? source,
+  ) {
+    if (source == 'declared-keys') return true;
+    if (source != null) return false;
+    final declared = fallbackSettingsKeys.toSet();
+    return !settings.keys.any((key) => !declared.contains(key));
   }
 
   /// נתיבי התיקיות המותאמות אישית שרשומות בהגדרות ואינן קיימות בדיסק.
