@@ -40,6 +40,7 @@ import 'package:otzaria/utils/text/global_search_helper.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
+import 'package:otzaria/widgets/layout/reading_area_width.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/view/selection/text_selection_manager.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
@@ -2121,15 +2122,11 @@ class _CombinedViewState extends State<CombinedView> {
                     builder: (context, constraints) {
                       return BlocBuilder<SettingsBloc, SettingsState>(
                         builder: (context, settingsState) {
-                          var textMaxWidth = settingsState.textMaxWidth;
-
-                          // אם הערך שלילי, זו רמה שצריך לחשב לפי גודל המסך
-                          // למשל -2 = רמה 2 = 90% מרוחב המסך
-                          if (textMaxWidth < 0) {
-                            final level = (-textMaxWidth).toInt();
-                            final widthPercent = 1.0 - (level * 0.05);
-                            textMaxWidth = constraints.maxWidth * widthPercent;
-                          }
+                          final textMaxWidth = textColumnMaxWidthOf(
+                            context,
+                            setting: settingsState.textMaxWidth,
+                            availableWidth: constraints.maxWidth,
+                          );
 
                           // במצב רציף — פסקה מכמה שורות מקור.
                           if (isContinuousParagraph) {
@@ -2690,14 +2687,11 @@ class _CommentaryCardState extends State<_CommentaryCard> {
         return BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, settingsState) {
             // שימוש באותו רוחב מקסימלי כמו הטקסט
-            var textMaxWidth = settingsState.textMaxWidth;
-
-            // אם הערך שלילי, זו רמה שצריך לחשב לפי גודל המסך
-            if (textMaxWidth < 0) {
-              final level = (-textMaxWidth).toInt();
-              final widthPercent = 1.0 - (level * 0.05);
-              textMaxWidth = constraints.maxWidth * widthPercent;
-            }
+            final textMaxWidth = textColumnMaxWidthOf(
+              context,
+              setting: settingsState.textMaxWidth,
+              availableWidth: constraints.maxWidth,
+            );
 
             final commentaryContainer = Container(
               margin: const EdgeInsets.only(bottom: 8.0),
