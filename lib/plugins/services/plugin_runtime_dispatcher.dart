@@ -269,10 +269,14 @@ class PluginRuntimeDispatcher {
     if (payload == null) return;
     if (!await _canReceiveEvent(pluginId, 'theme.changed')) return;
     try {
-      await controller.evaluateJavascript(
-        source:
-            "window.dispatchEvent(new CustomEvent('theme.changed', { detail: ${jsonEncode(payload)} }));",
-      );
+      // timeout: eval על WebView תקוע עלול לא להשלים לעולם, וכל שרשרת
+      // ה-lifecycle (שרצה תחת מנעול) הייתה נתקעת איתו.
+      await controller
+          .evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('theme.changed', { detail: ${jsonEncode(payload)} }));",
+          )
+          .timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Failed to resync theme to plugin $pluginId: $e');
     }
@@ -284,10 +288,14 @@ class PluginRuntimeDispatcher {
     String topic,
   ) async {
     try {
-      await controller.evaluateJavascript(
-        source:
-            "window.dispatchEvent(new CustomEvent('$topic', { detail: null }));",
-      );
+      // timeout: ראו _resyncThemeOnResume — לא נותנים ל-WebView תקוע להקפיא
+      // את מנעול ה-lifecycle לצמיתות.
+      await controller
+          .evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('$topic', { detail: null }));",
+          )
+          .timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Failed to dispatch $topic to plugin $pluginId: $e');
     }
@@ -589,67 +597,57 @@ class PluginRuntimeDispatcher {
       // למסירה חוזרת כשה-boot של הדף יסתיים (onForegroundInstanceReady).
       final pending = _pendingRedeliveries.putIfAbsent(pluginId, () => []);
       if (pending.length >= _maxPendingRedeliveries) pending.removeAt(0);
-      final pendingEntry = (
-        topic: topic,
-        jsonPayload: jsonPayload,
-        at: DateTime.now(),
-      );
-      pending.add(pendingEntry);
+      pending.add((topic: topic, jsonPayload: jsonPayload, at: DateTime.now()));
       try {
         await _resumeForeground(pluginId);
-        // פינג לפני המסירה: השעיה נייטיבית עלולה להשאיר את הדף קפוא, מרוקן,
-        // או — המקרה הערמומי — עם JS חי אך ערוץ הגשר JS→Dart מת (ה-platform
-        // view הושמד בזמן ההסתרה). eval רגיל היה מצליח אז למרות שתשובות RPC
-        // לא יגיעו לעולם, לכן הפינג עובר דרך הגשר עצמו: callHandler שחוזר
-        // מ-Dart. דף שאינו עונה בזמן נטען מחדש, והאירוע יימסר במסירה החוזרת
-        // אחרי ה-boot.
-        Object? pong;
-        try {
-          pong = await _bridgePing(controller).timeout(
-            const Duration(seconds: 3),
+        // בפלטפורמות בלי pause נייטיבי הדף מעולם לא הוקפא — מצב ה"זומבי"
+        // אינו קיים, ו-callAsyncJavaScript פחות בשל שם (Linux beta). מסלול
+        // ה-eval הרגיל מספיק.
+        if (!_supportsNativePauseResume) {
+          await controller.evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('$topic', "
+                "{ detail: $jsonPayload }));",
           );
-        } catch (_) {
-          pong = null;
-        }
-        if (pong != true) {
-          debugPrint(
-            'PluginRuntimeDispatcher: $pluginId unresponsive after resume — '
-            'reloading',
-          );
-          try {
-            await controller.reload();
-          } catch (e) {
-            debugPrint('PluginRuntimeDispatcher: reload failed: $e');
-          }
           return;
         }
-        // המסירה עצמה ב-callAsyncJavaScript ולא ב-evaluateJavascript: על טאב
-        // שה-platform view שלו הושמד בזמן ההסתרה, eval רגיל נבלע בשקט (נצפה
-        // בפועל: הפינג עבר אך מאזין בדף לא קיבל את האירוע) בעוד המסלול
-        // האסינכרוני עובד. הערך המוחזר מאמת שהאירוע אכן שוגר בדף; אחרת —
-        // reload, והמסירה החוזרת אחרי ה-boot תטפל.
-        Object? delivered;
+        // בדיקה ומסירה בקריאה אסינכרונית אחת (תקציב זמן אחד): השעיה נייטיבית
+        // עלולה להשאיר את הדף קפוא, מרוקן, או — המקרה הערמומי — context חדש
+        // שבו eval רץ ומחזיר ערכים אבל מאזיני הדף האמיתי לא רואים את האירוע
+        // (נצפה בפועל דרך CDP). לכן: (א) מוודאים שההרצה רואה את ה-world שבו
+        // התוסף באמת נטען (window.Otzaria._booted מוצב רק ב-_boot); (ב)
+        // משגרים את האירוע; (ג) מחזירים round-trip דרך ערוץ הגשר JS→Dart —
+        // ערוץ מת משאיר את ה-Promise תלוי וה-timeout מטפל. כל כשל → reload,
+        // והאירוע יימסר במסירה החוזרת אחרי ה-boot (onForegroundInstanceReady).
+        Object? outcome;
         try {
-          final dispatchResult = await controller
+          final result = await controller
               .callAsyncJavaScript(
                 functionBody:
+                    "if (!window.flutter_inappwebview || "
+                    "!window.flutter_inappwebview.callHandler) "
+                    "{ return 'no-bridge'; } "
+                    "if (!window.Otzaria || window.Otzaria._booted !== true) "
+                    "{ return 'no-page-world'; } "
                     "window.dispatchEvent(new CustomEvent('$topic', "
-                    "{ detail: $jsonPayload })); return true;",
+                    "{ detail: $jsonPayload })); "
+                    "return await window.flutter_inappwebview"
+                    ".callHandler('otzaria_bridge_ping');",
               )
               .timeout(const Duration(seconds: 3));
-          delivered = dispatchResult?.value;
+          outcome = result?.value;
         } catch (_) {
-          delivered = null;
+          outcome = null;
         }
-        if (delivered == true) {
-          // המסירה אומתה — אין צורך במסירה חוזרת אם הדף ייטען מחדש בקרוב
-          // מסיבה אחרת (מונע טיפול כפול באותו requestId).
-          _pendingRedeliveries[pluginId]?.remove(pendingEntry);
-        } else {
+        if (outcome != true) {
           debugPrint(
             'PluginRuntimeDispatcher: $topic delivery to $pluginId not '
-            'confirmed — reloading',
+            'confirmed ($outcome) — reloading',
           );
+          // הדף בדרך ל-reload: מחזירים את דגל ההשעיה כדי שגם ניסיון חוזר
+          // של השירות (retry אחרי 8 שניות) יעבור דרך המסלול המאומת הזה
+          // ויירשם למסירה חוזרת — ולא ייבלע ב-eval רגיל על דף באמצע טעינה.
+          _suspendedForegroundIds.add(pluginId);
           try {
             await controller.reload();
           } catch (e) {
@@ -678,27 +676,6 @@ class PluginRuntimeDispatcher {
         }
       }
     });
-  }
-
-  /// פינג round-trip דרך ערוץ הגשר JS→Dart (ה-handler `otzaria_bridge_ping`
-  /// שרושם PluginBridgeHandler). מחזיר true רק אם הערוץ חי בשני הכיוונים
-  /// *וההרצה רואה את ה-world של הדף עצמו*: אחרי השמדת ה-platform view בזמן
-  /// שהטאב מוסתר, הרצות מ-Dart עלולות לרוץ ב-context שמנותק מהדף — הקוד רץ
-  /// ומחזיר ערכים, אבל window.dispatchEvent לא מגיע למאזיני התוסף (נצפה
-  /// בפועל דרך CDP). `window.Otzaria` מוצב ב-main world ב-document start
-  /// (ה-SDK stub), ולכן היעדרו מזהה את המצב הזה. כשהערוץ מת ה-Promise לא
-  /// נפתר לעולם — הקורא אחראי ל-timeout.
-  Future<Object?> _bridgePing(InAppWebViewController controller) async {
-    final result = await controller.callAsyncJavaScript(
-      functionBody:
-          "if (!window.flutter_inappwebview || "
-          "!window.flutter_inappwebview.callHandler) { return 'no-bridge'; } "
-          "if (!window.Otzaria || window.Otzaria._booted !== true) { "
-          "return 'no-page-world'; } "
-          "return await window.flutter_inappwebview"
-          ".callHandler('otzaria_bridge_ping');",
-    );
-    return result?.value;
   }
 
   /// חלון חסד להשלמת טיפול אסינכרוני לפני הקפאה חוזרת של טאב מושהה.
