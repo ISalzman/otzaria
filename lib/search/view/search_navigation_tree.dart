@@ -154,8 +154,15 @@ class SearchNavigationTree extends StatelessWidget {
       final count = facetCounts[sub.path] ?? 0;
       final leadsToSelection = _leadsToSelection(sub.path, selectedPaths);
       if (count == 0 && !leadsToSelection && !_isSelected(sub.path)) continue;
-      final isExpanded = expansion[sub.path] ?? leadsToSelection;
-      rows.add(_FlatRow.category(sub, level + 1, count, isExpanded));
+      // ספירה שמקורה רק בספק חיצוני (היברובוקס) יכולה לשבת על קטגוריה שאין
+      // תחתיה שום שורה נראית — הענף העמוק אינו בקטלוג המקומי, או שהספר אינו
+      // ספר ספרייה. בלי ילדים נראים אין חץ הרחבה; הלחיצה על השורה עצמה
+      // מסננת ומציגה את התוצאות.
+      final hasChildren = _hasVisibleChildren(sub, selectedPaths);
+      final isExpanded = hasChildren && (expansion[sub.path] ?? leadsToSelection);
+      rows.add(
+        _FlatRow.category(sub, level + 1, count, isExpanded, hasChildren),
+      );
       if (isExpanded) _flattenChildren(sub, level + 1, rows, selectedPaths);
     }
     for (final book in _uniqueBooks(category.books)) {
@@ -164,6 +171,24 @@ class SearchNavigationTree extends StatelessWidget {
       if (count == 0 && !_isSelected(facet)) continue;
       rows.add(_FlatRow.book(book, facet, count, level + 1));
     }
+  }
+
+  /// האם לקטגוריה יש לפחות שורה נראית אחת מתחתיה — אותם תנאים בדיוק
+  /// שבהם [_flattenChildren] מרנדר ילד (קטגוריה או ספר).
+  bool _hasVisibleChildren(Category category, List<String> selectedPaths) {
+    for (final sub in category.subCategories) {
+      final count = facetCounts[sub.path] ?? 0;
+      if (count > 0 ||
+          _leadsToSelection(sub.path, selectedPaths) ||
+          _isSelected(sub.path)) {
+        return true;
+      }
+    }
+    for (final book in category.books) {
+      final facet = FacetHelper.buildBookFacet(category.path, book);
+      if ((facetCounts[facet] ?? 0) > 0 || _isSelected(facet)) return true;
+    }
+    return false;
   }
 
   List<Category> _sortedSubCategories(Category category) {
@@ -208,6 +233,7 @@ class SearchNavigationTree extends StatelessWidget {
               row.level - 1,
               row.count,
               isExpanded: row.isExpanded,
+              hasChildren: row.hasChildren,
             ),
           ),
         );
@@ -295,6 +321,7 @@ class SearchNavigationTree extends StatelessWidget {
     int level,
     int count, {
     required bool isExpanded,
+    required bool hasChildren,
   }) {
     final Widget? loadingTrailing = count == -1
         ? const SizedBox(
@@ -309,7 +336,7 @@ class SearchNavigationTree extends StatelessWidget {
       level: level,
       isSelected: _isSelected(category.path),
       isExpanded: isExpanded,
-      hasChildren: true,
+      hasChildren: hasChildren,
       count: count == -1 ? null : count,
       trailing: loadingTrailing,
       onTap: () => isMultiSelectPressed()
@@ -481,6 +508,7 @@ class _FlatRow {
   final int level;
   final int count;
   final bool isExpanded;
+  final bool hasChildren;
   bool isGroupStart = false;
   bool isGroupEnd = false;
 
@@ -493,18 +521,25 @@ class _FlatRow {
     this.level = 0,
     this.count = 0,
     this.isExpanded = false,
+    this.hasChildren = false,
   });
 
   _FlatRow.rootHeader(int count)
     : this._(kind: _FlatRowKind.rootHeader, count: count);
 
-  _FlatRow.category(Category category, int level, int count, bool isExpanded)
-    : this._(
+  _FlatRow.category(
+    Category category,
+    int level,
+    int count,
+    bool isExpanded,
+    bool hasChildren,
+  ) : this._(
         kind: _FlatRowKind.category,
         category: category,
         level: level,
         count: count,
         isExpanded: isExpanded,
+        hasChildren: hasChildren,
       );
 
   _FlatRow.book(Book book, String facet, int count, int level)
