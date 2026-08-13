@@ -12,6 +12,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/search_query_builder.dart';
@@ -905,6 +906,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     Emitter<SearchState> emit,
   ) {
     final newConfig = state.configuration.copyWith(sortBy: event.order);
+    SearchDefaults.saveSortOrderDefault(event.order);
     emit(state.copyWith(configuration: newConfig));
     _reSearch();
   }
@@ -913,6 +915,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     UpdateResultGrouping event,
     Emitter<SearchState> emit,
   ) {
+    // השמירה קודמת ל-early return: בטאב משוחזר ה-state עשוי כבר להיות במצב
+    // שנבחר, ובחירת המשתמש עדיין צריכה להיות זו שתיזכר לחיפוש הבא.
+    SearchDefaults.saveResultGroupingDefault(event.grouping);
     if (event.grouping == state.configuration.resultGrouping) return;
     final newConfig = state.configuration.copyWith(
       resultGrouping: event.grouping,

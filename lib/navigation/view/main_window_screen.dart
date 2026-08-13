@@ -31,6 +31,7 @@ import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
 import 'package:otzaria/library/models/library.dart' as library_model;
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
@@ -1220,9 +1221,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
       query,
       initialConfiguration: mode == null
           ? null
-          : SearchConfiguration(
-              searchMode: mode,
-              distance: mode == SearchMode.fuzzy ? 2 : 0,
+          : SearchDefaults.withResultPreferences(
+              SearchConfiguration(
+                searchMode: mode,
+                distance: mode == SearchMode.fuzzy ? 2 : 0,
+              ),
             ),
     );
     context.read<HistoryBloc>().add(AddHistory(tab));

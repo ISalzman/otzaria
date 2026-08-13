@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -27,7 +28,12 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/search/view/search_scope_menu.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show ResultsOrder;
 
 import '../support/search_engine_test_init.dart';
 import '../test_helpers/memory_cache_provider.dart';
@@ -43,6 +49,10 @@ class MockNavigationBloc extends MockBloc<NavigationEvent, NavigationState>
 
 class MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
     implements LibraryBloc {}
+
+class MockTabsBloc extends MockBloc<TabsEvent, TabsState> implements TabsBloc {}
+
+class _FakeTabsEvent extends Fake implements TabsEvent {}
 
 /// LibraryBloc מדומה עם ספרייה ריקה — מספיק ל-parseCategoryQuery בדיאלוג.
 MockLibraryBloc _stubLibraryBloc() {
@@ -81,7 +91,11 @@ Future<void> main() async {
   // ה-Rust; הטסטים המסומנים מדולגים כשאין build נייטיבי זמין.
   final engineReady = await tryInitSearchEngine();
 
-  setUpAll(() async {
+  setUpAll(() => registerFallbackValue(_FakeTabsEvent()));
+
+  // מחסן טרי לכל טסט: טסט ששומר העדפת תצוגת תוצאות אחרת מזליג אותה לכל
+  // טאב חיפוש שייבנה אחריו בקובץ.
+  setUp(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
@@ -1239,4 +1253,104 @@ Future<void> main() async {
       reason: 'סיומות כלליות בלעדיות למצב המתקדם',
     );
   });
+
+  // המסלול הראשי של המשתמש: דיאלוג → "חפש" → טאב חדש. הטאב נבנה כאן עם
+  // configuration מפורשת, ולכן העדפות תצוגת התוצאות חייבות להיות מוזרקות בו
+  // במפורש — ברירת המחדל של הבנאי אינה חלה על מסלול זה.
+  testWidgets(
+    'טאב שנפתח מהדיאלוג נושא את המיון והאיחוד השמורים',
+    (WidgetTester tester) async {
+      final historyBloc = MockHistoryBloc();
+      final indexingBloc = MockIndexingBloc();
+      final navigationBloc = MockNavigationBloc();
+      final tabsBloc = MockTabsBloc();
+      final theme = ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB85C38)),
+      );
+
+      whenListen(
+        historyBloc,
+        const Stream<HistoryState>.empty(),
+        initialState: HistoryLoaded([]),
+      );
+      whenListen(
+        indexingBloc,
+        const Stream<IndexingState>.empty(),
+        initialState: IndexingInitial(),
+      );
+      whenListen(
+        navigationBloc,
+        const Stream<NavigationState>.empty(),
+        initialState: const NavigationState(currentScreen: Screen.search),
+      );
+      whenListen(
+        tabsBloc,
+        const Stream<TabsState>.empty(),
+        initialState: const TabsState(tabs: [], currentTabIndex: 0),
+      );
+
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await historyBloc.close();
+        await indexingBloc.close();
+        await navigationBloc.close();
+        await tabsBloc.close();
+      });
+
+      SearchDefaults.saveResultGroupingDefault(ResultGroupingMode.sameSection);
+      SearchDefaults.saveSortOrderDefault(ResultsOrder.relevance);
+
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+            BlocProvider<IndexingBloc>.value(value: indexingBloc),
+            BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            BlocProvider<LibraryBloc>.value(value: _stubLibraryBloc()),
+            BlocProvider<TabsBloc>.value(value: tabsBloc),
+          ],
+          child: MaterialApp(
+            theme: theme,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => const SearchDialog(),
+                    ),
+                    child: const Text('פתח'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('פתח'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'חכמה בינה');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('חפש'));
+      await tester.pumpAndSettle();
+
+      final captured = verify(() => tabsBloc.add(captureAny())).captured;
+      final addedTabs = captured.whereType<AddTab>().toList();
+      expect(addedTabs, hasLength(1));
+      final tab = addedTabs.single.tab as SearchingTab;
+      addTearDown(tab.dispose);
+
+      expect(
+        tab.searchBloc.state.resultGrouping,
+        ResultGroupingMode.sameSection,
+      );
+      expect(tab.searchBloc.state.sortBy, ResultsOrder.relevance);
+      // העטיפה מוסיפה להעדפות ואינה מחליפה את מה שנבחר בדיאלוג.
+      expect(tab.searchBloc.state.currentFacets, isNotEmpty);
+    },
+    skip: !engineReady,
+  );
 }

@@ -3,12 +3,17 @@ import 'dart:convert';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
+import 'package:otzaria_search_engine/otzaria_search_engine.dart'
+    show ResultsOrder;
 
 /// ברירות מחדל לחיפוש, נפרדות לכל מצב: אפשרויות החיפוש המתקדם (7 תיבות
 /// הסימון + ניקוד/טעמים), אפשרויות החיפוש הרגיל (5 תיבות סימון בלבד)
-/// והמרווח בין מילים שלו, ומצב החיפוש שבו נפתח הדיאלוג.
-/// חיפוש חדש נפתח לפי ברירת המחדל השמורה; שינוי בחלונית נשמר לסשן
-/// הנוכחי בלבד וחוזר לברירת המחדל בהפעלה הבאה של התוכנה.
+/// והמרווח בין מילים שלו, מצב החיפוש שבו נפתח הדיאלוג, ותצוגת התוצאות
+/// (מיון ואיחוד).
+///
+/// חיפוש חדש נפתח לפי ברירת המחדל השמורה. למה שנקבע בדיאלוג יש גם שכבת
+/// סשן — `remember*Session*` נשמר עד סגירת התוכנה בלבד — ולעומת זאת
+/// תצוגת התוצאות, שנקבעת בסרגל התוצאות, נשמרת ישר לברירת המחדל.
 class SearchDefaults {
   static const _settingsKey = 'key-search-default-options';
   static const _exactSettingsKey = 'key-search-default-options-exact';
@@ -141,5 +146,62 @@ class SearchDefaults {
   /// משמר את המרווח להמשך הסשן (נקרא בסגירת דיאלוג החיפוש).
   static void rememberSessionDistance(int distance) {
     _sessionDistance = distance;
+  }
+
+  // ── תצוגת התוצאות: מיון ואיחוד ──────────────────────────────────────
+  // שתי ההעדפות נשמרות בשם הערך ולא באינדקסו, כדי שהוספת ערך באמצע ה-enum
+  // לא תהפוך העדפה שמורה לערך אחר. (ה-JSON של הטאב אינדקסי מאז ומתמיד.)
+
+  static const _sortOrderKey = 'key-search-results-sort-order';
+  static const _groupingKey = 'key-search-results-grouping';
+
+  /// המיון שאיתו נפתח חיפוש חדש — בחירת המשתמש האחרונה במסך התוצאות.
+  static ResultsOrder initialSortOrderForNewSearch() => _loadEnum(
+    _sortOrderKey,
+    ResultsOrder.values,
+    const SearchConfiguration().sortBy,
+  );
+
+  /// שומר את המיון שהמשתמש בחר כברירת מחדל לחיפושים הבאים.
+  static void saveSortOrderDefault(ResultsOrder order) =>
+      _saveEnum(_sortOrderKey, order.name);
+
+  /// מצב איחוד התוצאות שאיתו נפתח חיפוש חדש — בחירת המשתמש האחרונה.
+  static ResultGroupingMode initialResultGroupingForNewSearch() => _loadEnum(
+    _groupingKey,
+    ResultGroupingMode.values,
+    const SearchConfiguration().resultGrouping,
+  );
+
+  /// שומר את מצב איחוד התוצאות שהמשתמש בחר כברירת מחדל לחיפושים הבאים.
+  static void saveResultGroupingDefault(ResultGroupingMode grouping) =>
+      _saveEnum(_groupingKey, grouping.name);
+
+  /// [base] בתוספת ברירות המחדל השמורות לתצוגת התוצאות — מיון ואיחוד —
+  /// הדורסות את מה שיש ב-[base]. מסלולי השחזור (JSON, שכפול, היסטוריה)
+  /// אינם עוברים כאן, כדי שטאב משוחזר יישאר עם הערכים שנשמרו איתו.
+  static SearchConfiguration withResultPreferences([
+    SearchConfiguration base = const SearchConfiguration(),
+  ]) {
+    return base.copyWith(
+      sortBy: initialSortOrderForNewSearch(),
+      resultGrouping: initialResultGroupingForNewSearch(),
+    );
+  }
+
+  static T _loadEnum<T extends Enum>(String key, List<T> values, T fallback) {
+    // Settings לא אותחל (בדיקות ווידג'ט / אתחול מוקדם) — אין העדפות לקרוא.
+    if (!Settings.isInitialized) return fallback;
+    final raw = Settings.getValue<String>(key);
+    if (raw == null || raw.isEmpty) return fallback;
+    for (final value in values) {
+      if (value.name == raw) return value;
+    }
+    return fallback;
+  }
+
+  static void _saveEnum(String key, String name) {
+    if (!Settings.isInitialized) return;
+    Settings.setValue<String>(key, name);
   }
 }
