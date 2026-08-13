@@ -45,6 +45,17 @@ void main() {
       expect(result.plainText, 'יקוק');
       expect(result.htmlText, 'יקוק');
     });
+
+    test('שומר את ה-HTML כשמעבר שורה מיוצג ע"י <br>', () {
+      final result = CopyUtils.applyCopyPreferencesForClipboard(
+        plainText: 'ויאמר יהוה\nאל משה',
+        htmlText: 'ויאמר יהוה<br><b>אל משה</b>',
+        replaceHolyNames: true,
+      );
+
+      expect(result.plainText, 'ויאמר יקוק\nאל משה');
+      expect(result.htmlText, 'ויאמר יקוק<br><b>אל משה</b>');
+    });
   });
 
   group('CopyUtils.buildStyledHtml', () {

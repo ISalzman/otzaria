@@ -328,12 +328,18 @@ class CopyUtils {
     }
   }
 
+  /// `<br>` מומר לרווח לפני הפענוח — אחרת אינו תורם תו, וההשוואה מול
+  /// ה-plain text נכשלת על כל מעבר שורה ומפילה את ה-HTML.
   static String _extractVisibleTextFromHtml(String htmlText) {
     if (htmlText.isEmpty) {
       return '';
     }
 
-    return html_parser.parseFragment(htmlText).text ?? '';
+    final withBreaks = htmlText.replaceAll(
+      RegExp(r'<br\s*/?>', caseSensitive: false),
+      ' ',
+    );
+    return html_parser.parseFragment(withBreaks).text ?? '';
   }
 
   static String _normalizeCopiedText(String text) {
