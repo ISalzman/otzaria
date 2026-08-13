@@ -675,12 +675,14 @@ class _ExternalSearchResultsSectionState
                                 color: cs.onSurface,
                                 height: 1.5,
                               ),
+                              // אותה הדגשה כמו בגזירי המנוע המובנה: מילה
+                              // אדומה ומודגשת, ולא צביעת רקע.
                               highlightStyle: TextStyle(
-                                fontSize: settings.fontSize,
+                                fontSize: settings.fontSize + 2,
                                 fontFamily: settings.fontFamily,
                                 height: 1.5,
                                 fontWeight: FontWeight.bold,
-                                backgroundColor: cs.primaryContainer,
+                                color: cs.error,
                               ),
                             ),
                           ),
