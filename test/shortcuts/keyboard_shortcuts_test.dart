@@ -187,7 +187,7 @@ void main() {
     );
   });
 
-  group('KeyboardShortcuts - קיצורי חלוניות (Ctrl+Shift+L/C)', () {
+  group('KeyboardShortcuts - קיצורי חלוניות ותצוגה (Ctrl+Shift+L/C/P)', () {
     late MockSettingsBloc settingsBlocLocal;
     late StreamController<SettingsState> settingsControllerLocal;
 
@@ -297,6 +297,24 @@ void main() {
         expect(tab.toggleCommentatorsPaneNotifier.value, 0);
         await sendCtrlShift(tester, LogicalKeyboardKey.keyC);
         expect(tab.toggleCommentatorsPaneNotifier.value, 1);
+      },
+    );
+
+    testWidgets(
+      'Ctrl+Shift+P ב-PdfBookTab מגלגל את toggleTextViewNotifier '
+      '(הקיצור פעל רק בכיוון טקסט→PDF)',
+      (tester) async {
+        final tab = PdfBookTab(
+          book: PdfBook(title: 'ספר PDF', path: '/x.pdf'),
+          pageNumber: 1,
+        );
+        addTearDown(tab.dispose);
+
+        await pumpWithTab(tester, tab);
+
+        expect(tab.toggleTextViewNotifier.value, 0);
+        await sendCtrlShift(tester, LogicalKeyboardKey.keyP);
+        expect(tab.toggleTextViewNotifier.value, 1);
       },
     );
   });

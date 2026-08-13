@@ -501,6 +501,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _resolvedParallelEditions = false;
   late final VoidCallback _toggleNavPaneListener;
   late final VoidCallback _toggleCommentatorsPaneListener;
+  late final VoidCallback _toggleTextViewListener;
 
   Future<void> _runInitialSearchIfNeeded() async {
     final controller = widget.tab.searchController;
@@ -790,6 +791,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     widget.tab.toggleCommentatorsPaneNotifier.addListener(
       _toggleCommentatorsPaneListener,
     );
+
+    // קיצור Ctrl+Shift+P: מעבר למהדורת הטקסט — אותה פעולה כמו כפתור הטקסט.
+    _toggleTextViewListener = () => _handleTextButtonPress(context);
+    widget.tab.toggleTextViewNotifier.addListener(_toggleTextViewListener);
   }
 
   Future<void> _loadInitialLayoutMode() async {
@@ -3556,6 +3561,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     widget.tab.toggleCommentatorsPaneNotifier.removeListener(
       _toggleCommentatorsPaneListener,
     );
+    widget.tab.toggleTextViewNotifier.removeListener(_toggleTextViewListener);
     _leftPaneTabController?.dispose();
     _openFilterRequest.dispose();
     _searchFieldFocusNode.dispose();
