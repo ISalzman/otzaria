@@ -58,8 +58,34 @@ jobs:
 
       # חילול אינדקס חיפוש בהגדרות. ה-.g.dart נדחף לרפו, אבל הסקריפט הזה
       # יוודא שהוא עדכני בכל הרצה (אם searchEntries השתנו במהלך ה-PR).
+      # ה-dart run הראשון מפעיל build hooks שמורידים נכסים נייטיביים, ולכן
+      # retry חל רק על כשל hooks כדי ששגיאת סקריפט תיכשל מיד.
       - name: Generate settings search index
-        run: dart run tool/generate_search_index.dart
+        run: |
+          set +e
+
+          for attempt in 1 2 3; do
+            output=$(dart run tool/generate_search_index.dart 2>&1)
+            status=$?
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            case "$output" in
+              *'Running build hooks failed'*) ;;
+              *) exit "$status" ;;
+            esac
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::בניית נכסים נייטיביים נכשלה (ניסיון $attempt מתוך 3) - ניסיון נוסף בעוד 15 שניות"
+              sleep 15
+            fi
+          done
+
+          echo "::error::בניית הנכסים הנייטיביים נכשלה בשלושה ניסיונות"
+          exit 1
 
       - name: Generate settings translation catalog
         run: dart run tool/generate_settings_l10n.dart
