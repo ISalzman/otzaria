@@ -19,6 +19,13 @@ void main() {
       expect(externalFilterCategoryOf('/הלכה/ext:hb:42'), '/הלכה');
       expect(externalFilterCategoryOf('/id:9'), '/');
     });
+
+    test('facet של ספר בדלי אינו מתקפל — הוא הבחירה עצמה', () {
+      expect(
+        externalFilterCategoryOf('/עוד מהיברובוקס/#42'),
+        '/עוד מהיברובוקס/#42',
+      );
+    });
   });
 
   group('externalVisibleIdsFor', () {
@@ -87,6 +94,50 @@ void main() {
           otherFacet: null,
         ),
         [1, 2, 3, 4],
+      );
+    });
+
+    test('facet של ספר בדלי תואם את אותו ספר בלבד', () {
+      expect(
+        externalVisibleIdsFor(
+          index: index,
+          categories: categories,
+          facets: const ['/עוד מהיברובוקס/#3'],
+          otherFacet: '/עוד מהיברובוקס',
+        ),
+        [3],
+      );
+      // ספר מסווג נבחר דרך הדלי אינו קיים שם — הבחירה מחזירה ריק.
+      expect(
+        externalVisibleIdsFor(
+          index: index,
+          categories: categories,
+          facets: const ['/עוד מהיברובוקס/#999'],
+          otherFacet: '/עוד מהיברובוקס',
+        ),
+        isEmpty,
+      );
+      // בלי דלי (אינדקס בלי סיווג) אין facet כזה.
+      expect(
+        externalVisibleIdsFor(
+          index: index,
+          categories: categories,
+          facets: const ['/עוד מהיברובוקס/#3'],
+          otherFacet: null,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('ספר בדלי לצד קטגוריה — OR ביניהם, בסדר האינדקס', () {
+      expect(
+        externalVisibleIdsFor(
+          index: index,
+          categories: categories,
+          facets: const ['/הלכה', '/עוד מהיברובוקס/#1'],
+          otherFacet: '/עוד מהיברובוקס',
+        ),
+        [1, 2],
       );
     });
 

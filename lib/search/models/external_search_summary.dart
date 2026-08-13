@@ -59,7 +59,10 @@ class ExternalSearchSummary {
   String bookFacetOf(int id) => '$otherCategoryFacet/#$id';
 
   /// המזהה שב-[facet] כשהוא facet של ספר בדלי; אחרת null.
-  int? bookIdOfFacet(String facet) {
+  int? bookIdOfFacet(String facet) => bookIdIn(facet, otherCategoryFacet);
+
+  /// כמו [bookIdOfFacet], למי שמחזיק את נתיב הדלי בלבד (בלי הסיכום).
+  static int? bookIdIn(String facet, String otherCategoryFacet) {
     final prefix = '$otherCategoryFacet/#';
     if (!facet.startsWith(prefix)) return null;
     return int.tryParse(facet.substring(prefix.length));

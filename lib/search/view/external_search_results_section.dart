@@ -53,7 +53,8 @@ class ExternalSearchResultsSection extends StatefulWidget {
 
 /// נתיב הקטגוריה שמייצג facet שנבחר בעץ עבור סינון המדור: facet של ספר
 /// (המקטע האחרון הוא מפתח ספר — 'id:'/'uid:'/'ext:'/נתיב קובץ, תמיד עם ':')
-/// מתקפל לקטגוריית האם שלו.
+/// מתקפל לקטגוריית האם שלו. facet של ספר בדלי "עוד מ" נגמר ב-`#<id>` ולכן
+/// אינו מתקפל — הוא מזוהה במורד הדרך כבחירה של ספר בודד.
 @visibleForTesting
 String externalFilterCategoryOf(String facet) {
   final segments = facet
@@ -84,7 +85,8 @@ String? externalValidatedCategoryOf(
 
 /// המזהים מתוך [index] שסיווגם ([categories]) תואם את בחירת הקטגוריות
 /// [facets] (OR ביניהן; קטגוריה תואמת גם את צאצאיה). [otherFacet] הוא דלי
-/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג.
+/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג, ו-facet של ספר שתחתיו
+/// (`<דלי>/#<id>`) תואם את אותו ספר בלבד.
 @visibleForTesting
 List<int> externalVisibleIdsFor({
   required List<ExternalSearchIndexEntry> index,
@@ -92,6 +94,14 @@ List<int> externalVisibleIdsFor({
   required List<String> facets,
   required String? otherFacet,
 }) {
+  final pickedIds = <int>{};
+  if (otherFacet != null) {
+    for (final facet in facets) {
+      final id = ExternalSearchSummary.bookIdIn(facet, otherFacet);
+      if (id != null) pickedIds.add(id);
+    }
+  }
+
   bool matches(String? path) {
     for (final facet in facets) {
       if (facet == '/') return true;
@@ -108,7 +118,8 @@ List<int> externalVisibleIdsFor({
 
   return [
     for (final entry in index)
-      if (matches(categories[entry.id])) entry.id,
+      if (pickedIds.contains(entry.id) || matches(categories[entry.id]))
+        entry.id,
   ];
 }
 
