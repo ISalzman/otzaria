@@ -176,6 +176,8 @@ class _SearchDialogState extends State<SearchDialog> {
       _searchTab = SearchingTab(
         "חיפוש",
         lastTyping,
+        // בלי העדפות תצוגת התוצאות: זה טאב השירות של הדיאלוג, והמיון/האיחוד
+        // שלו נראים רק בבקשת החיפוש שנשלחת לתוספים.
         initialConfiguration: SearchConfiguration(
           searchMode: searchMode,
           distance: searchMode == SearchMode.fuzzy
@@ -723,13 +725,15 @@ class _SearchDialogState extends State<SearchDialog> {
     final newSearchTab = SearchingTab(
       "חיפוש: $query",
       query,
-      initialConfiguration: SearchConfiguration(
-        searchMode: currentMode,
-        distance: distance,
-        proximityScope: proximityScope,
-        currentFacets: facetsToSearch,
-        searchScopeFacets: facetsToSearch,
-        pluginSearchSelections: _allPluginSearchSelections(),
+      initialConfiguration: SearchDefaults.withResultPreferences(
+        SearchConfiguration(
+          searchMode: currentMode,
+          distance: distance,
+          proximityScope: proximityScope,
+          currentFacets: facetsToSearch,
+          searchScopeFacets: facetsToSearch,
+          pluginSearchSelections: _allPluginSearchSelections(),
+        ),
       ),
     );
 

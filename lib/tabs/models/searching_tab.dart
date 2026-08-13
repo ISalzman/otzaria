@@ -3,6 +3,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -80,7 +81,12 @@ class SearchingTab extends OpenedTab {
     super.dedupeKey,
     SearchConfiguration? initialConfiguration,
   }) {
-    searchBloc = SearchBloc(initialConfiguration: initialConfiguration);
+    // בלי configuration מפורשת זה טאב חיפוש חדש — הוא נפתח עם המיון ומצב
+    // האיחוד שהמשתמש בחר לאחרונה.
+    searchBloc = SearchBloc(
+      initialConfiguration:
+          initialConfiguration ?? SearchDefaults.withResultPreferences(),
+    );
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
@@ -362,6 +368,20 @@ class SearchingTab extends OpenedTab {
             sortByIndex < ResultsOrder.values.length)
         ? ResultsOrder.values[sortByIndex]
         : defaultConfig.sortBy;
+    final scopeIndex = json['proximityScope'];
+    final initialProximityScope =
+        (scopeIndex is int &&
+            scopeIndex >= 0 &&
+            scopeIndex < SearchScope.values.length)
+        ? SearchScope.values[scopeIndex]
+        : defaultConfig.proximityScope;
+    final groupingIndex = json['resultGrouping'];
+    final initialGrouping =
+        (groupingIndex is int &&
+            groupingIndex >= 0 &&
+            groupingIndex < ResultGroupingMode.values.length)
+        ? ResultGroupingMode.values[groupingIndex]
+        : defaultConfig.resultGrouping;
     final initialCurrentFacets = rawCurrentFacets is List
         ? rawCurrentFacets.map((e) => e.toString()).toList(growable: false)
         : defaultConfig.currentFacets;
@@ -383,9 +403,11 @@ class SearchingTab extends OpenedTab {
 
     final initialConfig = SearchConfiguration(
       distance: initialDistance,
+      proximityScope: initialProximityScope,
       searchMode: initialMode,
       numResults: initialNumResults,
       sortBy: initialSortBy,
+      resultGrouping: initialGrouping,
       currentFacets: initialCurrentFacets,
       searchScopeFacets: initialScopeFacets,
       wordMatchMode: initialWordMatchMode,
@@ -566,9 +588,11 @@ class SearchingTab extends OpenedTab {
       'isPinned': isPinned,
       'type': 'SearchingTabWindow',
       'distance': config.distance,
+      'proximityScope': config.proximityScope.index,
       'searchMode': config.searchMode.index,
       'numResults': config.numResults,
       'sortBy': config.sortBy.index,
+      'resultGrouping': config.resultGrouping.index,
       'currentFacets': config.currentFacets,
       'searchScopeFacets': config.searchScopeFacets,
       'wordMatchMode': config.wordMatchMode.index,

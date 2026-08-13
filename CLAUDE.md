@@ -668,6 +668,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Facet helper | `test/search/facet_helper_test.dart` |
 | Search BLoC facet counts | `test/search/search_bloc_facet_counts_test.dart` |
 | Search scope preferences | `test/search/search_scope_preferences_test.dart` |
+| זכירת המיון ואיחוד התוצאות (העדפה, BLoC, טאב חדש) | `test/search/search_results_preferences_test.dart` |
+| אותן העדפות בלי אתחול `Settings` | `test/search/search_results_preferences_uninitialized_test.dart` |
 | עץ ניווט תוצאות (רשימת סינון, גלוּת הבחירה, פתיחת ענפים) | `test/search/search_navigation_tree_test.dart` |
 | חלונית סינון התוצאות מקצה לקצה (שדה "איתור ספר") | `test/search/search_facet_filtering_book_filter_test.dart` |
 | ניתוב חיפוש-בספר: פשוט מול מנוע | `test/search/utils/in_book_search_routing_test.dart` |
@@ -676,6 +678,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | שקילות מנוע ↔ הדגשה במרווח בין מילים | `test/search/highlight_engine_distance_parity_test.dart` |
 | הדגשה במדיניות התאמה — רק בשורות שהמנוע החזיר | `test/utils/highlight_match_policy_test.dart` |
 | שימור קונפיגורציית החיפוש בשכפול/שחזור טאב ובשמירה ל-JSON | `test/tabs/models/tab_search_state_clone_test.dart` |
+| איחוד התוצאות וטווח הקרבה ב-JSON של טאב החיפוש | `test/tabs/models/searching_tab_json_config_test.dart` |
 | Gematria search | `test/tools/gematria/gematria_search_test.dart` |
 
 **Personal Notes**
@@ -779,6 +782,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Link types (נרמול, סוג קנוני, תוויות) | `test/models/link_types_test.dart` |
 | Utils (page map builder, page converter, TOC parser) | `test/utils/page_map_builder_test.dart`, `…page_converter_test.dart`, `…toc_parser_test.dart` |
 | Utils (link processing) | `test/text_book/utils/link_processing_test.dart` |
+| חיתוך HTML לפי טווח הבחירה (שימור עיצוב בהעתקה חלקית) | `test/utils/text/html_slice_test.dart` |
 | גודל פענוח תמונות (cacheWidth על נכסים כבדים) | `test/utils/ui/image_decode_size_test.dart` |
 | Hebrew text utils (migration) | `test/migration/hebrew_text_utils_test.dart` |
 | Text book searcher (in-book search) | `test/text_book/models/text_book_searcher_test.dart` |

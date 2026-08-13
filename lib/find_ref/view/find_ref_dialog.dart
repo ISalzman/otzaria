@@ -28,6 +28,7 @@ import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
@@ -573,7 +574,11 @@ class _FindRefDialogState extends State<FindRefDialog> {
   /// פותח את דיאלוג החיפוש עם [query] מוכן בשדה — ללא הרצת חיפוש.
   void _openTextSearch(String query) {
     Navigator.of(context).pop();
-    final tab = SearchingTab('חיפוש', query);
+    final tab = SearchingTab(
+      'חיפוש',
+      query,
+      initialConfiguration: const SearchConfiguration(),
+    );
     showDialog(
       context: context,
       builder: (context) => SearchDialog(existingTab: tab),
