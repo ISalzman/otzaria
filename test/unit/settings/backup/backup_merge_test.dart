@@ -106,6 +106,56 @@ void main() {
       );
       expect(merged['settings'], {'key-a': 'old'});
     });
+
+    test('התאמות פר-ספר מאוחדות לפי שם קובץ, החדש מנצח', () {
+      final merged = merge(
+        {
+          'perBookSettings': {'a.json': '{"fontSize":20.0}', 'b.json': '{}'},
+        },
+        {
+          'perBookSettings': {'a.json': '{"fontSize":31.0}'},
+        },
+      );
+      expect(merged['perBookSettings'], {
+        'a.json': '{"fontSize":31.0}',
+        'b.json': '{}',
+      });
+    });
+
+    test('חתימת מקור ההגדרות נשמרת עם הסעיף שנבחר', () {
+      expect(
+        merge(
+          const {},
+          {
+            'settings': {'key-a': 'new'},
+            'settingsSource': 'box',
+          },
+        )['settingsSource'],
+        'box',
+      );
+      expect(
+        merge(
+          {
+            'settings': {'key-a': 'old'},
+            'settingsSource': 'box',
+          },
+          const {},
+        )['settingsSource'],
+        'box',
+      );
+      expect(
+        merge(
+          {
+            'settings': {'key-a': 'old'},
+            'settingsSource': 'box',
+          },
+          {
+            'settings': {'key-a': 'new'},
+          },
+        )['settingsSource'],
+        isNull,
+      );
+    });
   });
 
   group('הערות אישיות', () {
@@ -240,6 +290,31 @@ void main() {
       expect((merged['workspaces'] as List), hasLength(2));
       expect(merged['currentWorkspace'], 'w2');
       expect(merged['origin'], 'archive');
+    });
+
+    test('הטאבים הפתוחים נלקחים מהחדש בשלמותם, בלי מיזוג רשימות', () {
+      final merged = merge(
+        {
+          'openTabs': {
+            'tabs': [
+              {'title': 'ספר שנסגר'},
+            ],
+            'currentTab': 0,
+          },
+        },
+        {
+          'openTabs': {
+            'tabs': [
+              {'title': 'ספר פתוח'},
+            ],
+            'currentTab': 0,
+          },
+        },
+      );
+
+      final tabs = (merged['openTabs'] as Map)['tabs'] as List;
+      expect(tabs, hasLength(1));
+      expect((tabs.single as Map)['title'], 'ספר פתוח');
     });
   });
 }

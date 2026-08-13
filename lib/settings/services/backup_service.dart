@@ -12,6 +12,7 @@ import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
+import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
@@ -110,6 +111,17 @@ class BackupService {
       // Backup settings
       if (includeSettings) {
         backupData['settings'] = await _backupSettings(skippedSections);
+        // חתימת מקור ההגדרות. גיבוי שנוצר לפני שהגיבוי סרק את ה-Box אסף
+        // רשימת מפתחות מוצהרת בלבד, ואינו נושא את השדה — כך השחזור מזהה
+        // אותו ומדווח למשתמש במקום להכריז "שוחזר בהצלחה" על קובץ חסר.
+        backupData['settingsSource'] = skippedSections.contains('settings')
+            ? 'declared-keys'
+            : 'box';
+        final perBookSettings = await _backupPerBookSettings();
+        backupData['perBookSettings'] = perBookSettings.files;
+        if (perBookSettings.hadFailures) {
+          skippedSections.add('perBookSettings');
+        }
       }
 
       // Backup bookmarks
@@ -142,6 +154,8 @@ class BackupService {
         final workspacesData = await _backupWorkspaces();
         backupData['workspaces'] = workspacesData['workspaces'];
         backupData['currentWorkspace'] = workspacesData['currentWorkspace'];
+        final openTabs = _backupOpenTabs();
+        if (openTabs != null) backupData['openTabs'] = openTabs;
       }
 
       // Backup Shamor Zachor
@@ -179,6 +193,39 @@ class BackupService {
     }
   }
 
+  /// מקומות השמירה שהגיבוי מכסה: Hive boxes ותיקיות תחת שורש הנתונים.
+  ///
+  /// `databases` מכוסה חלקית — `personal_notes.db` ו-`plugins_host.db` מגובים,
+  /// ו-`user_books.db`/`cache.db` נבנים מחדש מסריקת הספרים.
+  static const Set<String> backedUpStores = {
+    'app_preferences',
+    'bookmarks',
+    'history',
+    'workspaces',
+    'tabs',
+    'databases',
+    'plugins',
+    'per_book_settings',
+  };
+
+  /// מקומות שמירה שאינם מגובים במכוון, עם הסיבה לכל אחד.
+  ///
+  /// כל מקום שמירה בתוכנה חייב להופיע כאן או ב-[backedUpStores]:
+  /// `backup_storage_coverage_test` סורק את הקוד ונכשל על מקום שאינו מוצהר,
+  /// כך שתיקייה חדשה לא תישמט מהגיבוי בשקט כפי שקרה ל-`per_book_settings`.
+  static const Map<String, String> unbackedStores = {
+    'error_reports_queue': 'תור זמני — הדיווחים נשלחים והתור מתרוקן',
+    'pending_external_activations.jsonl':
+        'תור זמני של בקשות פתיחה מחוץ לתוכנה, מתרוקן בעיבוד',
+    'books': 'תוכן הספרייה, מגיע מההתקנה או מההורדה',
+    'הספרים שלי': 'קובצי הספרים; הנתיב נשמר בהגדרות והתיקייה נסרקת מחדש',
+    'index': 'אינדקס החיפוש, נבנה מחדש מהספרים',
+    'dictionaries': 'נכסי מילון שניתן להוריד שוב',
+    'library_update_cache': 'קאש הורדות זמני',
+    'webview2': 'נתוני מנוע הדפדפן המשובץ',
+    'backups': 'תיקיית הגיבויים עצמה',
+  };
+
   /// מפתחות הגדרות שאינם מועברים בין התקנות.
   ///
   /// הגיבוי סורק את *כל* מפתחות ההגדרות (ראה [_backupSettings]) ומחסיר את
@@ -205,6 +252,7 @@ class BackupService {
     // דגל פנימי שמסמן שברירות המחדל נכתבו לדיסק.
     'settings_initialized',
   };
+
   /// מפתחות ההגדרות שהגיבוי אוסף כשאין גישה ל-Hive box (ראה [_backupSettings]).
   /// כולל את הקיצורים הדינמיים, שמפתחותיהם נגזרים מהתוספים המותקנים.
   static List<String> get fallbackSettingsKeys => [
@@ -255,6 +303,30 @@ class BackupService {
       }
     }
     return settings;
+  }
+
+  /// גיבוי ההגדרות הפר-ספריות, שנשמרות בקבצי JSON מחוץ ל-Hive: המפרשים
+  /// הפעילים בכל ספר, גופן/ניקוד/פיסוק פר-ספר, רוחבי הטורים בצורת הדף וזום
+  /// ה-PDF. נשמרות כטקסט ולא כ-blob — הקבצים זעירים והמניפסט נשאר קריא.
+  static Future<({Map<String, String> files, bool hadFailures})>
+  _backupPerBookSettings() async {
+    final dir = Directory(await AppPaths.getPerBookSettingsPath());
+    if (!await dir.exists()) {
+      return (files: <String, String>{}, hadFailures: false);
+    }
+
+    final files = <String, String>{};
+    var hadFailures = false;
+    await for (final entity in dir.list()) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      try {
+        files[p.basename(entity.path)] = await entity.readAsString();
+      } catch (e) {
+        hadFailures = true;
+        _logger.warning('Skipping per-book settings ${entity.path}: $e');
+      }
+    }
+    return (files: files, hadFailures: hadFailures);
   }
 
   /// קידומות של נתונים שאינם הגדרות, אף שהם נשמרים באותו Hive box.
@@ -432,6 +504,19 @@ class BackupService {
     };
   }
 
+  /// הטאבים הפתוחים, כחלק מסעיף שולחנות העבודה — אותו סוג נתון (סידור
+  /// הספרים הפתוחים), ולכן אין להם העדפת גיבוי נפרדת.
+  ///
+  /// היעדר ה-box אינו מסמן את השחזור כחלקי: הטאבים הפתוחים הם מצב רגעי
+  /// שמשתנה בכל פתיחת ספר, ואין להבהיל את המשתמש בגללם.
+  static Map<String, dynamic>? _backupOpenTabs() {
+    if (!Hive.isBoxOpen(TabsRepository.boxName)) {
+      _logger.warning('_backupOpenTabs: tabs box not open — skipping');
+      return null;
+    }
+    return TabsRepository().exportRaw();
+  }
+
   /// Backup Shamor Zachor data - backs up all sz: keys found in Hive
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
     if (!Hive.isBoxOpen(HiveCache.keyName)) {
@@ -459,8 +544,18 @@ class BackupService {
   /// [missingCustomFolders] — נתיבי תיקיות ספרים מותאמות אישית ששוחזרו אך
   /// אינם קיימים במחשב היעד (שם משתמש אחר, כונן שאינו מחובר). הספרים שבהן
   /// לא ייסרקו, ולכן המשתמש חייב לדעת ולהצביע על הנתיב מחדש.
+  /// [hasLegacyPartialSettings] — קובץ הגיבוי נוצר לפני שהגיבוי סרק את ה-Box,
+  /// ולכן נשא רשימת מפתחות מוצהרת בלבד. כל השאר (קיצורי מקלדת, ברירות החיפוש,
+  /// צורת הדף, התאמות פר-ספר) אינו בקובץ ואינו בר-שחזור — והמשתמש חייב לדעת.
+  /// [notesWithoutAnchor] — הערות שקובץ הגיבוי אינו יכול לבטא להן עיגון (נוצר
+  /// לפני שהעיגון נכנס לגיבוי), ולכן תסומנה על כל השורה במקום על המילים.
   static Future<
-    ({List<String> skippedSections, List<String> missingCustomFolders})
+    ({
+      List<String> skippedSections,
+      List<String> missingCustomFolders,
+      bool hasLegacyPartialSettings,
+      int notesWithoutAnchor,
+    })
   >
   restoreFromBackup(String backupPath) async {
     final file = File(backupPath);
@@ -496,10 +591,23 @@ class BackupService {
 
     final includes = backupData['includes'] as Map<String, dynamic>;
 
+    final runtimeSkipped = <String>[];
+
     // Restore settings
+    var hasLegacyPartialSettings = false;
     if (includes['settings'] == true && backupData.containsKey('settings')) {
-      await _restoreSettings(backupData['settings'] as Map<String, dynamic>);
+      final settings = backupData['settings'] as Map<String, dynamic>;
+      await _restoreSettings(settings);
       missingCustomFolders.addAll(await findMissingCustomFolders());
+      hasLegacyPartialSettings = isPartialSettingsSection(
+        settings,
+        backupData['settingsSource'],
+      );
+      final perBookHadFailures = await _restorePerBookSettings(
+        (backupData['perBookSettings'] as Map?)?.cast<String, dynamic>() ??
+            const {},
+      );
+      if (perBookHadFailures) runtimeSkipped.add('perBookSettings');
     }
 
     // Restore bookmarks
@@ -521,8 +629,9 @@ class BackupService {
     }
 
     // Restore notes
+    var notesWithoutAnchor = 0;
     if (includes['notes'] == true && backupData.containsKey('notes')) {
-      await _restoreNotes(
+      notesWithoutAnchor = await _restoreNotes(
         (backupData['notes'] as List).cast<Map<String, dynamic>>(),
       );
     }
@@ -543,9 +652,10 @@ class BackupService {
         (backupData['workspaces'] as List).cast<Map<String, dynamic>>(),
         backupData['currentWorkspace'],
       );
+      await _restoreOpenTabs(
+        (backupData['openTabs'] as Map?)?.cast<String, dynamic>(),
+      );
     }
-
-    final runtimeSkipped = <String>[];
 
     // Restore plugins
     if (includes['plugins'] == true && backupData.containsKey('plugins')) {
@@ -573,7 +683,60 @@ class BackupService {
     return (
       skippedSections: allSkipped,
       missingCustomFolders: missingCustomFolders,
+      hasLegacyPartialSettings: hasLegacyPartialSettings,
+      notesWithoutAnchor: notesWithoutAnchor,
     );
+  }
+
+  /// שחזור ההגדרות הפר-ספריות (ראה [_backupPerBookSettings]).
+  ///
+  /// קובץ שאינו בגיבוי נשאר במקומו: השחזור מחזיר את מה שנשמר בו ואינו מוחק
+  /// התאמות של ספרים אחרים. שם הקובץ מאומת כשם בסיס בלבד לפני הכתיבה, כדי
+  /// שגיבוי פגום/זדוני לא יכתוב מחוץ לתיקייה.
+  static Future<bool> _restorePerBookSettings(
+    Map<String, dynamic> files,
+  ) async {
+    if (files.isEmpty) return false;
+    final dir = Directory(await AppPaths.getPerBookSettingsPath());
+    await dir.create(recursive: true);
+
+    var hadFailures = false;
+    for (final entry in files.entries) {
+      if (p.basename(entry.key) != entry.key || !entry.key.endsWith('.json')) {
+        hadFailures = true;
+        _logger.warning(
+          'Unsafe per-book settings name in backup: ${entry.key}',
+        );
+        continue;
+      }
+      try {
+        await File(
+          p.join(dir.path, entry.key),
+        ).writeAsString(entry.value as String);
+      } catch (e) {
+        hadFailures = true;
+        _logger.warning('Failed to restore per-book settings ${entry.key}: $e');
+      }
+    }
+    return hadFailures;
+  }
+
+  /// האם סעיף ההגדרות נאסף מרשימת מפתחות מוצהרת ולכן חסר את השאר.
+  ///
+  /// [source] הוא `settingsSource` מהמניפסט: `'declared-keys'` מצהיר על עצמו,
+  /// ו-`'box'` שולל. גיבוי מלפני שהשדה נוסף אינו נושא אותו כלל, ולכן ההכרעה
+  /// נופלת על התוכן: אוסף מרשימה מוצהרת יכול להכיל רק מפתחות מתוכה
+  /// (ראה [fallbackSettingsKeys]), ולכן מפתח אחד מחוצה לה מוכיח סריקת Box.
+  /// בלי הבדיקה הזאת גם גיבוי שלם מלפני התיקון היה מתריע התראת שקר.
+  @visibleForTesting
+  static bool isPartialSettingsSection(
+    Map<String, dynamic> settings,
+    Object? source,
+  ) {
+    if (source == 'declared-keys') return true;
+    if (source != null) return false;
+    final declared = fallbackSettingsKeys.toSet();
+    return !settings.keys.any((key) => !declared.contains(key));
   }
 
   /// נתיבי התיקיות המותאמות אישית שרשומות בהגדרות ואינן קיימות בדיסק.
@@ -632,11 +795,18 @@ class BackupService {
     await repo.saveHistory(history);
   }
 
-  /// Restore notes to SQLite database
-  static Future<void> _restoreNotes(
+  /// מפתח העיגון שנוכחותו מעידה שהגיבוי יודע לבטא עיגון להערה.
+  static const String _noteAnchorKey = 'anchorText';
+
+  /// Restore notes to SQLite database.
+  ///
+  /// מחזיר את מספר ההערות שקובץ הגיבוי אינו יכול לבטא להן עיגון (ראה
+  /// [_restoreNoteAnchoredAsBefore]) — הן תסומנה על כל השורה במקום על המילים.
+  static Future<int> _restoreNotes(
     List<Map<String, dynamic>> notesData,
   ) async {
     final database = PersonalNotesDatabase.instance;
+    var anchorlessNotes = 0;
 
     for (final entry in notesData) {
       try {
@@ -649,9 +819,12 @@ class BackupService {
           final notesList = entry['notes'] as List<dynamic>;
           for (final noteData in notesList) {
             try {
-              final note = _noteFromBackupJson(
-                noteData as Map<String, dynamic>,
-              );
+              final json = noteData as Map<String, dynamic>;
+              var note = _noteFromBackupJson(json);
+              if (!json.containsKey(_noteAnchorKey)) {
+                note = await _restoreNoteAnchoredAsBefore(database, note);
+                if (!note.isWordAnchored) anchorlessNotes++;
+              }
               await database.insertNote(note);
             } catch (e) {
               _logger.warning('Failed to restore single note from backup: $e');
@@ -661,6 +834,34 @@ class BackupService {
       } catch (e) {
         _logger.warning('Failed to restore note entry: $e');
       }
+    }
+
+    return anchorlessNotes;
+  }
+
+  /// משמר את עוגן ההערה הקיימת כששדות העיגון חסרים לגמרי בקובץ הגיבוי.
+  ///
+  /// גיבוי מלפני שהעיגון נכנס אליו אינו מבדיל בין "הערה על כל השורה" לבין
+  /// "הערה על מילה" — בשניהם המפתח נעדר. `insertNote` הוא `INSERT OR REPLACE`,
+  /// ולכן בלי השימור שחזור כזה מוחק עיגון קיים והערה שהצביעה על מילה מסוימת
+  /// נמתחת על כל השורה. מפתח שקיים בערך `null` הוא בחירת משתמש ומכובד.
+  static Future<PersonalNote> _restoreNoteAnchoredAsBefore(
+    PersonalNotesDatabase database,
+    PersonalNote note,
+  ) async {
+    try {
+      final existing = await database.getNote(note.id);
+      if (existing == null || !existing.isWordAnchored) return note;
+      return note.copyWith(
+        anchorText: existing.anchorText,
+        anchorPrefix: existing.anchorPrefix,
+        anchorSuffix: existing.anchorSuffix,
+        anchorStart: existing.anchorStart,
+        anchorEnd: existing.anchorEnd,
+      );
+    } catch (e) {
+      _logger.warning('Failed to preserve anchor for note ${note.id}: $e');
+      return note;
     }
   }
 
@@ -834,6 +1035,17 @@ class BackupService {
       currentWorkspace: currentWorkspace,
     );
     await repo.saveWorkspaces(workspaces, currentId);
+  }
+
+  /// שחזור הטאבים הפתוחים (ראה [_backupOpenTabs]). גיבוי בלעדיהם משאיר את
+  /// הטאבים הקיימים — עדיף מלרוקן את המסך על סמך מה שאין בקובץ.
+  static Future<void> _restoreOpenTabs(Map<String, dynamic>? openTabs) async {
+    if (openTabs == null) return;
+    if (!Hive.isBoxOpen(TabsRepository.boxName)) {
+      _logger.warning('_restoreOpenTabs: tabs box not open — skipping');
+      return;
+    }
+    await TabsRepository().importRaw(openTabs);
   }
 
   static String? _resolveCurrentWorkspaceId({

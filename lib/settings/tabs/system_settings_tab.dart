@@ -18,6 +18,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/app_runtime_reset.dart';
+import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -1569,6 +1570,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       final skipped = result.skippedSections;
       final missingFolders = result.missingCustomFolders;
+      final isPartial =
+          skipped.isNotEmpty ||
+          missingFolders.isNotEmpty ||
+          result.hasLegacyPartialSettings ||
+          result.notesWithoutAnchor > 0;
       final content = [
         if (skipped.isEmpty)
           context.settingsText('הנתונים שוחזרו בהצלחה.')
@@ -1576,6 +1582,20 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           context.settingsText(
             'שחזור חלקי — חסרים בקובץ הגיבוי: {items}.',
             args: {'items': skipped.join(", ")},
+          ),
+        if (result.hasLegacyPartialSettings)
+          context.settingsText(
+            'קובץ גיבוי זה נוצר בגרסה שגיבתה רק חלק מההגדרות, ולכן הגדרות '
+            'שאינן בו לא שוחזרו — בהן קיצורי מקלדת, ברירות המחדל של החיפוש, '
+            'התאמות צורת הדף והתאמות פר-ספר. יש לבדוק אם קיים גיבוי חדש יותר, '
+            'או להגדיר אותן מחדש.',
+          ),
+        if (result.notesWithoutAnchor > 0)
+          context.settingsText(
+            'ב-{count} הערות קובץ הגיבוי אינו כולל את המילים שאליהן הן קושרו, '
+            'ולכן הן מסומנות כעת על הקטע כולו. הקישור למילים נכנס לגיבוי '
+            'בגרסה מאוחרת יותר.',
+            args: {'count': result.notesWithoutAnchor},
           ),
         if (missingFolders.isNotEmpty)
           context.settingsText(
@@ -1588,9 +1608,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       await showSingleActionDialog(
         context: context,
         title: context.settingsText(
-          skipped.isEmpty && missingFolders.isEmpty
-              ? 'השחזור הושלם'
-              : 'שחזור חלקי',
+          isPartial ? 'שחזור חלקי' : 'השחזור הושלם',
         ),
         content: content,
         confirmText: context.settingsText('טען מחדש'),
@@ -2100,7 +2118,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   confirmText: context.settingsText('אפס'),
                 );
                 if (confirmed == true && mounted) {
-                  Settings.clearCache();
+                  await HiveCache.clearAllPreferences();
                   await resetRuntimeStateAfterSettingsReset();
                   if (!mounted) return;
                   RestartWidget.restartApp(

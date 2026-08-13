@@ -89,6 +89,16 @@ class HiveCache extends CacheProvider {
     await _preferences?.deleteAll(keys.cast<String>());
   }
 
+  /// מחיקת כל ההגדרות, בהמתנה לסיומה.
+  ///
+  /// `Settings.clearCache` של החבילה הוא `void` ואינו ממתין ל-Future של
+  /// המחיקה: איפוס דרכו מתחיל בנייה מחדש בזמן שהמחיקה עוד רצה, וברירות
+  /// המחדל שנכתבות מיד אחריו נמחקות איתה.
+  static Future<void> clearAllPreferences() async {
+    if (!Hive.isBoxOpen(keyName)) return;
+    await Hive.box<dynamic>(keyName).clear();
+  }
+
   @override
   T? getValue<T>(String key, {T? defaultValue}) {
     var value = _preferences?.get(key);

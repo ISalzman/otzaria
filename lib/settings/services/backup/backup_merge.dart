@@ -45,6 +45,20 @@ class BackupMerge {
     final settings = newer['settings'] ?? older['settings'];
     if (settings != null) result['settings'] = settings;
 
+    // החתימה שייכת למניפסט שממנו נבחר סעיף ההגדרות בפועל.
+    final settingsSource = newer['settings'] != null
+        ? newer['settingsSource']
+        : older['settingsSource'];
+    if (settingsSource != null) result['settingsSource'] = settingsSource;
+
+    // התאמות פר-ספר: איחוד לפי שם הקובץ, החדש מנצח. אין גיזום לפי גיל —
+    // הערכים הם מחרוזות JSON של הקובץ עצמו, ואין לזהם אותן ב-lastSeenAt.
+    final perBook = _mergeStringMaps(
+      _asStringMap(older['perBookSettings']),
+      _asStringMap(newer['perBookSettings']),
+    );
+    if (perBook != null) result['perBookSettings'] = perBook;
+
     final bookmarks = _mergeItemLists(
       older['bookmarks'],
       newer['bookmarks'],
@@ -88,6 +102,11 @@ class BackupMerge {
       result['currentWorkspace'] =
           newer['currentWorkspace'] ?? older['currentWorkspace'];
     }
+
+    // הטאבים הפתוחים: החדש מנצח בשלמותו. מיזוג רשימות טאבים משני מועדים
+    // היה מחזיר לחיים כל ספר שנסגר מאז, ומשאיר את הטאב הפעיל תלוש.
+    final openTabs = newer['openTabs'] ?? older['openTabs'];
+    if (openTabs != null) result['openTabs'] = openTabs;
 
     final shamorZachor = _mergeShamorZachor(
       _asStringMap(older['shamorZachor']),
@@ -170,6 +189,15 @@ class BackupMerge {
   static List<Map<String, dynamic>>? _asItemList(Object? raw) {
     if (raw is! List) return null;
     return raw.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList();
+  }
+
+  /// איחוד שתי מפות שם→ערך, כשערכי [newer] דורסים.
+  static Map<String, dynamic>? _mergeStringMaps(
+    Map<String, dynamic>? older,
+    Map<String, dynamic>? newer,
+  ) {
+    if (older == null && newer == null) return null;
+    return {...?older, ...?newer};
   }
 
   static Map<String, dynamic>? _asStringMap(Object? raw) {
