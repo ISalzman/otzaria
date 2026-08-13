@@ -592,18 +592,21 @@ class PluginRuntimeDispatcher {
       pending.add((topic: topic, jsonPayload: jsonPayload, at: DateTime.now()));
       try {
         await _resumeForeground(pluginId);
-        // פינג לפני המסירה: השעיה נייטיבית עלולה להשאיר את הדף קפוא או
-        // מרוקן גם אחרי resume — ואז ההזרקה נבלעת בשקט. דף שאינו עונה
-        // נטען מחדש, והאירוע יימסר במסירה החוזרת אחרי ה-boot.
+        // פינג לפני המסירה: השעיה נייטיבית עלולה להשאיר את הדף קפוא, מרוקן,
+        // או — המקרה הערמומי — עם JS חי אך ערוץ הגשר JS→Dart מת (ה-platform
+        // view הושמד בזמן ההסתרה). eval רגיל היה מצליח אז למרות שתשובות RPC
+        // לא יגיעו לעולם, לכן הפינג עובר דרך הגשר עצמו: callHandler שחוזר
+        // מ-Dart. דף שאינו עונה בזמן נטען מחדש, והאירוע יימסר במסירה החוזרת
+        // אחרי ה-boot.
         Object? pong;
         try {
-          pong = await controller
-              .evaluateJavascript(source: '1 + 1')
-              .timeout(const Duration(seconds: 3));
+          pong = await _bridgePing(controller).timeout(
+            const Duration(seconds: 3),
+          );
         } catch (_) {
           pong = null;
         }
-        if (pong != 2) {
+        if (pong != true) {
           debugPrint(
             'PluginRuntimeDispatcher: $pluginId unresponsive after resume — '
             'reloading',
@@ -641,6 +644,20 @@ class PluginRuntimeDispatcher {
         }
       }
     });
+  }
+
+  /// פינג round-trip דרך ערוץ הגשר JS→Dart (ה-handler `otzaria_bridge_ping`
+  /// שרושם PluginBridgeHandler). מחזיר true רק אם הערוץ חי בשני הכיוונים;
+  /// כשהערוץ מת ה-Promise לא נפתר לעולם — הקורא אחראי ל-timeout.
+  Future<Object?> _bridgePing(InAppWebViewController controller) async {
+    final result = await controller.callAsyncJavaScript(
+      functionBody:
+          "if (!window.flutter_inappwebview || "
+          "!window.flutter_inappwebview.callHandler) { return 'no-bridge'; } "
+          "return await window.flutter_inappwebview"
+          ".callHandler('otzaria_bridge_ping');",
+    );
+    return result?.value;
   }
 
   /// חלון חסד להשלמת טיפול אסינכרוני לפני הקפאה חוזרת של טאב מושהה.

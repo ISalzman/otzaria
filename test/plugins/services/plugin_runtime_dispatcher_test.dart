@@ -101,11 +101,19 @@ class _LifecycleFakeController extends Fake implements InAppWebViewController {
     required String source,
     ContentWorld? contentWorld,
   }) async {
-    // פינג הבריאות של הדיספצ'ר — דף חי עונה 2; בלי זה המסירה נחשבת
-    // כניסיון לדף קפוא והופכת לטעינה-מחדש.
-    if (source == '1 + 1') return 2;
     jsEvents.add(source);
     return null;
+  }
+
+  // פינג בריאות הגשר של הדיספצ'ר — גשר חי מחזיר true; בלי זה המסירה
+  // נחשבת כניסיון לדף קפוא/גשר מת והופכת לטעינה-מחדש.
+  @override
+  Future<CallAsyncJavaScriptResult?> callAsyncJavaScript({
+    required String functionBody,
+    Map<String, dynamic> arguments = const <String, dynamic>{},
+    ContentWorld? contentWorld,
+  }) async {
+    return CallAsyncJavaScriptResult(value: true);
   }
 }
 

@@ -50,6 +50,14 @@ class PluginBridgeHandler {
        _rateLimiter = rateLimiter ?? RateLimiter();
 
   void register(InAppWebViewController controller) {
+    // פינג חיוּת של ערוץ הגשר JS→Dart: השעיה נייטיבית של טאב עלולה להשאיר
+    // את ה-JS חי אך את ערוץ callHandler מת — ואז eval רגיל ('1+1') מצליח
+    // בעוד שתשובות RPC לא יגיעו לעולם. ה-handler הזה מאפשר ל-dispatcher
+    // לבדוק את הערוץ עצמו לפני מסירת אירוע ממוקד לטאב שהוחיה.
+    controller.addJavaScriptHandler(
+      handlerName: 'otzaria_bridge_ping',
+      callback: (args) => true,
+    );
     controller.addJavaScriptHandler(
       handlerName: 'otzaria_rpc',
       callback: (args) async {
