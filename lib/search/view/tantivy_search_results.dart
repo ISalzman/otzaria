@@ -12,6 +12,7 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -639,6 +640,10 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                // תגית מקור: מבדילה את תוצאות המנוע המובנה
+                                // מתוצאות ספק חיצוני שמוצגות באותו מסך.
+                                const SearchResultSourceTag(label: 'אוצריא'),
+                                const SizedBox(width: 4),
                                 IconButton(
                                   icon: Icon(
                                     FluentIcons.copy_24_regular,

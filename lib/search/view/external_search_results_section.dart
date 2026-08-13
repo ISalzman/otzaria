@@ -16,6 +16,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
+import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -650,23 +651,12 @@ class _ExternalSearchResultsSectionState
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const Spacer(),
+                        // תגית מקור בקצה השורה, באותו מקום שבו היא מופיעה
+                        // על תוצאות המנוע המובנה.
                         if (_sourceTag.isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          // תגית מקור על כל תוצאה, כמו במסך החיפוש המאוחד.
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.tertiaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _sourceTag,
-                              style: theme.textTheme.labelSmall,
-                            ),
-                          ),
+                          SearchResultSourceTag(label: _sourceTag),
                         ],
                       ],
                     ),
