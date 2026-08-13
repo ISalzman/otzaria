@@ -194,7 +194,8 @@ class SearchNavigationTree extends StatelessWidget {
       // ספר ספרייה. בלי ילדים נראים אין חץ הרחבה; הלחיצה על השורה עצמה
       // מסננת ומציגה את התוצאות.
       final hasChildren = _hasVisibleChildren(sub, selectedPaths);
-      final isExpanded = hasChildren && (expansion[sub.path] ?? leadsToSelection);
+      final isExpanded =
+          hasChildren && (expansion[sub.path] ?? leadsToSelection);
       rows.add(
         _FlatRow.category(sub, level + 1, count, isExpanded, hasChildren),
       );

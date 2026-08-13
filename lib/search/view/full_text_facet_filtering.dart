@@ -345,11 +345,12 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                 if (summary != null) {
                   counts = Map.of(counts);
                   summary.categoryBookCounts.forEach(
-                    (path, bookCount) => FacetHelper.incrementFacetWithAncestors(
-                      counts,
-                      path,
-                      bookCount,
-                    ),
+                    (path, bookCount) =>
+                        FacetHelper.incrementFacetWithAncestors(
+                          counts,
+                          path,
+                          bookCount,
+                        ),
                   );
                   // הדלי מוצג גם בספירה 0 כשהוא (או ספר שתחתיו) הסינון
                   // הפעיל — אחרת אין דרך לבטל אותו מהעץ. הבחירה שורדת חיפוש
