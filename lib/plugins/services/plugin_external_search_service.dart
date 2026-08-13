@@ -152,7 +152,7 @@ class PluginExternalSearchService {
       'limit': limit,
       // עמוד לפי מזהים מפורשים: דפדוף בתוצאות מסוננות-קטגוריה שהקורא
       // חישב מהאינדקס. הספק מגיש אותם מהמטמון של החיפוש.
-      if (ids != null) 'ids': ids,
+      'ids': ?ids,
     };
     Timer? retryTimer;
     try {
