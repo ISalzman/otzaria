@@ -614,6 +614,10 @@ class FindRefRepository {
             : (secondaryPhraseTokenCount[hit] ?? bookQueryTokenCount),
       );
 
+      // ראש-תיבות שזנבו אינו מילת-כותרת ("טור יורה דעה" / "טור יו"ד" מול
+      // הכותרת "טור") מציין חלק *בתוך* הספר — ראה [_acronymSectionTokens].
+      final sectionTokens = _acronymSectionTokens(hit);
+
       // הטוקן שאחרי שם-הספר עלול להיות בעצמו ספר עצמאי ("תורה אור" — "אור" ספר),
       // ואז חיפוש TOC לפיו יוצר התאמות-שווא חוצות-ספרים. אבל אם הטוקן הוא חלק
       // מכותרת הספר הנוכחי ("ברכות" בתוך "פסקי הרא"ש על ברכות") — אין חציית ספר,
@@ -707,11 +711,20 @@ class FindRefRepository {
         if (tocLookups >= maxTocLookups) continue;
         tocLookups++;
 
-        final tocEntries = await fetchTocEntries(
+        var tocEntries = await fetchTocEntries(
           bookId,
           title,
-          queryTokens: remainingTokens,
+          queryTokens: [...sectionTokens, ...remainingTokens],
         );
+        // הזנב אינו בהכרח חלק פנימי ("חזקוני על התורה") — נסיגה לחיפוש בלעדיו
+        // כדי שראש-תיבות כזה ימשיך להחזיר את מה שהחזיר.
+        if (tocEntries.isEmpty && sectionTokens.isNotEmpty) {
+          tocEntries = await fetchTocEntries(
+            bookId,
+            title,
+            queryTokens: remainingTokens,
+          );
+        }
 
         for (final entry in tocEntries) {
           results.add(
@@ -1173,6 +1186,24 @@ class FindRefRepository {
           return c != 0 ? c : a.index.compareTo(b.index);
         });
     return [for (final e in indexed) e.hit];
+  }
+
+  /// טוקני הזנב של ראש-התיבות שהותאם שאינם מילים מכותרת הספר — הם מציינים חלק
+  /// *בתוך* הספר ("טור יורה דעה" / "טור יו"ד" מול הכותרת "טור"), ולכן חייבים
+  /// להגיע לחיפוש ה-TOC ולא להיבלע עם שם הספר. מוחזר ריק כשראש-התיבות כולו
+  /// מזהה את הספר ("שוע אוח" ← "שולחן ערוך אורח חיים").
+  static List<String> _acronymSectionTokens(ReferenceBookHit hit) {
+    final term = hit.matchedTerm;
+    if (hit.matchRank != 3 || term == null) return const [];
+
+    final termTokens = term.split(' ').where((t) => t.isNotEmpty).toList();
+    final titleTokens = titleMatchTokens(hit.normalizedTitle);
+    var start = termTokens.length;
+    while (start > 0 && !titleTokens.contains(termTokens[start - 1])) {
+      start--;
+    }
+    if (start == 0) return const [];
+    return termTokens.sublist(start);
   }
 
   List<String> _getRemainingTokens(

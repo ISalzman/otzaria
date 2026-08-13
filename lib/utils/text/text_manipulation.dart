@@ -1293,6 +1293,28 @@ List<String> hebrewTokenAlternatives(String token) {
   return [token];
 }
 
+/// האם [token] הוא ראשי-תיבות של [words] — כל מילה תורמת תחילית רצופה
+/// והצירוף שווה בדיוק לטוקן ("יוד" ← "יורה דעה", "אהע" ← "אבן העזר").
+/// הסף (3 תווים, שתי מילים לפחות) מונע מטוקן-מיקום קצר להיתפס ככותרת.
+bool hebrewAbbreviationMatchesWords(String token, List<String> words) {
+  if (token.length < 3 || words.length < 2) return false;
+
+  bool walk(int wordIndex, int pos) {
+    if (wordIndex == words.length) return pos == token.length;
+    final word = words[wordIndex];
+    final remaining = token.length - pos;
+    if (remaining <= 0) return false;
+    final maxLen = word.length < remaining ? word.length : remaining;
+    for (var len = 1; len <= maxLen; len++) {
+      if (word.codeUnitAt(len - 1) != token.codeUnitAt(pos + len - 1)) break;
+      if (walk(wordIndex + 1, pos + len)) return true;
+    }
+    return false;
+  }
+
+  return walk(0, 0);
+}
+
 /// מנתח טוקני-מיקום כציטוט דף בפורמט "מספר ואחריו עמוד אופציונלי" (אחרי הפשטת
 /// "דף"/"עמוד"). מחזיר null אם אינו ציטוט דף נקי — אז המתקשר משתמש בהתאמה
 /// הרגילה. הבחנה זו מונעת ש-"ב" בודד (מספר דף) ייתפס ע"י סימון צד ע"ב

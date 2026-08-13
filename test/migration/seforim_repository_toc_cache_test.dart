@@ -859,4 +859,84 @@ void main() {
       },
     );
   });
+
+  // ── כותרת רב-מילים ברמה עליונה ("טור" → "אורח חיים" → "סימן יב") ──────────
+
+  group('כותרת חלק רב-מילים', () {
+    /// מבנה ה-TOC של "טור": חלקים ברמה 1, סימנים ברמה 2 תחתיהם.
+    Future<int> buildTur() async {
+      final catId = await createCategory();
+      final bookId = await createBook(catId, 'טור');
+      await insertLines(bookId, List.generate(12, (i) => 'l$i'));
+
+      var line = 0;
+      for (final part in ['אורח חיים', 'יורה דעה']) {
+        final partId = await insertToc(
+          bookId: bookId,
+          lineIndex: line++,
+          text: part,
+          level: 1,
+        );
+        for (final siman in ['א', 'יב']) {
+          await insertToc(
+            bookId: bookId,
+            lineIndex: line++,
+            text: 'סימן $siman',
+            level: 2,
+            parentId: partId,
+          );
+        }
+      }
+      await repository.updateTocEntryLineIdsByLineIndex(bookId);
+      return bookId;
+    }
+
+    Future<Set<String>> refsFor(int bookId, List<String> tokens) async {
+      final results = await repository.getTocEntriesForReference(
+        bookId,
+        'טור',
+        queryTokens: tokens,
+      );
+      return results.map((r) => r['reference'] as String).toSet();
+    }
+
+    test('מילה שנייה של הכותרת אינה מפילה את שאר השאילתה', () async {
+      // "חיים" כבר נבלע בהתאמת "אורח חיים" ואין לו התאמה בין הסימנים; בעבר
+      // הוא עצר את הסריקה ו-"יב" נזרק, כך שהתוצאה הייתה תחילת "אורח חיים".
+      final bookId = await buildTur();
+
+      expect(
+        await refsFor(bookId, ['אורח', 'חיים', 'יב']),
+        equals({'טור אורח חיים סימן יב'}),
+      );
+      expect(
+        await refsFor(bookId, ['יורה', 'דעה', 'יב']),
+        equals({'טור יורה דעה סימן יב'}),
+      );
+    });
+
+    test('ראשי-תיבות של שם החלק ("יו״ד" ← "יורה דעה")', () async {
+      final bookId = await buildTur();
+
+      expect(
+        await refsFor(bookId, ['אוח', 'יב']),
+        equals({'טור אורח חיים סימן יב'}),
+      );
+      expect(
+        await refsFor(bookId, ['יוד', 'יב']),
+        equals({'טור יורה דעה סימן יב'}),
+      );
+    });
+
+    test('התאמה מילולית קודמת לראשי-תיבות', () async {
+      // "אורח" הוא גם תחילית לגיטימית של "אורח חיים" — ההתאמה המילולית
+      // מכריעה, וראשי-התיבות אינם מרחיבים את התוצאה לחלק השני.
+      final bookId = await buildTur();
+
+      expect(
+        await refsFor(bookId, ['אורח', 'יב']),
+        equals({'טור אורח חיים סימן יב'}),
+      );
+    });
+  });
 }

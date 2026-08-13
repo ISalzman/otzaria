@@ -3123,7 +3123,25 @@ extension BookAcronymRepository on SeforimRepository {
         }
       }
 
-      if (found.isEmpty) break;
+      // ראשי-תיבות של כותרת רב-מילים ("יו"ד" ← "יורה דעה") — רק אחרי שההתאמה
+      // המילולית נכשלה, כדי שלא ייתפסו טוקני-מיקום לגיטימיים.
+      if (found.isEmpty) {
+        found = searchScope
+            .where((e) => hebrewAbbreviationMatchesWords(token, e.ownTokens))
+            .toList();
+      }
+
+      if (found.isEmpty) {
+        // מילה נוספת של הכותרת שכבר הותאמה ("חיים" אחרי "אורח") אינה מצמצמת,
+        // אבל אסור שתפיל את שאר השאילתה ("סימן יב" שבא אחריה).
+        if (currentMatches.isNotEmpty &&
+            currentMatches.every(
+              (e) => alts.any((a) => e.ownTokens.contains(a)),
+            )) {
+          continue;
+        }
+        break;
+      }
 
       // שומר רק את הרמה הרדודה ביותר בין ההתאמות.
       var minLevel = found.first.level;
