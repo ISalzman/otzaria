@@ -8,6 +8,11 @@ import 'package:otzaria/widgets/feedback/scrollbar_target_label.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ScrollablePositionedListScrollbar extends StatefulWidget {
+  /// המסילה (שטח המחווה) והאגודל. הרשימה עצמה היא ילד של הסרגל, ולכן חיפוש
+  /// לפי טיפוס תופס גם רכיבים מהתוכן — הטסטים מאתרים אותם דרך המפתחות.
+  static const Key trackKey = Key('positioned-list-scrollbar-track');
+  static const Key thumbKey = Key('positioned-list-scrollbar-thumb');
+
   final ItemScrollController scrollController;
   final ItemPositionsListener itemPositionsListener;
   final int itemCount;
@@ -462,6 +467,7 @@ class _ScrollablePositionedListScrollbarState
                     _hideLabel();
                   },
                   child: GestureDetector(
+                    key: ScrollablePositionedListScrollbar.trackKey,
                     // opaque: מבטיח שהגרירה והלחיצה יתקבלו בכל שטח ה-track,
                     // לא רק מעל ה-thumb עצמו — ללא צורך ברקע צבעוני.
                     behavior: HitTestBehavior.opaque,
@@ -518,6 +524,7 @@ class _ScrollablePositionedListScrollbarState
                           right: 2,
                           height: thumbPixelHeight,
                           child: Container(
+                            key: ScrollablePositionedListScrollbar.thumbKey,
                             decoration: BoxDecoration(
                               color: AppSurfaces.scrollbarThumb(
                                 colorScheme,

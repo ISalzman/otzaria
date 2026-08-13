@@ -646,16 +646,12 @@ class _CombinedViewState extends State<CombinedView> {
   // שמירת גובה הבלוק בפועל לחישובים דינאמיים
   double _viewportHeight = 0;
 
-  ScrollController? _previewScrollController;
   final DictionaryLookupRepository _dictionaryLookupRepository =
       DictionaryLookupRepository.instance;
 
   @override
   void initState() {
     super.initState();
-    if (widget.isPreviewMode) {
-      _previewScrollController = ScrollController();
-    }
     _focusNode = FocusNode();
     // רישום למיקוד אזור הקריאה במעבר טאב (לא ב-preview שאינו טאב פעיל).
     if (!widget.isPreviewMode) {
@@ -824,7 +820,6 @@ class _CombinedViewState extends State<CombinedView> {
     _disposed = true;
     _cancelPendingAnchorHover();
     LinkPreviewOverlay.dismiss();
-    _previewScrollController?.dispose();
     widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
     widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
     _savedSelectedText.dispose();
@@ -1754,30 +1749,7 @@ class _CombinedViewState extends State<CombinedView> {
                       ClearSelectionIntent: _ClearSelectionAction(this),
                     },
                     child: widget.isPreviewMode
-                        ? Scrollbar(
-                            controller: _previewScrollController,
-                            thickness: 8.0,
-                            radius: const Radius.circular(4.0),
-                            child: ListView.builder(
-                              controller: _previewScrollController,
-                              // מרווח אופקי סימטרי שמשאיר תעלה לפס הגלילה (8px)
-                              // בצד שמאל ב-RTL, כך שלא יכסה את הטקסט.
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12.0,
-                              ),
-                              itemCount: state.readingSegments.isNotEmpty
-                                  ? state.readingSegments.length
-                                  : widget.data.length,
-                              itemBuilder: (context, index) {
-                                return buildExpansiomTile(
-                                  ExpansibleController(),
-                                  index,
-                                  state,
-                                  const <int, List<PersonalNote>>{},
-                                );
-                              },
-                            ),
-                          )
+                        ? _buildPreviewList(state)
                         : ScrollablePositionedListScrollbar(
                             scrollController: widget.tab.scrollController,
                             itemPositionsListener: widget.tab.positionsListener,
@@ -1845,6 +1817,39 @@ class _CombinedViewState extends State<CombinedView> {
           },
         );
       },
+    );
+  }
+
+  /// רשימת התצוגה המקדימה, עם אותו מחוון גלילה של אזור הקריאה. ListView
+  /// אומד את היקף הגלילה מגובה הפריטים שבנויים כרגע, וכששורות הספר בגבהים
+  /// שונים האומדן משתנה בכל פריים והאגודל קפץ למעלה ולמטה במקום לנסוע ישר.
+  Widget _buildPreviewList(TextBookLoaded state) {
+    final itemCount = state.readingSegments.isNotEmpty
+        ? state.readingSegments.length
+        : widget.data.length;
+
+    return ScrollablePositionedListScrollbar(
+      scrollController: widget.tab.scrollController,
+      itemPositionsListener: widget.tab.positionsListener,
+      offsetController: widget.tab.mainOffsetController,
+      itemCount: itemCount,
+      child: SmoothWheelScroll(
+        child: ScrollablePositionedList.builder(
+          itemScrollController: widget.tab.scrollController,
+          itemPositionsListener: widget.tab.positionsListener,
+          scrollOffsetController: widget.tab.mainOffsetController,
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          itemCount: itemCount,
+          itemBuilder: (context, index) => RepaintBoundary(
+            child: buildExpansiomTile(
+              ExpansibleController(),
+              index,
+              state,
+              const <int, List<PersonalNote>>{},
+            ),
+          ),
+        ),
+      ),
     );
   }
 
