@@ -11,6 +11,9 @@ abstract class PluginMessages {
     String installedVersion,
   ) => 'כבר מותקנת אצלך גרסה חדשה יותר של "$pluginName" ($installedVersion)';
 
+  static const String dropSinglePluginOnly =
+      'ניתן להתקין תוסף אחד בכל פעם — הותקן הראשון מבין הקבצים שנגררו';
+
   static String pluginRequiresNewerApp(String minAppVersion) =>
       'התוסף דורש אוצריא בגרסה $minAppVersion לפחות — עדכן את אוצריא כדי להתקינו';
 

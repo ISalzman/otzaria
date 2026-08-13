@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
+import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -506,19 +507,21 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     final openToolIds = _openToolIds(context.watch<TabsBloc>().state);
     _keyboardEntries = entries;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildHeader(),
-        const SizedBox(height: AppTokens.spaceSM),
-        _buildSearchField(entries),
-        const SizedBox(height: AppTokens.spaceMD),
-        Expanded(
-          child: entries.isEmpty
-              ? _buildEmptyState(settingsState.isOfflineMode, allEntries)
-              : _buildGrid(entries, openToolIds),
-        ),
-      ],
+    return PluginDropZone(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: AppTokens.spaceSM),
+          _buildSearchField(entries),
+          const SizedBox(height: AppTokens.spaceMD),
+          Expanded(
+            child: entries.isEmpty
+                ? _buildEmptyState(settingsState.isOfflineMode, allEntries)
+                : _buildGrid(entries, openToolIds),
+          ),
+        ],
+      ),
     );
   }
 

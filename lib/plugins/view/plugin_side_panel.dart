@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
+import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -96,121 +97,125 @@ class _PluginSidePanelState extends State<PluginSidePanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              if (widget.onClose != null)
-                IconButton(
-                  icon: Icon(FluentIcons.dismiss_24_regular),
-                  tooltip: 'סגור',
-                  onPressed: widget.onClose,
-                  iconSize: 20,
-                ),
-              const Expanded(
-                child: Text(
-                  'תוספים',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ),
-              IconButton(
-                icon: Icon(FluentIcons.add_24_regular),
-                tooltip: 'התקן תוסף חדש',
-                onPressed: () => _installPlugin(context),
-              ),
-              if (widget.showDevTools)
-                IconButton(
-                  icon: Icon(FluentIcons.folder_add_24_regular),
-                  tooltip: 'טען תיקיית תוסף',
-                  onPressed: () => _loadDevPlugin(context),
-                ),
-              if (widget.showDevTools)
-                IconButton(
-                  icon: Icon(FluentIcons.globe_add_24_regular),
-                  tooltip: 'טען תוסף מ-localhost',
-                  onPressed: () => _loadLocalhostPlugin(context),
-                ),
-              if (widget.showDevTools)
-                IconButton(
-                  icon: Icon(FluentIcons.arrow_sync_24_regular),
-                  tooltip: 'רענן תוספים',
-                  onPressed: () =>
-                      context.read<PluginSystemBloc>().add(RefreshPlugins()),
-                ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: BlocBuilder<PluginSystemBloc, PluginSystemState>(
-            builder: (context, state) {
-              if (state is PluginSystemLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (state is PluginSystemError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'שגיאה: ${state.message}',
-                    ),
+    return PluginDropZone(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                if (widget.onClose != null)
+                  IconButton(
+                    icon: Icon(FluentIcons.dismiss_24_regular),
+                    tooltip: 'סגור',
+                    onPressed: widget.onClose,
+                    iconSize: 20,
                   ),
-                );
-              }
-              if (state is PluginSystemLoaded) {
-                final isOfflineMode = context.select<SettingsBloc, bool>(
-                  (b) => b.state.isOfflineMode,
-                );
-                final plugins = state.activePlugins.filterForOfflineMode(
-                  isOfflineMode,
-                );
-                if (plugins.isEmpty) {
+                const Expanded(
+                  child: Text(
+                    'תוספים',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(FluentIcons.add_24_regular),
+                  tooltip: 'התקן תוסף חדש',
+                  onPressed: () => _installPlugin(context),
+                ),
+                if (widget.showDevTools)
+                  IconButton(
+                    icon: Icon(FluentIcons.folder_add_24_regular),
+                    tooltip: 'טען תיקיית תוסף',
+                    onPressed: () => _loadDevPlugin(context),
+                  ),
+                if (widget.showDevTools)
+                  IconButton(
+                    icon: Icon(FluentIcons.globe_add_24_regular),
+                    tooltip: 'טען תוסף מ-localhost',
+                    onPressed: () => _loadLocalhostPlugin(context),
+                  ),
+                if (widget.showDevTools)
+                  IconButton(
+                    icon: Icon(FluentIcons.arrow_sync_24_regular),
+                    tooltip: 'רענן תוספים',
+                    onPressed: () =>
+                        context.read<PluginSystemBloc>().add(RefreshPlugins()),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: BlocBuilder<PluginSystemBloc, PluginSystemState>(
+              builder: (context, state) {
+                if (state is PluginSystemLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (state is PluginSystemError) {
                   return Center(
-                    child: Text(
-                      isOfflineMode && state.plugins.isNotEmpty
-                          ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
-                          : 'לא הותקנו תוספים',
-                      textAlign: TextAlign.center,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'שגיאה: ${state.message}',
+                      ),
                     ),
                   );
                 }
-                return ValueListenableBuilder<bool>(
-                  valueListenable: _reorderDragActive,
-                  builder: (context, dragging, child) => MouseRegion(
-                    cursor: dragging ? AppCursors.grabbing : MouseCursor.defer,
-                    child: child,
-                  ),
-                  child: ListView.builder(
-                    itemCount: plugins.length,
-                    itemBuilder: (context, index) {
-                      final plugin = plugins[index];
-                      return _DraggablePluginRow(
-                        key: ValueKey(plugin.pluginId),
-                        plugin: plugin,
-                        reorderDragActive: _reorderDragActive,
-                        onAcceptSource: (sourceId) =>
-                            context.read<PluginSystemBloc>().add(
-                              ReorderPluginsRequested(
-                                reorderedPluginIds(
-                                  state.plugins,
-                                  sourceId,
-                                  plugin.pluginId,
+                if (state is PluginSystemLoaded) {
+                  final isOfflineMode = context.select<SettingsBloc, bool>(
+                    (b) => b.state.isOfflineMode,
+                  );
+                  final plugins = state.activePlugins.filterForOfflineMode(
+                    isOfflineMode,
+                  );
+                  if (plugins.isEmpty) {
+                    return Center(
+                      child: Text(
+                        isOfflineMode && state.plugins.isNotEmpty
+                            ? 'כל התוספים המותקנים דורשים אינטרנט\nוהוסתרו במצב מנותק'
+                            : 'לא הותקנו תוספים',
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: _reorderDragActive,
+                    builder: (context, dragging, child) => MouseRegion(
+                      cursor: dragging
+                          ? AppCursors.grabbing
+                          : MouseCursor.defer,
+                      child: child,
+                    ),
+                    child: ListView.builder(
+                      itemCount: plugins.length,
+                      itemBuilder: (context, index) {
+                        final plugin = plugins[index];
+                        return _DraggablePluginRow(
+                          key: ValueKey(plugin.pluginId),
+                          plugin: plugin,
+                          reorderDragActive: _reorderDragActive,
+                          onAcceptSource: (sourceId) =>
+                              context.read<PluginSystemBloc>().add(
+                                ReorderPluginsRequested(
+                                  reorderedPluginIds(
+                                    state.plugins,
+                                    sourceId,
+                                    plugin.pluginId,
+                                  ),
                                 ),
                               ),
-                            ),
-                        onPluginSelected: widget.onPluginSelected,
-                      );
-                    },
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
+                          onPluginSelected: widget.onPluginSelected,
+                        );
+                      },
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
