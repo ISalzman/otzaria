@@ -2188,7 +2188,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return BarButton.icon(
       key: key,
-      tooltip: 'חיפוש (${shortcut.toUpperCase()})',
+      tooltip: 'חיפוש (${ShortcutHelper.formatShortcutForDisplay(shortcut)})',
       icon: FluentIcons.search_24_regular,
       compact: isCompact,
       onPressed: _openSearchFromToolbar,
@@ -2379,7 +2379,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     return IconButton(
       key: key,
       icon: const Icon(FluentIcons.print_24_regular),
-      tooltip: 'הדפסה (${shortcut.toUpperCase()})',
+      tooltip: 'הדפסה (${ShortcutHelper.formatShortcutForDisplay(shortcut)})',
       onPressed: () {
         context.read<TourCubit>().recordInteraction(
           TourInteraction(type: TourInteractionType.printUsed),

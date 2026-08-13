@@ -11,6 +11,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
@@ -348,21 +349,23 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 IconButton(
                   key: tourTitleBarHistoryButtonTargetKey,
                   icon: const Icon(FluentIcons.history_24_regular, size: 18),
-                  tooltip: 'הצג היסטוריה (${historyShortcut.toUpperCase()})',
+                  tooltip:
+                      'הצג היסטוריה (${ShortcutHelper.formatShortcutForDisplay(historyShortcut)})',
                   onPressed: () => _showHistoryDialog(context),
                   style: _kIconButtonStyle,
                 ),
                 IconButton(
                   key: tourTitleBarBookmarkButtonTargetKey,
                   icon: const Icon(FluentIcons.bookmark_24_regular, size: 18),
-                  tooltip: 'הצג סימניות (${bookmarksShortcut.toUpperCase()})',
+                  tooltip:
+                      'הצג סימניות (${ShortcutHelper.formatShortcutForDisplay(bookmarksShortcut)})',
                   onPressed: () => _showBookmarksDialog(context),
                   style: _kIconButtonStyle,
                 ),
                 IconButton(
                   icon: const Icon(FluentIcons.add_square_24_regular, size: 18),
                   tooltip:
-                      'החלף שולחן עבודה (${workspaceShortcut.toUpperCase()})',
+                      'החלף שולחן עבודה (${ShortcutHelper.formatShortcutForDisplay(workspaceShortcut)})',
                   onPressed: () => _showSaveWorkspaceDialog(context),
                   style: _kIconButtonStyle,
                 ),
@@ -969,7 +972,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                           if (showClose)
                             Tooltip(
                               preferBelow: false,
-                              message: closeTabShortcut.toUpperCase(),
+                              message: ShortcutHelper.formatShortcutForDisplay(
+                                closeTabShortcut,
+                              ),
                               child: MetaData(
                                 metaData: _kTabCloseButtonHitMarker,
                                 child: IconButton(

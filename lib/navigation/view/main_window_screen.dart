@@ -45,6 +45,7 @@ import 'package:otzaria/tools/open_tool_tab.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tools/view/tools_launcher_panel.dart';
 import 'package:otzaria/shortcuts/keyboard_shortcuts.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'dart:async';
 import 'package:otzaria/update/my_update_widget.dart';
@@ -1379,8 +1380,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
         tooltip: '',
         icon: Tooltip(
           preferBelow: false,
-          message: (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
-              .toUpperCase(),
+          message: ShortcutHelper.formatShortcutForDisplay(
+            ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '',
+          ),
           child: _navigationIcon(item.icon),
         ),
         selectedIcon: _navigationIcon(item.iconFilled),
@@ -3560,8 +3562,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final item = _navData[index];
     final isSelected =
         selectedOverride ?? (_getActiveNavigationIndex(currentScreen) == index);
-    final tooltip = (ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '')
-        .toUpperCase();
+    final tooltip = ShortcutHelper.formatShortcutForDisplay(
+      ShortcutValidator.getShortcutValue(item.shortcutKey) ?? '',
+    );
 
     final step = _tourCubit.state.currentStep;
     final isTourHighlighted = _isTourNavigationItemHighlighted(

@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/tour/models/tour_step.dart';
 
 /// תוויות הניווט עם מפתח ההגדרה של הקיצור של כל אחת. התוויות זהות לאלו
@@ -45,16 +46,6 @@ String? tourShortcutText(BuildContext context, TourShortcutHint hint) {
 }
 
 String _read(String key, String defaultValue) =>
-    _format(Settings.getValue<String>(key) ?? defaultValue);
-
-String _format(String shortcut) => shortcut
-    .split('+')
-    .map((part) {
-      if (part == 'ctrl') return 'Ctrl';
-      if (part == 'shift') return 'Shift';
-      if (part == 'alt') return 'Alt';
-      if (part == 'comma') return ',';
-      if (part == 'tab') return 'Tab';
-      return part.isEmpty ? part : part[0].toUpperCase() + part.substring(1);
-    })
-    .join('+');
+    ShortcutHelper.formatShortcutForDisplay(
+      Settings.getValue<String>(key) ?? defaultValue,
+    );
