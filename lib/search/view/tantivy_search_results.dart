@@ -37,11 +37,7 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
   final VoidCallback? onEditSearch;
-  const TantivySearchResults({
-    super.key,
-    required this.tab,
-    this.onEditSearch,
-  });
+  const TantivySearchResults({super.key, required this.tab, this.onEditSearch});
 
   @override
   State<TantivySearchResults> createState() => _TantivySearchResultsState();
@@ -75,11 +71,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           // בלי min ה-Column היה דורש גובה אינסופי.
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 52,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            Icon(icon, size: 52, color: colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
               title,
@@ -721,8 +713,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                       children: [
                         // מספר התוצאה
                         Container(
-                          width: 32,
+                          constraints: const BoxConstraints(minWidth: 32),
                           height: 32,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
                           decoration: BoxDecoration(
                             color: Theme.of(
                               context,
@@ -730,6 +723,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                             borderRadius: AppTokens.borderRadiusAll,
                           ),
                           child: Center(
+                            widthFactor: 1,
                             child: Text(
                               '${index + 1}',
                               style: TextStyle(
