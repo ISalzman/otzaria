@@ -43,9 +43,14 @@ class SearchNavigationTree extends StatelessWidget {
   final VoidCallback onClearAll;
 
   /// קטגוריות-על סינתטיות שאינן חלק מהספרייה (למשל "עוד מהיברובוקס" של
-  /// ספק תוצאות חיצוני), מוצגות אחרי הקטגוריות האמיתיות. לחיצה מסננת דרך
-  /// אותם callbacks של קטגוריה/ספר רגילים.
+  /// ספק תוצאות חיצוני), מוצגות אחרי הקטגוריות האמיתיות — או לפניהן, לפי
+  /// [extraCategoriesFirst]. לחיצה מסננת דרך אותם callbacks של קטגוריה/ספר
+  /// רגילים.
   final List<SearchTreeExtraCategory> extraRootCategories;
+
+  /// הגדרת "תוצאות מ<מקור> קודמות": הקטגוריות הסינתטיות מוצגות בראש העץ
+  /// (מיד אחרי כותרת השורש) במקום בסופו.
+  final bool extraCategoriesFirst;
 
   const SearchNavigationTree({
     super.key,
@@ -62,6 +67,7 @@ class SearchNavigationTree extends StatelessWidget {
     required this.isMultiSelectPressed,
     required this.onClearAll,
     this.extraRootCategories = const [],
+    this.extraCategoriesFirst = false,
   });
 
   static const double _iconBoxSize = 26;
@@ -106,7 +112,15 @@ class SearchNavigationTree extends StatelessWidget {
     final rows = <_FlatRow>[];
     final selectedPaths = _selectedPaths();
     rows.add(_FlatRow.rootHeader(facetCounts[library.path] ?? 0));
+    // "תוצאות מ<מקור> קודמות" — הדלי החיצוני עליון; אחרת בסוף העץ.
+    if (extraCategoriesFirst) _appendExtraRows(rows, selectedPaths);
     _flattenChildren(library, 0, rows, selectedPaths);
+    if (!extraCategoriesFirst) _appendExtraRows(rows, selectedPaths);
+    _markGroupBoundaries(rows);
+    return rows;
+  }
+
+  void _appendExtraRows(List<_FlatRow> rows, List<String> selectedPaths) {
     for (final extra in extraRootCategories) {
       // ספרי הקטגוריה הסינתטית מגיעים מהספק, ולא מהספרייה — לכן חץ ההרחבה
       // כאן תלוי ברשימה שהוא צירף, ולא ב-facetCounts.
@@ -134,8 +148,6 @@ class SearchNavigationTree extends StatelessWidget {
         rows.add(_FlatRow.extraBook(book.title, book.facet, book.hits));
       }
     }
-    _markGroupBoundaries(rows);
-    return rows;
   }
 
   /// כותרת השורש: כשיש סינון ממד פעיל (ספרי יסוד/תקופה/מחבר) מוצג שמו במקום

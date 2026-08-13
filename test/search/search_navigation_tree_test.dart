@@ -57,6 +57,7 @@ void main() {
     void Function(String path, bool isExpanded)? onToggleExpand,
     VoidCallback? onClearAll,
     List<SearchTreeExtraCategory> extraRootCategories = const [],
+    bool extraCategoriesFirst = false,
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -78,6 +79,7 @@ void main() {
               isMultiSelectPressed: () => false,
               onClearAll: onClearAll ?? () {},
               extraRootCategories: extraRootCategories,
+              extraCategoriesFirst: extraCategoriesFirst,
             ),
           ),
         ),
@@ -130,8 +132,29 @@ void main() {
 
       expect(find.text('עוד מהיברובוקס'), findsOneWidget);
       expect(find.text('(12)'), findsOneWidget);
+      // ברירת המחדל: הדלי אחרי קטגוריות הספרייה.
+      expect(
+        tester.getTopLeft(find.text('עוד מהיברובוקס')).dy,
+        greaterThan(tester.getTopLeft(find.text('תנ"ך')).dy),
+      );
       await tester.tap(find.text('עוד מהיברובוקס'));
       expect(selected, '/עוד מהיברובוקס');
+    });
+
+    testWidgets('extraCategoriesFirst מציב את הדלי לפני קטגוריות הספרייה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra()],
+        extraCategoriesFirst: true,
+      );
+
+      expect(
+        tester.getTopLeft(find.text('עוד מהיברובוקס')).dy,
+        lessThan(tester.getTopLeft(find.text('תנ"ך')).dy),
+      );
     });
 
     testWidgets('קטגוריה סינתטית בספירה 0 מוסתרת אלא אם היא נבחרה', (

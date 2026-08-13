@@ -14,6 +14,9 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 
@@ -22,6 +25,9 @@ class _MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
 
 class _MockSearchBloc extends MockBloc<SearchEvent, SearchState>
     implements SearchBloc {}
+
+class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {}
 
 /// חלונית הסינון מול סיכום של ספק חיצוני: התפר שבין
 /// [ExternalSearchSummary.namedOtherBooks] לשורות הספרים שתחת דלי
@@ -46,6 +52,7 @@ void main() {
 
   late _MockSearchBloc searchBloc;
   late _MockLibraryBloc libraryBloc;
+  late _MockSettingsBloc settingsBloc;
   late StreamController<SearchState> searchStates;
   late SearchingTab tab;
 
@@ -65,7 +72,10 @@ void main() {
     namedOtherBooks: books,
   );
 
-  void setUpBlocs({List<String> currentFacets = const ['/']}) {
+  void setUpBlocs({
+    List<String> currentFacets = const ['/'],
+    bool externalResultsFirst = false,
+  }) {
     searchStates = StreamController<SearchState>.broadcast();
     searchBloc = _MockSearchBloc();
     whenListen(
@@ -88,6 +98,15 @@ void main() {
         currentCategory: null,
       ),
     );
+
+    settingsBloc = _MockSettingsBloc();
+    whenListen(
+      settingsBloc,
+      const Stream<SettingsState>.empty(),
+      initialState: SettingsState.initial().copyWith(
+        externalResultsFirst: externalResultsFirst,
+      ),
+    );
   }
 
   setUp(() {
@@ -99,6 +118,7 @@ void main() {
     await searchStates.close();
     await searchBloc.close();
     await libraryBloc.close();
+    await settingsBloc.close();
   });
 
   Future<void> pumpPanel(WidgetTester tester) async {
@@ -109,6 +129,7 @@ void main() {
             providers: [
               BlocProvider<SearchBloc>.value(value: searchBloc),
               BlocProvider<LibraryBloc>.value(value: libraryBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
             ],
             child: SizedBox(
               width: 320,
@@ -180,5 +201,31 @@ void main() {
     await tester.pump();
 
     expect(find.text('עוד מהיברובוקס'), findsNothing);
+  });
+
+  testWidgets('ברירת המחדל (מאוחרות) — הדלי אחרי קטגוריות הספרייה', (
+    tester,
+  ) async {
+    setUpBlocs();
+    await pumpPanel(tester);
+    tab.externalSearchSummary.value = summaryWith();
+    await tester.pump();
+
+    final bucketY = tester.getTopLeft(find.text('עוד מהיברובוקס')).dy;
+    final libraryY = tester.getTopLeft(find.text('תנ"ך')).dy;
+    expect(bucketY, greaterThan(libraryY));
+  });
+
+  testWidgets('"קודמות" — הדלי בראש העץ, לפני קטגוריות הספרייה', (
+    tester,
+  ) async {
+    setUpBlocs(externalResultsFirst: true);
+    await pumpPanel(tester);
+    tab.externalSearchSummary.value = summaryWith();
+    await tester.pump();
+
+    final bucketY = tester.getTopLeft(find.text('עוד מהיברובוקס')).dy;
+    final libraryY = tester.getTopLeft(find.text('תנ"ך')).dy;
+    expect(bucketY, lessThan(libraryY));
   });
 }

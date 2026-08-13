@@ -14,6 +14,7 @@ import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/view/search_navigation_tree.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
@@ -363,22 +364,32 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
                     extraRoots = _extraRootsFor(summary);
                   }
                 }
-                return SearchNavigationTree(
-                  library: library,
-                  facetCounts: counts,
-                  selectedFacets: searchState.currentFacets,
-                  expansion: _expansionState,
-                  filterQuery: _filterQuery.text,
-                  isLoading: searchState.isLoading,
-                  hasResults: searchState.results.isNotEmpty,
-                  onSetFacet: (facet) => _setFacet(context, facet),
-                  onToggleFacet: (facet) => _handleFacetToggle(context, facet),
-                  onToggleExpand: (path, isExpanded) => setState(() {
-                    _expansionState[path] = !isExpanded;
-                  }),
-                  isMultiSelectPressed: _isMultiSelectModifierPressed,
-                  onClearAll: () => _clearAllScope(context),
-                  extraRootCategories: extraRoots,
+                // הגדרת "תוצאות מ<מקור> קודמות/מאוחרות" קובעת גם את מיקום
+                // הדלי החיצוני בעץ — בראשו או בסופו (ברירת המחדל).
+                return BlocBuilder<SettingsBloc, SettingsState>(
+                  buildWhen: (p, c) =>
+                      p.externalResultsFirst != c.externalResultsFirst,
+                  builder: (context, settingsState) {
+                    return SearchNavigationTree(
+                      library: library,
+                      facetCounts: counts,
+                      selectedFacets: searchState.currentFacets,
+                      expansion: _expansionState,
+                      filterQuery: _filterQuery.text,
+                      isLoading: searchState.isLoading,
+                      hasResults: searchState.results.isNotEmpty,
+                      onSetFacet: (facet) => _setFacet(context, facet),
+                      onToggleFacet: (facet) =>
+                          _handleFacetToggle(context, facet),
+                      onToggleExpand: (path, isExpanded) => setState(() {
+                        _expansionState[path] = !isExpanded;
+                      }),
+                      isMultiSelectPressed: _isMultiSelectModifierPressed,
+                      onClearAll: () => _clearAllScope(context),
+                      extraRootCategories: extraRoots,
+                      extraCategoriesFirst: settingsState.externalResultsFirst,
+                    );
+                  },
                 );
               },
             );
