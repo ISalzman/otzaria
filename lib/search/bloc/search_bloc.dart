@@ -14,7 +14,6 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_repository.dart';
-import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:flutter/foundation.dart';
@@ -253,7 +252,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
           // אירוע הספירות — מגיע עוד לפני ה-chunk הראשון של התוצאות.
           Map<String, int>? aggregated;
           if (scopeEqualsSearch && bookCounts != null) {
-            bookByIndexedFilePath ??= _buildBooksByIndexedFilePath(
+            bookByIndexedFilePath ??= _booksByIndexedFilePathFor(
               await DataRepository.instance.library,
             );
             aggregated = FacetHelper.buildFacetCountsFromBookCounts(
@@ -418,7 +417,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     // קבל את כל הספרים מהספרייה כדי למפות key -> Book
     final library = await DataRepository.instance.library;
-    final bookByIndexedFilePath = _buildBooksByIndexedFilePath(library);
+    final bookByIndexedFilePath = _booksByIndexedFilePathFor(library);
 
     // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
     // הקלטים מגיעים מהצילום שנלקח עם החתימה — לא מ-state שאולי השתנה מאז.
@@ -739,6 +738,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     if (newFacets.contains(event.facet)) {
       debugPrint('➖ RemoveFacet: ${event.facet} (before=$newFacets)');
       newFacets.remove(event.facet);
+      // ביטול הסינון האחרון חוזר לכל ההיקף; רשימה ריקה הייתה נקראת בחיפוש
+      // כ"אין במה לחפש" ומציגה "אין תוצאות" בלי לפנות למנוע.
+      if (newFacets.isEmpty) {
+        newFacets.addAll(
+          state.hasScopedFacetFilter ? state.searchScopeFacets : const ['/'],
+        );
+      }
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       final searchEvent = _rerunEvent();
       if (await _applyClientSideFacetNarrow(
@@ -856,13 +862,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return false;
     }
 
-    final bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
+    // זיהוי לפי `filePath` — המפתח היציב של האינדקס. הסדר הקטלוגי שבמזהה
+    // המסמך זז כשספרים נוספו/נמחקו מאז האינדוקס, ומזהה ספר שגוי.
+    final booksByIndexedFilePath = _booksByIndexedFilePathFor(library);
     final filtered = <SearchResult>[];
     for (final result in state.results) {
-      final catalogueOrder = IndexingRepository.catalogueOrderFromDocumentId(
-        result.id,
-      );
-      final book = bookByCatalogueOrder[catalogueOrder];
+      final book = booksByIndexedFilePath[result.filePath];
       if (book == null) {
         return false;
       }
@@ -873,6 +878,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       if (newFacets.any((facet) => facetContains(facet, facetPath))) {
         filtered.add(result);
       }
+    }
+
+    // העץ הבטיח תוצאות ל-facet הזה אך הסינון התרוקן — סימן לאי-התאמה בזיהוי
+    // הספר. חיפוש מנוע מלא עדיף על הצגת "אין תוצאות" על תוצאה שנמצאה.
+    final treePromisedResults = newFacets.any(
+      (facet) => (state.facetCounts[facet] ?? 0) > 0,
+    );
+    if (filtered.isEmpty && treePromisedResults) {
+      return false;
     }
 
     // מבטל המשכים תלויים של החיפוש הקודם (כמו countTexts שעוד ממתין) —
@@ -1224,11 +1238,19 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// המפתח לא אותר בקטלוג (ואז נופלים לבנייה לפי כותרת).
   Future<Book?> resolveBookForIndexedPath(String indexedFilePath) async {
     final library = await DataRepository.instance.library;
-    if (!identical(library, _resolveCacheLibrary)) {
-      _resolveCacheLibrary = library;
-      _booksByIndexedFilePathCache = bookForIndexedFilePathMap(library);
+    return _booksByIndexedFilePathFor(library)[indexedFilePath];
+  }
+
+  /// מפת המפתח היציב של האינדקס → ספר, במטמון לכל עוד הספרייה לא הוחלפה.
+  Map<String, Book> _booksByIndexedFilePathFor(Library library) {
+    final cached = _booksByIndexedFilePathCache;
+    if (cached != null && identical(library, _resolveCacheLibrary)) {
+      return cached;
     }
-    return _booksByIndexedFilePathCache?[indexedFilePath];
+    final books = _buildBooksByIndexedFilePath(library);
+    _resolveCacheLibrary = library;
+    _booksByIndexedFilePathCache = books;
+    return books;
   }
 
   Library? _resolveCacheLibrary;
@@ -1237,21 +1259,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   @visibleForTesting
   static Map<String, Book> bookForIndexedFilePathMap(Library library) =>
       _buildBooksByIndexedFilePath(library);
-
-  Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
-    final keyOrder = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => IndexingRepository.catalogueOrderKey(book as Book),
-    );
-    final booksByOrder = <int, Book>{};
-    for (final book in library.getAllBooks()) {
-      final order = keyOrder[IndexingRepository.catalogueOrderKey(book)];
-      if (order != null) {
-        booksByOrder.putIfAbsent(order, () => book);
-      }
-    }
-    return booksByOrder;
-  }
 
   static Map<String, Book> _buildBooksByIndexedFilePath(Library library) {
     final booksByIndexedFilePath = <String, Book>{};
