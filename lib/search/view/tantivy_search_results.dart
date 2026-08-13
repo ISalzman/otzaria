@@ -13,6 +13,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/search/view/external_search_results_section.dart';
 import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
@@ -28,6 +29,11 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show MergedSibling;
 
+/// אזור התוצאות של טאב החיפוש — רשימת גלילה אחת לשני המקורות: תוצאות
+/// המנוע המובנה, ואיתן (כשספק חיצוני של תוסף פעיל) בלוק התוצאות החיצוניות
+/// כ-sliver באותה רשימה ([ExternalSearchResultsSection]) — בלי חלוקת המסך
+/// לשני מדורים נפרדים. גם מצבי הריק/טעינה/שגיאה של המנוע מרונדרים כאן,
+/// כדי שהבלוק החיצוני יישאר חי ונראה גם כשלמנוע אין מה להציג.
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
   final VoidCallback? onEditSearch;
@@ -65,6 +71,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          // הרכיב מוצג גם כשורה קומפקטית בתוך sliver (גובה לא חסום) —
+          // בלי min ה-Column היה דורש גובה אינסופי.
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
@@ -387,57 +396,158 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     );
   }
 
+  /// שאילתת החיפוש האחרון שהושלם — מבחין בין "חיפוש חדש" (ספינר חוסם במקום
+  /// התוצאות הישנות) לבין "טען עוד" באותה שאילתה (אסור להעלים את הקיימות).
+  String _lastCompletedQuery = '';
+
+  void _updateLastCompletedQuery(SearchState state) {
+    if (!state.isLoading) {
+      _lastCompletedQuery = state.searchQuery;
+    }
+  }
+
+  bool _shouldShowBlockingLoader(SearchState state) {
+    final currentQuery = state.searchQuery.trim();
+    final lastQuery = _lastCompletedQuery.trim();
+    return state.isLoading &&
+        currentQuery.isNotEmpty &&
+        currentQuery != lastQuery;
+  }
+
   Widget _buildResultsContent(SearchState state, BoxConstraints constrains) {
-    // חשוב: בעת טעינה אנחנו לא רוצים לפרק את ה-ListView,
-    // אחרת הגלילה מתאפסת לראש. לכן ספינר מרכזי מוצג רק כשאין עדיין תוצאות.
-    if (state.isLoading && state.results.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    _updateLastCompletedQuery(state);
+    // רשימת גלילה אחת לשני המקורות: הבלוק החיצוני הוא sliver באותו
+    // CustomScrollView, ולכן כל מצבי המנוע (כולל ריק/טעינה/שגיאה) מרונדרים
+    // אף הם כ-slivers — אחרת הבלוק החיצוני היה יורד מהעץ יחד עם הרשימה.
+    return ValueListenableBuilder<ExternalSearchStatus?>(
+      valueListenable: widget.tab.externalSearchStatus,
+      builder: (context, externalStatus, _) {
+        final scrollView = CustomScrollView(
+          key: PageStorageKey(widget.tab),
+          controller: _scrollController,
+          slivers: [
+            // הבלוק החיצוני אחרי תוצאות המנוע — כמו מיקום הקטגוריה
+            // "עוד מ<מקור>" בסוף עץ הקטגוריות.
+            ..._buildEngineSlivers(state, hasExternal: externalStatus != null),
+            ExternalSearchResultsSection(tab: widget.tab),
+          ],
+        );
+        if (!state.resultsTruncated || state.results.isEmpty) {
+          return scrollView;
+        }
+        // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
+        // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
+        return Column(
+          children: [
+            _buildTruncatedBanner(context),
+            Expanded(child: scrollView),
+          ],
+        );
+      },
+    );
+  }
+
+  /// מצב-מנוע שממלא את שארית המסך כשאין מקור חיצוני (המראה המקורי), ונשאר
+  /// קומפקטי כשיש — אחרת הוא היה דוחק את הבלוק החיצוני אל מחוץ למסך.
+  Widget _engineStateSliver(Widget child, {required bool hasExternal}) =>
+      hasExternal
+      ? SliverToBoxAdapter(child: child)
+      : SliverFillRemaining(hasScrollBody: false, child: child);
+
+  List<Widget> _buildEngineSlivers(
+    SearchState state, {
+    required bool hasExternal,
+  }) {
+    // חשוב: בטעינת-המשך אנחנו לא רוצים לפרק את הרשימה, אחרת הגלילה מתאפסת
+    // לראש. לכן ספינר חוסם מוצג רק בחיפוש חדש או כשאין עדיין תוצאות.
+    if (_shouldShowBlockingLoader(state) ||
+        (state.isLoading && state.results.isEmpty)) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
     }
     if (state.searchQuery.isEmpty) {
-      return _buildInformativeEmptyState(
-        icon: FluentIcons.search_24_regular,
-        title: 'לא בוצע חיפוש',
-        message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
-      );
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: _buildInformativeEmptyState(
+            icon: FluentIcons.search_24_regular,
+            title: 'לא בוצע חיפוש',
+            message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
+          ),
+        ),
+      ];
     }
-    if (state.results.isEmpty && !state.isLoading) {
+    if (state.hasNoSelectedFacets) {
+      return [
+        _engineStateSliver(
+          _buildInformativeEmptyState(
+            icon: FluentIcons.filter_dismiss_24_regular,
+            title: 'לא נבחרו קטגוריות',
+            message: 'בחר קטגוריה אחת לפחות כדי לבצע חיפוש.',
+          ),
+          hasExternal: hasExternal,
+        ),
+      ];
+    }
+    if (state.results.isEmpty) {
       // הבחנה בין חיפוש ריק לגיטימי לבין כשל בחיפוש: אם errorMessage קיים,
       // תקלת מנוע (או FFI) הסתיימה בלי תוצאות — מציגים את ההודעה בצבע שגיאה
       // במקום "אין תוצאות" המטעה.
       if (state.errorMessage != null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              state.errorMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+        return [
+          _engineStateSliver(
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  state.errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ),
+            hasExternal: hasExternal,
           ),
-        );
+        ];
       }
       // חריגה מתקציב ההרחבות במנוע שהצטמצמה לאפס תוצאות: "אין תוצאות" מטעה
       // כאן, כי החיפוש לא נבדק במלואו.
       if (state.resultsTruncated) {
-        return _buildInformativeEmptyState(
-          icon: FluentIcons.warning_24_regular,
-          title: 'הגעת למגבלת אפשרויות החיפוש',
-          message:
-              'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) יצר '
-              'יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק מהגדרות החיפוש '
-              'או לצמצם את מילות החיפוש.',
-          showEditButton: true,
-        );
+        return [
+          _engineStateSliver(
+            _buildInformativeEmptyState(
+              icon: FluentIcons.warning_24_regular,
+              title: 'הגעת למגבלת אפשרויות החיפוש',
+              message:
+                  'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) יצר '
+                  'יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק מהגדרות החיפוש '
+                  'או לצמצם את מילות החיפוש.',
+              showEditButton: true,
+            ),
+            hasExternal: hasExternal,
+          ),
+        ];
       }
-      return _buildInformativeEmptyState(
-        icon: FluentIcons.document_search_24_regular,
-        title: 'אין תוצאות',
-        message:
-            'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
-        showEditButton: true,
-      );
+      return [
+        _engineStateSliver(
+          _buildInformativeEmptyState(
+            icon: FluentIcons.document_search_24_regular,
+            title: 'אין תוצאות',
+            message:
+                'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+            showEditButton: true,
+          ),
+          hasExternal: hasExternal,
+        ),
+      ];
     }
+    return [_buildEngineListSliver(state)];
+  }
 
-    // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
+  Widget _buildEngineListSliver(SearchState state) {
     // (במצב איחוד הספירה היא בקבוצות — displayTotal).
     final hasMoreResults = state.results.length < state.displayTotal;
     final showInlineLoadingIndicator =
@@ -450,10 +560,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       query: state.searchQuery,
     );
 
-    final resultsList = ListView.builder(
-      key: PageStorageKey(widget.tab),
-      controller: _scrollController,
+    return SliverPadding(
       padding: const EdgeInsets.all(16),
+      sliver: SliverList.builder(
       itemCount:
           state.results.length +
           ((showInlineLoadingIndicator || showLoadMoreButton) ? 1 : 0),
@@ -461,6 +570,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         // האיטם האחרון מציג אינדיקטור טעינה בזמן הזרמה,
         // או כפתור pagination כשיש עוד תוצאות בשרת.
         if (index == state.results.length) {
+          // כשהבלוק החיצוני יושב אחרי תוצאות המנוע, "מרחק מתחתית הגלילה"
+          // כבר אינו מודד את סוף תוצאות המנוע — לכן עצם הופעת האיטם האחרון
+          // בטווח הבנייה מפעילה טעינת-המשך (בנוסף ל-listener של הגלילה).
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _maybeLoadMore();
+          });
           if (showInlineLoadingIndicator) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16.0),
@@ -747,18 +862,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
           },
         );
       },
-    );
-
-    if (!state.resultsTruncated) {
-      return resultsList;
-    }
-    // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
-    // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
-    return Column(
-      children: [
-        _buildTruncatedBanner(context),
-        Expanded(child: resultsList),
-      ],
+      ),
     );
   }
 

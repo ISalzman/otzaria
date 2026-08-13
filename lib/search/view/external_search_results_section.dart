@@ -29,6 +29,10 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// מדור תוצאות ממקור חיצוני של תוסף (למשל היברובוקס) בטאב החיפוש המובנה.
 ///
+/// הרכיב הוא sliver: הוא משתבץ בתוך רשימת הגלילה המאוחדת של
+/// [TantivySearchResults] — מסך אחד לשני המקורות, בלי מדור נפרד עם גלילה
+/// משלו. כשאין ספק פעיל (או שהמדור מכווץ) הוא מתכווץ ל-sliver ריק.
+///
 /// המדור פעיל רק כשסומנה בדיאלוג החיפוש שורת תוסף שהצהירה `resultsProvider`
 /// והתוסף נרשם כספק. השאילתה נשלחת לתוסף כאירוע ממוקד — אוצריא עצמה אינה
 /// פונה לשירות החיפוש החיצוני. לחיצה על תוצאה פותחת את הספר במציג המובנה
@@ -126,8 +130,12 @@ List<int> externalVisibleIdsFor({
 class _ExternalSearchResultsSectionState
     extends State<ExternalSearchResultsSection> {
   static const _pageSize = 20;
-  static const _listMaxHeight = 420.0;
   static const _inBookMatchesTimeout = Duration(seconds: 15);
+
+  /// ה-slot של הרכיב ברשימה המאוחדת הוא תמיד sliver — גם כשאין מה להציג.
+  static const Widget _emptySliver = SliverToBoxAdapter(
+    child: SizedBox.shrink(),
+  );
 
   final List<ExternalSearchResult> _results = [];
   int _totalBooks = 0;
@@ -169,7 +177,7 @@ class _ExternalSearchResultsSectionState
   }
 
   /// המדור הוא הכותב היחיד של [SearchingTab.externalSearchStatus], ולכן הוא
-  /// מנקה אותו כשהוא יורד מהעץ (מעבר לפריסה צרה, שבה אין מדור חיצוני כלל) —
+  /// מנקה אותו כשהוא יורד מהעץ (החלפת פריסה רחבה/צרה מרכיבה אותו מחדש) —
   /// אחרת שאר המסך היה ממשיך להתנהג כאילו יש מקור שני. סגירת טאב מפנה את
   /// ה-ValueNotifier רק 350ms אחרי פירוק העץ (ראו TabsBloc._disposeTabLater),
   /// כך שהכתיבה כאן קודמת לו.
@@ -533,7 +541,7 @@ class _ExternalSearchResultsSectionState
       builder: (context, state) {
         final active = _activeProvider(state);
         if (active == null || state.searchQuery.trim().isEmpty) {
-          return const SizedBox.shrink();
+          return _emptySliver;
         }
         _sourceTag = active.$2;
         return _buildSection(context, state);
@@ -544,62 +552,55 @@ class _ExternalSearchResultsSectionState
   /// המדור מציג תוצאות בלבד: המקור, ההתקדמות והספירות שלו מוצגים בשורת
   /// המונים שבראש הטאב (ראו [ExternalSearchStatus]), ומשם גם מכווצים אותו.
   Widget _buildSection(BuildContext context, SearchState state) {
-    final cs = Theme.of(context).colorScheme;
     return ValueListenableBuilder<bool>(
       valueListenable: widget.tab.externalSectionExpanded,
-      builder: (context, expanded, _) {
-        final body = expanded ? _buildBody(context, state) : null;
-        if (body == null) return const SizedBox.shrink();
-        return Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-          ),
-          child: body,
-        );
-      },
+      builder: (context, expanded, _) =>
+          expanded ? _buildBody(context, state) : _emptySliver,
     );
   }
 
-  /// null כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או מדור ריק
-  /// לפני שהתקבלה תשובה כלשהי; אחרת אזור התוצאות היה מותיר מסגרת ריקה.
-  Widget? _buildBody(BuildContext context, SearchState state) {
+  /// sliver ריק כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או
+  /// מדור ריק לפני שהתקבלה תשובה כלשהי; אחרת נשאר רווח מת ברשימה.
+  Widget _buildBody(BuildContext context, SearchState state) {
     if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-            ),
-            ActionButton.ghost(
-              text: 'נסה שוב',
-              onPressed: () {
-                _fetchSignature = '';
-                _syncWithState(state);
-              },
-            ),
-          ],
+              ActionButton.ghost(
+                text: 'נסה שוב',
+                onPressed: () {
+                  _fetchSignature = '';
+                  _syncWithState(state);
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
     if (_results.isEmpty) {
       // בטעינה החיווי יושב בשורת המונים; לפני החיפוש הראשון (חתימה ריקה)
       // אין עדיין מה לדווח עליו.
-      if (_loading || _fetchSignature.isEmpty) return null;
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text('$_sourceTag: לא נמצאו תוצאות'),
+      if (_loading || _fetchSignature.isEmpty) return _emptySliver;
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text('$_sourceTag: לא נמצאו תוצאות'),
+        ),
       );
     }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: _listMaxHeight),
-      child: ListView.builder(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      sliver: SliverList.builder(
         itemCount: _results.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _results.length) {

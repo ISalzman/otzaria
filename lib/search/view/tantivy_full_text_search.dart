@@ -7,7 +7,6 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
-import 'package:otzaria/search/view/external_search_results_section.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
@@ -91,26 +90,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  // משמש כדי להבדיל בין "חיפוש חדש" (שבו נרצה להציג מסך טעינה מלא)
-  // לבין "טען תוצאות נוספות" (שבו אסור להעלים את התוצאות הקיימות).
-  String _lastCompletedQuery = '';
-
-  bool _shouldShowBlockingLoader(SearchState state) {
-    final currentQuery = state.searchQuery.trim();
-    final lastQuery = _lastCompletedQuery.trim();
-    // אם יש חיפוש חדש (הטקסט השתנה) והוא עוד בטעינה — נחסום עם ספינר.
-    // אם זה רק "טען עוד" (אותו query) — לא נחסום.
-    return state.isLoading &&
-        currentQuery.isNotEmpty &&
-        currentQuery != lastQuery;
-  }
-
-  void _updateLastCompletedQuery(SearchState state) {
-    if (!state.isLoading) {
-      _lastCompletedQuery = state.searchQuery;
-    }
-  }
-
   bool _shouldShowFacetFilterBanner(SearchState state) =>
       !_facetBannerDismissed &&
       shouldShowFacetFilterBanner(
@@ -126,130 +105,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     final setA = a.toSet()..removeWhere((facet) => facet == '/');
     final setB = b.toSet()..removeWhere((facet) => facet == '/');
     return setA.length == setB.length && setA.containsAll(setB);
-  }
-
-  Widget _buildNoCategoriesSelectedMessage(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.filter_dismiss_24_regular,
-              size: 56,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא נבחרו קטגוריות',
-              style: TextStyle(
-                fontSize: 18,
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'בחר קטגוריה אחת לפחות כדי לבצע חיפוש.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInitialSearchState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.search_24_regular,
-              size: 64,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא בוצע חיפוש',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNoResultsState(BuildContext context, {bool truncated = false}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              truncated
-                  ? FluentIcons.warning_24_regular
-                  : FluentIcons.document_search_24_regular,
-              size: 56,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              truncated ? 'הגעת למגבלת אפשרויות החיפוש' : 'אין תוצאות',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              truncated
-                  ? 'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) '
-                        'יצר יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק '
-                        'מהגדרות החיפוש או לצמצם את מילות החיפוש.'
-                  : 'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות '
-                        'החיפוש.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ActionButton.neutral(
-              text: 'ערוך חיפוש',
-              onPressed: _openEditDialog,
-              icon: FluentIcons.edit_24_regular,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -397,8 +252,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildForSmallScreens() {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        _updateLastCompletedQuery(state);
-        final showBlockingLoader = _shouldShowBlockingLoader(state);
         return Container(
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(),
@@ -413,39 +266,17 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               Expanded(
                 child: Stack(
                   children: [
-                    if (showBlockingLoader)
-                      const Center(child: CircularProgressIndicator())
-                    else if (state.searchQuery.isEmpty)
-                      _buildInitialSearchState(context)
-                    else if (state.hasNoSelectedFacets)
-                      _buildNoCategoriesSelectedMessage(context)
-                    else if (state.results.isEmpty)
-                      // הבחנה בין חיפוש ריק לכשל מנוע — ראה state.errorMessage.
-                      state.errorMessage != null
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  state.errorMessage!,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : _buildNoResultsState(
-                              context,
-                              truncated: state.resultsTruncated,
-                            )
-                    else
-                      Container(
-                        clipBehavior: Clip.hardEdge,
-                        decoration: const BoxDecoration(),
-                        child: TantivySearchResults(
-                          tab: widget.tab,
-                          onEditSearch: _openEditDialog,
-                        ),
+                    // כל מצבי אזור התוצאות (ריק/טעינה/שגיאה/תוצאות) מרונדרים
+                    // בתוך TantivySearchResults — רשימה מאוחדת אחת שמכילה גם
+                    // את תוצאות הספק החיצוני כשהוא פעיל.
+                    Container(
+                      clipBehavior: Clip.hardEdge,
+                      decoration: const BoxDecoration(),
+                      child: TantivySearchResults(
+                        tab: widget.tab,
+                        onEditSearch: _openEditDialog,
                       ),
+                    ),
                     ValueListenableBuilder(
                       valueListenable: widget.tab.isLeftPaneOpen,
                       builder: (context, value, child) => AnimatedSize(
@@ -482,8 +313,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         Expanded(
           child: BlocBuilder<SearchBloc, SearchState>(
             builder: (context, state) {
-              _updateLastCompletedQuery(state);
-              final showBlockingLoader = _shouldShowBlockingLoader(state);
               return Column(
                 children: [
                   AppTopBar(
@@ -579,11 +408,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                             return AdaptiveSidePane(
                               isOpen: isOpen,
                               alignment: AlignmentDirectional.centerEnd,
-                              mainContent: _buildResultsContent(
-                                context,
-                                state,
-                                showBlockingLoader,
-                              ),
+                              mainContent: _buildResultsContent(context),
                               paneContent: SearchFacetFiltering(
                                 tab: widget.tab,
                               ),
@@ -718,52 +543,10 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות),
-  /// ומעליו מדור תוצאות ממקור חיצוני של תוסף כשהוא פעיל (מכווץ את עצמו
-  /// לכלום אחרת).
-  Widget _buildResultsContent(
-    BuildContext context,
-    SearchState state,
-    bool showBlockingLoader,
-  ) {
-    return Column(
-      children: [
-        ExternalSearchResultsSection(tab: widget.tab),
-        Expanded(
-          child: _buildEngineResultsContent(context, state, showBlockingLoader),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEngineResultsContent(
-    BuildContext context,
-    SearchState state,
-    bool showBlockingLoader,
-  ) {
-    if (showBlockingLoader) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (state.searchQuery.isEmpty) {
-      return _buildInitialSearchState(context);
-    }
-    if (state.hasNoSelectedFacets) {
-      return _buildNoCategoriesSelectedMessage(context);
-    }
-    if (state.results.isEmpty) {
-      if (state.errorMessage != null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              state.errorMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        );
-      }
-      return _buildNoResultsState(context, truncated: state.resultsTruncated);
-    }
+  /// תוכן אזור התוצאות — רשימה מאוחדת אחת ([TantivySearchResults]) שמכילה
+  /// את כל מצבי המנוע (loader / ריק / שגיאה / תוצאות) וגם את תוצאות הספק
+  /// החיצוני של תוסף כשהוא פעיל (sliver שמכווץ את עצמו לכלום אחרת).
+  Widget _buildResultsContent(BuildContext context) {
     return Container(
       clipBehavior: Clip.hardEdge,
       decoration: const BoxDecoration(),

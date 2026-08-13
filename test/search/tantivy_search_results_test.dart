@@ -202,7 +202,7 @@ void main() {
       await tester.pumpWidget(buildWidget());
 
       await tester.pump();
-      await tester.drag(find.byType(ListView), const Offset(0, -100000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -100000));
       await tester.pump();
 
       expect(
@@ -217,10 +217,10 @@ void main() {
       await tester.pumpWidget(buildWidget());
       await tester.pump();
 
-      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pump();
       final scrolledOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(scrolledOffset, greaterThan(0));
@@ -237,7 +237,7 @@ void main() {
       await tester.pump(); // addPostFrameCallback → jumpTo(0)
 
       final resetOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(resetOffset, 0);
@@ -249,10 +249,10 @@ void main() {
       await tester.pumpWidget(buildWidget());
       await tester.pump();
 
-      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pump();
       final scrolledOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(scrolledOffset, greaterThan(0));
@@ -277,7 +277,7 @@ void main() {
       await tester.pump();
 
       final keptOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(keptOffset, scrolledOffset);
