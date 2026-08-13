@@ -61,6 +61,7 @@ bool shouldShowFacetFilterBanner({
 
 class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     with AutomaticKeepAliveClientMixin {
+  static const _externalCountLineMaxWidth = 240.0;
   @override
   bool get wantKeepAlive => true;
 
@@ -672,32 +673,44 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           message: expanded
               ? 'הסתר את תוצאות ${status.sourceTitle}'
               : 'הצג את תוצאות ${status.sourceTitle}',
-          child: InkWell(
-            onTap: () => widget.tab.externalSectionExpanded.value = !expanded,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(line, style: style),
-                if (status.loading) ...[
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    width: 10,
-                    height: 10,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: style.color,
+          child: ConstrainedBox(
+            // כותרת המקור מגיעה מתוסף; הסרגל העליון אינו יכול להתרחב בשבילה.
+            constraints: const BoxConstraints(
+              maxWidth: _externalCountLineMaxWidth,
+            ),
+            child: InkWell(
+              onTap: () => widget.tab.externalSectionExpanded.value = !expanded,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: style,
                     ),
                   ),
+                  if (status.loading) ...[
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: style.color,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 2),
+                  Icon(
+                    expanded
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
+                    size: 14,
+                    color: style.color,
+                  ),
                 ],
-                const SizedBox(width: 2),
-                Icon(
-                  expanded
-                      ? FluentIcons.chevron_up_24_regular
-                      : FluentIcons.chevron_down_24_regular,
-                  size: 14,
-                  color: style.color,
-                ),
-              ],
+              ),
             ),
           ),
         );
