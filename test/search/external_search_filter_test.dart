@@ -102,4 +102,29 @@ void main() {
       );
     });
   });
+
+  group('externalValidatedCategoryOf', () {
+    const validPaths = {'/תנ"ך', '/תנ"ך/תורה/בראשית', '/הלכה'};
+
+    test('נתיב קיים בעץ מתקבל כמות שהוא — גם נתיב עמוק', () {
+      expect(
+        externalValidatedCategoryOf('/תנ"ך/תורה/בראשית', validPaths),
+        '/תנ"ך/תורה/בראשית',
+      );
+      expect(externalValidatedCategoryOf('/הלכה', validPaths), '/הלכה');
+    });
+
+    test('נתיב לא קיים נופל לקטגוריית-העל שלו כשהיא קיימת', () {
+      expect(
+        externalValidatedCategoryOf('/תנ"ך/נביאים/ישעיהו', validPaths),
+        '/תנ"ך',
+      );
+    });
+
+    test('נתיב זר לגמרי, ריק או null — אין סיווג (דלי "עוד מ")', () {
+      expect(externalValidatedCategoryOf('/קבלה/זוהר', validPaths), isNull);
+      expect(externalValidatedCategoryOf('/', validPaths), isNull);
+      expect(externalValidatedCategoryOf(null, validPaths), isNull);
+    });
+  });
 }

@@ -1,11 +1,10 @@
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/services/parallel_editions_service.dart';
-import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_host_action_executor.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_program_executor.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/plugins/services/plugin_external_book_loader.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/navigation/otzar_utils.dart';
@@ -44,11 +43,7 @@ class DeclarativeLibraryBookAccess
   ) {
     return DeclarativeLibraryBookAccess(
       () async => (await DataRepository.instance.library).getAllBooks(),
-      (provider, externalIds) => switch (provider) {
-        'hebrewbooks' => _loadHebrewBooksByIds(externalIds),
-        'otzar' => DataRepository.instance.otzarBooks,
-        _ => Future.value(const <Book>[]),
-      },
+      loadExternalBooksByProvider,
       (
         book,
         index,
@@ -289,36 +284,4 @@ class _BookLookupIndex {
 
   static String _externalKey(({String provider, Object id}) external) =>
       '${external.provider}:${external.id}';
-}
-
-Future<List<Book>> _loadHebrewBooksByIds(Set<Object> externalIds) async {
-  final ids = externalIds.map(PluginBookIdentity.parseId).nonNulls.toSet();
-  if (ids.isEmpty) return const [];
-  final localMatches = (await DataRepository.instance.localHebrewBooks).where((
-    book,
-  ) {
-    final external = PluginBookIdentity.externalOf(book);
-    return external?.provider == 'hebrewbooks' &&
-        ids.contains(PluginBookIdentity.parseId(external?.id));
-  }).toList();
-  final localIds = localMatches
-      .map(PluginBookIdentity.externalOf)
-      .nonNulls
-      .map((external) => PluginBookIdentity.parseId(external.id))
-      .nonNulls
-      .toSet();
-  final missingIds = ids.difference(localIds);
-  if (missingIds.isEmpty) return localMatches;
-  final catalogBooks = await ExternalCatalogRepository.instance
-      .getHebrewBooksByIds(missingIds);
-  // מטמון הסריקה מתיישן בזמן שהורדות רצות ברקע; בדיקה נקודתית של הקבצים
-  // המבוקשים מאפשרת לפתוח מקומית ספר שירד זה עתה, בלי רענון ספרייה.
-  final probed = await FileSystemData.probeHebrewBooksPdfFilesByIds(
-    missingIds,
-  );
-  if (probed.isEmpty) return [...localMatches, ...catalogBooks];
-  return [
-    ...localMatches,
-    ...FileSystemData.mapHebrewBooksToLocal(catalogBooks, probed),
-  ];
 }

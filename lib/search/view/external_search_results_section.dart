@@ -3,10 +3,8 @@ import 'dart:async';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_library_book_access.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
@@ -31,10 +29,11 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 /// חיפוש-בתוך-ספר זמין.
 ///
 /// לצד עמודי התוצאות, הספק מצרף אינדקס תמציתי של כלל התוצאות עם קטגוריה
-/// משוערת לכל ספר. המדור מעדן אותו מול קטלוג ההשוואות המקומי
-/// (otzaria_hebrew_books), מאמת מול עץ הספרייה, ומפרסם סיכום ספירות דרך
-/// [SearchingTab.externalSearchSummary] — כך התוצאות החיצוניות משתתפות בעץ
-/// הקטגוריות של החיפוש, ובחירת קטגוריה מסננת גם אותן (דפדוף לפי ids).
+/// לכל ספר — הסיווג כולו (כולל עידון מול קטלוג השוואות, אם יש לספק כזה)
+/// באחריות הספק; המדור רק מאמת את הנתיבים מול עץ הספרייה ומפרסם סיכום
+/// ספירות דרך [SearchingTab.externalSearchSummary] — כך התוצאות החיצוניות
+/// משתתפות בעץ הקטגוריות של החיפוש, ובחירת קטגוריה מסננת גם אותן (דפדוף
+/// לפי ids).
 class ExternalSearchResultsSection extends StatefulWidget {
   final SearchingTab tab;
 
@@ -58,6 +57,22 @@ String externalFilterCategoryOf(String facet) {
     segments.removeLast();
   }
   return segments.isEmpty ? '/' : '/${segments.join('/')}';
+}
+
+/// אימות נתיב קטגוריה שהספק צירף לרשומת אינדקס מול עץ הספרייה: נתיב קיים
+/// מתקבל כמות שהוא; אחרת נופלים לקטגוריית-העל שלו אם היא קיימת; אחרת null
+/// (הספר יוצג בדלי "עוד מ<מקור>").
+@visibleForTesting
+String? externalValidatedCategoryOf(
+  String? suggested,
+  Set<String> validPaths,
+) {
+  if (suggested == null) return null;
+  if (validPaths.contains(suggested)) return suggested;
+  final segments = suggested.split('/').where((s) => s.isNotEmpty);
+  if (segments.isEmpty) return null;
+  final top = '/${segments.first}';
+  return validPaths.contains(top) ? top : null;
 }
 
 /// המזהים מתוך [index] שסיווגם ([categories]) תואם את בחירת הקטגוריות
@@ -127,8 +142,6 @@ class _ExternalSearchResultsSectionState
   /// ולכן העמוד הבא נספר לפי מזהים שנצרכו — לא לפי שורות שהוצגו).
   List<int>? _visibleIds;
   int _visibleConsumed = 0;
-
-  int _classifyToken = 0;
 
   @override
   void initState() {
@@ -276,7 +289,7 @@ class _ExternalSearchResultsSectionState
       // אינדקס בלי סיווג מוכן (גם אחרי ניסיון שנכשל) — מסווגים (מחדש).
       if (page.index != null && _categoryById == null) {
         _index = page.index;
-        unawaited(_classifyIndex(signature));
+        _classifyIndex(signature);
       }
       setState(() {
         _results.removeRange(
@@ -333,12 +346,12 @@ class _ExternalSearchResultsSectionState
     return total;
   }
 
-  /// מסווג את האינדקס: מיפוי מקומי (קטלוג ההשוואות) גובר על ההצעה של הספק,
-  /// והצעות מאומתות מול עץ הספרייה. התוצאה מתפרסמת לעץ הסינון של הטאב.
-  Future<void> _classifyIndex(String signature) async {
+  /// מסווג את האינדקס: נתיבי הקטגוריות שהספק צירף (הסיווג עצמו נעשה בצד
+  /// הספק — לאוצריא אין ידע ייחודי למקור) מאומתים מול עץ הספרייה, עם
+  /// נפילה לקטגוריית-העל. התוצאה מתפרסמת לעץ הסינון של הטאב.
+  void _classifyIndex(String signature) {
     final index = _index;
     if (index == null) return;
-    final token = ++_classifyToken;
     final library = context.read<LibraryBloc>().state.library;
     final active = _activeProvider(widget.tab.searchBloc.state);
     if (library == null || active == null) {
@@ -347,52 +360,17 @@ class _ExternalSearchResultsSectionState
       _index = null;
       return;
     }
-
-    // עידון מול קטלוג ההשוואות — ספר שמושווה לספר אוצריא מקבל את הקטגוריה
-    // האמיתית שלו בספרייה. רלוונטי לספקים שמזהיהם קיימים בטבלת המיפוי.
-    var mapping = const <int, int>{};
-    if (active.$1 == 'hebrewbooks') {
-      mapping = await ExternalCatalogRepository.instance
-          .getBestOtzariaIdsForHebrewBookIds(
-            [for (final entry in index) entry.id],
-          );
-    }
-    if (!mounted || token != _classifyToken || signature != _fetchSignature) {
-      return;
-    }
+    if (signature != _fetchSignature) return;
 
     final validPaths = <String>{
       for (final category in library.getAllCategories()) category.path,
     };
-    final bookById = <int, Book>{
-      for (final book in library.getAllBooks())
-        if (book.id != null) book.id!: book,
-    };
-
-    String? classify(ExternalSearchIndexEntry entry) {
-      final otzariaId = mapping[entry.id];
-      if (otzariaId != null) {
-        final book = bookById[otzariaId];
-        if (book != null) {
-          final path = FacetHelper.resolveCategoryPath(book);
-          if (path != null && path.isNotEmpty && path != '/') return path;
-        }
-      }
-      final suggested = entry.categoryPath;
-      if (suggested == null) return null;
-      if (validPaths.contains(suggested)) return suggested;
-      // נפילה לקטגוריית-העל של ההצעה, אם היא קיימת בספרייה.
-      final segments = suggested.split('/').where((s) => s.isNotEmpty);
-      if (segments.isEmpty) return null;
-      final top = '/${segments.first}';
-      return validPaths.contains(top) ? top : null;
-    }
 
     final categories = <int, String?>{};
     final counts = <String, int>{};
     var other = 0;
     for (final entry in index) {
-      final path = classify(entry);
+      final path = externalValidatedCategoryOf(entry.categoryPath, validPaths);
       categories[entry.id] = path;
       if (path == null) {
         other += 1;
