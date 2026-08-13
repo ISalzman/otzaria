@@ -7,6 +7,7 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
@@ -174,6 +175,7 @@ void main() {
   late ContextMenuRegistry contextMenu;
   late PluginLazyActivationService activation;
   late PluginSearchDialogRegistry searchDialog;
+  late PluginExternalEditionsRegistry externalEditions;
   late PluginStartupContributionsService service;
   late _FakeRepo repo;
 
@@ -182,11 +184,13 @@ void main() {
     contextMenu = ContextMenuRegistry.forTesting();
     activation = PluginLazyActivationService.forTesting();
     searchDialog = PluginSearchDialogRegistry.forTesting();
+    externalEditions = PluginExternalEditionsRegistry.detached();
     service = PluginStartupContributionsService.forTesting(
       toolbarRegistry: toolbar,
       contextMenuRegistry: contextMenu,
       activationService: activation,
       searchDialogRegistry: searchDialog,
+      externalEditionsRegistry: externalEditions,
     );
     repo = _FakeRepo();
   });
@@ -207,6 +211,81 @@ void main() {
       isFalse,
       reason: 'בלי app.run_on_startup אין הערה שקטה — לחיצה תפתח את הדף',
     );
+  });
+
+  group('externalEditions', () {
+    InstalledPlugin editionsPlugin({List<String> permissions = const []}) {
+      final manifest = PluginManifest.fromJson({
+        'schemaVersion': 1,
+        'id': 'p1',
+        'name': 'Test',
+        'version': '1.0.0',
+        'entrypoint': 'index.html',
+        'permissions': permissions,
+        'contributes': {
+          'databaseSources': [
+            {'id': 'mapping_source', 'label': 'מיפוי', 'required': true},
+          ],
+          'startup': {
+            'externalEditions': [
+              {
+                'id': 'editions-1',
+                'provider': 'extlib',
+                'sourceId': 'mapping_source',
+                'table': 'mapping',
+                'externalIdColumn': 'ext_id',
+                'otzariaIdColumn': 'otzaria_id',
+              },
+            ],
+          },
+        },
+      });
+      return InstalledPlugin(
+        pluginId: 'p1',
+        name: 'Test',
+        version: '1.0.0',
+        installPath: '/plugins/p1',
+        entrypointPath: 'index.html',
+        enabled: true,
+        pinned: false,
+        manifest: manifest,
+        installedAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+    }
+
+    const editionsPermissions = {
+      'app.startup_contributions',
+      'database.read',
+      'library.books.read',
+    };
+
+    test('נרשם עם שתי ההרשאות ומוסר כשאחת נשללת', () async {
+      repo.grantedByPlugin['p1'] = {...editionsPermissions};
+      await service.sync([editionsPlugin()], repo);
+      expect(externalEditions.configs, hasLength(1));
+      final config = externalEditions.configs.single;
+      expect(config.provider, 'extlib');
+      expect(config.table, 'mapping');
+      expect(config.plugin.pluginId, 'p1');
+
+      // שלילת database.read מסירה את הרישום בסנכרון הבא.
+      repo.grantedByPlugin['p1'] = {
+        'app.startup_contributions',
+        'library.books.read',
+      };
+      await service.sync([editionsPlugin()], repo);
+      expect(externalEditions.configs, isEmpty);
+    });
+
+    test('הסרת התוסף מסירה את הרישום', () async {
+      repo.grantedByPlugin['p1'] = {...editionsPermissions};
+      await service.sync([editionsPlugin()], repo);
+      expect(externalEditions.configs, hasLength(1));
+
+      await service.sync(const [], repo);
+      expect(externalEditions.configs, isEmpty);
+    });
   });
 
   test('lazy activation requires the app.run_on_startup permission', () async {

@@ -12,6 +12,7 @@ import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 import 'package:path/path.dart' as p;
@@ -58,6 +59,7 @@ const Set<String> _knownApiMethods = {
   'library.findBooks',
   'library.getBookMetadata',
   'library.resolveBooks',
+  'library.resolveCategoryPaths',
   'library.listRecentBooks',
   'library.getBookContent',
   'library.getBookToc',
@@ -187,6 +189,7 @@ const Map<String, String> _methodRequiredPermission = {
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
   'library.resolveBooks': 'library.books.read',
+  'library.resolveCategoryPaths': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
   'library.getTree': 'library.books.read',
   'library.getBookContent': 'library.content.read',
@@ -290,6 +293,7 @@ const Map<String, String> _methodMinVersion = {
   'library.findBooks': '0.9.89',
   'library.getBookMetadata': '0.9.89',
   'library.resolveBooks': '0.9.97',
+  'library.resolveCategoryPaths': '0.9.97',
   'library.listRecentBooks': '0.9.89',
   'library.getBookContent': '0.9.89',
   'library.getBookToc': '0.9.89',
@@ -549,6 +553,7 @@ class PluginExtendedValidator {
   static const String _declarativeProgramsMinVersion = '0.9.96';
   static const String _dataChooseMinVersion = '0.9.97';
   static const String _searchSubmitRoutingMinVersion = '0.9.97';
+  static const String _externalEditionsMinVersion = '0.9.97';
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.
@@ -596,6 +601,7 @@ class PluginExtendedValidator {
     checkListField('publishedData', (e) => e is Map, 'אובייקט');
     checkListField('programs', (e) => e is Map, 'אובייקט');
     checkListField('searchDialogItems', (e) => e is Map, 'אובייקט');
+    checkListField('externalEditions', (e) => e is Map, 'אובייקט');
     checkListField('activationEvents', (e) => e is String, 'מחרוזת');
     final keepAliveRaw = startupMap['keepAlive'];
     if (keepAliveRaw != null && keepAliveRaw is! bool) {
@@ -763,6 +769,57 @@ class PluginExtendedValidator {
           }
         } on PluginSearchDialogItemException catch (error) {
           errors.add('contributes.startup.searchDialogItems לא תקין: $error');
+        }
+      }
+    }
+
+    if (startup.externalEditions.isNotEmpty) {
+      for (final permission in const ['database.read', 'library.books.read']) {
+        if (!declaredPermissions.contains(permission)) {
+          errors.add(
+            'contributes.startup.externalEditions דורש את ההרשאה '
+            '"$permission" ב-manifest',
+          );
+        }
+      }
+      if (startup.externalEditions.length >
+          PluginExternalEditionsRegistry.maxItemsPerPlugin) {
+        errors.add(
+          'contributes.startup.externalEditions מוגבל ל-'
+          '${PluginExternalEditionsRegistry.maxItemsPerPlugin} תרומות',
+        );
+      }
+      try {
+        if (PluginVersionUtils.compareCoreVersions(
+              _externalEditionsMinVersion,
+              manifest.minAppVersion,
+            ) >
+            0) {
+          errors.add(
+            'contributes.startup.externalEditions נתמך החל מגרסה '
+            '$_externalEditionsMinVersion, אך minAppVersion שהוצהר הוא '
+            '${manifest.minAppVersion}',
+          );
+        }
+      } on PluginVersionFormatException {
+        // minAppVersion נבדק ב-PluginManifestValidator.
+      }
+      final declaredSourceIds = {
+        for (final source in manifest.databaseSources)
+          if (source['id'] is String) source['id'] as String,
+      };
+      final editionIds = <String>{};
+      for (final item in startup.externalEditions) {
+        try {
+          final parsed = PluginExternalEditionsRegistry.parsePayload(
+            item,
+            declaredSourceIds: declaredSourceIds,
+          );
+          if (!editionIds.add(parsed.id)) {
+            errors.add('contributes.startup.externalEditions מכיל מזהה כפול');
+          }
+        } on PluginExternalEditionsException catch (error) {
+          errors.add('contributes.startup.externalEditions לא תקין: $error');
         }
       }
     }

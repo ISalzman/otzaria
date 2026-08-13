@@ -93,6 +93,7 @@ if (response.success) {
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
+| `library.resolveCategoryPaths` | 0.9.97 |
 | `library.listRecentBooks` | 0.9.89 |
 | `library.getBookContent` | 0.9.89 |
 | `library.getBookToc` | 0.9.89 |
@@ -408,6 +409,20 @@ const { data } = await Otzaria.call('library.resolveBooks', {
   ]
 });
 // [{ id, type, source, bookId, title, categoryPath, external? }, ...]
+```
+
+### `library.resolveCategoryPaths`
+**הרשאה:** `library.books.read`
+
+נתיב הקטגוריה בעץ הספרייה לכל מזהה ספר, באצווה של עד 20,000 מזהים —
+מסלול bulk לסיווג אינדקס שלם של ספק תוצאות חיצוני בקריאה אחת. סדר
+התשובות זהה לסדר הקלט; מזהה לא מוכר מוחזר כ־`null`.
+
+```javascript
+const { data } = await Otzaria.call('library.resolveCategoryPaths', {
+  ids: [183, 42, 9999]
+});
+// ["/תנך/תורה", "/הלכה", null]
 ```
 
 ### `library.listRecentBooks`
@@ -2413,6 +2428,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
+| `externalEditions` | קונפיגורציית מהדורות מקבילות חיצוניות (טבלת מיפוי במקור DB מוכרז) | `database.read` וגם `library.books.read` |
 | `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
 
@@ -2588,7 +2604,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
-| `library.parallelEditions` | `library.books.read` | מ־0.9.98: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות היברובוקס שקובצן קיים בתיקייה שהוגדרה; שורות `{title, isCompanion, identity}` |
+| `library.parallelEditions` | `library.books.read` | מ־0.9.97: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות ספקים חיצוניים שנרשמו דרך `startup.externalEditions` ונפתחות מקומית; שורות `{title, isCompanion, identity}` |
 
 ערכים יכולים להפנות אל `$context`,‏ `$result` של פקודה קודמת, או `$row`
 בתוך תבנית שורה. `$concat` מחבר עד שמונה חלקים, ו־`$literal` מונע פירוש של
@@ -2701,6 +2717,53 @@ async function scheduleReminder(title, body, dateTime) {
 | `word.aramaic-translation` | תרגום ארמי |
 | `word.acronyms` | ראשי תיבות |
 | `word.nikud` / `word.taamim` | ניקוד / טעמים |
+
+### מהדורות מקבילות חיצוניות (externalEditions)
+
+מגרסה 0.9.97, `startup.externalEditions` מצהיר על טבלת מיפוי במקור נתונים
+מוכרז (`contributes.databaseSources`) שמקשרת מזהי ספק חיצוני לספרי אוצריא.
+לחצן "מהדורה מקבילה" המובנה — ופקודת `library.parallelEditions` בתכניות
+Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי המהדורה המובנית (טקסט↔PDF).
+נכללות רק מהדורות שנפתחות מקומית בקורא. הכול רץ ב-Dart בלי להעיר WebView,
+והשאילתות כפופות ל-policy של המקור. דורש את ההרשאות `database.read`
+ו-`library.books.read`. עד 2 תרומות לתוסף.
+
+```json
+{
+  "contributes": {
+    "startup": {
+      "externalEditions": [
+        {
+          "id": "hebrewbooks-editions",
+          "provider": "hebrewbooks",
+          "sourceId": "external_catalog",
+          "table": "otzaria_hebrew_books",
+          "externalIdColumn": "hb_id",
+          "otzariaIdColumn": "otzaria_id",
+          "orderBy": [
+            { "column": "is_best", "direction": "desc" },
+            { "column": "confidence", "direction": "desc" }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+| שדה | חובה | תיאור |
+|---|---:|---|
+| `id` | כן | מזהה ייחודי בתוסף; אותיות ASCII, מספרים, `.`, `_`, `-`. |
+| `provider` | כן | שם הספק כפי שמופיע בזהות `external.provider` של ספריו (אותיות קטנות, עד 64 תווים). |
+| `sourceId` | כן | מקור נתונים שהוכרז ב-`contributes.databaseSources`. |
+| `table` | כן | טבלת המיפוי (חייבת להיות מותרת ב-policy של המקור). |
+| `externalIdColumn` | כן | עמודת מזהה הספק החיצוני. |
+| `otzariaIdColumn` | כן | עמודת מזהה ספר אוצריא. |
+| `orderBy` | לא | עד 4 עמודות מיון של איכות ההתאמה: `{column, direction: asc/desc}`. |
+
+כשהספר הפתוח שייך לספק (זהות חיצונית תואמת), המנוע מוצא את ספרי האוצריא
+הממופים אליו ומהם את שאר מהדורות הספק (שני צעדים); כשהספר הפתוח הוא ספר
+ספרייה, המיפוי ישיר. הספר הפתוח עצמו לעולם אינו מוחזר כמהדורה.
 
 ### הפעלה עצלה
 

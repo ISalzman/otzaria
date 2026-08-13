@@ -732,6 +732,28 @@ class PluginBridgeAdapter {
                 },
           ];
         }
+      case 'resolveCategoryPaths':
+        {
+          // spec: resolveCategoryPaths({ ids }) — נתיב הקטגוריה בעץ הספרייה
+          // לכל מזהה ספר, מיושר לסדר הקלט (null למזהה לא מוכר). מסלול bulk:
+          // ספק תוצאות חיצוני מסווג אינדקס שלם (עד תקרת האינדקס של מדור
+          // החיפוש) בקריאה אחת, במקום קריאת resolveBooks לכל 100 מזהים.
+          final rawIds = args['ids'];
+          if (rawIds is! List || rawIds.length > 20000) {
+            throw Exception('ids must be an array with at most 20000 entries');
+          }
+          final bookById = <int, Book>{
+            for (final book in library.getAllBooks())
+              if (book.id != null) book.id!: book,
+          };
+          return [
+            for (final raw in rawIds)
+              if (raw is int && bookById[raw] != null)
+                FacetHelper.resolveCategoryPath(bookById[raw]!)
+              else
+                null,
+          ];
+        }
       case 'listRecentBooks':
         final historyState = _dependencies.historyBloc.state;
         if (historyState is! HistoryLoaded) return [];
