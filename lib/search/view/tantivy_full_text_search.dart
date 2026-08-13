@@ -658,12 +658,15 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     final filteredNote = status.ofTotalBooks != null
         ? ' (מתוך ${status.ofTotalBooks})'
         : '';
+    final books = status.books == 1
+        ? 'ספר אחד'
+        : '${status.books} ספרים';
+    final hits = status.hits == 1 ? 'מופע אחד' : '${status.hits} מופעים';
     final line = status.failed
         ? '${status.sourceTitle}: החיפוש נכשל'
         : status.isPending
         ? '${status.sourceTitle}: מחפש…'
-        : '${status.sourceTitle}: ${status.books} ספרים$filteredNote, '
-              '${status.hits} מופעים';
+        : '${status.sourceTitle}: $books$filteredNote, $hits';
     return ValueListenableBuilder<bool>(
       valueListenable: widget.tab.externalSectionExpanded,
       builder: (context, expanded, _) {

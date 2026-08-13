@@ -316,6 +316,10 @@ class _ExternalSearchResultsSectionState
       if (page.index != null && _categoryById == null) {
         _index = page.index;
         _classifyIndex(signature);
+        // סיווג יכול להפעיל סינון שהמתין לו, ואז כבר רצה בקשה חדשה — העמוד
+        // הלא-מסונן שבידינו שייך לדור הקודם, וכתיבתו הייתה מציגה את תוצאות
+        // החיפוש כולו עם ספירות מסוננות ובלי חיווי טעינה.
+        if (!mounted || generation != _fetchGeneration) return;
       }
       setState(() {
         _results.removeRange(
@@ -546,10 +550,12 @@ class _ExternalSearchResultsSectionState
       );
     }
     if (_results.isEmpty) {
-      if (_loading) return null;
+      // בטעינה החיווי יושב בשורת המונים; לפני החיפוש הראשון (חתימה ריקה)
+      // אין עדיין מה לדווח עליו.
+      if (_loading || _fetchSignature.isEmpty) return null;
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('לא נמצאו תוצאות ב$_sourceTag'),
+        child: Text('$_sourceTag: לא נמצאו תוצאות'),
       );
     }
     return ConstrainedBox(
