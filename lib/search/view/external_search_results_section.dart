@@ -411,12 +411,20 @@ class _ExternalSearchResultsSectionState
 
     final categories = <int, String?>{};
     final counts = <String, int>{};
+    final namedOther = <ExternalSearchBook>[];
     var other = 0;
     for (final entry in index) {
       final path = externalValidatedCategoryOf(entry.categoryPath, validPaths);
       categories[entry.id] = path;
       if (path == null) {
         other += 1;
+        final title = entry.title;
+        // ספר בלי שם אינו יכול להיות שורה בעץ; הוא עדיין נספר בדלי.
+        if (title != null) {
+          namedOther.add(
+            ExternalSearchBook(id: entry.id, title: title, hits: entry.hits),
+          );
+        }
       } else {
         counts[path] = (counts[path] ?? 0) + 1;
       }
@@ -434,6 +442,7 @@ class _ExternalSearchResultsSectionState
       totalHits: totalHits,
       categoryBookCounts: counts,
       otherBooks: other,
+      namedOtherBooks: namedOther,
     );
     widget.tab.externalSearchSummary.value = _summary;
 
