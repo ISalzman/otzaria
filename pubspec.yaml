@@ -95,7 +95,7 @@ dependencies:
   flutter_inappwebview:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: master
+      ref: 633b434ee4e7853654ae50c12124eff839af4e1f
       path: flutter_inappwebview
   custom_mouse_cursor: ^1.1.3
 
@@ -107,7 +107,7 @@ dependency_overrides:
   flutter_inappwebview_windows:
     git:
       url: https://github.com/Otzaria/flutter_inappwebview
-      ref: master
+      ref: 633b434ee4e7853654ae50c12124eff839af4e1f
       path: flutter_inappwebview_windows
 
 flutter_launcher_icons:

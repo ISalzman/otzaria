@@ -625,7 +625,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildResultCounts(BuildContext context, SearchState state) {
     final muted = TextStyle(
       fontSize: 14,
-      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
     final engineLine = state.totalGroups != null
         ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'

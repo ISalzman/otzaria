@@ -1,5 +1,7 @@
 /// ריכוז הודעות המערכת (UiSnack) של מערכת התוספים.
 abstract class PluginMessages {
+  static const String externalBookNotFound = 'הספר לא נמצא בקטלוג החיצוני';
+
   // ===== התקנה והסרה =====
   static const String pluginInstalledSuccess = 'התוסף הותקן בהצלחה';
   static const String pluginAlreadyInstalledSameVersion =

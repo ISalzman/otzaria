@@ -2,6 +2,8 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 /// סרגל ניווט בין עמודי התאמה שסופקו על-ידי מנוע חיפוש חיצוני (תוסף).
 ///
@@ -117,7 +119,7 @@ class _PdfExternalMatchesBarState extends State<PdfExternalMatchesBar> {
                 if (widget.onProviderSearch != null)
                   SizedBox(
                     width: 220,
-                    child: TextField(
+                    child: RtlTextField(
                       controller: _queryController,
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _runProviderSearch(),
@@ -159,7 +161,9 @@ class _PdfExternalMatchesBarState extends State<PdfExternalMatchesBar> {
                 const Spacer(),
                 if (hasPages) ...[
                   IconButton(
-                    icon: const Icon(FluentIcons.chevron_right_24_regular),
+                    icon: const RtlIcon(
+                      FluentIcons.chevron_right_24_regular,
+                    ),
                     iconSize: 18,
                     tooltip: 'המופע הקודם',
                     onPressed: _currentIndex > 0
@@ -186,7 +190,9 @@ class _PdfExternalMatchesBarState extends State<PdfExternalMatchesBar> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(FluentIcons.chevron_left_24_regular),
+                    icon: const RtlIcon(
+                      FluentIcons.chevron_left_24_regular,
+                    ),
                     iconSize: 18,
                     tooltip: 'המופע הבא',
                     onPressed: _currentIndex < pages.length - 1

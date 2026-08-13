@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/plugin_messages.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -19,6 +21,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
+import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// מדור תוצאות ממקור חיצוני של תוסף (למשל היברובוקס) בטאב החיפוש המובנה.
 ///
@@ -422,7 +425,6 @@ class _ExternalSearchResultsSectionState
         navigationBloc: context.read<NavigationBloc>(),
       ),
     );
-    final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       // עמודי ההתאמה מגיעים מספק החיפוש-בתוך-ספר של התוסף; כישלון או
       // איטיות אינם מונעים את פתיחת הספר — פותחים בלעדיהם.
@@ -449,9 +451,7 @@ class _ExternalSearchResultsSectionState
         externalMatches: matches,
       );
       if (!opened) {
-        messenger?.showSnackBar(
-          const SnackBar(content: Text('הספר לא נמצא בקטלוג החיצוני')),
-        );
+        UiSnack.show(PluginMessages.externalBookNotFound);
       }
     } finally {
       if (mounted) setState(() => _openingId = null);
@@ -502,7 +502,7 @@ class _ExternalSearchResultsSectionState
       onTap: () => setState(() => _expanded = !_expanded),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        color: cs.secondaryContainer.withValues(alpha: 0.35),
+        color: cs.secondaryContainer,
         child: Row(
           children: [
             Icon(FluentIcons.globe_search_24_regular, size: 18),
@@ -546,12 +546,12 @@ class _ExternalSearchResultsSectionState
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-            TextButton(
+            ActionButton.ghost(
+              text: 'נסה שוב',
               onPressed: () {
                 _fetchSignature = '';
                 _syncWithState(state);
               },
-              child: const Text('נסה שוב'),
             ),
           ],
         ),
@@ -571,13 +571,11 @@ class _ExternalSearchResultsSectionState
         itemBuilder: (context, index) {
           if (index == _results.length) {
             return Center(
-              child: TextButton(
+              child: ActionButton.ghost(
                 onPressed: _loading ? null : () => _loadMore(state),
-                child: Text(
-                  _loading
-                      ? 'טוען…'
-                      : 'טען תוצאות נוספות (${_totalBooks - _results.length})',
-                ),
+                text: _loading
+                    ? 'טוען…'
+                    : 'טען תוצאות נוספות (${_totalBooks - _results.length})',
               ),
             );
           }
@@ -620,7 +618,7 @@ class _ExternalSearchResultsSectionState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: cs.tertiaryContainer.withValues(alpha: 0.6),
+                color: cs.tertiaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(_sourceTag, style: theme.textTheme.labelSmall),
