@@ -11,6 +11,7 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -641,10 +642,26 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                   ),
                                 ),
                                 // תגית מקור: מבדילה את תוצאות המנוע המובנה
-                                // מתוצאות ספק חיצוני שמוצגות באותו מסך.
-                                const SizedBox(width: 8),
-                                const SearchResultSourceTag(label: 'אוצריא'),
-                                const SizedBox(width: 4),
+                                // מתוצאות ספק חיצוני שמוצגות באותו מסך. בלי
+                                // מדור חיצוני אין ממה להבדיל, והתגית הייתה
+                                // רק גוזלת רוחב משם הספר.
+                                ValueListenableBuilder<ExternalSearchStatus?>(
+                                  valueListenable: widget.tab
+                                      .externalSearchStatus,
+                                  builder: (context, status, _) =>
+                                      status == null
+                                      ? const SizedBox(width: 4)
+                                      : const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            SizedBox(width: 8),
+                                            SearchResultSourceTag(
+                                              label: 'אוצריא',
+                                            ),
+                                            SizedBox(width: 4),
+                                          ],
+                                        ),
+                                ),
                                 IconButton(
                                   icon: Icon(
                                     FluentIcons.copy_24_regular,
