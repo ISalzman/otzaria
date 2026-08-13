@@ -698,6 +698,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'קבצי PDF ו-Word': 'PDF and Word files',
     'קבצי PDF/Word — נקראים ישירות מהקבצים': 'PDF/Word files — read directly from the files',
     'קבצי הספרייה הקיימת יועברו לתיקיית היעד': 'The current library files will be moved to the target folder',
+    'קובץ גיבוי זה נוצר בגרסה שגיבתה רק חלק מההגדרות, ולכן הגדרות שאינן בו לא שוחזרו — בהן קיצורי מקלדת, ברירות המחדל של החיפוש, התאמות צורת הדף והתאמות פר-ספר. יש לבדוק אם קיים גיבוי חדש יותר, או להגדיר אותן מחדש.': 'This backup file was created by a version that backed up only some of the settings, so settings it does not contain were not restored — among them keyboard shortcuts, search defaults, page-shape layouts and per-book adjustments. Check whether a newer backup exists, or set them again.',
     'קטגוריות': 'Categories',
     'קיצורי מקשים': 'Keyboard Shortcuts',
     'קיצורי מקשים זמינים רק בדסקטופ': 'Keyboard shortcuts are for desktop only',

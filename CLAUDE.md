@@ -701,7 +701,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Settings screen controller | `test/settings/settings_screen_controller_test.dart` |
 | Bookmark model | `test/settings/history/bookmark_model_test.dart` |
 | Custom folders BLoC | `test/settings/services/custom_folders/custom_folders_bloc_test.dart` |
-| Backup service (roundtrip, plugins, auto-backup) | `test/settings/services/backup_service_test.dart` |
+| Backup service (roundtrip, plugins, auto-backup, per-book, tabs) | `test/settings/services/backup_service_test.dart` |
+| כיסוי מקומות השמירה — כל box/תיקייה מוכרע כמגובה או לא | `test/settings/services/backup_storage_coverage_test.dart` |
 | Backup store (blobs, dedup, GC) + maintenance helpers | `test/unit/settings/backup/backup_store_test.dart` |
 | Backup rotation (GFS) | `test/unit/settings/backup/backup_rotation_test.dart` |
 | Backup archive merge rules | `test/unit/settings/backup/backup_merge_test.dart` |

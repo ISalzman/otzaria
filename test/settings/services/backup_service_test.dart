@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
+import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/workspaces/workspace_repository.dart';
 import 'package:path/path.dart' as p;
 
@@ -728,5 +729,143 @@ void main() {
         expect(await escaped.exists(), isFalse);
       },
     );
+  });
+
+  // ─── הגדרות פר-ספר ─────────────────────────────────────────────────────────
+  // ההתאמות הפר-ספריות (מפרשים פעילים, גופן, רוחבי צורת הדף) יושבות בקבצי JSON
+  // מחוץ ל-Hive, ולכן נשמטו מהגיבוי לגמרי — ספר שהוגדרו לו מפרשים חזר ריק.
+  group('גיבוי ושחזור הגדרות פר-ספר', () {
+    setUp(() => AppPaths.debugOverrideDataRootPath(tempDir.path));
+
+    Future<File> perBookFile(String name) async =>
+        File(p.join(await AppPaths.getPerBookSettingsPath(), name));
+
+    Future<String> createSettingsBackup() async =>
+        (await BackupService.createBackup(
+          includeSettings: true,
+          includeBookmarks: false,
+          includeHistory: false,
+          includeNotes: false,
+          includeWorkspaces: false,
+          includeShamorZachor: false,
+          includePlugins: false,
+        )).path;
+
+    test('קובץ הגדרות פר-ספר מגובה ומשוחזר', () async {
+      const content = '{"activeCommentators":["מנחת חינוך"],"fontSize":31.0}';
+      final file = await perBookFile('settings_${'a' * 40}.json');
+      await file.create(recursive: true);
+      await file.writeAsString(content);
+
+      final path = await createSettingsBackup();
+      await file.delete();
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      expect(result.hasLegacyPartialSettings, isFalse);
+      expect(await file.readAsString(), content);
+    });
+
+    test('שחזור אינו מוחק התאמות של ספרים שאינם בגיבוי', () async {
+      final backedUp = await perBookFile('settings_${'b' * 40}.json');
+      await backedUp.create(recursive: true);
+      await backedUp.writeAsString('{"fontSize":20.0}');
+
+      final path = await createSettingsBackup();
+
+      final untouched = await perBookFile('settings_${'c' * 40}.json');
+      await untouched.writeAsString('{"fontSize":40.0}');
+      await BackupService.restoreFromBackup(path);
+
+      expect(await untouched.readAsString(), '{"fontSize":40.0}');
+    });
+
+    test('שם קובץ חורג בגיבוי מדולג ואינו נכתב מחוץ לתיקייה', () async {
+      final path = await createSettingsBackup();
+      final backupFile = File(path);
+      final json =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      (json['perBookSettings'] as Map)['../escaped.json'] = '{"fontSize":9.0}';
+      await backupFile.writeAsString(jsonEncode(json));
+
+      await BackupService.restoreFromBackup(path);
+
+      final escaped = File(
+        p.normalize(
+          p.join(await AppPaths.getPerBookSettingsPath(), '..', 'escaped.json'),
+        ),
+      );
+      expect(await escaped.exists(), isFalse);
+    });
+
+    test('גיבוי ללא חתימת מקור ההגדרות מדווח כחלקי', () async {
+      final path = await createSettingsBackup();
+      final backupFile = File(path);
+      final json =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      // גיבוי מגרסה שאספה רשימת מפתחות מוצהרת בלבד — בלי השדה הזה.
+      json.remove('settingsSource');
+      await backupFile.writeAsString(jsonEncode(json));
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      expect(result.hasLegacyPartialSettings, isTrue);
+    });
+  });
+
+  // ─── הטאבים הפתוחים ────────────────────────────────────────────────────────
+  // הטאבים יושבים ב-box נפרד ולא היו בגיבוי כלל: אחרי שחזור התוכנה נפתחה
+  // בלי הספרים שהיו פתוחים.
+  group('גיבוי ושחזור הטאבים הפתוחים', () {
+    late Box<dynamic> tabsBox;
+
+    setUp(() async {
+      tabsBox = await Hive.openBox<dynamic>(TabsRepository.boxName);
+    });
+
+    Future<String> createWorkspacesBackup() async =>
+        (await BackupService.createBackup(
+          includeSettings: false,
+          includeBookmarks: false,
+          includeHistory: false,
+          includeNotes: false,
+          includeWorkspaces: true,
+          includeShamorZachor: false,
+          includePlugins: false,
+        )).path;
+
+    test('הטאבים והטאב הפעיל עוברים גיבוי ושחזור', () async {
+      final tabs = [
+        {'type': 'TextBookTab', 'title': 'בראשית'},
+        {'type': 'TextBookTab', 'title': 'שמות'},
+      ];
+      await tabsBox.put('key-tabs', tabs);
+      await tabsBox.put('key-current-tab', 1);
+
+      final path = await createWorkspacesBackup();
+      await tabsBox.put('key-tabs', <dynamic>[]);
+      await tabsBox.put('key-current-tab', 0);
+
+      await BackupService.restoreFromBackup(path);
+
+      expect((tabsBox.get('key-tabs') as List), hasLength(2));
+      expect(tabsBox.get('key-current-tab'), 1);
+    });
+
+    test('גיבוי בלי סעיף טאבים אינו מרוקן את הטאבים הקיימים', () async {
+      final path = await createWorkspacesBackup();
+      final backupFile = File(path);
+      final json =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      json.remove('openTabs');
+      await backupFile.writeAsString(jsonEncode(json));
+
+      await tabsBox.put('key-tabs', [
+        {'type': 'TextBookTab', 'title': 'ויקרא'},
+      ]);
+      await BackupService.restoreFromBackup(path);
+
+      expect((tabsBox.get('key-tabs') as List), hasLength(1));
+    });
   });
 }

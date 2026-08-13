@@ -9,9 +9,29 @@ import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:flutter/foundation.dart';
 
 class TabsRepository {
+  static const String boxName = 'tabs';
   static const String _tabsBoxKey = 'key-tabs';
   static const String _currentTabKey = 'key-current-tab';
   static const String _legacySplitModeKey = 'key-side-by-side-mode';
+
+  /// הטאבים הפתוחים והטאב הפעיל, גולמיים, לגיבוי.
+  ///
+  /// גולמי (ה-JSON כפי שנשמר) ולא [OpenedTab]: טאב שאינו נטען במחשב היעד
+  /// (ספר חסר) מדולג בטעינה על ידי [loadTabs], ואין להשמיט אותו מהגיבוי מראש.
+  Map<String, dynamic> exportRaw() {
+    final box = Hive.box(boxName);
+    return {
+      'tabs': box.get(_tabsBoxKey, defaultValue: <dynamic>[]),
+      'currentTab': box.get(_currentTabKey, defaultValue: 0),
+    };
+  }
+
+  /// כתיבת הטאבים מגיבוי, בדריסת הטאבים השמורים.
+  Future<void> importRaw(Map<String, dynamic> data) async {
+    final box = Hive.box(boxName);
+    await box.put(_tabsBoxKey, data['tabs'] ?? <dynamic>[]);
+    await box.put(_currentTabKey, data['currentTab'] ?? 0);
+  }
 
   int _resolvePersistedCurrentTabIndex(
     Map<int, int> persistedIndexByOriginalIndex,
