@@ -2,8 +2,11 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/utils/text/html_slice.dart';
 
-/// בוחר את תוכן ה-HTML המתאים ביותר לטקסט שנבחר.
+/// בוחר את תוכן ה-HTML המתאים ביותר לטקסט שנבחר: השורה המקורית כשהיא
+/// נבחרה במלואה, אחרת חיתוך שלה לטווח הבחירה — כדי שגם בחירה חלקית
+/// תישמר מעוצבת. נופל לטקסט פשוט רק כשהבחירה אינה נמצאת בשורה.
 String resolveHtmlTextForSelection({
   required String plainText,
   required int? selectedIndex,
@@ -26,11 +29,11 @@ String resolveHtmlTextForSelection({
     return originalData;
   }
 
-  if (originalCleaned.contains(plainTextCleaned)) {
-    return plainText;
-  }
-
-  return plainText;
+  return sliceHtmlBySelection(
+        html: originalData,
+        selectedText: plainText,
+      ) ??
+      plainText;
 }
 
 /// מעתיק טקסט נבחר מספר טקסט תוך שמירה על כותרות ועיצוב.
