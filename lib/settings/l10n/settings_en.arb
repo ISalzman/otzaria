@@ -169,7 +169,7 @@
   "העבר לכאן": "Move Here",
 
   "מעביר את הספרייה למיקום החדש…\nהתוכנה לא תהיה פעילה עד לסיום הפעולה.": "Moving the library to its new location…\nOtzaria will be inactive until the operation completes.",
-  "הספרייה הועברה": Library Moved",
+  "הספרייה הועברה": "Library Moved",
   "הספרייה הועברה בהצלחה למיקום החדש. התוכנה תיטען מחדש כעת, והספרים הפתוחים ייטענו מהמיקום החדש.": "The library was moved successfully to the new location. Otzaria will reload now, and any open seforim will load from the new location.",
   "פעולה": "What To Do",
   "בחר אם להעביר את קבצי הספרייה למיקום החדש, או לעדכן את ההגדרה בלבד": "Choose whether to move the library files to the new location, or only update the setting",
@@ -535,7 +535,7 @@
   "גימטריה קטנה": "Mispar Katan",
   "כל אות מחושבת לפי ספרה אחת": "Each letter counts as a single digit",
   "אותיות סופיות שונות": "Osos Sofios Count",
-  "מנצפ\"ך בערכים שונים": "Mnatzpa"ch get their own values",
+  "מנצפ\"ך בערכים שונים": "Mnatzpa\"ch get their own values",
   "עם הכולל": "Im Hakollel",
   "הוספת מספר האותיות לסכום": "Add the letter count to the total",
 
