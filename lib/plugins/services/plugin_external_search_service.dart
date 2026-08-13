@@ -40,17 +40,23 @@ class ExternalSearchResult {
   });
 }
 
-/// רשומת אינדקס: תוצאה אחת בתמצות — מזהה, מופעים, וקטגוריית אוצריא
-/// המשוערת שהספק גזר מהקטלוג שלו (null כשאין לו סיווג).
+/// רשומת אינדקס: תוצאה אחת בתמצות — מזהה, מופעים, קטגוריית אוצריא
+/// המשוערת שהספק גזר מהקטלוג שלו (null כשאין לו סיווג), ושם הספר.
+///
+/// השם אופציונלי (ספק ותיק אינו שולח אותו): בלעדיו הדלי
+/// "עוד מ<מקור>" בעץ הסינון נשאר שורה שאי אפשר לפתוח, כי אין ממה לבנות
+/// את שורות הספרים שתחתיו.
 class ExternalSearchIndexEntry {
   final int id;
   final int hits;
   final String? categoryPath;
+  final String? title;
 
   const ExternalSearchIndexEntry({
     required this.id,
     required this.hits,
     this.categoryPath,
+    this.title,
   });
 }
 
@@ -191,6 +197,10 @@ class PluginExternalSearchService {
       // עמוד לפי מזהים מפורשים: דפדוף בתוצאות מסוננות-קטגוריה שהקורא
       // חישב מהאינדקס. הספק מגיש אותם מהמטמון של החיפוש.
       'ids': ?ids,
+      // הקורא צורך שמות ספרים באינדקס. ספק ותיק מתעלם מהשדה ושולח רשומות
+      // בלי שם; ספק שמכיר אותו יודע שהשם לא ייזרק — ומארח ותיק, שאינו
+      // שולח את השדה, לא יקבל רשומות שהיה זורק בסניטציה.
+      'indexTitles': true,
     };
     Timer? retryTimer;
     try {
@@ -314,19 +324,20 @@ class PluginExternalSearchService {
   List<ExternalSearchIndexEntry>? sanitizeIndexForTesting(List<Object?>? raw) =>
       _sanitizeIndex(raw);
 
-  /// אינדקס גולמי מהספק: רשימת מערכים [id, hits] או [id, hits, category].
+  /// אינדקס גולמי מהספק: רשימת מערכים [id, hits], [id, hits, category] או
+  /// [id, hits, category, title] (קטגוריה ריקה כשיש שם בלי סיווג).
   /// רשומות פגומות נזרקות; נתיב קטגוריה חייב להתחיל ב-'/' (בלי לוודא מול
   /// הספרייה — זו אחריות הקורא, שממילא מאחד נתיבים לא מוכרים לדלי משלו).
   List<ExternalSearchIndexEntry>? _sanitizeIndex(List<Object?>? raw) {
     if (raw == null) return null;
     final entries = <ExternalSearchIndexEntry>[];
     for (final item in raw.take(_maxIndexEntries)) {
-      if (item is! List || item.length < 2 || item.length > 3) continue;
+      if (item is! List || item.length < 2 || item.length > 4) continue;
       final id = item[0];
       final hits = item[1];
       if (id is! num || id < 1 || hits is! num || hits < 0) continue;
       String? categoryPath;
-      if (item.length == 3) {
+      if (item.length >= 3) {
         final path = _clip(item[2], _maxCategoryPathLength);
         if (path != null && path.startsWith('/') && path.length > 1) {
           categoryPath = path;
@@ -337,6 +348,7 @@ class PluginExternalSearchService {
           id: id.toInt(),
           hits: hits.toInt(),
           categoryPath: categoryPath,
+          title: item.length == 4 ? _clip(item[3], _maxTitleLength) : null,
         ),
       );
     }

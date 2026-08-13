@@ -889,6 +889,8 @@ export interface OtzariaEventMap {
     offset: number;
     limit: number;
     ids?: number[];
+    /** The host consumes `[id, hits, categoryPath, title]` index entries. */
+    indexTitles?: boolean;
   };
   /** In-book search request sent only to the plugin owning `provider`. */
   'reader.inBookSearch.requested': {
