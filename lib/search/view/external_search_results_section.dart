@@ -17,8 +17,8 @@ import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
-import 'package:otzaria/search/view/external_result_title_row.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/search/view/external_result_title_row.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
@@ -155,6 +155,17 @@ class _ExternalSearchResultsSectionState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncWithState(widget.tab.searchBloc.state);
     });
+  }
+
+  /// המדור הוא הכותב היחיד של [SearchingTab.externalSearchStatus], ולכן הוא
+  /// מנקה אותו כשהוא יורד מהעץ (מעבר לפריסה צרה, שבה אין מדור חיצוני כלל) —
+  /// אחרת שאר המסך היה ממשיך להתנהג כאילו יש מקור שני. סגירת טאב מפנה את
+  /// ה-ValueNotifier רק 350ms אחרי פירוק העץ (ראו TabsBloc._disposeTabLater),
+  /// כך שהכתיבה כאן קודמת לו.
+  @override
+  void dispose() {
+    widget.tab.externalSearchStatus.value = null;
+    super.dispose();
   }
 
   /// שם המקור לתגית שעל כל שורה — [resultsTitle] של שורת התוסף.
@@ -678,5 +689,4 @@ class _ExternalSearchResultsSectionState
       ),
     );
   }
-
 }

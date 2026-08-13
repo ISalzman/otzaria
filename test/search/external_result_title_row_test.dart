@@ -53,6 +53,29 @@ void main() {
       expect(distances.toSet(), hasLength(1));
     });
 
+    testWidgets('משבצת כפתור ההעתקה נשמרת גם בלי גזיר, כדי שהתגיות ייושרו', (
+      tester,
+    ) async {
+      final distances = <double>[];
+      for (final copyText in ['גזיר', null]) {
+        await tester.pumpWidget(
+          _host(
+            width: _wideRowWidth,
+            child: ExternalResultTitleRow(
+              title: 'ספר',
+              hitCount: 4,
+              sourceTag: 'היברובוקס',
+              copyText: copyText,
+            ),
+          ),
+        );
+        distances.add(
+          _distanceFromLeftEdge(tester, find.byType(SearchResultSourceTag)),
+        );
+      }
+      expect(distances.toSet(), hasLength(1));
+    });
+
     testWidgets('שורה צרה אינה גולשת — הכיתוב מתקצר למספר בלבד', (
       tester,
     ) async {
@@ -70,6 +93,13 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('128'), findsOneWidget);
       expect(find.text('128 תוצאות בספר'), findsNothing);
+      // שם הספר הוא העיקר בשורה — הוא אינו מכווץ לטובת המונה והתגית.
+      expect(
+        tester
+            .getSize(find.text('ספר עם שם ארוך במיוחד שאינו נכנס לשורה'))
+            .width,
+        greaterThan(_narrowRowWidth / 2),
+      );
     });
 
     testWidgets('שם מדור ארוך מהתוסף אינו מגלש את השורה', (tester) async {

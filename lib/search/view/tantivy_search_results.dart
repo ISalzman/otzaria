@@ -646,8 +646,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                 // מדור חיצוני אין ממה להבדיל, והתגית הייתה
                                 // רק גוזלת רוחב משם הספר.
                                 ValueListenableBuilder<ExternalSearchStatus?>(
-                                  valueListenable: widget.tab
-                                      .externalSearchStatus,
+                                  valueListenable:
+                                      widget.tab.externalSearchStatus,
                                   builder: (context, status, _) =>
                                       status == null
                                       ? const SizedBox(width: 4)

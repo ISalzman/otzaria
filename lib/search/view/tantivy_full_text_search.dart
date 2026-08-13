@@ -658,9 +658,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     final filteredNote = status.ofTotalBooks != null
         ? ' (מתוך ${status.ofTotalBooks})'
         : '';
-    final books = status.books == 1
-        ? 'ספר אחד'
-        : '${status.books} ספרים';
+    final books = status.books == 1 ? 'ספר אחד' : '${status.books} ספרים';
     final hits = status.hits == 1 ? 'מופע אחד' : '${status.hits} מופעים';
     final line = status.failed
         ? '${status.sourceTitle}: החיפוש נכשל'
@@ -675,8 +673,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               ? 'הסתר את תוצאות ${status.sourceTitle}'
               : 'הצג את תוצאות ${status.sourceTitle}',
           child: InkWell(
-            onTap: () =>
-                widget.tab.externalSectionExpanded.value = !expanded,
+            onTap: () => widget.tab.externalSectionExpanded.value = !expanded,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

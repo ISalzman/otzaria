@@ -33,45 +33,77 @@ class ExternalResultTitleRow extends StatelessWidget {
     this.copyText,
   });
 
+  /// רוחב משבצת כפתור ההעתקה, כולל הרווח שלפניו. המשבצת נשמרת גם כשאין
+  /// גזיר להעתיק, כדי שהתגיות של כל השורות יישבו על אותו קו.
+  static const _copySlotWidth = 44.0;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
+        // בשורה צרה אין מקום לשם הספר לצד כל השאר, ולכן המונה והתגית יורדים
+        // לשורה משלהם במקום לכווץ את שם הספר לשתי אותיות.
         final compact = constraints.maxWidth < narrowWidth;
-        return Row(
+        if (!compact) {
+          return Row(
+            children: [
+              Expanded(child: _buildTitle(context)),
+              if (hitCount > 0) ...[
+                const SizedBox(width: 8),
+                _buildHitCountPill(context, compact: false),
+              ],
+              if (sourceTag.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _buildTag(constraints.maxWidth),
+              ],
+              _buildCopySlot(context),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: cs.primary,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              children: [
+                Expanded(child: _buildTitle(context)),
+                _buildCopySlot(context),
+              ],
             ),
-            if (hitCount > 0) ...[
-              const SizedBox(width: 8),
-              _buildHitCountPill(context, compact: compact),
-            ],
-            if (sourceTag.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: constraints.maxWidth * _tagWidthFraction,
-                ),
-                child: SearchResultSourceTag(label: sourceTag),
+            if (hitCount > 0 || sourceTag.isNotEmpty)
+              Row(
+                children: [
+                  if (hitCount > 0) _buildHitCountPill(context, compact: true),
+                  const Spacer(),
+                  if (sourceTag.isNotEmpty) _buildTag(constraints.maxWidth),
+                ],
               ),
-            ],
-            if (copyText != null) ...[
-              const SizedBox(width: 4),
-              _buildCopyButton(context, copyText!),
-            ],
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTitle(BuildContext context) => Text(
+    title,
+    style: TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.bold,
+      color: Theme.of(context).colorScheme.primary,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+
+  Widget _buildTag(double rowWidth) => ConstrainedBox(
+    constraints: BoxConstraints(maxWidth: rowWidth * _tagWidthFraction),
+    child: SearchResultSourceTag(label: sourceTag),
+  );
+
+  Widget _buildCopySlot(BuildContext context) {
+    final text = copyText;
+    if (text == null) return const SizedBox(width: _copySlotWidth);
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 4),
+      child: _buildCopyButton(context, text),
     );
   }
 
