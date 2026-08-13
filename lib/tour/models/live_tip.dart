@@ -99,9 +99,9 @@ const List<LiveTipSpec> liveTipSpecs = [
   LiveTipSpec(
     id: LiveTipId.sideBySideSuggestion,
     area: TourSpotlightArea.tabs,
-    title: 'השוואה בין שני ספרים',
+    title: 'תצוגה מפוצלת',
     description:
-        'נראה שאתה מדלג שוב ושוב בין אותם ספרים. גרור אחת הלשוניות כאן אל צד אזור הקריאה, או לחץ עליה לחיצה ימנית ובחר "הצג לצד".',
+        'נראה שאתה מדלג שוב ושוב בין אותן שתי לשוניות. גרור אחת מהן כאן אל צד אזור הקריאה, או לחץ עליה לחיצה ימנית ובחר "הצג לצד".',
   ),
   LiveTipSpec(
     id: LiveTipId.dictionaryContextMenuHint,
