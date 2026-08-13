@@ -117,7 +117,11 @@ class BackupService {
         backupData['settingsSource'] = skippedSections.contains('settings')
             ? 'declared-keys'
             : 'box';
-        backupData['perBookSettings'] = await _backupPerBookSettings();
+        final perBookSettings = await _backupPerBookSettings();
+        backupData['perBookSettings'] = perBookSettings.files;
+        if (perBookSettings.hadFailures) {
+          skippedSections.add('perBookSettings');
+        }
       }
 
       // Backup bookmarks
@@ -304,20 +308,25 @@ class BackupService {
   /// גיבוי ההגדרות הפר-ספריות, שנשמרות בקבצי JSON מחוץ ל-Hive: המפרשים
   /// הפעילים בכל ספר, גופן/ניקוד/פיסוק פר-ספר, רוחבי הטורים בצורת הדף וזום
   /// ה-PDF. נשמרות כטקסט ולא כ-blob — הקבצים זעירים והמניפסט נשאר קריא.
-  static Future<Map<String, String>> _backupPerBookSettings() async {
+  static Future<({Map<String, String> files, bool hadFailures})>
+  _backupPerBookSettings() async {
     final dir = Directory(await AppPaths.getPerBookSettingsPath());
-    if (!await dir.exists()) return {};
+    if (!await dir.exists()) {
+      return (files: <String, String>{}, hadFailures: false);
+    }
 
     final files = <String, String>{};
+    var hadFailures = false;
     await for (final entity in dir.list()) {
       if (entity is! File || !entity.path.endsWith('.json')) continue;
       try {
         files[p.basename(entity.path)] = await entity.readAsString();
       } catch (e) {
+        hadFailures = true;
         _logger.warning('Skipping per-book settings ${entity.path}: $e');
       }
     }
-    return files;
+    return (files: files, hadFailures: hadFailures);
   }
 
   /// קידומות של נתונים שאינם הגדרות, אף שהם נשמרים באותו Hive box.
@@ -582,6 +591,8 @@ class BackupService {
 
     final includes = backupData['includes'] as Map<String, dynamic>;
 
+    final runtimeSkipped = <String>[];
+
     // Restore settings
     var hasLegacyPartialSettings = false;
     if (includes['settings'] == true && backupData.containsKey('settings')) {
@@ -592,10 +603,11 @@ class BackupService {
         settings,
         backupData['settingsSource'],
       );
-      await _restorePerBookSettings(
+      final perBookHadFailures = await _restorePerBookSettings(
         (backupData['perBookSettings'] as Map?)?.cast<String, dynamic>() ??
             const {},
       );
+      if (perBookHadFailures) runtimeSkipped.add('perBookSettings');
     }
 
     // Restore bookmarks
@@ -645,8 +657,6 @@ class BackupService {
       );
     }
 
-    final runtimeSkipped = <String>[];
-
     // Restore plugins
     if (includes['plugins'] == true && backupData.containsKey('plugins')) {
       final pluginsHadFailures = await _restorePlugins(
@@ -683,15 +693,17 @@ class BackupService {
   /// קובץ שאינו בגיבוי נשאר במקומו: השחזור מחזיר את מה שנשמר בו ואינו מוחק
   /// התאמות של ספרים אחרים. שם הקובץ מאומת כשם בסיס בלבד לפני הכתיבה, כדי
   /// שגיבוי פגום/זדוני לא יכתוב מחוץ לתיקייה.
-  static Future<void> _restorePerBookSettings(
+  static Future<bool> _restorePerBookSettings(
     Map<String, dynamic> files,
   ) async {
-    if (files.isEmpty) return;
+    if (files.isEmpty) return false;
     final dir = Directory(await AppPaths.getPerBookSettingsPath());
     await dir.create(recursive: true);
 
+    var hadFailures = false;
     for (final entry in files.entries) {
       if (p.basename(entry.key) != entry.key || !entry.key.endsWith('.json')) {
+        hadFailures = true;
         _logger.warning(
           'Unsafe per-book settings name in backup: ${entry.key}',
         );
@@ -702,9 +714,11 @@ class BackupService {
           p.join(dir.path, entry.key),
         ).writeAsString(entry.value as String);
       } catch (e) {
+        hadFailures = true;
         _logger.warning('Failed to restore per-book settings ${entry.key}: $e');
       }
     }
+    return hadFailures;
   }
 
   /// האם סעיף ההגדרות נאסף מרשימת מפתחות מוצהרת ולכן חסר את השאר.

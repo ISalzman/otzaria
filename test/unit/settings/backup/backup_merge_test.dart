@@ -122,21 +122,37 @@ void main() {
       });
     });
 
-    test('חתימת מקור ההגדרות נשמרת רק כששני המניפסטים נושאים אותה', () {
+    test('חתימת מקור ההגדרות נשמרת עם הסעיף שנבחר', () {
       expect(
         merge(
-          {'settingsSource': 'box'},
-          {'settingsSource': 'box'},
+          const {},
+          {
+            'settings': {'key-a': 'new'},
+            'settingsSource': 'box',
+          },
         )['settingsSource'],
         'box',
       );
-      // ארכיון שספג גיבוי מדור קודם — החתימה נושרת והשחזור ידווח על חלקיות.
       expect(
-        merge(const {}, {'settingsSource': 'box'})['settingsSource'],
-        isNull,
+        merge(
+          {
+            'settings': {'key-a': 'old'},
+            'settingsSource': 'box',
+          },
+          const {},
+        )['settingsSource'],
+        'box',
       );
       expect(
-        merge({'settingsSource': 'box'}, const {})['settingsSource'],
+        merge(
+          {
+            'settings': {'key-a': 'old'},
+            'settingsSource': 'box',
+          },
+          {
+            'settings': {'key-a': 'new'},
+          },
+        )['settingsSource'],
         isNull,
       );
     });

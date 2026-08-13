@@ -45,11 +45,10 @@ class BackupMerge {
     final settings = newer['settings'] ?? older['settings'];
     if (settings != null) result['settings'] = settings;
 
-    // חתימת מקור ההגדרות עוברת רק אם *שני* המניפסטים נושאים אותה: ארכיון
-    // שמכיל אפילו גיבוי אחד מדור קודם חסר הגדרות, והשחזור חייב לדווח על כך.
-    final settingsSource = older.containsKey('settingsSource')
+    // החתימה שייכת למניפסט שממנו נבחר סעיף ההגדרות בפועל.
+    final settingsSource = newer['settings'] != null
         ? newer['settingsSource']
-        : null;
+        : older['settingsSource'];
     if (settingsSource != null) result['settingsSource'] = settingsSource;
 
     // התאמות פר-ספר: איחוד לפי שם הקובץ, החדש מנצח. אין גיזום לפי גיל —

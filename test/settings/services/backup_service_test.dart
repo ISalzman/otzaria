@@ -791,7 +791,7 @@ void main() {
       (json['perBookSettings'] as Map)['../escaped.json'] = '{"fontSize":9.0}';
       await backupFile.writeAsString(jsonEncode(json));
 
-      await BackupService.restoreFromBackup(path);
+      final result = await BackupService.restoreFromBackup(path);
 
       final escaped = File(
         p.normalize(
@@ -799,6 +799,20 @@ void main() {
         ),
       );
       expect(await escaped.exists(), isFalse);
+      expect(result.skippedSections, contains('perBookSettings'));
+    });
+
+    test('ערך קובץ לא קריא מדווח כשחזור חלקי', () async {
+      final path = await createSettingsBackup();
+      final backupFile = File(path);
+      final json =
+          jsonDecode(await backupFile.readAsString()) as Map<String, dynamic>;
+      (json['perBookSettings'] as Map)['settings_bad.json'] = 1;
+      await backupFile.writeAsString(jsonEncode(json));
+
+      final result = await BackupService.restoreFromBackup(path);
+
+      expect(result.skippedSections, contains('perBookSettings'));
     });
 
     test('גיבוי ללא חתימת מקור ההגדרות מדווח כחלקי', () async {
