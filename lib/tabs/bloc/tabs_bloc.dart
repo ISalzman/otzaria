@@ -5,6 +5,8 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -31,6 +33,61 @@ class _ClosedTabEntry {
 class TabsBloc extends Bloc<TabsEvent, TabsState> {
   final TabsRepository _repository;
   final List<_ClosedTabEntry> _recentlyClosedTabs = <_ClosedTabEntry>[];
+
+  List<OpenedTab>? _pendingSaveTabs;
+  int _pendingSaveIndex = 0;
+  Future<void>? _saveDrain;
+
+  /// מבקש שמירה של הטאבים, בלי להמתין לה.
+  ///
+  /// כל שמירה מקודדת את *כל* הטאבים, ולכן בקשות שמגיעות בזמן שכתיבה רצה
+  /// מתמזגות לכתיבה אחת שאחריה.
+  void _scheduleSave(List<OpenedTab> tabs, int currentTabIndex) {
+    _pendingSaveTabs = tabs;
+    _pendingSaveIndex = currentTabIndex;
+    _saveDrain ??= _drainSaves();
+  }
+
+  Future<void> _drainSaves() async {
+    try {
+      while (_pendingSaveTabs != null) {
+        final tabs = _pendingSaveTabs!;
+        final index = _pendingSaveIndex;
+        _pendingSaveTabs = null;
+        try {
+          await _repository.saveTabs(tabs, index);
+        } catch (error, stackTrace) {
+          // אף אחד לא ממתין לשמירה הזו; בלי הרישום כאן כשל כתיבה (דיסק מלא,
+          // קובץ נעול) היה נעלם בשקט והמשתמש היה מאבד את הכרטיסיות הפתוחות.
+          ErrorLogFile.append(
+            title: 'שמירת הכרטיסיות הפתוחות נכשלה',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+        // הכתיבה נשאה את האינדקס שהיה בתחילתה; אם המשתמש החליף טאב בזמנה,
+        // היא דרסה את מה שכתב [_saveCurrentTabIndex].
+        if (_pendingSaveTabs == null && _pendingSaveIndex != index) {
+          await _repository.saveCurrentTabIndex(tabs, _pendingSaveIndex);
+        }
+      }
+    } finally {
+      _saveDrain = null;
+    }
+  }
+
+  /// שומר את האינדקס הפעיל בלבד, ומעדכן גם את האינדקס של השמירה המלאה —
+  /// זו שממתינה וזו שרצה — כדי שלא תחזיר לאחור את הטאב שנבחר.
+  Future<void> _saveCurrentTabIndex(List<OpenedTab> tabs, int index) {
+    _pendingSaveIndex = index;
+    return _repository.saveCurrentTabIndex(tabs, index);
+  }
+
+  /// ממתין לכתיבת הטאבים שטרם הסתיימה, לפני סגירת התוכנה. ה-timeout מונע
+  /// היתקעות ביציאה כשכתיבת Hive נחסמת (כמו ב-[remapBookPathsAwaitable]).
+  Future<void> _flushPendingSaves() =>
+      _saveDrain?.timeout(const Duration(seconds: 5), onTimeout: () {}) ??
+      Future<void>.value();
 
   void _disposeTabLater(OpenedTab tab) {
     unawaited(
@@ -87,6 +144,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<SwapSideBySideTabs>(_onSwapSideBySideTabs, transformer: sequential());
     on<ClosePane>(_onClosePane, transformer: sequential());
     on<SetActivePane>(_onSetActivePane);
+
+    _preCloseCallback = _flushPendingSaves;
+    PreCloseRegistry.register(_preCloseCallback);
+  }
+
+  late final Future<void> Function() _preCloseCallback;
+
+  @override
+  Future<void> close() async {
+    PreCloseRegistry.unregister(_preCloseCallback);
+    await _flushPendingSaves();
+    await super.close();
   }
 
   void _onLoadTabs(LoadTabs event, Emitter<TabsState> emit) {
@@ -139,6 +208,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           ).every((i) => identical(remapped[i], state.tabs[i]));
       if (!unchanged) {
         emit(state.copyWith(tabs: remapped));
+        // המיפוי חייב להיכתב אחרי הכתיבה שרצה, כי היא נושאת את הנתיבים הישנים.
+        await _saveDrain;
         await _repository.saveTabs(remapped, state.currentTabIndex);
       }
       event.completer?.complete();
@@ -168,15 +239,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: const <OpenedTab>[],
       ),
     );
-    await _repository.saveTabs(event.tabs, event.currentTabIndex);
+    _scheduleSave(event.tabs, event.currentTabIndex);
 
     for (final tab in tabsToDispose) {
       _disposeTabLater(tab);
     }
   }
 
+  /// נשלח ביציאה מהתוכנה ובמעבר לרקע — כאן ממתינים לסיום הכתיבה בפועל, אחרת
+  /// שמירה שממתינה תלך לאיבוד עם התהליך.
   Future<void> _onSaveTabs(SaveTabs event, Emitter<TabsState> emit) async {
-    await _repository.saveTabs(state.tabs, state.currentTabIndex);
+    _scheduleSave(state.tabs, state.currentTabIndex);
+    await _saveDrain;
   }
 
   Future<void> _onAddTab(AddTab event, Emitter<TabsState> emit) async {
@@ -193,7 +267,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         currentTabIndex: newIndex,
       ),
     );
-    await _repository.saveTabs(newTabs, newIndex);
+    _scheduleSave(newTabs, newIndex);
   }
 
   Future<void> _onOpenOrFocusTab(
@@ -247,7 +321,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           rawActivePane: matchingPane,
         ),
       );
-      await _repository.saveTabs(tabsToSave, matchingIndex);
+      _scheduleSave(tabsToSave, matchingIndex);
       return;
     }
 
@@ -276,7 +350,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
-    await _repository.saveTabs(newTabs, state.currentTabIndex);
+    _scheduleSave(newTabs, state.currentTabIndex);
     _disposeTabLater(event.oldTab);
   }
 
@@ -802,7 +876,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           selectedTabs: prunedSelection,
         ),
       );
-      await _repository.saveTabs(newTabs, 0);
+      _scheduleSave(newTabs, 0);
       _disposeTabLater(event.tab);
       return;
     }
@@ -823,7 +897,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: prunedSelection,
       ),
     );
-    await _repository.saveTabs(newTabs, newIndex);
+    _scheduleSave(newTabs, newIndex);
     _disposeTabLater(event.tab);
   }
 
@@ -867,7 +941,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
-    await _repository.saveTabs(newTabs, newIndex);
+    _scheduleSave(newTabs, newIndex);
 
     for (final tab in toRemove) {
       _disposeTabLater(tab);
@@ -922,7 +996,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       emit(state.copyWith(currentTabIndex: event.index));
       // מעבר טאב לא משנה את רשימת הטאבים — שומרים רק את האינדקס הנוכחי
       // במקום לקודד מחדש את כל הטאבים.
-      await _repository.saveCurrentTabIndex(tabsToSave, event.index);
+      await _saveCurrentTabIndex(tabsToSave, event.index);
     }
   }
 
@@ -952,7 +1026,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       closedEntry.tab.dispose();
       final tabsToSave = state.tabs;
       emit(state.copyWith(currentTabIndex: existingIndex));
-      await _repository.saveCurrentTabIndex(tabsToSave, existingIndex);
+      await _saveCurrentTabIndex(tabsToSave, existingIndex);
       return;
     }
     final restoredTabs = List<OpenedTab>.from(state.tabs);
@@ -968,7 +1042,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         currentTabIndex: restoreIndex,
       ),
     );
-    await _repository.saveTabs(restoredTabs, restoreIndex);
+    _scheduleSave(restoredTabs, restoreIndex);
   }
 
   Future<void> _onCloseAllTabs(
@@ -995,7 +1069,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: const <OpenedTab>[],
       ),
     );
-    await _repository.saveTabs(pinnedTabs, newIndex);
+    _scheduleSave(pinnedTabs, newIndex);
 
     for (final tab in tabsToDispose) {
       _disposeTabLater(tab);
@@ -1025,7 +1099,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: const <OpenedTab>[],
       ),
     );
-    await _repository.saveTabs(newTabs, 0);
+    _scheduleSave(newTabs, 0);
 
     for (final tab in tabsToDispose) {
       _disposeTabLater(tab);
@@ -1050,7 +1124,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         currentTabIndex: newIndex,
       ),
     );
-    await _repository.saveTabs(newTabs, newIndex);
+    _scheduleSave(newTabs, newIndex);
   }
 
   Future<void> _onNavigateToNextTab(
@@ -1061,7 +1135,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final newIndex = (state.currentTabIndex + 1) % state.tabs.length;
     final tabsToSave = state.tabs;
     emit(state.copyWith(currentTabIndex: newIndex));
-    await _repository.saveCurrentTabIndex(tabsToSave, newIndex);
+    await _saveCurrentTabIndex(tabsToSave, newIndex);
   }
 
   Future<void> _onNavigateToPreviousTab(
@@ -1074,7 +1148,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         : state.currentTabIndex - 1;
     final tabsToSave = state.tabs;
     emit(state.copyWith(currentTabIndex: newIndex));
-    await _repository.saveCurrentTabIndex(tabsToSave, newIndex);
+    await _saveCurrentTabIndex(tabsToSave, newIndex);
   }
 
   Future<void> _onTogglePinTab(
@@ -1104,7 +1178,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       ),
     );
     // שמירת השינויים
-    await _repository.saveTabs(newTabs, indexToSave);
+    _scheduleSave(newTabs, indexToSave);
   }
 
   Future<void> _onCreateCombinedTab(
@@ -1156,7 +1230,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
-    await _repository.saveTabs(newTabs, newCurrentIndex);
+    _scheduleSave(newTabs, newCurrentIndex);
   }
 
   Future<void> _onOpenTabInSidePane(
@@ -1195,7 +1269,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         rawActivePane: event.tab,
       ),
     );
-    await _repository.saveTabs(newTabs, index);
+    _scheduleSave(newTabs, index);
   }
 
   Future<void> _onExpandCombinedTab(
@@ -1234,7 +1308,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           selectedTabs: _normalizedSelection(newTabs),
         ),
       );
-      await _repository.saveTabs(newTabs, newCurrentIndex);
+      _scheduleSave(newTabs, newCurrentIndex);
       // אין לשחרר את העוטף, כי החלוניות ממשיכות להיות מוצגות.
     }
   }
@@ -1251,7 +1325,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final tabsToSave = state.tabs;
     final indexToSave = state.currentTabIndex;
     emit(state.copyWith(forceUpdate: true));
-    await _repository.saveTabs(tabsToSave, indexToSave);
+    _scheduleSave(tabsToSave, indexToSave);
   }
 
   /// אינדקס הטאב שאירוע חלונית פועל עליו, או `null` אם אינו קיים.
@@ -1285,7 +1359,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
-    await _repository.saveTabs(newTabs, state.currentTabIndex);
+    _scheduleSave(newTabs, state.currentTabIndex);
   }
 
   void _onSetActivePane(SetActivePane event, Emitter<TabsState> emit) {
@@ -1318,7 +1392,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
-    await _repository.saveTabs(newTabs, state.currentTabIndex);
+    _scheduleSave(newTabs, state.currentTabIndex);
 
     // אין לשחרר את הטאב המפוצל כי האחות ממשיכה להיות מוצגת.
     _disposeTabLater(event.pane);

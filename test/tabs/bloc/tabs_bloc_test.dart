@@ -556,6 +556,48 @@ void main() {
     });
   });
 
+  group('TabsBloc — איחוד שמירות בפתיחה מרובה', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('פתיחת עשרות טאבים ברצף אינה כותבת לדיסק בכל פתיחה', () async {
+      // הכתיבה מושהית כמו כתיבה אמיתית לדיסק; בלי ההשהיה הכתיבה מסתיימת בין
+      // אירוע לאירוע ואין מה לאחד.
+      final repository = _CountingTabsRepository(
+        writeDelay: const Duration(milliseconds: 5),
+      );
+      final bloc = TabsBloc(repository: repository);
+
+      const tabCount = 60;
+      for (var i = 0; i < tabCount; i++) {
+        bloc.add(AddTab(_createTextTab('ספר $i', categoryId: i + 1)));
+      }
+      await bloc.stream.firstWhere((s) => s.tabs.length == tabCount);
+      await bloc.close();
+
+      // כל שמירה מקודדת את כל הטאבים; בלי האיחוד זו הייתה כתיבה לכל פתיחה.
+      expect(repository.saveCount, lessThan(5));
+      expect(repository.lastSavedTabCount, tabCount);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+
+    test('סגירת ה-bloc ממתינה לכתיבת המצב האחרון', () async {
+      final repository = _CountingTabsRepository();
+      final bloc = TabsBloc(repository: repository);
+
+      bloc.add(AddTab(_createTextTab('ספר א', categoryId: 1)));
+      bloc.add(AddTab(_createTextTab('ספר ב', categoryId: 2)));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+      await bloc.close();
+
+      expect(repository.lastSavedTabCount, 2);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+  });
+
   group('TabsBloc insert position', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
@@ -2031,6 +2073,25 @@ class _FakeTabsRepository extends TabsRepository {
     int currentTabIndex,
   ) async {
     _currentTabIndex = currentTabIndex;
+  }
+}
+
+/// סופר את הכתיבות בפועל, לבדיקת איחוד השמירות בפתיחה מרובה.
+class _CountingTabsRepository extends _FakeTabsRepository {
+  _CountingTabsRepository({this.writeDelay = Duration.zero});
+
+  final Duration writeDelay;
+  int saveCount = 0;
+  int lastSavedTabCount = -1;
+
+  @override
+  Future<void> saveTabs(List<OpenedTab> tabs, int currentTabIndex) async {
+    saveCount++;
+    lastSavedTabCount = tabs.length;
+    if (writeDelay > Duration.zero) {
+      await Future<void>.delayed(writeDelay);
+    }
+    return super.saveTabs(tabs, currentTabIndex);
   }
 }
 

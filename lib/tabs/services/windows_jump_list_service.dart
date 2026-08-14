@@ -15,29 +15,51 @@ class WindowsJumpListService {
   /// כותרות הטאבים שנשלחו לאחרונה — מונע קריאות נייטיב מיותרות כשהמצב לא השתנה.
   List<String>? _lastTitles;
 
+  /// הכותרות שנשלחות כרגע ואלה שיישלחו אחריהן.
+  List<String>? _sendingTitles;
+  List<String>? _queuedTitles;
+
   bool get _isSupported => !kIsWeb && Platform.isWindows;
 
   /// מעדכן את ה-Jump List לרשימת הטאבים הנתונה (לפי הסדר). שולח רק כאשר
-  /// הכותרות או סדרן השתנו מאז הקריאה הקודמת.
+  /// הכותרות או סדרן שונים מהמצב שאליו ה-Jump List מתקדם.
+  ///
+  /// עדכון שמגיע בזמן ששליחה רצה מחליף את התור במקום להצטבר — כל שליחה היא
+  /// קריאת COM יקרה, ופתיחת ספרים ברצף מייצרת עדכון לכל ספר.
   Future<void> sync(List<OpenedTab> tabs) async {
     if (!_isSupported) return;
 
     final titles = tabs.map((tab) => tab.title).toList(growable: false);
-    if (listEquals(_lastTitles, titles)) return;
+    // ההשוואה היא מול היעד שאליו מתקדמים, ולא מול מה שנשלח בעבר: אחרת חזרה
+    // למצב הקודם בזמן שליחה נבלעת, וה-Jump List נשאר על מצב שאינו קיים.
+    final target = _queuedTitles ?? _sendingTitles ?? _lastTitles;
+    if (listEquals(target, titles)) return;
+
+    _queuedTitles = titles;
+    if (_sendingTitles != null) return;
 
     try {
-      final ok = await _channel.invokeMethod<bool>('updateTabs', {
-        'titles': titles,
-      });
-      // מעדכנים את הזיכרון רק בהצלחה — אחרת אותה רשימה תישלח שוב בשינוי הבא
-      // במקום להיתקע על מצב שלא נכתב בפועל.
-      if (ok == true) {
-        _lastTitles = titles;
+      while (_queuedTitles != null) {
+        final pending = _queuedTitles!;
+        _queuedTitles = null;
+        _sendingTitles = pending;
+        try {
+          final ok = await _channel.invokeMethod<bool>('updateTabs', {
+            'titles': pending,
+          });
+          // מעדכנים את הזיכרון רק בהצלחה — אחרת אותה רשימה תישלח שוב בשינוי
+          // הבא במקום להיתקע על מצב שלא נכתב בפועל.
+          if (ok == true) {
+            _lastTitles = pending;
+          }
+        } catch (error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint('עדכון ה-Jump List נכשל: $error\n$stackTrace');
+          }
+        }
       }
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('עדכון ה-Jump List נכשל: $error\n$stackTrace');
-      }
+    } finally {
+      _sendingTitles = null;
     }
   }
 }

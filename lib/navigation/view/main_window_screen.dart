@@ -2700,12 +2700,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
             },
           ),
           // סנכרון רשימת הטאבים הפתוחים ל-Jump List של שורת המשימות (Windows).
-          // נדלק כשהכותרות או סדרן משתנים; השירות עצמו no-op מחוץ ל-Windows.
+          // נדלק כשרשימת הטאבים מוחלפת; השירות עצמו no-op מחוץ ל-Windows,
+          // ומסנן כותרות שלא השתנו.
           BlocListener<TabsBloc, TabsState>(
-            listenWhen: (previous, current) => !listEquals(
-              previous.tabs.map((tab) => tab.title).toList(),
-              current.tabs.map((tab) => tab.title).toList(),
-            ),
+            // הרשימה נשמרת כאובייקט זהה כשהיא לא משתנה, ולכן בדיקת הזהות
+            // מספיקה וחוסכת מיפוי של כל הכותרות בכל שינוי מצב.
+            listenWhen: (previous, current) =>
+                !identical(previous.tabs, current.tabs),
             listener: (context, state) => _jumpListService.sync(state.tabs),
           ),
           // settings.changed עבור selectedCity ו-calendarType —
