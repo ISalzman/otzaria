@@ -211,10 +211,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String filePath,
     required Map<String, Map<String, bool>> effectiveOptions,
   }) async {
-    // שחזור הספר מהקטלוג לפי מפתח האינדקס היציב — פתיחה לפי כותרת בלבד
-    // הייתה פותחת ספר רשמי במקום ספר אישי בעל אותה כותרת.
+    // המפתח משמר את זהות הספר (ספר אישי מול רשמי בעל אותה כותרת), והכותרת
+    // מאמתת אותו: אינדקס שאינו מסונכרן ממפה את המפתח לספר אחר לגמרי.
     final resolvedBook = await widget.tab.searchBloc.resolveBookForIndexedPath(
       filePath,
+      indexedTitle: title,
     );
     if (!mounted) return;
 

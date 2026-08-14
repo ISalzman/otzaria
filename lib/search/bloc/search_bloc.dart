@@ -1220,15 +1220,23 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// שאינו תלוי בסדר הקטלוג בזמן האינדוקס ('uid:5'/'id:5' או נתיב PDF).
   ///
   /// פתיחה לפי כותרת בלבד מאבדת את זהות הספר (isUserBook/categoryId),
-  /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. מחזירה null אם
-  /// המפתח לא אותר בקטלוג (ואז נופלים לבנייה לפי כותרת).
-  Future<Book?> resolveBookForIndexedPath(String indexedFilePath) async {
+  /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. [indexedTitle] היא
+  /// הכותרת מאותו מסמך, לאימות מול הקטלוג. מחזירה null כשהמפתח לא אותר
+  /// או שאינו מצביע עוד על אותו ספר (ואז נופלים לבנייה לפי כותרת).
+  Future<Book?> resolveBookForIndexedPath(
+    String indexedFilePath, {
+    required String indexedTitle,
+  }) async {
     final library = await DataRepository.instance.library;
     if (!identical(library, _resolveCacheLibrary)) {
       _resolveCacheLibrary = library;
       _booksByIndexedFilePathCache = bookForIndexedFilePathMap(library);
     }
-    return _booksByIndexedFilePathCache?[indexedFilePath];
+    return IndexingRepository.bookForIndexedDocument(
+      _booksByIndexedFilePathCache,
+      indexedFilePath: indexedFilePath,
+      indexedTitle: indexedTitle,
+    );
   }
 
   Library? _resolveCacheLibrary;

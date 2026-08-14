@@ -1159,6 +1159,25 @@ class IndexingRepository {
     return catalogueOrderKey(book);
   }
 
+  /// הספר שמסמך האינדקס מתאר, רק אם הקטלוג עדיין מחזיק שם את אותו ספר.
+  static Book? bookForIndexedDocument(
+    Map<String, Book>? booksByIndexedFilePath, {
+    required String indexedFilePath,
+    required String indexedTitle,
+  }) => validatedIndexedBook(
+    booksByIndexedFilePath?[indexedFilePath],
+    indexedTitle: indexedTitle,
+  );
+
+  /// [book] אותר לפי מפתח מסמך האינדקס — מוחזר רק אם הוא עדיין אותו ספר.
+  ///
+  /// המפתח והכותרת נכתבים למסמך יחד מאותו ספר, ולכן כותרת שאינה תואמת
+  /// מעידה שה-DB הוחלף והמזהה שייך כבר לספר אחר.
+  static Book? validatedIndexedBook(
+    Book? book, {
+    required String indexedTitle,
+  }) => book?.title == indexedTitle ? book : null;
+
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
   /// הספרייה ותדרוש ניקוי). PDF תמיד; שאר ספרי הקובץ רק כשאין להם
   /// id/externalLibraryId יציב — אחרת הם מאונדקסים לפי מפתח id ושורדים העברה.

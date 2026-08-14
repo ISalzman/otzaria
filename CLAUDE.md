@@ -675,6 +675,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | ניתוב חיפוש-בספר: פשוט מול מנוע | `test/search/utils/in_book_search_routing_test.dart` |
 | מדיניות ההתאמה (טווח קרבה + התאמת מילים) | `test/search/search_match_policy_test.dart` |
 | פתיחת תוצאה: העברת הקונפיגורציה לטאב הקריאה | `test/search/tantivy_search_results_in_book_routing_test.dart` |
+| זיהוי הספר של תוצאה מול הקטלוג (מפתח האינדקס + אימות כותרת) | `test/search/search_result_book_resolution_test.dart` |
+| פתיחת תוצאה מאינדקס שאינו מסונכרן (מסלול הלחיצה) | `test/search/search_result_stale_index_open_test.dart` |
 | שקילות מנוע ↔ הדגשה במרווח בין מילים | `test/search/highlight_engine_distance_parity_test.dart` |
 | הדגשה במדיניות התאמה — רק בשורות שהמנוע החזיר | `test/utils/highlight_match_policy_test.dart` |
 | שימור קונפיגורציית החיפוש בשכפול/שחזור טאב ובשמירה ל-JSON | `test/tabs/models/tab_search_state_clone_test.dart` |
