@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
@@ -618,14 +619,11 @@ class _CombinedViewState extends State<CombinedView> {
   // מנהל בחירת טקסט משופר
   late final TextSelectionManager _selectionManager;
 
-  int _selectionAreaRevision = 0;
+  final GlobalKey<SelectionAreaState> _selectionAreaKey = GlobalKey();
   final Object _selectionOwner = Object();
 
-  // listener לניקוי בחירה - נשמור אותו כדי להסיר אותו ב-dispose
   void _onSelectionModeChanged() {
     if (!_selectionManager.isInSelectionMode && mounted) {
-      // כשיוצאים ממצב בחירה, קוראים ל-setState כדי לכפות בנייה מחדש
-      // של SelectionArea ולנקות את הבחירה באופן ויזואלי.
       setState(() {});
     }
   }
@@ -681,7 +679,6 @@ class _CombinedViewState extends State<CombinedView> {
     // אתחול מנהל הבחירה
     _selectionManager = TextSelectionManager();
 
-    // האזנה לשינויים במצב הבחירה כדי לכפות rebuild של SelectionArea
     _selectionManager.addListener(_onSelectionModeChanged);
     widget.selectionSyncController?.addListener(_handleExternalSelectionChange);
     PluginHighlightRevealService.instance.addListener(
@@ -845,20 +842,23 @@ class _CombinedViewState extends State<CombinedView> {
       return;
     }
 
-    final shouldRebuild = shouldRebuildSelectionAreaOnExternalChange(
+    final shouldClear = shouldClearSelectionOnExternalChange(
       activeOwner: controller.activeOwner,
       selfOwner: _selectionOwner,
       hasOwnSelection:
           _savedSelectedText.value != null ||
           _selectionManager.isInSelectionMode,
     );
-    if (!shouldRebuild) {
+    if (!shouldClear) {
       return;
     }
 
+    // ניקוי ישיר ולא החלפת מפתח: כרטיס המפרשים מקונן בעץ הזה, והחלפת מפתח
+    // הייתה הורסת אותו יחד עם הבחירה שזה עתה סומנה בו (issue #674).
+    _selectionAreaKey.currentState?.selectableRegion.clearSelection();
+
     _selectionManager.exitSelectionMode();
     setState(() {
-      _selectionAreaRevision = controller.revision;
       _savedSelectedText.value = null;
       _savedSelectedIndex.value = null;
       _currentSelectedIndex.value = null;
@@ -1583,233 +1583,229 @@ class _CombinedViewState extends State<CombinedView> {
             _viewportHeight = constraints.maxHeight;
             context.watch<SettingsBloc>().state;
 
-            return RtlSelectionShortcuts(
-              child: SelectionArea(
-                key: ValueKey('combined_selection_$_selectionAreaRevision'),
-                // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
-                contextMenuBuilder: (context, selectableRegionState) {
-                  return const SizedBox.shrink();
-                },
-                onSelectionChanged: (selection) {
-                  final plain = selection?.plainText;
-                  // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
-                  trackRtlSelection(plain);
-                  // שינוי בחירה זמני בזמן priming — לא לעבד.
-                  if (rtlSelectionPriming) return;
-                  if (!shouldPersistSelectedText(plain)) {
-                    widget.selectionSyncController?.clear(_selectionOwner);
-                    _selectionManager.exitSelectionMode();
-                    _savedSelectedText.value = null;
-                    _selectionLineStart = null;
-                    _selectionLineEnd = null;
-                    _selectionStartColumn = null;
-                    return;
-                  }
-                  widget.selectionSyncController?.activate(_selectionOwner);
-                  // כניסה למצב בחירה כשיש טקסט נבחר
-                  if (!_selectionManager.isInSelectionMode) {
-                    // שימוש באינדקס העליון הנראה במקום 0
-                    _selectionManager.setAnchor(
-                      topmostVisibleIndex(
-                        widget.tab.positionsListener.itemPositions.value,
-                      ),
-                    );
-                  }
-
-                  // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
-                  // נוודא שהפוקוס נמצא על אזור הקריאה.
-                  _focusNode.requestFocus();
-
-                  // מחשב את מספר השורה המדויק של הטקסט המודגש
-                  // משתמש באותה לוגיקה כמו בדיווח שגיאות
-                  final TextBookLoaded? loadedState =
-                      _textBookBloc.state is TextBookLoaded
-                      ? _textBookBloc.state as TextBookLoaded
-                      : null;
-                  int? foundIndex;
-                  var fixedPlain = plain;
-
-                  if (loadedState != null) {
-                    final settingsState = context.read<SettingsBloc>().state;
-                    final window = _buildSelectionWindow(
-                      loadedState,
-                      settingsState,
-                      plain!.length,
-                    );
-                    final baseIndex = window.baseIndex;
-                    final visibleLines = window.lines;
-                    final previousIndex = sessionSelectionIndex(
-                      savedSelectedText: _savedSelectedText.value,
-                      savedSelectedIndex: _savedSelectedIndex.value,
-                    );
-                    final restored = restoreSelectedTextLineBreaksDetailed(
-                      selectedText: plain,
-                      visibleLines: visibleLines,
-                      preferredLine: previousIndex == null
-                          ? null
-                          : previousIndex - baseIndex,
-                    );
-                    fixedPlain = restored.text;
-
-                    final location = resolveSelectionLocation(
-                      restored: restored,
-                      baseIndex: baseIndex,
-                      fallbackIndex: loadedState.selectedIndex,
-                    );
-                    final sourceIndices = List<int>.generate(
-                      visibleLines.length,
-                      (offset) => baseIndex + offset,
-                    );
-                    final pointerLocation = locateSingleLineSelectionAtPointer(
-                      renderedLines: visibleLines,
-                      sourceIndices: sourceIndices,
-                      selectedText: fixedPlain,
-                      pointerLineIndex: _selectionPointerLineIndex,
-                      pointerColumn: _selectionPointerColumn,
-                    );
-                    foundIndex =
-                        pointerLocation?.lineIndex ?? location.selectedIndex;
-                    // טווח השורות שהבחירה משתרעת עליהן — לזיהוי סלחני של לחיצה
-                    // ימנית על הבחירה, ועמודת ההתחלה — רמז לזיהוי המופע הנכון
-                    // כשאותו טקסט חוזר באותה שורה.
-                    _selectionLineStart =
-                        pointerLocation?.lineIndex ?? location.lineStart;
-                    _selectionLineEnd =
-                        pointerLocation?.lineIndex ?? location.lineEnd;
-                    _selectionStartColumn =
-                        pointerLocation?.column ?? location.startColumn;
-                  }
-
-                  if (mounted) {
-                    _savedSelectedText.value = fixedPlain;
-                    _savedSelectedIndex.value = foundIndex;
-                    _currentSelectedIndex.value = foundIndex;
-                    widget.onSelectedTextChanged?.call(
-                      fixedPlain,
-                      foundIndex,
-                      _selectionStartColumn,
-                    );
-
-                    // שליחת event לפלאגינים עם ה-index המדויק
-                    final selectionText = fixedPlain?.trim() ?? '';
-                    if (selectionText.isNotEmpty && loadedState != null) {
-                      unawaited(
-                        PluginRuntimeDispatcher.instance.dispatchEvent(
-                          'reader.selection_changed',
-                          {
-                            'text': selectionText,
-                            'currentRef': loadedState.currentTitle ?? '',
-                            'currentBook': loadedState.book.title,
-                            'currentBookId': loadedState.book.title,
-                            'currentIndex': foundIndex ?? 0,
-                          },
+            // יירוט Ctrl+C ממוקם *מעל* ה-SelectionArea — שם מנגנון ה-override
+            // של CopySelectionTextIntent מאתר אותו. מתחתיו הוא בלתי-נראה, ואז
+            // רצה העתקת ברירת המחדל של Flutter: בלחיצה בודדת הבחירה מתכווצת
+            // ל-plainText ריק, והיא נכתבת ללוח כפריט ריק (issue #674).
+            return SelectionCopyShortcuts(
+              onCopy: _copyFormattedText,
+              child: RtlSelectionShortcuts(
+                child: SelectionArea(
+                  key: _selectionAreaKey,
+                  // SelectionArea אחד לכל הרשימה - מאפשר בחירה רציפה בין פסקאות
+                  contextMenuBuilder: (context, selectableRegionState) {
+                    return const SizedBox.shrink();
+                  },
+                  onSelectionChanged: (selection) {
+                    final plain = selection?.plainText;
+                    // עדכון מעקב כיוון הגרירה (ל-RtlSelectionShortcuts).
+                    trackRtlSelection(plain);
+                    // שינוי בחירה זמני בזמן priming — לא לעבד.
+                    if (rtlSelectionPriming) return;
+                    if (!shouldPersistSelectedText(plain)) {
+                      widget.selectionSyncController?.clear(_selectionOwner);
+                      _selectionManager.exitSelectionMode();
+                      _savedSelectedText.value = null;
+                      _selectionLineStart = null;
+                      _selectionLineEnd = null;
+                      _selectionStartColumn = null;
+                      return;
+                    }
+                    widget.selectionSyncController?.activate(_selectionOwner);
+                    // כניסה למצב בחירה כשיש טקסט נבחר
+                    if (!_selectionManager.isInSelectionMode) {
+                      // שימוש באינדקס העליון הנראה במקום 0
+                      _selectionManager.setAnchor(
+                        topmostVisibleIndex(
+                          widget.tab.positionsListener.itemPositions.value,
                         ),
                       );
                     }
-                  }
-                  _prefetchDictionaryLookups(fixedPlain);
-                },
-                child: Shortcuts(
-                  shortcuts: <ShortcutActivator, Intent>{
-                    // Windows/Linux
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyC,
-                    ): const _CopySelectedTextIntent(),
-                    // Windows "classic" copy
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.insert,
-                    ): const _CopySelectedTextIntent(),
-                    // macOS (למקרה שמריצים שם)
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyC,
-                    ): const _CopySelectedTextIntent(),
-                    // Esc לניקוי בחירה
-                    LogicalKeySet(LogicalKeyboardKey.escape):
-                        const ClearSelectionIntent(),
+
+                    // חשוב: כדי ש-Ctrl+C יעבוד מיד אחרי סימון טקסט עם העכבר
+                    // נוודא שהפוקוס נמצא על אזור הקריאה.
+                    _focusNode.requestFocus();
+
+                    // מחשב את מספר השורה המדויק של הטקסט המודגש
+                    // משתמש באותה לוגיקה כמו בדיווח שגיאות
+                    final TextBookLoaded? loadedState =
+                        _textBookBloc.state is TextBookLoaded
+                        ? _textBookBloc.state as TextBookLoaded
+                        : null;
+                    int? foundIndex;
+                    var fixedPlain = plain;
+
+                    if (loadedState != null) {
+                      final settingsState = context.read<SettingsBloc>().state;
+                      final window = _buildSelectionWindow(
+                        loadedState,
+                        settingsState,
+                        plain!.length,
+                      );
+                      final baseIndex = window.baseIndex;
+                      final visibleLines = window.lines;
+                      final previousIndex = sessionSelectionIndex(
+                        savedSelectedText: _savedSelectedText.value,
+                        savedSelectedIndex: _savedSelectedIndex.value,
+                      );
+                      final restored = restoreSelectedTextLineBreaksDetailed(
+                        selectedText: plain,
+                        visibleLines: visibleLines,
+                        preferredLine: previousIndex == null
+                            ? null
+                            : previousIndex - baseIndex,
+                      );
+                      fixedPlain = restored.text;
+
+                      final location = resolveSelectionLocation(
+                        restored: restored,
+                        baseIndex: baseIndex,
+                        fallbackIndex: loadedState.selectedIndex,
+                      );
+                      final sourceIndices = List<int>.generate(
+                        visibleLines.length,
+                        (offset) => baseIndex + offset,
+                      );
+                      final pointerLocation =
+                          locateSingleLineSelectionAtPointer(
+                            renderedLines: visibleLines,
+                            sourceIndices: sourceIndices,
+                            selectedText: fixedPlain,
+                            pointerLineIndex: _selectionPointerLineIndex,
+                            pointerColumn: _selectionPointerColumn,
+                          );
+                      foundIndex =
+                          pointerLocation?.lineIndex ?? location.selectedIndex;
+                      // טווח השורות שהבחירה משתרעת עליהן — לזיהוי סלחני של לחיצה
+                      // ימנית על הבחירה, ועמודת ההתחלה — רמז לזיהוי המופע הנכון
+                      // כשאותו טקסט חוזר באותה שורה.
+                      _selectionLineStart =
+                          pointerLocation?.lineIndex ?? location.lineStart;
+                      _selectionLineEnd =
+                          pointerLocation?.lineIndex ?? location.lineEnd;
+                      _selectionStartColumn =
+                          pointerLocation?.column ?? location.startColumn;
+                    }
+
+                    if (mounted) {
+                      _savedSelectedText.value = fixedPlain;
+                      _savedSelectedIndex.value = foundIndex;
+                      _currentSelectedIndex.value = foundIndex;
+                      widget.onSelectedTextChanged?.call(
+                        fixedPlain,
+                        foundIndex,
+                        _selectionStartColumn,
+                      );
+
+                      // שליחת event לפלאגינים עם ה-index המדויק
+                      final selectionText = fixedPlain?.trim() ?? '';
+                      if (selectionText.isNotEmpty && loadedState != null) {
+                        unawaited(
+                          PluginRuntimeDispatcher.instance.dispatchEvent(
+                            'reader.selection_changed',
+                            {
+                              'text': selectionText,
+                              'currentRef': loadedState.currentTitle ?? '',
+                              'currentBook': loadedState.book.title,
+                              'currentBookId': loadedState.book.title,
+                              'currentIndex': foundIndex ?? 0,
+                            },
+                          ),
+                        );
+                      }
+                    }
+                    _prefetchDictionaryLookups(fixedPlain);
                   },
-                  child: Actions(
-                    actions: <Type, Action<Intent>>{
-                      _CopySelectedTextIntent:
-                          CallbackAction<_CopySelectedTextIntent>(
-                            onInvoke: (_) {
-                              _copyFormattedText();
-                              return null;
-                            },
-                          ),
-                      CopySelectionTextIntent:
-                          CallbackAction<CopySelectionTextIntent>(
-                            onInvoke: (_) {
-                              _copyFormattedText();
-                              return null;
-                            },
-                          ),
-                      ClearSelectionIntent: _ClearSelectionAction(this),
+                  child: Shortcuts(
+                    // Ctrl+C / Cmd+C מטופלים ב-SelectionCopyShortcuts שמעל.
+                    shortcuts: <ShortcutActivator, Intent>{
+                      // Windows "classic" copy
+                      LogicalKeySet(
+                        LogicalKeyboardKey.control,
+                        LogicalKeyboardKey.insert,
+                      ): const _CopySelectedTextIntent(),
+                      // Esc לניקוי בחירה
+                      LogicalKeySet(LogicalKeyboardKey.escape):
+                          const ClearSelectionIntent(),
                     },
-                    child: widget.isPreviewMode
-                        ? _buildPreviewList(state)
-                        : ScrollablePositionedListScrollbar(
-                            scrollController: widget.tab.scrollController,
-                            itemPositionsListener: widget.tab.positionsListener,
-                            itemCount: state.readingSegments.isNotEmpty
-                                ? state.readingSegments.length
-                                : widget.data.length,
-                            labelForIndex: state.tableOfContents.isEmpty
-                                ? null
-                                : (index) {
-                                    // במצב קריאה רציף האינדקס הוא אינדקס
-                                    // סגמנט; ממירים לשורת המקור כדי שמיפוי
-                                    // ה-TOC (שמבוסס על מספרי שורות) יהיה נכון.
-                                    final segments = state.readingSegments;
-                                    final lineIndex = segments.isNotEmpty
-                                        ? (index >= 0 && index < segments.length
-                                              ? segments[index].startLineIndex
-                                              : index)
-                                        : index;
-                                    final ref = refFromTocList(
-                                      lineIndex,
-                                      state.tableOfContents,
-                                    );
-                                    return addBookTitleToRef(
-                                      ref,
-                                      state.book.title,
-                                    );
-                                  },
-                            child: ProgressiveScroll(
-                              focusNode: _focusNode,
-                              maxSpeed: 10000.0,
-                              curve: 10.0,
-                              accelerationFactor: 5,
-                              scrollController: widget.tab.mainOffsetController,
-                              itemScrollController: widget.tab.scrollController,
-                              child:
-                                  BlocBuilder<
-                                    PersonalNotesBloc,
-                                    PersonalNotesState
-                                  >(
-                                    builder: (context, notesState) {
-                                      final noteMap =
-                                          <int, List<PersonalNote>>{};
-                                      if (notesState.bookId ==
-                                          state.book.title) {
-                                        for (final note
-                                            in notesState.locatedNotes) {
-                                          final line = note.lineNumber;
-                                          if (line == null) continue;
-                                          noteMap
-                                              .putIfAbsent(line, () => [])
-                                              .add(note);
-                                        }
-                                      }
-                                      return SmoothWheelScroll(
-                                        child: buildOuterList(state, noteMap),
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        _CopySelectedTextIntent:
+                            CallbackAction<_CopySelectedTextIntent>(
+                              onInvoke: (_) {
+                                _copyFormattedText();
+                                return null;
+                              },
+                            ),
+                        ClearSelectionIntent: _ClearSelectionAction(this),
+                      },
+                      child: widget.isPreviewMode
+                          ? _buildPreviewList(state)
+                          : ScrollablePositionedListScrollbar(
+                              scrollController: widget.tab.scrollController,
+                              itemPositionsListener:
+                                  widget.tab.positionsListener,
+                              itemCount: state.readingSegments.isNotEmpty
+                                  ? state.readingSegments.length
+                                  : widget.data.length,
+                              labelForIndex: state.tableOfContents.isEmpty
+                                  ? null
+                                  : (index) {
+                                      // במצב קריאה רציף האינדקס הוא אינדקס
+                                      // סגמנט; ממירים לשורת המקור כדי שמיפוי
+                                      // ה-TOC (שמבוסס על מספרי שורות) יהיה נכון.
+                                      final segments = state.readingSegments;
+                                      final lineIndex = segments.isNotEmpty
+                                          ? (index >= 0 &&
+                                                    index < segments.length
+                                                ? segments[index].startLineIndex
+                                                : index)
+                                          : index;
+                                      final ref = refFromTocList(
+                                        lineIndex,
+                                        state.tableOfContents,
+                                      );
+                                      return addBookTitleToRef(
+                                        ref,
+                                        state.book.title,
                                       );
                                     },
-                                  ),
+                              child: ProgressiveScroll(
+                                focusNode: _focusNode,
+                                maxSpeed: 10000.0,
+                                curve: 10.0,
+                                accelerationFactor: 5,
+                                scrollController:
+                                    widget.tab.mainOffsetController,
+                                itemScrollController:
+                                    widget.tab.scrollController,
+                                child:
+                                    BlocBuilder<
+                                      PersonalNotesBloc,
+                                      PersonalNotesState
+                                    >(
+                                      builder: (context, notesState) {
+                                        final noteMap =
+                                            <int, List<PersonalNote>>{};
+                                        if (notesState.bookId ==
+                                            state.book.title) {
+                                          for (final note
+                                              in notesState.locatedNotes) {
+                                            final line = note.lineNumber;
+                                            if (line == null) continue;
+                                            noteMap
+                                                .putIfAbsent(line, () => [])
+                                                .add(note);
+                                          }
+                                        }
+                                        return SmoothWheelScroll(
+                                          child: buildOuterList(state, noteMap),
+                                        );
+                                      },
+                                    ),
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
               ),
@@ -1820,9 +1816,6 @@ class _CombinedViewState extends State<CombinedView> {
     );
   }
 
-  /// רשימת התצוגה המקדימה, עם אותו מחוון גלילה של אזור הקריאה. ListView
-  /// אומד את היקף הגלילה מגובה הפריטים שבנויים כרגע, וכששורות הספר בגבהים
-  /// שונים האומדן משתנה בכל פריים והאגודל קפץ למעלה ולמטה במקום לנסוע ישר.
   Widget _buildPreviewList(TextBookLoaded state) {
     final itemCount = state.readingSegments.isNotEmpty
         ? state.readingSegments.length

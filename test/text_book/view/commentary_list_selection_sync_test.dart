@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -16,12 +17,14 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
-/// issue #530: מעבר בעלות בחירה לאזור אחר לא יהרוס את ה-SelectionArea של
-/// המפרשים כשאין להם בחירה משלהם (ההריסה איפסה את הרשימה ואת מצב הבחירה
-/// באמצע אינטראקציה, מה ששבר את ההעתקה במצב 'מפרשים מתחת').
+/// issues #530 ו-#674: מעבר בעלות בחירה בין אזורים לא יהרוס את ה-SelectionArea
+/// של המפרשים. הניקוי נעשה ב-`clearSelection()` ולא בהחלפת מפתח — החלפת מפתח
+/// הורסת את עץ הצאצאים, ובמצב 'מפרשים מתחת' היא מחקה את הבחירה שבמפרש והעתקה
+/// יצאה ריקה.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -68,17 +71,17 @@ void main() {
       controller: controller,
     );
 
-    final keyBefore = tester.widget(_selectionAreaFinder()).key;
+    final stateBefore = _regionState(tester);
 
     // אזור אחר (הטקסט הראשי) תופס בעלות בזמן שאין בחירה במפרשים.
     controller.activate(Object());
     await tester.pump();
 
-    expect(tester.widget(_selectionAreaFinder()).key, keyBefore);
+    expect(_regionState(tester), same(stateBefore));
   });
 
   testWidgets(
-    'בעלות חיצונית כשיש בחירה משלנו — ה-SelectionArea מתנקה ב-rebuild',
+    'בעלות חיצונית כשיש בחירה משלנו — הבחירה מתנקה בלי להרוס את הרשימה',
     (tester) async {
       final controller = SelectionSyncController();
       addTearDown(controller.dispose);
@@ -90,34 +93,171 @@ void main() {
         controller: controller,
       );
 
-      final keyBefore = tester.widget(_selectionAreaFinder()).key;
+      final stateBefore = _regionState(tester);
 
       // בחירת כל הטקסט במפרשים — הופכת את הפאנל לבעל הבחירה.
-      final region = tester.state<SelectableRegionState>(
-        find.descendant(
-          of: _selectionAreaFinder(),
-          matching: find.byType(SelectableRegion),
-        ),
-      );
-      region.selectAll();
+      _regionState(tester).selectAll();
       await _pumpUntil(tester, () => controller.activeOwner != null);
       expect(controller.activeOwner, isNotNull);
+      expect(_regionState(tester).selectionEndpoints, isNotEmpty);
 
-      // אזור אחר תופס בעלות — עכשיו כן צריך rebuild כדי לנקות את הבחירה.
+      // אזור אחר תופס בעלות — הבחירה שלנו צריכה להתנקות.
       controller.activate(Object());
       await tester.pump();
 
-      expect(tester.widget(_selectionAreaFinder()).key, isNot(keyBefore));
+      expect(
+        _regionState(tester),
+        same(stateBefore),
+        reason:
+            'ניקוי הבחירה חייב להשאיר את אותו SelectableRegion — הריסתו הייתה '
+            'טוענת מחדש את המפרשים ומאבדת את מיקום הגלילה בהם',
+      );
+      expect(
+        _hasVisibleSelection(tester),
+        isFalse,
+        reason: 'הבחירה עצמה כן צריכה להתנקות',
+      );
     },
   );
+
+  testWidgets(
+    'מעבר בעלות חוזר לא מאבד את ה-state של רשימת המפרשים (issue #674)',
+    (tester) async {
+      // הלב של #674: כרטיס המפרשים מקונן בעץ של הטקסט הראשי. כל מעבר בעלות
+      // שמוביל לבנייה מחדש היה משמיד את ה-State — ואיתו את הבחירה שהמשתמש
+      // בדיוק סימן, כך ש-Ctrl+C נשאר בלי טקסט.
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+
+      await _pump(
+        tester,
+        textBookBloc: textBookBloc,
+        settingsBloc: settingsBloc,
+        controller: controller,
+      );
+
+      final listStateBefore = tester.state<CommentaryListBaseState>(
+        find.byType(CommentaryListBase),
+      );
+      final regionBefore = _regionState(tester);
+
+      // שלוש העברות בעלות הלוך ושוב, כולל אחת עם בחירה פעילה שלנו.
+      final mainTextOwner = Object();
+      controller.activate(mainTextOwner);
+      await tester.pump();
+
+      _regionState(tester).selectAll();
+      await _pumpUntil(tester, () => controller.activeOwner != mainTextOwner);
+
+      controller.activate(mainTextOwner);
+      await tester.pump();
+      controller.clear(mainTextOwner);
+      await tester.pump();
+
+      expect(
+        tester.state<CommentaryListBaseState>(find.byType(CommentaryListBase)),
+        same(listStateBefore),
+      );
+      expect(_regionState(tester), same(regionBefore));
+    },
+  );
+
+  testWidgets(
+    'ה-SelectionArea של המפרשים עטוף ב-SelectionCopyShortcuts (הגנת #674)',
+    (tester) async {
+      // בלי העטיפה Ctrl+C נופל להעתקת ברירת המחדל של Flutter, שכותבת ללוח את
+      // הבחירה כמות שהיא — כולל מחרוזת ריקה, וזה בדיוק התסמין שדווח.
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+
+      await _pump(
+        tester,
+        textBookBloc: textBookBloc,
+        settingsBloc: settingsBloc,
+        controller: controller,
+      );
+
+      expect(
+        find.ancestor(
+          of: _selectionAreaFinder(),
+          matching: find.byType(SelectionCopyShortcuts),
+        ),
+        findsOneWidget,
+        reason: 'העטיפה חייבת להיות *מעל* ה-SelectionArea כדי ליירט',
+      );
+    },
+  );
+
+  testWidgets('Ctrl+C בלי בחירה אינו כותב פריט ריק ללוח (issue #674)', (
+    tester,
+  ) async {
+    final clipboardWrites = <String?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardWrites.add(
+            (call.arguments as Map?)?['text'] as String?,
+          );
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+
+    await _pump(
+      tester,
+      textBookBloc: textBookBloc,
+      settingsBloc: settingsBloc,
+      controller: controller,
+      autofocus: true,
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(
+      clipboardWrites,
+      isEmpty,
+      reason: 'בלי טקסט נבחר אין להעתיק כלום — ובוודאי לא מחרוזת ריקה',
+    );
+  });
 }
 
-Finder _selectionAreaFinder() => find.byWidgetPredicate(
-  (w) =>
-      w is SelectionArea &&
-      (w.key is ValueKey<String>) &&
-      (w.key as ValueKey<String>).value.startsWith('commentary_list_'),
+Finder _selectionAreaFinder() => find.descendant(
+  of: find.byType(CommentaryListBase),
+  matching: find.byWidgetPredicate(
+    (w) => w is SelectionArea && w.key is GlobalKey<SelectionAreaState>,
+  ),
 );
+
+SelectableRegionState _regionState(WidgetTester tester) =>
+    tester.state<SelectableRegionState>(
+      find.descendant(
+        of: _selectionAreaFinder(),
+        matching: find.byType(SelectableRegion),
+      ),
+    );
+
+/// האם ל-SelectableRegion יש כרגע בחירה מוצגת. `selectionEndpoints` זורק
+/// כשאין בחירה פעילה, ולכן החריגה עצמה היא התשובה.
+bool _hasVisibleSelection(WidgetTester tester) {
+  try {
+    return _regionState(tester).selectionEndpoints.isNotEmpty;
+  } catch (_) {
+    return false;
+  }
+}
 
 /// שואב פריימים עד שהתנאי מתקיים או שנגמרו הניסיונות. עמיד יותר מ-
 /// `pumpAndSettle` כשתוכן נטען דרך Future (שעלול להיפתר אחרי ש-settle חוזר).
@@ -137,6 +277,7 @@ Future<void> _pump(
   required TextBookBloc textBookBloc,
   required SettingsBloc settingsBloc,
   required SelectionSyncController controller,
+  bool autofocus = false,
 }) async {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -156,6 +297,7 @@ Future<void> _pump(
             fontSize: 18,
             showSearch: false,
             shrinkWrap: false,
+            autofocus: autofocus,
             selectionSyncController: controller,
           ),
         ),

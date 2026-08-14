@@ -16,13 +16,11 @@ void main() {
       controller.activate(firstOwner);
 
       expect(controller.activeOwner, same(firstOwner));
-      expect(controller.revision, 1);
       expect(notifications, 1);
 
       controller.activate(secondOwner);
 
       expect(controller.activeOwner, same(secondOwner));
-      expect(controller.revision, 2);
       expect(notifications, 2);
     });
 
@@ -39,7 +37,6 @@ void main() {
       controller.activate(owner);
 
       expect(controller.activeOwner, same(owner));
-      expect(controller.revision, 1);
       expect(notifications, 1);
     });
 
@@ -58,7 +55,6 @@ void main() {
       controller.clear(firstOwner);
 
       expect(controller.activeOwner, same(secondOwner));
-      expect(controller.revision, 2);
       expect(notifications, 2);
     });
 
@@ -75,7 +71,6 @@ void main() {
       controller.clear(owner);
 
       expect(controller.activeOwner, isNull);
-      expect(controller.revision, 2);
       expect(notifications, 2);
     });
 
