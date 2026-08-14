@@ -1967,7 +1967,7 @@ class _CombinedViewState extends State<CombinedView> {
         return theme.colorScheme.secondaryContainer.withValues(alpha: 0.4);
       }
       if (isSelected) {
-        return theme.colorScheme.primary.withValues(alpha: 0.08);
+        return AppSurfaces.paragraphSelectionBackground(theme.colorScheme);
       }
       return null;
     }();
@@ -2434,7 +2434,7 @@ class _CombinedViewState extends State<CombinedView> {
       final backgroundColor = state.highlightedLine == lineIndex
           ? colorScheme.secondaryContainer.withValues(alpha: 0.4)
           : state.selectedIndices.contains(lineIndex)
-          ? colorScheme.primary.withValues(alpha: 0.08)
+          ? AppSurfaces.paragraphSelectionBackground(colorScheme)
           : null;
       final style = backgroundColor == null
           ? baseTextStyle
