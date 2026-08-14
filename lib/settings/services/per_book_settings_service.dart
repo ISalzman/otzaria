@@ -17,8 +17,8 @@ class PerBookSettings {
     final scope = book.isUserBook ? 'u' : 'o';
     if (book is FileBook) return '${scope}__${book.path}';
     final cat = book.categoryId?.toString() ?? 'x';
-    // נוסח חלופי הוא ספר נפרד לעניין ההגדרות: הוא נפתח בחלונית לצד הנוסח
-    // הראשי, ובמפתח משותף כל שינוי באחת מהן היה נכתב לקובץ שהשנייה קוראת.
+    // נוסח חלופי הוא ספר נפרד לעניין ההגדרות: במפתח משותף כל שינוי בכרטיסייה
+    // של נוסח אחד היה נכתב לקובץ שהכרטיסייה של הנוסח האחר קוראת ממנו.
     final version = book is TextBook && book.versionTitle != null
         ? '__v__${book.versionTitle}'
         : '';
