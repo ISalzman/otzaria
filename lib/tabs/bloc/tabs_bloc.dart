@@ -48,6 +48,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     _saveDrain ??= _drainSaves();
   }
 
+  void _logSaveFailure(Object error, StackTrace stackTrace) {
+    try {
+      ErrorLogFile.append(
+        title: 'שמירת הכרטיסיות הפתוחות נכשלה',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } catch (logError, logStackTrace) {
+      debugPrint('רישום כשל שמירת כרטיסיות נכשל: $logError\n$logStackTrace');
+    }
+  }
+
   Future<void> _drainSaves() async {
     try {
       while (_pendingSaveTabs != null) {
@@ -57,18 +69,16 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         try {
           await _repository.saveTabs(tabs, index);
         } catch (error, stackTrace) {
-          // אף אחד לא ממתין לשמירה הזו; בלי הרישום כאן כשל כתיבה (דיסק מלא,
-          // קובץ נעול) היה נעלם בשקט והמשתמש היה מאבד את הכרטיסיות הפתוחות.
-          ErrorLogFile.append(
-            title: 'שמירת הכרטיסיות הפתוחות נכשלה',
-            error: error,
-            stackTrace: stackTrace,
-          );
+          _logSaveFailure(error, stackTrace);
         }
         // הכתיבה נשאה את האינדקס שהיה בתחילתה; אם המשתמש החליף טאב בזמנה,
         // היא דרסה את מה שכתב [_saveCurrentTabIndex].
         if (_pendingSaveTabs == null && _pendingSaveIndex != index) {
-          await _repository.saveCurrentTabIndex(tabs, _pendingSaveIndex);
+          try {
+            await _repository.saveCurrentTabIndex(tabs, _pendingSaveIndex);
+          } catch (error, stackTrace) {
+            _logSaveFailure(error, stackTrace);
+          }
         }
       }
     } finally {
