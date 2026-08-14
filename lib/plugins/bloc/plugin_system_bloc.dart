@@ -120,7 +120,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     LoadPlugins event,
     Emitter<PluginSystemState> emit,
   ) async {
-    emit(PluginSystemLoading());
+    // מצב "טוען" רק כשאין עדיין רשימה בזיכרון. טעינה חוזרת (אחרי התקנה,
+    // הצמדה, סידור מחדש וכו') היא רענון — ואם נעבור דרך PluginSystemLoading
+    // כל צרכן שבודק `is! PluginSystemLoaded` יראה לרגע "אין תוספים": מסך הכלי
+    // יחליף את התוסף בספינר, ה-WebView ייהרס ויטען מאפס.
+    if (state is! PluginSystemLoaded) emit(PluginSystemLoading());
     try {
       final plugins = await repository.getAllPlugins();
       devWatchService.syncWatchers(await repository.getDevelopmentPlugins());
