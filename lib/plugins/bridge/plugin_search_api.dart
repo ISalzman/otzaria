@@ -312,41 +312,61 @@ class PluginSearchApi {
     engine.SearchResult result,
     Book? book, {
     Map<String, Book> booksByPath = const {},
-  }) => {
-    if (book != null)
-      ...PluginBookIdentity.toJson(book)
-    else ...{
-      'id': null,
-      'type': result.isPdf ? 'pdf' : 'text',
-      'bookId': result.title,
-      'source': null,
-    },
-    'book': result.title,
-    if (book != null) 'categoryPath': FacetHelper.resolveCategoryPath(book),
-    'reference': result.reference,
-    'text': result.text,
-    'index': result.segment.toInt(),
-    'mergedCount': result.mergedCount,
-    if (result.merged.isNotEmpty)
-      'merged': [
-        for (final sibling in result.merged)
-          {
-            if (booksByPath[sibling.filePath] case final Book siblingBook)
-              ...PluginBookIdentity.toJson(siblingBook)
-            else ...{
-              'id': null,
-              'type': sibling.isPdf ? 'pdf' : 'text',
-              'bookId': sibling.title,
-              'source': null,
-            },
-            'book': sibling.title,
-            if (booksByPath[sibling.filePath] case final Book siblingBook)
-              'categoryPath': FacetHelper.resolveCategoryPath(siblingBook),
-            'reference': sibling.reference,
-            'index': sibling.segment.toInt(),
-          },
-      ],
-  };
+  }) {
+    // אינדקס שאינו מסונכרן ממפה את מפתח המסמך לספר אחר; עדיף להחזיר לתוסף
+    // זהות ריקה מאשר לייחס לתוצאה את ה-id של ספר זר.
+    final resolved = IndexingRepository.validatedIndexedBook(
+      book,
+      indexedTitle: result.title,
+    );
+    return {
+      if (resolved != null)
+        ...PluginBookIdentity.toJson(resolved)
+      else ...{
+        'id': null,
+        'type': result.isPdf ? 'pdf' : 'text',
+        'bookId': result.title,
+        'source': null,
+      },
+      'book': result.title,
+      if (resolved != null)
+        'categoryPath': FacetHelper.resolveCategoryPath(resolved),
+      'reference': result.reference,
+      'text': result.text,
+      'index': result.segment.toInt(),
+      'mergedCount': result.mergedCount,
+      if (result.merged.isNotEmpty)
+        'merged': [
+          for (final sibling in result.merged)
+            _siblingToJson(sibling, booksByPath),
+        ],
+    };
+  }
+
+  static Map<String, dynamic> _siblingToJson(
+    engine.MergedSibling sibling,
+    Map<String, Book> booksByPath,
+  ) {
+    final book = IndexingRepository.bookForIndexedDocument(
+      booksByPath,
+      indexedFilePath: sibling.filePath,
+      indexedTitle: sibling.title,
+    );
+    return {
+      if (book != null)
+        ...PluginBookIdentity.toJson(book)
+      else ...{
+        'id': null,
+        'type': sibling.isPdf ? 'pdf' : 'text',
+        'bookId': sibling.title,
+        'source': null,
+      },
+      'book': sibling.title,
+      if (book != null) 'categoryPath': FacetHelper.resolveCategoryPath(book),
+      'reference': sibling.reference,
+      'index': sibling.segment.toInt(),
+    };
+  }
 
   /// מפתח כל ספר בספרייה לפי הנתיב שבו הוא מאונדקס — כך תוצאה מהמנוע
   /// מתורגמת חזרה לזהות ספר של ה-SDK.

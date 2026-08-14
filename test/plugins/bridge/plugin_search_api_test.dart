@@ -566,6 +566,70 @@ Future<void> main() async {
       expect(sibling['bookId'], 'מהדורה אחרת');
       expect(sibling['source'], 'library');
     });
+
+    test('רגרסיה #774/#712: מפתח שהוסב לספר אחר אינו נושא זהות', () {
+      // אינדקס לא מסונכרן: id:7 שייך כעת לספר אחר, והתוסף היה מקבל את
+      // הכותרת הישנה יחד עם ה-id של הספר הזר.
+      final json = PluginSearchApi.resultToJson(
+        buildResult(),
+        TextBook(id: 7, title: 'רבינו חננאל על מועד קטן'),
+      );
+
+      expect(json['id'], isNull);
+      expect(json['source'], isNull);
+      expect(json['bookId'], 'בראשית');
+      expect(json['book'], 'בראשית');
+      expect(json.containsKey('categoryPath'), isFalse);
+    });
+
+    test('רגרסיה: ספר אח שהוסב לספר אחר אינו נושא זהות', () {
+      final result = engine.SearchResult(
+        title: 'בראשית',
+        reference: 'בראשית, פרק א',
+        text: 'בראשית ברא',
+        id: BigInt.one,
+        segment: BigInt.from(12),
+        isPdf: false,
+        filePath: 'id:7',
+        mergedCount: 2,
+        merged: [
+          engine.MergedSibling(
+            title: 'מהדורה אחרת',
+            reference: 'פרק א',
+            id: BigInt.two,
+            segment: BigInt.from(4),
+            isPdf: true,
+            filePath: 'id:8',
+          ),
+        ],
+      );
+
+      final json = PluginSearchApi.resultToJson(
+        result,
+        TextBook(id: 7, title: 'בראשית'),
+        booksByPath: {'id:8': PdfBook(id: 8, title: 'ספר זר', path: '/tmp/x')},
+      );
+
+      final sibling = (json['merged'] as List).single as Map;
+      expect(sibling['id'], isNull);
+      expect(sibling['source'], isNull);
+      expect(sibling['bookId'], 'מהדורה אחרת');
+      expect(sibling['book'], 'מהדורה אחרת');
+      expect(sibling.containsKey('categoryPath'), isFalse);
+    });
+
+    test('שדות התוצאה עצמם נשמרים גם כשהזהות נדחתה', () {
+      final json = PluginSearchApi.resultToJson(
+        buildResult(),
+        TextBook(id: 7, title: 'ספר זר'),
+      );
+
+      expect(json['id'], isNull, reason: 'הזהות נדחתה');
+      expect(json['bookId'], 'בראשית');
+      expect(json['reference'], 'בראשית, פרק א');
+      expect(json['text'], 'בראשית ברא');
+      expect(json['index'], 12);
+    });
   });
 
   test('describeOptions מכסה את כל הערכים החוקיים', () {

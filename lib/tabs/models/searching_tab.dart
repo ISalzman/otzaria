@@ -87,13 +87,16 @@ class SearchingTab extends OpenedTab {
     super.isPinned = false,
     super.dedupeKey,
     SearchConfiguration? initialConfiguration,
+    SearchBloc? searchBloc,
   }) {
     // בלי configuration מפורשת זה טאב חיפוש חדש — הוא נפתח עם המיון ומצב
     // האיחוד שהמשתמש בחר לאחרונה.
-    searchBloc = SearchBloc(
-      initialConfiguration:
-          initialConfiguration ?? SearchDefaults.withResultPreferences(),
-    );
+    this.searchBloc =
+        searchBloc ??
+        SearchBloc(
+          initialConfiguration:
+              initialConfiguration ?? SearchDefaults.withResultPreferences(),
+        );
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;

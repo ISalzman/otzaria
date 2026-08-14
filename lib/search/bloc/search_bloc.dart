@@ -33,6 +33,8 @@ typedef _FacetRecountInputs = ({
   int wordMatchCount,
 });
 
+typedef IndexedBookResolution = ({Book? book, bool isStale});
+
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository;
   int _searchRequestId = 0;
@@ -75,11 +77,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   SearchBloc({
     SearchConfiguration? initialConfiguration,
     this._repository = const SearchRepository(),
+    Future<bool> Function(Book book, Library library)? indexedBookVerifier,
   }) : super(
          SearchState(
            configuration: initialConfiguration ?? const SearchConfiguration(),
          ),
        ) {
+    _indexedBookVerifier = indexedBookVerifier;
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<RerunSearch>((_, _) => _reSearch());
     on<UpdateDistance>(_onUpdateDistance);
@@ -1234,11 +1238,49 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// שאינו תלוי בסדר הקטלוג בזמן האינדוקס ('uid:5'/'id:5' או נתיב PDF).
   ///
   /// פתיחה לפי כותרת בלבד מאבדת את זהות הספר (isUserBook/categoryId),
-  /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. מחזירה null אם
-  /// המפתח לא אותר בקטלוג (ואז נופלים לבנייה לפי כותרת).
-  Future<Book?> resolveBookForIndexedPath(String indexedFilePath) async {
+  /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. [indexedTitle] היא
+  /// הכותרת מאותו מסמך, לאימות מול הקטלוג. [IndexedBookResolution.isStale]
+  /// מונע נפילה לפי כותרת כשמסמך האינדקס כבר אינו שייך לספר שבקטלוג.
+  Future<IndexedBookResolution> resolveBookForIndexedPath(
+    String indexedFilePath, {
+    required String indexedTitle,
+  }) async {
     final library = await DataRepository.instance.library;
-    return _booksByIndexedFilePathFor(library)[indexedFilePath];
+    final book = _booksByIndexedFilePathFor(library)[indexedFilePath];
+    if (book == null) return (book: null, isStale: false);
+    if (book.title != indexedTitle) return (book: null, isStale: true);
+    if ((!indexedFilePath.startsWith('id:') &&
+        !indexedFilePath.startsWith('uid:'))) {
+      return (book: book, isStale: false);
+    }
+
+    final matches = await _indexedBookVerificationByPath.putIfAbsent(
+      indexedFilePath,
+      () async {
+        final verifier = _indexedBookVerifier;
+        if (verifier != null) return verifier(book, library);
+        return _indexingRepository.textBookMatchesIndexedFingerprint(
+          book,
+          library,
+          await _indexFingerprintsFor(library),
+        );
+      },
+    );
+    return (book: matches ? book : null, isStale: !matches);
+  }
+
+  late final Future<bool> Function(Book book, Library library)?
+  _indexedBookVerifier;
+  final IndexingRepository _indexingRepository = IndexingRepository(
+    TantivyDataProvider.instance,
+  );
+  Future<Map<String, BigInt>>? _indexFingerprints;
+  final Map<String, Future<bool>> _indexedBookVerificationByPath = {};
+
+  Future<Map<String, BigInt>> _indexFingerprintsFor(Library library) {
+    return _indexFingerprints ??= TantivyDataProvider.instance.engine.then(
+      (engine) => engine.getBookFingerprints(),
+    );
   }
 
   /// מפת המפתח היציב של האינדקס → ספר, במטמון לכל עוד הספרייה לא הוחלפה.
@@ -1250,6 +1292,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     final books = _buildBooksByIndexedFilePath(library);
     _resolveCacheLibrary = library;
     _booksByIndexedFilePathCache = books;
+    _indexFingerprints = null;
+    _indexedBookVerificationByPath.clear();
     return books;
   }
 

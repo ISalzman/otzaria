@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -214,12 +215,18 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String filePath,
     required Map<String, Map<String, bool>> effectiveOptions,
   }) async {
-    // שחזור הספר מהקטלוג לפי מפתח האינדקס היציב — פתיחה לפי כותרת בלבד
-    // הייתה פותחת ספר רשמי במקום ספר אישי בעל אותה כותרת.
-    final resolvedBook = await widget.tab.searchBloc.resolveBookForIndexedPath(
+    // המפתח משמר את זהות הספר (ספר אישי מול רשמי בעל אותה כותרת), והכותרת
+    // מאמתת אותו: אינדקס שאינו מסונכרן ממפה את המפתח לספר אחר לגמרי.
+    final resolution = await widget.tab.searchBloc.resolveBookForIndexedPath(
       filePath,
+      indexedTitle: title,
     );
     if (!mounted) return;
+    if (resolution.isStale) {
+      UiSnack.showError(LibraryMessages.searchResultIndexOutOfDate);
+      return;
+    }
+    final resolvedBook = resolution.book;
 
     final rawQuery = widget.tab.queryController.text;
     final configuration = widget.tab.searchBloc.state.configuration;
