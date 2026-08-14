@@ -932,6 +932,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
               body: LoadingIndicator(),
             )
           : TextBookStateBuilder(
+              buildWhen: textBookStateDiffersBeyondVisibleIndices,
               loadingWidget: const Scaffold(
                 body: LoadingIndicator(),
               ),
@@ -2428,6 +2429,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
     }
 
     return TextBookStateBuilder(
+      buildWhen: textBookStateDiffersBeyondVisibleIndices,
       loadingWidget: const SizedBox(),
       builder: (context, state) {
         return BlocBuilder<SettingsBloc, SettingsState>(

@@ -677,6 +677,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | התאמת מפרשי צורת הדף בין ספרים (היקף קטגוריה) | `test/text_book/view/page_shape/page_shape_category_commentator_matching_test.dart` |
 | חלונית הצד של צורת הדף (3 לשוניות) | `test/text_book/view/page_shape/page_shape_sidebar_tabs_test.dart` |
 | סנכרון המפרש בצורת הדף (יעד תחילת בלוק, מרחק הגלישה) | `test/text_book/view/page_shape/commentary_sync_helper_test.dart` |
+| שער הבנייה מחדש בגלילה (buildWhen בשורש עץ הספר) | `test/text_book/view/visible_indices_rebuild_gate_test.dart` |
 | תפריט הקשר בצורת הדף (מפרשים / קטע היעד) | `test/text_book/view/page_shape/simple_text_viewer_context_menu_test.dart` |
 | תת-תפריט "מפרשים" המשותף + מדיניות הצגה | `test/text_book/utils/commentators_context_menu_test.dart` |
 | SimpleTextViewer | `test/text_book/view/page_shape/simple_text_viewer_test.dart` |

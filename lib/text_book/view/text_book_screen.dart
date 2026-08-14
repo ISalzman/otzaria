@@ -629,7 +629,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         book: state.book,
         links: state.links,
         activeCommentators: state.activeCommentators,
-        startLine: state.visibleIndices.first,
+        startLine: _topmostVisibleSourceLine(state),
         removeNikud: state.removeNikud,
         removeTaamim: !context.read<SettingsBloc>().state.showTeamim,
         tableOfContents: state.tableOfContents,
@@ -1178,6 +1178,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           builder: (context, tabsState) {
             return BlocConsumer<TextBookBloc, TextBookState>(
               bloc: context.read<TextBookBloc>(),
+              // ה-listener ממשיך לרוץ על כל מצב; רק הבנייה מדלגת.
+              buildWhen: textBookStateDiffersBeyondVisibleIndices,
               listener: (context, state) {
                 // [EDITING DISABLED]
                 // if (state is TextBookLoaded &&
@@ -2447,7 +2449,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             book: state.book,
             links: state.links,
             activeCommentators: state.activeCommentators,
-            startLine: state.visibleIndices.first,
+            startLine: _topmostVisibleSourceLine(state),
             removeNikud: state.removeNikud,
             removeTaamim: !settingsState.showTeamim,
             tableOfContents: state.tableOfContents,
@@ -3134,7 +3136,7 @@ bool _handleGlobalKeyEvent(
         book: state.book,
         links: state.links,
         activeCommentators: state.activeCommentators,
-        startLine: state.visibleIndices.first,
+        startLine: _topmostVisibleSourceLine(state),
         removeNikud: state.removeNikud,
         removeTaamim: !settingsState.showTeamim,
         tableOfContents: state.tableOfContents,
@@ -3180,9 +3182,7 @@ bool _handleGlobalKeyEvent(
       copySectionMarkLinkShortcut.isNotEmpty ||
       copyTextMarkLinkShortcut.isNotEmpty) {
     final bookId = state.book.id;
-    final index =
-        selectedLineForNote ??
-        (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
+    final index = selectedLineForNote ?? _topmostVisibleSourceLine(state);
 
     if (ShortcutHelper.matchesShortcut(event, copyBookLinkShortcut)) {
       if (bookId == null) {
@@ -3329,7 +3329,7 @@ Future<void> _addNoteFromKeyboard(
   final currentIndex =
       (hasSelection ? selectedLineIndex : null) ??
       state.selectedIndex ??
-      (state.visibleIndices.isNotEmpty ? state.visibleIndices.first : 0);
+      _topmostVisibleSourceLine(state);
 
   // קבלת הטקסט המזהה של השורה (כמו שיוצג ככותרת ההערה), או הטקסט המסומן
   final referenceText = hasSelection

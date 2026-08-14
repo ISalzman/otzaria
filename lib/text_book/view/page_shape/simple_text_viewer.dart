@@ -2409,6 +2409,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         // תוכן
         Expanded(
           child: BlocBuilder<TextBookBloc, TextBookState>(
+            buildWhen: textBookStateDiffersBeyondVisibleIndices,
             builder: (context, state) {
               if (state is! TextBookLoaded) {
                 return const Center(child: CircularProgressIndicator());

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/strategies/strategies.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 
@@ -47,6 +48,7 @@ class TextBookScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
+      buildWhen: textBookStateDiffersBeyondVisibleIndices,
       builder: (context, state) {
         // Select the appropriate strategy based on current state
         final strategy = _selectStrategy(state);
