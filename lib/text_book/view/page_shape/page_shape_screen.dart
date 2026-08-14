@@ -2334,14 +2334,19 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       return;
     }
 
-    // יעד חוזר אינו נחסם כאן: הגלישה מודדת מרחק אמיתי ויוצאת מעצמה, וכך
-    // גלישה שנקטעה (גרירה בחלונית, שינוי גובה בהשלמת חלון) מתקנת את עצמה.
+    // יעד שכבר סונכרנו אליו אינו נוגע במפרש שוב. בלי זה כל emission של
+    // ה-bloc (למשל חימום התוכן ברקע) היה גורר חזרה לעוגן גלילה ידנית
+    // שהמשתמש עשה בחלונית.
+    if (targetIndex == _lastSyncedIndex && state.selectedIndex == null) {
+      return;
+    }
+
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
       // במצב טעינת-חלונות: מזניק טעינה סביב היעד כדי שהשורות ימולאו
       // מיד אחרי הקפיצה (מאזין המיקומים ישלים חלונות בהמשך הגלילה).
-      if (_useWindowedLoading && targetIndex != _lastSyncedIndex) {
+      if (_useWindowedLoading) {
         unawaited(_ensureWindowLoaded(targetIndex, targetIndex));
       }
       if (_lastSyncedIndex == null) {

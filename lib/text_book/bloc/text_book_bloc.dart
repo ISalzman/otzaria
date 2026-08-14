@@ -35,12 +35,19 @@ import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  // שאילתת הקישורים חוסמת את ה-thread שמצייר (sqlite3 סינכרוני), ולכן החלון
-  // רחב והסף גבוה: בגלילה מהירה הוא נטען פעם ל-~400 שורות במקום כל 20.
+  // השאילתה עצמה רצה ב-Isolate, אבל כל טעינה גוררת פענוח התוצאה, מיזוג
+  // הקישורים ובנייה מחדש של חלונית המפרשים על ה-thread שמצייר. הסף — ולא
+  // גודל החלון — הוא שקובע את התדירות: טעינה כל ~120 שורות במקום כל ~20.
+  /// כמה שורות אחורה נטענות סביב הנראה. חייב להיות ≥ [linksReloadThresholdLines].
   @visibleForTesting
-  static const int linkLookBehindLines = 200;
+  static const int linkLookBehindLines = 150;
+
+  /// כמה שורות קדימה נטענות סביב הנראה. חייב להיות ≥ [linksReloadThresholdLines],
+  /// אחרת שורות בין קצה הכיסוי לנקודת הטעינה יישארו בלי קישורים.
   @visibleForTesting
-  static const int linkLookAheadLines = 400;
+  static const int linkLookAheadLines = 200;
+
+  /// המרחק מקצה החלון הטעון שבו נטענת מנה חדשה. קובע את תדירות הטעינות.
   @visibleForTesting
   static const int linksReloadThresholdLines = 120;
   static const int _initialContentLookBehindLines = 80;
@@ -1496,7 +1503,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _loadLinksInBackground(
           currentState.book,
           event.visibleIndecies,
-          fromScroll: true,
         );
       }
     }
@@ -2607,9 +2613,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  /// [fromScroll] מסמן קריאה שנובעת מתזוזת גלילה בלבד. שם היעדים אינם
-  /// משתנים, ולכן די להשוות את החלון מול היעדים שכבר נטענו — בלי לפתור אותם
-  /// מחדש, פעולה שממיינת את כל המפרשים הזמינים ובונה מהם מפתח מחרוזת.
   Future<void> _loadLinksInBackground(
     TextBook book,
     List<int> visibleIndices, {
@@ -2617,7 +2620,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     Iterable<String>? targetBookTitlesOverride,
     bool forceLoadAll = false,
     String? workspaceId,
-    bool fromScroll = false,
   }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
@@ -2627,20 +2629,6 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final window = _calculateLinksWindow(visibleIndices);
-
-    // יציאה מוקדמת לגלילה: החלון שנטען עדיין מכסה את הנראה, ואין צורך
-    // בפתירת היעדים היקרה שהתבצעה כאן בכל תזוזה.
-    if (fromScroll &&
-        !force &&
-        _loadedLinksTargetBookTitlesSignature != null &&
-        _isLinksWindowSufficient(
-          book.title,
-          window.start,
-          window.end,
-          _loadedLinksTargetBookTitlesSignature!,
-        )) {
-      return;
-    }
 
     if (_isLoadingLinks) {
       _pendingLinksReload = true;

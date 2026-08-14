@@ -648,7 +648,7 @@ class TextBookLoaded extends TextBookState {
 /// [previous] ו-[current] הם המצב הקודם והנוכחי של ה-bloc.
 /// מחזיר `true` כשצריך לבנות מחדש. ההשוואה עוברת דרך `copyWith`, ולכן שדה
 /// שיתווסף ל-props ולא ל-`copyWith` יישבר כאן בשקט — ראו את בדיקת הסחיפה
-/// ב-`text_book_state_test.dart`.
+/// ב-`test/text_book/view/visible_indices_rebuild_gate_test.dart`.
 bool textBookStateDiffersBeyondVisibleIndices(
   TextBookState previous,
   TextBookState current,

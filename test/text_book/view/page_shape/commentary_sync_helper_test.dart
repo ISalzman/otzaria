@@ -205,5 +205,83 @@ void main() {
       expect(delta(double.nan), isNull);
       expect(delta(0.5, viewportHeight: double.infinity), isNull);
     });
+
+    test('הסף נמדד בפיקסלים ולא בשבר החלון', () {
+      // אותו שבר סטייה: בחלון נמוך הוא פחות מ-2 פיקסלים ונבלע, בחלון גבוה
+      // הוא חורג ומזיז. בלי זה חלוניות בגדלים שונים היו מתנהגות אחרת.
+      const drift = 0.005;
+
+      expect(delta(alignment + drift, viewportHeight: 200), isNull);
+      expect(delta(alignment + drift, viewportHeight: 2000), isNotNull);
+    });
+
+    test('מעט מעל הסף — כן זזים', () {
+      expect(delta(alignment + (epsilon + 0.5) / 600), isNotNull);
+    });
+
+    test('הסימן עקבי עם כיוון הסטייה', () {
+      expect(delta(0.9)!, isPositive);
+      expect(delta(0.05)!, isNegative);
+    });
+
+    test('גובה חלון אפס או שלילי אינו מייצר תזוזה', () {
+      // מגן על מסלול שבו טרם נמדדה פריסה; בלעדיו הדלתא הייתה 0 ומתפרשת
+      // כ"היעד במקומו" גם כשהוא רחוק.
+      expect(delta(0.9, viewportHeight: 0), isNull);
+    });
+
+    test('יעד מחוץ לחלון הנראה מייצר תזוזה גדולה מגובה החלון', () {
+      // itemLeadingEdge יכול לחרוג מ-[0,1] כשהפריט מעל או מתחת ל-viewport.
+      expect(delta(2.0)!.abs(), greaterThan(600));
+    });
+  });
+
+  group('getLogicalIndex', () {
+    test('שורה רגילה מוחזרת כמות שהיא', () {
+      expect(CommentarySyncHelper.getLogicalIndex(1, const ['a', 'b']), 1);
+    });
+
+    test('כותרת מדלגת לשורה שאחריה', () {
+      // כותרות אינן נושאות קישורים, ולכן היעד נגזר מהשורה שמתחתן; בלי זה
+      // כל כותרת נראית כפער מלאכותי במקור.
+      const content = ['<h1>פרק א</h1>', 'תוכן'];
+
+      expect(CommentarySyncHelper.getLogicalIndex(0, content), 1);
+    });
+
+    test('רצף כותרות מדלג עד לתוכן', () {
+      const content = ['<h1>א</h1>', '<h2>ב</h2>', '<h3>ג</h3>', 'תוכן'];
+
+      expect(CommentarySyncHelper.getLogicalIndex(0, content), 3);
+    });
+
+    test('כותרות עד סוף התוכן מחזירות את האינדקס המקורי', () {
+      const content = ['תוכן', '<h1>סוף</h1>'];
+
+      expect(CommentarySyncHelper.getLogicalIndex(1, content), 1);
+    });
+
+    test('אינדקס מחוץ לטווח מוחזר כמות שהוא', () {
+      expect(CommentarySyncHelper.getLogicalIndex(9, const ['a']), 9);
+      expect(CommentarySyncHelper.getLogicalIndex(-1, const ['a']), -1);
+    });
+  });
+
+  group('isHeaderLine', () {
+    test('מזהה כותרות בכל הרמות', () {
+      for (final level in [1, 2, 3, 4, 5, 6]) {
+        expect(CommentarySyncHelper.isHeaderLine('<h$level>כותרת'), isTrue);
+      }
+    });
+
+    test('מזהה כותרת עם רווח מוביל ובאותיות גדולות', () {
+      expect(CommentarySyncHelper.isHeaderLine('  <H2>כותרת'), isTrue);
+    });
+
+    test('טקסט רגיל אינו כותרת', () {
+      expect(CommentarySyncHelper.isHeaderLine('שורת תוכן'), isFalse);
+      expect(CommentarySyncHelper.isHeaderLine('<p>פסקה'), isFalse);
+      expect(CommentarySyncHelper.isHeaderLine(''), isFalse);
+    });
   });
 }

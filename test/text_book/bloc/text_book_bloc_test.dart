@@ -925,6 +925,137 @@ void main() {
       },
     );
 
+    group('חלון טעינת הקישורים', () {
+      test('הכיסוי קדימה ואחורה מגיע לפחות עד נקודת הטעינה מחדש', () {
+        // אילו הכיסוי היה קטן מהסף, שורות שבין קצה הכיסוי לנקודת הטעינה
+        // היו מוצגות בלי מפרשים ושום טעינה לא הייתה מופעלת עבורן.
+        expect(
+          TextBookBloc.linkLookAheadLines,
+          greaterThanOrEqualTo(TextBookBloc.linksReloadThresholdLines),
+        );
+        expect(
+          TextBookBloc.linkLookBehindLines,
+          greaterThanOrEqualTo(TextBookBloc.linksReloadThresholdLines),
+        );
+      });
+
+      test('הסף גדול דיו כדי לא לטעון מחדש בכל תזוזת שורה', () {
+        expect(TextBookBloc.linksReloadThresholdLines, greaterThan(20));
+      });
+
+      test('גלילה בתוך החלון הטעון אינה מייצרת שאילתה נוספת', () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 1,
+          description: 'טעינה ראשונה',
+        );
+        final afterLoad = repository.getBookLinksInRangeCalls;
+
+        for (final index in [12, 15, 18, 21, 24]) {
+          bloc.add(UpdateVisibleIndecies([index, index + 1]));
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+
+        expect(repository.getBookLinksInRangeCalls, afterLoad);
+
+        await bloc.close();
+      });
+
+      test('גלילה מעבר לחלון הטעון מייצרת שאילתה', () async {
+        final repository = _FakeTextBookRepository();
+        final bloc = _createBloc(
+          repository: repository,
+          showPageShapeView: false,
+          commentators: const ['רש"י על בראשית'],
+        );
+
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 1,
+          description: 'טעינה ראשונה',
+        );
+
+        bloc.add(UpdateVisibleIndecies([_farLine, _farLine + 1]));
+
+        await _waitFor(
+          () => repository.getBookLinksInRangeCalls >= 2,
+          description: 'טעינה אחרי חריגה מהחלון',
+        );
+
+        expect(
+          repository.lastEndIndex,
+          _farLine + 1 + TextBookBloc.linkLookAheadLines,
+        );
+
+        await bloc.close();
+      });
+
+      test(
+        'בצורת הדף בחירת מפרש בחלונית הצד אינה מנתקת את הקישורים',
+        () async {
+          // רגרסיה: UpdateCommentators דורס את הקישורים ביעדים של הסרגל.
+          // אם הגלילה שאחריו לא תפתור מחדש את יעדי צורת הדף, חלוניות
+          // המפרשים יישארו בלי קישורים ויפסיקו לעקוב אחרי הטקסט.
+          final repository = _FakeTextBookRepository();
+          final bloc = _createBloc(
+            repository: repository,
+            showPageShapeView: true,
+            commentators: const ['רש"י על בראשית'],
+          );
+
+          bloc.add(
+            const LoadContent(
+              fontSize: 20,
+              showSplitView: false,
+              removeNikud: false,
+              loadCommentators: false,
+            ),
+          );
+
+          await _waitFor(
+            () => repository.getBookLinksInRangeCalls >= 1,
+            description: 'טעינה ראשונה',
+          );
+
+          bloc.add(const UpdateCommentators(['אבן עזרא על בראשית']));
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+          final afterOverride = repository.getBookLinksInRangeCalls;
+
+          bloc.add(const UpdateVisibleIndecies([12, 13, 14]));
+
+          await _waitFor(
+            () => repository.getBookLinksInRangeCalls > afterOverride,
+            description: 'הגלילה פותרת מחדש את יעדי צורת הדף',
+          );
+
+          await bloc.close();
+        },
+      );
+    });
+
     test('ToggleLeftPane לא פולט state חדש אם הערך לא השתנה', () async {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
