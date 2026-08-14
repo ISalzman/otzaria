@@ -73,3 +73,6 @@ https://api.emailjs.com/api/v1.0/email/send
 
 # תוסף MDY
 https://github.com/yair-yair/mdy-images-updated
+https://api.github.com/repos/yair-yair/mdy-images-updated/
+https://raw.githubusercontent.com/yair-yair/mdy-images-updated/
+https://github.com/yair-yair/mdy-images-updated/
