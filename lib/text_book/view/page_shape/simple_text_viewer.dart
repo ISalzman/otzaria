@@ -1005,12 +1005,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       return;
     }
 
-    final shouldRebuild = shouldRebuildSelectionAreaOnExternalChange(
+    final shouldClear = shouldClearSelectionOnExternalChange(
       activeOwner: controller.activeOwner,
       selfOwner: _selectionOwner,
       hasOwnSelection: _savedSelectedText != null,
     );
-    if (!shouldRebuild) {
+    if (!shouldClear) {
       return;
     }
 

@@ -100,4 +100,134 @@ void main() {
     expect(copyCount, 1);
     fn.dispose();
   });
+
+  // issue #674: התסמין שדווח היה "פריט ריק בלוח הגזירים". המקור הוא
+  // SelectableRegion._copy של Flutter, שכותב את הבחירה ללוח בלי לבדוק שהיא
+  // אינה ריקה. שני הטסטים הבאים מתעדים את ההתנהגות בלי העטיפה ואיתה.
+  group('Ctrl+C על SelectionArea בלי בחירה', () {
+    late List<String?> clipboardWrites;
+
+    void mockClipboard(WidgetTester tester) {
+      clipboardWrites = <String?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardWrites.add((call.arguments as Map?)?['text'] as String?);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+    }
+
+    testWidgets('יירוט *מתחת* ל-SelectionArea אינו נראה — ההעתקה נשארת של '
+        'Flutter', (tester) async {
+      // זה הדפוס השבור שהוליד את #674: Actions עם CopySelectionTextIntent
+      // שממוקם בתוך ה-SelectionArea. מנגנון ה-override מחפש רק כלפי מעלה,
+      // ולכן רצה העתקת ברירת המחדל של Flutter — שכותבת ללוח את הבחירה בלי
+      // לבדוק שהיא אינה ריקה.
+      mockClipboard(tester);
+      var copyCount = 0;
+      final fn = FocusNode();
+      addTearDown(fn.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SelectionArea(
+              focusNode: fn,
+              child: Actions(
+                actions: <Type, Action<Intent>>{
+                  CopySelectionTextIntent:
+                      CallbackAction<CopySelectionTextIntent>(
+                        onInvoke: (_) {
+                          copyCount++;
+                          return null;
+                        },
+                      ),
+                },
+                child: const Text('שלום עולם'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      fn.requestFocus();
+      await tester.pump();
+      tester
+          .state<SelectableRegionState>(find.byType(SelectableRegion))
+          .selectAll();
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(
+        copyCount,
+        0,
+        reason: 'יירוט מתחת ל-SelectionArea אינו נראה למנגנון ה-override',
+      );
+      expect(
+        clipboardWrites,
+        isNotEmpty,
+        reason: 'במקום זאת רצה ההעתקה של Flutter, שכותבת ישירות ללוח',
+      );
+    });
+
+    testWidgets('עם העטיפה — ההעתקה מנותבת ל-onCopy ולא נכתב ללוח כלום', (
+      tester,
+    ) async {
+      mockClipboard(tester);
+      var copyCount = 0;
+      final fn = FocusNode();
+      addTearDown(fn.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SelectionCopyShortcuts(
+              // המסלול של אוצריא בודק ריקנות ומציג הודעה במקום להעתיק.
+              onCopy: () => copyCount++,
+              child: SelectionArea(
+                focusNode: fn,
+                child: const Text('שלום עולם'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      fn.requestFocus();
+      await tester.pump();
+
+      final region = tester.state<SelectableRegionState>(
+        find.byType(SelectableRegion),
+      );
+      region.selectAll();
+      await tester.pump();
+      region.clearSelection();
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(copyCount, 1, reason: 'ההעתקה חייבת לעבור דרך המסלול שלנו');
+      expect(
+        clipboardWrites,
+        isEmpty,
+        reason: 'Flutter לא יכתוב ללוח בעצמו כשהעטיפה מיירטת',
+      );
+    });
+  });
 }

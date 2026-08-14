@@ -1,15 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-/// מסנכרן בחירת טקסט בין כמה אזורי SelectionArea באותו מסך.
-///
-/// ל-SelectionArea של Flutter אין API ישיר ל"נקה בחירה באזור אחר",
-/// לכן כל אזור מאזין לגרסה (`revision`) ומבצע rebuild מקומי כשהבחירה
-/// עברה לאזור אחר.
+/// מסנכרן בחירת טקסט בין כמה אזורי SelectionArea באותו מסך: רק אזור אחד
+/// מחזיק בחירה בכל רגע, והשאר מנקים את שלהם כשהבעלות עוברת.
 class SelectionSyncController extends ChangeNotifier {
-  int _revision = 0;
   Object? _activeOwner;
 
-  int get revision => _revision;
   Object? get activeOwner => _activeOwner;
 
   void activate(Object owner) {
@@ -18,7 +13,6 @@ class SelectionSyncController extends ChangeNotifier {
     }
 
     _activeOwner = owner;
-    _revision++;
     notifyListeners();
   }
 
@@ -28,21 +22,17 @@ class SelectionSyncController extends ChangeNotifier {
     }
 
     _activeOwner = null;
-    _revision++;
     notifyListeners();
   }
 }
 
-/// קובע האם צריך לבנות מחדש את ה-SelectionArea של אזור בתגובה לשינוי בעלות
-/// ב-[SelectionSyncController]. הבנייה מחדש מתבצעת על-ידי קידום ערך revision
-/// ששימש כ-`ValueKey` של ה-SelectionArea — ולכן היא משחזרת את כל עץ הצאצאים.
+/// קובע האם אזור צריך לנקות את הבחירה שלו כשאזור אחר תפס בעלות.
 ///
-/// מטרת הבנייה היא לנקות בחירה ויזואלית של ה-SelectionArea שלנו כשאזור אחר
-/// תפס בעלות. אם אין לנו בחירה משלנו — אין מה לנקות, ו-rebuild רק יהרוס
-/// את עץ הצאצאים שלא לצורך (במצב 'מפרשים מתחת' זה גורם לטעינה מחדש של
-/// המפרשים בכל פעם שמנסים לסמן בהם טקסט; ב'צורת הדף' זה גורם לאיפוס
-/// סטייט פנימי של הצאצאים).
-bool shouldRebuildSelectionAreaOnExternalChange({
+/// הניקוי חייב להתבצע דרך `SelectableRegionState.clearSelection()`. ניקוי
+/// על-ידי החלפת מפתח ה-SelectionArea הורס את עץ הצאצאים, ובמצב 'מפרשים מתחת'
+/// (שבו רשימת המפרשים מקוננת בתוך אזור הטקסט הראשי) הוא מוחק את הבחירה
+/// שהמשתמש זה עתה סימן במפרש — והעתקה יוצאת ריקה (issue #674).
+bool shouldClearSelectionOnExternalChange({
   required Object? activeOwner,
   required Object selfOwner,
   required bool hasOwnSelection,

@@ -24,6 +24,7 @@ import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -226,13 +227,13 @@ void main() {
     });
   });
 
-  group('shouldRebuildSelectionAreaOnExternalChange', () {
+  group('shouldClearSelectionOnExternalChange', () {
     test('מחזירה false כש-activeOwner הוא null (ניקוי בעלות)', () {
-      // אחרי clear ה-controller מודיע עם activeOwner=null — אסור לבנות מחדש,
-      // אחרת ניקוי בחירה גורם לקפיצה בגלילה.
+      // אחרי clear ה-controller מודיע עם activeOwner=null — אין אזור אחר
+      // שתפס בעלות, ולכן אין מה לנקות.
       final selfOwner = Object();
       expect(
-        shouldRebuildSelectionAreaOnExternalChange(
+        shouldClearSelectionOnExternalChange(
           activeOwner: null,
           selfOwner: selfOwner,
           hasOwnSelection: true,
@@ -242,9 +243,10 @@ void main() {
     });
 
     test('מחזירה false כש-activeOwner זהה ל-selfOwner', () {
+      // אנחנו הבעלים — ניקוי כאן היה מוחק את הבחירה שהמשתמש בדיוק סימן.
       final selfOwner = Object();
       expect(
-        shouldRebuildSelectionAreaOnExternalChange(
+        shouldClearSelectionOnExternalChange(
           activeOwner: selfOwner,
           selfOwner: selfOwner,
           hasOwnSelection: true,
@@ -254,18 +256,12 @@ void main() {
     });
 
     test(
-      "מחזירה false כשאזור חיצוני מקבל בעלות אבל אין לנו בחירה משלנו לנקות "
-      "(תרחיש 'מפרשים מתחת': בחירת טקסט במפרש המקונן לא צריכה להרוס את עץ הצאצאים)",
+      "מחזירה false כשאזור חיצוני מקבל בעלות אבל אין לנו בחירה משלנו לנקות",
       () {
-        // הבאג שתוקן: במצב 'מפרשים מתחת' ה-CommentaryListBase מקונן בעץ
-        // ה-SelectionArea של ה-CombinedView. כשהמשתמש מסמן טקסט במפרש,
-        // ה-controller מעביר בעלות לאזור המפרש. לפני התיקון, ה-CombinedView
-        // היה מעלה את revision ובונה את ה-SelectionArea מחדש — מה שהשמיד את
-        // ה-CommentaryListBase וגרם לטעינה מחדש של המפרש.
         final selfOwner = Object();
         final commentaryOwner = Object();
         expect(
-          shouldRebuildSelectionAreaOnExternalChange(
+          shouldClearSelectionOnExternalChange(
             activeOwner: commentaryOwner,
             selfOwner: selfOwner,
             hasOwnSelection: false,
@@ -279,13 +275,144 @@ void main() {
       final selfOwner = Object();
       final externalOwner = Object();
       expect(
-        shouldRebuildSelectionAreaOnExternalChange(
+        shouldClearSelectionOnExternalChange(
           activeOwner: externalOwner,
           selfOwner: selfOwner,
           hasOwnSelection: true,
         ),
         isTrue,
       );
+    });
+
+    test(
+      'הבעלות עוברת למפרש בזמן שיש בחירה בטקסט הראשי — מנקים, אך רק דרך '
+      'clearSelection ולא בהחלפת מפתח (issue #674)',
+      () {
+        // התרחיש של #674: המשתמש סימן בטקסט הראשי, ואז סימן במפרש שמתחת.
+        // התשובה כאן היא true (יש בחירה ישנה לנקות) — ולכן קריטי שהניקוי
+        // בפועל ייעשה ב-clearSelection: החלפת מפתח הייתה הורסת את כרטיס
+        // המפרשים המקונן יחד עם הבחירה החדשה שבתוכו.
+        final mainTextOwner = Object();
+        final commentaryOwner = Object();
+        expect(
+          shouldClearSelectionOnExternalChange(
+            activeOwner: commentaryOwner,
+            selfOwner: mainTextOwner,
+            hasOwnSelection: true,
+          ),
+          isTrue,
+        );
+      },
+    );
+  });
+
+  group('אזור הבחירה של התצוגה המשולבת (issue #674)', () {
+    Future<SelectionSyncController> pumpCombinedView(
+      WidgetTester tester,
+    ) async {
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+      final textBookBloc = _ClosedTextBookBloc(_loadedState());
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final personalNotesBloc = _TestPersonalNotesBloc(
+        PersonalNotesState(
+          isLoading: false,
+          bookId: 'ספר בדיקה',
+          locatedNotes: const [],
+          missingNotes: const [],
+          errorMessage: null,
+          filteredLocatedNotes: const [],
+          filteredMissingNotes: const [],
+        ),
+      );
+      final tab = TextBookTab(book: TextBook(title: 'ספר בדיקה'), index: 0);
+      addTearDown(tab.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<TextBookBloc>.value(value: textBookBloc),
+              BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            ],
+            child: Scaffold(
+              body: CombinedView(
+                data: const ['שורה א'],
+                openBookCallback: (_) {},
+                openLeftPaneTab: (_, {searchText}) {},
+                textSize: 18,
+                showCommentaryAsExpansionTiles: true,
+                selectionSyncController: controller,
+                tab: tab,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 20));
+      });
+      return controller;
+    }
+
+    testWidgets(
+      'ה-SelectionArea נושא מפתח יציב ולא מפתח שנגזר ממצב הבחירה',
+      (tester) async {
+        // נסיגה לדפוס הישן — ValueKey('combined_selection_$revision') — גרמה
+        // לכך שכל מעבר בעלות בחירה בנה מחדש את תת-העץ, כולל כרטיס המפרשים
+        // המקונן, ואיתו נמחקה הבחירה שהמשתמש זה עתה סימן במפרש.
+        await pumpCombinedView(tester);
+
+        expect(_combinedSelectionAreaFinder(), findsOneWidget);
+      },
+    );
+
+    testWidgets('יירוט ההעתקה ממוקם מעל ה-SelectionArea', (tester) async {
+      // מתחת ל-SelectionArea מנגנון ה-override של CopySelectionTextIntent
+      // אינו רואה אותו, ואז רצה העתקת ברירת המחדל של Flutter — שכותבת ללוח
+      // גם בחירה מכווצת (plainText ריק), וזה הפריט הריק שדווח.
+      await pumpCombinedView(tester);
+
+      expect(
+        find.ancestor(
+          of: _combinedSelectionAreaFinder(),
+          matching: find.byType(SelectionCopyShortcuts),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('מעבר בעלות לכרטיס המפרשים אינו הורס את אזור הטקסט הראשי', (
+      tester,
+    ) async {
+      final controller = await pumpCombinedView(tester);
+
+      SelectableRegionState region() => tester.state<SelectableRegionState>(
+        find.descendant(
+          of: _combinedSelectionAreaFinder(),
+          matching: find.byType(SelectableRegion),
+        ),
+      );
+
+      final regionBefore = region();
+      region().selectAll();
+      await tester.pump();
+      // בלי בחירה משלנו מסלול הניקוי יוצא מוקדם, והטסט היה עובר ריק מתוכן.
+      expect(
+        controller.activeOwner,
+        isNotNull,
+        reason: 'הבחירה בטקסט הראשי חייבת להיווצר כדי שהתרחיש ייבדק',
+      );
+
+      // כרטיס המפרשים תופס בעלות בזמן שלטקסט הראשי יש בחירה — בדיוק התרחיש
+      // שבו הבאג התרחש.
+      controller.activate(Object());
+      await tester.pump();
+
+      expect(region(), same(regionBefore));
     });
   });
 
@@ -861,3 +988,9 @@ class _TestSettingsBloc extends Bloc<SettingsEvent, SettingsState>
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// ה-SelectionArea של אזור הטקסט הראשי, לפי סוג המפתח שלו. חיפוש לפי סוג
+/// המפתח הוא מה שמכשיל נסיגה חזרה ל-ValueKey שנגזר ממונה revision.
+Finder _combinedSelectionAreaFinder() => find.byWidgetPredicate(
+  (w) => w is SelectionArea && w.key is GlobalKey<SelectionAreaState>,
+);
