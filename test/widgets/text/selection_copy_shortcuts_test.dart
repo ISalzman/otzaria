@@ -229,5 +229,43 @@ void main() {
         reason: 'Flutter לא יכתוב ללוח בעצמו כשהעטיפה מיירטת',
       );
     });
+
+    testWidgets('עם בחירה פעילה — ההעתקה מנותבת ל-onCopy ולא ל-Flutter', (
+      tester,
+    ) async {
+      mockClipboard(tester);
+      var copyCount = 0;
+      final fn = FocusNode();
+      addTearDown(fn.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SelectionCopyShortcuts(
+              onCopy: () => copyCount++,
+              child: SelectionArea(
+                focusNode: fn,
+                child: const Text('שלום עולם'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      fn.requestFocus();
+      await tester.pump();
+      tester
+          .state<SelectableRegionState>(find.byType(SelectableRegion))
+          .selectAll();
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(copyCount, 1);
+      expect(clipboardWrites, isEmpty);
+    });
   });
 }
