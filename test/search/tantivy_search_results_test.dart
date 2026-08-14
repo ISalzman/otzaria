@@ -132,11 +132,7 @@ void main() {
       ];
 
       searchBloc = RecordingSearchBloc(
-        SearchState(
-          searchQuery: 'בדיקה',
-          totalResults: 200,
-          results: results,
-        ),
+        SearchState(searchQuery: 'בדיקה', totalResults: 200, results: results),
       );
 
       whenListen(
@@ -162,10 +158,7 @@ void main() {
             ),
           ],
           child: Scaffold(
-            body: SizedBox(
-              height: 500,
-              child: TantivySearchResults(tab: tab),
-            ),
+            body: SizedBox(height: 500, child: TantivySearchResults(tab: tab)),
           ),
         ),
       );
@@ -202,13 +195,13 @@ void main() {
       await tester.pumpWidget(buildWidget());
 
       await tester.pump();
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -100000));
+      await tester.drag(
+        find.byType(CustomScrollView),
+        const Offset(0, -100000),
+      );
       await tester.pump();
 
-      expect(
-        searchBloc.recordedEvents.whereType<LoadMoreResults>().length,
-        1,
-      );
+      expect(searchBloc.recordedEvents.whereType<LoadMoreResults>().length, 1);
     });
 
     testWidgets('חיפוש חדש (שינוי קטגוריה) מאפס את הגלילה לראש הרשימה', (
@@ -370,6 +363,41 @@ void main() {
         _highlightedTextFromInlineSpan(highlightedResultText.text),
         'טקסט',
       );
+    });
+
+    testWidgets('מספר תוצאה בן 4 ספרות נשאר בשורה אחת בתוך הריבוע', (
+      tester,
+    ) async {
+      searchBloc.emitState(
+        SearchState(
+          searchQuery: 'בדיקה',
+          totalResults: 1000,
+          results: List.generate(
+            1000,
+            (i) => SearchResult(
+              id: BigInt.from(i + 1),
+              title: 'ספר ${i + 1}',
+              reference: 'סימן ${i + 1}',
+              text: 'טקסט ${i + 1}',
+              segment: BigInt.from(i),
+              isPdf: false,
+              filePath: 'book_$i.txt',
+              mergedCount: 1,
+              merged: const [],
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      final badge = find.text('1000');
+      await tester.scrollUntilVisible(badge, 20000, maxScrolls: 200);
+
+      expect(badge, findsOneWidget);
+      // שבירה לשתי שורות הייתה מכפילה את גובה הטקסט (גופן 16)
+      expect(tester.getSize(badge).height, lessThan(30));
     });
 
     testWidgets(
