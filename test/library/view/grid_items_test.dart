@@ -512,4 +512,68 @@ void main() {
       expect(externalCatalogLogoAsset(book), 'assets/logos/otzar.ico');
     });
   });
+
+  group('MyGridView בתצוגה צרה', () {
+    testWidgets('מקטין את גובה כרטיס הספר בחצי עם רצפת גובה לקריאה', (
+      tester,
+    ) async {
+      final book = TextBook(
+        title: 'שם ספר ארוך מאוד שמתפרס על שתי שורות בכרטיס',
+        author: 'מחבר ארוך מאוד שמתפרס על שתי שורות',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              child: MyGridView(
+                items: [
+                  BookGridItem(book: book, onBookClickCallback: () {}),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // רוחב הרשת: 400 - 60 (שוליים 30+30) = 340. הגובה הקודם היה
+      // 340/1.65 ≈ 206, והחדש נחתך לחצי עם רצפה של 112 — בלי גלישה.
+      final size = tester.getSize(find.byType(BookGridItem));
+      expect(size.width, closeTo(340, 0.5));
+      expect(size.height, closeTo(kNarrowGridCardMinHeight, 0.5));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('בתצוגה רחבה הגובה נשאר ללא שינוי', (tester) async {
+      // משטח ברירת המחדל הוא 800×600 וחותך את הרוחב — מרחיבים אותו.
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final book = TextBook(title: 'ספר', author: 'מחבר');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 1000,
+              child: MyGridView(
+                items: [
+                  BookGridItem(book: book, onBookClickCallback: () {}),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 4 עמודות, רוחב תא (1000 - 60 - 14*3)/4 = 224.5, יחס 1.8 → גובה ≈ 125.
+      final size = tester.getSize(find.byType(BookGridItem));
+      expect(size.height, closeTo(224.5 / 1.8, 0.5));
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

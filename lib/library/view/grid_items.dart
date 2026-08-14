@@ -747,6 +747,13 @@ class _BookGridActionColumn extends StatelessWidget {
 /// ריווח אחיד בין כרטיסי הרשת — משותף לתצוגת הספרייה ולתוצאות החיפוש.
 const double kLibraryGridSpacing = 14;
 
+/// גובה מינימלי לכרטיס ספר בתצוגה צרה — מספיק לכותרת (עד 2 שורות), למחבר
+/// ולטור האייקונים בלי גלישה.
+const double kNarrowGridCardMinHeight = 112;
+
+/// השוליים האופקיים של רשת הספרייה — משמשים גם בחישוב רוחב התא בפועל.
+const double _kGridHorizontalPadding = 30;
+
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
 
@@ -768,7 +775,22 @@ class MyGridView extends StatelessWidget {
         final textAdjustment = textScale <= 1.0
             ? 1.0
             : (1.0 / (1.0 + ((textScale - 1.0) * 0.65)));
-        final childAspectRatio = (baseRatio * textAdjustment).clamp(1.45, 2.15);
+        final crossAxisCount = max(1, min(width ~/ 250, 5));
+
+        // בתצוגה צרה (<800) הכרטיסים גבוהים במיוחד: מקטינים את גובהם בחצי,
+        // עם רצפת גובה שמותירה מקום לשם הספר, למחבר ולטור האייקונים.
+        final double childAspectRatio;
+        if (width < 800) {
+          final gridWidth = width - 2 * _kGridHorizontalPadding;
+          final cellWidth =
+              (gridWidth - kLibraryGridSpacing * (crossAxisCount - 1)) /
+              crossAxisCount;
+          final halfHeight = cellWidth / (2 * baseRatio * textAdjustment);
+          final minHeight = kNarrowGridCardMinHeight * textScale;
+          childAspectRatio = cellWidth / max(minHeight, halfHeight);
+        } else {
+          childAspectRatio = (baseRatio * textAdjustment).clamp(1.45, 2.15);
+        }
 
         return FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
@@ -776,13 +798,13 @@ class MyGridView extends StatelessWidget {
             // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
             padding: const EdgeInsets.only(
               top: 8,
-              left: 30,
-              right: 30,
+              left: _kGridHorizontalPadding,
+              right: _kGridHorizontalPadding,
               bottom: 8,
             ),
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: max(1, min(constraints.maxWidth ~/ 250, 5)),
+                crossAxisCount: crossAxisCount,
                 childAspectRatio: childAspectRatio,
                 crossAxisSpacing: kLibraryGridSpacing,
                 mainAxisSpacing: kLibraryGridSpacing,
