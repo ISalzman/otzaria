@@ -593,7 +593,8 @@ class IndexingRepository {
       final topics = _bookTopics(book);
       final filePath = buildIndexedBookFilePath(book);
       final catalogueOrder =
-          catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF;
+          catalogueOrderByBookKey[catalogueOrderKey(book)] ??
+          unknownCatalogueOrder;
       final generationOrder = chronologicalOrderForBook(book);
       final engineStopwatch = Stopwatch()..start();
       final extraFacets = _bookExtraFacets(book);
@@ -755,7 +756,8 @@ class IndexingRepository {
       topics: _bookTopics(book),
       filePath: buildIndexedBookFilePath(book),
       catalogueOrder:
-          catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
+          catalogueOrderByBookKey[catalogueOrderKey(book)] ??
+          unknownCatalogueOrder,
       generationOrder: chronologicalOrderForBook(book),
       extraFacets: _bookExtraFacets(book),
       pages: [
@@ -794,7 +796,8 @@ class IndexingRepository {
         DocumentInput(
           id: buildCatalogueDocumentId(
             catalogueOrder:
-                catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
+                catalogueOrderByBookKey[catalogueOrderKey(book)] ??
+                unknownCatalogueOrder,
             ordinal: 0,
           ),
           title: book.title,
@@ -1170,6 +1173,11 @@ class IndexingRepository {
     }
   }
 
+  /// הסדר שניתן לספר שאינו נמצא במפת הסדר הקטלוגי — ממוין אחרי כל הספרים
+  /// המוכרים. לא 0xFFFFFFFF: [buildCatalogueDocumentId] מוסיף 1 לפני ההזזה,
+  /// והתוצאה הייתה חורגת מ-u64 ונחתכת בגשר ל-1 — כלומר ראש הרשימה.
+  static const int unknownCatalogueOrder = 0xFFFFFFFE;
+
   @visibleForTesting
   static BigInt buildCatalogueDocumentId({
     required int catalogueOrder,
@@ -1259,7 +1267,7 @@ class IndexingRepository {
           topics: _bookTopics(textBook),
           catalogueOrder:
               catalogueOrderByBookKey[catalogueOrderKey(textBook)] ??
-              0xFFFFFFFF,
+              unknownCatalogueOrder,
           generationOrder: chronologicalOrderForBook(textBook),
           extraFacets: _bookExtraFacets(textBook),
         ) ==
@@ -1677,7 +1685,8 @@ class IndexingRepository {
           title: book.title,
           topics: _bookTopics(book),
           catalogueOrder:
-              catalogueOrderByBookKey[catalogueOrderKey(book)] ?? 0xFFFFFFFF,
+              catalogueOrderByBookKey[catalogueOrderKey(book)] ??
+              unknownCatalogueOrder,
           generationOrder: chronologicalOrderForBook(book),
           extraFacets: _bookExtraFacets(book),
         ));

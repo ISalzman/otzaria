@@ -1461,6 +1461,37 @@ void main() {
 
       expect(earlierBookLateSegment, lessThan(laterBookFirstSegment));
     });
+
+    test('מזהה של ספר שאינו במפת הסדר נכנס ב-u64 וממוין אחרון', () {
+      final u64Max = (BigInt.one << 64) - BigInt.one;
+      final unknownBook = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: IndexingRepository.unknownCatalogueOrder,
+        ordinal: 0,
+      );
+
+      // חריגה מ-u64 נחתכת בגשר ל-Rust ומתגלגלת למזהה 1 — הספר היה קופץ
+      // לראש תוצאות החיפוש במקום להישאר אחרון.
+      expect(unknownBook, lessThanOrEqualTo(u64Max));
+      expect(
+        IndexingRepository.buildCatalogueDocumentId(
+          catalogueOrder: 100000,
+          ordinal: 0,
+        ),
+        lessThan(unknownBook),
+      );
+    });
+
+    test('מזהה של ספר לא ידוע נשאר בתוך u64 גם בשורות מאוחרות', () {
+      final u64Max = (BigInt.one << 64) - BigInt.one;
+
+      expect(
+        IndexingRepository.buildCatalogueDocumentId(
+          catalogueOrder: IndexingRepository.unknownCatalogueOrder,
+          ordinal: 1000000,
+        ),
+        lessThanOrEqualTo(u64Max),
+      );
+    });
   });
 
   group('IndexingRepository.catalogueOrderKey', () {
