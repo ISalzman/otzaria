@@ -2555,7 +2555,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       }
       if (isCommentaryHighlighted || isSelected) {
         // צבע הדגשה למפרש קשור - כמו השורה הנבחרת
-        return theme.colorScheme.primary.withAlpha((0.08 * 255).round());
+        return AppSurfaces.paragraphSelectionBackground(theme.colorScheme);
       }
       return null;
     }();
@@ -2954,7 +2954,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       final backgroundColor = state.highlightedLine == lineIndex
           ? colorScheme.secondaryContainer.withAlpha((0.4 * 255).round())
           : state.selectedIndices.contains(lineIndex)
-          ? colorScheme.primary.withAlpha((0.08 * 255).round())
+          ? AppSurfaces.paragraphSelectionBackground(colorScheme)
           : null;
       final style = backgroundColor == null
           ? baseTextStyle

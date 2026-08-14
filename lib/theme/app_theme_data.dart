@@ -3,6 +3,7 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_colors.dart';
+import 'package:otzaria/theme/app_seed_colors.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -39,13 +40,20 @@ class AppThemeData {
   /// לתוספים, כדי שכולם יקבלו בדיוק אותם צבעים.
   static ColorScheme createColorScheme(Color seedColor, Brightness brightness) {
     final isNeutral = HSLColor.fromColor(seedColor).saturation < 0.1;
-    return ColorScheme.fromSeed(
+    final scheme = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
       dynamicSchemeVariant: isNeutral
           ? DynamicSchemeVariant.monochrome
           : DynamicSchemeVariant.tonalSpot,
     );
+    // ערכת "לבן": זרע לבן נותן מ-fromSeed surface אפור (F9F9F9) — מסך העיון
+    // צריך לבן מוחלט, ולכן ה-surface מוחלף במפורש במצב בהיר.
+    if (seedColor.toARGB32() == AppSeedColors.white.toARGB32() &&
+        brightness == Brightness.light) {
+      return scheme.copyWith(surface: Colors.white);
+    }
+    return scheme;
   }
 
   // ── Light Theme ──────────────────────────────────────────────────────────

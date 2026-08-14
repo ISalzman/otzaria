@@ -467,6 +467,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'לא קיימת ספרייה לאינדוקס': 'There is no library to index',
     'לא תידרש עוד סיסמה לגישה להגדרות.': 'A password will no longer be needed to access the settings.',
     'לאחר טעינת הספרייה תוכל לחזור לסיור המלא מ: הגדרות ← מערכת ← הפעל סיור מחדש.': 'Once the library is loaded you can come back to the full tour from: Settings → System → Run the tour again.',
+    'לבן': 'White',
     'לוח שנה': 'Calendar',
     'לוח שנה ושמור וזכור': 'Calendar and Shamor VeZachor',
     'לוח שנה ראשי': 'Main Calendar',

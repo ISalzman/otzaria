@@ -75,6 +75,16 @@ class AppSurfaces {
   static Color selectedItem(ColorScheme cs) =>
       cs.primaryContainer.withValues(alpha: 0.3);
 
+  /// רקע הפסקה הנבחרת במסך העיון — השורה הפעילה בספר.
+  ///
+  /// ברירת מחדל: 8% primary — רמז עדין של הצבע הראשי. בערכת "לבן"
+  /// (מצב בהיר, מזוהה ע"י surface לבן מוחלט שהוגדר ב-createColorScheme)
+  /// הרקע בהיר יותר — F8FAFC — כדי שהבחירה תהיה עדינה וקרובה ללבן.
+  static Color paragraphSelectionBackground(ColorScheme cs) =>
+      cs.surface == Colors.white
+      ? const Color(0xFFF8FAFC)
+      : cs.primary.withValues(alpha: 0.08);
+
   /// רקע הדגשה לשורה שמעליה מרחפים בגרירה (drag target).
   ///
   /// 8% primary — רמז עדין למקום השחרור מבלי להסתיר את תוכן השורה.

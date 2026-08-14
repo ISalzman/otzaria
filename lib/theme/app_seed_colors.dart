@@ -24,6 +24,7 @@ class AppSeedColors {
   // ── צבעים נייטרלים ————————————————————————————
   static const Color brown = Color(0xFF795548);
   static const Color parchment = Color(0xFFD7CCC8);
+  static const Color white = Color(0xFFFFFFFF);
   static const Color grey = Color(0xFF9E9E9E);
   static const Color darkBrown = Color(0xFF2C1B02);
 
@@ -40,6 +41,7 @@ class AppSeedColors {
     (color: purple, name: 'סגול'),
     (color: brown, name: 'חום'),
     (color: parchment, name: 'פרגמנט / בז\''),
+    (color: white, name: 'לבן'),
     (color: grey, name: 'אפור'),
     (color: darkBrown, name: 'חום זהבהב'),
   ];
