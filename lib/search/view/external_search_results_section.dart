@@ -29,6 +29,10 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// מדור תוצאות ממקור חיצוני של תוסף (למשל היברובוקס) בטאב החיפוש המובנה.
 ///
+/// הרכיב הוא sliver: הוא משתבץ בתוך רשימת הגלילה המאוחדת של
+/// [TantivySearchResults] — מסך אחד לשני המקורות, בלי מדור נפרד עם גלילה
+/// משלו. כשאין ספק פעיל הוא מתכווץ ל-sliver ריק.
+///
 /// המדור פעיל רק כשסומנה בדיאלוג החיפוש שורת תוסף שהצהירה `resultsProvider`
 /// והתוסף נרשם כספק. השאילתה נשלחת לתוסף כאירוע ממוקד — אוצריא עצמה אינה
 /// פונה לשירות החיפוש החיצוני. לחיצה על תוצאה פותחת את הספר במציג המובנה
@@ -53,7 +57,8 @@ class ExternalSearchResultsSection extends StatefulWidget {
 
 /// נתיב הקטגוריה שמייצג facet שנבחר בעץ עבור סינון המדור: facet של ספר
 /// (המקטע האחרון הוא מפתח ספר — 'id:'/'uid:'/'ext:'/נתיב קובץ, תמיד עם ':')
-/// מתקפל לקטגוריית האם שלו.
+/// מתקפל לקטגוריית האם שלו. facet של ספר בדלי "עוד מ" נגמר ב-`#<id>` ולכן
+/// אינו מתקפל — הוא מזוהה במורד הדרך כבחירה של ספר בודד.
 @visibleForTesting
 String externalFilterCategoryOf(String facet) {
   final segments = facet
@@ -84,7 +89,8 @@ String? externalValidatedCategoryOf(
 
 /// המזהים מתוך [index] שסיווגם ([categories]) תואם את בחירת הקטגוריות
 /// [facets] (OR ביניהן; קטגוריה תואמת גם את צאצאיה). [otherFacet] הוא דלי
-/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג.
+/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג, ו-facet של ספר שתחתיו
+/// (`<דלי>/#<id>`) תואם את אותו ספר בלבד.
 @visibleForTesting
 List<int> externalVisibleIdsFor({
   required List<ExternalSearchIndexEntry> index,
@@ -92,6 +98,14 @@ List<int> externalVisibleIdsFor({
   required List<String> facets,
   required String? otherFacet,
 }) {
+  final pickedIds = <int>{};
+  if (otherFacet != null) {
+    for (final facet in facets) {
+      final id = ExternalSearchSummary.bookIdIn(facet, otherFacet);
+      if (id != null) pickedIds.add(id);
+    }
+  }
+
   bool matches(String? path) {
     for (final facet in facets) {
       if (facet == '/') return true;
@@ -108,15 +122,20 @@ List<int> externalVisibleIdsFor({
 
   return [
     for (final entry in index)
-      if (matches(categories[entry.id])) entry.id,
+      if (pickedIds.contains(entry.id) || matches(categories[entry.id]))
+        entry.id,
   ];
 }
 
 class _ExternalSearchResultsSectionState
     extends State<ExternalSearchResultsSection> {
   static const _pageSize = 20;
-  static const _listMaxHeight = 420.0;
   static const _inBookMatchesTimeout = Duration(seconds: 15);
+
+  /// ה-slot של הרכיב ברשימה המאוחדת הוא תמיד sliver — גם כשאין מה להציג.
+  static const Widget _emptySliver = SliverToBoxAdapter(
+    child: SizedBox.shrink(),
+  );
 
   final List<ExternalSearchResult> _results = [];
   int _totalBooks = 0;
@@ -158,7 +177,7 @@ class _ExternalSearchResultsSectionState
   }
 
   /// המדור הוא הכותב היחיד של [SearchingTab.externalSearchStatus], ולכן הוא
-  /// מנקה אותו כשהוא יורד מהעץ (מעבר לפריסה צרה, שבה אין מדור חיצוני כלל) —
+  /// מנקה אותו כשהוא יורד מהעץ (החלפת פריסה רחבה/צרה מרכיבה אותו מחדש) —
   /// אחרת שאר המסך היה ממשיך להתנהג כאילו יש מקור שני. סגירת טאב מפנה את
   /// ה-ValueNotifier רק 350ms אחרי פירוק העץ (ראו TabsBloc._disposeTabLater),
   /// כך שהכתיבה כאן קודמת לו.
@@ -411,12 +430,20 @@ class _ExternalSearchResultsSectionState
 
     final categories = <int, String?>{};
     final counts = <String, int>{};
+    final namedOther = <ExternalSearchBook>[];
     var other = 0;
     for (final entry in index) {
       final path = externalValidatedCategoryOf(entry.categoryPath, validPaths);
       categories[entry.id] = path;
       if (path == null) {
         other += 1;
+        final title = entry.title;
+        // ספר בלי שם אינו יכול להיות שורה בעץ; הוא עדיין נספר בדלי.
+        if (title != null) {
+          namedOther.add(
+            ExternalSearchBook(id: entry.id, title: title, hits: entry.hits),
+          );
+        }
       } else {
         counts[path] = (counts[path] ?? 0) + 1;
       }
@@ -425,6 +452,12 @@ class _ExternalSearchResultsSectionState
     for (final entry in index) {
       totalHits += entry.hits;
     }
+    // שורות הדלי בעץ הן הרשימה הזו, ואין להן סדר קטלוגי כמו לספרי הספרייה —
+    // לכן העשיר במופעים ראשון, ובתיקו לפי שם, כדי שהסדר יהיה יציב וקריא.
+    namedOther.sort((a, b) {
+      final byHits = b.hits.compareTo(a.hits);
+      return byHits != 0 ? byHits : a.title.compareTo(b.title);
+    });
 
     _categoryById = categories;
     _summary = ExternalSearchSummary(
@@ -434,6 +467,7 @@ class _ExternalSearchResultsSectionState
       totalHits: totalHits,
       categoryBookCounts: counts,
       otherBooks: other,
+      namedOtherBooks: namedOther,
     );
     widget.tab.externalSearchSummary.value = _summary;
 
@@ -507,7 +541,7 @@ class _ExternalSearchResultsSectionState
       builder: (context, state) {
         final active = _activeProvider(state);
         if (active == null || state.searchQuery.trim().isEmpty) {
-          return const SizedBox.shrink();
+          return _emptySliver;
         }
         _sourceTag = active.$2;
         return _buildSection(context, state);
@@ -516,64 +550,52 @@ class _ExternalSearchResultsSectionState
   }
 
   /// המדור מציג תוצאות בלבד: המקור, ההתקדמות והספירות שלו מוצגים בשורת
-  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]), ומשם גם מכווצים אותו.
-  Widget _buildSection(BuildContext context, SearchState state) {
-    final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<bool>(
-      valueListenable: widget.tab.externalSectionExpanded,
-      builder: (context, expanded, _) {
-        final body = expanded ? _buildBody(context, state) : null;
-        if (body == null) return const SizedBox.shrink();
-        return Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-          ),
-          child: body,
-        );
-      },
-    );
-  }
+  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]).
+  Widget _buildSection(BuildContext context, SearchState state) =>
+      _buildBody(context, state);
 
-  /// null כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או מדור ריק
-  /// לפני שהתקבלה תשובה כלשהי; אחרת אזור התוצאות היה מותיר מסגרת ריקה.
-  Widget? _buildBody(BuildContext context, SearchState state) {
+  /// sliver ריק כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או
+  /// מדור ריק לפני שהתקבלה תשובה כלשהי; אחרת נשאר רווח מת ברשימה.
+  Widget _buildBody(BuildContext context, SearchState state) {
     if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-            ),
-            ActionButton.ghost(
-              text: 'נסה שוב',
-              onPressed: () {
-                _fetchSignature = '';
-                _syncWithState(state);
-              },
-            ),
-          ],
+              ActionButton.ghost(
+                text: 'נסה שוב',
+                onPressed: () {
+                  _fetchSignature = '';
+                  _syncWithState(state);
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
     if (_results.isEmpty) {
       // בטעינה החיווי יושב בשורת המונים; לפני החיפוש הראשון (חתימה ריקה)
       // אין עדיין מה לדווח עליו.
-      if (_loading || _fetchSignature.isEmpty) return null;
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text('$_sourceTag: לא נמצאו תוצאות'),
+      if (_loading || _fetchSignature.isEmpty) return _emptySliver;
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text('$_sourceTag: לא נמצאו תוצאות'),
+        ),
       );
     }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: _listMaxHeight),
-      child: ListView.builder(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      sliver: SliverList.builder(
         itemCount: _results.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _results.length) {

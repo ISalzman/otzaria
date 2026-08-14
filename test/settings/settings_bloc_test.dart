@@ -120,6 +120,8 @@ void main() {
             pinSidebar: mockSettings['pinSidebar'] as bool,
             sidebarWidth: mockSettings['sidebarWidth'] as double,
             facetFilteringWidth: mockSettings['facetFilteringWidth'] as double,
+            externalResultsFirst:
+                mockSettings['externalResultsFirst'] as bool? ?? false,
             commentaryPaneWidth: mockSettings['commentaryPaneWidth'] as double,
             copyWithHeaders: mockSettings['copyWithHeaders'] as String,
             copyHeaderFormat: mockSettings['copyHeaderFormat'] as String,

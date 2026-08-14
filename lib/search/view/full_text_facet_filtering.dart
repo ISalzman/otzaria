@@ -14,6 +14,7 @@ import 'package:otzaria/search/search_scope_preferences.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/view/search_navigation_tree.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
@@ -287,6 +288,35 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     );
   }
 
+  ExternalSearchSummary? _extraRootsSource;
+  List<SearchTreeExtraCategory> _extraRoots = const [];
+
+  /// שורות הדלי החיצוני, נבנות מחדש רק כשהסיכום עצמו מתחלף. הדלי עשוי לשאת
+  /// אלפי ספרים, וה-builder שמסביב רץ בכל פעימת חיפוש ובכל תו שמוקלד בשדה
+  /// האיתור — שאז העץ כלל אינו מרונדר.
+  List<SearchTreeExtraCategory> _extraRootsFor(ExternalSearchSummary summary) {
+    if (identical(summary, _extraRootsSource)) return _extraRoots;
+    _extraRootsSource = summary;
+    _extraRoots = [
+      SearchTreeExtraCategory(
+        title: summary.otherCategoryTitle,
+        facet: summary.otherCategoryFacet,
+        count: summary.otherBooks,
+        // ספרי הדלי מגיעים מהספק (רק כשצירף שמות לאינדקס); בלעדיהם הדלי
+        // נשאר שורה שאי אפשר לפתוח.
+        books: [
+          for (final book in summary.namedOtherBooks)
+            SearchTreeExtraBook(
+              title: book.title,
+              facet: summary.bookFacetOf(book.id),
+              hits: book.hits,
+            ),
+        ],
+      ),
+    ];
+    return _extraRoots;
+  }
+
   Widget _buildFacetTree() {
     return BlocBuilder<LibraryBloc, LibraryState>(
       builder: (context, libraryState) {
@@ -311,46 +341,56 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
               valueListenable: widget.tab.externalSearchSummary,
               builder: (context, summary, _) {
                 var counts = searchState.facetCounts;
-                var extraRoots = const <({String title, int count})>[];
+                var extraRoots = const <SearchTreeExtraCategory>[];
                 if (summary != null) {
                   counts = Map.of(counts);
                   summary.categoryBookCounts.forEach(
-                    (path, bookCount) => FacetHelper.incrementFacetWithAncestors(
-                      counts,
-                      path,
-                      bookCount,
-                    ),
+                    (path, bookCount) =>
+                        FacetHelper.incrementFacetWithAncestors(
+                          counts,
+                          path,
+                          bookCount,
+                        ),
                   );
-                  // הדלי מוצג גם בספירה 0 כשהוא הסינון הפעיל — אחרת אין
-                  // דרך לבטל אותו מהעץ (העץ עצמו יודע להציג שורה נבחרת).
-                  if (summary.otherBooks > 0 ||
-                      searchState.currentFacets
-                          .contains(summary.otherCategoryFacet)) {
+                  // הדלי מוצג גם בספירה 0 כשהוא (או ספר שתחתיו) הסינון
+                  // הפעיל — אחרת אין דרך לבטל אותו מהעץ. הבחירה שורדת חיפוש
+                  // חדש, וסיווג שונה עלול לרוקן את הדלי בדיוק אז.
+                  final bucketFiltered = searchState.currentFacets.any(
+                    (facet) =>
+                        facet == summary.otherCategoryFacet ||
+                        summary.bookIdOfFacet(facet) != null,
+                  );
+                  if (summary.otherBooks > 0 || bucketFiltered) {
                     FacetHelper.incrementFacet(counts, '/', summary.otherBooks);
-                    extraRoots = [
-                      (
-                        title: summary.otherCategoryTitle,
-                        count: summary.otherBooks,
-                      ),
-                    ];
+                    extraRoots = _extraRootsFor(summary);
                   }
                 }
-                return SearchNavigationTree(
-                  library: library,
-                  facetCounts: counts,
-                  selectedFacets: searchState.currentFacets,
-                  expansion: _expansionState,
-                  filterQuery: _filterQuery.text,
-                  isLoading: searchState.isLoading,
-                  hasResults: searchState.results.isNotEmpty,
-                  onSetFacet: (facet) => _setFacet(context, facet),
-                  onToggleFacet: (facet) => _handleFacetToggle(context, facet),
-                  onToggleExpand: (path, isExpanded) => setState(() {
-                    _expansionState[path] = !isExpanded;
-                  }),
-                  isMultiSelectPressed: _isMultiSelectModifierPressed,
-                  onClearAll: () => _clearAllScope(context),
-                  extraRootCategories: extraRoots,
+                // הגדרת "תוצאות מ<מקור> קודמות/מאוחרות" קובעת גם את מיקום
+                // הדלי החיצוני בעץ — בראשו או בסופו (ברירת המחדל).
+                return BlocBuilder<SettingsBloc, SettingsState>(
+                  buildWhen: (p, c) =>
+                      p.externalResultsFirst != c.externalResultsFirst,
+                  builder: (context, settingsState) {
+                    return SearchNavigationTree(
+                      library: library,
+                      facetCounts: counts,
+                      selectedFacets: searchState.currentFacets,
+                      expansion: _expansionState,
+                      filterQuery: _filterQuery.text,
+                      isLoading: searchState.isLoading,
+                      hasResults: searchState.results.isNotEmpty,
+                      onSetFacet: (facet) => _setFacet(context, facet),
+                      onToggleFacet: (facet) =>
+                          _handleFacetToggle(context, facet),
+                      onToggleExpand: (path, isExpanded) => setState(() {
+                        _expansionState[path] = !isExpanded;
+                      }),
+                      isMultiSelectPressed: _isMultiSelectModifierPressed,
+                      onClearAll: () => _clearAllScope(context),
+                      extraRootCategories: extraRoots,
+                      extraCategoriesFirst: settingsState.externalResultsFirst,
+                    );
+                  },
                 );
               },
             );

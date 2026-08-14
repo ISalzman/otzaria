@@ -10,12 +10,18 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/search_scope_menu.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 
 import '../support/search_engine_test_init.dart';
 
 class _MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
     implements LibraryBloc {}
+
+class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {}
 
 class _StubSearchBloc extends SearchBloc {
   _StubSearchBloc(SearchState initialState) {
@@ -84,16 +90,24 @@ Future<void> main() async {
     'סרגל התוצאות - סינון ממדים דרך כפתור הסינון',
     () {
       late _StubSearchBloc searchBloc;
+      late _MockSettingsBloc settingsBloc;
       late SearchingTab tab;
 
       setUp(() {
         tab = SearchingTab('חיפוש', null);
         searchBloc = _StubSearchBloc(const SearchState());
+        settingsBloc = _MockSettingsBloc();
+        whenListen(
+          settingsBloc,
+          const Stream<SettingsState>.empty(),
+          initialState: SettingsState.initial(),
+        );
       });
 
       tearDown(() async {
         tab.dispose();
         await searchBloc.close();
+        await settingsBloc.close();
       });
 
       Future<void> pumpSidebar(WidgetTester tester) async {
@@ -104,6 +118,7 @@ Future<void> main() async {
                 providers: [
                   BlocProvider<SearchBloc>.value(value: searchBloc),
                   BlocProvider<LibraryBloc>.value(value: libraryBloc),
+                  BlocProvider<SettingsBloc>.value(value: settingsBloc),
                 ],
                 child: SizedBox(
                   height: 700,

@@ -29,9 +29,6 @@ class SearchingTab extends OpenedTab {
   final ValueNotifier<ExternalSearchStatus?> externalSearchStatus =
       ValueNotifier(null);
 
-  /// האם מדור התוצאות החיצוני פרוש. הכיווץ נעשה משורת המונים, ולכן המצב
-  /// יושב על הטאב ולא בתוך המדור.
-  final ValueNotifier<bool> externalSectionExpanded = ValueNotifier(true);
   final ItemScrollController scrollController = ItemScrollController();
   List<Book> allBooks = [];
 
@@ -343,7 +340,6 @@ class SearchingTab extends OpenedTab {
     useGlobalNegativeSearchOptions.dispose();
     externalSearchSummary.dispose();
     externalSearchStatus.dispose();
-    externalSectionExpanded.dispose();
     // סגירת ה-bloc כדי למנוע דליפה
     searchBloc.close();
     super.dispose();
