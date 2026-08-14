@@ -86,6 +86,9 @@ const List<String> pluginNetworkAllowlist = <String>[
 
   // תוסף MDY
   'https://github.com/yair-yair/mdy-images-updated',
+  'https://api.github.com/repos/yair-yair/mdy-images-updated/',
+  'https://raw.githubusercontent.com/yair-yair/mdy-images-updated/',
+  'https://github.com/yair-yair/mdy-images-updated/',
 ];
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
