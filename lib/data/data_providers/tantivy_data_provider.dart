@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
+import 'package:otzaria/data/data_providers/catalogue_order_revision.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_engine_gateway.dart';
 import 'package:otzaria/search/magic_dictionary_downloader.dart';
@@ -49,6 +50,9 @@ class TantivyDataProvider {
   IndexCompatibility? _indexCompatibility;
   IndexCompatibility? get indexCompatibility => _indexCompatibility;
 
+  /// נקבע באתחול: האינדקס מכיל ספרים שנצרב בהם סדר קטלוגי מגרסה ישנה.
+  bool _catalogueOrderStale = false;
+
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
     debugPrint(
@@ -90,7 +94,11 @@ class TantivyDataProvider {
     _indexCompatibility = _checkIndexCompatibility(indexPath);
 
     final engine = await _initEngine();
-    await _loadIndexedFilePaths(engine);
+    final indexedFilePathsLoaded = await _loadIndexedFilePaths(engine);
+    _syncCatalogueOrderRevision(
+      indexPath,
+      indexStateIsKnown: indexedFilePathsLoaded && !isTempFallback,
+    );
 
     // indexedFilePaths כעת משקפת את מצב האינדקס בפועל. צרכנים שמסיקים
     // "אין אינדקס" מתוך הקבוצה צריכים לחכות לסימן הזה כדי לא להציג שגוי בהפעלה.
@@ -115,16 +123,51 @@ class TantivyDataProvider {
     }
   }
 
+  /// מכריע אם הסדר הקטלוגי שבאינדקס מיושן. אינדקס ריק (התקנה נקייה או
+  /// אינדקס שאופס) מסומן מיד בגרסה הנוכחית, כדי שלא ידרוש בנייה מחדש.
+  ///
+  /// [indexStateIsKnown] false כשלא הצלחנו לקרוא את מצב האינדקס או שהמנוע
+  /// רץ על אינדקס זמני. חתימה במצב כזה הייתה מברכת אינדקס ישן ומלא כתקין,
+  /// והבאג היה נשאר אצל המשתמש בלי שום סימן — לכן לא כותבים ולא מסמנים.
+  void _syncCatalogueOrderRevision(
+    String indexPath, {
+    required bool indexStateIsKnown,
+  }) {
+    final hasIndexedBooks = indexedFilePaths.isNotEmpty;
+
+    if (CatalogueOrderRevision.shouldStamp(
+      indexStateIsKnown: indexStateIsKnown,
+      hasIndexedBooks: hasIndexedBooks,
+    )) {
+      _catalogueOrderStale = false;
+      CatalogueOrderRevision.write(indexPath);
+      return;
+    }
+
+    _catalogueOrderStale = CatalogueOrderRevision.isStale(
+      storedRevision: CatalogueOrderRevision.read(indexPath),
+      hasIndexedBooks: hasIndexedBooks,
+      indexStateIsKnown: indexStateIsKnown,
+    );
+
+    if (_catalogueOrderStale) {
+      debugPrint('⚠️ האינדקס נבנה בסדר קטלוגי ישן — נדרשת בנייה מחדש');
+    }
+  }
+
   /// טוען מהאינדקס עצמו את רשימת הספרים שיש להם מסמכים חיים.
-  Future<void> _loadIndexedFilePaths(SearchEngine engine) async {
+  /// מחזיר האם הקריאה הצליחה — קבוצה ריקה אחרי כשל אינה "אינדקס ריק".
+  Future<bool> _loadIndexedFilePaths(SearchEngine engine) async {
     indexedFilePaths.clear();
     try {
       indexedFilePaths.addAll(await engine.getIndexedFilePaths());
       debugPrint(
         '📚 נקראו ${indexedFilePaths.length} ספרים מאונדקסים מהאינדקס',
       );
+      return true;
     } catch (e) {
       debugPrint('⚠️ קריאת הספרים המאונדקסים מהאינדקס נכשלה: $e');
+      return false;
     }
   }
 
@@ -377,10 +420,11 @@ class TantivyDataProvider {
     }
   }
 
-  /// האם האינדקס הקיים דורש איפוס ובנייה מחדש, לפי בדיקת התאימות
-  /// שנקראה מהאינדקס עצמו בעת פתיחת המנוע.
+  /// האם האינדקס הקיים דורש איפוס ובנייה מחדש — בגלל אי-תאימות סכמה
+  /// שנקראה מהאינדקס עצמו, או בגלל שנצרב בו סדר קטלוגי מגרסה ישנה.
   bool get requiresManualReindex =>
-      isRebuildRequiredStatus(_indexCompatibility?.status);
+      isRebuildRequiredStatus(_indexCompatibility?.status) ||
+      _catalogueOrderStale;
 
   /// האם סטטוס תאימות נתון מחייב בנייה מחדש של האינדקס.
   @visibleForTesting
