@@ -1271,7 +1271,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
   late final Future<bool> Function(Book book, Library library)?
   _indexedBookVerifier;
-  final IndexingRepository _indexingRepository = IndexingRepository(
+  late final IndexingRepository _indexingRepository = IndexingRepository(
     TantivyDataProvider.instance,
   );
   Future<Map<String, BigInt>>? _indexFingerprints;
