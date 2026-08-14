@@ -7,7 +7,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
-import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -77,16 +77,33 @@ List<ToolTab> orphanedPluginToolTabs(
       .toList();
 }
 
-/// סוגר כרטיסיות של תוספים שהוסרו. נקרא בכל `PluginSystemLoaded`, כי הסרה
-/// יכולה להגיע מחלונית התוספים, ממסך ההגדרות או מניהול הכלים.
-void closeUninstalledPluginTabs(
-  BuildContext context,
-  List<InstalledPlugin> installedPlugins,
+/// כמו [orphanedPluginToolTabs], לפי מצב מערכת התוספים.
+///
+/// כל עוד הרשימה עדיין נטענת מוחזרת רשימה ריקה: באותו רגע אין דרך לדעת מה
+/// מותקן, וסגירה הייתה מוחקת כרטיסיות תקינות — למשל בעלייה, כשהכרטיסיות
+/// משוחזרות לפני שרישום התוספים נקרא.
+List<ToolTab> orphanedPluginToolTabsForState(
+  List<OpenedTab> tabs,
+  PluginSystemState pluginState,
 ) {
+  if (pluginState is! PluginSystemLoaded) return const [];
+  return orphanedPluginToolTabs(
+    tabs,
+    pluginState.plugins.map((p) => p.pluginId),
+  );
+}
+
+/// סוגר כרטיסיות של תוספים שהוסרו.
+///
+/// נקרא משני כיוונים: כשרשימת התוספים משתנה (הסרה — שיכולה להגיע מחלונית
+/// התוספים, ממסך ההגדרות או מניהול הכלים), וכשרשימת הכרטיסיות מתחלפת (מעבר
+/// בין סביבות עבודה ושחזור בעלייה) — כי כרטיסיה של תוסף שהוסר יכולה לצוץ
+/// מסביבת עבודה שלא הייתה פעילה בזמן המחיקה.
+void closeUninstalledPluginTabs(BuildContext context) {
   final tabsBloc = context.read<TabsBloc>();
-  final orphaned = orphanedPluginToolTabs(
+  final orphaned = orphanedPluginToolTabsForState(
     tabsBloc.state.tabs,
-    installedPlugins.map((p) => p.pluginId),
+    context.read<PluginSystemBloc>().state,
   );
   for (final tab in orphaned) {
     tabsBloc.add(RemoveTab(tab));

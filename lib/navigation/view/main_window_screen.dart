@@ -2772,10 +2772,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
           // מסכים, ולכן מגיבים לרשימה המעודכנת ולא לאירוע ההסרה עצמו.
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) => current is PluginSystemLoaded,
-            listener: (context, state) => closeUninstalledPluginTabs(
-              context,
-              (state as PluginSystemLoaded).plugins,
-            ),
+            listener: (context, _) => closeUninstalledPluginTabs(context),
+          ),
+          // אותו ניקוי בכיוון ההפוך: כרטיסיה של תוסף שהוסר יכולה להגיע
+          // מסביבת עבודה שלא הייתה פעילה בזמן המחיקה, או משחזור הכרטיסיות
+          // בעלייה — שם היא נטענת אחרי שרשימת התוספים כבר עודכנה.
+          BlocListener<TabsBloc, TabsState>(
+            listenWhen: (previous, current) =>
+                !listEquals(previous.tabs, current.tabs),
+            listener: (context, _) => closeUninstalledPluginTabs(context),
           ),
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) => current is PluginSystemLoaded,
