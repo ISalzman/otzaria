@@ -26,20 +26,29 @@ String? _searchEnginePackageRoot() {
 /// כל בניות המנוע הזמינות (release/debug), ממוינות מהחדשה לישנה — קוד
 /// ה-FRB המחולל חייב להתאים ל-DLL (בדיקת content hash באתחול), ו-build
 /// ישן בפרופיל אחד אסור שיסתיר build עדכני בפרופיל השני.
+///
+/// נסרקים גם פלטי הבנייה של האפליקציה עצמה — לא פעם זו הבנייה היחידה על
+/// מכונת פיתוח, ובלעדיה כל קבוצות הטסט שתלויות במנוע מדולגות בשקט.
 List<String> searchEngineLibraryCandidates() {
-  final packageRoot = _searchEnginePackageRoot();
-  if (packageRoot == null) return const [];
   const names = [
     'search_engine.dll',
     'libsearch_engine.so',
     'libsearch_engine.dylib',
   ];
+  final packageRoot = _searchEnginePackageRoot();
+  final roots = <String>[
+    for (final profile in ['release', 'debug'])
+      if (packageRoot != null) '$packageRoot/rust/target/$profile',
+    for (final profile in ['Release', 'Debug'])
+      'build/windows/x64/plugins/otzaria_search_engine/$profile',
+    'build/linux/x64/release/plugins/otzaria_search_engine',
+    'build/linux/x64/debug/plugins/otzaria_search_engine',
+  ];
+
   final candidates = <File>[];
-  for (final profile in ['release', 'debug']) {
+  for (final root in roots) {
     for (final name in names) {
-      final path = '$packageRoot/rust/target/$profile/$name'
-          .replaceAll('\\', '/')
-          .replaceAll('//', '/');
+      final path = '$root/$name'.replaceAll('\\', '/').replaceAll('//', '/');
       final file = File(path);
       if (file.existsSync()) {
         candidates.add(file);

@@ -1119,14 +1119,6 @@ class IndexingRepository {
     return (BigInt.from(catalogueOrder + 1) << 32) + BigInt.from(ordinal + 1);
   }
 
-  static int catalogueOrderFromDocumentId(BigInt documentId) {
-    final encodedCatalogueOrder = (documentId >> 32).toInt();
-    if (encodedCatalogueOrder <= 0) {
-      return -1;
-    }
-    return encodedCatalogueOrder - 1;
-  }
-
   static String catalogueOrderKey(Book book) {
     if (book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty) {
       return 'ext:${book.externalLibraryId}';
