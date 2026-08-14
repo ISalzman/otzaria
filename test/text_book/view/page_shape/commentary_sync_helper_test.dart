@@ -111,5 +111,99 @@ void main() {
         0,
       );
     });
+
+    test('שורת מקור עם כמה קטעי מפרש — נצמד לתחילת הבלוק', () {
+      // אור החיים על בראשית מגיע ל-63 קישורים על שורת מקור אחת.
+      final links = [
+        _link(index1: 10, index2: 80),
+        _link(index1: 10, index2: 42),
+        _link(index1: 10, index2: 57),
+      ];
+      expect(
+        CommentarySyncHelper.getCommentaryTargetIndex(
+          linksForCommentary: links,
+          logicalMainIndex: 9,
+        ),
+        41, // index2(42) - 1 — הקטע הראשון, לא זה שבמקרה ראשון ברשימה
+      );
+    });
+
+    test('היעד אינו תלוי בסדר הקישורים באותה שורת מקור', () {
+      final ascending = [
+        _link(index1: 7, index2: 20),
+        _link(index1: 7, index2: 35),
+      ];
+      final descending = [
+        _link(index1: 7, index2: 35),
+        _link(index1: 7, index2: 20),
+      ];
+      for (final links in [ascending, descending]) {
+        expect(
+          CommentarySyncHelper.getCommentaryTargetIndex(
+            linksForCommentary: links,
+            logicalMainIndex: 6,
+          ),
+          19, // index2(20) - 1, בשני סדרי הקלט
+        );
+      }
+    });
+
+    test('קישור הבא בריבוי קטעים — גם הוא נצמד לתחילת הבלוק', () {
+      // אין קישור קודם, ולכן נופלים על הקישור הבא הראשון.
+      final links = [
+        _link(index1: 30, index2: 90),
+        _link(index1: 30, index2: 65),
+      ];
+      expect(
+        CommentarySyncHelper.getCommentaryTargetIndex(
+          linksForCommentary: links,
+          logicalMainIndex: 4,
+        ),
+        64, // index2(65) - 1
+      );
+    });
+  });
+
+  group('glideDelta', () {
+    const alignment = 1 / 3;
+    const epsilon = 2.0;
+
+    double? delta(double leadingEdge, {double viewportHeight = 600}) =>
+        CommentarySyncHelper.glideDelta(
+          leadingEdge: leadingEdge,
+          viewportHeight: viewportHeight,
+          alignment: alignment,
+          epsilon: epsilon,
+        );
+
+    test('היעד כבר על קו העוגן — אין תזוזה', () {
+      expect(delta(alignment), isNull);
+    });
+
+    test('סטייה מתחת לסף — אין תזוזה', () {
+      // 1.8 פיקסלים: מתחת ל-2, אחרת כל שבר פיקסל היה יורה אנימציה חדשה.
+      expect(delta(alignment + 1.8 / 600), isNull);
+    });
+
+    test('היעד מתחת לקו העוגן — גלילה קדימה', () {
+      // חצי חלון מתחת לשליש: 600*(0.5-1/3) = 100
+      expect(delta(0.5), closeTo(100, 0.001));
+    });
+
+    test('היעד מעל קו העוגן — גלילה אחורה', () {
+      expect(delta(0), closeTo(-200, 0.001));
+    });
+
+    test('גובה חלון גדול יותר מגדיל את התזוזה באותו יחס', () {
+      final small = delta(0.5, viewportHeight: 300)!;
+      final large = delta(0.5, viewportHeight: 900)!;
+
+      expect(large, closeTo(small * 3, 0.001));
+    });
+
+    test('ערך לא סופי אינו מייצר תזוזה', () {
+      expect(delta(double.nan), isNull);
+      expect(delta(0.5, viewportHeight: double.infinity), isNull);
+    });
   });
 }

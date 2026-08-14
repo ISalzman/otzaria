@@ -1682,6 +1682,8 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   final ItemScrollController _scrollController = ItemScrollController();
   final ItemPositionsListener _positionsListener =
       ItemPositionsListener.create();
+  final ScrollOffsetController _scrollOffsetController =
+      ScrollOffsetController();
   List<Link> _relevantLinks = [];
   int? _lastSyncedIndex; // האינדקס האחרון שסונכרן
   int _initialSyncAttempts = 0; // ניסיונות סנכרון ראשוני עד שה-controller מחובר
@@ -1929,6 +1931,10 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   /// בראש). אותו ערך משמש גם לבחירת שורת המקור וגם ליישור המפרש, כדי
   /// ששניהם יהיו באותו מיקום אנכי.
   static const double _syncAlignment = 1 / 3;
+
+  /// סף בפיקסלים שמתחתיו היעד נחשב כבר במקומו. בלעדיו תזוזה של שבר פיקסל
+  /// הייתה יורה אנימציה חדשה שמבטלת את הקודמת.
+  static const double _glideEpsilonPixels = 2;
 
   /// מחזיר את אינדקס השורה שבכשליש העליון של ה-viewport מתוך השורות
   /// הגלויות. הסנכרון מכוון לנקודה זו ולא לשורה העליונה, כדי שהמפרש
@@ -2327,41 +2333,77 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
       return;
     }
 
-    // אם כבר סונכרנו לאינדקס הזה ואין לחיצה מפורשת - לא צריך לגלול שוב
-    if (targetIndex == _lastSyncedIndex && state.selectedIndex == null) {
-      return;
-    }
-
-    // גלילה למיקום הנכון במפרש
+    // יעד חוזר אינו נחסם כאן: הגלישה מודדת מרחק אמיתי ויוצאת מעצמה, וכך
+    // גלישה שנקטעה (גרירה בחלונית, שינוי גובה בהשלמת חלון) מתקנת את עצמה.
     if (targetIndex >= 0 &&
         targetIndex < _content!.length &&
         _scrollController.isAttached) {
       // במצב טעינת-חלונות: מזניק טעינה סביב היעד כדי שהשורות ימולאו
       // מיד אחרי הקפיצה (מאזין המיקומים ישלים חלונות בהמשך הגלילה).
-      if (_useWindowedLoading) {
+      if (_useWindowedLoading && targetIndex != _lastSyncedIndex) {
         unawaited(_ensureWindowLoaded(targetIndex, targetIndex));
       }
-      // סנכרון מגלילה רציפה (או ראשוני) — קפיצה מיידית כדי שהמפרש יעקוב
-      // צמוד אחר הטקסט הראשי. אנימציה כאן הייתה יוצרת פיגור והתנגשות בין
-      // אנימציות עוקבות, וגם בונה אלפי פריטים בזמן אנימציה (תקיעה).
-      // רק לחיצה מפורשת על שורה מקבלת גלילה מונפשת.
-      // מציב את שורת היעד בכשליש העליון של חלון המפרש (_syncAlignment),
-      // מקביל לשורת המקור שנבחרה מאותה נקודה ב-viewport של הטקסט הראשי,
-      // ולא בראש החלון.
-      if (_lastSyncedIndex == null || state.selectedIndex == null) {
+      if (_lastSyncedIndex == null) {
+        // סנכרון ראשוני: הרשימה נבנתה מאינדקס 0 וחייבת להגיע למקומה מיד.
         _scrollController.jumpTo(
           index: targetIndex,
           alignment: _syncAlignment,
         );
-      } else {
+      } else if (state.selectedIndex != null) {
         _scrollController.scrollTo(
           index: targetIndex,
           duration: const Duration(milliseconds: 300),
           alignment: _syncAlignment,
         );
+      } else {
+        _glideToTarget(targetIndex);
       }
       _lastSyncedIndex = targetIndex;
     }
+  }
+
+  /// מזיז את המפרש ליעד בגלילה רציפה במקום בקפיצה.
+  ///
+  /// `jumpTo` מחליף את פריט העוגן ומרכיב מחדש את החלונית כולה; כשהיעד כבר
+  /// גלוי די בהזזת ההיסט בפיקסלים, בלי בנייה מחדש.
+  void _glideToTarget(int targetIndex) {
+    final position = _visiblePositionFor(targetIndex);
+    final viewportHeight =
+        context.size?.height ?? MediaQuery.sizeOf(context).height;
+
+    // יעד שלא נפרש — המרחק בפיקסלים אינו ידוע, ורק קפיצה תגיע אליו.
+    if (position == null || viewportHeight <= 0) {
+      _scrollController.jumpTo(index: targetIndex, alignment: _syncAlignment);
+      return;
+    }
+
+    final delta = CommentarySyncHelper.glideDelta(
+      leadingEdge: position.itemLeadingEdge,
+      viewportHeight: viewportHeight,
+      alignment: _syncAlignment,
+      epsilon: _glideEpsilonPixels,
+    );
+    if (delta == null) {
+      return;
+    }
+
+    unawaited(
+      _scrollOffsetController.animateScroll(
+        offset: delta,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+      ),
+    );
+  }
+
+  /// המיקום הנוכחי של [index] אם הוא בין הפריטים שנפרשו, אחרת null.
+  ItemPosition? _visiblePositionFor(int index) {
+    for (final position in _positionsListener.itemPositions.value) {
+      if (position.index == index) {
+        return position;
+      }
+    }
+    return null;
   }
 
   @override
@@ -2410,6 +2452,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               openBookCallback: widget.openBookCallback,
               scrollController: _scrollController,
               positionsListener: _positionsListener,
+              scrollOffsetController: _scrollOffsetController,
               isMainText: false,
               bookTitle: widget.commentatorName, // לפתיחה בטאב נפרד
               labelForIndex: _commentaryToc == null

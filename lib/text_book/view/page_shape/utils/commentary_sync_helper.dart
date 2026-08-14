@@ -49,16 +49,21 @@ class CommentarySyncHelper {
 
     final mainLineNumber = logicalMainIndex + 1; // המרה ל-1-based
 
-    // מציאת הקישור הקודם הקרוב ביותר (before) והבא הקרוב ביותר (after)
+    // שורת מקור אחת מקושרת לעיתים לעשרות שורות מפרש; בוחרים את תחילת הבלוק,
+    // אחרת היעד נקבע לפי סדר הרשימה — שאינו מובטח — והנחיתה משתנה בין טעינות.
     Link? before;
     Link? after;
     for (final link in linksForCommentary) {
       if (link.index1 <= mainLineNumber) {
-        if (before == null || link.index1 > before.index1) {
+        if (before == null ||
+            link.index1 > before.index1 ||
+            (link.index1 == before.index1 && link.index2 < before.index2)) {
           before = link;
         }
       } else {
-        if (after == null || link.index1 < after.index1) {
+        if (after == null ||
+            link.index1 < after.index1 ||
+            (link.index1 == after.index1 && link.index2 < after.index2)) {
           after = link;
         }
       }
@@ -69,5 +74,26 @@ class CommentarySyncHelper {
       return before.index2 - 1; // המרה ל-0-based
     }
     return after == null ? null : after.index2 - 1;
+  }
+
+  /// המרחק בפיקסלים שיש לגלול כדי ששורת היעד תשב על קו העוגן.
+  ///
+  /// [leadingEdge] - הקצה העליון של שורת היעד, כשבר מגובה החלון
+  /// [viewportHeight] - גובה חלון המפרש בפיקסלים
+  /// [alignment] - קו העוגן, כשבר מגובה החלון
+  /// [epsilon] - סף בפיקסלים שמתחתיו היעד נחשב במקומו
+  /// מחזיר null כשאין צורך לזוז — כך שתזוזה של שבר פיקסל לא תירה אנימציה
+  /// חדשה שמבטלת את הקודמת.
+  static double? glideDelta({
+    required double leadingEdge,
+    required double viewportHeight,
+    required double alignment,
+    required double epsilon,
+  }) {
+    final delta = (leadingEdge - alignment) * viewportHeight;
+    if (!delta.isFinite || delta.abs() < epsilon) {
+      return null;
+    }
+    return delta;
   }
 }
