@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -11,7 +12,10 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/search/view/external_search_results_section.dart';
+import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -26,14 +30,15 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show MergedSibling;
 
+/// אזור התוצאות של טאב החיפוש — רשימת גלילה אחת לשני המקורות: תוצאות
+/// המנוע המובנה, ואיתן (כשספק חיצוני של תוסף פעיל) בלוק התוצאות החיצוניות
+/// כ-sliver באותה רשימה ([ExternalSearchResultsSection]) — בלי חלוקת המסך
+/// לשני מדורים נפרדים. גם מצבי הריק/טעינה/שגיאה של המנוע מרונדרים כאן,
+/// כדי שהבלוק החיצוני יישאר חי ונראה גם כשלמנוע אין מה להציג.
 class TantivySearchResults extends StatefulWidget {
   final SearchingTab tab;
   final VoidCallback? onEditSearch;
-  const TantivySearchResults({
-    super.key,
-    required this.tab,
-    this.onEditSearch,
-  });
+  const TantivySearchResults({super.key, required this.tab, this.onEditSearch});
 
   @override
   State<TantivySearchResults> createState() => _TantivySearchResultsState();
@@ -63,12 +68,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          // הרכיב מוצג גם כשורה קומפקטית בתוך sliver (גובה לא חסום) —
+          // בלי min ה-Column היה דורש גובה אינסופי.
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 52,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            Icon(icon, size: 52, color: colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
               title,
@@ -213,11 +217,16 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   }) async {
     // המפתח משמר את זהות הספר (ספר אישי מול רשמי בעל אותה כותרת), והכותרת
     // מאמתת אותו: אינדקס שאינו מסונכרן ממפה את המפתח לספר אחר לגמרי.
-    final resolvedBook = await widget.tab.searchBloc.resolveBookForIndexedPath(
+    final resolution = await widget.tab.searchBloc.resolveBookForIndexedPath(
       filePath,
       indexedTitle: title,
     );
     if (!mounted) return;
+    if (resolution.isStale) {
+      UiSnack.showError(LibraryMessages.searchResultIndexOutOfDate);
+      return;
+    }
+    final resolvedBook = resolution.book;
 
     final rawQuery = widget.tab.queryController.text;
     final configuration = widget.tab.searchBloc.state.configuration;
@@ -386,57 +395,175 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     );
   }
 
+  /// שאילתת החיפוש האחרון שהושלם — מבחין בין "חיפוש חדש" (ספינר חוסם במקום
+  /// התוצאות הישנות) לבין "טען עוד" באותה שאילתה (אסור להעלים את הקיימות).
+  String _lastCompletedQuery = '';
+
+  void _updateLastCompletedQuery(SearchState state) {
+    if (!state.isLoading) {
+      _lastCompletedQuery = state.searchQuery;
+    }
+  }
+
+  bool _shouldShowBlockingLoader(SearchState state) {
+    final currentQuery = state.searchQuery.trim();
+    final lastQuery = _lastCompletedQuery.trim();
+    return state.isLoading &&
+        currentQuery.isNotEmpty &&
+        currentQuery != lastQuery;
+  }
+
   Widget _buildResultsContent(SearchState state, BoxConstraints constrains) {
-    // חשוב: בעת טעינה אנחנו לא רוצים לפרק את ה-ListView,
-    // אחרת הגלילה מתאפסת לראש. לכן ספינר מרכזי מוצג רק כשאין עדיין תוצאות.
-    if (state.isLoading && state.results.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    _updateLastCompletedQuery(state);
+    // רשימת גלילה אחת לשני המקורות: הבלוק החיצוני הוא sliver באותו
+    // CustomScrollView, ולכן כל מצבי המנוע (כולל ריק/טעינה/שגיאה) מרונדרים
+    // אף הם כ-slivers — אחרת הבלוק החיצוני היה יורד מהעץ יחד עם הרשימה.
+    return ValueListenableBuilder<ExternalSearchStatus?>(
+      valueListenable: widget.tab.externalSearchStatus,
+      builder: (context, externalStatus, _) {
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          buildWhen: (p, c) => p.externalResultsFirst != c.externalResultsFirst,
+          builder: (context, settings) {
+            // ה-key מאפשר ל-Flutter לזהות את המדור כשהוא נודד בין ראש
+            // הרשימה לסופה (החלפת "קודמות/מאוחרות"): בלעדיו ה-State היה
+            // מפורק ונבנה מחדש — והמדור היה יורה חיפוש חיצוני חדש במקום
+            // רק להחליף מקום.
+            final externalSliver = ExternalSearchResultsSection(
+              key: const ValueKey('external-results-sliver'),
+              tab: widget.tab,
+            );
+            final engineSlivers = _buildEngineSlivers(
+              state,
+              hasExternal: externalStatus != null,
+            );
+            final scrollView = CustomScrollView(
+              key: PageStorageKey(widget.tab),
+              controller: _scrollController,
+              // מיקום הבלוק החיצוני נשלט בהגדרה "קודמות/מאוחרות"
+              // (ExternalResultsPositionControl): כברירת מחדל אחרי תוצאות
+              // המנוע — כמו הקטגוריה "עוד מ<מקור>" בסוף עץ הקטגוריות.
+              slivers: settings.externalResultsFirst
+                  ? [externalSliver, ...engineSlivers]
+                  : [...engineSlivers, externalSliver],
+            );
+            if (!state.resultsTruncated || state.results.isEmpty) {
+              return scrollView;
+            }
+            // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
+            // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
+            return Column(
+              children: [
+                _buildTruncatedBanner(context),
+                Expanded(child: scrollView),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// מצב-מנוע שממלא את שארית המסך כשאין מקור חיצוני (המראה המקורי), ונשאר
+  /// קומפקטי כשיש — אחרת הוא היה דוחק את הבלוק החיצוני אל מחוץ למסך.
+  Widget _engineStateSliver(Widget child, {required bool hasExternal}) =>
+      hasExternal
+      ? SliverToBoxAdapter(child: child)
+      : SliverFillRemaining(hasScrollBody: false, child: child);
+
+  List<Widget> _buildEngineSlivers(
+    SearchState state, {
+    required bool hasExternal,
+  }) {
+    // חשוב: בטעינת-המשך אנחנו לא רוצים לפרק את הרשימה, אחרת הגלילה מתאפסת
+    // לראש. לכן ספינר חוסם מוצג רק בחיפוש חדש או כשאין עדיין תוצאות.
+    if (_shouldShowBlockingLoader(state) ||
+        (state.isLoading && state.results.isEmpty)) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
     }
     if (state.searchQuery.isEmpty) {
-      return _buildInformativeEmptyState(
-        icon: FluentIcons.search_24_regular,
-        title: 'לא בוצע חיפוש',
-        message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
-      );
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: _buildInformativeEmptyState(
+            icon: FluentIcons.search_24_regular,
+            title: 'לא בוצע חיפוש',
+            message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
+          ),
+        ),
+      ];
     }
-    if (state.results.isEmpty && !state.isLoading) {
+    if (state.hasNoSelectedFacets) {
+      return [
+        _engineStateSliver(
+          _buildInformativeEmptyState(
+            icon: FluentIcons.filter_dismiss_24_regular,
+            title: 'לא נבחרו קטגוריות',
+            message: 'בחר קטגוריה אחת לפחות כדי לבצע חיפוש.',
+          ),
+          hasExternal: hasExternal,
+        ),
+      ];
+    }
+    if (state.results.isEmpty) {
       // הבחנה בין חיפוש ריק לגיטימי לבין כשל בחיפוש: אם errorMessage קיים,
       // תקלת מנוע (או FFI) הסתיימה בלי תוצאות — מציגים את ההודעה בצבע שגיאה
       // במקום "אין תוצאות" המטעה.
       if (state.errorMessage != null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              state.errorMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+        return [
+          _engineStateSliver(
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  state.errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ),
+            hasExternal: hasExternal,
           ),
-        );
+        ];
       }
       // חריגה מתקציב ההרחבות במנוע שהצטמצמה לאפס תוצאות: "אין תוצאות" מטעה
       // כאן, כי החיפוש לא נבדק במלואו.
       if (state.resultsTruncated) {
-        return _buildInformativeEmptyState(
-          icon: FluentIcons.warning_24_regular,
-          title: 'הגעת למגבלת אפשרויות החיפוש',
-          message:
-              'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) יצר '
-              'יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק מהגדרות החיפוש '
-              'או לצמצם את מילות החיפוש.',
-          showEditButton: true,
-        );
+        return [
+          _engineStateSliver(
+            _buildInformativeEmptyState(
+              icon: FluentIcons.warning_24_regular,
+              title: 'הגעת למגבלת אפשרויות החיפוש',
+              message:
+                  'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) יצר '
+                  'יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק מהגדרות החיפוש '
+                  'או לצמצם את מילות החיפוש.',
+              showEditButton: true,
+            ),
+            hasExternal: hasExternal,
+          ),
+        ];
       }
-      return _buildInformativeEmptyState(
-        icon: FluentIcons.document_search_24_regular,
-        title: 'אין תוצאות',
-        message:
-            'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
-        showEditButton: true,
-      );
+      return [
+        _engineStateSliver(
+          _buildInformativeEmptyState(
+            icon: FluentIcons.document_search_24_regular,
+            title: 'אין תוצאות',
+            message:
+                'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות החיפוש.',
+            showEditButton: true,
+          ),
+          hasExternal: hasExternal,
+        ),
+      ];
     }
+    return [_buildEngineListSliver(state)];
+  }
 
-    // תמיד נשתמש ב-ListView גם לתוצאה אחת - כך היא תופיע למעלה
+  Widget _buildEngineListSliver(SearchState state) {
     // (במצב איחוד הספירה היא בקבוצות — displayTotal).
     final hasMoreResults = state.results.length < state.displayTotal;
     final showInlineLoadingIndicator =
@@ -449,294 +576,315 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       query: state.searchQuery,
     );
 
-    final resultsList = ListView.builder(
-      key: PageStorageKey(widget.tab),
-      controller: _scrollController,
+    return SliverPadding(
       padding: const EdgeInsets.all(16),
-      itemCount:
-          state.results.length +
-          ((showInlineLoadingIndicator || showLoadMoreButton) ? 1 : 0),
-      itemBuilder: (context, index) {
-        // האיטם האחרון מציג אינדיקטור טעינה בזמן הזרמה,
-        // או כפתור pagination כשיש עוד תוצאות בשרת.
-        if (index == state.results.length) {
-          if (showInlineLoadingIndicator) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
+      sliver: SliverList.builder(
+        itemCount:
+            state.results.length +
+            ((showInlineLoadingIndicator || showLoadMoreButton) ? 1 : 0),
+        itemBuilder: (context, index) {
+          // האיטם האחרון מציג אינדיקטור טעינה בזמן הזרמה,
+          // או כפתור pagination כשיש עוד תוצאות בשרת.
+          if (index == state.results.length) {
+            // כשהבלוק החיצוני יושב אחרי תוצאות המנוע, "מרחק מתחתית הגלילה"
+            // כבר אינו מודד את סוף תוצאות המנוע — לכן עצם הופעת האיטם האחרון
+            // בטווח הבנייה מפעילה טעינת-המשך (בנוסף ל-listener של הגלילה).
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _maybeLoadMore();
+            });
+            if (showInlineLoadingIndicator) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.0),
+                child: Center(
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 8),
+                      Text('טוען תוצאות...'),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            final remainingText =
+                'טען תוצאות נוספות (${state.displayTotal - state.results.length})';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Center(
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 8),
-                    Text('טוען תוצאות...'),
-                  ],
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: ActionButton.neutral(
+                    text: state.isLoading ? 'טוען...' : remainingText,
+                    onPressed: () {
+                      context.read<SearchBloc>().add(
+                        LoadMoreResults(
+                          customSpacing: widget.tab.spacingValues,
+                          alternativeWords: widget.tab.alternativeWords,
+                          searchOptions: effectiveOptions,
+                          negativeCustomSpacing:
+                              widget.tab.negativeSpacingValues,
+                          negativeAlternativeWords:
+                              widget.tab.negativeAlternativeWords,
+                          negativeSearchOptions: widget.tab
+                              .effectiveNegativeSearchOptions(
+                                query: state.negativeQuery,
+                              ),
+                        ),
+                      );
+                    },
+                    isLoading: state.isLoading,
+                    icon: state.isLoading
+                        ? null
+                        : FluentIcons.arrow_download_24_regular,
+                  ),
                 ),
               ),
             );
           }
+          final result = state.results[index];
+          return BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, settingsState) {
+              final colorScheme = Theme.of(context).colorScheme;
+              String titleText = result.reference;
+              String rawHtml = result.text;
+              // Debug info removed for production
+              if (settingsState.replaceHolyNames) {
+                titleText = utils.replaceHolyNames(titleText);
+                rawHtml = utils.replaceHolyNames(rawHtml);
+              }
 
-          final remainingText =
-              'טען תוצאות נוספות (${state.displayTotal - state.results.length})';
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: ActionButton.neutral(
-                  text: state.isLoading ? 'טוען...' : remainingText,
-                  onPressed: () {
-                    context.read<SearchBloc>().add(
-                      LoadMoreResults(
-                        customSpacing: widget.tab.spacingValues,
-                        alternativeWords: widget.tab.alternativeWords,
-                        searchOptions: effectiveOptions,
-                        negativeCustomSpacing: widget.tab.negativeSpacingValues,
-                        negativeAlternativeWords:
-                            widget.tab.negativeAlternativeWords,
-                        negativeSearchOptions: widget.tab
-                            .effectiveNegativeSearchOptions(
-                              query: state.negativeQuery,
-                            ),
-                      ),
-                    );
-                  },
-                  isLoading: state.isLoading,
-                  icon: state.isLoading
-                      ? null
-                      : FluentIcons.arrow_download_24_regular,
-                ),
-              ),
-            ),
-          );
-        }
-        final result = state.results[index];
-        return BlocBuilder<SettingsBloc, SettingsState>(
-          builder: (context, settingsState) {
-            final colorScheme = Theme.of(context).colorScheme;
-            String titleText = result.reference;
-            String rawHtml = result.text;
-            // Debug info removed for production
-            if (settingsState.replaceHolyNames) {
-              titleText = utils.replaceHolyNames(titleText);
-              rawHtml = utils.replaceHolyNames(rawHtml);
-            }
+              final wrappedTitleText = _formatTitleForWrapping(titleText);
 
-            final wrappedTitleText = _formatTitleForWrapping(titleText);
+              // ההדגשה מגיעה מוכנה מהמנוע בתוך rawHtml, ולכן המפתח תלוי רק
+              // ב-HTML ובסגנון התצוגה — לא בפרמטרי החיפוש.
+              final snippetCacheKey = [
+                result.id,
+                result.segment,
+                rawHtml.hashCode,
+                settingsState.fontSize,
+                settingsState.fontFamily,
+                settingsState.replaceHolyNames,
+                colorScheme.onSurface.toARGB32(),
+              ].join('|');
 
-            // ההדגשה מגיעה מוכנה מהמנוע בתוך rawHtml, ולכן המפתח תלוי רק
-            // ב-HTML ובסגנון התצוגה — לא בפרמטרי החיפוש.
-            final snippetCacheKey = [
-              result.id,
-              result.segment,
-              rawHtml.hashCode,
-              settingsState.fontSize,
-              settingsState.fontFamily,
-              settingsState.replaceHolyNames,
-              colorScheme.onSurface.toARGB32(),
-            ].join('|');
+              // Create the snippet using the new robust function
+              // שימוש בגופן וגודל של המשתמש מההגדרות
+              final snippetSpans = _snippetCache.putIfAbsent(
+                snippetCacheKey,
+                () {
+                  if (_snippetCache.length > 300) {
+                    _snippetCache.clear();
+                  }
+                  return SnippetBuilder.fromHighlightedHtml(
+                    html: rawHtml,
+                    defaultStyle: TextStyle(
+                      fontSize: settingsState.fontSize,
+                      fontFamily: settingsState.fontFamily,
+                      color: colorScheme.onSurface,
+                      height: 1.5,
+                    ),
+                    highlightStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: settingsState.fontSize + 2,
+                      fontFamily: settingsState.fontFamily,
+                      color: colorScheme.error,
+                    ),
+                  );
+                },
+              );
 
-            // Create the snippet using the new robust function
-            // שימוש בגופן וגודל של המשתמש מההגדרות
-            final snippetSpans = _snippetCache.putIfAbsent(
-              snippetCacheKey,
-              () {
-                if (_snippetCache.length > 300) {
-                  _snippetCache.clear();
-                }
-                return SnippetBuilder.fromHighlightedHtml(
-                  html: rawHtml,
-                  defaultStyle: TextStyle(
-                    fontSize: settingsState.fontSize,
-                    fontFamily: settingsState.fontFamily,
-                    color: colorScheme.onSurface,
-                    height: 1.5,
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.3),
+                    width: 1,
                   ),
-                  highlightStyle: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: settingsState.fontSize + 2,
-                    fontFamily: settingsState.fontFamily,
-                    color: colorScheme.error,
+                  borderRadius: AppTokens.borderRadiusAll,
+                ),
+                child: InkWell(
+                  onTap: () => _openResultLocation(
+                    title: result.title,
+                    reference: result.reference,
+                    segment: result.segment.toInt(),
+                    isPdf: result.isPdf,
+                    filePath: result.filePath,
+                    effectiveOptions: effectiveOptions,
                   ),
-                );
-              },
-            );
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: colorScheme.outline.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-              child: InkWell(
-                onTap: () => _openResultLocation(
-                  title: result.title,
-                  reference: result.reference,
-                  segment: result.segment.toInt(),
-                  isPdf: result.isPdf,
-                  filePath: result.filePath,
-                  effectiveOptions: effectiveOptions,
-                ),
-                borderRadius: AppTokens.borderRadiusAll,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // מספר התוצאה
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: AppTokens.borderRadiusAll,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${index + 1}',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                  borderRadius: AppTokens.borderRadiusAll,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // מספר התוצאה
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 32),
+                          height: 32,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            borderRadius: AppTokens.borderRadiusAll,
+                          ),
+                          child: Center(
+                            widthFactor: 1,
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      // תוכן התוצאה
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                if (result.isPdf)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8),
-                                    child: Icon(
-                                      FluentIcons.document_pdf_24_regular,
+                        const SizedBox(width: 16),
+                        // תוכן התוצאה
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  if (result.isPdf)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Icon(
+                                        FluentIcons.document_pdf_24_regular,
+                                        size: 16,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      result.title,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  // תגית מקור: מבדילה את תוצאות המנוע המובנה
+                                  // מתוצאות ספק חיצוני שמוצגות באותו מסך. בלי
+                                  // מדור חיצוני אין ממה להבדיל, והתגית הייתה
+                                  // רק גוזלת רוחב משם הספר.
+                                  ValueListenableBuilder<ExternalSearchStatus?>(
+                                    valueListenable:
+                                        widget.tab.externalSearchStatus,
+                                    builder: (context, status, _) =>
+                                        status == null
+                                        ? const SizedBox(width: 4)
+                                        : const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              SizedBox(width: 8),
+                                              SearchResultSourceTag(
+                                                label: 'אוצריא',
+                                              ),
+                                              SizedBox(width: 4),
+                                            ],
+                                          ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      FluentIcons.copy_24_regular,
                                       size: 16,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
+                                    tooltip: 'העתק טקסט',
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                    onPressed: () {
+                                      final plainText = utils.stripHtmlIfNeeded(
+                                        rawHtml,
+                                      );
+                                      Clipboard.setData(
+                                        ClipboardData(text: plainText),
+                                      );
+                                      UiSnack.show(UiSnack.textCopied);
+                                    },
                                   ),
-                                Expanded(
+                                ],
+                              ),
+                              if (wrappedTitleText.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
                                   child: Text(
-                                    result.title,
+                                    wrappedTitleText,
                                     style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                                     textAlign: TextAlign.right,
-                                    maxLines: 1,
+                                    softWrap: true,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                IconButton(
-                                  icon: Icon(
-                                    FluentIcons.copy_24_regular,
-                                    size: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                  tooltip: 'העתק טקסט',
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 28,
-                                    minHeight: 28,
-                                  ),
-                                  onPressed: () {
-                                    final plainText = utils.stripHtmlIfNeeded(
-                                      rawHtml,
-                                    );
-                                    Clipboard.setData(
-                                      ClipboardData(text: plainText),
-                                    );
-                                    UiSnack.show(UiSnack.textCopied);
-                                  },
-                                ),
-                              ],
-                            ),
-                            if (wrappedTitleText.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  wrappedTitleText,
+                              const SizedBox(height: 8),
+                              // הטקסט שנמצא
+                              RichText(
+                                textAlign: TextAlign.justify,
+                                text: TextSpan(
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 16,
                                     color: Theme.of(
                                       context,
-                                    ).colorScheme.onSurfaceVariant,
+                                    ).colorScheme.onSurface,
+                                    height: 1.5,
                                   ),
-                                  textAlign: TextAlign.right,
-                                  softWrap: true,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  children: snippetSpans,
                                 ),
                               ),
-                            const SizedBox(height: 8),
-                            // הטקסט שנמצא
-                            RichText(
-                              textAlign: TextAlign.justify,
-                              text: TextSpan(
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                  height: 1.5,
+                              // תוצאות שאוחדו לכרטיס זה (במצב איחוד תוצאות)
+                              if (result.mergedCount > 1)
+                                _MergedSiblingsSection(
+                                  mergedCount: result.mergedCount,
+                                  siblings: result.merged,
+                                  groupingMode: state.resultGrouping,
+                                  onOpenSibling: (sibling) =>
+                                      _openResultLocation(
+                                        title: sibling.title,
+                                        reference: sibling.reference,
+                                        segment: sibling.segment.toInt(),
+                                        isPdf: sibling.isPdf,
+                                        filePath: sibling.filePath,
+                                        effectiveOptions: effectiveOptions,
+                                      ),
                                 ),
-                                children: snippetSpans,
-                              ),
-                            ),
-                            // תוצאות שאוחדו לכרטיס זה (במצב איחוד תוצאות)
-                            if (result.mergedCount > 1)
-                              _MergedSiblingsSection(
-                                mergedCount: result.mergedCount,
-                                siblings: result.merged,
-                                groupingMode: state.resultGrouping,
-                                onOpenSibling: (sibling) => _openResultLocation(
-                                  title: sibling.title,
-                                  reference: sibling.reference,
-                                  segment: sibling.segment.toInt(),
-                                  isPdf: sibling.isPdf,
-                                  filePath: sibling.filePath,
-                                  effectiveOptions: effectiveOptions,
-                                ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!state.resultsTruncated) {
-      return resultsList;
-    }
-    // תוצאות חלקיות: השאילתה חרגה מתקציב איסוף-הטרמים במנוע, כך שרק
-    // ההרחבות בעדיפות הגבוהה הוגשו. מציגים באנר קבוע מעל הרשימה.
-    return Column(
-      children: [
-        _buildTruncatedBanner(context),
-        Expanded(child: resultsList),
-      ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

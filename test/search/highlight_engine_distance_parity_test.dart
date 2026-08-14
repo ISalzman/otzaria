@@ -49,8 +49,13 @@ Future<void> main() async {
 
     tearDownAll(() {
       if (!engineReady) return;
-      if (indexDir.existsSync()) {
+      if (!indexDir.existsSync()) return;
+      // ב-Windows המנוע עדיין מחזיק את קובצי האינדקס פתוחים כשהטסט מסתיים;
+      // ניקוי תיקיית הזמנית אינו סיבה להפיל את הריצה.
+      try {
         indexDir.deleteSync(recursive: true);
+      } on FileSystemException {
+        // ignore
       }
     });
 

@@ -1119,14 +1119,6 @@ class IndexingRepository {
     return (BigInt.from(catalogueOrder + 1) << 32) + BigInt.from(ordinal + 1);
   }
 
-  static int catalogueOrderFromDocumentId(BigInt documentId) {
-    final encodedCatalogueOrder = (documentId >> 32).toInt();
-    if (encodedCatalogueOrder <= 0) {
-      return -1;
-    }
-    return encodedCatalogueOrder - 1;
-  }
-
   static String catalogueOrderKey(Book book) {
     if (book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty) {
       return 'ext:${book.externalLibraryId}';
@@ -1177,6 +1169,43 @@ class IndexingRepository {
     Book? book, {
     required String indexedTitle,
   }) => book?.title == indexedTitle ? book : null;
+
+  /// בודק שספר טקסט עדיין זהה למסמכים הקיימים באינדקס.
+  Future<bool> textBookMatchesIndexedFingerprint(
+    Book book,
+    Library library,
+    Map<String, BigInt> indexFingerprints,
+  ) async {
+    final indexHash = indexFingerprints[buildIndexedBookFilePath(book)];
+    final textBook = _asTextBookForIndex(book);
+    if (indexHash == null || indexHash == BigInt.zero || textBook == null) {
+      return false;
+    }
+
+    final text = await _loadTextBookText(textBook);
+    if (text == null) return false;
+
+    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
+      library,
+      keyOf: (candidate) => catalogueOrderKey(candidate as Book),
+    );
+    await Future.wait([
+      GenerationCache.instance.warmUp(),
+      ReferenceBooksCache.instance.warmUp(),
+      BookFacetMetadataCache.instance.warmUp(),
+    ]);
+    return computeBookFingerprint(
+          text: text,
+          title: textBook.title,
+          topics: _bookTopics(textBook),
+          catalogueOrder:
+              catalogueOrderByBookKey[catalogueOrderKey(textBook)] ??
+              0xFFFFFFFF,
+          generationOrder: chronologicalOrderForBook(textBook),
+          extraFacets: _bookExtraFacets(textBook),
+        ) ==
+        indexHash;
+  }
 
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
   /// הספרייה ותדרוש ניקוי). PDF תמיד; שאר ספרי הקובץ רק כשאין להם

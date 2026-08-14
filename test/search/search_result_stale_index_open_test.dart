@@ -33,11 +33,12 @@ void main() {
     await Settings.init(cacheProvider: MemoryCacheProvider());
   });
 
-  Future<TextBookTab> openResultAgainstLibrary(
+  Future<TextBookTab?> openResultAgainstLibrary(
     WidgetTester tester, {
     required List<Book> catalogue,
     required String resultTitle,
     required String indexedFilePath,
+    bool expectOpen = true,
   }) async {
     final library = Library(categories: const []);
     library.books.addAll(catalogue);
@@ -70,11 +71,14 @@ void main() {
       initialState: SettingsState.initial(),
     );
     final tabsBloc = _RecordingTabsBloc();
-    final searchingTab = SearchingTab('חיפוש', 'תמיד של שחר מכפרת');
+    final searchingTab = SearchingTab(
+      'חיפוש',
+      'תמיד של שחר מכפרת',
+      searchBloc: searchBloc,
+    );
 
     addTearDown(() async {
       searchingTab.dispose();
-      await searchBloc.close();
       await settingsBloc.close();
       await tabsBloc.close();
     });
@@ -99,7 +103,8 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.text('הפניה לתוצאה').first);
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 24; i++) {
+      await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
       );
@@ -107,12 +112,16 @@ void main() {
     }
 
     final opened = tabsBloc.openedTabs.whereType<TextBookTab>().toList();
+    if (!expectOpen) {
+      expect(opened, isEmpty, reason: 'אינדקס עבש אינו פותח ספר');
+      return null;
+    }
     expect(opened, hasLength(1), reason: 'נפתח טאב קריאה אחד');
     addTearDown(opened.single.dispose);
     return opened.single;
   }
 
-  testWidgets('רגרסיה #774/#712: מפתח שהוסב לספר אחר נפתח לפי הכותרת שהוצגה', (
+  testWidgets('רגרסיה #774/#712: מפתח שהוסב לספר אחר אינו נפתח', (
     tester,
   ) async {
     final tab = await openResultAgainstLibrary(
@@ -120,9 +129,9 @@ void main() {
       catalogue: [TextBook(id: 1234, title: 'רבינו חננאל על מועד קטן')],
       resultTitle: 'רש"י על ישעיהו',
       indexedFilePath: 'id:1234',
+      expectOpen: false,
     );
-
-    expect(tab.book.title, 'רש"י על ישעיהו');
+    expect(tab, isNull);
   });
 
   testWidgets('מפתח תואם פותח את ספר הקטלוג עצמו', (tester) async {
@@ -135,7 +144,7 @@ void main() {
       indexedFilePath: 'id:1234',
     );
 
-    expect(tab.book.title, 'רש"י על ישעיהו');
+    expect(tab!.book.title, 'רש"י על ישעיהו');
     expect(
       tab.book.author,
       'רש"י',
@@ -155,7 +164,7 @@ void main() {
       indexedFilePath: 'uid:5',
     );
 
-    expect(tab.book.title, 'שבת');
+    expect(tab!.book.title, 'שבת');
     expect(tab.book.isUserBook, isTrue);
   });
 
@@ -167,12 +176,35 @@ void main() {
       indexedFilePath: 'id:999999',
     );
 
-    expect(tab.book.title, 'ספר שאינו בקטלוג');
+    expect(tab!.book.title, 'ספר שאינו בקטלוג');
+  });
+
+  test('כותרת זהה אינה מספיקה כשחתימת הספר השתנתה', () async {
+    final library = Library(categories: const []);
+    library.books.add(TextBook(id: 1234, title: 'משנה תורה'));
+    DataRepository.instance.library = Future.value(library);
+    final bloc = _StaticSearchBloc(
+      const SearchState(),
+      indexedBookVerifier: (_, _) async => false,
+    );
+    addTearDown(bloc.close);
+
+    final resolution = await bloc.resolveBookForIndexedPath(
+      'id:1234',
+      indexedTitle: 'משנה תורה',
+    );
+    expect(resolution.book, isNull);
+    expect(resolution.isStale, isTrue);
   });
 }
 
 class _StaticSearchBloc extends SearchBloc {
-  _StaticSearchBloc(SearchState initialSearchState) {
+  _StaticSearchBloc(
+    SearchState initialSearchState, {
+    Future<bool> Function(Book book, Library library)? indexedBookVerifier,
+  }) : super(
+         indexedBookVerifier: indexedBookVerifier ?? ((_, _) async => true),
+       ) {
     emit(initialSearchState);
   }
 

@@ -7,10 +7,9 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
-import 'package:otzaria/search/view/external_search_results_section.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
-import 'package:otzaria/search/models/external_search_summary.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -61,6 +60,7 @@ bool shouldShowFacetFilterBanner({
 
 class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     with AutomaticKeepAliveClientMixin {
+  static const _externalCountLineMaxWidth = 240.0;
   @override
   bool get wantKeepAlive => true;
 
@@ -90,26 +90,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  // משמש כדי להבדיל בין "חיפוש חדש" (שבו נרצה להציג מסך טעינה מלא)
-  // לבין "טען תוצאות נוספות" (שבו אסור להעלים את התוצאות הקיימות).
-  String _lastCompletedQuery = '';
-
-  bool _shouldShowBlockingLoader(SearchState state) {
-    final currentQuery = state.searchQuery.trim();
-    final lastQuery = _lastCompletedQuery.trim();
-    // אם יש חיפוש חדש (הטקסט השתנה) והוא עוד בטעינה — נחסום עם ספינר.
-    // אם זה רק "טען עוד" (אותו query) — לא נחסום.
-    return state.isLoading &&
-        currentQuery.isNotEmpty &&
-        currentQuery != lastQuery;
-  }
-
-  void _updateLastCompletedQuery(SearchState state) {
-    if (!state.isLoading) {
-      _lastCompletedQuery = state.searchQuery;
-    }
-  }
-
   bool _shouldShowFacetFilterBanner(SearchState state) =>
       !_facetBannerDismissed &&
       shouldShowFacetFilterBanner(
@@ -125,130 +105,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     final setA = a.toSet()..removeWhere((facet) => facet == '/');
     final setB = b.toSet()..removeWhere((facet) => facet == '/');
     return setA.length == setB.length && setA.containsAll(setB);
-  }
-
-  Widget _buildNoCategoriesSelectedMessage(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.filter_dismiss_24_regular,
-              size: 56,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא נבחרו קטגוריות',
-              style: TextStyle(
-                fontSize: 18,
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'בחר קטגוריה אחת לפחות כדי לבצע חיפוש.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInitialSearchState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.search_24_regular,
-              size: 64,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'לא בוצע חיפוש',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNoResultsState(BuildContext context, {bool truncated = false}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              truncated
-                  ? FluentIcons.warning_24_regular
-                  : FluentIcons.document_search_24_regular,
-              size: 56,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              truncated ? 'הגעת למגבלת אפשרויות החיפוש' : 'אין תוצאות',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              truncated
-                  ? 'שילוב הגדרות ההרחבה (קידומות, סיומות, שגיאות כתיב וכד׳) '
-                        'יצר יותר מדי אפשרויות עבור המנוע. נסה להוריד חלק '
-                        'מהגדרות החיפוש או לצמצם את מילות החיפוש.'
-                  : 'נסה להרחיב קטגוריות, לשנות מצב חיפוש או לעדכן את מילות '
-                        'החיפוש.',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ActionButton.neutral(
-              text: 'ערוך חיפוש',
-              onPressed: _openEditDialog,
-              icon: FluentIcons.edit_24_regular,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -396,8 +252,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   Widget _buildForSmallScreens() {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        _updateLastCompletedQuery(state);
-        final showBlockingLoader = _shouldShowBlockingLoader(state);
         return Container(
           clipBehavior: Clip.hardEdge,
           decoration: const BoxDecoration(),
@@ -412,39 +266,17 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               Expanded(
                 child: Stack(
                   children: [
-                    if (showBlockingLoader)
-                      const Center(child: CircularProgressIndicator())
-                    else if (state.searchQuery.isEmpty)
-                      _buildInitialSearchState(context)
-                    else if (state.hasNoSelectedFacets)
-                      _buildNoCategoriesSelectedMessage(context)
-                    else if (state.results.isEmpty)
-                      // הבחנה בין חיפוש ריק לכשל מנוע — ראה state.errorMessage.
-                      state.errorMessage != null
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  state.errorMessage!,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : _buildNoResultsState(
-                              context,
-                              truncated: state.resultsTruncated,
-                            )
-                    else
-                      Container(
-                        clipBehavior: Clip.hardEdge,
-                        decoration: const BoxDecoration(),
-                        child: TantivySearchResults(
-                          tab: widget.tab,
-                          onEditSearch: _openEditDialog,
-                        ),
+                    // כל מצבי אזור התוצאות (ריק/טעינה/שגיאה/תוצאות) מרונדרים
+                    // בתוך TantivySearchResults — רשימה מאוחדת אחת שמכילה גם
+                    // את תוצאות הספק החיצוני כשהוא פעיל.
+                    Container(
+                      clipBehavior: Clip.hardEdge,
+                      decoration: const BoxDecoration(),
+                      child: TantivySearchResults(
+                        tab: widget.tab,
+                        onEditSearch: _openEditDialog,
                       ),
+                    ),
                     ValueListenableBuilder(
                       valueListenable: widget.tab.isLeftPaneOpen,
                       builder: (context, value, child) => AnimatedSize(
@@ -481,8 +313,6 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         Expanded(
           child: BlocBuilder<SearchBloc, SearchState>(
             builder: (context, state) {
-              _updateLastCompletedQuery(state);
-              final showBlockingLoader = _shouldShowBlockingLoader(state);
               return Column(
                 children: [
                   AppTopBar(
@@ -559,6 +389,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                             const AppTopBarItem(
                               widget: GroupingOfResults(),
                             ),
+                            // מיקום תוצאות המקור החיצוני (קודמות/מאוחרות) —
+                            // הפקד מסתיר את עצמו כשאין ספק חיצוני פעיל.
+                            AppTopBarItem(
+                              widget: ExternalResultsPositionControl(
+                                tab: widget.tab,
+                              ),
+                            ),
                           ],
                   ),
                   if (_shouldShowFacetFilterBanner(state))
@@ -578,11 +415,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                             return AdaptiveSidePane(
                               isOpen: isOpen,
                               alignment: AlignmentDirectional.centerEnd,
-                              mainContent: _buildResultsContent(
-                                context,
-                                state,
-                                showBlockingLoader,
-                              ),
+                              mainContent: _buildResultsContent(context),
                               paneContent: SearchFacetFiltering(
                                 tab: widget.tab,
                               ),
@@ -622,80 +455,81 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   /// מוני התוצאות בשורת הפקדים: ספירת המנוע, ומתחתיה — כשספק חיצוני פעיל —
   /// ספירת המקור החיצוני (ספרים ומופעים). שתי הספירות שונות במהותן (תוצאות
   /// מול ספרים), ולכן מוצגות שורה מעל שורה באותו מקום במקום מספר מאוחד.
+  ///
+  /// שורת המקור החיצוני נושאת גם את חיווי ההתקדמות בזמן החיפוש. כך הספירות
+  /// של שני המקורות יושבות זו מעל זו במקום אחד, ואזור התוצאות מציג תוצאות
+  /// בלבד.
   Widget _buildResultCounts(BuildContext context, SearchState state) {
-    final muted = TextStyle(
-      fontSize: 14,
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
+    final cs = Theme.of(context).colorScheme;
+    final muted = TextStyle(fontSize: 14, color: cs.onSurfaceVariant);
     final engineLine = state.totalGroups != null
         ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
         : '${state.results.length}/${state.totalResults} תוצאות';
-    return ValueListenableBuilder<ExternalSearchSummary?>(
-      valueListenable: widget.tab.externalSearchSummary,
-      builder: (context, summary, _) {
-        if (summary == null) return Text(engineLine, style: muted);
+    return ValueListenableBuilder<ExternalSearchStatus?>(
+      valueListenable: widget.tab.externalSearchStatus,
+      builder: (context, status, _) {
+        if (status == null) return Text(engineLine, style: muted);
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('אוצריא: $engineLine', style: muted.copyWith(fontSize: 12)),
-            Text(
-              '${summary.sourceTitle}: ${summary.totalBooks} ספרים, '
-              '${summary.totalHits} מופעים',
-              style: muted.copyWith(fontSize: 12),
-            ),
+            _buildExternalCountLine(context, status, muted),
           ],
         );
       },
     );
   }
 
-  /// תוכן אזור התוצאות (loader / מצב התחלתי / אין קטגוריות / שגיאה / תוצאות),
-  /// ומעליו מדור תוצאות ממקור חיצוני של תוסף כשהוא פעיל (מכווץ את עצמו
-  /// לכלום אחרת).
-  Widget _buildResultsContent(
+  Widget _buildExternalCountLine(
     BuildContext context,
-    SearchState state,
-    bool showBlockingLoader,
+    ExternalSearchStatus status,
+    TextStyle muted,
   ) {
-    return Column(
-      children: [
-        ExternalSearchResultsSection(tab: widget.tab),
-        Expanded(
-          child: _buildEngineResultsContent(context, state, showBlockingLoader),
-        ),
-      ],
+    final style = muted.copyWith(fontSize: 12);
+    final filteredNote = status.ofTotalBooks != null
+        ? ' (מתוך ${status.ofTotalBooks})'
+        : '';
+    final books = status.books == 1 ? 'ספר אחד' : '${status.books} ספרים';
+    final hits = status.hits == 1 ? 'מופע אחד' : '${status.hits} מופעים';
+    final line = status.failed
+        ? '${status.sourceTitle}: החיפוש נכשל'
+        : status.isPending
+        ? '${status.sourceTitle}: מחפש…'
+        : '${status.sourceTitle}: $books$filteredNote, $hits';
+    return ConstrainedBox(
+      // כותרת המקור מגיעה מתוסף; הסרגל העליון אינו יכול להתרחב בשבילה.
+      constraints: const BoxConstraints(maxWidth: _externalCountLineMaxWidth),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              line,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+          if (status.loading) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: style.color,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildEngineResultsContent(
-    BuildContext context,
-    SearchState state,
-    bool showBlockingLoader,
-  ) {
-    if (showBlockingLoader) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (state.searchQuery.isEmpty) {
-      return _buildInitialSearchState(context);
-    }
-    if (state.hasNoSelectedFacets) {
-      return _buildNoCategoriesSelectedMessage(context);
-    }
-    if (state.results.isEmpty) {
-      if (state.errorMessage != null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              state.errorMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        );
-      }
-      return _buildNoResultsState(context, truncated: state.resultsTruncated);
-    }
+  /// תוכן אזור התוצאות — רשימה מאוחדת אחת ([TantivySearchResults]) שמכילה
+  /// את כל מצבי המנוע (loader / ריק / שגיאה / תוצאות) וגם את תוצאות הספק
+  /// החיצוני של תוסף כשהוא פעיל (sliver שמכווץ את עצמו לכלום אחרת).
+  Widget _buildResultsContent(BuildContext context) {
     return Container(
       clipBehavior: Clip.hardEdge,
       decoration: const BoxDecoration(),
@@ -873,6 +707,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             const SizedBox(width: 4),
             // איחוד תוצאות
             const GroupingOfResults(compact: true),
+            const SizedBox(width: 4),
+            // מיקום תוצאות המקור החיצוני — נסתר כשאין ספק חיצוני פעיל
+            ExternalResultsPositionControl(tab: widget.tab, compact: true),
           ],
         ],
       ),

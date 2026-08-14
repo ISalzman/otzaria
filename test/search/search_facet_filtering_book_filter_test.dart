@@ -15,6 +15,9 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -24,6 +27,9 @@ class _MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
 
 class _MockSearchBloc extends MockBloc<SearchEvent, SearchState>
     implements SearchBloc {}
+
+class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {}
 
 /// חלונית סינון תוצאות החיפוש: שדה "איתור ספר" + עץ הניווט.
 ///
@@ -76,6 +82,7 @@ void main() {
 
   late _MockSearchBloc searchBloc;
   late _MockLibraryBloc libraryBloc;
+  late _MockSettingsBloc settingsBloc;
   late StreamController<SearchState> searchStates;
   late SearchingTab tab;
 
@@ -103,6 +110,13 @@ void main() {
         currentCategory: null,
       ),
     );
+
+    settingsBloc = _MockSettingsBloc();
+    whenListen(
+      settingsBloc,
+      const Stream<SettingsState>.empty(),
+      initialState: SettingsState.initial(),
+    );
   }
 
   setUp(() {
@@ -114,6 +128,7 @@ void main() {
     await searchStates.close();
     await searchBloc.close();
     await libraryBloc.close();
+    await settingsBloc.close();
   });
 
   Future<void> pumpPanel(WidgetTester tester) async {
@@ -124,6 +139,7 @@ void main() {
             providers: [
               BlocProvider<SearchBloc>.value(value: searchBloc),
               BlocProvider<LibraryBloc>.value(value: libraryBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
             ],
             child: SizedBox(
               width: 320,

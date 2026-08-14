@@ -24,6 +24,9 @@ abstract class LibraryMessages {
   static const String searchIndexOpenFailed =
       'פתיחת אינדקס החיפוש נכשלה — האינדוקס הושהה. נסה להפעיל מחדש את התוכנה';
 
+  static const String searchResultIndexOutOfDate =
+      'תוצאת החיפוש שייכת לאינדקס ישן. יש לעדכן את אינדקס החיפוש.';
+
   static String indexingCompletedWithFailures(int count) =>
       'האינדוקס הסתיים עם $count בעיות. הפרטים נשמרו בקובץ השגיאות.';
 

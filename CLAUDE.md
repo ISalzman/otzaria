@@ -672,6 +672,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | אותן העדפות בלי אתחול `Settings` | `test/search/search_results_preferences_uninitialized_test.dart` |
 | עץ ניווט תוצאות (רשימת סינון, גלוּת הבחירה, פתיחת ענפים) | `test/search/search_navigation_tree_test.dart` |
 | חלונית סינון התוצאות מקצה לקצה (שדה "איתור ספר") | `test/search/search_facet_filtering_book_filter_test.dart` |
+| צמצום מקומי בלחיצה בעץ התוצאות (זיהוי הספר לפי המפתח היציב) | `test/search/search_client_side_facet_narrow_test.dart` |
+| זיהוי ספר של תוצאת חיפוש לפי מפתח האינדקס היציב | `test/search/search_result_book_resolution_test.dart` |
 | ניתוב חיפוש-בספר: פשוט מול מנוע | `test/search/utils/in_book_search_routing_test.dart` |
 | מדיניות ההתאמה (טווח קרבה + התאמת מילים) | `test/search/search_match_policy_test.dart` |
 | פתיחת תוצאה: העברת הקונפיגורציה לטאב הקריאה | `test/search/tantivy_search_results_in_book_routing_test.dart` |

@@ -346,18 +346,24 @@ class _LinksListViewState extends State<LinksListView> {
 
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
-    if (controller == null ||
-        controller.activeOwner == null ||
-        identical(controller.activeOwner, _selectionOwner)) {
+    if (controller == null || !mounted) {
       return;
     }
 
-    if (!mounted) {
+    final shouldClear = shouldClearSelectionOnExternalChange(
+      activeOwner: controller.activeOwner,
+      selfOwner: _selectionOwner,
+      hasOwnSelection: _savedSelectedText != null,
+    );
+    if (!shouldClear) {
       return;
     }
 
+    // כאן הניקוי כן נעשה בהחלפת מפתח: הרשימה מרנדרת SelectionArea לכל קישור
+    // מורחב, ולכן אין GlobalKey יחיד לפנות אליו. ההריסה בטוחה — אין כאן אזור
+    // בחירה מקונן שאפשר להרוס לו את הבחירה.
     setState(() {
-      _selectionRevision = controller.revision;
+      _selectionRevision++;
       _savedSelectedText = null;
       _savedSelectedLink = null;
     });

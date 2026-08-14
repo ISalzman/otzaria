@@ -14,7 +14,6 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_repository.dart';
-import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:flutter/foundation.dart';
@@ -33,6 +32,8 @@ typedef _FacetRecountInputs = ({
   WordMatchMode wordMatchMode,
   int wordMatchCount,
 });
+
+typedef IndexedBookResolution = ({Book? book, bool isStale});
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final SearchRepository _repository;
@@ -76,11 +77,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   SearchBloc({
     SearchConfiguration? initialConfiguration,
     this._repository = const SearchRepository(),
+    Future<bool> Function(Book book, Library library)? indexedBookVerifier,
   }) : super(
          SearchState(
            configuration: initialConfiguration ?? const SearchConfiguration(),
          ),
        ) {
+    _indexedBookVerifier = indexedBookVerifier;
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<RerunSearch>((_, _) => _reSearch());
     on<UpdateDistance>(_onUpdateDistance);
@@ -253,7 +256,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
           // אירוע הספירות — מגיע עוד לפני ה-chunk הראשון של התוצאות.
           Map<String, int>? aggregated;
           if (scopeEqualsSearch && bookCounts != null) {
-            bookByIndexedFilePath ??= _buildBooksByIndexedFilePath(
+            bookByIndexedFilePath ??= _booksByIndexedFilePathFor(
               await DataRepository.instance.library,
             );
             aggregated = FacetHelper.buildFacetCountsFromBookCounts(
@@ -418,7 +421,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     // קבל את כל הספרים מהספרייה כדי למפות key -> Book
     final library = await DataRepository.instance.library;
-    final bookByIndexedFilePath = _buildBooksByIndexedFilePath(library);
+    final bookByIndexedFilePath = _booksByIndexedFilePathFor(library);
 
     // סופר ברמת ספר במנוע עצמו, בלי למשוך עשרות אלפי snippets לדארט.
     // הקלטים מגיעים מהצילום שנלקח עם החתימה — לא מ-state שאולי השתנה מאז.
@@ -739,6 +742,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     if (newFacets.contains(event.facet)) {
       debugPrint('➖ RemoveFacet: ${event.facet} (before=$newFacets)');
       newFacets.remove(event.facet);
+      // ביטול הסינון האחרון חוזר לכל ההיקף; רשימה ריקה הייתה נקראת בחיפוש
+      // כ"אין במה לחפש" ומציגה "אין תוצאות" בלי לפנות למנוע.
+      if (newFacets.isEmpty) {
+        newFacets.addAll(
+          state.hasScopedFacetFilter ? state.searchScopeFacets : const ['/'],
+        );
+      }
       final newConfig = state.configuration.copyWith(currentFacets: newFacets);
       final searchEvent = _rerunEvent();
       if (await _applyClientSideFacetNarrow(
@@ -856,13 +866,12 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       return false;
     }
 
-    final bookByCatalogueOrder = _buildBooksByCatalogueOrder(library);
+    // זיהוי לפי `filePath` — המפתח היציב של האינדקס. הסדר הקטלוגי שבמזהה
+    // המסמך זז כשספרים נוספו/נמחקו מאז האינדוקס, ומזהה ספר שגוי.
+    final booksByIndexedFilePath = _booksByIndexedFilePathFor(library);
     final filtered = <SearchResult>[];
     for (final result in state.results) {
-      final catalogueOrder = IndexingRepository.catalogueOrderFromDocumentId(
-        result.id,
-      );
-      final book = bookByCatalogueOrder[catalogueOrder];
+      final book = booksByIndexedFilePath[result.filePath];
       if (book == null) {
         return false;
       }
@@ -873,6 +882,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       if (newFacets.any((facet) => facetContains(facet, facetPath))) {
         filtered.add(result);
       }
+    }
+
+    // העץ הבטיח תוצאות ל-facet הזה אך הסינון התרוקן — סימן לאי-התאמה בזיהוי
+    // הספר. חיפוש מנוע מלא עדיף על הצגת "אין תוצאות" על תוצאה שנמצאה.
+    final treePromisedResults = newFacets.any(
+      (facet) => (state.facetCounts[facet] ?? 0) > 0,
+    );
+    if (filtered.isEmpty && treePromisedResults) {
+      return false;
     }
 
     // מבטל המשכים תלויים של החיפוש הקודם (כמו countTexts שעוד ממתין) —
@@ -1221,22 +1239,62 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ///
   /// פתיחה לפי כותרת בלבד מאבדת את זהות הספר (isUserBook/categoryId),
   /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. [indexedTitle] היא
-  /// הכותרת מאותו מסמך, לאימות מול הקטלוג. מחזירה null כשהמפתח לא אותר
-  /// או שאינו מצביע עוד על אותו ספר (ואז נופלים לבנייה לפי כותרת).
-  Future<Book?> resolveBookForIndexedPath(
+  /// הכותרת מאותו מסמך, לאימות מול הקטלוג. [IndexedBookResolution.isStale]
+  /// מונע נפילה לפי כותרת כשמסמך האינדקס כבר אינו שייך לספר שבקטלוג.
+  Future<IndexedBookResolution> resolveBookForIndexedPath(
     String indexedFilePath, {
     required String indexedTitle,
   }) async {
     final library = await DataRepository.instance.library;
-    if (!identical(library, _resolveCacheLibrary)) {
-      _resolveCacheLibrary = library;
-      _booksByIndexedFilePathCache = bookForIndexedFilePathMap(library);
+    final book = _booksByIndexedFilePathFor(library)[indexedFilePath];
+    if (book == null) return (book: null, isStale: false);
+    if (book.title != indexedTitle) return (book: null, isStale: true);
+    if ((!indexedFilePath.startsWith('id:') &&
+        !indexedFilePath.startsWith('uid:'))) {
+      return (book: book, isStale: false);
     }
-    return IndexingRepository.bookForIndexedDocument(
-      _booksByIndexedFilePathCache,
-      indexedFilePath: indexedFilePath,
-      indexedTitle: indexedTitle,
+
+    final matches = await _indexedBookVerificationByPath.putIfAbsent(
+      indexedFilePath,
+      () async {
+        final verifier = _indexedBookVerifier;
+        if (verifier != null) return verifier(book, library);
+        return _indexingRepository.textBookMatchesIndexedFingerprint(
+          book,
+          library,
+          await _indexFingerprintsFor(library),
+        );
+      },
     );
+    return (book: matches ? book : null, isStale: !matches);
+  }
+
+  late final Future<bool> Function(Book book, Library library)?
+  _indexedBookVerifier;
+  final IndexingRepository _indexingRepository = IndexingRepository(
+    TantivyDataProvider.instance,
+  );
+  Future<Map<String, BigInt>>? _indexFingerprints;
+  final Map<String, Future<bool>> _indexedBookVerificationByPath = {};
+
+  Future<Map<String, BigInt>> _indexFingerprintsFor(Library library) {
+    return _indexFingerprints ??= TantivyDataProvider.instance.engine.then(
+      (engine) => engine.getBookFingerprints(),
+    );
+  }
+
+  /// מפת המפתח היציב של האינדקס → ספר, במטמון לכל עוד הספרייה לא הוחלפה.
+  Map<String, Book> _booksByIndexedFilePathFor(Library library) {
+    final cached = _booksByIndexedFilePathCache;
+    if (cached != null && identical(library, _resolveCacheLibrary)) {
+      return cached;
+    }
+    final books = _buildBooksByIndexedFilePath(library);
+    _resolveCacheLibrary = library;
+    _booksByIndexedFilePathCache = books;
+    _indexFingerprints = null;
+    _indexedBookVerificationByPath.clear();
+    return books;
   }
 
   Library? _resolveCacheLibrary;
@@ -1245,21 +1303,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   @visibleForTesting
   static Map<String, Book> bookForIndexedFilePathMap(Library library) =>
       _buildBooksByIndexedFilePath(library);
-
-  Map<int, Book> _buildBooksByCatalogueOrder(Library library) {
-    final keyOrder = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => IndexingRepository.catalogueOrderKey(book as Book),
-    );
-    final booksByOrder = <int, Book>{};
-    for (final book in library.getAllBooks()) {
-      final order = keyOrder[IndexingRepository.catalogueOrderKey(book)];
-      if (order != null) {
-        booksByOrder.putIfAbsent(order, () => book);
-      }
-    }
-    return booksByOrder;
-  }
 
   static Map<String, Book> _buildBooksByIndexedFilePath(Library library) {
     final booksByIndexedFilePath = <String, Book>{};

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
@@ -22,6 +23,12 @@ class SearchingTab extends OpenedTab {
   /// ספירות הקטגוריות בעץ הסינון. נכתב ע"י מדור התוצאות החיצוני.
   final ValueNotifier<ExternalSearchSummary?> externalSearchSummary =
       ValueNotifier(null);
+
+  /// מצב המדור החיצוני להצגה בשורת המונים שבראש הטאב (מקור, התקדמות
+  /// וספירות). נכתב ע"י מדור התוצאות החיצוני; null כשאין ספק פעיל.
+  final ValueNotifier<ExternalSearchStatus?> externalSearchStatus =
+      ValueNotifier(null);
+
   final ItemScrollController scrollController = ItemScrollController();
   List<Book> allBooks = [];
 
@@ -80,13 +87,16 @@ class SearchingTab extends OpenedTab {
     super.isPinned = false,
     super.dedupeKey,
     SearchConfiguration? initialConfiguration,
+    SearchBloc? searchBloc,
   }) {
     // בלי configuration מפורשת זה טאב חיפוש חדש — הוא נפתח עם המיון ומצב
     // האיחוד שהמשתמש בחר לאחרונה.
-    searchBloc = SearchBloc(
-      initialConfiguration:
-          initialConfiguration ?? SearchDefaults.withResultPreferences(),
-    );
+    this.searchBloc =
+        searchBloc ??
+        SearchBloc(
+          initialConfiguration:
+              initialConfiguration ?? SearchDefaults.withResultPreferences(),
+        );
     titleNotifier = ValueNotifier(title);
     if (searchText != null) {
       queryController.text = searchText;
@@ -332,6 +342,7 @@ class SearchingTab extends OpenedTab {
     useGlobalSearchOptions.dispose();
     useGlobalNegativeSearchOptions.dispose();
     externalSearchSummary.dispose();
+    externalSearchStatus.dispose();
     // סגירת ה-bloc כדי למנוע דליפה
     searchBloc.close();
     super.dispose();

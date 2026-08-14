@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/models/links.dart';
@@ -229,7 +229,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     null,
   ); // ה-link האחרון שנוגעו בו (לכותרות בהעתקה)
   final Object _selectionOwner = Object(); // מזהה ייחודי לבעלות על הבחירה
-  int _selectionRevision = 0; // גרסה לאיפוס SelectionArea כשבחירה חיצונית מנקה
+  final GlobalKey<SelectionAreaState> _selectionAreaKey = GlobalKey();
   bool _showCommentatorsFilter = false; // האם להציג את מסך בחירת המפרשים
   bool _filterWasAutoOpened = false; // האם מסך הסינון נפתח אוטומטית (לא ידנית)
   // latch חד-פעמי: מסמן שהפתיחה האוטומטית דרך onFilterOpenRequested כבר נשלחה.
@@ -984,17 +984,17 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   void _handleExternalSelectionChange() {
     final controller = widget.selectionSyncController;
     if (controller == null || !mounted) return;
-    final shouldRebuild = shouldRebuildSelectionAreaOnExternalChange(
+    final shouldClear = shouldClearSelectionOnExternalChange(
       activeOwner: controller.activeOwner,
       selfOwner: _selectionOwner,
       hasOwnSelection: _savedSelectedText.value != null,
     );
-    if (!shouldRebuild) return;
+    if (!shouldClear) return;
+    // ניקוי ישיר ולא החלפת מפתח: החלפה הייתה טוענת מחדש את כל המפרשים
+    // ומאבדת את מיקום הגלילה בהם.
+    _selectionAreaKey.currentState?.selectableRegion.clearSelection();
     _savedSelectedText.value = null;
     _lastSelectedLink.value = null;
-    setState(() {
-      _selectionRevision = controller.revision;
-    });
   }
 
   Future<void> _scrollToSearchResult() async {
@@ -1757,121 +1757,103 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     ),
                   );
 
-                  return Shortcuts(
-                    shortcuts: <ShortcutActivator, Intent>{
-                      LogicalKeySet(
-                        LogicalKeyboardKey.control,
-                        LogicalKeyboardKey.keyC,
-                      ): const _CopyCommentaryIntent(),
-                      LogicalKeySet(
-                        LogicalKeyboardKey.meta,
-                        LogicalKeyboardKey.keyC,
-                      ): const _CopyCommentaryIntent(),
+                  // מיירט גם את CopySelectionTextIntent, ולא רק את צירוף
+                  // המקשים: בלעדיו Ctrl+C נופל להעתקת ברירת המחדל של Flutter,
+                  // שכותבת ללוח את הבחירה כמות שהיא — גם כשהיא ריקה (#674).
+                  return SelectionCopyShortcuts(
+                    onCopy: () {
+                      // בחירה החוצה כמה מפרשים — לא מייחסים כותרת מקור
+                      // (היא הייתה משתייכת למפרש בודד בלבד).
+                      final link = _selectionSpansMultipleItems()
+                          ? null
+                          : _lastSelectedLink.value;
+                      ContextMenuUtils.copyFormattedText(
+                        context: context,
+                        savedSelectedText: _restoreLineBreaks(
+                          _savedSelectedText.value,
+                        ),
+                        fontSize: widget.fontSize,
+                        link: link,
+                      );
                     },
-                    child: Actions(
-                      actions: <Type, Action<Intent>>{
-                        _CopyCommentaryIntent:
-                            CallbackAction<_CopyCommentaryIntent>(
-                              onInvoke: (_) {
-                                // בחירה החוצה כמה מפרשים — לא מייחסים כותרת מקור
-                                // (היא הייתה משתייכת למפרש בודד בלבד).
-                                final link = _selectionSpansMultipleItems()
-                                    ? null
-                                    : _lastSelectedLink.value;
-                                ContextMenuUtils.copyFormattedText(
-                                  context: context,
-                                  savedSelectedText: _restoreLineBreaks(
-                                    _savedSelectedText.value,
-                                  ),
-                                  fontSize: widget.fontSize,
-                                  link: link,
-                                );
-                                return null;
-                              },
-                            ),
+                    child: Listener(
+                      // לחיצה בכל מקום בחלונית ממקדת את ה-ProgressiveScroll
+                      // כדי שגלילה עם החיצים תעבוד בלי לבחור טקסט קודם.
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (event) {
+                        if (!shouldFocusScrollOnPointerDown(event.buttons)) {
+                          return;
+                        }
+                        _focusNode.requestFocus();
                       },
-                      child: Listener(
-                        // לחיצה בכל מקום בחלונית ממקדת את ה-ProgressiveScroll
-                        // כדי שגלילה עם החיצים תעבוד בלי לבחור טקסט קודם.
-                        behavior: HitTestBehavior.translucent,
-                        onPointerDown: (event) {
-                          if (!shouldFocusScrollOnPointerDown(event.buttons)) {
-                            return;
-                          }
-                          _focusNode.requestFocus();
-                        },
-                        child: AppFutureBuilder<List<CommentaryGroup>>(
-                          future: _getCachedGroups(data),
-                          loadingWidget: _buildSkeletonLoading(),
-                          builder: (context, groups) {
-                            for (final group in groups) {
-                              final groupKey = group.bookTitle;
-                              _expansionStates.putIfAbsent(
-                                groupKey,
-                                () => _allExpanded,
-                              );
-                            }
-
-                            final Widget
-                            listView = ScrollablePositionedList.builder(
-                              itemScrollController: _itemScrollController,
-                              itemPositionsListener: _itemPositionsListener,
-                              initialScrollIndex: _lastScrollIndex.clamp(
-                                0,
-                                groups.length - 1,
-                              ),
-                              key: PageStorageKey(
-                                'commentary_${selectedCommentators.join(',')}',
-                              ),
-                              physics: const ClampingScrollPhysics(),
-                              scrollOffsetController: scrollController,
-                              shrinkWrap: widget.shrinkWrap,
-                              itemCount: groups.length,
-                              itemBuilder: (context, groupIndex) {
-                                final group = groups[groupIndex];
-                                return _buildCommentaryGroupTile(
-                                  group: group,
-                                  state: state,
-                                  groupIndex: groupIndex,
-                                );
-                              },
+                      child: AppFutureBuilder<List<CommentaryGroup>>(
+                        future: _getCachedGroups(data),
+                        loadingWidget: _buildSkeletonLoading(),
+                        builder: (context, groups) {
+                          for (final group in groups) {
+                            final groupKey = group.bookTitle;
+                            _expansionStates.putIfAbsent(
+                              groupKey,
+                              () => _allExpanded,
                             );
+                          }
 
-                            // ProgressiveScroll עוטף את SelectionArea (מעליו),
-                            // כך שגלילת החיצים נקלטת גם כש-SelectableRegion הוא
-                            // ה-primaryFocus — האירוע מתפשט כלפי מעלה דרכו.
-                            return ProgressiveScroll(
-                              focusNode: _focusNode,
-                              autofocus: widget.autofocus,
-                              scrollController: scrollController,
-                              maxSpeed: 10000.0,
-                              curve: 10.0,
-                              accelerationFactor: 5,
-                              itemScrollController: _itemScrollController,
-                              child: RtlSelectionShortcuts(
-                                child: SelectionArea(
-                                  key: ValueKey(
-                                    'commentary_list_$_selectionRevision',
-                                  ),
-                                  contextMenuBuilder: (context, _) =>
-                                      const SizedBox.shrink(),
-                                  onSelectionChanged: (selection) =>
-                                      _onListSelectionChanged(
-                                        selection?.plainText,
-                                      ),
-                                  child: ScrollablePositionedListScrollbar(
-                                    scrollController: _itemScrollController,
-                                    offsetController: scrollController,
-                                    itemPositionsListener:
-                                        _itemPositionsListener,
-                                    itemCount: groups.length,
-                                    child: SmoothWheelScroll(child: listView),
-                                  ),
+                          final Widget
+                          listView = ScrollablePositionedList.builder(
+                            itemScrollController: _itemScrollController,
+                            itemPositionsListener: _itemPositionsListener,
+                            initialScrollIndex: _lastScrollIndex.clamp(
+                              0,
+                              groups.length - 1,
+                            ),
+                            key: PageStorageKey(
+                              'commentary_${selectedCommentators.join(',')}',
+                            ),
+                            physics: const ClampingScrollPhysics(),
+                            scrollOffsetController: scrollController,
+                            shrinkWrap: widget.shrinkWrap,
+                            itemCount: groups.length,
+                            itemBuilder: (context, groupIndex) {
+                              final group = groups[groupIndex];
+                              return _buildCommentaryGroupTile(
+                                group: group,
+                                state: state,
+                                groupIndex: groupIndex,
+                              );
+                            },
+                          );
+
+                          // ProgressiveScroll עוטף את SelectionArea (מעליו),
+                          // כך שגלילת החיצים נקלטת גם כש-SelectableRegion הוא
+                          // ה-primaryFocus — האירוע מתפשט כלפי מעלה דרכו.
+                          return ProgressiveScroll(
+                            focusNode: _focusNode,
+                            autofocus: widget.autofocus,
+                            scrollController: scrollController,
+                            maxSpeed: 10000.0,
+                            curve: 10.0,
+                            accelerationFactor: 5,
+                            itemScrollController: _itemScrollController,
+                            child: RtlSelectionShortcuts(
+                              child: SelectionArea(
+                                key: _selectionAreaKey,
+                                contextMenuBuilder: (context, _) =>
+                                    const SizedBox.shrink(),
+                                onSelectionChanged: (selection) =>
+                                    _onListSelectionChanged(
+                                      selection?.plainText,
+                                    ),
+                                child: ScrollablePositionedListScrollbar(
+                                  scrollController: _itemScrollController,
+                                  offsetController: scrollController,
+                                  itemPositionsListener: _itemPositionsListener,
+                                  itemCount: groups.length,
+                                  child: SmoothWheelScroll(child: listView),
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   );
@@ -2473,10 +2455,6 @@ class _CollapsibleCommentaryGroupState
       ],
     );
   }
-}
-
-class _CopyCommentaryIntent extends Intent {
-  const _CopyCommentaryIntent();
 }
 
 /// תצוגת המפרש הוירטואלי 'הערות' — מציגה את גוף ההערות ה-inline

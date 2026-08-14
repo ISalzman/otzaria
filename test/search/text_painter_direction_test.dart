@@ -11,12 +11,18 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 
 import '../support/search_engine_test_init.dart';
 
 class _MockLibraryBloc extends MockBloc<LibraryEvent, LibraryState>
     implements LibraryBloc {}
+
+class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {}
 
 class _StubSearchBloc extends SearchBloc {
   _StubSearchBloc(SearchState initialState) {
@@ -121,6 +127,7 @@ Future<void> main() async {
     group('SearchFacetFiltering - category tile', () {
       late _StubSearchBloc searchBloc;
       late _MockLibraryBloc libraryBloc;
+      late _MockSettingsBloc settingsBloc;
       late SearchingTab tab;
 
       setUp(() {
@@ -143,6 +150,12 @@ Future<void> main() async {
             currentCategory: library,
           ),
         );
+        settingsBloc = _MockSettingsBloc();
+        whenListen(
+          settingsBloc,
+          const Stream<SettingsState>.empty(),
+          initialState: SettingsState.initial(),
+        );
 
         // count > 0 כדי שה-tile ייצור LayoutBuilder + TextPainter
         searchBloc = _StubSearchBloc(
@@ -157,6 +170,7 @@ Future<void> main() async {
         tab.dispose();
         await searchBloc.close();
         await libraryBloc.close();
+        await settingsBloc.close();
       });
 
       testWidgets('tile של קטגוריה מרנדר ללא חריגת TextPainter', (
@@ -169,6 +183,7 @@ Future<void> main() async {
                 providers: [
                   BlocProvider<SearchBloc>.value(value: searchBloc),
                   BlocProvider<LibraryBloc>.value(value: libraryBloc),
+                  BlocProvider<SettingsBloc>.value(value: settingsBloc),
                 ],
                 child: SizedBox(
                   height: 500,
@@ -187,6 +202,7 @@ Future<void> main() async {
     group('SearchFacetFiltering - book tile', () {
       late _StubSearchBloc searchBloc;
       late _MockLibraryBloc libraryBloc;
+      late _MockSettingsBloc settingsBloc;
       late SearchingTab tab;
 
       setUp(() {
@@ -217,6 +233,12 @@ Future<void> main() async {
             currentCategory: library,
           ),
         );
+        settingsBloc = _MockSettingsBloc();
+        whenListen(
+          settingsBloc,
+          const Stream<SettingsState>.empty(),
+          initialState: SettingsState.initial(),
+        );
 
         // מפתח ה-facet לספר עם id: '/תנ"ך/id:42'
         searchBloc = _StubSearchBloc(
@@ -231,6 +253,7 @@ Future<void> main() async {
         tab.dispose();
         await searchBloc.close();
         await libraryBloc.close();
+        await settingsBloc.close();
       });
 
       testWidgets('tile של ספר מרנדר ללא חריגת TextPainter', (tester) async {
@@ -241,6 +264,7 @@ Future<void> main() async {
                 providers: [
                   BlocProvider<SearchBloc>.value(value: searchBloc),
                   BlocProvider<LibraryBloc>.value(value: libraryBloc),
+                  BlocProvider<SettingsBloc>.value(value: settingsBloc),
                 ],
                 child: SizedBox(
                   height: 500,

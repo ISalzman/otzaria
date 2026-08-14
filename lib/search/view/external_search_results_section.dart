@@ -14,16 +14,24 @@ import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/search/view/external_result_title_row.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
 /// מדור תוצאות ממקור חיצוני של תוסף (למשל היברובוקס) בטאב החיפוש המובנה.
+///
+/// הרכיב הוא sliver: הוא משתבץ בתוך רשימת הגלילה המאוחדת של
+/// [TantivySearchResults] — מסך אחד לשני המקורות, בלי מדור נפרד עם גלילה
+/// משלו. כשאין ספק פעיל הוא מתכווץ ל-sliver ריק.
 ///
 /// המדור פעיל רק כשסומנה בדיאלוג החיפוש שורת תוסף שהצהירה `resultsProvider`
 /// והתוסף נרשם כספק. השאילתה נשלחת לתוסף כאירוע ממוקד — אוצריא עצמה אינה
@@ -49,7 +57,8 @@ class ExternalSearchResultsSection extends StatefulWidget {
 
 /// נתיב הקטגוריה שמייצג facet שנבחר בעץ עבור סינון המדור: facet של ספר
 /// (המקטע האחרון הוא מפתח ספר — 'id:'/'uid:'/'ext:'/נתיב קובץ, תמיד עם ':')
-/// מתקפל לקטגוריית האם שלו.
+/// מתקפל לקטגוריית האם שלו. facet של ספר בדלי "עוד מ" נגמר ב-`#<id>` ולכן
+/// אינו מתקפל — הוא מזוהה במורד הדרך כבחירה של ספר בודד.
 @visibleForTesting
 String externalFilterCategoryOf(String facet) {
   final segments = facet
@@ -80,7 +89,8 @@ String? externalValidatedCategoryOf(
 
 /// המזהים מתוך [index] שסיווגם ([categories]) תואם את בחירת הקטגוריות
 /// [facets] (OR ביניהן; קטגוריה תואמת גם את צאצאיה). [otherFacet] הוא דלי
-/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג.
+/// "עוד מ<מקור>" — תואם תוצאות ללא סיווג, ו-facet של ספר שתחתיו
+/// (`<דלי>/#<id>`) תואם את אותו ספר בלבד.
 @visibleForTesting
 List<int> externalVisibleIdsFor({
   required List<ExternalSearchIndexEntry> index,
@@ -88,6 +98,14 @@ List<int> externalVisibleIdsFor({
   required List<String> facets,
   required String? otherFacet,
 }) {
+  final pickedIds = <int>{};
+  if (otherFacet != null) {
+    for (final facet in facets) {
+      final id = ExternalSearchSummary.bookIdIn(facet, otherFacet);
+      if (id != null) pickedIds.add(id);
+    }
+  }
+
   bool matches(String? path) {
     for (final facet in facets) {
       if (facet == '/') return true;
@@ -104,15 +122,20 @@ List<int> externalVisibleIdsFor({
 
   return [
     for (final entry in index)
-      if (matches(categories[entry.id])) entry.id,
+      if (pickedIds.contains(entry.id) || matches(categories[entry.id]))
+        entry.id,
   ];
 }
 
 class _ExternalSearchResultsSectionState
     extends State<ExternalSearchResultsSection> {
   static const _pageSize = 20;
-  static const _listMaxHeight = 300.0;
   static const _inBookMatchesTimeout = Duration(seconds: 15);
+
+  /// ה-slot של הרכיב ברשימה המאוחדת הוא תמיד sliver — גם כשאין מה להציג.
+  static const Widget _emptySliver = SliverToBoxAdapter(
+    child: SizedBox.shrink(),
+  );
 
   final List<ExternalSearchResult> _results = [];
   int _totalBooks = 0;
@@ -120,7 +143,6 @@ class _ExternalSearchResultsSectionState
   bool _hasMore = false;
   bool _loading = false;
   String? _error;
-  bool _expanded = true;
   Object? _openingId;
 
   /// חתימת הבקשה האחרונה — מזהה מתי צריך חיפוש חדש ומסנן תשובות ישנות.
@@ -154,6 +176,17 @@ class _ExternalSearchResultsSectionState
     });
   }
 
+  /// המדור הוא הכותב היחיד של [SearchingTab.externalSearchStatus], ולכן הוא
+  /// מנקה אותו כשהוא יורד מהעץ (החלפת פריסה רחבה/צרה מרכיבה אותו מחדש) —
+  /// אחרת שאר המסך היה ממשיך להתנהג כאילו יש מקור שני. סגירת טאב מפנה את
+  /// ה-ValueNotifier רק 350ms אחרי פירוק העץ (ראו TabsBloc._disposeTabLater),
+  /// כך שהכתיבה כאן קודמת לו.
+  @override
+  void dispose() {
+    widget.tab.externalSearchStatus.value = null;
+    super.dispose();
+  }
+
   /// שם המקור לתגית שעל כל שורה — [resultsTitle] של שורת התוסף.
   String _sourceTag = '';
 
@@ -184,8 +217,26 @@ class _ExternalSearchResultsSectionState
           .toList()
         ..sort();
 
+  /// מפרסם את מצב המדור לשורת המונים שבראש הטאב — המקום היחיד שבו ספירות
+  /// המקור החיצוני וההתקדמות שלו מוצגות.
+  void _publishStatus() {
+    if (_fetchSignature.isEmpty || _sourceTag.isEmpty) {
+      widget.tab.externalSearchStatus.value = null;
+      return;
+    }
+    widget.tab.externalSearchStatus.value = ExternalSearchStatus(
+      sourceTitle: _sourceTag,
+      loading: _loading,
+      books: _totalBooks,
+      hits: _totalHits,
+      ofTotalBooks: _filterActive ? _summary?.totalBooks : null,
+      failed: _error != null,
+    );
+  }
+
   void _syncWithState(SearchState state) {
     final active = _activeProvider(state);
+    if (active != null) _sourceTag = active.$2;
     final query = state.searchQuery.trim();
     final signature = active == null || query.isEmpty
         ? ''
@@ -222,6 +273,7 @@ class _ExternalSearchResultsSectionState
       _error = null;
       _loading = signature.isNotEmpty;
     });
+    _publishStatus();
     if (signature.isNotEmpty) {
       unawaited(_fetch(state, active!.$1, reset: true));
     }
@@ -248,6 +300,7 @@ class _ExternalSearchResultsSectionState
       }
       _loading = visible == null || visible.isNotEmpty;
     });
+    _publishStatus();
     if (visible == null || visible.isNotEmpty) {
       unawaited(_fetch(state, active.$1, reset: true));
     }
@@ -293,6 +346,10 @@ class _ExternalSearchResultsSectionState
       if (page.index != null && _categoryById == null) {
         _index = page.index;
         _classifyIndex(signature);
+        // סיווג יכול להפעיל סינון שהמתין לו, ואז כבר רצה בקשה חדשה — העמוד
+        // הלא-מסונן שבידינו שייך לדור הקודם, וכתיבתו הייתה מציגה את תוצאות
+        // החיפוש כולו עם ספירות מסוננות ובלי חיווי טעינה.
+        if (!mounted || generation != _fetchGeneration) return;
       }
       setState(() {
         _results.removeRange(
@@ -313,6 +370,7 @@ class _ExternalSearchResultsSectionState
         }
         _loading = !done;
       });
+      _publishStatus();
     }
 
     try {
@@ -335,6 +393,7 @@ class _ExternalSearchResultsSectionState
             ? 'החיפוש החיצוני לא ענה בזמן'
             : error.toString().replaceFirst('Bad state: ', '');
       });
+      _publishStatus();
     }
   }
 
@@ -371,12 +430,20 @@ class _ExternalSearchResultsSectionState
 
     final categories = <int, String?>{};
     final counts = <String, int>{};
+    final namedOther = <ExternalSearchBook>[];
     var other = 0;
     for (final entry in index) {
       final path = externalValidatedCategoryOf(entry.categoryPath, validPaths);
       categories[entry.id] = path;
       if (path == null) {
         other += 1;
+        final title = entry.title;
+        // ספר בלי שם אינו יכול להיות שורה בעץ; הוא עדיין נספר בדלי.
+        if (title != null) {
+          namedOther.add(
+            ExternalSearchBook(id: entry.id, title: title, hits: entry.hits),
+          );
+        }
       } else {
         counts[path] = (counts[path] ?? 0) + 1;
       }
@@ -385,6 +452,12 @@ class _ExternalSearchResultsSectionState
     for (final entry in index) {
       totalHits += entry.hits;
     }
+    // שורות הדלי בעץ הן הרשימה הזו, ואין להן סדר קטלוגי כמו לספרי הספרייה —
+    // לכן העשיר במופעים ראשון, ובתיקו לפי שם, כדי שהסדר יהיה יציב וקריא.
+    namedOther.sort((a, b) {
+      final byHits = b.hits.compareTo(a.hits);
+      return byHits != 0 ? byHits : a.title.compareTo(b.title);
+    });
 
     _categoryById = categories;
     _summary = ExternalSearchSummary(
@@ -394,6 +467,7 @@ class _ExternalSearchResultsSectionState
       totalHits: totalHits,
       categoryBookCounts: counts,
       otherBooks: other,
+      namedOtherBooks: namedOther,
     );
     widget.tab.externalSearchSummary.value = _summary;
 
@@ -407,6 +481,7 @@ class _ExternalSearchResultsSectionState
     final active = _activeProvider(state);
     if (active == null || _loading) return;
     setState(() => _loading = true);
+    _publishStatus();
     unawaited(_fetch(state, active.$1, reset: false));
   }
 
@@ -466,107 +541,61 @@ class _ExternalSearchResultsSectionState
       builder: (context, state) {
         final active = _activeProvider(state);
         if (active == null || state.searchQuery.trim().isEmpty) {
-          return const SizedBox.shrink();
+          return _emptySliver;
         }
         _sourceTag = active.$2;
-        return _buildSection(context, state, active.$2);
+        return _buildSection(context, state);
       },
     );
   }
 
-  Widget _buildSection(BuildContext context, SearchState state, String title) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildHeader(context, title),
-          if (_expanded) _buildBody(context, state),
-        ],
-      ),
-    );
-  }
+  /// המדור מציג תוצאות בלבד: המקור, ההתקדמות והספירות שלו מוצגים בשורת
+  /// המונים שבראש הטאב (ראו [ExternalSearchStatus]).
+  Widget _buildSection(BuildContext context, SearchState state) =>
+      _buildBody(context, state);
 
-  Widget _buildHeader(BuildContext context, String title) {
-    final cs = Theme.of(context).colorScheme;
-    final filteredNote = _filterActive && _summary != null
-        ? ' (מתוך ${_summary!.totalBooks})'
-        : '';
-    final summary = _totalBooks > 0
-        ? '$title — $_totalBooks ספרים$filteredNote, $_totalHits מופעים'
-        : title;
-    return InkWell(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        color: cs.secondaryContainer,
-        child: Row(
-          children: [
-            Icon(FluentIcons.globe_search_24_regular, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                summary,
-                style: Theme.of(context).textTheme.titleSmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (_loading)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            const SizedBox(width: 8),
-            Icon(
-              _expanded
-                  ? FluentIcons.chevron_up_24_regular
-                  : FluentIcons.chevron_down_24_regular,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
+  /// sliver ריק כשאין מה להראות — טעינה ראשונה (החיווי בשורת המונים) או
+  /// מדור ריק לפני שהתקבלה תשובה כלשהי; אחרת נשאר רווח מת ברשימה.
   Widget _buildBody(BuildContext context, SearchState state) {
     if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-            ),
-            ActionButton.ghost(
-              text: 'נסה שוב',
-              onPressed: () {
-                _fetchSignature = '';
-                _syncWithState(state);
-              },
-            ),
-          ],
+              ActionButton.ghost(
+                text: 'נסה שוב',
+                onPressed: () {
+                  _fetchSignature = '';
+                  _syncWithState(state);
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
     if (_results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(_loading ? 'מחפש…' : 'לא נמצאו תוצאות'),
+      // בטעינה החיווי יושב בשורת המונים; לפני החיפוש הראשון (חתימה ריקה)
+      // אין עדיין מה לדווח עליו.
+      if (_loading || _fetchSignature.isEmpty) return _emptySliver;
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text('$_sourceTag: לא נמצאו תוצאות'),
+        ),
       );
     }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: _listMaxHeight),
-      child: ListView.builder(
-        shrinkWrap: true,
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      sliver: SliverList.builder(
         itemCount: _results.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _results.length) {
@@ -579,90 +608,107 @@ class _ExternalSearchResultsSectionState
               ),
             );
           }
-          return _buildResultRow(context, state, _results[index]);
+          return BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, settings) =>
+                _buildResultRow(context, state, _results[index], settings),
+          );
         },
       ),
     );
   }
 
+  /// כרטיס תוצאה באותה שפה עיצובית של תוצאות הספרייה במסך הזה: מסגרת
+  /// מעוגלת, ריווח פנימי נדיב ושורת קטע בגובה קריא — ולא ListTile צפוף.
+  ///
+  /// גזיר הטקסט נצבע בגופן הספרים של המשתמש ([SettingsState.fontFamily]
+  /// ובגודלו), כמו גזירי המנוע המובנה — אחרת אותה שאילתה מוצגת בשני גופנים
+  /// שונים באותו מסך.
   Widget _buildResultRow(
     BuildContext context,
     SearchState state,
     ExternalSearchResult result,
+    SettingsState settings,
   ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final opening = _openingId == result.externalId;
-    return ListTile(
-      dense: true,
-      enabled: _openingId == null || opening,
-      leading: opening
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(FluentIcons.book_open_24_regular, color: cs.primary),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              result.title,
-              style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (_sourceTag.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            // תגית מקור על כל תוצאה, כמו במסך החיפוש המאוחד של התוסף.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: cs.tertiaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(_sourceTag, style: theme.textTheme.labelSmall),
-            ),
-          ],
-        ],
+    final enabled = _openingId == null || opening;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outline.withValues(alpha: 0.3)),
+        borderRadius: AppTokens.borderRadiusAll,
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (result.meta != null)
-            Text(result.meta!, style: theme.textTheme.bodySmall),
-          if (result.snippet != null)
-            RichText(
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                children: SnippetBuilder.highlightLiteral(
-                  plainText: result.snippet!,
-                  query: state.searchQuery.trim(),
-                  defaultStyle: theme.textTheme.bodyMedium!,
-                  highlightStyle: theme.textTheme.bodyMedium!.copyWith(
-                    fontWeight: FontWeight.bold,
-                    backgroundColor: cs.primaryContainer,
-                  ),
+      child: InkWell(
+        onTap: enabled ? () => unawaited(_openResult(result, state)) : null,
+        borderRadius: AppTokens.borderRadiusAll,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              opening
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      FluentIcons.book_open_24_regular,
+                      size: 20,
+                      color: cs.primary,
+                    ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExternalResultTitleRow(
+                      title: result.title,
+                      hitCount: result.hitCount,
+                      sourceTag: _sourceTag,
+                      copyText: result.snippet,
+                    ),
+                    // result.meta (מחבר · מקום · שנה) אינו מוצג: כרטיס תוצאה
+                    // של המנוע המובנה אינו נושא פרטי ספר, והשורה הזו רק
+                    // הרחיקה את הגזיר מהכותרת.
+                    if (result.snippet != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: RichText(
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.justify,
+                          text: TextSpan(
+                            children: SnippetBuilder.highlightLiteral(
+                              plainText: result.snippet!,
+                              query: state.searchQuery.trim(),
+                              defaultStyle: TextStyle(
+                                fontSize: settings.fontSize,
+                                fontFamily: settings.fontFamily,
+                                color: cs.onSurface,
+                                height: 1.5,
+                              ),
+                              // אותה הדגשה כמו בגזירי המנוע המובנה: מילה
+                              // אדומה ומודגשת, ולא צביעת רקע.
+                              highlightStyle: TextStyle(
+                                fontSize: settings.fontSize + 2,
+                                fontFamily: settings.fontFamily,
+                                height: 1.5,
+                                fontWeight: FontWeight.bold,
+                                color: cs.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
-      trailing: result.hitCount > 0
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${result.hitCount}',
-                style: theme.textTheme.labelSmall,
-              ),
-            )
-          : null,
-      onTap: () => unawaited(_openResult(result, state)),
     );
   }
 }

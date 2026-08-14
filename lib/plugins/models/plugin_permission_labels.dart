@@ -63,6 +63,12 @@ List<String> pluginBackgroundActivationReasons(PluginManifest manifest) {
       reasons.add('עליית אוצריא');
       continue;
     }
+    // אירוע ממוקד של ספק חיפוש חיצוני — אין לו הרשאת subscribe ולכן גם
+    // לא תווית ברשימת ההרשאות.
+    if (topic == 'search.external.requested') {
+      reasons.add('בקשת חיפוש ממסך החיפוש המובנה');
+      continue;
+    }
     reasons.add(
       _permissionLabels['events.subscribe:$topic']?.label ?? 'האירוע $topic',
     );

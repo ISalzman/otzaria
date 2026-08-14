@@ -175,6 +175,10 @@ const Set<String> _knownEvents = {
   'settings.changed',
   'plugin.permissions_changed',
   'search.requested',
+  // אירוע ממוקד מ-PluginExternalSearchService: בקשת חיפוש חיצוני ממסך
+  // החיפוש המובנה. תוסף-ספק מצהיר עליו ב-activationEvents כדי שהבקשה
+  // תעיר מנוע רקע במקום לפתוח את דף התוסף.
+  'search.external.requested',
 };
 
 /// מיפוי `method -> permission` נדרשת (תואם METHOD_REQUIRED_PERMISSION ב-JS).

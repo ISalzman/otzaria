@@ -253,6 +253,16 @@ class UpdateFacetFilteringWidth extends SettingsEvent {
   List<Object?> get props => [facetFilteringWidth];
 }
 
+/// מיקום בלוק התוצאות ממקור חיצוני במסך החיפוש: true — קודמות, false — מאוחרות.
+class UpdateExternalResultsFirst extends SettingsEvent {
+  final bool externalResultsFirst;
+
+  const UpdateExternalResultsFirst(this.externalResultsFirst);
+
+  @override
+  List<Object?> get props => [externalResultsFirst];
+}
+
 class UpdateCommentaryPaneWidth extends SettingsEvent {
   final double commentaryPaneWidth;
 

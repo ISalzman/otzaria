@@ -6,6 +6,8 @@ import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
+import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_defaults.dart';
@@ -878,6 +880,121 @@ class GroupingOfResults extends StatelessWidget {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+/// בורר מיקום התוצאות ממקור חיצוני — "תוצאות מ<מקור> קודמות/מאוחרות".
+///
+/// מוצג רק כשספק תוצאות חיצוני של תוסף פעיל בטאב (יש
+/// [SearchingTab.externalSearchStatus]); שם המקור מגיע מהצהרת התוסף, כך
+/// שהליבה אינה מכירה מקור מסוים. הבחירה נשמרת בהגדרות
+/// ([SettingsState.externalResultsFirst]) וחלה גם על מיקום הבלוק ברשימת
+/// התוצאות המאוחדת וגם על מיקום קטגוריית "עוד מ<מקור>" בעץ הסינון.
+class ExternalResultsPositionControl extends StatelessWidget {
+  const ExternalResultsPositionControl({
+    super.key,
+    required this.tab,
+    this.compact = false,
+  });
+
+  final SearchingTab tab;
+
+  /// במצב קומפקטי מוצג כפתור שפותח תפריט נפתח במקום dropdown רגיל.
+  final bool compact;
+
+  List<AppMenuEntry<bool>> _entries(String sourceTitle) => [
+    AppMenuEntry(
+      value: false,
+      label: 'תוצאות מ$sourceTitle מאוחרות',
+      subtitle: 'אחרי תוצאות אוצריא, והקטגוריה בסוף העץ',
+    ),
+    AppMenuEntry(
+      value: true,
+      label: 'תוצאות מ$sourceTitle קודמות',
+      subtitle: 'לפני תוצאות אוצריא, והקטגוריה בראש העץ',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ExternalSearchStatus?>(
+      valueListenable: tab.externalSearchStatus,
+      builder: (context, status, _) {
+        if (status == null) return const SizedBox.shrink();
+        return BlocBuilder<SettingsBloc, SettingsState>(
+          buildWhen: (p, c) => p.externalResultsFirst != c.externalResultsFirst,
+          builder: (context, settings) {
+            final entries = _entries(status.sourceTitle);
+            if (compact) {
+              return AppPopupMenuButton<bool>(
+                tooltip: 'מיקום תוצאות ${status.sourceTitle}',
+                initialValue: settings.externalResultsFirst,
+                entries: entries,
+                onSelected: (value) {
+                  context.read<SettingsBloc>().add(
+                    UpdateExternalResultsFirst(value),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10.0,
+                    vertical: 5.0,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    borderRadius: AppTokens.borderRadiusAll,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        status.sourceTitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        FluentIcons.chevron_down_12_regular,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return SizedBox(
+              width: 220,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 4.0,
+                ),
+                child: AppDropdownField<bool>(
+                  value: settings.externalResultsFirst,
+                  decoration: InputDecoration(
+                    labelText: 'מיקום תוצאות ${status.sourceTitle}',
+                    border: const OutlineInputBorder(),
+                  ),
+                  entries: entries,
+                  onSelected: (value) {
+                    if (value != null) {
+                      context.read<SettingsBloc>().add(
+                        UpdateExternalResultsFirst(value),
+                      );
+                    }
+                  },
+                ),
+              ),
+            );
+          },
         );
       },
     );

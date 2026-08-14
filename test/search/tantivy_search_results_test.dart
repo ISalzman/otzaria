@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
+import 'package:otzaria/search/models/external_search_status.dart';
+import 'package:otzaria/search/view/search_result_source_tag.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
@@ -130,11 +132,7 @@ void main() {
       ];
 
       searchBloc = RecordingSearchBloc(
-        SearchState(
-          searchQuery: 'בדיקה',
-          totalResults: 200,
-          results: results,
-        ),
+        SearchState(searchQuery: 'בדיקה', totalResults: 200, results: results),
       );
 
       whenListen(
@@ -160,26 +158,50 @@ void main() {
             ),
           ],
           child: Scaffold(
-            body: SizedBox(
-              height: 500,
-              child: TantivySearchResults(tab: tab),
-            ),
+            body: SizedBox(height: 500, child: TantivySearchResults(tab: tab)),
           ),
         ),
       );
     }
 
+    testWidgets('בלי מדור תוצאות חיצוני אין תגית מקור על הכרטיסים', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      expect(find.byType(SearchResultSourceTag), findsNothing);
+    });
+
+    testWidgets('כשמדור חיצוני פעיל, כל כרטיס נושא תגית "אוצריא"', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      tab.externalSearchStatus.value = const ExternalSearchStatus(
+        sourceTitle: 'היברובוקס',
+        loading: false,
+        books: 3,
+        hits: 7,
+      );
+      await tester.pump();
+
+      expect(find.byType(SearchResultSourceTag), findsWidgets);
+      expect(find.text('אוצריא'), findsWidgets);
+    });
+
     testWidgets('גלילה לתחתית טוענת עוד תוצאות אוטומטית', (tester) async {
       await tester.pumpWidget(buildWidget());
 
       await tester.pump();
-      await tester.drag(find.byType(ListView), const Offset(0, -100000));
+      await tester.drag(
+        find.byType(CustomScrollView),
+        const Offset(0, -100000),
+      );
       await tester.pump();
 
-      expect(
-        searchBloc.recordedEvents.whereType<LoadMoreResults>().length,
-        1,
-      );
+      expect(searchBloc.recordedEvents.whereType<LoadMoreResults>().length, 1);
     });
 
     testWidgets('חיפוש חדש (שינוי קטגוריה) מאפס את הגלילה לראש הרשימה', (
@@ -188,10 +210,10 @@ void main() {
       await tester.pumpWidget(buildWidget());
       await tester.pump();
 
-      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pump();
       final scrolledOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(scrolledOffset, greaterThan(0));
@@ -208,7 +230,7 @@ void main() {
       await tester.pump(); // addPostFrameCallback → jumpTo(0)
 
       final resetOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(resetOffset, 0);
@@ -220,10 +242,10 @@ void main() {
       await tester.pumpWidget(buildWidget());
       await tester.pump();
 
-      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pump();
       final scrolledOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(scrolledOffset, greaterThan(0));
@@ -248,7 +270,7 @@ void main() {
       await tester.pump();
 
       final keptOffset = tester
-          .widget<ListView>(find.byType(ListView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!
           .offset;
       expect(keptOffset, scrolledOffset);
@@ -341,6 +363,41 @@ void main() {
         _highlightedTextFromInlineSpan(highlightedResultText.text),
         'טקסט',
       );
+    });
+
+    testWidgets('מספר תוצאה בן 4 ספרות נשאר בשורה אחת בתוך הריבוע', (
+      tester,
+    ) async {
+      searchBloc.emitState(
+        SearchState(
+          searchQuery: 'בדיקה',
+          totalResults: 1000,
+          results: List.generate(
+            1000,
+            (i) => SearchResult(
+              id: BigInt.from(i + 1),
+              title: 'ספר ${i + 1}',
+              reference: 'סימן ${i + 1}',
+              text: 'טקסט ${i + 1}',
+              segment: BigInt.from(i),
+              isPdf: false,
+              filePath: 'book_$i.txt',
+              mergedCount: 1,
+              merged: const [],
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      final badge = find.text('1000');
+      await tester.scrollUntilVisible(badge, 20000, maxScrolls: 200);
+
+      expect(badge, findsOneWidget);
+      // שבירה לשתי שורות הייתה מכפילה את גובה הטקסט (גופן 16)
+      expect(tester.getSize(badge).height, lessThan(30));
     });
 
     testWidgets(

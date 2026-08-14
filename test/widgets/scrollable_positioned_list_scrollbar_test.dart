@@ -1430,4 +1430,173 @@ void main() {
       reason: 'האגודל זז אחרי שהתוכן נחת — המיפוי קדימה וההפוך אינם מתאימים',
     );
   });
+
+  group('שורות בגבהים שונים (ספר אמיתי)', () {
+    // גבהים משתנים כמו שורות ספר — שורה קצרה מול פסקה שנשברת לכמה שורות.
+    double heightFor(int index) =>
+        const [40.0, 90.0, 240.0, 60.0, 150.0, 320.0][index % 6];
+
+    Future<Finder> pumpVariableHeightList(
+      WidgetTester tester, {
+      required int itemCount,
+    }) async {
+      tester.view.physicalSize = const Size(600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final listener = ItemPositionsListener.create();
+      final controller = ItemScrollController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScrollablePositionedListScrollbar(
+              scrollController: controller,
+              itemPositionsListener: listener,
+              itemCount: itemCount,
+              child: ScrollablePositionedList.builder(
+                itemScrollController: controller,
+                itemPositionsListener: listener,
+                itemCount: itemCount,
+                itemBuilder: (context, i) =>
+                    SizedBox(height: heightFor(i), child: Text('פריט $i')),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      return find.descendant(
+        of: find.byType(ScrollablePositionedListScrollbar),
+        matching: find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+      );
+    }
+
+    Future<void> wheel(WidgetTester tester, {int frames = 1}) async {
+      for (var i = 0; i < frames; i++) {
+        await tester.sendEventToBinding(
+          const PointerScrollEvent(
+            position: Offset(300, 450),
+            scrollDelta: Offset(0, 20),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+
+    testWidgets('האגודל אינו נסוג כלפי מעלה בזמן גלילה למטה', (tester) async {
+      // המחוון אינדקסי ואינו אומד היקף גלילה, ולכן שינוי צפיפות השורות אינו
+      // מזיז אותו אחורה. אומדן ההיקף של ListView, לעומת זאת, מקפיץ ~17px.
+      final thumb = await pumpVariableHeightList(tester, itemCount: 200);
+
+      var previousTop = tester.getRect(thumb).top;
+      var worstBackwardJump = 0.0;
+      for (var i = 0; i < 300; i++) {
+        await wheel(tester);
+        final top = tester.getRect(thumb).top;
+        final backward = previousTop - top;
+        if (backward > worstBackwardJump) worstBackwardJump = backward;
+        previousTop = top;
+      }
+
+      expect(worstBackwardJump, lessThan(1.5));
+    });
+
+    testWidgets('האגודל נוגע בתחתית המסילה בסוף התוכן', (tester) async {
+      final thumb = await pumpVariableHeightList(tester, itemCount: 40);
+      final track = find.descendant(
+        of: find.byType(ScrollablePositionedListScrollbar),
+        matching: find.byKey(ScrollablePositionedListScrollbar.trackKey),
+      );
+
+      // גלילה מוגזמת בכוונה — הרשימה נעצרת בסוף התוכן.
+      await wheel(tester, frames: 400);
+
+      expect(
+        tester.getRect(thumb).bottom,
+        closeTo(tester.getRect(track).bottom, 1.5),
+        reason: 'בסוף התוכן האגודל לא הגיע לתחתית המסילה',
+      );
+    });
+
+    testWidgets('גובה האגודל אינו "נושם" בין אזורי צפיפות', (tester) async {
+      final thumb = await pumpVariableHeightList(tester, itemCount: 200);
+
+      final initialHeight = tester.getRect(thumb).height;
+      var worstChange = 0.0;
+      for (var i = 0; i < 200; i++) {
+        await wheel(tester);
+        final change = (tester.getRect(thumb).height - initialHeight).abs();
+        if (change > worstChange) worstChange = change;
+      }
+
+      expect(worstChange, lessThan(initialHeight * 0.35));
+    });
+  });
+
+  group('צד המסילה לפי כיוון הקריאה', () {
+    Future<Rect> pumpAndMeasureTrack(
+      WidgetTester tester, {
+      required TextDirection direction,
+    }) async {
+      final listener = ItemPositionsListener.create();
+      final controller = ItemScrollController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: direction,
+            child: Scaffold(
+              body: ScrollablePositionedListScrollbar(
+                scrollController: controller,
+                itemPositionsListener: listener,
+                itemCount: 10,
+                child: const _ScrollableStub(),
+              ),
+            ),
+          ),
+        ),
+      );
+      (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
+          const [
+            ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.5),
+            ItemPosition(index: 1, itemLeadingEdge: 0.5, itemTrailingEdge: 1.0),
+          ];
+      await tester.pump();
+
+      return tester.getRect(
+        find.descendant(
+          of: find.byType(ScrollablePositionedListScrollbar),
+          matching: find.byKey(ScrollablePositionedListScrollbar.trackKey),
+        ),
+      );
+    }
+
+    testWidgets('בעברית המסילה בקצה ימין', (tester) async {
+      final track = await pumpAndMeasureTrack(
+        tester,
+        direction: TextDirection.rtl,
+      );
+      final scrollbar = tester.getRect(
+        find.byType(ScrollablePositionedListScrollbar),
+      );
+
+      expect(track.right, closeTo(scrollbar.right, 0.5));
+      expect(track.center.dx, greaterThan(scrollbar.center.dx));
+    });
+
+    testWidgets('בלטינית המסילה בקצה שמאל', (tester) async {
+      final track = await pumpAndMeasureTrack(
+        tester,
+        direction: TextDirection.ltr,
+      );
+      final scrollbar = tester.getRect(
+        find.byType(ScrollablePositionedListScrollbar),
+      );
+
+      expect(track.left, closeTo(scrollbar.left, 0.5));
+      expect(track.center.dx, lessThan(scrollbar.center.dx));
+    });
+  });
 }

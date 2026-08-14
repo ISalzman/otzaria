@@ -56,7 +56,8 @@ void main() {
     void Function(String facet)? onSetFacet,
     void Function(String path, bool isExpanded)? onToggleExpand,
     VoidCallback? onClearAll,
-    List<({String title, int count})> extraRootCategories = const [],
+    List<SearchTreeExtraCategory> extraRootCategories = const [],
+    bool extraCategoriesFirst = false,
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -78,6 +79,7 @@ void main() {
               isMultiSelectPressed: () => false,
               onClearAll: onClearAll ?? () {},
               extraRootCategories: extraRootCategories,
+              extraCategoriesFirst: extraCategoriesFirst,
             ),
           ),
         ),
@@ -86,6 +88,37 @@ void main() {
   }
 
   group('עץ הניווט — קטגוריות סינתטיות (ספק חיצוני)', () {
+    SearchTreeExtraCategory extra({
+      int count = 12,
+      List<SearchTreeExtraBook> books = const [],
+    }) => SearchTreeExtraCategory(
+      title: 'עוד מהיברובוקס',
+      facet: '/עוד מהיברובוקס',
+      count: count,
+      books: books,
+    );
+
+    const twoBooks = [
+      SearchTreeExtraBook(
+        title: 'שו"ת מהרש"ם',
+        facet: '/עוד מהיברובוקס/#42',
+        hits: 7,
+      ),
+      SearchTreeExtraBook(
+        title: 'דרשות הר"ן',
+        facet: '/עוד מהיברובוקס/#43',
+        hits: 2,
+      ),
+    ];
+
+    Finder chevron(String title) => find.descendant(
+      of: find.ancestor(
+        of: find.text(title),
+        matching: find.byType(NavTreeTile),
+      ),
+      matching: find.byType(IconButton),
+    );
+
     testWidgets('קטגוריה סינתטית מוצגת אחרי הקטגוריות ולחיצה בוחרת אותה', (
       tester,
     ) async {
@@ -93,14 +126,35 @@ void main() {
       await pumpTree(
         tester,
         library: makeLibrary(),
-        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 12)],
+        extraRootCategories: [extra()],
         onSetFacet: (facet) => selected = facet,
       );
 
       expect(find.text('עוד מהיברובוקס'), findsOneWidget);
       expect(find.text('(12)'), findsOneWidget);
+      // ברירת המחדל: הדלי אחרי קטגוריות הספרייה.
+      expect(
+        tester.getTopLeft(find.text('עוד מהיברובוקס')).dy,
+        greaterThan(tester.getTopLeft(find.text('תנ"ך')).dy),
+      );
       await tester.tap(find.text('עוד מהיברובוקס'));
       expect(selected, '/עוד מהיברובוקס');
+    });
+
+    testWidgets('extraCategoriesFirst מציב את הדלי לפני קטגוריות הספרייה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra()],
+        extraCategoriesFirst: true,
+      );
+
+      expect(
+        tester.getTopLeft(find.text('עוד מהיברובוקס')).dy,
+        lessThan(tester.getTopLeft(find.text('תנ"ך')).dy),
+      );
     });
 
     testWidgets('קטגוריה סינתטית בספירה 0 מוסתרת אלא אם היא נבחרה', (
@@ -109,17 +163,95 @@ void main() {
       await pumpTree(
         tester,
         library: makeLibrary(),
-        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 0)],
+        extraRootCategories: [extra(count: 0)],
       );
       expect(find.text('עוד מהיברובוקס'), findsNothing);
 
       await pumpTree(
         tester,
         library: makeLibrary(),
-        extraRootCategories: [(title: 'עוד מהיברובוקס', count: 0)],
+        extraRootCategories: [extra(count: 0)],
         selectedFacets: {'/עוד מהיברובוקס'},
       );
       expect(find.text('עוד מהיברובוקס'), findsOneWidget);
+    });
+
+    testWidgets('בלי ספרים מהספק אין חץ הרחבה', (tester) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra()],
+        expansion: const {'/עוד מהיברובוקס': true},
+      );
+
+      expect(chevron('עוד מהיברובוקס'), findsNothing);
+    });
+
+    testWidgets('פתיחה מציגה את ספרי הספק עם מספר המופעים בכל אחד', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra(books: twoBooks)],
+        expansion: const {'/עוד מהיברובוקס': true},
+      );
+
+      expect(find.text('שו"ת מהרש"ם'), findsOneWidget);
+      expect(find.text('דרשות הר"ן'), findsOneWidget);
+      expect(find.text('(7)'), findsOneWidget);
+      expect(find.text('(2)'), findsOneWidget);
+    });
+
+    testWidgets('סגורה כברירת מחדל, והחץ מדווח על מצבה', (tester) async {
+      final toggles = <(String, bool)>[];
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra(books: twoBooks)],
+        onToggleExpand: (path, isExpanded) => toggles.add((path, isExpanded)),
+      );
+
+      expect(find.text('שו"ת מהרש"ם'), findsNothing);
+      await tester.tap(chevron('עוד מהיברובוקס'));
+      await tester.pump();
+      expect(toggles, [('/עוד מהיברובוקס', false)]);
+    });
+
+    testWidgets('לחיצה על ספר של הספק בוחרת את ה-facet שלו', (tester) async {
+      String? selected;
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra(books: twoBooks)],
+        expansion: const {'/עוד מהיברובוקס': true},
+        onSetFacet: (facet) => selected = facet,
+      );
+
+      await tester.tap(find.text('שו"ת מהרש"ם'));
+      await tester.pump();
+      expect(selected, '/עוד מהיברובוקס/#42');
+    });
+
+    testWidgets('ספר נבחר פותח את הדלי אוטומטית, וכיווץ ידני גובר', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra(books: twoBooks)],
+        selectedFacets: {'/עוד מהיברובוקס/#42'},
+      );
+      expect(find.text('שו"ת מהרש"ם'), findsOneWidget);
+
+      await pumpTree(
+        tester,
+        library: makeLibrary(),
+        extraRootCategories: [extra(books: twoBooks)],
+        selectedFacets: {'/עוד מהיברובוקס/#42'},
+        expansion: const {'/עוד מהיברובוקס': false},
+      );
+      expect(find.text('שו"ת מהרש"ם'), findsNothing);
     });
   });
 
@@ -426,6 +558,63 @@ void main() {
       );
 
       expect(find.text('נקה סינון'), findsOneWidget);
+    });
+  });
+
+  group('קטגוריה עם ספירה חיצונית בלבד — בלי חץ הרחבה', () {
+    // ספירת היברובוקס יכולה לשבת על קטגוריה שאין תחתיה שום שורה נראית
+    // (הענף העמוק לא בקטלוג, או שהספר אינו ספר ספרייה). חץ שנפתח לריק
+    // מבלבל — לכן הוא מוצג רק כשיש ילד נראה; הלחיצה על השורה מסננת.
+    Library twoBranchLibrary() => makeLibraryFrom([
+      makeCategory(
+        'תלמוד ירושלמי',
+        subCategories: [makeCategory('סדר זרעים')],
+      ),
+      makeCategory(
+        'תנ"ך',
+        subCategories: [makeCategory('כתובים')],
+      ),
+    ]);
+
+    Finder chevronOf(String title) => find.descendant(
+      of: find.ancestor(
+        of: find.text(title),
+        matching: find.byType(NavTreeTile),
+      ),
+      matching: find.byType(IconButton),
+    );
+
+    testWidgets('ספירה על הקטגוריה בלבד — אין חץ; עם ילד בעל ספירה — יש', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: twoBranchLibrary(),
+        facetCounts: const {
+          '/': 3,
+          // רק האב קיבל ספירה (הזרקת ספק חיצוני) — תת-הקטגוריה בספירה 0.
+          '/תלמוד ירושלמי': 1,
+          // ענף רגיל: גם הילד נספר.
+          '/תנ"ך': 2,
+          '/תנ"ך/כתובים': 2,
+        },
+      );
+
+      expect(chevronOf('תלמוד ירושלמי'), findsNothing);
+      expect(chevronOf('תנ"ך'), findsOneWidget);
+    });
+
+    testWidgets('קטגוריה בלי חץ אינה נפתחת גם כשהיא מסומנת כפתוחה', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: twoBranchLibrary(),
+        facetCounts: const {'/': 1, '/תלמוד ירושלמי': 1},
+        expansion: const {'/תלמוד ירושלמי': true},
+      );
+
+      expect(find.text('סדר זרעים'), findsNothing);
     });
   });
 }

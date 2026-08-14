@@ -17,6 +17,18 @@ void main() {
       expect(entries[0].hits, 7);
       expect(entries[0].categoryPath, '/שו"ת');
       expect(entries[1].categoryPath, isNull);
+      expect(entries[0].title, isNull);
+    });
+
+    test('מקבל שם ספר כאיבר רביעי, עם קטגוריה ובלעדיה', () {
+      final entries = service.sanitizeIndexForTesting([
+        [43558, 7, '/שו"ת', 'שאלות ותשובות'],
+        [44, 2, '', 'ספר בלי סיווג'],
+      ])!;
+      expect(entries[0].categoryPath, '/שו"ת');
+      expect(entries[0].title, 'שאלות ותשובות');
+      expect(entries[1].categoryPath, isNull);
+      expect(entries[1].title, 'ספר בלי סיווג');
     });
 
     test('זורק רשומות פגומות ומנקה נתיבים לא תקינים', () {
@@ -25,15 +37,19 @@ void main() {
         [0, 5],
         [5, -1],
         [5],
-        [5, 1, 2, 3],
+        [5, 1, 2, 3, 4],
+        [6, 3, 2, 3],
         [7, 3, 'בלי לוכסן'],
         [8, 3, '/'],
         [9, 3, '/הלכה\u0000'],
       ])!;
-      expect(entries.map((e) => e.id), [7, 8, 9]);
+      expect(entries.map((e) => e.id), [6, 7, 8, 9]);
+      // איבר שאינו מחרוזת נזרק, והרשומה נשארת בלי סיווג ובלי שם.
       expect(entries[0].categoryPath, isNull);
+      expect(entries[0].title, isNull);
       expect(entries[1].categoryPath, isNull);
-      expect(entries[2].categoryPath, '/הלכה');
+      expect(entries[2].categoryPath, isNull);
+      expect(entries[3].categoryPath, '/הלכה');
     });
 
     test('null נשאר null — עדכון בלי אינדקס אינו מוחק אינדקס קודם', () {
@@ -62,6 +78,37 @@ void main() {
         throwsStateError,
       );
       expect(service.hasProvider('hebrewbooks'), isTrue);
+    });
+
+    test('הבקשה מצהירה שהקורא צורך שמות ספרים באינדקס', () async {
+      service.register('hebrewbooks', 'owner');
+      final search = service.search(provider: 'hebrewbooks', query: 'שלום');
+      await Future<void>.delayed(Duration.zero);
+      expect(request['indexTitles'], isTrue);
+      expect(search, throwsStateError);
+      service.removePlugin('owner');
+    });
+
+    test('עמוד המשך ועמוד לפי מזהים אינם מזמינים שמות — אין בהם אינדקס', () async {
+      service.register('hebrewbooks', 'owner');
+      final next = service.search(
+        provider: 'hebrewbooks',
+        query: 'שלום',
+        offset: 20,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(request.containsKey('indexTitles'), isFalse);
+      expect(next, throwsStateError);
+
+      final byIds = service.search(
+        provider: 'hebrewbooks',
+        query: 'שלום',
+        ids: const [1, 2],
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(request.containsKey('indexTitles'), isFalse);
+      expect(byIds, throwsStateError);
+      service.removePlugin('owner');
     });
 
     test('רק בעל הספק יכול לענות לבקשה', () async {
