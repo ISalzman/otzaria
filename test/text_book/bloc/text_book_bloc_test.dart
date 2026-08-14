@@ -15,6 +15,11 @@ import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+/// שורה שחורגת בוודאות מחלון הקישורים שנטען סביב תחילת הספר, ולכן מחייבת
+/// שאילתה חדשה. נגזר מהקבועים כדי שכוונון החלון לא ישבור את הבדיקות.
+const int _farLine =
+    TextBookBloc.linkLookAheadLines + TextBookBloc.linksReloadThresholdLines;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -46,7 +51,7 @@ void main() {
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 150);
+      expect(repository.lastEndIndex, 10 + TextBookBloc.linkLookAheadLines);
       expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
@@ -75,7 +80,7 @@ void main() {
 
       expect(repository.getBookLinksInRangeCalls, 1);
       expect(repository.lastStartIndex, 0);
-      expect(repository.lastEndIndex, 150);
+      expect(repository.lastEndIndex, 10 + TextBookBloc.linkLookAheadLines);
       expect(repository.lastTargetBookTitles, isEmpty);
 
       await bloc.close();
@@ -409,7 +414,7 @@ void main() {
         expect((bloc.state as TextBookLoaded).visibleIndices, const [0]);
         expect(repository.lastStartIndex, 0);
 
-        bloc.add(const UpdateVisibleIndecies([84, 85, 86]));
+        bloc.add(UpdateVisibleIndecies([_farLine, _farLine + 1, _farLine + 2]));
 
         await _waitFor(
           () => repository.getBookLinksInRangeCalls >= 2,
@@ -418,10 +423,16 @@ void main() {
 
         expect(
           (bloc.state as TextBookLoaded).visibleIndices,
-          const [84, 85, 86],
+          [_farLine, _farLine + 1, _farLine + 2],
         );
-        expect(repository.lastStartIndex, 24);
-        expect(repository.lastEndIndex, 226);
+        expect(
+          repository.lastStartIndex,
+          _farLine - TextBookBloc.linkLookBehindLines,
+        );
+        expect(
+          repository.lastEndIndex,
+          _farLine + 2 + TextBookBloc.linkLookAheadLines,
+        );
 
         await bloc.close();
       },
@@ -466,8 +477,14 @@ void main() {
           description: 'getBookLinksInRangeCalls >= 2',
         );
 
-        expect(repository.lastStartIndex, 1741);
-        expect(repository.lastEndIndex, 1941);
+        expect(
+          repository.lastStartIndex,
+          1801 - TextBookBloc.linkLookBehindLines,
+        );
+        expect(
+          repository.lastEndIndex,
+          1801 + TextBookBloc.linkLookAheadLines,
+        );
 
         await bloc.close();
       },
@@ -761,7 +778,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(repository.getBookLinksInRangeCalls, 1);
 
-      bloc.add(const UpdateVisibleIndecies([80, 81, 82]));
+      // חורג מחלון הקישורים שכבר נטען, אחרת הגלילה נענית ממנו בלי שאילתה.
+      bloc.add(UpdateVisibleIndecies([_farLine, _farLine + 1, _farLine + 2]));
       await Future<void>.delayed(const Duration(milliseconds: 30));
 
       expect(repository.getBookLinksInRangeCalls, 2);
@@ -887,16 +905,20 @@ void main() {
 
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        bloc.add(const UpdateVisibleIndecies([40, 41, 42]));
+        // גלילה בתוך החלון שכבר נטען אינה מייצרת שאילתה נוספת.
+        bloc.add(const UpdateVisibleIndecies([20, 21, 22]));
         await Future<void>.delayed(const Duration(milliseconds: 80));
-        expect(repository.getBookLinksInRangeCalls, 2);
+        expect(repository.getBookLinksInRangeCalls, 1);
 
         bloc.add(const UpdateCommentators(['אבן עזרא על בראשית']));
         await Future<void>.delayed(const Duration(milliseconds: 80));
 
-        expect(repository.getBookLinksInRangeCalls, 3);
+        expect(repository.getBookLinksInRangeCalls, 2);
         expect(repository.lastStartIndex, 0);
-        expect(repository.lastEndIndex, 182);
+        expect(
+          repository.lastEndIndex,
+          22 + TextBookBloc.linkLookAheadLines,
+        );
         expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
 
         await bloc.close();

@@ -35,9 +35,14 @@ import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  static const int _linkLookBehindLines = 60;
-  static const int _linkLookAheadLines = 140;
-  static const int _linksReloadThresholdLines = 20;
+  // שאילתת הקישורים חוסמת את ה-thread שמצייר (sqlite3 סינכרוני), ולכן החלון
+  // רחב והסף גבוה: בגלילה מהירה הוא נטען פעם ל-~400 שורות במקום כל 20.
+  @visibleForTesting
+  static const int linkLookBehindLines = 200;
+  @visibleForTesting
+  static const int linkLookAheadLines = 400;
+  @visibleForTesting
+  static const int linksReloadThresholdLines = 120;
   static const int _initialContentLookBehindLines = 80;
   static const int _initialContentLookAheadLines = 180;
   static const int _contentLookBehindLines = 120;
@@ -1491,6 +1496,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _loadLinksInBackground(
           currentState.book,
           event.visibleIndecies,
+          fromScroll: true,
         );
       }
     }
@@ -1508,15 +1514,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   ({int start, int end}) _calculateLinksWindow(List<int> visibleIndices) {
     if (visibleIndices.isEmpty) {
-      return (start: 0, end: _linkLookAheadLines);
+      return (start: 0, end: linkLookAheadLines);
     }
 
     final minVisible = visibleIndices.reduce((a, b) => a < b ? a : b);
     final maxVisible = visibleIndices.reduce((a, b) => a > b ? a : b);
 
     return (
-      start: (minVisible - _linkLookBehindLines).clamp(0, minVisible),
-      end: maxVisible + _linkLookAheadLines,
+      start: (minVisible - linkLookBehindLines).clamp(0, minVisible),
+      end: maxVisible + linkLookAheadLines,
     );
   }
 
@@ -1530,8 +1536,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _loadedLinksStart != null &&
         _loadedLinksEnd != null &&
         _loadedLinksTargetBookTitlesSignature == targetBookTitlesSignature &&
-        start >= (_loadedLinksStart! - _linksReloadThresholdLines) &&
-        end <= (_loadedLinksEnd! + _linksReloadThresholdLines);
+        start >= (_loadedLinksStart! - linksReloadThresholdLines) &&
+        end <= (_loadedLinksEnd! + linksReloadThresholdLines);
   }
 
   List<String>? _normalizeTargetBookTitles(Iterable<String>? targetBookTitles) {
@@ -2601,6 +2607,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
+  /// [fromScroll] מסמן קריאה שנובעת מתזוזת גלילה בלבד. שם היעדים אינם
+  /// משתנים, ולכן די להשוות את החלון מול היעדים שכבר נטענו — בלי לפתור אותם
+  /// מחדש, פעולה שממיינת את כל המפרשים הזמינים ובונה מהם מפתח מחרוזת.
   Future<void> _loadLinksInBackground(
     TextBook book,
     List<int> visibleIndices, {
@@ -2608,6 +2617,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     Iterable<String>? targetBookTitlesOverride,
     bool forceLoadAll = false,
     String? workspaceId,
+    bool fromScroll = false,
   }) async {
     final runtimeStateBeforeWindowCheck = state;
     if (!force &&
@@ -2617,6 +2627,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     final window = _calculateLinksWindow(visibleIndices);
+
+    // יציאה מוקדמת לגלילה: החלון שנטען עדיין מכסה את הנראה, ואין צורך
+    // בפתירת היעדים היקרה שהתבצעה כאן בכל תזוזה.
+    if (fromScroll &&
+        !force &&
+        _loadedLinksTargetBookTitlesSignature != null &&
+        _isLinksWindowSufficient(
+          book.title,
+          window.start,
+          window.end,
+          _loadedLinksTargetBookTitlesSignature!,
+        )) {
+      return;
+    }
 
     if (_isLoadingLinks) {
       _pendingLinksReload = true;
