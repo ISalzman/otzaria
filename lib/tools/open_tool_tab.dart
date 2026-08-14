@@ -7,9 +7,11 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
+import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 
@@ -55,6 +57,39 @@ void openToolTabById(BuildContext context, String toolId) {
       );
     case ToolUnavailable(:final reason, :final name):
       UiSnack.showError(toolUnavailableMessage(reason, name, toolId));
+  }
+}
+
+/// הכרטיסיות הפתוחות של תוספים שכבר אינם מותקנים.
+///
+/// מחיקת תוסף חייבת לסגור את הכרטיסיה שלו — אחרת נשארת כרטיסיה עם "הכלי אינו
+/// זמין" שהמשתמש צריך לסגור ידנית. תוסף מושבת או מוסתר מהכלים אינו נכלל כאן:
+/// הוא עדיין מותקן והמשתמש יכול להחזירו מההגדרות, ולכן ההודעה בכרטיסיה היא
+/// המשוב הנכון.
+List<ToolTab> orphanedPluginToolTabs(
+  List<OpenedTab> tabs,
+  Iterable<String> installedPluginIds,
+) {
+  final installed = installedPluginIds.toSet();
+  return tabs
+      .whereType<ToolTab>()
+      .where((tab) => tab.isPlugin && !installed.contains(tab.toolId))
+      .toList();
+}
+
+/// סוגר כרטיסיות של תוספים שהוסרו. נקרא בכל `PluginSystemLoaded`, כי הסרה
+/// יכולה להגיע מחלונית התוספים, ממסך ההגדרות או מניהול הכלים.
+void closeUninstalledPluginTabs(
+  BuildContext context,
+  List<InstalledPlugin> installedPlugins,
+) {
+  final tabsBloc = context.read<TabsBloc>();
+  final orphaned = orphanedPluginToolTabs(
+    tabsBloc.state.tabs,
+    installedPlugins.map((p) => p.pluginId),
+  );
+  for (final tab in orphaned) {
+    tabsBloc.add(RemoveTab(tab));
   }
 }
 

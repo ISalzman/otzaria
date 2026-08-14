@@ -2768,6 +2768,15 @@ class MainWindowScreenState extends State<MainWindowScreen>
               );
             },
           ),
+          // הסרת תוסף סוגרת את הכרטיסיה הפתוחה שלו. ההסרה יכולה להגיע מכמה
+          // מסכים, ולכן מגיבים לרשימה המעודכנת ולא לאירוע ההסרה עצמו.
+          BlocListener<PluginSystemBloc, PluginSystemState>(
+            listenWhen: (_, current) => current is PluginSystemLoaded,
+            listener: (context, state) => closeUninstalledPluginTabs(
+              context,
+              (state as PluginSystemLoaded).plugins,
+            ),
+          ),
           BlocListener<PluginSystemBloc, PluginSystemState>(
             listenWhen: (_, current) => current is PluginSystemLoaded,
             listener: (context, _) async {
