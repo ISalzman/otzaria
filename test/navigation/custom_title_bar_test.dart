@@ -69,6 +69,59 @@ void main() {
     expect(find.byTooltip('ספר א, פרק א'), findsOneWidget);
   });
 
+  group('שורה עמוסה בכרטיסיות', () {
+    // ברוחב הזה כל כרטיסיה שאינה הנבחרת מקבלת פחות מ-12 פיקסל, כלומר אחרי
+    // הריפודים לא נותר בה מקום לתוכן.
+    Future<_TestTabsBloc> pumpCrowdedStrip(WidgetTester tester) async {
+      final tabs = [for (var i = 0; i < 200; i++) _makeTextTab('ספר $i')];
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      return tabsBloc;
+    }
+
+    testWidgets('נבנה תוכן רק לכרטיסיות שיש בהן מקום להציגו', (tester) async {
+      await pumpCrowdedStrip(tester);
+
+      expect(find.text('ספר 0'), findsOneWidget);
+      expect(find.text('ספר 100'), findsNothing);
+    });
+
+    testWidgets('לחיצה על כרטיסיה צרה עדיין בוחרת אותה', (tester) async {
+      final tabsBloc = await pumpCrowdedStrip(tester);
+
+      // אמצע השורה — הרחק מהכרטיסיה הנבחרת שבקצה, כלומר בתוך הכרטיסיות הצרות.
+      final stripRect = tester.getRect(find.byType(ReadingTabStrip));
+      await tester.tapAt(stripRect.center);
+      await tester.pump();
+
+      final selection = tabsBloc.addedEvents.whereType<SetCurrentTab>();
+      expect(selection, isNotEmpty);
+      expect(selection.last.index, greaterThan(0));
+    });
+  });
+
   testWidgets('אייקון pin מוצג כשהכרטיסיה מוצמדת', (tester) async {
     final tab = _makeTextTab('ספר א');
     tab.isPinned = true;
