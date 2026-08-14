@@ -608,6 +608,23 @@ void main() {
         isTrue,
       );
     });
+
+    test('data URI ענק (מיליוני תווים) מסולק בלי Stack Overflow', () {
+      final img = 'data:image/jpeg;base64,${'B' * 5000000}';
+      final text = 'לפני\n$img\nאחרי';
+
+      final stripped = IndexingRepository.stripDataUrisForIndex(text);
+
+      expect(stripped, 'לפני\n\nאחרי');
+    });
+
+    test('רצף data: קצר מ-64 תווים נשמר (אותו מופע)', () {
+      final text = 'ראו data:text/plain,${'A' * 20} בהמשך';
+      expect(
+        identical(IndexingRepository.stripDataUrisForIndex(text), text),
+        isTrue,
+      );
+    });
   });
 
   group('IndexingRepository.indexAllBooks', () {

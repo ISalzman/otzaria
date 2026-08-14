@@ -1019,13 +1019,45 @@ class IndexingRepository {
   /// data URIs (תמונות מוטמעות בספרי EPUB/DOCX מומרים) — עשרות MB לספר
   /// מצויר. אינם ניתנים לחיפוש, מנפחים את האינדקס, וגרמו ל-abort של ה-VM
   /// בזמן אינדוקס. ההחלפה משמרת את מבנה השורות (אין מחיקת שורות).
-  static final RegExp _dataUriPattern = RegExp(
-    r'data:[A-Za-z0-9+/;,=.\-]{64,}',
-  );
-
+  ///
+  /// סריקה ידנית ולא RegExp — מנוע ה-regex של Dart ממוטט את המחסנית
+  /// (Stack Overflow) על data URI באורך מיליוני תווים.
   @visibleForTesting
-  static String stripDataUrisForIndex(String text) =>
-      text.contains('data:') ? text.replaceAll(_dataUriPattern, '') : text;
+  static String stripDataUrisForIndex(String text) {
+    const scheme = 'data:';
+    const minPayloadLength = 64;
+    var matchStart = text.indexOf(scheme);
+    if (matchStart < 0) return text;
+
+    final buffer = StringBuffer();
+    var copiedUpTo = 0;
+    while (matchStart >= 0) {
+      var end = matchStart + scheme.length;
+      while (end < text.length && _isDataUriChar(text.codeUnitAt(end))) {
+        end++;
+      }
+      if (end - matchStart - scheme.length >= minPayloadLength) {
+        buffer.write(text.substring(copiedUpTo, matchStart));
+        copiedUpTo = end;
+      }
+      matchStart = text.indexOf(scheme, end);
+    }
+    if (copiedUpTo == 0) return text;
+    buffer.write(text.substring(copiedUpTo));
+    return buffer.toString();
+  }
+
+  static bool _isDataUriChar(int c) =>
+      (c >= 0x41 && c <= 0x5A) || // A-Z
+      (c >= 0x61 && c <= 0x7A) || // a-z
+      (c >= 0x30 && c <= 0x39) || // 0-9
+      c == 0x2B || // +
+      c == 0x2F || // /
+      c == 0x3B || // ;
+      c == 0x2C || // ,
+      c == 0x3D || // =
+      c == 0x2E || // .
+      c == 0x2D; // -
 
   Future<String?> _loadTextBookText(TextBook book) async {
     String? text;
