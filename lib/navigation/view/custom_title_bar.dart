@@ -713,6 +713,25 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     context.read<TabsBloc>().add(RemoveTab(tab));
   }
 
+  /// סוגר חלונית אחת מלשונית מפוצלת; אחותה נשארת ככרטיסייה רגילה במקומה.
+  void closePane(OpenedTab pane, BuildContext context) {
+    context.read<HistoryBloc>().add(AddHistory(pane));
+    context.read<TabsBloc>().add(ClosePane(pane));
+  }
+
+  /// החלונית שהחצי שלה בלשונית נמצא מתחת ל-[dx] (קואורדינטה מקומית, LTR).
+  OpenedTab _paneAtDx(
+    BuildContext context,
+    CombinedTab tab,
+    double dx,
+    double tabWidth,
+  ) {
+    final inFirstHalf = Directionality.of(context) == TextDirection.rtl
+        ? dx >= tabWidth / 2
+        : dx < tabWidth / 2;
+    return inFirstHalf ? tab.rightTab : tab.leftTab;
+  }
+
   /// סוגר את כל הכרטיסיות שבבחירה המרובה בפעולה אחת.
   void closeSelectedTabs(BuildContext context) {
     final tabsBloc = context.read<TabsBloc>();
@@ -785,6 +804,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       tab,
       index,
       state,
+      tabWidth: tabWidth,
       child: AppContextMenuRegion(
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
@@ -888,17 +908,42 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       );
     }
 
-    Widget buildTabContent() {
+    // X של חצי לשונית — סוגר רק את החלונית שלו, בסגנון ה-X של לשונית רגילה.
+    Widget paneCloseButton(OpenedTab pane) {
+      return Tooltip(
+        preferBelow: false,
+        message: 'סגור חלונית',
+        child: MetaData(
+          metaData: _kTabCloseButtonHitMarker,
+          child: IconButton(
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints(
+              minWidth: 25,
+              minHeight: 25,
+              maxWidth: 25,
+              maxHeight: 25,
+            ),
+            onPressed: () => closePane(pane, context),
+            icon: const Icon(FluentIcons.dismiss_24_regular, size: 10),
+          ),
+        ),
+      );
+    }
+
+    Widget buildTabContent({bool showPaneClose = false}) {
       if (tab is CombinedTab) {
         // כל חלונית מפוצלת מציגה את תחילת שמה בחלק שווה מרוחב הטאב.
         // פסים מפרידים מוצגים רק כשיש להם מקום.
-        final paneTitles = leafPanes(tab).map((p) => p.title).toList();
-        final showDividers = tabWidth >= 100 * (paneTitles.length - 1);
+        final panes = leafPanes(tab);
+        final showDividers = tabWidth >= 100 * (panes.length - 1);
         return Tooltip(
           message: tab.title,
           child: Row(
             children: [
-              for (var i = 0; i < paneTitles.length; i++) ...[
+              for (var i = 0; i < panes.length; i++) ...[
                 if (i > 0 && showDividers)
                   Container(
                     width: 2,
@@ -906,7 +951,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                     margin: const EdgeInsets.symmetric(horizontal: 5),
                     color: Theme.of(context).colorScheme.outline,
                   ),
-                Expanded(child: fadedTitle(paneTitles[i])),
+                Expanded(child: fadedTitle(panes[i].title)),
+                if (showPaneClose) paneCloseButton(panes[i]),
               ],
             ],
           ),
@@ -987,11 +1033,19 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // הכותרת תמיד ב-Expanded ומתכווצת לאפס בעת הצורך.
       final extrasBudget =
           tabWidth - 2 * (outerPad + innerPad) - (isSelected ? 4 : 0);
+      // בלשונית מפוצלת כל חצי מקבל X משלו במקום X יחיד ללשונית — ולכן
+      // התקציב הנדרש כפול.
+      final isCombined = tab is CombinedTab;
+      final closeVisibleByState =
+          tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered;
       final showClose =
-          extrasBudget >= 25 &&
-          (tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered);
+          !isCombined && extrasBudget >= 25 && closeVisibleByState;
+      final showPaneClose =
+          isCombined && extrasBudget >= 50 && closeVisibleByState;
       final showPin =
-          tab.isPinned && (extrasBudget - (showClose ? 25 : 0)) >= 20;
+          tab.isPinned &&
+          (extrasBudget - (showClose ? 25 : 0) - (showPaneClose ? 50 : 0)) >=
+              20;
       // אייקון ליד שם הטאב — רק כשהטאב רחב (אותו סף כמו מפריד ה-CombinedTab).
       final showPdfIcon = tab is PdfBookTab && tabWidth >= 100;
       final toolIcon = tab is ToolTab && tabWidth >= 100
@@ -1064,7 +1118,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               padding: const EdgeInsetsDirectional.only(end: 4),
                               child: toolIcon,
                             ),
-                          Expanded(child: buildTabContent()),
+                          Expanded(
+                            child: buildTabContent(
+                              showPaneClose: showPaneClose,
+                            ),
+                          ),
                           if (showClose)
                             Tooltip(
                               preferBelow: false,
@@ -1112,6 +1170,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       tab,
       index,
       state,
+      tabWidth: tabWidth,
       child: AppContextMenuRegion(
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
@@ -1138,7 +1197,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
   /// עוטף כרטיסיה בטיפול הלחיצות שלה.
   ///
-  /// בחירת הטאב על pointer-down: לחצן אמצעי סוגר, לחצן ראשי (או תחילת גרירה)
+  /// בחירת הטאב על pointer-down: לחצן אמצעי סוגר (בלשונית מפוצלת — רק את
+  /// החלונית שהחצי שלה נלחץ), לחצן ראשי (או תחילת גרירה)
   /// בוחר. לחצן ימני אינו בוחר — אחרת הבחירה גוררת rebuild שהורס את
   /// ה-AppContextMenuRegion לפני שתפריט ההקשר נפתח. משתמשים ב-Listener פסיבי
   /// כי הגרירה המיידית (ReorderableDragStartListener) זוכה ב-arena וחוסמת onTap.
@@ -1147,6 +1207,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     OpenedTab tab,
     int index,
     TabsState state, {
+    required double tabWidth,
     required Widget child,
   }) {
     return Listener(
@@ -1166,7 +1227,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         // מונע מבחירה קודמת להשפיע על שחרור הלחיצה הנוכחי.
         _pendingTabSelection = null;
         if (event.buttons == 4) {
-          closeTab(tab, context);
+          // בלשונית מפוצלת נסגרת רק החלונית שהחצי שלה נלחץ.
+          if (tab is CombinedTab) {
+            closePane(
+              _paneAtDx(context, tab, event.localPosition.dx, tabWidth),
+              context,
+            );
+          } else {
+            closeTab(tab, context);
+          }
           return;
         }
         if (event.buttons != 1 ||
@@ -1330,11 +1399,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             for (final pane in leafPanes(tab))
               AppContextMenuEntry(
                 label: pane.title,
-                onTap: () {
-                  // רושמים היסטוריה לפני שהחלונית מוסרת מהטאב.
-                  context.read<HistoryBloc>().add(AddHistory(pane));
-                  context.read<TabsBloc>().add(ClosePane(pane));
-                },
+                onTap: () => closePane(pane, context),
               ),
           ],
         ),
