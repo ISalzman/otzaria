@@ -21,10 +21,17 @@ import 'package:otzaria/core/app_paths.dart';
 /// **למה זה עובד גם כשהבאג מתוקן**: ברגע ש-WebView מצליח לטעון תקין
 /// (אצל המשתמש, אחרי שדרוג של WebView2/Flutter/בלי-קשר), הרישום מסיר
 /// את עצמו ב-`onLoadStop` — והתוסף חוזר לעבוד אוטומטית.
+///
+/// **הגנות מפני האשמת-שווא**: [isBlocked] מתעלם מניסיונות של הסשן הנוכחי,
+/// ו-[markCleanShutdownSync] מנקה canaries בטיסה בסגירה יזומה.
 class PluginCrashGuard {
   static Set<String>? _blocked;
   static String? _currentAppVersion;
   static Completer<void>? _initFuture;
+
+  /// תוספים שנוסה לטעון אותם בסשן הנוכחי. [isBlocked] מתעלם מהם — canary
+  /// חי של הסשן הזה אינו עדות לקריסה בהפעלה קודמת.
+  static final Set<String> _sessionAttempts = <String>{};
 
   static Future<String> _filePath() async {
     final root = await AppPaths.getDataRootPath();
@@ -94,7 +101,11 @@ class PluginCrashGuard {
 
   /// `true` אם התוסף נמצא ב-quarantine — כלומר הופיע בקובץ בתחילת ההפעלה
   /// הזו (= הופיע בריצה הקודמת בלי שהושלם markSuccess).
+  ///
+  /// canary שנוסף בסשן הנוכחי אינו נחשב חסימה — אחרת rebuild של הווידג'ט
+  /// באמצע טעינה תקינה היה מציג "התוסף קרס" וקוטע את הטעינה.
   static bool isBlocked(String pluginId) {
+    if (_sessionAttempts.contains(pluginId)) return false;
     return _blocked?.contains(pluginId) ?? false;
   }
 
@@ -102,6 +113,7 @@ class PluginCrashGuard {
   /// תראה את ה-pluginId בקובץ ותסרב לטעון אותו אוטומטית.
   static Future<void> markLoadAttempt(String pluginId) async {
     await ensureInitialized();
+    _sessionAttempts.add(pluginId);
     _blocked!.add(pluginId);
     await _persist();
   }
@@ -118,9 +130,8 @@ class PluginCrashGuard {
       debugPrint('PluginCrashGuard.markLoadAttemptSync called before init');
       return;
     }
-    if (blocked.contains(pluginId)) return;
-    blocked.add(pluginId);
-    _persistSync();
+    _sessionAttempts.add(pluginId);
+    if (blocked.add(pluginId)) _persistSync();
   }
 
   /// מסמן שהתוסף נטען בהצלחה. מסיר את הסימון מ-disk כדי שההפעלה הבאה
@@ -143,6 +154,16 @@ class PluginCrashGuard {
     final removed = blocked.remove(pluginId);
     if (!removed) return;
     _persistSync();
+  }
+
+  /// נקרא בתחילת סגירה יזומה (onWindowClose): מנקה canaries של טעינות בטיסה.
+  /// סגירה רגילה אינה קריסה, וה-dispose של הטאבים לא רץ במסלול היציאה.
+  static void markCleanShutdownSync() {
+    final blocked = _blocked;
+    if (blocked == null || _sessionAttempts.isEmpty) return;
+    final before = blocked.length;
+    blocked.removeAll(_sessionAttempts);
+    if (blocked.length != before) _persistSync();
   }
 
   /// כתיבה סינכרונית ל-disk של מצב ה-_blocked הנוכחי.
@@ -173,6 +194,7 @@ class PluginCrashGuard {
   /// להיטען שוב בפעם הבאה ש-WebView ייווצר.
   static Future<void> retry(String pluginId) async {
     await ensureInitialized();
+    _sessionAttempts.remove(pluginId);
     final removed = _blocked!.remove(pluginId);
     if (removed) await _persist();
   }
@@ -191,6 +213,7 @@ class PluginCrashGuard {
     _blocked = null;
     _currentAppVersion = null;
     _initFuture = null;
+    _sessionAttempts.clear();
   }
 
   /// משמש לטסטים בלבד — מאפשר להחדיר state התחלתי.

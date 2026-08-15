@@ -376,12 +376,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   @override
   void dispose() {
-    // dispose רץ רק כשמחזור החיים הרגיל של Flutter קורא לו — כלומר התהליך
-    // חי. אם הייתה קריסה native, dispose לא היה רץ בכלל. לכן מנקים את ה-
-    // canary של ה-crash guard גם פה: סגירה רגילה של האפליקציה / החלפת
-    // טאב / unmount של הוויג'ט = לא קריסה, ואין סיבה לחסום בהפעלה הבאה.
-    // משתמשים בגרסה sync כדי שהכתיבה תושלם גם אם dispose נקרא בתוך סגירה
-    // של האפליקציה שלא יספיק להריץ async writes.
+    // dispose = unmount רגיל (סגירת טאב) בזמן שהתהליך חי — לא קריסה, מנקים
+    // את ה-canary. סגירת האפליקציה לא מריצה dispose; אותה מכסה
+    // PluginCrashGuard.markCleanShutdownSync ב-onWindowClose.
     PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
     _creationWatchdog?.cancel();
     _adapter.dispose();
