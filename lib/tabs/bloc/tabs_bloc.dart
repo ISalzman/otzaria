@@ -20,6 +20,9 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 
+/// כמה כרטיסיות שנסגרו נשמרות לשחזור. מוגבל כי כל רשומה מחזיקה מופע טאב חי.
+const int _kMaxRecentlyClosedTabs = 10;
+
 class _ClosedTabEntry {
   final OpenedTab tab;
   final int originalIndex;
@@ -33,6 +36,12 @@ class _ClosedTabEntry {
 class TabsBloc extends Bloc<TabsEvent, TabsState> {
   final TabsRepository _repository;
   final List<_ClosedTabEntry> _recentlyClosedTabs = <_ClosedTabEntry>[];
+
+  /// הכרטיסיות שנסגרו לאחרונה, מהאחרונה שנסגרה ואילך. הרשימה אינה חלק
+  /// מה-state, ולכן קוראים אותה בתוך `BlocBuilder` על שינוי הכרטיסיות.
+  List<OpenedTab> get recentlyClosedTabs => List<OpenedTab>.unmodifiable(
+    _recentlyClosedTabs.reversed.map((entry) => entry.tab),
+  );
 
   List<OpenedTab>? _pendingSaveTabs;
   int _pendingSaveIndex = 0;
@@ -136,6 +145,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       _onRestoreLastClosedTab,
       transformer: sequential(),
     );
+    on<RestoreClosedTab>(_onRestoreClosedTab, transformer: sequential());
     on<SaveTabs>(_onSaveTabs, transformer: sequential());
     on<TogglePinTab>(_onTogglePinTab, transformer: sequential());
     on<CreateCombinedTab>(
@@ -858,6 +868,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         originalIndex: originalIndex,
       ),
     );
+    while (_recentlyClosedTabs.length > _kMaxRecentlyClosedTabs) {
+      _recentlyClosedTabs.removeAt(0).tab.dispose();
+    }
   }
 
   /// מנרמל את הבחירה המרובה מול רשימת טאבים חדשה: כרטיסיות שנסגרו/הוחלפו
@@ -1028,8 +1041,24 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     Emitter<TabsState> emit,
   ) async {
     if (_recentlyClosedTabs.isEmpty) return;
+    await _restoreClosedEntry(_recentlyClosedTabs.removeLast(), emit);
+  }
 
-    final closedEntry = _recentlyClosedTabs.removeLast();
+  Future<void> _onRestoreClosedTab(
+    RestoreClosedTab event,
+    Emitter<TabsState> emit,
+  ) async {
+    final index = _recentlyClosedTabs.indexWhere(
+      (entry) => identical(entry.tab, event.tab),
+    );
+    if (index == -1) return;
+    await _restoreClosedEntry(_recentlyClosedTabs.removeAt(index), emit);
+  }
+
+  Future<void> _restoreClosedEntry(
+    _ClosedTabEntry closedEntry,
+    Emitter<TabsState> emit,
+  ) async {
     // תוסף פתוח ממוקד במקום ליצור מופע WebView נוסף.
     final existingIndex = _indexOfMatchingDedupeKey(closedEntry.tab);
     if (existingIndex != null) {

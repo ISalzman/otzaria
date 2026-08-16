@@ -408,6 +408,33 @@ class UpdateCompactMenuMode extends SettingsEvent {
   List<Object?> get props => [compactMenuMode];
 }
 
+class UpdateReadingTabsPlacement extends SettingsEvent {
+  final String placement;
+
+  const UpdateReadingTabsPlacement(this.placement);
+
+  @override
+  List<Object?> get props => [placement];
+}
+
+class UpdateReadingTabsColumnWidth extends SettingsEvent {
+  final double width;
+
+  const UpdateReadingTabsColumnWidth(this.width);
+
+  @override
+  List<Object?> get props => [width];
+}
+
+class UpdateReadingTabsColumnCollapsed extends SettingsEvent {
+  final bool collapsed;
+
+  const UpdateReadingTabsColumnCollapsed(this.collapsed);
+
+  @override
+  List<Object?> get props => [collapsed];
+}
+
 class UpdateMergeUserBooksIntoLibrary extends SettingsEvent {
   final bool mergeUserBooksIntoLibrary;
 

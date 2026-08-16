@@ -19,6 +19,12 @@ final GlobalKey tourReadingScreenTargetKey = GlobalKey(
 final GlobalKey tourReadingTabsTargetKey = GlobalKey(
   debugLabel: 'tour_reading_tabs_target',
 );
+
+/// עמודת הכרטיסיות האנכית. מפתח נפרד מ-[tourReadingTabsTargetKey]: העמודה
+/// נשארת בעץ ברוחב 0 גם במצב "למעלה", ומפתח משותף היה מתנגש בין השתיים.
+final GlobalKey tourReadingTabsSideTargetKey = GlobalKey(
+  debugLabel: 'tour_reading_tabs_side_target',
+);
 final GlobalKey tourReadingSettingsButtonTargetKey = GlobalKey(
   debugLabel: 'tour_reading_settings_button_target',
 );

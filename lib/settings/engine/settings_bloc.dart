@@ -64,6 +64,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       _onUpdatePersonalNotesCollapsedByDefault,
     );
     on<UpdateCompactMenuMode>(_onUpdateCompactMenuMode);
+    on<UpdateReadingTabsPlacement>(_onUpdateReadingTabsPlacement);
+    on<UpdateReadingTabsColumnWidth>(_onUpdateReadingTabsColumnWidth);
+    on<UpdateReadingTabsColumnCollapsed>(_onUpdateReadingTabsColumnCollapsed);
     on<UpdateMergeUserBooksIntoLibrary>(_onUpdateMergeUserBooksIntoLibrary);
     on<UpdateProtectedModeEnabled>(_onUpdateProtectedModeEnabled);
     on<UpdateProtectedModePassword>(_onUpdateProtectedModePassword);
@@ -139,6 +142,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         personalNotesCollapsedByDefault:
             settings['personalNotesCollapsedByDefault'] ?? true,
         compactMenuMode: settings['compactMenuMode'] ?? false,
+        readingTabsPlacement:
+            settings['readingTabsPlacement'] ??
+            SettingsRepository.readingTabsPlacementTop,
+        readingTabsColumnWidth:
+            settings['readingTabsColumnWidth'] ??
+            SettingsRepository.defaultReadingTabsColumnWidth,
+        readingTabsColumnCollapsed:
+            settings['readingTabsColumnCollapsed'] ?? false,
         mergeUserBooksIntoLibrary:
             settings['mergeUserBooksIntoLibrary'] ?? false,
         protectedModeEnabled: settings['protectedModeEnabled'] ?? false,
@@ -231,6 +242,34 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateCompactMenuMode(event.compactMenuMode);
     emit(state.copyWith(compactMenuMode: event.compactMenuMode));
+  }
+
+  Future<void> _onUpdateReadingTabsPlacement(
+    UpdateReadingTabsPlacement event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateReadingTabsPlacement(event.placement);
+    emit(state.copyWith(readingTabsPlacement: event.placement));
+  }
+
+  Future<void> _onUpdateReadingTabsColumnWidth(
+    UpdateReadingTabsColumnWidth event,
+    Emitter<SettingsState> emit,
+  ) async {
+    final width = event.width.clamp(
+      SettingsRepository.minReadingTabsColumnWidth,
+      SettingsRepository.maxReadingTabsColumnWidth,
+    );
+    await _repository.updateReadingTabsColumnWidth(width);
+    emit(state.copyWith(readingTabsColumnWidth: width));
+  }
+
+  Future<void> _onUpdateReadingTabsColumnCollapsed(
+    UpdateReadingTabsColumnCollapsed event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateReadingTabsColumnCollapsed(event.collapsed);
+    emit(state.copyWith(readingTabsColumnCollapsed: event.collapsed));
   }
 
   Future<void> _onUpdateMergeUserBooksIntoLibrary(

@@ -56,6 +56,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener, presentMainWindow;
 import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
 import 'package:otzaria/navigation/view/custom_title_bar.dart';
+import 'package:otzaria/navigation/view/reading_tabs_side_panel.dart';
 import 'package:otzaria/migration/sync/background_sync_initializer.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -2082,6 +2083,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
   }
 
   Rect? _tabsTourTargetRect() {
+    // במצב "בצד" העמודה האנכית היא רצועת הכרטיסיות; במצב "למעלה" היא נשארת
+    // בעץ ברוחב 0, ולכן רק רוחב ממשי מעיד שהיא זו שמוצגת.
+    final sideRect = _rectForGlobalKey(tourReadingTabsSideTargetKey);
+    if (sideRect != null && sideRect.width > 1) {
+      return sideRect;
+    }
     final rect = _rectForGlobalKey(tourReadingTabsTargetKey, inflate: 0);
     if (rect == null) {
       return null;
@@ -3217,6 +3224,25 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                             thickness: 1,
                                             width: 1,
                                           ),
+                                        // ילד קבוע ב-Row: הסתרה היא רוחב 0 ולא
+                                        // הוצאה מהעץ, אחרת ה-PageView נבנה
+                                        // מחדש והמסכים מאבדים State.
+                                        ReadingTabsSidePanel(
+                                          show:
+                                              !isImmersive &&
+                                              hasOpenTabs &&
+                                              (state.currentScreen ==
+                                                      Screen.reading ||
+                                                  state.currentScreen ==
+                                                      Screen.search) &&
+                                              context.select<
+                                                SettingsBloc,
+                                                bool
+                                              >(
+                                                (b) =>
+                                                    b.state.readingTabsOnSide,
+                                              ),
+                                        ),
                                         Expanded(child: pageView),
                                       ],
                                     );

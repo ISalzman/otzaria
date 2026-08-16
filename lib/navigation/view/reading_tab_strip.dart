@@ -17,6 +17,14 @@ const Duration kTabSpringOpenDelay = Duration(milliseconds: 400);
 /// שקיפות הכרטיסיה במקומה המקורי בזמן שגוררים אותה.
 const double _kDraggingTabOpacity = 0.35;
 
+/// עומק אזור הקצה שגרירה בתוכו גוללת את הרצועה.
+const double _kAutoScrollEdge = 40;
+
+/// קצב הגלילה האוטומטית — פיקסלים לכל פעימה (פעימה לכל פריים בקירוב).
+const double _kAutoScrollStep = 8;
+
+const Duration _kAutoScrollTick = Duration(milliseconds: 16);
+
 /// רצועת כרטיסיות העיון.
 ///
 /// כל כרטיסיה היא [Draggable] של הטאב עצמו, ולכן אותה מחווה משרתת שני
@@ -29,8 +37,17 @@ class ReadingTabStrip extends StatefulWidget {
   /// הכרטיסיות בסדר התצוגה.
   final List<OpenedTab> tabs;
 
-  /// רוחב כל כרטיסיה, מקביל באורכו ל-[tabs].
+  /// מידת כל כרטיסיה לאורך ציר הרצועה — רוחב באופקית, גובה באנכית.
   final List<double> widths;
+
+  /// ציר הרצועה. באנכית אין היפוך RTL: הכרטיסיה הראשונה תמיד למעלה.
+  final Axis axis;
+
+  /// רוחב הכרטיסיה הצפה בגרירה כשהציר אנכי; באופקית הרוחב נלקח מ-[widths].
+  final double? crossExtent;
+
+  /// האם הרצועה עצמה נגללת. ברצועה האופקית הרוחבים מחושבים כך שהכל נכנס.
+  final bool scrollable;
 
   /// במגע נדרשת לחיצה ארוכה, כדי שהחלקה או גלילה לא יגררו כרטיסיה בטעות.
   final bool requireLongPressToDrag;
@@ -58,7 +75,12 @@ class ReadingTabStrip extends StatefulWidget {
     this.onDragStarted,
     this.onSpringOpen,
     this.requireLongPressToDrag = false,
+    this.axis = Axis.horizontal,
+    this.crossExtent,
+    this.scrollable = false,
   });
+
+  bool get isVertical => axis == Axis.vertical;
 
   @override
   State<ReadingTabStrip> createState() => _ReadingTabStripState();
@@ -73,6 +95,15 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   /// הכרטיסיה שהגרירה משתהה מעליה, והשעון שיפתח אותה.
   OpenedTab? _springTarget;
   Timer? _springTimer;
+
+  final ScrollController _scrollController = ScrollController();
+
+  /// גלילת הקצה: הכיוון (1- למעלה/להתחלה, 1 למטה/לסוף), השעון שמניע אותה,
+  /// והגרירה האחרונה שנמדדה — כדי לעדכן את מיקום ההכנסה גם כשהסמן עומד.
+  double _autoScrollDirection = 0;
+  Timer? _autoScrollTimer;
+  OpenedTab? _autoScrollTab;
+  Offset? _autoScrollOffset;
 
   @override
   void initState() {
@@ -91,7 +122,65 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   @override
   void dispose() {
     _springTimer?.cancel();
+    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// מזניק או עוצר את גלילת הקצה לפי מיקום הסמן ברצועה.
+  void _updateAutoScroll(OpenedTab dragged, Offset globalOffset) {
+    if (!widget.scrollable) return;
+
+    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return _stopAutoScroll();
+
+    final local = box.globalToLocal(globalOffset);
+    final main = widget.isVertical ? local.dy : local.dx;
+    final extent = widget.isVertical ? box.size.height : box.size.width;
+
+    // רחוק מחוץ לרצועה הגרירה כבר מכוונת לאזור הקריאה, ולא לסידור מחדש.
+    if (main < -_kAutoScrollEdge || main > extent + _kAutoScrollEdge) {
+      return _stopAutoScroll();
+    }
+
+    var direction = 0.0;
+    if (main < _kAutoScrollEdge) {
+      direction = -1;
+    } else if (main > extent - _kAutoScrollEdge) {
+      direction = 1;
+    }
+    // ב-RTL אופקי הגלילה מתקדמת שמאלה, ולכן קצה המסך ההפוך מגליל קדימה.
+    if (_flipsForRtl) direction = -direction;
+
+    if (direction == 0) return _stopAutoScroll();
+
+    _autoScrollDirection = direction;
+    _autoScrollTab = dragged;
+    _autoScrollOffset = globalOffset;
+    _autoScrollTimer ??= Timer.periodic(_kAutoScrollTick, _onAutoScrollTick);
+  }
+
+  void _onAutoScrollTick(Timer timer) {
+    if (!_scrollController.hasClients) return _stopAutoScroll();
+
+    final position = _scrollController.position;
+    final target = (position.pixels + _autoScrollDirection * _kAutoScrollStep)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target == position.pixels) return _stopAutoScroll();
+
+    position.jumpTo(target);
+    // הרצועה זזה תחת סמן שעומד במקומו, ולכן מיקום ההכנסה נמדד מחדש.
+    final tab = _autoScrollTab;
+    final offset = _autoScrollOffset;
+    if (tab != null && offset != null) _updateDragPosition(tab, offset);
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    _autoScrollDirection = 0;
+    _autoScrollTab = null;
+    _autoScrollOffset = null;
   }
 
   /// שורת הכרטיסיות עצמה. הרצועה נמתחת על כל הרוחב הפנוי, ולכן מדידה מול
@@ -99,37 +188,43 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   /// לימין, כל ההפרש נכנס לחישוב ומיקום ההכנסה יצא תמיד 0.
   final GlobalKey _contentKey = GlobalKey();
 
-  bool get _isRtl => Directionality.of(context) == TextDirection.rtl;
+  /// מכל הגלילה עצמו — גבולותיו הם אזורי הקצה שגלילה אוטומטית נמדדת מולם,
+  /// בשונה מ-[_contentKey] שגדל עם הכרטיסיות וזז עם הגלילה.
+  final GlobalKey _viewportKey = GlobalKey();
 
-  /// מיקום ההכנסה שאליו מצביע [localDx].
+  /// ב-RTL הכרטיסיה הראשונה יושבת בימין, ולכן המרחק נמדד מהקצה הימני. בציר
+  /// אנכי אין היפוך: הכרטיסיה הראשונה למעלה בשתי הכיווניות.
+  bool get _flipsForRtl =>
+      !widget.isVertical && Directionality.of(context) == TextDirection.rtl;
+
+  /// מיקום ההכנסה שאליו מצביע [localMain] (מיקום מקומי לאורך ציר הרצועה).
   ///
-  /// ב-RTL הכרטיסיה הראשונה יושבת בימין, ולכן המרחק נמדד מהקצה הימני.
   /// ההשוואה היא לאמצע כל כרטיסיה — כך היעד מתחלף בדיוק כשחוצים אותה,
-  /// והרוחבים אינם חייבים להיות אחידים.
-  int _insertIndexFor(double localDx) {
+  /// והמידות אינן חייבות להיות אחידות.
+  int _insertIndexFor(double localMain) {
     final total = _geometry.totalWidth;
-    final flowX = _isRtl ? total - localDx : localDx;
-    return _geometry.insertIndexAt(flowX);
+    final flow = _flipsForRtl ? total - localMain : localMain;
+    return _geometry.insertIndexAt(flow);
   }
 
-  /// הקצה השמאלי של קו החיווי בתוך שורת הכרטיסיות, מוגבל לגבולותיה — קו
+  /// קצה ההתחלה של קו החיווי בתוך רצועת הכרטיסיות, מוגבל לגבולותיה — קו
   /// שחורג מהן מפעיל חיתוך ב-Stack וקוצץ את קצות הכרטיסיה הנבחרת.
-  double _insertLineLeft(int index) {
+  double _insertLineOffset(int index) {
     final edge = _geometry.edgeAt(index);
     final total = _geometry.totalWidth;
-    final visualEdge = _isRtl ? total - edge : edge;
-    final maxLeft = total - _kInsertLineWidth;
-    if (maxLeft <= 0) return 0;
-    return (visualEdge - _kInsertLineWidth / 2).clamp(0.0, maxLeft);
+    final visualEdge = _flipsForRtl ? total - edge : edge;
+    final maxOffset = total - _kInsertLineWidth;
+    if (maxOffset <= 0) return 0;
+    return (visualEdge - _kInsertLineWidth / 2).clamp(0.0, maxOffset);
   }
 
-  /// הכרטיסיה שמתחת ל-[localDx], או `null` מחוץ לשורה.
+  /// הכרטיסיה שמתחת ל-[localMain], או `null` מחוץ לרצועה.
   ///
   /// שונה מ-[_insertIndexFor], שמחזיר גבול בין כרטיסיות ולא כרטיסיה.
-  OpenedTab? _tabAt(double localDx) {
+  OpenedTab? _tabAt(double localMain) {
     final total = _geometry.totalWidth;
-    final flowX = _isRtl ? total - localDx : localDx;
-    final index = _geometry.tabIndexAt(flowX);
+    final flow = _flipsForRtl ? total - localMain : localMain;
+    final index = _geometry.tabIndexAt(flow);
     return index == null ? null : widget.tabs[index];
   }
 
@@ -157,14 +252,17 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   }
 
   void _updateDragPosition(OpenedTab dragged, Offset globalOffset) {
+    _updateAutoScroll(dragged, globalOffset);
+
     final box = _contentKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
-    final localDx = box.globalToLocal(globalOffset).dx;
-    _updateSpringTarget(dragged, _tabAt(localDx));
+    final local = box.globalToLocal(globalOffset);
+    final localMain = widget.isVertical ? local.dy : local.dx;
+    _updateSpringTarget(dragged, _tabAt(localMain));
 
     // setState רק כשהיעד באמת זז: onMove יורה בכל תזוזת מצביע.
-    final next = _insertIndexFor(localDx);
+    final next = _insertIndexFor(localMain);
     if (next != _insertIndex) setState(() => _insertIndex = next);
   }
 
@@ -174,6 +272,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   void _completeReorder(OpenedTab tab) {
     final insertIndex = _insertIndex;
     _cancelSpring();
+    _stopAutoScroll();
     setState(() => _insertIndex = null);
     if (insertIndex == null) return;
 
@@ -203,6 +302,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
       },
       onLeave: (_) {
         _cancelSpring();
+        _stopAutoScroll();
         if (_insertIndex != null) setState(() => _insertIndex = null);
       },
       onAcceptWithDetails: (details) => _completeReorder(details.data),
@@ -210,33 +310,43 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
         // הרצועה נמתחת על כל הרוחב הפנוי ולא מתכווצת לרוחב הכרטיסיות: השטח
         // שנותר הוא "האזור הריק" שגרירת חלון ולחיצה כפולה למסך מלא מסתמכות
         // על קיומו.
+        final isVertical = widget.isVertical;
         return SizedBox(
-          width: double.infinity,
-          // גלילה מנוטרלת: הרוחבים מחושבים כך שכל הכרטיסיות ייכנסו, אבל
-          // בפריים הראשון — לפני שאזור הכרטיסיות נמדד — הם לפי רוחב המסך.
-          // בלי מכל שגולש בשקט אותו פריים היה זורק overflow.
+          width: isVertical ? null : double.infinity,
+          height: isVertical ? double.infinity : null,
+          // ברצועה האופקית הגלילה מנוטרלת: הרוחבים מחושבים כך שכל הכרטיסיות
+          // ייכנסו, אבל בפריים הראשון — לפני שאזור הכרטיסיות נמדד — הם לפי
+          // רוחב המסך. בלי מכל שגולש בשקט אותו פריים היה זורק overflow.
           child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            // קו החיווי יושב באותו Stack עם השורה, ולכן באותה מערכת
+            key: _viewportKey,
+            controller: _scrollController,
+            scrollDirection: widget.axis,
+            physics: widget.scrollable
+                ? null
+                : const NeverScrollableScrollPhysics(),
+            // קו החיווי יושב באותו Stack עם הרצועה, ולכן באותה מערכת
             // קואורדינטות שבה נמדד מיקום ההכנסה.
             child: Stack(
               children: [
-                Row(
+                Flex(
                   key: _contentKey,
+                  direction: widget.axis,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (var i = 0; i < widget.tabs.length; i++)
                       _DraggableTab(
                         key: ObjectKey(widget.tabs[i]),
                         tab: widget.tabs[i],
-                        width: widget.widths[i],
+                        axis: widget.axis,
+                        extent: widget.widths[i],
+                        crossExtent: widget.crossExtent,
                         requireLongPress: widget.requireLongPressToDrag,
                         onDragStarted: widget.onDragStarted,
                         // גרירה שהסתיימה מחוץ לרצועה אינה מפעילה onLeave,
                         // ולכן קו החיווי מנוקה גם כאן.
                         onDragFinished: () {
                           _cancelSpring();
+                          _stopAutoScroll();
                           if (_insertIndex != null) {
                             setState(() => _insertIndex = null);
                           }
@@ -250,7 +360,10 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                   ],
                 ),
                 if (_insertIndex != null)
-                  _InsertIndicator(left: _insertLineLeft(_insertIndex!)),
+                  _InsertIndicator(
+                    axis: widget.axis,
+                    offset: _insertLineOffset(_insertIndex!),
+                  ),
               ],
             ),
           ),
@@ -319,7 +432,9 @@ class _TabStripGeometry {
 /// כרטיסיה בודדת ברצועה, ניתנת לגרירה.
 class _DraggableTab extends StatelessWidget {
   final OpenedTab tab;
-  final double width;
+  final Axis axis;
+  final double extent;
+  final double? crossExtent;
   final bool requireLongPress;
   final VoidCallback? onDragStarted;
   final VoidCallback onDragFinished;
@@ -328,7 +443,9 @@ class _DraggableTab extends StatelessWidget {
   const _DraggableTab({
     super.key,
     required this.tab,
-    required this.width,
+    required this.axis,
+    required this.extent,
+    required this.crossExtent,
     required this.requireLongPress,
     required this.onDragStarted,
     required this.onDragFinished,
@@ -338,9 +455,14 @@ class _DraggableTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // הכרטיסיה נשארת במקומה מעומעמת ולא נעלמת: היעלמותה הייתה משנה את חלוקת
-    // הרוחבים באמצע הגרירה ומזיזה את שאר הכרטיסיות תחת הסמן.
+    // המידות באמצע הגרירה ומזיזה את שאר הכרטיסיות תחת הסמן.
     final placeholder = Opacity(opacity: _kDraggingTabOpacity, child: child);
-    final feedback = _TabDragFeedback(width: width, child: child);
+    final isVertical = axis == Axis.vertical;
+    final feedback = _TabDragFeedback(
+      width: isVertical ? crossExtent : extent,
+      height: isVertical ? extent : null,
+      child: child,
+    );
 
     if (requireLongPress) {
       return LongPressDraggable<OpenedTab>(
@@ -375,10 +497,15 @@ class _DraggableTab extends StatelessWidget {
 /// מוצגת ב-[Overlay] ולכן אינה יורשת את ערכת הנושא ואת שכבת ה-[Material]
 /// של הרצועה — בלי העטיפה המפורשת הצבעים נופלים לברירות מחדל.
 class _TabDragFeedback extends StatelessWidget {
-  final double width;
+  final double? width;
+  final double? height;
   final Widget child;
 
-  const _TabDragFeedback({required this.width, required this.child});
+  const _TabDragFeedback({
+    required this.width,
+    this.height,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -394,7 +521,7 @@ class _TabDragFeedback extends StatelessWidget {
             color: theme.colorScheme.surfaceContainerHigh,
             elevation: 8,
             borderRadius: BorderRadius.circular(8),
-            child: SizedBox(width: width, child: child),
+            child: SizedBox(width: width, height: height, child: child),
           ),
         ),
       ),
@@ -402,20 +529,25 @@ class _TabDragFeedback extends StatelessWidget {
   }
 }
 
-/// קו אנכי המסמן היכן הכרטיסיה הנגררת תיכנס.
+/// קו המסמן היכן הכרטיסיה הנגררת תיכנס — אנכי ברצועה אופקית ולהפך.
 class _InsertIndicator extends StatelessWidget {
-  /// הקצה השמאלי של הקו, כבר ממורכז על נקודת ההכנסה ומוגבל לגבולות השורה.
-  final double left;
+  final Axis axis;
 
-  const _InsertIndicator({required this.left});
+  /// קצה ההתחלה של הקו, כבר ממורכז על נקודת ההכנסה ומוגבל לגבולות הרצועה.
+  final double offset;
+
+  const _InsertIndicator({required this.axis, required this.offset});
 
   @override
   Widget build(BuildContext context) {
+    final isVertical = axis == Axis.vertical;
     return Positioned(
-      top: 4,
-      bottom: 4,
-      left: left,
-      width: _kInsertLineWidth,
+      top: isVertical ? offset : 4,
+      bottom: isVertical ? null : 4,
+      left: isVertical ? 4 : offset,
+      right: isVertical ? 4 : null,
+      width: isVertical ? null : _kInsertLineWidth,
+      height: isVertical ? _kInsertLineWidth : null,
       child: IgnorePointer(
         child: DecoratedBox(
           decoration: BoxDecoration(

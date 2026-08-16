@@ -19,6 +19,7 @@ import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -67,6 +68,93 @@ void main() {
     );
 
     expect(find.byTooltip('ספר א, פרק א'), findsOneWidget);
+  });
+
+  testWidgets('כרטיסיה שכותרתה נכנסת במלואה אינה מקבלת tooltip', (
+    tester,
+  ) async {
+    final tab = _makeTextTab('ספר א');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      tab.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(find.byTooltip('ספר א'), findsNothing);
+  });
+
+  group('מיקום הכרטיסיות', () {
+    /// שורת כותרת עם כרטיסיה אחת, במיקום הכרטיסיות הנתון.
+    Future<void> pumpWithPlacement(
+      WidgetTester tester,
+      String placement,
+    ) async {
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(
+        SettingsState.initial().copyWith(readingTabsPlacement: placement),
+      );
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('במצב "בצד" הרצועה שבכותרת אינה נבנית', (tester) async {
+      await pumpWithPlacement(
+        tester,
+        SettingsRepository.readingTabsPlacementSide,
+      );
+
+      expect(find.byType(ReadingTabStrip), findsNothing);
+      expect(find.text('ספר א'), findsNothing);
+      // כפתור הגדרות הקריאה נשאר בכותרת גם בלי הרצועה.
+      expect(find.byTooltip('הגדרות תצוגת הספרים'), findsOneWidget);
+    });
+
+    testWidgets('במצב "למעלה" הרצועה נבנית כרגיל', (tester) async {
+      await pumpWithPlacement(
+        tester,
+        SettingsRepository.readingTabsPlacementTop,
+      );
+
+      expect(find.byType(ReadingTabStrip), findsOneWidget);
+      expect(find.text('ספר א'), findsOneWidget);
+    });
   });
 
   group('שורה עמוסה בכרטיסיות', () {

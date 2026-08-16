@@ -1933,6 +1933,83 @@ void main() {
       await _closeBlocAndAllowDeferredDispose(tabsBloc);
     });
   });
+
+  group('TabsBloc כרטיסיות שנסגרו לאחרונה', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('recentlyClosedTabs מחזיר מהאחרונה שנסגרה ואילך', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      bloc.add(RemoveTab(first));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+      bloc.add(RemoveTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.isEmpty);
+
+      expect(
+        bloc.recentlyClosedTabs.map((t) => t.title).toList(),
+        ['ספר ב', 'ספר א'],
+      );
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('RestoreClosedTab משחזר כרטיסיה שאינה האחרונה שנסגרה', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final first = _createTextTab('ספר א', categoryId: 1);
+      final second = _createTextTab('ספר ב', categoryId: 2);
+
+      bloc.add(AddTab(first));
+      bloc.add(AddTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+      bloc.add(RemoveTab(first));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+      bloc.add(RemoveTab(second));
+      await bloc.stream.firstWhere((s) => s.tabs.isEmpty);
+
+      final oldest = bloc.recentlyClosedTabs.last;
+      expect(oldest.title, 'ספר א');
+
+      bloc.add(RestoreClosedTab(oldest));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      expect(bloc.state.tabs.single.title, 'ספר א');
+      expect(
+        bloc.recentlyClosedTabs.map((t) => t.title).toList(),
+        ['ספר ב'],
+        reason: 'הכרטיסיה ששוחזרה יוצאת מרשימת הנסגרות',
+      );
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('רשימת הנסגרות מוגבלת ל-10 והישנות ביותר נושרות', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      for (var i = 0; i < 12; i++) {
+        bloc.add(AddTab(_createTextTab('ספר $i', categoryId: i)));
+      }
+      await bloc.stream.firstWhere((s) => s.tabs.length == 12);
+
+      for (final tab in List.of(bloc.state.tabs)) {
+        bloc.add(RemoveTab(tab));
+      }
+      await bloc.stream.firstWhere((s) => s.tabs.isEmpty);
+
+      final titles = bloc.recentlyClosedTabs.map((t) => t.title).toList();
+      expect(titles, hasLength(10));
+      expect(titles.first, 'ספר 11');
+      expect(titles.contains('ספר 0'), isFalse);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
 }
 
 TextBookBloc _createLoadedTextBookBloc({

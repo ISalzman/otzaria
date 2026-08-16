@@ -91,6 +91,19 @@ class SettingsRepository {
       'key-personal-notes-collapsed';
   static const String keyCompactMenuMode = 'key-compact-menu-mode';
 
+  /// מיקום רצועת כרטיסיות העיון: `top` בשורת הכותרת, `side` בעמודה אנכית.
+  static const String keyReadingTabsPlacement = 'key-reading-tabs-placement';
+  static const String keyReadingTabsColumnWidth =
+      'key-reading-tabs-column-width';
+  static const String keyReadingTabsColumnCollapsed =
+      'key-reading-tabs-column-collapsed';
+
+  static const String readingTabsPlacementTop = 'top';
+  static const String readingTabsPlacementSide = 'side';
+  static const double defaultReadingTabsColumnWidth = 220;
+  static const double minReadingTabsColumnWidth = 160;
+  static const double maxReadingTabsColumnWidth = 400;
+
   /// CSV של מזהי כלים מובנים שהמשתמש הסתיר מהממשק (לשונית הכלים).
   static const String keyHiddenBuiltInToolIds = 'key-hidden-builtin-tool-ids';
 
@@ -210,6 +223,9 @@ class SettingsRepository {
     keyEnableHtmlLinks,
     keyPersonalNotesCollapsedByDefault,
     keyCompactMenuMode,
+    keyReadingTabsPlacement,
+    keyReadingTabsColumnWidth,
+    keyReadingTabsColumnCollapsed,
     keyHiddenBuiltInToolIds,
     keyBuiltInToolsPinnedToNavRail,
     keyBuiltInToolsOrder,
@@ -421,6 +437,18 @@ class SettingsRepository {
       ),
       'compactMenuMode': _settings.getValue<bool>(
         keyCompactMenuMode,
+        defaultValue: false,
+      ),
+      'readingTabsPlacement': _settings.getValue<String>(
+        keyReadingTabsPlacement,
+        defaultValue: readingTabsPlacementTop,
+      ),
+      'readingTabsColumnWidth': _settings.getValue<double>(
+        keyReadingTabsColumnWidth,
+        defaultValue: defaultReadingTabsColumnWidth,
+      ),
+      'readingTabsColumnCollapsed': _settings.getValue<bool>(
+        keyReadingTabsColumnCollapsed,
         defaultValue: false,
       ),
       'mergeUserBooksIntoLibrary': _settings.getValue<bool>(
@@ -706,6 +734,18 @@ class SettingsRepository {
 
   Future<void> updateCompactMenuMode(bool value) async {
     await _settings.setValue(keyCompactMenuMode, value);
+  }
+
+  Future<void> updateReadingTabsPlacement(String value) async {
+    await _settings.setValue(keyReadingTabsPlacement, value);
+  }
+
+  Future<void> updateReadingTabsColumnWidth(double value) async {
+    await _settings.setValue(keyReadingTabsColumnWidth, value);
+  }
+
+  Future<void> updateReadingTabsColumnCollapsed(bool value) async {
+    await _settings.setValue(keyReadingTabsColumnCollapsed, value);
   }
 
   Future<void> updateMergeUserBooksIntoLibrary(bool value) async {

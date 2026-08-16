@@ -82,6 +82,22 @@ class DesignSettingsTab extends StatelessWidget {
       ],
     ),
     SettingsSearchEntry(
+      id: 'design.display.reading_tabs_placement',
+      title: 'מיקום הכרטיסיות',
+      subtitle: 'כרטיסיות העיון ברצועה שלמעלה או בעמודה אנכית בצד',
+      tab: SettingsTab.design,
+      cardId: 'design.display',
+      keywords: [
+        'כרטיסיות',
+        'טאבים',
+        'לשוניות',
+        'עמודה',
+        'אנכי',
+        'בצד',
+        'למעלה',
+      ],
+    ),
+    SettingsSearchEntry(
       id: 'design.pdf.book_view',
       title: 'תצוגת ספר בPDF',
       subtitle: 'פתיחת ספרי PDF בתצוגת ספר או רגילה',
@@ -315,6 +331,32 @@ class DesignSettingsTab extends StatelessWidget {
                         onChanged: (value) {
                           context.read<SettingsBloc>().add(
                             UpdateCompactMenuMode(value),
+                          );
+                        },
+                      ),
+                      SettingsActionTile.segmentedTile<String>(
+                        rtlIcon: FluentIcons.panel_left_24_regular,
+                        title: context.settingsText('מיקום הכרטיסיות'),
+                        options: [
+                          SegmentOption(
+                            value: SettingsRepository.readingTabsPlacementTop,
+                            label: context.settingsText('למעלה'),
+                            subtitle: context.settingsText(
+                              'הכרטיסיות יוצגו ברצועה שבשורת הכותרת',
+                            ),
+                          ),
+                          SegmentOption(
+                            value: SettingsRepository.readingTabsPlacementSide,
+                            label: context.settingsText('בצד'),
+                            subtitle: context.settingsText(
+                              'הכרטיסיות יוצגו בעמודה אנכית ליד סרגל הניווט',
+                            ),
+                          ),
+                        ],
+                        currentValue: state.readingTabsPlacement,
+                        onChanged: (value) {
+                          context.read<SettingsBloc>().add(
+                            UpdateReadingTabsPlacement(value),
                           );
                         },
                       ),

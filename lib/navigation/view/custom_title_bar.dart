@@ -14,6 +14,9 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
+import 'package:otzaria/navigation/view/tab_context_menu.dart';
+import 'package:otzaria/navigation/view/tab_search_menu.dart';
+import 'package:otzaria/navigation/view/tab_visuals.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -35,10 +38,6 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
-import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
-import 'package:otzaria/workspaces/bloc/workspace_event.dart';
-import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
@@ -183,12 +182,26 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     }
   }
 
+  bool _isReadingScreen(NavigationState navState) =>
+      navState.currentScreen == Screen.reading ||
+      navState.currentScreen == Screen.search;
+
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
-    final isReading =
-        navState.currentScreen == Screen.reading ||
-        navState.currentScreen == Screen.search;
-    if (!isReading) return false;
+    if (!_isReadingScreen(navState)) return false;
     return MediaQuery.of(context).orientation == Orientation.portrait;
+  }
+
+  /// במצב "בצד" הכרטיסיות מוצגות בעמודה אנכית שבמסך הראשי, ולכן הרצועה
+  /// שבכותרת אינה נבנית כלל. במסך לאורך נשמרת ההתנהגות הקיימת (שורה שנייה).
+  bool _useSideTabs(
+    BuildContext context,
+    NavigationState navState,
+    SettingsState settingsState,
+  ) {
+    if (!_isReadingScreen(navState) || !settingsState.readingTabsOnSide) {
+      return false;
+    }
+    return MediaQuery.of(context).orientation == Orientation.landscape;
   }
 
   @override
@@ -240,7 +253,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
                         // תוכן הכותרת (טאבים או כותרת רגילה)
                         Expanded(
-                          child: _buildContent(context, navState),
+                          child: _buildContent(
+                            context,
+                            navState,
+                            settingsState,
+                          ),
                         ),
 
                         // כפתורי חלון (רק בדסקטופ)
@@ -363,13 +380,19 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
-  Widget _buildContent(BuildContext context, NavigationState navState) {
-    if (navState.currentScreen == Screen.reading ||
-        navState.currentScreen == Screen.search) {
-      if (_useStackedTabs(context, navState)) {
+  Widget _buildContent(
+    BuildContext context,
+    NavigationState navState,
+    SettingsState settingsState,
+  ) {
+    if (_isReadingScreen(navState)) {
+      final stacked = _useStackedTabs(context, navState);
+      if (stacked || _useSideTabs(context, navState, settingsState)) {
         return Row(
           children: [
             const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+            // במצב "בצד" כפתור חיפוש הכרטיסיות יושב בראש העמודה עצמה.
+            if (stacked) TabSearchButton(style: _kIconButtonStyle),
             _buildReadingSettingsButton(context),
           ],
         );
@@ -457,7 +480,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         return Row(
           children: [
             Expanded(child: _buildScrollableTabsArea(state)),
-            const SizedBox(width: 36),
+            TabSearchButton(style: _kIconButtonStyle),
+            const SizedBox(width: 8),
             _buildReadingSettingsButton(context),
           ],
         );
@@ -709,15 +733,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     if (_pointerInsideTabStrip && _lastComputedTabWidths != null) {
       _pinnedTabWidths ??= _lastComputedTabWidths;
     }
-    context.read<HistoryBloc>().add(AddHistory(tab));
-    context.read<TabsBloc>().add(RemoveTab(tab));
+    closeTabWithHistory(context, tab);
   }
 
   /// סוגר חלונית אחת מלשונית מפוצלת; אחותה נשארת ככרטיסייה רגילה במקומה.
-  void closePane(OpenedTab pane, BuildContext context) {
-    context.read<HistoryBloc>().add(AddHistory(pane));
-    context.read<TabsBloc>().add(ClosePane(pane));
-  }
+  void closePane(OpenedTab pane, BuildContext context) =>
+      closePaneWithHistory(context, pane);
 
   /// החלונית שהחצי שלה בלשונית נמצא מתחת ל-[dx] (קואורדינטה מקומית, LTR).
   OpenedTab _paneAtDx(
@@ -734,26 +755,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
   /// סוגר את כל הכרטיסיות שבבחירה המרובה בפעולה אחת.
   void closeSelectedTabs(BuildContext context) {
-    final tabsBloc = context.read<TabsBloc>();
-    final tabsToClose = List<OpenedTab>.from(tabsBloc.state.selectedTabs);
-    if (tabsToClose.isEmpty) return;
     if (_pointerInsideTabStrip && _lastComputedTabWidths != null) {
       _pinnedTabWidths ??= _lastComputedTabWidths;
     }
-    // אירוע קבוצתי אחד — אירועי AddHistory נפרדים מעובדים במקביל ועלולים
-    // לדרוס זה את זה.
-    context.read<HistoryBloc>().add(AddHistoryForTabs(tabsToClose));
-    tabsBloc.add(RemoveTabs(tabsToClose));
-  }
-
-  void closeAllTabs(TabsState state, BuildContext context) {
-    context.read<TabsBloc>().add(CloseAllTabs());
-  }
-
-  void closeAllTabsButCurrent(TabsState state, BuildContext context) {
-    if (state.currentTab != null) {
-      context.read<TabsBloc>().add(CloseOtherTabs(state.currentTab!));
-    }
+    closeSelectedTabsWithHistory(context);
   }
 
   /// רקע הכרטיסיה: סימון בחירה מרובה, ואחריו הכרטיסיה הפעילה.
@@ -882,31 +887,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
     bool isTabHovered = identical(_hoveredTab, tab);
 
-    // כותרת בשורה אחת שמוצגת מההתחלה (RTL: מימין) ונדהית רק בקצה הסוף, כמו
-    // כרום. TextOverflow.fade/clip של פלאטר מציג בעברית את *סוף* הכותרת
-    // (הפוך מהרצוי), לכן מצמידים את הטקסט בעצמנו: OverflowBox ברוחב טבעי מיושר
-    // ל-start (ימין ב-RTL) → ההתחלה גלויה, הסוף גולש; ClipRect חותך אותו;
-    // ו-ShaderMask מדהה רק את קצה הסוף. בכותרת קצרה הקצה ריק והדהייה נעלמת.
-    Widget fadedTitle(String title) {
-      final isLtr = Directionality.of(context) == TextDirection.ltr;
-      return ClipRect(
-        child: ShaderMask(
-          blendMode: BlendMode.dstIn,
-          shaderCallback: (rect) => LinearGradient(
-            begin: isLtr ? Alignment.centerLeft : Alignment.centerRight,
-            end: isLtr ? Alignment.centerRight : Alignment.centerLeft,
-            stops: const [0.0, 0.82, 1.0],
-            colors: const [Colors.white, Colors.white, Colors.transparent],
-          ).createShader(rect),
-          child: OverflowBox(
-            alignment: AlignmentDirectional.centerStart,
-            minWidth: 0,
-            maxWidth: double.infinity,
-            child: Text(title, maxLines: 1, softWrap: false),
-          ),
-        ),
-      );
-    }
+    Widget fadedTitle(String title) => buildFadedTabTitle(context, title);
 
     // X של חצי לשונית — סוגר רק את החלונית שלו, בסגנון ה-X של לשונית רגילה.
     Widget paneCloseButton(OpenedTab pane) {
@@ -962,8 +943,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       if (tab is SearchingTab) {
         return ValueListenableBuilder<String>(
           valueListenable: tab.titleNotifier,
-          builder: (context, title, child) =>
-              Tooltip(message: title, child: fadedTitle(title)),
+          builder: (context, title, child) => TabTitleTooltip(
+            message: title,
+            title: title,
+            child: fadedTitle(title),
+          ),
         );
       }
 
@@ -974,8 +958,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             final tooltipMessage = currentTitleValue.isNotEmpty
                 ? '${tab.title}, $currentTitleValue'
                 : tab.title;
-            return Tooltip(
+            return TabTitleTooltip(
               message: tooltipMessage,
+              title: tab.title,
               child: fadedTitle(tab.title),
             );
           },
@@ -989,8 +974,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             final tooltipMessage = currentTitleValue.isNotEmpty
                 ? '${tab.title}, $currentTitleValue'
                 : tab.title;
-            return Tooltip(
+            return TabTitleTooltip(
               message: tooltipMessage,
+              title: tab.title,
               child: fadedTitle(tab.title),
             );
           },
@@ -1000,7 +986,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // כל טיפוס שאין לו כותרת חיה (כולל ToolTab) — כותרת סטטית. ברירת
       // המחדל שאחריה היא cast ל-TextBookTab, ולכן היא חייבת להיות אחרונה.
       if (tab is! TextBookTab) {
-        return Tooltip(message: tab.title, child: fadedTitle(tab.title));
+        return TabTitleTooltip(
+          message: tab.title,
+          title: tab.title,
+          child: fadedTitle(tab.title),
+        );
       }
 
       final textTab = tab;
@@ -1010,7 +1000,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           final tooltipMessage = currentTitleValue.isNotEmpty
               ? '${tab.title}, $currentTitleValue'
               : tab.title;
-          return Tooltip(message: tooltipMessage, child: fadedTitle(tab.title));
+          return TabTitleTooltip(
+            message: tooltipMessage,
+            title: tab.title,
+            child: fadedTitle(tab.title),
+          );
         },
       );
     }
@@ -1263,201 +1257,18 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
-  /// בונה פריט תפריט להעברת טאב לשולחן עבודה אחר
-  AppContextMenuEntry _buildMoveToWorkspaceMenuEntry(
-    BuildContext context,
-    OpenedTab tab,
-  ) {
-    final workspaceState = context.read<WorkspaceBloc>().state;
-
-    final otherWorkspaces = workspaceState.workspaces
-        .where((w) => w.id != workspaceState.activeWorkspaceId)
-        .toList();
-
-    if (otherWorkspaces.isEmpty) {
-      return AppContextMenuEntry(
-        label: 'העבר לשולחן עבודה',
-        enabled: false,
-      );
-    }
-
-    return AppContextMenuEntry(
-      label: 'העבר לשולחן עבודה',
-      children: otherWorkspaces.map((workspace) {
-        return AppContextMenuEntry(
-          label: workspace.name,
-          onTap: () {
-            _moveTabToWorkspace(context, tab, workspace.id);
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  /// מעביר טאב לשולחן עבודה אחר
-  void _moveTabToWorkspace(
-    BuildContext context,
-    OpenedTab tab,
-    String targetWorkspaceId,
-  ) {
-    final tabsBloc = context.read<TabsBloc>();
-    final workspaceBloc = context.read<WorkspaceBloc>();
-    final tabsState = tabsBloc.state;
-    final workspaceState = workspaceBloc.state;
-
-    final targetWorkspace = workspaceState.workspaces.firstWhere(
-      (w) => w.id == targetWorkspaceId,
-    );
-
-    tabsBloc.add(RemoveTab(tab));
-
-    final currentTabs = tabsState.tabs.where((t) => t != tab).toList();
-    final newActiveIndex = currentTabs.isEmpty
-        ? 0
-        : tabsState.currentTabIndex.clamp(0, currentTabs.length - 1);
-
-    workspaceBloc.add(
-      MoveTabToWorkspace(
-        tab: tab,
-        targetWorkspaceId: targetWorkspaceId,
-        currentTabs: currentTabs,
-        currentTabIndex: newActiveIndex,
-      ),
-    );
-
-    UiSnack.show(LibraryMessages.tabMovedToWorkspace(targetWorkspace.name));
-  }
-
   List<AppContextMenuEntry> _buildTabContextMenuEntries(
     BuildContext menuCtx,
     OpenedTab tab,
     TabsState state,
   ) {
-    final entries = <AppContextMenuEntry>[
-      AppContextMenuEntry(
-        label: tab.isPinned ? 'בטל הצמדת כרטיסיה' : 'הצמד כרטיסיה',
-        onTap: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
-      ),
-      // על טאב שנכלל בבחירה מרובה "סגור" הופך לסגירת כל הקבוצה (כמו בדפדפן).
-      if (state.selectedTabs.length > 1 && state.selectedTabs.contains(tab))
-        AppContextMenuEntry(
-          label: 'סגור ${state.selectedTabs.length} כרטיסיות',
-          onTap: () => closeSelectedTabs(context),
-        )
-      else
-        AppContextMenuEntry(
-          label: 'סגור',
-          onTap: () => closeTab(tab, context),
-        ),
-      AppContextMenuEntry(
-        label: 'סגור הכל',
-        onTap: () => closeAllTabs(state, context),
-      ),
-      AppContextMenuEntry(
-        label: 'סגור את האחרים',
-        onTap: () => closeAllTabsButCurrent(state, context),
-      ),
-      if (tab is! ToolTab || tab.isBuiltIn)
-        AppContextMenuEntry(
-          label: 'שיכפול',
-          onTap: () => context.read<TabsBloc>().add(CloneTab(tab)),
-        ),
-      const AppContextMenuEntry.divider(),
-    ];
-
-    // טאב שכבר מפוצל אינו נכנס לפיצול נוסף: הפיצול הוא לשתי חלוניות בלבד.
-    final otherTabs = tab is CombinedTab
-        ? const <OpenedTab>[]
-        : state.tabs.where((t) => t != tab && t is! CombinedTab).toList();
-    if (otherTabs.isEmpty) {
-      entries.add(AppContextMenuEntry(label: 'הצג לצד', enabled: false));
-    } else {
-      entries.add(
-        AppContextMenuEntry(
-          label: 'הצג לצד',
-          children: otherTabs
-              .map(
-                (otherTab) => AppContextMenuEntry(
-                  label: otherTab.title,
-                  onTap: () => context.read<TabsBloc>().add(
-                    CreateCombinedTab(rightTab: tab, leftTab: otherTab),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      );
-    }
-
-    if (tab is CombinedTab) {
-      // לחיצה ימנית אינה מחליפה טאב פעיל, לכן האירועים מקבלים אינדקס מפורש.
-      final tabIndex = state.tabs.indexOf(tab);
-      entries.addAll([
-        AppContextMenuEntry(
-          label: 'סגור חלונית',
-          children: [
-            for (final pane in leafPanes(tab))
-              AppContextMenuEntry(
-                label: pane.title,
-                onTap: () => closePane(pane, context),
-              ),
-          ],
-        ),
-        AppContextMenuEntry(
-          label: 'החלף צדדים',
-          onTap: () => context.read<TabsBloc>().add(
-            SwapSideBySideTabs(tabIndex: tabIndex),
-          ),
-        ),
-        AppContextMenuEntry(
-          label: 'חזרה לתצוגה רגילה',
-          onTap: () =>
-              context.read<TabsBloc>().add(ExpandCombinedTab(tabIndex)),
-        ),
-      ]);
-    }
-
-    entries.addAll([
-      const AppContextMenuEntry.divider(),
-      AppContextMenuEntry(
-        label: 'כרטיסיות פתוחות',
-        // childrenBuilder + stream: הרשימה נבנית מחדש בכל שינוי במצב הכרטיסיות,
-        // כך שסגירת כרטיסייה דרך ה-X מסירה את שורתה והתפריט נשאר פתוח.
-        childrenBuilder: () =>
-            _getOpenTabsMenuEntries(context.read<TabsBloc>().state.tabs),
-        childrenRefreshStream: context.read<TabsBloc>().stream,
-      ),
-      _buildMoveToWorkspaceMenuEntry(context, tab),
-    ]);
-
-    return entries;
-  }
-
-  List<AppContextMenuEntry> _getOpenTabsMenuEntries(List<OpenedTab> tabs) {
-    // ללא מיון — הרשימה משקפת את סדר הכרטיסיות בשורת הכרטיסיות.
-    return tabs.map((tab) {
-      return AppContextMenuEntry(
-        label: tab.title,
-        onTap: () {
-          final index = tabs.indexOf(tab);
-          context.read<TabsBloc>().add(SetCurrentTab(index));
-        },
-        trailing: Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: IconButton(
-            tooltip: 'סגור',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            icon: const Icon(FluentIcons.dismiss_24_regular, size: 14),
-            // סגירת הכרטיסייה מעדכנת את ה-TabsBloc; ה-childrenRefreshStream
-            // יבנה מחדש את הרשימה ושורת הכרטיסייה תיעלם.
-            onPressed: () => closeTab(tab, context),
-            splashRadius: 16,
-          ),
-        ),
-      );
-    }).toList();
+    return buildTabContextMenuEntries(
+      context,
+      tab,
+      state,
+      onCloseTab: (target) => closeTab(target, context),
+      onCloseSelectedTabs: () => closeSelectedTabs(context),
+    );
   }
 }
 
