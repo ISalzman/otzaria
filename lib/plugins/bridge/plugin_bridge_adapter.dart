@@ -3474,6 +3474,24 @@ class PluginBridgeAdapter {
           payload: {'param': args['param']},
         );
         return true;
+      case 'openOther':
+        final targetId = (args['pluginId'] as String?)?.trim();
+        if (targetId == null || targetId.isEmpty) {
+          throw Exception('error.invalid_params: pluginId required');
+        }
+        // רק תוסף מותקן — כלים מובנים אינם נפתחים בערוץ הזה, כדי שההרשאה
+        // תישאר במשמעות שהוצגה למשתמש. שאר סיבות אי-הזמינות (מושבת, מוסתר,
+        // מנותק) נשארות ל-openToolTabById, שמציג הודעה מדויקת אחת.
+        final installed = await _pluginRepo.getAllPlugins();
+        if (!installed.any((p) => p.pluginId == targetId)) {
+          throw Exception('error.not_found: plugin not installed: $targetId');
+        }
+        PluginPageLauncher.instance.open(
+          targetId,
+          topic: 'plugin.page_opened',
+          payload: {'param': args['param'], 'openedBy': plugin.pluginId},
+        );
+        return true;
       case 'backgroundDone':
         return _dependencies.onBackgroundInstanceDone?.call() ?? false;
       default:

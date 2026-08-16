@@ -188,6 +188,12 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'ניווט במסכים',
     description: 'מעבר בין מסכים שונים באפליקציה',
   ),
+  'plugin.open_other': PluginPermissionInfo(
+    label: 'פתיחת תוסף אחר',
+    description:
+        'פתיחת דף של תוסף אחר שמותקן אצלך, כולל הפעלת הקוד שלו. התוסף הנפתח '
+        'פועל בהרשאות שלו בלבד',
+  ),
 
   // ===== הערות אישיות =====
   'notes.read': PluginPermissionInfo(

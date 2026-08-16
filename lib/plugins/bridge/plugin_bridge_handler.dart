@@ -339,6 +339,10 @@ class PluginBridgeHandler {
         if (action == 'openSelf') {
           return 'navigation.write';
         }
+        // openOther מפעיל תוסף שלישי — הרשאה נפרדת וחזקה יותר.
+        if (action == 'openOther') {
+          return pluginOpenOtherPermission;
+        }
         return null;
       default:
         return null;

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:io' as io show Link;
 
 import 'package:archive/archive_io.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +34,7 @@ import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
@@ -267,15 +269,42 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   Future<void> removeKV(String pluginId, String namespace, String key) async {
     kv.remove('$namespace/$key');
   }
+
+  /// התוספים ה"מותקנים" — plugin.openOther נבדק מולם.
+  List<InstalledPlugin> installed = [];
+
+  @override
+  Future<List<InstalledPlugin>> getAllPlugins() async => installed;
+}
+
+class _EnabledRegistryRepo extends Fake implements PluginRegistryRepository {
+  @override
+  Future<bool> getIsEnabled(String pluginId) async => true;
+}
+
+/// קולט את ה-JS שהאירוע נמסר בו, לאימות תוכן ה-payload.
+class _RecordingWebViewController extends Fake
+    implements InAppWebViewController {
+  final List<String> jsCalls = [];
+
+  @override
+  Future<dynamic> evaluateJavascript({
+    required String source,
+    ContentWorld? contentWorld,
+  }) async {
+    jsCalls.add(source);
+    return null;
+  }
 }
 
 InstalledPlugin _buildInstalledPlugin({
   List<String> permissions = const [],
   bool networkEnabled = false,
   List<String> networkAllowlist = const [],
+  String pluginId = 'test.plugin',
 }) {
   return InstalledPlugin(
-    pluginId: 'test.plugin',
+    pluginId: pluginId,
     name: 'Test Plugin',
     version: '1.0.0',
     installPath: '/',
@@ -284,7 +313,7 @@ InstalledPlugin _buildInstalledPlugin({
     pinned: true,
     manifest: PluginManifest(
       schemaVersion: 1,
-      id: 'test.plugin',
+      id: pluginId,
       name: 'Test Plugin',
       version: '1.0.0',
       description: '',
@@ -2468,13 +2497,16 @@ Future<void> main() async {
   group('PluginBridgeAdapter plugin.openSelf + context menu openPlugin', () {
     late PluginBridgeAdapter adapter;
 
+    late _StubPluginRegistryRepository registry;
+
     setUp(() {
+      registry = _StubPluginRegistryRepository();
       adapter = PluginBridgeAdapter(
         _buildInstalledPlugin(
           permissions: const ['navigation.write', 'reader.context_menu'],
         ),
         dependencies: _buildNetworkDeps(),
-        pluginRepository: _StubPluginRegistryRepository(),
+        pluginRepository: registry,
       );
     });
 
@@ -2493,6 +2525,67 @@ Future<void> main() async {
 
       expect(result, isTrue);
       expect(navigations, ['test.plugin']);
+    });
+
+    test('plugin.openOther מנווט לתוסף היעד ומוסר לו openedBy', () async {
+      registry.installed = [_buildInstalledPlugin(pluginId: 'other.plugin')];
+      final navigations = <String>[];
+      PluginPageLauncher.instance.navigator = navigations.add;
+      final dispatcher = PluginRuntimeDispatcher.instance;
+      final controller = _RecordingWebViewController();
+      dispatcher.repositoryForTesting = _EnabledRegistryRepo();
+      dispatcher.registerController('other.plugin', controller);
+      addTearDown(() {
+        PluginPageLauncher.instance.markPageClosed('other.plugin');
+        dispatcher.unregisterController('other.plugin');
+        dispatcher.repositoryForTesting = PluginRegistryRepository();
+      });
+
+      final result = await adapter.execute('plugin', 'openOther', {
+        'pluginId': 'other.plugin',
+        'param': 'x',
+      });
+      PluginPageLauncher.instance.markPageReady('other.plugin');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(result, isTrue);
+      expect(navigations, ['other.plugin']);
+      expect(controller.jsCalls.single, contains('plugin.page_opened'));
+      expect(controller.jsCalls.single, contains('"openedBy":"test.plugin"'));
+    });
+
+    test(
+      'plugin.openOther על תוסף שאינו מותקן → not_found, בלי ניווט',
+      () async {
+        registry.installed = [_buildInstalledPlugin(pluginId: 'other.plugin')];
+        final navigations = <String>[];
+        PluginPageLauncher.instance.navigator = navigations.add;
+
+        await expectLater(
+          adapter.execute('plugin', 'openOther', {'pluginId': 'ghost.plugin'}),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('not_found'),
+            ),
+          ),
+        );
+        expect(navigations, isEmpty);
+      },
+    );
+
+    test('plugin.openOther ללא pluginId → invalid_params', () async {
+      await expectLater(
+        adapter.execute('plugin', 'openOther', <String, dynamic>{}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('invalid_params'),
+          ),
+        ),
+      );
     });
 
     test('addContextMenuItem שומר openPlugin ו-param ב-registry', () async {

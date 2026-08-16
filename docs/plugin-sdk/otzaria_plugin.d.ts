@@ -875,8 +875,11 @@ export interface OtzariaEventMap {
     /** The `param` value passed to `reader.addContextMenuItem`, or null. */
     param: unknown;
   };
-  /** The plugin page was opened via `plugin.openSelf`. Carries the param passed to the call. */
-  'plugin.page_opened': { param: unknown };
+  /**
+   * The plugin page was opened via `plugin.openSelf`, or by another plugin via
+   * `plugin.openOther` — in which case `openedBy` holds that plugin's id.
+   */
+  'plugin.page_opened': { param: unknown; openedBy?: string };
   /** A checked static search row routed submission to its owning plugin. */
   'search.requested': { itemId: string; request: SearchQueryParams };
   /** External-search page request sent only to the plugin owning `provider`. */
@@ -1118,6 +1121,7 @@ export type OtzariaMethod =
   | 'network.download'
   | 'shortcut.create'
   | 'plugin.openSelf'
+  | 'plugin.openOther'
   | 'plugin.backgroundDone'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'

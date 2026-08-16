@@ -90,6 +90,7 @@ const Set<String> _knownApiMethods = {
   'reader.clearAllHighlights',
   'navigation.goTo',
   'plugin.openSelf',
+  'plugin.openOther',
   'plugin.backgroundDone',
   'notes.list',
   'notes.getBookNotesSummary',
@@ -224,6 +225,7 @@ const Map<String, String> _methodRequiredPermission = {
   'reader.clearAllHighlights': 'reader.highlight',
   'navigation.goTo': 'navigation.write',
   'plugin.openSelf': 'navigation.write',
+  'plugin.openOther': pluginOpenOtherPermission,
   'notes.list': 'notes.read',
   'notes.getBookNotesSummary': 'notes.read',
   'notes.add': 'notes.write',
@@ -384,6 +386,7 @@ const Map<String, String> _methodMinVersion = {
   'app.openUrl': '0.9.95',
   // 0.9.96
   'plugin.openSelf': '0.9.96',
+  'plugin.openOther': '0.9.97',
   'library.listBookAltStructures': '0.9.96',
   'library.getBookAltToc': '0.9.96',
   // 0.9.97

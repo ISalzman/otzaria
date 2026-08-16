@@ -58,6 +58,7 @@ const Map<String, String> apiCallToPermissionHint = {
 
   // plugin.*
   'plugin.openSelf': 'navigation.write',
+  'plugin.openOther': pluginOpenOtherPermission,
 
   // reader.* (new APIs)
   'reader.addContextMenuItem': 'reader.context_menu',
@@ -75,6 +76,10 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
 };
+
+/// הרשאה לפתיחת דף של תוסף **אחר** (`plugin.openOther`). נפרדת מ-navigation.write
+/// כי היא מפעילה את ה-WebView של תוסף שלישי, ולא רק מזיזה את המשתמש בין מסכים.
+const pluginOpenOtherPermission = 'plugin.open_other';
 
 /// הרשאה להפעלת מנוע התוסף ברקע ללא פתיחת הדף שלו.
 /// בתוסף דקלרטיבי ההפעלה נעשית רק בעקבות אירוע.
@@ -185,6 +190,9 @@ const pluginValidPermissions = <String>[
   // ===== ניווט =====
   /// מעבר בין מסכים באפליקציה
   'navigation.write',
+
+  /// פתיחת דף של תוסף אחר המותקן אצל המשתמש
+  pluginOpenOtherPermission,
 
   // ===== הערות אישיות =====
   /// קריאת הערות אישיות

@@ -525,6 +525,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `search.fulltext.read` | חיפוש טקסט מלא |
 | `reader.open` | פתיחת ספרים + קריאת מצב הקורא |
 | `navigation.write` | ניווט בין מסכים |
+| `plugin.open_other` | פתיחת דף של תוסף אחר המותקן אצל המשתמש (`plugin.openOther`), כולל הפעלת הקוד שלו |
 | `notes.read` | קריאת הערות אישיות |
 | `notes.write` | הוספה/עדכון/מחיקה של הערות |
 | `calendar.read` | גישה לנתוני לוח שנה |

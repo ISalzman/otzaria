@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 /// adapter פיקטיבי: מיישם רק את execute (השאר דרך noSuchMethod), סופר קריאות
@@ -109,6 +110,14 @@ List<dynamic> _shortcutCreateRequest() => [
   {
     'method': 'shortcut.create',
     'payload': {'label': 'בדיקה'},
+  },
+];
+
+/// בקשת RPC ל-plugin.openOther.
+List<dynamic> _openOtherRequest() => [
+  {
+    'method': 'plugin.openOther',
+    'payload': {'pluginId': 'other.plugin'},
   },
 ];
 
@@ -284,6 +293,48 @@ void main() {
       expect(resp['error']['code'], 'permission_denied');
       expect(adapter.executeCalls, 0);
     });
+
+    test(
+      'plugin.openOther עם navigation.write בלבד → permission_denied',
+      () async {
+        // openSelf מסתפק ב-navigation.write; פתיחת תוסף אחר דורשת הרשאה נפרדת,
+        // ולכן תוסף ותיק שהצהיר רק על ניווט אינו מקבל אותה בירושה.
+        final adapter = _FakeAdapter();
+        final handler = buildHandler(
+          declaredPermissions: const ['navigation.write'],
+          granted: true,
+          adapter: adapter,
+        );
+
+        final resp =
+            await handler.handleRpcForTesting(_openOtherRequest())
+                as Map<String, dynamic>;
+
+        expect(resp['success'], isFalse);
+        expect(resp['error']['code'], 'permission_denied');
+        expect(adapter.executeCalls, 0);
+      },
+    );
+
+    test(
+      'plugin.openOther עם plugin.open_other מוצהרת ומוענקת → execute נקרא',
+      () async {
+        final adapter = _FakeAdapter(result: true);
+        final handler = buildHandler(
+          declaredPermissions: const [pluginOpenOtherPermission],
+          granted: true,
+          adapter: adapter,
+        );
+
+        final resp =
+            await handler.handleRpcForTesting(_openOtherRequest())
+                as Map<String, dynamic>;
+
+        expect(resp['success'], isTrue);
+        expect(adapter.lastDomain, 'plugin');
+        expect(adapter.lastAction, 'openOther');
+      },
+    );
 
     test('app.openUrl ללא app.open_url במניפסט → permission_denied, '
         'execute לא נקרא', () async {
