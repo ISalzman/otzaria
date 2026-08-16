@@ -49,36 +49,53 @@ class UiSnack {
     Duration? duration,
     IconData? icon,
     bool enableHaptic = true,
+    VoidCallback? onTap,
   }) => _showOverlay(
     message: message,
     variant: _SnackVariant.standard,
     duration: duration ?? const Duration(seconds: 6),
     icon: icon,
     enableHaptic: enableHaptic,
+    onTap: onTap,
   );
 
-  static void showError(String message, {Duration? duration}) => _showOverlay(
+  static void showError(
+    String message, {
+    Duration? duration,
+    VoidCallback? onTap,
+  }) => _showOverlay(
     message: message,
     variant: _SnackVariant.error,
     icon: FluentIcons.error_circle_24_regular,
     duration: duration ?? const Duration(seconds: 3),
     enableHaptic: true,
+    onTap: onTap,
   );
 
-  static void showSuccess(String message, {Duration? duration}) => _showOverlay(
+  static void showSuccess(
+    String message, {
+    Duration? duration,
+    VoidCallback? onTap,
+  }) => _showOverlay(
     message: message,
     variant: _SnackVariant.standard,
     icon: FluentIcons.checkmark_circle_24_regular,
     duration: duration ?? const Duration(seconds: 3),
     enableHaptic: true,
+    onTap: onTap,
   );
 
-  static void showWarning(String message, {Duration? duration}) => _showOverlay(
+  static void showWarning(
+    String message, {
+    Duration? duration,
+    VoidCallback? onTap,
+  }) => _showOverlay(
     message: message,
     variant: _SnackVariant.warning,
     icon: FluentIcons.warning_24_regular,
     duration: duration ?? const Duration(seconds: 3),
     enableHaptic: true,
+    onTap: onTap,
   );
 
   static void showWithAction({
@@ -136,6 +153,7 @@ class UiSnack {
     VoidCallback? onAction,
     bool enableHaptic = false,
     bool showCloseButton = false,
+    VoidCallback? onTap,
   }) {
     _removeCurrentOverlay();
 
@@ -167,6 +185,8 @@ class UiSnack {
             actionLabel: actionLabel,
             onAction: onAction,
             enableHaptic: enableHaptic,
+            showCloseButton: showCloseButton,
+            onTap: onTap,
           );
         });
         return;
@@ -181,6 +201,8 @@ class UiSnack {
         actionLabel: actionLabel,
         onAction: onAction,
         enableHaptic: enableHaptic,
+        showCloseButton: showCloseButton,
+        onTap: onTap,
       );
     }
 
@@ -201,6 +223,7 @@ class UiSnack {
     VoidCallback? onAction,
     bool enableHaptic = false,
     bool showCloseButton = false,
+    VoidCallback? onTap,
   }) {
     if (enableHaptic) HapticFeedback.lightImpact();
 
@@ -214,6 +237,7 @@ class UiSnack {
         onAction: onAction,
         showCloseButton: showCloseButton,
         onDismiss: _removeCurrentOverlay,
+        onTap: onTap,
       ),
     );
 
@@ -259,6 +283,7 @@ class _SnackToast extends StatefulWidget {
   final VoidCallback? onAction;
   final bool showCloseButton;
   final VoidCallback onDismiss;
+  final VoidCallback? onTap;
 
   const _SnackToast({
     required this.message,
@@ -269,6 +294,7 @@ class _SnackToast extends StatefulWidget {
     this.icon,
     this.actionLabel,
     this.onAction,
+    this.onTap,
   });
 
   @override
@@ -365,106 +391,117 @@ class _SnackToastState extends State<_SnackToast>
               child: child,
             ),
           ),
-          child: GestureDetector(
-            onVerticalDragEnd: (d) {
-              if ((d.primaryVelocity ?? 0) > 200) _close();
-            },
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: _ToastTokens.maxWidth,
-              ),
-              child: IntrinsicWidth(
-                child: ClipRRect(
-                  borderRadius: AppTokens.borderRadiusAll,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: _ToastTokens.blurSigma,
-                      sigmaY: _ToastTokens.blurSigma,
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: bgColor,
-                          borderRadius: AppTokens.borderRadiusAll,
-                          //  ללא border — רק צל עדין לעומק
-                          boxShadow: [
-                            BoxShadow(
-                              color: cs.shadow.withValues(
-                                alpha: isDark ? 0.35 : 0.12,
-                              ),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                              spreadRadius: -2,
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: _ToastTokens.padH,
-                          vertical: _ToastTokens.padV,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (widget.icon != null) ...[
-                              Icon(widget.icon, color: c.fg, size: 20),
-                              const SizedBox(width: AppTokens.spaceSM),
-                            ],
-                            Flexible(
-                              child: Text(
-                                widget.message,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: c.fg,
-                                  fontSize: _ToastTokens.fontMessage,
-                                  fontWeight: FontWeight.w400,
-                                  height: 1.4,
+          child: MouseRegion(
+            cursor: widget.onTap != null
+                ? SystemMouseCursors.click
+                : MouseCursor.defer,
+            child: GestureDetector(
+              onTap: widget.onTap == null
+                  ? null
+                  : () {
+                      widget.onTap!();
+                      _close();
+                    },
+              onVerticalDragEnd: (d) {
+                if ((d.primaryVelocity ?? 0) > 200) _close();
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: _ToastTokens.maxWidth,
+                ),
+                child: IntrinsicWidth(
+                  child: ClipRRect(
+                    borderRadius: AppTokens.borderRadiusAll,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                        sigmaX: _ToastTokens.blurSigma,
+                        sigmaY: _ToastTokens.blurSigma,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: AppTokens.borderRadiusAll,
+                            //  ללא border — רק צל עדין לעומק
+                            boxShadow: [
+                              BoxShadow(
+                                color: cs.shadow.withValues(
+                                  alpha: isDark ? 0.35 : 0.12,
                                 ),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                                spreadRadius: -2,
                               ),
-                            ),
-                            if (widget.actionLabel != null &&
-                                widget.onAction != null) ...[
-                              const SizedBox(width: AppTokens.spaceSM),
-                              TextButton(
-                                onPressed: () {
-                                  widget.onAction!();
-                                  _close();
-                                },
-                                style: TextButton.styleFrom(
-                                  foregroundColor: c.action,
-                                  textStyle: const TextStyle(
-                                    fontSize: _ToastTokens.fontAction,
-                                    fontWeight: FontWeight.w700,
+                            ],
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: _ToastTokens.padH,
+                            vertical: _ToastTokens.padV,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.icon != null) ...[
+                                Icon(widget.icon, color: c.fg, size: 20),
+                                const SizedBox(width: AppTokens.spaceSM),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  widget.message,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: c.fg,
+                                    fontSize: _ToastTokens.fontMessage,
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.4,
                                   ),
-                                  minimumSize: Size.zero,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTokens.spaceSM,
-                                    vertical: 4,
+                                ),
+                              ),
+                              if (widget.actionLabel != null &&
+                                  widget.onAction != null) ...[
+                                const SizedBox(width: AppTokens.spaceSM),
+                                TextButton(
+                                  onPressed: () {
+                                    widget.onAction!();
+                                    _close();
+                                  },
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: c.action,
+                                    textStyle: const TextStyle(
+                                      fontSize: _ToastTokens.fontAction,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTokens.spaceSM,
+                                      vertical: 4,
+                                    ),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                                  child: Text(widget.actionLabel!),
                                 ),
-                                child: Text(widget.actionLabel!),
-                              ),
+                              ],
+                              if (widget.showCloseButton) ...[
+                                const SizedBox(width: AppTokens.spaceSM),
+                                IconButton(
+                                  onPressed: _close,
+                                  icon: Icon(
+                                    FluentIcons.dismiss_24_regular,
+                                    color: c.fg,
+                                    size: 18,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                ),
+                              ],
                             ],
-                            if (widget.showCloseButton) ...[
-                              const SizedBox(width: AppTokens.spaceSM),
-                              IconButton(
-                                onPressed: _close,
-                                icon: Icon(
-                                  FluentIcons.dismiss_24_regular,
-                                  color: c.fg,
-                                  size: 18,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
                       ),
                     ),

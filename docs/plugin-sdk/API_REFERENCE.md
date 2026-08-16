@@ -1329,10 +1329,30 @@ await Otzaria.call('ui.showMessage', {
 });
 ```
 
+**הודעה לחיצה (מגרסה 0.9.97):** העברת `tapPayload` (ואופציונלית `tapEvent`)
+הופכת את ההודעה ללחיצה — לחיצה עליה משגרת לתוסף את האירוע `ui.messageClicked`
+(או שם מותאם שנמסר ב-`tapEvent`, באותיות/ספרות/נקודה/מקף/קו תחתון בלבד)
+עם `{ payload: tapPayload }`. זמין גם ב-`ui.showSuccess` וב-`ui.showError`.
+
+עם `tapOpenPlugin: true` הלחיצה גם **מנווטת את המשתמש לדף התוסף**, והאירוע
+נמסר לדף — גם אם הוא נטען רק עכשיו (כמו `openPlugin` בתפריט ההקשר). זו הדרך
+הנכונה להודעה ממופע רקע, שהמנוע שלו כבר עשוי להיות כבוי בזמן הלחיצה.
+
+```javascript
+await Otzaria.call('ui.showMessage', {
+  message: 'הסנכרון הסתיים — לחצו לפרטים',
+  tapPayload: { syncId: 42 }
+});
+
+Otzaria.on('ui.messageClicked', (data) => {
+  console.log(data.payload.syncId); // 42
+});
+```
+
 ### `ui.showSuccess`
 **הרשאה:** `ui.feedback`
 
-הצגת הודעת הצלחה.
+הצגת הודעת הצלחה. תומכת ב-`tapEvent`/`tapPayload` כמו `ui.showMessage`.
 
 ```javascript
 await Otzaria.call('ui.showSuccess', {
@@ -1343,11 +1363,23 @@ await Otzaria.call('ui.showSuccess', {
 ### `ui.showError`
 **הרשאה:** `ui.feedback`
 
-הצגת הודעת שגיאה.
+הצגת הודעת שגיאה. תומכת ב-`tapEvent`/`tapPayload` כמו `ui.showMessage`.
 
 ```javascript
 await Otzaria.call('ui.showError', {
   message: 'אירעה שגיאה'
+});
+```
+
+### `ui.messageClicked` (Event)
+**הרשאה:** אין צורך בהרשאה נוספת — נשלח רק לתוסף שהציג את ההודעה
+
+נורה כאשר המשתמש לוחץ על הודעה שהתוסף הציג עם `tapPayload`. שם האירוע
+ניתן להחלפה דרך `tapEvent` בקריאת ההצגה.
+
+```javascript
+Otzaria.on('ui.messageClicked', (data) => {
+  console.log('payload:', data.payload); // הערך שנמסר ב-tapPayload (null אם לא נמסר)
 });
 ```
 
@@ -1628,6 +1660,18 @@ const { data } = await Otzaria.call('notifications.showInApp', {
 - `info` - הודעה רגילה (כחול)
 - `success` - הודעת הצלחה (ירוק)
 - `error` - הודעת שגיאה (אדום)
+
+**התראה לחיצה (מגרסה 0.9.97):** נתמכים אותם `tapEvent`/`tapPayload`/`tapOpenPlugin`
+כמו ב-`ui.showMessage` — שימושי במיוחד להתראה ממופע רקע שמזמינה את המשתמש
+לפתוח את דף התוסף בלחיצה:
+
+```javascript
+await Otzaria.call('notifications.showInApp', {
+  message: 'יש עדכונים — לחצו לפתיחה',
+  type: 'info',
+  tapOpenPlugin: true
+});
+```
 
 ### `notifications.sendSystem`
 **הרשאה:** `notifications.system`

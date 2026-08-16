@@ -69,6 +69,7 @@ import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
@@ -333,6 +334,15 @@ class PluginBridgeDependencies {
   /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
   final bool Function()? onBackgroundInstanceDone;
 
+  /// שולח אירוע ממוקד לתוסף (לחיצה על הודעת snack). אופציונלי — ברירת
+  /// המחדל היא [PluginRuntimeDispatcher.dispatchEventToPlugin]; קיים להזרקה בבדיקות.
+  final Future<void> Function(
+    String pluginId,
+    String topic,
+    Map<String, dynamic> payload,
+  )?
+  dispatchEventToPlugin;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -353,6 +363,7 @@ class PluginBridgeDependencies {
     this.altStructuresProvider,
     this.altTocEntriesProvider,
     this.onBackgroundInstanceDone,
+    this.dispatchEventToPlugin,
   });
 }
 
@@ -2146,13 +2157,22 @@ class PluginBridgeAdapter {
   Future<dynamic> _handleUi(String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'showMessage':
-        UiSnack.show(args['message'] as String? ?? '');
+        UiSnack.show(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showSuccess':
-        UiSnack.showSuccess(args['message'] as String? ?? '');
+        UiSnack.showSuccess(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showError':
-        UiSnack.showError(args['message'] as String? ?? '');
+        UiSnack.showError(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showConfirm':
         final result = await _dependencies.showConfirmDialog(
@@ -2181,6 +2201,37 @@ class PluginBridgeAdapter {
       default:
         throw Exception("Unknown action in ui: $action");
     }
+  }
+
+  static final _tapEventTopicPattern = RegExp(r'^[A-Za-z0-9._-]{1,64}$');
+
+  /// בונה מטפל לחיצה להודעת snack: הלחיצה משגרת לתוסף את האירוע שביקש
+  /// ב-`tapEvent` (או `ui.messageClicked`) עם `tapPayload`. null כשלא התבקש.
+  VoidCallback? _messageTapHandler(Map<String, dynamic> args) {
+    final openPlugin = args['tapOpenPlugin'] == true;
+    if (!openPlugin &&
+        !args.containsKey('tapEvent') &&
+        !args.containsKey('tapPayload')) {
+      return null;
+    }
+    final topic = args['tapEvent'] as String? ?? 'ui.messageClicked';
+    // שם האירוע משוקע לתוך JS בעת השיגור — תבנית קשיחה חוסמת הזרקת קוד.
+    if (!_tapEventTopicPattern.hasMatch(topic)) {
+      throw Exception('Invalid tapEvent: $topic');
+    }
+    final payload = <String, dynamic>{'payload': args['tapPayload']};
+    if (openPlugin) {
+      // ניווט לדף התוסף עם מסירת האירוע — כמו openPlugin בתפריט ההקשר.
+      return () => PluginPageLauncher.instance.open(
+        plugin.pluginId,
+        topic: topic,
+        payload: payload,
+      );
+    }
+    final dispatch =
+        _dependencies.dispatchEventToPlugin ??
+        PluginRuntimeDispatcher.instance.dispatchEventToPlugin;
+    return () => unawaited(dispatch(plugin.pluginId, topic, payload));
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
@@ -2897,16 +2948,17 @@ class PluginBridgeAdapter {
           throw Exception('message required');
         }
 
+        final onTap = _messageTapHandler(args);
         switch (type) {
           case 'success':
-            UiSnack.showSuccess(message);
+            UiSnack.showSuccess(message, onTap: onTap);
             break;
           case 'error':
-            UiSnack.showError(message);
+            UiSnack.showError(message, onTap: onTap);
             break;
           case 'info':
           default:
-            UiSnack.show(message);
+            UiSnack.show(message, onTap: onTap);
             break;
         }
         return true;

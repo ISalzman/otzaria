@@ -811,6 +811,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Indexing repository | `test/indexing/repository/indexing_repository_test.dart` |
 | External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
 | Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
+| הודעות לחיצות מתוסף (`ui.show*` + tapEvent) | `test/plugins/bridge/plugin_bridge_ui_message_tap_test.dart` |
+| לחיצוּת הודעות UiSnack (onTap) | `test/core/ui_snack_tap_test.dart` |
 | Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
 | Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
 
