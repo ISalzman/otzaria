@@ -2848,6 +2848,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                         sourceType: state.sourceType,
                         grantedPermissions: perms,
                         allowOrderBeforeBuiltInsGranted: allowOrder,
+                        previousVersion: state.previousVersion,
                       ),
                     ),
                     onCancel: () => bloc.add(LoadPlugins()),

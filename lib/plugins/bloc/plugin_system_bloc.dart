@@ -259,6 +259,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     PluginInstallReportContext? report, {
     required bool success,
     String? errorMessage,
+    bool updated = false,
   }) {
     if (report == null) return;
     unawaited(
@@ -266,6 +267,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         report,
         success: success,
         errorMessage: errorMessage,
+        updated: updated,
       ),
     );
   }
@@ -413,8 +415,16 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         grantedPermissions: event.grantedPermissions,
       );
 
-      UiSnack.showSuccess(PluginMessages.pluginInstalledSuccess);
-      _reportInstallResult(event.reportContext, success: true);
+      UiSnack.showSuccess(
+        event.isUpdate
+            ? PluginMessages.pluginUpdatedSuccess
+            : PluginMessages.pluginInstalledSuccess,
+      );
+      _reportInstallResult(
+        event.reportContext,
+        success: true,
+        updated: event.isUpdate,
+      );
       add(LoadPlugins());
     } catch (e) {
       await _installerService.cancelInstall(event.tempDirPath);
@@ -682,7 +692,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         );
       }
       add(LoadPlugins());
-      UiSnack.showSuccess(PluginMessages.devPluginInstalledSuccess);
+      UiSnack.showSuccess(
+        event.isUpdate
+            ? PluginMessages.devPluginUpdatedSuccess
+            : PluginMessages.devPluginInstalledSuccess,
+      );
     } catch (e) {
       UiSnack.showError(PluginMessages.installDevPluginError(e));
       add(LoadPlugins());

@@ -161,6 +161,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
           Map.unmodifiable(_permissionToggles),
           _allowOrderBeforeBuiltInsGranted,
           reportContext: widget.reportContext,
+          previousVersion: widget.previousVersion,
         ),
       );
     }

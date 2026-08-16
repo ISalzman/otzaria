@@ -727,6 +727,34 @@ void main() {
     },
   );
 
+  testWidgets('הגרסה הקודמת נשלחת ב-ConfirmPluginInstall ומסמנת עדכון', (
+    tester,
+  ) async {
+    await _openDialog(tester, bloc, _manifest(), previousVersion: '1.0.0');
+
+    await tester.ensureVisible(find.text('עדכן'));
+    await tester.tap(find.text('עדכן'));
+    await tester.pumpAndSettle();
+
+    final event = bloc.capturedEvents.whereType<ConfirmPluginInstall>().first;
+    expect(event.previousVersion, '1.0.0');
+    expect(event.isUpdate, isTrue);
+  });
+
+  testWidgets('בהתקנה ראשונה ConfirmPluginInstall אינו מסומן כעדכון', (
+    tester,
+  ) async {
+    await _openDialog(tester, bloc, _manifest());
+
+    await tester.ensureVisible(find.text('התקן'));
+    await tester.tap(find.text('התקן'));
+    await tester.pumpAndSettle();
+
+    final event = bloc.capturedEvents.whereType<ConfirmPluginInstall>().first;
+    expect(event.previousVersion, isNull);
+    expect(event.isUpdate, isFalse);
+  });
+
   // ── עדכון: רק הרשאות חדשות/כבויות ──
 
   testWidgets('עדכון ללא הרשאות חדשות — דיאלוג אישור עדכון בלבד', (

@@ -4,6 +4,7 @@ abstract class PluginMessages {
 
   // ===== התקנה והסרה =====
   static const String pluginInstalledSuccess = 'התוסף הותקן בהצלחה';
+  static const String pluginUpdatedSuccess = 'התוסף עודכן בהצלחה';
   static const String pluginAlreadyInstalledSameVersion =
       'תוסף זה כבר מותקן אצלך, באותה הגרסה. '
       'להתקנה מחדש השתמש בקישור עם overwrite=true.';
@@ -78,6 +79,7 @@ abstract class PluginMessages {
       'כבר קיים תוסף מותקן (רגיל) עם אותו מזהה. מחק או שנה id.';
   static const String devPluginReloaded = 'תוסף פיתוח נטען מחדש';
   static const String devPluginInstalledSuccess = 'תוסף פיתוח הותקן בהצלחה';
+  static const String devPluginUpdatedSuccess = 'תוסף פיתוח עודכן בהצלחה';
   static const String localhostPluginReloaded = 'תוסף localhost נטען מחדש';
 
   static String loadDevPluginError(Object error) =>
