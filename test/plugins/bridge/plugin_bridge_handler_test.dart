@@ -321,22 +321,30 @@ void main() {
       expect(adapter.lastAction, 'openUrl');
     });
 
-    test('app.getConnectivity ללא app.info.read → permission_denied', () async {
-      final adapter = _FakeAdapter();
-      final handler = buildHandler(
-        declaredPermissions: const [],
-        granted: true,
-        adapter: adapter,
-      );
+    test(
+      'app.getConnectivity ללא הצהרה → מותר (app.info.read הרשאת בסיס)',
+      () async {
+        final adapter = _FakeAdapter(
+          result: const {
+            'isOfflineMode': false,
+            'hasNetwork': true,
+            'isOnline': true,
+          },
+        );
+        final handler = buildHandler(
+          declaredPermissions: const [],
+          granted: true,
+          adapter: adapter,
+        );
 
-      final resp =
-          await handler.handleRpcForTesting(_getConnectivityRequest())
-              as Map<String, dynamic>;
+        final resp =
+            await handler.handleRpcForTesting(_getConnectivityRequest())
+                as Map<String, dynamic>;
 
-      expect(resp['success'], isFalse);
-      expect(resp['error']['code'], 'permission_denied');
-      expect(adapter.executeCalls, 0);
-    });
+        expect(resp['success'], isTrue);
+        expect(adapter.executeCalls, 1);
+      },
+    );
 
     test('app.getConnectivity עם app.info.read → execute נקרא', () async {
       final adapter = _FakeAdapter(

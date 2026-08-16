@@ -354,7 +354,7 @@ void main() {
       );
     });
 
-    test('warns when ui.pickFolder is used without ui.feedback', () {
+    test('warns when ui.pickFolder is used without fs.folder_access', () {
       final report = _runOn(
         tempDir,
         files: {
@@ -364,9 +364,84 @@ void main() {
       );
       expect(
         report.warnings.any(
-          (w) => w.contains('ui.pickFolder') && w.contains('ui.feedback'),
+          (w) => w.contains('ui.pickFolder') && w.contains('fs.folder_access'),
         ),
         isTrue,
+      );
+    });
+
+    test('legacy ui.feedback declaration covers ui.pickFolder', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(permissions: const ['ui.feedback']),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js': "Otzaria.call('ui.pickFolder', {});",
+        },
+      );
+      expect(
+        report.warnings.any((w) => w.contains('ui.pickFolder')),
+        isFalse,
+      );
+    });
+
+    test('baseline APIs need no declaration; declaring one warns', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['plugin.storage.read'],
+        ),
+        files: {
+          'index.html': '<html lang="he" dir="rtl"></html>',
+          'app.js':
+              "Otzaria.call('storage.get', {});"
+              "Otzaria.call('ui.showMessage', {});"
+              "Otzaria.call('app.getInfo', {});",
+        },
+      );
+      // אין אזהרת הרשאה-חסרה על API של הרשאת בסיס.
+      expect(
+        report.warnings.any((w) => w.contains('אך לא ביקש')),
+        isFalse,
+      );
+      // הצהרה על הרשאת בסיס — אזהרת דעיכה.
+      expect(
+        report.warnings.any(
+          (w) =>
+              w.contains('plugin.storage.read') &&
+              w.contains('ניתנת כיום אוטומטית'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('fs.folder_access requires minAppVersion 0.9.97', () {
+      final report = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['fs.folder_access'],
+          minAppVersion: '0.9.94',
+        ),
+        files: {'index.html': '<html lang="he" dir="rtl"></html>'},
+      );
+      expect(
+        report.errors.any(
+          (e) => e.contains('fs.folder_access') && e.contains('0.9.97'),
+        ),
+        isTrue,
+      );
+
+      final okReport = _runOn(
+        tempDir,
+        manifestOverride: _baseManifest(
+          permissions: const ['fs.folder_access'],
+          minAppVersion: '0.9.97',
+        ),
+        files: {'index.html': '<html lang="he" dir="rtl"></html>'},
+      );
+      expect(
+        okReport.errors.any((e) => e.contains('fs.folder_access')),
+        isFalse,
       );
     });
 
@@ -421,20 +496,23 @@ void main() {
       },
     );
 
-    test('shorthand `Otzaria.app.getInfo()` is detected as API usage', () {
-      final report = _runOn(
-        tempDir,
-        files: {
-          'index.html': '<html lang="he" dir="rtl"></html>',
-          'app.js': 'Otzaria.app.getInfo();',
-        },
-      );
-      // app.getInfo דורש app.info.read; ההרשאה לא הוכרזה -> warning.
-      expect(
-        report.warnings.any((w) => w.contains('app.info.read')),
-        isTrue,
-      );
-    });
+    test(
+      'shorthand `Otzaria.library.findBooks()` is detected as API usage',
+      () {
+        final report = _runOn(
+          tempDir,
+          files: {
+            'index.html': '<html lang="he" dir="rtl"></html>',
+            'app.js': 'Otzaria.library.findBooks();',
+          },
+        );
+        // library.findBooks דורש library.books.read; לא הוכרזה -> warning.
+        expect(
+          report.warnings.any((w) => w.contains('library.books.read')),
+          isTrue,
+        );
+      },
+    );
 
     test('reserved shorthand fields (.call/.on/.off) are NOT treated as API', () {
       final report = _runOn(
@@ -577,13 +655,13 @@ void main() {
           'app.js': '''
             const ratio = total / count;
             const url = 'http://example.com/path';
-            Otzaria.app.getInfo();
+            Otzaria.library.findBooks();
           ''',
         },
       );
-      // app.getInfo דורש app.info.read; לא הוכרזה -> warning.
+      // library.findBooks דורש library.books.read; לא הוכרזה -> warning.
       expect(
-        report.warnings.any((w) => w.contains('app.info.read')),
+        report.warnings.any((w) => w.contains('library.books.read')),
         isTrue,
         reason: 'API call after division/string must still be scanned',
       );

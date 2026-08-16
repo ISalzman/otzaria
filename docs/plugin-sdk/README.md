@@ -506,6 +506,14 @@ const { data: keys } = await Otzaria.call('storage.list');
 
 התוסף מצהיר על ההרשאות שלו ב-manifest. בעת התקנה, המשתמש רואה את ההרשאות ומאשר.
 
+### הרשאות בסיס (מ-0.9.97 — אין צורך להצהיר)
+
+ההרשאות הבאות ניתנות **אוטומטית לכל תוסף**, אינן מוצגות למשתמש, והצהרה עליהן
+במניפסט מיותרת (נסבלת לתאימות לאחור, עם אזהרת ולידטור):
+
+`plugin.storage.read` · `plugin.storage.write` · `app.info.read` ·
+`ui.feedback` · `notifications.send` · `events.subscribe:theme.changed`
+
 ### רשימת ההרשאות המלאה
 
 | הרשאה | מה מאפשרת |
@@ -529,6 +537,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `network.access` | גישה לאינטרנט (דורש `network.enabled: true` במניפסט + שה-URL מופיע ב-allowlist הרשמי של אוצריא ב-GitHub) |
 | `network.localhost` | גישה לשירות מקומי על המחשב (`localhost` / `127.0.0.1`), כמו Ollama / LM Studio. נפרדת מ-`network.access` — אינה מתירה אינטרנט, ואינה דורשת allowlist גלובלי |
 | `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
+| `fs.folder_access` | בחירת תיקייה בדיאלוג מערכת (`ui.pickFolder`) ועבודה על קבצים בתוכה. מ-0.9.97 — פוצלה מ-`ui.feedback`; הצהרה ותיקה על `ui.feedback` עדיין מכסה אותה |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
 | `app.run_on_startup` | **הרשאה רגישה** — הפעלת WebView ברקע לפי אירוע שהוצהר ב-`contributes.startup`. ברירת מחדל: **כבויה**. בתוסף ישן ללא `contributes.startup`, מפעילה זמנית בעליית אוצריא עד 0.9.97. |

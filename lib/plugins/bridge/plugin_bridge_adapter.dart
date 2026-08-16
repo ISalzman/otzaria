@@ -3246,14 +3246,7 @@ class PluginBridgeAdapter {
   }
 
   Future<List<String>> _getGrantedPermissions() async {
-    final permissions = await _pluginRepo.getPluginPermissions(plugin.pluginId);
-    final grantedPermissions =
-        permissions
-            .where((permission) => permission.granted)
-            .map((permission) => permission.permission)
-            .toList()
-          ..sort();
-    return grantedPermissions;
+    return _pluginRepo.getGrantedPermissionNames(plugin.pluginId);
   }
 
   /// הספר שמייצג טאב כלפי התוספים.

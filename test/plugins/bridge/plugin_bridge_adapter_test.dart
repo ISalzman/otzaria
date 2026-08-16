@@ -27,6 +27,7 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
@@ -553,7 +554,11 @@ Future<void> main() async {
             await adapter.execute('app', 'getGrantedPermissions', {})
                 as Map<String, dynamic>;
 
-        expect(response['permissions'], ['app.info.read', 'reader.open']);
+        // הרשאות הבסיס מצטרפות אוטומטית; notes.write שנשללה אינה מופיעה.
+        expect(
+          response['permissions'],
+          withBaselinePermissions(['app.info.read', 'reader.open']),
+        );
       },
     );
 

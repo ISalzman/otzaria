@@ -111,11 +111,9 @@ class PluginStartupContributionsService {
         }
         continue;
       }
-      final grants = await repository.getPluginPermissions(plugin.pluginId);
-      final granted = grants
-          .where((g) => g.granted)
-          .map((g) => g.permission)
-          .toSet();
+      final granted = (await repository.getGrantedPermissionNames(
+        plugin.pluginId,
+      )).toSet();
       if (!granted.contains(pluginStartupContributionsPermission)) {
         await _removePlugin(plugin.pluginId, repository);
         continue;

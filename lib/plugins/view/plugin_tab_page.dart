@@ -708,7 +708,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
               _cachedPackageInfo ?? await PackageInfo.fromPlatform();
           if (!mounted) return;
           final permissions = await _pluginRegistryRepository
-              .getPluginPermissions(
+              .getGrantedPermissionNames(
                 widget.plugin.pluginId,
               );
           if (!mounted) return;
@@ -733,10 +733,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
             },
             'connectivity': ConnectivityStatusService.instance.bootPayload(),
             'theme': theme,
-            'permissions': permissions
-                .where((permission) => permission.granted)
-                .map((permission) => permission.permission)
-                .toList(),
+            'permissions': permissions,
           };
 
           final jsonPayload = jsonEncode(bootPayload);

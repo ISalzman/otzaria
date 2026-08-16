@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_request.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_response.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
@@ -132,7 +133,11 @@ class PluginBridgeHandler {
     final requiredPermission = _getRequiredPermission(domain, action);
     final declaresPermission =
         requiredPermission == null ||
-        plugin.manifest.permissions.contains(requiredPermission);
+        pluginBaselinePermissions.contains(requiredPermission) ||
+        plugin.manifest.permissions.contains(requiredPermission) ||
+        plugin.manifest.permissions.contains(
+          pluginLegacyPermissionAliases[requiredPermission],
+        );
 
     // ההחרגה ממגביל הקצב חלה רק על קריאת תוכן שההרשאה לה *הוענקה בפועל* (לא רק
     // הוצהרה במניפסט). לכן בודקים את ההענקה כבר עכשיו עבור getBookContent —
@@ -283,6 +288,10 @@ class PluginBridgeHandler {
         }
         return 'notes.read';
       case 'ui':
+        // בחירת תיקייה היא גבול ההסכמה של פעולות ה-fs — הרשאה נפרדת.
+        if (action == 'pickFolder') {
+          return pluginFolderAccessPermission;
+        }
         return 'ui.feedback';
       case 'storage':
         if (action == 'get' || action == 'list') {

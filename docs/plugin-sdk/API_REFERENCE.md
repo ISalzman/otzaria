@@ -1379,7 +1379,7 @@ const { data } = await Otzaria.call('ui.showWarning', {
 ```
 
 ### `ui.pickFolder`
-**הרשאה:** `ui.feedback`
+**הרשאה:** `fs.folder_access` (מ-0.9.97; הצהרה ותיקה על `ui.feedback` עדיין מכסה)
 
 פתיחת דיאלוג מערכת לבחירת תיקייה. מחזירה את הנתיב שנבחר, או `{ path: null }`
 אם המשתמש ביטל.

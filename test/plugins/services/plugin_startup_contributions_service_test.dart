@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
@@ -32,6 +33,10 @@ class _FakeRepo implements PluginRegistryRepository {
         grantedAt: DateTime(2026),
       ),
   ];
+
+  @override
+  Future<List<String>> getGrantedPermissionNames(String id) async =>
+      withBaselinePermissions(grantedByPlugin[id] ?? const <String>{});
 
   @override
   Future<void> publishRecord(

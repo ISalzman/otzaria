@@ -871,7 +871,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           final packageInfo =
               _cachedPackageInfo ?? await PackageInfo.fromPlatform();
           final permissions = await _pluginRegistryRepository
-              .getPluginPermissions(
+              .getGrantedPermissionNames(
                 widget.plugin.pluginId,
               );
           final bootPayload = {
@@ -897,10 +897,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             },
             'connectivity': ConnectivityStatusService.instance.bootPayload(),
             'theme': theme,
-            'permissions': permissions
-                .where((permission) => permission.granted)
-                .map((permission) => permission.permission)
-                .toList(),
+            'permissions': permissions,
           };
           final jsonPayload = jsonEncode(bootPayload);
           await controller.evaluateJavascript(

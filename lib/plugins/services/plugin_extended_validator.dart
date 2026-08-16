@@ -234,7 +234,7 @@ const Map<String, String> _methodRequiredPermission = {
   'ui.showError': 'ui.feedback',
   'ui.showConfirm': 'ui.feedback',
   'ui.showWarning': 'ui.feedback',
-  'ui.pickFolder': 'ui.feedback',
+  'ui.pickFolder': 'fs.folder_access',
   // fs.extractZip/deleteFile מכוונים בכוונה לא להופיע כאן — ה-runtime לא דורש
   // עבורם הרשאת manifest (הם מגודרים ע"י תיקייה שנבחרה ב-ui.pickFolder).
   'fs.pickUserFile': 'fs.user_files.read',
@@ -487,7 +487,15 @@ class PluginExtendedValidator {
     for (final method in apiUsage.keys) {
       final required = _methodRequiredPermission[method];
       if (required == null) continue;
+      // הרשאות בסיס ניתנות אוטומטית — אין צורך בהצהרה.
+      if (pluginBaselinePermissions.contains(required)) continue;
       if (declaredPermissions.contains(required)) continue;
+      // הצהרה ותיקה מכסה הרשאה שפוצלה ממנה (ui.feedback → fs.folder_access).
+      if (declaredPermissions.contains(
+        pluginLegacyPermissionAliases[required],
+      )) {
+        continue;
+      }
       // קריאות רשת מסתפקות גם ב-network.localhost
       // (גישה לשירות מקומי), לא רק ב-network.access.
       if (required == 'network.access' &&
@@ -499,6 +507,37 @@ class PluginExtendedValidator {
       );
     }
 
+    // הרשאת בסיס שהוצהרה — מיותרת; מומלץ להסיר בהזדמנות.
+    for (final permission in declaredPermissions) {
+      if (pluginBaselinePermissions.contains(permission)) {
+        warnings.add(
+          'ההרשאה "$permission" ניתנת כיום אוטומטית לכל תוסף — '
+          'אפשר להסירה מה-manifest',
+        );
+      }
+    }
+
+    // הרשאה שלא הייתה קיימת בגרסת המינימום תפיל את ההתקנה באוצריא ישנה.
+    if (declaredPermissions.contains(pluginFolderAccessPermission)) {
+      int? cmp;
+      try {
+        cmp = PluginVersionUtils.compareCoreVersions(
+          _folderAccessPermissionMinVersion,
+          manifest.minAppVersion,
+        );
+      } on PluginVersionFormatException {
+        cmp = null; // minAppVersion לא חוקי — נתפס ב-PluginManifestValidator.
+      }
+      if (cmp != null && cmp > 0) {
+        errors.add(
+          'ההרשאה "$pluginFolderAccessPermission" קיימת החל מגרסה '
+          '$_folderAccessPermissionMinVersion, אך minAppVersion שהוצהר הוא '
+          '${manifest.minAppVersion}. עדכן את minAppVersion ל-'
+          '$_folderAccessPermissionMinVersion לפחות',
+        );
+      }
+    }
+
     // Cross-check: method חדש מ-minAppVersion שהוצהר — שגיאה חוסמת. תוסף שקורא
     // ל-API שלא היה קיים בגרסת המינימום שלו יקרוס אצל משתמש בגרסה כזו.
     _checkMethodVersions(apiUsage, manifest.minAppVersion, errors);
@@ -507,6 +546,7 @@ class PluginExtendedValidator {
     for (final ev in eventUsage.keys) {
       final eventPerm = 'events.subscribe:$ev';
       if (!pluginValidPermissions.contains(eventPerm)) continue;
+      if (pluginBaselinePermissions.contains(eventPerm)) continue;
       if (!declaredPermissions.contains(eventPerm)) {
         warnings.add(
           'רישום ל-event "$ev" דורש את ההרשאה "$eventPerm" שלא הוכרזה ב-manifest',
@@ -554,6 +594,7 @@ class PluginExtendedValidator {
 
   /// הגרסה שבה נוסף מנגנון contributes.startup — נאכף מול minAppVersion.
   static const String _startupContributionsMinVersion = '0.9.96';
+  static const String _folderAccessPermissionMinVersion = '0.9.97';
   static const String _declarativeProgramsMinVersion = '0.9.96';
   static const String _dataChooseMinVersion = '0.9.97';
   static const String _searchSubmitRoutingMinVersion = '0.9.97';

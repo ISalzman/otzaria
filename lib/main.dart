@@ -1175,10 +1175,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
               final host = DeclarativePluginHostService(
                 loadPlugin: repository.getPlugin,
                 loadPermissions: (pluginId) async =>
-                    (await repository.getPluginPermissions(pluginId))
-                        .where((permission) => permission.granted)
-                        .map((permission) => permission.permission)
-                        .toSet(),
+                    (await repository.getGrantedPermissionNames(
+                      pluginId,
+                    )).toSet(),
                 bookResolver: bookAccess,
                 bookOpener: bookAccess,
                 parallelEditionsFinder: bookAccess.parallelEditionsForIdentity,

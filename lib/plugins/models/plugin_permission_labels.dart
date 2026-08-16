@@ -221,6 +221,19 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     description: 'יצירת קיצור דרך בשולחן העבודה או בתפריט ההתחל (לאחר אישור)',
   ),
 
+  // ===== קבצים אישיים =====
+  'fs.user_files.read': PluginPermissionInfo(
+    label: 'קבצים אישיים',
+    description:
+        'בחירה וקריאה של קבצים שתבחר במפורש בדיאלוג — לא גישה חופשית לדיסק',
+  ),
+  'fs.folder_access': PluginPermissionInfo(
+    label: 'גישה לתיקייה שתבחר',
+    description:
+        'בחירת תיקייה בדיאלוג מערכת ועבודה על קבצים בתוכה (חילוץ ומחיקה). '
+        'הגישה מוגבלת לתיקיות שאישרת בדיאלוג בלבד',
+  ),
+
   // ===== אחסון תוסף =====
   'plugin.storage.read': PluginPermissionInfo(
     label: 'אחסון מקומי — קריאה',

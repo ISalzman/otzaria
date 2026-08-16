@@ -525,11 +525,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         }
       }
       PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
-      final permissions = await repository.getPluginPermissions(event.pluginId);
-      final grantedPermissions = permissions
-          .where((permission) => permission.granted)
-          .map((permission) => permission.permission)
-          .toList();
+      final grantedPermissions = await repository.getGrantedPermissionNames(
+        event.pluginId,
+      );
       PluginRuntimeDispatcher.instance.dispatchEvent(
         'plugin.permissions_changed',
         {'permissions': grantedPermissions},

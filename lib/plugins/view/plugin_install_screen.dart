@@ -78,11 +78,14 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
   @override
   void initState() {
     super.initState();
+    final effectivePermissions = effectiveManifestPermissions(
+      widget.manifest.permissions,
+    );
     _permissionToggles = {
-      for (final p in widget.manifest.permissions) p: _initialGrantFor(p),
+      for (final p in effectivePermissions) p: _initialGrantFor(p),
     };
     _orderedPermissions = orderedPluginPermissions(
-      widget.manifest.permissions,
+      effectivePermissions,
       isOfflineMode: widget.isOfflineMode,
     );
     _newPermissions = _orderedPermissions
@@ -215,7 +218,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPermissions = widget.manifest.permissions.isNotEmpty;
+    final hasPermissions = _orderedPermissions.isNotEmpty;
     final colorScheme = Theme.of(context).colorScheme;
     final isUpdate = widget.isUpdate;
 

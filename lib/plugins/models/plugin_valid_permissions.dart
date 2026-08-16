@@ -32,6 +32,9 @@ const Map<String, String> apiCallToPermissionHint = {
   // shortcut.*
   'shortcut.create': 'ui.create_shortcut',
 
+  // ui.* (בחירת תיקייה)
+  'ui.pickFolder': 'fs.folder_access',
+
   // fs.* (user-selected files)
   'fs.pickUserFile': 'fs.user_files.read',
   'fs.resolveFileUrl': 'fs.user_files.read',
@@ -92,6 +95,43 @@ const pluginStartupContributionsPermission = 'app.startup_contributions';
 /// שם ההרשאה לגישה לאינטרנט. מטופלת בנפרד בממשק: במצב 'מנותק' היא מתחילה
 /// כבויה במסך ההתקנה, ותוסף שהמשתמש כיבה בו הרשאה זו ממשיך להופיע גם במצב 'מנותק'.
 const pluginNetworkAccessPermission = 'network.access';
+
+/// הרשאת בחירת תיקייה (`ui.pickFolder`) — פוצלה מ-ui.feedback כי התיקייה
+/// שנבחרת היא גבול ההסכמה של פעולות הקבצים (fs.extractZip / fs.deleteFile).
+const pluginFolderAccessPermission = 'fs.folder_access';
+
+/// הרשאות בסיס — מוענקות לכל תוסף אוטומטית, בלי הצהרה במניפסט ובלי הצגה
+/// למשתמש. הצהרה קיימת נסבלת לתאימות לאחור (הוולידטור רק ממליץ להסירה).
+const pluginBaselinePermissions = <String>{
+  'plugin.storage.read',
+  'plugin.storage.write',
+  'app.info.read',
+  'ui.feedback',
+  'notifications.send',
+  'events.subscribe:theme.changed',
+};
+
+/// הרשאה חדשה (key) שהצהרה ותיקה (value) נחשבת כמכסה אותה —
+/// ui.pickFolder ישב היסטורית תחת ui.feedback.
+const pluginLegacyPermissionAliases = <String, String>{
+  pluginFolderAccessPermission: 'ui.feedback',
+};
+
+/// ההרשאות שמוצגות למשתמש ונשמרות כהחלטות: הרשאות המניפסט ללא הרשאות הבסיס.
+List<String> effectiveManifestPermissions(List<String> manifestPermissions) {
+  final result = <String>[];
+  for (final permission in manifestPermissions) {
+    if (pluginBaselinePermissions.contains(permission)) continue;
+    if (!result.contains(permission)) result.add(permission);
+  }
+  return result;
+}
+
+/// מאחד את הרשאות הבסיס לרשימת הרשאות מוענקות — ל-boot payload,
+/// ל-app.getGrantedPermissions ולאירוע plugin.permissions_changed.
+List<String> withBaselinePermissions(Iterable<String> granted) {
+  return {...granted, ...pluginBaselinePermissions}.toList()..sort();
+}
 
 const pluginValidPermissions = <String>[
   // ===== מידע על האפליקציה =====
@@ -172,6 +212,9 @@ const pluginValidPermissions = <String>[
   /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').
   /// הגישה מוגבלת לקבצים שהמשתמש בחר בדיאלוג — לא לנתיב חופשי בדיסק.
   'fs.user_files.read',
+
+  /// בחירת תיקייה בדיאלוג מערכת ועבודה על קבצים בתוכה (חילוץ/מחיקה).
+  pluginFolderAccessPermission,
 
   // ===== אחסון תוסף =====
   /// קריאה מאחסון מפתח-ערך של התוסף

@@ -9,6 +9,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
@@ -34,12 +35,11 @@ class _FakeRegistryRepo extends Fake implements PluginRegistryRepository {
 
 // ── fake repository לסנכרון תרומות עלייה (הרשאות מוענקות, בלי SQLite) ──────
 class _ContributionsRepo extends Fake implements PluginRegistryRepository {
+  static const _granted = ['app.startup_contributions', 'reader.toolbar'];
+
   @override
   Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async => [
-    for (final permission in const [
-      'app.startup_contributions',
-      'reader.toolbar',
-    ])
+    for (final permission in _granted)
       PluginPermissionGrant(
         pluginId: id,
         permission: permission,
@@ -47,6 +47,10 @@ class _ContributionsRepo extends Fake implements PluginRegistryRepository {
         grantedAt: DateTime(2026),
       ),
   ];
+
+  @override
+  Future<List<String>> getGrantedPermissionNames(String id) async =>
+      withBaselinePermissions(_granted);
 
   @override
   Future<List<PluginPublishedRecord>> getPluginPublishedRecords(
