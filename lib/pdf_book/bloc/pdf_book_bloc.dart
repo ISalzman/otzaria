@@ -321,11 +321,9 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
         searchDistance: searchDistance,
         matchPolicy: matchPolicy,
         layoutMode: layoutMode,
-        // כל פתיחה לעמוד שאינו הראשון (היסטוריה, סימניות, דף יומי,
-        // חיפוש, קישור→PDF) צריכה overlay עד ש-stability tracking
-        // ב-screen מסיים. בפתיחה לעמוד הראשון אין סיכון לקפיצות —
-        // הספינר נסגר מיד.
-        isLoading: tab.requiresStableLayout || tab.pageNumber > 1,
+        // overlay רק כשהקורא ביקש יציבות במפורש (דף יומי/חיפוש/קישור→PDF).
+        // שחזור מיקום (עמוד>1) מוצג מיד; תיקוני סטייה רצים ברקע (issue #824).
+        isLoading: tab.requiresStableLayout,
         loadSucceeded: true,
       ),
     );

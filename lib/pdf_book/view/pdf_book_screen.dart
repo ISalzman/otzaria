@@ -421,6 +421,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// משם בגלל ממדי עמודי רקע שהתעדכנו).
   int? _stableLayoutTargetPage;
 
+  /// מתי התחיל ה-tracking הנוכחי — בסיס לתקרת [_kStableLayoutMaxWait].
+  DateTime? _stableLayoutStartedAt;
+
   /// הגנה מפני לולאת תיקון אינסופית: אם אחרי [_kStableLayoutMaxRetries]
   /// נסיונות עוד לא הגענו לעמוד היעד, מסתפקים במה שיש ומסירים את
   /// ה-overlay כדי לא לתקוע את המשתמש.
@@ -1517,11 +1520,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ),
         );
 
-        // פתיחה ל"עמוד יעד" (דף יומי/חיפוש/קישור/היסטוריה/סימניה) —
-        // progressive loading עלול לעדכן ממדי עמודים ברקע ולדחוף את
-        // עמוד היעד מהמסך. כל פתיחה לעמוד שאינו הראשון צריכה overlay
-        // עד שה-layout מתייצב, גם אם הקורא לא הגדיר requiresStableLayout
-        // במפורש (היסטוריה/סימניה לא מסמנים את הדגל הזה).
+        // פתיחה ל"עמוד יעד" — progressive loading עלול לדחוף את עמוד היעד
+        // כשממדי עמודים מתעדכנים ברקע; ה-tracking מתקן בחזרה. overlay מוצג
+        // רק כשהקורא ביקש requiresStableLayout (ראה isLoading ב-bloc).
         if (widget.tab.requiresStableLayout || initialTargetPage > 1) {
           _beginStableLayoutTracking(initialTargetPage);
         }
@@ -3349,10 +3350,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const Duration _kStableLayoutDebounce = Duration(milliseconds: 800);
   static const int _kStableLayoutMaxRetries = 3;
 
+  // תקרת המתנה ל-onDocumentLoadFinished: במסמכים גדולים הוא עלול להתעכב
+  // דקה — קפיצת עמוד נדירה עדיפה על overlay תקוע (issue #824).
+  static const Duration _kStableLayoutMaxWait = Duration(seconds: 2);
+
   void _beginStableLayoutTracking(int targetPage) {
     if (!mounted) return;
     _stableLayoutTargetPage = targetPage;
     _stableLayoutRetryCount = 0;
+    _stableLayoutStartedAt = DateTime.now();
     // לא מאפסים _documentFullyLoaded כאן — race: onDocumentLoadFinished
     // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
     // מנוהל ריכוזית ב-_createDocumentRef.
@@ -3376,11 +3382,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _restartStableLayoutDebounce();
       return;
     }
-    // אינדיקטור חזק נדרש: בלי ש-onDocumentLoadFinished ירה (= כל
-    // המטא-דאטה נטענה), 800ms של debounce ריק עדיין משאיר אפשרות
-    // שעמודי רקע ימשיכו להידחק ולדחוף את עמוד היעד. בלי הבדיקה הזו
-    // נראו קפיצות גלויות אחרי שה-overlay הוסר ב-bookView.
-    if (!_documentFullyLoaded) {
+    // בלי onDocumentLoadFinished עמודי רקע עוד עלולים לדחוף את עמוד היעד,
+    // אבל ממתינים לו רק עד _kStableLayoutMaxWait — לא לנצח (issue #824).
+    final startedAt = _stableLayoutStartedAt;
+    final maxWaitReached =
+        startedAt != null &&
+        DateTime.now().difference(startedAt) >= _kStableLayoutMaxWait;
+    if (!_documentFullyLoaded && !maxWaitReached) {
       _restartStableLayoutDebounce();
       return;
     }
@@ -3422,6 +3430,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
     _stableLayoutTargetPage = null;
+    _stableLayoutStartedAt = null;
     if (!_waitingForStableLayout) return;
     if (mounted) {
       setState(() {
@@ -3437,6 +3446,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
     _stableLayoutTargetPage = null;
+    _stableLayoutStartedAt = null;
     _stableLayoutRetryCount = 0;
     _waitingForStableLayout = false;
     // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
