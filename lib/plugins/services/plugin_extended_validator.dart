@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_program_compiler.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_selection_action.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_template_compiler.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
@@ -616,6 +617,7 @@ class PluginExtendedValidator {
     'storage.set': '0.9.97',
     'storage.remove': '0.9.97',
   };
+  static const String _contextMenuActionMinVersion = '0.9.97';
   static const String _searchSubmitRoutingMinVersion = '0.9.97';
   static const String _externalEditionsMinVersion = '0.9.97';
   static const String _whenConditionMinVersion = '0.9.97';
@@ -677,6 +679,59 @@ class PluginExtendedValidator {
       }
     } on PluginVersionFormatException {
       // minAppVersion נבדק ב-PluginManifestValidator.
+    }
+  }
+
+  /// פעולות host על פריטי תפריט הקשר: הצהרת הרשאה וגרסת מינימום. השגיאות
+  /// המבניות נתפסות כבר ברישום דרך ContextMenuRegistry.
+  static void _validateContextMenuActions(
+    PluginManifest manifest,
+    List<Map<String, dynamic>> items,
+    Set<String> declaredPermissions,
+    List<String> errors,
+  ) {
+    final actions = <Map<String, dynamic>>[];
+    void collect(Map<String, dynamic> item) {
+      if (item['action'] is Map) {
+        actions.add(Map<String, dynamic>.from(item['action'] as Map));
+      }
+      final children = item['children'];
+      if (children is List) {
+        for (final child in children.whereType<Map>()) {
+          collect(Map<String, dynamic>.from(child));
+        }
+      }
+    }
+
+    for (final item in items) {
+      collect(item);
+    }
+    if (actions.isEmpty) return;
+
+    try {
+      if (PluginVersionUtils.compareCoreVersions(
+            _contextMenuActionMinVersion,
+            manifest.minAppVersion,
+          ) >
+          0) {
+        errors.add(
+          'action על פריט תפריט הקשר נתמך החל מגרסה '
+          '$_contextMenuActionMinVersion, אך minAppVersion שהוצהר הוא '
+          '${manifest.minAppVersion}',
+        );
+      }
+    } on PluginVersionFormatException {
+      // minAppVersion נבדק ב-PluginManifestValidator.
+    }
+    for (final action in actions) {
+      try {
+        DeclarativeSelectionAction.validateTemplate(
+          action,
+          declaredPermissions: declaredPermissions,
+        );
+      } on DeclarativeProgramException catch (error) {
+        errors.add('contributes.startup.contextMenuItems לא תקין: $error');
+      }
     }
   }
 
@@ -845,6 +900,12 @@ class PluginExtendedValidator {
           errors.add('contributes.startup.contextMenuItems לא תקין: $e');
         }
       }
+      _validateContextMenuActions(
+        manifest,
+        startup.contextMenuItems,
+        declaredPermissions,
+        errors,
+      );
     }
 
     if (startup.publishedData.isNotEmpty) {

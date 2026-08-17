@@ -152,6 +152,106 @@ void main() {
     expect(fixture.toolbar.getAll(), isEmpty);
     expect(fixture.errors, hasLength(1));
   });
+
+  group('dispatchSelectionAction', () {
+    final template = <String, dynamic>{
+      'type': 'storage.set',
+      'args': {
+        'key': 'savedBooks',
+        'value': {
+          'id': {r'$selection': 'id'},
+          'title': {r'$selection': 'currentBook'},
+        },
+      },
+    };
+    const payload = <String, dynamic>{
+      'id': 42,
+      'currentBook': 'ברכות',
+      'selectedText': 'טקסט מסומן',
+    };
+
+    test('כותבת לאחסון התוסף מנתוני הסימון בלי מנוע', () async {
+      final fixture = _Fixture(
+        declaredPermissions: const [
+          'app.startup_contributions',
+          'reader.context_menu',
+          'plugin.storage.write',
+        ],
+      );
+      addTearDown(fixture.dispose);
+      fixture.permissions.add('plugin.storage.write');
+
+      await fixture.host.dispatchSelectionAction(
+        fixture.plugin.pluginId,
+        template,
+        payload,
+      );
+
+      expect(fixture.errors, isEmpty);
+      final write = fixture.storage.sets.single;
+      expect(write.pluginId, fixture.plugin.pluginId);
+      expect(write.key, 'savedBooks');
+      expect(write.value, {'id': 42, 'title': 'ברכות'});
+    });
+
+    test('הרשאה שלא הוצהרה במניפסט חוסמת את הפעולה', () async {
+      final fixture = _Fixture(
+        declaredPermissions: const [
+          'app.startup_contributions',
+          'reader.context_menu',
+        ],
+      );
+      addTearDown(fixture.dispose);
+      fixture.permissions.add('plugin.storage.write');
+
+      await fixture.host.dispatchSelectionAction(
+        fixture.plugin.pluginId,
+        template,
+        payload,
+      );
+
+      expect(fixture.storage.sets, isEmpty);
+      expect(fixture.errors, hasLength(1));
+    });
+
+    test('הרשאה מוצהרת אך לא מוענקת נחסמת בזמן הביצוע', () async {
+      final fixture = _Fixture(
+        declaredPermissions: const [
+          'app.startup_contributions',
+          'plugin.storage.write',
+        ],
+      );
+      addTearDown(fixture.dispose);
+      fixture.permissions.remove('plugin.storage.write');
+
+      await fixture.host.dispatchSelectionAction(
+        fixture.plugin.pluginId,
+        template,
+        payload,
+      );
+
+      expect(fixture.storage.sets, isEmpty);
+      expect(fixture.errors, hasLength(1));
+    });
+
+    test('reader.openBook נפתר מזהות הסימון ופותח את הספר', () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+
+      await fixture.host.dispatchSelectionAction(fixture.plugin.pluginId, {
+        'type': 'reader.openBookInSidePane',
+        'args': {
+          'identity': {
+            'id': {r'$selection': 'id'},
+          },
+          'searchQuery': {r'$selection': 'selectedText'},
+        },
+      }, payload);
+
+      expect(fixture.errors, isEmpty);
+      expect(fixture.access.opened.single, {'id': 42});
+    });
+  });
 }
 
 class _Fixture {
@@ -163,6 +263,7 @@ class _Fixture {
   };
   final errors = <Object>[];
   final _BookAccess access = _BookAccess();
+  final _StorageWriter storage = _StorageWriter();
   late final InstalledPlugin plugin;
   late final DeclarativePluginHostService host;
 
@@ -181,11 +282,24 @@ class _Fixture {
       bookResolver: access,
       bookOpener: access,
       toolbarRegistry: toolbar,
+      storageWriter: storage,
       onError: (_, error, _) => errors.add(error),
     );
   }
 
   void dispose() => host.dispose();
+}
+
+class _StorageWriter implements DeclarativeStorageWriter {
+  final sets = <({String pluginId, String key, Object? value})>[];
+
+  @override
+  Future<void> set(String pluginId, String key, Object? value) async {
+    sets.add((pluginId: pluginId, key: key, value: value));
+  }
+
+  @override
+  Future<void> remove(String pluginId, String key) async {}
 }
 
 class _BookAccess implements DeclarativeBookResolver, DeclarativeBookOpener {

@@ -2925,6 +2925,52 @@ Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי �
 
 עד 50 מחרוזות, כל אחת עד 100 תווים. אין תמיכה ב-regex (בכוונה). ה-`showWhen` עובד גם ברישום דינמי דרך `reader.addContextMenuItem`.
 
+### action — פעולת host על פריט תפריט הקשר
+
+מ-`minAppVersion: 0.9.97`. פריט `contextMenuItems` מסוג `item` (גם ילד של
+`submenu`) יכול לשאת `action` — פעולה שהתוכנה מבצעת בלחיצה **בלי להעיר את
+מנוע התוסף**. סותר את `onClickEvent` ואת `openPlugin` על אותו פריט.
+הפעולות הן אותן פעולות של פקדי הסרגל (`reader.openBook`,
+`reader.openBookInSidePane`, `storage.set`, `storage.remove`), אך במקום
+`$output`/`$item` ההפניה היחידה היא `$selection` — נתוני הסימון בזמן
+הלחיצה (לצד `$literal` ו-`$concat`):
+
+| נתיב `$selection` | ערך |
+|---|---|
+| `selectedText` | הטקסט המסומן |
+| `currentRef` | הכותרת הנוכחית |
+| `currentBook` / `currentBookId` | שם הספר |
+| `currentIndex` | אינדקס השורה |
+| `id` / `type` / `source` | זהות הספר (לבניית `identity`) |
+
+דוגמה — "הוסף את הספר הפתוח לרשימה" בלי מנוע, כולל הסתרה מיידית דרך `when`:
+
+```json
+{
+  "contextMenuItems": [
+    {
+      "id": "save-book",
+      "title": "שמור את הספר לרשימה",
+      "when": { "storage": { "key": "savedBook", "exists": false } },
+      "action": {
+        "type": "storage.set",
+        "args": {
+          "key": "savedBook",
+          "value": {
+            "id": { "$selection": "id" },
+            "title": { "$selection": "currentBook" }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+ההרשאה של הפעולה נבדקת בהתקנה (הצהרה במניפסט), ושוב בזמן הלחיצה מול
+ההרשאות המוענקות. `action` עובד גם ברישום דינמי דרך
+`reader.addContextMenuItem`; שם הצהרת ההרשאה נבדקת רק בלחיצה.
+
 ### when — תרומה תלוית-הגדרה
 
 מ-`minAppVersion: 0.9.97`. כל פריט ב-`toolbarItems`, `contextMenuItems` ו-`searchDialogItems`, וכן כל איבר ב-`activationEvents`, יכול לשאת אובייקט `when`. הפריט נרשם תמיד; הוא מוצג רק כשהתנאי מתקיים, ומופיע/נעלם מיד כשהערך משתנה — בלי לטעון את מנוע ה-JS של התוסף.
@@ -3430,7 +3476,10 @@ Otzaria.on('reader.selection_changed', (data) => {
 //   currentRef: "בראשית פרק א",
 //   currentBook: "בראשית",
 //   currentBookId: "בראשית",
-//   currentIndex: 0
+//   currentIndex: 0,
+//   id: 42,            // מ-0.9.97: זהות הספר הקנונית (כשידועה)
+//   type: "text",
+//   source: "library"
 // }
 ```
 

@@ -109,6 +109,7 @@ class PluginStartupContributions {
       case 'color-row':
         return true;
       default:
+        if (item.containsKey('action')) return false;
         return item['openPlugin'] != true;
     }
   }

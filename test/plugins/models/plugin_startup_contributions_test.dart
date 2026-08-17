@@ -253,6 +253,30 @@ void main() {
     expect(startup.hasBackgroundActivationTrigger, isFalse);
   });
 
+  test('פריט תפריט הקשר עם action אינו מפעיל מנוע רקע', () {
+    const startup = PluginStartupContributions(
+      contextMenuItems: [
+        {
+          'id': 'save',
+          'type': 'item',
+          'action': {'type': 'storage.set', 'args': <String, Object?>{}},
+        },
+        {
+          'id': 'menu',
+          'type': 'submenu',
+          'children': [
+            {
+              'id': 'child',
+              'action': {'type': 'storage.set', 'args': <String, Object?>{}},
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(startup.hasBackgroundActivationTrigger, isFalse);
+  });
+
   test('background trigger finds actionable nested items and color rows', () {
     const toolbar = PluginStartupContributions(
       toolbarItems: [

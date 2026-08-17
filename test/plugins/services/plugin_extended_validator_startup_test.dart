@@ -223,6 +223,65 @@ void main() {
     expect(supportedVersion.errors, isEmpty);
   });
 
+  test('action בתפריט ההקשר: גרסת מינימום והצהרת הרשאה', () {
+    Map<String, dynamic> startup() => {
+      'contextMenuItems': [
+        {
+          'id': 'save',
+          'title': 'שמור לרשימה',
+          'action': {
+            'type': 'storage.set',
+            'args': {
+              'key': 'savedBooks',
+              'value': {r'$selection': 'id'},
+            },
+          },
+        },
+      ],
+    };
+    const permissions = [
+      'app.startup_contributions',
+      'reader.context_menu',
+      'plugin.storage.write',
+    ];
+
+    final oldVersion = _run(
+      tempDir,
+      _manifest(
+        permissions: permissions,
+        minAppVersion: '0.9.96',
+        startup: startup(),
+      ),
+    );
+    expect(
+      oldVersion.errors,
+      contains(contains('action על פריט תפריט הקשר נתמך החל מגרסה')),
+    );
+
+    final missingPermission = _run(
+      tempDir,
+      _manifest(
+        permissions: const ['app.startup_contributions', 'reader.context_menu'],
+        minAppVersion: '0.9.97',
+        startup: startup(),
+      ),
+    );
+    expect(
+      missingPermission.errors,
+      contains(contains('plugin.storage.write')),
+    );
+
+    final valid = _run(
+      tempDir,
+      _manifest(
+        permissions: permissions,
+        minAppVersion: '0.9.97',
+        startup: startup(),
+      ),
+    );
+    expect(valid.errors, isEmpty);
+  });
+
   test('פעולת storage.set בפקד דקלרטיבי דורשת minAppVersion 0.9.97', () {
     final startup = {
       'programs': [

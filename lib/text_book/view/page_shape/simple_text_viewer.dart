@@ -104,6 +104,9 @@ Map<String, dynamic> buildPageShapePluginSelectionPayload({
   required String bookTitle,
   required int sectionIndex,
   String? currentRef,
+  int? bookDbId,
+  String? bookType,
+  String? bookSource,
 }) {
   return {
     'text': selectedText,
@@ -114,6 +117,9 @@ Map<String, dynamic> buildPageShapePluginSelectionPayload({
     'bookId': bookTitle,
     'currentIndex': sectionIndex,
     'sectionIndex': sectionIndex,
+    'id': ?bookDbId,
+    'type': ?bookType,
+    'source': ?bookSource,
   };
 }
 
@@ -1346,6 +1352,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 textBookState.selectedIndex ??
                 0,
             currentRef: textBookState.currentTitle,
+            bookDbId: textBookState.book.id,
+            bookType: PluginBookIdentity.typeOf(textBookState.book),
+            bookSource: PluginBookIdentity.sourceOf(textBookState.book),
           ),
         ),
       );
@@ -1844,6 +1853,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             records: pluginItems,
             selection: selection,
             context: 'reader-page-shape-selection',
+            selectionActionDispatcher: pluginSelectionActionDispatcherOf(
+              menuContext,
+            ),
           ),
         );
       }

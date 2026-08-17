@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_action_compiler.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_program_compiler.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_selection_action.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_template_compiler.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_toolbar_template.dart';
@@ -33,6 +35,12 @@ abstract interface class DeclarativePluginHost {
   Future<void> dispatchAction(
     String pluginId,
     CompiledDeclarativeAction action,
+  );
+
+  Future<void> dispatchSelectionAction(
+    String pluginId,
+    Map<String, dynamic> actionTemplate,
+    Map<String, dynamic> selectionPayload,
   );
 
   void dispose();
@@ -192,6 +200,53 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
   ) async {
     try {
       await executeAction(pluginId, action);
+    } catch (error, stackTrace) {
+      onError?.call(pluginId, error, stackTrace);
+    }
+  }
+
+  /// חתימה מלאכותית לפעולת סימון: הפתרון והביצוע אטומיים בזמן הלחיצה,
+  /// כך שמגן ה-stale_action של ה-executor מסופק תמיד ובצדק.
+  static const String _selectionSignature = 'reader.selection';
+
+  @override
+  Future<void> dispatchSelectionAction(
+    String pluginId,
+    Map<String, dynamic> actionTemplate,
+    Map<String, dynamic> selectionPayload,
+  ) async {
+    try {
+      final plugin = await _loadPlugin(pluginId);
+      if (plugin == null) {
+        throw const DeclarativeProgramException(
+          'declarative.plugin_unavailable',
+          'The plugin is no longer installed',
+        );
+      }
+      final declaredPermissions = plugin.manifest.permissions.toSet();
+      DeclarativeSelectionAction.validateTemplate(
+        actionTemplate,
+        declaredPermissions: declaredPermissions,
+      );
+      final action =
+          DeclarativeActionCompiler(
+            declaredPermissions: declaredPermissions,
+          ).compileResolved(
+            DeclarativeSelectionAction.resolve(
+              actionTemplate,
+              selectionPayload,
+            ),
+            contextSignature: _selectionSignature,
+            programGeneration: 1,
+          );
+      final permissions = await _loadPermissions(pluginId);
+      await _actionExecutor.execute(
+        action: action,
+        plugin: plugin,
+        grantedPermissions: permissions,
+        currentContextSignature: _selectionSignature,
+        currentProgramGeneration: 1,
+      );
     } catch (error, stackTrace) {
       onError?.call(pluginId, error, stackTrace);
     }

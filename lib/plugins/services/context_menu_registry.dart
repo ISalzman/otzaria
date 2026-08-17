@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_selection_action.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
@@ -264,7 +266,40 @@ class ContextMenuRegistry extends ChangeNotifier {
       param: json['param'],
       showWhenContainsAny: _parseShowWhen(json['showWhen']),
       when: _parseWhen(json['when'], depth: depth),
+      action: _parseAction(json),
     );
+  }
+
+  /// פעולת host דקלרטיבית על הפריט — ולידציה מבנית בלבד; הצהרת ההרשאה
+  /// נבדקת בוולידטור ההתקנה ושוב בזמן הלחיצה.
+  Map<String, dynamic>? _parseAction(Map<String, dynamic> json) {
+    final value = json['action'];
+    if (value == null) return null;
+    if (json['type'] != null && json['type'] != 'item') {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action is only allowed on items',
+      );
+    }
+    if (json['onClickEvent'] != null || json['openPlugin'] == true) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action cannot be combined with onClickEvent or openPlugin',
+      );
+    }
+    if (value is! Map) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action must be an object',
+      );
+    }
+    final action = Map<String, dynamic>.from(value);
+    try {
+      DeclarativeSelectionAction.validateTemplate(action);
+    } on DeclarativeProgramException catch (error) {
+      throw PluginContextMenuException('error.invalid_params', '$error');
+    }
+    return action;
   }
 
   PluginWhenCondition? _parseWhen(Object? value, {required int depth}) {

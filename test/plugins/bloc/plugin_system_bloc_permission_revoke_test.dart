@@ -56,6 +56,13 @@ class _FakeDeclarativeHost implements DeclarativePluginHost {
   ) async {}
 
   @override
+  Future<void> dispatchSelectionAction(
+    String pluginId,
+    Map<String, dynamic> actionTemplate,
+    Map<String, dynamic> selectionPayload,
+  ) async {}
+
+  @override
   void dispose() {}
 }
 

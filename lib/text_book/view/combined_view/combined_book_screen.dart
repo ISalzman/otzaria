@@ -1325,6 +1325,9 @@ class _CombinedViewState extends State<CombinedView> {
           ...buildPluginContextMenuEntries(
             records: pluginItems,
             selection: selection,
+            selectionActionDispatcher: pluginSelectionActionDispatcherOf(
+              menuContext,
+            ),
           ),
         ];
       }(),
@@ -1743,6 +1746,13 @@ class _CombinedViewState extends State<CombinedView> {
                               'currentBook': loadedState.book.title,
                               'currentBookId': loadedState.book.title,
                               'currentIndex': foundIndex ?? 0,
+                              'id': ?loadedState.book.id,
+                              'type': PluginBookIdentity.typeOf(
+                                loadedState.book,
+                              ),
+                              'source': PluginBookIdentity.sourceOf(
+                                loadedState.book,
+                              ),
                             },
                           ),
                         );

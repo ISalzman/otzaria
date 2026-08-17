@@ -47,6 +47,88 @@ void main() {
       expect(item.children.single.onColorClickEvent, 'marker.colorSelected');
     });
 
+    group('action — פעולת host דקלרטיבית', () {
+      Map<String, dynamic> actionItem({
+        Map<String, dynamic> extra = const {},
+      }) => {
+        'id': 'save-book',
+        'title': 'שמור לרשימה',
+        'action': {
+          'type': 'storage.set',
+          'args': {
+            'key': 'savedBooks',
+            'value': {r'$selection': 'id'},
+          },
+        },
+        ...extra,
+      };
+
+      test('פריט עם action תקין נרשם ונשמר ב-toJson', () {
+        registry.registerPayload('marker', actionItem());
+
+        final item = registry.getAll().single.$2;
+        expect(item.action, isNotNull);
+        expect(item.toJson()['action'], item.action);
+      });
+
+      test('action מותר גם על ילד של submenu', () {
+        registry.registerPayload('marker', {
+          'id': 'menu',
+          'type': 'submenu',
+          'title': 'רשימות',
+          'children': [actionItem()],
+        });
+
+        expect(registry.getAll().single.$2.children.single.action, isNotNull);
+      });
+
+      test('action על submenu עצמו נדחה', () {
+        expect(
+          () => registry.registerPayload('marker', {
+            'id': 'menu',
+            'type': 'submenu',
+            'title': 'רשימות',
+            'children': [
+              {'id': 'child', 'title': 'ילד'},
+            ],
+            'action': actionItem()['action'],
+          }),
+          throwsA(isA<PluginContextMenuException>()),
+        );
+      });
+
+      test('שילוב action עם onClickEvent או openPlugin נדחה', () {
+        expect(
+          () => registry.registerPayload(
+            'marker',
+            actionItem(extra: {'onClickEvent': 'my.event'}),
+          ),
+          throwsA(isA<PluginContextMenuException>()),
+        );
+        expect(
+          () => registry.registerPayload(
+            'marker',
+            actionItem(extra: {'openPlugin': true}),
+          ),
+          throwsA(isA<PluginContextMenuException>()),
+        );
+      });
+
+      test('תבנית פגומה נדחית ברישום', () {
+        expect(
+          () => registry.registerPayload('marker', {
+            'id': 'bad',
+            'title': 'פגום',
+            'action': {
+              'type': 'storage.get',
+              'args': {'key': 'k'},
+            },
+          }),
+          throwsA(isA<PluginContextMenuException>()),
+        );
+      });
+    });
+
     test('updates an existing item without changing its id', () {
       registry.registerPayload('marker', {
         'id': 'marker-colors',
