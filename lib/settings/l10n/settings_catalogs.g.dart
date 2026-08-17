@@ -424,7 +424,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'כאן מוצגים כל הספרים הזמינים. תוכל לדפדף לפי קטגוריות, לחפש לפי שם, או לפתוח ספר בלחיצה.': 'Every sefer you have shows here. Browse by category, search by name, or click to open a sefer.',
     'כאן קוראים את הספרים שפתחת. ניתן לפתוח מספר ספרים בטאבים שונים ולעבור ביניהם.\n\nקיצור: {shortcut}': 'This is where you read opened seforim. You can open multiple seforim in different tabs and switch between them.\n\nShortcut: {shortcut}',
     'כאן תוכל להתאים אישית מראה, כתב, ספרייה, כלים, קיצורים, גיבוי ועוד.\n\nקיצור: {shortcut}': 'Here you can customize appearance, text, library, tools, shortcuts, backup and more.\n\nShortcut: {shortcut}',
-    'כאן תמצא לוח שנה יהודי, גימטריות, מילון ארמי, ראשי תיבות, ממיר יחידות, תוכנית לימוד והערות אישיות.\n\nקיצור: {shortcut}': 'Here you will find a Calendar, Gematrios, an Aramaic dictionary, Roshei Teivos, a Shiurim Converter, a Learning Schedule and Personal Notes.\n\nShortcut: {shortcut}',
+    'כאן תמצא לוח שנה יהודי, גימטריות, מילון ארמי, ראשי תיבות, ממיר מידות, תוכנית לימוד והערות אישיות.\n\nקיצור: {shortcut}': 'Here you will find a Calendar, Gematrios, an Aramaic dictionary, Roshei Teivos, a Shiurim Converter, a Learning Schedule and Personal Notes.\n\nShortcut: {shortcut}',
     'כבוי': 'Off',
     'כדאי לפתוח מפרשים': 'It\'s worth opening the meforshim',
     'כדי להשתמש באוצריא, צריך ספרייה של ספרים. אפשר להוריד את הספרייה, לבחור תיקייה קיימת או לחלץ מקובץ ZIP.': 'To use Otzaria you need a library of seforim. You can download the library, choose an existig folder, or extract it from a ZIP file.',

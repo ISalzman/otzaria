@@ -46,3 +46,8 @@ final GlobalKey tourTitleBarHistoryButtonTargetKey = GlobalKey(
 final GlobalKey tourTitleBarBookmarkButtonTargetKey = GlobalKey(
   debugLabel: 'tour_title_bar_bookmark_button_target',
 );
+
+/// פאנל משגר הכלים. נשאר בעץ גם כשהוא סגור, ולכן הריבוע נלקח רק כשהוא פתוח.
+final GlobalKey tourToolsLauncherPanelTargetKey = GlobalKey(
+  debugLabel: 'tour_tools_launcher_panel_target',
+);

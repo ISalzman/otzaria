@@ -2049,6 +2049,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
       return [?buttonRect, ?panelRect];
     }
 
+    if (step.id == 'tools') {
+      final navRect = _navItemTourRect(_toolsNavIndex);
+      final panelRect = _isToolsLauncherOpen
+          ? _rectForGlobalKey(tourToolsLauncherPanelTargetKey)
+          : null;
+      return [?navRect, ?panelRect];
+    }
+
     if (step.id == 'bookmark') {
       final titleBarHistoryRect = _rectForGlobalKey(
         tourTitleBarHistoryButtonTargetKey,
@@ -3025,6 +3033,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                         width: 440,
                                         deferChildBuildOnOpen: true,
                                         child: ToolsLauncherPanel(
+                                          key: tourToolsLauncherPanelTargetKey,
                                           onClose: _closeToolsLauncher,
                                           onToolSelected: (entry) {
                                             _closeToolsLauncher();
