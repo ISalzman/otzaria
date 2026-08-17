@@ -100,12 +100,15 @@ class PluginBridgeHandler {
 
   /// האם הקריאה מנהלת חסם זמן או משאבים בתוך השירות שלה,
   /// ולכן אינה כפופה ל-timeout הגנרי של 30 שניות.
+  // feedback.report ממתין לדיאלוג אישור ללא הגבלה; timeout גנרי היה מחזיר
+  // error.timeout אחרי שהדיווח כבר נשלח, וגורם לכפילות בניסיון חוזר.
   static bool hasOwnTimeout(String method) =>
       method == 'search.query' ||
       method == 'network.fetch' ||
       method == 'network.fetchStream' ||
       method == 'network.download' ||
-      method == 'fs.extractZip';
+      method == 'fs.extractZip' ||
+      method == 'feedback.report';
 
   Future<dynamic> _handleRpc(
     List<dynamic> args, {
@@ -305,6 +308,11 @@ class PluginBridgeHandler {
       case 'publishedData':
         return 'published_data.write';
       case 'feedback':
+        // report אינה דורשת הרשאת manifest: הדיווח נשלח רק אחרי שהמשתמש
+        // אישר אותו בדיאלוג, וההסכמה בדיאלוג היא גבול האבטחה.
+        if (action == 'report') {
+          return null;
+        }
         return 'feedback.send_email';
       case 'history':
         if (action == 'clear' || action == 'remove') {

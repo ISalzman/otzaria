@@ -316,10 +316,12 @@ void main() {
       // ב-methodRequiredPermissions, אלא אם ה-runtime לא דורש עבורו הרשאה.
       // fs.extractZip/deleteFile מגודרים ע"י ui.pickFolder, לא ע"י manifest.
       // plugin.backgroundDone הוא ניהול-עצמי של מופע הרקע — נטול הרשאה בכוונה.
+      // feedback.report מגודר בדיאלוג האישור של המשתמש, לא ע"י manifest.
       const noManifestPermission = {
         'fs.extractZip',
         'fs.deleteFile',
         'plugin.backgroundDone',
+        'feedback.report',
       };
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))

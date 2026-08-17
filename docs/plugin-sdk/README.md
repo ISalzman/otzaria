@@ -358,6 +358,15 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `ui.showConfirm` | `ui.feedback` | `{ title, content }` | `{ confirmed: boolean }` |
 | `ui.showWarning` | `ui.feedback` | `{ title, content, subtitle? }` | `{ confirmed: boolean }` |
 
+### feedback.*
+
+| Method | הרשאה | פרמטרים | החזרה |
+|--------|-------|----------|-------|
+| `feedback.sendEmail` | `feedback.send_email` | `{ to, subject, body, includeSystemInfo? }` | `boolean` |
+| `feedback.report` | — (אישור המשתמש בדיאלוג) | `{ details, reportType?, reporterEmail? }` | `boolean` |
+
+`feedback.report` שולח דיווח של המשתמש על התוסף לאתר אוצריא, שמעביר אותו למפתח התוסף. מוצג דיאלוג אישור חובה; `false` פירושו שהמשתמש ביטל.
+
 ### storage.*
 
 | Method | הרשאה |

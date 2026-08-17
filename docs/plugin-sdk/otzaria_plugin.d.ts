@@ -1101,6 +1101,7 @@ export type OtzariaMethod =
   | 'publishedData.remove'
   | 'publishedData.listOwn'
   | 'feedback.sendEmail'
+  | 'feedback.report'
   | 'history.list'
   | 'history.listSearches'
   | 'history.clear'

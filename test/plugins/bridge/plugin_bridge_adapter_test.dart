@@ -39,6 +39,7 @@ import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -3365,6 +3366,191 @@ Future<void> main() async {
         'index': 1,
       };
       expect(pdfResult['type'], 'pdf');
+    });
+  });
+
+  group('PluginBridgeAdapter feedback.report', () {
+    PluginBridgeDependencies buildDeps({
+      required Future<bool> Function(String title, String content) onConfirm,
+    }) {
+      return PluginBridgeDependencies(
+        historyBloc: _MockHistoryBloc(),
+        tabsBloc: _StubTabsBloc(),
+        navigationBloc: _MockNavigationBloc(),
+        calendarCubit: _StubCalendarCubit(
+          _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+        ),
+        workspaceBloc: _MockWorkspaceBloc(),
+        searchRepository: _MockSearchRepository(),
+        personalNotesRepository: _MockPersonalNotesRepository(),
+        bookOpenCoordinator: _MockBookOpenCoordinator(),
+        themePayloadBuilder: () => <String, dynamic>{},
+        showConfirmDialog: ({required title, required content}) =>
+            onConfirm(title, content),
+        showWarningDialog:
+            ({required title, required content, required subtitle}) async =>
+                true,
+      );
+    }
+
+    PluginBridgeAdapter buildAdapter({
+      required Future<bool> Function(String title, String content) onConfirm,
+      required http.Client client,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(),
+        dependencies: buildDeps(onConfirm: onConfirm),
+        pluginRepository: _StubPluginRegistryRepository(),
+        reportService: PluginReportService(client: client),
+      );
+    }
+
+    setUp(() async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+    });
+
+    test('details חסר → שגיאה, ואין דיאלוג ואין שליחה', () async {
+      var confirmCalls = 0;
+      var posted = false;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async {
+          confirmCalls++;
+          return true;
+        },
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': '   '}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('details required'),
+          ),
+        ),
+      );
+      expect(confirmCalls, 0);
+      expect(posted, isFalse);
+    });
+
+    test('ביטול בדיאלוג → false ואין שליחה', () async {
+      var posted = false;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => false,
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'התוסף קורס',
+      });
+
+      expect(result, isFalse);
+      expect(posted, isFalse);
+    });
+
+    test('אישור → POST עם שדות התוסף, סוג לא מוכר הופך ל-other', () async {
+      String? dialogTitle;
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (title, content) async {
+          dialogTitle = title;
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'התוסף קורס',
+        'reportType': 'nonsense',
+      });
+
+      expect(result, isTrue);
+      expect(dialogTitle, 'שליחת דיווח למפתח התוסף');
+      expect(dialogContent, contains('Test Plugin'));
+      expect(dialogContent, contains('התוסף קורס'));
+      expect(body['pluginUid'], 'test.plugin');
+      expect(body['pluginName'], 'Test Plugin');
+      expect(body['pluginVersion'], '1.0.0');
+      expect(body['reportType'], 'other');
+      expect(body['details'], 'התוסף קורס');
+      expect(body.containsKey('reporterEmail'), isFalse);
+    });
+
+    test('פירוט ארוך נחתך ל-5000 תווים גם בתצוגה המקדימה', () async {
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, content) async {
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {'details': 'א' * 6000});
+
+      expect((body['details'] as String).length, 5000);
+      expect(dialogContent!.length, lessThan(600));
+    });
+
+    test('כתובת חוזרת נלקחת מהגדרות דיווח השגיאות כשלא נמסרה', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'user@example.com',
+      );
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, content) async {
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {'details': 'משהו'});
+
+      expect(body['reporterEmail'], 'user@example.com');
+      expect(dialogContent, contains('user@example.com'));
+    });
+
+    test('תשובה שאינה 2xx → חריגה מוחזרת לתוסף', () async {
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('nope', 500)),
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': 'משהו'}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('500'),
+          ),
+        ),
+      );
     });
   });
 }

@@ -121,6 +121,22 @@ List<dynamic> _openOtherRequest() => [
   },
 ];
 
+/// בקשת RPC ל-feedback.report.
+List<dynamic> _feedbackReportRequest() => [
+  {
+    'method': 'feedback.report',
+    'payload': {'details': 'התוסף קורס'},
+  },
+];
+
+/// בקשת RPC ל-feedback.sendEmail.
+List<dynamic> _feedbackSendEmailRequest() => [
+  {
+    'method': 'feedback.sendEmail',
+    'payload': {'to': 'a@b.c', 'subject': 'x', 'body': 'y'},
+  },
+];
+
 /// בקשת RPC ל-app.openUrl.
 List<dynamic> _openUrlRequest() => [
   {
@@ -188,6 +204,8 @@ void main() {
       expect(PluginBridgeHandler.hasOwnTimeout('network.fetchStream'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('network.download'), isTrue);
       expect(PluginBridgeHandler.hasOwnTimeout('fs.extractZip'), isTrue);
+      // ממתין לדיאלוג אישור — timeout גנרי היה מדווח כשל אחרי שליחה בפועל.
+      expect(PluginBridgeHandler.hasOwnTimeout('feedback.report'), isTrue);
     });
 
     test('שאר הקריאות נשארות תחת timeout ברירת המחדל', () {
@@ -335,6 +353,43 @@ void main() {
         expect(adapter.lastAction, 'openOther');
       },
     );
+
+    test('feedback.report ללא הרשאה כלשהי במניפסט → execute נקרא', () async {
+      // גבול האבטחה של report הוא דיאלוג האישור של המשתמש, ולכן היא אינה
+      // דורשת הרשאת manifest — בשונה מ-feedback.sendEmail.
+      final adapter = _FakeAdapter(result: true);
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: null,
+        adapter: adapter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(_feedbackReportRequest())
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(adapter.lastDomain, 'feedback');
+      expect(adapter.lastAction, 'report');
+    });
+
+    test('feedback.sendEmail עדיין דורשת feedback.send_email', () async {
+      final adapter = _FakeAdapter(result: true);
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: true,
+        adapter: adapter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting(_feedbackSendEmailRequest())
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isFalse);
+      expect(resp['error']['code'], 'permission_denied');
+      expect(adapter.executeCalls, 0);
+    });
 
     test('app.openUrl ללא app.open_url במניפסט → permission_denied, '
         'execute לא נקרא', () async {

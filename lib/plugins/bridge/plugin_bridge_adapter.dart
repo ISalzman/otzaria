@@ -74,6 +74,7 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
@@ -412,7 +413,9 @@ class PluginBridgeAdapter {
     PluginShortcutService? shortcutService,
     PluginFileServer? fileServer,
     PluginHighlightRegistry? highlightRegistry,
+    PluginReportService? reportService,
   }) : _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
+       _pluginReportService = reportService,
        _notificationService = notificationService ?? NotificationService(),
        _databaseService = databaseService ?? PluginDatabaseService(),
        _highlightRegistry =
@@ -435,6 +438,12 @@ class PluginBridgeAdapter {
   // נוצר עם השימוש הראשון. אינו מחזיק משאבים ולכן אינו דורש שחרור ב-dispose.
   PluginFsService? _pluginFsService;
   PluginFsService get _fsService => _pluginFsService ??= PluginFsService();
+
+  // שירות שליחת דיווחי משתמש על התוסף (feedback.report) — מופע יחיד לכל
+  // adapter, נוצר עם השימוש הראשון.
+  PluginReportService? _pluginReportService;
+  PluginReportService get _reportService =>
+      _pluginReportService ??= PluginReportService();
 
   // שירות יצירת קיצורי דרך (shortcut.create) — מופע יחיד לכל adapter.
   PluginShortcutService? _pluginShortcutService;
@@ -2833,6 +2842,55 @@ class PluginBridgeAdapter {
         } catch (e) {
           throw Exception('Failed to open email client: $e');
         }
+
+      case 'report':
+        final rawDetails = args['details'];
+        final details = rawDetails is String ? rawDetails.trim() : '';
+        if (details.isEmpty) {
+          throw Exception('details required');
+        }
+        final cappedDetails =
+            details.length > PluginReportService.maxDetailsLength
+            ? details.substring(0, PluginReportService.maxDetailsLength)
+            : details;
+
+        final rawEmail = args['reporterEmail'];
+        var email = rawEmail is String ? rawEmail.trim() : '';
+        if (email.isEmpty) {
+          email =
+              Settings.getValue<String>(
+                SettingsRepository.keyErrorReportSenderEmail,
+              )?.trim() ??
+              '';
+        }
+
+        final preview = cappedDetails.length > 300
+            ? '${cappedDetails.substring(0, 300)}…'
+            : cappedDetails;
+        // הדיאלוג הוא גבול האבטחה, ולכן חייב לחשוף גם את הכתובת שתישלח —
+        // היא עשויה להגיע מהגדרות המשתמש בלי שהתוסף ביקש אותה.
+        final emailLine = email.isEmpty ? '' : '\n\nכתובת לחזרה: $email';
+        final confirmed = await _dependencies.showConfirmDialog(
+          title: 'שליחת דיווח למפתח התוסף',
+          content:
+              'התוסף "${plugin.name}" מבקש לשלוח דיווח לאתר אוצריא, '
+              'שיעביר אותו למפתח התוסף.\n\nתוכן הדיווח:\n$preview$emailLine',
+        );
+        if (!confirmed) {
+          return false;
+        }
+
+        await _reportService.sendReport(
+          pluginUid: plugin.pluginId,
+          pluginName: plugin.name,
+          pluginVersion: plugin.version,
+          details: cappedDetails,
+          reportType: args['reportType'] is String
+              ? args['reportType'] as String
+              : null,
+          reporterEmail: email.isEmpty ? null : email,
+        );
+        return true;
 
       default:
         throw Exception('Unknown action in feedback: $action');
