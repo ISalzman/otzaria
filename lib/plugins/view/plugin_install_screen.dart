@@ -165,7 +165,9 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         ),
       );
     }
-    Navigator.of(context).pop();
+    // pop(true) = נסגר בפעולה מפורשת; סגירת barrier מחזירה null והמארח
+    // מתרגם אותה לביטול (ניקוי תיקיית ה-temp ודיווח לחנות).
+    Navigator.of(context).pop(true);
   }
 
   void _onCancel() {
@@ -179,7 +181,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         ),
       );
     }
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(true);
   }
 
   Widget _permissionTile(String permission, ColorScheme colorScheme) {

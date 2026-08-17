@@ -1118,7 +1118,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final bloc = context.read<PluginSystemBloc>();
     final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
     if (state is PluginSystemInstallRequiresPermissions) {
-      await showDialog(
+      final handled = await showDialog<bool>(
         context: context,
         builder: (_) => BlocProvider.value(
           value: bloc,
@@ -1134,8 +1134,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
           ),
         ),
       );
+      // סגירה דרך ה-barrier (בלי כפתור) = ביטול: ניקוי תיקיית ה-temp
+      // של ההתקנה ודיווח לחנות, כמו לחיצה על "ביטול".
+      if (handled != true) {
+        bloc.add(
+          CancelPluginInstall(
+            state.tempDirPath,
+            reportContext: state.reportContext,
+          ),
+        );
+      }
     } else if (state is PluginSystemDevInstallRequiresPermissions) {
-      await showDialog(
+      final handled = await showDialog<bool>(
         context: context,
         builder: (_) => PluginInstallScreen(
           manifest: state.manifest,
@@ -1157,6 +1167,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
           onCancel: () => bloc.add(LoadPlugins()),
         ),
       );
+      if (handled != true) {
+        bloc.add(LoadPlugins());
+      }
     } else if (state is PluginSystemOverwriteRequired) {
       final value = await showWarningDialog(
         context: context,
