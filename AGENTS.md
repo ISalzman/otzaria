@@ -722,6 +722,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
 | App dropdown/search menu | `test/widgets/app_dropdown_field_test.dart`, `…app_search_menu_test.dart` |
+| שימור כיוון הפותח בתפריטים מעוגנים (הגדרות באנגלית) | `test/widgets/app_menu_direction_test.dart` |
+| כיוון כרטיסי הסיור/טיפים לפי שפת ההגדרות | `test/tour/widgets/tour_cards_direction_test.dart` |
 | Search pane base | `test/widgets/search_pane_base_test.dart` |
 | נתוני פופאפ "אוצריא מתגייסת" (`assets/support_organizations.json`) | `test/services/support_organizations_test.dart` |
 | פופאפ "אוצריא מתגייסת" (תצוגה, שגיאת טעינה, פענוח לוגואים ומטמון) | `test/widgets/dialogs/ad_popup_dialog_test.dart` |

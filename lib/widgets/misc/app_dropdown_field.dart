@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
@@ -111,7 +112,7 @@ class _AppDropdownFieldState<T> extends State<AppDropdownField<T>> {
             searchHint:
                 widget.decoration?.hintText ??
                 widget.decoration?.labelText ??
-                'חיפוש',
+                context.settingsText('חיפוש'),
             filterLabels: widget.filterLabels,
             filterPredicates: widget.filterPredicates,
             initialFilter: widget.initialFilter,

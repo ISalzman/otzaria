@@ -36,6 +36,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'אין אפשרות להוספה, והם רק מוצגים ונקראים ישירות מהקבצים שבדיסק.': 'These cannot be imported to the database — they are read directly from the file.',
     'אין כרגע דיווחים שמורים בתור': 'There are no pending reports.',
     'אין כרטיסיות תואמות': 'No matching tabs',
+    'אין תוצאות': 'No results',
     'אינדקס': 'Index',
     'אינדקס החיפוש יתעדכן אוטומטית': 'The search index updates automatically',
     'אינדקס החיפוש לא יתעדכן אוטומטית': 'The search index does not update automatically',

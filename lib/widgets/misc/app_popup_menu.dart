@@ -439,7 +439,17 @@ Future<T?> showAnchoredAppMenu<T>({
   final metrics =
       Theme.of(context).extension<AppMenuMetrics>() ??
       AppMenuMetrics.create(compactMenus: false);
-  final items = itemsBuilder(metrics);
+  // ה-route של התפריט נבנה תחת ה-Navigator ולא יורש את ה-Directionality של
+  // הפותח (למשל הגדרות באנגלית) — לוכדים ועוטפים כל פריט.
+  final textDirection = Directionality.of(context);
+  final items = itemsBuilder(metrics)
+      .map<PopupMenuEntry<T>>(
+        (item) => _DirectionalMenuEntry<T>(
+          textDirection: textDirection,
+          inner: item,
+        ),
+      )
+      .toList();
   if (items.isEmpty) return null;
 
   final renderBox = anchorContext.findRenderObject() as RenderBox;
@@ -484,6 +494,35 @@ Future<T?> showAnchoredAppMenu<T>({
     constraints: BoxConstraints(
       minWidth: max(targetRect.width, minWidth ?? 0.0),
     ),
+  );
+}
+
+/// עוטף פריט תפריט ב-Directionality של הפותח, בשקיפות מלאה כלפי showMenu.
+class _DirectionalMenuEntry<T> extends PopupMenuEntry<T> {
+  final PopupMenuEntry<T> inner;
+  final TextDirection textDirection;
+
+  const _DirectionalMenuEntry({
+    required this.inner,
+    required this.textDirection,
+  });
+
+  @override
+  double get height => inner.height;
+
+  @override
+  bool represents(T? value) => inner.represents(value);
+
+  @override
+  State<_DirectionalMenuEntry<T>> createState() =>
+      _DirectionalMenuEntryState<T>();
+}
+
+class _DirectionalMenuEntryState<T> extends State<_DirectionalMenuEntry<T>> {
+  @override
+  Widget build(BuildContext context) => Directionality(
+    textDirection: widget.textDirection,
+    child: widget.inner,
   );
 }
 
@@ -561,15 +600,21 @@ Future<T?> showAnchoredAppSearchMenu<T>({
     filterRowWidth,
     targetRect.width,
   ].reduce(max).clamp(0.0, overlay.size.width);
-  // ברירת מחדל (RTL): הקצה הימני של התפריט מיושר לקצה הימני של הכפתור,
-  // והתפריט מתרחב שמאלה. אם ההתרחבות שמאלה חורגת מקצה החלון — מיישרים לקצה
-  // השמאלי של הכפתור ומתרחבים ימינה (פנימה), כדי שהתפריט לא יבלוט מהחלון.
-  final rawMenuLeft = targetRect.right - effectiveWidth;
+  // קצה ההתחלה של התפריט מיושר לקצה ההתחלה של הכפתור (לפי כיוון הפותח),
+  // והתפריט מתרחב לכיוון הקריאה. בחריגה מהחלון — מיישרים לקצה הנגדי.
+  final textDirection = Directionality.of(context);
+  final isRtl = textDirection == TextDirection.rtl;
+  final alignedLeft = isRtl
+      ? targetRect.right - effectiveWidth
+      : targetRect.left;
+  final overflows = isRtl
+      ? alignedLeft < 0
+      : alignedLeft + effectiveWidth > overlay.size.width;
+  final fallbackLeft = isRtl
+      ? targetRect.left
+      : targetRect.right - effectiveWidth;
   final maxLeft = max(0.0, overlay.size.width - effectiveWidth);
-  final menuLeft = (rawMenuLeft >= 0 ? rawMenuLeft : targetRect.left).clamp(
-    0.0,
-    maxLeft,
-  );
+  final menuLeft = (overflows ? fallbackLeft : alignedLeft).clamp(0.0, maxLeft);
 
   return Navigator.of(context).push<T>(
     _AnchoredSearchMenuRoute<T>(
@@ -583,6 +628,7 @@ Future<T?> showAnchoredAppSearchMenu<T>({
       initialValue: initialValue,
       searchHint: searchHint,
       metrics: metrics,
+      textDirection: textDirection,
       filterLabels: filterLabels,
       filterPredicates: filterPredicates,
       initialFilter: initialFilter,
@@ -596,6 +642,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
   final T? initialValue;
   final String searchHint;
   final AppMenuMetrics metrics;
+  final TextDirection textDirection;
   final List<String>? filterLabels;
   final List<bool Function(AppMenuEntry<T>)?>? filterPredicates;
   final int initialFilter;
@@ -606,6 +653,7 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
     required this.initialValue,
     required this.searchHint,
     required this.metrics,
+    required this.textDirection,
     this.filterLabels,
     this.filterPredicates,
     this.initialFilter = 0,
@@ -629,16 +677,20 @@ class _AnchoredSearchMenuRoute<T> extends PopupRoute<T> {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) {
-    return _AnchoredSearchMenuContent<T>(
-      anchorRect: anchorRect,
-      entries: entries,
-      initialValue: initialValue,
-      searchHint: searchHint,
-      metrics: metrics,
-      animation: animation,
-      filterLabels: filterLabels,
-      filterPredicates: filterPredicates,
-      initialFilter: initialFilter,
+    // ה-route לא יורש את ה-Directionality של הפותח — משחזרים אותו כאן.
+    return Directionality(
+      textDirection: textDirection,
+      child: _AnchoredSearchMenuContent<T>(
+        anchorRect: anchorRect,
+        entries: entries,
+        initialValue: initialValue,
+        searchHint: searchHint,
+        metrics: metrics,
+        animation: animation,
+        filterLabels: filterLabels,
+        filterPredicates: filterPredicates,
+        initialFilter: initialFilter,
+      ),
     );
   }
 }
@@ -855,7 +907,7 @@ class _AnchoredSearchMenuContentState<T>
                     child: filtered.isEmpty
                         ? Center(
                             child: Text(
-                              'אין תוצאות',
+                              context.settingsText('אין תוצאות'),
                               style: TextStyle(
                                 color: cs.onSurfaceVariant,
                                 fontSize: widget.metrics.fontSize,

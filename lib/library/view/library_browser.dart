@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -2270,16 +2270,21 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildSettingsOverlay(BuildContext context, bool isOpen) {
-    return ContextOverlayPanel(
-      isOpen: isOpen,
-      onClose: _closeSettingsPanel,
-      width: 400,
-      deferChildBuildOnOpen: true,
-      preserveChildStateOnClose: true,
-      title: 'הגדרות',
-      child: const Expanded(
-        child: SingleChildScrollView(
-          child: LibrarySettingsPanel(hebrewBooksPathWidget: null),
+    // הפאנל מציג תוכן של מסך ההגדרות מחוץ לתת-העץ שלו, ולכן הכיווניות
+    // נקבעת כאן לפי שפת ההגדרות.
+    return Directionality(
+      textDirection: SettingsTextScope.languageOf(context).textDirection,
+      child: ContextOverlayPanel(
+        isOpen: isOpen,
+        onClose: _closeSettingsPanel,
+        width: 400,
+        deferChildBuildOnOpen: true,
+        preserveChildStateOnClose: true,
+        title: context.settingsText('הגדרות'),
+        child: const Expanded(
+          child: SingleChildScrollView(
+            child: LibrarySettingsPanel(hebrewBooksPathWidget: null),
+          ),
         ),
       ),
     );
