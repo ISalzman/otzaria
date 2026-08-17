@@ -66,6 +66,7 @@ import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
@@ -77,6 +78,8 @@ import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
@@ -91,45 +94,6 @@ import 'package:otzaria/plugins/services/plugin_text_occurrence_service.dart';
 import 'package:otzaria/plugins/services/text_source_map_service.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
-
-// ===================================================================
-// Spec-compliant allowlist for settings.get/getMany
-// keys a plugin CAN read (from plugin_system_plan.md#L954)
-// ===================================================================
-const _settingsAllowlist = {
-  SettingsRepository.keyDarkMode,
-  SettingsRepository.keyFollowSystemTheme,
-  SettingsRepository.keySwatchColor,
-  SettingsRepository.keyDarkSwatchColor,
-  SettingsRepository.keyFontSize,
-  SettingsRepository.keyFontFamily,
-  SettingsRepository.keyCommentatorsFontFamily,
-  SettingsRepository.keyCommentatorsFontSize,
-  SettingsRepository.keyLineHeight,
-  SettingsRepository.keySelectedCity,
-  SettingsRepository.keyCalendarType,
-  SettingsRepository.keySettingsLanguage,
-  SettingsRepository.keyShowTeamim,
-  SettingsRepository.keyDefaultNikud,
-  SettingsRepository.keyRemoveNikudFromTanach,
-  SettingsRepository.keyReplaceHolyNames,
-  SettingsRepository.keyLibraryViewMode,
-  SettingsRepository.keyCopyWithHeaders,
-  SettingsRepository.keyCopyHeaderFormat,
-  SettingsRepository.keyHebrewBooksPath,
-};
-
-// keys a plugin CANNOT read even if attempted
-const _settingsBlocklist = {
-  SettingsRepository.keyProtectedModePasswordHash,
-  SettingsRepository.keyGoogleCalendarClientSecret,
-  SettingsRepository.keyGoogleCalendarCredentialsJson,
-  SettingsRepository.keyDbEffectivePath,
-  SettingsRepository.keyLibraryPath,
-  SettingsRepository.keyIndexPath,
-  SettingsRepository.keyBackupPath,
-  SettingsRepository.keyErrorReportSenderEmail,
-};
 
 // ===================================================================
 // Helper: build the main colorScheme roles + typography from Flutter theme
@@ -1580,6 +1544,7 @@ class PluginBridgeAdapter {
         return _getSectionTextMap(args);
       case 'addContextMenuItem':
         ContextMenuRegistry.instance.registerPayload(plugin.pluginId, args);
+        await _trackWhenStorageKeys(args);
         return true;
       case 'removeContextMenuItem':
         final id = args['id'] as String?;
@@ -1600,9 +1565,11 @@ class PluginBridgeAdapter {
           id,
           Map<String, dynamic>.from(patch),
         );
+        await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'addToolbarItem':
         PluginToolbarRegistry.instance.registerPayload(plugin.pluginId, args);
+        await _trackWhenStorageKeys(args);
         return true;
       case 'removeToolbarItem':
         final id = args['id'] as String?;
@@ -1623,6 +1590,7 @@ class PluginBridgeAdapter {
           id,
           Map<String, dynamic>.from(patch),
         );
+        await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'setHighlight':
         if (args['range'] is Map && args['style'] is Map) {
@@ -2533,6 +2501,24 @@ class PluginBridgeAdapter {
     }
   }
 
+  /// רושם למעקב את מפתחות ה-KV של תנאי ה-`when` בפריט שנרשם בזמן ריצה,
+  /// אחרת הסינון שלו לא יגיב ל-`storage.set`.
+  Future<void> _trackWhenStorageKeys(Map<String, dynamic> args) async {
+    final raw = args['when'];
+    if (raw == null) return;
+    try {
+      final keys = PluginWhenCondition.fromJson(raw).storageKeys;
+      if (keys.isEmpty) return;
+      await PluginConditionEvaluator.instance.trackStorageKeys(
+        plugin.pluginId,
+        keys,
+        _pluginRepo,
+      );
+    } on PluginWhenConditionException {
+      return;
+    }
+  }
+
   // ----------------------------------------------------------------
   // storage.*
   // ----------------------------------------------------------------
@@ -2558,11 +2544,20 @@ class PluginBridgeAdapter {
           key,
           jsonEncode(value),
         );
+        PluginConditionEvaluator.instance.onStorageValueChanged(
+          plugin.pluginId,
+          key,
+          value,
+        );
         return true;
       case 'remove':
         final key = args['key'] as String?;
         if (key == null) throw Exception("key required");
         await _pluginRepo.removeKV(plugin.pluginId, 'default', key);
+        PluginConditionEvaluator.instance.onStorageRemoved(
+          plugin.pluginId,
+          key,
+        );
         return true;
       case 'list':
         return _pluginRepo.listKVKeys(plugin.pluginId, 'default');
@@ -2578,8 +2573,7 @@ class PluginBridgeAdapter {
     String action,
     Map<String, dynamic> args,
   ) async {
-    bool isAllowed(String key) =>
-        _settingsAllowlist.contains(key) && !_settingsBlocklist.contains(key);
+    bool isAllowed(String key) => PluginSettingsAccessPolicy.isReadable(key);
 
     switch (action) {
       case 'get':

@@ -54,6 +54,7 @@ class DeclarativeToolbarTemplateCompiler {
       'binding',
       'action',
       'childrenBinding',
+      'when',
     }, 'toolbarItems[$index]');
     final type = json['type'] ?? 'button';
     if (type != 'button' && type != 'menu' && type != 'split') {
@@ -71,6 +72,7 @@ class DeclarativeToolbarTemplateCompiler {
         'contexts',
         'placement',
         'order',
+        'when',
       ])
         if (json.containsKey(field)) field: json[field],
       if (type != 'button')

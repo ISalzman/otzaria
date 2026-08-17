@@ -11,7 +11,9 @@ import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
 import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
 import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
@@ -601,9 +603,76 @@ class PluginExtendedValidator {
   static const String _startupContributionsMinVersion = '0.9.96';
   static const String _folderAccessPermissionMinVersion = '0.9.97';
   static const String _declarativeProgramsMinVersion = '0.9.96';
-  static const String _dataChooseMinVersion = '0.9.97';
+
+  /// פקודות דקלרטיביות שנוספו אחרי מנגנון ה-programs — נאכפות מול minAppVersion.
+  static const Map<String, String> _commandMinVersions = {
+    'data.choose': '0.9.97',
+    'settings.get': '0.9.97',
+    'storage.get': '0.9.97',
+  };
   static const String _searchSubmitRoutingMinVersion = '0.9.97';
   static const String _externalEditionsMinVersion = '0.9.97';
+  static const String _whenConditionMinVersion = '0.9.97';
+
+  /// ולידציית תנאי `when`: סכימה, מפתח הגדרה קריא וגרסת מינימום. מפתח
+  /// חסום מוערך כ-false בזמן ריצה, ולכן נחשב לשגיאה כבר בהתקנה.
+  static void _validateWhenConditions(
+    PluginManifest manifest,
+    PluginStartupContributions startup,
+    Map<String, dynamic> startupMap,
+    List<String> errors,
+  ) {
+    var hasWhen = false;
+    void validateRaw(String field, Object? raw) {
+      if (raw == null) return;
+      hasWhen = true;
+      try {
+        final condition = PluginWhenCondition.fromJson(raw);
+        for (final key in condition.settingKeys) {
+          if (!PluginSettingsAccessPolicy.isReadable(key)) {
+            errors.add(
+              'contributes.startup.$field: when קורא הגדרה שאינה '
+              'זמינה לתוספים ("$key")',
+            );
+          }
+        }
+      } on PluginWhenConditionException catch (error) {
+        errors.add('contributes.startup.$field: when לא תקין: $error');
+      }
+    }
+
+    final categories = {
+      'toolbarItems': startup.toolbarItems,
+      'contextMenuItems': startup.contextMenuItems,
+      'searchDialogItems': startup.searchDialogItems,
+    };
+    for (final entry in categories.entries) {
+      for (final item in entry.value) {
+        validateRaw(entry.key, item['when']);
+      }
+    }
+    final events = startupMap['activationEvents'];
+    if (events is List) {
+      for (final entry in events) {
+        if (entry is Map) validateRaw('activationEvents', entry['when']);
+      }
+    }
+    if (!hasWhen) return;
+    try {
+      if (PluginVersionUtils.compareCoreVersions(
+            _whenConditionMinVersion,
+            manifest.minAppVersion,
+          ) >
+          0) {
+        errors.add(
+          'תנאי when נתמך החל מגרסה $_whenConditionMinVersion, אך '
+          'minAppVersion שהוצהר הוא ${manifest.minAppVersion}',
+        );
+      }
+    } on PluginVersionFormatException {
+      // minAppVersion נבדק ב-PluginManifestValidator.
+    }
+  }
 
   /// ולידציית contributes.startup: סכימה (דרך אותם parsers של ה-runtime),
   /// הרשאות נדרשות וגרסת מינימום.
@@ -652,7 +721,25 @@ class PluginExtendedValidator {
     checkListField('programs', (e) => e is Map, 'אובייקט');
     checkListField('searchDialogItems', (e) => e is Map, 'אובייקט');
     checkListField('externalEditions', (e) => e is Map, 'אובייקט');
-    checkListField('activationEvents', (e) => e is String, 'מחרוזת');
+    checkListField(
+      'activationEvents',
+      (e) => e is String || (e is Map && e['topic'] is String),
+      'מחרוזת או אובייקט עם topic',
+    );
+    final rawEvents = startupMap['activationEvents'];
+    if (rawEvents is List) {
+      for (final entry in rawEvents.whereType<Map>()) {
+        final unknown = entry.keys.where(
+          (key) => key != 'topic' && key != 'when',
+        );
+        if (unknown.isEmpty) continue;
+        errors.add(
+          'contributes.startup.activationEvents: שדה לא מוכר '
+          '"${unknown.first}" (מותרים topic ו-when בלבד)',
+        );
+        hasTypeErrors = true;
+      }
+    }
     final keepAliveRaw = startupMap['keepAlive'];
     if (keepAliveRaw != null && keepAliveRaw is! bool) {
       errors.add('contributes.startup.keepAlive חייב להיות bool');
@@ -694,6 +781,8 @@ class PluginExtendedValidator {
     } on PluginVersionFormatException {
       // minAppVersion לא חוקי — נתפס ב-PluginManifestValidator.
     }
+
+    _validateWhenConditions(manifest, startup, startupMap, errors);
 
     if (startup.toolbarItems.isNotEmpty) {
       final hasDeclarativeItems = startup.toolbarItems.any(
@@ -894,22 +983,22 @@ class PluginExtendedValidator {
       } on PluginVersionFormatException {
         // minAppVersion נבדק ב-PluginManifestValidator.
       }
-      final usesDataChoose = startup.programs.any((program) {
-        final commands = program['commands'];
-        return commands is List &&
-            commands.whereType<Map>().any(
-              (command) => command['type'] == 'data.choose',
-            );
-      });
-      if (usesDataChoose) {
+      final usedCommandTypes = <String>{
+        for (final program in startup.programs)
+          if (program['commands'] case final List commands)
+            for (final command in commands.whereType<Map>())
+              if (command['type'] case final String type) type,
+      };
+      for (final entry in _commandMinVersions.entries) {
+        if (!usedCommandTypes.contains(entry.key)) continue;
         try {
           if (PluginVersionUtils.compareCoreVersions(
-                _dataChooseMinVersion,
+                entry.value,
                 manifest.minAppVersion,
               ) >
               0) {
             errors.add(
-              'data.choose נתמך החל מגרסה $_dataChooseMinVersion, אך '
+              '${entry.key} נתמכת החל מגרסה ${entry.value}, אך '
               'minAppVersion שהוצהר הוא ${manifest.minAppVersion}',
             );
           }

@@ -635,6 +635,173 @@ void main() {
 
     expect(report.errors, contains(contains('output_not_found')));
   });
+
+  group('when', () {
+    Map<String, dynamic> whenManifest(
+      Object? when, {
+      String minAppVersion = '0.9.97',
+    }) => _manifest(
+      minAppVersion: minAppVersion,
+      startup: {
+        'toolbarItems': [
+          {
+            'id': 'b1',
+            'title': 'כפתור',
+            'icon': 'apps_24_regular',
+            'when': when,
+          },
+        ],
+      },
+    );
+
+    test('תנאי תקין עובר ללא שגיאות', () {
+      final report = _run(
+        tempDir,
+        whenManifest({
+          'all': [
+            {
+              'setting': {'key': 'key-dark-mode', 'equals': true},
+            },
+            {
+              'storage': {'key': 'showButton', 'exists': true},
+            },
+          ],
+        }),
+      );
+
+      expect(report.errors, isEmpty);
+    });
+
+    test('מפתח הגדרה שאינו זמין לתוספים — שגיאה', () {
+      final report = _run(
+        tempDir,
+        whenManifest({
+          'setting': {'key': 'key-library-path', 'equals': 'C:/books'},
+        }),
+      );
+
+      expect(report.errors, contains(contains('key-library-path')));
+    });
+
+    test('סכימה לא תקינה — שגיאה', () {
+      final report = _run(
+        tempDir,
+        whenManifest({
+          'setting': {'key': 'key-dark-mode'},
+        }),
+      );
+
+      expect(report.errors, contains(contains('when')));
+    });
+
+    test('minAppVersion נמוך מדי — שגיאה', () {
+      final report = _run(
+        tempDir,
+        whenManifest({
+          'setting': {'key': 'key-dark-mode', 'equals': true},
+        }, minAppVersion: '0.9.96'),
+      );
+
+      expect(report.errors, contains(contains('when')));
+    });
+
+    Map<String, dynamic> eventManifest(
+      Object? event, {
+      String minAppVersion = '0.9.97',
+    }) => _manifest(
+      permissions: const [
+        'app.startup_contributions',
+        'reader.toolbar',
+        'app.run_on_startup',
+      ],
+      minAppVersion: minAppVersion,
+      startup: {
+        'toolbarItems': [
+          {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+        ],
+        'activationEvents': [event],
+      },
+    );
+
+    test('activationEvents בפורמט אובייקט עם תנאי תקין עובר', () {
+      final report = _run(
+        tempDir,
+        eventManifest({
+          'topic': 'app.startup',
+          'when': {
+            'setting': {'key': 'key-dark-mode', 'equals': true},
+          },
+        }),
+      );
+
+      expect(report.errors, isEmpty);
+    });
+
+    test('activationEvents — תנאי לא תקין הוא שגיאה', () {
+      final report = _run(
+        tempDir,
+        eventManifest({
+          'topic': 'app.startup',
+          'when': {
+            'setting': {'key': 'key-dark-mode'},
+          },
+        }),
+      );
+
+      expect(
+        report.errors,
+        contains(contains('contributes.startup.activationEvents: when')),
+      );
+    });
+
+    test('activationEvents — מפתח הגדרה חסום הוא שגיאה', () {
+      final report = _run(
+        tempDir,
+        eventManifest({
+          'topic': 'app.startup',
+          'when': {
+            'setting': {'key': 'key-library-path', 'equals': 'C:/books'},
+          },
+        }),
+      );
+
+      expect(report.errors, contains(contains('key-library-path')));
+    });
+
+    test('activationEvents — תנאי דורש את רף הגרסה', () {
+      final report = _run(
+        tempDir,
+        eventManifest({
+          'topic': 'app.startup',
+          'when': {
+            'setting': {'key': 'key-dark-mode', 'equals': true},
+          },
+        }, minAppVersion: '0.9.96'),
+      );
+
+      expect(report.errors, contains(contains('when')));
+    });
+
+    test('activationEvents — מפתח לא מוכר באובייקט הוא שגיאה', () {
+      final report = _run(
+        tempDir,
+        eventManifest({
+          'topic': 'app.startup',
+          'wen': {
+            'setting': {'key': 'key-dark-mode', 'equals': true},
+          },
+        }),
+      );
+
+      expect(report.errors, contains(contains('"wen"')));
+    });
+
+    test('activationEvents — אובייקט בלי topic הוא שגיאת טיפוס', () {
+      final report = _run(tempDir, eventManifest({'when': true}));
+
+      expect(report.errors, contains(contains('activationEvents')));
+    });
+  });
 }
 
 Map<String, dynamic> _validHostProgram() => {

@@ -31,6 +31,7 @@ import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
@@ -2614,6 +2615,32 @@ Future<void> main() async {
       expect(item.openPlugin, isFalse);
       expect(item.param, isNull);
     });
+
+    test(
+      'updateContextMenuItem עם when על storage רושם את המפתח למעקב',
+      () async {
+        addTearDown(
+          () => PluginConditionEvaluator.instance.removePlugin('test.plugin'),
+        );
+        registry.kv['default/flag'] = '"on"';
+
+        await adapter.execute('reader', 'addContextMenuItem', {
+          'id': 'item-3',
+          'label': 'מותנה',
+        });
+        await adapter.execute('reader', 'updateContextMenuItem', {
+          'id': 'item-3',
+          'patch': {
+            'when': {
+              'storage': {'key': 'flag', 'equals': 'on'},
+            },
+          },
+        });
+
+        // בלי רישום המפתח, הערך הקיים ב-KV לא נטען והפריט היה מוסתר לצמיתות.
+        expect(ContextMenuRegistry.instance.getAll(), hasLength(1));
+      },
+    );
   });
 
   group('PluginBridgeAdapter — reader.addToolbarItem', () {
@@ -2665,6 +2692,34 @@ Future<void> main() async {
 
       await adapter.execute('reader', 'removeToolbarItem', {'id': 'mark'});
       expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
+    });
+
+    test('updateToolbarItem עם when על storage רושם את המפתח למעקב', () async {
+      addTearDown(
+        () => PluginConditionEvaluator.instance.removePlugin('test.plugin'),
+      );
+      final repo = _StubPluginRegistryRepository()..kv['default/flag'] = '"on"';
+      final conditionedAdapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['reader.toolbar']),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: repo,
+      );
+
+      await conditionedAdapter.execute('reader', 'addToolbarItem', {
+        'id': 'mark',
+        'title': 'סמן',
+        'icon': 'bookmark_24_regular',
+      });
+      await conditionedAdapter.execute('reader', 'updateToolbarItem', {
+        'id': 'mark',
+        'patch': {
+          'when': {
+            'storage': {'key': 'flag', 'equals': 'on'},
+          },
+        },
+      });
+
+      expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
     });
   });
 

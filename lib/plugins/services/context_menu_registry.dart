@@ -1,19 +1,37 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 
 class ContextMenuRegistry extends ChangeNotifier {
   static const int maxTopLevelItemsPerPlugin = 2;
 
   static final ContextMenuRegistry instance = ContextMenuRegistry._();
-  ContextMenuRegistry._();
+  ContextMenuRegistry._() {
+    _attachEvaluator(PluginConditionEvaluator.instance);
+  }
 
   @visibleForTesting
-  ContextMenuRegistry.forTesting();
+  ContextMenuRegistry.forTesting({PluginConditionEvaluator? evaluator}) {
+    if (evaluator != null) _attachEvaluator(evaluator);
+  }
 
   /// מופע מנותק לפרסינג-יבש בוולידציה (אריזה/התקנה) — לא נוגע ב-UI.
   ContextMenuRegistry.detached();
 
   final Map<String, List<PluginContextMenuItem>> _items = {};
+  PluginConditionEvaluator? _evaluator;
+
+  void _attachEvaluator(PluginConditionEvaluator evaluator) {
+    _evaluator = evaluator;
+    evaluator.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    _evaluator?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   void register(String pluginId, PluginContextMenuItem item) {
     final list = _items.putIfAbsent(pluginId, () => []);
@@ -80,10 +98,15 @@ class ContextMenuRegistry extends ChangeNotifier {
     if (_items.remove(pluginId) != null) notifyListeners();
   }
 
+  /// הפריטים המוצגים בפועל — פריט שתנאי ה-`when` שלו אינו מתקיים מסונן החוצה
+  /// (ונשאר רשום, כך שהוא חוזר כשהתנאי מתקיים).
   List<(String pluginId, PluginContextMenuItem item)> getAll() {
+    final evaluator = _evaluator;
     return List.unmodifiable([
       for (final entry in _items.entries)
-        for (final item in entry.value) (entry.key, item),
+        for (final item in entry.value)
+          if (evaluator?.isVisible(entry.key, item.when) ?? true)
+            (entry.key, item),
     ]);
   }
 
@@ -240,7 +263,23 @@ class ContextMenuRegistry extends ChangeNotifier {
       openPlugin: json['openPlugin'] == true,
       param: json['param'],
       showWhenContainsAny: _parseShowWhen(json['showWhen']),
+      when: _parseWhen(json['when'], depth: depth),
     );
+  }
+
+  PluginWhenCondition? _parseWhen(Object? value, {required int depth}) {
+    if (value == null) return null;
+    if (depth > 0) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'when is only allowed on top-level items',
+      );
+    }
+    try {
+      return PluginWhenCondition.fromJson(value);
+    } on PluginWhenConditionException catch (error) {
+      throw PluginContextMenuException('error.invalid_params', '$error');
+    }
   }
 
   /// `showWhen: {selectionContainsAny: [...]}` — עד 50 מילים, כל אחת עד 100

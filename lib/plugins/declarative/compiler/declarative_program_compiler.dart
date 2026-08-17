@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:otzaria/plugins/declarative/commands/declarative_command_registry.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
+import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
 
 class DeclarativeProgramCompiler {
   static const int maxCommands = 16;
@@ -11,6 +12,7 @@ class DeclarativeProgramCompiler {
   static const int maxListLength = 100;
   static const int maxStringLength = 4096;
   static const int maxDatabaseWhereDepth = 5;
+  static const int maxKeyLength = 128;
 
   static const supportedTriggers = {'reader.activeBookChanged'};
 
@@ -247,6 +249,16 @@ class DeclarativeProgramCompiler {
           depth: 0,
           allowRow: true,
         );
+      case 'settings.get':
+        final settingKey = _requiredArgKey(args['key'], 'settings.get.key');
+        if (!PluginSettingsAccessPolicy.isReadable(settingKey)) {
+          throw DeclarativeProgramException(
+            'declarative.setting_not_allowed',
+            'Setting "$settingKey" is not readable by plugins',
+          );
+        }
+      case 'storage.get':
+        _requiredArgKey(args['key'], 'storage.get.key');
       case 'library.parallelEditions':
         final parallelIdentity = _requiredMap(
           args['identity'],
@@ -297,6 +309,18 @@ class DeclarativeProgramCompiler {
           'Command "${definition.type}" is not a computation command',
         );
     }
+  }
+
+  /// מפתח חייב להיות ליטרל מחרוזת — כך ניתן לאכוף עליו policy בקומפילציה.
+  String _requiredArgKey(Object? value, String context) {
+    if (value is! String || value.isEmpty || value.length > maxKeyLength) {
+      throw DeclarativeProgramException(
+        'declarative.invalid_args',
+        '$context must be a non-empty string of up to $maxKeyLength characters',
+      );
+    }
+    _validateString(value, context);
+    return value;
   }
 
   void _validateDatabaseSelectArgs(

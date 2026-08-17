@@ -69,6 +69,20 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'maxItems'},
       outputKind: DeclarativeValueKind.list,
     ),
+    'settings.get': DeclarativeCommandDefinition(
+      type: 'settings.get',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'settings.read',
+      requiredArgs: {'key'},
+      outputKind: DeclarativeValueKind.any,
+    ),
+    'storage.get': DeclarativeCommandDefinition(
+      type: 'storage.get',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'plugin.storage.read',
+      requiredArgs: {'key'},
+      outputKind: DeclarativeValueKind.any,
+    ),
     'library.resolveBooks': DeclarativeCommandDefinition(
       type: 'library.resolveBooks',
       phase: DeclarativeCommandPhase.computation,

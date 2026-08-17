@@ -9,6 +9,7 @@ import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
@@ -1127,6 +1128,68 @@ void main() {
       );
 
       expect(opened, isEmpty);
+    });
+
+    test('תנאי when שאינו מתקיים — האירוע נזרק ולא נפתח דף התוסף', () async {
+      final activated = <String>[];
+      PluginLazyActivationService.instance.backgroundActivator = (id) async {
+        activated.add(id);
+      };
+      PluginLazyActivationService.instance.syncPlugin(
+        'lazy-when',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.toolbar_item_clicked': PluginWhenCondition.fromJson(const {
+            'storage': {'key': 'on', 'equals': true},
+          }),
+        },
+      );
+      addTearDown(() {
+        PluginLazyActivationService.instance.removePlugin('lazy-when');
+        PluginLazyActivationService.instance.backgroundActivator = null;
+      });
+
+      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+        'lazy-when',
+        'reader.toolbar_item_clicked',
+        {'itemId': 'b1'},
+        preferBackground: true,
+      );
+
+      expect(opened, isEmpty);
+      expect(activated, isEmpty);
+    });
+
+    test('תנאי when שמתקיים — המנוע מוער כרגיל', () async {
+      final activated = <String>[];
+      PluginLazyActivationService.instance.backgroundActivator = (id) async {
+        activated.add(id);
+      };
+      PluginLazyActivationService.instance.syncPlugin(
+        'lazy-when-ok',
+        broadcastTopics: const {},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.toolbar_item_clicked': PluginWhenCondition.fromJson(const {
+            'storage': {'key': 'on', 'exists': false},
+          }),
+        },
+      );
+      addTearDown(() {
+        PluginLazyActivationService.instance.removePlugin('lazy-when-ok');
+        PluginLazyActivationService.instance.backgroundActivator = null;
+      });
+
+      await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+        'lazy-when-ok',
+        'reader.toolbar_item_clicked',
+        {'itemId': 'b1'},
+        preferBackground: true,
+      );
+
+      expect(opened, isEmpty);
+      expect(activated, ['lazy-when-ok']);
     });
   });
 }

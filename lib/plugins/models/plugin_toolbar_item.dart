@@ -1,4 +1,5 @@
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 
 /// פריט שתוסף רושם בשורת הפקדים של מסך העיון.
 ///
@@ -35,6 +36,9 @@ class PluginToolbarItem {
 
   static const int defaultOrder = 1000;
 
+  /// תנאי הצגה על ערכי הגדרות/אחסון — null = מוצג תמיד.
+  final PluginWhenCondition? when;
+
   const PluginToolbarItem({
     required this.id,
     this.type = 'button',
@@ -48,6 +52,7 @@ class PluginToolbarItem {
     this.hostAction,
     this.placement = 'primary',
     this.order = defaultOrder,
+    this.when,
   });
 
   Map<String, dynamic> toJson() => {
@@ -63,6 +68,7 @@ class PluginToolbarItem {
     if (param != null) 'param': param,
     if (placement != 'primary') 'placement': placement,
     if (order != defaultOrder) 'order': order,
+    if (when != null) 'when': when!.toJson(),
   };
 }
 

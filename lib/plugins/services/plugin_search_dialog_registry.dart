@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 
 /// רישום שורות חיפוש סטטיות של תוספים.
@@ -9,14 +10,30 @@ import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 class PluginSearchDialogRegistry extends ChangeNotifier {
   static final PluginSearchDialogRegistry instance =
       PluginSearchDialogRegistry._();
-  PluginSearchDialogRegistry._();
+  PluginSearchDialogRegistry._() {
+    _attachEvaluator(PluginConditionEvaluator.instance);
+  }
 
   @visibleForTesting
-  PluginSearchDialogRegistry.forTesting();
+  PluginSearchDialogRegistry.forTesting({PluginConditionEvaluator? evaluator}) {
+    if (evaluator != null) _attachEvaluator(evaluator);
+  }
 
   PluginSearchDialogRegistry.detached();
 
   final Map<String, List<PluginSearchDialogItem>> _items = {};
+  PluginConditionEvaluator? _evaluator;
+
+  void _attachEvaluator(PluginConditionEvaluator evaluator) {
+    _evaluator = evaluator;
+    evaluator.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    _evaluator?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   void registerPayload(String pluginId, Map<String, dynamic> payload) {
     final item = PluginSearchDialogItem.fromPayload(payload);
@@ -58,11 +75,15 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
     if (_items.remove(pluginId) != null) notifyListeners();
   }
 
+  /// השורות המוצגות בפועל — שורה שתנאי ה-`when` שלה אינו מתקיים מסוננת החוצה
+  /// (ונשארת רשומה, כך שהיא חוזרת כשהתנאי מתקיים).
   List<(String pluginId, PluginSearchDialogItem item)> getAll() {
     final values = <(String pluginId, PluginSearchDialogItem item)>[];
     for (final entry in _items.entries) {
       for (final item in entry.value) {
-        values.add((entry.key, item));
+        if (_evaluator?.isVisible(entry.key, item.when) ?? true) {
+          values.add((entry.key, item));
+        }
       }
     }
     return List.unmodifiable(values);

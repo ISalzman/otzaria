@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
@@ -444,6 +445,11 @@ class PluginRuntimeDispatcher {
   Future<void> dispatchEvent(String topic, Map<String, dynamic> payload) async {
     if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
     if (topic == 'theme.changed') _lastThemePayload = payload;
+    // הנקודה היחידה שדרכה עוברות כל הודעות שינוי ההגדרות — תנאי `when`
+    // מוערכים מחדש כאן, בלי תלות באתר ה-UI שגרם לשינוי.
+    if (topic == 'settings.changed') {
+      PluginConditionEvaluator.instance.notifySettingsChanged();
+    }
     final jsonPayload = jsonEncode(payload);
     debugPrint('PluginRuntimeDispatcher: Dispatching $topic');
 
@@ -518,6 +524,15 @@ class PluginRuntimeDispatcher {
     }
     final instances = _controllersByPlugin[pluginId];
     if (instances == null || instances.isEmpty) {
+      // תנאי `when` שלא מתקיים = התוסף לא ביקש את האירוע; לא מעירים מנוע
+      // וגם לא פותחים את דף התוסף.
+      if (PluginLazyActivationService.instance.isActivationBlocked(
+        pluginId,
+        topic,
+      )) {
+        debugPrint('PluginRuntimeDispatcher: $topic → dropped (when)');
+        return;
+      }
       // אין מנוע חי — עם הרשאת ריצה ברקע התוסף מוּעָר בעצלנות והאירוע ממתין
       // בתור עד ה-boot; בלעדיה (false) לחיצה נופלת לפתיחת דף התוסף, שם
       // הדלקת המנוע גלויה למשתמש.

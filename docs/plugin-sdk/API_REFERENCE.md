@@ -1921,7 +1921,6 @@ const { data } = await Otzaria.call('settings.getMany', {
 - `key-remove-nikud-tanach`
 - `key-replace-holy-names`
 - `key-library-view-mode`
-- `key-align-tabs-to-right`
 - `key-copy-with-headers`, `key-copy-header-format`
 - `key-hebrew-books-path` — נתיב ספרי HebrewBooks, או `null`/מחרוזת ריקה
   כשלא הוגדר מיקום
@@ -2549,7 +2548,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
 | `externalEditions` | קונפיגורציית מהדורות מקבילות חיצוניות (טבלת מיפוי במקור DB מוכרז) | `database.read` וגם `library.books.read` |
-| `activationEvents` | שמות אירועים או `app.startup` | הרשאת ה-subscribe של כל נושא |
+| `activationEvents` | שמות אירועים או `app.startup`; אפשר גם `{topic, when}` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
 
 ### תכניות Host ללא WebView
@@ -2724,6 +2723,8 @@ async function scheduleReminder(title, body, dateTime) {
 | `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
+| `settings.get` | `settings.read` | מ־0.9.97: ערך הגדרת תוכנה לפי `key` (ליטרל מחרוזת). רק מפתחות שתוספים רשאים לקרוא — מפתח אחר נדחה כבר בהתקנה |
+| `storage.get` | `plugin.storage.read` | מ־0.9.97: ערך מאחסון התוסף לפי `key` (ליטרל מחרוזת). נעול למרחב האחסון הרגיל של התוסף (אותו אחד של `storage.set`) — אין פרמטר namespace; מפתח שאינו קיים מחזיר `null` |
 | `library.parallelEditions` | `library.books.read` | מ־0.9.97: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות ספקים חיצוניים שנרשמו דרך `startup.externalEditions` ונפתחות מקומית; שורות `{title, isCompanion, identity}` |
 
 ערכים יכולים להפנות אל `$context`,‏ `$result` של פקודה קודמת, או `$row`
@@ -2915,6 +2916,58 @@ Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי �
 ```
 
 עד 50 מחרוזות, כל אחת עד 100 תווים. אין תמיכה ב-regex (בכוונה). ה-`showWhen` עובד גם ברישום דינמי דרך `reader.addContextMenuItem`.
+
+### when — תרומה תלוית-הגדרה
+
+מ-`minAppVersion: 0.9.97`. כל פריט ב-`toolbarItems`, `contextMenuItems` ו-`searchDialogItems`, וכן כל איבר ב-`activationEvents`, יכול לשאת אובייקט `when`. הפריט נרשם תמיד; הוא מוצג רק כשהתנאי מתקיים, ומופיע/נעלם מיד כשהערך משתנה — בלי לטעון את מנוע ה-JS של התוסף.
+
+> אל תבלבלו עם ה-`when` של `startup.programs` — שם זו סכימה אחרת לגמרי (`{op, value}`) שמחליטה אם התכנית בכלל רצה. ה-`when` שמתואר כאן חל על תרומות, ומבנהו `setting`/`storage`.
+
+#### הסכימה
+
+```json
+{ "setting": { "key": "key-dark-mode", "equals": true } }
+{ "storage": { "key": "showButton",   "equals": "yes" } }
+{ "all": [ ... ] }
+{ "any": [ ... ] }
+{ "not": { ... } }
+```
+
+לכל אובייקט `when` בדיוק מפתח אחד. שני סוגי עלים ושלושה קומבינטורים:
+
+| מפתח | משמעות |
+|---|---|
+| `setting` | הגדרת אוצריא. נקראת דרך אותו סינון של `settings.get` — הגדרה שתוספים אינם רשאים לקרוא מוערכת כ-`false` |
+| `storage` | ערך מאחסון התוסף עצמו (אותו מרחב של `storage.get`/`storage.set`), מושווה לערך המפוענח שנשמר |
+| `all` | מערך תנאים — כולם חייבים להתקיים |
+| `any` | מערך תנאים — לפחות אחד |
+| `not` | תנאי יחיד, מתהפך |
+
+עלה חייב `key` (מחרוזת עד 128 תווים) ובדיוק אחד מהאופרטורים:
+
+| אופרטור | ערך | משמעות |
+|---|---|---|
+| `equals` | מחרוזת / מספר / בוליאני / `null` | שוויון מדויק לערך השמור |
+| `notEquals` | כנ"ל | היפוך של `equals` |
+| `exists` | `true` / `false` | האם קיים ערך שאינו `null` |
+
+`exists` מבדיל בין "אין מפתח" ל"יש מפתח עם ערך": מפתח שלא נכתב מעולם ומפתח שערכו `null` מתנהגים שניהם כלא-קיימים, ולכן `{"exists": false}` מתקיים בשניהם ו-`{"equals": null}` מתקיים בשניהם.
+
+מגבלות (נאכפות בהתקנה וגם בזמן ריצה): עומק מקסימלי 5, עד 20 עלים בסך הכול, `key` עד 128 תווים. `when` פגום פוסל את הפריט בהתקנה; ללא `when` — הפריט מוצג תמיד.
+
+#### when על activationEvents
+
+איבר ב-`activationEvents` יכול להיות מחרוזת (כמו קודם) או אובייקט `{"topic": "...", "when": {...}}`. מפתחות אחרים באובייקט נדחים — טעות כתיב כמו `"wen"` פוסלת את האיבר בהתקנה במקום להתעלם מהתנאי בשקט.
+
+```json
+"activationEvents": [
+  "app.startup",
+  { "topic": "reader.sectionContentChanged",
+    "when": { "storage": { "key": "autoSync", "equals": true } } }
+]
+```
+
+**האירוע נזרק כשהתנאי אינו מתקיים** — המנוע לא מוער, וגם אין נפילה לפתיחת דף התוסף. התנאי חל רק על **הערת** מנוע כבוי: כשמנוע התוסף כבר חי, האירועים ממשיכים להימסר אליו כרגיל. זו סמנטיקה של חיסכון במשאבים, לא של סינון תוכן.
 
 ### רשומות publishedData זרועות
 

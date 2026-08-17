@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_template_compiler.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 
 void main() {
   test('מקמפל כפתור ברירת מחדל ותפריט מהדורות בלבד', () {
@@ -63,6 +66,31 @@ void main() {
       () => _compiler().compileAll('test.plugin', templates),
       _throwsProgramError('declarative.invalid_reference'),
     );
+  });
+
+  test('when נשמר על הפריט הדקלרטיבי ומסונן לפי התנאי', () {
+    final templates = _templates();
+    templates.first['when'] = {
+      'setting': {'key': SettingsRepository.keyDarkMode, 'equals': true},
+    };
+
+    final compiled = _compiler().compileAll('test.plugin', templates).first;
+
+    expect(compiled.baseItem.when, isNotNull);
+    expect(compiled.baseItem.when!.settingKeys, {
+      SettingsRepository.keyDarkMode,
+    });
+
+    final settings = <String, Object?>{};
+    final evaluator = PluginConditionEvaluator.forTesting(
+      settingReader: (key) => settings[key],
+    );
+    final registry = PluginToolbarRegistry.forTesting(evaluator: evaluator);
+    registry.register('test.plugin', compiled.baseItem);
+
+    expect(registry.getAll(), isEmpty);
+    settings[SettingsRepository.keyDarkMode] = true;
+    expect(registry.getAll(), hasLength(1));
   });
 
   test('שדה toolbar דקלרטיבי לא מוכר נדחה', () {

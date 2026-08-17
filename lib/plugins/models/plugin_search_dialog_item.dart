@@ -1,3 +1,4 @@
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 
@@ -24,6 +25,9 @@ class PluginSearchDialogItem {
   final Set<SearchMode> visibleInModes;
   final Map<SearchMode, Set<String>> disabledSearchOptionIds;
 
+  /// תנאי הצגה על ערכי הגדרות/אחסון — null = מוצג תמיד.
+  final PluginWhenCondition? when;
+
   const PluginSearchDialogItem({
     required this.id,
     required this.title,
@@ -33,6 +37,7 @@ class PluginSearchDialogItem {
     String? resultsTitle,
     required this.visibleInModes,
     required this.disabledSearchOptionIds,
+    this.when,
   }) : resultsTitle = resultsTitle ?? title;
 
   bool isVisibleIn(SearchMode mode) => visibleInModes.contains(mode);
@@ -51,6 +56,7 @@ class PluginSearchDialogItem {
       'resultsTitle',
       'visibleInModes',
       'disabledSearchOptions',
+      'when',
     };
     final unknownFields = payload.keys
         .where((key) => !allowedFields.contains(key))
@@ -124,8 +130,18 @@ class PluginSearchDialogItem {
       payload['disabledSearchOptions'],
     );
 
+    PluginWhenCondition? when;
+    if (payload['when'] != null) {
+      try {
+        when = PluginWhenCondition.fromJson(payload['when']);
+      } on PluginWhenConditionException catch (error) {
+        throw PluginSearchDialogItemException('when is invalid: $error');
+      }
+    }
+
     return PluginSearchDialogItem(
       id: id,
+      when: when,
       title: title,
       defaultValue: defaultValue as bool? ?? false,
       openPluginOnSubmit: openPluginOnSubmit as bool? ?? false,
