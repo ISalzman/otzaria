@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
+import 'package:otzaria/plugins/utils/plugin_dev_tools_mode.dart';
 import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
@@ -145,13 +146,15 @@ class ToolTileAction {
 class ToolsLauncherPanel extends StatefulWidget {
   final ValueChanged<ToolCatalogEntry> onToolSelected;
   final VoidCallback onClose;
-  final bool showDevTools;
+
+  /// `null` — לפי [PluginDevToolsMode.enabled] (debug או דגל `--dev-plugins`).
+  final bool? showDevTools;
 
   const ToolsLauncherPanel({
     super.key,
     required this.onToolSelected,
     required this.onClose,
-    this.showDevTools = kDebugMode,
+    this.showDevTools,
   });
 
   @override
@@ -515,7 +518,8 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
                   bottom: AppTokens.spaceSM,
                   start: kNavTreeSideInset,
                   child: _PluginsToolbar(
-                    showDevTools: widget.showDevTools,
+                    showDevTools:
+                        widget.showDevTools ?? PluginDevToolsMode.enabled,
                     onInstall: _installPlugin,
                     onLoadFolder: _loadDevPlugin,
                     onLoadLocalhost: _loadLocalhostPlugin,
@@ -568,7 +572,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       onSubmitted: (_) => _activateHighlighted(entries),
     );
 
-    if (!widget.showDevTools) return field;
+    if (!(widget.showDevTools ?? PluginDevToolsMode.enabled)) return field;
 
     return Row(
       children: [

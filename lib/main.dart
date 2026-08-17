@@ -95,6 +95,7 @@ import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
+import 'package:otzaria/plugins/utils/plugin_dev_tools_mode.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/core/sentry_event_filter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -276,6 +277,8 @@ void main(List<String> args) async {
   if (await _maybeRunCliCommand(args)) {
     return;
   }
+
+  PluginDevToolsMode.initFromArgs(args);
 
   SentryWidgetsFlutterBinding.ensureInitialized();
 
