@@ -1917,10 +1917,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final viewportBounds = Offset.zero & viewportSize;
     final pages = <_VisibleBookPage>[];
 
+    final pageLayouts = controller.layout.pageLayouts;
+
     for (final pageNumber in pageNumbers) {
+      // מיקום שמור עלול להצביע מחוץ למסמך הנטען (עמוד ממסמך אחר) — אותה
+      // שמירת טווח שקיימת ב-[_spreadRectForPageLayout].
+      if (pageNumber - 1 >= pageLayouts.length) continue;
       final pageRect = MatrixUtils.transformRect(
         effectiveMatrix,
-        controller.layout.pageLayouts[pageNumber - 1],
+        pageLayouts[pageNumber - 1],
       );
       if (!pageRect.overlaps(viewportBounds)) continue;
 

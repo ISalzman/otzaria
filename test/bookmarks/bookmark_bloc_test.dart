@@ -461,6 +461,18 @@ void main() {
       );
     });
 
+    test('PDF שחולק id עם מהדורת הטקסט מקבל זהות נפרדת', () {
+      final text = TextBook(id: 103, title: 'ברכות', categoryId: 3);
+      final pdf = PdfBook(
+        id: 103,
+        title: 'ברכות',
+        path: r'C:\books\תלמוד בבלי\ברכות.pdf',
+        categoryId: 3,
+      );
+
+      expect(bookIdentity(pdf), isNot(bookIdentity(text)));
+    });
+
     test('historyKey של מהדורה חלופית נפרד משל הנוסח הממוזג', () {
       final merged = TextBook(id: 7, title: 'טור', categoryId: 3);
       final edition = merged.copyWith(versionTitle: 'Warsaw 1861');
