@@ -2006,6 +2006,124 @@ void main() {
       );
     });
   });
+
+  group('ריחוף על כרטיסיה', () {
+    /// שורת כותרת עם [count] כרטיסיות; ככל שיש יותר הן צרות יותר.
+    Future<List<OpenedTab>> pumpTabs(
+      WidgetTester tester,
+      int count, {
+      Size size = const Size(900, 800),
+    }) async {
+      final tabs = List.generate(count, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, size);
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+      return tabs;
+    }
+
+    /// מרחף מעל [position] ומחזיר את המחווה, לשחרור בסוף הבדיקה.
+    Future<TestGesture> hoverAt(WidgetTester tester, Offset position) async {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: position);
+      addTearDown(gesture.removePointer);
+      await tester.pumpAndSettle();
+      return gesture;
+    }
+
+    /// המפרידים שבין הכרטיסיות — קווים ברוחב 1 וגובה 24.
+    Iterable<Container> dividers(WidgetTester tester) => tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byType(ReadingTabStrip),
+            matching: find.byType(Container),
+          ),
+        )
+        .where(
+          (c) => c.constraints == BoxConstraints.tightFor(width: 1, height: 24),
+        );
+
+    testWidgets('ה-X מוצג בריחוף גם בכרטיסיה צרה מאוד', (tester) async {
+      // 20 כרטיסיות ברוחב 900 → ~25px לכרטיסיה, פחות מרוחב ה-X המלא.
+      await pumpTabs(tester, 20);
+
+      final tab = find.byType(Tab).at(5);
+      final closeButton = find.descendant(
+        of: tab,
+        matching: find.byIcon(FluentIcons.dismiss_24_regular),
+      );
+      expect(closeButton, findsNothing, reason: 'בלי ריחוף ה-X מוסתר');
+
+      await hoverAt(tester, tester.getCenter(tab));
+      expect(
+        closeButton,
+        findsOneWidget,
+        reason: 'ה-X מצטמצם לרוחב שנותר במקום להיעלם',
+      );
+    });
+
+    testWidgets('ה-tooltip מוצג בריחוף על כל שטח הכרטיסיה', (tester) async {
+      final tabs = await pumpTabs(tester, 12);
+      final title = tabs[5].title;
+      final tabRect = tester.getRect(find.byType(Tab).at(5));
+
+      // פינת הכרטיסיה — הרחק מהכותרת עצמה, ששם היה ה-tooltip קודם.
+      await hoverAt(tester, tabRect.topLeft + const Offset(2, 2));
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(
+        find.text(title),
+        findsNWidgets(2),
+        reason: 'הכותרת שבכרטיסיה ועותק נוסף ב-tooltip שנפתח',
+      );
+    });
+
+    testWidgets('הפסים משני צדי הכרטיסיה שבריחוף נעלמים בלי להזיז דבר', (
+      tester,
+    ) async {
+      final tabs = await pumpTabs(tester, 4, size: const Size(1200, 800));
+
+      final coloredBefore = dividers(
+        tester,
+      ).where((c) => c.color != null).length;
+      expect(coloredBefore, greaterThan(0));
+      final neighborBefore = tester.getTopLeft(find.text(tabs[3].title));
+
+      await hoverAt(tester, tester.getCenter(find.byType(Tab).at(2)));
+
+      expect(
+        dividers(tester).where((c) => c.color != null).length,
+        coloredBefore - 2,
+        reason: 'הפס שלפני הכרטיסיה שבריחוף והפס שאחריה מתבטלים',
+      );
+      expect(
+        tester.getTopLeft(find.text(tabs[3].title)),
+        neighborBefore,
+        reason: 'מקום הפס שמור גם כשאינו נצבע — התוכן לא זז',
+      );
+    });
+  });
 }
 
 /// לחיצה כפולה במיקום נתון: שתי הקשות עם השהיה תקפה ל-double-tap, ואז המתנה

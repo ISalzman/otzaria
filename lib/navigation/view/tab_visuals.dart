@@ -129,6 +129,14 @@ class TabTitleTooltip extends StatelessWidget {
   /// כשדולק, ה-tooltip מוצג תמיד (מצב מכווץ: מוצג אייקון בלבד).
   final bool alwaysShow;
 
+  /// הרוחב שבו הכותרת מרונדרת. כשהוא ידוע, ה-[child] יכול להיות שטח רחב יותר
+  /// מהכותרת — למשל הכרטיסיה כולה — והחיתוך עדיין נמדד נכון.
+  final double? titleWidth;
+
+  /// הסגנון שבו נמדדת הכותרת; חובה יחד עם [titleWidth], כי ה-[child] החיצוני
+  /// אינו בהכרח תחת ה-[DefaultTextStyle] של הכותרת.
+  final TextStyle? titleStyle;
+
   final Widget child;
 
   const TabTitleTooltip({
@@ -137,23 +145,43 @@ class TabTitleTooltip extends StatelessWidget {
     required this.title,
     required this.child,
     this.alwaysShow = false,
+    this.titleWidth,
+    this.titleStyle,
   });
+
+  Widget _wrapIfNeeded(
+    BuildContext context,
+    double available,
+    TextStyle style,
+  ) {
+    final width = _measuredTitleWidth(
+      title,
+      style,
+      MediaQuery.textScalerOf(context),
+      Directionality.of(context),
+    );
+    final truncated = width > available + 0.5;
+    if (!truncated && message == title) return child;
+    return Tooltip(message: message, child: child);
+  }
 
   @override
   Widget build(BuildContext context) {
     if (alwaysShow) return Tooltip(message: message, child: child);
+    final available = titleWidth;
+    if (available != null) {
+      return _wrapIfNeeded(
+        context,
+        available,
+        titleStyle ?? DefaultTextStyle.of(context).style,
+      );
+    }
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = _measuredTitleWidth(
-          title,
-          DefaultTextStyle.of(context).style,
-          MediaQuery.textScalerOf(context),
-          Directionality.of(context),
-        );
-        final truncated = width > constraints.maxWidth + 0.5;
-        if (!truncated && message == title) return child;
-        return Tooltip(message: message, child: child);
-      },
+      builder: (context, constraints) => _wrapIfNeeded(
+        context,
+        constraints.maxWidth,
+        DefaultTextStyle.of(context).style,
+      ),
     );
   }
 }
