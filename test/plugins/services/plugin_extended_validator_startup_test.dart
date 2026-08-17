@@ -223,6 +223,76 @@ void main() {
     expect(supportedVersion.errors, isEmpty);
   });
 
+  test('פעולת storage.set בפקד דקלרטיבי דורשת minAppVersion 0.9.97', () {
+    final startup = {
+      'programs': [
+        {
+          'id': 'p1',
+          'version': 1,
+          'triggers': ['reader.activeBookChanged'],
+          'commands': [
+            {
+              'id': 'c1',
+              'type': 'data.first',
+              'args': {
+                'items': {
+                  r'$literal': [1],
+                },
+              },
+            },
+          ],
+          'outputs': {
+            'visible': {r'$result': 'c1'},
+          },
+        },
+      ],
+      'toolbarItems': [
+        {
+          'id': 'b1',
+          'type': 'button',
+          'title': 'שמור',
+          'icon': 'apps_24_regular',
+          'binding': {'program': 'p1', 'visibleOutput': 'visible'},
+          'action': {
+            'type': 'storage.set',
+            'args': {
+              'key': 'saved',
+              'value': {r'$output': 'visible'},
+            },
+          },
+        },
+      ],
+    };
+    const permissions = [
+      'app.startup_contributions',
+      'reader.toolbar',
+      'plugin.storage.write',
+    ];
+
+    final oldVersion = _run(
+      tempDir,
+      _manifest(
+        permissions: permissions,
+        minAppVersion: '0.9.96',
+        startup: startup,
+      ),
+    );
+    expect(
+      oldVersion.errors,
+      contains(contains('storage.set נתמכת החל מגרסה')),
+    );
+
+    final supportedVersion = _run(
+      tempDir,
+      _manifest(
+        permissions: permissions,
+        minAppVersion: '0.9.97',
+        startup: startup,
+      ),
+    );
+    expect(supportedVersion.errors, isEmpty);
+  });
+
   test('data.choose דורש minAppVersion 0.9.97', () {
     final startup = {
       'programs': [

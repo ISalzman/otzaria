@@ -54,6 +54,7 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
     PluginToolbarRegistry? toolbarRegistry,
     PluginDatabaseService? databaseService,
     DeclarativeParallelEditionsFinder? parallelEditionsFinder,
+    DeclarativeStorageWriter? storageWriter,
     DeclarativeHostErrorHandler? onError,
   }) {
     final programs = DeclarativeProgramRepository(
@@ -76,7 +77,10 @@ class DeclarativePluginHostService implements DeclarativePluginHost {
       loadPermissions: loadPermissions,
       programRepository: programs,
       toolbarBinding: binding,
-      actionExecutor: DeclarativeHostActionExecutor(bookOpener: bookOpener),
+      actionExecutor: DeclarativeHostActionExecutor(
+        bookOpener: bookOpener,
+        storageWriter: storageWriter,
+      ),
       onError: onError,
     );
   }

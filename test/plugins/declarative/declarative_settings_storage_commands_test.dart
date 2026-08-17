@@ -76,6 +76,18 @@ void main() {
       );
     });
 
+    test('storage.set היא פעולה ואינה נכנסת לתכנית חישוב', () {
+      for (final type in const ['storage.set', 'storage.remove']) {
+        expect(
+          () => const DeclarativeProgramCompiler(
+            declaredPermissions: {'plugin.storage.write'},
+            declaredSourceIds: {},
+          ).compile(_program(type, const {'key': 'k', 'value': 1})),
+          _throwsProgramError('declarative.invalid_phase'),
+        );
+      }
+    });
+
     test('הרשאה שלא הוצהרה במניפסט חוסמת את הקומפילציה', () {
       const bare = DeclarativeProgramCompiler(
         declaredPermissions: {},

@@ -610,6 +610,12 @@ class PluginExtendedValidator {
     'settings.get': '0.9.97',
     'storage.get': '0.9.97',
   };
+
+  /// פעולות דקלרטיביות (action בפקדים) שנוספו מאוחר — נאכפות מול minAppVersion.
+  static const Map<String, String> _actionMinVersions = {
+    'storage.set': '0.9.97',
+    'storage.remove': '0.9.97',
+  };
   static const String _searchSubmitRoutingMinVersion = '0.9.97';
   static const String _externalEditionsMinVersion = '0.9.97';
   static const String _whenConditionMinVersion = '0.9.97';
@@ -1035,6 +1041,32 @@ class PluginExtendedValidator {
         .where(DeclarativeToolbarTemplateCompiler.isDeclarative)
         .toList();
     if (declarativeToolbarItems.isNotEmpty) {
+      final usedActionTypes = <String>{
+        for (final item in declarativeToolbarItems) ...[
+          if (item['action'] case {'type': final String type}) type,
+          if (item['childrenBinding'] case {
+            'itemTemplate': {'action': {'type': final String type}},
+          })
+            type,
+        ],
+      };
+      for (final entry in _actionMinVersions.entries) {
+        if (!usedActionTypes.contains(entry.key)) continue;
+        try {
+          if (PluginVersionUtils.compareCoreVersions(
+                entry.value,
+                manifest.minAppVersion,
+              ) >
+              0) {
+            errors.add(
+              '${entry.key} נתמכת החל מגרסה ${entry.value}, אך '
+              'minAppVersion שהוצהר הוא ${manifest.minAppVersion}',
+            );
+          }
+        } on PluginVersionFormatException {
+          // minAppVersion נבדק ב-PluginManifestValidator.
+        }
+      }
       try {
         DeclarativeToolbarTemplateCompiler(
           declaredPermissions: declaredPermissions,

@@ -115,6 +115,20 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
       outputKind: DeclarativeValueKind.any,
     ),
+    'storage.set': DeclarativeCommandDefinition(
+      type: 'storage.set',
+      phase: DeclarativeCommandPhase.action,
+      requiredPermission: 'plugin.storage.write',
+      requiredArgs: {'key', 'value'},
+      outputKind: DeclarativeValueKind.any,
+    ),
+    'storage.remove': DeclarativeCommandDefinition(
+      type: 'storage.remove',
+      phase: DeclarativeCommandPhase.action,
+      requiredPermission: 'plugin.storage.write',
+      requiredArgs: {'key'},
+      outputKind: DeclarativeValueKind.any,
+    ),
   };
 
   static DeclarativeCommandDefinition require(String type) {

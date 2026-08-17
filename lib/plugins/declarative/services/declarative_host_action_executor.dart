@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 
 abstract interface class DeclarativeBookOpener {
@@ -12,10 +16,46 @@ abstract interface class DeclarativeBookOpener {
   });
 }
 
+/// כתיבה לאחסון ה-KV של תוסף מפעולה דקלרטיבית — בלי מנוע JS.
+abstract interface class DeclarativeStorageWriter {
+  Future<void> set(String pluginId, String key, Object? value);
+
+  Future<void> remove(String pluginId, String key);
+}
+
+/// המימוש בפועל: אותו מחסן ואותו namespace של `storage.set` בגשר, כולל
+/// עדכון ה-snapshot של מעריך התנאים כדי שתנאי `when` יגיבו מיד.
+class PluginKvStorageWriter implements DeclarativeStorageWriter {
+  final PluginRegistryRepository _repository;
+  final PluginConditionEvaluator _conditions;
+
+  PluginKvStorageWriter({
+    PluginRegistryRepository? repository,
+    PluginConditionEvaluator? conditions,
+  }) : _repository = repository ?? PluginRegistryRepository(),
+       _conditions = conditions ?? PluginConditionEvaluator.instance;
+
+  @override
+  Future<void> set(String pluginId, String key, Object? value) async {
+    await _repository.setKV(pluginId, 'default', key, jsonEncode(value));
+    _conditions.onStorageValueChanged(pluginId, key, value);
+  }
+
+  @override
+  Future<void> remove(String pluginId, String key) async {
+    await _repository.removeKV(pluginId, 'default', key);
+    _conditions.onStorageRemoved(pluginId, key);
+  }
+}
+
 class DeclarativeHostActionExecutor {
   final DeclarativeBookOpener bookOpener;
+  final DeclarativeStorageWriter? storageWriter;
 
-  const DeclarativeHostActionExecutor({required this.bookOpener});
+  const DeclarativeHostActionExecutor({
+    required this.bookOpener,
+    this.storageWriter,
+  });
 
   Future<bool> execute({
     required CompiledDeclarativeAction action,
@@ -58,12 +98,25 @@ class DeclarativeHostActionExecutor {
               ? null
               : ExternalBookMatches(
                   pages: matchPages,
-                  matchedTerms: (action.args['matchedTerms'] as List? ?? const [])
-                      .whereType<String>()
-                      .toList(),
+                  matchedTerms:
+                      (action.args['matchedTerms'] as List? ?? const [])
+                          .whereType<String>()
+                          .toList(),
                   query: action.args['searchQuery'] as String? ?? '',
                 ),
         );
+      case 'storage.set':
+        final writer = storageWriter ?? PluginKvStorageWriter();
+        await writer.set(
+          plugin.pluginId,
+          action.args['key'] as String,
+          action.args['value'],
+        );
+        return true;
+      case 'storage.remove':
+        final writer = storageWriter ?? PluginKvStorageWriter();
+        await writer.remove(plugin.pluginId, action.args['key'] as String);
+        return true;
       default:
         throw DeclarativeProgramException(
           'declarative.unknown_command',

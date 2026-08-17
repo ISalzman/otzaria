@@ -61,6 +61,9 @@ class DeclarativeActionCompiler {
       case 'reader.openBook':
       case 'reader.openBookInSidePane':
         _validateOpenBookArgs(args);
+      case 'storage.set':
+      case 'storage.remove':
+        _validateStorageArgs(args, requiresValue: type == 'storage.set');
       default:
         throw DeclarativeProgramException(
           'declarative.invalid_phase',
@@ -148,6 +151,80 @@ class DeclarativeActionCompiler {
         'reader.openBook.matchedTerms must be a list of short strings',
       );
     }
+  }
+
+  void _validateStorageArgs(
+    Map<String, dynamic> args, {
+    required bool requiresValue,
+  }) {
+    final key = args['key'];
+    if (key is! String ||
+        key.isEmpty ||
+        key.length > 128 ||
+        _hasControlChars(key)) {
+      throw const DeclarativeProgramException(
+        'declarative.invalid_args',
+        'storage key must be a non-empty string of up to 128 characters',
+      );
+    }
+    if (!requiresValue) return;
+    if (args['value'] == null) {
+      throw const DeclarativeProgramException(
+        'declarative.invalid_args',
+        'storage.set.value must not be null',
+      );
+    }
+    _validateStorageValue(args['value']);
+  }
+
+  void _validateStorageValue(Object? value) {
+    var nodes = 0;
+    void visit(Object? current, int depth) {
+      nodes++;
+      if (nodes > 256 || depth > 10) {
+        throw const DeclarativeProgramException(
+          'declarative.value_too_large',
+          'storage.set.value is limited in size and nesting depth',
+        );
+      }
+      if (current is Map) {
+        for (final entry in current.entries) {
+          if (entry.key is! String) {
+            throw const DeclarativeProgramException(
+              'declarative.invalid_args',
+              'storage.set.value object keys must be strings',
+            );
+          }
+          visit(entry.value, depth + 1);
+        }
+        return;
+      }
+      if (current is List) {
+        for (final child in current) {
+          visit(child, depth + 1);
+        }
+        return;
+      }
+      if (current == null || current is num || current is bool) return;
+      if (current is String &&
+          current.length <= 4096 &&
+          !_hasControlChars(current)) {
+        return;
+      }
+      throw const DeclarativeProgramException(
+        'declarative.invalid_args',
+        'storage.set.value must contain small JSON values only',
+      );
+    }
+
+    visit(value, 0);
+  }
+
+  bool _hasControlChars(String value) {
+    for (final unit in value.codeUnits) {
+      if (unit < 0x20 || unit == 0x7F) return true;
+    }
+    return false;
   }
 
   Map<String, dynamic> _requiredMap(Object? value, String context) {
