@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:ui' as ui;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +20,7 @@ import 'package:otzaria/printing/serial_latest_runner.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/printing/pdf_text_rasterizer.dart';
 import 'package:otzaria/printing/word_export_service.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -1566,13 +1566,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
         bytes = await _createOutputPdf(format);
         successMessage = PdfMessages.pdfFileSaved;
       }
-      final path = await FilePicker.saveFile(
+      final path = await saveFileWithExtension(
         dialogTitle: 'ייצוא קובץ',
         fileName: '${_sanitizeFileName(widget.bookId)}.$selectedExtension',
-        type: FileType.custom,
-        allowedExtensions: [selectedExtension],
+        extension: selectedExtension,
         bytes: bytes,
-        lockParentWindow: true,
       );
       if (path == null) return;
       UiSnack.showSuccess(successMessage);
@@ -1882,7 +1880,12 @@ class _PrintingScreenState extends State<PrintingScreen> {
                                             Padding(
                                               padding: kPrintingRowPadding,
                                               child: Text(
-                                                '${_pdfEndPage - _pdfStartPage + 1} עמודים מתוך $_totalPdfPages',
+                                                pdfPageRangeSummary(
+                                                  startPage: _pdfStartPage,
+                                                  endPage: _pdfEndPage,
+                                                  totalPages: _totalPdfPages,
+                                                  pagesPerSheet: _pagesPerSheet,
+                                                ),
                                                 style: TextStyle(
                                                   color: colorScheme.primary,
                                                   fontSize: 12,

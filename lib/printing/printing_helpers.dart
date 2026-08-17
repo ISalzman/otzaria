@@ -50,6 +50,21 @@ bool hasPdfPageRange({required int startPage, required int? endPage}) {
   return startPage > 1 || endPage != null;
 }
 
+/// תווית סיכום לטווח עמודי ה-PDF שנבחר; כשמאוחדים כמה עמודים בגיליון,
+/// מוסיפה את מספר הגיליונות שיודפסו בפועל.
+String pdfPageRangeSummary({
+  required int startPage,
+  required int endPage,
+  required int totalPages,
+  required int pagesPerSheet,
+}) {
+  final pages = endPage - startPage + 1;
+  final base = '$pages עמודים מתוך $totalPages';
+  if (pagesPerSheet <= 1) return base;
+  final sheets = (pages / pagesPerSheet).ceil();
+  return sheets == 1 ? '$base (גיליון אחד)' : '$base ($sheets גיליונות)';
+}
+
 /// מחזיר את עמוד-ההתחלה לטווח ההדפסה כברירת מחדל.
 ///
 /// בתצוגה רגילה (או על העמוד הראשון) — מחזיר את העמוד הנוכחי כפי שהוא.

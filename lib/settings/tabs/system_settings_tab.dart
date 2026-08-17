@@ -8,7 +8,6 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
@@ -50,6 +49,7 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -795,16 +795,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       'בחר מיקום לשמירת סקריפט השליחה',
     );
     final downloadsDirectory = await getDownloadsDirectory();
-    final path = await FilePicker.saveFile(
+    final path = await saveFileWithExtension(
       dialogTitle: saveDialogTitle,
       fileName: script.fileName,
       initialDirectory: downloadsDirectory?.path,
-      allowedExtensions: [
-        target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
-      ],
-      type: FileType.custom,
+      extension: target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
       bytes: Uint8List.fromList(utf8.encode(script.content)),
-      lockParentWindow: true,
     );
     if (path == null || !mounted) {
       return;

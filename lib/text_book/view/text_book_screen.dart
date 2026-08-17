@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart' show IterableExtension;
-import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +56,7 @@ import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
@@ -688,14 +688,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         successMessage = TextBookMessages.textFileSaved;
       }
 
-      final path = await FilePicker.saveFile(
+      final path = await saveFileWithExtension(
         dialogTitle: 'ייצוא הספר',
         fileName:
             '${sanitizeTextBookExportFileName(state.book.title)}.$extension',
-        type: FileType.custom,
-        allowedExtensions: [extension],
+        extension: extension,
         bytes: bytes,
-        lockParentWindow: true,
       );
       if (path == null) return;
       if (!mounted) return;
