@@ -2220,7 +2220,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             .toInt();
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 45),
+          padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
           child: FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
             child: GridView.builder(
