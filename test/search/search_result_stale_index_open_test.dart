@@ -168,15 +168,30 @@ void main() {
     expect(tab.book.isUserBook, isTrue);
   });
 
-  testWidgets('מפתח שאינו בקטלוג ממשיך להיפתח לפי הכותרת', (tester) async {
+  testWidgets('מפתח יציב שנעלם מהקטלוג אינו נפתח לפי הכותרת', (tester) async {
+    // סריקה מחדש של ספרים אישיים מקצה מזהים חדשים; פתיחה לפי כותרת הייתה
+    // מאבדת את זהות הספר האישי ופותחת ספר רשמי באותה כותרת במיקום שגוי.
+    final tab = await openResultAgainstLibrary(
+      tester,
+      catalogue: [TextBook(id: 7, title: 'ספר שאינו בקטלוג')],
+      resultTitle: 'ספר שאינו בקטלוג',
+      indexedFilePath: 'uid:999999',
+      expectOpen: false,
+    );
+    expect(tab, isNull);
+  });
+
+  testWidgets('מפתח legacy בפורמט נתיב ממשיך להיפתח לפי הכותרת', (
+    tester,
+  ) async {
     final tab = await openResultAgainstLibrary(
       tester,
       catalogue: const [],
-      resultTitle: 'ספר שאינו בקטלוג',
-      indexedFilePath: 'id:999999',
+      resultTitle: 'ספר מאינדקס ישן',
+      indexedFilePath: 'C:/books/ספר מאינדקס ישן.txt',
     );
 
-    expect(tab!.book.title, 'ספר שאינו בקטלוג');
+    expect(tab!.book.title, 'ספר מאינדקס ישן');
   });
 
   test('כותרת זהה אינה מספיקה כשחתימת הספר השתנתה', () async {

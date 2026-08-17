@@ -10,6 +10,9 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -66,6 +69,10 @@ class TextBookSearchView extends StatefulWidget {
   /// מנוע החיפוש שמריץ את מסלול החיפוש המורכב. מוזרק בבדיקות בלבד.
   final SearchRepository searchRepository;
 
+  /// אימות שהאינדקס עדיין תואם את תוכן הספר לפני שסומכים על מספרי השורות
+  /// שלו (הבסיס לגלילה ולהדגשה). null = אימות טביעת האצבע האמיתי מול המנוע.
+  final Future<bool> Function(TextBook book)? indexSyncVerifier;
+
   const TextBookSearchView({
     super.key,
     required this.contentLoader,
@@ -81,6 +88,7 @@ class TextBookSearchView extends StatefulWidget {
     this.initialMatchPolicy = SearchMatchPolicy.standard,
     this.simpleSearchRunner,
     this.searchRepository = const SearchRepository(),
+    this.indexSyncVerifier,
   });
 
   @override
@@ -101,6 +109,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   String? _bookPath;
   String? _bookTitle;
   Future<void>? _bookPathFuture;
+  Future<bool>? _indexSyncFuture;
   bool _forceSearchEngine = false;
   Map<String, Map<String, bool>> _searchOptions = {};
   Map<int, List<String>> _alternativeWords = {};
@@ -326,6 +335,46 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     );
   }
 
+  /// אימות חד-פעמי (לכל חיי החלונית) שהאינדקס תואם את תוכן הספר. אימות
+  /// שנכשל אינו נשמר, כדי שעדכון אינדקס יורגש כבר בחיפוש הבא.
+  Future<bool> _ensureIndexSynced() async {
+    final existing = _indexSyncFuture;
+    if (existing != null) return existing;
+    final state = context.read<TextBookBloc>().state;
+    if (state is! TextBookLoaded) return false;
+    final future = (widget.indexSyncVerifier ?? _bookMatchesIndexFingerprint)(
+      state.book,
+    );
+    _indexSyncFuture = future;
+    try {
+      final matches = await future;
+      if (!matches && identical(_indexSyncFuture, future)) {
+        _indexSyncFuture = null;
+      }
+      return matches;
+    } catch (_) {
+      if (identical(_indexSyncFuture, future)) {
+        _indexSyncFuture = null;
+      }
+      rethrow;
+    }
+  }
+
+  // הטביעה מחושבת על נוסח הבסיס (טעינת הטקסט מתעלמת מ-versionTitle), כמו
+  // באינדקס עצמו — מהדורה חלופית פעילה עוברת אימות ואינה נחסמת בטעות.
+  static Future<bool> _bookMatchesIndexFingerprint(TextBook book) async {
+    final provider = TantivyDataProvider.instance;
+    final library = await DataRepository.instance.library;
+    final engine = await provider.engine;
+    return IndexingRepository(
+      provider,
+    ).textBookMatchesIndexedFingerprint(
+      book,
+      library,
+      await engine.getBookFingerprints(),
+    );
+  }
+
   /// טוען את תוכן הספר פעם אחת ושומר אותו עד לשחרור. כישלון — או שחרור בזמן
   /// הטעינה — מאפס את ה-Future כדי לאפשר ניסיון חוזר בחיפוש הבא.
   Future<List<String>> _ensureContent() async {
@@ -422,6 +471,21 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           searchResults = [];
           _isSearching = false;
           _searchErrorMessage = LibraryMessages.searchError;
+        });
+        return;
+      }
+
+      // אינדקס שאינו תואם את תוכן הספר מחזיר מספרי שורות של הנוסח הישן —
+      // הגלילה וההדגשה מחטיאות בשקט. עוצרים עם הודעה במקום תוצאות שגויות.
+      final indexSynced = await _ensureIndexSynced();
+      if (!mounted || requestId != _activeSearchRequestId) {
+        return;
+      }
+      if (!indexSynced) {
+        setState(() {
+          searchResults = [];
+          _isSearching = false;
+          _searchErrorMessage = LibraryMessages.inBookSearchIndexOutOfDate;
         });
         return;
       }

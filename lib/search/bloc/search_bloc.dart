@@ -1240,17 +1240,20 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   /// פתיחה לפי כותרת בלבד מאבדת את זהות הספר (isUserBook/categoryId),
   /// וספר אישי שכותרתו זהה לספר רשמי היה נפתח כרשמי. [indexedTitle] היא
   /// הכותרת מאותו מסמך, לאימות מול הקטלוג. [IndexedBookResolution.isStale]
-  /// מונע נפילה לפי כותרת כשמסמך האינדקס כבר אינו שייך לספר שבקטלוג.
+  /// מונע נפילה לפי כותרת כשמסמך האינדקס כבר אינו שייך לספר שבקטלוג —
+  /// כולל מפתח יציב שנעלם (סריקה מחדש של ספרים אישיים מקצה מזהים חדשים).
+  /// רק מפתח legacy בפורמט נתיב ממשיך ליפול לפתיחה לפי כותרת.
   Future<IndexedBookResolution> resolveBookForIndexedPath(
     String indexedFilePath, {
     required String indexedTitle,
   }) async {
+    final isStableKey =
+        indexedFilePath.startsWith('id:') || indexedFilePath.startsWith('uid:');
     final library = await DataRepository.instance.library;
     final book = _booksByIndexedFilePathFor(library)[indexedFilePath];
-    if (book == null) return (book: null, isStale: false);
+    if (book == null) return (book: null, isStale: isStableKey);
     if (book.title != indexedTitle) return (book: null, isStale: true);
-    if ((!indexedFilePath.startsWith('id:') &&
-        !indexedFilePath.startsWith('uid:'))) {
+    if (!isStableKey) {
       return (book: book, isStale: false);
     }
 
