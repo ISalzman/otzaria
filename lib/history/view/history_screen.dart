@@ -26,6 +26,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+import 'package:otzaria/utils/ui/book_format_icon.dart';
 
 /// משחזר אפשרויות חיפוש שההיסטוריה שומרת תמיד פר-מילה. אפשרויות אחידות
 /// מוחזרות למצב הגלובלי — אחרת הצ'יפים בדיאלוג העריכה מוצגים כבויים למרות
@@ -215,16 +216,8 @@ class _HistoryViewState extends State<HistoryView> {
     if (isSearch) {
       return const Icon(FluentIcons.search_24_regular);
     }
-    if (book is PdfBook) {
-      if (book.path.toLowerCase().endsWith('.docx')) {
-        return const Icon(FluentIcons.document_text_24_regular);
-      }
-      return const Icon(FluentIcons.document_pdf_24_regular);
-    }
-    if (book is TextBook) {
-      return const Icon(FluentIcons.document_text_24_regular);
-    }
-    return null;
+    if (book is! PdfBook && book is! TextBook) return null;
+    return Icon(bookFormatIcon(book));
   }
 
   @override

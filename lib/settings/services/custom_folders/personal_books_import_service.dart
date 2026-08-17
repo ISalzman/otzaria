@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:path/path.dart' as p;
 
 /// תוצאת העתקת קבצים לתיקיית הספרים האישיים.
@@ -31,20 +33,16 @@ class PersonalBooksImportService {
 
   final String? _folderPathOverride;
 
-  /// הסיומות שמנוע הסנכרון יודע לקלוט (תואם ל-FileSyncService).
-  static const Set<String> supportedExtensions = {
-    '.txt',
-    '.pdf',
-    '.docx',
-    '.epub',
-    '.md',
-    '.markdown',
-  };
+  /// הסיומות שמנוע הסנכרון יודע לקלוט — נגזרות מה-registry היחיד.
+  static final Set<String> supportedExtensions = kSupportedDottedBookExtensions
+      .toSet();
 
   /// נתיב תיקיית הספרים האישיים.
   Future<String> getFolderPath() async =>
       _folderPathOverride ?? await AppPaths.getPersonalBooksImportPath();
 
+  /// בדיקת סיומת בלבד, לרשימת הקבצים שכבר יובאו. לשער הכניסה משמש
+  /// `isSupportedBookFileByContent`, שבודק גם את תוכן הקובץ.
   static bool isSupportedFile(String filePath) =>
       supportedExtensions.contains(p.extension(filePath).toLowerCase());
 
@@ -61,7 +59,9 @@ class PersonalBooksImportService {
     final errors = <String>[];
 
     for (final sourcePath in sourcePaths) {
-      if (!isSupportedFile(sourcePath)) {
+      // שער התוכן ולא הסיומת בלבד: ‎.xml‎ שאינו מסמך Word היה מועתק, ואז
+      // מדולג בשקט בסריקה — המשתמש רואה "יובא" וספר שלעולם אינו מופיע.
+      if (!await isSupportedBookFileByContent(sourcePath)) {
         skippedUnsupported++;
         continue;
       }

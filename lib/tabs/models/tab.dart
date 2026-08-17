@@ -148,13 +148,11 @@ abstract class OpenedTab {
         dedupeKey: dedupeKey,
         externalMatches: externalMatches,
       );
-    } else if (book is DocxBook || book is EpubBook) {
-      // DOCX/EPUB רצים דרך זרימת TextBook — העטיפה דרך toTextBook
-      // משמרת id/categoryId/externalLibraryId שדרושים ל-LibraryProviderManager.
+    } else if (book is ConvertibleDocumentBook) {
+      // ספרי מסמך רצים דרך זרימת TextBook — העטיפה דרך toTextBook משמרת
+      // id/categoryId/externalLibraryId שדרושים ל-LibraryProviderManager.
       return TextBookTab(
-        book: book is DocxBook
-            ? book.toTextBook()
-            : (book as EpubBook).toTextBook(),
+        book: book.toTextBook(),
         index: index,
         searchText: searchText,
         highlightText: highlightText,

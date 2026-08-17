@@ -11,6 +11,7 @@ import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import '../models/book_model.dart';
 import '../models/error_model.dart';
 import '../services/shamor_zachor_bootstrap_worker.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 typedef ShamorZachorCategoryTreeLoader =
     Future<Map<String, dynamic>> Function({
@@ -337,9 +338,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
         : '';
 
     return BookDetails(
-      contentType: dbBook.fileType == 'pdf'
-          ? 'pdf'
-          : (dbBook.fileType == 'docx' ? 'docx' : contentType),
+      // ספר שתוכנו מומר (או PDF) אינו מבוסס-דף, ולכן אסור לו לרשת
+      // contentType של "דף" מהקטגוריה. הסיומת עצמה משמשת כסוג.
+      contentType: _nonDafContentType(dbBook.fileType) ?? contentType,
       parts: parts,
       isCustom: !dbBook.isBaseBook, // isCustom means "not a base book"
       id: dbBook.id, // העברת ה-ID כ-int ישירות
@@ -837,4 +838,14 @@ class ShamorZachorDataProvider with ChangeNotifier {
     _tocCache.clear();
     super.dispose();
   }
+}
+
+/// סוג התוכן לספר שאינו מבוסס-דף (PDF או פורמט שדורש המרה), או `null`
+/// כשהספר הוא טקסט רגיל ויורש את סוג התוכן מהקטגוריה.
+String? _nonDafContentType(String? fileType) {
+  final format = documentFormatFromFileType(fileType);
+  if (format == null) return null;
+  return format == DocumentFormat.pdf || format.requiresConversion
+      ? format.extension
+      : null;
 }

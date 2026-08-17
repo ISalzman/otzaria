@@ -15,8 +15,9 @@ import '../models/topic.dart';
 import '../database/repository/seforim_repository.dart';
 import 'link_processor.dart';
 import 'hebrew_text_utils.dart' as hebrew_text_utils;
-import 'package:otzaria/utils/file/docx_to_otzaria.dart';
-import 'package:otzaria/utils/file/epub_to_otzaria.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/toc_parser.dart'
     show isTocExcludedHeadingLine;
 
@@ -148,12 +149,7 @@ class DatabaseGenerator {
         );
         await processDirectory(entity.path, categoryId, level + 1);
       } else if (entity is File &&
-          [
-            '.txt',
-            '.pdf',
-            '.docx',
-            '.epub',
-          ].contains(path.extension(entity.path).toLowerCase())) {
+          await isSupportedBookFileByContent(entity.path)) {
         // Skip if already processed from priority list
         final key = _toLibraryRelativeKey(entity.path);
         if (_processedPriorityBookKeys.contains(key)) {
@@ -163,12 +159,43 @@ class DatabaseGenerator {
         if (parentCategoryId == null) {
           continue;
         }
-        await createAndProcessBook(entity.path, parentCategoryId);
+        // קובץ בודד אינו מפיל את ייבוא הספרייה כולה — הכשל נרשם והסריקה
+        // ממשיכה לקובץ הבא (§76). גם כשל שאינו המרה נתפס: קובץ שננעל או
+        // נמחק בין הסריקה לקריאה (כונן רשת, OneDrive) היה מבטל את הייבוא
+        // כולו ומשאיר ספרייה חלקית.
+        try {
+          await createAndProcessBook(entity.path, parentCategoryId);
+        } on DocumentConversionException catch (e) {
+          _logConversionFailure(entity.path, e);
+        } catch (e, stackTrace) {
+          _log.warning(
+            'עיבוד הספר נכשל — הקובץ דולג: ${entity.path}',
+            e,
+            stackTrace,
+          );
+        }
       }
     }
 
     // Delete directory if it became empty after processing
     await _deleteIfEmpty(dir);
+  }
+
+  /// רושם כשל המרה עם כל מה שנדרש לאבחון מרחוק (§77): הנתיב, הפורמט
+  /// שהסיומת הצהירה עליו, הפורמט שזוהה בפועל, וגרסת הממיר שרצה.
+  void _logConversionFailure(String bookPath, DocumentConversionException e) {
+    final declared = documentFormatFromExtension(bookPath);
+    _log.warning(
+      'המרת מסמך נכשלה — הספר דולג'
+      ' | path=$bookPath'
+      ' | declared=${declared?.extension}'
+      ' | detected=${e.format?.extension}'
+      // הפורמט שזוהה קודם למוצהר: ל-‎.wbk‎ אין מנוע משל עצמו, ורק התוכן
+      // מגלה איזו גרסת ממיר רצה בפועל.
+      ' | converterVersion=${converterVersionFor(e.format ?? declared)}'
+      ' | error=$e',
+      e,
+    );
   }
 
   /// Creates a category in the database.
@@ -279,6 +306,11 @@ class DatabaseGenerator {
       final fileType = fileExtension.startsWith('.')
           ? fileExtension.substring(1)
           : fileExtension;
+      final format = documentFormatFromExtension(bookPath);
+      // רק פורמט ששורותיו נשמרות ב-DB מוותר על הנתיב; כל השאר file-backed
+      // וחייב לשמור אותו כדי שאפשר יהיה להמיר בזמן קריאה.
+      final storesLinesInDb = format?.canStoreLinesInDb ?? false;
+      final targetFilePath = storesLinesInDb && insertContent ? null : bookPath;
 
       // Check for duplicates in the same category with the same file type (for performance measurement)
       final existingBook = await repository
@@ -288,22 +320,16 @@ class DatabaseGenerator {
           await repository.updateBookSourceId(existingBook.id, sourceId);
         }
 
-        if ((fileType == 'txt' ||
-                fileType == 'docx' ||
-                fileType == 'epub' ||
-                fileType == 'md' ||
-                fileType == 'markdown' ||
-                fileType == 'pdf') &&
-            insertContent) {
+        if ((format?.isProductionSupported ?? false) && insertContent) {
           await repository.clearBookContent(existingBook.id);
+          // כשל כאן משאיר את הספר בלי תוכן, אך גם בלי לעדכן את חותמת הקובץ
+          // (`updateBookStorage` שלמטה) — ולכן הסריקה הבאה תנסה שוב במקום
+          // לדלג עליו כ"לא השתנה".
           await processBookContent(bookPath, existingBook.id);
           // Keep file stats and storage location in sync. If insertContent is true and it's a txt file, filePath becomes null.
           try {
             final file = File(bookPath);
             final stat = await file.stat();
-            final targetFilePath = (fileType != "txt" || !insertContent)
-                ? bookPath
-                : null;
             await repository.updateBookStorage(
               existingBook.id,
               targetFilePath,
@@ -318,20 +344,13 @@ class DatabaseGenerator {
           }
         } else {
           try {
-            if (fileType == 'txt' ||
-                fileType == 'docx' ||
-                fileType == 'epub' ||
-                fileType == 'md' ||
-                fileType == 'markdown') {
+            if (format?.isTextual ?? false) {
               // We're moving to file-backed storage, so clear lines from DB to save space, but preserve TOC
               await repository.deleteBookLines(existingBook.id);
               await repository.updateBookTotalLines(existingBook.id, 0);
             }
             final file = File(bookPath);
             final stat = await file.stat();
-            final targetFilePath = (fileType != "txt" || !insertContent)
-                ? bookPath
-                : null;
             await repository.updateBookStorage(
               existingBook.id,
               targetFilePath,
@@ -384,7 +403,8 @@ class DatabaseGenerator {
         order: 999.0,
         topics: extractTopics(bookPath),
         isBaseBook: false,
-        filePath: (fileType != "txt" || !insertContent) ? bookPath : null,
+        // רק פורמט ששורותיו נשמרות ב-DB מוותר על הנתיב; כל השאר file-backed.
+        filePath: storesLinesInDb && insertContent ? null : bookPath,
         fileType: fileType,
         fileSize: fileSize,
         lastModified: lastModified,
@@ -394,7 +414,14 @@ class DatabaseGenerator {
 
       // Process content of the book
       if (insertContent) {
-        await processBookContent(bookPath, insertedBookId);
+        try {
+          await processBookContent(bookPath, insertedBookId);
+        } on DocumentConversionException {
+          // ההמרה נכשלה — שורת ספר בלי תוכן הייתה מופיעה בספרייה כספר ריק
+          // שלא ניתן לפתוח. מסירים אותה ומעבירים את הכשל לרישום.
+          await repository.deleteBookCompletely(insertedBookId);
+          rethrow;
+        }
       } else {
         await repository.updateBookTotalLines(insertedBookId, 0);
       }
@@ -432,24 +459,28 @@ class DatabaseGenerator {
   /// [bookPath] The path to the book file
   /// [bookId] The ID of the book in the database
   Future<void> processBookContent(String bookPath, int bookId) async {
-    final ext = path.extension(bookPath).toLowerCase();
+    final format = documentFormatFromExtension(bookPath);
+    if (format == null) {
+      throw UnsupportedDocumentFormatException(path: bookPath);
+    }
 
-    if (ext == '.pdf') {
+    if (!format.isTextual) {
       // Process PDF outline as TOC
       await _processPdfOutline(bookPath, bookId);
       await repository.updateBookTotalLines(bookId, 0);
       return;
     }
 
-    if (ext == '.docx' || ext == '.epub') {
-      final title = path.basenameWithoutExtension(bookPath);
+    if (format.requiresConversion) {
       // הקריאה בתוך ה-isolate — נמנעת העתקת buffer גדול בין isolates.
-      final content = await Isolate.run(() {
-        final bytes = File(bookPath).readAsBytesSync();
-        return ext == '.docx'
-            ? docxToText(bytes, title)
-            : epubToText(bytes, title, embedImages: false);
-      });
+      // בלי תמונות: כאן נדרש רק מבנה השורות ותוכן העניינים.
+      final content = await Isolate.run(
+        () => convertDocumentFileSync(
+          bookPath,
+          format: format,
+          embedImages: false,
+        ),
+      );
       final lines = content.split('\n');
 
       await processLinesWithTocEntries(bookId, lines);
@@ -791,13 +822,7 @@ class DatabaseGenerator {
       final dir = Directory(dirPath);
       var count = 0;
       await for (final entity in dir.list(recursive: true)) {
-        if (entity is File &&
-            [
-              '.txt',
-              '.pdf',
-              '.docx',
-              '.epub',
-            ].contains(path.extension(entity.path).toLowerCase())) {
+        if (entity is File && await isSupportedBookFileByContent(entity.path)) {
           count++;
         }
       }

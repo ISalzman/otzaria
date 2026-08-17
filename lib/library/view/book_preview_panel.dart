@@ -86,15 +86,13 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   void _createNewTab() {
     if (widget.book == null) return;
 
-    // DocxBook/EpubBook יורשים מ-FileBook ולא מ-TextBook — העטיפה דרך
+    // ספרי מסמך יורשים מ-FileBook ולא מ-TextBook — העטיפה דרך
     // toTextBook משמרת id/categoryId/externalLibraryId שדרושים
     // ל-LibraryProviderManager (בלעדיהם getBookContent יחזיר תוכן ריק).
     final book = widget.book;
     final TextBook? textBook = book is TextBook
         ? book
-        : book is DocxBook
-        ? book.toTextBook()
-        : book is EpubBook
+        : book is ConvertibleDocumentBook
         ? book.toTextBook()
         : null;
 
@@ -128,9 +126,9 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       return;
     }
 
-    // DOCX עובר ל-TextBookTab דרך _createNewTab, ולכן _currentTextTab קיים
-    // גם עבור DocxBook. בלי הבדיקה הזו לחיצה כפולה על preview של DOCX היתה
-    // נופלת ל-fallback של 0 ומאבדת את מיקום הגלילה הנוכחי.
+    // ספר מסמך עובר ל-TextBookTab דרך _createNewTab, ולכן _currentTextTab
+    // קיים גם עבורו. בלי הבדיקה הזו לחיצה כפולה על ה-preview הייתה נופלת
+    // ל-fallback של 0 ומאבדת את מיקום הגלילה הנוכחי.
     if (_currentTextTab != null) {
       widget.onOpenInReader?.call(_currentTextTab!.index);
       return;

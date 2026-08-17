@@ -17,6 +17,7 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
+import 'package:otzaria/utils/ui/book_format_icon.dart';
 
 /// מספר התווים המרבי בתיאור קצר המוצג בכרטיס ספר, כולל שלוש הנקודות.
 const kBookCardDescriptionMaxCharacters = 120;
@@ -86,17 +87,8 @@ Widget _buildBookIconChild(Book book, ColorScheme cs, double iconSize) {
       fit: BoxFit.contain,
     );
   }
-  if (book is PdfBook || book.fileType == 'pdf') {
-    return Icon(
-      FluentIcons.document_pdf_24_regular,
-      color: cs.onSecondaryContainer,
-      size: iconSize,
-    );
-  }
   return Icon(
-    book.fileType == 'docx'
-        ? FluentIcons.document_edit_24_regular
-        : FluentIcons.document_text_24_regular,
+    bookFormatIcon(book),
     color: cs.onSecondaryContainer,
     size: iconSize,
   );

@@ -1,10 +1,19 @@
-import 'dart:typed_data';
-import 'package:archive/archive.dart';
-import 'package:xml/xml.dart' as xml;
 import 'dart:convert';
+import 'dart:typed_data';
 
-/// גרסת הממיר [docxToText]. **חובה להעלות ערך זה בכל שינוי שמשפיע על הפלט**
-/// (עיצוב, כותרות, תמונות, טבלאות…). מטמון התוכן ([convertDocxWithCache])
+import 'package:archive/archive.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_format.dart';
+import 'package:otzaria/utils/file/embedded_media.dart';
+import 'package:otzaria/utils/file/zip_limits.dart';
+import 'package:otzaria/utils/text/html_escape.dart';
+import 'package:otzaria/utils/text/inline_style.dart';
+import 'package:otzaria/utils/text/numeral_formats.dart';
+import 'package:otzaria/utils/text/otzaria_markup.dart';
+import 'package:xml/xml.dart' as xml;
+
+/// גרסת מנוע ה-OOXML. **חובה להעלות ערך זה בכל שינוי שמשפיע על הפלט**
+/// (עיצוב, כותרות, תמונות, טבלאות…). מטמון התוכן (`convertOoxmlWordWithCache`)
 /// כולל את הגרסה במפתח-התוקף: העלאה כאן פוסלת אוטומטית את כל הרשומות שנוצרו
 /// ע"י גרסה ישנה, וגורמת להמרה מחדש — כך משתמש שכבר פתח ספר יקבל את התצוגה
 /// המשופרת בלי לגעת בקובץ.
@@ -18,7 +27,22 @@ import 'dart:convert';
 /// v8: תמונות inline בתוך תיבת-טקסט אינן מזוהות בטעות כתמונת-רקע של התיבה.
 /// v9: כותרות עם styleId מספרי (Word בעברית / המרה מ-HTML) לפי styles.xml
 /// כולל ירושת `w:basedOn`, ו-`outlineLvl=9` ("Body Text") אינו נחשב לכותרת.
-const int kDocxConverterVersion = 9;
+/// v10: מסמך שגופו אינו קריא זורק חריגה במקום להחזיר כותרת בלבד, ותמונות
+/// SVG מוטמעות (המפה המשותפת ב-`embedded_media.dart` הכירה בהן; זו לא).
+/// v11: `w:jc` לוגי (`start`/`end`) נפתר לפי `w:bidi`, תיבות-טקסט מזוהות לפי
+/// שם מקומי (קידומת namespace אחרת שכפלה את תוכנן), ומילוי-תמונה של VML
+/// (`v:fill type="frame"`) הוא תמונת הרקע של התיבה.
+/// v12: יישור לוגי בפסקה RTL מדולג — מפיקי המסמכים חלוקים בפירושו, והכרעה
+/// שגויה מיישרת קטע עברי שלם לצד ההפוך.
+/// v13: ערכי צבע ויישור מהמסמך מסוננים לפני שהם נכנסים ל-`style` (מנע
+/// הזרקת תגיות לגוף הספר), גוף הערת שוליים רב-פסקתית מופרד ברווח,
+/// `w:customXml` שקוף, כל תיבות הטקסט בשייף מקובץ מרונדרות, `w:vMerge` בלי
+/// תא פותח אינו נמחק, וכותרת עוברת trim.
+const int kOoxmlWordConverterVersion = 13;
+
+/// שם ותיק ל-[kOoxmlWordConverterVersion]. הערך משותף לכל פורמטי OOXML —
+/// הם חולקים מנוע אחד, ולכן שינוי בפלט פוסל את המטמון של כולם יחד.
+const int kDocxConverterVersion = kOoxmlWordConverterVersion;
 
 // Windows-1255 Hebrew range: 0xC0–0xD8 and 0xE0–0xFA map to Unicode with offset 1264.
 // 0xE0 (224) + 1264 = 1488 = U+05D0 = א, ... 0xFA (250) + 1264 = 1514 = U+05EA = ת
@@ -41,8 +65,6 @@ String _decodeXmlBytes(List<int> bytes) {
     return buf.toString();
   }
 }
-
-ZipDecoder? _zipDecoder;
 
 /// מונה רץ לסימוני הערות שוליים (משותף לגוף ולתאי טבלה).
 class _FootnoteCounter {
@@ -119,93 +141,22 @@ String _formatNum(int n, String fmt) {
     case 'decimalZero':
       return n < 10 ? '0$n' : '$n';
     case 'lowerLetter':
-      return _toLetters(n, upper: false);
+      return toLatinLetters(n, upper: false);
     case 'upperLetter':
-      return _toLetters(n, upper: true);
+      return toLatinLetters(n, upper: true);
     case 'lowerRoman':
-      return _toRoman(n).toLowerCase();
+      return toRomanNumeral(n).toLowerCase();
     case 'upperRoman':
-      return _toRoman(n);
+      return toRomanNumeral(n);
     case 'hebrew1':
     case 'hebrew2':
-      return _toHebrewNumeral(n);
+      return toHebrewNumeral(n);
     case 'none':
       return '';
     case 'decimal':
     default:
       return '$n';
   }
-}
-
-/// 1→a, 26→z, 27→aa … (bijective base-26).
-String _toLetters(int n, {required bool upper}) {
-  if (n <= 0) return '$n';
-  final base = upper ? 65 : 97;
-  final chars = <int>[];
-  var x = n;
-  while (x > 0) {
-    x--;
-    chars.add(base + (x % 26));
-    x ~/= 26;
-  }
-  return String.fromCharCodes(chars.reversed);
-}
-
-/// ממיר מספר למספרה רומית (1–3999), אחרת מחזיר ספרות.
-String _toRoman(int n) {
-  if (n <= 0 || n > 3999) return '$n';
-  const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
-  const syms = [
-    'M',
-    'CM',
-    'D',
-    'CD',
-    'C',
-    'XC',
-    'L',
-    'XL',
-    'X',
-    'IX',
-    'V',
-    'IV',
-    'I',
-  ];
-  final buf = StringBuffer();
-  var x = n;
-  for (var i = 0; i < vals.length; i++) {
-    while (x >= vals[i]) {
-      buf.write(syms[i]);
-      x -= vals[i];
-    }
-  }
-  return buf.toString();
-}
-
-/// ממיר מספר לאות עברית (גימטרייה) ללא גרשיים — למספור רשימות `hebrew1`.
-/// מדויק עד 499; מעבר לכך נופל לספרות (רשימות ארוכות כאלה נדירות).
-String _toHebrewNumeral(int n) {
-  if (n <= 0 || n > 499) return '$n';
-  const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-  const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
-  const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
-  final buf = StringBuffer();
-  var x = n;
-  if (x >= 100) {
-    buf.write(hundreds[x ~/ 100]);
-    x %= 100;
-  }
-  if (x == 15) {
-    buf.write('טו');
-  } else if (x == 16) {
-    buf.write('טז');
-  } else {
-    if (x >= 10) {
-      buf.write(tens[x ~/ 10]);
-      x %= 10;
-    }
-    if (x > 0) buf.write(ones[x]);
-  }
-  return buf.toString();
 }
 
 /// בונה מפת `numId` → (`ilvl` → [_NumLevel]) מקובץ numbering.xml.
@@ -279,13 +230,19 @@ Map<String, int> _extractHeadingStyles(Archive archive) {
   }
   if (stylesFile == null) return const {};
 
-  final xml.XmlDocument doc;
   try {
-    doc = xml.XmlDocument.parse(_decodeXmlBytes(stylesFile.content));
+    return _headingStylesFrom(
+      xml.XmlDocument.parse(_decodeXmlBytes(stylesFile.content)),
+    );
   } catch (_) {
     return const {};
   }
+}
 
+/// גוף [_extractHeadingStyles], על מסמך XML שכבר נקרא. WordML 2003 מחזיק
+/// את הסגנונות באותו מסמך עם אותו אוצר-מילים, ולכן שני הדיאלקטים חולקים
+/// את הפתירה הזו.
+Map<String, int> _headingStylesFrom(xml.XmlDocument doc) {
   final defs = <String, ({String? name, String? outline, String? basedOn})>{};
   for (final style in doc.findAllElements('w:style')) {
     final type = style.getAttribute('w:type');
@@ -334,22 +291,14 @@ Map<String, int> _extractHeadingStyles(Archive archive) {
   return result;
 }
 
-/// מחזיר את ה-MIME של תמונה לפי סיומת, או `null` אם הקורא לא יודע לרנדר
-/// אותה (EMF/WMF/TIFF — פורמטים ישנים של Word שאינם נתמכים ב-HtmlWidget).
-String? _imageMime(String path) {
-  final p = path.toLowerCase();
-  if (p.endsWith('.png')) return 'image/png';
-  if (p.endsWith('.jpg') || p.endsWith('.jpeg')) return 'image/jpeg';
-  if (p.endsWith('.gif')) return 'image/gif';
-  if (p.endsWith('.bmp')) return 'image/bmp';
-  if (p.endsWith('.webp')) return 'image/webp';
-  return null;
-}
-
 /// בונה מפת `rId` → `data:` URI עבור כל התמונות המוטמעות בקובץ — קריאה
 /// אחת של ה-relationships + קבצי ה-media, והמרה ל-base64. הטמעה מלאה
 /// (offline) ולא קישור חיצוני. פורמטים שהקורא לא תומך בהם מדולגים בשקט.
-Map<String, String> _extractImages(Archive archive) {
+///
+/// [embedImages] כבוי מחזיר URI ריק במקום ה-base64: תגי ה-`<img>` נשארים
+/// במקומם ולכן מבנה השורות זהה — קריטי, כי אינדקסי ה-TOC וה-highlight
+/// נבנים מהווריאנט חסר-התמונות ונקראים מול הווריאנט המלא.
+Map<String, String> _extractImages(Archive archive, {bool embedImages = true}) {
   // שלב 1: rId → target ("media/imageN.png"), רק יחסים מסוג image.
   final rels = <String, String>{};
   for (final file in archive) {
@@ -380,29 +329,78 @@ Map<String, String> _extractImages(Archive archive) {
   }
 
   final images = <String, String>{};
+  var embeddedBytes = 0;
   rels.forEach((id, target) {
-    final mime = _imageMime(target);
+    final mime = imageMimeForPath(target);
     if (mime == null) return; // פורמט לא נתמך
-    final fullPath = target.startsWith('/')
-        ? target.substring(1)
-        : 'word/$target';
-    final file = mediaByPath[fullPath];
-    if (file == null) return; // קובץ חסר
-    images[id] = 'data:$mime;base64,${base64Encode(file.content)}';
+    final file = mediaByPath[_mediaPathFor(target)];
+    if (file == null) return; // קובץ חסר, או יעד חיצוני אמיתי
+
+    if (!embedImages) {
+      images[id] = '';
+      return;
+    }
+    if (file.size > EmbeddedMediaLimits.maxImageBytes ||
+        embeddedBytes + file.size > EmbeddedMediaLimits.maxTotalImageBytes) {
+      images[id] = '';
+      return;
+    }
+    // `file.content` הוא שמפרס בפועל, ולכן רשומה פגומה/מוצפנת זורקת כאן
+    // חריגה שאינה מוטיפסת. תמונה אינה שווה כשל של המסמך כולו.
+    try {
+      final content = file.content;
+      // הגודל ברשומת ה-ZIP הוא הצהרה של הקובץ; רק כאן ידוע מה נפרס בפועל.
+      if (content.length > EmbeddedMediaLimits.maxImageBytes) {
+        images[id] = '';
+        return;
+      }
+      images[id] = 'data:$mime;base64,${base64Encode(content)}';
+      embeddedBytes += content.length;
+    } catch (_) {
+      images[id] = '';
+    }
   });
   return images;
 }
 
+/// האם האלמנט הוא תוכן של תיבת-טקסט, בלי תלות בקידומת ה-namespace.
+///
+/// Word כותב את אותה תיבה פעמיים — DrawingML ו-VML לתאימות — ולעיתים
+/// בקידומות שונות (`w:`, `wne:`). השוואה לקידומת אחת בלבד החמיצה את השנייה,
+/// ואז תוכן התיבה נפלט גם בתוך המסגרת וגם כטקסט חופשי אחריה.
+bool _isTextBoxContent(xml.XmlElement element) =>
+    element.name.local == 'txbxContent';
+
+Iterable<xml.XmlElement> _textBoxContents(xml.XmlElement root) =>
+    root.descendantElements.where(_isTextBoxContent);
+
+/// ממיר יעד של relationship לנתיב בתוך החבילה.
+///
+/// Word כותב למילוי-תמונה של שייפ יחס **חיצוני** שנתיבו הוא בעצם הפניה
+/// לחבילה עצמה (`ooxWord://word/media/image12.png`). בלי הנרמול תמונת הרקע
+/// של תיבת-טקסט אינה נמצאת. יעד חיצוני אמיתי (`http://…`) פשוט לא יתאים
+/// לשום רשומה בארכיב — ואין כאן שום גישת רשת (§74).
+String _mediaPathFor(String target) {
+  final scheme = target.indexOf('://');
+  final path = scheme < 0 ? target : target.substring(scheme + 3);
+  if (path.startsWith('/')) return path.substring(1);
+  return path.startsWith('word/') ? path : 'word/$path';
+}
+
 /// מחזיר את ה-data URI של תמונה מוטמעת ב-run (DrawingML `a:blip` או VML
 /// `v:imagedata`), או `null`.
+///
+/// [includeShapeFill] מוסיף מילוי-תמונה של שייפ VML (`v:fill type="frame"`) —
+/// כך נמצאת תמונת הרקע של תיבת-טקסט, שאינה `v:imagedata`.
 String? _imageUriFromRun(
   xml.XmlElement run,
   Map<String, String> images, {
   bool skipTextBoxContent = false,
+  bool includeShapeFill = false,
 }) {
   if (images.isEmpty) return null;
   String? visit(xml.XmlElement element) {
-    if (skipTextBoxContent && element.name.qualified == 'w:txbxContent') {
+    if (skipTextBoxContent && _isTextBoxContent(element)) {
       return null;
     }
     if (element.name.qualified == 'a:blip') {
@@ -412,7 +410,18 @@ String? _imageUriFromRun(
       if (uri != null) return uri;
     }
     if (element.name.qualified == 'v:imagedata') {
-      final id = element.getAttribute('r:id');
+      // `r:id` בחבילת OOXML; `src="wordml://…"` ב-WordML 2003, שבו התמונה
+      // יושבת בתוך המסמך עצמו ואין לה relationship.
+      final id = element.getAttribute('r:id') ?? element.getAttribute('src');
+      final uri = id == null ? null : images[id];
+      if (uri != null) return uri;
+    }
+    // `type="frame"` הוא מילוי-תמונה מתוח; מילוי דוגמה (`tile`/`pattern`) הוא
+    // טקסטורה דקורטיבית שאין טעם להציג כתמונה.
+    if (includeShapeFill &&
+        element.name.qualified == 'v:fill' &&
+        element.getAttribute('type') == 'frame') {
+      final id = element.getAttribute('r:id') ?? element.getAttribute('src');
       final uri = id == null ? null : images[id];
       if (uri != null) return uri;
     }
@@ -449,15 +458,27 @@ String? _drawingHtmlFromRun(xml.XmlElement run, _DocxContext ctx) {
   // (אך עדיין מעבדים טקסט-בתיבה אם קיים, כדי לא לאבד תוכן).
   final imgUri = _isBehindDocDrawing(run)
       ? null
-      : _imageUriFromRun(run, ctx.images, skipTextBoxContent: true);
+      : _imageUriFromRun(
+          run,
+          ctx.images,
+          skipTextBoxContent: true,
+          includeShapeFill: true,
+        );
 
-  xml.XmlElement? txbx;
-  for (final t in run.findAllElements('w:txbxContent')) {
-    txbx = t;
-    break;
+  // Word כותב את אותה תיבה פעמיים לתאימות (`mc:Choice` + `mc:Fallback`),
+  // אך **שייף מקובץ** מכיל תיבות שונות באותו run. ההבחנה היא לפי התוכן:
+  // לקיחת הראשונה בלבד מחקה את תיבות 2..N, ורינדור כולן שכפל את התאימות.
+  final boxes = <xml.XmlElement>[];
+  final seen = <String>{};
+  for (final content in _textBoxContents(run)) {
+    if (seen.add(content.innerText)) boxes.add(content);
   }
 
-  if (txbx != null) {
+  // תיבה עם טקסט: עוטפים במסגרת (`<div>`), עם תמונת-הרקע אם קיימת. תיבה
+  // ריקה מטקסט: נופלים לרינדור `<img>` הרגיל בהמשך — `<div>` ריק חסר גובה
+  // ולא היה מציג את תמונת-הרקע ממילא.
+  final rendered = <String>[];
+  for (final txbx in boxes) {
     final parts = <String>[];
     for (final child in _collectChildren(txbx, const {'w:p', 'w:tbl'})) {
       if (child.name.qualified == 'w:p') {
@@ -468,41 +489,26 @@ String? _drawingHtmlFromRun(xml.XmlElement run, _DocxContext ctx) {
         if (nested != null) parts.add(nested);
       }
     }
-    // תיבה עם טקסט: עוטפים במסגרת (`<div>`), עם תמונת-הרקע אם קיימת.
-    // תיבה ריקה מטקסט: נופלים לרינדור `<img>` הרגיל בהמשך — `<div>` ריק חסר
-    // גובה ולא היה מציג את תמונת-הרקע ממילא.
-    if (parts.isNotEmpty) {
-      final bg = imgUri != null
-          ? 'background-image: url($imgUri); background-size: contain; '
-                'background-repeat: no-repeat; background-position: center; '
-          : '';
-      return '<div style="${bg}border: 1px solid #999; '
-          'padding: 8px; margin: 4px 0;">${parts.join('<br>')}</div>';
-    }
+    if (parts.isEmpty) continue;
+    // תמונת-הרקע היא של השייף כולו, ולכן היא נמתחת על התיבה הראשונה בלבד.
+    final bg = imgUri != null && rendered.isEmpty
+        ? 'background-image: url($imgUri); background-size: contain; '
+              'background-repeat: no-repeat; background-position: center; '
+        : '';
+    rendered.add(
+      '<div style="${bg}border: 1px solid #999; '
+      'padding: 8px; margin: 4px 0;">${parts.join('<br>')}</div>',
+    );
   }
+  if (rendered.isNotEmpty) return rendered.join();
 
-  if (imgUri != null) return '<img src="$imgUri" style="max-width: 100%;"/>';
+  if (imgUri != null) return otzariaImage(imgUri);
   return null;
 }
 
-/// Escape של תווי HTML בתוכן *טקסט* (לא בתגיות שאנו מוסיפים), כדי שתוכן
-/// שמכיל `<`/`>`/`&` (נוסחאות, סוגריים מחודדים, "ר' & ...") לא ישבור את
-/// הרנדור — `HtmlWidget` היה מפרש `<` כתחילת תגית ומבלגן את כל המשך הפסקה.
-String _escapeHtml(String s) {
-  if (!s.contains('&') && !s.contains('<') && !s.contains('>')) return s;
-  return s
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;');
-}
-
-/// גרסה ציבורית של [_escapeHtml] — לשימוש בהזרקת כותרת הספר במטמון
-/// (`docx_cache`), כדי ששם קובץ עם `<`/`&` לא ישבור את ה-HTML.
-String escapeHtmlText(String s) => _escapeHtml(s);
-
 /// תגיות העיצוב של פורמט הטקסט של אוצריא, ללא מאפיינים (attributes).
 /// מסמכי Word שנוצרו מהדבקת טקסט בפורמט אוצריא מכילים אותן כטקסט גלוי —
-/// [_escapeHtml] הופך אותן ל-`&lt;b&gt;` והקורא מציג אותן כטקסט משובש
+/// [escapeHtmlText] הופך אותן ל-`&lt;b&gt;` והקורא מציג אותן כטקסט משובש
 /// (וב-RTL אף מבולגן ויזואלית). כאן הן מזוהות *אחרי* ההרכבה ומוחזרות
 /// לתגיות אמיתיות.
 final RegExp _otzariaTagEntityRegExp = RegExp(
@@ -536,49 +542,14 @@ bool _isOnOff(xml.XmlElement? el) {
   return v != 'false' && v != '0' && v != 'off' && v != 'none';
 }
 
-/// ממיר ערך `w:highlight` (מרקר צבעוני) לצבע CSS, או `null` אם אין/לבטל.
-///
-/// רוב 16 ערכי ה-highlight של Word הם שמות צבע תקניים ב-CSS
-/// (`yellow`, `darkblue`, `lightgray`...). היוצא דופן הוא `darkYellow`
-/// שאין לו שם CSS — ממופה ל-HEX. `none` = ללא סימון.
-String? _highlightColor(String val) {
-  final v = val.toLowerCase();
-  if (v == 'none') return null;
-  if (v == 'darkyellow') return '#808000';
-  return v;
-}
-
-/// ממפה ערך `w:u w:val` (סוג הקו התחתי של Word) לערך `text-decoration-style`
-/// של CSS שהקורא תומך בו (`solid`/`double`/`dotted`/`dashed`/`wavy`).
-/// `single`/`thick`/`words` → `solid` (מוחזר `null` כדי לחסוך style מיותר).
-String? _underlineStyleCss(String val) {
-  final v = val.toLowerCase();
-  if (v == 'double') return 'double';
-  if (v.startsWith('wav')) return 'wavy'; // wave, wavyHeavy, wavyDouble
-  if (v.startsWith('dot')) return 'dotted'; // dotted, dottedHeavy, dotDash…
-  if (v.startsWith('dash')) return 'dashed'; // dash, dashLong, dashedHeavy…
-  return null; // single, thick, words, solid
-}
-
-/// בונה את ה-CSS של קו תחתי מותאם (סוג/צבע/עובי) עבור `<span>`, או `null`
-/// כשמדובר בקו פשוט (single) ללא צבע — שאז עדיף `<u>` (שניתן למזג).
-String? _underlineSpanStyle(xml.XmlElement u) {
-  final val = u.getAttribute('w:val') ?? 'single';
-  final color = u.getAttribute('w:color');
-  final styleCss = _underlineStyleCss(val);
-  final isThick =
-      val.toLowerCase().contains('thick') ||
-      val.toLowerCase().endsWith('heavy');
-  final hasColor = color != null && color.toLowerCase() != 'auto';
-
-  if (styleCss == null && !isThick && !hasColor) return null; // קו פשוט → <u>
-
-  final css = StringBuffer('text-decoration: underline');
-  if (styleCss != null) css.write(' $styleCss');
-  css.write(';');
-  if (hasColor) css.write(' text-decoration-color: #$color;');
-  if (isThick) css.write(' text-decoration-thickness: 2px;');
-  return css.toString();
+/// תגי הקו התחתי של run, לפי `w:u` (סוג/צבע/עובי).
+({String open, String close}) _underlineTagsFor(xml.XmlElement u) {
+  final val = (u.getAttribute('w:val') ?? 'single').toLowerCase();
+  return underlineTags(
+    kind: underlineKindFromName(val),
+    color: cssColorForWordHex(u.getAttribute('w:color')),
+    thick: val.contains('thick') || val.endsWith('heavy'),
+  );
 }
 
 /// מקטע טקסט מעוצב בודד (run לאחר עיבוד). [open]/[close] הן תגיות העטיפה
@@ -652,7 +623,7 @@ _Seg? _processRunSeg(xml.XmlElement node) {
   for (final child in node.childElements) {
     switch (child.name.qualified) {
       case 'w:t':
-        buf.write(_escapeHtml(child.innerText));
+        buf.write(escapeHtmlText(otzariaInlineText(child.innerText)));
       case 'w:br':
         buf.write('<br>');
       case 'w:tab':
@@ -680,37 +651,38 @@ _Seg? _processRunSeg(xml.XmlElement node) {
   }
 
   // צבע: רק צבע אמיתי (לא שחור/auto) — שחור שובר מצב כהה.
-  final color = rPr.getElement('w:color')?.getAttribute('w:val');
+  final color = cssColorForWordHex(
+    rPr.getElement('w:color')?.getAttribute('w:val'),
+  );
   if (color != null) {
-    final c = color.toLowerCase();
-    if (c != '000000' && c != 'auto') {
-      wrap('<span style="color:#$color">', '</span>');
-    }
+    final tags = colorTags(color);
+    wrap(tags.open, tags.close);
   }
 
-  // סימון/מרקר צבעוני (`w:highlight`) → רקע צבעוני.
-  final highlight = rPr.getElement('w:highlight')?.getAttribute('w:val');
-  if (highlight != null) {
-    final bg = _highlightColor(highlight);
-    if (bg != null) wrap('<span style="background-color:$bg">', '</span>');
+  // סימון/מרקר צבעוני (`w:highlight`) → רקע צבעוני. שחור מותר כאן: מרקר
+  // שחור הוא בחירה מכוונת של המחבר, בשונה מצבע טקסט שחור שהוא ברירת מחדל.
+  final bg = cssColorForWordName(
+    rPr.getElement('w:highlight')?.getAttribute('w:val'),
+    allowBlack: true,
+  );
+  if (bg != null) {
+    final tags = highlightTags(bg);
+    wrap(tags.open, tags.close);
   }
 
   // קו חוצה: כפול (`w:dstrike`) → line-through double; יחיד → `<s>`.
-  if (_isOnOff(rPr.getElement('w:dstrike'))) {
-    wrap('<span style="text-decoration: line-through double;">', '</span>');
-  } else if (_isOnOff(rPr.getElement('w:strike'))) {
-    wrap('<s>', '</s>');
+  final isDoubleStrike = _isOnOff(rPr.getElement('w:dstrike'));
+  if (isDoubleStrike || _isOnOff(rPr.getElement('w:strike'))) {
+    final tags = strikeTags(doubleLine: isDoubleStrike);
+    wrap(tags.open, tags.close);
   }
 
   // קו תחתי — `w:u w:val="none"` מבטל. קו פשוט → `<u>`; סוג מותאם
   // (כפול/מנוקד/מקווקו/גלי/עבה/צבעוני) → `<span>` עם text-decoration.
   final u = rPr.getElement('w:u');
   if (_isOnOff(u)) {
-    final spanStyle = _underlineSpanStyle(u!);
-    wrap(
-      spanStyle == null ? '<u>' : '<span style="$spanStyle">',
-      spanStyle == null ? '</u>' : '</span>',
-    );
+    final tags = _underlineTagsFor(u!);
+    wrap(tags.open, tags.close);
   }
 
   // נטוי — כולל וריאנט complex-script של עברית
@@ -730,18 +702,20 @@ _Seg? _processRunSeg(xml.XmlElement node) {
 /// בפורמט שהקורא של אוצריא מציג כמפרש בצד:
 ///   `<sup class="footnote-marker">N</sup><i class="footnote">גוף</i>`
 String _renderParagraphInline(xml.XmlElement paragraph, _DocxContext ctx) {
-  // runs שבתוך תיבות-טקסט (`w:txbxContent`) מעובדים *בתוך* התיבה (ב-
-  // _drawingHtmlFromRun), לא inline — אחרת findAllElements היה תופס אותם
-  // פעמיים. אוספים אותם לדילוג.
-  final txbxRuns = <xml.XmlElement>{};
-  for (final tb in paragraph.findAllElements('w:txbxContent')) {
-    txbxRuns.addAll(tb.findAllElements('w:r'));
+  // runs של תיבת-טקסט ושל הערה inline מעובדים בתוך היחידה שלהם; בלי דילוג
+  // כאן `findAllElements` תופס אותם שוב והתוכן נפלט פעמיים.
+  final nestedRuns = <xml.XmlElement>{};
+  for (final tb in _textBoxContents(paragraph)) {
+    nestedRuns.addAll(tb.findAllElements('w:r'));
+  }
+  for (final note in paragraph.findAllElements('w:footnote')) {
+    nestedRuns.addAll(note.findAllElements('w:r'));
   }
 
   // שלב 1: איסוף מקטעים (segments) מכל ה-runs לפי הסדר.
   final segs = <_Seg>[];
   for (final run in paragraph.findAllElements('w:r')) {
-    if (txbxRuns.contains(run)) continue; // מעובד בתוך תיבת-הטקסט
+    if (nestedRuns.contains(run)) continue; // מעובד בתיבת-הטקסט / בהערה
 
     final footnoteRef = run.getElement('w:footnoteReference');
     if (footnoteRef != null) {
@@ -749,11 +723,20 @@ String _renderParagraphInline(xml.XmlElement paragraph, _DocxContext ctx) {
       if (id != null && ctx.footnotes.containsKey(id)) {
         final n = ctx.footnoteCounter.next();
         segs.add(
-          _Seg.raw(
-            '<sup class="footnote-marker">$n</sup>'
-            '<i class="footnote">${_escapeHtml(ctx.footnotes[id]!)}</i>',
-          ),
+          _Seg.raw(otzariaFootnote('$n', escapeHtmlText(ctx.footnotes[id]!))),
         );
+      }
+      continue;
+    }
+
+    // WordML 2003 אינו מפריד את ההערות לחלק משלהן — גוף ההערה יושב בתוך
+    // ה-run עצמו. בלי הטיפול כאן הוא היה זולג לגוף הפסקה כטקסט רגיל.
+    final inlineFootnote = run.getElement('w:footnote');
+    if (inlineFootnote != null) {
+      final body = escapeHtmlText(inlineFootnote.innerText).trim();
+      if (body.isNotEmpty) {
+        final n = ctx.footnoteCounter.next();
+        segs.add(_Seg.raw(otzariaFootnote('$n', body)));
       }
       continue;
     }
@@ -818,39 +801,60 @@ void _processParagraph(
             (styleVal != null ? ctx.headingStyles[styleVal] : null);
 
   if (level != null) {
-    output.add('<h$level>$text</h$level>');
+    // trim: תווית תוכן העניינים נגזרת מטקסט הכותרת, ורווח מוביל/עוקב
+    // (`xml:space="preserve"`) היה מייצר ערך TOC שונה לאותה כותרת בדיוק.
+    output.add('<h$level>${text.trim()}</h$level>');
     return;
   }
 
   // רשימה: קידומת תבליט עם הזחה לפי רמת הקינון — לא `<ul>` (שנשבר בין שורות).
-  final numPr = pPr?.getElement('w:numPr');
+  // `w:numPr` ב-OOXML; `w:listPr` ב-WordML 2003, שם המזהה הוא `w:ilfo`
+  // ו-Word אף כותב שם את התווית המחושבת עצמה ב-`wx:t`.
+  final numPr = pPr?.getElement('w:numPr') ?? pPr?.getElement('w:listPr');
   if (numPr != null) {
-    final numId = numPr.getElement('w:numId')?.getAttribute('w:val');
+    final numId =
+        numPr.getElement('w:numId')?.getAttribute('w:val') ??
+        numPr.getElement('w:ilfo')?.getAttribute('w:val');
     final ilvl =
         int.tryParse(numPr.getElement('w:ilvl')?.getAttribute('w:val') ?? '') ??
         0;
-    final label = ctx.listLabel(numId, ilvl);
+    // תווית שהמסמך עצמו חישב אמינה מכל שחזור שלנו מהגדרת הרשימה.
+    final rendered = numPr.getElement('wx:t')?.getAttribute('wx:val')?.trim();
+    final label = (rendered != null && rendered.isNotEmpty)
+        ? escapeHtmlText(rendered)
+        : ctx.listLabel(numId, ilvl);
     final indent = '    ' * ilvl;
     text = '$indent$label $text';
   }
 
-  // יישור מפורש (`w:jc`) — center/right/left. `both`/`start`/`end` נופלים
-  // לברירת המחדל של אוצריא (justify ב-RTL) ולכן אינם נעטפים.
+  // יישור מפורש (`w:jc`). `both` נופל לברירת המחדל של אוצריא ואינו נעטף.
   // חל רק על פסקת גוף: כותרות כבר חזרו ב-return למעלה, כדי לא לעטוף `<h>`
   // ב-`<div>` (מה שהיה שובר את זיהוי הכותרות ב-TocParser).
-  final jc = pPr?.getElement('w:jc')?.getAttribute('w:val');
-  final align = switch (jc) {
-    'center' => 'center',
-    'right' => 'right',
-    'left' => 'left',
-    _ => null,
-  };
+  final align = _alignmentFromJc(
+    pPr?.getElement('w:jc')?.getAttribute('w:val'),
+    isRtl: _isOnOff(pPr?.getElement('w:bidi')),
+  );
   if (align != null) {
     text = '<div style="text-align: $align;">$text</div>';
   }
 
   output.add(text);
 }
+
+/// ממיר `w:jc` ליישור CSS, או `null` כשאין יישור מפורש.
+///
+/// `start`/`end` הם יישור *לוגי* התלוי בכיוון הפסקה (`w:bidi`). Word 2013
+/// ואילך כותב אותם במקום `left`/`right`, ולכן התעלמות מהם השאירה מסמכים
+/// שלמים בלי שום יישור. בפסקה שכיוונה RTL הם **מדולגים**: מפיקי המסמכים
+/// חלוקים בפירושם, והכרעה שגויה מיישרת קטע עברי שלם לצד ההפוך.
+String? _alignmentFromJc(String? jc, {required bool isRtl}) => switch (jc) {
+  'center' => 'center',
+  'right' => 'right',
+  'left' => 'left',
+  'start' => isRtl ? null : 'left',
+  'end' => isRtl ? null : 'right',
+  _ => null,
+};
 
 /// מספר עמודות ה-grid שתא תופס (`w:gridSpan`, ברירת מחדל 1).
 int _gridSpanOf(xml.XmlElement cell) {
@@ -861,11 +865,41 @@ int _gridSpanOf(xml.XmlElement cell) {
   return (v != null ? int.tryParse(v) : null) ?? 1;
 }
 
+/// אלמנט המיזוג האנכי של התא. WordML 2003 כותב `w:vmerge` באות קטנה,
+/// ולכן החיפוש הוא לפי שם מקומי ללא תלות ברישיות.
+xml.XmlElement? _vMergeOf(xml.XmlElement cell) {
+  final tcPr = cell.getElement('w:tcPr');
+  if (tcPr == null) return null;
+  for (final child in tcPr.childElements) {
+    if (child.name.local.toLowerCase() == 'vmerge') return child;
+  }
+  return null;
+}
+
 /// האם התא הוא המשך מיזוג אנכי (`w:vMerge` ללא `restart`) — כלומר ממוזג
 /// עם התא שמעליו ואין לפלוט עבורו `<td>`.
 bool _isVMergeContinue(xml.XmlElement cell) {
-  final vm = cell.getElement('w:tcPr')?.getElement('w:vMerge');
+  final vm = _vMergeOf(cell);
   return vm != null && vm.getAttribute('w:val') != 'restart';
+}
+
+/// האם באותה עמדת grid יש מעל [row] תא שפותח את המיזוג ויבלע את ההמשך.
+///
+/// מטפסים מעל שרשרת תאי-ההמשך; התא הראשון שאינו המשך חייב להצהיר
+/// `w:vMerge w:val="restart"`. תא רגיל אינו בולע דבר (ה-rowspan נספר רק
+/// מ-`restart`), ולכן דילוג על ההמשך היה מוחק את תוכנו.
+bool _hasVMergeStartAbove(
+  List<xml.XmlElement> rows,
+  int row,
+  int gridPos,
+) {
+  for (var above = row - 1; above >= 0; above--) {
+    final cell = _cellAtGridPos(rows[above], gridPos);
+    if (cell == null) return false;
+    if (_isVMergeContinue(cell)) continue;
+    return _vMergeOf(cell)?.getAttribute('w:val') == 'restart';
+  }
+  return false;
 }
 
 /// אוסף ילדים ישירים מהסוגים שב-[tags], תוך פתיחה *שקופה* של בקרות-תוכן
@@ -880,6 +914,8 @@ List<xml.XmlElement> _collectChildren(xml.XmlElement parent, Set<String> tags) {
     } else if (name == 'w:sdt') {
       final content = child.getElement('w:sdtContent');
       if (content != null) result.addAll(_collectChildren(content, tags));
+    } else if (name == 'w:customXml') {
+      result.addAll(_collectChildren(child, tags));
     }
   }
   return result;
@@ -929,14 +965,16 @@ String? _buildTableHtml(xml.XmlElement table, _DocxContext ctx) {
     for (final cell in _collectChildren(row, const {'w:tc'})) {
       final span = _gridSpanOf(cell);
 
-      // תא המשך-מיזוג-אנכי: מדולג (כלול ב-rowspan של התא העליון).
-      if (_isVMergeContinue(cell)) {
+      // תא המשך-מיזוג-אנכי: מדולג (כלול ב-rowspan של התא העליון). בלי תא
+      // פותח מעליו — טבלה שפוצלה בין מקטעים, או `w:vMerge` בשורה הראשונה —
+      // אין מי שיבלע אותו, ודילוג היה מוחק את תוכנו.
+      if (_isVMergeContinue(cell) && _hasVMergeStartAbove(rowEls, r, colPos)) {
         colPos += span;
         continue;
       }
 
       final tcPr = cell.getElement('w:tcPr');
-      final vMergeVal = tcPr?.getElement('w:vMerge')?.getAttribute('w:val');
+      final vMergeVal = _vMergeOf(cell)?.getAttribute('w:val');
 
       // rowspan: אם זה restart, סופרים תאי-המשך בשורות הבאות באותה עמדה.
       var rowspan = 1;
@@ -952,7 +990,12 @@ String? _buildTableHtml(xml.XmlElement table, _DocxContext ctx) {
       }
 
       final shd = tcPr?.getElement('w:shd')?.getAttribute('w:fill');
-      final vAlign = tcPr?.getElement('w:vAlign')?.getAttribute('w:val');
+      // הערכים מגיעים מתוך המסמך ונכנסים ל-`style="…"`; בלי סינון, ערך
+      // שמכיל גרש נחלץ מהמאפיין ומזריק תגיות משלו לגוף הספר — ומשם הן
+      // מגיעות גם לתוכן העניינים ולאינדקס.
+      final vAlign = cssVerticalAlign(
+        tcPr?.getElement('w:vAlign')?.getAttribute('w:val'),
+      );
 
       final attrs = StringBuffer();
       if (span > 1) attrs.write(' colspan="$span"');
@@ -960,7 +1003,10 @@ String? _buildTableHtml(xml.XmlElement table, _DocxContext ctx) {
       final styles = <String>['border: 1px solid #999', 'padding: 4px 8px'];
       if (shd != null) {
         final f = shd.toLowerCase();
-        if (f != 'auto' && f != 'ffffff') styles.add('background-color: #$shd');
+        final fill = f == 'auto' || f == 'ffffff'
+            ? null
+            : sanitizeCssColor('#$shd');
+        if (fill != null) styles.add('background-color: $fill');
       }
       if (vAlign != null) styles.add('vertical-align: $vAlign');
       attrs.write(' style="${styles.join('; ')}"');
@@ -987,8 +1033,27 @@ String? _buildTableHtml(xml.XmlElement table, _DocxContext ctx) {
 
   if (rows.isEmpty) return null;
   final dir = isRtl ? ' dir="rtl"' : '';
-  return '<table$dir style="border-collapse: collapse; '
-      'border: 1px solid #999;">$rows</table>';
+  return '${otzariaTableOpen(attributes: dir)}$rows</table>';
+}
+
+/// טקסט הערת שוליים כשורה אחת.
+///
+/// גבול פסקה, `w:br` ו-`w:tab` הופכים לרווח: חיבור כל ה-`w:t` במחרוזת ריקה
+/// מדביק את המילה האחרונה של פסקה אחת לראשונה של הבאה, והחיפוש על הצירוף
+/// מפסיק למצוא. אותה תבנית בדיוק בממירי ODT ו-Word הבינארי.
+String _footnoteText(xml.XmlElement footnote) {
+  final buffer = StringBuffer();
+  for (final node in footnote.descendantElements) {
+    switch (node.name.qualified) {
+      case 'w:t':
+        buffer.write(node.innerText);
+      case 'w:p':
+      case 'w:br':
+      case 'w:tab':
+        buffer.write(' ');
+    }
+  }
+  return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 /// Extracts footnotes from the document
@@ -998,7 +1063,11 @@ Map<String, String> _extractFootnotes(Archive archive) {
   for (final file in archive) {
     if (file.isFile && file.name == 'word/footnotes.xml') {
       try {
-        final content = _decodeXmlBytes(file.content);
+        // הערות השוליים הן תוכן הספר, ולכן הן עוברות את אימות הגודל בפועל
+        // כמו גוף המסמך; styles/numbering הם מטא-דאטה ונסבלים.
+        final content = _decodeXmlBytes(
+          readArchiveEntry(file, format: DocumentFormat.docx),
+        );
         final document = xml.XmlDocument.parse(content);
 
         final footnoteNodes = document.findAllElements('w:footnote');
@@ -1006,11 +1075,7 @@ Map<String, String> _extractFootnotes(Archive archive) {
           final id = footnote.getAttribute('w:id');
           if (id != null && id != '-1' && id != '0') {
             // Skip automatic footnotes
-            final text = footnote
-                .findAllElements('w:t')
-                .map((e) => e.innerText)
-                .join('');
-            footnotes[id] = text;
+            footnotes[id] = _footnoteText(footnote);
           }
         }
       } catch (_) {
@@ -1023,41 +1088,243 @@ Map<String, String> _extractFootnotes(Archive archive) {
   return footnotes;
 }
 
-/// Converts a docx file to text.
-/// Marks up headings, lists, text styling, and includes footnotes inline.
-String docxToText(Uint8List bytes, String title) {
-  _zipDecoder ??= ZipDecoder();
+/// ממיר מסמך Word מבוסס OOXML (DOCX/DOCM/DOTX/DOTM) לטקסט של אוצריא.
+/// מסמן כותרות, רשימות ועיצוב, ומשלב הערות שוליים inline.
+///
+/// כל ארבעת הפורמטים חולקים את אותו מבנה חבילה (`word/document.xml`,
+/// `styles.xml`, `numbering.xml`) ולכן את אותו מנוע. [format] נשמר בחוזה כדי
+/// שההבחנה תישמר בשגיאות ובמטמון — ולא כדי לגזור ממנו התנהגות המרה.
+///
+/// [embedImages] כבוי משמיט את ה-base64 ומשאיר את תגי התמונה — ראו
+/// [_extractImages].
+String ooxmlWordToText(
+  Uint8List bytes,
+  String title, {
+  required DocumentFormat format,
+  bool embedImages = true,
+}) {
+  assert(
+    format.isOoxmlWord,
+    'ooxmlWordToText נקרא עם ${format.extension} שאינו OOXML Word',
+  );
+  // מופע מקומי ולא מודולרי: `ZipDecoder` שומר מצב ומחזיק את חוצץ הבייטים של
+  // המסמך האחרון לכל אורך חיי ה-isolate. גם התועלת אפסית — כל המרה רצה
+  // ב-`Isolate.run` נפרד, וסטטיקה היא פר-isolate.
+  // חבילת OOXML מוצפנת אינה ZIP אלא מכולת OLE. בלעדי הבדיקה היא נדחית
+  // כ"קובץ פגום", והמשתמש מחפש שיבוש שאינו קיים.
+  if (hasOleContainerSignature(bytes)) {
+    throw EncryptedDocumentException(
+      format: format,
+      cause: 'החבילה מוצפנת (מכולת OLE במקום ZIP)',
+    );
+  }
+  // ה-decode על ZIP פגום זורק `RangeError` — חריגה שאינה
+  // [DocumentConversionException] ולכן בורחת מכל מטפל בצנרת ומפילה סריקה
+  // שלמה בגלל ספר אחד.
+  final Archive archive;
+  try {
+    archive = ZipDecoder().decodeBytes(bytes);
+  } catch (e) {
+    throw CorruptedDocumentException(format: format, cause: e);
+  }
+  // מפענח ה-ZIP סובלני ומחזיר ארכיון ריק על קלט שאינו ZIP כלל. בלי הבדיקה
+  // הזו קובץ טקסט ששמו .docx היה נפתח כספר ריק במקום לדווח על שגיאה.
+  if (archive.isEmpty) {
+    throw CorruptedDocumentException(
+      format: format,
+      cause: 'החבילה אינה ארכיון ZIP תקין',
+    );
+  }
+  assertSafeArchive(archive, format: format);
+  return ooxmlWordArchiveToText(
+    archive,
+    title,
+    format: format,
+    embedImages: embedImages,
+  );
+}
 
-  final archive = _zipDecoder!.decodeBytes(bytes);
+/// ממיר חבילת OOXML **שכבר נפרסה** לטקסט של אוצריא.
+///
+/// נקודת הכניסה של פורמט Flat OPC (‎.xml‎), שאין לו ZIP לפרוס: הוא בונה את
+/// אותה [Archive] מתוך רשומות ה-XML ומגיע לאותו מנוע בדיוק.
+String ooxmlWordArchiveToText(
+  Archive archive,
+  String title, {
+  required DocumentFormat format,
+  bool embedImages = true,
+}) {
   final ctx = _DocxContext(
     _extractFootnotes(archive),
-    _extractImages(archive),
+    _extractImages(archive, embedImages: embedImages),
     _extractNumbering(archive),
     _extractHeadingStyles(archive),
   );
-  final List<String> list = ['<h1>${_escapeHtml(title)}</h1>'];
+  final List<String> list = ['<h1>${escapeHtmlText(title)}</h1>'];
 
-  for (final file in archive) {
-    if (file.isFile && file.name == 'word/document.xml') {
-      final fileContent = _decodeXmlBytes(file.content);
-      final xml.XmlDocument document;
-      try {
-        document = xml.XmlDocument.parse(fileContent);
-      } catch (_) {
-        // document.xml פגום — מחזירים לפחות את כותרת הספר במקום לקרוס.
-        break;
-      }
+  // גוף המסמך חסר או אינו קריא = כשל מפורש. פלט "כותרת בלבד" נראה כמו ספר
+  // תקין וריק: הוא נשמר במטמון, מאונדקס, ומסמן כל הערה אישית כחסרה.
+  final entry = archive.files.firstWhere(
+    (file) => file.isFile && file.name == 'word/document.xml',
+    orElse: () => throw CorruptedDocumentException(
+      format: format,
+      cause: 'אין word/document.xml בחבילה',
+    ),
+  );
 
-      final body = document.rootElement.getElement('w:body');
-      if (body == null) break;
-
-      _processBlockChildren(body.childElements, ctx, list);
-      break;
-    }
+  final xml.XmlDocument document;
+  try {
+    document = xml.XmlDocument.parse(
+      _decodeXmlBytes(readArchiveEntry(entry, format: format)),
+    );
+  } catch (e) {
+    if (e is DocumentConversionException) rethrow;
+    throw CorruptedDocumentException(
+      format: format,
+      cause: 'word/document.xml אינו קריא: $e',
+    );
   }
+
+  final body = document.rootElement.getElement('w:body');
+  if (body == null) {
+    throw CorruptedDocumentException(
+      format: format,
+      cause: 'ל-word/document.xml אין w:body',
+    );
+  }
+  _processBlockChildren(body.childElements, ctx, list);
 
   return list.join('\n');
 }
+
+/// ממיר DOCX. wrapper דק מעל [ooxmlWordToText] — קיים כדי שקוראים ותיקים
+/// (וטסטים) לא ישתנו.
+String docxToText(Uint8List bytes, String title) =>
+    ooxmlWordToText(bytes, title, format: DocumentFormat.docx);
+
+// ── WordML 2003 ───────────────────────────────────────────────────────────
+
+/// ממיר מסמך **WordprocessingML 2003** (‎.xml‎ עם שורש `w:wordDocument`).
+///
+/// הדיאלקט חולק עם OOXML את כל אוצר-המילים של הגוף (`w:p`, `w:r`, `w:rPr`,
+/// `w:tbl`) ולכן את אותו מנוע רינדור. שונים רק מקורות המשאבים: הסגנונות,
+/// הרשימות, התמונות וההערות יושבים כולם **בתוך אותו מסמך** ולא בקבצים
+/// נפרדים בחבילה.
+String wordMl2003ToText(
+  xml.XmlDocument document,
+  String title, {
+  required DocumentFormat format,
+  bool embedImages = true,
+}) {
+  final root = document.rootElement;
+  final body = root.getElement('w:body');
+  if (body == null) {
+    throw CorruptedDocumentException(
+      format: format,
+      cause: 'אין w:body במסמך WordML',
+    );
+  }
+
+  final ctx = _DocxContext(
+    // ההערות אינן חלק נפרד — הן inline, ומטופלות ב-_renderParagraphInline.
+    const {},
+    _extractWordMlImages(root, embedImages: embedImages),
+    _extractWordMlNumbering(root),
+    _headingStylesFrom(document),
+  );
+
+  final list = <String>['<h1>${escapeHtmlText(title)}</h1>'];
+  _processBlockChildren(body.childElements, ctx, list);
+  return list.join('\n');
+}
+
+/// אוסף את התמונות המוטמעות של WordML 2003 (`w:binData`) כ-data URI.
+/// המפתח הוא השם שמופיע ב-`v:imagedata src` (`wordml://…`).
+Map<String, String> _extractWordMlImages(
+  xml.XmlElement root, {
+  required bool embedImages,
+}) {
+  final images = <String, String>{};
+  var embeddedBytes = 0;
+  for (final data in root.descendantElements) {
+    if (data.name.local != 'binData') continue;
+    final name = data.getAttribute('w:name');
+    if (name == null) continue;
+    final mime = imageMimeForPath(name);
+    if (mime == null) continue;
+    if (!embedImages) {
+      images[name] = '';
+      continue;
+    }
+    // ה-base64 שבמסמך גדול פי ~4/3 מהתמונה; התקרה נבדקת על הגודל המפוענח.
+    final encoded = data.innerText.replaceAll(RegExp(r'\s'), '');
+    if (encoded.length ~/ 4 * 3 > EmbeddedMediaLimits.maxImageBytes ||
+        embeddedBytes + encoded.length ~/ 4 * 3 >
+            EmbeddedMediaLimits.maxTotalImageBytes) {
+      images[name] = '';
+      continue;
+    }
+    // base64 פגום זורק — תמונה אחת אינה שווה כשל של המסמך כולו.
+    try {
+      embeddedBytes += base64Decode(encoded).length;
+      images[name] = 'data:$mime;base64,$encoded';
+    } catch (_) {
+      images[name] = '';
+    }
+  }
+  return images;
+}
+
+/// בונה את מפת הרשימות של WordML 2003: `ilfo` → (`ilvl` → הגדרה).
+///
+/// המבנה מקביל ל-numbering.xml אך בשמות אחרים: `w:listDef` במקום
+/// `w:abstractNum`, ו-`w:nfc` (קוד מספרי) במקום `w:numFmt` (שם).
+Map<String, Map<int, _NumLevel>> _extractWordMlNumbering(xml.XmlElement root) {
+  final lists = root.getElement('w:lists');
+  if (lists == null) return const {};
+
+  final defs = <String, Map<int, _NumLevel>>{};
+  for (final def in lists.findElements('w:listDef')) {
+    final id = def.getAttribute('w:listDefId');
+    if (id == null) continue;
+    final levels = <int, _NumLevel>{};
+    for (final lvl in def.findElements('w:lvl')) {
+      final ilvl = int.tryParse(lvl.getAttribute('w:ilvl') ?? '');
+      if (ilvl == null) continue;
+      levels[ilvl] = _NumLevel(
+        _numberFormatForNfc(lvl.getElement('w:nfc')?.getAttribute('w:val')),
+        lvl.getElement('w:lvlText')?.getAttribute('w:val') ?? '',
+        int.tryParse(lvl.getElement('w:start')?.getAttribute('w:val') ?? '') ??
+            1,
+      );
+    }
+    defs[id] = levels;
+  }
+
+  final result = <String, Map<int, _NumLevel>>{};
+  for (final list in lists.findElements('w:list')) {
+    final ilfo = list.getAttribute('w:ilfo');
+    final defId = list.getElement('w:ilst')?.getAttribute('w:val');
+    if (ilfo != null && defId != null && defs.containsKey(defId)) {
+      result[ilfo] = defs[defId]!;
+    }
+  }
+  return result;
+}
+
+/// קודי `MSONFC` → שמות `w:numFmt`, כדי שמנוע המספור יישאר אחד.
+String _numberFormatForNfc(String? nfc) => switch (int.tryParse(nfc ?? '')) {
+  0 => 'decimal',
+  1 => 'upperRoman',
+  2 => 'lowerRoman',
+  3 => 'upperLetter',
+  4 => 'lowerLetter',
+  22 => 'decimalZero',
+  23 => 'bullet',
+  45 || 47 => 'hebrew1',
+  255 => 'none',
+  _ => 'decimal',
+};
 
 /// מעבד רצף אלמנטי-בלוק (ילדי body / sdtContent) *לפי הסדר*: פסקאות,
 /// טבלאות, ובקרות-תוכן (`w:sdt`). ה-sdt עטיפה שקופה — יורדים ל-`w:sdtContent`
@@ -1078,6 +1345,12 @@ void _processBlockChildren(
         if (content != null) {
           _processBlockChildren(content.childElements, ctx, output);
         }
+      // עטיפות שקופות: `w:customXml` מגיע ממסמכי Word 2003, מטפסים וממערכות
+      // DMS, ו-`wx:sect` מ-WordML 2003. בלי הירידה דרכן תוכנן נמחק בשקט.
+      case 'w:customXml':
+      case 'wx:sect':
+      case 'wx:sub-section':
+        _processBlockChildren(element.childElements, ctx, output);
     }
   }
 }

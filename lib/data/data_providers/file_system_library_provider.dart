@@ -9,8 +9,8 @@ import 'package:otzaria/data/data_providers/library_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -119,7 +119,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       final lowerPath = entity.path.toLowerCase();
       if (!lowerPath.endsWith('.pdf')) continue;
 
-      final book = _createBookFromFile(
+      final book = await _createBookFromFile(
         entity,
         metadata,
         [DatabaseConstants.talmudBavliFolderName],
@@ -183,7 +183,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
             keyToPath,
           );
         } else if (entity is File) {
-          final book = _createBookFromFile(entity, metadata, currentPath);
+          final book = await _createBookFromFile(entity, metadata, currentPath);
           if (book != null) {
             final categoryName = currentPath.isNotEmpty
                 ? currentPath.last
@@ -209,11 +209,11 @@ class FileSystemLibraryProvider implements LibraryProvider {
     }
   }
 
-  Book? _createBookFromFile(
+  Future<Book?> _createBookFromFile(
     File file,
     Map<String, Map<String, dynamic>> metadata,
     List<String> categoryPath,
-  ) {
+  ) async {
     final path = file.path.toLowerCase();
     final title = getTitleFromPath(file.path);
     final topics = categoryPath.join(', ');
@@ -243,49 +243,24 @@ class FileSystemLibraryProvider implements LibraryProvider {
       );
     }
 
-    if (path.endsWith('.txt') ||
-        path.endsWith('.docx') ||
-        path.endsWith('.epub') ||
-        path.endsWith('.md') ||
-        path.endsWith('.markdown')) {
+    final format = documentFormatFromExtension(path);
+    if (format != null &&
+        format.isProductionSupported &&
+        format.isTextual &&
+        // ‎.xml‎ ו-‎.wbk‎ נאספים רק אם תוכנם אכן מסמך — אותו שער שבכל שאר
+        // נקודות הכניסה. בלעדיו כל קובץ XML בתיקיית הספרים הופך ל"ספר"
+        // שנכשל בפתיחה ובכל אינדוקס.
+        (!format.needsContentSniffing ||
+            await isSupportedBookFileByContent(file.path))) {
       final categoryPathStr = categoryPath.join(', ');
       final categoryId = categoryPathStr.hashCode;
       _categoryIdToPath[categoryId] = categoryPathStr;
 
-      if (path.endsWith('.docx')) {
-        return DocxBook(
-          title: title,
-          path: file.path,
-          filePath: file.path,
-          author: metadata[title]?['author'],
-          heShortDesc: metadata[title]?['heShortDesc'],
-          pubDate: metadata[title]?['pubDate'],
-          pubPlace: metadata[title]?['pubPlace'],
-          order: metadata[title]?['order'] ?? 999,
-          topics: finalTopics,
-          categoryPath: categoryPathStr,
-          categoryId: categoryId,
-        );
-      }
-
-      if (path.endsWith('.epub')) {
-        return EpubBook(
-          title: title,
-          path: file.path,
-          filePath: file.path,
-          author: metadata[title]?['author'],
-          heShortDesc: metadata[title]?['heShortDesc'],
-          pubDate: metadata[title]?['pubDate'],
-          pubPlace: metadata[title]?['pubPlace'],
-          order: metadata[title]?['order'] ?? 999,
-          topics: finalTopics,
-          categoryPath: categoryPathStr,
-          categoryId: categoryId,
-        );
-      }
-
-      return TextBook(
+      return buildBookForFileType(
+        fileType: format.extension,
         title: title,
+        path: file.path,
+        filePath: file.path,
         author: metadata[title]?['author'],
         heShortDesc: metadata[title]?['heShortDesc'],
         pubDate: metadata[title]?['pubDate'],
@@ -293,12 +268,6 @@ class FileSystemLibraryProvider implements LibraryProvider {
         order: metadata[title]?['order'] ?? 999,
         topics: finalTopics,
         extraTitles: metadata[title]?['extraTitles'],
-        filePath: file.path,
-        fileType: path.endsWith('.markdown')
-            ? 'markdown'
-            : path.endsWith('.md')
-            ? 'md'
-            : 'txt',
         categoryPath: categoryPathStr,
         categoryId: categoryId,
       );
@@ -330,22 +299,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
     final file = File(path);
     if (!await file.exists()) return null;
 
-    // PDF content isn't plain text; callers should use the PDF flow.
-    if (fileType.toLowerCase() == 'pdf' ||
-        path.toLowerCase().endsWith('.pdf')) {
-      return null;
-    }
-
-    final lowerPath = path.toLowerCase();
-    if (lowerPath.endsWith('.docx')) {
-      return convertDocxWithCache(file, title);
-    } else if (lowerPath.endsWith('.epub')) {
-      return convertEpubWithCache(file, title);
-    } else if (lowerPath.endsWith('.md') || lowerPath.endsWith('.markdown')) {
-      return convertMarkdownWithCache(file, title);
-    } else {
-      return readTextFileSmart(file);
-    }
+    // PDF מוחזר null — התוכן שלו אינו טקסט והקוראים עוברים בצנרת ה-PDF.
+    return readFileBackedBookText(file, fileType, title);
   }
 
   @override
@@ -355,7 +310,8 @@ class FileSystemLibraryProvider implements LibraryProvider {
     String fileType, {
     bool preferUserBooks = false,
   }) async {
-    if (fileType.toLowerCase() == 'pdf') return null;
+    // PDF בונה תוכן עניינים מה-outline שלו במסלול נפרד ואין ממנו טקסט.
+    if (!(documentFormatFromFileType(fileType)?.isTextual ?? true)) return null;
     final text = await getBookText(
       title,
       categoryId,
@@ -455,13 +411,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
       final results = <String>[];
       await for (final entity in Directory(path).list(recursive: true)) {
         if (entity is! File) continue;
-        final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.txt') ||
-            lower.endsWith('.docx') ||
-            lower.endsWith('.epub') ||
-            lower.endsWith('.md') ||
-            lower.endsWith('.markdown') ||
-            lower.endsWith('.pdf')) {
+        if (await isSupportedBookFileByContent(entity.path)) {
           results.add(entity.path);
         }
       }
@@ -565,11 +515,9 @@ class FileSystemLibraryProvider implements LibraryProvider {
     }
     if (path == null) throw Exception('Book not found: $title');
 
-    final lowerPath = path.toLowerCase();
-    if (lowerPath.endsWith('.docx') ||
-        lowerPath.endsWith('.epub') ||
-        lowerPath.endsWith('.md') ||
-        lowerPath.endsWith('.markdown')) {
+    // עריכה מותרת רק בטקסט גולמי: פורמט מומר היה נשמר כ-HTML המומר ולא
+    // כמקור, וההמרה הבאה הייתה מכפילה עיצוב.
+    if (documentFormatFromExtension(path)?.requiresConversion ?? false) {
       throw Exception(
         'Cannot save converted book formats. Only text files are supported.',
       );
@@ -870,7 +818,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
         return 'שגיאה: הקובץ לא נמצא';
       }
 
-      return await _getLineFromFile(path, link.index2).timeout(
+      return await _getLineFromFile(path, link.index2, title).timeout(
         const Duration(seconds: 3),
         onTimeout: () => 'שגיאה: פג זמן קריאת הקובץ',
       );
@@ -880,9 +828,18 @@ class FileSystemLibraryProvider implements LibraryProvider {
   }
 
   /// Gets a specific line from a file by index.
-  Future<String> _getLineFromFile(String path, int lineIndex) async {
-    final file = File(path);
-    final lines = const LineSplitter().convert(await readTextFileSmart(file));
+  ///
+  /// [title] הוא כותרת הספר בקטלוג: בפורמט שדורש המרה היא שורה 1 של הפלט,
+  /// ולכן היא חלק מהמיקום שהקישור מפנה אליו. הניתוב לפי פורמט הוא גם מה
+  /// שמונע קריאת מכולה בינארית כטקסט — שמחזירה ג'יבריש שנראה כתוכן.
+  Future<String> _getLineFromFile(
+    String path,
+    int lineIndex,
+    String title,
+  ) async {
+    final text = await readFileBackedBookText(File(path), null, title);
+    if (text == null) return 'שגיאה: לפורמט הקובץ אין תוכן טקסטואלי';
+    final lines = const LineSplitter().convert(text);
 
     if (lineIndex < 1 || lineIndex > lines.length) {
       return 'שגיאה: אינדקס מחוץ לטווח';

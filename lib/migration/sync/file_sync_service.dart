@@ -14,6 +14,8 @@ import '../generator/generator.dart';
 import '../models/book.dart';
 import '../models/category.dart';
 import '../../utils/file/file_hidden_utils.dart';
+import '../../utils/file/document_converter.dart';
+import '../../utils/file/document_format.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {
@@ -629,16 +631,15 @@ class FileSyncService {
     required _FolderScanCaches caches,
   }) async {
     final title = path.basenameWithoutExtension(filePath);
-    final extension = path.extension(filePath).toLowerCase();
+    final format = documentFormatFromExtension(filePath);
+    if (format == null) {
+      // ‏[_findNewFiles] כבר סינן מול ה-registry, ולכן זהו באג ולא קלט חוקי.
+      _log.warning('Unsupported file reached the sync pipeline: $filePath');
+      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
+    }
 
     // פורמטים שמומרים בזמן קריאה נשארים חיצוניים כדי שהמטמון יבודד גרסאות.
-    final isBinaryFormat =
-        extension == '.pdf' ||
-        extension == '.docx' ||
-        extension == '.epub' ||
-        extension == '.md' ||
-        extension == '.markdown';
-    final effectiveInsertContent = isBinaryFormat ? false : insertContent;
+    final effectiveInsertContent = format.canStoreLinesInDb && insertContent;
 
     // Build category path
     final relativeCategories = _parsePathToCategories(filePath, basePath);
@@ -662,8 +663,7 @@ class FileSyncService {
         ? categoryResult.categoriesCreated
         : 0;
 
-    // Extract file type from extension (remove the dot)
-    final fileType = extension.replaceFirst('.', '').toLowerCase();
+    final fileType = format.extension;
 
     // רישום מפתח הספר — הקובץ קיים בדיסק, ולכן ה-prune של קבצים שנמחקו
     // לא יסיר אותו מה-DB. המפתח אינו תלוי ב-filePath, כדי לכסות גם ספרים
@@ -965,25 +965,14 @@ class FileSyncService {
   Future<List<String>> _findNewFiles(String basePath) async {
     final newFiles = <String>[];
     final dir = Directory(basePath);
-    final supportedExtensions = {
-      '.txt',
-      '.pdf',
-      '.docx',
-      '.epub',
-      '.md',
-      '.markdown',
-    };
-
     if (!await dir.exists()) return newFiles;
 
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
         if (isHiddenOrSystem(entity.path)) continue;
-        final ext = path.extension(entity.path).toLowerCase();
-        if (supportedExtensions.contains(ext)) {
-          final title = path.basenameWithoutExtension(entity.path);
+        if (await isSupportedBookFileByContent(entity.path)) {
           newFiles.add(entity.path);
-          _log.fine('Found file to process: $title ($ext)');
+          _log.fine('Found file to process: ${path.basename(entity.path)}');
         }
       }
     }

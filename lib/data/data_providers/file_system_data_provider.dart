@@ -12,7 +12,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -21,7 +21,7 @@ import 'package:path/path.dart' as path;
 /// A data provider that manages file system operations for the library.
 ///
 /// This class handles all file system related operations including:
-/// - Reading and parsing book content from various file formats (txt, docx, pdf)
+/// - Reading and parsing book content from every supported document format
 /// - Managing the library structure (categories and books)
 /// - Handling external book data from CSV files
 /// - Managing book links and metadata
@@ -574,13 +574,15 @@ class FileSystemData {
       throw Exception('Book not found: $title');
     }
 
-    final file = File(path);
-    return readTextFileSmart(file);
+    // ניתוב לפי פורמט ולא קריאה עיוורת כטקסט: פירוש מכולה בינארית (ZIP/OLE)
+    // כ-Windows-1255 מייצר ג'יבריש עברי שנראה כספר תקין לגמרי.
+    return await readFileBackedBookText(File(path), fileType, title) ?? '';
   }
 
   /// Saves text content to a book file.
   ///
-  /// Only supports plain text files (.txt). DOCX files cannot be edited.
+  /// Only supports plain text files (.txt); a converted format has no source
+  /// to write back to.
   /// Creates a backup of the original file before saving.
   Future<void> saveBookText(String title, String content) async {
     await _providerManager.fileSystemProvider.saveBookText(title, content);
@@ -615,7 +617,11 @@ class FileSystemData {
         return 'שגיאה: הקובץ לא נמצא';
       }
 
-      return await getLineFromFile(path, link.index2).timeout(
+      return await getLineFromFile(
+        path,
+        link.index2,
+        title: getTitleFromPath(link.path2),
+      ).timeout(
         const Duration(seconds: 3),
         onTimeout: () {
           debugPrint('⚠️ Timeout reading line from file: $path');
@@ -671,41 +677,37 @@ class FileSystemData {
     );
   }
 
-  /// Efficiently reads a specific line from a file.
+  /// Reads a specific line (1-based) from a book file.
   ///
-  /// Uses a stream to read the file line by line until the desired index
-  /// is reached, then closes the stream to conserve resources.
-  Future<String> getLineFromFile(String path, int index) async {
+  /// [title] הוא כותרת הספר בקטלוג: בפורמט שדורש המרה היא שורה 1 של הפלט,
+  /// ולכן היא חלק מהמיקום שהקישור מפנה אליו. הניתוב לפי פורמט הוא גם מה
+  /// שמונע קריאת מכולה בינארית כטקסט — שמחזירה ג'יבריש שנראה כתוכן.
+  Future<String> getLineFromFile(
+    String path,
+    int index, {
+    String? title,
+  }) async {
     try {
-      File file = File(path);
+      final file = File(path);
 
-      // Validate that file exists
       if (!await file.exists()) {
         debugPrint('⚠️ File does not exist: $path');
         return 'שגיאה: הקובץ לא נמצא';
       }
 
-      // Validate index is positive
       if (index <= 0) {
         debugPrint('⚠️ Invalid line index: $index for file: $path');
         return 'שגיאה: אינדקס שורה לא תקין';
       }
 
-      // Add timeout to prevent hanging
-      final lines = await file
-          .openRead()
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .take(index)
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: (sink) {
-              debugPrint('⚠️ Timeout reading file: $path');
-              sink.close();
-            },
-          )
-          .toList();
+      final text = await readFileBackedBookText(
+        file,
+        null,
+        title ?? getTitleFromPath(path),
+      );
+      if (text == null) return 'שגיאה: לפורמט הקובץ אין תוכן טקסטואלי';
 
+      final lines = const LineSplitter().convert(text);
       if (lines.isEmpty) {
         debugPrint('⚠️ No lines found in file: $path');
         return 'שגיאה: הקובץ ריק';
@@ -718,7 +720,7 @@ class FileSystemData {
         return 'שגיאה: אינדקס השורה חורג מגודל הקובץ';
       }
 
-      return lines.last;
+      return lines[index - 1];
     } catch (e) {
       debugPrint('⚠️ Error reading line from file $path: $e');
       return 'שגיאה בקריאת הקובץ: $e';
