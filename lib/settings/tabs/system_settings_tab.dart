@@ -361,12 +361,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     super.dispose();
   }
 
+  /// התרגום נעשה כאן ולא בטעינה: `context.settingsText` בגוף הסינכרוני של
+  /// [_loadVersionInfo] רץ בתוך `initState` ושם רישום תלות ב-InheritedWidget זורק.
+  String _libraryVersionLabel(BuildContext context) {
+    final version = _libraryVersion;
+    if (version == null) return context.settingsText('טוען...');
+    if (version == 'unknown') return context.settingsText('לא ידוע');
+    return version;
+  }
+
   Future<void> _loadVersionInfo() async {
-    final unknownText = context.settingsText('לא ידוע');
     final packageInfo = await PackageInfo.fromPlatform();
     final dataService = DataCollectionService();
-    String? libVersion = await dataService.readLibraryVersion();
-    if (libVersion == 'unknown') libVersion = unknownText;
+    final libVersion = await dataService.readLibraryVersion();
 
     int? count;
     try {
@@ -1387,9 +1394,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           icon: FluentIcons.library_24_regular,
           title: context.settingsText(
             'גרסת ספרייה {version}',
-            args: {
-              'version': _libraryVersion ?? context.settingsText('טוען...'),
-            },
+            args: {'version': _libraryVersionLabel(context)},
           ),
           subtitle: _bookCount != null
               ? context.settingsText(
