@@ -7,6 +7,7 @@ import 'dart:io' as io show Link;
 import 'package:archive/archive_io.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -58,6 +59,7 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart'
         SearchStreamUpdate,
         WordMatchMode;
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -77,6 +79,22 @@ class _StubTabsBloc extends Mock implements TabsBloc {
 
   @override
   TabsState get state => currentState;
+}
+
+/// לוכד את ה-events ששולח ה-bridge אל TabsBloc (בעיקר AddTab) כדי שנוכל
+/// לבחון את הטאב שנפתח על ידי `reader.openSearchTab`.
+class _CapturingTabsBloc extends Cubit<TabsState> implements TabsBloc {
+  _CapturingTabsBloc() : super(const TabsState(tabs: [], currentTabIndex: 0));
+
+  final List<TabsEvent> captured = [];
+
+  @override
+  void add(TabsEvent event) {
+    captured.add(event);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _MockNavigationBloc extends Mock implements NavigationBloc {}
@@ -3761,34 +3779,174 @@ Future<void> main() async {
       expect(await queue.load(), isEmpty);
     });
   });
-}
 
-class _InMemoryPluginReportQueue
-    extends HiveListRepository<PluginReportRecord> {
-  List<PluginReportRecord> _items = [];
+  group('PluginBridgeAdapter.reader.openSearchTab', () {
+    late _CapturingTabsBloc tabsBloc;
+    late PluginBridgeAdapter adapter;
 
-  _InMemoryPluginReportQueue()
-    : super(
-        boxName: 'in_memory',
-        key: 'pending_reports',
-        fromJson: PluginReportRecord.fromJson,
-        toJson: (record) => record.toJson(),
+    setUp(() {
+      tabsBloc = _CapturingTabsBloc();
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['reader.open']),
+        dependencies: PluginBridgeDependencies(
+          historyBloc: _MockHistoryBloc(),
+          tabsBloc: tabsBloc,
+          navigationBloc: _MockNavigationBloc(),
+          calendarCubit: _StubCalendarCubit(
+            _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+          ),
+          workspaceBloc: _MockWorkspaceBloc(),
+          searchRepository: _MockSearchRepository(),
+          personalNotesRepository: _MockPersonalNotesRepository(),
+          bookOpenCoordinator: BookOpenCoordinator(
+            tabsBloc: tabsBloc,
+            historyBloc: _MockHistoryBloc(),
+            navigationBloc: _MockNavigationBloc(),
+          ),
+          themePayloadBuilder: () => <String, dynamic>{},
+          showConfirmDialog: ({required title, required content}) async => true,
+          showWarningDialog:
+              ({required title, required content, required subtitle}) async =>
+                  true,
+        ),
+        pluginRepository: _StubPluginRegistryRepository(),
       );
+    });
 
-  @override
-  Future<List<PluginReportRecord>> load() async {
-    return List<PluginReportRecord>.from(_items);
-  }
+    SearchingTab capturedSearchTab() {
+      final addTab = tabsBloc.captured.whereType<AddTab>().first;
+      return addTab.tab as SearchingTab;
+    }
 
-  @override
-  Future<void> save(List<PluginReportRecord> items) async {
-    _items = List<PluginReportRecord>.from(items);
-  }
+    test(
+      'פותח טאב חיפוש עם השאילתה ומריץ אותה אוטומטית כברירת מחדל',
+      () async {
+        final response = await adapter.execute('reader', 'openSearchTab', {
+          'query': 'ברכת המזון',
+        });
+        expect(response, isTrue);
+        final tab = capturedSearchTab();
+        expect(tab.queryController.text, 'ברכת המזון');
+        expect(tab.autoRunInitialSearch, isTrue);
+        final config = tab.searchBloc.state.configuration;
+        expect(config.searchMode, SearchMode.advanced);
+        expect(config.distance, 0);
+        expect(config.proximityScope, SearchScope.wordDistance);
+        expect(config.wordMatchMode, WordMatchMode.all);
+        expect(config.wordMatchCount, 2);
+        expect(tab.searchOptions, isEmpty);
+        // החיפוש מופעל אוטומטית — השאילתה נכנסה ל-state. החיפוש עצמו
+        // עובר דרך מנוע ה-Rust (sanitizeQuery), ולכן דורש build נייטיבי.
+        await pumpEventQueue();
+        expect(tab.searchBloc.state.searchQuery, 'ברכת המזון');
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
 
-  @override
-  Future<void> clear() async {
-    _items = [];
-  }
+    test('autoSearch: false פותח עם השאילתה בשדה בלי להריץ חיפוש', () async {
+      await adapter.execute('reader', 'openSearchTab', {
+        'query': 'ברכת המזון',
+        'autoSearch': false,
+      });
+      final tab = capturedSearchTab();
+      expect(tab.autoRunInitialSearch, isFalse);
+      expect(tab.queryController.text, 'ברכת המזון');
+      await pumpEventQueue();
+      expect(tab.searchBloc.state.searchQuery, isEmpty);
+    });
+
+    test('settings מעבירים מצב, מרחק ומדיניות התאמה לטאב', () async {
+      // autoSearch: false — בודקים את מיפוי ההגדרות בלי להריץ חיפוש, כדי
+      // שהטסט לא יהיה תלוי במנוע הנייטיבי.
+      await adapter.execute('reader', 'openSearchTab', {
+        'query': 'ואהבת לרעך',
+        'autoSearch': false,
+        'settings': {
+          'mode': 'advanced',
+          'distance': 2,
+          'proximityScope': 'sameParagraph',
+          'wordMatchMode': 'atLeast',
+          'wordMatchCount': 3,
+        },
+      });
+      final tab = capturedSearchTab();
+      final config = tab.searchBloc.state.configuration;
+      expect(config.searchMode, SearchMode.advanced);
+      expect(config.distance, 2);
+      expect(config.proximityScope, SearchScope.sameParagraph);
+      expect(config.wordMatchMode, WordMatchMode.atLeast);
+      expect(config.wordMatchCount, 3);
+      expect(tab.searchOptions, isEmpty);
+    });
+
+    test(
+      'settings.options מרחיבים אפשרויות מילה לכל מילות השאילתה',
+      () async {
+        await adapter.execute('reader', 'openSearchTab', {
+          'query': 'ואהבת לרעך',
+          'settings': {
+            'mode': 'advanced',
+            'options': {'קידומות דקדוקיות': true},
+          },
+        });
+        final tab = capturedSearchTab();
+        expect(tab.searchOptions, isNotEmpty);
+        for (final options in tab.searchOptions.values) {
+          expect(options['קידומות דקדוקיות'], isTrue);
+        }
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+
+    test(
+      'settings.wordOptions נשמרים פר-מילה בטאב',
+      () async {
+        await adapter.execute('reader', 'openSearchTab', {
+          'query': 'ואהבת לרעך',
+          'settings': {
+            'mode': 'advanced',
+            'wordOptions': {
+              'ואהבת_0': {'קידומות': true},
+            },
+          },
+        });
+        final tab = capturedSearchTab();
+        expect(tab.searchOptions['ואהבת_0'], {'קידומות': true});
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+
+    test('settings לא חוקיים נדחים בלי לפתוח טאב', () async {
+      await expectLater(
+        adapter.execute('reader', 'openSearchTab', {
+          'query': 'ברכת המזון',
+          'settings': {'unknownParam': 1},
+        }),
+        throwsA(isA<Exception>()),
+      );
+      expect(tabsBloc.captured.whereType<AddTab>(), isEmpty);
+    });
+
+    test(
+      'wordOptions מפתח שאינו תואם לשאילתה נדחה',
+      () async {
+        await expectLater(
+          adapter.execute('reader', 'openSearchTab', {
+            'query': 'ואהבת לרעך',
+            'settings': {
+              'mode': 'advanced',
+              'wordOptions': {
+                'מילה_5': {'קידומות': true},
+              },
+            },
+          }),
+          throwsA(isA<Exception>()),
+        );
+        expect(tabsBloc.captured.whereType<AddTab>(), isEmpty);
+      },
+      skip: engineReady ? false : searchEngineSkipReason,
+    );
+  });
 }
 
 class _FakeBookProvider implements LibraryProvider {
@@ -3975,4 +4133,32 @@ CalendarState _buildCalendarState(
     dayTransition: CalendarDayTransition.sunset,
     inIsrael: inIsrael,
   );
+}
+
+class _InMemoryPluginReportQueue
+    extends HiveListRepository<PluginReportRecord> {
+  List<PluginReportRecord> _items = [];
+
+  _InMemoryPluginReportQueue()
+    : super(
+        boxName: 'in_memory',
+        key: 'pending_reports',
+        fromJson: PluginReportRecord.fromJson,
+        toJson: (record) => record.toJson(),
+      );
+
+  @override
+  Future<List<PluginReportRecord>> load() async {
+    return List<PluginReportRecord>.from(_items);
+  }
+
+  @override
+  Future<void> save(List<PluginReportRecord> items) async {
+    _items = List<PluginReportRecord>.from(items);
+  }
+
+  @override
+  Future<void> clear() async {
+    _items = [];
+  }
 }

@@ -293,6 +293,36 @@ export type NetworkFetchStreamChunk =
       body: string;
     };
 
+/**
+ * הגדרות פתיחת טאב חיפוש (`reader.openSearchTab` → `settings`).
+ * תת-קבוצה של פרמטרי `search.query`; הערכים החוקיים מ-`search.getOptions`.
+ */
+export interface OpenSearchTabSettings {
+  /** ברירת מחדל 'advanced'. */
+  mode?: SearchMode;
+  /** מרווח מילים בין מילות החיפוש; במצב 'fuzzy' הטווח 0–2. */
+  distance?: number;
+  proximityScope?: SearchProximityScope;
+  wordMatchMode?: SearchWordMatchMode;
+  /** חוקי רק עם mode: 'advanced' ו-wordMatchMode: 'atLeast'. */
+  wordMatchCount?: number;
+  /** אפשרויות מילה שחלות על כל מילות השאילתה (למשל 'קידומות דקדוקיות'). */
+  options?: Record<string, boolean>;
+  /** אפשרויות פר-מילה במפתח `"{מילה}_{אינדקס}"`; גובר על `options`. */
+  wordOptions?: Record<string, Record<string, boolean>>;
+}
+
+/** פרמטרי `reader.openSearchTab` — פתיחת כרטיסיית חיפוש מובנית. */
+export interface OpenSearchTabArgs {
+  query: string;
+  /** ברירת מחדל true — הרצה אוטומטית; false פותח עם השאילתה בשדה בלי להריץ. */
+  autoSearch?: boolean;
+  /** שורות `searchDialogItems` של התוסף הקורא (עד 4 מזהים). */
+  selectItems?: string[];
+  /** הגדרות החיפוש איתן תיפתח הכרטיסייה. */
+  settings?: OpenSearchTabSettings;
+}
+
 export interface TocEntry {
   text: string;
   index: number;
@@ -1275,6 +1305,12 @@ export interface OtzariaGlobal {
     method: 'network.fetchStream',
     payload: NetworkFetchParams
   ): AsyncIterable<NetworkFetchStreamChunk>;
+
+  /** פותח כרטיסיית חיפוש מובנית עם השאילתה וההגדרות. */
+  call(
+    method: 'reader.openSearchTab',
+    payload: OpenSearchTabArgs
+  ): Promise<OtzariaResponse<boolean>>;
 
   /**
    * Call a Host API method.
