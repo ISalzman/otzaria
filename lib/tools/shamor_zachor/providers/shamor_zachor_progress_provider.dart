@@ -330,20 +330,70 @@ class ShamorZachorProgressProvider with ChangeNotifier {
       return;
     }
 
+    await _applyBulkColumnUpdate(
+      bookId,
+      bookDetails,
+      bookDetails.learnableItems.map((item) => item.absoluteIndex),
+      columnName,
+      selectAll,
+      errorMessage: 'Failed to bulk update column',
+    );
+  }
+
+  /// Toggle a continuous range of items (by absolute index, inclusive) in a column
+  Future<void> toggleRangeForColumnById(
+    int bookId,
+    BookDetails bookDetails,
+    String columnName,
+    int fromIndex,
+    int toIndex,
+    bool value,
+  ) async {
+    if (!_columnIdsForBook(bookId).contains(columnName)) {
+      _logger.warning('Invalid column name: $columnName');
+      return;
+    }
+
+    final start = fromIndex <= toIndex ? fromIndex : toIndex;
+    final end = fromIndex <= toIndex ? toIndex : fromIndex;
+    final indices = bookDetails.learnableItems
+        .map((item) => item.absoluteIndex)
+        .where((index) => index >= start && index <= end);
+    if (indices.isEmpty) return;
+
+    await _applyBulkColumnUpdate(
+      bookId,
+      bookDetails,
+      indices,
+      columnName,
+      value,
+      errorMessage: 'Failed to update range progress',
+    );
+  }
+
+  /// Write the same value to a column across many items, in one save+notify
+  Future<void> _applyBulkColumnUpdate(
+    int bookId,
+    BookDetails bookDetails,
+    Iterable<int> absoluteIndices,
+    String columnName,
+    bool value, {
+    required String errorMessage,
+  }) async {
     try {
       _progressById[bookId] ??= {};
       final bookProgress = _progressById[bookId]!;
 
-      for (final item in bookDetails.learnableItems) {
-        final key = item.absoluteIndex.toString();
+      for (final index in absoluteIndices) {
+        final key = index.toString();
         bookProgress[key] ??= PageProgress();
-        bookProgress[key]!.setProperty(columnName, selectAll);
+        bookProgress[key]!.setProperty(columnName, value);
       }
 
       await _progressService.saveProgressDataById(_progressById);
       _invalidateSummaryCache(bookId);
 
-      if (selectAll) {
+      if (value) {
         final wasAlreadyCompleted = getCompletionDateSyncById(bookId) != null;
         final isNowComplete = isBookCompletedById(bookId, bookDetails);
 
@@ -359,15 +409,11 @@ class ShamorZachorProgressProvider with ChangeNotifier {
 
       notifyListeners();
     } catch (e, stackTrace) {
-      _logger.severe(
-        'Error toggling select all for column by ID',
-        e,
-        stackTrace,
-      );
+      _logger.severe(errorMessage, e, stackTrace);
       _error = ShamorZachorError.fromException(
         e,
         stackTrace: stackTrace,
-        customMessage: 'Failed to bulk update column',
+        customMessage: errorMessage,
       );
       notifyListeners();
     }
@@ -381,46 +427,17 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     String columnName,
     bool selectAll,
   ) async {
-    try {
-      final leafIndices = bookDetails.sectionLeafIndexMap[sectionId];
-      if (leafIndices == null || leafIndices.isEmpty) return;
+    final leafIndices = bookDetails.sectionLeafIndexMap[sectionId];
+    if (leafIndices == null || leafIndices.isEmpty) return;
 
-      _progressById[bookId] ??= {};
-      final bookProgress = _progressById[bookId]!;
-
-      for (final index in leafIndices) {
-        final key = index.toString();
-        bookProgress[key] ??= PageProgress();
-        bookProgress[key]!.setProperty(columnName, selectAll);
-      }
-
-      await _progressService.saveProgressDataById(_progressById);
-      _invalidateSummaryCache(bookId);
-
-      if (selectAll) {
-        final wasAlreadyCompleted = getCompletionDateSyncById(bookId) != null;
-        final isNowComplete = isBookCompletedById(bookId, bookDetails);
-
-        if (isNowComplete && !wasAlreadyCompleted) {
-          await _progressService.saveCompletionDateById(
-            bookId,
-            DateTime.now().toIso8601String(),
-          );
-          _completionDatesById = await _progressService
-              .loadCompletionDatesById();
-        }
-      }
-
-      notifyListeners();
-    } catch (e, stackTrace) {
-      _logger.severe('Error toggling section column by ID', e, stackTrace);
-      _error = ShamorZachorError.fromException(
-        e,
-        stackTrace: stackTrace,
-        customMessage: 'Failed to update section progress',
-      );
-      notifyListeners();
-    }
+    await _applyBulkColumnUpdate(
+      bookId,
+      bookDetails,
+      leafIndices,
+      columnName,
+      selectAll,
+      errorMessage: 'Failed to update section progress',
+    );
   }
 
   /// Clear all progress for a specific book by ID

@@ -12,6 +12,7 @@ import '../providers/shamor_zachor_data_provider.dart';
 import '../providers/shamor_zachor_progress_provider.dart';
 import '../widgets/hebrew_utils.dart';
 import '../widgets/completion_animation_overlay.dart';
+import '../widgets/mark_range_dialog.dart';
 import '../widgets/error_boundary.dart';
 import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -386,7 +387,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
 
   Widget _buildHeader(
     BuildContext context,
-    dynamic bookDetails,
+    BookDetails bookDetails,
     ShamorZachorProgressProvider progressProvider,
   ) {
     final theme = Theme.of(context);
@@ -467,6 +468,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                       ),
                       _buildColumnHeaderLabel(
                         progressProvider,
+                        bookDetails,
                         col,
                         columns.length,
                       ),
@@ -484,6 +486,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
   /// כותרת עמודה לחיצה - פותחת תפריט לשינוי שם או הסרת העמודה
   Widget _buildColumnHeaderLabel(
     ShamorZachorProgressProvider progressProvider,
+    BookDetails bookDetails,
     ProgressColumn column,
     int columnCount,
   ) {
@@ -492,13 +495,25 @@ class _BookDetailScreenState extends State<BookDetailScreen>
       tooltip: 'אפשרויות עמודה',
       padding: EdgeInsets.zero,
       onSelected: (value) {
-        if (value == 'rename') {
+        if (value == 'range') {
+          _markRange(progressProvider, bookDetails, column);
+        } else if (value == 'rename') {
           _renameColumn(progressProvider, column);
         } else if (value == 'remove') {
           _removeColumn(progressProvider, column);
         }
       },
       itemBuilder: (_) => [
+        const PopupMenuItem<String>(
+          value: 'range',
+          child: Row(
+            children: [
+              Icon(FluentIcons.checkbox_checked_24_regular, size: 18),
+              SizedBox(width: 8),
+              Text('סימון טווח'),
+            ],
+          ),
+        ),
         const PopupMenuItem<String>(
           value: 'rename',
           child: Row(
@@ -561,6 +576,28 @@ class _BookDetailScreenState extends State<BookDetailScreen>
     await progressProvider.addColumn(widget.bookId!, name);
   }
 
+  Future<void> _markRange(
+    ShamorZachorProgressProvider progressProvider,
+    BookDetails bookDetails,
+    ProgressColumn column,
+  ) async {
+    if (widget.bookId == null) return;
+    final selection = await showMarkRangeDialog(
+      context: context,
+      bookDetails: bookDetails,
+      columnLabel: column.label,
+    );
+    if (selection == null) return;
+    await progressProvider.toggleRangeForColumnById(
+      widget.bookId!,
+      bookDetails,
+      column.id,
+      selection.fromIndex,
+      selection.toIndex,
+      selection.value,
+    );
+  }
+
   Future<void> _renameColumn(
     ShamorZachorProgressProvider progressProvider,
     ProgressColumn column,
@@ -613,14 +650,11 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               (index == 0 || partName != learnableItems[index - 1].partName) &&
               partName != widget.bookName; // מניעת כפילות של שם הספר בכותרת חלק
 
-          String rowLabel;
-          if (bookDetails.isDafType == true) {
-            final amudSymbol = (item.amudKey == "b") ? ":" : ".";
-            rowLabel =
-                "${HebrewUtils.intToGematria(item.pageNumber)}$amudSymbol";
-          } else {
-            rowLabel = HebrewUtils.intToGematria(item.pageNumber);
-          }
+          final rowLabel = HebrewUtils.pageLabel(
+            item.pageNumber,
+            item.amudKey,
+            bookDetails.isDafType,
+          );
 
           final pageProgress = _getProgress(
             progressProvider,

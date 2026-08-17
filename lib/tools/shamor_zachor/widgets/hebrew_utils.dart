@@ -29,6 +29,13 @@ class HebrewUtils {
     return _addGershayim(base);
   }
 
+  /// Label of a learnable item: gematria, with an amud mark for daf-type books.
+  static String pageLabel(int pageNumber, String amudKey, bool isDafType) {
+    final gematria = intToGematria(pageNumber);
+    if (!isDafType) return gematria;
+    return '$gematria${amudKey == 'b' ? ':' : '.'}';
+  }
+
   /// Convert integer to Hebrew letters without quotation marks.
   static String intToHebrewWithoutQuotes(int number) {
     if (number <= 0) {
