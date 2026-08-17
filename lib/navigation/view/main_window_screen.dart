@@ -97,6 +97,7 @@ import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayloadFromScheme;
 import 'package:otzaria/theme/app_theme_data.dart' show AppThemeData;
+import 'package:otzaria/core/sequential_dialog_queue.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/core/external_uri_router.dart';
@@ -343,6 +344,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
   SettingsState? _prevSettingsState;
   // עוקב אחר מצב הלוח הקודם לצורך dispatch ספציפי
   CalendarState? _prevCalendarState;
+
+  // דיאלוגי התקנת תוספים מוצגים אחד-אחד: כמה בקשות במקביל (קישורי עומק
+  // מרובים) נכנסות לתור, והבא נפתח רק כשהקודם נסגר — אחרת הם נערמים זה על זה.
+  late final SequentialDialogQueue<PluginSystemState>
+  _pluginInstallDialogQueue = SequentialDialogQueue(_showPluginInstallDialog);
 
   bool _hasInitializedPageController = false;
   bool _isProcessingExternalActivations = false;
@@ -1107,6 +1113,70 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
   }
 
+  Future<void> _showPluginInstallDialog(PluginSystemState state) async {
+    if (!mounted) return;
+    final bloc = context.read<PluginSystemBloc>();
+    final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
+    if (state is PluginSystemInstallRequiresPermissions) {
+      await showDialog(
+        context: context,
+        builder: (_) => BlocProvider.value(
+          value: bloc,
+          child: PluginInstallScreen(
+            manifest: state.manifest,
+            tempDirPath: state.tempDirPath,
+            previousVersion: state.previousVersion,
+            previousAllowOrderBeforeBuiltInsGranted:
+                state.previousAllowOrderBeforeBuiltInsGranted,
+            previousGrantedPermissions: state.previousGrantedPermissions,
+            reportContext: state.reportContext,
+            isOfflineMode: isOfflineMode,
+          ),
+        ),
+      );
+    } else if (state is PluginSystemDevInstallRequiresPermissions) {
+      await showDialog(
+        context: context,
+        builder: (_) => PluginInstallScreen(
+          manifest: state.manifest,
+          tempDirPath: '',
+          previousVersion: state.previousVersion,
+          previousAllowOrderBeforeBuiltInsGranted:
+              state.previousAllowOrderBeforeBuiltInsGranted,
+          isOfflineMode: isOfflineMode,
+          onConfirm: (perms, allowOrder) => bloc.add(
+            ConfirmDevPluginInstall(
+              manifest: state.manifest,
+              sourcePath: state.sourcePath,
+              sourceType: state.sourceType,
+              grantedPermissions: perms,
+              allowOrderBeforeBuiltInsGranted: allowOrder,
+              previousVersion: state.previousVersion,
+            ),
+          ),
+          onCancel: () => bloc.add(LoadPlugins()),
+        ),
+      );
+    } else if (state is PluginSystemOverwriteRequired) {
+      final value = await showWarningDialog(
+        context: context,
+        title: 'התוסף כבר קיים',
+        content:
+            'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
+        subtitle: 'האם ברצונך להתקין מחדש ולדרוס אותו?',
+        cancelText: 'ביטול',
+        confirmText: 'התקן מחדש',
+      );
+      if (value == true) {
+        bloc.add(
+          InstallPluginRequested(state.archivePath, forceOverwrite: true),
+        );
+      } else {
+        bloc.add(LoadPlugins());
+      }
+    }
+  }
+
   /// מחזיר `true` כאשר הפעולה בוצעה במלואה (לדוגמה: ספר אומת ונפתח). חשוב
   /// במיוחד עבור book/pdf — אם ה-id לא קיים בספרייה, מחזיר `false` כדי ששדה
   /// החיפוש בספרייה לא ינקה את הקישור שהמשתמש הדביק.
@@ -1289,6 +1359,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     appWindowListener?.onWindowStateChanged = null;
     appWindowListener?.onWindowResizeOccurred = null;
     _splashFailsafeTimer?.cancel();
+    _pluginInstallDialogQueue.clear();
     _externalActivationWatchSub?.cancel();
     _externalActivationChannelSub?.cancel();
     _externalActivationChannel.dispose();
@@ -2814,77 +2885,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 current is PluginSystemInstallRequiresPermissions ||
                 current is PluginSystemDevInstallRequiresPermissions ||
                 current is PluginSystemOverwriteRequired,
-            listener: (context, state) {
-              final isOfflineMode = context
-                  .read<SettingsBloc>()
-                  .state
-                  .isOfflineMode;
-              if (state is PluginSystemInstallRequiresPermissions) {
-                showDialog(
-                  context: context,
-                  builder: (_) => BlocProvider.value(
-                    value: context.read<PluginSystemBloc>(),
-                    child: PluginInstallScreen(
-                      manifest: state.manifest,
-                      tempDirPath: state.tempDirPath,
-                      previousVersion: state.previousVersion,
-                      previousAllowOrderBeforeBuiltInsGranted:
-                          state.previousAllowOrderBeforeBuiltInsGranted,
-                      previousGrantedPermissions:
-                          state.previousGrantedPermissions,
-                      reportContext: state.reportContext,
-                      isOfflineMode: isOfflineMode,
-                    ),
-                  ),
-                );
-              } else if (state is PluginSystemDevInstallRequiresPermissions) {
-                final bloc = context.read<PluginSystemBloc>();
-                showDialog(
-                  context: context,
-                  builder: (_) => PluginInstallScreen(
-                    manifest: state.manifest,
-                    tempDirPath: '',
-                    previousVersion: state.previousVersion,
-                    previousAllowOrderBeforeBuiltInsGranted:
-                        state.previousAllowOrderBeforeBuiltInsGranted,
-                    isOfflineMode: isOfflineMode,
-                    onConfirm: (perms, allowOrder) => bloc.add(
-                      ConfirmDevPluginInstall(
-                        manifest: state.manifest,
-                        sourcePath: state.sourcePath,
-                        sourceType: state.sourceType,
-                        grantedPermissions: perms,
-                        allowOrderBeforeBuiltInsGranted: allowOrder,
-                        previousVersion: state.previousVersion,
-                      ),
-                    ),
-                    onCancel: () => bloc.add(LoadPlugins()),
-                  ),
-                );
-              } else if (state is PluginSystemOverwriteRequired) {
-                final bloc = context.read<PluginSystemBloc>();
-                showWarningDialog(
-                  context: context,
-                  title: 'התוסף כבר קיים',
-                  content:
-                      'התוסף "${state.pluginName}" בגרסה ${state.version} כבר מותקן.',
-                  subtitle: 'האם ברצונך להתקין מחדש ולדרוס אותו?',
-                  cancelText: 'ביטול',
-                  confirmText: 'התקן מחדש',
-                ).then((value) {
-                  if (value == true) {
-                    bloc.add(
-                      InstallPluginRequested(
-                        state.archivePath,
-                        forceOverwrite: true,
-                      ),
-                    );
-                  } else {
-                    bloc.add(LoadPlugins());
-                  }
-                });
-              }
-            },
+            listener: (context, state) =>
+                _pluginInstallDialogQueue.enqueue(state),
           ),
         ],
         child: BlocBuilder<NavigationBloc, NavigationState>(
