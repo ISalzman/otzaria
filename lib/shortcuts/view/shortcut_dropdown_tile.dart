@@ -68,6 +68,12 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
     // הוספת אופציה להתאמה אישית
     availableShortcuts['__custom__'] = 'התאמה אישית...';
 
+    // קיצור שתוסף הצהיר עליו אפשר לבטל לגמרי — הוא יחזור לרשימת הפעולות
+    // הזמינות להגדרת קיצור.
+    if (ShortcutValidator.isPluginShortcutKey(widget.settingKey)) {
+      availableShortcuts['__clear__'] = 'ללא קיצור';
+    }
+
     for (final entry in widget.allShortcuts.entries) {
       // Include if: it's the current value OR it's not used by others
       if (entry.key == currentValue || !usedShortcuts.contains(entry.key)) {
@@ -172,6 +178,13 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
         widget.selected;
     final settingsBloc = context.read<SettingsBloc>();
     String? finalValue = newValue;
+
+    if (newValue == '__clear__') {
+      // ביטול קיצור תוסף: ריק = "בוטל במפורש" — הקיצור חוזר לרשימת
+      // הפעולות הזמינות להגדרת קיצור.
+      settingsBloc.add(UpdateShortcut(widget.settingKey, ''));
+      return;
+    }
 
     if (newValue == '__custom__') {
       final customShortcut = await showDialog<String>(

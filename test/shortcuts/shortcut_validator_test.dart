@@ -284,6 +284,31 @@ void main() {
       expect(ShortcutValidator.getShortcutValue(key), 'ctrl+alt+h');
     });
 
+    test(
+      'קיצור תוסף בלי ברירת מחדל נחשב לא-מוגדר — יוצג ב"הוסף קיצור לפעולה זמינה"',
+      () {
+        const emptyTarget = (
+          pluginId: pluginId,
+          shortcutId: 'no-default',
+          label: 'פעולה ללא קיצור',
+          defaultKey: '',
+          command: 'doThing',
+          contextMenuItemId: null,
+        );
+        final emptyKey = ShortcutValidator.pluginShortcutKey(
+          pluginId,
+          'no-default',
+        );
+        ShortcutValidator.registerPluginShortcuts({emptyKey: emptyTarget});
+
+        // בלי ברירת מחדל אין ערך — ולכן הקיצור נכלל ב-unconfiguredKeys
+        // של מסך ההגדרות ומוצג ב"הוסף קיצור לפעולה זמינה".
+        expect(ShortcutValidator.getShortcutValue(emptyKey) ?? '', isEmpty);
+        expect(ShortcutValidator.shortcutKeys, contains(emptyKey));
+        expect(ShortcutValidator.shortcutNames[emptyKey], 'פעולה ללא קיצור');
+      },
+    );
+
     test('ערך שהמשתמש הגדיר גובר על קיצור ברירת המחדל של התוסף', () async {
       ShortcutValidator.registerPluginShortcuts({key: target});
       await Settings.setValue<String>(key, 'ctrl+shift+m');
@@ -294,6 +319,66 @@ void main() {
       ShortcutValidator.registerPluginShortcuts({key: target});
       await Settings.setValue<String>(key, 'ctrl+l');
       expect(ShortcutValidator.hasConflict(key), isTrue);
+    });
+
+    test(
+      'ברירת מחדל שמתנגשת עם קיצור מובנה משאירה את קיצור התוסף לא-מוגדר',
+      () {
+        const conflicting = (
+          pluginId: pluginId,
+          shortcutId: 'conflict',
+          label: 'מתנגש',
+          defaultKey: 'ctrl+l', // תפוס ע"י פתיחת הספרייה
+          command: 'x',
+          contextMenuItemId: null,
+        );
+        final conflictingKey = ShortcutValidator.pluginShortcutKey(
+          pluginId,
+          'conflict',
+        );
+        ShortcutValidator.registerPluginShortcuts({
+          conflictingKey: conflicting,
+        });
+
+        expect(ShortcutValidator.getShortcutValue(conflictingKey), isNull);
+        // מופיע ברשימה הכללית כדי שיוצג ב"הוסף קיצור לפעולה זמינה".
+        expect(ShortcutValidator.shortcutKeys, contains(conflictingKey));
+      },
+    );
+
+    test('ביטול מפורש (ערך ריק) משאיר קיצור תוסף לא-מוגדר', () async {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      await Settings.setValue<String>(key, '');
+      expect(ShortcutValidator.getShortcutValue(key), isNull);
+    });
+
+    test('שני קיצורי תוסף עם אותה ברירת מחדל — הראשון (ממוין) זוכה', () {
+      const first = (
+        pluginId: 'com.a',
+        shortcutId: 'first',
+        label: 'ראשון',
+        defaultKey: 'ctrl+alt+x',
+        command: 'a',
+        contextMenuItemId: null,
+      );
+      const second = (
+        pluginId: 'com.a',
+        shortcutId: 'second',
+        label: 'שני',
+        defaultKey: 'ctrl+alt+x',
+        command: 'b',
+        contextMenuItemId: null,
+      );
+      final firstKey = ShortcutValidator.pluginShortcutKey('com.a', 'first');
+      final secondKey = ShortcutValidator.pluginShortcutKey('com.a', 'second');
+      ShortcutValidator.registerPluginShortcuts({
+        secondKey: second,
+        firstKey: first,
+      });
+
+      expect(ShortcutValidator.getShortcutValue(firstKey), 'ctrl+alt+x');
+      expect(ShortcutValidator.getShortcutValue(secondKey), isNull);
+      expect(ShortcutValidator.pluginShortcuts[secondKey]?.defaultKey, isEmpty);
     });
   });
 

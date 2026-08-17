@@ -99,7 +99,30 @@ class ShortcutValidator {
   static void registerPluginShortcuts(
     Map<String, PluginShortcutTarget> shortcuts,
   ) {
-    _pluginShortcuts = Map.unmodifiable(shortcuts);
+    // פתרון התנגשויות בין קיצורי תוספים: אם שני תוספים מצהירים על אותו
+    // קיצור ברירת מחדל, הראשון (בסדר ממוין) זוכה והשני נשאר לא-מוגדר.
+    final takenDefaults = <String>{};
+    final resolved = <String, PluginShortcutTarget>{};
+    final entries = shortcuts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final entry in entries) {
+      final target = entry.value;
+      final defaultKey = target.defaultKey;
+      if (defaultKey.isEmpty || !takenDefaults.contains(defaultKey)) {
+        if (defaultKey.isNotEmpty) takenDefaults.add(defaultKey);
+        resolved[entry.key] = target;
+      } else {
+        resolved[entry.key] = (
+          pluginId: target.pluginId,
+          shortcutId: target.shortcutId,
+          label: target.label,
+          defaultKey: '',
+          command: target.command,
+          contextMenuItemId: target.contextMenuItemId,
+        );
+      }
+    }
+    _pluginShortcuts = Map.unmodifiable(resolved);
   }
 
   static Map<String, PluginShortcutTarget> get pluginShortcuts =>
@@ -335,12 +358,21 @@ class ShortcutValidator {
   }
 
   /// מחזיר את ערך הקיצור הנוכחי עבור [settingKey] או את ברירת המחדל שלו.
-  /// עבור קיצורי תוספים ברירת המחדל היא הקיצור שהתוסף הצהיר עליו.
+  /// עבור קיצורי תוספים ברירת המחדל היא הקיצור שהתוסף הצהיר עליו — אלא אם
+  /// המשתמש ביטל אותו במפורש, או שהוא מתנגש עם קיצור קיים (ואז התוסף מפנה
+  /// את מקומו ונהיה לא-מוגדר).
   static String? getShortcutValue(String settingKey) {
     final normalizedKey = canonicalSettingKey(settingKey);
     final directValue = Settings.getValue<String>(normalizedKey);
+    final declared = _pluginShortcuts[normalizedKey];
     if (directValue != null && directValue.isNotEmpty) {
       return directValue;
+    }
+
+    // קיצור תוסף שהוגדר לו במפורש ערך ריק (ביטול) — נשאר לא-מוגדר כדי
+    // לחזור לרשימת "פעולות זמינות לקיצור", במקום ליפול לברירת המחדל.
+    if (declared != null && directValue != null) {
+      return null;
     }
 
     for (final legacyKey in legacyShortcutAliases[normalizedKey] ?? const []) {
@@ -350,13 +382,33 @@ class ShortcutValidator {
       }
     }
 
-    final declared = _pluginShortcuts[normalizedKey];
-    if (declared != null && declared.defaultKey.isNotEmpty) {
+    if (declared != null) {
+      if (declared.defaultKey.isEmpty) return null;
+      if (_pluginDefaultKeyTaken(normalizedKey, declared.defaultKey)) {
+        return null;
+      }
       return declared.defaultKey;
     }
 
     return defaultShortcuts[normalizedKey];
   }
+
+  /// האם קיצור ברירת המחדל של תוסף תפוס כבר על ידי קיצור קיים (בנוי, פתיחת
+  /// תוסף או העתקת קישור). קיצורי תוספים אחרים נפתרים ברישום, ולכן מדלגים
+  /// עליהם כאן כדי להימנע מרקורסיה.
+  static bool _pluginDefaultKeyTaken(String settingKey, String defaultKey) {
+    for (final key in shortcutKeys) {
+      if (key == settingKey) continue;
+      if (_pluginShortcuts.containsKey(key)) continue;
+      final value = getShortcutValue(key) ?? '';
+      if (value.isNotEmpty && value == defaultKey) return true;
+    }
+    return false;
+  }
+
+  /// האם [settingKey] הוא קיצור שתוסף הצהיר עליו (ולא פעולה מובנית).
+  static bool isPluginShortcutKey(String settingKey) =>
+      _pluginShortcuts.containsKey(canonicalSettingKey(settingKey));
 
   static bool canShareShortcut(String firstKey, String secondKey) {
     final normalizedFirst = canonicalSettingKey(firstKey);
