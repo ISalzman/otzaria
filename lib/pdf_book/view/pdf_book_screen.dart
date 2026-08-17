@@ -1359,6 +1359,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: 0.2,
+      panAxis: pdfPanAxis(isMobile: Platform.isAndroid || Platform.isIOS),
       interactionDelegateProvider:
           const PdfViewerScrollInteractionDelegateProviderPhysics(),
       onDocumentLoadFinished: (documentRef, succeeded) {

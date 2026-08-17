@@ -1,5 +1,10 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
+
+/// ציר ה-pan של צפיין ה-PDF: מחוות pan של לוח מגע מדויק עוקפות את
+/// [TrackpadAxisLock], לכן בדסקטופ ננעל לציר; במגע גרירה ישירה נשארת חופשית.
+PanAxis pdfPanAxis({required bool isMobile}) =>
+    isMobile ? PanAxis.free : PanAxis.aligned;
 
 /// נועלת את ציר הגלילה של לוח מגע ברגע שמתחילה גלילה משמעותית בציר
 /// אחד, ומחזירה אירוע "מקוצץ" לציר הנעול. הנעילה משתחררת אחרי הפסקה
