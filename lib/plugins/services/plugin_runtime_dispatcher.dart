@@ -6,6 +6,7 @@ import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
@@ -295,6 +296,7 @@ class PluginRuntimeDispatcher {
       _enabledCache.remove(pluginId);
       _permissionCache.remove(pluginId);
       ContextMenuRegistry.instance.removeAll(pluginId);
+      PluginShortcutRegistry.instance.removeAll(pluginId);
       PluginToolbarRegistry.instance.removeAll(pluginId);
       // רישומים דקלרטיביים מהמניפסט אינם תלויים במנוע חי — נשארים גם אחרי
       // כיבוי עצל של מופע הרקע (אחרת הפקדים היו נעלמים אחרי 3 דקות).
@@ -552,6 +554,7 @@ class PluginRuntimeDispatcher {
 
     for (final pluginId in pluginIds) {
       ContextMenuRegistry.instance.removeAll(pluginId);
+      PluginShortcutRegistry.instance.removeAll(pluginId);
       PluginToolbarRegistry.instance.removeAll(pluginId);
     }
 
@@ -615,6 +618,7 @@ class PluginRuntimeDispatcher {
   Future<void> reloadPlugin(String pluginId) async {
     if (_shutdownMode != _PluginRuntimeShutdownMode.idle) return;
     ContextMenuRegistry.instance.removeAll(pluginId);
+    PluginShortcutRegistry.instance.removeAll(pluginId);
     PluginToolbarRegistry.instance.removeAll(pluginId);
     PluginHighlightRegistry.instance.removePlugin(pluginId);
     // רישומים דקלרטיביים מהמניפסט אינם תלויים ב-JS — מוחזרים מיד.

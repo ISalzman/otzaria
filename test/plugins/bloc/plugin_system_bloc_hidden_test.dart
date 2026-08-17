@@ -6,6 +6,8 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 
 PluginManifest _manifest(String id) {
   return PluginManifest.fromJson({
@@ -181,5 +183,77 @@ void main() {
         expect(repo.showInToolsCalls[1].showInTools, isTrue);
       },
     );
+  });
+
+  group('PluginSystemBloc - קיצורי מקלדת של תוספים', () {
+    const pluginId = 'shortcut-test-plugin';
+
+    tearDown(() {
+      PluginShortcutRegistry.instance.removeAll(pluginId);
+      ShortcutValidator.registerPluginShortcuts(const {});
+    });
+
+    test('LoadPlugins רושם ל-validator את הקיצורים שב-registry', () async {
+      PluginShortcutRegistry.instance.registerPayload(pluginId, {
+        'id': 'cmd-1',
+        'label': 'הפעלת פקודה',
+        'key': 'ctrl+alt+c',
+        'command': 'runCommand',
+      });
+      final bloc = PluginSystemBloc(
+        repository: _FakeRepo([_plugin(id: pluginId)]),
+      );
+      addTearDown(bloc.close);
+
+      bloc.add(LoadPlugins());
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+
+      final key = ShortcutValidator.pluginShortcutKey(pluginId, 'cmd-1');
+      expect(ShortcutValidator.declaredPluginShortcutKeys, contains(key));
+      final target = ShortcutValidator.pluginShortcuts[key];
+      expect(target, isNotNull);
+      expect(target!.command, 'runCommand');
+      expect(target.contextMenuItemId, isNull);
+      expect(target.defaultKey, 'ctrl+alt+c');
+    });
+
+    test('רישום בזמן ריצה מעדכן את הקיצורים דרך המאזין', () async {
+      final bloc = PluginSystemBloc(
+        repository: _FakeRepo([_plugin(id: pluginId)]),
+      );
+      addTearDown(bloc.close);
+      bloc.add(LoadPlugins());
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+
+      PluginShortcutRegistry.instance.registerPayload(pluginId, {
+        'id': 'ctx-1',
+        'label': 'פעולת תפריט',
+        'contextMenuItemId': 'menu-item-1',
+      });
+
+      final key = ShortcutValidator.pluginShortcutKey(pluginId, 'ctx-1');
+      final target = ShortcutValidator.pluginShortcuts[key];
+      expect(target, isNotNull);
+      expect(target!.contextMenuItemId, 'menu-item-1');
+      expect(target.command, isNull);
+    });
+
+    test('הסרת קיצור מסירה אותו מה-validator', () async {
+      PluginShortcutRegistry.instance.registerPayload(pluginId, {
+        'id': 'cmd-2',
+        'label': 'פקודה',
+        'command': 'x',
+      });
+      final bloc = PluginSystemBloc(
+        repository: _FakeRepo([_plugin(id: pluginId)]),
+      );
+      addTearDown(bloc.close);
+      bloc.add(LoadPlugins());
+      await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+
+      PluginShortcutRegistry.instance.remove(pluginId, 'cmd-2');
+      final key = ShortcutValidator.pluginShortcutKey(pluginId, 'cmd-2');
+      expect(ShortcutValidator.pluginShortcuts[key], isNull);
+    });
   });
 }

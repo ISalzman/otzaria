@@ -126,7 +126,7 @@ AppContextMenuEntry _buildEntry({
   return AppContextMenuEntry(
     label: item.label,
     icon: pluginIconFromName(item.icon),
-    onTap: () => _dispatchItemClick(
+    onTap: () => dispatchPluginContextMenuItemClick(
       dispatcher: dispatcher,
       pluginId: pluginId,
       item: item,
@@ -163,7 +163,7 @@ String? _targetInstanceId(
   ContextMenuRegistry.instance.instanceIdsForItem(pluginId, item.id),
 );
 
-Future<void> _dispatchItemClick({
+Future<void> dispatchPluginContextMenuItemClick({
   required PluginRuntimeDispatcher dispatcher,
   required String pluginId,
   required PluginContextMenuItem item,

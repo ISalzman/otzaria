@@ -59,6 +59,9 @@ const Set<String> _knownApiMethods = {
   'app.getGrantedPermissions',
   'app.getConnectivity',
   'app.openUrl',
+  'app.registerShortcut',
+  'app.unregisterShortcut',
+  'app.updateShortcut',
   'library.findBooks',
   'library.getBookMetadata',
   'library.resolveBooks',
@@ -228,6 +231,9 @@ const Map<String, String> _methodRequiredPermission = {
   'app.getConnectivity': 'app.info.read',
   'app.getUserEmail': 'app.user_email.read',
   'app.openUrl': 'app.open_url',
+  'app.registerShortcut': 'app.shortcuts',
+  'app.unregisterShortcut': 'app.shortcuts',
+  'app.updateShortcut': 'app.shortcuts',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
   'library.resolveBooks': 'library.books.read',
@@ -486,6 +492,9 @@ const Map<String, String> _methodMinVersion = {
   'bookmarks.remove': '0.9.97',
   'tools.gematria': '0.9.97',
   'tools.dictionary': '0.9.97',
+  'app.registerShortcut': '0.9.97',
+  'app.unregisterShortcut': '0.9.97',
+  'app.updateShortcut': '0.9.97',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).

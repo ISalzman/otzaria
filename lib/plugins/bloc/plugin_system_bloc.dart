@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
@@ -90,6 +91,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     on<LoadLocalhostPluginRequested>(_onLoadLocalhostPluginRequested);
     on<ConfirmDevPluginInstall>(_onConfirmDevPluginInstall);
 
+    PluginShortcutRegistry.instance.addListener(_onPluginShortcutsChanged);
+
     _devWatchSub = this.devWatchService.events.listen((change) {
       if (change.manifestChanged) {
         add(DevelopmentPluginManifestChanged(change.pluginId));
@@ -116,6 +119,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
 
   @override
   Future<void> close() async {
+    PluginShortcutRegistry.instance.removeListener(_onPluginShortcutsChanged);
     await _devWatchSub?.cancel();
     await _readerStateSub?.cancel();
     devWatchService.dispose();
@@ -140,6 +144,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         plugins,
         repository,
       );
+      _registerPluginDeclaredShortcuts();
       if (declarativeHost != null) {
         final signature = await _declarativeSyncSignature(plugins);
         if (signature != _lastDeclarativeSyncSignature) {
@@ -165,6 +170,26 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           ShortcutValidator.openPluginShortcutKey(p.pluginId):
               'פתיחת ${p.name}',
     });
+  }
+
+  void _onPluginShortcutsChanged() => _registerPluginDeclaredShortcuts();
+
+  void _registerPluginDeclaredShortcuts() {
+    final targets = <String, PluginShortcutTarget>{};
+    for (final record in PluginShortcutRegistry.instance.getAll()) {
+      final pluginId = record.$1;
+      final shortcut = record.$2;
+      final key = ShortcutValidator.pluginShortcutKey(pluginId, shortcut.id);
+      targets[key] = (
+        pluginId: pluginId,
+        shortcutId: shortcut.id,
+        label: shortcut.label,
+        defaultKey: shortcut.key,
+        command: shortcut.command,
+        contextMenuItemId: shortcut.contextMenuItemId,
+      );
+    }
+    ShortcutValidator.registerPluginShortcuts(targets);
   }
 
   /// חתימת הקלט ש-[DeclarativePluginHost.syncPlugins] נשען עליו: לכל תוסף

@@ -199,6 +199,12 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
         'מאפשר לתוסף להוסיף פקדים, פריטי תפריט ונתונים שמנוהלים בידי אוצריא. '
         'פעולות מובנות עשויות להתבצע בלי לפתוח את דף התוסף.',
   ),
+  'app.shortcuts': PluginPermissionInfo(
+    label: 'קיצורי מקלדת',
+    description:
+        'רישום קיצורי מקלדת שהתוסף מציע: הפעלת פקודות שלו או פעולות '
+        'תפריט הלחיצה הימנית. הקיצורים נשלטים במסך הגדרות קיצורי המקשים.',
+  ),
 
   // ===== ספרייה =====
   'library.books.read': PluginPermissionInfo(

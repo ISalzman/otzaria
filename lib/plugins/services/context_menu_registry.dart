@@ -174,6 +174,19 @@ class ContextMenuRegistry extends ChangeNotifier {
       item.id == itemId ||
       item.children.any((child) => _treeContains(child, itemId));
 
+  /// מחזיר פריט לפי [itemId], כולל פריטי משנה בתוך תת-תפריט.
+  PluginContextMenuItem? findItem(String pluginId, String itemId) {
+    final list = _items[pluginId];
+    if (list == null) return null;
+    for (final item in list) {
+      if (item.id == itemId) return item;
+      for (final child in item.children) {
+        if (child.id == itemId) return child;
+      }
+    }
+    return null;
+  }
+
   PluginContextMenuItem _parseItem(
     Map<String, dynamic> json, {
     required int depth,

@@ -96,6 +96,7 @@ import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
@@ -793,6 +794,28 @@ class PluginBridgeAdapter {
         )).toJson();
       case 'getGrantedPermissions':
         return {'permissions': await _getGrantedPermissions()};
+      case 'registerShortcut':
+        PluginShortcutRegistry.instance.registerPayload(plugin.pluginId, args);
+        return true;
+      case 'unregisterShortcut':
+        final id = args['id'] as String?;
+        if (id == null) throw Exception('error.invalid_params: id required');
+        PluginShortcutRegistry.instance.remove(plugin.pluginId, id);
+        return true;
+      case 'updateShortcut':
+        final id = args['id'];
+        final patch = args['patch'];
+        if (id is! String || patch is! Map) {
+          throw Exception(
+            'error.invalid_params: id and patch are required',
+          );
+        }
+        PluginShortcutRegistry.instance.update(
+          plugin.pluginId,
+          id,
+          Map<String, dynamic>.from(patch),
+        );
+        return true;
       default:
         throw Exception("error.unknown_method: Unknown action in app: $action");
     }

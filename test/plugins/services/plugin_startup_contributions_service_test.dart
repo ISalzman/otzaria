@@ -13,6 +13,7 @@ import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 
@@ -161,6 +162,9 @@ Map<String, dynamic> _fullStartup() => {
   'contextMenuItems': [
     {'id': 'm1', 'title': 'פריט'},
   ],
+  'shortcuts': [
+    {'id': 's1', 'label': 'קיצור', 'key': 'ctrl+alt+s', 'command': 'run'},
+  ],
   'publishedData': [
     {
       'type': 'calendar.event',
@@ -181,6 +185,7 @@ Map<String, dynamic> _fullStartup() => {
 
 const _allPermissions = {
   'app.startup_contributions',
+  'app.shortcuts',
   'reader.toolbar',
   'reader.context_menu',
   'published_data.write',
@@ -191,6 +196,7 @@ const _allPermissions = {
 void main() {
   late PluginToolbarRegistry toolbar;
   late ContextMenuRegistry contextMenu;
+  late PluginShortcutRegistry shortcuts;
   late PluginLazyActivationService activation;
   late PluginSearchDialogRegistry searchDialog;
   late PluginExternalEditionsRegistry externalEditions;
@@ -200,6 +206,7 @@ void main() {
   setUp(() {
     toolbar = PluginToolbarRegistry.forTesting();
     contextMenu = ContextMenuRegistry.forTesting();
+    shortcuts = PluginShortcutRegistry.forTesting();
     activation = PluginLazyActivationService.forTesting();
     searchDialog = PluginSearchDialogRegistry.forTesting();
     externalEditions = PluginExternalEditionsRegistry.detached();
@@ -207,6 +214,7 @@ void main() {
       toolbarRegistry: toolbar,
       contextMenuRegistry: contextMenu,
       activationService: activation,
+      shortcutRegistry: shortcuts,
       searchDialogRegistry: searchDialog,
       externalEditionsRegistry: externalEditions,
     );
@@ -220,6 +228,8 @@ void main() {
 
     expect(toolbar.getAll().single.$2.id, 'b1');
     expect(contextMenu.getAll().single.$2.id, 'm1');
+    expect(shortcuts.getAll().single.$2.id, 's1');
+    expect(shortcuts.getAll().single.$2.key, 'ctrl+alt+s');
     expect(searchDialog.getAll().single.$2.id, 'include-external');
     final record = repo.records.single;
     expect(record.key, 'manifest:k1');
@@ -229,6 +239,17 @@ void main() {
       isFalse,
       reason: 'בלי app.run_on_startup אין הערה שקטה — לחיצה תפתח את הדף',
     );
+  });
+
+  test('shortcuts are not registered without the app.shortcuts permission',
+      () async {
+    repo.grantedByPlugin['p1'] = {..._allPermissions}
+      ..remove('app.shortcuts');
+
+    await service.sync([_plugin(startup: _fullStartup())], repo);
+
+    expect(shortcuts.getAll(), isEmpty);
+    expect(contextMenu.getAll().single.$2.id, 'm1');
   });
 
   group('externalEditions', () {

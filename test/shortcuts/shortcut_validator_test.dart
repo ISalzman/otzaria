@@ -12,6 +12,7 @@ void main() {
   tearDown(() {
     // מנקה רישום קיצורי תוספים כדי שלא יזלוג בין טסטים.
     ShortcutValidator.registerPluginShortcutKeys(const {});
+    ShortcutValidator.registerPluginShortcuts(const {});
   });
 
   group('getShortcutValue', () {
@@ -243,6 +244,56 @@ void main() {
       );
       expect(action, isA<OpenPluginAction>());
       expect((action as OpenPluginAction).pluginId, pluginId);
+    });
+  });
+
+  group('קיצורי תוספים (registerPluginShortcuts)', () {
+    const pluginId = 'com.example.marker';
+    const shortcutId = 'highlight';
+    final key = ShortcutValidator.pluginShortcutKey(pluginId, shortcutId);
+    const target = (
+      pluginId: pluginId,
+      shortcutId: shortcutId,
+      label: 'הדגשה',
+      defaultKey: 'ctrl+alt+h',
+      command: null,
+      contextMenuItemId: 'highlight-item',
+    );
+
+    test('pluginShortcutKey בונה מפתח עם הקידומת והיעד', () {
+      expect(key, 'key-shortcut-plugin-$pluginId::$shortcutId');
+    });
+
+    test('רישום מוסיף את המפתח ל-shortcutKeys ול-shortcutNames', () {
+      expect(ShortcutValidator.shortcutKeys, isNot(contains(key)));
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      expect(ShortcutValidator.shortcutKeys, contains(key));
+      expect(ShortcutValidator.shortcutNames[key], 'הדגשה');
+      expect(ShortcutValidator.pluginShortcuts[key], target);
+    });
+
+    test('רישום ריק מסיר מפתחות קודמים', () {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      ShortcutValidator.registerPluginShortcuts(const {});
+      expect(ShortcutValidator.shortcutKeys, isNot(contains(key)));
+      expect(ShortcutValidator.shortcutNames[key], isNull);
+    });
+
+    test('getShortcutValue נופל לקיצור ברירת המחדל שהתוסף הצהיר', () {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      expect(ShortcutValidator.getShortcutValue(key), 'ctrl+alt+h');
+    });
+
+    test('ערך שהמשתמש הגדיר גובר על קיצור ברירת המחדל של התוסף', () async {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      await Settings.setValue<String>(key, 'ctrl+shift+m');
+      expect(ShortcutValidator.getShortcutValue(key), 'ctrl+shift+m');
+    });
+
+    test('קיצור תוסף נכלל בזיהוי קונפליקטים מול פעולה מובנית', () async {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      await Settings.setValue<String>(key, 'ctrl+l');
+      expect(ShortcutValidator.hasConflict(key), isTrue);
     });
   });
 

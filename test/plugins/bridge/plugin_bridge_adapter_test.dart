@@ -34,6 +34,7 @@ import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
@@ -798,6 +799,83 @@ Future<void> main() async {
         );
       },
     );
+
+    group('app.registerShortcut / unregisterShortcut / updateShortcut', () {
+      const pluginId = 'test.plugin';
+
+      tearDown(() => PluginShortcutRegistry.instance.removeAll(pluginId));
+
+      test('registerShortcut רושם קיצור פקודה ב-registry', () async {
+        final response = await adapter.execute('app', 'registerShortcut', {
+          'id': 'my-command',
+          'label': 'הפעלת פקודה',
+          'key': 'ctrl+alt+c',
+          'command': 'runCommand',
+        });
+
+        expect(response, isTrue);
+        final shortcut = PluginShortcutRegistry.instance.find(
+          pluginId,
+          'my-command',
+        );
+        expect(shortcut, isNotNull);
+        expect(shortcut!.command, 'runCommand');
+        expect(shortcut.key, 'ctrl+alt+c');
+      });
+
+      test('registerShortcut רושם קיצור שקשור לפעולת תפריט ההקשר', () async {
+        await adapter.execute('app', 'registerShortcut', {
+          'id': 'ctx-action',
+          'label': 'פעולת תפריט',
+          'contextMenuItemId': 'menu-item-1',
+        });
+
+        final shortcut = PluginShortcutRegistry.instance.find(
+          pluginId,
+          'ctx-action',
+        );
+        expect(shortcut!.contextMenuItemId, 'menu-item-1');
+      });
+
+      test('updateShortcut משנה את הקיצור', () async {
+        await adapter.execute('app', 'registerShortcut', {
+          'id': 's',
+          'label': 'קיצור',
+          'key': 'ctrl+alt+x',
+          'command': 'x',
+        });
+        await adapter.execute('app', 'updateShortcut', {
+          'id': 's',
+          'patch': {'key': 'ctrl+alt+y'},
+        });
+
+        expect(
+          PluginShortcutRegistry.instance.find(pluginId, 's')!.key,
+          'ctrl+alt+y',
+        );
+      });
+
+      test('unregisterShortcut מסיר את הקיצור', () async {
+        await adapter.execute('app', 'registerShortcut', {
+          'id': 's',
+          'label': 'קיצור',
+          'command': 'x',
+        });
+        await adapter.execute('app', 'unregisterShortcut', {'id': 's'});
+
+        expect(PluginShortcutRegistry.instance.find(pluginId, 's'), isNull);
+      });
+
+      test('registerShortcut ללא command וללא contextMenuItemId זורק', () async {
+        expect(
+          () => adapter.execute('app', 'registerShortcut', {
+            'id': 'empty',
+            'label': 'ריק',
+          }),
+          throwsA(isA<PluginShortcutException>()),
+        );
+      });
+    });
 
     group('app.getConnectivity', () {
       late ConnectivityStatusService original;

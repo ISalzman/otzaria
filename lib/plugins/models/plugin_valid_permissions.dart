@@ -30,6 +30,9 @@ const Map<String, String> apiCallToPermissionHint = {
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
   'app.getConnectivity': 'app.info.read',
+  'app.registerShortcut': 'app.shortcuts',
+  'app.unregisterShortcut': 'app.shortcuts',
+  'app.updateShortcut': 'app.shortcuts',
 
   // feedback.*
   'feedback.sendEmail': 'feedback.send_email',
@@ -225,6 +228,10 @@ const pluginValidPermissions = <String>[
   /// תרומות עלייה דקלרטיביות (contributes.startup) — פקדים, תפריטי הקשר
   /// ונתונים שנקראים ע"י Flutter בעלייה, בלי להריץ קוד של התוסף.
   pluginStartupContributionsPermission,
+
+  /// רישום קיצורי מקלדת לתוסף — מהמניפסט (`contributes.startup.shortcuts`)
+  /// או בזמן ריצה (`app.registerShortcut`).
+  'app.shortcuts',
 
   // ===== ספרייה =====
   /// חיפוש וקריאת רשימת ספרים

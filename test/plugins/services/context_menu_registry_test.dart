@@ -163,6 +163,26 @@ void main() {
       expect(registry.getAll(), hasLength(1));
     });
 
+    test('findItem מוצא פריט עליון ופריט בתת-תפריט', () {
+      registry.registerPayload('marker', {
+        'id': 'menu',
+        'type': 'submenu',
+        'title': 'Menu',
+        'children': [
+          {'id': 'child-action', 'title': 'Child'},
+        ],
+      });
+      registry.registerPayload('marker', {
+        'id': 'top-action',
+        'title': 'Top',
+      });
+
+      expect(registry.findItem('marker', 'top-action')?.label, 'Top');
+      expect(registry.findItem('marker', 'child-action')?.label, 'Child');
+      expect(registry.findItem('marker', 'missing'), isNull);
+      expect(registry.findItem('other', 'top-action'), isNull);
+    });
+
     test('keeps plugin ownership isolated', () {
       const item = PluginContextMenuItem(id: 'same-id', label: 'Item');
       registry.register('first', item);

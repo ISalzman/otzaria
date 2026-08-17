@@ -1,5 +1,17 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
+/// יעד הפעולה של קיצור מקלדת שתוסף הצהיר עליו: התוסף, מזהה הקיצור, תווית
+/// התצוגה, קיצור ברירת המחדל שהתוסף מציע, ומה הקיצור מפעיל (פקודה חופשית
+/// או פעולת תפריט הקשר).
+typedef PluginShortcutTarget = ({
+  String pluginId,
+  String shortcutId,
+  String label,
+  String defaultKey,
+  String? command,
+  String? contextMenuItemId,
+});
+
 /// Validator for keyboard shortcuts to detect conflicts
 class ShortcutValidator {
   static const String currentWindowSearchKey =
@@ -73,10 +85,35 @@ class ShortcutValidator {
   static String pluginIdFromShortcutKey(String key) =>
       key.substring(_openPluginKeyPrefix.length);
 
+  static const String _pluginShortcutKeyPrefix = 'key-shortcut-plugin-';
+
+  /// מפתח הגדרת הקיצור שתוסף הצהיר עליו לפי [pluginId] ו-[shortcutId].
+  /// אופציונלי, בלי ברירת מחדל — ברירת המחדל מגיעה מהתוסף עצמו.
+  static String pluginShortcutKey(String pluginId, String shortcutId) =>
+      '$_pluginShortcutKeyPrefix$pluginId::$shortcutId';
+
+  /// קיצורי מקלדת שתוספים הצהירו עליהם (מניפסט / app.registerShortcut) —
+  /// מפתח → יעד. נדחף מ-PluginSystemBloc לפי PluginShortcutRegistry.
+  static Map<String, PluginShortcutTarget> _pluginShortcuts = const {};
+
+  static void registerPluginShortcuts(
+    Map<String, PluginShortcutTarget> shortcuts,
+  ) {
+    _pluginShortcuts = Map.unmodifiable(shortcuts);
+  }
+
+  static Map<String, PluginShortcutTarget> get pluginShortcuts =>
+      _pluginShortcuts;
+
+  /// המפתחות של קיצורי המקלדת שהתוספים הצהירו עליהם כעת.
+  static Iterable<String> get declaredPluginShortcutKeys =>
+      _pluginShortcuts.keys;
+
   /// List of all shortcut setting keys (סטטיים + מפתחות תוספים רשומים)
   static List<String> get shortcutKeys => [
     ..._baseShortcutKeys,
     ..._pluginShortcutNames.keys,
+    ..._pluginShortcuts.keys,
   ];
 
   static const List<String> _baseShortcutKeys = [
@@ -181,6 +218,8 @@ class ShortcutValidator {
   static Map<String, String> get shortcutNames => {
     ..._baseShortcutNames,
     ..._pluginShortcutNames,
+    for (final entry in _pluginShortcuts.entries)
+      entry.key: entry.value.label,
   };
 
   static const Map<String, String> _baseShortcutNames = {
@@ -296,6 +335,7 @@ class ShortcutValidator {
   }
 
   /// מחזיר את ערך הקיצור הנוכחי עבור [settingKey] או את ברירת המחדל שלו.
+  /// עבור קיצורי תוספים ברירת המחדל היא הקיצור שהתוסף הצהיר עליו.
   static String? getShortcutValue(String settingKey) {
     final normalizedKey = canonicalSettingKey(settingKey);
     final directValue = Settings.getValue<String>(normalizedKey);
@@ -308,6 +348,11 @@ class ShortcutValidator {
       if (legacyValue != null && legacyValue.isNotEmpty) {
         return legacyValue;
       }
+    }
+
+    final declared = _pluginShortcuts[normalizedKey];
+    if (declared != null && declared.defaultKey.isNotEmpty) {
+      return declared.defaultKey;
     }
 
     return defaultShortcuts[normalizedKey];

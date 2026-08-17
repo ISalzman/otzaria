@@ -1202,6 +1202,11 @@ export interface OtzariaEventMap {
     currentBookId: string;
     currentIndex: number;
   };
+  /**
+   * A keyboard shortcut bound to a free-form command was pressed in the reading
+   * screen. Sent only to the registering plugin.
+   */
+  'app.command': PluginCommandPayload;
   /** User clicked a plugin-registered context menu item. Sent only to the registering plugin. */
   'reader.context_menu_item_clicked': {
     itemId: string;
@@ -1498,6 +1503,38 @@ export type WorkspaceStatResult =
   | ({ exists: true } & WorkspaceEntry)
   | { exists: false };
 
+/**
+ * A keyboard shortcut the plugin declares (manifest `contributes.startup.shortcuts`
+ * or runtime `app.registerShortcut`). Pressing it in the reading screen either
+ * sends an `app.command` event to the plugin (`command`) or triggers a
+ * right-click menu action exactly like a right-click on it (`contextMenuItemId`).
+ */
+export interface PluginShortcutArgs {
+  /** Unique id within the plugin. */
+  id: string;
+  /** Display label shown in the keyboard-shortcut settings screen. */
+  label: string;
+  /** Default key in canonical form (`ctrl+alt+x`); empty = user assigns one. */
+  key?: string;
+  /** Free-form command name, delivered to the plugin via the `app.command` event. */
+  command?: string;
+  /** Id of a context-menu item (`reader.addContextMenuItem`) this shortcut triggers. */
+  contextMenuItemId?: string;
+}
+
+/** Arguments for `app.updateShortcut`. Only `key` is currently supported. */
+export interface PluginShortcutUpdateArgs {
+  id: string;
+  patch: { key?: string };
+}
+
+/** Payload of the `app.command` event delivered when a command shortcut is pressed. */
+export interface PluginCommandPayload {
+  /** The `command` value passed to `app.registerShortcut` / manifest. */
+  command: string;
+  /** The shortcut id that triggered the command. */
+  shortcutId: string;
+}
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1506,6 +1543,9 @@ export type OtzariaMethod =
   | 'app.getGrantedPermissions'
   | 'app.getConnectivity'
   | 'app.openUrl'
+  | 'app.registerShortcut'
+  | 'app.unregisterShortcut'
+  | 'app.updateShortcut'
   | 'library.findBooks'
   | 'library.getBookMetadata'
   | 'library.resolveBooks'
