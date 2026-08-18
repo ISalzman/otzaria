@@ -44,38 +44,6 @@ void main() {
     });
   });
 
-  group('bottommostVisibleIndex', () {
-    test('מחזיר 0 כשהקולקציה ריקה', () {
-      expect(bottommostVisibleIndex(const <ItemPosition>[]), 0);
-    });
-
-    test('מחזיר את האינדקס היחיד כשיש פריט אחד', () {
-      expect(bottommostVisibleIndex([_pos(42)]), 42);
-    });
-
-    test('מחזיר מקסימום כשהפריטים בסדר עולה', () {
-      expect(
-        bottommostVisibleIndex([_pos(10), _pos(11), _pos(12)]),
-        12,
-      );
-    });
-
-    test('מחזיר מקסימום גם כשסדר האיטרציה לא תואם לאינדקס', () {
-      // .last יחזיר 10, אבל הפריט התחתון הוא 12.
-      expect(
-        bottommostVisibleIndex([_pos(12), _pos(11), _pos(10)]),
-        12,
-      );
-    });
-
-    test('מחזיר מקסימום בסדר ערבוב כללי', () {
-      expect(
-        bottommostVisibleIndex([_pos(50), _pos(20), _pos(80), _pos(35)]),
-        80,
-      );
-    });
-  });
-
   group('עקביות עם ValueNotifier של ItemPositionsListener', () {
     test('עובד על ה-Iterable שמוחזר מ-ItemPositionsListener', () {
       final listener = ItemPositionsListener.create();
@@ -86,7 +54,6 @@ void main() {
       ];
 
       expect(topmostVisibleIndex(listener.itemPositions.value), 5);
-      expect(bottommostVisibleIndex(listener.itemPositions.value), 9);
     });
   });
 
@@ -197,45 +164,6 @@ void main() {
           positions: [_pos(1), _pos(0)],
           continuousReadingMode: true,
           readingSegments: segments,
-        ),
-        0,
-      );
-    });
-  });
-
-  group('resolveBottommostSourceLine', () {
-    test('מצב רגיל — מחזיר את ה-itemIndex המקסימלי', () {
-      final segments = buildReadingSegments(['א', 'ב', 'ג'], continuous: false);
-      expect(
-        resolveBottommostSourceLine(
-          positions: [_pos(0), _pos(1), _pos(2)],
-          continuousReadingMode: false,
-          readingSegments: segments,
-        ),
-        2,
-      );
-    });
-
-    test('מצב רצף — מחזיר את שורת המקור האחרונה של הפסקה האחרונה הנראית', () {
-      // ['a', 'b', 'c'] במצב רצף → פסקה אחת [0,1,2].
-      // segmentIndex 0 → sourceLineIndices.last = 2.
-      final segments = buildReadingSegments(['a', 'b', 'c'], continuous: true);
-      expect(
-        resolveBottommostSourceLine(
-          positions: [_pos(0)],
-          continuousReadingMode: true,
-          readingSegments: segments,
-        ),
-        2,
-      );
-    });
-
-    test('positions ריק → 0', () {
-      expect(
-        resolveBottommostSourceLine(
-          positions: const <ItemPosition>[],
-          continuousReadingMode: true,
-          readingSegments: const [],
         ),
         0,
       );

@@ -16,12 +16,6 @@ int topmostVisibleIndex(Iterable<ItemPosition> positions) {
   return positions.map((p) => p.index).reduce(min);
 }
 
-/// אינדקס הפריט התחתון הנראה (מקסימום, מאותה סיבה כמו [topmostVisibleIndex]).
-int bottommostVisibleIndex(Iterable<ItemPosition> positions) {
-  if (positions.isEmpty) return 0;
-  return positions.map((p) => p.index).reduce(max);
-}
-
 /// **תמיד מחזיר שורת מקור**, גם במצב רצף שבו ה-itemIndex של ה-
 /// `ScrollablePositionedList` הוא segmentIndex (פסקה) ולא שורה.
 ///
@@ -40,21 +34,6 @@ int resolveTopmostSourceLine({
   }
   if (topmost < 0 || topmost >= readingSegments.length) return 0;
   return readingSegments[topmost].startLineIndex;
-}
-
-/// המקבילה ל-[resolveTopmostSourceLine] בקצה התחתון של ה-viewport.
-int resolveBottommostSourceLine({
-  required Iterable<ItemPosition> positions,
-  required bool continuousReadingMode,
-  required List<ReadingSegment> readingSegments,
-}) {
-  if (positions.isEmpty) return 0;
-  final bottommost = bottommostVisibleIndex(positions);
-  if (!continuousReadingMode || readingSegments.isEmpty) {
-    return bottommost;
-  }
-  if (bottommost < 0 || bottommost >= readingSegments.length) return 0;
-  return readingSegments[bottommost].sourceLineIndices.last;
 }
 
 /// ממיר שורת מקור ל-itemIndex של ה-`ScrollablePositionedList`.

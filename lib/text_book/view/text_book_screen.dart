@@ -2298,7 +2298,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (positions.isEmpty) return;
     state.scrollController.scrollTo(
       duration: const Duration(milliseconds: 300),
-      index: _bottommostVisibleIndex(state) + 1,
+      index: _topmostVisibleIndex(state) + 1,
     );
   }
 
@@ -2402,7 +2402,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex = _bottommostVisibleSourceLine(state);
+    final currentIndex = _topmostVisibleSourceLine(state);
     final nextIndex = _findNextTocIndex(
       state.tableOfContents,
       currentIndex,
@@ -3005,11 +3005,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 int _topmostVisibleIndex(TextBookLoaded state) =>
     topmostVisibleIndex(state.positionsListener.itemPositions.value);
 
-int _bottommostVisibleIndex(TextBookLoaded state) =>
-    bottommostVisibleIndex(state.positionsListener.itemPositions.value);
-
 // ה-helpers הבאים הם wrapper-ים דקים לפונקציות הטהורות ב-visible_index.dart
-// (`resolveTopmostSourceLine`/`resolveBottommostSourceLine`/`resolveItemIndexForSourceLine`).
+// (`resolveTopmostSourceLine`/`resolveItemIndexForSourceLine`).
 // הלוגיקה נבדקת ב-test/text_book/utils/visible_index_test.dart.
 
 int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
@@ -3017,13 +3014,6 @@ int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
   continuousReadingMode: state.continuousReadingMode,
   readingSegments: state.readingSegments,
 );
-
-int _bottommostVisibleSourceLine(TextBookLoaded state) =>
-    resolveBottommostSourceLine(
-      positions: state.positionsListener.itemPositions.value,
-      continuousReadingMode: state.continuousReadingMode,
-      readingSegments: state.readingSegments,
-    );
 
 int _itemIndexForSourceLine(TextBookLoaded state, int lineIndex) =>
     resolveItemIndexForSourceLine(
