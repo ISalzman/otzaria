@@ -1138,6 +1138,7 @@ export type OtzariaMethod =
   | 'publishedData.listOwn'
   | 'feedback.sendEmail'
   | 'feedback.report'
+  | 'feedback.hasReporterEmail'
   | 'history.list'
   | 'history.listSearches'
   | 'history.clear'

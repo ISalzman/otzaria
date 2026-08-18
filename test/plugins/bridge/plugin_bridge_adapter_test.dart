@@ -3590,6 +3590,75 @@ Future<void> main() async {
       expect(dialogContent, contains('user@example.com'));
     });
 
+    test('כתובת שמורה בהגדרות גוברת על כתובת שנמסרה מהתוסף', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'saved@example.com',
+      );
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+        'reporterEmail': 'plugin@example.com',
+      });
+
+      expect(body['reporterEmail'], 'saved@example.com');
+    });
+
+    test('כתובת מהתוסף משמשת רק כשאין כתובת שמורה', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+        'reporterEmail': 'plugin@example.com',
+      });
+
+      expect(body['reporterEmail'], 'plugin@example.com');
+    });
+
+    test('hasReporterEmail מחזירה קיום בלבד, בלי הכתובת', () async {
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('{}', 200)),
+      );
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+      expect(
+        await adapter.execute('feedback', 'hasReporterEmail', {}),
+        isFalse,
+      );
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'user@example.com',
+      );
+      expect(
+        await adapter.execute('feedback', 'hasReporterEmail', {}),
+        isTrue,
+      );
+    });
+
     test('תשובה שאינה 2xx → חריגה מוחזרת לתוסף', () async {
       final adapter = buildAdapter(
         onConfirm: (_, _) async => true,

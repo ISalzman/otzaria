@@ -310,7 +310,8 @@ class PluginBridgeHandler {
       case 'feedback':
         // report אינה דורשת הרשאת manifest: הדיווח נשלח רק אחרי שהמשתמש
         // אישר אותו בדיאלוג, וההסכמה בדיאלוג היא גבול האבטחה.
-        if (action == 'report') {
+        // hasReporterEmail מחזירה ביט קיום בלבד, בלי הכתובת עצמה.
+        if (action == 'report' || action == 'hasReporterEmail') {
           return null;
         }
         return 'feedback.send_email';

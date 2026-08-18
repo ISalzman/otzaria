@@ -322,6 +322,7 @@ void main() {
         'fs.deleteFile',
         'plugin.backgroundDone',
         'feedback.report',
+        'feedback.hasReporterEmail',
       };
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))

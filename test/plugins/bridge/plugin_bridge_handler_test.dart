@@ -374,6 +374,25 @@ void main() {
       expect(adapter.lastAction, 'report');
     });
 
+    test('feedback.hasReporterEmail ללא הרשאה כלשהי → execute נקרא', () async {
+      final adapter = _FakeAdapter(result: false);
+      final handler = buildHandler(
+        declaredPermissions: const [],
+        granted: null,
+        adapter: adapter,
+      );
+
+      final resp =
+          await handler.handleRpcForTesting([
+                {'method': 'feedback.hasReporterEmail', 'payload': {}},
+              ])
+              as Map<String, dynamic>;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.executeCalls, 1);
+      expect(adapter.lastAction, 'hasReporterEmail');
+    });
+
     test('feedback.sendEmail עדיין דורשת feedback.send_email', () async {
       final adapter = _FakeAdapter(result: true);
       final handler = buildHandler(

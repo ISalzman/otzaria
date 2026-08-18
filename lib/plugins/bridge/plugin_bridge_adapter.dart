@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -2530,7 +2531,11 @@ class PluginBridgeAdapter {
       case 'get':
         final key = args['key'] as String?;
         if (key == null) throw Exception("key required");
-        final value = await _pluginRepo.getKV(plugin.pluginId, 'default', key);
+        final value = await _pluginRepo.getKV(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+          key,
+        );
         return value != null ? jsonDecode(value) : null;
       case 'set':
         final key = args['key'] as String?;
@@ -2540,7 +2545,7 @@ class PluginBridgeAdapter {
         }
         await _pluginRepo.setKV(
           plugin.pluginId,
-          'default',
+          kDefaultStorageNamespace,
           key,
           jsonEncode(value),
         );
@@ -2553,14 +2558,21 @@ class PluginBridgeAdapter {
       case 'remove':
         final key = args['key'] as String?;
         if (key == null) throw Exception("key required");
-        await _pluginRepo.removeKV(plugin.pluginId, 'default', key);
+        await _pluginRepo.removeKV(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+          key,
+        );
         PluginConditionEvaluator.instance.onStorageRemoved(
           plugin.pluginId,
           key,
         );
         return true;
       case 'list':
-        return _pluginRepo.listKVKeys(plugin.pluginId, 'default');
+        return _pluginRepo.listKVKeys(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+        );
       default:
         throw Exception("Unknown action in storage: $action");
     }
@@ -2848,14 +2860,16 @@ class PluginBridgeAdapter {
             ? details.substring(0, PluginReportService.maxDetailsLength)
             : details;
 
+        // המייל השמור בהגדרות גובר — כתובת מהתוסף משמשת רק כשאין שמור,
+        // כדי שתוסף לא יוכל לעקוף את הכתובת שהמשתמש קבע.
         final rawEmail = args['reporterEmail'];
-        var email = rawEmail is String ? rawEmail.trim() : '';
-        if (email.isEmpty) {
-          email =
-              Settings.getValue<String>(
-                SettingsRepository.keyErrorReportSenderEmail,
-              )?.trim() ??
-              '';
+        var email =
+            Settings.getValue<String>(
+              SettingsRepository.keyErrorReportSenderEmail,
+            )?.trim() ??
+            '';
+        if (email.isEmpty && rawEmail is String) {
+          email = rawEmail.trim();
         }
 
         final preview = cappedDetails.length > 300
@@ -2885,6 +2899,13 @@ class PluginBridgeAdapter {
           reporterEmail: email.isEmpty ? null : email,
         );
         return true;
+
+      // ביט אחד בלבד: קיום כתובת שמורה, בלי לחשוף את הכתובת עצמה לתוסף.
+      case 'hasReporterEmail':
+        final saved = Settings.getValue<String>(
+          SettingsRepository.keyErrorReportSenderEmail,
+        )?.trim();
+        return saved != null && saved.isNotEmpty;
 
       default:
         throw Exception('Unknown action in feedback: $action');
