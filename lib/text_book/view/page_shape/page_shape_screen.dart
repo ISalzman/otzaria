@@ -91,6 +91,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   String? _bottomCommentator;
   String? _bottomRightCommentator;
   bool _isLoadingConfig = true;
+  int _loadConfigurationGeneration = 0;
   bool _isLeftSidebarOpen = false;
   int _leftSidebarTabIndex = 0;
   String? _notesBookIdOverride;
@@ -318,6 +319,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       return;
     }
 
+    final generation = ++_loadConfigurationGeneration;
+
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
@@ -343,6 +346,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         state.book,
         availableCommentators: state.availableCommentators,
       );
+      // טעינה חדשה יותר (למשל אחרי העשרת heCategories) כבר רצה — לא לדרוס.
+      if (generation != _loadConfigurationGeneration) return;
       commentators = defaults.commentators;
       for (final entry in defaults.visibility.entries) {
         if (!entry.value) _columnVisibility[entry.key] = false;
@@ -884,8 +889,11 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         BlocListener<TextBookBloc, TextBookState>(
           listenWhen: (previous, current) {
             if (previous is TextBookLoaded && current is TextBookLoaded) {
+              // heCategories מועשר ברקע אחרי הטעינה; בלעדיו הגדרות הקטגוריה
+              // לא נמצאות וברירות המחדל נשארות על המסך (issue #770).
               return previous.availableCommentators.length !=
-                  current.availableCommentators.length;
+                      current.availableCommentators.length ||
+                  previous.book.heCategories != current.book.heCategories;
             }
             return previous is! TextBookLoaded && current is TextBookLoaded;
           },
