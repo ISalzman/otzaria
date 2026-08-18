@@ -356,18 +356,9 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
         borderRadius: AppTokens.borderRadiusAll,
         child: widget.child,
       );
-    } else if (_isTouchMode &&
-        widget.tooltip != null &&
-        !_hasCompactConstraints) {
-      trigger = TextButton.icon(
-        onPressed: widget.enabled ? _showAdaptiveMenu : null,
-        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
-        label: Text(
-          widget.tooltip!,
-        ),
-      );
     } else if (widget.iconData != null) {
-      // מצב Toolbar: BarButton.icon עם אייקון מסוגנן
+      // מצב Toolbar: BarButton.icon עם אייקון מסוגנן. חייב לגבור על מצב מגע —
+      // כפתור טקסט רחב מפוצץ את תקציב הרוחב של הסרגל וגורם overflow (#891).
       final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
       trigger = Opacity(
         opacity: widget.enabled ? 1.0 : 0.38,
@@ -381,6 +372,16 @@ class _AppPopupMenuButtonState<T> extends State<AppPopupMenuButton<T>> {
             selected: _isMenuOpen,
             onPressed: _showAdaptiveMenu,
           ),
+        ),
+      );
+    } else if (_isTouchMode &&
+        widget.tooltip != null &&
+        !_hasCompactConstraints) {
+      trigger = TextButton.icon(
+        onPressed: widget.enabled ? _showAdaptiveMenu : null,
+        icon: widget.icon ?? const Icon(FluentIcons.more_vertical_24_regular),
+        label: Text(
+          widget.tooltip!,
         ),
       );
     } else if (widget.highlighted) {

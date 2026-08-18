@@ -54,7 +54,10 @@ class ReaderNavCenter extends StatelessWidget {
         // כפתורי major מוסתרים כשאין מקום ל-4 כפתורים + כותרת מינימלית.
         final showMajor =
             available >= 4 * buttonWidth + 2 * gap + minTitleWidth;
-        final visibleButtons = showMajor ? 4 : 2;
+        // כשאין מקום אף לשני כפתורי minor (הצדדים בלעו את הסרגל) — מוותרים
+        // גם עליהם, אחרת ה-Row גולש ומצייר את פס האזהרה (issue #891).
+        final showMinor = available >= 2 * buttonWidth + 2 * gap;
+        final visibleButtons = showMajor ? 4 : (showMinor ? 2 : 0);
         final navButtonsWidth = visibleButtons * buttonWidth + 2 * gap;
 
         final remainingForTitle = (available - navButtonsWidth).clamp(
@@ -74,13 +77,15 @@ class ReaderNavCenter extends StatelessWidget {
                 compact: forceCompact,
                 onPressed: onPrevMajor,
               ),
-            BarButton.icon(
-              tooltip: prevMinorTooltip,
-              icon: FluentIcons.chevron_left_24_regular,
-              compact: forceCompact,
-              onPressed: onPrevMinor,
-            ),
-            const SizedBox(width: gap),
+            if (showMinor) ...[
+              BarButton.icon(
+                tooltip: prevMinorTooltip,
+                icon: FluentIcons.chevron_left_24_regular,
+                compact: forceCompact,
+                onPressed: onPrevMinor,
+              ),
+              const SizedBox(width: gap),
+            ],
             Flexible(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -96,13 +101,15 @@ class ReaderNavCenter extends StatelessWidget {
                 constraints: BoxConstraints(maxWidth: remainingForTitle),
                 child: FittedBox(fit: BoxFit.scaleDown, child: afterTitle!),
               ),
-            const SizedBox(width: gap),
-            BarButton.icon(
-              tooltip: nextMinorTooltip,
-              icon: FluentIcons.chevron_right_24_regular,
-              compact: forceCompact,
-              onPressed: onNextMinor,
-            ),
+            if (showMinor) ...[
+              const SizedBox(width: gap),
+              BarButton.icon(
+                tooltip: nextMinorTooltip,
+                icon: FluentIcons.chevron_right_24_regular,
+                compact: forceCompact,
+                onPressed: onNextMinor,
+              ),
+            ],
             if (showMajor)
               BarButton.icon(
                 tooltip: nextMajorTooltip,

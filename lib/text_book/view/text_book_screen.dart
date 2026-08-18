@@ -1472,13 +1472,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         // (ellipsis) לפי המקום הפנוי, אך המיקום נשאר גלוי במלואו — נחוץ לחברותא
         // שבה אין מידע אחר על המיקום.
         final namePrefix = '${state.book.title}, ';
-        // מיקום שאינו נכנס בעצמו ברוחב הפנוי (כותרת Word שהיא פסקה שלמה) חייב
-        // להיחתך כמחרוזת אחת — כשני חלקים הוא חורג מהסרגל ודורס את הכפתורים.
+        // מיקום שאינו משאיר לצדו מקום אף ל"..." של השם חייב להיחתך כמחרוזת
+        // אחת — כשני חלקים ה-Row גולש מהסרגל ומצייר את פס האזהרה (#891).
         final hasSeparateLocation =
             displayText.startsWith(namePrefix) &&
-            !measure(
-              displayText.substring(namePrefix.length),
-            ).didExceedMaxLines;
+            measure(displayText.substring(namePrefix.length)).width +
+                    measure('…').width <=
+                constraints.maxWidth;
         final rowAlignment = switch (textAlign) {
           TextAlign.center => MainAxisAlignment.center,
           TextAlign.start => MainAxisAlignment.start,
