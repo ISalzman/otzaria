@@ -55,18 +55,8 @@ class IndexFreshnessWarner {
   static Future<bool> _contentMatchesIndex(Book book) async {
     final provider = TantivyDataProvider.instance;
     final engine = await provider.engine;
-    // getBookTextFingerprints נוסף במנוע ב-PR otzaria_search_engine#13;
-    // עד שדרוג התלות הקריאה דינמית, ומנוע ישן נחשב "לא ניתן לאימות".
-    final Map<String, BigInt> fingerprints;
-    try {
-      fingerprints = Map<String, BigInt>.from(
-        await (engine as dynamic).getBookTextFingerprints() as Map,
-      );
-    } on NoSuchMethodError {
-      return true;
-    }
     return IndexingRepository(
       provider,
-    ).textBookContentMatchesIndex(book, fingerprints);
+    ).textBookContentMatchesIndex(book, await engine.getBookTextFingerprints());
   }
 }
