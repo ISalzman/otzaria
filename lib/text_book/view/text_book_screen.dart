@@ -3225,9 +3225,7 @@ bool _handleGlobalKeyEvent(
 
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
   // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
-  final isCtrlOrCmd =
-      HardwareKeyboard.instance.isControlPressed ||
-      (Platform.isMacOS && HardwareKeyboard.instance.isMetaPressed);
+  final isCtrlOrCmd = ShortcutHelper.isPlainCtrlOrCmdPressed;
 
   if (event is KeyDownEvent && isCtrlOrCmd) {
     switch (event.logicalKey) {
