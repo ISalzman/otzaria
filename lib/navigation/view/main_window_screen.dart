@@ -2388,10 +2388,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             },
           ),
           BlocListener<LibraryBloc, LibraryState>(
-            listenWhen: (previous, current) =>
-                previous.isLoading &&
-                !current.isLoading &&
-                current.library != null,
+            listenWhen: LibraryState.reloadCompleted,
             listener: (context, state) {
               _startupWorkGate.markLibraryLoaded();
               _tryStartDeferredStartupWork();

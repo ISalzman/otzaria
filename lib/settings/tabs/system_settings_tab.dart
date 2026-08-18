@@ -33,6 +33,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/models/direct_error_report.dart';
@@ -872,61 +873,67 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
-        return BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
-          bloc: _librarySelectionBloc,
-          listener: (context, librarySelectionState) async {
-            if (librarySelectionState is EmptyLibraryDirectorySelected) {
-              await context.read<NavigationBloc>().refreshLibrary();
-              if (!context.mounted) {
-                return;
+        return BlocListener<LibraryBloc, LibraryState>(
+          // הספרייה נטענת מחדש אחרי עדכון/החלפת מיקום — בלי ריענון כאן
+          // כרטיס "מערכת" ממשיך להציג גרסת ספרייה ישנה (issue #895).
+          listenWhen: LibraryState.reloadCompleted,
+          listener: (context, libraryState) => _loadVersionInfo(),
+          child: BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
+            bloc: _librarySelectionBloc,
+            listener: (context, librarySelectionState) async {
+              if (librarySelectionState is EmptyLibraryDirectorySelected) {
+                await context.read<NavigationBloc>().refreshLibrary();
+                if (!context.mounted) {
+                  return;
+                }
+                context.read<LibraryBloc>().add(RefreshLibrary());
+                UiSnack.showSuccess(SettingsMessages.libraryLoaded);
               }
-              context.read<LibraryBloc>().add(RefreshLibrary());
-              UiSnack.showSuccess(SettingsMessages.libraryLoaded);
-            }
 
-            if (librarySelectionState is EmptyLibraryError &&
-                librarySelectionState.errorMessage != null) {
-              UiSnack.showError(librarySelectionState.errorMessage!);
-            }
-
-            // [בדיקת אנדרואיד] דיאלוג ה-SAF להעתקת seforim.db לאחסון פנימי.
-            // אינו ניתן-להתנעה כרגע (שום דבר לא משגר PickDirectoryRequested
-            // ל-bloc זה) — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
-            if (librarySelectionState is EmptyLibraryAskingDbCopy) {
-              if (librarySelectionState.errorMessage != null) {
+              if (librarySelectionState is EmptyLibraryError &&
+                  librarySelectionState.errorMessage != null) {
                 UiSnack.showError(librarySelectionState.errorMessage!);
               }
-              if (!context.mounted) {
-                return;
+
+              // [בדיקת אנדרואיד] דיאלוג ה-SAF להעתקת seforim.db לאחסון פנימי.
+              // אינו ניתן-להתנעה כרגע (שום דבר לא משגר PickDirectoryRequested
+              // ל-bloc זה) — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
+              if (librarySelectionState is EmptyLibraryAskingDbCopy) {
+                if (librarySelectionState.errorMessage != null) {
+                  UiSnack.showError(librarySelectionState.errorMessage!);
+                }
+                if (!context.mounted) {
+                  return;
+                }
+                _showLibraryDbCopyDialog(context, librarySelectionState);
               }
-              _showLibraryDbCopyDialog(context, librarySelectionState);
-            }
-          },
-          child: SingleChildScrollView(
-            primary: true,
-            padding: const EdgeInsets.all(16.0),
-            child: ToolPanelWrapper(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. גרסאות + נתיב ספרייה
-                  _buildVersionAndPathSection(context, state),
+            },
+            child: SingleChildScrollView(
+              primary: true,
+              padding: const EdgeInsets.all(16.0),
+              child: ToolPanelWrapper(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. גרסאות + נתיב ספרייה
+                    _buildVersionAndPathSection(context, state),
 
-                  // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                  _buildSystemUpdatesSection(context, state),
+                    // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                    _buildSystemUpdatesSection(context, state),
 
-                  // 3. דיווחי טעויות
-                  _buildErrorReportsSection(context, state),
+                    // 3. דיווחי טעויות
+                    _buildErrorReportsSection(context, state),
 
-                  // 3ב. דיווחים על תוספים
-                  _buildPluginReportsSection(context, state),
+                    // 3ב. דיווחים על תוספים
+                    _buildPluginReportsSection(context, state),
 
-                  // 4. מתקדם (גיבוי + מצב סייפר)
-                  _buildAdvancedSection(context, state),
+                    // 4. מתקדם (גיבוי + מצב סייפר)
+                    _buildAdvancedSection(context, state),
 
-                  // 6. איפוס
-                  _buildResetSection(context),
-                ],
+                    // 6. איפוס
+                    _buildResetSection(context),
+                  ],
+                ),
               ),
             ),
           ),
