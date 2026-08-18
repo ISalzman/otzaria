@@ -8,14 +8,9 @@ on:
       - dev
 
 jobs:
-  test:
-    name: Analyze & Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -32,30 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      # sanitizeQuery/splitQueryWords מאצילים ל-Rust דרך FRB,
-      # ו-flutter_test_config.dart טוען את הספרייה מ-rust/target שבחבילה.
-      # ה-cache מיוצר ב-warm_search_engine_cache.yml על ענף הבסיס.
-      - name: Cache search engine library
-        id: engine-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache/hosted/pub.dev/otzaria_search_engine-*/rust/target/release/libsearch_engine.so
-          # בלי restore-keys: .so מגרסה קודמת נכשל בבדיקת ה-content hash של FRB,
-          # והטסטים היו מדולגים בשקט במקום להיכשל.
-          key: ${{ runner.os }}-search-engine-lib-${{ hashFiles('pubspec.lock') }}
-
-      - name: Build search engine native library
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        run: |
-          pkg_root=$(jq -r '.packages[] | select(.name == "otzaria_search_engine") | .rootUri' .dart_tool/package_config.json)
-          pkg_root=${pkg_root#file://}
-          case "$pkg_root" in
-            /*) ;;
-            *) pkg_root=".dart_tool/$pkg_root" ;;
-          esac
-          echo "Building search engine at: $pkg_root"
-          cargo build --release --manifest-path "$pkg_root/rust/Cargo.toml"
 
       # חילול אינדקס חיפוש בהגדרות. ה-.g.dart נדחף לרפו, אבל הסקריפט הזה
       # יוודא שהוא עדכני בכל הרצה (אם searchEntries השתנו במהלך ה-PR).
@@ -95,17 +66,106 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+  test:
+    name: Test (shard ${{ matrix.shard }}/6)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # sanitizeQuery/splitQueryWords מאצילים ל-Rust דרך FRB,
+      # ו-flutter_test_config.dart טוען את הספרייה מ-rust/target שבחבילה.
+      # ה-cache מיוצר ב-warm_search_engine_cache.yml על ענף הבסיס.
+      - name: Cache search engine library
+        id: engine-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache/hosted/pub.dev/otzaria_search_engine-*/rust/target/release/libsearch_engine.so
+          # בלי restore-keys: .so מגרסה קודמת נכשל בבדיקת ה-content hash של FRB,
+          # והטסטים היו מדולגים בשקט במקום להיכשל.
+          key: ${{ runner.os }}-search-engine-lib-${{ hashFiles('pubspec.lock') }}
+
+      - name: Build search engine native library
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: |
+          pkg_root=$(jq -r '.packages[] | select(.name == "otzaria_search_engine") | .rootUri' .dart_tool/package_config.json)
+          pkg_root=${pkg_root#file://}
+          case "$pkg_root" in
+            /*) ;;
+            *) pkg_root=".dart_tool/$pkg_root" ;;
+          esac
+          echo "Building search engine at: $pkg_root"
+          cargo build --release --manifest-path "$pkg_root/rust/Cargo.toml"
+
+      # הטסטים תלויים בקבצים המחוללים, לכן החילול רץ גם בכל shard (~20 שניות).
+      - name: Generate settings search index
+        run: |
+          set +e
+
+          for attempt in 1 2 3; do
+            output=$(dart run tool/generate_search_index.dart 2>&1)
+            status=$?
+            printf '%s\n' "$output"
+
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            case "$output" in
+              *'Running build hooks failed'*) ;;
+              *) exit "$status" ;;
+            esac
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::בניית נכסים נייטיביים נכשלה (ניסיון $attempt מתוך 3) - ניסיון נוסף בעוד 15 שניות"
+              sleep 15
+            fi
+          done
+
+          echo "::error::בניית הנכסים הנייטיביים נכשלה בשלושה ניסיונות"
+          exit 1
+
+      - name: Generate settings translation catalog
+        run: dart run tool/generate_settings_l10n.dart
+
       # הרצת הטסטים עם retry: אם הריצה הראשונה נכשלה, נחלץ את קבצי הטסט
       # שנכשלו ונריץ אותם שוב. רק אם הם נכשלים גם בריצה השנייה - הסטפ נכשל.
       - name: Run tests (with retry on failure)
         run: |
           set +e
 
+          # פיצול מפורש של רשימת הקבצים (round-robin על רשימה ממוינת) במקום
+          # --total-shards: הדגל מקמפל את כל הקבצים בכל shard והקומפילציה
+          # היא רוב הזמן, כך שהפיצול לא חסך כלום.
+          mapfile -t all_files < <(find test -name "*_test.dart" | sort)
+          shard_files=()
+          for i in "${!all_files[@]}"; do
+            if [ $((i % 6)) -eq ${{ matrix.shard }} ]; then
+              shard_files+=("${all_files[$i]}")
+            fi
+          done
+
           echo "════════════════════════════════════════"
-          echo "ריצה ראשונה של הטסטים"
+          echo "ריצה ראשונה של הטסטים (shard ${{ matrix.shard }}/6, ${#shard_files[@]} מתוך ${#all_files[@]} קבצים)"
           echo "════════════════════════════════════════"
 
-          flutter test --file-reporter json:test-results.json
+          flutter test --file-reporter json:test-results.json "${shard_files[@]}"
           first_exit=$?
 
           if [ $first_exit -eq 0 ]; then
@@ -156,6 +216,8 @@ jobs:
             [ -n "$line" ] && files_array+=("$line")
           done <<< "$failed_files"
 
+          # ה-retry רץ על רשימת קבצים מפורשת - בלי דגלי shard,
+          # כדי שהפיצול לא ישמיט חלק מהקבצים שנכשלו.
           flutter test --file-reporter json:retry-results.json "${files_array[@]}"
           second_exit=$?
 
@@ -165,7 +227,7 @@ jobs:
             echo "כל הטסטים עברו בהצלחה בריצה השנייה (retry)"
             echo "════════════════════════════════════════"
             {
-              echo "## טסטים שעברו רק אחרי retry"
+              echo "## טסטים שעברו רק אחרי retry (shard ${{ matrix.shard }})"
               echo ""
               echo "$failed_files" | sed 's/^/- /'
             } >> "$GITHUB_STEP_SUMMARY"
@@ -198,7 +260,7 @@ jobs:
           echo "════════════════════════════════════════"
 
           {
-            echo "## טסטים שנכשלו (גם אחרי retry)"
+            echo "## טסטים שנכשלו גם אחרי retry (shard ${{ matrix.shard }})"
             echo ""
             echo "$final_failed"
           } >> "$GITHUB_STEP_SUMMARY"
