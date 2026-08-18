@@ -83,21 +83,27 @@ Future<void> main() async {
       expect(out, contains('²'));
     });
 
-    test('sup עברי חשוף (בלי class) נשאר sup — superscript תוכני אמיתי', () {
+    // sup חשוף היה נשאר `<sup>` ונרנדר ב-WidgetSpan של fwfh — מה שהפך את סדר
+    // הסימונים בפסקת RTL. כיום הוא נפלט כ-span טקסט טהור במחלקת raised-sup,
+    // עם אותן מטריקות (5/6, בלי נטייה), וההרמה נעשית בציור.
+    test('sup עברי חשוף (בלי class) נפלט כ-raised-sup — superscript תוכני', () {
       const line = 'טקסט עם <sup>מעריך</sup> רגיל';
 
       final out = TextRendererService.processText(line, settings);
 
-      expect(out, contains('<sup>'));
+      expect(out, isNot(contains('<sup')));
+      expect(out, contains('class="raised-sup"'));
       expect(out, isNot(contains('footnote-marker-number')));
     });
 
-    test('sup מורכב (שאינו סימון הערה) נשאר sup', () {
+    test('sup מורכב (שאינו סימון הערה) נפלט כ-raised-sup', () {
       const line = 'טקסט<sup><a href="x">קישור מורכב!</a></sup> המשך';
 
       final out = TextRendererService.processText(line, settings);
 
-      expect(out, contains('<sup>'));
+      expect(out, isNot(contains('<sup')));
+      expect(out, contains('class="raised-sup"'));
+      expect(out, contains('<a href="x">'));
     });
 
     test('sup ריק מוסר לחלוטין', () {

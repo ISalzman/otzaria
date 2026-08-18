@@ -114,7 +114,9 @@ void main() {
 
     group('נפילה ל-HtmlWidget (מחזיר null)', () {
       final cases = <String, String>{
-        'תג עם attributes': '<span class="footnote-marker-number">א</span>',
+        // סימונים מורמים (footnote-marker-number / raised-sup) הם היוצא
+        // מן הכלל היחיד — נתמכים במסלול המהיר; ראו raised_markers_test.
+        'תג עם attributes': '<span class="unknown-class">א</span>',
         'קישור': '<a href="x">קישור</a>',
         'כותרת': '<h2>כותרת</h2>',
         'הדגשת חיפוש': 'לפני <span style="background-color:yellow">מילה</span>',

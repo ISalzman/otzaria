@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 
 /// שירות מרכזי לעיבוד טקסט
@@ -119,11 +120,10 @@ class TextRendererService {
     r'\bclass\s*=\s*"[^"]*\bfootnote-marker\b[^"]*"',
     caseSensitive: false,
   );
-  static final RegExp _simpleInnerRegex = RegExp(r'^[0-9\u0590-\u05FF]+$');
   static final RegExp _isolateStartRegex = RegExp(r'[\u2066\u2067\u2068]');
   static final RegExp _rtlCharRegex = RegExp(r'[\u0590-\u08FF]');
 
-  /// מתקן תגי <sup> כדי למנוע היפוך סדר ב-RTL
+  /// מתקן תגי <sup> כדי למנוע היפוך סדר ב-RTL ולאפשר הצגה מורמת אמיתית
   ///
   /// הבעיה האמיתית אינה bidi של הטקסט: HtmlWidget מממש `<sup>` באמצעות
   /// WidgetSpan, ומנוע Flutter משבץ inline-placeholders בפסקת RTL בסדר
@@ -133,12 +133,20 @@ class TextRendererService {
   ///
   /// הפתרון: sup *מספרי* (עם או בלי class — שניהם משמשים כמרקרים בספרים)
   /// מומר לספרות-עיליות יוניקוד (¹²³…) — טקסט טהור שמוצג מוגבה ומוקטן בכל
-  /// הגופנים, ללא WidgetSpan. מרקר לא-מספרי *מסומן* (`class="footnote-marker"`,
-  /// למשל אות עברית) נפלט כ-`<span class="footnote-marker-number">` — ה-class
-  /// מקבל גופן מוקטן ונטוי גם ב-[SmartTextWidget] (customStylesBuilder) וגם
-  /// בפרסר של מצב קריאה רציפה. sup לא-מספרי שאינו מסומן (superscript תוכני,
-  /// כגון `<sup>מעלית</sup>`) נשאר sup. בנוסף, התוכן עטוף בסימני בידוד
-  /// דו־כיווניות (LRI/RLI + PDI) בהתאם לתוכן כדי שסימונים סמוכים לא יתמזגו.
+  /// הגופנים, ללא WidgetSpan. כל sup לא-מספרי נפלט כ-span טקסט טהור, בשני
+  /// טעמים ששומרים על המטריקות המקוריות של כל אחד:
+  ///   * מרקר הערה (`class="footnote-marker"`) → `footnote-marker-number`,
+  ///     מוקטן ל-0.75em ונטוי.
+  ///   * sup חשוף — אות הפניה מקובץ משתמש או superscript תוכני
+  ///     (`<sup>מעלית</sup>`) → `raised-sup`, מוקטן ל-5/6 בלי נטייה, כמו
+  ///     שה-`<sup>` נראה קודם ב-fwfh ובקריאה הרציפה.
+  ///
+  /// ההרמה הוויזואלית מעל השורה נעשית בציור: [SmartTextWidget] צובע את שני
+  /// ה-class-ים שקופים ומצייר את תוכנם מורם דרך RaisedMarkerOverlay — ל-fwfh
+  /// אין תמיכה ב-`position`/`top` (הן היו no-op גם קודם, ולכן מרקרי הערות
+  /// כלל לא הורמו), ולכן ההרמה חייבת שכבת ציור; ראו raised_markers.dart.
+  /// בנוסף, התוכן עטוף בסימני בידוד דו־כיווניות (LRI/RLI + PDI) בהתאם
+  /// לתוכן כדי שסימונים סמוכים לא יתמזגו.
   static String _fixFootnoteMarkers(String text) {
     // Early-exit מהיר: אם אין בכלל תג <sup> בשורה, מחזירים את הטקסט כפי שהוא
     // בלי לבצע replaceAllMapped (שמקצה StringBuffer גם כשאין התאמות).
@@ -154,16 +162,7 @@ class TextRendererService {
         return '';
       }
 
-      final isFootnoteMarker = _footnoteMarkerClassRegex.hasMatch(attrs);
-      final isSimple = _simpleInnerRegex.hasMatch(innerText);
-
       final wrappedInner = _wrapWithBidiIsolate(innerHtml);
-      if (!isFootnoteMarker && !isSimple) {
-        if (identical(wrappedInner, innerHtml)) {
-          return match[0]!;
-        }
-        return '<sup$attrs>$wrappedInner</sup>';
-      }
 
       // מספר טהור → ספרות-עיליות יוניקוד (מוגבה ומוקטן מטבעו, ללא תגית).
       // חל גם על <sup>1</sup> חשוף בלי class: חלק מספרי ההערות-inline
@@ -176,15 +175,15 @@ class TextRendererService {
         return _wrapWithBidiIsolate(superscript);
       }
 
-      // תוכן לא-מספרי: רק מרקר *מסומן* (class="footnote-marker") הופך ל-span.
-      if (isFootnoteMarker) {
-        return '<span class="footnote-marker-number">$wrappedInner</span>';
+      // מרקר הערה מסומן — 0.75em ונטוי.
+      if (_footnoteMarkerClassRegex.hasMatch(attrs)) {
+        return '<span class="$kFootnoteMarkerClass">$wrappedInner</span>';
       }
 
-      // sup פשוט שאינו מרקר (למשל <sup>מעלית</sup> מייבוא Word) נשאר sup —
-      // שומר הגבהה אמיתית. נשאר חשוף לבאג ההיפוך רק אם יופיעו כמה כאלה
-      // באותה פסקה (נדיר עבור superscript תוכני).
-      return '<sup>$wrappedInner</sup>';
+      // sup חשוף (אות הפניה מקובץ משתמש, או superscript תוכני) — 5/6 בלי
+      // נטייה. גם הוא נפלט כ-span טקסט טהור ולא נשאר `<sup>`: מסלול ה-sup של
+      // fwfh בונה WidgetSpan, וזה מה שהפך את הסדר כששני סימונים באותה פסקה.
+      return '<span class="$kRaisedSupClass">$wrappedInner</span>';
     });
   }
 

@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/utils/link_preview_utils.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_renderer.dart';
 import 'package:otzaria/plugins/view/plugin_highlight_frame_overlay.dart';
 import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
+import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
 
 /// תגובה ללחיצה על קישור inline בתוך פסקה של מצב טקסט רציף.
@@ -75,6 +76,10 @@ dom.DocumentFragment _parseFragmentCached(String htmlText) {
   return fragment;
 }
 
+/// [hideRaisedMarkers] — כברירת מחדל גליפי הסימונים המורמים נפלטים שקופים,
+/// מתוך הנחה שהקורא עוטף את התוצאה ב-[RaisedMarkerOverlay.wrap] שמצייר אותם
+/// מורמים. קורא שמציג את הספאנים בלי השכבה חייב להעביר false — אחרת
+/// הסימונים ייעלמו מהמסך.
 List<InlineSpan> buildInlineHtmlSpans(
   String htmlText,
   TextStyle baseStyle, {
@@ -84,6 +89,7 @@ List<InlineSpan> buildInlineHtmlSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  bool hideRaisedMarkers = true,
 }) {
   final fragment = _parseFragmentCached(htmlText);
   return _nodesToSpans(
@@ -95,6 +101,7 @@ List<InlineSpan> buildInlineHtmlSpans(
     linkStyle: linkStyle,
     anchorActiveBackground: anchorActiveBackground,
     recognizerSink: recognizerSink,
+    hideRaisedMarkers: hideRaisedMarkers,
   );
 }
 
@@ -197,13 +204,28 @@ class _ContinuousReadingParagraphState
     final textSpan = TextSpan(style: widget.baseStyle, children: spans);
     // justify אינו מותח שורה אחרונה, ולכן גם לא פסקה בת שורה חזותית אחת.
     // מדידה מוקדמת של מספר השורות = layout שני על כל הפסקה, ומייקרת גלילה.
-    final text = Text.rich(
+    Widget result = Text.rich(
       textSpan,
       textAlign: widget.textAlign,
       strutStyle: exactLineHeightStrut(widget.baseStyle, textSpan),
     );
-    if (frameRanges.isEmpty) return text;
-    return PluginHighlightFrameOverlay(ranges: frameRanges, child: text);
+    if (frameRanges.isNotEmpty) {
+      result = PluginHighlightFrameOverlay(ranges: frameRanges, child: result);
+    }
+    // סימונים מורמים: כאן הספאנים הם טקסט טהור ואין דרך להרים אותם בפריסה,
+    // ולכן אותה שכבת ציור כמו במסך עיון. ספירת המופעים חייבת לרוץ על הפסקה
+    // כולה — לא לכל שורה בנפרד — כי השורות מאוחדות לטקסט אחד עם רווח מפריד,
+    // בדיוק כמו שהשכבה קוראת אותן מעץ הרינדור.
+    return RaisedMarkerOverlay.wrap(
+      context: context,
+      markers: RaisedMarkers.extract(
+        widget.lines.map((line) => line.htmlText ?? line.text).join(' '),
+      ),
+      baseStyle: widget.baseStyle,
+      linkColor: widget.linkStyle?.color,
+      activeBackground: widget.anchorActiveBackground,
+      child: result,
+    );
   }
 
   List<InlineSpan> _buildLineSpans(ContinuousReadingParagraphLine line) {
@@ -276,6 +298,7 @@ List<InlineSpan> _nodesToSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  bool hideRaisedMarkers = true,
 }) {
   final spans = <InlineSpan>[];
   for (final node in nodes) {
@@ -289,6 +312,7 @@ List<InlineSpan> _nodesToSpans(
         linkStyle: linkStyle,
         anchorActiveBackground: anchorActiveBackground,
         recognizerSink: recognizerSink,
+        hideRaisedMarkers: hideRaisedMarkers,
       ),
     );
   }
@@ -304,6 +328,7 @@ List<InlineSpan> _nodeToSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  bool hideRaisedMarkers = true,
 }) {
   if (node is dom.Text) {
     if (node.text.isEmpty) return const [];
@@ -322,22 +347,36 @@ List<InlineSpan> _nodeToSpans(
   if (node.localName == 'a' && onTapUrl != null) {
     final href = node.attributes['href'];
     if (href != null && href.isNotEmpty) {
-      final childStyle = _styleForElement(node, style);
+      final childStyle = _styleForElement(
+        node,
+        style,
+        hideRaisedMarkers: hideRaisedMarkers,
+      );
       // עוגן-מילה וטווח-ציטוט — צבע ה-primary של הנושא בלי קו תחתון; במצב
       // active מודגש עם רקע; שאר הקישורים — קו תחתון + צבע theme.
+      //
+      // כשהגליפים מוסתרים (hideRaisedMarkers) עוגן-מילה וסימון הערה נשארים
+      // שקופים: הצבע והרקע עוברים לציור המורם של RaisedMarkerOverlay, ורק
+      // ההדגשה של active נשארת כדי שרוחב המקום בשורה יתאים לציור.
       final effectiveLinkStyle = node.classes.contains('link-anchor')
           // הווריאנט שב-childStyle נשמר גם ב-active (מיזוג linkStyle היה גורר
           // קו תחתון של קישור ומוחק את קו-התחתון שהוא סימנו של וריאנט 5).
           ? (node.classes.contains('link-anchor-active')
                 ? childStyle.copyWith(
-                    color: linkStyle?.color,
+                    color: hideRaisedMarkers ? null : linkStyle?.color,
                     fontWeight: FontWeight.bold,
                     fontVariations: AppFonts.boldFontVariations(
                       childStyle.fontFamily,
                     ),
-                    backgroundColor: anchorActiveBackground,
+                    backgroundColor: hideRaisedMarkers
+                        ? null
+                        : anchorActiveBackground,
                   )
+                : hideRaisedMarkers
+                ? childStyle
                 : childStyle.copyWith(color: linkStyle?.color))
+          : node.classes.contains('book-note-marker') && hideRaisedMarkers
+          ? childStyle
           : node.classes.contains('numbered-note-marker')
           ? childStyle.copyWith(color: linkStyle?.color)
           : node.classes.contains('link-anchor-range')
@@ -357,6 +396,7 @@ List<InlineSpan> _nodeToSpans(
         linkStyle: linkStyle,
         anchorActiveBackground: anchorActiveBackground,
         recognizerSink: recognizerSink,
+        hideRaisedMarkers: hideRaisedMarkers,
       );
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
@@ -367,24 +407,49 @@ List<InlineSpan> _nodeToSpans(
       final isHoverableAnchor =
           isPreviewHoverableUrl(href) &&
           (onAnchorHover != null || onAnchorExit != null);
+      final mouseCursor = isHoverableAnchor ? SystemMouseCursors.click : null;
+      final onEnter = isHoverableAnchor && onAnchorHover != null
+          ? (PointerEnterEvent event) => onAnchorHover(href, event.position)
+          : null;
+      final onExit = isHoverableAnchor && onAnchorExit != null
+          ? (PointerExitEvent _) => onAnchorExit(href)
+          : null;
+
+      // ה-hit-test של RenderParagraph מחזיר את ספאן-העלה שמכיל את הטקסט —
+      // recognizer שיושב רק על ספאן-האב לעולם אינו נפגע בלחיצה במיקום.
+      // לכן ההתנהגות מועתקת לכל עלה בתת-העץ (אותו recognizer משותף, כך
+      // שה-dispose דרך recognizerSink נשאר יחיד).
+      InlineSpan withLinkBehavior(InlineSpan span) {
+        if (span is! TextSpan) return span;
+        return TextSpan(
+          text: span.text,
+          style: span.style,
+          recognizer: recognizer,
+          mouseCursor: mouseCursor,
+          onEnter: onEnter,
+          onExit: onExit,
+          children: span.children?.map(withLinkBehavior).toList(),
+        );
+      }
+
       return [
         TextSpan(
           style: effectiveLinkStyle,
           recognizer: recognizer,
-          mouseCursor: isHoverableAnchor ? SystemMouseCursors.click : null,
-          onEnter: isHoverableAnchor && onAnchorHover != null
-              ? (event) => onAnchorHover(href, event.position)
-              : null,
-          onExit: isHoverableAnchor && onAnchorExit != null
-              ? (_) => onAnchorExit(href)
-              : null,
-          children: children,
+          mouseCursor: mouseCursor,
+          onEnter: onEnter,
+          onExit: onExit,
+          children: children.map(withLinkBehavior).toList(),
         ),
       ];
     }
   }
 
-  final childStyle = _styleForElement(node, style);
+  final childStyle = _styleForElement(
+    node,
+    style,
+    hideRaisedMarkers: hideRaisedMarkers,
+  );
   return _nodesToSpans(
     node.nodes,
     childStyle,
@@ -394,10 +459,15 @@ List<InlineSpan> _nodeToSpans(
     linkStyle: linkStyle,
     anchorActiveBackground: anchorActiveBackground,
     recognizerSink: recognizerSink,
+    hideRaisedMarkers: hideRaisedMarkers,
   );
 }
 
-TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
+TextStyle _styleForElement(
+  dom.Element element,
+  TextStyle parentStyle, {
+  bool hideRaisedMarkers = true,
+}) {
   var style = parentStyle;
   final localName = element.localName;
 
@@ -417,17 +487,29 @@ TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
   }
   // sup חשוף (למשל מייבוא Word) מוקטן כמו ב-fwfh, בלי נטייה; סמני ההערות
   // מוקטנים ונוטים לפי ה-CSS שהוגדר להם ב-SmartTextWidget.
-  if (localName == 'sup') {
+  // `processText` ממיר כל sup לא-מספרי ל-span (ראו raised_markers.dart), ולכן
+  // בפועל מגיע לכאן `raised-sup`; תג sup חשוף נשאר נתמך לקלט שלא עבר עיבוד.
+  if (localName == 'sup' || element.classes.contains(kRaisedSupClass)) {
     style = style.copyWith(
       fontSize: (style.fontSize ?? 18) * kHtmlSmallerFontScale,
     );
+    // הגליף עצמו שקוף — RaisedMarkerOverlay מצייר אותו מורם. תג sup חשוף
+    // (קלט שלא עבר processText) נשאר גלוי, שם אין סימון לשכבה לצייר.
+    if (hideRaisedMarkers && element.classes.contains(kRaisedSupClass)) {
+      style = style.copyWith(color: const Color(0x00000000));
+    }
   }
-  if (element.classes.contains('footnote-marker-number') ||
+  if (element.classes.contains(kFootnoteMarkerClass) ||
       element.classes.contains('book-note-marker')) {
     style = style.copyWith(
-      fontSize: (style.fontSize ?? 18) * 0.75,
+      fontSize: (style.fontSize ?? 18) * kFootnoteMarkerScale,
       fontStyle: FontStyle.italic,
     );
+    // גם סימון ההערה הלחיץ שקוף — RaisedMarkerOverlay מצייר אותו מורם
+    // ומפנה אליו לחיצות; ה-recognizer נשאר על הספאן שבשורה.
+    if (hideRaisedMarkers) {
+      style = style.copyWith(color: const Color(0x00000000));
+    }
   }
   // סמן-אות של מפרש: מוקטן, והטיפוגרפיה נקבעת אך ורק בווריאנט שהוקצה למפרש.
   // נטייה כפויה כאן הייתה מוחקת את ההבחנה בין המפרשים.
@@ -438,6 +520,10 @@ TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
         fontSize: (style.fontSize ?? 18) * kLinkAnchorMarkerScale,
       ),
     );
+    // הגליף שקוף; הווריאנט נשאר עליו כדי שרוחב המקום יתאים לציור המורם.
+    if (hideRaisedMarkers) {
+      style = style.copyWith(color: const Color(0x00000000));
+    }
   }
   if (localName == 'i' ||
       localName == 'em' ||
