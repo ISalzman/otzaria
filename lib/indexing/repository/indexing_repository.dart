@@ -1246,36 +1246,25 @@ class IndexingRepository {
     required String indexedTitle,
   }) => book?.title == indexedTitle ? book : null;
 
-  /// בודק שספר טקסט עדיין זהה למסמכים הקיימים באינדקס.
-  Future<bool> textBookMatchesIndexedFingerprint(
+  /// בודק שתוכן ספר טקסט עדיין תואם את חתימת הטקסט שבאינדקס — בלי תלות
+  /// ב-metadata (סדר קטלוגי וכו', שנפסלים מכל הוספת ספר — issue #828).
+  ///
+  /// בדיקה רכה: `true` גם כשאין חתימה או שהספר לא ניתן לאימות — אזהרה
+  /// מוצדקת רק על אי-התאמה ודאית.
+  Future<bool> textBookContentMatchesIndex(
     Book book,
-    Library library,
-    Map<String, BigInt> indexFingerprints,
+    Map<String, BigInt> textFingerprints,
   ) async {
-    final indexHash = indexFingerprints[buildIndexedBookFilePath(book)];
+    final indexHash = textFingerprints[buildIndexedBookFilePath(book)];
     final textBook = _asTextBookForIndex(book);
     if (indexHash == null || indexHash == BigInt.zero || textBook == null) {
-      return false;
+      return true;
     }
 
     final text = await _loadTextBookText(textBook);
-    if (text == null) return false;
+    if (text == null) return true;
 
-    final catalogueOrder = buildCatalogueOrderResolver(library);
-    await Future.wait([
-      GenerationCache.instance.warmUp(),
-      ReferenceBooksCache.instance.warmUp(),
-      BookFacetMetadataCache.instance.warmUp(),
-    ]);
-    return computeBookFingerprint(
-          text: text,
-          title: textBook.title,
-          topics: _bookTopics(textBook),
-          catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(textBook)),
-          generationOrder: chronologicalOrderForBook(textBook),
-          extraFacets: _bookExtraFacets(textBook),
-        ) ==
-        indexHash;
+    return computeContentFingerprint(text: text) == indexHash;
   }
 
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
