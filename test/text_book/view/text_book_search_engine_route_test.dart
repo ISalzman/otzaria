@@ -57,7 +57,6 @@ Future<void> main() async {
     Future<List<TextSearchResult>> Function(List<String>, String)?
     simpleSearchRunner,
     String bookTitle = 'ספר בדיקה',
-    Future<bool> Function(TextBook book)? indexSyncVerifier,
   }) async {
     final textBookBloc = _TestTextBookBloc(
       bookLoaded
@@ -100,7 +99,6 @@ Future<void> main() async {
               initialMatchPolicy: matchPolicy,
               simpleSearchRunner: simpleSearchRunner,
               searchRepository: searchRepository,
-              indexSyncVerifier: indexSyncVerifier ?? (_) async => true,
             ),
           ),
         ),
@@ -322,61 +320,6 @@ Future<void> main() async {
     },
     skip: !engineReady,
   );
-
-  testWidgets('אינדקס שאינו תואם את הספר חוסם את מסלול המנוע עם הודעה', (
-    tester,
-  ) async {
-    // רגרסיה: ספר אישי שנערך אחרי האינדוקס — המנוע מחזיר מספרי שורות של
-    // הנוסח הישן, וההדגשה והגלילה מחטיאות בשקט. במקום זה מוצגת הודעה.
-    final repository = _RecordingSearchRepository(
-      results: [_result(title: 'ספר בדיקה', reference: 'קטע א', segment: 0)],
-    );
-
-    final harness = await pumpSearchView(
-      tester,
-      searchRepository: repository,
-      initialQuery: 'תדע זרעך',
-      searchDistance: 2,
-      indexSyncVerifier: (_) async => false,
-    );
-
-    await harness.settle();
-
-    expect(repository.requests, isEmpty, reason: 'אין לפנות למנוע');
-    expect(
-      find.text(LibraryMessages.inBookSearchIndexOutOfDate),
-      findsWidgets,
-    );
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-  });
-
-  testWidgets('אימות שנכשל אינו נשמר — עדכון אינדקס מורגש בחיפוש הבא', (
-    tester,
-  ) async {
-    final repository = _RecordingSearchRepository(
-      results: [_result(title: 'ספר בדיקה', reference: 'קטע א', segment: 0)],
-    );
-    var verifierCalls = 0;
-
-    final harness = await pumpSearchView(
-      tester,
-      searchRepository: repository,
-      initialQuery: 'תדע זרעך',
-      searchDistance: 2,
-      // הקריאה הראשונה — אינדקס ישן; אחרי "עדכון אינדקס" האימות מצליח.
-      indexSyncVerifier: (_) async => ++verifierCalls > 1,
-    );
-
-    await harness.settle();
-    expect(repository.requests, isEmpty);
-
-    await harness.type('תדע זרעך ');
-    await harness.settle();
-
-    expect(verifierCalls, 2, reason: 'תוצאת אימות שלילית אינה נשמרת במטמון');
-    expect(repository.requests, hasLength(1));
-    expect(find.text(LibraryMessages.inBookSearchIndexOutOfDate), findsNothing);
-  }, skip: !engineReady);
 
   testWidgets(
     'כשל בזיהוי הספר מציג שגיאה, ואינו משאיר את החלונית במצב "מחפש"',

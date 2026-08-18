@@ -194,32 +194,29 @@ void main() {
     expect(tab!.book.title, 'ספר מאינדקס ישן');
   });
 
-  test('כותרת זהה אינה מספיקה כשחתימת הספר השתנתה', () async {
-    final library = Library(categories: const []);
-    library.books.add(TextBook(id: 1234, title: 'משנה תורה'));
-    DataRepository.instance.library = Future.value(library);
-    final bloc = _StaticSearchBloc(
-      const SearchState(),
-      indexedBookVerifier: (_, _) async => false,
-    );
-    addTearDown(bloc.close);
+  test(
+    'רגרסיה #828: מפתח וכותרת תואמים פותחים גם בלי אימות טביעת אצבע',
+    () async {
+      // הוספת ספר לספרייה מזיזה את הסדר הקטלוגי ופוסלת את החתימה הקנונית של
+      // כל הספרים שאחריו — הפתיחה חייבת להסתמך על זהות בלבד (מפתח + כותרת).
+      final library = Library(categories: const []);
+      library.books.add(TextBook(id: 1234, title: 'משנה תורה'));
+      DataRepository.instance.library = Future.value(library);
+      final bloc = _StaticSearchBloc(const SearchState());
+      addTearDown(bloc.close);
 
-    final resolution = await bloc.resolveBookForIndexedPath(
-      'id:1234',
-      indexedTitle: 'משנה תורה',
-    );
-    expect(resolution.book, isNull);
-    expect(resolution.isStale, isTrue);
-  });
+      final resolution = await bloc.resolveBookForIndexedPath(
+        'id:1234',
+        indexedTitle: 'משנה תורה',
+      );
+      expect(resolution.book?.title, 'משנה תורה');
+      expect(resolution.isStale, isFalse);
+    },
+  );
 }
 
 class _StaticSearchBloc extends SearchBloc {
-  _StaticSearchBloc(
-    SearchState initialSearchState, {
-    Future<bool> Function(Book book, Library library)? indexedBookVerifier,
-  }) : super(
-         indexedBookVerifier: indexedBookVerifier ?? ((_, _) async => true),
-       ) {
+  _StaticSearchBloc(SearchState initialSearchState) {
     emit(initialSearchState);
   }
 

@@ -229,8 +229,7 @@ void main() {
 }
 
 class _StaticSearchBloc extends SearchBloc {
-  _StaticSearchBloc(SearchState initialSearchState)
-    : super(indexedBookVerifier: (_, _) async => true) {
+  _StaticSearchBloc(SearchState initialSearchState) {
     emit(initialSearchState);
   }
 

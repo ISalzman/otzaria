@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/core/messages/library_messages.dart';
@@ -564,8 +565,14 @@ class IndexingRepository {
         book.fileType ?? 'txt',
         book.isUserBook,
       );
+      // ניקוי תמונות מוטמעות חייב לרוץ גם כאן, כמו באימות הטביעה — אחרת
+      // החתימה לעולם לא תתאים ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
+      if (bytes != null && bytesContainDataUriScheme(bytes)) {
+        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
+        bytes = null;
+      }
     }
-    if (bytes == null || bytes.isEmpty) {
+    if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
       // מסלול הנפילה (docx/epub, ספר בלי categoryId): טקסט דרך LibraryProvider.
       // תמונות מוטמעות מסולקות — ראו [stripDataUrisForIndex].
       text = await _loadTextForIndex(book);
@@ -1045,6 +1052,23 @@ class IndexingRepository {
     if (copiedUpTo == 0) return text;
     buffer.write(text.substring(copiedUpTo));
     return buffer.toString();
+  }
+
+  /// סריקת bytes ל-'data:' (ASCII, ולכן תקפה על UTF-8) — מכריעה אם מסלול
+  /// ה-bytes המהיר חייב לרדת לפענוח וניקוי. false = אין מה לנקות.
+  @visibleForTesting
+  static bool bytesContainDataUriScheme(Uint8List bytes) {
+    const scheme = [0x64, 0x61, 0x74, 0x61, 0x3A]; // 'data:'
+    final last = bytes.length - scheme.length;
+    for (var i = 0; i <= last; i++) {
+      if (bytes[i] != scheme[0]) continue;
+      var j = 1;
+      while (j < scheme.length && bytes[i + j] == scheme[j]) {
+        j++;
+      }
+      if (j == scheme.length) return true;
+    }
+    return false;
   }
 
   static bool _isDataUriChar(int c) =>
