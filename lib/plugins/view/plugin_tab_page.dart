@@ -516,6 +516,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
         useOnDownloadStart: PluginDownloadHandler.isSupported,
+        // ב-Windows ה-status bar של WebView2 מציג את ה-URI בריחוף על קישור
+        // ומאפשר לתוסף לכתוב לשם טקסט חופשי (window.status).
+        statusBarEnabled: false,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: widget.plugin.isDevelopment || kDebugMode,
       ),
