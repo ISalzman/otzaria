@@ -2885,10 +2885,10 @@ class PluginBridgeAdapter {
               'שיעביר אותו למפתח התוסף.\n\nתוכן הדיווח:\n$preview$emailLine',
         );
         if (!confirmed) {
-          return false;
+          return 'cancelled';
         }
 
-        await _reportService.sendReport(
+        final record = await _reportService.buildRecord(
           pluginUid: plugin.pluginId,
           pluginName: plugin.name,
           pluginVersion: plugin.version,
@@ -2898,7 +2898,8 @@ class PluginBridgeAdapter {
               : null,
           reporterEmail: email.isEmpty ? null : email,
         );
-        return true;
+        final status = await _reportService.submitReport(record);
+        return status == PluginReportDeliveryStatus.sent ? 'sent' : 'queued';
 
       // ביט אחד בלבד: קיום כתובת שמורה, בלי לחשוף את הכתובת עצמה לתוסף.
       case 'hasReporterEmail':

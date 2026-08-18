@@ -363,10 +363,10 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | Method | הרשאה | פרמטרים | החזרה |
 |--------|-------|----------|-------|
 | `feedback.sendEmail` | `feedback.send_email` | `{ to, subject, body, includeSystemInfo? }` | `boolean` |
-| `feedback.report` | — (אישור המשתמש בדיאלוג) | `{ details, reportType?, reporterEmail? }` | `boolean` |
+| `feedback.report` | — (אישור המשתמש בדיאלוג) | `{ details, reportType?, reporterEmail? }` | `'sent' \| 'queued' \| 'cancelled'` |
 | `feedback.hasReporterEmail` | — (ביט קיום בלבד) | — | `boolean` |
 
-`feedback.report` שולח דיווח של המשתמש על התוסף לאתר אוצריא, שמעביר אותו למפתח התוסף. מוצג דיאלוג אישור חובה; `false` פירושו שהמשתמש ביטל. כתובת לחזרה השמורה בהגדרות גוברת על `reporterEmail`; בדקו קיומה מראש עם `feedback.hasReporterEmail` (הכתובת עצמה אינה נחשפת לתוסף).
+`feedback.report` שולח דיווח של המשתמש על התוסף לאתר אוצריא, שמעביר אותו למפתח התוסף. מוצג דיאלוג אישור חובה; `'queued'` פירושו שהדיווח נשמר בתור מקומי ויישלח אוטומטית כשיהיה חיבור. כתובת לחזרה השמורה בהגדרות גוברת על `reporterEmail`; בדקו קיומה מראש עם `feedback.hasReporterEmail` (הכתובת עצמה אינה נחשפת לתוסף).
 
 ### storage.*
 

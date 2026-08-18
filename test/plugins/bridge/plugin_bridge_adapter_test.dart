@@ -40,6 +40,8 @@ import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
+import 'package:otzaria/data/repository/hive_list_repository.dart';
+import 'package:otzaria/plugins/models/plugin_report_record.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
@@ -3451,12 +3453,17 @@ Future<void> main() async {
     PluginBridgeAdapter buildAdapter({
       required Future<bool> Function(String title, String content) onConfirm,
       required http.Client client,
+      _InMemoryPluginReportQueue? queue,
     }) {
       return PluginBridgeAdapter(
         _buildInstalledPlugin(),
         dependencies: buildDeps(onConfirm: onConfirm),
         pluginRepository: _StubPluginRegistryRepository(),
-        reportService: PluginReportService(client: client),
+        reportService: PluginReportService(
+          client: client,
+          queueRepository: queue ?? _InMemoryPluginReportQueue(),
+          sentRepository: _InMemoryPluginReportQueue(),
+        ),
       );
     }
 
@@ -3495,7 +3502,7 @@ Future<void> main() async {
       expect(posted, isFalse);
     });
 
-    test('ביטול בדיאלוג → false ואין שליחה', () async {
+    test('ביטול בדיאלוג → cancelled ואין שליחה', () async {
       var posted = false;
       final adapter = buildAdapter(
         onConfirm: (_, _) async => false,
@@ -3509,7 +3516,7 @@ Future<void> main() async {
         'details': 'התוסף קורס',
       });
 
-      expect(result, isFalse);
+      expect(result, 'cancelled');
       expect(posted, isFalse);
     });
 
@@ -3534,7 +3541,7 @@ Future<void> main() async {
         'reportType': 'nonsense',
       });
 
-      expect(result, isTrue);
+      expect(result, 'sent');
       expect(dialogTitle, 'שליחת דיווח למפתח התוסף');
       expect(dialogContent, contains('Test Plugin'));
       expect(dialogContent, contains('התוסף קורס'));
@@ -3659,10 +3666,12 @@ Future<void> main() async {
       );
     });
 
-    test('תשובה שאינה 2xx → חריגה מוחזרת לתוסף', () async {
+    test('דחייה קבועה (400) → חריגה מוחזרת לתוסף ולא נשמר בתור', () async {
+      final queue = _InMemoryPluginReportQueue();
       final adapter = buildAdapter(
         onConfirm: (_, _) async => true,
-        client: MockClient((_) async => http.Response('nope', 500)),
+        client: MockClient((_) async => http.Response('bad', 400)),
+        queue: queue,
       );
 
       await expectLater(
@@ -3671,12 +3680,95 @@ Future<void> main() async {
           isA<Exception>().having(
             (e) => e.toString(),
             'message',
-            contains('500'),
+            contains('400'),
           ),
         ),
       );
+      expect(await queue.load(), isEmpty);
+    });
+
+    test('כשל זמני (500) → queued והדיווח נשמר בתור', () async {
+      final queue = _InMemoryPluginReportQueue();
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('nope', 500)),
+        queue: queue,
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+      });
+
+      expect(result, 'queued');
+      final queued = await queue.load();
+      expect(queued.single.pluginUid, 'test.plugin');
+      expect(queued.single.details, 'משהו');
+    });
+
+    test('מצב לא-מקוון עם תור כבוי → חריגה, בלי רשת ובלי תור', () async {
+      await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, true);
+      await Settings.setValue<bool>(
+        SettingsRepository.keyQueueErrorReportsWhenOffline,
+        false,
+      );
+      addTearDown(() async {
+        await Settings.setValue<bool>(
+          SettingsRepository.keyOfflineMode,
+          false,
+        );
+        await Settings.setValue<bool>(
+          SettingsRepository.keyQueueErrorReportsWhenOffline,
+          true,
+        );
+      });
+
+      var posted = false;
+      final queue = _InMemoryPluginReportQueue();
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+        queue: queue,
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': 'משהו'}),
+        throwsA(isA<Exception>()),
+      );
+      expect(posted, isFalse);
+      expect(await queue.load(), isEmpty);
     });
   });
+}
+
+class _InMemoryPluginReportQueue
+    extends HiveListRepository<PluginReportRecord> {
+  List<PluginReportRecord> _items = [];
+
+  _InMemoryPluginReportQueue()
+    : super(
+        boxName: 'in_memory',
+        key: 'pending_reports',
+        fromJson: PluginReportRecord.fromJson,
+        toJson: (record) => record.toJson(),
+      );
+
+  @override
+  Future<List<PluginReportRecord>> load() async {
+    return List<PluginReportRecord>.from(_items);
+  }
+
+  @override
+  Future<void> save(List<PluginReportRecord> items) async {
+    _items = List<PluginReportRecord>.from(items);
+  }
+
+  @override
+  Future<void> clear() async {
+    _items = [];
+  }
 }
 
 class _FakeBookProvider implements LibraryProvider {

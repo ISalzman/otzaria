@@ -74,6 +74,7 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provide
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/core/http_client_registry.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -702,6 +703,8 @@ Future<void> _runDeferredErrorReportFlush() async {
     final reportService = DirectErrorReportService();
     HttpClientRegistry.register(reportService.closeHttpClient);
     await reportService.startAutomaticFlush();
+    // תור דיווחי התוספים משתמש ב-client סטטי שכבר רשום ב-HttpClientRegistry.
+    await PluginReportService().startAutomaticFlush();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
       'Direct error report queue',
@@ -1212,6 +1215,7 @@ Future<void> initHive() async {
     Hive.openBox<dynamic>('history'),
     Hive.openBox<dynamic>('bookmarks'),
     Hive.openBox<dynamic>('error_reports_queue'),
+    Hive.openBox<dynamic>(PluginReportService.queueBoxName),
   ]);
 }
 
