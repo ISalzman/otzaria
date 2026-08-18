@@ -155,6 +155,7 @@ class ContextMenuRegistry extends ChangeNotifier {
     const supportedContexts = {
       'reader-selection',
       'reader-page-shape-selection',
+      'reader-highlight',
     };
     if (contexts.isEmpty ||
         contexts.toSet().length != contexts.length ||

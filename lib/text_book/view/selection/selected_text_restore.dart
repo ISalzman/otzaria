@@ -153,6 +153,90 @@ RestoredSelection restoreSelectedTextLineBreaksDetailed({
   return withoutLocation(_restoreGreedy(selectedText, visibleLines));
 }
 
+/// טווחי הבחירה פר-שורה בבחירה חוצת-שורות: לכל שורה שנכללת בבחירה — טווח
+/// ה-utf16 המסומן בטקסט המרונדר שלה. [visibleLines] הן שורות הבחירה עצמן
+/// (הראשונה = שורת ההתחלה), ולכן עדיפות למופע שפרוש מהשורה הראשונה עד
+/// האחרונה. `null` — אין התאמה.
+List<({int line, int start, int end})>? locateSelectionRangesPerLine({
+  required String selectedText,
+  required List<String> visibleLines,
+  int? startColumnHint,
+}) {
+  if (selectedText.isEmpty || visibleLines.isEmpty) return null;
+
+  final selectedBuffer = StringBuffer();
+  for (var i = 0; i < selectedText.length; i++) {
+    if (!_isWhitespace(selectedText.codeUnitAt(i))) {
+      selectedBuffer.write(selectedText[i]);
+    }
+  }
+  final selectedCompact = selectedBuffer.toString();
+  if (selectedCompact.isEmpty) return null;
+
+  final lineOfChar = <int>[];
+  final columnOfChar = <int>[];
+  final visibleBuffer = StringBuffer();
+  for (var lineIndex = 0; lineIndex < visibleLines.length; lineIndex++) {
+    final line = visibleLines[lineIndex];
+    for (var i = 0; i < line.length; i++) {
+      if (!_isWhitespace(line.codeUnitAt(i))) {
+        visibleBuffer.write(line[i]);
+        lineOfChar.add(lineIndex);
+        columnOfChar.add(i);
+      }
+    }
+  }
+  final visibleCompact = visibleBuffer.toString();
+
+  final candidates = <int>[];
+  for (
+    var from = 0, found = 0;
+    (found = visibleCompact.indexOf(selectedCompact, from)) >= 0;
+    from = found + 1
+  ) {
+    candidates.add(found);
+  }
+  if (candidates.isEmpty) return null;
+
+  final lastChar = selectedCompact.length - 1;
+  final spanning = candidates
+      .where(
+        (start) =>
+            lineOfChar[start] == 0 &&
+            lineOfChar[start + lastChar] == visibleLines.length - 1,
+      )
+      .toList();
+  final pool = spanning.isNotEmpty ? spanning : candidates;
+  final start = startColumnHint == null
+      ? pool.first
+      : pool.reduce(
+          (a, b) =>
+              (columnOfChar[a] - startColumnHint).abs() <=
+                  (columnOfChar[b] - startColumnHint).abs()
+              ? a
+              : b,
+        );
+
+  final result = <({int line, int start, int end})>[];
+  var currentLine = -1;
+  var rangeStart = 0;
+  var rangeEnd = 0;
+  for (var k = 0; k <= lastChar; k++) {
+    final line = lineOfChar[start + k];
+    final column = columnOfChar[start + k];
+    if (line != currentLine) {
+      if (currentLine >= 0) {
+        result.add((line: currentLine, start: rangeStart, end: rangeEnd));
+      }
+      currentLine = line;
+      rangeStart = column;
+    }
+    rangeEnd = column + 1;
+  }
+  result.add((line: currentLine, start: rangeStart, end: rangeEnd));
+  return result;
+}
+
 /// תואם את קבוצת `\s` של Dart RegExp (כולל NBSP ורווח-דק) — חייב להישאר
 /// עקבי עם כיווץ הרווחים ב-[renderSelectionLine].
 bool _isWhitespace(int codeUnit) =>

@@ -145,4 +145,68 @@ void main() {
     expect(anchors[2]!.startWordIndex, 2);
     expect(anchors[3], isNull);
   });
+
+  group('buildMultiSectionPayload', () {
+    const settings = RenderSettings(formatParentheses: false);
+
+    test('בונה עוגן לכל פסקה בבחירה חוצת-פסקאות', () {
+      final payload = service.buildMultiSectionPayload(
+        bookId: 'book',
+        bookTitle: 'ספר',
+        firstSectionIndex: 7,
+        rawTexts: const ['שלום עולם', 'ברוך הבא'],
+        lineRanges: const [
+          (line: 0, start: 5, end: 9),
+          (line: 1, start: 0, end: 4),
+        ],
+        settings: settings,
+        selectedText: 'עולם\nברוך',
+        currentRef: 'פרק א',
+      );
+
+      expect(payload['currentIndex'], 7);
+      expect(payload['sourceRange'], isNull);
+      final sections = payload['sections'] as List;
+      expect(sections, hasLength(2));
+      final first = sections[0] as Map<String, dynamic>;
+      final second = sections[1] as Map<String, dynamic>;
+      expect(first['sectionIndex'], 7);
+      expect(first['currentIndex'], 7);
+      expect((first['sourceRange'] as Map)['exactText'], 'עולם');
+      expect(second['sectionIndex'], 8);
+      expect((second['sourceRange'] as Map)['exactText'], 'ברוך');
+    });
+
+    test('פסקה יחידה מתמזגת לרמה העליונה כמו בחירה רגילה', () {
+      final payload = service.buildMultiSectionPayload(
+        bookId: 'book',
+        bookTitle: 'ספר',
+        firstSectionIndex: 3,
+        rawTexts: const ['שלום עולם'],
+        lineRanges: const [(line: 0, start: 5, end: 9)],
+        settings: settings,
+        selectedText: 'עולם',
+      );
+
+      expect(payload.containsKey('sections'), isFalse);
+      expect(payload['sectionIndex'], 3);
+      expect((payload['sourceRange'] as Map)['exactText'], 'עולם');
+    });
+
+    test('ללא טווחים — payload בסיסי בלי sections', () {
+      final payload = service.buildMultiSectionPayload(
+        bookId: 'book',
+        bookTitle: 'ספר',
+        firstSectionIndex: 0,
+        rawTexts: const ['שלום עולם'],
+        lineRanges: const [],
+        settings: settings,
+        selectedText: 'טקסט',
+      );
+
+      expect(payload.containsKey('sections'), isFalse);
+      expect(payload.containsKey('sourceRange'), isFalse);
+      expect(payload['text'], 'טקסט');
+    });
+  });
 }

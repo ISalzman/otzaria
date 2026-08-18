@@ -410,6 +410,39 @@ export interface ReaderSelection {
   direction?: 'rtl' | 'ltr' | 'mixed';
   /** ISO 8601 */
   createdAt?: string;
+  /** Multi-paragraph selection: one fully-anchored entry per section, in
+   * reading order. The top-level fields then carry no sourceRange. From 0.9.97. */
+  sections?: ReaderSelectionSection[];
+  /** `reader-highlight` context only: the plugin highlights found under the
+   * click position. Act only on your own ids. From 0.9.97. */
+  clickedHighlights?: ClickedHighlightRef[];
+}
+
+/** One section of a multi-paragraph selection (same shape as a verified
+ * single-section selection, scoped to that section). */
+export interface ReaderSelectionSection {
+  schemaVersion: 1;
+  selectionId: string;
+  bookId: string;
+  bookTitle?: string;
+  sectionIndex: number;
+  /** Mirrors `sectionIndex` for legacy consumers. */
+  currentIndex: number;
+  currentRef: string | null;
+  renderedSelectedText: string;
+  sourceSelectedText: string;
+  normalizedSelectedText: string;
+  sourceRange: TextRangeAnchor;
+  renderedRange: TextRangeAnchor;
+  direction: 'rtl' | 'ltr' | 'mixed';
+  /** ISO 8601 */
+  createdAt: string;
+}
+
+export interface ClickedHighlightRef {
+  highlightId: string;
+  /** Owner plugin id — skip entries that are not yours. */
+  pluginId: string;
 }
 
 export interface TextOffset {
@@ -643,7 +676,10 @@ export interface ReaderSectionContentChangedEvent {
 
 export type ContextMenuContext =
   | 'reader-selection'
-  | 'reader-page-shape-selection';
+  | 'reader-page-shape-selection'
+  /** Right-click on a plugin highlight, with or without an active selection.
+   * The click payload carries `selection.clickedHighlights`. From 0.9.97. */
+  | 'reader-highlight';
 
 export interface ContextMenuColor {
   id: string;

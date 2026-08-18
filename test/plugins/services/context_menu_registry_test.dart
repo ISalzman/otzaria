@@ -47,6 +47,17 @@ void main() {
       expect(item.children.single.onColorClickEvent, 'marker.colorSelected');
     });
 
+    test('מקבל את ההקשר reader-highlight (לחיצה על הדגשה ללא בחירה)', () {
+      registry.registerPayload('marker', {
+        'id': 'marker-remove-highlight',
+        'title': 'הסר סימון',
+        'contexts': ['reader-highlight'],
+      });
+
+      final item = registry.getAll().single.$2;
+      expect(item.contexts, ['reader-highlight']);
+    });
+
     group('action — פעולת host דקלרטיבית', () {
       Map<String, dynamic> actionItem({
         Map<String, dynamic> extra = const {},

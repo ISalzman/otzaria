@@ -3266,9 +3266,62 @@ await Otzaria.call('reader.addContextMenuItem', {
   הטקסט המסומן ולפעול עליו בדף שלו.
 - `type` יכול להיות `item`,‏ `submenu`,‏ `color-row` או `separator`
 - תת־תפריט מקבל `children`; שורת צבעים מקבלת `colors` עם `id`,‏ `color`,‏ `label`,‏ `selected` ו־`icon` אופציונלי. כאשר `icon` קיים הוא מוצג במקום גוש הצבע ומתאים לפעולות קומפקטיות כמו מחק
-- `contexts` הוא מערך ויכול להכיל את `reader-selection`, את `reader-page-shape-selection`, או את שניהם באותו פריט. ערכי `contexts` חייבים להיות חוקיים וייחודיים. פריט שלא מגדיר `contexts` מופיע בשני ההקשרים (כהתנהגות הרישום המקורית).
+- `contexts` הוא מערך ויכול להכיל את `reader-selection`, את `reader-page-shape-selection`, או את שניהם באותו פריט. מ-`0.9.97` נתמך גם `reader-highlight` (ראו למטה). ערכי `contexts` חייבים להיות חוקיים וייחודיים. פריט שלא מגדיר `contexts` מופיע בשני הקשרי הבחירה (כהתנהגות הרישום המקורית).
 - ילד שלא מגדיר `contexts` יורש את המערך של אביו. ילד שמגדיר `contexts` במפורש מוצג רק בהקשרים שלו, ללא איחוד אוטומטי עם הקשר האב; ההקשרים המפורשים חייבים להיות תת־קבוצה של הקשרי האב.
 - אפשר להגדיר `onClickEvent` או `onColorClickEvent` כאירוע מותאם אישית
+
+**בחירה חוצת־פסקאות — `selection.sections` (מ-`0.9.97`):**
+כשהבחירה משתרעת על כמה פסקאות, ה־`selection` שנמסר לאירועי הלחיצה של
+פריטי התפריט כולל מערך `sections` — איבר לכל פסקה, עם `sectionIndex`,
+`sourceRange` ו־`renderedRange` מלאים משלה. השדות העליונים נשארים כבעבר
+(ללא `sourceRange`, לתאימות עם תוספים קיימים). תוסף שמחיל פעולה על
+הבחירה (הדגשה, הערה) צריך לפעול על כל איבר בנפרד:
+
+```javascript
+Otzaria.on('contextMenu.colorClicked', async (data) => {
+  const targets = data.selection.sections
+    ?? [data.selection];                       // בחירה חד־פסקתית — כרגיל
+  for (const target of targets) {
+    if (!target.sourceRange) continue;
+    await Otzaria.call('reader.setHighlight', {
+      bookId: target.bookId,
+      sectionIndex: target.sectionIndex,
+      range: target.sourceRange,
+      style: { backgroundColor: '#FFEB3B' }
+    });
+  }
+});
+```
+
+**ההקשר `reader-highlight` (מ-`0.9.97`):**
+פריט בהקשר זה מופיע בלחיצה ימנית על טקסט שמודגש על־ידי תוסף — **גם כשאין
+בחירה פעילה**. ה־Host מזהה אילו הדגשות נמצאות מתחת לנקודת הלחיצה, ואירוע
+הלחיצה מקבל `selection.clickedHighlights` — מערך של
+`{ highlightId, pluginId }`. התוסף פועל רק על ההדגשות שבבעלותו
+(`reader.clearHighlight` על מזהה של תוסף אחר מחזיר שגיאה ממילא). שימוש
+אופייני: פריט "הסר סימון" שזמין בלחיצה על ההדגשה עצמה:
+
+```javascript
+await Otzaria.call('reader.addContextMenuItem', {
+  id: 'my-remove-highlight',
+  title: 'הסר סימון',
+  icon: 'eraser_24_regular',
+  contexts: ['reader-highlight'],
+  onClickEvent: 'myPlugin.removeClicked'
+});
+
+Otzaria.on('myPlugin.removeClicked', async (data) => {
+  for (const clicked of data.selection?.clickedHighlights ?? []) {
+    await Otzaria.call('reader.clearHighlight', {
+      highlightId: clicked.highlightId
+    }).catch(() => {});
+  }
+});
+```
+
+בגרסאות שלפני `0.9.97` רישום עם `reader-highlight` נדחה עם
+`error.unsupported_context` — עטפו את הקריאה ב־catch כדי לתמוך בשתי
+הגרסאות.
 
 ---
 

@@ -217,6 +217,59 @@ bool? clickIsOnSelectionWithinArea({
   return false;
 }
 
+/// בודק אם נקודת הלחיצה [globalPosition] נופלת על מופע של [text] בפסקה
+/// שתחת הנקודה. משמש לזיהוי לחיצה על טקסט מודגש (ללא בחירה פעילה).
+///
+/// כשידוע איזה מופע מודגש ([occurrenceIndex] מתוך [occurrenceCount]) —
+/// נבדק רק הוא, כדי שלחיצה על מופע זהה לא-מודגש לא תיחשב על ההדגשה.
+/// כשמספר המופעים בפסקה שונה מהצפוי המיפוי דו-משמעי ונבדקים כל המופעים.
+///
+/// מחזיר `true` — הלחיצה על המופע; `false` — בפסקה אך מחוץ לו;
+/// `null` — לא ניתן להכריע (אין פסקה / הטקסט לא נמצא בה).
+bool? clickIsOnTextOccurrence({
+  required RenderObject root,
+  required Offset globalPosition,
+  required String text,
+  int? occurrenceIndex,
+  int? occurrenceCount,
+}) {
+  if (text.isEmpty) return false;
+  final paragraph = _findParagraphContaining(root, globalPosition);
+  if (paragraph == null) return null;
+
+  final pText = paragraph.text.toPlainText(includeSemanticsLabels: false);
+  if (pText.isEmpty) return null;
+
+  final starts = <int>[];
+  for (var from = 0; ;) {
+    final start = pText.indexOf(text, from);
+    if (start < 0) break;
+    starts.add(start);
+    from = start + 1;
+  }
+  if (starts.isEmpty) return null;
+
+  final onlyKnownOccurrence =
+      occurrenceIndex != null &&
+      occurrenceCount != null &&
+      starts.length == occurrenceCount &&
+      occurrenceIndex >= 0 &&
+      occurrenceIndex < starts.length;
+  final candidates = onlyKnownOccurrence ? [starts[occurrenceIndex]] : starts;
+
+  final local = paragraph.globalToLocal(globalPosition);
+  for (final start in candidates) {
+    final boxes = paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: start, extentOffset: start + text.length),
+      boxHeightStyle: ui.BoxHeightStyle.includeLineSpacingMiddle,
+    );
+    for (final box in boxes) {
+      if (box.toRect().contains(local)) return true;
+    }
+  }
+  return false;
+}
+
 /// מחשב את טווח התווים המסומן בתוך טקסט הפסקה [pText], בהינתן כלל הטקסט הנבחר
 /// [selectedText] (שטוח, רציף בסדר הקריאה). מטפל בארבעה מצבים: הפסקה כולה נמצאת
 /// בתוך הבחירה, הבחירה כולה בתוך הפסקה, הבחירה מתחילה בפסקה (סיומת מסומנת), או
