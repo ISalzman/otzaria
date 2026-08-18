@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/page_turn_geometry.dart';
 
@@ -164,8 +166,77 @@ void main() {
           progress: p,
           turnLeftPage: true,
         );
-        expect(geometry.shadeStrength, closeTo(pageTurnDecorationFade(p), 1e-9));
+        expect(
+          geometry.shadeStrength,
+          closeTo(pageTurnDecorationFade(p), 1e-9),
+        );
       }
+    });
+  });
+
+  group('clampStripToSnapshotCoverage — כפולה שגולשת מהצילום', () {
+    const coverage = Rect.fromLTWH(0, -100, 600, 700);
+
+    test('רצועה בתוך התחום חוזרת ללא שינוי', () {
+      const dest = Rect.fromLTWH(10, 0, 50, 400);
+      const source = Rect.fromLTWH(100, 200, 25, 200);
+
+      final clamped = clampStripToSnapshotCoverage(
+        dest: dest,
+        source: source,
+        coverage: coverage,
+      )!;
+
+      expect(clamped.dest, dest);
+      expect(clamped.source, source);
+    });
+
+    test('חריגה אנכית נחתכת יעד-ומקור באותו יחס — אין מתיחה', () {
+      // כפולה בגובה 1000 מול צילום שמכסה 700 החל מ-y=-100:
+      // 10% נחתכים למעלה ו-20% למטה.
+      const dest = Rect.fromLTWH(0, -200, 50, 1000);
+      const source = Rect.fromLTWH(0, 0, 25, 500);
+
+      final clamped = clampStripToSnapshotCoverage(
+        dest: dest,
+        source: source,
+        coverage: coverage,
+      )!;
+
+      expect(clamped.dest, const Rect.fromLTWH(0, -100, 50, 700));
+      expect(clamped.source.top, closeTo(50, 1e-9));
+      expect(clamped.source.bottom, closeTo(400, 1e-9));
+      // יחס הפיקסלים לגובה נשמר: source/dest זהה לפני ואחרי החיתוך.
+      expect(
+        clamped.source.height / clamped.dest.height,
+        closeTo(source.height / dest.height, 1e-9),
+      );
+    });
+
+    test('חריגה אופקית (חלונית ניווט פתוחה) נחתכת באותו יחס', () {
+      const dest = Rect.fromLTWH(-40, 0, 100, 400);
+      const source = Rect.fromLTWH(300, 0, 50, 400);
+
+      final clamped = clampStripToSnapshotCoverage(
+        dest: dest,
+        source: source,
+        coverage: coverage,
+      )!;
+
+      expect(clamped.dest, const Rect.fromLTWH(0, 0, 60, 400));
+      expect(clamped.source.left, closeTo(320, 1e-9));
+      expect(clamped.source.right, closeTo(350, 1e-9));
+    });
+
+    test('רצועה מחוץ לתחום כולו מוחזרת כ-null', () {
+      expect(
+        clampStripToSnapshotCoverage(
+          dest: const Rect.fromLTWH(700, 0, 50, 400),
+          source: const Rect.fromLTWH(0, 0, 25, 200),
+          coverage: coverage,
+        ),
+        isNull,
+      );
     });
   });
 }
