@@ -6,6 +6,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3;
@@ -54,6 +55,15 @@ typedef LibraryUpdateProgressCallback =
 typedef FullDbExtractor =
     Future<void> Function(String archivePath, String outputPath);
 
+/// אין מספיק מקום פנוי בדיסק להורדה המלאה — נבדק לפני תחילת ההורדה.
+class LibraryUpdateDiskSpaceException implements Exception {
+  final String message;
+  const LibraryUpdateDiskSpaceException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// ממשק שירות עדכון הספרייה — מאפשר ל-BLoC להיבדק מול מימוש מזויף.
 abstract interface class LibraryUpdateService {
   Future<RecoveryResult> recoverIfNeeded();
@@ -87,6 +97,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
   final String Function() dbPathProvider;
   final Future<String> Function() dataRootProvider;
   final String Function() nowTimestamp;
+  final Future<DiskSpaceInfo> Function(String dirPath) diskSpaceProvider;
 
   LibraryUpdateRepository({
     required this.discovery,
@@ -99,10 +110,12 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     String Function()? dbPathProvider,
     Future<String> Function()? dataRootProvider,
     String Function()? nowTimestamp,
+    Future<DiskSpaceInfo> Function(String dirPath)? diskSpaceProvider,
   }) : dbPathProvider = dbPathProvider ?? DatabaseConstants.getDatabasePath,
        dataRootProvider = dataRootProvider ?? AppPaths.getDataRootPath,
        nowTimestamp = nowTimestamp ?? (() => DateTime.now().toIso8601String()),
-       fullDbExtractor = fullDbExtractor ?? _defaultFullDbExtractor;
+       fullDbExtractor = fullDbExtractor ?? _defaultFullDbExtractor,
+       diskSpaceProvider = diskSpaceProvider ?? getDiskSpaceInfo;
 
   static Future<void> _defaultFullDbExtractor(
     String archivePath,
@@ -276,6 +289,12 @@ class LibraryUpdateRepository implements LibraryUpdateService {
         ? asset.digest!.substring('sha256:'.length)
         : null;
 
+    await _ensureDiskSpaceForFullDownload(
+      archivePath: archivePath,
+      archiveSize: asset.size,
+      dbDir: p.dirname(dbPath),
+    );
+
     try {
       onProgress?.call(
         const LibraryUpdateProgress(phase: LibraryUpdatePhase.downloading),
@@ -335,6 +354,55 @@ class LibraryUpdateRepository implements LibraryUpdateService {
       // הארכיון החלקי נשמר בכוונה — ההורדה תתחדש ממנו בניסיון הבא.
       _deleteQuietly(newDbPath);
       rethrow;
+    }
+  }
+
+  /// אומדן גודל ה-DB המחולץ — ה-release מדווח רק את הגודל הדחוס, לכן קבוע
+  /// עם מרווח ביטחון. יש להגדילו אם ה-DB יגדל מעבר לכך.
+  static const int _extractedDbSizeEstimate = 6979321856; // 6.5GB
+
+  /// זורק [LibraryUpdateDiskSpaceException] אם אין מקום להורדה ולחילוץ.
+  /// מקום פנוי לא-ידוע (freeBytes==-1) אינו חוסם — עדיף לנסות מלחסום בטעות.
+  Future<void> _ensureDiskSpaceForFullDownload({
+    required String archivePath,
+    required int archiveSize,
+    required String dbDir,
+  }) async {
+    // ארכיון חלקי מהורדה קודמת מתחדש (resume) ואינו דורש מקום נוסף.
+    final partial = File(archivePath);
+    final resumed = partial.existsSync() ? partial.lengthSync() : 0;
+    final archiveNeeded = (archiveSize - resumed).clamp(0, archiveSize);
+
+    final archiveInfo = await diskSpaceProvider(p.dirname(archivePath));
+    final extractInfo = await diskSpaceProvider(dbDir);
+    String gb(int bytes) => (bytes / (1 << 30)).toStringAsFixed(1);
+
+    final sameVolume =
+        archiveInfo.volumeId != null &&
+        archiveInfo.volumeId == extractInfo.volumeId;
+    if (sameVolume) {
+      final needed = archiveNeeded + _extractedDbSizeEstimate;
+      if (archiveInfo.freeBytes >= 0 && archiveInfo.freeBytes < needed) {
+        throw LibraryUpdateDiskSpaceException(
+          'אין מספיק מקום פנוי בכונן: נדרש ~${gb(needed)}GB להורדה ולחילוץ '
+          'הספרייה, פנוי ${gb(archiveInfo.freeBytes)}GB',
+        );
+      }
+      return;
+    }
+    if (archiveInfo.freeBytes >= 0 && archiveInfo.freeBytes < archiveNeeded) {
+      throw LibraryUpdateDiskSpaceException(
+        'אין מספיק מקום פנוי להורדת הספרייה: נדרש ~${gb(archiveNeeded)}GB, '
+        'פנוי ${gb(archiveInfo.freeBytes)}GB',
+      );
+    }
+    if (extractInfo.freeBytes >= 0 &&
+        extractInfo.freeBytes < _extractedDbSizeEstimate) {
+      throw LibraryUpdateDiskSpaceException(
+        'אין מספיק מקום פנוי לחילוץ הספרייה: '
+        'נדרש ~${gb(_extractedDbSizeEstimate)}GB, '
+        'פנוי ${gb(extractInfo.freeBytes)}GB',
+      );
     }
   }
 

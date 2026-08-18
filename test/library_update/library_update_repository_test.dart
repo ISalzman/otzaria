@@ -14,6 +14,7 @@ import 'package:otzaria/library_update/repository/library_update_repository.dart
 import 'package:otzaria/library_update/services/library_runtime_refresh_service.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -74,6 +75,7 @@ void main() {
         dbPathProvider: () => dbPath,
         dataRootProvider: () async => tmp.path,
         nowTimestamp: () => '2026-06-28T00:00:00Z',
+        diskSpaceProvider: (_) async => DiskSpaceInfo.unknown,
         fullDbExtractor: (archivePath, outputPath) async {
           decompressSyncForTest(
             archivePath,
@@ -139,6 +141,7 @@ void main() {
         dbPathProvider: () => dbPath,
         dataRootProvider: () async => tmp.path,
         nowTimestamp: () => '2026-07-19T00:00:00Z',
+        diskSpaceProvider: (_) async => DiskSpaceInfo.unknown,
         fullDbExtractor: (a, o) async =>
             fail('ביטול בהורדה — אסור להגיע לחילוץ'),
       );
@@ -204,6 +207,7 @@ void main() {
         dbPathProvider: () => dbPath,
         dataRootProvider: () async => tmp.path,
         nowTimestamp: () => '2026-07-19T00:00:00Z',
+        diskSpaceProvider: (_) async => DiskSpaceInfo.unknown,
         fullDbExtractor: (a, o) async => throw Exception('ארכיון פגום'),
       );
       final plan = LibraryUpdatePlan.fullDownload(
@@ -234,6 +238,106 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  group('applyFullDownload: בדיקת מקום פנוי לפני ההורדה', () {
+    const oneGb = 1 << 30;
+
+    LibraryUpdateRepository repo(
+      Future<DiskSpaceInfo> Function(String dirPath) diskSpaceProvider,
+      String dbPath,
+    ) {
+      return LibraryUpdateRepository(
+        discovery: _unusedDiscovery(),
+        downloader: PatchDownloader(
+          // כל הגעה לרשת מסומנת בחריגה ייחודית — הבדיקות מבחינות בינה לבין
+          // כשל מקום פנוי.
+          httpClient: MockClient.streaming(
+            (request, bodyStream) async => throw Exception('download-started'),
+          ),
+          decompress: (b) async => b,
+        ),
+        refreshService: _NoopRefreshService(),
+        dbPathProvider: () => dbPath,
+        dataRootProvider: () async => tmp.path,
+        nowTimestamp: () => '2026-08-19T00:00:00Z',
+        diskSpaceProvider: diskSpaceProvider,
+        fullDbExtractor: (a, o) async => fail('אסור להגיע לחילוץ'),
+      );
+    }
+
+    LibraryUpdatePlan plan() => LibraryUpdatePlan.fullDownload(
+      localVersion: 1,
+      targetVersion: 2,
+      asset: ReleaseAsset(
+        name: DatabaseConstants.databaseArchiveFileName,
+        downloadUrl: 'https://x/seforim.db.zst',
+        size: oneGb,
+      ),
+      releaseTag: 'v2',
+    );
+
+    test('אותו volume בלי מספיק מקום — נכשל עם הודעה ברורה', () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+      final repository = repo(
+        (_) async => const DiskSpaceInfo(volumeId: 'C:\\', freeBytes: oneGb),
+        dbPath,
+      );
+
+      await expectLater(
+        repository.applyFullDownload(plan()),
+        throwsA(
+          isA<LibraryUpdateDiskSpaceException>().having(
+            (e) => e.message,
+            'message',
+            contains('אין מספיק מקום פנוי'),
+          ),
+        ),
+      );
+    });
+
+    test(
+      'volumes נפרדים: כונן החילוץ מלא נתפס גם כשכונן ההורדה פנוי',
+      () async {
+        final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+        _writeDb(dbPath, version: 1, marker: 'old');
+        final repository = repo(
+          (dirPath) async => dirPath.contains('library_update_cache')
+              ? const DiskSpaceInfo(volumeId: 'D:\\', freeBytes: 100 * oneGb)
+              : const DiskSpaceInfo(volumeId: 'C:\\', freeBytes: oneGb),
+          dbPath,
+        );
+
+        await expectLater(
+          repository.applyFullDownload(plan()),
+          throwsA(
+            isA<LibraryUpdateDiskSpaceException>().having(
+              (e) => e.message,
+              'message',
+              contains('לחילוץ'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('מקום פנוי מספיק — הבדיקה עוברת וההורדה מתחילה', () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+      final repository = repo(
+        (_) async =>
+            const DiskSpaceInfo(volumeId: 'C:\\', freeBytes: 100 * oneGb),
+        dbPath,
+      );
+
+      // ההורדה עצמה נכשלת בכוונה (MockClient זורק fail) — מספיק לוודא
+      // שהכשל אינו כשל מקום פנוי, כלומר הבדיקה לא חסמה.
+      await expectLater(
+        repository.applyFullDownload(plan()),
+        throwsA(isNot(isA<LibraryUpdateDiskSpaceException>())),
+      );
+    });
+  });
 
   test(
     'applyDeltaPlan: ה-apply ב-isolate אינו לוכד את ה-downloader הלא-sendable',
