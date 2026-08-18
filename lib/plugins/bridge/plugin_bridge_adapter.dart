@@ -36,6 +36,7 @@ import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
+import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
@@ -2727,7 +2728,9 @@ class PluginBridgeAdapter {
     if (await file.length() > maxTextBytes) {
       throw Exception('error.too_large: file exceeds 10MB text limit');
     }
-    return file.readAsString();
+    // קובץ שהמשתמש בחר יכול להיות בכל קידוד; `readAsString` היה זורק על
+    // קובץ ANSI עברית והתוסף היה מקבל שגיאה במקום את התוכן.
+    return readTextFileSmart(file);
   }
 
   /// פותר את הנתיב הקנוני של קובץ מאושר לפי [token], או זורק `error.not_found`

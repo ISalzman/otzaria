@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
@@ -240,12 +241,24 @@ Future<DocumentFormat?> _sniffFormat(File file) async {
 /// כדי לא לטעון קובץ שלם רק לצורך הבדיקה.
 Future<String> _readPlainTextFile(File file) async {
   _assertNotBinaryContainer(await _readFileHead(file, 8), file.path);
-  return readTextFileSmart(file);
+  return _textOf(await readTextFileSmartDetailed(file), file.path);
 }
 
 String _decodeTextBytes(Uint8List bytes, String? path) {
   _assertNotBinaryContainer(bytes, path);
-  return decodeTextBytesSmart(bytes);
+  return _textOf(decodeTextBytesSmartDetailed(bytes), path);
+}
+
+/// זיהוי קידוד לא-ודאי נרשם ללוג: הסימפטום שלו — ספר שנראה ג'יבריש — אינו
+/// מבחין את עצמו בשום שכבה אחרת, ובלי הרישום אין דרך לאבחן דיווח כזה.
+String _textOf(TextDecodingResult result, String? path) {
+  if (result.lowConfidence) {
+    debugPrint(
+      '⚠️ זיהוי קידוד בוודאות נמוכה ל-$path: ${result.encoding.label} '
+      '(${result.confidence.toStringAsFixed(2)}) — ${result.detectionReason}',
+    );
+  }
+  return result.text;
 }
 
 /// שכבת ההגנה האחרונה לפני פענוח כטקסט: הפענוח אינו זורק לעולם — כל בית

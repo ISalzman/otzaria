@@ -861,6 +861,15 @@ dart format lib/file.dart    # Format ONLY files you modified
 | עמידות סריקה לקובץ פגום (§76) | `test/migration/generator_corrupted_file_test.dart` |
 | אינטגרציה: סריקת תיקייה לכל הפורמטים → DB → פתיחה → זיהוי שינוי | `test/migration/sync/file_sync_document_formats_test.dart` |
 | מחולל קורפוס ה-fixtures (כל פורמט נפתח, כל מקרה-קצה נכשל נכון) | `test/tool/document_fixtures_generator_test.dart` |
+| זיהוי קידוד טקסט — שרשרת הזיהוי, BOM, זנב קטוע, כפיית קידוד | `test/utils/file/text_encoding_detection_test.dart` |
+| טבלאות המיפוי (Windows-1255, ISO-8859-8, CP862) מול התקנים | `test/utils/file/text_encoding_tables_test.dart` |
+| קורפוס הזהב של הקידודים (40+ קבצים, טווחי confidence) | `test/utils/file/text_encoding_corpus_test.dart` (מחולל ב-`tool/generate_text_encoding_fixtures.dart`) |
+| רגרסיה מול מפענח הקידודים הקודם (מה נשמר, מה השתנה בכוונה) | `test/utils/file/text_encoding_regression_test.dart` |
+| תכונות הקידוד על קלט מוגרל (סבב שלם, שיבוש, חיתוך, דטרמיניזם) | `test/utils/file/text_encoding_fuzz_test.dart` |
+| צנרת הקידודים מקצה לקצה (פתיחת ספר, בניית DB, אינדוקס) | `test/utils/file/text_encoding_pipeline_test.dart` |
+| ייבוא ספרים בכל קידוד לתוך SQLite (סריקה→שורות→TOC) | `test/migration/sync/file_sync_text_encodings_test.dart` |
+| ביצועי הזיהוי (חסימת דגימה, תפוקת batch, השוואה לקודם) | `test/utils/file/text_encoding_performance_test.dart` |
+| קורפוס קידודים חיצוני אמיתי (מדלג כשאינו על המכונה) | `test/utils/file/text_encoding_real_corpus_test.dart` |
 | Utils (link processing) | `test/text_book/utils/link_processing_test.dart` |
 | חיתוך HTML לפי טווח הבחירה (שימור עיצוב בהעתקה חלקית) | `test/utils/text/html_slice_test.dart` |
 | גודל פענוח תמונות (cacheWidth על נכסים כבדים) | `test/utils/ui/image_decode_size_test.dart` |

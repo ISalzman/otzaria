@@ -5,6 +5,8 @@
 בנפרד ב-[`document_conversion_matrix.md`](document_conversion_matrix.md).
 הרקע להכרעות סביב ‎.doc‎ הבינארי מתועד ב-
 [`legacy_word_doc_research.md`](legacy_word_doc_research.md).
+זיהוי הקידוד של קובץ טקסט גולמי — השכבה שדרכה עובר `txt` — מתועד ב-
+[`text_encoding_detection.md`](text_encoding_detection.md).
 
 ## הפורמטים הנתמכים
 

@@ -5,7 +5,10 @@ import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/user_content_import/models/user_import_models.dart';
 import 'package:otzaria/user_content_import/repository/user_content_repository.dart';
 import 'package:otzaria/user_content_import/services/user_content_importer.dart';
+import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:path/path.dart' as p;
+
+import '../../tool/generate_text_encoding_fixtures.dart' show encodeLegacy;
 
 /// פותר-כתובות מזויף לבדיקות: "לא קיים" → null (כשל resolution); כל כתובת
 /// טקסטואלית אחרת → שורה 41.
@@ -103,6 +106,34 @@ void main() {
       expect(reference.single.targetRef, 'רטו א');
       expect(reference.single.targetLineIndex, 41);
       expect(reference.single.connectionType, 'REFERENCE');
+    });
+
+    test('קובץ ייבוא ב-ANSI עברית נקלט כמו UTF-8', () async {
+      // קובץ CSV שנשמר מאקסל בעברית הוא Windows-1255, ו-`readAsString` היה
+      // זורק עליו — הייבוא כולו נכשל בהודעת "קריאת הקובץ נכשלה".
+      final path = p.join(folder.path, 'דורות.csv');
+      File(path).writeAsBytesSync(
+        encodeLegacy(
+          'ספר,דור,מחבר\nביאורי יוסף,מחברי זמננו,יוסף כהן\n',
+          TextEncoding.windows1255,
+        ),
+      );
+
+      final result = await UserContentImporter.importFiles(
+        [path],
+        db,
+        resolveRef: fakeResolver,
+      );
+      expect(result.errors, isEmpty);
+      expect(result.generationsApplied, 1);
+
+      final raw = await db.database;
+      final genRow = raw.select(
+        'SELECT g.name FROM book_generation bg '
+        'JOIN generation g ON g.id = bg.generationId WHERE bg.bookId = ?',
+        [bookId],
+      );
+      expect(genRow.single['name'], 'מחברי זמננו');
     });
 
     test('קולט קישורים מקובץ JSON', () async {

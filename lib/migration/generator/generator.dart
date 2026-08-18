@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -18,6 +17,7 @@ import 'hebrew_text_utils.dart' as hebrew_text_utils;
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:otzaria/utils/file/document_format.dart';
+import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/utils/file/toc_parser.dart'
     show isTocExcludedHeadingLine;
 
@@ -562,24 +562,19 @@ class DatabaseGenerator {
   }
 
   /// Reads book lines from file
+  ///
+  /// עובר בזיהוי הקידוד המלא: ספר שנשמר ב-ANSI עברית או ב-UTF-16 נכנס
+  /// לבסיס הנתונים ולאינדקס כטקסט קריא, ולא כג'יבריש Latin-1.
   static Future<List<String>> readBookLines(String bookPath) async {
-    final file = File(bookPath);
-    try {
-      final content = await file.readAsString(encoding: utf8);
-      return content.split('\n');
-    } on FormatException catch (e) {
-      // Try with latin1 encoding if UTF-8 fails
-      debugPrint('⚠️ UTF-8 decoding failed for $bookPath, trying latin1: $e');
-      try {
-        final content = await file.readAsString(encoding: latin1);
-        return content.split('\n');
-      } catch (e2) {
-        debugPrint(
-          '❌ Failed to read file with both UTF-8 and latin1: $bookPath',
-        );
-        rethrow;
-      }
+    final result = await readTextFileSmartDetailed(File(bookPath));
+    if (result.lowConfidence) {
+      debugPrint(
+        '⚠️ זיהוי קידוד בוודאות נמוכה עבור $bookPath: '
+        '${result.encoding.label} (${result.confidence.toStringAsFixed(2)}) — '
+        '${result.detectionReason}',
+      );
     }
+    return result.text.split('\n');
   }
 
   /// Processes lines of a book, identifying and creating TOC entries.
