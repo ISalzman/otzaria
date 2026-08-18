@@ -1,17 +1,16 @@
 /// רשימת ה-URLs המאושרים גישה לרשת עבור תוספים.
 ///
 /// ## איך מאשרים כתובת חדשה (אין צורך ב-release!)
-/// מקור האמת הוא הקובץ `plugin_network_allowlist.txt` בשורש הריפו, כפי
-/// שהוא בענף **`dev`** — האפליקציה מושכת אותו משם בזמן ריצה:
+/// מקור האמת **היחיד** הוא הקובץ `plugin_network_allowlist.txt` בשורש
+/// הריפו, כפי שהוא בענף **`dev`** — האפליקציה מושכת אותו משם בזמן ריצה:
 /// <https://github.com/Otzaria/otzaria/blob/dev/plugin_network_allowlist.txt>
 ///
-/// 1. מוסיפים את הכתובת לקובץ (שורה = קידומת URL, `#` = הערה) — האישור
-///    נכנס לתוקף **מיד** אצל כל המשתמשים עם מיזוג ל-dev, בכל גרסה מותקנת.
-/// 2. מוסיפים אותה גם לרשימה המקומפלת כאן — כך היא תעבוד גם בלי גישה
-///    ל-GitHub, החל מהגרסה הבאה.
+/// מוסיפים את הכתובת לקובץ (שורה = קידומת URL, `#` = הערה) — האישור
+/// נכנס לתוקף **מיד** אצל כל המשתמשים עם מיזוג ל-dev, בכל גרסה מותקנת.
 ///
-/// כל כתובת ברשימה המקומפלת **חייבת** להופיע גם בקובץ —
-/// נאכף בבדיקה plugin_network_allowlist_branch_sync_test.dart.
+/// הרשימה המקומפלת [pluginNetworkAllowlist] (גיבוי לא-מקוון) **מחוללת**
+/// מאותו קובץ בכל בנייה — אין רשימה שנייה לתחזק, ואין קובץ נגיש לעריכה
+/// אצל המשתמש. חוללה ידנית: `dart run tool/generate_plugin_network_allowlist.dart`.
 ///
 /// כל ערך הוא **קידומת** (prefix) — מאושרים ה-URL עצמו וכל
 /// תתי-הנתיבים תחתיו, ולא שאר הדומיין.
@@ -35,61 +34,11 @@
 /// - מותר לציין דומיין שלם כדי להתיר את כולו: `https://api.example.com`
 ///   יתיר כל URL שמתחיל ב-`https://api.example.com/`.
 /// - אין להשאיר `/` סופי — הוא לא משנה את ההתנהגות אך מבלבל.
-const List<String> pluginNetworkAllowlist = <String>[
-  // אתר אוצריא — חנות תוספים ודפים ציבוריים
-  'https://otzaria.org',
-  // אתר אוצר החכמה
-  'https://tablet.otzar.org',
-  // אתר היברבוקס
-  'https://hebrewbooks.org',
-  // ספריית על התורה
-  'https://library.alhatorah.org',
-  //על התורה - מקראות גדולות, רמבם, שס, טור
-  'https://mg.alhatorah.org',
-  'https://rambam.alhatorah.org',
-  'https://shas.alhatorah.org',
-  'https://turshulchanarukh.alhatorah.org',
-  // שרתי הנקדן של Dicta
-  'https://nakdan.dicta.org.il/api',
-  'https://nakdan-u1-0.loadbalancer.dicta.org.il/api',
-  'https://nakdan-5-1.loadbalancer.dicta.org.il/api',
+library;
 
-  // Google Apps Script — תוסף ספריית אוצריא
-  'https://script.google.com/macros/s/AKfycbwU7ktk7_VdSqIxlMBnj4L8dIOKX7C5XIYxxyJsr2gohCtJuLEKA4RPUWO6d88Ry8TAoA/exec',
+export 'plugin_network_allowlist.g.dart' show pluginNetworkAllowlist;
 
-  // תוסף הורדת ספרים — מאגר הספרים הלא רשמי
-  'https://api.github.com/repos/YairDaniel11/Otzarya-Unofficial-Books',
-  'https://github.com/YairDaniel11/Otzarya-Unofficial-Books',
-  'https://raw.githubusercontent.com/YairDaniel11/Otzarya-Unofficial-Books',
-
-  //תוסף עיון ההלכה
-  'https://api.github.com/repos/Y-PLONI/iyun_h-halacha_plugin',
-  'https://github.com/Y-PLONI/iyun_h-halacha_plugin',
-  'https://raw.githubusercontent.com/Y-PLONI/iyun_h-halacha_plugin',
-
-  // דיווח תוספים יאיר דניאל
-  'https://formsubmit.co/ajax/575cd25953ea11970a7a017b6913a3ee',
-
-  // הורדת ויקיישיבה וויקיסוגיה
-  'https://drive.usercontent.google.com/download?id=1fX-GwDn4f-JUaxrZJPb8y0dVlH38_dMW&export=download&confirm=t',
-  'https://drive.usercontent.google.com/download?id=1x0-hX0KSW_DYCDWu2ZgH1MqFye2iMd3d&export=download&confirm=t',
-
-  // תוסף zim (יאיר דניאל) — קבצי milon/wikisugya/wikishiva/otzaria-wiki
-  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/milon-klei-kodesh.zim',
-  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/wikisugya.zim',
-  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/wikishiva.zim',
-  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/otzaria-wiki.zim',
-  'https://github.com/YairDaniel11/otzaria-zim-plugin/releases/download/v0.5.0/otzar-hasfarim.zim',
-
-  // תוספי הביוגרפיות (יאיר דניאל) — דיווח שגיאות תוכן מתוך התוסף
-  'https://api.emailjs.com/api/v1.0/email/send',
-
-  // תוסף MDY
-  'https://github.com/yair-yair/mdy-images-updated',
-  'https://api.github.com/repos/yair-yair/mdy-images-updated',
-  'https://raw.githubusercontent.com/yair-yair/mdy-images-updated',
-  'https://github.com/yair-yair/mdy-images-updated',
-];
+import 'plugin_network_allowlist.g.dart';
 
 /// דומייני ה-CDN שאליהם GitHub מפנה (redirect) בהורדת asset של release.
 ///
