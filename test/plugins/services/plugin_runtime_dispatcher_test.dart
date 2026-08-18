@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/models/plugin_published_record.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_startup_contributions_service.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
@@ -176,6 +177,12 @@ class _SlowController extends Fake implements InAppWebViewController {
 const _kPid = 'dispatcher.test.plugin';
 
 PluginRuntimeDispatcher get _d => PluginRuntimeDispatcher.instance;
+
+/// מפתח המופע הקדמי הדיפולטי של [pluginId] — קיצור לבדיקות.
+PluginInstanceKey _fg(
+  String pluginId, [
+  String instanceId = PluginInstanceIds.defaultForeground,
+]) => (pluginId: pluginId, instanceId: instanceId);
 
 void _cleanupControllers() {
   _d.unregisterController(_kPid);
@@ -638,12 +645,12 @@ void main() {
       _d.registerController(pidA, a);
       _d.registerController(pidB, b);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
       expect(a.resumeCalls, 1);
       expect(a.jsEvents.last, contains('plugin.resumed'));
 
-      _d.setVisiblePluginTabs({pidB});
+      _d.setVisiblePluginInstances({_fg(pidB)});
       await pumpEventQueue();
       expect(a.pauseCalls, 1);
       expect(a.jsEvents, contains(contains('plugin.suspended')));
@@ -655,9 +662,9 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
 
       expect(a.resumeCalls, 0);
@@ -670,7 +677,7 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
       expect(a.resumeCalls, 1);
 
@@ -687,7 +694,7 @@ void main() {
       final bg = _LifecycleFakeController();
       _d.registerController(pidA, bg, instanceId: 'background');
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       _d.setReaderScreenVisible(false);
       await pumpEventQueue();
 
@@ -701,7 +708,7 @@ void main() {
       _d.registerController(pidA, fg, instanceId: 'default');
       _d.registerController(pidA, bg, instanceId: 'background');
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
       _d.setReaderScreenVisible(false);
       await pumpEventQueue();
@@ -714,9 +721,9 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
 
       expect(a.pauseCalls, 1);
@@ -727,9 +734,9 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
       final resumeCalls = a.resumeCalls;
       final pauseCalls = a.pauseCalls;
@@ -758,9 +765,9 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
       a.jsEvents.clear();
       // מדמה את מצב הזומבי: ההרצה רצה אך לא ב-world של הדף האמיתי.
@@ -798,9 +805,9 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
       a.jsEvents.clear();
 
@@ -827,9 +834,9 @@ void main() {
       _d.registerController(pidA, foreground);
       _d.registerController(pidA, background, instanceId: 'background');
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
-      _d.setVisiblePluginTabs(const {});
+      _d.setVisiblePluginInstances(const {});
       await pumpEventQueue();
       foreground.jsEvents.clear();
 
@@ -861,7 +868,7 @@ void main() {
         final a = _LifecycleFakeController();
         _d.registerController(pidA, a);
 
-        _d.setVisiblePluginTabs({pidA});
+        _d.setVisiblePluginInstances({_fg(pidA)});
         await pumpEventQueue();
 
         expect(a.resumeCalls, 1);
@@ -882,7 +889,7 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
 
       expect(a.resumeCalls, 1);
@@ -896,7 +903,7 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
 
       expect(a.jsEvents.any((e) => e.contains('theme.changed')), isFalse);
@@ -906,7 +913,7 @@ void main() {
       final a = _LifecycleFakeController();
       _d.registerController(pidA, a);
 
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
 
       expect(a.jsEvents.any((e) => e.contains('theme.changed')), isFalse);
@@ -946,10 +953,12 @@ void main() {
         // חוסמים את resume של A כדי לדמות reconcile איטי שעדיין רץ.
         a.resumeGate = Completer<void>();
 
-        _d.setVisiblePluginTabs({pidA}); // reconcile #1: resume A (נחסם)
+        _d.setVisiblePluginInstances({
+          _fg(pidA),
+        }); // reconcile #1: resume A (נחסם)
         await pumpEventQueue();
         // המעבר ל-B נכנס לתור — אסור שיתחיל כל עוד #1 חסום.
-        _d.setVisiblePluginTabs({pidB});
+        _d.setVisiblePluginInstances({_fg(pidB)});
         await pumpEventQueue();
         expect(
           log,
@@ -1002,7 +1011,7 @@ void main() {
 
     test('תוסף שנטען כשהוא ה-foreground הנבחר — אינו מושהה', () async {
       // הבחירה מגיעה לפני שה-controller קיים (טעינה ראשונה).
-      _d.setVisiblePluginTabs({pidA});
+      _d.setVisiblePluginInstances({_fg(pidA)});
       await pumpEventQueue();
 
       final a = _LifecycleFakeController();
@@ -1014,8 +1023,8 @@ void main() {
 
     test('תוסף שנטען כשכבר עברו ממנו — מושהה מיד', () async {
       // בוחרים A ואז B עוד לפני ש-A נטען; A נבנה בכרטיסיה שאינה מוצגת.
-      _d.setVisiblePluginTabs({pidA});
-      _d.setVisiblePluginTabs({pidB});
+      _d.setVisiblePluginInstances({_fg(pidA)});
+      _d.setVisiblePluginInstances({_fg(pidB)});
       await pumpEventQueue();
 
       final a = _LifecycleFakeController();
@@ -1191,5 +1200,170 @@ void main() {
       expect(opened, isEmpty);
       expect(activated, ['lazy-when-ok']);
     });
+  });
+
+  // ── ריבוי מופעים קדמיים של אותו תוסף ──────────────────────────────────────
+
+  group('multi-instance foreground', () {
+    const pid = 'multi.test.plugin';
+    const i1 = 'instance-1';
+    const i2 = 'instance-2';
+
+    setUp(() {
+      _d.resetVisibilityForTesting();
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      _d.repositoryForTesting = _FakeRegistryRepo(
+        enabled: true,
+        permission: true,
+      );
+      _d.invalidatePlugin(pid);
+    });
+
+    tearDown(() {
+      _d.unregisterController(pid, instanceId: i1);
+      _d.unregisterController(pid, instanceId: i2);
+      _d.unregisterController(pid, instanceId: 'background');
+      _d.repositoryForTesting = PluginRegistryRepository();
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    test('broadcast מגיע לשני המופעים הקדמיים החיים ולא לרקע', () async {
+      final a = _LifecycleFakeController();
+      final b = _LifecycleFakeController();
+      final bg = _LifecycleFakeController();
+      _d.registerController(pid, a, instanceId: i1);
+      _d.registerController(pid, b, instanceId: i2);
+      _d.registerController(pid, bg, instanceId: 'background');
+
+      _d.setVisiblePluginInstances({_fg(pid, i1), _fg(pid, i2)});
+      await pumpEventQueue();
+      a.jsEvents.clear();
+      b.jsEvents.clear();
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+
+      expect(a.jsEvents, contains(contains('navigation.changed')));
+      expect(b.jsEvents, contains(contains('navigation.changed')));
+      expect(bg.jsEvents, isEmpty);
+    });
+
+    test('השהיית מופע אחד אינה נוגעת במופע השני', () async {
+      final a = _LifecycleFakeController();
+      final b = _LifecycleFakeController();
+      _d.registerController(pid, a, instanceId: i1);
+      _d.registerController(pid, b, instanceId: i2);
+
+      _d.setVisiblePluginInstances({_fg(pid, i1), _fg(pid, i2)});
+      await pumpEventQueue();
+      expect(a.resumeCalls, 1);
+      expect(b.resumeCalls, 1);
+
+      // המופע השני יוצא מהתצוגה — רק הוא מושהה.
+      _d.setVisiblePluginInstances({_fg(pid, i1)});
+      await pumpEventQueue();
+
+      expect(b.pauseCalls, 1);
+      expect(a.pauseCalls, 0);
+
+      // broadcast ממשיך להגיע רק למופע החי.
+      a.jsEvents.clear();
+      b.jsEvents.clear();
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+      expect(a.jsEvents, contains(contains('navigation.changed')));
+      expect(b.jsEvents, isEmpty);
+    });
+
+    test(
+      'ביטול רישום מופע אחד אינו מוחק את השני ואינו מנקה registries',
+      () async {
+        PluginToolbarRegistry.instance.register(
+          pid,
+          const PluginToolbarItem(
+            id: 'toolbar',
+            title: 'Toolbar',
+            icon: 'apps_24_regular',
+          ),
+        );
+        addTearDown(() => PluginToolbarRegistry.instance.removeAll(pid));
+        final a = _LifecycleFakeController();
+        final b = _LifecycleFakeController();
+        _d.registerController(pid, a, instanceId: i1);
+        _d.registerController(pid, b, instanceId: i2);
+        _d.setVisiblePluginInstances({_fg(pid, i2)});
+        await pumpEventQueue();
+
+        _d.unregisterController(pid, instanceId: i1);
+
+        expect(
+          PluginToolbarRegistry.instance.getAll().where((r) => r.$1 == pid),
+          hasLength(1),
+        );
+        b.jsEvents.clear();
+        await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+        expect(b.jsEvents, contains(contains('navigation.changed')));
+      },
+    );
+
+    test('כשכל המופעים הקדמיים מושהים — האירוע נופל לרקע', () async {
+      final a = _LifecycleFakeController();
+      final bg = _LifecycleFakeController();
+      _d.registerController(pid, a, instanceId: i1);
+      _d.registerController(pid, bg, instanceId: 'background');
+
+      _d.setVisiblePluginInstances({_fg(pid, i1)});
+      await pumpEventQueue();
+      _d.setVisiblePluginInstances(const {});
+      await pumpEventQueue();
+      a.jsEvents.clear();
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+
+      expect(bg.jsEvents, contains(contains('navigation.changed')));
+      expect(a.jsEvents, isEmpty);
+    });
+
+    test('אירוע ממוקד עם instanceId מגיע למופע הזה בלבד', () async {
+      final a = _LifecycleFakeController();
+      final b = _LifecycleFakeController();
+      _d.registerController(pid, a, instanceId: i1);
+      _d.registerController(pid, b, instanceId: i2);
+      _d.setVisiblePluginInstances({_fg(pid, i1), _fg(pid, i2)});
+      await pumpEventQueue();
+      a.jsEvents.clear();
+      b.jsEvents.clear();
+
+      await _d.dispatchEventToPlugin(
+        pid,
+        'reader.context_menu_item_clicked',
+        {'itemId': 'mark'},
+        instanceId: i2,
+      );
+
+      expect(b.jsEvents, contains(contains('context_menu_item_clicked')));
+      expect(a.jsEvents, isEmpty);
+    });
+
+    test(
+      'resetVisibilityForTesting מנקה השהיות ונראות של כל המופעים',
+      () async {
+        final a = _LifecycleFakeController();
+        final b = _LifecycleFakeController();
+        _d.registerController(pid, a, instanceId: i1);
+        _d.registerController(pid, b, instanceId: i2);
+        _d.setVisiblePluginInstances({_fg(pid, i1), _fg(pid, i2)});
+        await pumpEventQueue();
+        _d.setVisiblePluginInstances(const {});
+        await pumpEventQueue();
+
+        _d.resetVisibilityForTesting();
+
+        // דגלי ההשהיה נוקו — broadcast מגיע שוב לשני המופעים.
+        a.jsEvents.clear();
+        b.jsEvents.clear();
+        await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+        expect(a.jsEvents, contains(contains('navigation.changed')));
+        expect(b.jsEvents, contains(contains('navigation.changed')));
+      },
+    );
   });
 }

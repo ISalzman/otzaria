@@ -162,4 +162,37 @@ void main() {
     await pumpMicrotasks();
     expect(controller.jsCalls, hasLength(1));
   });
+
+  test('אירוע ממתין נמסר לדף שהודיע מוכנות — לא למופע אחר', () async {
+    final second = _RecordingController();
+    dispatcher.registerController(_kPid, second, instanceId: 'tab-2');
+    addTearDown(() {
+      launcher.markPageClosed(_kPid, instanceId: 'tab-2');
+      dispatcher.unregisterController(_kPid, instanceId: 'tab-2');
+    });
+
+    launcher.open(_kPid, topic: 'plugin.page_opened', payload: {'param': 'x'});
+    await pumpMicrotasks();
+
+    launcher.markPageReady(_kPid, instanceId: 'tab-2');
+    await pumpMicrotasks();
+
+    expect(second.jsCalls, hasLength(1));
+    expect(controller.jsCalls, isEmpty);
+  });
+
+  test('סגירת מופע אחד לא מוחקת את מצב התוסף כשנשאר דף מוכן', () async {
+    final second = _RecordingController();
+    dispatcher.registerController(_kPid, second, instanceId: 'tab-2');
+
+    launcher.markPageReady(_kPid);
+    launcher.markPageReady(_kPid, instanceId: 'tab-2');
+    launcher.markPageClosed(_kPid, instanceId: 'tab-2');
+    dispatcher.unregisterController(_kPid, instanceId: 'tab-2');
+
+    // הדף הראשי עדיין מוכן — אירוע חדש נמסר מיד, לא ממתין לטעינה.
+    launcher.open(_kPid, topic: 'plugin.page_opened', payload: {'param': 1});
+    await pumpMicrotasks();
+    expect(controller.jsCalls, hasLength(1));
+  });
 }

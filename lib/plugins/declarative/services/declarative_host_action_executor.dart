@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
@@ -37,13 +38,18 @@ class PluginKvStorageWriter implements DeclarativeStorageWriter {
 
   @override
   Future<void> set(String pluginId, String key, Object? value) async {
-    await _repository.setKV(pluginId, 'default', key, jsonEncode(value));
+    await _repository.setKV(
+      pluginId,
+      kDefaultStorageNamespace,
+      key,
+      jsonEncode(value),
+    );
     _conditions.onStorageValueChanged(pluginId, key, value);
   }
 
   @override
   Future<void> remove(String pluginId, String key) async {
-    await _repository.removeKV(pluginId, 'default', key);
+    await _repository.removeKV(pluginId, kDefaultStorageNamespace, key);
     _conditions.onStorageRemoved(pluginId, key);
   }
 }

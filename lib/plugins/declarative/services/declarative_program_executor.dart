@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
@@ -154,11 +155,11 @@ class DeclarativeProgramExecutor {
         if (!PluginSettingsAccessPolicy.isReadable(key)) return null;
         return _settingReader(key);
       case 'storage.get':
-        // נעול ל-namespace 'default' כמו הגשר — namespaces פנימיים
+        // נעול ל-namespace של הגשר — namespaces פנימיים
         // (user_file_grants, otzaria.startup) אינם חשופים לתוסף.
         final raw = await _registryRepository.getKV(
           plugin.pluginId,
-          'default',
+          kDefaultStorageNamespace,
           command.args['key'] as String,
         );
         if (raw == null) return null;

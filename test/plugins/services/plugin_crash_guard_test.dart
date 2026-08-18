@@ -278,6 +278,41 @@ void main() {
       expect(PluginCrashGuard.isBlocked('com.slow.plugin'), true);
     });
 
+    test('שני מופעים טוענים — סגירת האחד לא מנקה canary של השני', () async {
+      await PluginCrashGuard.ensureInitialized();
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-2');
+
+      // המופע הראשון נסגר תקין בזמן שהשני עוד באמצע טעינה — ואז קריסה.
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-1');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), true);
+    });
+
+    test('שני מופעים — ה-canary נמחק רק כשהאחרון שבהם מסיים', () async {
+      await PluginCrashGuard.ensureInitialized();
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-2');
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-2');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), false);
+    });
+
+    test('מסלול async עם שני מופעים מתנהג זהה למסלול ה-sync', () async {
+      await PluginCrashGuard.markLoadAttempt('com.two.plugin', owner: 'tab-1');
+      await PluginCrashGuard.markLoadAttempt('com.two.plugin', owner: 'tab-2');
+      await PluginCrashGuard.markLoadSuccess('com.two.plugin', owner: 'tab-1');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), true);
+    });
+
     test('attempt+success סינכרוני אטומי — אין race', () async {
       // מדמה את התרחיש: onWebViewCreated קורא markLoadAttemptSync, ומיד
       // לאחר מכן dispose() קורא markLoadSuccessSync. שניהם sync, אין

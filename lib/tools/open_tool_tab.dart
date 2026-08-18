@@ -17,12 +17,28 @@ import 'package:otzaria/tools/tool_catalog_entry.dart';
 
 /// פותח כלי ככרטיסיה במסך העיון.
 ///
-/// תוסף קיים ממוקד, כי הוא מוגבל למופע WebView יחיד; כלים מובנים יכולים
-/// להיפתח במספר כרטיסיות.
+/// תוסף שכבר פתוח ממוקד (dedupeKey) וכלי מובנה נפתח בכרטיסיה חדשה;
+/// מופע נוסף של תוסף נפתח דרך [openNewToolTabInstance].
 void openToolTab(BuildContext context, ToolCatalogEntry entry) {
   context.read<TabsBloc>().add(
     OpenOrFocusTab(ToolTab(toolId: entry.toolId, title: entry.label)),
   );
+  context.read<NavigationBloc>().add(
+    const NavigateToScreen(Screen.reading),
+  );
+}
+
+/// בונה טאב של מופע נוסף לכלי — בלי dedupeKey, כך שפתיחתו לא תמקד טאב קיים.
+ToolTab newToolTabInstance(ToolCatalogEntry entry) => ToolTab(
+  toolId: entry.toolId,
+  title: entry.label,
+  allowMultipleInstances: true,
+);
+
+/// פותח מופע נוסף של הכלי בטאב חדש גם כשכבר פתוח טאב שלו.
+/// נקודת כניסה עתידית (Ctrl+לחיצה / "פתח בטאב חדש") — אין עדיין UI שקורא לה.
+void openNewToolTabInstance(BuildContext context, ToolCatalogEntry entry) {
+  context.read<TabsBloc>().add(OpenOrFocusTab(newToolTabInstance(entry)));
   context.read<NavigationBloc>().add(
     const NavigateToScreen(Screen.reading),
   );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
@@ -86,6 +87,7 @@ AppContextMenuEntry _buildEntry({
               'selection': selection,
             },
             preferBackground: true,
+            instanceId: _targetInstanceId(dispatcher, pluginId, item),
           ),
         ),
     ]);
@@ -150,6 +152,17 @@ Map<String, dynamic> _clickPayload({
   'param': item.param,
 };
 
+/// מופע היעד ללחיצה על [item]: קדמי גלוי מבין המופעים שרשמו אותו, אחרת
+/// הקדמי האחרון שנרשם; אין קדמי חי — null והדיספצ'ר בוחר (רקע/החייאה).
+String? _targetInstanceId(
+  PluginRuntimeDispatcher dispatcher,
+  String pluginId,
+  PluginContextMenuItem item,
+) => dispatcher.pickContributionTarget(
+  pluginId,
+  ContextMenuRegistry.instance.instanceIdsForItem(pluginId, item.id),
+);
+
 Future<void> _dispatchItemClick({
   required PluginRuntimeDispatcher dispatcher,
   required String pluginId,
@@ -173,11 +186,13 @@ Future<void> _dispatchItemClick({
     }
     return;
   }
+  final instanceId = _targetInstanceId(dispatcher, pluginId, item);
   await dispatcher.dispatchEventToPlugin(
     pluginId,
     item.onClickEvent ?? 'contextMenu.itemClicked',
     payload,
     preferBackground: true,
+    instanceId: instanceId,
   );
   if (item.onClickEvent == null) {
     await dispatcher.dispatchEventToPlugin(
@@ -185,6 +200,7 @@ Future<void> _dispatchItemClick({
       'reader.context_menu_item_clicked',
       payload,
       preferBackground: true,
+      instanceId: instanceId,
     );
   }
 }

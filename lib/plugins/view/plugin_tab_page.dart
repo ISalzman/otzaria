@@ -115,7 +115,15 @@ const String _sdkStub = r'''
 class PluginTabPage extends StatefulWidget {
   final InstalledPlugin plugin;
 
-  const PluginTabPage({super.key, required this.plugin});
+  /// מזהה המופע של הטאב (ToolTab.instanceId) — מזהה את הרישום של הדף הזה
+  /// אצל PluginRuntimeDispatcher, לצד מופעים נוספים של אותו תוסף.
+  final String instanceId;
+
+  const PluginTabPage({
+    super.key,
+    required this.plugin,
+    required this.instanceId,
+  });
 
   @override
   State<PluginTabPage> createState() => _PluginTabPageState();
@@ -273,6 +281,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     _adapter = PluginBridgeAdapter(
       widget.plugin,
       dependencies: dependencies,
+      instanceId: widget.instanceId,
       pluginRepository: pluginRegistryRepository,
     );
     _bridge = PluginBridgeHandler(
@@ -286,6 +295,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     PluginRuntimeDispatcher.instance.registerReloadCallback(
       widget.plugin.pluginId,
       _reloadFromDisk,
+      instanceId: widget.instanceId,
       token: this,
     );
   }
@@ -379,7 +389,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
     // dispose = unmount רגיל (סגירת טאב) בזמן שהתהליך חי — לא קריסה, מנקים
     // את ה-canary. סגירת האפליקציה לא מריצה dispose; אותה מכסה
     // PluginCrashGuard.markCleanShutdownSync ב-onWindowClose.
-    PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
+    PluginCrashGuard.markLoadSuccessSync(
+      widget.plugin.pluginId,
+      owner: widget.instanceId,
+    );
     _creationWatchdog?.cancel();
     _adapter.dispose();
     // ביטול הרישום רק אם הדף הזה עדיין הבעלים. עדכון תוסף משנה את ה-key,
@@ -388,14 +401,20 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (PluginRuntimeDispatcher.instance.ownsForegroundController(
       widget.plugin.pluginId,
       webViewController,
+      instanceId: widget.instanceId,
     )) {
-      PluginPageLauncher.instance.markPageClosed(widget.plugin.pluginId);
+      PluginPageLauncher.instance.markPageClosed(
+        widget.plugin.pluginId,
+        instanceId: widget.instanceId,
+      );
       PluginRuntimeDispatcher.instance.unregisterController(
         widget.plugin.pluginId,
+        instanceId: widget.instanceId,
       );
     }
     PluginRuntimeDispatcher.instance.unregisterReloadCallback(
       widget.plugin.pluginId,
+      instanceId: widget.instanceId,
       token: this,
     );
     super.dispose();
@@ -538,12 +557,16 @@ class _PluginTabPageState extends State<PluginTabPage> {
         // markLoadAttempt הספיק להוסיף לזיכרון, מוביל ל-canary שגוי.
         // הסימון נשאר ב-disk **רק** אם התהליך מת native לפני שהגענו
         // לאחד מנתיבי הסיום ב-Dart (catch / success / dispose).
-        PluginCrashGuard.markLoadAttemptSync(widget.plugin.pluginId);
+        PluginCrashGuard.markLoadAttemptSync(
+          widget.plugin.pluginId,
+          owner: widget.instanceId,
+        );
         try {
           webViewController = controller;
           PluginRuntimeDispatcher.instance.registerController(
             widget.plugin.pluginId,
             controller,
+            instanceId: widget.instanceId,
           );
           _bridge.register(controller);
           controller.addJavaScriptHandler(
@@ -560,8 +583,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // ה-registration הלא שלם וגם את ה-canary של ה-crash guard.
           PluginRuntimeDispatcher.instance.unregisterController(
             widget.plugin.pluginId,
+            instanceId: widget.instanceId,
           );
-          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(
+            PluginCrashGuard.markLoadSuccess(
+              widget.plugin.pluginId,
+              owner: widget.instanceId,
+            ),
+          );
           debugPrint(
             'Plugin [${widget.plugin.pluginId}] WebView init error: $e',
           );
@@ -894,20 +923,34 @@ class _PluginTabPageState extends State<PluginTabPage> {
           );
           // הטעינה הצליחה עד הסוף (גם ה-stub וגם ה-boot payload הוזרקו).
           // מסירים את התוסף מ-quarantine כדי שהפעלה הבאה תאפשר טעינה רגילה.
-          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(
+            PluginCrashGuard.markLoadSuccess(
+              widget.plugin.pluginId,
+              owner: widget.instanceId,
+            ),
+          );
           // אם התוסף נטען בזמן שאינו ה-foreground הפעיל — להשהותו מיד, כדי
           // שלא ירוץ ברקע. ההשהיה כאן (אחרי load) ולא ב-registerController
           // כי pause על WebView שעוד לא נטען עלול לקטוע את הטעינה עצמה.
           unawaited(
             PluginRuntimeDispatcher.instance.onForegroundInstanceReady(
               widget.plugin.pluginId,
+              instanceId: widget.instanceId,
             ),
           );
-          PluginPageLauncher.instance.markPageReady(widget.plugin.pluginId);
+          PluginPageLauncher.instance.markPageReady(
+            widget.plugin.pluginId,
+            instanceId: widget.instanceId,
+          );
         } catch (e, st) {
           // Boot ב-Dart נכשל — התהליך חי, לא קריסה native. מנקים את ה-canary
           // כדי שלא נחסום בהפעלה הבאה תוסף שפשוט החזיר שגיאת אתחול רגילה.
-          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(
+            PluginCrashGuard.markLoadSuccess(
+              widget.plugin.pluginId,
+              owner: widget.instanceId,
+            ),
+          );
           debugPrint('Plugin [${widget.plugin.pluginId}] boot error: $e\n$st');
           PluginSystemDatabase.instance.writeLog(
             widget.plugin.pluginId,
@@ -940,7 +983,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
         if (request.url.scheme == 'file') {
           // שגיאת רשת/קובץ נתפסה ב-Dart — התהליך חי, לא קריסה native.
           // מנקים את ה-canary כדי שלא נחסום שגיאה רגילה כ"קריסה".
-          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(
+            PluginCrashGuard.markLoadSuccess(
+              widget.plugin.pluginId,
+              owner: widget.instanceId,
+            ),
+          );
           if (mounted) setState(() => _hasError = true);
           return;
         }
@@ -949,7 +997,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
         if (widget.plugin.isLocalhostDev &&
             request.isForMainFrame == true &&
             _isDevServerUri(request.url)) {
-          unawaited(PluginCrashGuard.markLoadSuccess(widget.plugin.pluginId));
+          unawaited(
+            PluginCrashGuard.markLoadSuccess(
+              widget.plugin.pluginId,
+              owner: widget.instanceId,
+            ),
+          );
           if (mounted) {
             setState(
               () => _devErrorMessage =

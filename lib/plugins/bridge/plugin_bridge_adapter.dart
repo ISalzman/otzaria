@@ -300,13 +300,15 @@ class PluginBridgeDependencies {
   /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
   final bool Function()? onBackgroundInstanceDone;
 
-  /// שולח אירוע ממוקד לתוסף (לחיצה על הודעת snack). אופציונלי — ברירת
-  /// המחדל היא [PluginRuntimeDispatcher.dispatchEventToPlugin]; קיים להזרקה בבדיקות.
+  /// שולח אירוע ממוקד לתוסף (לחיצה על הודעת snack) — עם [instanceId]
+  /// האירוע חוזר למופע שהציג את ההודעה. אופציונלי — ברירת המחדל היא
+  /// [PluginRuntimeDispatcher.dispatchEventToPlugin]; קיים להזרקה בבדיקות.
   final Future<void> Function(
     String pluginId,
     String topic,
-    Map<String, dynamic> payload,
-  )?
+    Map<String, dynamic> payload, {
+    String? instanceId,
+  })?
   dispatchEventToPlugin;
 
   const PluginBridgeDependencies({
@@ -360,6 +362,10 @@ class _PluginNetworkRequest {
 // ===================================================================
 class PluginBridgeAdapter {
   final InstalledPlugin plugin;
+
+  /// מזהה מופע הריצה שה-adapter משרת (טאב או 'background') — רישומי ה-UI
+  /// וההדגשות ממופתחים לפיו, וניקויים ב-dispose מסיר רק אותם.
+  final String instanceId;
   final PluginRegistryRepository _pluginRepo;
   final PluginBridgeDependencies _dependencies;
   final NotificationService _notificationService;
@@ -369,6 +375,7 @@ class PluginBridgeAdapter {
   PluginBridgeAdapter(
     this.plugin, {
     required this._dependencies,
+    this.instanceId = PluginInstanceIds.defaultForeground,
     PluginRegistryRepository? pluginRepository,
     NotificationService? notificationService,
     PluginDatabaseService? databaseService,
@@ -468,6 +475,12 @@ class PluginBridgeAdapter {
   }
 
   void dispose() {
+    // מסיר רק את תרומות המופע הזה — מופע אחר של אותו תוסף ממשיך לתפקד,
+    // וה-dedup בציור חושף את העותקים שלו.
+    final key = (pluginId: plugin.pluginId, instanceId: instanceId);
+    ContextMenuRegistry.instance.removeInstance(key);
+    PluginToolbarRegistry.instance.removeInstance(key);
+    _highlightRegistry.removeInstance(key);
     for (final cancel in _activeSearchStreams.values) {
       unawaited(cancel());
     }
@@ -1289,6 +1302,7 @@ class PluginBridgeAdapter {
                 .toList(),
             query: args['query'] as String? ?? '',
             error: args['error'] as String?,
+            instanceId: instanceId,
           );
           if (!accepted) {
             throw Exception(
@@ -1372,6 +1386,7 @@ class PluginBridgeAdapter {
             done: args['done'] != false,
             index: args['index'] as List?,
             error: args['error'] as String?,
+            instanceId: instanceId,
           );
           if (!accepted) {
             throw Exception(
@@ -1544,13 +1559,21 @@ class PluginBridgeAdapter {
       case 'getSectionTextMap':
         return _getSectionTextMap(args);
       case 'addContextMenuItem':
-        ContextMenuRegistry.instance.registerPayload(plugin.pluginId, args);
+        ContextMenuRegistry.instance.registerPayload(
+          plugin.pluginId,
+          args,
+          instanceId: instanceId,
+        );
         await _trackWhenStorageKeys(args);
         return true;
       case 'removeContextMenuItem':
         final id = args['id'] as String?;
         if (id == null) throw Exception('error.invalid_params: id required');
-        ContextMenuRegistry.instance.remove(plugin.pluginId, id);
+        ContextMenuRegistry.instance.remove(
+          plugin.pluginId,
+          id,
+          instanceId: instanceId,
+        );
         return true;
       case 'updateContextMenuItem':
         final id = args['id'];
@@ -1565,17 +1588,26 @@ class PluginBridgeAdapter {
           plugin.pluginId,
           id,
           Map<String, dynamic>.from(patch),
+          instanceId: instanceId,
         );
         await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'addToolbarItem':
-        PluginToolbarRegistry.instance.registerPayload(plugin.pluginId, args);
+        PluginToolbarRegistry.instance.registerPayload(
+          plugin.pluginId,
+          args,
+          instanceId: instanceId,
+        );
         await _trackWhenStorageKeys(args);
         return true;
       case 'removeToolbarItem':
         final id = args['id'] as String?;
         if (id == null) throw Exception('error.invalid_params: id required');
-        PluginToolbarRegistry.instance.remove(plugin.pluginId, id);
+        PluginToolbarRegistry.instance.remove(
+          plugin.pluginId,
+          id,
+          instanceId: instanceId,
+        );
         return true;
       case 'updateToolbarItem':
         final id = args['id'];
@@ -1590,13 +1622,18 @@ class PluginBridgeAdapter {
           plugin.pluginId,
           id,
           Map<String, dynamic>.from(patch),
+          instanceId: instanceId,
         );
         await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'setHighlight':
         if (args['range'] is Map && args['style'] is Map) {
           return _highlightRegistry
-              .setHighlight(ownerPluginId: plugin.pluginId, payload: args)
+              .setHighlight(
+                ownerPluginId: plugin.pluginId,
+                ownerInstanceId: instanceId,
+                payload: args,
+              )
               .toJson();
         }
         final bookId = args['bookId'];
@@ -1615,6 +1652,7 @@ class PluginBridgeAdapter {
         }
         _highlightRegistry.setLegacyHighlight(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: bookId,
           sectionIndex: index,
           color: color as String?,
@@ -1623,7 +1661,11 @@ class PluginBridgeAdapter {
         return true;
       case 'updateHighlight':
         return _highlightRegistry
-            .updateHighlight(ownerPluginId: plugin.pluginId, payload: args)
+            .updateHighlight(
+              ownerPluginId: plugin.pluginId,
+              ownerInstanceId: instanceId,
+              payload: args,
+            )
             .toJson();
       case 'getHighlights':
         final bookId = args['bookId'];
@@ -1638,6 +1680,7 @@ class PluginBridgeAdapter {
         return _highlightRegistry
             .getHighlights(
               ownerPluginId: plugin.pluginId,
+              ownerInstanceId: instanceId,
               bookId: bookId as String?,
               sectionIndex: sectionIndex as int?,
               includeStale: args['includeStale'] == true,
@@ -1654,6 +1697,7 @@ class PluginBridgeAdapter {
         }
         final matches = _highlightRegistry.getHighlights(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           includeStale: true,
         );
         final highlight = matches.cast<dynamic>().firstWhere(
@@ -1685,6 +1729,7 @@ class PluginBridgeAdapter {
         if (highlightId is String) {
           final removed = _highlightRegistry.clearHighlight(
             ownerPluginId: plugin.pluginId,
+            ownerInstanceId: instanceId,
             highlightId: highlightId,
             expectedVersion: args['expectedVersion'],
             expectedEtag: args['expectedEtag'],
@@ -1707,6 +1752,7 @@ class PluginBridgeAdapter {
         }
         final matches = _highlightRegistry.getHighlights(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: legacyBookId,
           sectionIndex: legacyIndex,
           includeStale: true,
@@ -1714,6 +1760,7 @@ class PluginBridgeAdapter {
         for (final match in matches) {
           _highlightRegistry.clearHighlight(
             ownerPluginId: plugin.pluginId,
+            ownerInstanceId: instanceId,
             highlightId: match.highlightId,
           );
         }
@@ -1730,6 +1777,7 @@ class PluginBridgeAdapter {
         }
         _highlightRegistry.clearAll(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: bookId as String?,
           sectionIndex: sectionIndex as int?,
         );
@@ -2209,7 +2257,9 @@ class PluginBridgeAdapter {
     final dispatch =
         _dependencies.dispatchEventToPlugin ??
         PluginRuntimeDispatcher.instance.dispatchEventToPlugin;
-    return () => unawaited(dispatch(plugin.pluginId, topic, payload));
+    // הלחיצה חוזרת למופע שהציג את ההודעה — לא לבחירת הדיספצ'ר.
+    return () =>
+        unawaited(dispatch(plugin.pluginId, topic, payload, instanceId: instanceId));
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].

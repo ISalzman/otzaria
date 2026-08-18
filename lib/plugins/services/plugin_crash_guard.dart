@@ -33,6 +33,21 @@ class PluginCrashGuard {
   /// חי של הסשן הזה אינו עדות לקריסה בהפעלה קודמת.
   static final Set<String> _sessionAttempts = <String>{};
 
+  /// טעינות פתוחות לכל תוסף, לפי בעלים (מזהה מופע): ה-canary נמחק רק כשלא
+  /// נותרה אף טעינה — מופע שנסגר לא מנקה סימון של מופע שעדיין נטען.
+  static final Map<String, Set<String>> _loadsInFlight = {};
+
+  /// מסיר את הטעינה של [owner]; true כשלא נותרה טעינה פתוחה לתוסף
+  /// ומותר לנקות את ה-canary.
+  static bool _finishLoad(String pluginId, String owner) {
+    final inFlight = _loadsInFlight[pluginId];
+    if (inFlight == null) return true;
+    inFlight.remove(owner);
+    if (inFlight.isNotEmpty) return false;
+    _loadsInFlight.remove(pluginId);
+    return true;
+  }
+
   static Future<String> _filePath() async {
     final root = await AppPaths.getDataRootPath();
     return p.join(root, 'plugin_crash_guard.json');
@@ -111,9 +126,11 @@ class PluginCrashGuard {
 
   /// מסמן שמתחילים לטעון את התוסף. אם הקוד יקרוס מכאן והלאה, ההפעלה הבאה
   /// תראה את ה-pluginId בקובץ ותסרב לטעון אותו אוטומטית.
-  static Future<void> markLoadAttempt(String pluginId) async {
+  /// [owner] מזהה את המופע הטוען — ראו [_loadsInFlight].
+  static Future<void> markLoadAttempt(String pluginId, {String owner = ''}) async {
     await ensureInitialized();
     _sessionAttempts.add(pluginId);
+    _loadsInFlight.putIfAbsent(pluginId, () => <String>{}).add(owner);
     _blocked!.add(pluginId);
     await _persist();
   }
@@ -124,20 +141,22 @@ class PluginCrashGuard {
   /// אחרי onWebViewCreated).
   ///
   /// דורש ש-[ensureInitialized] כבר רץ (main.dart דואג לזה באתחול).
-  static void markLoadAttemptSync(String pluginId) {
+  static void markLoadAttemptSync(String pluginId, {String owner = ''}) {
     final blocked = _blocked;
     if (blocked == null) {
       debugPrint('PluginCrashGuard.markLoadAttemptSync called before init');
       return;
     }
     _sessionAttempts.add(pluginId);
+    _loadsInFlight.putIfAbsent(pluginId, () => <String>{}).add(owner);
     if (blocked.add(pluginId)) _persistSync();
   }
 
-  /// מסמן שהתוסף נטען בהצלחה. מסיר את הסימון מ-disk כדי שההפעלה הבאה
-  /// תאפשר טעינה רגילה.
-  static Future<void> markLoadSuccess(String pluginId) async {
+  /// מסמן שסיום הטעינה של [owner] הגיע בעוד התהליך חי. הסימון מוסר מ-disk
+  /// רק כשלא נותרה טעינה פתוחה של מופע אחר לאותו תוסף.
+  static Future<void> markLoadSuccess(String pluginId, {String owner = ''}) async {
     await ensureInitialized();
+    if (!_finishLoad(pluginId, owner)) return;
     final removed = _blocked!.remove(pluginId);
     if (removed) await _persist();
   }
@@ -145,12 +164,13 @@ class PluginCrashGuard {
   /// גרסה סינכרונית של [markLoadSuccess] — לשימוש ב-`State.dispose()` בלבד,
   /// כי שם async writes לא תמיד מגיעים ל-disk לפני שהאפליקציה נסגרת.
   /// מבטיח שניקוי ה-canary יקרה גם בעת סגירה רגילה של התוכנה בזמן טעינה.
-  static void markLoadSuccessSync(String pluginId) {
+  static void markLoadSuccessSync(String pluginId, {String owner = ''}) {
     // לפני ensureInitialized — אם הגענו לכאן בלי שאתחלנו, _blocked עוד null.
     // במקרה כזה אין מה לעדכן בזיכרון, אבל גם הקובץ לא מכיל את ה-pluginId
     // (כי לא הוספנו אותו עדיין). אין מה לעשות.
     final blocked = _blocked;
     if (blocked == null) return;
+    if (!_finishLoad(pluginId, owner)) return;
     final removed = blocked.remove(pluginId);
     if (!removed) return;
     _persistSync();
@@ -161,6 +181,7 @@ class PluginCrashGuard {
   static void markCleanShutdownSync() {
     final blocked = _blocked;
     if (blocked == null || _sessionAttempts.isEmpty) return;
+    _loadsInFlight.clear();
     final before = blocked.length;
     blocked.removeAll(_sessionAttempts);
     if (blocked.length != before) _persistSync();
@@ -195,6 +216,7 @@ class PluginCrashGuard {
   static Future<void> retry(String pluginId) async {
     await ensureInitialized();
     _sessionAttempts.remove(pluginId);
+    _loadsInFlight.remove(pluginId);
     final removed = _blocked!.remove(pluginId);
     if (removed) await _persist();
   }
@@ -202,6 +224,7 @@ class PluginCrashGuard {
   /// המשתמש לחץ "נסה שוב את כולם". מסיר את כל הסימונים.
   static Future<void> retryAll() async {
     await ensureInitialized();
+    _loadsInFlight.clear();
     if (_blocked!.isEmpty) return;
     _blocked!.clear();
     await _persist();
@@ -214,6 +237,7 @@ class PluginCrashGuard {
     _currentAppVersion = null;
     _initFuture = null;
     _sessionAttempts.clear();
+    _loadsInFlight.clear();
   }
 
   /// משמש לטסטים בלבד — מאפשר להחדיר state התחלתי.

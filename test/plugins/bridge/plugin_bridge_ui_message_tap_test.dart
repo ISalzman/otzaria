@@ -78,14 +78,17 @@ void main() {
   late List<String> dispatchedTopics;
   late List<String> dispatchedPluginIds;
   late List<Map<String, dynamic>> dispatchedPayloads;
+  late List<String?> dispatchedInstanceIds;
   late PluginBridgeAdapter adapter;
 
   setUp(() {
     dispatchedTopics = [];
     dispatchedPluginIds = [];
     dispatchedPayloads = [];
+    dispatchedInstanceIds = [];
     adapter = PluginBridgeAdapter(
       _buildInstalledPlugin(),
+      instanceId: 'tab-7',
       dependencies: PluginBridgeDependencies(
         historyBloc: _MockHistoryBloc(),
         tabsBloc: _MockTabsBloc(),
@@ -100,10 +103,11 @@ void main() {
         showWarningDialog:
             ({required title, required content, required subtitle}) async =>
                 true,
-        dispatchEventToPlugin: (pluginId, topic, payload) async {
+        dispatchEventToPlugin: (pluginId, topic, payload, {instanceId}) async {
           dispatchedPluginIds.add(pluginId);
           dispatchedTopics.add(topic);
           dispatchedPayloads.add(payload);
+          dispatchedInstanceIds.add(instanceId);
         },
       ),
       pluginRepository: _MockPluginRegistryRepository(),
@@ -142,6 +146,8 @@ void main() {
         'payload': {'syncId': 42},
       },
     ]);
+    // הלחיצה חוזרת למופע שהציג את ההודעה — לא לבחירת הדיספצ'ר.
+    expect(dispatchedInstanceIds, ['tab-7']);
     expect(find.text('הסנכרון הסתיים'), findsNothing);
   });
 

@@ -82,8 +82,8 @@ class _ReadingScreenState extends State<ReadingScreen>
   }
 
   void _syncVisiblePluginTabs(TabsState state) {
-    PluginRuntimeDispatcher.instance.setVisiblePluginTabs(
-      ToolTab.visiblePluginIdsOf(state.currentTab),
+    PluginRuntimeDispatcher.instance.setVisiblePluginInstances(
+      ToolTab.visiblePluginInstancesOf(state.currentTab),
     );
   }
 
