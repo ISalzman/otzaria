@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
 /// רשומת תצוגה מאוחדת לכלי מובנה או לתוסף.
@@ -47,7 +47,7 @@ class ToolCatalogEntry {
 
   factory ToolCatalogEntry.fromPlugin(InstalledPlugin plugin) {
     final icon =
-        fluentIconFromName(plugin.manifest.toolTabIconName) ??
+        pluginIconFromName(plugin.manifest.toolTabIconName) ??
         FluentIcons.puzzle_piece_24_regular;
     return ToolCatalogEntry(
       toolId: plugin.pluginId,
@@ -106,7 +106,7 @@ Widget? buildToolTabLeadingIcon(
       (p) => p.pluginId == toolId,
     );
     if (plugin != null) {
-      icon = fluentIconFromName(plugin.manifest.toolTabIconName);
+      icon = pluginIconFromName(plugin.manifest.toolTabIconName);
     }
   }
   return Icon(

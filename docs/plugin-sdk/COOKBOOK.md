@@ -127,12 +127,11 @@ my-plugin/
 
 ## 2. אייקונים מאוצריא
 
-**חשוב להבין:** אין API שמחזיר לתוסף קובץ SVG של אייקון. אוצריא מציירת אייקוני
-[FluentUI System Icons](https://github.com/microsoft/fluentui-system-icons) **בצד שלה** בשני מקומות שהתוסף מצהיר עליהם. בתוך ה-WebView עצמו — האייקונים הם שלך (SVG inline).
+**חשוב להבין:** אין API שמחזיר לתוסף קובץ SVG של אייקון. אוצריא מציירת **בצד שלה** אייקונים משתי ספריות — [אוצריא](https://github.com/Otzaria/otzaria_icons) ו-[FluentUI System Icons](https://github.com/microsoft/fluentui-system-icons) — בכל מקום שהתוסף מצהיר עליו. בתוך ה-WebView עצמו — האייקונים הם שלך (SVG inline).
 
 ### מקום 1 — אייקון הטאב במסך "כלים"
 
-מוצהר ב-`manifest.json`. השם הוא שם FluentUI בגודל 24, המסתיים ב-`_24_regular` או `_24_filled`:
+מוצהר ב-`manifest.json`. שם מכל אחת משתי הספריות, בגודל 24, המסתיים ב-`_24_regular` או `_24_filled`:
 
 ```json
 "contributes": {
@@ -147,7 +146,7 @@ my-plugin/
 
 ### מקום 2 — אייקון בתפריט לחצן-ימין (מסכי טקסט)
 
-בעת רישום פריט לתפריט ההקשר, ניתן לציין `icon` (שם FluentUI 24, אופציונלי):
+בעת רישום פריט לתפריט ההקשר, ניתן לציין `icon` (שם אייקון 24, אופציונלי):
 
 ```javascript
 await Otzaria.call('reader.addContextMenuItem', {
@@ -157,7 +156,9 @@ await Otzaria.call('reader.addContextMenuItem', {
 });
 ```
 
-> **איך מוצאים שם אייקון?** גלוש ל-[מאגר FluentUI](https://github.com/microsoft/fluentui-system-icons), או חפש בקוד אוצריא `FluentIcons.xxx_24_regular`. שם שאינו קיים במפת האייקונים יוצג כפאזל ברירת מחדל (בטאב) או ללא אייקון (בתפריט) — לא תיזרק שגיאה.
+> **איך מוצאים שם אייקון?** ראה [ICONS.md](ICONS.md) — רשימת 135 אייקוני אוצריא, קישור לקטלוג פלואנט, וכלל ההכרעה בין שתי הספריות. שם שאינו קיים באף אחת מהן יוצג כפאזל ברירת מחדל (בטאב) או ללא אייקון (בתפריט) — לא תיזרק שגיאה.
+>
+> **שם שקיים בשתי הספריות** (למשל `book_24_regular`) נפתר לגרסת אוצריא. כדי לקבל דווקא את הצורה של פלואנט, כתוב `fluent:book_24_regular`.
 
 ### בתוך ה-WebView — SVG inline שעוקב אחרי ה-theme
 

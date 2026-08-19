@@ -94,7 +94,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayloadFromScheme;
 import 'package:otzaria/theme/app_theme_data.dart' show AppThemeData;
@@ -170,7 +170,7 @@ class _PinnedToolNavItem {
       toolId: plugin.pluginId,
       label: plugin.manifest.toolTabTitle,
       icon:
-          fluentIconFromName(plugin.manifest.toolTabIconName) ??
+          pluginIconFromName(plugin.manifest.toolTabIconName) ??
           FluentIcons.puzzle_piece_24_regular,
       isPlugin: true,
       plugin: plugin,

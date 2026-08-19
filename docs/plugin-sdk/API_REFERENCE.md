@@ -4158,7 +4158,7 @@ https://googleapis.com      # ❌ פותח את כל שירותי גוגל
 await Otzaria.call('reader.addContextMenuItem', {
   id: 'my-save-item',       // מזהה ייחודי (חובה)
   label: 'הוסף למראי המקומות שלי',  // טקסט לתצוגה (חובה)
-  icon: 'bookmark_24_regular',  // שם אייקון FluentUI System Icons (אופציונלי)
+  icon: 'bookmark_24_regular',  // שם אייקון מאוצריא או מפלואנט (אופציונלי) — ראה ICONS.md
   openPlugin: true,          // לחיצה תפתח את דף התוסף (אופציונלי, מגרסה 0.9.96)
   param: 'save-mode'         // ערך חופשי שיוחזר ב-payload של אירוע הלחיצה (אופציונלי)
 });
@@ -4307,7 +4307,7 @@ Otzaria.on('reader.context_menu_item_clicked', (data) => {
 await Otzaria.call('reader.addToolbarItem', {
   id: 'my-button',              // מזהה ייחודי (חובה)
   title: 'שמור מראה מקום',      // tooltip + טקסט בתפריט ה-overflow (חובה)
-  icon: 'bookmark_24_regular',  // שם אייקון FluentUI System Icons (חובה בפקד עליון)
+  icon: 'bookmark_24_regular',  // שם אייקון מאוצריא או מפלואנט (חובה בפקד עליון) — ראה ICONS.md
   openPlugin: true,             // לחיצה תפתח את דף התוסף (אופציונלי)
   param: 'save-mode'            // ערך חופשי שיוחזר ב-payload של הלחיצה (אופציונלי)
 });

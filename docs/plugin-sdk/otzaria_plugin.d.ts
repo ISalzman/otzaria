@@ -952,7 +952,7 @@ export interface ContextMenuColor {
   /** Safe CSS color: #RRGGBB or #RRGGBBAA. */
   color: string;
   label: string;
-  /** Optional FluentUI icon rendered instead of the color swatch. */
+  /** Optional icon rendered instead of the color swatch. See ICONS.md. */
   icon?: string;
   selected?: boolean;
 }
@@ -968,6 +968,7 @@ export interface ContextMenuItem {
   /** `label` is accepted as a legacy alias. */
   title?: string;
   label?: string;
+  /** Icon name (see ICONS.md). */
   icon?: string;
   /** One or more reader contexts. Children inherit this when omitted; an
    * explicit child value must be a subset of its parent's contexts. */
@@ -1035,7 +1036,7 @@ export interface ToolbarItem {
   type?: 'button' | 'menu' | 'split';
   /** Tooltip on the visible button and label in the overflow menu. */
   title: string;
-  /** FluentUI icon name. Required on top-level items, optional on children. */
+  /** Icon name (see ICONS.md). Required on top-level items, optional on children. */
   icon?: string;
   /** One or more reader contexts. Children inherit this when omitted; an
    * explicit child value must be a subset of its parent's contexts. */
