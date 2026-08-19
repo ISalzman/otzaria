@@ -58,6 +58,9 @@ class TextRendererService {
     // 0. תיקון סדר סימוני הערות (<sup>) ב-RTL
     processed = _fixFootnoteMarkers(processed);
 
+    // 0a. המרת טקסט תחתי (<sub>) לטקסט טהור — ראו _fixSubscripts.
+    processed = _fixSubscripts(processed);
+
     // 0b. הסרת גוף הערות inline (<i class="footnote">...</i>) - מוצגות כמפרש בצד.
     processed = notes.stripInlineNotes(processed);
 
@@ -194,6 +197,55 @@ class TextRendererService {
       return '<span class="$kRaisedSupClass">$wrappedInner</span>';
     });
   }
+
+  static final RegExp _subRegex = RegExp(
+    r'<sub(\s[^>]*)?>(.*?)</sub>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+
+  /// ממיר תגי <sub> לטקסט טהור.
+  ///
+  /// HtmlWidget מממש `<sub>` כ-WidgetSpan עם padding עליון (0.4×fontSize),
+  /// ולכן הוא מותח את השורה / נשבר לשורה נפרדת, ואינו נכלל בבחירת טקסט
+  /// (SelectableRegion מדלג על WidgetSpan). sub *מספרי* מומר לספרות-תחתיות
+  /// יוניקוד (₁₂₃…); לתוכן אחר (למשל עברית) אין גליפים תחתיים — נפלט
+  /// כ-`<span class="subscript-text">` שמוקטן ב-CSS ונשאר טקסט נבחר.
+  static String _fixSubscripts(String text) {
+    if (!_subRegex.hasMatch(text)) return text;
+
+    return text.replaceAllMapped(_subRegex, (match) {
+      final innerHtml = match[2] ?? '';
+      final innerText = innerHtml.replaceAll(_htmlTagRegex, '');
+      if (innerText.trim().isEmpty) {
+        return '';
+      }
+
+      final trimmedInner = innerText.trim();
+      if (_digitsOnlyRegex.hasMatch(trimmedInner)) {
+        final subscript = trimmedInner.split('').map((d) {
+          return _subscriptDigits[d]!;
+        }).join();
+        return _wrapWithBidiIsolate(subscript);
+      }
+
+      return '<span class="subscript-text">${_wrapWithBidiIsolate(innerHtml)}</span>';
+    });
+  }
+
+  /// מיפוי ספרה רגילה → ספרת-תחתית יוניקוד (U+2080–U+2089).
+  static const Map<String, String> _subscriptDigits = {
+    '0': '₀',
+    '1': '₁',
+    '2': '₂',
+    '3': '₃',
+    '4': '₄',
+    '5': '₅',
+    '6': '₆',
+    '7': '₇',
+    '8': '₈',
+    '9': '₉',
+  };
 
   static final RegExp _digitsOnlyRegex = RegExp(r'^[0-9]+$');
 

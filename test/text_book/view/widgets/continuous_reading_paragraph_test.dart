@@ -8,6 +8,7 @@ import 'package:otzaria/plugins/models/text_source_map.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_renderer.dart';
 import 'package:otzaria/plugins/view/plugin_highlight_frame_overlay.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
 
 /// טסטים לפיצ'ר ההצגה הרציפה. עיקר הסיכון הוא ב-`_styleForElement` החדש —
 /// פירוש סטיילים inline (color/background-color) של ה-`<span>`-ים שמנוע
@@ -518,6 +519,18 @@ void main() {
       expect(flattened, contains('יוסף'));
       expect(flattened, contains('לפני'));
       expect(flattened, contains('אחרי'));
+    });
+  });
+
+  group('טקסט תחתי שהומר ל-span (issue #842)', () {
+    test('span.subscript-text מוקטן ביחס לבסיס', () {
+      final spans = buildInlineHtmlSpans(
+        'לפני <span class="subscript-text">ב</span> אחרי',
+        const TextStyle(fontSize: 24),
+      );
+      final sizes = _flattenStyles(spans).map((s) => s.fontSize).nonNulls;
+      expect(sizes, contains(closeTo(24 * kHtmlSmallerFontScale, 0.01)));
+      expect(_flattenText(spans), contains('ב'));
     });
   });
 

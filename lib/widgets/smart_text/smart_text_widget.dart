@@ -269,6 +269,10 @@ class SmartTextWidget extends StatelessWidget {
             if (headingWeight != null) {
               return {'font-weight': headingWeight};
             }
+            if (element.localName == 'span' &&
+                element.classes.contains('subscript-text')) {
+              return {'font-size': 'smaller'};
+            }
             // סימונים מורמים: הגליפים נשארים בשורה — תופסים את המקום ואת הסדר
             // הנכון, וזמינים לבחירה ולהעתקה — אבל שקופים, ו-RaisedMarkerOverlay
             // מצייר אותם מורמים מעל מקומם. `position`/`top` אינם נתמכים ב-fwfh

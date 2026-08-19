@@ -499,6 +499,12 @@ TextStyle _styleForElement(
       style = style.copyWith(color: const Color(0x00000000));
     }
   }
+  // טקסט תחתי שהומר ל-span (ראו TextRendererService._fixSubscripts) — מוקטן.
+  if (element.classes.contains('subscript-text')) {
+    style = style.copyWith(
+      fontSize: (style.fontSize ?? 18) * kHtmlSmallerFontScale,
+    );
+  }
   if (element.classes.contains(kFootnoteMarkerClass) ||
       element.classes.contains('book-note-marker')) {
     style = style.copyWith(
