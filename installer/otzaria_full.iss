@@ -77,10 +77,8 @@ Type: filesandordirs; Name: "{app}\default.isar";
 ; המסמן נכתב רק בהתקנת מנהל (ראה [INI]) והאפליקציה גוזרת ממנו את מיקום
 ; ברירת המחדל של הספרייה — מסמן ששרד מעבר להתקנת משתמש מפנה אותה ל-ProgramData.
 Type: files; Name: "{app}\system_install.marker"; Check: (not IsAdminInstallMode) or IsPortableInstall
-; במתקין המשובץ מוחקים לפני הפריסה; במתקין המפוצל מחליפים רק אחרי אימות וחילוץ מלא.
-#ifndef IndexedSplitFull
-Type: filesandordirs; Name: "{code:GetSelectedBooksPath}"
-#endif
+; אין כאן מחיקה של תיקיית הספרים: בשני מצבי הבנייה הספרייה מוחלפת רק אחרי
+; חילוץ מלא ומוצלח ל-staging — מחיקה מוקדמת השאירה משדרגים בלי ספרייה (issue #867).
 
 [Dirs]
 ; במצב נייד הנתונים יושבים ב-otzaria_data ליד ה-EXE — האפליקציה יוצרת אותה בעצמה.
@@ -746,8 +744,8 @@ var
 begin
   Result := True;
 
-  // אתחול ברירות מחדל כבר עכשיו, כדי ש-GetSelectedBooksPath (שמשמש
-  // ב-[InstallDelete]) יחזיר ערך תקין בכל מסלול ריצה.
+  // אתחול ברירות מחדל כבר עכשיו, כדי ש-GetSelectedBooksPath יחזיר ערך
+  // תקין בכל מסלול ריצה.
   InstallWV2 := WebView2NeedsInstall;
   SelectedBooksPath := GetDataDir('') + '\books';
 
@@ -1604,7 +1602,7 @@ begin
     Result := 'קובץ היעד נעול על ידי תהליך אחר. סגור את אוצריא ותוכנות אחרות שעשויות להשתמש בקבצים ונסה שוב.';
 end;
 
-procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
+procedure ExtractBundledDatabase(const ArchiveName, DatabaseName, TargetRoot: String);
 var
   ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
@@ -1616,7 +1614,7 @@ begin
     exit;
   end;
 
-  DatabasePath := SelectedBooksPath + '\' + DatabaseName;
+  DatabasePath := TargetRoot + '\' + DatabaseName;
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
 
   ForceDirectories(ExtractFileDir(DatabasePath));
@@ -1638,7 +1636,7 @@ begin
   DeleteFile(ArchivePath);
 end;
 
-procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
+procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName, TargetRoot: String);
 var
   ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
@@ -1650,9 +1648,9 @@ begin
     exit;
   end;
 
-  ParentDir := SelectedBooksPath;
+  ParentDir := TargetRoot;
   TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
-  TargetDir := SelectedBooksPath + '\' + TargetDirName;
+  TargetDir := TargetRoot + '\' + TargetDirName;
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
   SevenZipPath := ExpandConstant('{tmp}\7za.exe');
 
@@ -1698,6 +1696,75 @@ begin
   end;
   DeleteFile(ArchivePath);
 end;
+
+#ifndef IndexedSplitFull
+// מחלץ את כל רכיבי הספרייה המשובצים לתיקיית staging, ומחליף את הספרייה
+// הקיימת רק אחרי שהכל הצליח — כשל באמצע משאיר את הספרייה הישנה שלמה (issue #867).
+procedure ExtractEmbeddedLibraryArchives();
+var
+  LibraryRoot, StagingBooks, BooksBackup: String;
+  BooksBackedUp: Boolean;
+begin
+  LibraryRoot := ExtractFileDir(SelectedBooksPath);
+  StagingBooks := LibraryRoot + '\.otzaria-books-staging';
+  BooksBackup := LibraryRoot + '\.otzaria-books-backup';
+
+  ForceDirectories(LibraryRoot);
+  DelTree(StagingBooks, True, True, True);
+  ForceDirectories(StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('seforim.db.zst', 'seforim.db', StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db',
+    StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי',
+    StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('lexical.db.zst', 'lexical.db', StagingBooks);
+  // בלי קובץ הגרסה בדיקת העדכון הראשונה מורידה את המילון (~57MB) מחדש;
+  // ה-sha256 של הקובץ הוא ה-digest של נכס ה-release שהאפליקציה משווה מולו.
+  if FileExists(StagingBooks + '\lexical.db') then
+  begin
+    try
+      SaveStringToFile(StagingBooks + '\lexical.db.version',
+        Lowercase(GetSHA256OfFile(StagingBooks + '\lexical.db')), False);
+    except
+      Log('Lexical version marker was not written: ' + GetExceptionMessage);
+    end;
+  end;
+
+  WizardForm.StatusLabel.Caption := 'מחליף את הספרייה הקודמת...';
+  WizardForm.StatusLabel.Update;
+  DelTree(BooksBackup, True, True, True);
+  BooksBackedUp := (not DirExists(SelectedBooksPath)) or
+    RenameFile(SelectedBooksPath, BooksBackup);
+  if not BooksBackedUp then
+  begin
+    DelTree(StagingBooks, True, True, True);
+    MsgBox('לא ניתן להחליף את תיקיית הספרים הקיימת. ודא שאוצריא סגורה.',
+      mbCriticalError, MB_OK);
+    Abort;
+  end;
+  if not RenameFile(StagingBooks, SelectedBooksPath) then
+  begin
+    if DirExists(BooksBackup) then
+      RenameFile(BooksBackup, SelectedBooksPath);
+    DelTree(StagingBooks, True, True, True);
+    MsgBox('העברת הספרייה למיקום שנבחר נכשלה.', mbCriticalError, MB_OK);
+    Abort;
+  end;
+  DelTree(BooksBackup, True, True, True);
+end;
+#endif
 
 #ifdef IndexedSplitFull
 procedure ExtractIndexedLibraryArchive();
@@ -2121,32 +2188,7 @@ begin
   WizardForm.StatusLabel.Update;
   ExtractIndexedLibraryArchive();
 #else
-  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('lexical.db.zst', 'lexical.db');
-  // בלי קובץ הגרסה בדיקת העדכון הראשונה מורידה את המילון (~57MB) מחדש;
-  // ה-sha256 של הקובץ הוא ה-digest של נכס ה-release שהאפליקציה משווה מולו.
-  if FileExists(SelectedBooksPath + '\lexical.db') then
-  begin
-    try
-      SaveStringToFile(SelectedBooksPath + '\lexical.db.version',
-        Lowercase(GetSHA256OfFile(SelectedBooksPath + '\lexical.db')), False);
-    except
-      Log('Lexical version marker was not written: ' + GetExceptionMessage);
-    end;
-  end;
+  ExtractEmbeddedLibraryArchives();
 #endif
 
   WizardForm.ProgressGauge.Style := npbstNormal;

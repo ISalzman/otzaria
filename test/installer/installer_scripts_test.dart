@@ -168,19 +168,41 @@ void main() {
       }
     });
 
-    test('$_full: התיקייה שנמחקת היא התיקייה שנכתבת', () {
+    test('$_full: הספרייה מוחלפת רק אחרי חילוץ מלא — לא נמחקת מראש', () {
       final script = _script(_full);
       final installDelete = _section(script, 'InstallDelete');
 
       expect(
         installDelete,
-        contains(r'Name: "{code:GetSelectedBooksPath}"'),
-        reason: 'מחיקה לפי נתיב אחר מהיעד תמחק ספרייה לא נכונה',
+        isNot(contains('GetSelectedBooksPath')),
+        reason:
+            'מחיקת הספרייה בתחילת ההתקנה השאירה משדרגים בלי ספרייה '
+            'כשהחילוץ נקטע (issue #867)',
+      );
+
+      final extract = _routine(
+        script,
+        'procedure ExtractEmbeddedLibraryArchives();',
       );
       expect(
-        _routine(script, 'function GetSelectedBooksPath('),
-        contains('SelectedBooksPath'),
+        extract,
+        contains('ExtractFileDir(SelectedBooksPath)'),
+        reason: 'ה-staging חייב לשבת ליד היעד — rename עובד רק באותו כונן',
       );
+
+      final lastExtract = extract.lastIndexOf('ExtractBundled');
+      final backupOld = extract.indexOf(
+        'RenameFile(SelectedBooksPath, BooksBackup)',
+      );
+      final moveNew = extract.indexOf(
+        'RenameFile(StagingBooks, SelectedBooksPath)',
+      );
+      expect(
+        backupOld,
+        greaterThan(lastExtract),
+        reason: 'ההחלפה חייבת לבוא אחרי שכל החילוצים הצליחו',
+      );
+      expect(moveNew, greaterThan(backupOld));
     });
   });
 
@@ -597,13 +619,16 @@ void main() {
   group('סימון גרסת מילון החיפוש בחבילות FULL', () {
     // בלי הסימון האפליקציה מורידה מחדש ~57MB בבדיקת העדכון הראשונה (issue #665).
     test('$_full: אחרי חילוץ lexical.db נכתב סימון מ-sha256 של הקובץ', () {
-      final body = _routine(_script(_full), 'procedure CurStepChanged(');
+      final body = _routine(
+        _script(_full),
+        'procedure ExtractEmbeddedLibraryArchives();',
+      );
 
       expect(body, contains("'\\lexical.db.version'"));
       expect(
         body,
         contains(
-          "Lowercase(GetSHA256OfFile(SelectedBooksPath + '\\lexical.db'))",
+          "Lowercase(GetSHA256OfFile(StagingBooks + '\\lexical.db'))",
         ),
         reason: 'הנכס ב-release אינו דחוס — ה-digest מחושב על הקובץ המחולץ',
       );
