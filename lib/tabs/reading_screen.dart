@@ -163,6 +163,17 @@ class _ReadingScreenState extends State<ReadingScreen>
     if (_isTouchPlatform) return child;
     return RawGestureDetector(
       gestures: <Type, GestureRecognizerFactory>{
+        // "בולען" אנכי: מעל WebView של תוסף אין Scrollable שמתחרה בזירה,
+        // והאופקי כחבר יחיד זכה מיד בכל גלילה אנכית (רעד ומעבר טאב בטעות).
+        VerticalDragGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<VerticalDragGestureRecognizer>(
+              () => VerticalDragGestureRecognizer(
+                supportedDevices: const {PointerDeviceKind.trackpad},
+              ),
+              (recognizer) {
+                recognizer.onStart = (_) {};
+              },
+            ),
         HorizontalDragGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<
               HorizontalDragGestureRecognizer
@@ -172,6 +183,9 @@ class _ReadingScreenState extends State<ReadingScreen>
               ),
               (recognizer) {
                 recognizer
+                  // הזכייה בזירה מגיעה רק אחרי סף — down מוסר את הדלתא
+                  // שנצברה עד אז במקום לבלוע אותה (רציפות הגרירה).
+                  ..dragStartBehavior = DragStartBehavior.down
                   ..onStart = (_) {
                     final controller = _pageController;
                     if (controller == null || !controller.hasClients) return;
