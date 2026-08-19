@@ -2271,18 +2271,57 @@ class _CombinedViewState extends State<CombinedView> {
 
                           // במצב רציף — פסקה מכמה שורות מקור.
                           if (isContinuousParagraph) {
-                            final segmentText = _buildContinuousSegmentText(
-                              segment: segment,
-                              state: state,
-                              settingsState: settingsState,
-                              baseTextStyle: TextStyle(
-                                fontSize: widget.textSize,
-                                fontFamily: settingsState.fontFamily,
-                                height: settingsState.lineHeight,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                              noteMap: noteMap,
+                            final baseTextStyle = TextStyle(
+                              fontSize: widget.textSize,
+                              fontFamily: settingsState.fontFamily,
+                              height: settingsState.lineHeight,
+                              color: Theme.of(context).colorScheme.onSurface,
                             );
+                            Widget paragraphPart(List<int> lineIndices) =>
+                                _buildContinuousSegmentText(
+                                  segment: segment,
+                                  state: state,
+                                  settingsState: settingsState,
+                                  baseTextStyle: baseTextStyle,
+                                  noteMap: noteMap,
+                                  lineIndices: lineIndices,
+                                );
+
+                            // כרטיס המפרשים נבנה מתחת לשורה שנלחצה ע"י פיצול
+                            // הפסקה סביבה — בתחתית הפסקה הוא היה מחוץ למסך.
+                            final splitPos =
+                                widget.showCommentaryAsExpansionTiles &&
+                                    isSelected &&
+                                    _hasCommentaries(state, selectedLineIndex)
+                                ? segment.sourceLineIndices.indexOf(
+                                    selectedLineIndex,
+                                  )
+                                : -1;
+                            final segmentText = splitPos < 0
+                                ? paragraphPart(segment.sourceLineIndices)
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      paragraphPart(
+                                        segment.sourceLineIndices.sublist(
+                                          0,
+                                          splitPos + 1,
+                                        ),
+                                      ),
+                                      _buildCommentaryCard(
+                                        state,
+                                        selectedLineIndex,
+                                      ),
+                                      if (splitPos + 1 <
+                                          segment.sourceLineIndices.length)
+                                        paragraphPart(
+                                          segment.sourceLineIndices.sublist(
+                                            splitPos + 1,
+                                          ),
+                                        ),
+                                    ],
+                                  );
                             final constrainedText = textMaxWidth > 0
                                 ? Center(
                                     child: ConstrainedBox(
@@ -2450,25 +2489,32 @@ class _CombinedViewState extends State<CombinedView> {
             ),
           ),
         ),
-        // לכרטיס המפרשים SelectionArea משלו; disabled מנתק אותו מאזור הבחירה
-        // של הטקסט הראשי — קינון SelectionArea שובר את ההעתקה (issue #530).
-        if (widget.showCommentaryAsExpansionTiles &&
+        // במצב רציף הכרטיס מוצג בתוך הפסקה, מתחת לשורה שנלחצה (issue #875).
+        if (!isContinuousParagraph &&
+            widget.showCommentaryAsExpansionTiles &&
             isSelected &&
             _hasCommentaries(state, selectedLineIndex))
-          SelectionContainer.disabled(
-            child: _CommentaryCard(
-              key: ValueKey('commentary_card_$selectedLineIndex'),
-              index: selectedLineIndex,
-              textSize: widget.textSize,
-              openBookCallback: widget.openBookCallback,
-              viewportHeight: _viewportHeight,
-              selectionSyncController: widget.selectionSyncController,
-              searchText: state.searchText,
-              scrollTargetListenable: _anchorScrollTargetNotifier,
-              onOpenPersonalNote: widget.onOpenCommentaryPersonalNote,
-            ),
-          ),
+          _buildCommentaryCard(state, selectedLineIndex),
       ],
+    );
+  }
+
+  /// כרטיס המפרשים שמוצג מתחת לשורה נבחרת במצב "מפרשים מתחת לטקסט".
+  /// SelectionArea משלו; disabled מנתק אותו מאזור הבחירה של הטקסט הראשי —
+  /// קינון SelectionArea שובר את ההעתקה (issue #530).
+  Widget _buildCommentaryCard(TextBookLoaded state, int lineIndex) {
+    return SelectionContainer.disabled(
+      child: _CommentaryCard(
+        key: ValueKey('commentary_card_$lineIndex'),
+        index: lineIndex,
+        textSize: widget.textSize,
+        openBookCallback: widget.openBookCallback,
+        viewportHeight: _viewportHeight,
+        selectionSyncController: widget.selectionSyncController,
+        searchText: state.searchText,
+        scrollTargetListenable: _anchorScrollTargetNotifier,
+        onOpenPersonalNote: widget.onOpenCommentaryPersonalNote,
+      ),
     );
   }
 
@@ -2483,6 +2529,7 @@ class _CombinedViewState extends State<CombinedView> {
     required SettingsState settingsState,
     required TextStyle baseTextStyle,
     required Map<int, List<PersonalNote>> noteMap,
+    List<int>? lineIndices,
   }) {
     return ListenableBuilder(
       listenable: Listenable.merge([
@@ -2496,6 +2543,7 @@ class _CombinedViewState extends State<CombinedView> {
           settingsState: settingsState,
           baseTextStyle: baseTextStyle,
           noteMap: noteMap,
+          lineIndices: lineIndices,
         );
 
         return ContinuousReadingParagraph(
@@ -2567,10 +2615,11 @@ class _CombinedViewState extends State<CombinedView> {
     required SettingsState settingsState,
     required TextStyle baseTextStyle,
     required Map<int, List<PersonalNote>> noteMap,
+    List<int>? lineIndices,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final lines = <ContinuousReadingParagraphLine>[];
-    for (final lineIndex in segment.sourceLineIndices) {
+    for (final lineIndex in lineIndices ?? segment.sourceLineIndices) {
       if (lineIndex < 0 || lineIndex >= widget.data.length) {
         continue;
       }
