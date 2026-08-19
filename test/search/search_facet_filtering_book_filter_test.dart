@@ -261,6 +261,7 @@ void main() {
             providers: [
               BlocProvider<SearchBloc>.value(value: searchBloc),
               BlocProvider<LibraryBloc>.value(value: libraryBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
             ],
             child: Column(
               children: [

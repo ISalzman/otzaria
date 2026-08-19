@@ -11,6 +11,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -970,7 +971,20 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // ── סימון מקלדת ─────────────────────────────────────────────────────────
+    testWidgets('עיצוב הרשימה נשאר בתוך אזור השלכת תוספים', (tester) async {
+      await pumpPanel(tester);
+
+      expect(find.byType(PluginDropZone), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(PluginDropZone),
+          matching: find.byType(NavTreeTile),
+        ),
+        findsWidgets,
+      );
+    });
+
+    // ── סימון מקלדת ────────────────────────────────────────────────────────
 
     testWidgets('בפתיחה אין שורה מסומנת — לוח שנה לא נראה נבחר', (
       tester,
