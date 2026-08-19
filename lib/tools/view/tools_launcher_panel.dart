@@ -373,24 +373,25 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         label: 'הזזה',
         onTap: null,
         children: [
-          // RtlIcon בשורת התפריט מהפך את החץ, כך שיצביע לכיוון ההזזה בפועל.
-          ToolTileAction(
-            icon: FluentIcons.arrow_left_24_regular,
-            label: 'הזז אחורה',
-            onTap: onMoveEarlier,
-          ),
+          // לאייקוני החצים matchTextDirection, והמנוע מהפך אותם ב-RTL אחרי
+          // ההחלפה של RtlIcon — לכן מוצהר כאן הגליף כפי שייראה על המסך.
           ToolTileAction(
             icon: FluentIcons.arrow_right_24_regular,
             label: 'הזז קדימה',
+            onTap: onMoveEarlier,
+          ),
+          ToolTileAction(
+            icon: FluentIcons.arrow_left_24_regular,
+            label: 'הזז אחורה',
             onTap: onMoveLater,
           ),
           ToolTileAction(
-            icon: FluentIcons.arrow_previous_24_regular,
+            icon: FluentIcons.arrow_next_24_regular,
             label: 'הזז לתחילה',
             onTap: onMoveToStart,
           ),
           ToolTileAction(
-            icon: FluentIcons.arrow_next_24_regular,
+            icon: FluentIcons.arrow_previous_24_regular,
             label: 'הזז לסוף',
             onTap: onMoveToEnd,
           ),
