@@ -621,6 +621,97 @@ void main() {
       });
     }
   });
+
+  group('התקנה ניידת — שאלה לפני שכפול ספרייה קיימת (issue #861)', () {
+    test('$_full: השאלה נשאלת בלחיצת "התקן" ומזהה ספרייה קיימת בלבד', () {
+      final script = _script(_full);
+      final ask = _routine(script, 'procedure AskPortableLibraryChoice(');
+
+      expect(ask, contains('if not PortableMode then'));
+      expect(ask, contains('FindExistingLibraryPath()'));
+      expect(
+        ask,
+        contains('MB_YESNO) = IDNO'),
+        reason: 'ברירת המחדל (Yes) חייבת להישאר חילוץ — דילוג רק בבחירה מפורשת',
+      );
+
+      final next = _routine(script, 'function NextButtonClick(');
+      expect(
+        next,
+        contains('AskPortableLibraryChoice()'),
+        reason: 'השאלה חייבת לרוץ בעמוד Ready, לפני תחילת ההתקנה',
+      );
+    });
+
+    test('$_full: הזיהוי מכסה את ה-prefs ואת שני נתיבי ברירת המחדל', () {
+      final find = _routine(
+        _script(_full),
+        'function FindExistingLibraryPath(',
+      );
+
+      expect(find, contains('GetCustomLibraryPath()'));
+      expect(find, contains(r"'{userappdata}\otzaria\books'"));
+      expect(find, contains(r"'{commonappdata}\otzaria\books'"));
+      expect(
+        RegExp('IsOtzariaBooksFolder').allMatches(find).length,
+        3,
+        reason: 'כל מועמד חייב אימות תוכן לפני שהוא נחשב ספרייה קיימת',
+      );
+    });
+
+    test('$_full: הדילוג כותב את ה-marker ויוצא לפני החילוץ', () {
+      final body = _routine(_script(_full), 'procedure CurStepChanged(');
+      final skipAt = body.indexOf('PortableMode and PortableSkipLibrary');
+      final extractAt = body.indexOf('zstd.exe');
+
+      expect(skipAt, greaterThan(0));
+      expect(
+        skipAt,
+        lessThan(extractAt),
+        reason: 'בלוק הדילוג חייב לקדום לחילוץ — אחרת העותק הכפול כבר נוצר',
+      );
+
+      final skipBlock = body.substring(skipAt, extractAt);
+      expect(
+        skipBlock,
+        contains(r"'{app}\portable.marker'"),
+        reason: 'גם בדילוג ההתקנה חייבת להישאר ניידת',
+      );
+      expect(skipBlock, contains('exit;'));
+    });
+
+    test('שירות הספרייה היתומה מזהה התקנת מנהל לפי ה-AppId של המתקינים', () {
+      final service = File(
+        'lib/settings/services/orphan_library_service.dart',
+      ).readAsStringSync();
+      final guid = RegExp(
+        r'\{[0-9A-F-]{36}\}_is1',
+      ).firstMatch(service)?.group(0);
+
+      expect(guid, isNotNull, reason: 'מפתח ההסרה נעלם מהשירות');
+      final appId = guid!.substring(0, guid.length - 4);
+      for (final name in _scripts) {
+        expect(
+          _script(name),
+          contains('AppId={$appId'),
+          reason:
+              'שינוי AppId במתקין ישבור את זיהוי התקנת המנהל '
+              'ב-OrphanLibraryService — יש לעדכן את שניהם יחד',
+        );
+      }
+    });
+
+    test('$_full: בדילוג לא מורידים את חבילת הספרייה המאונדקסת', () {
+      final next = _routine(_script(_full), 'function NextButtonClick(');
+      expect(
+        next,
+        contains(
+          'if not PortableSkipLibrary then\n'
+          '      Result := PrepareIndexedLibrary();',
+        ),
+      );
+    });
+  });
 }
 
 /// גוף שלב [name] ב-workflow הראשי, עד השלב הבא.

@@ -136,6 +136,8 @@ var
   RelaunchingForModeChange: Boolean;
   RegularInstallDirDefault: String;
   PortableInstallDirDefault: String;
+  // המשתמש בחר לדלג על חילוץ הספרייה בהתקנה ניידת — קיימת ספרייה במחשב.
+  PortableSkipLibrary: Boolean;
 
   FeaturesPage: TWizardPage;
   SlideshowImage: TBitmapImage;
@@ -694,6 +696,44 @@ begin
   CustomPath := GetCustomLibraryPath();
   if IsOtzariaBooksFolder(CustomPath) then
     SelectedBooksPath := CustomPath;
+end;
+
+// מאתר ספרייה קיימת במחשב: הנתיב המותאם מה-prefs, ואחריו נתיבי ברירת
+// המחדל של התקנת משתמש ושל התקנת מנהל.
+function FindExistingLibraryPath(): String;
+begin
+  Result := GetCustomLibraryPath();
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := ExpandConstant('{userappdata}\otzaria\books');
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := ExpandConstant('{commonappdata}\otzaria\books');
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := '';
+end;
+
+// בהתקנה ניידת עם ספרייה קיימת במחשב — שואל אם לחלץ עותק נוסף של
+// גיגה-בייטים לתיקייה הניידת, או לדלג ולהשתמש בקיימת (issue #861).
+procedure AskPortableLibraryChoice();
+var
+  ExistingPath: String;
+begin
+  PortableSkipLibrary := False;
+  if not PortableMode then
+    exit;
+  ExistingPath := FindExistingLibraryPath();
+  if ExistingPath = '' then
+    exit;
+  PortableSkipLibrary := MsgBox(
+    'נמצאה ספרייה קיימת במחשב זה:' + #13#10 +
+    ExistingPath + #13#10#13#10 +
+    'האם לחלץ עותק ספרייה נוסף לתיקייה הניידת?' + #13#10 +
+    'עותק נוסף תופס כמה גיגה-בייטים בדיסק.' + #13#10#13#10 +
+    'בחירה ב"לא" תדלג על החילוץ, ובפתיחת אוצריא הניידת ניתן יהיה ' +
+    'להצביע על הספרייה הקיימת דרך "שימוש בספרייה קיימת במקומה".',
+    mbConfirmation, MB_YESNO) = IDNO;
 end;
 
 function InitializeSetup(): Boolean;
@@ -1315,10 +1355,15 @@ begin
       Result := False;
     end;
   end;
-#ifdef IndexedSplitFull
   if (CurPageID = wpReady) and Result then
-    Result := PrepareIndexedLibrary();
+  begin
+    AskPortableLibraryChoice();
+#ifdef IndexedSplitFull
+    // בדילוג על הספרייה אין צורך להוריד את חבילת הספרייה המאונדקסת.
+    if not PortableSkipLibrary then
+      Result := PrepareIndexedLibrary();
 #endif
+  end;
 end;
 
 procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
@@ -2043,6 +2088,14 @@ begin
   // במצב נייד GetSelectedBooksPath מחזיר את הנתיב שבתוך התיקייה הניידת —
   // מיישרים את המשתנה כדי שכל החילוץ בהמשך ילך לשם.
   SelectedBooksPath := GetSelectedBooksPath('');
+
+  // המשתמש בחר לדלג על חילוץ הספרייה: רק ה-marker נכתב, ומסך הפתיחה של
+  // אוצריא יציע להצביע על הספרייה הקיימת.
+  if PortableMode and PortableSkipLibrary then
+  begin
+    SaveStringToFile(ExpandConstant('{app}\portable.marker'), '', False);
+    exit;
+  end;
 
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
   SevenZipPath := ExpandConstant('{tmp}\7za.exe');

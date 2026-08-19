@@ -137,6 +137,12 @@ abstract class SettingsMessages {
   static String hebrewBooksPathRemoveError(Object error) =>
       'שגיאה בהסרת המיקום: $error';
 
+  static String oldLibraryCopyDeleted(String size) =>
+      'העותק הישן נמחק — התפנו $size';
+
+  static String oldLibraryCopyDeleteError(Object error) =>
+      'שגיאה במחיקת העותק הישן: $error';
+
   // ── רשימת ספרים (books_list_dialog) ────────────────────────────────────
 
   static String booksListSaved(int rowCount) =>

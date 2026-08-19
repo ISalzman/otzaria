@@ -30,6 +30,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/dialogs/change_location_dialog.dart';
 import 'package:otzaria/settings/tabs/widgets/android_storage_location_card.dart';
 import 'package:otzaria/settings/dialogs/library_setup_dialog.dart';
+import 'package:otzaria/settings/services/orphan_library_service.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:path/path.dart' as p;
 
@@ -129,12 +130,17 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
   String? _defaultLibraryPath;
   String? _indexPath;
   String? _databasesPath;
+  OrphanLibraryInfo? _orphanLibrary;
+  bool _isDeletingOrphan = false;
 
   @override
   void initState() {
     super.initState();
     AppPaths.getDefaultLibraryPath().then((path) {
       if (mounted) setState(() => _defaultLibraryPath = path);
+    });
+    OrphanLibraryService.detect().then((info) {
+      if (mounted && info != null) setState(() => _orphanLibrary = info);
     });
     AppPaths.getIndexPath().then((path) {
       if (mounted) setState(() => _indexPath = path);
@@ -297,7 +303,65 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
         ),
       ];
     }
-    return [_buildLibraryLocationWidget(context)];
+    return [
+      _buildLibraryLocationWidget(context),
+      if (_orphanLibrary != null) _buildOrphanLibraryWidget(context),
+    ];
+  }
+
+  /// שורת ניקוי עותק ספרייה יתום שנשאר ב-ProgramData ממעבר בין מצבי התקנה.
+  Widget _buildOrphanLibraryWidget(BuildContext context) {
+    final orphan = _orphanLibrary!;
+    final size = OrphanLibraryService.formatBytes(orphan.sizeBytes);
+    return SettingsActionTile.text(
+      icon: FluentIcons.broom_24_regular,
+      title: context.settingsText('עותק ספרייה ישן שאינו בשימוש'),
+      subtitle: context.settingsText(
+        'שארית מהתקנה קודמת שתופסת {size} — ניתן למחוק אותה בבטחה',
+        args: {'size': size},
+      ),
+      actions: [
+        ActionButton.neutral(
+          text: context.settingsText('מחק'),
+          isLoading: _isDeletingOrphan,
+          onPressed: _isDeletingOrphan
+              ? null
+              : () => _deleteOrphanLibrary(context, orphan),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteOrphanLibrary(
+    BuildContext context,
+    OrphanLibraryInfo orphan,
+  ) async {
+    final size = OrphanLibraryService.formatBytes(orphan.sizeBytes);
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: context.settingsText('מחיקת עותק ספרייה ישן'),
+      content: context.settingsText(
+        'העותק הישן בנתיב {path} יימחק לצמיתות ויתפנו {size}. הספרייה הפעילה לא תושפע.',
+        args: {'path': orphan.path, 'size': size},
+      ),
+      confirmText: context.settingsText('מחק'),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingOrphan = true);
+    try {
+      await OrphanLibraryService.delete(orphan);
+      if (!mounted) return;
+      setState(() {
+        _orphanLibrary = null;
+        _isDeletingOrphan = false;
+      });
+      UiSnack.show(SettingsMessages.oldLibraryCopyDeleted(size));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeletingOrphan = false);
+      UiSnack.showError(SettingsMessages.oldLibraryCopyDeleteError(e));
+    }
   }
 
   /// פותח את דיאלוג הגדרת/עדכון מיקום הספרייה המאוחד. [booksPath] ריק → מצב
