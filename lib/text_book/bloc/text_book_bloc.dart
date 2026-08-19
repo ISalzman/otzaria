@@ -1253,13 +1253,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       emit(updatedState);
       if (_shouldLoadLinksForState(updatedState)) {
         final targetIndices = _targetIndicesForCommentaryRefresh(updatedState);
-        _loadLinksInBackground(
-          updatedState.book,
-          targetIndices,
-          targetBookTitlesOverride: _normalizeCommentaryTargets(
-            updatedState.activeCommentators,
-          ),
-        );
+        // ללא override — היעדים נגזרים מהמצב, כך שבצורת הדף נשמרים גם
+        // מפרשי הטורים ולא רק הבחירה מהחלונית (issue #906).
+        _loadLinksInBackground(updatedState.book, targetIndices);
       }
     }
   }
@@ -1662,7 +1658,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         state,
         workspaceId,
       );
-      return pageShapeTargets ?? const <String>[];
+      // מפרשי חלונית הצד (activeCommentators) מוצגים לצד טורי צורת הדף —
+      // בלעדיהם רענון בגלילה מוחק את הקישורים שלהם והם נעלמים (issue #906).
+      return _normalizeCommentaryTargets([
+        ...?pageShapeTargets,
+        ...state.activeCommentators,
+      ]);
     }
 
     if (state.showSplitView || state.activeCommentators.isNotEmpty) {
