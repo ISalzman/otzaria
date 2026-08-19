@@ -766,9 +766,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     SetFacet event,
     Emitter<SearchState> emit,
   ) async {
-    // Clicking root "/" in a scoped search means "all books within scope"
-    final effectiveFacets = (event.facet == '/' && state.hasScopedFacetFilter)
-        ? state.searchScopeFacets
+    // בחיפוש בהיקף מוגבל הלחיצה נחתכת עם ההיקף — החלפה גורפת הייתה בורחת
+    // ממנו ומחזירה תוצאות שהעץ (שסופר בתוך ההיקף) מעולם לא הראה.
+    final effectiveFacets = state.hasScopedFacetFilter
+        ? intersectFacetWithScope(event.facet, state.searchScopeFacets)
         : [event.facet];
     final newConfig = state.configuration.copyWith(
       currentFacets: effectiveFacets,
@@ -801,6 +802,24 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   @visibleForTesting
   static bool facetContains(String parent, String child) =>
       parent == '/' || child == parent || child.startsWith('$parent/');
+
+  /// חיתוך הענף הנלחץ [facet] עם היקף החיפוש [scopeFacets]: מכל facet בהיקף
+  /// נשמר הצד הצר יותר. חיתוך ריק (הענף זר להיקף) נופל ל-[facet] עצמו —
+  /// העץ הראה אותו, ותוצאותיו עדיפות על רשימה ריקה.
+  @visibleForTesting
+  static List<String> intersectFacetWithScope(
+    String facet,
+    List<String> scopeFacets,
+  ) {
+    final intersection = <String>{
+      for (final scopeFacet in scopeFacets)
+        if (facetContains(facet, scopeFacet))
+          scopeFacet
+        else if (facetContains(scopeFacet, facet))
+          facet,
+    };
+    return intersection.isEmpty ? [facet] : intersection.toList();
+  }
 
   /// האם המעבר ל-[newFacets] רק מצמצם את ההיקף הנוכחי [oldFacets] —
   /// כלומר כל facet חדש מוכל באחד הקיימים.
