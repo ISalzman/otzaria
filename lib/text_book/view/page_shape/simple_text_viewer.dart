@@ -2910,8 +2910,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                         : SearchMatchPolicy.standard,
                     isSearchResultLine:
                         widget.isMainText &&
-                        (state.searchResultLines?.contains(primaryLineIndex) ??
-                            false),
+                        state.lineParticipatesInSearchHighlight(
+                          primaryLineIndex,
+                        ),
                     fontSize: widget.fontSize,
                     fontFamily: widget.fontFamily ?? settingsState.fontFamily,
                     fontWeight:
@@ -3177,7 +3178,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           : SearchMatchPolicy.standard,
       isSearchResultLine:
           useStateSearchSettings &&
-          (state.searchResultLines?.contains(lineIndex) ?? false),
+          state.lineParticipatesInSearchHighlight(lineIndex),
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       fontWeight:

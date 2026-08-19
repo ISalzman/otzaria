@@ -229,7 +229,12 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     }
     final resolvedBook = resolution.book;
 
-    final rawQuery = widget.tab.queryController.text;
+    // השאילתה שבוצעה בפועל — לא הטקסט שבתיבה, שהמשתמש עשוי היה לערוך בלי
+    // לחפש; searchText שגוי היה גורר הדגשה של מחרוזת שהתוצאה לא נמצאה בה.
+    final appliedQuery = widget.tab.searchBloc.state.searchQuery;
+    final rawQuery = appliedQuery.trim().isNotEmpty
+        ? appliedQuery
+        : widget.tab.queryController.text;
     final configuration = widget.tab.searchBloc.state.configuration;
 
     // אין צורך בזיהוי "שאילתת רגקס": המנוע מנקה מטא-תווים

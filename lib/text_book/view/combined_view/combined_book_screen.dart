@@ -2466,9 +2466,12 @@ class _CombinedViewState extends State<CombinedView> {
                               searchMode: state.searchMode,
                               searchDistance: state.searchDistance,
                               matchPolicy: state.matchPolicy,
-                              isSearchResultLine:
-                                  state.searchResultLines?.contains(index) ??
-                                  false,
+                              // לפי שורת התוכן המוצגת — index הוא אינדקס
+                              // מקטע במצב קריאה רציפה, לא אינדקס שורה.
+                              isSearchResultLine: state
+                                  .lineParticipatesInSearchHighlight(
+                                    primaryLineIndex,
+                                  ),
                               fontSize: widget.textSize,
                               fontFamily: settingsState.fontFamily,
                               fontWeight: settingsState.fontBold
@@ -2773,7 +2776,7 @@ class _CombinedViewState extends State<CombinedView> {
       searchMode: effectiveSearchMode,
       searchDistance: effectiveSearchDistance,
       matchPolicy: effectiveMatchPolicy,
-      isSearchResultLine: state.searchResultLines?.contains(lineIndex) ?? false,
+      isSearchResultLine: state.lineParticipatesInSearchHighlight(lineIndex),
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,

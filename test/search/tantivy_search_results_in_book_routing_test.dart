@@ -73,8 +73,8 @@ void main() {
       initialState: SettingsState.initial(),
     );
     final tabsBloc = _RecordingTabsBloc();
-    // הפותח קורא את הקונפיגורציה מה-bloc של טאב החיפוש עצמו — מוזרם ה-bloc
-    // הסטטי, שגם עוקף את אימות טביעת האצבע האמיתי מול המנוע.
+    // הפותח קורא את הקונפיגורציה והשאילתה מה-bloc של טאב החיפוש עצמו —
+    // באפליקציה זהו אותו מופע שמוזרק כ-Provider, ולכן גם כאן הם משותפים.
     final searchingTab = SearchingTab(
       'חיפוש',
       'תדע זרעך',

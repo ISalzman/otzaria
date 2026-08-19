@@ -377,6 +377,14 @@ class TextBookLoaded extends TextBookState {
     );
   }
 
+  /// האם השורה משתתפת בהדגשת חיפוש במדיניות התאמה שאינה ברירת המחדל.
+  ///
+  /// null — חיפוש-מנוע בתוך הספר לא רץ (למשל ספר שנפתח מתוצאת חיפוש
+  /// גלובלית בלי חלונית צד): אין מידע לפסול לפיו, וההדגשה נשארת פעילה.
+  /// סט (גם ריק) — מוסמך: רק שורות שהמנוע החזיר מודגשות.
+  bool lineParticipatesInSearchHighlight(int lineIndex) =>
+      searchResultLines?.contains(lineIndex) ?? true;
+
   /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות.
   bool get commentaryRemoveNikud =>
       commentaryRemoveNikudOverride ?? (removeNikud || nikudExemptByTanach);
