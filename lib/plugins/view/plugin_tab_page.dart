@@ -112,6 +112,29 @@ const String _sdkStub = r'''
 })();
 ''';
 
+/// הגדרות ה-WebView של טאב תוסף.
+@visibleForTesting
+InAppWebViewSettings buildPluginTabWebViewSettings({
+  required bool isDevelopment,
+}) {
+  return InAppWebViewSettings(
+    allowFileAccessFromFileURLs: false,
+    allowUniversalAccessFromFileURLs: false,
+    useShouldOverrideUrlLoading: true,
+    useShouldInterceptRequest: true,
+    useOnDownloadStart: PluginDownloadHandler.isSupported,
+    // ב-Windows ה-status bar של WebView2 מציג את ה-URI בריחוף על קישור
+    // ומאפשר לתוסף לכתוב לשם טקסט חופשי (window.status).
+    statusBarEnabled: false,
+    // זום (צביטת מגע / Ctrl+גלגלת) משנה את סקאלת התוסף בלי דרך גלויה
+    // לאיפוס — לכן חסום.
+    supportZoom: false,
+    pinchZoomEnabled: false,
+    cacheEnabled: !isDevelopment,
+    isInspectable: isDevelopment || kDebugMode,
+  );
+}
+
 class PluginTabPage extends StatefulWidget {
   final InstalledPlugin plugin;
 
@@ -529,17 +552,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final webView = InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
       initialUrlRequest: URLRequest(url: initialUrl),
-      initialSettings: InAppWebViewSettings(
-        allowFileAccessFromFileURLs: false,
-        allowUniversalAccessFromFileURLs: false,
-        useShouldOverrideUrlLoading: true,
-        useShouldInterceptRequest: true,
-        useOnDownloadStart: PluginDownloadHandler.isSupported,
-        // ב-Windows ה-status bar של WebView2 מציג את ה-URI בריחוף על קישור
-        // ומאפשר לתוסף לכתוב לשם טקסט חופשי (window.status).
-        statusBarEnabled: false,
-        cacheEnabled: !widget.plugin.isDevelopment,
-        isInspectable: widget.plugin.isDevelopment || kDebugMode,
+      initialSettings: buildPluginTabWebViewSettings(
+        isDevelopment: widget.plugin.isDevelopment,
       ),
       // Stub SDK — injected BEFORE any page JS runs
       initialUserScripts: UnmodifiableListView<UserScript>([
