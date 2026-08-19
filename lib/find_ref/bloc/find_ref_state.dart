@@ -15,10 +15,15 @@ class FindRefLoading extends FindRefState {}
 
 class FindRefSuccess extends FindRefState {
   final List<DbReferenceResult> refs;
-  const FindRefSuccess(this.refs);
+
+  /// השאילתה שהניבה את [refs] — לא בהכרח מה שמוקלד כרגע בשדה, שכן
+  /// המשתמש ממשיך להקליד בזמן שהתוצאות הקודמות עדיין מוצגות.
+  final String query;
+
+  const FindRefSuccess(this.refs, {this.query = ''});
 
   @override
-  List<Object> get props => [refs];
+  List<Object> get props => [refs, query];
 }
 
 class FindRefError extends FindRefState {

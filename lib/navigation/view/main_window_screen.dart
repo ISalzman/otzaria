@@ -1918,7 +1918,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     focusRepository.findRefSearchController.selection =
         const TextSelection.collapsed(offset: 'בראשית'.length);
     context.read<FindRefBloc>().add(const SearchRefRequested('בראשית'));
-    _handleFindRefOpen(context, closeIfOpen: false);
+    _handleFindRefOpen(
+      context,
+      closeIfOpen: false,
+      transparentBarrier: true,
+    );
     _scheduleBringTourOverlayToFront(remainingFrames: 6);
   }
 
@@ -2002,7 +2006,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case 'advanced_search':
         return _rectForGlobalKey(tourSearchDialogTargetKey);
       case 'find_ref':
-        return _findRefDialogTourRect();
+        return _rectForGlobalKey(tourFindRefDialogTargetKey);
       case 'reading':
         return _rectForGlobalKey(tourReadingScreenTargetKey);
       case 'tabs':
@@ -2040,7 +2044,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     if (step.id == 'find_ref') {
-      final dialogRect = _findRefDialogTourRect();
+      final dialogRect = _rectForGlobalKey(tourFindRefDialogTargetKey);
       final navFindRefRect = _navItemTourRectForScreen(Screen.find);
       return [?dialogRect, ?navFindRefRect];
     }
@@ -2194,22 +2198,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       rect.top - 4,
       rect.right,
       rect.bottom + 4,
-    );
-  }
-
-  Rect? _findRefDialogTourRect() {
-    final contentRect = _rectForGlobalKey(
-      tourFindRefDialogTargetKey,
-      inflate: 0,
-    );
-    if (contentRect == null) {
-      return null;
-    }
-    return Rect.fromLTRB(
-      contentRect.left - 24,
-      contentRect.top - 80,
-      contentRect.right + 24,
-      contentRect.bottom + 88,
     );
   }
 
@@ -3484,7 +3472,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
-  void _handleFindRefOpen(BuildContext context, {bool closeIfOpen = true}) {
+  /// [transparentBarrier] לסיור המודרך בלבד: הצעד מזרקר גם את פריט הניווט
+  /// שמאחורי הדיאלוג, וההאפלה של הדיאלוג הייתה מכהה אותו.
+  void _handleFindRefOpen(
+    BuildContext context, {
+    bool closeIfOpen = true,
+    bool transparentBarrier = false,
+  }) {
     if (_isFindRefOpen) {
       if (closeIfOpen) {
         Navigator.of(context).pop();
@@ -3499,7 +3493,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     showDialog(
       context: context,
       useRootNavigator: true,
-      barrierColor: Colors.transparent,
+      barrierColor: transparentBarrier ? Colors.transparent : null,
       builder: (context) => FindRefDialog(),
     ).then((_) {
       if (!mounted) return;
