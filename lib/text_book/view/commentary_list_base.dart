@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
@@ -611,7 +612,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         const SizedBox(width: gap),
         // 4. הפעלת שדה החיפוש
         IconButton(
-          icon: const Icon(FluentIcons.search_24_regular),
+          icon: const Icon(OtzariaIcons.search_24_regular),
           tooltip: 'חיפוש',
           onPressed: _openInlineSearch,
         ),
@@ -697,7 +698,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                         controller: _searchController,
                         decoration: InputDecoration(
                           hintText: 'חפש בתוך המפרשים המוצגים...',
-                          prefixIcon: const Icon(FluentIcons.search_24_regular),
+                          prefixIcon: const Icon(
+                            OtzariaIcons.search_in_the_library_24_regular,
+                          ),
                           suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/utils/visible_index.dart';
 
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
@@ -1248,13 +1249,13 @@ class _CombinedViewState extends State<CombinedView> {
       ),
       AppContextMenuEntry(
         label: 'מפרשים',
-        icon: FluentIcons.book_24_regular,
+        icon: OtzariaIcons.book_24_regular,
         enabled: state.availableCommentators.isNotEmpty,
         children: commentatorChildren,
       ),
       AppContextMenuEntry(
         label: 'קישורים',
-        icon: FluentIcons.link_24_regular,
+        icon: OtzariaIcons.link_24_regular,
         enabled: paragraphLinks.isNotEmpty,
         childrenBuilder: buildLinkChildren,
       ),

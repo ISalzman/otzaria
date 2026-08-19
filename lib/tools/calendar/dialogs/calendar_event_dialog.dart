@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -835,7 +836,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
   }) {
     if (!_isDesktop) {
       return _pickerButton(
-        icon: FluentIcons.calendar_24_regular,
+        icon: OtzariaIcons.calendar_24_regular,
         label: label,
         onTap: () => _pickDateWithDialog(
           initialDate: selectedDate,
@@ -860,7 +861,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
         );
       },
       buttonBuilder: (ctx, open) => _pickerButton(
-        icon: FluentIcons.calendar_24_regular,
+        icon: OtzariaIcons.calendar_24_regular,
         label: label,
         onTap: open,
       ),
@@ -1063,7 +1064,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
               // תחילת האירוע — תאריך + שעה מאוחדים.
               // מיקום הכפתורים והגלישה שלהם מנוהלים ע"י SettingsActionTile.
               SettingsActionTile.text(
-                rtlIcon: FluentIcons.calendar_24_regular,
+                rtlIcon: OtzariaIcons.calendar_24_regular,
                 title: 'תחילת האירוע',
                 subtitle: _startSubtitle(),
                 actions: [

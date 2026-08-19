@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
@@ -496,7 +497,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         SliverFillRemaining(
           hasScrollBody: false,
           child: _buildInformativeEmptyState(
-            icon: FluentIcons.search_24_regular,
+            icon: OtzariaIcons.search_24_regular,
             title: 'לא בוצע חיפוש',
             message: 'הקלד מילות חיפוש ולחץ על כפתור "חפש" כדי להתחיל.',
           ),
@@ -761,7 +762,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                     Padding(
                                       padding: const EdgeInsets.only(left: 8),
                                       child: Icon(
-                                        FluentIcons.document_pdf_24_regular,
+                                        OtzariaIcons.book_pdf_24_regular,
                                         size: 16,
                                         color: Theme.of(
                                           context,

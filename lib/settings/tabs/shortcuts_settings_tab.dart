@@ -469,7 +469,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
       _ShortcutTile(
         settingKey: 'key-shortcut-open-tool-calendar',
         label: context.settingsText('פתיחת לוח שנה'),
-        icon: FluentIcons.calendar_24_regular,
+        icon: OtzariaIcons.calendar_24_regular,
         allShortcuts: _shortcutsList,
       ),
       _ShortcutTile(
@@ -726,7 +726,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             _ShortcutTile(
               settingKey: 'key-shortcut-toggle-pdf-view',
               label: context.settingsText('החלף מצב תצוגה (PDF/טקסט)'),
-              icon: FluentIcons.document_pdf_24_regular,
+              icon: OtzariaIcons.book_pdf_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
@@ -777,7 +777,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             _ShortcutTile(
               settingKey: 'key-shortcut-calendar-toggle-events',
               label: context.settingsText('לוח שנה: פתיחה/סגירה אירועים'),
-              icon: FluentIcons.calendar_24_regular,
+              icon: OtzariaIcons.calendar_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(

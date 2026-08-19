@@ -37,6 +37,7 @@ import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -1712,7 +1713,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.add(
         AppContextMenuEntry(
           label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
-          icon: FluentIcons.book_search_24_regular,
+          icon: OtzariaIcons.book_search_24_regular,
           enabled: hasSelectedText,
           onTap: hasSelectedText
               ? () {
@@ -1737,7 +1738,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.add(
         AppContextMenuEntry(
           label: 'מפרשים',
-          icon: FluentIcons.book_24_regular,
+          icon: OtzariaIcons.book_24_regular,
           enabled: state.availableCommentators.isNotEmpty,
           childrenBuilder: () => _buildCommentatorsMenuItems(state, index),
         ),
@@ -1745,7 +1746,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.add(
         AppContextMenuEntry(
           label: 'קישורים',
-          icon: FluentIcons.link_24_regular,
+          icon: OtzariaIcons.link_24_regular,
           enabled: hasLinkItems,
           childrenBuilder: buildLinksItems,
         ),

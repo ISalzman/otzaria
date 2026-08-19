@@ -1,3 +1,4 @@
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -48,6 +49,9 @@ class ItemsListView extends StatefulWidget {
   final String emptyText;
   final String notFoundText;
   final String clearAllText;
+
+  /// אייקון שדה החיפוש — ממוקד לפי מה שמסתנן ברשימה.
+  final IconData searchIcon;
   final Widget? Function(dynamic item)? leadingIconBuilder;
   final String? Function(dynamic item)? subtitleBuilder;
   final String? Function(dynamic item)? subtitleTooltipBuilder;
@@ -93,6 +97,7 @@ class ItemsListView extends StatefulWidget {
     required this.emptyText,
     required this.notFoundText,
     required this.clearAllText,
+    this.searchIcon = OtzariaIcons.search_24_regular,
     this.leadingIconBuilder,
     this.subtitleBuilder,
     this.subtitleTooltipBuilder,
@@ -563,6 +568,7 @@ class _ItemsListViewState extends State<ItemsListView> {
               builder: (context) {
                 final searchField = OtzariaSearchField(
                   controller: _searchController,
+                  icon: widget.searchIcon,
                   focusNode: _searchFocusNode,
                   hintText: widget.hintText,
                   onClear: () {

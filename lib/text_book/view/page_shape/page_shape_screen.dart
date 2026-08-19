@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -640,7 +641,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
           children: [
             ActionButton.recommended(
               onPressed: onSelectCommentator,
-              icon: FluentIcons.book_24_regular,
+              icon: OtzariaIcons.book_24_regular,
               text: 'בחר מפרש',
             ),
             const SizedBox(height: 12),

@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -1079,7 +1080,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                             Padding(
                               padding: const EdgeInsetsDirectional.only(end: 4),
                               child: Icon(
-                                FluentIcons.document_pdf_16_regular,
+                                OtzariaIcons.book_pdf_24_regular,
                                 size: 14,
                                 color: colorScheme.onSurface,
                               ),

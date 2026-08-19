@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/tools_messages.dart';
@@ -368,7 +369,9 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
                 onSubmitted: (_) => _performSearch(),
                 onClear: _clearResults,
                 leading: IconButton(
-                  icon: const Icon(FluentIcons.search_24_regular),
+                  icon: const Icon(
+                    OtzariaIcons.search_in_numbered_list_24_regular,
+                  ),
                   onPressed: _performSearch,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -499,7 +502,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
 
     if (_searchResults.isEmpty && _hasSearched) {
       return const ToolEmptyState(
-        icon: FluentIcons.search_24_regular,
+        icon: OtzariaIcons.search_in_numbered_list_24_regular,
         message: 'לא נמצאו תוצאות',
       );
     }

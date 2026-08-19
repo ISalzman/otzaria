@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1644,7 +1645,7 @@ void main() {
           AppContextMenuIconAction(
             label: 'חיפוש',
             tooltip: 'חיפוש בכל המאגר',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
           ),
           AppContextMenuIconAction(
             label: 'העתקה',
@@ -1660,7 +1661,7 @@ void main() {
         trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
       );
 
-      expect(find.byIcon(FluentIcons.library_24_regular), findsOneWidget);
+      expect(find.byIcon(OtzariaIcons.bookshelf_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.copy_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.note_add_24_regular), findsOneWidget);
       expect(
@@ -1717,7 +1718,7 @@ void main() {
         actions: [
           AppContextMenuIconAction(
             label: 'א',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
             onTap: () => tapped.add('a'),
           ),
           AppContextMenuIconAction(
@@ -1756,7 +1757,7 @@ void main() {
           ),
           AppContextMenuIconAction(
             label: 'מושבת',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
             enabled: false,
             onTap: () => disabledTapped = true,
           ),
@@ -1764,7 +1765,7 @@ void main() {
         trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
       );
 
-      await tester.tap(find.byIcon(FluentIcons.library_24_regular));
+      await tester.tap(find.byIcon(OtzariaIcons.bookshelf_24_regular));
       await tester.pumpAndSettle();
       expect(disabledTapped, isFalse);
       expect(
@@ -1786,7 +1787,7 @@ void main() {
         actions: const [
           AppContextMenuIconAction(
             label: 'כיתוב ארוך מאוד שלא נכנס לכפתור צר',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
           ),
           AppContextMenuIconAction(
             label: 'עוד כיתוב ארוך במיוחד לבדיקה',
@@ -1818,7 +1819,7 @@ void main() {
           AppContextMenuIconAction(
             label: 'חיפוש',
             tooltip: 'חיפוש בכל המאגר',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
           ),
         ],
       );
@@ -1868,7 +1869,7 @@ void main() {
           AppContextMenuIconAction(
             label: 'חיפוש',
             tooltip: 'חיפוש בכל הספרים',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
           ),
         ],
       );
@@ -1924,14 +1925,14 @@ void main() {
         actions: [
           AppContextMenuIconAction(
             tooltip: 'חיפוש בכל המאגר',
-            icon: FluentIcons.library_24_regular,
+            icon: OtzariaIcons.bookshelf_24_regular,
             enabled: false,
             onTap: () => tapped = true,
           ),
         ],
       );
 
-      await tester.tap(find.byIcon(FluentIcons.library_24_regular));
+      await tester.tap(find.byIcon(OtzariaIcons.bookshelf_24_regular));
       await tester.pumpAndSettle();
 
       expect(
@@ -2025,7 +2026,7 @@ void main() {
           AppContextMenuIconAction(
             label: 'קישור ישיר',
             tooltip: 'העתק קישור ישיר',
-            icon: FluentIcons.link_24_regular,
+            icon: OtzariaIcons.link_24_regular,
             submenuBuilder: () => [
               AppContextMenuSubAction(
                 label: 'העתק קישור למקטע',
@@ -2043,7 +2044,7 @@ void main() {
         reason: 'פעולה עם submenuBuilder מציגה חץ למטה',
       );
 
-      await tester.tap(find.byIcon(FluentIcons.link_24_regular));
+      await tester.tap(find.byIcon(OtzariaIcons.link_24_regular));
       await tester.pumpAndSettle();
       expect(
         find.text('העתק קישור למקטע'),

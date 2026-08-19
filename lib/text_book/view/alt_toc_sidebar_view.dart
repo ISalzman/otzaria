@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/migration/models/alt_toc_entry.dart';
@@ -625,7 +625,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
               title: entry.text ?? '',
               level: 0,
               isSelected: entry.id == _activeEntryId,
-              icon: FluentIcons.text_bullet_list_24_regular,
+              icon: OtzariaIcons.text_bullet_list_24_regular,
               onTap: () => _handleEntryTap(structureId, entry),
             ),
           );
@@ -691,7 +691,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
             title: entry.text ?? '',
             level: level,
             isSelected: isSelected,
-            icon: FluentIcons.text_bullet_list_24_regular,
+            icon: OtzariaIcons.text_bullet_list_24_regular,
             onTap: () => _handleEntryTap(structureId, entry),
           );
 

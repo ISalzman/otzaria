@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/external_catalog/view/external_catalog_settings_helper.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
@@ -120,7 +121,7 @@ class _LibrarySettingsPanelState extends State<LibrarySettingsPanel> {
                     SegmentOption(
                       value: 'list',
                       label: context.settingsText('רשימה'),
-                      rtlIcon: FluentIcons.list_24_regular,
+                      rtlIcon: OtzariaIcons.list_24_regular,
                       subtitle: context.settingsText(
                         'התיקיות והספרים יוצגו ברשימה נפתחת (עץ מתרחב)',
                       ),

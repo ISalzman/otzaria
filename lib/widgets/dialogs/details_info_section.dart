@@ -6,6 +6,7 @@ class DetailsInfoSection extends StatelessWidget {
     super.key,
     required this.title,
     required this.value,
+    this.icon,
     this.valueDirection,
   });
 
@@ -15,20 +16,38 @@ class DetailsInfoSection extends StatelessWidget {
   /// הערך המלא. הבחירה וההעתקה מסופקות ע"י AppSelectionArea שעוטף את הדיאלוג.
   final String value;
 
+  /// אייקון שמזהה את סוג הפרט, מוצג לפני התווית.
+  final IconData? icon;
+
   /// כיוון הערך, כאשר הוא שונה מכיוון הממשק.
   final TextDirection? valueDirection;
 
   @override
   Widget build(BuildContext context) {
+    final titleText = Text(
+      title,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
+          if (icon == null)
+            titleText
+          else
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                titleText,
+              ],
+            ),
           const SizedBox(height: 4),
           Text(
             value,

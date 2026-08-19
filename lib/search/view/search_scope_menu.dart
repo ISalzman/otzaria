@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
@@ -850,7 +851,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
     return _MenuItem(
       label: node.title,
       subtitle: node.subtitle,
-      icon: FluentIcons.book_24_regular,
+      icon: OtzariaIcons.book_24_regular,
       useRtlIcon: true,
       check: tree.isFacetCovered(node.facet, _categoryPart),
       onToggle: (v) => _toggleCategoryFacet(node.facet, v),
@@ -935,7 +936,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
       ),
       _MenuItem(
         label: 'ספרי יסוד',
-        icon: FluentIcons.book_star_24_regular,
+        icon: OtzariaIcons.book_star_24_regular,
         useRtlIcon: true,
         check: baseSelected,
         onToggle: (v) => _toggleDimension(FacetHelper.baseDimensionFacet, v),
@@ -945,7 +946,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
       for (final era in _eraNames)
         _MenuItem(
           label: era,
-          icon: FluentIcons.calendar_24_regular,
+          icon: OtzariaIcons.calendar_24_regular,
           useRtlIcon: true,
           check: _selection.contains(FacetHelper.buildEraFacet(era)),
           onToggle: (v) => _toggleDimension(FacetHelper.buildEraFacet(era), v),
@@ -967,7 +968,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
         _MenuItem(
           label: author,
           subtitle: 'מחבר',
-          icon: FluentIcons.person_24_regular,
+          icon: OtzariaIcons.person_24_regular,
           check: _selection.contains(FacetHelper.buildAuthorFacet(author)),
           onToggle: (v) =>
               _toggleDimension(FacetHelper.buildAuthorFacet(author), v),
@@ -976,7 +977,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
         _MenuItem(
           label: era,
           subtitle: 'תקופה',
-          icon: FluentIcons.calendar_24_regular,
+          icon: OtzariaIcons.calendar_24_regular,
           useRtlIcon: true,
           check: _selection.contains(FacetHelper.buildEraFacet(era)),
           onToggle: (v) => _toggleDimension(FacetHelper.buildEraFacet(era), v),
@@ -986,7 +987,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
           label: item.title,
           subtitle: item.subtitle,
           icon: item.isBook
-              ? FluentIcons.book_24_regular
+              ? OtzariaIcons.book_24_regular
               : FluentIcons.folder_24_regular,
           useRtlIcon: item.isBook,
           check: tree.isFacetCovered(item.facet, categoryPart),
@@ -1136,7 +1137,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
     final isFolder =
         item.icon == FluentIcons.folder_24_regular ||
         item.icon == FluentIcons.library_24_regular ||
-        item.icon == FluentIcons.book_star_24_regular;
+        item.icon == OtzariaIcons.book_star_24_regular;
     final iconColor = isFolder
         ? colorScheme.primary
         : colorScheme.onSurfaceVariant;

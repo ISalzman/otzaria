@@ -40,8 +40,8 @@ const List<BuiltInToolMeta> kBuiltInToolsCatalog = [
     toolId: 'builtin.calendar',
     label: 'לוח שנה',
     order: 10,
-    icon: FluentIcons.calendar_24_regular,
-    iconFilled: FluentIcons.calendar_24_filled,
+    icon: OtzariaIcons.calendar_24_regular,
+    iconFilled: OtzariaIcons.calendar_24_filled,
   ),
   BuiltInToolMeta(
     toolId: 'builtin.shamor_zachor',

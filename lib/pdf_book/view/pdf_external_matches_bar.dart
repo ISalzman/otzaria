@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -111,7 +112,7 @@ class _PdfExternalMatchesBarState extends State<PdfExternalMatchesBar> {
             child: Row(
               children: [
                 Icon(
-                  FluentIcons.book_search_24_regular,
+                  OtzariaIcons.book_search_24_regular,
                   size: 18,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -141,7 +142,7 @@ class _PdfExternalMatchesBarState extends State<PdfExternalMatchesBar> {
                               )
                             : IconButton(
                                 icon: const Icon(
-                                  FluentIcons.search_24_regular,
+                                  OtzariaIcons.search_24_regular,
                                   size: 16,
                                 ),
                                 tooltip: 'חפש',

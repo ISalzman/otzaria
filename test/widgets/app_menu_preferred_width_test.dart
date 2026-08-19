@@ -1,4 +1,4 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -60,7 +60,7 @@ void main() {
         AppMenuEntry<int>(
           value: 1,
           label: label,
-          icon: FluentIcons.book_24_regular,
+          icon: OtzariaIcons.book_24_regular,
         ),
       ],
     );

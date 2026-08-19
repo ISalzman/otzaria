@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -558,7 +559,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                       kSettingsCardSpacing,
                       CustomFoldersPanel(
                         mergeToggle: SettingsActionTile.switchTile(
-                          icon: FluentIcons.person_24_regular,
+                          icon: OtzariaIcons.person_24_regular,
                           title: context.settingsText(
                             'מיזוג ספרים אישיים לעץ הספרייה',
                           ),

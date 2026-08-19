@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
@@ -824,6 +825,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           child: KeyedSubtree(
             key: _tourLibrarySearchKey,
             child: OtzariaSearchField(
+              icon: OtzariaIcons.search_in_the_library_24_regular,
               controller: focusRepository.librarySearchController,
               focusNode: focusRepository.librarySearchFocusNode,
               autofocus: true,

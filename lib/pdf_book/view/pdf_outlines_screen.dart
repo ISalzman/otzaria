@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
@@ -414,7 +414,7 @@ class _OutlineViewState extends State<OutlineView>
             title: node.title,
             level: level,
             isSelected: selected,
-            icon: FluentIcons.text_bullet_list_24_regular,
+            icon: OtzariaIcons.text_bullet_list_24_regular,
             onTap: navigateToEntry,
           ),
         ),

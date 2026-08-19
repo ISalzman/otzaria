@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
 import 'package:otzaria/core/messages/tools_messages.dart';
@@ -262,7 +263,7 @@ class _CategoryBooksGridState extends State<CategoryBooksGrid> {
         );
       default:
         return const ToolEmptyState(
-          icon: FluentIcons.book_24_regular,
+          icon: OtzariaIcons.book_24_regular,
           message: 'אין ספרים להצגה',
         );
     }

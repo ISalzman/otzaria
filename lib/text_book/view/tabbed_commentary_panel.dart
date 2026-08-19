@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -148,7 +149,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                 // מתחת לסף זה - הצג אייקונים בלבד (ללא טקסט)
                 final isCompact = constraints.maxWidth < 270;
                 final firstTabIconData = widget.showSplitView
-                    ? FluentIcons.book_24_regular
+                    ? OtzariaIcons.book_24_regular
                     : FluentIcons.settings_24_regular;
                 return PanelTabHeader(
                   controller: _tabController,
@@ -183,7 +184,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                   tabs: isCompact
                       ? [
                           PanelTab(icon: firstTabIconData),
-                          const PanelTab(icon: FluentIcons.link_24_regular),
+                          const PanelTab(icon: OtzariaIcons.link_24_regular),
                           const PanelTab(icon: FluentIcons.note_24_regular),
                         ]
                       : [
@@ -194,7 +195,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                                 : 'סינון מפרשים',
                           ),
                           const PanelTab(
-                            icon: FluentIcons.link_24_regular,
+                            icon: OtzariaIcons.link_24_regular,
                             label: 'קישורים',
                           ),
                           const PanelTab(

@@ -1,3 +1,4 @@
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -515,6 +516,8 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
                                 ],
                                 Expanded(
                                   child: OtzariaSearchField(
+                                    icon: OtzariaIcons
+                                        .search_in_the_library_24_regular,
                                     controller: _searchController,
                                     focusNode: _searchFocusNode,
                                     hintText: 'חפש...',

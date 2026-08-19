@@ -285,7 +285,7 @@ AppContextMenuEntry buildPdfLinksContextMenuEntry({
 
   return AppContextMenuEntry(
     label: 'קישורים',
-    icon: FluentIcons.link_24_regular,
+    icon: OtzariaIcons.link_24_regular,
     enabled: relevantLinks.isNotEmpty,
     childrenBuilder: buildLinkChildren,
   );
@@ -1159,13 +1159,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
       AppContextMenuEntry(
         label: 'חפש מקבילות',
-        icon: FluentIcons.book_search_24_regular,
+        icon: OtzariaIcons.book_search_24_regular,
         enabled: _hasPdfTextSelection(),
         onTap: _searchParallelsFromSelection,
       ),
       AppContextMenuEntry(
         label: 'מפרשים',
-        icon: FluentIcons.book_24_regular,
+        icon: OtzariaIcons.book_24_regular,
         // התת-תפריט פעיל אם יש בדף מפרשים זמינים, או אם ניתן לפתוח את
         // חלונית בחירת המפרשים (כדי לאפשר בחירה התחלתית גם בדף ללא מפרשים).
         enabled: relevantCommentators.isNotEmpty || shouldShowSelectEntry,
@@ -4946,7 +4946,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         (
           80,
           ActionButtonData.simple(
-            icon: FluentIcons.book_information_24_regular,
+            icon: OtzariaIcons.book_information_24_regular,
             tooltip: 'אודות הספר',
             onPressed: () => showBookDetailsDialog(context, widget.tab.book),
             compact: isCompact,
@@ -4976,7 +4976,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               ),
               ActionButtonData(
                 widget: const SizedBox.shrink(),
-                icon: FluentIcons.book_information_24_regular,
+                icon: OtzariaIcons.book_information_24_regular,
                 tooltip: 'אודות הספר',
                 onPressed: () =>
                     showBookDetailsDialog(context, widget.tab.book),
@@ -5101,7 +5101,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             widget: const SizedBox.shrink(),
             icon: edition.isCompanion
                 ? OtzariaIcons.document_column_24_regular
-                : FluentIcons.book_24_regular,
+                : OtzariaIcons.book_24_regular,
             tooltip: edition.isCompanion
                 ? '${edition.book.title} — מהדורת טקסט (אוצריא)'
                 : edition.book.title,
@@ -5330,14 +5330,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final isBookViewMode = state.layoutMode.isBookView;
     final iconData = isBookViewMode
         ? OtzariaIcons.book_open_small_24_regular
-        : FluentIcons.book_24_regular;
+        : OtzariaIcons.book_24_regular;
 
     return AppPopupMenuButton<PdfLayoutMode>(
       tooltip: 'בחר מצב תצוגה',
       iconData: iconData,
-      icon: isBookViewMode
-          ? Icon(iconData)
-          : Transform.scale(scaleX: -1.0, child: Icon(iconData)),
+      icon: Icon(iconData),
       position: PopupMenuPosition.under,
       onSelected: (selectedMode) {
         // בחירת "תצוגת ספר" כשכבר בתצוגת ספר משמרת את כיוון הזוגות
@@ -5370,15 +5368,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             value: value,
             child: Row(
               children: [
-                value == PdfLayoutMode.bookView
-                    ? Icon(icon, color: isSelected ? primaryColor : null)
-                    : Transform.scale(
-                        scaleX: -1.0,
-                        child: Icon(
-                          icon,
-                          color: isSelected ? primaryColor : null,
-                        ),
-                      ),
+                Icon(icon, color: isSelected ? primaryColor : null),
                 const SizedBox(width: 12),
                 Text(text, style: style),
                 if (isSelected) ...[
@@ -5398,7 +5388,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           buildItem(
             value: PdfLayoutMode.regularView,
             text: 'תצוגה רגילה',
-            icon: FluentIcons.book_24_regular,
+            icon: OtzariaIcons.book_24_regular,
             isSelected: !isBookViewMode,
           ),
           buildItem(

@@ -1,3 +1,4 @@
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/theme/app_tokens.dart';
@@ -389,7 +390,9 @@ class _LinksListViewState extends State<LinksListView> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'חפש בתוך הקישורים המוצגים...',
-                  prefixIcon: const Icon(FluentIcons.search_24_regular),
+                  prefixIcon: const Icon(
+                    OtzariaIcons.search_in_titles_24_regular,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(FluentIcons.dismiss_24_regular),

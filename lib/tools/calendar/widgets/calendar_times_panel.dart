@@ -591,7 +591,7 @@ class _CalendarTimesPanelState extends State<CalendarTimesPanel> {
 
     return ActionButton.recommended(
       text: _buildDafYomiButtonText(bavliTractate, dafLabel),
-      icon: FluentIcons.book_24_regular,
+      icon: OtzariaIcons.book_24_regular,
       onPressed: bavliTractate == 'לא זמין'
           ? () => UiSnack.showError(ToolsMessages.dafYomiUnavailableForDate)
           : () => openDafYomiBook(

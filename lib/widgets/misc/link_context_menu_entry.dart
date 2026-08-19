@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/links.dart';
@@ -130,7 +131,7 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                       Expanded(child: titleText),
                       const SizedBox(width: 6),
                       Icon(
-                        Icons.open_in_new,
+                        FluentIcons.open_24_regular,
                         size: compact ? 13 : 16,
                         color: colorScheme.primary,
                       ),

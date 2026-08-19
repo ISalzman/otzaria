@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/plugin_messages.dart';
@@ -654,7 +654,7 @@ class _ExternalSearchResultsSectionState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(
-                      FluentIcons.book_open_24_regular,
+                      OtzariaIcons.otzaria_icon_2_page_24_regular,
                       size: 20,
                       color: cs.primary,
                     ),

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
@@ -143,7 +143,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
             },
             isCompact: _isCompact,
             onExpand: () => setState(() => _isCompact = false),
-            leading: const Icon(FluentIcons.search_24_regular),
+            leading: const Icon(OtzariaIcons.search_24_regular),
             trailingActions: [
               if (widget.onAdvancedSearch != null)
                 OtzariaSearchAction.settings(

@@ -4,6 +4,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
@@ -1005,11 +1006,11 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           },
           tabs: const [
             PanelTab(
-              icon: FluentIcons.book_24_regular,
+              icon: OtzariaIcons.book_24_regular,
               label: 'מפרשים',
             ),
             PanelTab(
-              icon: FluentIcons.link_24_regular,
+              icon: OtzariaIcons.link_24_regular,
               label: 'קישורים',
             ),
             PanelTab(
@@ -1147,7 +1148,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         const SizedBox(width: gap),
         // 4. הפעלת שדה החיפוש
         IconButton(
-          icon: const Icon(FluentIcons.search_24_regular),
+          icon: const Icon(OtzariaIcons.search_24_regular),
           tooltip: 'חיפוש',
           onPressed: _openInlineSearch,
         ),
@@ -1194,7 +1195,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'חפש בתוך המפרשים המוצגים...',
-        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        prefixIcon: const Icon(OtzariaIcons.search_in_the_library_24_regular),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1353,7 +1354,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                       widget.onSelectCommentatorsRequested?.call();
                     }
                   },
-                  icon: const Icon(FluentIcons.apps_list_24_regular),
+                  icon: const Icon(OtzariaIcons.apps_list_24_regular),
                   label: const Text('בחר מפרשים'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(

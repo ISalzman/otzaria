@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 
 /// Toolbar widget providing markdown formatting controls
 class MarkdownToolbar extends StatelessWidget {
@@ -101,7 +102,7 @@ class MarkdownToolbar extends StatelessWidget {
 
           // Lists
           _ToolbarButton(
-            icon: FluentIcons.text_bullet_list_24_regular,
+            icon: OtzariaIcons.text_bullet_list_24_regular,
             tooltip: hasLinksFile
                 ? 'רשימה לא ממוספרת - מושבת בספר עם לינקים'
                 : 'רשימה לא ממוספרת',
@@ -141,7 +142,7 @@ class MarkdownToolbar extends StatelessWidget {
 
           // Search and navigation
           _ToolbarButton(
-            icon: FluentIcons.search_24_regular,
+            icon: OtzariaIcons.search_24_regular,
             tooltip: 'חיפוש (Ctrl+F)',
             onPressed: onSearch,
           ),

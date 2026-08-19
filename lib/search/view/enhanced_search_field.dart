@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
@@ -568,10 +569,10 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                               ? IconButton(
                                   onPressed: _performSearch,
                                   icon: const Icon(
-                                    FluentIcons.search_24_regular,
+                                    OtzariaIcons.search_24_regular,
                                   ),
                                 )
-                              : const Icon(FluentIcons.search_24_regular),
+                              : const Icon(OtzariaIcons.search_24_regular),
                           suffixIcon: widget.trailingAction != null
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,

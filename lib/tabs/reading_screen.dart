@@ -1,9 +1,9 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'
     show ValueListenable, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
@@ -399,7 +399,9 @@ class _ReadingScreenState extends State<ReadingScreen>
                                   const NavigateToScreen(Screen.library),
                                 );
                               },
-                              icon: const Icon(FluentIcons.library_24_regular),
+                              icon: const Icon(
+                                FluentIcons.library_24_regular,
+                              ),
                               label: const Text('דפדף בספרייה'),
                             ),
                           ),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -508,13 +509,13 @@ class _PersonalNoteToolbar extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'רשימה',
-          icon: const Icon(FluentIcons.text_bullet_list_24_regular, size: 18),
+          icon: const Icon(OtzariaIcons.text_bullet_list_24_regular, size: 18),
           onPressed: () => _toggleAttribute(quill.Attribute.ul),
         ),
         IconButton(
           tooltip: 'רשימה ממוספרת',
           icon: const Icon(
-            FluentIcons.text_number_list_rtl_24_regular,
+            OtzariaIcons.text_number_list_24_regular,
             size: 18,
           ),
           onPressed: () => _toggleAttribute(quill.Attribute.ol),

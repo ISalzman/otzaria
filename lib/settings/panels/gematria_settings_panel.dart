@@ -184,7 +184,7 @@ class _GematriaSettingsTabState extends State<GematriaSettingsTab> {
               },
             ),
             SettingsActionTile.switchTile(
-              rtlIcon: FluentIcons.book_24_regular,
+              rtlIcon: OtzariaIcons.book_24_regular,
               title: context.settingsText('חיפוש בתורה בלבד'),
               subtitle: torahOnly
                   ? context.settingsText('חיפוש רק בחמישה חומשי תורה')

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -744,7 +745,7 @@ class _SearchDialogState extends State<_SearchDialog> {
             decoration: const InputDecoration(
               labelText: 'הכנס טקסט לחיפוש',
               hintText: 'מה לחפש...',
-              prefixIcon: Icon(FluentIcons.search_24_regular),
+              prefixIcon: Icon(OtzariaIcons.search_24_regular),
             ),
             autofocus: true,
             onSubmitted: (_) => _performSearch(),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
@@ -176,7 +177,7 @@ class _AcronymsDictionaryScreenState extends State<AcronymsDictionaryScreen> {
 
     if (_filteredResults.isEmpty) {
       return const ToolEmptyState(
-        icon: FluentIcons.search_24_regular,
+        icon: OtzariaIcons.search_24_regular,
         message: 'לא נמצאו תוצאות',
       );
     }

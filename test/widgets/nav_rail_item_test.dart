@@ -15,7 +15,7 @@ void main() {
         home: Directionality(
           textDirection: TextDirection.rtl,
           child: NavRailItem(
-            icon: FluentIcons.search_24_regular,
+            icon: OtzariaIcons.search_24_regular,
             label: 'איתור',
             isSelected: true,
             onTap: () {},
@@ -40,7 +40,7 @@ void main() {
           home: Directionality(
             textDirection: TextDirection.rtl,
             child: NavRailItem(
-              icon: FluentIcons.library_24_regular,
+              icon: OtzariaIcons.bookshelf_24_regular,
               label: 'ספרייה',
               isSelected: false,
               onTap: () {},
@@ -70,7 +70,7 @@ void main() {
           home: Directionality(
             textDirection: TextDirection.rtl,
             child: NavRailItem(
-              icon: FluentIcons.library_24_regular,
+              icon: OtzariaIcons.bookshelf_24_regular,
               label: 'ספרייה',
               isSelected: true,
               onTap: () {},
@@ -285,7 +285,7 @@ void main() {
           home: Directionality(
             textDirection: TextDirection.ltr,
             child: NavRailItem(
-              icon: FluentIcons.book_24_regular,
+              icon: OtzariaIcons.book_24_regular,
               label: 'ספרייה',
               isSelected: false,
               onTap: () {},

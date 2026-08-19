@@ -244,7 +244,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen> {
 
     if (_filteredResults.isEmpty) {
       return const ToolEmptyState(
-        icon: FluentIcons.search_24_regular,
+        icon: OtzariaIcons.search_24_regular,
         message: 'לא נמצאו תוצאות',
       );
     }

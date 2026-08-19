@@ -1,5 +1,7 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/services/book_details_service.dart';
@@ -172,62 +174,93 @@ Widget _buildBookDetailsContent(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DetailsInfoSection(title: 'שם הספר:', value: book.title),
+          DetailsInfoSection(
+            icon: OtzariaIcons.booklet_empty_24_regular,
+            title: 'שם הספר:',
+            value: book.title,
+          ),
           if (information.authors.isNotEmpty)
             DetailsInfoSection(
               title: 'מחבר:',
+              icon: OtzariaIcons.person_24_regular,
               value: information.authors.join(', '),
             ),
           if (information.generation != null)
-            DetailsInfoSection(title: 'דור:', value: information.generation!),
+            DetailsInfoSection(
+              icon: FluentIcons.people_team_24_regular,
+              title: 'דור:',
+              value: information.generation!,
+            ),
           if (book.heEra != null && book.heEra!.isNotEmpty)
-            DetailsInfoSection(title: 'תקופה:', value: book.heEra!),
+            DetailsInfoSection(
+              icon: FluentIcons.history_24_regular,
+              title: 'תקופה:',
+              value: book.heEra!,
+            ),
           if (information.categories != null)
             DetailsInfoSection(
               title: 'קטגוריות:',
+              icon: FluentIcons.folder_24_regular,
               value: information.categories!,
             ),
           if (book.compDateStringHe != null &&
               book.compDateStringHe!.isNotEmpty)
             DetailsInfoSection(
               title: 'תאריך חיבור:',
+              icon: OtzariaIcons.calendar_24_regular,
               value: book.compDateStringHe!,
             ),
           if (book.compPlaceStringHe != null &&
               book.compPlaceStringHe!.isNotEmpty)
             DetailsInfoSection(
               title: 'מקום חיבור:',
+              icon: FluentIcons.location_24_regular,
               value: book.compPlaceStringHe!,
             ),
           if (information.publicationDates.isNotEmpty)
             DetailsInfoSection(
               title: 'תאריך פרסום:',
+              icon: FluentIcons.print_24_regular,
               value: information.publicationDates.join(', '),
             ),
           if (information.publicationPlaces.isNotEmpty)
             DetailsInfoSection(
               title: 'מקום פרסום:',
+              icon: FluentIcons.building_24_regular,
               value: information.publicationPlaces.join(', '),
             ),
           if (information.topics.isNotEmpty)
             DetailsInfoSection(
               title: 'נושאים:',
+              icon: FluentIcons.tag_24_regular,
               value: information.topics.join(', '),
             ),
           if (information.shortDescription != null)
             DetailsInfoSection(
               title: 'תיאור קצר:',
+              icon: OtzariaIcons.book_information_24_regular,
               value: information.shortDescription!,
             ),
           if (information.fullDescription != null)
             DetailsInfoSection(
               title: 'תיאור מורחב:',
+              icon: FluentIcons.document_text_24_regular,
               value: information.fullDescription!,
             ),
           const Divider(height: 24),
-          const Text(
-            'מקור הספר:',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Icon(
+                OtzariaIcons.book_information_24_filled,
+                size: 18,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'מקור הספר:',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           if (isTashma)
@@ -254,6 +287,7 @@ Widget _buildBookDetailsContent(
           if (bookDetails['נתיב הקובץ'] != BookDetailsService.bookNotFoundText)
             DetailsInfoSection(
               title: 'נתיב הקובץ:',
+              icon: FluentIcons.folder_open_24_regular,
               value: bookDetails['נתיב הקובץ']!,
               valueDirection: TextDirection.ltr,
             ),

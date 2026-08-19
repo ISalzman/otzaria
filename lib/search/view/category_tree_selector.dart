@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -473,7 +474,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
       controller: _searchController,
       decoration: InputDecoration(
         hintText: 'איתור קטגוריה או ספר...',
-        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        prefixIcon: const Icon(OtzariaIcons.search_24_regular),
         suffixIcon: _searchController.text.isEmpty
             ? null
             : IconButton(
@@ -591,7 +592,7 @@ class _CategoryTreeSelectorState extends State<CategoryTreeSelector> {
                         padding: const EdgeInsets.only(top: 2),
                         child: Icon(
                           item.isBook
-                              ? FluentIcons.book_24_regular
+                              ? OtzariaIcons.book_24_regular
                               : FluentIcons.folder_24_regular,
                           size: 18,
                           color: item.isBook

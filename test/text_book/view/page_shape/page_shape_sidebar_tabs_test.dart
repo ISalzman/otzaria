@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -147,8 +148,8 @@ void main() {
       ),
       findsNWidgets(3),
     );
-    expect(tabWithIcon(FluentIcons.book_24_regular), findsOneWidget);
-    expect(tabWithIcon(FluentIcons.link_24_regular), findsOneWidget);
+    expect(tabWithIcon(OtzariaIcons.book_24_regular), findsOneWidget);
+    expect(tabWithIcon(OtzariaIcons.link_24_regular), findsOneWidget);
     expect(tabWithIcon(FluentIcons.note_24_regular), findsOneWidget);
 
     // הלשונית הפעילה היא "מפרשים" — בלי מפרשים נבחרים מוצג מסך הבחירה,
@@ -163,7 +164,7 @@ void main() {
     await tester.tap(find.byType(PanelOpenHandle));
     await tester.pumpAndSettle();
 
-    await tester.tap(tabWithIcon(FluentIcons.link_24_regular));
+    await tester.tap(tabWithIcon(OtzariaIcons.link_24_regular));
     await tester.pumpAndSettle();
 
     expect(find.text('לא נמצאו קישורים לקטע הנבחר'), findsOneWidget);

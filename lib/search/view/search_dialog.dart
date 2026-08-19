@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -427,7 +428,7 @@ class _SearchDialogState extends State<SearchDialog> {
                   return ListTile(
                     dense: true,
                     leading: const Icon(
-                      FluentIcons.search_24_regular,
+                      OtzariaIcons.search_24_regular,
                       size: 18,
                     ),
                     title: Text(
@@ -1017,7 +1018,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 borderRadius: AppTokens.borderRadiusAll,
               ),
               child: Icon(
-                FluentIcons.search_24_filled,
+                OtzariaIcons.search_24_filled,
                 size: 22,
                 color: colorScheme.onPrimaryContainer,
               ),

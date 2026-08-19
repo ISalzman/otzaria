@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
@@ -68,7 +69,7 @@ class _SettingsSearchFieldState extends State<SettingsSearchField> {
             color: colorScheme.onSurfaceVariant,
           ),
           prefixIcon: Icon(
-            FluentIcons.search_24_regular,
+            OtzariaIcons.search_in_the_settings_24_regular,
             color: colorScheme.onSurfaceVariant,
             size: 16,
           ),

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -78,7 +78,7 @@ class SiblingCommentariesController {
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      icon: FluentIcons.book_24_regular,
+      icon: OtzariaIcons.book_24_regular,
       childrenBuilder: () => _buildChildren(
         lineIndex,
         sourceLink,

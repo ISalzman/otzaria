@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
@@ -307,7 +308,7 @@ IconData _iconForTab(SettingsTab tab) {
     case SettingsTab.design:
       return FluentIcons.paint_brush_24_regular;
     case SettingsTab.text:
-      return FluentIcons.book_24_regular;
+      return OtzariaIcons.book_24_regular;
     case SettingsTab.library:
       return FluentIcons.library_24_regular;
     case SettingsTab.tools:

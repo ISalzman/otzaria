@@ -1,4 +1,4 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
@@ -26,7 +26,7 @@ void main() {
 
   // פותח את תת-התפריט של טווח "מרווח בין מילים" בתוך התפריט המרוכז.
   Future<void> openWordDistanceSubmenu(WidgetTester tester) async {
-    await tester.tap(find.byIcon(FluentIcons.apps_list_24_regular));
+    await tester.tap(find.byIcon(OtzariaIcons.apps_list_24_regular));
     await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
@@ -94,7 +94,7 @@ void main() {
       await tester.pumpWidget(harness(bloc, tab));
       await tester.pumpAndSettle();
       expect(
-        find.byIcon(FluentIcons.apps_list_24_regular),
+        find.byIcon(OtzariaIcons.apps_list_24_regular),
         findsNothing,
       );
     });

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_bloc.dart';
@@ -872,7 +873,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                                   : null,
                               leading: ref.isPdf
                                   ? const Icon(
-                                      FluentIcons.document_pdf_24_regular,
+                                      OtzariaIcons.book_pdf_24_regular,
                                     )
                                   : null,
                               title: Text(
