@@ -1209,6 +1209,42 @@ void main() {
         p.join(exeRoot.path, 'otzaria_data', 'books'),
       );
     });
+
+    // מנגנון העדכון גוזר מהערך הזה את דגלי המתקין השקט — זיהוי לפי נתיב
+    // בלבד פספס התקנות מנהל בנתיבי legacy ויצר התקנה כפולה (issue #886).
+    test(
+      'isWindowsSystemInstall — המסמן מזוהה גם מחוץ ל-Program Files',
+      () async {
+        if (!Platform.isWindows) return;
+        await stageExe(systemInstallMarker: true);
+
+        expect(AppPaths.isWindowsSystemInstall, isTrue);
+      },
+    );
+
+    test(
+      'isWindowsSystemInstall — ללא מסמן ומחוץ ל-Program Files: false',
+      () async {
+        if (!Platform.isWindows) return;
+        await stageExe();
+
+        expect(AppPaths.isWindowsSystemInstall, isFalse);
+      },
+    );
+
+    test('isWindowsSystemInstall — מצב נייד גובר על המסמן', () async {
+      if (!Platform.isWindows) return;
+      final exeRoot = await stageExe(systemInstallMarker: true);
+      await File(
+        p.join(exeRoot.path, AppPaths.portableMarkerFileName),
+      ).writeAsString('');
+      // הכתיבה נעשתה אחרי הכיוונון — מרעננים את זיהוי המצב הנייד.
+      AppPaths.debugOverrideResolvedExecutable(
+        p.join(exeRoot.path, 'otzaria.exe'),
+      );
+
+      expect(AppPaths.isWindowsSystemInstall, isFalse);
+    });
   });
 
   group('AppPaths.libraryRootOf', () {

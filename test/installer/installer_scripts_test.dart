@@ -406,6 +406,67 @@ void main() {
     }
   });
 
+  group('ניקוי התקנה מקבילה בהיקף השני (issue #886)', () {
+    for (final name in _scripts) {
+      test('$name: התקנת מנהל מנקה את HKCU ואת WOW6432Node אחרי ההתקנה', () {
+        final script = _script(name);
+        final cleanup = _routine(
+          script,
+          'procedure RemoveOtherScopeInstalls();',
+        );
+
+        expect(
+          cleanup,
+          contains('if PortableMode or (not IsAdminInstallMode) then'),
+          reason:
+              'התקנת משתמש אינה יכולה למחוק ב-HKLM, והתקנה ניידת לא נוגעת '
+              'ברישום כלל',
+        );
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU)'));
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKLM32)'));
+
+        final postInstall = _routine(script, 'procedure CurStepChanged(');
+        expect(
+          postInstall,
+          contains('RemoveOtherScopeInstalls()'),
+          reason:
+              'בלי הקריאה, ההתקנה בהיקף השני נשארת והקיצור הישן ממשיך '
+              'להריץ בינארי ישן',
+        );
+      });
+
+      test('$name: רשומה בנתיב אחר מוסרת דרך ה-uninstaller שלה, בשקט', () {
+        final body = _routine(
+          _script(name),
+          'procedure RemoveStaleScopeRegistration(',
+        );
+
+        expect(
+          body,
+          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'"),
+          reason:
+              'בלי דגלי השקט ה-uninstaller שואל על מחיקת נתונים; '
+              'ברירת המחדל השקטה שלו משמרת אותם',
+        );
+        expect(body, contains('ewWaitUntilTerminated'));
+        expect(
+          body,
+          contains('SameInstallDir(StaleDir'),
+          reason:
+              'הרצת uninstaller על רשומה שמצביעה על {app} הייתה מוחקת '
+              'את הקבצים שזה עתה הותקנו',
+        );
+        expect(
+          body,
+          contains('RegDeleteKeyIncludingSubkeys(RootKey, UninstallRegKey)'),
+          reason:
+              'רשומה שמצביעה על {app} (או בלי uninstaller) נמחקת '
+              'מהרישום בלבד',
+        );
+      });
+    }
+  });
+
   group('שיגור-מחדש עם מצב מפורש — בלי לשאול שוב', () {
     for (final name in _scripts) {
       test('$name: ShouldSkipPage מדלג על עמודי הפתיחה והמצב', () {

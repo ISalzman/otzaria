@@ -1,17 +1,15 @@
 import 'dart:ffi';
-import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/update/windows_installer_args.dart';
 import 'package:win32/win32.dart';
 
-/// האם האפליקציה מותקנת בנתיב מערכתי (Program Files) שדורש הרשאות מנהל
-/// לשדרוג. per-user (LocalAppData\Programs) אינו דורש.
-bool _isAdminInstall() {
-  final exe = Platform.resolvedExecutable.toLowerCase();
-  return exe.contains('\\program files\\') ||
-      exe.contains('\\program files (x86)\\');
-}
+/// האם ההתקנה דורשת הרשאות מנהל לשדרוג. חיפוש 'program files' בנתיב לבדו
+/// פספס התקנות מנהל בנתיבי legacy (כמו C:\אוצריא) וגרם להתקנת משתמש
+/// כפולה לצידן (issue #886) — לכן הזיהוי המלא של [AppPaths], כולל
+/// system_install.marker שהמתקין כותב בכל התקנת מנהל.
+bool _isAdminInstall() => AppPaths.isWindowsSystemInstall;
 
 /// משגר את המתקין כך שהעדכון יותקן בפועל וישרוד את סגירת אוצריא.
 ///

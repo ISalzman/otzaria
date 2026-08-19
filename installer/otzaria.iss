@@ -1085,6 +1085,61 @@ begin
   end;
 end;
 
+// תיקיית ההתקנה של רשומת uninstall בהיקף הנתון — בלי לדרוש שהתיקייה קיימת.
+function GetRegisteredInstallDir(RootKey: Integer): String;
+begin
+  if not RegQueryStringValue(RootKey, UninstallRegKey, 'Inno Setup: App Path', Result) then
+    Result := '';
+  if Result = '' then
+    RegQueryStringValue(RootKey, UninstallRegKey, 'InstallLocation', Result);
+end;
+
+function SameInstallDir(PathA, PathB: String): Boolean;
+begin
+  Result := CompareText(RemoveBackslash(PathA), RemoveBackslash(PathB)) = 0;
+end;
+
+// מסיר התקנת אוצריא שנותרה רשומה בהיקף אחר (issue #886): רשומה בנתיב אחר
+// מוסרת דרך ה-uninstaller שלה (מוחק גם קבצים וקיצורים שאחרת ימשיכו להריץ
+// בינארי ישן); רשומה שמצביעה על {app} נמחקת מהרישום בלבד — הקבצים שלנו.
+procedure RemoveStaleScopeRegistration(RootKey: Integer);
+var
+  StaleDir, UninstallExe: String;
+  ResultCode: Integer;
+begin
+  if not RegKeyExists(RootKey, UninstallRegKey) then
+    exit;
+
+  StaleDir := GetRegisteredInstallDir(RootKey);
+  if (StaleDir <> '') and
+     (not SameInstallDir(StaleDir, ExpandConstant('{app}'))) and
+     RegQueryStringValue(RootKey, UninstallRegKey, 'UninstallString', UninstallExe) then
+  begin
+    UninstallExe := RemoveQuotes(Trim(UninstallExe));
+    if FileExists(UninstallExe) and
+       Exec(UninstallExe, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
+      exit;
+    end;
+  end;
+
+  Log('Deleting stale uninstall registration for ' + StaleDir);
+  RegDeleteKeyIncludingSubkeys(RootKey, UninstallRegKey);
+end;
+
+// התקנת מנהל מנקה רשומות שנותרו בהיקפים האחרים: HKCU (התקנת משתמש מקבילה,
+// המצב של issue #886) ו-WOW6432Node (מתקיני מנהל 32-ביט ישנים). ההיקף
+// הנגדי אינו מנוקה בהתקנת משתמש — מחיקה ב-HKLM דורשת הרשאות מנהל.
+procedure RemoveOtherScopeInstalls();
+begin
+  if PortableMode or (not IsAdminInstallMode) then
+    exit;
+  RemoveStaleScopeRegistration(HKCU);
+  RemoveStaleScopeRegistration(HKLM32);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;
@@ -1096,6 +1151,7 @@ begin
     // ב-otzaria_data ליד ה-EXE (ראה lib/core/app_paths.dart → isPortable).
     if PortableMode then
       SaveStringToFile(ExpandConstant('{app}\portable.marker'), '', False);
+    RemoveOtherScopeInstalls();
     exit;
   end;
 
