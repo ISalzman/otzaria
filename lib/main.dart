@@ -1102,9 +1102,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
             )..add(LoadTabs()),
           ),
           BlocProvider<NavigationBloc>(
-            create: (_) => NavigationBloc(
+            create: (context) => NavigationBloc(
               repository: NavigationRepository(),
               tabsRepository: TabsRepository(),
+              // "חיפוש" ו"עיון" הם אותו עמוד טאבים; היישור לפי החלונית
+              // הפעילה שומר שהאייקון המודגש בסרגל יתאים למה שמוצג בפועל.
+              activePaneStream: context
+                  .read<TabsBloc>()
+                  .stream
+                  .map((tabsState) => tabsState.activePane)
+                  .distinct(),
             )..add(const CheckLibrary()),
           ),
           BlocProvider<FindRefBloc>(
