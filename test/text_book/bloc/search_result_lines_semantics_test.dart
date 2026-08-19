@@ -1,0 +1,67 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+/// סמנטיקת searchResultLines בהדגשת חיפוש:
+///
+/// הבאג: ארבעת אתרי הרינדור תרגמו `searchResultLines == null` ל"השורה אינה
+/// תוצאה" (`?? false`). אבל null פירושו שחיפוש-מנוע בתוך הספר כלל לא רץ —
+/// למשל ספר שנפתח מלחיצה על תוצאת חיפוש גלובלית בלי חלונית צד פתוחה (רק
+/// חלונית החיפוש שבספר ממלאה את הסט). במדיניות התאמה שאינה ברירת המחדל שער
+/// ההדגשה דורש isSearchResultLine — וכך שום שורה לא הודגשה, למרות שהמשתמש
+/// הגיע היישר מתוצאה שהמנוע (הגלובלי) בהחלט החזיר.
+///
+/// החוזה: null = אין מידע ⇢ ההדגשה אינה נחסמת; סט (גם ריק) = מוסמך —
+/// רק שורות שהמנוע החזיר מודגשות.
+void main() {
+  group('TextBookLoaded.lineParticipatesInSearchHighlight', () {
+    test('null — חיפוש בתוך הספר לא רץ — אינו חוסם אף שורה', () {
+      final state = _loadedState(searchResultLines: null);
+      expect(state.lineParticipatesInSearchHighlight(0), isTrue);
+      expect(state.lineParticipatesInSearchHighlight(389), isTrue);
+    });
+
+    test('סט מוסמך: שורה שהמנוע החזיר משתתפת', () {
+      final state = _loadedState(searchResultLines: {3, 7});
+      expect(state.lineParticipatesInSearchHighlight(7), isTrue);
+    });
+
+    test('סט מוסמך: שורה שהמנוע לא החזיר אינה משתתפת', () {
+      final state = _loadedState(searchResultLines: {3, 7});
+      expect(state.lineParticipatesInSearchHighlight(5), isFalse);
+    });
+
+    test('סט ריק — חיפוש רץ ולא החזיר דבר — חוסם הכל', () {
+      final state = _loadedState(searchResultLines: const {});
+      expect(state.lineParticipatesInSearchHighlight(0), isFalse);
+    });
+  });
+}
+
+TextBookLoaded _loadedState({Set<int>? searchResultLines}) {
+  return TextBookLoaded(
+    book: TextBook(title: 'ספר בדיקה'),
+    showLeftPane: false,
+    content: const ['שורה א'],
+    contentVersion: 0,
+    fontSize: 18,
+    showSplitView: false,
+    activeCommentators: const [],
+    commentatorGroups: const [],
+    availableCommentators: const [],
+    links: const [],
+    visibleLinks: const [],
+    selectedLinkTypes: const {},
+    linksByLine: const {},
+    tableOfContents: const [],
+    removeNikud: false,
+    visibleIndices: const [0],
+    selectedIndices: const {},
+    pinLeftPane: false,
+    searchText: 'אמר רבי',
+    searchResultLines: searchResultLines,
+    scrollController: ItemScrollController(),
+    positionsListener: ItemPositionsListener.create(),
+  );
+}
