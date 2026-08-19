@@ -6,6 +6,7 @@ import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
 void main() {
   const groups = [
@@ -282,6 +283,42 @@ void main() {
       expect(
         find.widgetWithText(NavTreeTile, 'הצג את כל האחרונים'),
         findsNothing,
+      );
+    });
+
+    testWidgets('סינון סוג ריק מסתיר גם את "הצג את כל המפרשים"', (
+      tester,
+    ) async {
+      await pumpWithTypes(
+        tester,
+        selectedTypeChips: const {'TARGUM'},
+        commentatorsByType: const {'TARGUM': {}},
+      );
+
+      expect(
+        find.widgetWithText(NavTreeTile, 'הצג את כל המפרשים'),
+        findsNothing,
+      );
+      expect(find.text('מפרשים על בראשית'), findsOneWidget);
+    });
+
+    testWidgets('חיפוש ללא תוצאות מסתיר את "הצג את כל" וניקוי מחזיר אותו', (
+      tester,
+    ) async {
+      await pumpWithTypes(tester, selectedTypeChips: const {});
+
+      await tester.enterText(find.byType(OtzariaSearchField), 'לא קיים');
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(NavTreeTile, 'הצג את כל המפרשים'),
+        findsNothing,
+      );
+
+      await tester.enterText(find.byType(OtzariaSearchField), '');
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(NavTreeTile, 'הצג את כל המפרשים'),
+        findsOneWidget,
       );
     });
 

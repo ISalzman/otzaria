@@ -308,9 +308,7 @@ class _CommentatorsSelectionPanelState
   }
 
   void _toggleAllVisible(bool selected) {
-    final items = _commentatorsList
-        .where((e) => !e.startsWith('__TITLE_') && !e.startsWith('__BUTTON_'))
-        .toList();
+    final items = _visibleCommentators.toList();
 
     if (selected) {
       _emitSelection({...widget.selectedCommentators, ...items}.toList());
@@ -473,10 +471,19 @@ class _CommentatorsSelectionPanelState
     );
   }
 
+  Iterable<String> get _visibleCommentators => _commentatorsList.where(
+    (item) => !item.startsWith('__TITLE_') && !item.startsWith('__BUTTON_'),
+  );
+
   /// האם כל המפרשים המוצגים כרגע מסומנים.
-  bool get _allVisibleSelected => _commentatorsList
-      .where((e) => !e.startsWith('__TITLE_') && !e.startsWith('__BUTTON_'))
-      .every(widget.selectedCommentators.contains);
+  bool get _allVisibleSelected {
+    var hasVisible = false;
+    for (final commentator in _visibleCommentators) {
+      hasVisible = true;
+      if (!widget.selectedCommentators.contains(commentator)) return false;
+    }
+    return hasVisible;
+  }
 
   /// תיבת סימון קומפקטית לשורת מפרש — ה-trailing של שורת עץ הניווט.
   Widget _selectionCheckbox({
@@ -530,6 +537,8 @@ class _CommentatorsSelectionPanelState
       onChanged: (_) => _update(),
       onClear: _update,
     );
+    final hasVisibleCommentators = _commentatorsList.isNotEmpty;
+    final leadingItemCount = hasVisibleCommentators ? 2 : 1;
 
     return NavPanelSearchPublisher(
       delegate: delegate,
@@ -545,33 +554,33 @@ class _CommentatorsSelectionPanelState
                   child: NavTreeFocusGroup(
                     child: ListView.builder(
                       padding: kNavTreeListPadding,
-                      // +2: הכותרת הראשית וכרטיס "הצג את כל המפרשים" נגללים
-                      // עם הרשימה ואינם רצועה קבועה מעליה.
-                      itemCount: _commentatorsList.length + 2,
+                      // הכותרת תמיד נגללת; "הצג את כל" נוסף רק כשיש תוצאות.
+                      itemCount: _commentatorsList.length + leadingItemCount,
                       itemBuilder: (context, listIndex) {
                         if (listIndex == 0) {
                           return NavTreeHeader(
                             title: 'מפרשים על ${widget.bookTitle}',
                           );
                         }
-                        if (listIndex == 1) {
+                        if (hasVisibleCommentators && listIndex == 1) {
+                          final allVisibleSelected = _allVisibleSelected;
                           return NavTreeGroupCard(
                             isGroupStart: true,
                             isGroupEnd: true,
                             child: NavTreeTile.category(
                               title: 'הצג את כל המפרשים',
                               level: 0,
-                              isSelected: _allVisibleSelected,
+                              isSelected: allVisibleSelected,
                               trailing: _selectionCheckbox(
-                                value: _allVisibleSelected,
+                                value: allVisibleSelected,
                                 onChanged: _toggleAllVisible,
                               ),
                               onTap: () =>
-                                  _toggleAllVisible(!_allVisibleSelected),
+                                  _toggleAllVisible(!allVisibleSelected),
                             ),
                           );
                         }
-                        final index = listIndex - 2;
+                        final index = listIndex - leadingItemCount;
                         final item = _commentatorsList[index];
 
                         // כותרת דור — יושבת על רקע החלונית, מחוץ לכרטיס הקבוצה.
