@@ -484,6 +484,82 @@ void main() {
     }
   });
 
+  group('איפוס הגדרות לא מוחק ספרים (issue #873)', () {
+    // שם פרוצדורת המחיקה-עם-החרגות בכל סקריפט: הרגיל משמר גם books,
+    // ה-FULL רק backups כי הספרייה מותקנת בו מחדש.
+    const exceptProc = {
+      _regular: 'DelTreeExceptBooksAndBackups',
+      _full: 'DelTreeExceptBackups',
+    };
+
+    for (final name in _scripts) {
+      test('$name: הנתיב העברי הישן נמחק עם החרגות ולא ב-DelTree מלא', () {
+        final body = _routine(_script(name), 'procedure CurStepChanged(');
+        final legacy = body.indexOf(r'{localappdata}\אוצריא');
+        expect(legacy, greaterThanOrEqualTo(0));
+
+        final end = legacy + 250 > body.length ? body.length : legacy + 250;
+        final after = body.substring(legacy, end);
+        expect(
+          after,
+          contains('${exceptProc[name]}(AppDataPath)'),
+          reason: 'DelTree מלא על הנתיב העברי מחק ספריות וגיבויים שלמים',
+        );
+        expect(after, isNot(contains('DelTree(AppDataPath')));
+        expect(
+          body,
+          isNot(contains(r'אוצריא\Data')),
+          reason: 'קוד מת — תת-התיקייה נמחקת ממילא עם ההורה',
+        );
+      });
+
+      test('$name: נתיב הספרייה המותאם נקרא לפני המחיקה ומוגן ממנה', () {
+        final body = _routine(_script(name), 'procedure CurStepChanged(');
+        final protect = body.indexOf(
+          'ProtectedLibraryPath := RemoveBackslash(GetCustomLibraryPath())',
+        );
+        final firstDelete = body.indexOf('${exceptProc[name]}(');
+
+        expect(protect, greaterThanOrEqualTo(0));
+        expect(
+          firstDelete,
+          greaterThan(protect),
+          reason: 'הנתיב נשמר ב-prefs — חייבים לקרוא אותו לפני שה-prefs נמחק',
+        );
+
+        final delProc = _routine(
+          _script(name),
+          'procedure ${exceptProc[name]}(',
+        );
+        expect(
+          delProc,
+          contains('Lowercase(ChildPath) <> Lowercase(ProtectedLibraryPath)'),
+          reason: 'ספרייה מותאמת בתוך נתיב נתונים נמחקה יחד איתו',
+        );
+        expect(
+          delProc,
+          contains('Lowercase(Path) = Lowercase(ProtectedLibraryPath)'),
+          reason: 'ספרייה שהיא הנתיב הנמחק עצמו חייבת יציאה מוקדמת',
+        );
+      });
+
+      test('$name: תיאור משימת האיפוס מוביל באזהרה ולא ממליץ עליה', () {
+        final tasks = _section(_script(name), 'Tasks');
+        final line = tasks
+            .split('\n')
+            .firstWhere((l) => l.contains('resetsettings'));
+
+        expect(
+          line,
+          isNot(contains('מומלץ')),
+          reason: 'הניסוח "מומלץ למעדכנים" גרם למשתמשים לסמן ולאבד נתונים',
+        );
+        expect(line.indexOf('אזהרה'), greaterThanOrEqualTo(0));
+        expect(line.indexOf('אזהרה'), lessThan(line.indexOf('ימחק')));
+      });
+    }
+  });
+
   group('סימון גרסת התלמוד בחבילות FULL', () {
     // בלי הסימון האפליקציה מורידה מחדש ~440MB בבדיקת העדכון הראשונה.
     final versionFile = DatabaseConstants.talmudBavliVersionFileName;

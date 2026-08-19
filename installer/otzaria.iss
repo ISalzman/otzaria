@@ -75,7 +75,7 @@ Name: "{code:GetDataDir}\index"; Permissions: users-modify; Check: not IsPortabl
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "calendaricon"; Description: "צור קיצור דרך ישירות ללוח שנה"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! תיקיות הספרים והגיבויים נשמרות)"; Flags: unchecked
+Name: "resetsettings"; Description: "איפוס הגדרות משתמש — אזהרה: ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! (תיקיות הספרים והגיבויים נשמרות. נדרש רק בשדרוג מגרסה ישנה מ-0.9.80 או לפתרון תקלות)"; Flags: unchecked
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "Otzaria.Otzaria"; Check: not IsPortableInstall
@@ -148,6 +148,8 @@ var
   // קבצי האפליקציה. ברירת המחדל False — נשמר כדי לא לאבד נתונים בעדכון
   // שקט (Inno Setup מריץ את ה-uninstaller הישן עם /SILENT).
   DeleteUserDataOnUninstall: Boolean;
+  // נתיב ספרייה מותאם מה-prefs; איפוס הגדרות מדלג עליו כדי לא למחוק ספרים.
+  ProtectedLibraryPath: String;
 
 // משמש גם את Uninstallable/CreateUninstallRegKey וגם רשומות Check.
 function IsPortableInstall(): Boolean;
@@ -796,6 +798,11 @@ var
   FindRec: TFindRec;
   ChildPath: String;
 begin
+  // הספרייה המוגנת עשויה להיות הנתיב הנמחק עצמו, לא רק תת-תיקייה שלו.
+  if (ProtectedLibraryPath <> '') and
+     (Lowercase(Path) = Lowercase(ProtectedLibraryPath)) then
+    exit;
+
   if not DirExists(Path) then
     exit;
 
@@ -810,7 +817,9 @@ begin
           if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
           begin
             if (Lowercase(FindRec.Name) <> 'books') and
-               (Lowercase(FindRec.Name) <> 'backups') then
+               (Lowercase(FindRec.Name) <> 'backups') and
+               ((ProtectedLibraryPath = '') or
+                (Lowercase(ChildPath) <> Lowercase(ProtectedLibraryPath))) then
             begin
               DelTreeExceptBooksAndBackups(ChildPath);
               RemoveDir(ChildPath);
@@ -1172,6 +1181,9 @@ begin
 
   if WizardIsTaskSelected('resetsettings') then
   begin
+    // נקרא לפני מחיקת ה-prefs — מגן על ספרייה מותאמת שיושבת בתוך נתיב נמחק.
+    ProtectedLibraryPath := RemoveBackslash(GetCustomLibraryPath());
+
     AppDataPath := GetDataDir('');
     if DirExists(AppDataPath) then
       DelTreeExceptBooksAndBackups(AppDataPath);
@@ -1194,13 +1206,10 @@ begin
     if DirExists(AppDataPath) then
       DelTreeExceptBooksAndBackups(AppDataPath);
 
-    // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+    // נתיב ישן מאוד: LocalAppData בעברית (לפני גרסה 0.9.x) — גם כאן ספרים
+    // וגיבויים נשמרים; DelTree מלא מחק שם ספריות שלמות (issue #873).
     AppDataPath := ExpandConstant('{localappdata}\אוצריא');
     if DirExists(AppDataPath) then
-      DelTree(AppDataPath, True, True, True);
-
-    AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
-    if DirExists(AppDataPath) then
-      DelTree(AppDataPath, True, True, True);
+      DelTreeExceptBooksAndBackups(AppDataPath);
   end;
 end;

@@ -147,6 +147,8 @@ var
   // קבצי האפליקציה. ברירת המחדל False — נשמר כדי לא לאבד נתונים בעדכון
   // שקט (Inno Setup מריץ את ה-uninstaller הישן עם /SILENT).
   DeleteUserDataOnUninstall: Boolean;
+  // נתיב ספרייה מותאם מה-prefs; איפוס הגדרות מדלג עליו כדי לא למחוק ספרים.
+  ProtectedLibraryPath: String;
 
 #ifdef IndexedSplitFull
   IndexedDownloadPage: TDownloadWizardPage;
@@ -406,6 +408,11 @@ var
   FindRec: TFindRec;
   ChildPath: String;
 begin
+  // הספרייה המוגנת עשויה להיות הנתיב הנמחק עצמו, לא רק תת-תיקייה שלו.
+  if (ProtectedLibraryPath <> '') and
+     (Lowercase(Path) = Lowercase(ProtectedLibraryPath)) then
+    exit;
+
   if not DirExists(Path) then
     exit;
 
@@ -419,7 +426,9 @@ begin
 
           if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
           begin
-            if Lowercase(FindRec.Name) <> 'backups' then
+            if (Lowercase(FindRec.Name) <> 'backups') and
+               ((ProtectedLibraryPath = '') or
+                (Lowercase(ChildPath) <> Lowercase(ProtectedLibraryPath))) then
             begin
               DelTreeExceptBackups(ChildPath);
               RemoveDir(ChildPath);
@@ -1995,6 +2004,9 @@ begin
 
     if WizardIsTaskSelected('resetsettings') then
     begin
+      // נקרא לפני מחיקת ה-prefs — מגן על ספרייה מותאמת שיושבת בתוך נתיב נמחק.
+      ProtectedLibraryPath := RemoveBackslash(GetCustomLibraryPath());
+
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
         DelTreeExceptBackups(AppDataPath);
@@ -2017,14 +2029,11 @@ begin
       if DirExists(AppDataPath) then
         DelTreeExceptBackups(AppDataPath);
 
-      // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+      // נתיב ישן מאוד: LocalAppData בעברית (לפני גרסה 0.9.x) — גם כאן
+      // גיבויים נשמרים; DelTree מלא מחק שם ספריות שלמות (issue #873).
       AppDataPath := ExpandConstant('{localappdata}\אוצריא');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
-
-      AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
-      if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBackups(AppDataPath);
     end;
   end;
 
@@ -2135,7 +2144,7 @@ Name: "{autodesktop}\לוח שנה - {#MyAppName}"; Filename: "{app}\{#MyAppExeN
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "calendaricon"; Description: "צור קיצור דרך ישירות ללוח שנה"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! תיקיית הגיבויים נשמרת)"; Flags: unchecked
+Name: "resetsettings"; Description: "איפוס הגדרות משתמש — אזהרה: ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! (תיקיית הגיבויים נשמרת והספרייה מותקנת מחדש. נדרש רק בשדרוג מגרסה ישנה מ-0.9.80 או לפתרון תקלות)"; Flags: unchecked
 
 [Files]
 ; Copy DLL files without compression to prevent corruption
