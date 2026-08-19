@@ -612,6 +612,9 @@ end;
 procedure WriteLibraryPathToPrefs(const LibraryPath: String);
 begin
   WriteStringPreferenceToPrefs('key-library-path', LibraryPath);
+  // ערך stale בשם תת-התיקייה מפנה את האפליקציה ל-<books>\<folder>\seforim.db
+  // שאינו קיים בפריסה החדשה — והספרייה שהותקנה זה עתה "נעלמת" (issue #871).
+  WriteStringPreferenceToPrefs('key-library-folder-name', '');
 #ifdef IndexedSplitFull
   WriteStringPreferenceToPrefs('key-index-path',
     ExtractFileDir(LibraryPath) + '\index');

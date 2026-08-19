@@ -313,6 +313,21 @@ void main() {
       );
     });
 
+    test('$_full: הכתיבה מאפסת שם תת-תיקייה ישן (issue #871)', () {
+      final body = _routine(
+        _script(_full),
+        'procedure WriteLibraryPathToPrefs(',
+      );
+
+      expect(
+        body,
+        contains("'${SettingsRepository.keyLibraryFolderName}', ''"),
+        reason:
+            'ערך stale ב-keyLibraryFolderName מפנה את האפליקציה לתת-תיקייה '
+            'שאינה קיימת — והספרייה שהותקנה זה עתה "נעלמת"',
+      );
+    });
+
     test('$_full: המתקין המאונדקס שומר גם את נתיב האינדקס הצמוד', () {
       final body = _routine(
         _script(_full),
