@@ -156,7 +156,7 @@ Future<void> main() async {
 
       final out = TextRendererService.processText(line, settings);
 
-      expect(out, contains('⁦₃⁩'));
+      expect(out, contains('\u2066₃\u2069'));
     });
 
     test('sub ריק מוסר לחלוטין', () {
