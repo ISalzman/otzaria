@@ -116,59 +116,119 @@ lib/
 
 ## MANDATORY UI Components
 
-### 1. Icons - ONLY from `fluentui_system_icons`
+### 1. Icons - `otzaria_icons` FIRST, `fluentui_system_icons` for the rest
 ```dart
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
-// Regular icon (symmetric, no RTL flipping needed):
-Icon(FluentIcons.search_24_regular)
-Icon(FluentIcons.settings_24_regular)
+// First choice — the app's own set. ALWAYS plain Icon(), never RtlIcon:
+Icon(OtzariaIcons.book_pdf_24_regular)
+Icon(OtzariaIcons.otzaria_icon_2_page_24_regular)
+Icon(OtzariaIcons.calendar_24_regular)
 
-// RtlIcon — ONLY for icons registered in lib/widgets/misc/rtl_icon.dart:
-RtlIcon(FluentIcons.book_24_filled)              // in _flippableIcons
-RtlIcon(FluentIcons.arrow_left_24_regular)        // in _fluentMirrorMap — auto-mirrors to arrow_right in RTL
+// Fallback — Fluent, only for what otzaria_icons does not have:
+Icon(FluentIcons.settings_24_regular)
 RtlIcon(FluentIcons.chevron_right_24_regular)     // in _fluentMirrorMap
+RtlIcon(FluentIcons.arrow_left_24_regular)        // in _fluentMirrorMap — auto-mirrors to arrow_right in RTL
 ```
+
+**What `otzaria_icons` is for.** It is not a general-purpose set and does not try to cover Fluent. It exists for exactly four cases:
+
+1. An icon that **breaks when mirrored** for RTL — a geometric flip mangles it.
+2. An icon that is **always shown in an RTL context**, so it should simply be drawn that way.
+3. An icon **Fluent does not have** (`stander`, `torah_scroll`, `yoma_deilula`, the `alef_*`/`beit_*`/`tet_*` families).
+4. An icon Fluent has but whose form is **less suitable** for a seforim library (`book_pdf` over a generic document).
+
+Anything outside those four — generic UI chrome like `dismiss`, `delete`, `copy`, `folder`, `settings`, `add`, `edit` — stays on Fluent. Redrawing chrome buys nothing and costs consistency.
+
+**Which library — in this order:**
+
+| Does `otzaria_icons` have an icon for it? | Use |
+|---|---|
+| Yes | `Icon(OtzariaIcons....)` — always plain `Icon` |
+| No | `fluentui_system_icons`, per the `RtlIcon` rule below |
+| Neither, but Material does | Draw it in `otzaria_icons` — **never** import Material |
+
+`otzaria_icons` is purpose-built for a Hebrew seforim library, so prefer it even when Fluent has *something* close: `book_pdf` for a PDF book rather than a generic document, `search_in_the_book` / `search_in_the_library` / `search_in_the_settings` for scoped search, the `alef_*` / `beit_*` / `tet_*` families for nikud, punctuation and font settings, `stander` / `torah_scroll` / `yoma_deilula` where nothing in Fluent applies.
+
+**Deliberate exceptions — these stay on Fluent:**
+
+| Case | Icon | Why |
+|---|---|---|
+| The seforim library itself | `FluentIcons.library_24_regular/filled` | The Fluent library is the app's established symbol for it |
+| In-book search action (toolbar button, side-panel tab, context-menu `חיפוש`) in `text_book/` and `pdf_book/` | `FluentIcons.search_24_regular/filled` | Recognized as *the* search affordance in the reading screen |
+| Search icon inside a **labeled** button (`ActionButton`, `FilledButton.icon` — e.g. `פתח חיפוש טקסט`, `חפש`) | `FluentIcons.search_24_regular` | Beside a label the Fluent glyph reads cleaner. Icon-only buttons and field prefixes are not affected |
+| A **direct link** to a book or a section (`קישור ישיר`, deep links, inserting a hyperlink) | `FluentIcons.link_24_regular` | Distinct from links *between* books |
+| The private-book badge on a library card (8px) | `FluentIcons.person_24_regular` | The Otzaria person is drawn for legible sizes; at 8px it turns to mush. `OtzariaIcons.person_24_regular` stays everywhere it renders at 16px+ |
+
+**Links between books** — the `קישורים` panel tab, the `קישורים` context-menu entry, `דורות וקישורים` — use `OtzariaIcons.link_24_regular`. The rule in practice: singular `קישור` / `קישור ישיר` is Fluent, plural `קישורים` is Otzaria. Two similar icons for the two meanings would be confusing, so keep the split.
+
+**Scoped search — pick the icon that names *what* is being searched.** A generic magnifier says nothing; these do. None of the scoped icons has a `filled` twin, so a selected/unselected pair reuses the same glyph and lets color carry the state.
+
+| Where | Icon |
+|---|---|
+| Library screen search, `סינון מפרשים`, `חפש בתוך המפרשים המוצגים`, שמור וזכור search | `search_in_the_library_24_regular` |
+| Notes search, calendar `חפש גם בתיאור` | `search_in_the_document_24_regular` |
+| Calendar `חפש רק בכותרת` | `search_in_the_text_24_regular` |
+| `הוסף ספרים למעקב` dialog | `search_in_the_book_24_regular` |
+| Settings search | `search_in_the_settings_24_regular` |
+| `איתור כותרת` boxes (TOC, alt-TOC), bookmarks search, `חפש בתוך הקישורים המוצגים` | `search_in_titles_24_regular` |
+| Gematria search | `search_in_numbered_list_24_regular` |
+
+The **navigation rail's `חיפוש`** item is the exception: it keeps plain `OtzariaIcons.search_24_regular` / `search_24_filled`, because it is the app-wide search entry point and not scoped to anything.
+
+Three shared widgets take an `icon:` / `searchIcon:` parameter for exactly this — `OtzariaSearchField`, `ItemsListView`, and any field's `prefixIcon`. Pass the scoped icon rather than wrapping the prefix in a `leading:` widget, which would drop `OtzariaSearchField`'s focus-color and sizing behaviour.
+
+**Finding an icon:** 135 icons, listed in `OtzariaIcons.values` and in the package's `index.html` catalog. The names follow the Fluent convention (`<name>_24_<regular|filled>`), so a Fluent name is usually the right thing to look up first. `otzaria_icons` is pinned by commit in `pubspec.lock`, and **`pubspec.lock` is gitignored** — if an icon in the catalog is undefined in your checkout, run `flutter pub upgrade otzaria_icons`.
+
+**Sizes:** every icon is drawn on a 24px grid, and the `_24_` in the name is the grid, not a size limit — pass `size:` freely. But the `book_open_*` family is drawn at different weights for different display sizes; `otzaria_icon_2_page_24_regular/filled` is the general-purpose "open book" and the only one of them with a `filled` twin, so it is what a nav rail or any regular/filled pair needs.
+
+**`OtzariaIcons` NEVER goes through `RtlIcon`.** Every icon in the set is drawn right-to-left already — `RtlIcon` would flip an icon that already faces the correct way. `test/widgets/rtl_icon_registered_usage_test.dart` fails the build on any `RtlIcon(OtzariaIcons....)`.
 
 **When to use `RtlIcon` vs `Icon`:**
 
-| Icon is registered in `rtl_icon.dart`? | Use |
+| Icon | Use |
 |---|---|
-| Yes (in `_fluentMirrorMap`, `_materialMirrorMap`, or `_flippableIcons`) | `RtlIcon(...)` |
-| No | `Icon(...)` — plain, no wrapper |
+| Any `OtzariaIcons.…` | `Icon(...)` — always |
+| Fluent icon registered in `rtl_icon.dart` (`_fluentMirrorMap`, `_flippableIcons`) | `RtlIcon(...)` |
+| Any other Fluent icon | `Icon(...)` — plain, no wrapper |
 
 **Icons currently registered in `lib/widgets/misc/rtl_icon.dart`:**
 
 *`_fluentMirrorMap` (swaps to opposite-direction variant in RTL):*
 - `chevron_right/left_24/20/16_regular`
 - `arrow_right/left_24_regular`, `arrow_right/left_24_filled`
+- `arrow_previous/next_24_regular`
+- `calendar_24_regular/filled` → `calendar_rtl_*`
 - `panel_left/right_24_regular`, `panel_left/right_24_filled`
 - `text_align_right/left_24_regular`
 
-*`_materialMirrorMap` (Material icons, swaps in RTL):*
-- `arrow_forward/back`, `arrow_forward/back_ios`
-- `arrow_right/left`, `chevron_right/left`
-- `navigate_next/before`, `keyboard_arrow_right/left`
-- `first_page/last_page`, `skip_next/previous`
-
-*`_flippableIcons` (geometrically flipped in RTL — no opposite-direction variant in library):*
+*`_flippableIcons` (geometrically flipped in RTL — no opposite-direction variant in Fluent):*
 - `book_24_regular`, `book_24_filled`
 - `book_information_24_regular`
 - `text_align_distributed_24_regular`
 - `list_24_regular`
+- `calendar_week_start_24_regular/filled`, `calendar_month_24_regular/filled`
 
-**If you need to flip an icon that is NOT yet registered:**
-Add it to the appropriate set/map in `lib/widgets/misc/rtl_icon.dart`, then use `RtlIcon`. Do NOT add manual `Transform.flip`/`Transform.scale` in feature files.
+`_flippableIcons` is a **stopgap, not a destination.** A geometric flip mirrors the whole glyph, including asymmetric detail that was never meant to mirror. When an icon looks wrong flipped, the fix is to draw it right-to-left in `otzaria_icons` and drop it from this set — that is what `book_star_24_regular` did. The remaining six are the open candidates.
+
+There is no `_materialMirrorMap` any more: `lib/` contains **zero** Material icons, and nothing can feed one to `RtlIcon` (plugins declare icons by *Fluent* name through `fluentIconFromName`), so the map was dead code.
+
+Some Fluent entries here have no call site left in `lib/` — the app moved to the `OtzariaIcons` equivalent. **Do not delete those:** a plugin can still name a Fluent icon through `fluentIconFromName` in `lib/plugins/utils/fluent_icon_resolver.dart`, and it reaches `RtlIcon` as a variable.
+
+**If you need to flip a Fluent icon that is NOT yet registered:**
+Prefer drawing it in `otzaria_icons` — that is exactly what the package is for. Registering it in `_flippableIcons` is the fallback when you cannot. Either way, do NOT add manual `Transform.flip`/`Transform.scale` in feature files.
 
 **Never use:**
-- Material Icons (unless in `_materialMirrorMap` above)
+- Material Icons — no exceptions. `lib/` is Material-free; if Material has something Fluent lacks, draw it in `otzaria_icons`
 - Cupertino Icons
-- Custom icon fonts
-- Random icon packages
+- Any icon font other than `otzaria_icons` and `fluentui_system_icons`
+- `RtlIcon` with an `OtzariaIcons` icon — it is already RTL
 - `mirrorIcon` parameter on any widget — **FORBIDDEN**, removed in commit 3b4d357
-- Manual `Transform.scale(scaleX: -1, ...)` or `Transform.flip(flipX: true, ...)` around icons — register in `rtl_icon.dart` instead
+- Manual `Transform.scale(scaleX: -1, ...)` or `Transform.flip(flipX: true, ...)` around icons — register in `rtl_icon.dart` instead. **On an `OtzariaIcons` icon this silently points it the wrong way**, and neither the analyzer nor `rtl_icon_registered_usage_test.dart` catches it — when replacing a Fluent icon, check the call site for a hand-rolled flip first
 - Comments explaining why `RtlIcon` or `Icon(...)` was chosen — the decision rule is documented here; do NOT repeat it inline in code
+- Editing `lib/plugins/utils/fluent_icon_resolver.dart` to point at `otzaria_icons` — it is the generated Fluent-name contract for plugins
 
 ### 2. User Messages - ONLY via `UiSnack`
 ```dart
@@ -872,7 +932,7 @@ if (Platform.isAndroid || Platform.isIOS) {
 1. **No progression with errors** - Fix ALL analyzer errors before next step
 2. **Run `flutter analyze` after EVERY file change** - Don't accumulate errors
 3. **RTL text fields** - Use `RtlTextField` exclusively, never `TextField`
-4. **Icons** - Only `fluentui_system_icons`. Use `RtlIcon` **only** for icons registered in `lib/widgets/misc/rtl_icon.dart` (`_fluentMirrorMap`, `_materialMirrorMap`, `_flippableIcons`). All other icons: plain `Icon(...)`. Never add manual `Transform` on icons — register in `rtl_icon.dart` instead.
+4. **Icons** - `otzaria_icons` first, `fluentui_system_icons` only for what it lacks, **Material never**. `OtzariaIcons` always uses plain `Icon(...)` — never `RtlIcon`, it is already RTL. `RtlIcon` is for Fluent icons registered in `lib/widgets/misc/rtl_icon.dart` (`_fluentMirrorMap`, `_flippableIcons`); all others: plain `Icon(...)`. Never add manual `Transform` on icons.
 5. **User messages** - Only through `UiSnack`, never direct SnackBar
 6. **Dialogs** - Only through `custom_ui_components` (SingleActionDialog, TwoActionsDialog, WarningDialog)
 7. **Action buttons** - Only `ActionButton.recommended` / `.neutral` / `.ghost` from `widgets_exports.dart`
@@ -896,9 +956,11 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Asking multiple separate questions instead of batching all open questions into one message
 - Writing a large diff to fix what should be a small bug
 - Using `TextField` instead of `RtlTextField`
-- Using Material/Cupertino icons instead of FluentUI (unless Material icon is in `_materialMirrorMap` in `rtl_icon.dart`)
-- Using `RtlIcon` for icons **not** registered in `lib/widgets/misc/rtl_icon.dart` — check first; if not registered, use plain `Icon(...)`
-- Forgetting to use `RtlIcon` for icons that **are** registered in `lib/widgets/misc/rtl_icon.dart`
+- Reaching for a Fluent icon when `otzaria_icons` already has one for it — check `OtzariaIcons` first
+- Using a Material or Cupertino icon at all — `lib/` is Material-free and must stay that way
+- Wrapping an `OtzariaIcons` icon in `RtlIcon` — it is drawn RTL already, and `rtl_icon_registered_usage_test.dart` fails on it
+- Using `RtlIcon` for Fluent icons **not** registered in `lib/widgets/misc/rtl_icon.dart` — check first; if not registered, use plain `Icon(...)`
+- Forgetting to use `RtlIcon` for Fluent icons that **are** registered in `lib/widgets/misc/rtl_icon.dart`
 - Adding `mirrorIcon` parameter to any widget — FORBIDDEN (removed in commit 3b4d357)
 - Manual `Transform.scale(scaleX: -1)` or `Transform.flip` on icons — register the icon in `rtl_icon.dart` instead
 - Adding inline comments that explain why `RtlIcon` or `Icon(...)` was chosen — the decision rule lives in CLAUDE.md, not in code
