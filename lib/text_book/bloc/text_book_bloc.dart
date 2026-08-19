@@ -215,10 +215,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         currentState.visibleIndices,
       );
       _warmContentCacheInBackground(currentState.book);
-    } else {
-      // שחרור רק בטאב רקע. שחרור בחזית מקריס את רשימת הסגמנטים במצב קריאה
-      // רציף, וה-ScrollablePositionedList מצמיד את היעד לאורך החדש — כלומר
-      // המשתמש מאבד את מקום הקריאה בדיוק בזמן הפיצול.
+    } else if (!currentState.continuousReadingMode) {
+      // שחרור אסור במצב קריאה רציף: הוא מכווץ את רשימת הסגמנטים, וגם רשימת
+      // טאב רקע חיה (KeepAlive) — ה-clamp דורס את מקום הקריאה (issue #912).
       _releaseContentOutsideWindow(currentState, emit);
     }
   }
