@@ -30,6 +30,8 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
   final NavPanelSearchHost host = NavPanelSearchHost();
   final navController = TextEditingController();
   final searchController = TextEditingController();
+  final navFocus = FocusNode();
+  final searchFocus = FocusNode();
   late final TabController tabs;
 
   @override
@@ -45,6 +47,8 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
     host.dispose();
     navController.dispose();
     searchController.dispose();
+    navFocus.dispose();
+    searchFocus.dispose();
     super.dispose();
   }
 
@@ -91,6 +95,7 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
                         child: NavPanelSearchPublisher(
                           delegate: NavPanelSearchDelegate(
                             controller: navController,
+                            focusNode: navFocus,
                             hintText: 'איתור כותרת...',
                           ),
                           child: NavTreeFocusGroup(
@@ -117,6 +122,7 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
                         child: NavPanelSearchPublisher(
                           delegate: NavPanelSearchDelegate(
                             controller: searchController,
+                            focusNode: searchFocus,
                             hintText: 'חיפוש בספר...',
                           ),
                           child: const Text('תוכן חיפוש'),
@@ -264,6 +270,66 @@ void main() {
       tester.element(find.byType(OtzariaSearchField)),
       same(elementBefore),
       reason: 'הסרגל נשאר מורכב; רק התוכן הפנימי שלו מתחלף',
+    );
+  });
+
+  testWidgets('מעבר בין לשוניות מאפס פוקוס ובוחר את השאילתה החדשה', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+    final state = tester.state<_HostState>(find.byType(_Host));
+    state.navController.text = 'ניווט';
+    state.searchController.text = 'חיפוש';
+
+    state.navFocus.requestFocus();
+    await tester.pump();
+    expect(state.navFocus.hasFocus, isTrue);
+
+    state.tabs.index = 1;
+    await tester.pumpAndSettle();
+    state.searchController.selection = const TextSelection.collapsed(offset: 5);
+    state.searchFocus.requestFocus();
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.searchFocus.hasFocus, isTrue);
+    expect(
+      state.searchController.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 5),
+    );
+  });
+
+  testWidgets('מעבר דרך לשונית בלי חיפוש לא משאיר מצב פוקוס ישן', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const _Host()));
+    await tester.pumpAndSettle();
+    final state = tester.state<_HostState>(find.byType(_Host));
+    state.navController.text = 'ניווט';
+    state.searchController.text = 'חיפוש';
+    state.navFocus.requestFocus();
+    await tester.pump();
+
+    state.tabs.index = 2;
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<OtzariaSearchField>(find.byType(OtzariaSearchField))
+          .enabled,
+      isFalse,
+    );
+
+    state.tabs.index = 1;
+    await tester.pumpAndSettle();
+    state.searchController.selection = const TextSelection.collapsed(offset: 5);
+    state.searchFocus.requestFocus();
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      state.searchController.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 5),
     );
   });
 

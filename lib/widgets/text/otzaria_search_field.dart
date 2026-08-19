@@ -303,6 +303,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
       _effectiveFocusNode.removeListener(_onFocusChange);
       if (oldWidget.focusNode == null) _effectiveFocusNode.dispose();
       _effectiveFocusNode = widget.focusNode ?? FocusNode();
+      _hasFocus = _effectiveFocusNode.hasFocus;
       _effectiveFocusNode.addListener(_onFocusChange);
     }
     if (oldWidget.controller != widget.controller) {
