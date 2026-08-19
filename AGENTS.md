@@ -740,6 +740,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Bookmarks BLoC | `test/bookmarks/bookmark_bloc_test.dart` |
 | Workspaces BLoC | `test/workspaces/bloc/workspace_bloc_test.dart` |
 | מחוות החלקה בין טאבים (סינון התקנים, כיוון) | `test/tabs/reading_screen_move_tab_state_test.dart`, `…tab_swipe_direction_test.dart` |
+| מעבר לטאב שנפתח כשמסך הקריאה מנותק (issue #877) | `test/tabs/reading_screen_offscreen_tab_open_test.dart` |
 | Windows installer scripts (`.iss` invariants) | `test/installer/installer_scripts_test.dart` |
 | App paths / install-mode detection | `test/core/app_paths_test.dart` |
 | Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart`, `…library_browser_flat_tree_test.dart` |

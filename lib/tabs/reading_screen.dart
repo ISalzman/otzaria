@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -43,6 +44,10 @@ import 'package:otzaria/tour/tour_target_keys.dart';
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
 
+  /// עקיפה לבדיקות של זיהוי פלטפורמת מגע (physics ו-onPageChanged של מובייל).
+  @visibleForTesting
+  static bool? debugForceTouchTabs;
+
   @override
   State<ReadingScreen> createState() => _ReadingScreenState();
 }
@@ -71,6 +76,10 @@ class _ReadingScreenState extends State<ReadingScreen>
   /// מדכא את [_syncPageController] בזמן אנימציית מעבר מהחלקה, כדי
   /// ש-jumpToPage של הסנכרון לא יקטע את האנימציה באמצע.
   bool _suppressPageSync = false;
+
+  bool get _isTouchPlatform =>
+      ReadingScreen.debugForceTouchTabs ??
+      (Platform.isAndroid || Platform.isIOS);
 
   @override
   void initState() {
@@ -111,6 +120,10 @@ class _ReadingScreenState extends State<ReadingScreen>
     _pageController ??= PageController(initialPage: initialIndex);
   }
 
+  /// קפיצת סנכרון תוכנתית מתבצעת כעת — הדיווח שלה ב-onPageChanged אינו
+  /// בחירת משתמש ואסור להזין אותו חזרה כ-SetCurrentTab.
+  bool _inProgrammaticJump = false;
+
   void _syncPageController() {
     // הקפיצה נדחית לפוסט-פריים בכוונה: ה-BlocListener שמפעיל את הסנכרון רץ
     // *לפני* שה-BlocBuilder בונה מחדש את ה-PageView, כך שברגע הקריאה ל-PageView
@@ -128,7 +141,16 @@ class _ReadingScreenState extends State<ReadingScreen>
       final targetIndex = state.currentTabIndex.clamp(0, state.tabs.length - 1);
       final currentPage = controller.page?.round();
       if (currentPage != null && currentPage != targetIndex) {
-        controller.jumpToPage(targetIndex);
+        // כשהמסך מנותק מעץ הרינדור (keepAlive מחוץ למסך, למשל פתיחת ספר
+        // מהאיתור בזמן שהות בספרייה) ה-extent מיושן, וקפיצה מדווחת
+        // onPageChanged עם ערך clamp שגוי — שבמובייל היה מוזן חזרה
+        // כ-SetCurrentTab ומהפך את הבחירה לטאב הקודם. הדגל חוסם את המשוב.
+        _inProgrammaticJump = true;
+        try {
+          controller.jumpToPage(targetIndex);
+        } finally {
+          _inProgrammaticJump = false;
+        }
       }
     });
   }
@@ -138,7 +160,7 @@ class _ReadingScreenState extends State<ReadingScreen>
   /// הגרירה מזיזה את ה-PageView באופן הדרגתי, ובשחרור מתיישבים על
   /// הטאב הקרוב (או הסמוך, בהנפה מהירה) — כמו PageScrollPhysics במובייל.
   Widget _wrapWithDesktopTabSwipe(Widget child) {
-    if (Platform.isAndroid || Platform.isIOS) return child;
+    if (_isTouchPlatform) return child;
     return RawGestureDetector(
       gestures: <Type, GestureRecognizerFactory>{
         HorizontalDragGestureRecognizer:
@@ -383,7 +405,7 @@ class _ReadingScreenState extends State<ReadingScreen>
                             // עם גלילה אופקית ב-PDF ועם אירועי גלגלת.
                             // החלקת טאצ'פד/מגע בדסקטופ ממומשת בנפרד
                             // ב-_wrapWithDesktopTabSwipe.
-                            physics: Platform.isAndroid || Platform.isIOS
+                            physics: _isTouchPlatform
                                 ? const PageScrollPhysics()
                                 : const NeverScrollableScrollPhysics(),
                             // רק במובייל הגלילה ידנית ולכן onPageChanged משקף
@@ -392,8 +414,9 @@ class _ReadingScreenState extends State<ReadingScreen>
                             // וה-callback היה יורה רק על קפיצות תוכנתיות —
                             // כולל ערך clamp שגוי רגעי בעת פתיחת טאב חדש —
                             // ודורס את האינדקס הנכון. לכן מנוטרל.
-                            onPageChanged: Platform.isAndroid || Platform.isIOS
+                            onPageChanged: _isTouchPlatform
                                 ? (index) {
+                                    if (_inProgrammaticJump) return;
                                     if (index < state.tabs.length) {
                                       context.read<TabsBloc>().add(
                                         SetCurrentTab(index),
