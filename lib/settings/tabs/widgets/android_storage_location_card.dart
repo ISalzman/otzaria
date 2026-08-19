@@ -62,7 +62,9 @@ class _AndroidStorageLocationCardState
     final target = _targetRoot(option, view.internalRoot);
     final removalWarning = option.isRemovable
         ? context.settingsText(
-            ' אם הכרטיס יוסר, האפליקציה לא תוכל לגשת לספרים עד שיוחזר.',
+            ' אם הכרטיס יוסר, האפליקציה לא תוכל לגשת לספרים עד שיוחזר.\n\n'
+            'שים לב: תיקיית האפליקציה שבכרטיס נספרת כמטמון של האפליקציה — '
+            '"ניקוי מטמון" בהגדרות המכשיר ימחק ממנה את הספרייה.',
           )
         : '';
 

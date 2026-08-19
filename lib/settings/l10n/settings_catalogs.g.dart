@@ -7,7 +7,7 @@
 /// תרגומי מסך ההגדרות לפי קוד שפה, ממופים מהמקור העברי.
 const Map<String, Map<String, String>> kSettingsCatalogs = {
   'en': {
-    ' אם הכרטיס יוסר, האפליקציה לא תוכל לגשת לספרים עד שיוחזר.': ' If the SD card is removed, Otzaria will not be able to access the seforim until it is back.',
+    ' אם הכרטיס יוסר, האפליקציה לא תוכל לגשת לספרים עד שיוחזר.\n\nשים לב: תיקיית האפליקציה שבכרטיס נספרת כמטמון של האפליקציה — "ניקוי מטמון" בהגדרות המכשיר ימחק ממנה את הספרייה.': ' If the SD card is removed, Otzaria will not be able to access the seforim until it is back.\n\nNote: the app folder on the card is counted as app cache — clearing the app\'s cache in the device settings will delete the library stored there.',
     '12 בלילה': 'Midnight',
     '{count} גיבויים': '{count} backups',
     '{count} נבחרו': '{count} selected',
