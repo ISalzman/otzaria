@@ -306,6 +306,20 @@ void main() {
           b.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50)),
       verify: (b) => expect((b.state as PdfBookLoaded).isLoading, isFalse),
     );
+
+    // issue #869: בלי סנכרון ה-notifier בטעינה, כפתור הסגירה בסרגל חישב
+    // כיוון הפוך (לפי tab.showLeftPane) והחלונית לא נסגרה.
+    blocTest<PdfBookBloc, PdfBookState>(
+      'פתיחה אוטומטית של חלונית הניווט מסנכרנת את tab.showLeftPane',
+      build: () => _makeBloc(_tab()),
+      seed: () => PdfBookLoading(book: _book(), searchText: 'תורה'),
+      act: (b) =>
+          b.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 5)),
+      verify: (b) {
+        expect((b.state as PdfBookLoaded).showLeftPane, isTrue);
+        expect(b.tab.showLeftPane.value, isTrue);
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────────────

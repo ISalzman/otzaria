@@ -296,6 +296,8 @@ class PdfBookBloc extends Bloc<PdfBookEvent, PdfBookState> {
       explicitOpen: tab.showLeftPane.value,
       hasSearchText: searchText.isNotEmpty,
     );
+    // בלי סנכרון ה-notifier, כפתור הסגירה בסרגל מחשב כיוון הפוך ונתקע (issue #869)
+    tab.showLeftPane.value = showLeftPane;
     final pinLeftPane = Settings.getValue<bool>('key-pin-sidebar') ?? false;
     final sidebarWidth = Settings.getValue<double>(
       'key-sidebar-width',
