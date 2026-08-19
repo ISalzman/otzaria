@@ -263,6 +263,12 @@ void main() {
           defaultValue: false,
         ),
       ).thenReturn(true);
+      when(
+        mockSettingsWrapper.getValue<String>(
+          SettingsRepository.keyPageShapeBottomFont,
+          defaultValue: AppFonts.defaultFont,
+        ),
+      ).thenReturn('Tinos');
 
       final settings = await repository.loadSettings();
 
@@ -285,6 +291,8 @@ void main() {
       expect(settings['defaultContinuousReadingMode'], true);
       expect(settings['defaultSidebarOpen'], true);
       expect(settings['pinSidebar'], true);
+      // issue #849 — הגופן של "מפרשים תחתונים" נטען בעלייה דרך loadSettings.
+      expect(settings['pageShapeBottomFont'], 'Tinos');
     });
 
     test('updateDarkMode calls setValue on settings wrapper', () async {

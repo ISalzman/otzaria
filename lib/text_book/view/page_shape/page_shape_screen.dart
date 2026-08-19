@@ -2393,7 +2393,9 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
             // רק המפרשים התחתונים משתמשים בגופן שנבחר בדיאלוג צורת הדף;
             // המפרשים הצדדיים נשארים עם גופן המפרשים הגלובלי מההגדרות.
             final bottomFont =
-                Settings.getValue<String>('page_shape_bottom_font') ??
+                Settings.getValue<String>(
+                  SettingsRepository.keyPageShapeBottomFont,
+                ) ??
                 AppFonts.defaultFont;
             final fontFamily = widget.isBottom
                 ? bottomFont

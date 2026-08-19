@@ -72,8 +72,11 @@ void main() {
   });
 
   test('allKeys — כל הערכים בפורמט key- ואינם ריקים', () {
+    // מפתחות ותיקים שכבר שמורים אצל משתמשים בשם אחר — שינוי שמם דורש מיגרציה.
+    const legacyKeys = {SettingsRepository.keyPageShapeBottomFont};
     for (final key in SettingsRepository.allKeys) {
       expect(key, isNotEmpty);
+      if (legacyKeys.contains(key)) continue;
       expect(
         key,
         startsWith('key-'),

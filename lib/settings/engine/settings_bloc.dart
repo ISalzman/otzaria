@@ -91,6 +91,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     await AppFonts.ensureFontLoaded(
       settings['commentatorsFontFamily'] as String,
     );
+    // גופן "מפרשים תחתונים" בצורת הדף נשמר מחוץ ל-state — בלי טעינה כאן
+    // גופן מערכת מתאפס ל-fallback אחרי הפעלה מחדש (issue #849).
+    await AppFonts.ensureFontLoaded(
+      settings['pageShapeBottomFont'] as String? ?? AppFonts.defaultFont,
+    );
 
     emit(
       SettingsState(

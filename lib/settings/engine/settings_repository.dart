@@ -17,6 +17,7 @@ class SettingsRepository {
   static const String keyFontFamily = 'key-font-family';
   static const String keyCommentatorsFontFamily =
       'key-commentators-font-family';
+  static const String keyPageShapeBottomFont = 'page_shape_bottom_font';
   static const String keyFontBold = 'key-font-bold';
   static const String keyCommentatorsFontBold = 'key-commentators-font-bold';
   static const String keyCommentatorsFontSize = 'key-commentators-font-size';
@@ -170,6 +171,7 @@ class SettingsRepository {
     keyFontSize,
     keyFontFamily,
     keyCommentatorsFontFamily,
+    keyPageShapeBottomFont,
     keyFontBold,
     keyCommentatorsFontBold,
     keyCommentatorsFontSize,
@@ -288,6 +290,10 @@ class SettingsRepository {
       'commentatorsFontFamily': _settings.getValue<String>(
         keyCommentatorsFontFamily,
         defaultValue: AppFonts.defaultCommentatorsFont,
+      ),
+      'pageShapeBottomFont': _settings.getValue<String>(
+        keyPageShapeBottomFont,
+        defaultValue: AppFonts.defaultFont,
       ),
       'fontBold': _settings.getValue<bool>(keyFontBold, defaultValue: false),
       'commentatorsFontBold': _settings.getValue<bool>(
