@@ -1217,7 +1217,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           : SearchMatchPolicy.standard,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+      fontWeight:
+          (widget.isMainText
+              ? settingsState.fontBold
+              : settingsState.commentatorsFontBold)
+          ? FontWeight.bold
+          : null,
       lineHeight: settingsState.lineHeight,
     );
   }
@@ -2904,7 +2909,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                             false),
                     fontSize: widget.fontSize,
                     fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-                    fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+                    fontWeight:
+                        (widget.isMainText
+                            ? settingsState.fontBold
+                            : settingsState.commentatorsFontBold)
+                        ? FontWeight.bold
+                        : null,
                     lineHeight: settingsState.lineHeight,
                   ),
                   onOpenBook: widget.openBookCallback,
@@ -3165,7 +3175,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           (state.searchResultLines?.contains(lineIndex) ?? false),
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+      fontWeight:
+          (widget.isMainText
+              ? settingsState.fontBold
+              : settingsState.commentatorsFontBold)
+          ? FontWeight.bold
+          : null,
       lineHeight: settingsState.lineHeight,
     );
     final processedHtml = TextRendererService.processText(

@@ -1616,6 +1616,92 @@ void main() {
     },
   );
 
+  testWidgets(
+    'בולד בצורת הדף: הטקסט הראשי לפי fontBold והמפרש לפי commentatorsFontBold',
+    (tester) async {
+      // רגרסיה ל-issue #848: בולד הטקסט חל על המפרשים ובולד המפרשים לא פעל.
+      Future<FontWeight?> pumpAndGetFontWeight({
+        required bool isMainText,
+        required SettingsState settings,
+      }) async {
+        final textBookBloc = _TestTextBookBloc(_loadedState());
+        final personalNotesBloc = _TestPersonalNotesBloc(
+          PersonalNotesState(
+            isLoading: false,
+            bookId: 'ספר בדיקה',
+            locatedNotes: const [],
+            missingNotes: const [],
+            errorMessage: null,
+            filteredLocatedNotes: const [],
+            filteredMissingNotes: const [],
+          ),
+        );
+        final settingsBloc = _TestSettingsBloc(settings);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MultiBlocProvider(
+              providers: [
+                BlocProvider<TextBookBloc>.value(value: textBookBloc),
+                BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+                BlocProvider<SettingsBloc>.value(value: settingsBloc),
+              ],
+              child: Scaffold(
+                body: SimpleTextViewer(
+                  content: const ['שורה א'],
+                  fontSize: 18,
+                  openBookCallback: (_) {},
+                  isMainText: isMainText,
+                  bookTitle: isMainText ? null : 'רש"י',
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final smartText = tester
+            .widgetList<SmartTextWidget>(find.byType(SmartTextWidget))
+            .first;
+        return smartText.settings.fontWeight;
+      }
+
+      final mainBold = SettingsState.initial().copyWith(
+        fontBold: true,
+        commentatorsFontBold: false,
+      );
+      expect(
+        await pumpAndGetFontWeight(isMainText: true, settings: mainBold),
+        FontWeight.bold,
+      );
+      expect(
+        await pumpAndGetFontWeight(isMainText: false, settings: mainBold),
+        isNull,
+        reason: 'בולד גופן הטקסט לא אמור לחול על מפרש בצורת הדף',
+      );
+
+      final commentatorsBold = SettingsState.initial().copyWith(
+        fontBold: false,
+        commentatorsFontBold: true,
+      );
+      expect(
+        await pumpAndGetFontWeight(
+          isMainText: true,
+          settings: commentatorsBold,
+        ),
+        isNull,
+      );
+      expect(
+        await pumpAndGetFontWeight(
+          isMainText: false,
+          settings: commentatorsBold,
+        ),
+        FontWeight.bold,
+        reason: 'בולד גופן המפרשים חייב לחול על מפרש בצורת הדף',
+      );
+    },
+  );
+
   testWidgets('פוקוס בתוך עורך Quill מזוהה כשדה קלט', (tester) async {
     final focusNode = FocusNode();
     final scrollController = ScrollController();
