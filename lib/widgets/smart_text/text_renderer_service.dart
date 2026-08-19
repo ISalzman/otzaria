@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
+import 'package:otzaria/utils/text/superscript_digits.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
@@ -178,11 +179,8 @@ class TextRendererService {
       // מספר טהור → ספרות-עיליות יוניקוד (מוגבה ומוקטן מטבעו, ללא תגית).
       // חל גם על <sup>1</sup> חשוף בלי class: חלק מספרי ההערות-inline
       // מקודדים כך את המרקרים, וההמרה חסרת-אובדן גם ל-superscript מספרי אמיתי.
-      final trimmedInner = innerText.trim();
-      if (_digitsOnlyRegex.hasMatch(trimmedInner)) {
-        final superscript = trimmedInner.split('').map((d) {
-          return _superscriptDigits[d]!;
-        }).join();
+      final superscript = superscriptDigitsOrNull(innerText.trim());
+      if (superscript != null) {
         return _wrapWithBidiIsolate(superscript);
       }
 
@@ -248,22 +246,6 @@ class TextRendererService {
   };
 
   static final RegExp _digitsOnlyRegex = RegExp(r'^[0-9]+$');
-
-  /// מיפוי ספרה רגילה → ספרת-עילית יוניקוד. 1–3 בבלוק Latin-1 (U+00B9/B2/B3),
-  /// השאר בבלוק Superscripts (U+2070, U+2074–U+2079) — אלה נקודות הקוד
-  /// הקנוניות; אין חלופות ל-1–3 בבלוק U+2070.
-  static const Map<String, String> _superscriptDigits = {
-    '0': '⁰',
-    '1': '¹',
-    '2': '²',
-    '3': '³',
-    '4': '⁴',
-    '5': '⁵',
-    '6': '⁶',
-    '7': '⁷',
-    '8': '⁸',
-    '9': '⁹',
-  };
 
   static String _wrapWithBidiIsolate(String innerHtml) {
     if (innerHtml.isEmpty) return innerHtml;

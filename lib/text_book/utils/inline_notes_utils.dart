@@ -6,6 +6,10 @@
 /// הספר.
 library;
 
+import 'package:otzaria/utils/text/superscript_digits.dart';
+
+final RegExp _htmlTagRegExp = RegExp(r'<[^>]+>');
+
 final RegExp _footnoteBodyRegExp = RegExp(
   r'<i\b[^>]*\bclass\s*=\s*"[^"]*\bfootnote\b[^"]*"[^>]*>(.*?)</i>',
   caseSensitive: false,
@@ -41,13 +45,21 @@ String addInlineNotePreviewLinks(String html, {required int lineIndex}) {
       continue;
     }
     final marker = html.substring(contentStart, closeIndex);
+    // מרקר מספרי → ספרות-עיליות יוניקוד: HtmlWidget לא תומך בהגבהת CSS,
+    // ו-<sup> אסור (WidgetSpan מתהפך ב-RTL). התוכן עטוף LRI/PDI נגד מיזוג.
+    final superscript = superscriptDigitsOrNull(
+      marker.replaceAll(_htmlTagRegExp, '').trim(),
+    );
     replacements.add((
       start: openIndex,
       end: closeIndex + _supCloseTag.length,
-      value:
-          '<a class="book-note-marker" '
-          'href="otzaria://book-note?line=$lineIndex&note=$noteIndex">'
-          '$marker</a>',
+      value: superscript != null
+          ? '<a class="book-note-marker-sup" '
+                'href="otzaria://book-note?line=$lineIndex&note=$noteIndex">'
+                '\u2066$superscript\u2069</a>'
+          : '<a class="book-note-marker" '
+                'href="otzaria://book-note?line=$lineIndex&note=$noteIndex">'
+                '$marker</a>',
     ));
     noteIndex++;
   }
