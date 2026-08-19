@@ -100,6 +100,10 @@ if (response.success) {
 | `library.listBookAltStructures` | 0.9.96 |
 | `library.getBookAltToc` | 0.9.96 |
 | `library.getTree` | 0.9.93 |
+| `library.getCommentators` | 0.9.97 |
+| `library.getLinks` | 0.9.97 |
+| `library.getLinkTargetsSummary` | 0.9.97 |
+| `library.getLinkContent` | 0.9.97 |
 | `network.fetch` | 0.9.93 |
 | `network.fetchStream` | 0.9.97 |
 | `network.download` | 0.9.93 |
@@ -111,6 +115,7 @@ if (response.success) {
 | `reader.getCurrentState` | 0.9.89 |
 | `reader.getCurrentRef` | 0.9.89 |
 | `reader.getSelection` | 0.9.89 |
+| `reader.getActiveCommentators` | 0.9.97 |
 | `reader.findTextOccurrences` | 0.9.95 |
 | `reader.getSectionTextMap` | 0.9.95 |
 | `reader.addContextMenuItem` | 0.9.89 |
@@ -537,6 +542,138 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
   structureKey: 'Parasha' // אופציונלי; ברירת מחדל = המבנה הראשון
 });
 // [{ text: "בראשית", index: 0, level: 1 }, ...]
+```
+
+---
+
+## מפרשים וקישורים
+
+ארבע הקריאות הבאות חושפות את מפת הקישורים של הספרייה: אילו מפרשים קיימים על
+ספר, אילו קישורים יוצאים מטווח שורות נתון, ומה התוכן שבצד השני של הקישור.
+
+**כל מספרי השורות ב-API הזה 0-based** — כמו ה-`index` של `library.getBookToc`
+ושל `reader.getCurrentRef`. אין צורך בהיסט כלשהו בין הקריאות.
+
+> ⚠️ **גרשיים עבריים.** שמות הספרים במסד שמורים בגרשיים עבריים (`״` U+05F4,
+> `׳` U+05F3) ולא במרכאות ASCII (`"`, `'`). השוואה מול ליטרל כמו `'רש"י על
+> בראשית'` תיכשל בשקט. תמיד השוו/העבירו את המחרוזת שהתקבלה מהקריאה הקודמת.
+
+הקישורים תלויים במהדורת הטקסט של הספר. ספר שקיים כ-PDF בלבד מוחזר כ-
+`error.not_found`; לספר שיש לו שתי מהדורות, העבירו את כותרת מהדורת הטקסט.
+
+> 💡 **התחילו מ-`getLinkTargetsSummary`.** הוא מחזיר את כל ספרי היעד של הספר
+> בקריאה אחת וזולה, כולל `maxSourceLine` — ומאפשר לבחור אילו יעדים לבקש
+> ב-`getLinks` (`targetTitles`) במקום לסרוק את כל הקישורים.
+
+### `library.getCommentators`
+**הרשאה:** `library.links.read` · **מגרסה:** 0.9.97
+
+רשימת המפרשים של ספר. זיהוי הספר: `bookId` (=כותרת) עם `categoryId` אופציונלי
+שמכריע בין ספרים שווי-שם, או `id` מספרי.
+
+- ללא `startLine`/`endLine` — כל מפרשי הספר, עם `linkCount` ועם `isRare`
+  (מפרש שהממשק מסתיר מרשימת הבחירה הכללית בספרים גדולים).
+- עם `startLine`+`endLine` (חובה יחד, 0-based וכולל) — רק המפרשים על אותו
+  טווח שורות. בקריאה זו `isRare` תמיד `false` — הנדירות מוגדרת ביחס לספר כולו.
+- `grouped: true` — במקום `commentators` מוחזר `groups`, המפרשים מקובצים לפי
+  דורות באותו סדר שבו הממשק מציג אותם. קבוצות ריקות מושמטות.
+
+```javascript
+const { data } = await Otzaria.call('library.getCommentators', {
+  bookId: 'בראשית',
+  categoryId: 7,     // אופציונלי — מכריע בין ספרים שווי-שם
+  startLine: 0,      // אופציונלי, חובה יחד עם endLine
+  endLine: 40,
+  grouped: false     // אופציונלי, ברירת מחדל: false
+});
+// { commentators: [
+//     { title: "רש״י על בראשית", author: "רש״י", linkCount: 1420, isRare: false },
+//     ...
+// ] }
+
+// grouped: true
+// { groups: [{ title: "ראשונים", commentators: ["רש״י על בראשית", ...] }, ...] }
+```
+
+### `library.getLinks`
+**הרשאה:** `library.links.read` · **מגרסה:** 0.9.97
+
+הקישורים היוצאים מטווח שורות בספר — מפרשים והפניות כאחד, כולל קישורי-משתמש
+שיובאו מקבצי CSV.
+
+`startLine` ו-`endLine` חובה (0-based, כולל), והחלון מוגבל ל-**200 שורות**;
+חלון גדול יותר מוחזר כ-`error.invalid_params`. תשובה נחתכת אחרי 2,000 רשומות
+ומסומנת `truncated: true`.
+
+- `connectionTypes` — סינון לפי סוג חיבור (`"COMMENTARY"`, `"TARGUM"`,
+  `"REFERENCE"` …). ההשוואה אינה תלוית רישיות.
+- `targetTitles` — סינון לספרי יעד מסוימים.
+- `includeAnchors` — כשהוא `true`, קישור בעל עוגן-מילה מקבל שדה `anchor`.
+
+```javascript
+const { data } = await Otzaria.call('library.getLinks', {
+  bookId: 'בראשית',
+  startLine: 0,
+  endLine: 40,
+  connectionTypes: ['COMMENTARY'],  // אופציונלי
+  targetTitles: ['רש״י על בראשית'], // אופציונלי
+  includeAnchors: false             // אופציונלי, ברירת מחדל: false
+});
+// {
+//   truncated: false,
+//   links: [{
+//     sourceLine: 0,
+//     targetTitle: "רש״י על בראשית",
+//     targetLine: 3,
+//     targetLineEnd: null,       // קישור-טווח בלבד
+//     targetHeRef: "רש״י על בראשית א, א",
+//     connectionType: "COMMENTARY",
+//     isCommentary: true,        // מפרש (ולא הפניה)
+//     targetIsUserBook: false,
+//     targetCategoryId: 12,      // להעברה ל-getLinkContent
+//     anchor: { start: 4, end: 9, label: "א" }  // רק עם includeAnchors
+//   }]
+// }
+```
+
+### `library.getLinkTargetsSummary`
+**הרשאה:** `library.links.read` · **מגרסה:** 0.9.97
+
+כל ספרי היעד של הספר לפי סוג חיבור, בלי לטעון את הקישורים עצמם.
+`maxSourceLine` הוא השורה הגבוהה ביותר שיש עליה קישור (0-based), או `-1`
+כשאין לספר קישורים כלל.
+
+```javascript
+const { data } = await Otzaria.call('library.getLinkTargetsSummary', {
+  bookId: 'בראשית'
+});
+// {
+//   maxSourceLine: 1533,
+//   targets: [
+//     { targetTitle: "רש״י על בראשית", connectionType: "COMMENTARY", linkCount: 1420 },
+//     ...
+//   ]
+// }
+```
+
+### `library.getLinkContent`
+**הרשאה:** `library.content.read` · **מגרסה:** 0.9.97
+
+תוכן הצד המקושר — עד **25 פריטים** בקריאה אחת (יותר מכך:
+`error.invalid_params`). ה-`items` מוחזרים באותו סדר של הקלט; פריט שלא ניתן
+לטעון מוחזר כ-`{ error: "not_found" }`.
+
+העבירו את `targetTitle`, `targetLine`, `targetLineEnd`, `targetIsUserBook`
+ו-`targetCategoryId` בדיוק כפי שהתקבלו מ-`getLinks` — הם מזהים את הספר הנכון
+כשקיימים ספרים שווי-שם או מהדורה אישית.
+
+```javascript
+const { data } = await Otzaria.call('library.getLinkContent', {
+  links: [
+    { targetTitle: 'רש״י על בראשית', targetLine: 3, targetCategoryId: 12 }
+  ]
+});
+// { items: [{ content: "בראשית ברא — אמר רבי יצחק..." }] }
 ```
 
 ---
@@ -1105,6 +1242,26 @@ const { data } = await Otzaria.call('reader.getSelection');
 ```
 
 יחידת המיקום הקנונית היא grapheme cluster לפי חלוקת Unicode של ה־Host. `codePoint` ו־`utf16` נמסרים לצורכי שילוב בלבד; אין להשתמש ב־`String.length` של JavaScript כעוגן קנוני.
+
+### `reader.getActiveCommentators`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+מצב המפרשים של טאב הקריאה הנוכחי, כפי שהוא כבר טעון בו — ללא פרמטרים וללא
+שאילתה נוספת. `null` כשאין טאב קריאה, כשהטאב עדיין נטען או כשאין בו מפרשים.
+
+בטאב PDF אין מצב מפרשים מלא: `available` נגזר מהקישורים שכבר נטענו לטאב,
+ו-`rare`/`groups` חוזרים ריקים. לרשימה המלאה קראו ל-`library.getCommentators`
+עם כותרת הספר.
+
+```javascript
+const { data } = await Otzaria.call('reader.getActiveCommentators');
+// {
+//   available: ["רש״י על בראשית", "רמב״ן על בראשית", ...],
+//   active:    ["רש״י על בראשית"],
+//   rare:      ["ספר נדיר"],
+//   groups:    [{ title: "ראשונים", commentators: ["רש״י על בראשית", ...] }]
+// }
+```
 
 ### `reader.findTextOccurrences`
 **הרשאה:** `reader.open`
@@ -3128,6 +3285,7 @@ Otzaria.on('plugin.boot', async (payload) => {
     "app.user_email.read",
     "library.books.read",
     "library.content.read",
+    "library.links.read",
     "search.fulltext.read",
     "reader.open",
     "navigation.write",

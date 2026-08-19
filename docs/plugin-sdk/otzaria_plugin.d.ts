@@ -310,6 +310,86 @@ export interface AltStructure {
   heTitle: string | null;
 }
 
+/**
+ * מפרש של ספר כפי שמוחזר מ-`library.getCommentators`. `isRare` נכון רק
+ * בקריאה ללא טווח שורות — הנדירות מוגדרת ביחס לספר כולו.
+ */
+export interface CommentatorInfo {
+  title: string;
+  author?: string;
+  linkCount: number;
+  isRare: boolean;
+}
+
+/** קבוצת מפרשים לפי דור, כפי שהממשק מציג אותה. */
+export interface CommentatorGroup {
+  title: string;
+  commentators: string[];
+}
+
+export type GetCommentatorsResult =
+  | { commentators: CommentatorInfo[] }
+  | { groups: CommentatorGroup[] };
+
+/** עוגן-מילה של קישור בשורת המקור (אופסטים בתווים גלויים). */
+export interface LinkAnchor {
+  start: number;
+  end: number | null;
+  label: string | null;
+}
+
+/** קישור יחיד כפי שמוחזר מ-`library.getLinks`. כל השורות 0-based. */
+export interface BookLink {
+  sourceLine: number;
+  targetTitle: string;
+  targetLine: number;
+  /** סוף טווח בצד המקושר, או `null` לקישור לשורה בודדת. */
+  targetLineEnd: number | null;
+  targetHeRef: string;
+  connectionType: string;
+  /** `true` למפרש/תרגום/מדרש; `false` להפניה. */
+  isCommentary: boolean;
+  targetIsUserBook: boolean;
+  targetCategoryId: number | null;
+  /** מוחזר רק כאשר `includeAnchors: true` ולקישור יש עוגן. */
+  anchor?: LinkAnchor;
+}
+
+export interface GetLinksResult {
+  links: BookLink[];
+  /** `true` כשהתשובה נחתכה בתקרת 2,000 הרשומות. */
+  truncated: boolean;
+}
+
+export interface LinkTargetSummary {
+  targetTitle: string;
+  connectionType: string;
+  linkCount: number;
+}
+
+export interface GetLinkTargetsSummaryResult {
+  targets: LinkTargetSummary[];
+  /** השורה הגבוהה ביותר שיש עליה קישור (0-based), או ‎-1‎ כשאין קישורים. */
+  maxSourceLine: number;
+}
+
+export type LinkContentItem = { content: string } | { error: 'not_found' };
+
+export interface GetLinkContentResult {
+  /** באותו סדר של פריטי הקלט. */
+  items: LinkContentItem[];
+}
+
+/** מצב המפרשים של טאב הקריאה (`reader.getActiveCommentators`). */
+export interface ActiveCommentators {
+  available: string[];
+  active: string[];
+  /** ריק בטאב PDF. */
+  rare: string[];
+  /** ריק בטאב PDF. */
+  groups: CommentatorGroup[];
+}
+
 export type JewishHolidayKind =
   | 'yomTov'
   | 'roshChodesh'
@@ -1095,6 +1175,10 @@ export type OtzariaMethod =
   | 'library.getBookToc'
   | 'library.listBookAltStructures'
   | 'library.getBookAltToc'
+  | 'library.getCommentators'
+  | 'library.getLinks'
+  | 'library.getLinkTargetsSummary'
+  | 'library.getLinkContent'
   | 'search.fullText'
   | 'search.query'
   | 'search.getOptions'
@@ -1108,6 +1192,7 @@ export type OtzariaMethod =
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
   | 'reader.getSelection'
+  | 'reader.getActiveCommentators'
   | 'reader.findTextOccurrences'
   | 'reader.getSectionTextMap'
   | 'navigation.goTo'

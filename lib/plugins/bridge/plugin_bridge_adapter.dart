@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+// dart:io מגדיר Link משלו (קישור בקובץ־מערכת) שמתנגש ב-Link של הקישורים.
+import 'dart:io' hide Link;
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,10 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
@@ -295,6 +300,20 @@ class PluginBridgeDependencies {
   final Future<List<AltTocEntryRow>> Function(int structureId)?
   altTocEntriesProvider;
 
+  /// מקור הקישורים והמפרשים ל-`library.getLinks` / `library.getCommentators`.
+  /// אופציונלי — ברירת המחדל היא [TextBookRepository] מעל מערכת הקבצים.
+  final TextBookRepository? textBookRepository;
+
+  /// סיכום יעדי הקישורים של ספר (`library.getLinkTargetsSummary`). אופציונלי —
+  /// ברירת המחדל היא [DatabaseLibraryProvider.instance].
+  final Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+  Function(String title, int categoryId)?
+  linkTargetsSummaryProvider;
+
+  /// טוען את תוכן הקישור (`library.getLinkContent`). אופציונלי — ברירת המחדל
+  /// היא [Link.content] עם המטמון שלו.
+  final Future<String> Function(Link link)? linkContentLoader;
+
   /// `plugin.backgroundDone` — התוסף מכריז שסיים את עבודת הרקע. מחווט רק
   /// במופע הרקע (PluginBackgroundHost); בדף התוסף נשאר null, כך שקריאה
   /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
@@ -330,10 +349,20 @@ class PluginBridgeDependencies {
     this.resolveRefToLine,
     this.altStructuresProvider,
     this.altTocEntriesProvider,
+    this.textBookRepository,
+    this.linkTargetsSummaryProvider,
+    this.linkContentLoader,
     this.onBackgroundInstanceDone,
     this.dispatchEventToPlugin,
   });
 }
+
+/// חלון השורות המרבי לקריאת `library.getLinks` אחת, ותקרת הרשומות בתשובה.
+const int _pluginLinksMaxWindowLines = 200;
+const int _pluginLinksMaxRecords = 2000;
+
+/// מספר הפריטים המרבי בקריאת `library.getLinkContent` אחת.
+const int _pluginLinkContentMaxItems = 25;
 
 typedef PluginRpcEventSink =
     Future<void> Function(
@@ -862,9 +891,280 @@ class PluginBridgeAdapter {
             : _findCategoryByPath(library, path);
         if (root == null) return null;
         return _categoryToTree(root, includeBooks: includeBooks);
+      case 'getCommentators':
+        return await _getCommentators(library, args);
+      case 'getLinks':
+        return await _getLinks(library, args);
+      case 'getLinkTargetsSummary':
+        return await _getLinkTargetsSummary(library, args);
+      case 'getLinkContent':
+        return await _getLinkContent(args);
       default:
         throw Exception('Unknown action in library: $action');
     }
+  }
+
+  // ----------------------------------------------------------------
+  // library.* — מפרשים וקישורים
+  // ----------------------------------------------------------------
+
+  TextBookRepository get _linksRepository =>
+      _dependencies.textBookRepository ??
+      TextBookRepository(fileSystem: FileSystemData.instance);
+
+  /// מאתר את ספר הטקסט של קריאות הקישורים. `bookId` (=כותרת) עם `categoryId`
+  /// אופציונלי שמכריע בין ספרים שווי-שם; אחרת נופל לזיהוי הרגיל לפי `id`.
+  TextBook? _findLinksTextBook(Library library, Map<String, dynamic> args) {
+    _ensureBookIndex(library);
+    final bookId = (args['bookId'] ?? args['title']) as String?;
+    if (PluginBookIdentity.parseId(args['id']) == null && bookId != null) {
+      final categoryId = args['categoryId'] as int?;
+      return (_booksByTitle[bookId] ?? const <Book>[])
+          .whereType<TextBook>()
+          .where((b) => categoryId == null || b.categoryId == categoryId)
+          .firstOrNull;
+    }
+    final book = _findPluginBook(library, args);
+    return book is TextBook ? book : null;
+  }
+
+  /// קורא מספר שורה מה-wire (0-based) ומאמת שהוא שלם אי-שלילי.
+  int _requireWireLine(dynamic raw, String name) {
+    if (raw is! int || raw < 0) {
+      throw Exception(
+        'error.invalid_params: $name must be a non-negative integer',
+      );
+    }
+    return raw;
+  }
+
+  List<String>? _optionalStringList(dynamic raw, String name) {
+    if (raw == null) return null;
+    if (raw is! List) {
+      throw Exception('error.invalid_params: $name must be an array');
+    }
+    final values = <String>[];
+    for (final item in raw) {
+      if (item is! String || item.trim().isEmpty) {
+        throw Exception('error.invalid_params: $name entries must be strings');
+      }
+      values.add(item.trim());
+    }
+    return values;
+  }
+
+  Future<dynamic> _getCommentators(
+    Library library,
+    Map<String, dynamic> args,
+  ) async {
+    final rawStart = args['startLine'];
+    final rawEnd = args['endLine'];
+    if ((rawStart == null) != (rawEnd == null)) {
+      throw Exception(
+        'error.invalid_params: startLine and endLine must be given together',
+      );
+    }
+    final book = _findLinksTextBook(library, args);
+    if (book == null) throw Exception('error.not_found: book not found');
+
+    final List<CommentatorInfo> commentators;
+    Set<String> rare = const {};
+    if (rawStart != null) {
+      final startLine = _requireWireLine(rawStart, 'startLine');
+      final endLine = _requireWireLine(rawEnd, 'endLine');
+      if (endLine < startLine) {
+        throw Exception('error.invalid_params: endLine must be >= startLine');
+      }
+      commentators = await _linksRepository.getCommentatorsInLineRange(
+        book,
+        startLine: startLine,
+        endLine: endLine,
+      );
+    } else {
+      final detailed = await _linksRepository.getCommentatorsDetailed(book);
+      commentators = detailed.commentators;
+      rare = detailed.rare;
+    }
+
+    if (args['grouped'] as bool? ?? false) {
+      final titles = [for (final c in commentators) c.title];
+      final eras = await splitByEra(titles);
+      return {
+        'groups': _commentatorGroupsToJson(
+          buildCommentatorGroups(eras, titles),
+        ),
+      };
+    }
+
+    return {
+      'commentators': [
+        for (final c in commentators)
+          {
+            'title': c.title,
+            if (c.author != null && c.author!.isNotEmpty) 'author': c.author,
+            'linkCount': c.linkCount,
+            'isRare': rare.contains(c.title),
+          },
+      ],
+    };
+  }
+
+  List<Map<String, dynamic>> _commentatorGroupsToJson(
+    List<CommentatorGroup> groups,
+  ) => [
+    for (final group in groups)
+      if (group.commentators.isNotEmpty)
+        {'title': group.title, 'commentators': group.commentators},
+  ];
+
+  Future<dynamic> _getLinks(Library library, Map<String, dynamic> args) async {
+    final startLine = _requireWireLine(args['startLine'], 'startLine');
+    final endLine = _requireWireLine(args['endLine'], 'endLine');
+    if (endLine < startLine) {
+      throw Exception('error.invalid_params: endLine must be >= startLine');
+    }
+    if (endLine - startLine + 1 > _pluginLinksMaxWindowLines) {
+      throw Exception(
+        'error.invalid_params: line window must not exceed '
+        '$_pluginLinksMaxWindowLines lines',
+      );
+    }
+    final targetTitles = _optionalStringList(
+      args['targetTitles'],
+      'targetTitles',
+    );
+    final connectionTypes = _optionalStringList(
+      args['connectionTypes'],
+      'connectionTypes',
+    );
+    final includeAnchors = args['includeAnchors'] as bool? ?? false;
+
+    final book = _findLinksTextBook(library, args);
+    if (book == null) throw Exception('error.not_found: book not found');
+
+    final links = await _linksRepository.getBookLinksInRange(
+      book,
+      startIndex: startLine,
+      endIndex: endLine,
+      targetBookTitles: targetTitles,
+    );
+
+    final titlesFilter = targetTitles?.toSet();
+    final typesFilter = connectionTypes?.map(LinkTypes.normalize).toSet();
+    final records = <Map<String, dynamic>>[];
+    var truncated = false;
+    for (final link in links) {
+      final targetTitle = getTitleFromPath(link.path2);
+      if (titlesFilter != null && !titlesFilter.contains(targetTitle)) continue;
+      if (typesFilter != null &&
+          !typesFilter.contains(LinkTypes.normalize(link.connectionType)) &&
+          !typesFilter.contains(LinkTypes.canonicalType(link.connectionType))) {
+        continue;
+      }
+      if (records.length >= _pluginLinksMaxRecords) {
+        truncated = true;
+        break;
+      }
+      // index1/index2 הם 1-based במודל; ה-wire כולו 0-based — זו נקודת ההמרה.
+      records.add({
+        'sourceLine': link.index1 - 1,
+        'targetTitle': targetTitle,
+        'targetLine': link.index2 - 1,
+        'targetLineEnd': link.index2End == null ? null : link.index2End! - 1,
+        'targetHeRef': link.heRef,
+        'connectionType': link.connectionType,
+        'isCommentary': LinkTypes.isDependentTextLink(link.connectionType),
+        'targetIsUserBook': link.targetIsUserBook,
+        'targetCategoryId': link.targetCategoryId,
+        if (includeAnchors) ...?_linkAnchorJson(link),
+      });
+    }
+    return {'links': records, 'truncated': truncated};
+  }
+
+  Map<String, dynamic>? _linkAnchorJson(Link link) {
+    final span = link.anchorSpans.firstOrNull;
+    final start = span?.start ?? link.anchorStart;
+    if (start == null) return null;
+    return {
+      'anchor': {
+        'start': start,
+        'end': span?.end ?? link.anchorEnd,
+        'label': span?.label ?? link.anchorLabel,
+      },
+    };
+  }
+
+  Future<dynamic> _getLinkTargetsSummary(
+    Library library,
+    Map<String, dynamic> args,
+  ) async {
+    final book = _findLinksTextBook(library, args);
+    if (book?.categoryId == null) {
+      throw Exception('error.not_found: book not found');
+    }
+    final provider =
+        _dependencies.linkTargetsSummaryProvider ??
+        DatabaseLibraryProvider.instance.getBookLinkTargetsSummary;
+    final summary = await provider(book!.title, book.categoryId!);
+    if (summary == null) {
+      throw Exception('error.internal: link targets summary unavailable');
+    }
+    return {
+      'targets': [
+        for (final target in summary.targets)
+          {
+            'targetTitle': target.targetTitle,
+            'connectionType': target.connectionType,
+            'linkCount': target.linkCount,
+          },
+      ],
+      // maxSourceLine מגיע 1-based מהמסד; ‎-1‎ = לספר אין קישורים כלל.
+      'maxSourceLine': summary.maxSourceLine - 1,
+    };
+  }
+
+  Future<dynamic> _getLinkContent(Map<String, dynamic> args) async {
+    final rawItems = args['links'];
+    if (rawItems is! List ||
+        rawItems.isEmpty ||
+        rawItems.length > _pluginLinkContentMaxItems) {
+      throw Exception(
+        'error.invalid_params: links must be an array with at most '
+        '$_pluginLinkContentMaxItems entries',
+      );
+    }
+    final loader = _dependencies.linkContentLoader;
+    final items = <Map<String, dynamic>>[];
+    for (final raw in rawItems) {
+      if (raw is! Map) {
+        throw Exception('error.invalid_params: links entries must be objects');
+      }
+      final targetTitle = raw['targetTitle'];
+      final targetLine = raw['targetLine'];
+      if (targetTitle is! String || targetTitle.isEmpty || targetLine is! int) {
+        throw Exception(
+          'error.invalid_params: targetTitle and targetLine are required',
+        );
+      }
+      final targetLineEnd = raw['targetLineEnd'];
+      final link = Link(
+        heRef: targetTitle,
+        index1: 1,
+        path2: targetTitle,
+        index2: targetLine + 1,
+        index2End: targetLineEnd is int ? targetLineEnd + 1 : null,
+        connectionType: LinkTypes.commentary,
+        targetCategoryId: raw['targetCategoryId'] as int?,
+        targetIsUserBook: raw['targetIsUserBook'] as bool? ?? false,
+      );
+      try {
+        items.add({'content': await (loader?.call(link) ?? link.content)});
+      } catch (_) {
+        items.add(const {'error': 'not_found'});
+      }
+    }
+    return {'items': items};
   }
 
   /// טוען את מבני ה-AltToc של ספר (דרך התלות המוזרקת או ה-DB).
@@ -1550,6 +1850,8 @@ class PluginBridgeAdapter {
           };
         }
         return snapshot.toJson();
+      case 'getActiveCommentators':
+        return _getActiveCommentators();
       case 'getSelection':
         final currentPane = _dependencies.tabsBloc.state.readingPane;
         final snapshot = await resolveReaderLocation(currentPane);
@@ -2258,8 +2560,9 @@ class PluginBridgeAdapter {
         _dependencies.dispatchEventToPlugin ??
         PluginRuntimeDispatcher.instance.dispatchEventToPlugin;
     // הלחיצה חוזרת למופע שהציג את ההודעה — לא לבחירת הדיספצ'ר.
-    return () =>
-        unawaited(dispatch(plugin.pluginId, topic, payload, instanceId: instanceId));
+    return () => unawaited(
+      dispatch(plugin.pluginId, topic, payload, instanceId: instanceId),
+    );
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
@@ -3430,6 +3733,43 @@ class PluginBridgeAdapter {
   /// בטאב מפוצל הכותרת המשולבת אינה ספר, ולכן מדווחת החלונית הפעילה (ובטאב
   /// שאינו הנוכחי — הראשונה). דיווח כל החלוניות מחייב הרחבת הסכמה של
   /// `openTabs`, שהיא שינוי API בפני עצמו.
+  /// מצב המפרשים של טאב הקריאה כפי שהוא כבר טעון בטאב — בלי שאילתה נוספת.
+  /// `null` כשאין טאב קריאה, כשמצב הטאב עדיין לא נטען או כשאין בו מפרשים.
+  Map<String, dynamic>? _getActiveCommentators() {
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is TextBookTab) {
+      final state = pane.bloc.state;
+      if (state is! TextBookLoaded) return null;
+      if (state.availableCommentators.isEmpty &&
+          state.activeCommentators.isEmpty) {
+        return null;
+      }
+      return {
+        'available': state.availableCommentators,
+        'active': state.activeCommentators,
+        'rare': state.rareCommentators.toList()..sort(),
+        'groups': _commentatorGroupsToJson(state.commentatorGroups),
+      };
+    }
+    if (pane is PdfBookTab) {
+      // ל-PDF אין מצב מפרשים טעון; הרשימה נגזרת מהקישורים שכבר בטאב.
+      final available = <String>{
+        for (final link in pane.links)
+          if (LinkTypes.isDependentTextLink(link.connectionType))
+            getTitleFromPath(link.path2),
+      }.toList()..sort();
+      final active = pane.activeCommentators.toList()..sort();
+      if (available.isEmpty && active.isEmpty) return null;
+      return {
+        'available': available,
+        'active': active,
+        'rare': const <String>[],
+        'groups': const <Map<String, dynamic>>[],
+      };
+    }
+    return null;
+  }
+
   OpenedTab _paneForPlugins(OpenedTab tab) {
     if (tab is! CombinedTab) return tab;
     final state = _dependencies.tabsBloc.state;

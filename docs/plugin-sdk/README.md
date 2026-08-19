@@ -302,6 +302,10 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `library.getBookToc` | `library.content.read` | `{ bookId }` | `TocEntry[]` |
 | `library.listBookAltStructures` | `library.content.read` | `{ bookId }` | `AltStructure[]` |
 | `library.getBookAltToc` | `library.content.read` | `{ bookId, structureKey? }` | `TocEntry[]` |
+| `library.getCommentators` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, grouped? }` | `{ commentators }` או `{ groups }` |
+| `library.getLinks` | `library.links.read` | `{ bookId, categoryId?, startLine, endLine, connectionTypes?, targetTitles?, includeAnchors? }` (חלון עד 200 שורות) | `{ links, truncated }` |
+| `library.getLinkTargetsSummary` | `library.links.read` | `{ bookId, categoryId? }` | `{ targets, maxSourceLine }` |
+| `library.getLinkContent` | `library.content.read` | `{ links }` (עד 25) | `{ items }` |
 
 ### network.*
 
@@ -532,6 +536,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `app.open_url` | פתיחת קישור http/https בדפדפן ברירת המחדל של מערכת ההפעלה |
 | `library.books.read` | חיפוש וקריאת metadata של ספרים |
 | `library.content.read` | קריאת תוכן ספרים (TOC + טקסט) |
+| `library.links.read` | קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן) |
 | `search.fulltext.read` | חיפוש טקסט מלא |
 | `reader.open` | פתיחת ספרים + קריאת מצב הקורא |
 | `navigation.write` | ניווט בין מסכים |

@@ -16,6 +16,10 @@ const Map<String, String> apiCallToPermissionHint = {
   'library.getBookToc': 'library.content.read',
   'library.listBookAltStructures': 'library.content.read',
   'library.getBookAltToc': 'library.content.read',
+  'library.getLinkContent': 'library.content.read',
+  'library.getCommentators': pluginLinksReadPermission,
+  'library.getLinks': pluginLinksReadPermission,
+  'library.getLinkTargetsSummary': pluginLinksReadPermission,
 
   // app.*
   'app.getUserEmail': 'app.user_email.read',
@@ -75,7 +79,12 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.revealHighlight': 'reader.highlight',
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
+  'reader.getActiveCommentators': 'reader.open',
 };
+
+/// הרשאה לקריאת מפת הקישורים של הספרייה — המפרשים על ספר, קישורי טווח השורות
+/// וסיכום היעדים. נפרדת מ-`library.content.read` כי היא חושפת מבנה בלבד.
+const pluginLinksReadPermission = 'library.links.read';
 
 /// הרשאה לפתיחת דף של תוסף **אחר** (`plugin.openOther`). נפרדת מ-navigation.write
 /// כי היא מפעילה את ה-WebView של תוסף שלישי, ולא רק מזיזה את המשתמש בין מסכים.
@@ -166,6 +175,9 @@ const pluginValidPermissions = <String>[
 
   /// קריאת תוכן ספרים
   'library.content.read',
+
+  /// קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן)
+  pluginLinksReadPermission,
 
   // ===== חיפוש =====
   /// ביצוע חיפוש טקסט מלא

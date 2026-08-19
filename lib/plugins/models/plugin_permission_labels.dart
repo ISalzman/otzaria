@@ -166,6 +166,11 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'תוכן ספרים',
     description: 'קריאת תוכן הספרים מהספרייה',
   ),
+  'library.links.read': PluginPermissionInfo(
+    label: 'מפרשים וקישורים',
+    description:
+        'צפייה ברשימת המפרשים של ספר ובקישורים בין הספרים, בלי תוכן הספרים',
+  ),
 
   // ===== חיפוש =====
   'search.fulltext.read': PluginPermissionInfo(

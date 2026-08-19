@@ -254,8 +254,14 @@ class PluginBridgeHandler {
         if (action == 'getBookContent' ||
             action == 'getBookToc' ||
             action == 'listBookAltStructures' ||
-            action == 'getBookAltToc') {
+            action == 'getBookAltToc' ||
+            action == 'getLinkContent') {
           return 'library.content.read';
+        }
+        if (action == 'getCommentators' ||
+            action == 'getLinks' ||
+            action == 'getLinkTargetsSummary') {
+          return pluginLinksReadPermission;
         }
         return 'library.books.read';
       case 'search':
