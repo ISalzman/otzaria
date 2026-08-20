@@ -94,6 +94,31 @@ bool libraryUpdateButtonResets(LibraryUpdateStatus status) =>
     status == LibraryUpdateStatus.error ||
     status == LibraryUpdateStatus.blocked;
 
+/// פעולת לחצני "חזור"/"בית" במצב "אין תוצאות".
+enum LibraryEmptyStateAction {
+  /// אין טקסט חיפוש — ניווט רגיל בתיקיות.
+  navigate,
+
+  /// ניווט שמשמר את הטקסט ומריץ אותו מחדש בהיקף הרחב יותר.
+  navigateKeepingSearch,
+
+  /// אין היקף רחב יותר לנסות בו — איפוס החיפוש והחזרת עץ הספרייה.
+  resetSearch,
+}
+
+/// [inSubCategory] — האם החיפוש נעשה בתת-תיקייה, שאז התיקייה שמעליה היא
+/// היקף רחב יותר לאותו טקסט. בתיקייה הראשית אין היקף כזה.
+@visibleForTesting
+LibraryEmptyStateAction libraryEmptyStateAction({
+  required bool hasSearchText,
+  required bool inSubCategory,
+}) {
+  if (!hasSearchText) return LibraryEmptyStateAction.navigate;
+  return inSubCategory
+      ? LibraryEmptyStateAction.navigateKeepingSearch
+      : LibraryEmptyStateAction.resetSearch;
+}
+
 enum FlatLibraryRowKind { categoryHeader, book, rootBook, showMore }
 
 /// שורה בעץ הספרייה המשוטח. דגלי הקצוות משחזרים את מראה הכרטיס של
@@ -1134,18 +1159,26 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     ];
   }
 
+  /// [keepSearchQuery] — הטקסט בתיבה נשאר לשימוש, ולכן אינו מסומן כולו
+  /// בחזרת הפוקוס (הקלדת תו אחת הייתה מוחקת אותו).
   void _handleNavigateUp(
     BuildContext context,
     LibraryState state,
-    SettingsState settingsState,
-  ) {
-    if (settingsState.libraryViewMode == 'list' &&
+    SettingsState settingsState, {
+    bool keepSearchQuery = false,
+  }) {
+    // כשמוצגות תוצאות חיפוש עץ הקטגוריות אינו על המסך, וכיווץ הרחבה בו היה
+    // נראה כלחיצה שלא עשתה דבר — במצב הזה מנווטים לתיקיית האב.
+    if (state.searchResults == null &&
+        settingsState.libraryViewMode == 'list' &&
         _expandedCategories.isNotEmpty) {
       setState(() => _expandedCategories.remove(_expandedCategories.last));
     } else if (state.currentCategory?.parent != null) {
+      // הניווט משמר את שאילתת החיפוש ב-state, לכן החיפוש רץ מחדש בתיקיית
+      // האב עם אותו טקסט — עם דגלי הספרים החיצוניים שבהגדרות.
       context.read<LibraryBloc>().add(NavigateUp());
-      context.read<LibraryBloc>().add(const SearchBooks());
-      _refocusSearchBar(selectAll: true);
+      _searchWithSettings(context, settingsState);
+      _refocusSearchBar(selectAll: !keepSearchQuery);
     }
   }
 
@@ -1215,24 +1248,29 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     return KeyEventResult.handled;
   }
 
+  /// [keepSearchQuery] משאיר את טקסט החיפוש בתיבה, כך שהחיפוש יורץ מחדש
+  /// בתיקייה הראשית במקום להתאפס.
   void _handleNavigateHome(
     BuildContext context,
     LibraryState state,
-    SettingsState settingsState,
-  ) {
+    SettingsState settingsState, {
+    bool keepSearchQuery = false,
+  }) {
     setState(() {
       _expandedCategories.clear();
     });
     if (state.library != null) {
       context.read<LibraryBloc>().add(NavigateToCategory(state.library!));
     }
-    context.read<FocusRepository>().librarySearchController.clear();
+    if (!keepSearchQuery) {
+      context.read<FocusRepository>().librarySearchController.clear();
+    }
     _update(
       context,
       state,
       settingsState,
       restoreSearchFocus: true,
-      selectAllOnRestore: true,
+      selectAllOnRestore: !keepSearchQuery,
     );
   }
 
@@ -1265,26 +1303,39 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         ? 'אין תוצאות עבור "$searchText"'
         : 'אין פריטים להצגה בתיקייה זו';
 
-    void onBack() {
-      if (searchText.isNotEmpty) {
-        repo.librarySearchController.clear();
-        context.read<LibraryBloc>().add(const UpdateSearchQuery(''));
-        context.read<LibraryBloc>().add(const SearchBooks());
-      } else {
-        _handleNavigateUp(context, state, settingsState);
-      }
+    final action = libraryEmptyStateAction(
+      hasSearchText: searchText.isNotEmpty,
+      inSubCategory: state.currentCategory != state.library,
+    );
+    final keepSearch = action == LibraryEmptyStateAction.navigateKeepingSearch;
+
+    // איפוס בלי לכווץ את העץ — בתצוגת רשימה ההרחבות נשמרות, בשונה מ"בית".
+    void resetSearch() {
+      repo.librarySearchController.clear();
+      _update(context, state, settingsState, restoreSearchFocus: true);
     }
 
     return LibraryEmptyStateWidget(
       message: message,
-      onBack: onBack,
-      onHome: () => _handleNavigateHome(context, state, settingsState),
+      onBack: action == LibraryEmptyStateAction.resetSearch
+          ? resetSearch
+          : () => _handleNavigateUp(
+              context,
+              state,
+              settingsState,
+              keepSearchQuery: keepSearch,
+            ),
+      onHome: () => _handleNavigateHome(
+        context,
+        state,
+        settingsState,
+        keepSearchQuery: keepSearch,
+      ),
       onOpenSearch: () => _openSearchDialog(context, searchQuery: searchText),
       onOpenLink: isDeepLink
           ? () => _tryHandleDeepLink(context, searchText)
           : null,
-      showSearchElsewhereHint:
-          searchText.isNotEmpty && state.currentCategory != state.library,
+      showSearchElsewhereHint: keepSearch,
     );
   }
 
@@ -2297,9 +2348,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         .read<FocusRepository>()
         .librarySearchController
         .text;
-    context.read<LibraryBloc>().add(
-      UpdateSearchQuery(searchText.replaceAll('"', '')),
-    );
+    // אותה שאילתה כמו בהקלדה ישירה — מנוע החיפוש מנרמל מרכאות בעצמו.
+    // הסרתן כאן מפילה שאילתות כמו ש"ס מתחת למינימום 3 התווים ב-SearchBooks.
+    context.read<LibraryBloc>().add(UpdateSearchQuery(searchText));
     _searchWithSettings(context, settingsState);
     setState(() {});
     if (restoreSearchFocus) {
