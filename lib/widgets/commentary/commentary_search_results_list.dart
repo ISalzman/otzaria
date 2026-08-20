@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 import 'package:otzaria/theme/app_fonts.dart';
-import 'package:otzaria/theme/app_surfaces.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 
 /// מאתר את שורת התוצאה האחרונה שאינה אחרי [currentIdx], שמונה היקרויות
 /// ולא שורות.
@@ -133,40 +130,20 @@ class _CommentarySearchResultsListState
       items.add(_SearchResultItem.result(snippet));
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        if (item.isHeader) return _buildHeader(context, item.header!);
-        return _buildResult(context, item.snippet!, selectedGlobalIndex);
-      },
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, String header) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4, right: 4, left: 4),
-      child: Row(
-        children: [
-          RtlIcon(
-            FluentIcons.text_align_right_24_regular,
-            size: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              header,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
+    return NavTreeFocusGroup(
+      child: ListView.builder(
+        padding: kNavTreeListPadding,
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          if (item.isHeader) return NavTreeHeader(title: item.header!);
+          return NavTreeGroupCard(
+            // הקבוצה נפתחת אחרי כותרת מפרש ונסגרת לפני הכותרת הבאה.
+            isGroupStart: index == 0 || items[index - 1].isHeader,
+            isGroupEnd: index == items.length - 1 || items[index + 1].isHeader,
+            child: _buildResult(context, item.snippet!, selectedGlobalIndex),
+          );
+        },
       ),
     );
   }
@@ -176,33 +153,14 @@ class _CommentarySearchResultsListState
     CommentarySearchSnippet snippet,
     int selectedGlobalIndex,
   ) {
-    final isSelected = snippet.globalIndex == selectedGlobalIndex;
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppSurfaces.selectedItem(Theme.of(context).colorScheme)
-                : null,
-            border: Border.all(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outlineVariant,
-              width: 1,
-            ),
-            borderRadius: AppTokens.borderRadiusAll,
-          ),
-          child: InkWell(
-            onTap: () => widget.onSnippetTap(snippet.globalIndex),
-            borderRadius: AppTokens.borderRadiusAll,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Text.rich(
-                TextSpan(
-                  children: _highlightSpans(context, settingsState, snippet),
-                ),
-              ),
+        return NavTreeContentRow(
+          isSelected: snippet.globalIndex == selectedGlobalIndex,
+          onTap: () => widget.onSnippetTap(snippet.globalIndex),
+          child: Text.rich(
+            TextSpan(
+              children: _highlightSpans(context, settingsState, snippet),
             ),
           ),
         );

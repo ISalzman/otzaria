@@ -105,12 +105,13 @@ class _ShamorZachorSidebarState extends State<ShamorZachorSidebar> {
       rows[lastGrouped!].isGroupEnd = true;
     }
 
-    return ListView.builder(
-      // שוליים אופקיים — הכרטיסים לא נוגעים בקצה, וקו הגלילה ברווח.
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: rows.length,
-      itemBuilder: (context, index) =>
-          _buildNavRow(context, rows[index], selectAll),
+    return NavTreeFocusGroup(
+      child: ListView.builder(
+        padding: kNavTreeListPadding,
+        itemCount: rows.length,
+        itemBuilder: (context, index) =>
+            _buildNavRow(context, rows[index], selectAll),
+      ),
     );
   }
 

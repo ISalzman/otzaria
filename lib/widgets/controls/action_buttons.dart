@@ -3,6 +3,9 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ── ActionButton ──────────────────────────────────────────────────────────────
@@ -279,6 +282,70 @@ class _BalancedText extends StatelessWidget {
 
         return Text(bestText, textAlign: textAlign);
       },
+    );
+  }
+}
+
+// ── SquareIconButton ──────────────────────────────────────────────────────────
+
+enum _SquareVariant { field, toolbar }
+
+/// כפתור אייקון מרובע (פינות מעוגלות ברדיוס האחיד) בגובה שדה קלט:
+/// - [SquareIconButton.field] — רקע tonal, לשורה אחת עם [OtzariaSearchField]
+/// - [SquareIconButton.toolbar] — רקע שקוף, בתוך סרגל צף שכבר צבוע
+///
+/// [slim] = null: יורש מ-[SettingsBloc.compactMenuMode], בדיוק כמו שדה החיפוש,
+/// כדי שהגבהים יישארו זהים בשני המצבים.
+class SquareIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+  final bool? slim;
+  final _SquareVariant _variant;
+
+  const SquareIconButton.field({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.slim,
+  }) : _variant = _SquareVariant.field;
+
+  const SquareIconButton.toolbar({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.slim,
+  }) : _variant = _SquareVariant.toolbar;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isSlim =
+        slim ?? context.read<SettingsBloc?>()?.state.compactMenuMode ?? false;
+    final side = AppInputTokens.height(isSlim);
+
+    return SizedBox(
+      width: side,
+      height: side,
+      child: IconButton(
+        icon: Icon(icon, size: isSlim ? 18 : 20),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          backgroundColor: _variant == _SquareVariant.field
+              ? cs.surfaceContainerHighest
+              : Colors.transparent,
+          foregroundColor: cs.onSurfaceVariant,
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppTokens.borderRadiusAll,
+          ),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
     );
   }
 }

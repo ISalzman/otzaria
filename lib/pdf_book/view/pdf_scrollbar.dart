@@ -13,7 +13,6 @@ class PdfScrollbar extends StatefulWidget {
   final PdfViewerController controller;
   final ScrollbarOrientation orientation;
   final double trackThickness;
-  final Color? trackColor;
   final Color? thumbColor;
   final double thumbMinSize;
   final PdfScrollBoundsBuilder? scrollBoundsBuilder;
@@ -32,7 +31,6 @@ class PdfScrollbar extends StatefulWidget {
     required this.controller,
     required this.orientation,
     this.trackThickness = 12.0,
-    this.trackColor,
     this.thumbColor,
     this.thumbMinSize = 40.0,
     this.scrollBoundsBuilder,
@@ -210,9 +208,6 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
         ? Alignment.centerLeft
         : Alignment.centerRight;
     final colorScheme = Theme.of(context).colorScheme;
-    final resolvedTrackColor =
-        widget.trackColor ??
-        colorScheme.surfaceContainerHighest.withValues(alpha: 0.8);
     final resolvedThumbColor =
         widget.thumbColor ?? colorScheme.primary.withValues(alpha: 0.82);
 
@@ -418,13 +413,9 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
                     },
                     child: Stack(
                       children: [
-                        Container(
+                        SizedBox(
                           key: _trackKey,
                           width: widget.trackThickness,
-                          decoration: BoxDecoration(
-                            color: resolvedTrackColor,
-                            borderRadius: AppTokens.borderRadiusAll,
-                          ),
                         ),
                         Positioned(
                           top: thumbTop,
@@ -470,7 +461,6 @@ class _PdfScrollbarState extends State<PdfScrollbar> {
 class PdfHorizontalScrollbar extends StatefulWidget {
   final PdfViewerController controller;
   final double trackThickness;
-  final Color? trackColor;
   final Color? thumbColor;
   static const double _minThumbWidth = 60.0;
 
@@ -478,7 +468,6 @@ class PdfHorizontalScrollbar extends StatefulWidget {
     super.key,
     required this.controller,
     this.trackThickness = 8.0,
-    this.trackColor,
     this.thumbColor,
   });
 

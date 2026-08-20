@@ -685,6 +685,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'attachToTopEdge: מעטפת ריבועית צמודה + עיגול קעור כטלאי, ללא FloatingPanel (wide)',
+    (tester) async {
+      const paneColor = Color(0xFF123456);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: SizedBox(
+                width: 1200,
+                height: 700,
+                child: AdaptiveSidePane(
+                  isOpen: true,
+                  alignment: AlignmentDirectional.centerEnd,
+                  attachToTopEdge: true,
+                  paneColor: paneColor,
+                  paneWidth: 300,
+                  minMainContentWidth: 420,
+                  onClose: () {},
+                  mainContent: const SizedBox.expand(),
+                  paneContent: const SizedBox.expand(),
+                  autoHandleResponsiveVisibility: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byType(FloatingPanel),
+        findsNothing,
+        reason: 'במצב הצמדה החלונית אינה חלונית צפה (FloatingPanel)',
+      );
+
+      // המעטפת ריבועית (העיגול הקעור מצויר בנפרד כטלאי, לא כ-borderRadius).
+      final shell = tester.widget<Material>(
+        find.byWidgetPredicate((w) => w is Material && w.color == paneColor),
+      );
+      expect(
+        shell.borderRadius,
+        anyOf(isNull, equals(BorderRadius.zero)),
+        reason: 'מעטפת החלונית ריבועית; העיגול הקעור אינו borderRadius',
+      );
+
+      // קיים טלאי CustomPaint בצבע החלונית שמצייר את העיגול הקעור בפינה.
+      final filletPainter = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where(
+            (cp) =>
+                cp.painter.runtimeType.toString() == '_ConcaveCornerPainter',
+          );
+      expect(
+        filletPainter,
+        isNotEmpty,
+        reason: 'צריך להתקיים טלאי עיגול קעור בפינה הפנימית-עליונה',
+      );
+    },
+  );
+
   // ── מיקום פס הגלילה בקצה החיצוני ─────────────────────────────────────────
   //
   // רגרסיה: ידית הגרירה (ResizableDragHandle) יושבת בקצה הפנימי של הפאנל.

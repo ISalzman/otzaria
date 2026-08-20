@@ -79,7 +79,6 @@ import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/app_selection_area.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/utils/link_helpers.dart';
 import 'package:otzaria/text_book/utils/link_processing.dart'
@@ -87,7 +86,8 @@ import 'package:otzaria/text_book/utils/link_processing.dart'
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:otzaria/widgets/widgets_exports.dart';
-import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 
 // קבועים למצבי תצוגה (למניעת magic strings)
@@ -244,6 +244,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   final FocusNode altTitlesSearchFocusNode = FocusNode();
   final FocusNode _bookContentFocusNode = FocusNode(); // FocusNode לתוכן הספר
   late TabController tabController;
+
+  /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
@@ -886,6 +889,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// מאזין למעבר בין לשוניות הפאנל הצדדי. מעביר פוקוס לשדה החיפוש של
   /// הלשונית החדשה רק לאחר שהמעבר הושלם (לא במהלך אנימציית המעבר).
   void _handleTabChange() {
+    _searchHost.activeTab = tabController.index;
     if (tabController.indexIsChanging) return;
     _focusActiveTabSearchField();
   }
@@ -1016,6 +1020,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     widget.tab.navNextTocNotifier.removeListener(_onNavNextToc);
 
     tabController.dispose();
+    _searchHost.dispose();
     textSearchFocusNode.dispose();
     navigationSearchFocusNode.dispose();
     altTitlesSearchFocusNode.dispose();
@@ -1230,21 +1235,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 }
 
                 if (state is TextBookInitial || state is TextBookLoading) {
-                  final isCompact = context
-                      .read<SettingsBloc>()
-                      .state
-                      .compactMenuMode;
                   return Scaffold(
                     body: Column(
                       children: [
                         AppTopBar(
                           leadingItems: [
                             AppTopBarItem(
-                              widget: BarButton.icon(
-                                tooltip: 'ניווט וחיפוש',
-                                icon: OtzariaIcons.text_continuous_24_regular,
-                                compact: isCompact,
-                                onPressed: () {},
+                              widget: NavPanelToggleButton(
+                                isOpen: false,
+                                onToggle: () {},
                               ),
                             ),
                           ],
@@ -1371,6 +1370,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   ) {
     return AppTopBar(
       leadingItems: [
+        AppTopBarItem(widget: _buildPaneSearchBar(state)),
         AppTopBarItem(widget: _buildMenuButton(context, state)),
         if (state.showPageShapeView)
           AppTopBarItem(widget: _buildPageShapeSettingsButton(context, state)),
@@ -1524,16 +1524,30 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildMenuButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
+    return NavPanelToggleButton(
       key: widget.enableTourTargets ? textBookNavigationTourTargetKey : null,
-      tooltip: 'ניווט וחיפוש',
-      icon: state.showLeftPane
-          ? OtzariaIcons.text_continuous_24_filled
-          : OtzariaIcons.text_continuous_24_regular,
-      compact: isCompact,
-      onPressed: () =>
+      isOpen: state.showLeftPane,
+      onToggle: () =>
           context.read<TextBookBloc>().add(ToggleLeftPane(!state.showLeftPane)),
+    );
+  }
+
+  /// סרגל החיפוש שמעל החלונית — פריט ראשון בסרגל העליון, ולכן הוא נפתח
+  /// מכיוון הדופן ודוחק את אייקון הפתיחה פנימה.
+  Widget _buildPaneSearchBar(TextBookLoaded state) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _sidebarWidth,
+      builder: (context, paneWidth, _) => NavPanelSearchBar(
+        host: _searchHost,
+        isOpen: state.showLeftPane,
+        paneWidth: paneWidth,
+        isPinned: state.pinLeftPane,
+        onTogglePin: MediaQuery.of(context).size.width >= 600
+            ? () => context.read<TextBookBloc>().add(
+                TogglePinLeftPane(!state.pinLeftPane),
+              )
+            : null,
+      ),
     );
   }
 
@@ -2666,16 +2680,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
-    return AdaptiveSidePane(
+    return NavSidePanel(
       isOpen: state.showLeftPane,
       alignment: AlignmentDirectional.centerEnd,
       paneWidth: _sidebarWidth.value,
       minMainContentWidth: 520,
       onClose: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-      paneContent: TextBookNavPanelTourTarget(
-        isActiveTab: widget.enableTourTargets,
-        child: _buildLeftPaneContent(state),
+      paneContent: NavPanelSearchScope(
+        host: _searchHost,
+        child: TextBookNavPanelTourTarget(
+          isActiveTab: widget.enableTourTargets,
+          child: _buildLeftPaneContent(state),
+        ),
       ),
       mainContent: _buildHTMLViewer(state),
       isResizable: true,
@@ -2694,13 +2711,14 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         _paneUsesPushLayout = usesPushLayout;
       },
       autoHandleResponsiveVisibility: false,
-      scrollbarTopMargin: 0,
     );
   }
 
   Widget _buildHTMLViewer(TextBookLoaded state) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 5, 5),
+      // ללא שוליים אופקיים: רוחב הטקסט נקבע ב-textMaxWidth, ושוליים כאן הרחיקו
+      // את פס הגלילה מדופן החלון בשונה משאר החלוניות.
+      padding: const EdgeInsets.only(bottom: 5),
       child: GestureDetector(
         onScaleUpdate: (details) {
           context.read<TextBookBloc>().add(
@@ -2803,7 +2821,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
     return Column(
       children: [
-        SidebarTabHeader(
+        NavPanelTabHeader(
           controller: tabController,
           tabs: [
             (
@@ -2823,26 +2841,27 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               label: 'חיפוש',
             ),
           ],
-          isPinned: state.pinLeftPane,
-          onTogglePin: MediaQuery.of(context).size.width >= 600
-              ? () => context.read<TextBookBloc>().add(
-                  TogglePinLeftPane(!state.pinLeftPane),
-                )
-              : null,
         ),
         Expanded(
           child: TabBarView(
             controller: tabController,
             children: [
-              _buildTocViewer(context, state),
+              NavPanelSearchSlot(
+                index: 0,
+                child: _buildTocViewer(context, state),
+              ),
               if (_hasAltTitles)
-                AltTocSidebarView(
-                  book: widget.tab.book,
-                  focusNode: altTitlesSearchFocusNode,
-                  closeLeftPaneCallback: () => context.read<TextBookBloc>().add(
-                    const ToggleLeftPane(false),
+                NavPanelSearchSlot(
+                  index: 1,
+                  child: AltTocSidebarView(
+                    book: widget.tab.book,
+                    focusNode: altTitlesSearchFocusNode,
+                    closeLeftPaneCallback: () =>
+                        context.read<TextBookBloc>().add(
+                          const ToggleLeftPane(false),
+                        ),
+                    scrollController: state.scrollController,
                   ),
-                  scrollController: state.scrollController,
                 ),
               Builder(
                 builder: (context) {
@@ -2854,19 +2873,22 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     textSearchFocusNode.requestFocus();
                   }
 
-                  return CallbackShortcuts(
-                    bindings: <ShortcutActivator, VoidCallback>{
-                      LogicalKeySet(
-                        LogicalKeyboardKey.control,
-                        LogicalKeyboardKey.keyF,
-                      ): openSearch,
-                      // Mac: Cmd+F
-                      LogicalKeySet(
-                        LogicalKeyboardKey.meta,
-                        LogicalKeyboardKey.keyF,
-                      ): openSearch,
-                    },
-                    child: _buildSearchView(context, state),
+                  return NavPanelSearchSlot(
+                    index: _hasAltTitles ? 2 : 1,
+                    child: CallbackShortcuts(
+                      bindings: <ShortcutActivator, VoidCallback>{
+                        LogicalKeySet(
+                          LogicalKeyboardKey.control,
+                          LogicalKeyboardKey.keyF,
+                        ): openSearch,
+                        // Mac: Cmd+F
+                        LogicalKeySet(
+                          LogicalKeyboardKey.meta,
+                          LogicalKeyboardKey.keyF,
+                        ): openSearch,
+                      },
+                      child: _buildSearchView(context, state),
+                    ),
                   );
                 },
               ),

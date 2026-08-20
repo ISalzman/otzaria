@@ -3,7 +3,6 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
-import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -21,8 +20,15 @@ import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
 import 'package:otzaria/search/view/full_text_facet_filtering.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/feedback/indexing_warning.dart';
+
+/// רוחב הסרגל שמתחתיו בוררי המיון והאיחוד מתכווצים לכפתורי אייקון.
+/// הבדיקה היא על רוחב הסרגל עצמו (ולא על גודל החלון), כדי שהכיווץ יקרה
+/// בדיוק כשאין מקום לשני ה-dropdown ברוחב מלא.
+const double _kMenusCollapseWidth = 900;
 
 class TantivyFullTextSearch extends StatefulWidget {
   final SearchingTab tab;
@@ -75,6 +81,15 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   bool _appliedNarrowLeftPaneDefault = false;
   // רוחב חי של פאנל הסינון בזמן גרירה; נשמר להגדרות ב-onPaneResizeEnd.
   double? _facetPaneWidthOverride;
+
+  /// פעולת החיפוש של חלונית הסינון — מוזנת לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
+
+  @override
+  void dispose() {
+    _searchHost.dispose();
+    super.dispose();
+  }
 
   void _openEditDialog() {
     showDialog(
@@ -240,8 +255,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   if (mounted) widget.tab.isLeftPaneOpen.value = false;
                 });
               }
-              if (isNarrow) return _buildForSmallScreens();
-              return _buildForWideScreens();
+              final collapseMenus = constraints.maxWidth < _kMenusCollapseWidth;
+              if (isNarrow) return _buildForSmallScreens(collapseMenus);
+              return _buildForWideScreens(collapseMenus);
             },
           ),
         ),
@@ -249,7 +265,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  Widget _buildForSmallScreens() {
+  Widget _buildForSmallScreens(bool collapseMenus) {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         return Container(
@@ -258,8 +274,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           child: Column(
             children: [
               _buildIndexingWarning(),
-              // השורה התחתונה - מוצגת תמיד!
-              _buildBottomRow(state),
+              _buildSearchTopBar(state, collapseMenus: collapseMenus),
               // חיווי סינון קטגוריות
               if (_shouldShowFacetFilterBanner(state))
                 _buildFacetFilterBanner(context, state),
@@ -306,7 +321,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  Widget _buildForWideScreens() {
+  Widget _buildForWideScreens(bool collapseMenus) {
     return Column(
       children: [
         _buildIndexingWarning(),
@@ -315,88 +330,10 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             builder: (context, state) {
               return Column(
                 children: [
-                  AppTopBar(
-                    leadingItems: [
-                      AppTopBarItem(
-                        widget: BarButton.icon(
-                          tooltip: 'הצג/הסתר עץ ספרים',
-                          icon: FluentIcons.line_horizontal_3_20_regular,
-                          compact: context
-                              .read<SettingsBloc>()
-                              .state
-                              .compactMenuMode,
-                          onPressed: () {
-                            widget.tab.isLeftPaneOpen.value =
-                                !widget.tab.isLeftPaneOpen.value;
-                          },
-                        ),
-                      ),
-                    ],
-                    center: state.searchQuery.isEmpty
-                        ? const SizedBox.shrink()
-                        : Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  'מוצגות תוצאות של חיפוש: ',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.7),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: ScrollConfiguration(
-                                  behavior: ScrollConfiguration.of(
-                                    context,
-                                  ).copyWith(scrollbars: false),
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: SearchTermsDisplay(tab: widget.tab),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              BarButton.icon(
-                                tooltip: 'ערוך חיפוש',
-                                icon: FluentIcons.edit_24_regular,
-                                compact: context
-                                    .read<SettingsBloc>()
-                                    .state
-                                    .compactMenuMode,
-                                onPressed: _openEditDialog,
-                              ),
-                            ],
-                          ),
-                    trailingItems: state.searchQuery.isEmpty
-                        ? const []
-                        : [
-                            AppTopBarItem(
-                              widget: _buildResultCounts(context, state),
-                            ),
-                            AppTopBarItem(
-                              dividerBefore: true,
-                              widget: OrderOfResults(
-                                widget: TantivySearchResults(tab: widget.tab),
-                              ),
-                            ),
-                            const AppTopBarItem(
-                              widget: GroupingOfResults(),
-                            ),
-                            // מיקום תוצאות המקור החיצוני (קודמות/מאוחרות) —
-                            // הפקד מסתיר את עצמו כשאין ספק חיצוני פעיל.
-                            AppTopBarItem(
-                              widget: ExternalResultsPositionControl(
-                                tab: widget.tab,
-                              ),
-                            ),
-                          ],
+                  _buildSearchTopBar(
+                    state,
+                    collapseMenus: collapseMenus,
+                    showPaneSearchBar: true,
                   ),
                   if (_shouldShowFacetFilterBanner(state))
                     _buildFacetFilterBanner(context, state),
@@ -412,12 +349,18 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                                 (_facetPaneWidthOverride ??
                                         settingsState.facetFilteringWidth)
                                     .clamp(220.0, 600.0);
-                            return AdaptiveSidePane(
+                            return NavSidePanel(
                               isOpen: isOpen,
                               alignment: AlignmentDirectional.centerEnd,
                               mainContent: _buildResultsContent(context),
-                              paneContent: SearchFacetFiltering(
-                                tab: widget.tab,
+                              paneContent: NavPanelSearchScope(
+                                host: _searchHost,
+                                child: NavPanelSearchSlot(
+                                  index: 0,
+                                  child: SearchFacetFiltering(
+                                    tab: widget.tab,
+                                  ),
+                                ),
                               ),
                               paneWidth: paneWidth,
                               minMainContentWidth: 300,
@@ -459,21 +402,36 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   /// שורת המקור החיצוני נושאת גם את חיווי ההתקדמות בזמן החיפוש. כך הספירות
   /// של שני המקורות יושבות זו מעל זו במקום אחד, ואזור התוצאות מציג תוצאות
   /// בלבד.
-  Widget _buildResultCounts(BuildContext context, SearchState state) {
+  Widget _buildResultCounts(
+    BuildContext context,
+    SearchState state, {
+    required bool collapsed,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final muted = TextStyle(fontSize: 14, color: cs.onSurfaceVariant);
     final engineLine = state.totalGroups != null
         ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
         : '${state.results.length}/${state.totalResults} תוצאות';
+    final compactEngineLine =
+        '${state.results.length}/${state.totalGroups ?? state.totalResults}';
     return ValueListenableBuilder<ExternalSearchStatus?>(
       valueListenable: widget.tab.externalSearchStatus,
       builder: (context, status, _) {
-        if (status == null) return Text(engineLine, style: muted);
+        if (status == null) {
+          final text = Text(
+            collapsed ? compactEngineLine : engineLine,
+            style: muted,
+          );
+          return collapsed ? Tooltip(message: engineLine, child: text) : text;
+        }
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('אוצריא: $engineLine', style: muted.copyWith(fontSize: 12)),
+            Text(
+              'אוצריא: ${collapsed ? compactEngineLine : engineLine}',
+              style: muted.copyWith(fontSize: 12),
+            ),
             _buildExternalCountLine(context, status, muted),
           ],
         );
@@ -629,89 +587,137 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
-  // השורה העליונה - כפתור תפריט + מילות חיפוש + כפתור עריכה
-  Widget _buildBottomRow(SearchState state) {
-    return Container(
-      height: 60, // גובה קבוע
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: Row(
-        children: [
-          // כפתור פתיחה/סגירה של עץ הספרים - שלושה פסים
-          IconButton(
-            tooltip: "הצג/הסתר עץ ספרים",
-            icon: const Icon(FluentIcons.line_horizontal_3_20_regular),
-            onPressed: () {
-              widget.tab.isLeftPaneOpen.value =
-                  !widget.tab.isLeftPaneOpen.value;
-            },
+  /// הסרגל העליון של מסך החיפוש — זהה בכל רוחבי המסך.
+  /// [collapseMenus] מכווץ את בוררי המיון והאיחוד לכפתורי אייקון.
+  /// [showPaneSearchBar] — רק בפריסה הרחבה, שבה חלונית הסינון היא
+  /// [NavSidePanel] ושדה "איתור ספר" עולה לסרגל. בפריסה הצרה החלונית מציירת
+  /// אותו בעצמה.
+  Widget _buildSearchTopBar(
+    SearchState state, {
+    required bool collapseMenus,
+    bool showPaneSearchBar = false,
+  }) {
+    final hasQuery = state.searchQuery.isNotEmpty;
+    return AppTopBar(
+      leadingItems: [
+        if (showPaneSearchBar)
+          AppTopBarItem(
+            widget: ValueListenableBuilder<bool>(
+              valueListenable: widget.tab.isLeftPaneOpen,
+              builder: (context, isOpen, _) =>
+                  BlocBuilder<SettingsBloc, SettingsState>(
+                    buildWhen: (p, c) =>
+                        p.facetFilteringWidth != c.facetFilteringWidth,
+                    builder: (context, settingsState) => NavPanelSearchBar(
+                      host: _searchHost,
+                      isOpen: isOpen,
+                      paneWidth:
+                          (_facetPaneWidthOverride ??
+                                  settingsState.facetFilteringWidth)
+                              .clamp(220.0, 600.0),
+                    ),
+                  ),
+            ),
           ),
-          // מילות החיפוש + כפתור עריכה (רק אם יש חיפוש)
-          if (state.searchQuery.isNotEmpty) ...[
-            Expanded(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'חיפוש: ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // הצגת מילות החיפוש רק בחיפוש מתקדם
-                  if (state.isAdvancedSearchEnabled)
-                    Flexible(
-                      child: SearchTermsDisplay(tab: widget.tab),
-                    )
-                  else
-                    Flexible(
-                      child: Text(
-                        state.searchQuery,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  IconButton(
-                    icon: const Icon(FluentIcons.edit_24_regular, size: 20),
-                    tooltip: 'ערוך חיפוש',
-                    onPressed: _openEditDialog,
-                  ),
-                ],
-              ),
+        AppTopBarItem(
+          widget: ValueListenableBuilder<bool>(
+            valueListenable: widget.tab.isLeftPaneOpen,
+            builder: (context, isOpen, _) => NavPanelToggleButton(
+              isOpen: isOpen,
+              onToggle: () => widget.tab.isLeftPaneOpen.value = !isOpen,
             ),
-            // מספר תוצאות
-            Text(
-              state.totalGroups != null
-                  ? '${state.results.length}/${state.totalGroups} תוצאות מאוחדות (מתוך ${state.totalResults})'
-                  : '${state.results.length}/${state.totalResults} תוצאות',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(
+          ),
+        ),
+      ],
+      center: hasQuery ? _buildQueryDisplay(context) : const SizedBox.shrink(),
+      trailingItems: hasQuery
+          ? [
+              AppTopBarItem(
+                widget: _buildResultCounts(
                   context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  state,
+                  collapsed: collapseMenus,
+                ),
+              ),
+              AppTopBarItem(
+                dividerBefore: true,
+                widget: _animatedBarControl(
+                  collapsed: collapseMenus,
+                  child: OrderOfResults(
+                    widget: TantivySearchResults(tab: widget.tab),
+                    iconOnly: collapseMenus,
+                  ),
+                ),
+              ),
+              AppTopBarItem(
+                widget: _animatedBarControl(
+                  collapsed: collapseMenus,
+                  child: GroupingOfResults(iconOnly: collapseMenus),
+                ),
+              ),
+              AppTopBarItem(
+                widget: _animatedBarControl(
+                  collapsed: collapseMenus,
+                  child: ExternalResultsPositionControl(
+                    tab: widget.tab,
+                    compact: collapseMenus,
+                  ),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
+
+  /// מילות החיפוש בתוך סרגל בעיצוב שדה החיפוש; לחיצה עליו פותחת את דיאלוג
+  /// העריכה.
+  Widget _buildQueryDisplay(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'חיפוש',
+          style: TextStyle(
+            fontSize: AppTokens.fontMD,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: AppTokens.spaceSM),
+        Flexible(
+          child: OtzariaSearchDisplayBar(
+            icon: FluentIcons.edit_24_regular,
+            tooltip: 'ערוך חיפוש',
+            onTap: _openEditDialog,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SearchTermsDisplay(tab: widget.tab),
               ),
             ),
-            const SizedBox(width: 4),
-            // סדר מיון
-            OrderOfResults(
-              widget: TantivySearchResults(tab: widget.tab),
-              compact: true,
-            ),
-            const SizedBox(width: 4),
-            // איחוד תוצאות
-            const GroupingOfResults(compact: true),
-            const SizedBox(width: 4),
-            // מיקום תוצאות המקור החיצוני — נסתר כשאין ספק חיצוני פעיל
-            ExternalResultsPositionControl(tab: widget.tab, compact: true),
-          ],
-        ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// מעבר מונפש בין ה-dropdown המלא לכפתור האייקון המכווץ.
+  Widget _animatedBarControl({
+    required bool collapsed,
+    required Widget child,
+  }) {
+    return AnimatedSize(
+      duration: AppTokens.animNormal,
+      curve: Curves.easeInOut,
+      child: AnimatedSwitcher(
+        duration: AppTokens.animNormal,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: animation, child: child),
+        ),
+        child: KeyedSubtree(key: ValueKey(collapsed), child: child),
       ),
     );
   }

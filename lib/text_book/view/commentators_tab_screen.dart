@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -9,7 +8,6 @@ import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
-import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,17 +32,16 @@ import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria/widgets/layout/reading_area_width.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
-import 'package:otzaria/widgets/misc/animated_pin_button.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -248,6 +245,9 @@ CommentatorsVerseStep? computeVerseStep(
   );
 }
 
+/// רוחב חלונית הניווט בכרטיסיית המפרשים.
+const double _kNavPaneWidth = 320;
+
 class CommentatorsTabScreen extends StatefulWidget {
   final CommentatorsTab tab;
   final Function(OpenedTab) openBookCallback;
@@ -405,6 +405,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
 
   late final TabController _navTabController;
 
+  /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
+  final NavPanelSearchHost _searchHost = NavPanelSearchHost();
+
   // אינדקסי טאבים בסרגל הניווט הצדדי
   static const int _commentatorsTabIndex = 1;
   static const int _searchTabIndex = 2;
@@ -414,6 +417,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     super.initState();
     _navTabController = TabController(length: 3, vsync: this);
     _navTabController.addListener(() {
+      _searchHost.activeTab = _navTabController.index;
       if (_navTabController.index == _searchTabIndex) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _searchFocusNode.requestFocus();
@@ -459,6 +463,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     }
     FocusRepository().unregisterTabContentFocusRequester(widget.tab);
     _navTabController.dispose();
+    _searchHost.dispose();
     _typeSelection.dispose();
     _commentarySearchController.dispose();
     _searchFocusNode.dispose();
@@ -677,21 +682,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
             },
             builder: (context, state) {
               if (state is! TextBookLoaded) {
-                final isCompact = context
-                    .read<SettingsBloc>()
-                    .state
-                    .compactMenuMode;
                 return Scaffold(
                   body: Column(
                     children: [
                       AppTopBar(
                         leadingItems: [
                           AppTopBarItem(
-                            widget: BarButton.icon(
-                              tooltip: 'ניווט',
-                              icon: OtzariaIcons.text_continuous_24_regular,
-                              compact: isCompact,
-                              onPressed: () {},
+                            widget: NavPanelToggleButton(
+                              isOpen: false,
+                              onToggle: () {},
                             ),
                           ),
                         ],
@@ -725,33 +724,33 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     children: [
                       _buildAppBar(context, state, chapters),
                       Expanded(
-                        child: Padding(
-                          padding: SplitPaneContentInset.of(context),
-                          child: Stack(
-                            children: [
-                              AdaptiveSidePane(
-                                isOpen: _navPaneOpen || _pinLeftPane,
-                                onClose: () {
-                                  if (!_pinLeftPane) {
-                                    setState(() => _navPaneOpen = false);
-                                  }
-                                },
-                                alignment: AlignmentDirectional.centerEnd,
-                                paneWidth: 320,
-                                minMainContentWidth: 400,
-                                mainContent: _buildCommentaryMainContent(
-                                  context,
-                                  state,
-                                  effectiveIndexes,
-                                ),
-                                paneContent: _buildNavPanel(
+                        child: Stack(
+                          children: [
+                            NavSidePanel(
+                              isOpen: _navPaneOpen || _pinLeftPane,
+                              onClose: () {
+                                if (!_pinLeftPane) {
+                                  setState(() => _navPaneOpen = false);
+                                }
+                              },
+                              alignment: AlignmentDirectional.centerEnd,
+                              paneWidth: _kNavPaneWidth,
+                              minMainContentWidth: 400,
+                              mainContent: _buildCommentaryMainContent(
+                                context,
+                                state,
+                                effectiveIndexes,
+                              ),
+                              paneContent: NavPanelSearchScope(
+                                host: _searchHost,
+                                child: _buildNavPanel(
                                   context,
                                   state: state,
                                   chapters: chapters,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -773,7 +772,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     TextBookLoaded state,
     List<int>? effectiveIndexes,
   ) {
-    final listContent = NotificationListener<UserScrollNotification>(
+    Widget listContentWithWidth(
+      double? contentMaxWidth,
+    ) => NotificationListener<UserScrollNotification>(
       onNotification: (notification) {
         if (notification.direction != ScrollDirection.idle &&
             _navPaneOpen &&
@@ -820,6 +821,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           externalAllExpandedNotifier: _allExpandedInChild,
           typeSelection: _typeSelection,
           personalNotesLoader: loadStoredPersonalNotes,
+          contentMaxWidth: contentMaxWidth,
         ),
       ),
     );
@@ -834,18 +836,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               availableWidth: constraints.maxWidth,
             );
 
-            if (textMaxWidth > 0) {
-              // יישור לראש (topCenter) ולא Center — אחרת כשהמפרשים מכווצים
-              // הרשימה (shrinkWrap) נמוכה ומתמרכזת אנכית, ונוצר רווח למעלה.
-              return Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: textMaxWidth),
-                  child: listContent,
-                ),
-              );
-            }
-            return listContent;
+            // הרוחב עובר לתוך הרשימה ולא עוטף אותה מבחוץ, כדי שפס הגלילה
+            // יישאר צמוד לדופן החלון.
+            return listContentWithWidth(textMaxWidth > 0 ? textMaxWidth : null);
           },
         );
       },
@@ -1004,13 +997,18 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     return AppTopBar(
       leadingItems: [
         AppTopBarItem(
-          widget: BarButton.icon(
-            tooltip: 'ניווט',
-            icon: _navPaneOpen
-                ? OtzariaIcons.text_continuous_24_filled
-                : OtzariaIcons.text_continuous_24_regular,
-            compact: context.read<SettingsBloc>().state.compactMenuMode,
-            onPressed: () {
+          widget: NavPanelSearchBar(
+            host: _searchHost,
+            isOpen: _navPaneOpen || _pinLeftPane,
+            paneWidth: _kNavPaneWidth,
+            isPinned: _pinLeftPane,
+            onTogglePin: () => setState(() => _pinLeftPane = !_pinLeftPane),
+          ),
+        ),
+        AppTopBarItem(
+          widget: NavPanelToggleButton(
+            isOpen: _navPaneOpen,
+            onToggle: () {
               setState(() => _navPaneOpen = !_navPaneOpen);
               if (_navPaneOpen && _navTabController.index == 0) {
                 _scrollNavToSelectedChapter();
@@ -1227,84 +1225,50 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required TextBookLoaded state,
     required List<TocEntry> chapters,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Column(
       children: [
-        // ─── כותרת TabBar (זהה לטאב הטקסט) ─────────────────────────
-        SizedBox(
-          height: 44,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
+        NavPanelTabHeader(
+          controller: _navTabController,
+          tabs: const [
+            (
+              icon: OtzariaIcons.list_24_regular,
+              iconFilled: OtzariaIcons.list_24_filled,
+              label: 'ניווט',
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TabBar(
-                    controller: _navTabController,
-                    tabs: const [
-                      Tab(
-                        icon: Icon(OtzariaIcons.list_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'ניווט',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      Tab(
-                        icon: Icon(FluentIcons.apps_list_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'מפרשים',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      Tab(
-                        icon: Icon(FluentIcons.search_24_regular, size: 16),
-                        iconMargin: EdgeInsets.only(bottom: 1),
-                        height: 44,
-                        child: Text(
-                          'חיפוש',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    ],
-                    labelColor: colorScheme.primary,
-                    unselectedLabelColor: colorScheme.onSurfaceVariant,
-                    indicatorColor: colorScheme.primary,
-                    dividerColor: Colors.transparent,
-                    splashBorderRadius: AppTokens.borderRadiusAll,
-                  ),
-                ),
-                AnimatedPinButton(
-                  isPinned: _pinLeftPane,
-                  tooltip: _pinLeftPane ? 'בטל נעיצה' : 'נעץ את הפאנל',
-                  onPressed: () => setState(() => _pinLeftPane = !_pinLeftPane),
-                ),
-              ],
+            (
+              icon: FluentIcons.apps_list_24_regular,
+              iconFilled: FluentIcons.apps_list_24_filled,
+              label: 'מפרשים',
             ),
-          ),
+            (
+              icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
+              label: 'חיפוש',
+            ),
+          ],
         ),
         // ─── תוכן TabBarView ──────────────────────────────────────────
         Expanded(
           child: TabBarView(
             controller: _navTabController,
             children: [
-              _buildTocList(
-                context,
-                chapters: chapters,
-                content: state.content,
+              NavPanelSearchSlot(
+                index: 0,
+                child: _buildTocList(
+                  context,
+                  chapters: chapters,
+                  content: state.content,
+                  title: state.book.title,
+                ),
               ),
-              _buildCommentatorsSelectionPanel(context, state),
-              _buildCommentarySearchPanel(context),
+              NavPanelSearchSlot(
+                index: 1,
+                child: _buildCommentatorsSelectionPanel(context, state),
+              ),
+              NavPanelSearchSlot(
+                index: 2,
+                child: _buildCommentarySearchPanel(context),
+              ),
             ],
           ),
         ),
@@ -1453,167 +1417,102 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     BuildContext context, {
     required List<TocEntry> chapters,
     required List<String> content,
+    required String title,
   }) {
     if (chapters.isEmpty) {
       return const Center(
         child: Text('אין תוכן עניינים'),
       );
     }
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _tocSearchController,
-            builder: (_, val, _) => RtlTextField(
-              controller: _tocSearchController,
-              decoration: InputDecoration(
-                hintText: 'איתור כותרת...',
-                prefixIcon: const Icon(FluentIcons.search_24_regular),
-                suffixIcon: val.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(FluentIcons.dismiss_24_regular),
-                        onPressed: () => _tocSearchController.clear(),
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: AppTokens.borderRadiusAll,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 12,
-                ),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _tocSearchController,
-            builder: (context, val, _) {
-              final query = val.text;
-              final filteredChapters = query.isEmpty
-                  ? chapters
-                  : chapters.where((ch) => ch.text.contains(query)).toList();
-              final items = _buildVisibleTocItems(
-                filteredChapters,
-                chapters,
-                content,
-              );
-              _navItems = items;
-              return ScrollablePositionedList.builder(
-                itemScrollController: _navScrollController,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  if (item.isChapter) {
-                    final ch = item.chapter!;
-                    final isSelected = ch == _selectedChapter;
-                    final isExpandedInNav = ch == _navExpandedChapter;
+    final delegate = NavPanelSearchDelegate(
+      controller: _tocSearchController,
+      hintText: 'איתור כותרת...',
+      onClear: () {},
+    );
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppSurfaces.selectedItem(colorScheme)
-                            : null,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 0.5,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          // אזור לחיצה ראשי — בחירת הפרק לטעינת מפרשים.
-                          Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                // no-op כשהפרק כבר נבחר — מונע טעינה כפולה
-                                // של links. _onChapterSelected יחיל את ה-state
-                                // הסופי דרך הרדוסר reduceSubItemTap.
-                                final current = debugNavSelection;
-                                if (identical(
-                                  reduceChapterBodyTap(current, ch),
-                                  current,
-                                )) {
-                                  return;
-                                }
-                                _onChapterSelected(ch, chapters);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 16,
-                                  top: 12,
-                                  bottom: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      FluentIcons.book_24_regular,
-                                      color: colorScheme.primary,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        ch.text,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                          color: colorScheme.primary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          // חץ הכיווץ/פתיחה — אזור לחיצה נפרד שמשנה רק את
-                          // תצוגת תתי-הפריטים בניווט, ללא ביטול בחירת הפרק.
-                          IconButton(
-                            onPressed: () => _applyNavSelection(
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          if (!NavPanelSearch.isHoisted(context))
+            NavPanelLocalSearchField(delegate: delegate),
+          Expanded(
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _tocSearchController,
+              builder: (context, val, _) {
+                final query = val.text;
+                final filteredChapters = query.isEmpty
+                    ? chapters
+                    : chapters.where((ch) => ch.text.contains(query)).toList();
+                final items = [
+                  _TocListItem.header(title),
+                  ..._buildVisibleTocItems(filteredChapters, chapters, content),
+                ];
+                _navItems = items;
+                return NavTreeFocusGroup(
+                  child: ScrollablePositionedList.builder(
+                    itemScrollController: _navScrollController,
+                    itemCount: items.length,
+                    padding: kNavTreeListPadding,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      if (item.isHeader) {
+                        return NavTreeHeader(title: item.text!);
+                      }
+                      final isGroupStart = index == 1;
+                      final isGroupEnd = index == items.length - 1;
+                      if (item.isChapter) {
+                        final ch = item.chapter!;
+                        return NavTreeGroupCard(
+                          isGroupStart: isGroupStart,
+                          isGroupEnd: isGroupEnd,
+                          child: NavTreeTile.category(
+                            title: ch.text,
+                            level: 0,
+                            isSelected: ch == _selectedChapter,
+                            isExpanded: ch == _navExpandedChapter,
+                            hasChildren: true,
+                            // לחיצה על גוף השורה בוחרת את הפרק (טעינת מפרשים);
+                            // הצ'ברן משנה רק את תצוגת תתי-הפריטים בניווט.
+                            onTap: () {
+                              // no-op כשהפרק כבר נבחר — מונע טעינה כפולה של links.
+                              final current = debugNavSelection;
+                              if (identical(
+                                reduceChapterBodyTap(current, ch),
+                                current,
+                              )) {
+                                return;
+                              }
+                              _onChapterSelected(ch, chapters);
+                            },
+                            onToggleExpand: () => _applyNavSelection(
                               reduceChevronTap(debugNavSelection, ch),
                               clearMulti: false,
                             ),
-                            icon: Icon(
-                              isExpandedInNav
-                                  ? FluentIcons.chevron_up_24_regular
-                                  : FluentIcons.chevron_down_24_regular,
-                              color: colorScheme.onSurfaceVariant,
-                              size: 20,
-                            ),
-                            tooltip: isExpandedInNav
-                                ? 'כווץ תתי-פריטים'
-                                : 'הצג תתי-פריטים',
                           ),
-                        ],
-                      ),
-                    );
-                  }
+                        );
+                      }
 
-                  return _buildSubItem(
-                    context,
-                    text: item.text!,
-                    isSelected: item.isSelected,
-                    onTap: item.onTap!,
-                    colorScheme: colorScheme,
-                    isAllChapter: item.isAllChapter,
-                  );
-                },
-              );
-            },
+                      return NavTreeGroupCard(
+                        isGroupStart: isGroupStart,
+                        isGroupEnd: isGroupEnd,
+                        child: _buildSubItem(
+                          context,
+                          text: item.text!,
+                          isSelected: item.isSelected,
+                          onTap: item.onTap!,
+                          isAllChapter: item.isAllChapter,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1837,51 +1736,16 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required String text,
     required bool isSelected,
     required VoidCallback onTap,
-    required ColorScheme colorScheme,
     bool isAllChapter = false,
   }) {
-    return InkWell(
+    return NavTreeTile.book(
+      title: text,
+      level: 1,
+      isSelected: isSelected,
+      icon: isAllChapter
+          ? FluentIcons.book_24_regular
+          : FluentIcons.text_bullet_list_24_regular,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(
-          right: 16.0 + 24.0,
-          left: 16,
-          top: 10,
-          bottom: 10,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? AppSurfaces.selectedItem(colorScheme) : null,
-          border: Border(
-            bottom: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isAllChapter
-                  ? FluentIcons.book_24_regular
-                  : FluentIcons.text_bullet_list_24_regular,
-              color: colorScheme.secondary,
-              size: 18,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1894,18 +1758,31 @@ class _TocListItem {
   final bool isAllChapter;
   final VoidCallback? onTap;
 
+  /// הכותרת הראשית של הרשימה — פריט אמיתי, כדי שחישובי האינדקס לגלילה
+  /// יישארו נכונים גם כשהכותרת נגללת עם הרשימה.
+  final bool isHeader;
+
+  const _TocListItem.header(this.text)
+    : chapter = null,
+      isSelected = false,
+      isAllChapter = false,
+      onTap = null,
+      isHeader = true;
+
   const _TocListItem.chapter(this.chapter)
     : text = null,
       isSelected = false,
       isAllChapter = false,
-      onTap = null;
+      onTap = null,
+      isHeader = false;
 
   const _TocListItem.subItem({
     required this.text,
     required this.isSelected,
     required this.onTap,
     this.isAllChapter = false,
-  }) : chapter = null;
+  }) : chapter = null,
+       isHeader = false;
 
   bool get isChapter => chapter != null;
 }

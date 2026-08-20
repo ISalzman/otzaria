@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
-import 'package:otzaria/widgets/text/rtl_text_field.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
 @visibleForTesting
 const Key commentatorEraChipsGroupKey = Key('commentator_era_chips_group');
@@ -308,9 +308,7 @@ class _CommentatorsSelectionPanelState
   }
 
   void _toggleAllVisible(bool selected) {
-    final items = _commentatorsList
-        .where((e) => !e.startsWith('__TITLE_') && !e.startsWith('__BUTTON_'))
-        .toList();
+    final items = _visibleCommentators.toList();
 
     if (selected) {
       _emitSelection({...widget.selectedCommentators, ...items}.toList());
@@ -473,6 +471,55 @@ class _CommentatorsSelectionPanelState
     );
   }
 
+  Iterable<String> get _visibleCommentators => _commentatorsList.where(
+    (item) => !item.startsWith('__TITLE_') && !item.startsWith('__BUTTON_'),
+  );
+
+  /// האם כל המפרשים המוצגים כרגע מסומנים.
+  bool get _allVisibleSelected {
+    var hasVisible = false;
+    for (final commentator in _visibleCommentators) {
+      hasVisible = true;
+      if (!widget.selectedCommentators.contains(commentator)) return false;
+    }
+    return hasVisible;
+  }
+
+  /// תיבת סימון קומפקטית לשורת מפרש — ה-trailing של שורת עץ הניווט.
+  Widget _selectionCheckbox({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Checkbox(
+      value: value,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onChanged: (checked) => onChanged(checked ?? false),
+    );
+  }
+
+  /// מזהה שורת "הצג את כל ..." ומחזיר את התווית והקבוצה שלה.
+  ({String label, List<String> commentators})? _groupForButtonToken(
+    String item,
+  ) {
+    switch (item) {
+      case _torahShebichtavButton:
+        return (label: 'הצג את כל התורה שבכתב', commentators: _torahShebichtav);
+      case _chazalButton:
+        return (label: 'הצג את כל חז"ל', commentators: _chazal);
+      case _rishonimButton:
+        return (label: 'הצג את כל הראשונים', commentators: _rishonim);
+      case _acharonimButton:
+        return (label: 'הצג את כל האחרונים', commentators: _acharonim);
+      case _modernButton:
+        return (label: 'הצג את כל מחברי זמננו', commentators: _modern);
+      case _ungroupedButton:
+        return (label: 'הצג את כל שאר המפרשים', commentators: _ungrouped);
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.groups.every((group) => group.commentators.isEmpty)) {
@@ -484,174 +531,125 @@ class _CommentatorsSelectionPanelState
           );
     }
 
-    return Column(
-      children: [
-        _buildChipsRow(context),
-        Expanded(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: RtlTextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'סינון מפרשים...',
-                    prefixIcon: const Icon(FluentIcons.search_24_regular),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              _update();
-                            },
-                            icon: const Icon(FluentIcons.dismiss_24_regular),
-                          )
-                        : null,
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: AppTokens.borderRadiusAll,
-                    ),
-                  ),
-                  onChanged: (_) => _update(),
-                ),
-              ),
-              if (_commentatorsList.isNotEmpty)
-                CheckboxListTile(
-                  title: const Text(
-                    'הצג את כל המפרשים',
-                  ),
-                  value: _commentatorsList
-                      .where(
-                        (e) =>
-                            !e.startsWith('__TITLE_') &&
-                            !e.startsWith('__BUTTON_'),
-                      )
-                      .every(widget.selectedCommentators.contains),
-                  onChanged: (checked) => _toggleAllVisible(checked ?? false),
-                ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _commentatorsList.length,
-                  itemBuilder: (context, index) {
-                    final item = _commentatorsList[index];
+    final delegate = NavPanelSearchDelegate(
+      controller: _searchController,
+      hintText: 'סינון מפרשים...',
+      onChanged: (_) => _update(),
+      onClear: _update,
+    );
+    final hasVisibleCommentators = _commentatorsList.isNotEmpty;
+    final leadingItemCount = hasVisibleCommentators ? 2 : 1;
 
-                    if (item == _torahShebichtavButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל התורה שבכתב',
-                        ),
-                        value: _torahShebichtav.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_torahShebichtav, checked ?? false),
-                      );
-                    }
-                    if (item == _chazalButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל חז"ל',
-                        ),
-                        value: _chazal.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_chazal, checked ?? false),
-                      );
-                    }
-                    if (item == _rishonimButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל הראשונים',
-                        ),
-                        value: _rishonim.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_rishonim, checked ?? false),
-                      );
-                    }
-                    if (item == _acharonimButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל האחרונים',
-                        ),
-                        value: _acharonim.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_acharonim, checked ?? false),
-                      );
-                    }
-                    if (item == _modernButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל מחברי זמננו',
-                        ),
-                        value: _modern.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_modern, checked ?? false),
-                      );
-                    }
-                    if (item == _ungroupedButton) {
-                      return CheckboxListTile(
-                        title: const Text(
-                          'הצג את כל שאר המפרשים',
-                        ),
-                        value: _ungrouped.every(
-                          widget.selectedCommentators.contains,
-                        ),
-                        onChanged: (checked) =>
-                            _toggleGroup(_ungrouped, checked ?? false),
-                      );
-                    }
-
-                    if (item.startsWith('__TITLE_')) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10.0,
-                          horizontal: 16.0,
-                        ),
-                        child: Row(
-                          children: [
-                            const Expanded(child: Divider()),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0,
+    return NavPanelSearchPublisher(
+      delegate: delegate,
+      child: Column(
+        children: [
+          _buildChipsRow(context),
+          Expanded(
+            child: Column(
+              children: [
+                if (!NavPanelSearch.isHoisted(context))
+                  NavPanelLocalSearchField(delegate: delegate),
+                Expanded(
+                  child: NavTreeFocusGroup(
+                    child: ListView.builder(
+                      padding: kNavTreeListPadding,
+                      // הכותרת תמיד נגללת; "הצג את כל" נוסף רק כשיש תוצאות.
+                      itemCount: _commentatorsList.length + leadingItemCount,
+                      itemBuilder: (context, listIndex) {
+                        if (listIndex == 0) {
+                          return NavTreeHeader(
+                            title: 'מפרשים על ${widget.bookTitle}',
+                          );
+                        }
+                        if (hasVisibleCommentators && listIndex == 1) {
+                          final allVisibleSelected = _allVisibleSelected;
+                          return NavTreeGroupCard(
+                            isGroupStart: true,
+                            isGroupEnd: true,
+                            child: NavTreeTile.category(
+                              title: 'הצג את כל המפרשים',
+                              level: 0,
+                              isSelected: allVisibleSelected,
+                              trailing: _selectionCheckbox(
+                                value: allVisibleSelected,
+                                onChanged: _toggleAllVisible,
                               ),
-                              child: Text(
-                                _titleTextForToken(item),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.8),
+                              onTap: () =>
+                                  _toggleAllVisible(!allVisibleSelected),
+                            ),
+                          );
+                        }
+                        final index = listIndex - leadingItemCount;
+                        final item = _commentatorsList[index];
+
+                        // כותרת דור — יושבת על רקע החלונית, מחוץ לכרטיס הקבוצה.
+                        if (item.startsWith('__TITLE_')) {
+                          return NavTreeHeader(title: _titleTextForToken(item));
+                        }
+
+                        final groupToken = _groupForButtonToken(item);
+                        final isGroupStart =
+                            index == 0 ||
+                            _commentatorsList[index - 1].startsWith('__TITLE_');
+                        final isGroupEnd =
+                            index == _commentatorsList.length - 1 ||
+                            _commentatorsList[index + 1].startsWith('__TITLE_');
+
+                        if (groupToken != null) {
+                          final selected = groupToken.commentators.every(
+                            widget.selectedCommentators.contains,
+                          );
+                          return NavTreeGroupCard(
+                            isGroupStart: isGroupStart,
+                            isGroupEnd: isGroupEnd,
+                            child: NavTreeTile.category(
+                              title: groupToken.label,
+                              level: 0,
+                              isSelected: selected,
+                              trailing: _selectionCheckbox(
+                                value: selected,
+                                onChanged: (checked) => _toggleGroup(
+                                  groupToken.commentators,
+                                  checked,
                                 ),
                               ),
+                              onTap: () => _toggleGroup(
+                                groupToken.commentators,
+                                !selected,
+                              ),
                             ),
-                            const Expanded(child: Divider()),
-                          ],
-                        ),
-                      );
-                    }
+                          );
+                        }
 
-                    return CheckboxListTile(
-                      title: Text(
-                        item,
-                      ),
-                      value: widget.selectedCommentators.contains(item),
-                      onChanged: (checked) =>
-                          _toggleSingleCommentator(item, checked ?? false),
-                    );
-                  },
+                        final selected = widget.selectedCommentators.contains(
+                          item,
+                        );
+                        return NavTreeGroupCard(
+                          isGroupStart: isGroupStart,
+                          isGroupEnd: isGroupEnd,
+                          child: NavTreeTile.book(
+                            title: item,
+                            level: 0,
+                            isSelected: selected,
+                            trailing: _selectionCheckbox(
+                              value: selected,
+                              onChanged: (checked) =>
+                                  _toggleSingleCommentator(item, checked),
+                            ),
+                            onTap: () =>
+                                _toggleSingleCommentator(item, !selected),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -5,6 +5,8 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
+import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -243,5 +245,67 @@ void main() {
 
     expect(find.text('תנ"ך'), findsOneWidget);
     expect(find.text('כתובים'), findsNothing);
+  });
+
+  testWidgets('בתוך חלונית ניווט: שדה "איתור ספר" עולה לסרגל שמעליה', (
+    tester,
+  ) async {
+    setUpBlocs(stateWith());
+    final host = NavPanelSearchHost();
+    addTearDown(host.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MultiBlocProvider(
+            providers: [
+              BlocProvider<SearchBloc>.value(value: searchBloc),
+              BlocProvider<LibraryBloc>.value(value: libraryBloc),
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+            ],
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 56,
+                  child: Row(
+                    children: [
+                      NavPanelSearchBar(
+                        host: host,
+                        isOpen: true,
+                        paneWidth: 320,
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    width: 320,
+                    child: NavPanelSearchScope(
+                      host: host,
+                      child: NavPanelSearchSlot(
+                        index: 0,
+                        child: SearchFacetFiltering(tab: tab),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // שדה אחד בלבד — זה שבסרגל; החלונית עצמה אינה מציירת שדה משלה.
+    expect(find.byType(OtzariaSearchField), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(NavPanelSearchBar),
+        matching: find.byType(OtzariaSearchField),
+      ),
+      findsOneWidget,
+      reason: 'שדה "איתור ספר" חייב להתרנדר בסרגל שמעל החלונית',
+    );
   });
 }

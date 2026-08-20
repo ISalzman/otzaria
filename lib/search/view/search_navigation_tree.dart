@@ -97,12 +97,12 @@ class SearchNavigationTree extends StatelessWidget {
     // בנייה מוקדמת של כל העץ (ExpandableCard לכל קטגוריה) הקפיאה את הגלילה
     // ואת הרינדור-מחדש בכל שינוי סינון.
     final rows = _flattenRows();
-    return ListView.builder(
-      // שוליים אופקיים — הכרטיסים לא נוגעים בקצה החלונית, וקו הגלילה יושב
-      // ברווח שנוצר (ולא על התוכן).
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: rows.length,
-      itemBuilder: (context, index) => _buildFlatRow(context, rows[index]),
+    return NavTreeFocusGroup(
+      child: ListView.builder(
+        padding: kNavTreeListPadding,
+        itemCount: rows.length,
+        itemBuilder: (context, index) => _buildFlatRow(context, rows[index]),
+      ),
     );
   }
 
@@ -483,13 +483,15 @@ class SearchNavigationTree extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final match = matches[index];
-        return _buildBook(context, match.book, match.facet, match.count, 0);
-      },
+    return NavTreeFocusGroup(
+      child: ListView.builder(
+        padding: kNavTreeListPadding,
+        itemCount: matches.length,
+        itemBuilder: (context, index) {
+          final match = matches[index];
+          return _buildBook(context, match.book, match.facet, match.count, 0);
+        },
+      ),
     );
   }
 

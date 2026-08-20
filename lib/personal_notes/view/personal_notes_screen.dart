@@ -39,7 +39,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
-import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -316,7 +316,7 @@ class _PersonalNotesManagerScreenState
               Expanded(
                 child: PrimaryScrollController(
                   controller: _contentScrollController,
-                  child: AdaptiveSidePane(
+                  child: NavSidePanel(
                     isOpen: _isNavigationVisible,
                     alignment: AlignmentDirectional
                         .centerEnd, // ימין בעברית (RTL) - סרגל ניווט
@@ -337,7 +337,6 @@ class _PersonalNotesManagerScreenState
                       _navigationWidth = nextWidth;
                     },
                     paneContent: _buildNotesTree(),
-                    wrapPaneInFloatingPanel: true,
                   ),
                 ),
               ),
@@ -355,33 +354,11 @@ class _PersonalNotesManagerScreenState
         return AppTopBar(
           leadingItems: [
             AppTopBarItem(
-              widget: IconButton(
-                tooltip: _isNavigationVisible ? 'הסתר ניווט' : 'הצג ניווט',
-                onPressed: () {
-                  setState(() {
-                    _isNavigationVisible = !_isNavigationVisible;
-                  });
-                },
-                icon: AnimatedSwitcher(
-                  duration: AppTokens.animFast,
-                  transitionBuilder: (child, animation) => RotationTransition(
-                    turns: Tween<double>(
-                      begin: 0.5,
-                      end: 0.0,
-                    ).animate(animation),
-                    child: FadeTransition(opacity: animation, child: child),
-                  ),
-                  child: Icon(
-                    _isNavigationVisible
-                        ? FluentIcons.panel_right_contract_24_regular
-                        : FluentIcons.panel_right_24_regular,
-                    key: ValueKey(_isNavigationVisible),
-                    size: 24,
-                  ),
-                ),
-                visualDensity: VisualDensity.standard,
-                splashRadius: 22,
-                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              widget: NavPanelToggleButton(
+                isOpen: _isNavigationVisible,
+                onToggle: () => setState(() {
+                  _isNavigationVisible = !_isNavigationVisible;
+                }),
               ),
             ),
           ],
@@ -654,11 +631,12 @@ class _PersonalNotesManagerScreenState
           rows[lastGrouped!].isGroupEnd = true;
         }
 
-        return ListView.builder(
-          // שוליים אופקיים — הכרטיסים לא נוגעים בקצה, וקו הגלילה ברווח.
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          itemCount: rows.length,
-          itemBuilder: (context, index) => _buildNotesNavRow(rows[index]),
+        return NavTreeFocusGroup(
+          child: ListView.builder(
+            padding: kNavTreeListPadding,
+            itemCount: rows.length,
+            itemBuilder: (context, index) => _buildNotesNavRow(rows[index]),
+          ),
         );
       },
     );

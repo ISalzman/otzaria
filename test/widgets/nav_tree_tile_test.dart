@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 
@@ -152,6 +153,78 @@ void main() {
       expect(find.text('שני'), findsOneWidget);
       // שורה שאינה תחילת קבוצה נושאת מפריד לפניה; תחילת קבוצה לא.
       expect(find.byType(Divider), findsOneWidget);
+    });
+  });
+
+  group('NavTreeFocusGroup', () {
+    testWidgets('Tab מהשדה שמעל הרשימה מתמקד בשורה המסומנת ולא בראשונה', (
+      tester,
+    ) async {
+      final fieldFocus = FocusNode(debugLabel: 'field');
+      addTearDown(fieldFocus.dispose);
+
+      await pump(
+        tester,
+        Column(
+          children: [
+            TextField(focusNode: fieldFocus),
+            Expanded(
+              child: NavTreeFocusGroup(
+                child: ListView(
+                  children: [
+                    for (var i = 0; i < 4; i++)
+                      NavTreeGroupCard(
+                        isGroupStart: i == 0,
+                        isGroupEnd: i == 3,
+                        child: NavTreeTile.category(
+                          title: 'שורה $i',
+                          level: 0,
+                          isSelected: i == 2,
+                          onTap: () {},
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      fieldFocus.requestFocus();
+      await tester.pump();
+
+      expect(
+        tester.binding.focusManager.primaryFocus,
+        fieldFocus,
+        reason: 'נקודת הפתיחה: הפוקוס בשדה שמעל הרשימה',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+
+      // הפוקוס נכנס לרשימה — ועל השורה המסומנת (2), לא על הראשונה.
+      final focusedTile = find.ancestor(
+        of: find.text('שורה 2'),
+        matching: find.byType(InkWell),
+      );
+      expect(focusedTile, findsWidgets);
+      expect(
+        tester.binding.focusManager.primaryFocus!.context!
+            .findAncestorWidgetOfExactType<FocusTraversalOrder>(),
+        isNotNull,
+        reason: 'השורה שקיבלה פוקוס היא זו שסומנה בעדיפות מעבר',
+      );
+      expect(
+        find.descendant(
+          of: find.byWidget(
+            tester.binding.focusManager.primaryFocus!.context!
+                .findAncestorWidgetOfExactType<FocusTraversalOrder>()!,
+          ),
+          matching: find.text('שורה 2'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

@@ -713,13 +713,24 @@ class _SearchTermsDisplayState extends State<SearchTermsDisplay> {
   }
 }
 
+/// גודל כפתורי האייקון של בוררי התוצאות — נמוך מגובה הסרגל העליון במצב
+/// קומפקטי (44), שאחרת ה-IconButton בגודל ברירת המחדל (48) גולש ממנו.
+const BoxConstraints _iconOnlyConstraints = BoxConstraints.tightFor(
+  width: 36,
+  height: 36,
+);
+
 class OrderOfResults extends StatelessWidget {
-  const OrderOfResults({super.key, required this.widget, this.compact = false});
+  const OrderOfResults({
+    super.key,
+    required this.widget,
+    this.iconOnly = false,
+  });
 
   final TantivySearchResults widget;
 
-  /// במצב קומפקטי מוצג כפתור "לפי" שפותח תפריט נפתח במקום dropdown רגיל.
-  final bool compact;
+  /// כשאין מקום בסרגל — כפתור אייקון מיון בלבד במקום ה-dropdown.
+  final bool iconOnly;
 
   static const _entries = [
     AppMenuEntry(value: ResultsOrder.relevance, label: 'לפי רלוונטיות'),
@@ -727,48 +738,24 @@ class OrderOfResults extends StatelessWidget {
     AppMenuEntry(value: ResultsOrder.generation, label: 'לפי סדר הדורות'),
   ];
 
+  static String _labelOf(ResultsOrder order) =>
+      _entries.firstWhere((entry) => entry.value == order).label;
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        if (compact) {
+        if (iconOnly) {
           return AppPopupMenuButton<ResultsOrder>(
-            tooltip: 'סדר תוצאות',
+            tooltip: 'מיון: ${_labelOf(state.sortBy)}',
+            icon: const Icon(FluentIcons.arrow_sort_24_regular, size: 20),
+            highlighted: true,
+            constraints: _iconOnlyConstraints,
             initialValue: state.sortBy,
             entries: _entries,
             onSelected: (value) {
               context.read<SearchBloc>().add(UpdateSortOrder(value));
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10.0,
-                vertical: 5.0,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'לפי',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    FluentIcons.chevron_down_12_regular,
-                    size: 12,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ],
-              ),
-            ),
           );
         }
         return SizedBox(
@@ -796,12 +783,12 @@ class OrderOfResults extends StatelessWidget {
 }
 
 /// בורר מצב איחוד תוצאות — מקביל ויזואלית ל-[OrderOfResults]:
-/// dropdown במסך רחב וכפתור תפריט קומפקטי במסך צר.
+/// dropdown כשיש מקום בסרגל, וכפתור אייקון כשאין.
 class GroupingOfResults extends StatelessWidget {
-  const GroupingOfResults({super.key, this.compact = false});
+  const GroupingOfResults({super.key, this.iconOnly = false});
 
-  /// במצב קומפקטי מוצג כפתור "איחוד" שפותח תפריט נפתח במקום dropdown רגיל.
-  final bool compact;
+  /// כשאין מקום בסרגל — כפתור אייקון סינון בלבד במקום ה-dropdown.
+  final bool iconOnly;
 
   static final _entries = [
     for (final mode in ResultGroupingMode.values)
@@ -819,44 +806,17 @@ class GroupingOfResults extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
-        if (compact) {
+        if (iconOnly) {
           return AppPopupMenuButton<ResultGroupingMode>(
-            tooltip: 'איחוד תוצאות',
+            tooltip: 'איחוד תוצאות: ${state.resultGrouping.label}',
+            icon: const Icon(FluentIcons.filter_24_regular, size: 20),
+            highlighted: true,
+            constraints: _iconOnlyConstraints,
             initialValue: state.resultGrouping,
             entries: _entries,
             onSelected: (value) {
               context.read<SearchBloc>().add(UpdateResultGrouping(value));
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10.0,
-                vertical: 5.0,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'איחוד',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    FluentIcons.chevron_down_12_regular,
-                    size: 12,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ],
-              ),
-            ),
           );
         }
         return SizedBox(

@@ -14,6 +14,8 @@ import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
+import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import '../helpers/memory_settings_cache.dart';
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
@@ -279,4 +281,39 @@ void main() {
       expect(find.text('לא נמצאו מפרשים לקטע הנבחר'), findsOneWidget);
     },
   );
+
+  testWidgets('חלונית הניווט בעיצוב האחיד: NavSidePanel, כותרת ועץ כרטיסים', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final sourceTab = PdfBookTab(
+      book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+      pageNumber: 1,
+    );
+    addTearDown(sourceTab.dispose);
+    sourceTab.pdfHeadings = PdfHeadings(
+      bookTitle: 'PDF בדיקה',
+      headingsMap: {'פרק א': 1, 'פרק ב': 10},
+    );
+    sourceTab.currentTitle.value = 'פרק א';
+
+    final tab = PdfCommentatorsTab(sourceTab: sourceTab);
+    await tester.pumpWidget(_wrap(PdfCommentatorsTabScreen(tab: tab)));
+    await tester.pump();
+
+    expect(find.byType(NavSidePanel), findsOneWidget);
+    // פתיחת החלונית דרך הכפתור האחיד של כל המסכים.
+    await tester.tap(find.byType(NavPanelToggleButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavPanelTabHeader), findsOneWidget);
+    expect(find.byType(NavPanelPinButton), findsOneWidget);
+    // שורות העץ בעיצוב הספרייה: כרטיס מקובץ + שורת ניווט.
+    expect(find.byType(NavTreeGroupCard), findsWidgets);
+    expect(find.widgetWithText(NavTreeTile, 'פרק א'), findsOneWidget);
+  });
 }

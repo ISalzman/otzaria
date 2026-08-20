@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
@@ -104,10 +105,7 @@ void main() {
         isInCombinedView: false,
       );
 
-      expect(
-        find.byIcon(OtzariaIcons.text_continuous_24_regular),
-        findsOneWidget,
-      );
+      expect(find.byType(NavPanelToggleButton), findsOneWidget);
       expect(
         find.byIcon(OtzariaIcons.alef_deletion_24_regular),
         findsOneWidget,
@@ -580,7 +578,7 @@ void main() {
     ) async {
       final count = await pumpAndToggleLeftPane(
         tester,
-        size: const Size(820, 900),
+        size: const Size(780, 900),
       );
       expect(count, 0);
     });

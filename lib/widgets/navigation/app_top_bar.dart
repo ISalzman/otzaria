@@ -78,6 +78,10 @@ class AppTopBar extends StatefulWidget {
   static double barHeight(bool isCompact) =>
       isCompact ? _kCompactHeight : _kTouchHeight;
 
+  /// הריווח האופקי בקצות הסרגל. ווידג'ט שצריך להתיישר לתוכן שמתחתיו
+  /// (כמו סרגל חלונית הניווט) מפחית אותו מהרוחב/מהשוליים שלו.
+  static double horizontalPadding(bool isCompact) => isCompact ? 6.0 : 8.0;
+
   /// סגנון טקסט אחיד לכותרת הסרגל העליון — ישמש בכל מסכי הקריאה.
   static TextStyle titleStyle(BuildContext context) {
     return TextStyle(
@@ -254,7 +258,7 @@ class _AppTopBarState extends State<AppTopBar>
             widget.backgroundColor ?? AppSurfaces.topBarBackground(context);
         final shadowColor = cs.shadow.withValues(alpha: 0.14);
         final barH = isCompact ? _kCompactHeight : _kTouchHeight;
-        final hPad = isCompact ? 6.0 : 8.0;
+        final hPad = AppTopBar.horizontalPadding(isCompact);
         final vPad = isCompact ? 4.0 : 8.0;
 
         // במסך מלא לחצן היציאה משולב כפריט ראשון בסרגל (ולא כלחצן צף),

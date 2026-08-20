@@ -145,6 +145,10 @@ class CommentaryListBase extends StatefulWidget {
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
   final PersonalNotesLoader? personalNotesLoader;
 
+  /// רוחב מקסימלי לתוכן הרשימה (הגדרת רוחב הטקסט), או null לרוחב מלא. מוחל
+  /// בתוך פס הגלילה, כדי שהפס יישאר צמוד לדופן החלון ולא יידחק פנימה עם הטקסט.
+  final double? contentMaxWidth;
+
   const CommentaryListBase({
     super.key,
     required this.openBookCallback,
@@ -176,6 +180,7 @@ class CommentaryListBase extends StatefulWidget {
     this.typeSelection,
     this.onOpenPersonalNote,
     this.personalNotesLoader,
+    this.contentMaxWidth,
   });
 
   @override
@@ -1431,6 +1436,20 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     );
   }
 
+  /// מגביל את רוחב הרשימה ל-[CommentaryListBase.contentMaxWidth]. יישור לראש
+  /// ולא מרכוז — אחרת רשימה מכווצת (shrinkWrap) הייתה מתמרכזת אנכית.
+  Widget _constrainToContentWidth(Widget list) {
+    final maxWidth = widget.contentMaxWidth;
+    if (maxWidth == null || maxWidth <= 0) return list;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: list,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return TextBookStateBuilder(
@@ -1798,8 +1817,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                             );
                           }
 
-                          final Widget
-                          listView = ScrollablePositionedList.builder(
+                          final listView = ScrollablePositionedList.builder(
                             itemScrollController: _itemScrollController,
                             itemPositionsListener: _itemPositionsListener,
                             initialScrollIndex: _lastScrollIndex.clamp(
@@ -1848,7 +1866,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                   offsetController: scrollController,
                                   itemPositionsListener: _itemPositionsListener,
                                   itemCount: groups.length,
-                                  child: SmoothWheelScroll(child: listView),
+                                  child: SmoothWheelScroll(
+                                    child: _constrainToContentWidth(listView),
+                                  ),
                                 ),
                               ),
                             ),
