@@ -216,15 +216,18 @@ class AppFonts {
       if (!_sfntSupportsHebrew(bytes)) continue;
       final info = _sfntFaceInfo(bytes);
       if (info == null || info.italic) continue;
+      // p.windows מפרק גם נתיבי \ וגם / — נתיבי ה-registry של Windows מגיעים
+      // עם \ גם כשהקוד (ובדיקותיו) רץ על פלטפורמה אחרת.
       final family = info.family.trim().isNotEmpty
           ? info.family.trim()
-          : p.basenameWithoutExtension(face.key);
+          : p.windows.basenameWithoutExtension(face.key);
       final acc = builders.putIfAbsent(
         family.toLowerCase(),
         () => _FamilyAccumulator(family),
       );
       acc.addFace(path: face.key, info: info, category: _sfntCategory(bytes));
-      aliases[p.basenameWithoutExtension(face.key).toLowerCase()] = family;
+      aliases[p.windows.basenameWithoutExtension(face.key).toLowerCase()] =
+          family;
     }
 
     final fonts = <FontInfo>[];
