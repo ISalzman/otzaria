@@ -415,6 +415,59 @@ void main() {
     });
   });
 
+  group('filterBookSearchEntries - סינון לפי נושאים', () {
+    const entries = [
+      BookSearchEntry(
+        index: 0,
+        title: 'מסכת שבת',
+        author: '',
+        topics: 'תלמוד, בבלי',
+      ),
+      BookSearchEntry(
+        index: 1,
+        title: 'מסכת שבת',
+        author: '',
+        topics: 'משנה',
+      ),
+      BookSearchEntry(
+        index: 2,
+        title: 'מסכת שבת',
+        author: '',
+        topics: '',
+      ),
+    ];
+
+    List<int> search(List<String> topics) => filterBookSearchEntries(
+      entries: entries,
+      queryWords: const ['שבת'],
+      topics: topics,
+      sortByRatio: false,
+      normalizedQuery: 'שבת',
+    );
+
+    test('רשימת נושאים ריקה אינה מסננת דבר', () {
+      expect(search(const []), [0, 1, 2]);
+    });
+
+    test('נושא בודד משאיר רק את הספרים שנושאיהם מכילים אותו', () {
+      expect(search(const ['בבלי']), [0]);
+      expect(search(const ['משנה']), [1]);
+    });
+
+    test('רווחים סביב הנושא ברשומה אינם מונעים התאמה', () {
+      // 'תלמוד, בבלי' — הנושא השני מגיע עם רווח מוביל
+      expect(search(const ['תלמוד', 'בבלי']), [0]);
+    });
+
+    test('נושא שאינו קיים באף רשומה מחזיר רשימה ריקה', () {
+      expect(search(const ['הלכה']), isEmpty);
+    });
+
+    test('ספר בלי נושאים נופל מכל סינון נושאים', () {
+      expect(search(const ['בבלי']), isNot(contains(2)));
+    });
+  });
+
   group('buildBookSearchEntry - בידוד מרחבי id של ספר אישי', () {
     // ה-lookups מדמים מאגר רשמי שבו id=7 שייך לספר רשמי זר עם כינוי ודור מוקדם.
     List<String>? acronymsForId(int id) => id == 7 ? const ['רמבם'] : null;

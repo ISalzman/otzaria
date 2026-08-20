@@ -37,8 +37,6 @@ abstract class LibraryMessages {
 
   static const String searchError = 'אירעה שגיאה בעת החיפוש';
 
-  static const String bookFilterError = 'אירעה שגיאה בסינון הספרים';
-
   static const String loadMoreResultsError = 'אירעה שגיאה בטעינת תוצאות נוספות';
 
   // ===== ניווט =====
