@@ -8,6 +8,8 @@ import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:path/path.dart' as p;
 
+import 'cfb_fixtures.dart';
+
 /// [readFileBackedBookText] בוחרת ממיר לפי סוג הקובץ. הרגרסיה שהיא מונעת:
 /// `readAsString` על DOCX/EPUB (ZIP בינארי) זורק `FileSystemException`,
 /// והקוראים בלעו אותו והמשיכו עם תוכן ריק.
@@ -230,6 +232,13 @@ void main() {
         readFileBackedBookText(file, 'wbk', 'גיבוי'),
         throwsA(isA<UnsupportedDocumentFormatException>()),
       );
+    });
+
+    test('WBK מסוג OLE שאינו Word נדחה כבר בשער הסריקה', () async {
+      final file = File(p.join(tempDir.path, 'גיליון.wbk'));
+      await file.writeAsBytes(CfbBuilder({'Workbook': Uint8List(16)}).build());
+
+      expect(await isSupportedBookFileByContent(file.path), isFalse);
     });
 
     test('DOC שאינו מכולת CFB זורק חריגה מוקלדת', () async {

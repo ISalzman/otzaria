@@ -665,11 +665,6 @@ class FileSyncService {
 
     final fileType = format.extension;
 
-    // רישום מפתח הספר — הקובץ קיים בדיסק, ולכן ה-prune של קבצים שנמחקו
-    // לא יסיר אותו מה-DB. המפתח אינו תלוי ב-filePath, כדי לכסות גם ספרים
-    // ששמורים כעותק עצמאי (txt עם content בתוך ה-DB, filePath=null).
-    validBookKeys?.add('$categoryId|$title|$fileType');
-
     // ספרי תיקיות מותאמות חיים ב-user_books.db; תמונת-המצב נטענה משם —
     // ל-seforim.db v3 אין עמודת fileType (וגם הוא read-only).
     final existingBook = caches.booksByKey['$categoryId|$title|$fileType'];
@@ -705,6 +700,9 @@ class FileSyncService {
       final sourceChanged = existingSourceName != customSourceName;
 
       if (fileChanged || storageChanged || sourceChanged) {
+        if (fileChanged) {
+          await _validateConvertedDocument(file, title, format);
+        }
         if (storageChanged) {
           debugPrint(
             '[FileSyncService] Storage preference changed for ${existingBook.title}: isFileBacked=${existingBook.isFileBacked} -> $expectedIsContentExternal',
@@ -724,6 +722,7 @@ class FileSyncService {
         );
       }
     } else {
+      await _validateConvertedDocument(File(filePath), title, format);
       wasAdded = true;
       await generator.createAndProcessBook(
         filePath,
@@ -743,12 +742,24 @@ class FileSyncService {
       }
     }
 
+    // רק קובץ שעבר את ההמרה (או ספר קיים שלא השתנה) נחשב תקין ל-prune.
+    validBookKeys?.add('$categoryId|$title|$fileType');
+
     return _FileProcessResult(
       wasAdded: wasAdded,
       wasUpdated: wasUpdated,
       categoriesCreated: categoriesCreated,
       updatedBookId: wasUpdated ? existingBook?.id : null,
     );
+  }
+
+  Future<void> _validateConvertedDocument(
+    File file,
+    String title,
+    DocumentFormat format,
+  ) async {
+    if (!format.isTextual || !format.requiresConversion) return;
+    await convertDocumentForIndex(file, title, format);
   }
 
   /// Pure sync logic — receives all inputs, touches no Settings.

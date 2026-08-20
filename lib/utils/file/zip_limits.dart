@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:archive/archive.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_format.dart';
@@ -12,14 +14,14 @@ class ZipLimits {
   static const int maxEntries = 20000;
 
   /// גודל פרוס מרבי לרשומה בודדת.
-  static const int maxEntryBytes = 512 * 1024 * 1024;
+  static const int maxEntryBytes = 64 * 1024 * 1024;
 
   /// גודל פרוס מרבי לכל החבילה.
-  static const int maxTotalBytes = 2 * 1024 * 1024 * 1024;
+  static const int maxTotalBytes = 256 * 1024 * 1024;
 
   /// יחס דחיסה מרבי (פרוס ÷ דחוס) לרשומה בודדת. טקסט XML נדחס היטב, ולכן
   /// הסף גבוה בכוונה — הוא נועד לתפוס רק ניפוח קיצוני.
-  static const int maxCompressionRatio = 500;
+  static const int maxCompressionRatio = 100;
 
   /// גודל רשומה דחוסה שמתחתיו יחס הדחיסה אינו נבדק. רשומה זעירה מייצרת
   /// יחס גבוה מטבעה ואינה מסוכנת.
@@ -70,27 +72,89 @@ void assertSafeArchive(
   }
 }
 
-/// קורא את תוכן הרשומה ומאמת את גודלו **בפועל**.
-///
-/// `file.size` הוא ה-uncompressed size שהארכיון הצהיר עליו, והפריסה אינה
-/// חסומה לפיו. רשומה שהצהירה על 4KB יכולה להיפרס ל-40MB, ולעבור את כל
-/// שלוש הבדיקות של [assertSafeArchive].
+/// קורא רשומה בפריסה מוגבלת. הגבול נאכף תוך כדי הכתיבה של המפענח, לכן
+/// מטא־דאטה כוזב אינו יכול לגרום להקצאה בלתי מוגבלת לפני שהשגיאה נזרקת.
 List<int> readArchiveEntry(
   ArchiveFile file, {
   required DocumentFormat format,
   String? path,
 }) {
-  final content = file.content;
-  // ההשוואה מול ההצהרה עצמה ולא מול תקרה מוחלטת: בארכיון אמיתי השניים זהים,
-  // ולכן חריגה כלשהי מעליה היא כבר עדות לשקר.
-  if (content.length > file.size) {
+  final output = _LimitedArchiveOutput(ZipLimits.maxEntryBytes);
+  try {
+    file.decompress(output);
+  } on _ArchiveEntryLimitExceeded {
+    throw CorruptedDocumentException(
+      path: path,
+      format: format,
+      cause: 'הרשומה "${file.name}" חרגה מ-${ZipLimits.maxEntryBytes} בתים',
+    );
+  }
+  if (output.length > file.size) {
     throw CorruptedDocumentException(
       path: path,
       format: format,
       cause:
           'הרשומה "${file.name}" הצהירה על ${file.size} בתים '
-          'ונפרסה ל-${content.length}',
+          'ונפרסה ל-${output.length}',
     );
   }
-  return content;
+  return output.bytes;
+}
+
+class _ArchiveEntryLimitExceeded implements Exception {}
+
+class _LimitedArchiveOutput extends OutputStream {
+  _LimitedArchiveOutput(this._maxBytes)
+    : super(byteOrder: ByteOrder.littleEndian);
+
+  final int _maxBytes;
+  final BytesBuilder _bytes = BytesBuilder(copy: false);
+
+  @override
+  int get length => _length;
+  int _length = 0;
+
+  Uint8List get bytes => _bytes.takeBytes();
+
+  void _reserve(int count) {
+    if (count < 0 || _length + count > _maxBytes) {
+      throw _ArchiveEntryLimitExceeded();
+    }
+    _length += count;
+  }
+
+  @override
+  void clear() {
+    _bytes.clear();
+    _length = 0;
+  }
+
+  @override
+  void flush() {}
+
+  @override
+  Uint8List subset(int start, [int? end]) {
+    final all = _bytes.toBytes();
+    return Uint8List.sublistView(all, start, end);
+  }
+
+  @override
+  void writeByte(int value) {
+    _reserve(1);
+    _bytes.addByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    final count = length ?? bytes.length;
+    _reserve(count);
+    _bytes.add(bytes.sublist(0, count));
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    while (!stream.isEOS) {
+      writeByte(stream.readByte());
+    }
+  }
 }

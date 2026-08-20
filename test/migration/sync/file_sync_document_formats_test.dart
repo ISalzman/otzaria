@@ -17,7 +17,6 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
-import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:path/path.dart' as path;
 
@@ -218,11 +217,7 @@ void main() {
     expect((await repository.getAllBooksLean()).length, 2);
   });
 
-  // בסנכרון תיקיות מותאמות פורמט file-backed *אינו* מומר בזמן הסריקה — הספר
-  // נרשם לפי המטא-דאטה והתוכן נקרא בעת הפתיחה. לכן קובץ פגום אינו מזוהה
-  // בסריקה; מה שחייב להתקיים הוא שהסריקה אינה נופלת, ושהפתיחה נכשלת בקול
-  // ולא מציגה ספר ריק (§76).
-  test('קובץ פגום אינו מפיל את הסריקה ונכשל בקול בפתיחה', () async {
+  test('קובץ פגום נדחה בסנכרון ואינו נרשם כספר', () async {
     writeDocx('תקין.docx', 'תוכן תקין');
     File(
       path.join(booksDir.path, 'פגום.docx'),
@@ -231,7 +226,7 @@ void main() {
 
     final result = await sync();
 
-    expect(result.errors, isEmpty, reason: 'הסריקה עצמה אינה אמורה להיכשל');
+    expect(result.errors, hasLength(1));
     final books = await repository.getAllBooksLean();
     expect(
       books.map((b) => b.title),
@@ -239,16 +234,7 @@ void main() {
       reason: 'הקבצים התקינים נסרקו',
     );
 
-    final broken = books.firstWhere((b) => b.title == 'פגום');
-    await expectLater(
-      readFileBackedBookText(
-        File(broken.filePath!),
-        broken.fileType,
-        broken.title,
-      ),
-      throwsA(isA<CorruptedDocumentException>()),
-      reason: 'פתיחה חייבת להיכשל מפורשות ולא להחזיר ספר ריק',
-    );
+    expect(books.map((b) => b.title), isNot(contains('פגום')));
   });
 }
 

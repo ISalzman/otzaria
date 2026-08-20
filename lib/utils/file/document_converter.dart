@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:otzaria/utils/file/cfb_reader.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
@@ -190,8 +191,14 @@ Future<bool> isSupportedBookFileByContent(String filePath) async {
   if (format == null || !format.isProductionSupported) return false;
   if (!format.needsContentSniffing) return true;
   try {
-    final window = await _readSniffWindow(File(filePath));
-    return resolveDocumentFormat(format, window) != null;
+    final file = File(filePath);
+    final window = await _readSniffWindow(file);
+    final resolved = resolveDocumentFormat(format, window);
+    if (resolved == null) return false;
+    if (format != DocumentFormat.wbk || !resolved.isLegacyWord) return true;
+
+    // חתימת OLE משותפת גם ל-Excel ול-Outlook; רק זרם WordDocument מאשר WBK.
+    return isLegacyWordContainer(await file.readAsBytes(), path: filePath);
   } catch (_) {
     return false;
   }

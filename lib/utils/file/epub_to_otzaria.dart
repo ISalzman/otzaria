@@ -369,7 +369,10 @@ class _ArchiveFiles {
   }
 
   List<int>? read(String path) {
-    return _find(path)?.content;
+    final file = _find(path);
+    return file == null
+        ? null
+        : readArchiveEntry(file, format: DocumentFormat.epub);
   }
 
   int? size(String path) => _find(path)?.size;

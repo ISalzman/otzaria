@@ -62,7 +62,9 @@ String odtToText(Uint8List bytes, String title, {bool embedImages = true}) {
   // בלי הקידומת: מניפסט עם namespace ברירת-מחדל כותב `<encryption-data/>`.
   final manifest = _fileNamed(archive, 'META-INF/manifest.xml');
   if (manifest != null &&
-      _decodeXml(manifest.content).contains('encryption-data')) {
+      _decodeXml(
+        readArchiveEntry(manifest, format: DocumentFormat.odt),
+      ).contains('encryption-data')) {
     throw EncryptedDocumentException(
       format: DocumentFormat.odt,
       cause: 'החבילה מוגנת בסיסמה',
@@ -548,7 +550,13 @@ Map<String, _OdtStyle> _extractStyles(
   final globalStyles = _fileNamed(archive, 'styles.xml');
   if (globalStyles != null) {
     try {
-      collect(xml.XmlDocument.parse(_decodeXml(globalStyles.content)));
+      collect(
+        xml.XmlDocument.parse(
+          _decodeXml(
+            readArchiveEntry(globalStyles, format: DocumentFormat.odt),
+          ),
+        ),
+      );
     } catch (_) {
       // styles.xml פגום — ממשיכים עם הסגנונות המקומיים בלבד (§45).
     }
@@ -664,7 +672,13 @@ Map<String, String> _extractFillImages(
   final globalStyles = _fileNamed(archive, 'styles.xml');
   if (globalStyles != null) {
     try {
-      collect(xml.XmlDocument.parse(_decodeXml(globalStyles.content)));
+      collect(
+        xml.XmlDocument.parse(
+          _decodeXml(
+            readArchiveEntry(globalStyles, format: DocumentFormat.odt),
+          ),
+        ),
+      );
     } catch (_) {
       // styles.xml פגום — ממשיכים בלי תמונות מילוי.
     }
@@ -711,7 +725,13 @@ Map<String, Map<int, _OdtListLevel>> _extractListStyles(
   final globalStyles = _fileNamed(archive, 'styles.xml');
   if (globalStyles != null) {
     try {
-      collect(xml.XmlDocument.parse(_decodeXml(globalStyles.content)));
+      collect(
+        xml.XmlDocument.parse(
+          _decodeXml(
+            readArchiveEntry(globalStyles, format: DocumentFormat.odt),
+          ),
+        ),
+      );
     } catch (_) {
       // סגנונות רשימה גלובליים פגומים — נופלים לתבליט ברירת מחדל.
     }
@@ -743,15 +763,8 @@ Map<String, String> _extractImages(
       images[file.name] = '';
       continue;
     }
-    // `file.content` הוא שמפרס בפועל, ולכן רשומה פגומה זורקת דווקא כאן
-    // חריגה שאינה מוטיפסת.
     try {
-      final content = file.content;
-      // הגודל ב-ZIP הוא הצהרה של הקובץ; רק כאן ידוע מה נפרס בפועל.
-      if (content.length > EmbeddedMediaLimits.maxImageBytes) {
-        images[file.name] = '';
-        continue;
-      }
+      final content = readArchiveEntry(file, format: DocumentFormat.odt);
       images[file.name] = 'data:$mime;base64,${base64Encode(content)}';
       embeddedBytes += content.length;
     } catch (_) {

@@ -172,7 +172,9 @@ Map<String, Map<int, _NumLevel>> _extractNumbering(Archive archive) {
 
   final xml.XmlDocument doc;
   try {
-    doc = xml.XmlDocument.parse(_decodeXmlBytes(numFile.content));
+    doc = xml.XmlDocument.parse(
+      _decodeXmlBytes(readArchiveEntry(numFile, format: DocumentFormat.docx)),
+    );
   } catch (_) {
     return const {};
   }
@@ -232,7 +234,11 @@ Map<String, int> _extractHeadingStyles(Archive archive) {
 
   try {
     return _headingStylesFrom(
-      xml.XmlDocument.parse(_decodeXmlBytes(stylesFile.content)),
+      xml.XmlDocument.parse(
+        _decodeXmlBytes(
+          readArchiveEntry(stylesFile, format: DocumentFormat.docx),
+        ),
+      ),
     );
   } catch (_) {
     return const {};
@@ -304,7 +310,9 @@ Map<String, String> _extractImages(Archive archive, {bool embedImages = true}) {
   for (final file in archive) {
     if (file.isFile && file.name == 'word/_rels/document.xml.rels') {
       try {
-        final doc = xml.XmlDocument.parse(_decodeXmlBytes(file.content));
+        final doc = xml.XmlDocument.parse(
+          _decodeXmlBytes(readArchiveEntry(file, format: DocumentFormat.docx)),
+        );
         for (final rel in doc.findAllElements('Relationship')) {
           if ((rel.getAttribute('Type') ?? '').endsWith('/image')) {
             final id = rel.getAttribute('Id');
@@ -345,15 +353,8 @@ Map<String, String> _extractImages(Archive archive, {bool embedImages = true}) {
       images[id] = '';
       return;
     }
-    // `file.content` הוא שמפרס בפועל, ולכן רשומה פגומה/מוצפנת זורקת כאן
-    // חריגה שאינה מוטיפסת. תמונה אינה שווה כשל של המסמך כולו.
     try {
-      final content = file.content;
-      // הגודל ברשומת ה-ZIP הוא הצהרה של הקובץ; רק כאן ידוע מה נפרס בפועל.
-      if (content.length > EmbeddedMediaLimits.maxImageBytes) {
-        images[id] = '';
-        return;
-      }
+      final content = readArchiveEntry(file, format: DocumentFormat.docx);
       images[id] = 'data:$mime;base64,${base64Encode(content)}';
       embeddedBytes += content.length;
     } catch (_) {
