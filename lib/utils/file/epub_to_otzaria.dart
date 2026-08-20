@@ -6,14 +6,20 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
 
-import 'package:otzaria/utils/file/docx_to_otzaria.dart' show escapeHtmlText;
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_format.dart';
+import 'package:otzaria/utils/file/embedded_media.dart';
+import 'package:otzaria/utils/file/zip_limits.dart';
+import 'package:otzaria/utils/text/html_escape.dart';
+import 'package:otzaria/utils/text/otzaria_markup.dart';
 import 'package:otzaria/utils/file/text_encoding.dart'
     show decodeTextBytesSmart;
 import 'package:otzaria/utils/file/toc_parser.dart' show kTocExcludeAttr;
 
 /// גרסת הממיר [epubToText] — **חובה להעלות בכל שינוי שמשפיע על הפלט**:
 /// מטמון התוכן כולל את הגרסה במפתח-התוקף, והעלאה פוסלת רשומות ישנות.
-const int kEpubConverterVersion = 14;
+/// v15: חבילה שאינה קריאה זורקת חריגה מוקלדת במקום להחזיר כותרת בלבד.
+const int kEpubConverterVersion = 15;
 
 /// תג raw-text סוגר-עצמו (`<script/>`, `<title/>` וכד') — חוקי ב-XHTML אך
 /// בפרסינג HTML התג נחשב פתוח וכל שאר המסמך נבלע כטקסט גולמי. מסירים לפני
@@ -40,33 +46,56 @@ String epubToText(
   Uint8List bytes,
   String title, {
   bool embedImages = true,
-  int maxTotalEmbeddedImageBytes = _maxTotalEmbeddedImageBytes,
+  int maxTotalEmbeddedImageBytes = EmbeddedMediaLimits.maxTotalImageBytes,
 }) {
   final List<String> output = ['<h1>${escapeHtmlText(title)}</h1>'];
 
   // ZipDecoder הוא stateful — מופע מקומי לכל המרה מונע דריסת מצב בין
   // קריאות מקבילות באותו isolate.
+  //
+  // חבילה שאינה קריאה נכשלת בקול, כמו בכל שאר הממירים: פלט "כותרת בלבד"
+  // נראה כספר תקין וריק — הוא נשמר במטמון ל-90 יום, מאונדקס, ומסמן כל
+  // הערה אישית מעבר לשורה 1 כחסרה, בלי שום סימן לתקלה.
   final Archive archive;
   try {
     archive = ZipDecoder().decodeBytes(bytes);
-  } catch (_) {
-    // ZIP פגום — מחזירים לפחות את כותרת הספר במקום לקרוס.
-    return output.join('\n');
+  } catch (e) {
+    throw CorruptedDocumentException(format: DocumentFormat.epub, cause: e);
   }
+  if (archive.isEmpty) {
+    throw CorruptedDocumentException(
+      format: DocumentFormat.epub,
+      cause: 'החבילה אינה ארכיון ZIP תקין',
+    );
+  }
+  assertSafeArchive(archive, format: DocumentFormat.epub);
 
   final files = _ArchiveFiles(archive);
 
   final opfPath = _findOpfPath(files);
-  if (opfPath == null) return output.join('\n');
+  if (opfPath == null) {
+    throw CorruptedDocumentException(
+      format: DocumentFormat.epub,
+      cause: 'אין מסמך OPF בחבילה',
+    );
+  }
 
   final opfBytes = files.read(opfPath);
-  if (opfBytes == null) return output.join('\n');
+  if (opfBytes == null) {
+    throw CorruptedDocumentException(
+      format: DocumentFormat.epub,
+      cause: 'רשומת ה-OPF "$opfPath" אינה קריאה',
+    );
+  }
 
   final xml.XmlDocument opf;
   try {
     opf = xml.XmlDocument.parse(_decodeBytes(opfBytes));
-  } catch (_) {
-    return output.join('\n');
+  } catch (e) {
+    throw CorruptedDocumentException(
+      format: DocumentFormat.epub,
+      cause: 'ה-OPF אינו XML תקין: $e',
+    );
   }
 
   final opfDir = _dirOf(opfPath);
@@ -166,7 +195,7 @@ String epubToText(
       coverPath != null && ctx.images.wasRequested(coverPath);
   final coverUri = coverPath == null ? null : ctx.images.resolve(coverPath);
   if (coverUri != null && !coverWasRendered) {
-    output.insert(1, '<img src="$coverUri" style="max-width: 100%;"/>');
+    output.insert(1, otzariaImage(coverUri));
   }
 
   return output.join('\n');
@@ -340,7 +369,10 @@ class _ArchiveFiles {
   }
 
   List<int>? read(String path) {
-    return _find(path)?.content;
+    final file = _find(path);
+    return file == null
+        ? null
+        : readArchiveEntry(file, format: DocumentFormat.epub);
   }
 
   int? size(String path) => _find(path)?.size;
@@ -520,27 +552,6 @@ const _imageMediaTypes = {
   'image/bmp': 'image/bmp',
 };
 
-String? _mediaTypeFromExtension(String path) {
-  final lower = path.toLowerCase();
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-  if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.gif')) return 'image/gif';
-  if (lower.endsWith('.svg')) return 'image/svg+xml';
-  if (lower.endsWith('.webp')) return 'image/webp';
-  if (lower.endsWith('.bmp')) return 'image/bmp';
-  return null;
-}
-
-/// תקרת גודל לתמונה מוטמעת. הטקסט המלא (כולל ה-base64) נשמר במטמון
-/// cache.db ובזיכרון — תמונה ענקית הייתה מנפחת את שניהם; מעליה מדולגת.
-const _maxEmbeddedImageBytes = 4 * 1024 * 1024;
-
-/// תקרה מוגדלת לתמונת הכריכה — כריכות סרוקות כבדות במיוחד, ויש רק אחת.
-const _maxEmbeddedCoverBytes = 10 * 1024 * 1024;
-
-/// תקרת גודל מצטברת לתמונות גוף, בנוסף לתקרה לכל תמונה בנפרד.
-const _maxTotalEmbeddedImageBytes = 32 * 1024 * 1024;
-
 class _EpubImageResource {
   final String path;
   final String mediaType;
@@ -570,8 +581,7 @@ class _EpubImageResolver {
     final coverPathLower = coverPath?.toLowerCase();
     for (final item in manifest.values) {
       final mediaType =
-          _imageMediaTypes[item.mediaType] ??
-          _mediaTypeFromExtension(item.path);
+          _imageMediaTypes[item.mediaType] ?? imageMimeForPath(item.path);
       if (mediaType == null) continue;
       final pathLower = item.path.toLowerCase();
       _resources[pathLower] ??= _EpubImageResource(
@@ -592,8 +602,8 @@ class _EpubImageResolver {
     final resource = _resources[pathLower];
     if (resource == null) return _resolved[pathLower] = null;
     final maxBytes = resource.isCover
-        ? _maxEmbeddedCoverBytes
-        : _maxEmbeddedImageBytes;
+        ? EmbeddedMediaLimits.maxCoverBytes
+        : EmbeddedMediaLimits.maxImageBytes;
     final size = files.size(resource.path);
     if (size == null || size > maxBytes) {
       return _resolved[pathLower] = null;
@@ -1048,7 +1058,7 @@ String? _imgHtml(dom.Element e, _EpubContext ctx) {
   final resolved = _resolveHref(ctx.baseDir, src).toLowerCase();
   final uri = ctx.images.resolve(resolved);
   if (uri == null) return null; // תמונה חיצונית/חסרה — אין מה להטמיע.
-  return '<img src="$uri" style="max-width: 100%;"/>';
+  return otzariaImage(uri);
 }
 
 String _renderInlineChildren(dom.Element parent, _EpubContext ctx) {
@@ -1122,7 +1132,7 @@ bool _renderNoteref(dom.Element a, _EpubContext ctx, StringBuffer buf) {
       ? escapeHtmlText(markerText)
       : '${ctx.footnoteCounter++}';
 
-  buf.write('<sup class="footnote-marker">$marker</sup>');
+  buf.write(otzariaFootnoteMarker(marker));
   final target = res.target;
   if (target != null) {
     final body = _extractNoteBody(target, markerText);

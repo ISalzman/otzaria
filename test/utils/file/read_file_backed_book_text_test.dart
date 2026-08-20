@@ -4,8 +4,11 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:path/path.dart' as p;
+
+import 'cfb_fixtures.dart';
 
 /// [readFileBackedBookText] בוחרת ממיר לפי סוג הקובץ. הרגרסיה שהיא מונעת:
 /// `readAsString` על DOCX/EPUB (ZIP בינארי) זורק `FileSystemException`,
@@ -183,50 +186,114 @@ void main() {
       );
     });
 
-    test('סוג לא מוכר נקרא כטקסט', () async {
+    test('Markdown מומר ל-HTML ולא מוחזר כמקור', () async {
       final file = File(p.join(tempDir.path, 'ספר.md'));
       await file.writeAsString('# כותרת');
 
-      expect(await readFileBackedBookText(file, 'md', 'ספר'), '# כותרת');
+      final text = await readFileBackedBookText(file, 'md', 'ספר');
+
+      expect(text, contains('כותרת'));
+      expect(text, contains('<h1'));
+    });
+
+    test('סוג לא מוכר עם תוכן טקסטואלי נקרא כטקסט', () async {
+      final file = File(p.join(tempDir.path, 'ספר.xyz'));
+      await file.writeAsString('טקסט בסיומת לא מוכרת');
+
+      expect(
+        await readFileBackedBookText(file, 'xyz', 'ספר'),
+        'טקסט בסיומת לא מוכרת',
+      );
+    });
+
+    test('סיומת לא מוכרת שתוכנה DOCX מומרת ולא נקראת כטקסט', () async {
+      // ההגנה המרכזית: קריאת ZIP כטקסט מייצרת ג'יבריש שנראה כספר תקין.
+      final file = File(p.join(tempDir.path, 'מוסווה.xyz'));
+      await file.writeAsBytes(buildDocxBytes('תוכן בינארי'));
+
+      final text = await readFileBackedBookText(file, null, 'מוסווה');
+
+      expect(text, contains('תוכן בינארי'));
+    });
+
+    test('סיומת לא מוכרת שתוכנה PDF מוחזרת null', () async {
+      final file = File(p.join(tempDir.path, 'מוסווה2.xyz'));
+      await file.writeAsBytes(const [0x25, 0x50, 0x44, 0x46, 0x2D]);
+
+      expect(await readFileBackedBookText(file, null, 'מוסווה2'), isNull);
+    });
+
+    test('WBK שאינו Word כלל זורק חריגה מוקלדת', () async {
+      // גיבוי Word חייב להיות OOXML או בינארי ישן; תוכן אחר אינו ניתן לניחוש.
+      final file = File(p.join(tempDir.path, 'גיבוי.wbk'));
+      await file.writeAsBytes(const [0x25, 0x50, 0x44, 0x46, 0x2D]); // %PDF-
+
+      await expectLater(
+        readFileBackedBookText(file, 'wbk', 'גיבוי'),
+        throwsA(isA<UnsupportedDocumentFormatException>()),
+      );
+    });
+
+    test('WBK מסוג OLE שאינו Word נדחה כבר בשער הסריקה', () async {
+      final file = File(p.join(tempDir.path, 'גיליון.wbk'));
+      await file.writeAsBytes(CfbBuilder({'Workbook': Uint8List(16)}).build());
+
+      expect(await isSupportedBookFileByContent(file.path), isFalse);
+    });
+
+    test('DOC שאינו מכולת CFB זורק חריגה מוקלדת', () async {
+      final file = File(p.join(tempDir.path, 'מזויף.doc'));
+      await file.writeAsString('זה בכלל לא CFB');
+
+      await expectLater(
+        readFileBackedBookText(file, 'doc', 'מזויף'),
+        throwsA(isA<CorruptedDocumentException>()),
+      );
     });
   });
 
+  // PDF מוחזר null (ולא ''), כדי שהקורא יבדיל בין "אין טקסט לפורמט הזה"
+  // לבין "ספר ריק" ויוכל ליפול למסלול ה-PDF או לתוכן שב-DB.
   group('PDF', () {
-    test('מוחזר ריק — אינו טקסט', () async {
+    test('מוחזר null — אינו טקסט', () async {
       final file = File(p.join(tempDir.path, 'ספר.pdf'));
       await file.writeAsBytes(const [0x25, 0x50, 0x44, 0x46]);
 
-      expect(await readFileBackedBookText(file, 'pdf', 'ספר'), isEmpty);
+      expect(await readFileBackedBookText(file, 'pdf', 'ספר'), isNull);
     });
 
-    test('מוחזר ריק גם לפי סיומת בלבד', () async {
+    test('מוחזר null גם לפי סיומת בלבד', () async {
       final file = File(p.join(tempDir.path, 'ללא-סוג.pdf'));
       await file.writeAsBytes(const [0x25, 0x50, 0x44, 0x46]);
 
-      expect(await readFileBackedBookText(file, null, 'ללא סוג'), isEmpty);
+      expect(await readFileBackedBookText(file, null, 'ללא סוג'), isNull);
     });
 
     test('קובץ PDF שאינו קיים אינו זורק — הסוג נבדק לפני הקריאה', () async {
       final missing = File(p.join(tempDir.path, 'חסר.pdf'));
 
-      expect(await readFileBackedBookText(missing, 'pdf', 'חסר'), isEmpty);
+      expect(await readFileBackedBookText(missing, 'pdf', 'חסר'), isNull);
     });
   });
 
-  // הממיר סובלני: קובץ שאינו DOCX תקין מחזיר כותרת בלבד ולא זורק, כך שספר
-  // פגום מוצג ריק במקום להפיל את מסך הקריאה.
+  // הממיר נכשל בקול: פלט "כותרת בלבד" נראה כספר תקין וריק, נשמר במטמון
+  // ל-90 יום, נכנס לאינדקס, ומסמן כל הערה אישית שמעבר לשורה 1 כחסרה.
   group('קבצים פגומים', () {
-    test('DOCX שאינו ZIP תקין מחזיר כותרת בלבד', () async {
+    test('DOCX שאינו ZIP תקין זורק חריגה מוקלדת', () async {
+      // קובץ טקסט ששמו .docx נכשל בקול ולא נפתח כספר ריק — כשל שקט הוא
+      // הגרוע ביותר, כי המשתמש רואה ספר תקין שכל תוכנו נעלם.
       final file = File(p.join(tempDir.path, 'פגום.docx'));
       await file.writeAsString('זה בכלל לא ZIP');
 
-      expect(
-        await readFileBackedBookText(file, 'docx', 'פגום'),
-        '<h1>פגום</h1>',
+      await expectLater(
+        readFileBackedBookText(file, 'docx', 'פגום'),
+        throwsA(isA<CorruptedDocumentException>()),
       );
     });
 
-    test('ZIP ללא word/document.xml מחזיר כותרת בלבד', () async {
+    // ZIP בלי גוף מסמך אינו "ספר ריק": פלט כותרת-בלבד נשמר במטמון, מאונדקס,
+    // ומסמן כל הערה אישית שמעבר לשורה 1 כחסרה — לצמיתות.
+    test('ZIP ללא word/document.xml זורק חריגה מוקלדת', () async {
       final bytes = utf8.encode('לא מסמך');
       final archive = Archive()
         ..addFile(ArchiveFile('readme.txt', bytes.length, bytes));
@@ -235,19 +302,19 @@ void main() {
         Uint8List.fromList(ZipEncoder().encode(archive)),
       );
 
-      expect(
-        await readFileBackedBookText(file, 'docx', 'זיפ'),
-        '<h1>זיפ</h1>',
+      await expectLater(
+        readFileBackedBookText(file, 'docx', 'זיפ'),
+        throwsA(isA<CorruptedDocumentException>()),
       );
     });
 
-    test('DOCX ריק לגמרי (0 בתים) מחזיר כותרת בלבד', () async {
+    test('DOCX ריק לגמרי (0 בתים) זורק חריגה מוקלדת', () async {
       final file = File(p.join(tempDir.path, 'ריק.docx'));
       await file.writeAsBytes(const []);
 
-      expect(
-        await readFileBackedBookText(file, 'docx', 'ריק'),
-        '<h1>ריק</h1>',
+      await expectLater(
+        readFileBackedBookText(file, 'docx', 'ריק'),
+        throwsA(isA<CorruptedDocumentException>()),
       );
     });
 

@@ -843,6 +843,33 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Models (books, links) | `test/models/books_test.dart`, `…links_test.dart`, `…phone_report_data_test.dart` |
 | Link types (נרמול, סוג קנוני, תוויות) | `test/models/link_types_test.dart` |
 | Utils (page map builder, page converter, TOC parser) | `test/utils/page_map_builder_test.dart`, `…page_converter_test.dart`, `…toc_parser_test.dart` |
+| זיהוי פורמט מסמך + registry הסיומות | `test/utils/file/document_format_test.dart` |
+| עקביות ה-registry מול הצרכנים (FilePicker, סורק, מודל הספר) | `test/utils/file/format_registry_consistency_test.dart` |
+| Golden regression של ממיר Word (17 תרחישים, שקילות DOCX/DOCM/DOTX/DOTM) | `test/utils/file/docx_golden_test.dart` (fixtures ב-`docx_golden_fixtures.dart`) |
+| שרשרת מלאה לפורמטי OOXML (סריקה→המרה→TOC→אינדוקס) | `test/utils/file/ooxml_formats_pipeline_test.dart` |
+| ממיר ODT | `test/utils/file/odt_to_otzaria_test.dart` |
+| Parser RTF (state machine, דפי-קוד, עברית) | `test/utils/file/rtf_to_otzaria_test.dart` |
+| קריאת ספר file-backed לפי פורמט | `test/utils/file/read_file_backed_book_text_test.dart` |
+| מגבלות פריסת ZIP (zip bomb) | `test/utils/file/zip_limits_test.dart` |
+| הקשחה מול קובץ פגום/קטוע/זדוני (כשל בקול, לא פלט חלקי) | `test/utils/file/malformed_document_hardening_test.dart` |
+| קורא מכולת CFB/OLE2 (תשתית ל-DOC/WBK) | `test/utils/file/cfb_reader_test.dart` |
+| ממיר Word בינארי ישן (FIB, piece table, ניתוב WBK) | `test/utils/file/legacy_word_to_otzaria_test.dart` |
+| שכבת המאפיינים של Word הבינארי (sprm, וריאנט Bi, יישור) | `test/utils/file/legacy_word_properties_test.dart` |
+| חילוץ תמונות מ-Word הבינארי (עץ OfficeArt, תקרות, קלט פגום) | `test/utils/file/legacy_word_pictures_test.dart` |
+| ממיר Word שנשמר כ-XML (Flat OPC ו-WordML 2003) | `test/utils/file/word_xml_to_otzaria_test.dart` |
+| צימוד פלט הממיר לגרסתו (מונע מטמון שמגיש פלט באגי) | `test/utils/file/converter_versions_test.dart` |
+| עמידות סריקה לקובץ פגום (§76) | `test/migration/generator_corrupted_file_test.dart` |
+| אינטגרציה: סריקת תיקייה לכל הפורמטים → DB → פתיחה → זיהוי שינוי | `test/migration/sync/file_sync_document_formats_test.dart` |
+| מחולל קורפוס ה-fixtures (כל פורמט נפתח, כל מקרה-קצה נכשל נכון) | `test/tool/document_fixtures_generator_test.dart` |
+| זיהוי קידוד טקסט — שרשרת הזיהוי, BOM, זנב קטוע, כפיית קידוד | `test/utils/file/text_encoding_detection_test.dart` |
+| טבלאות המיפוי (Windows-1255, ISO-8859-8, CP862) מול התקנים | `test/utils/file/text_encoding_tables_test.dart` |
+| קורפוס הזהב של הקידודים (40+ קבצים, טווחי confidence) | `test/utils/file/text_encoding_corpus_test.dart` (מחולל ב-`tool/generate_text_encoding_fixtures.dart`) |
+| רגרסיה מול מפענח הקידודים הקודם (מה נשמר, מה השתנה בכוונה) | `test/utils/file/text_encoding_regression_test.dart` |
+| תכונות הקידוד על קלט מוגרל (סבב שלם, שיבוש, חיתוך, דטרמיניזם) | `test/utils/file/text_encoding_fuzz_test.dart` |
+| צנרת הקידודים מקצה לקצה (פתיחת ספר, בניית DB, אינדוקס) | `test/utils/file/text_encoding_pipeline_test.dart` |
+| ייבוא ספרים בכל קידוד לתוך SQLite (סריקה→שורות→TOC) | `test/migration/sync/file_sync_text_encodings_test.dart` |
+| ביצועי הזיהוי (חסימת דגימה, תפוקת batch, השוואה לקודם) | `test/utils/file/text_encoding_performance_test.dart` |
+| קורפוס קידודים חיצוני אמיתי (מדלג כשאינו על המכונה) | `test/utils/file/text_encoding_real_corpus_test.dart` |
 | Utils (link processing) | `test/text_book/utils/link_processing_test.dart` |
 | חיתוך HTML לפי טווח הבחירה (שימור עיצוב בהעתקה חלקית) | `test/utils/text/html_slice_test.dart` |
 | גודל פענוח תמונות (cacheWidth על נכסים כבדים) | `test/utils/ui/image_decode_size_test.dart` |

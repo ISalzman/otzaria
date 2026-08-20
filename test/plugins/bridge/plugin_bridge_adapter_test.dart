@@ -2470,6 +2470,26 @@ Future<void> main() async {
       expect(content, 'תוכן טקסטואלי');
     });
 
+    test('readTextFile קורא גם קובץ ב-ANSI עברית', () async {
+      // הקובץ שהמשתמש בוחר יכול להיות בכל קידוד; `readAsString` היה זורק
+      // עליו והתוסף היה מקבל שגיאה במקום את התוכן.
+      final file = File(p.join(tempDir.path, 'ansi.txt'))
+        ..writeAsBytesSync(const [
+          0xFA, 0xE5, 0xEB, 0xEF, 0x20, // "תוכן " ב-Windows-1255
+          0xE1, 0xF2, 0xE1, 0xF8, 0xE9, 0xFA, // "בעברית"
+        ]);
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => file.path,
+      );
+
+      final picked = await adapter.execute('fs', 'pickUserFile', {}) as Map;
+      final content = await adapter.execute('fs', 'readTextFile', {
+        'token': picked['token'],
+      });
+
+      expect(content, 'תוכן בעברית');
+    });
+
     test('revokeFile מסיר את ה-grant — resolveFileUrl לאחריו נכשל', () async {
       final file = File(p.join(tempDir.path, 'x.txt'))..writeAsStringSync('x');
       final adapter = buildAdapter(

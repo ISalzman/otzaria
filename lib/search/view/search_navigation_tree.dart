@@ -1,4 +1,3 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/library/view/grid_items.dart';
@@ -8,6 +7,7 @@ import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/utils/ui/book_format_icon.dart';
 
 /// עץ ניווט תוצאות החיפוש בעיצוב מסך הספרייה ([library_browser.dart]),
 /// בנוי מ-[NavTreeTile]. העץ משוטח לרשימת שורות ומרונדר ב-ListView.builder
@@ -353,11 +353,7 @@ class SearchNavigationTree extends StatelessWidget {
             fit: BoxFit.contain,
           )
         : Icon(
-            book is PdfBook
-                ? FluentIcons.document_pdf_24_regular
-                : book is DocxBook || book.fileType == 'docx'
-                ? FluentIcons.document_edit_24_regular
-                : FluentIcons.document_text_24_regular,
+            bookFormatIcon(book),
             color: cs.onSecondaryContainer,
             size: _iconSize,
           );

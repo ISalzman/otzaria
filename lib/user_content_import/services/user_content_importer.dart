@@ -7,6 +7,7 @@ import 'package:otzaria/user_content_import/models/user_import_models.dart';
 import 'package:otzaria/user_content_import/repository/user_content_repository.dart';
 import 'package:otzaria/user_content_import/services/user_import_parser.dart';
 import 'package:otzaria/user_content_import/services/user_link_ref_resolver.dart';
+import 'package:otzaria/utils/file/text_encoding.dart';
 
 /// תוצאת ייבוא נתוני-משתמש מקבצים: ספירות + שגיאות מרוכזות (עם הקשר קובץ).
 class UserImportResult {
@@ -181,7 +182,7 @@ class UserContentImporter {
     final fileName = _baseName(file.path);
     final ParseResult<ParsedBookGeneration> parsed;
     try {
-      parsed = UserImportParser.parseGenerations(await file.readAsString());
+      parsed = UserImportParser.parseGenerations(await readTextFileSmart(file));
     } catch (e) {
       errors.add('$fileName: קריאת הקובץ נכשלה ($e)');
       return;
@@ -214,7 +215,7 @@ class UserContentImporter {
     final fileName = _baseName(file.path);
     final ParseResult<ParsedUserLink> parsed;
     try {
-      final content = await file.readAsString();
+      final content = await readTextFileSmart(file);
       parsed = fileName.toLowerCase().endsWith('.json')
           ? UserImportParser.parseLinksJson(content)
           : UserImportParser.parseLinks(content);
@@ -276,7 +277,9 @@ class UserContentImporter {
     final fileName = _baseName(file.path);
     final ParseResult<ParsedNativeLink> parsed;
     try {
-      parsed = UserImportParser.parseNativeLinksJson(await file.readAsString());
+      parsed = UserImportParser.parseNativeLinksJson(
+        await readTextFileSmart(file),
+      );
     } catch (e) {
       errors.add('$fileName: קריאת הקובץ נכשלה ($e)');
       return;

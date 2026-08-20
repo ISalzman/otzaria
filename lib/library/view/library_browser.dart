@@ -39,6 +39,7 @@ import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/core/external_uri_router.dart';
+import 'package:otzaria/utils/ui/book_format_icon.dart';
 
 // ── קבועים ────────────────────────────────────────────────────────────────────
 
@@ -1934,11 +1935,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       );
     }
     return Icon(
-      book is PdfBook
-          ? FluentIcons.document_pdf_24_regular
-          : book is DocxBook || book.fileType == 'docx'
-          ? FluentIcons.document_edit_24_regular
-          : FluentIcons.document_text_24_regular,
+      bookFormatIcon(book),
       color: cs.onSecondaryContainer,
       size: iconSize,
     );

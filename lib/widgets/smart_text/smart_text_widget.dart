@@ -8,6 +8,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/utils/link_anchor_variants.dart';
 import 'package:otzaria/text_book/utils/link_preview_utils.dart';
 import 'package:otzaria/theme/app_fonts.dart';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
@@ -243,6 +244,9 @@ class SmartTextWidget extends StatelessWidget {
     final anchorColorCss = toCssHex(
       DefaultTextStyle.of(context).style.color ?? colorScheme.onSurface,
     );
+    final markdownSurfaceCss = toCssHex(colorScheme.surfaceContainerHighest);
+    final markdownBorderCss = toCssHex(colorScheme.outlineVariant);
+    final hasMarkdownBlock = processedHtml.contains(kMarkdownBlockClass);
 
     return _withPluginFrames(
       frameRanges,
@@ -271,9 +275,6 @@ class SmartTextWidget extends StatelessWidget {
               element.localName,
               settings.fontFamily,
             );
-            if (headingWeight != null) {
-              return {'font-weight': headingWeight};
-            }
             if (element.localName == 'span' &&
                 element.classes.contains('subscript-text')) {
               return {'font-size': 'smaller'};
@@ -349,7 +350,21 @@ class SmartTextWidget extends StatelessWidget {
                 'color': anchorLinkColorCss,
               };
             }
-            return null;
+            if (!hasMarkdownBlock) {
+              return headingWeight == null
+                  ? null
+                  : {'font-weight': headingWeight};
+            }
+            final markdownCss = _markdownElementCss(
+              element,
+              linkColorCss: anchorLinkColorCss,
+              surfaceCss: markdownSurfaceCss,
+              borderCss: markdownBorderCss,
+            );
+            if (headingWeight != null) {
+              return {'font-weight': headingWeight, ...?markdownCss};
+            }
+            return markdownCss;
           },
           onTapUrl:
               (onOpenBook != null || onNoteTap != null || onAnchorTap != null)
@@ -415,6 +430,100 @@ class SmartTextWidget extends StatelessWidget {
     }
     return PluginHighlightFrameOverlay(ranges: ranges, child: child);
   }
+}
+
+Map<String, String>? _markdownElementCss(
+  dom.Element element, {
+  required String linkColorCss,
+  required String surfaceCss,
+  required String borderCss,
+}) {
+  if (!_isInsideMarkdownBlock(element)) return null;
+
+  return switch (element.localName) {
+    'h1' => _markdownHeadingCss('1.7em', top: 22, bottom: 10),
+    'h2' => _markdownHeadingCss('1.45em', top: 20, bottom: 9),
+    'h3' => _markdownHeadingCss('1.25em', top: 18, bottom: 8),
+    'h4' => _markdownHeadingCss('1.1em', top: 16, bottom: 7),
+    'h5' || 'h6' => _markdownHeadingCss('1em', top: 14, bottom: 6),
+    'p' => {'margin': '0 0 10px 0', 'line-height': '1.7'},
+    'a' => {'color': linkColorCss, 'text-decoration': 'underline'},
+    'blockquote' => {
+      'border-right': '4px solid $borderCss',
+      'padding': '4px 12px',
+      'margin': '10px 4px',
+      'background-color': surfaceCss,
+      'font-style': 'italic',
+    },
+    'code' => {
+      'direction': 'ltr',
+      'text-align': 'left',
+      'font-family': 'monospace',
+      'font-size': '0.92em',
+    },
+    'pre' => {
+      'direction': 'ltr',
+      'text-align': 'left',
+      'font-family': 'monospace',
+      'background-color': surfaceCss,
+      'padding': '12px',
+      'margin': '10px 0',
+      'border-radius': '6px',
+      'line-height': '1.5',
+    },
+    'table' => {
+      'border-collapse': 'collapse',
+      'width': '100%',
+      'margin': '10px 0',
+    },
+    'tr' => _markdownZebraRowCss(element, surfaceCss),
+    'td' => {'border': '1px solid $borderCss', 'padding': '6px 8px'},
+    'th' => {
+      'border': '1px solid $borderCss',
+      'padding': '6px 8px',
+      'background-color': surfaceCss,
+      'font-weight': 'bold',
+    },
+    'ul' || 'ol' => {'padding-right': '24px', 'margin': '6px 0 10px 0'},
+    'li' => {'margin-bottom': '4px', 'line-height': '1.7'},
+    'hr' => {'margin': '18px 0'},
+    _ => null,
+  };
+}
+
+Map<String, String> _markdownHeadingCss(
+  String fontSize, {
+  required int top,
+  required int bottom,
+}) => {
+  'font-size': fontSize,
+  'margin': '${top}px 0 ${bottom}px 0',
+  'line-height': '1.4',
+};
+
+Map<String, String>? _markdownZebraRowCss(dom.Element row, String surfaceCss) {
+  final siblings = row.parent?.nodes;
+  if (siblings == null) return null;
+  var index = 0;
+  for (final node in siblings) {
+    if (identical(node, row)) {
+      return index.isEven ? null : {'background-color': surfaceCss};
+    }
+    if (node is dom.Element) index++;
+  }
+  return null;
+}
+
+bool _isInsideMarkdownBlock(dom.Element element) {
+  dom.Element? current = element;
+  while (current != null) {
+    if (current.className.isNotEmpty &&
+        current.classes.contains(kMarkdownBlockClass)) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
 }
 
 /// WidgetFactory ל-fwfh עם שלוש אחריות:

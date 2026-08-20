@@ -11,6 +11,7 @@ import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_blo
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/services/custom_folders/personal_books_import_service.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -81,7 +82,7 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
 
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['txt', 'pdf', 'docx', 'epub'],
+      allowedExtensions: kSupportedBookExtensions,
       dialogTitle: context.settingsText('בחר קבצי ספרים לייבוא'),
     );
     if (result == null) return null;
@@ -165,16 +166,12 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
   }
 
   String _fileTypeLabel(String filePath) {
-    switch (p.extension(filePath).toLowerCase()) {
-      case '.pdf':
-        return 'PDF';
-      case '.docx':
-        return 'Word';
-      case '.epub':
-        return 'EPUB';
-      default:
-        return context.settingsText('טקסט');
+    final format = documentFormatFromExtension(filePath);
+    // שמות המשפחות (PDF/Word/EPUB…) זהים בשתי השפות; רק "טקסט" מתורגם.
+    if (format == null || format == DocumentFormat.txt) {
+      return context.settingsText('טקסט');
     }
+    return format.familyLabel;
   }
 
   @override
@@ -198,7 +195,7 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
           icon: FluentIcons.book_add_24_regular,
           title: context.settingsText('הספרים שלי'),
           subtitle: _importedFiles.isEmpty
-              ? context.settingsText('ייבוא קבצי TXT, PDF, Word ו-EPUB לספרייה')
+              ? context.settingsText('ייבוא קובצי ספרים לספרייה')
               : context.settingsText(
                   '{count} ספרים מיובאים',
                   args: {'count': _importedFiles.length},

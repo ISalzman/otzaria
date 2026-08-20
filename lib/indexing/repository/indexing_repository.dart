@@ -19,7 +19,9 @@ import 'package:otzaria/search/book_facet.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
@@ -146,10 +148,7 @@ class IndexingRepository {
     final categoryPath = book.categoryPath?.isNotEmpty == true
         ? book.categoryPath
         : _categoryPathForBook(book);
-    return FoundationalBookClassifier.classify(
-      categoryPath,
-      book.title,
-    );
+    return FoundationalBookClassifier.classify(categoryPath, book.title);
   }
 
   static String? _categoryPathForBook(Book book) {
@@ -360,7 +359,7 @@ class IndexingRepository {
 
         var bookWasIndexed = false;
         try {
-          // DocxBook/EpubBook עוברים אינדוקס דרך זרימת TextBook (העטיפה
+          // ספרי מסמך עוברים אינדוקס דרך זרימת TextBook (העטיפה
           // משמרת id/categoryId כדי ש-`book.text` יחלץ קובץ → text).
           // catalogueOrderKey של העטוף זהה למקור: כשיש id המפתח הוא
           // 'id:<id>', וכשאין — title+categoryKey+fileType+path
@@ -573,7 +572,7 @@ class IndexingRepository {
       }
     }
     if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
-      // מסלול הנפילה (docx/epub, ספר בלי categoryId): טקסט דרך LibraryProvider.
+      // מסלול הנפילה (פורמט מומר, ספר בלי categoryId): טקסט דרך LibraryProvider.
       // תמונות מוטמעות מסולקות — ראו [stripDataUrisForIndex].
       text = await _loadTextForIndex(book);
     }
@@ -969,11 +968,7 @@ class IndexingRepository {
         );
       }
 
-      return (
-        pages: pages,
-        outline: outline,
-        droppedPages: droppedPages,
-      );
+      return (pages: pages, outline: outline, droppedPages: droppedPages);
     } finally {
       // בלי סגירה מפורשת המסמך נשאר פתוח ב-pdfium עד סוף התהליך: אין
       // Finalizer על העטיפה, ו-FPDF_CloseDocument נקרא רק מ-dispose.
@@ -1110,12 +1105,20 @@ class IndexingRepository {
     return stripDataUrisForIndex(text);
   }
 
+  /// טוען את טקסט הספר לאינדוקס, בלי להטמיע תמונות כשהממיר תומך בכך.
+  ///
+  /// לאינדקס אין שימוש ב-base64 של התמונות, והטמעתן מקצה מחרוזות של עשרות
+  /// MB לכל ספר. פורמט שאין לו וריאנט חסר-תמונות נופל לניקוי ה-data URI
+  /// אחרי ההמרה (§63, §65).
   Future<String> _loadTextForIndex(TextBook book) async {
     final filePath = book.filePath;
-    if ((book.fileType ?? '').toLowerCase() == 'epub' && filePath != null) {
+    final format = documentFormatOf(fileType: book.fileType, path: filePath);
+    if (format != null &&
+        format.supportsImageFreeConversion &&
+        filePath != null) {
       final file = File(filePath);
       if (await file.exists()) {
-        return convertEpubWithoutEmbeddedImages(file, book.title);
+        return convertDocumentForIndex(file, book.title, format);
       }
     }
     return stripDataUrisForIndex(await book.text);
@@ -1337,7 +1340,7 @@ class IndexingRepository {
         }
 
         try {
-          // DocxBook/EpubBook ממופים ל-TextBook (ראה הסבר ב-indexAllBooks).
+          // ספרי מסמך ממופים ל-TextBook (ראה הסבר ב-indexAllBooks).
           final TextBook? textBookForIndex = _asTextBookForIndex(book);
           if (textBookForIndex != null) {
             if (!isBookIndexed(book)) {
@@ -1681,7 +1684,7 @@ class IndexingRepository {
 
     final candidates = library
         .getAllBooks()
-        .where((b) => b is TextBook || b is DocxBook || b is EpubBook)
+        .where((b) => b is TextBook || b is ConvertibleDocumentBook)
         .toList();
     final total = candidates.length;
     final changed = <Book>[];
@@ -1709,7 +1712,13 @@ class IndexingRepository {
         }
 
         final TextBook textBook = _asTextBookForIndex(book)!;
-        final text = await textLoader(textBook);
+        // ספר פגום אחד אינו מבטל את סריקת כל השאר — הוא רק אינו בר-השוואה.
+        String? text;
+        try {
+          text = await textLoader(textBook);
+        } on DocumentConversionException catch (e) {
+          debugPrint('🔎 reconcile: דילוג על "${book.title}" — $e');
+        }
         if (text == null) {
           // אין תוכן להשוואה (כשל טעינה) — לא נוגעים ברשומה הקיימת.
           onScanProgress?.call(processed, total);
@@ -1762,20 +1771,16 @@ class IndexingRepository {
   /// Returns true for book types that the indexer actually processes.
   /// Non-indexable types (ExternalLibraryBook וכו') מדולגים בשקט
   /// ב-indexAllBooks, ולכן חייבים להיות מחוץ לבדיקות הסטטוס.
-  /// DocxBook/EpubBook נכללים — הם ממופים ל-TextBook ב-indexAllBooks דרך
+  /// ספרי מסמך נכללים — הם ממופים ל-TextBook ב-indexAllBooks דרך
   /// `toTextBook()`, ו-`book.text` כבר יודע לחלץ את התוכן דרך הממיר
   /// המתאים (ראה DatabaseLibraryProvider.getBookText).
   static bool isIndexableBook(Book book) =>
-      book is TextBook ||
-      book is PdfBook ||
-      book is DocxBook ||
-      book is EpubBook;
+      book is TextBook || book is PdfBook || book is ConvertibleDocumentBook;
 
   /// ממפה ספר לזרימת האינדוקס של TextBook; null לסוגים שאינם טקסטואליים.
   static TextBook? _asTextBookForIndex(Book book) => switch (book) {
     final TextBook b => b,
-    final DocxBook b => b.toTextBook(),
-    final EpubBook b => b.toTextBook(),
+    final ConvertibleDocumentBook b => b.toTextBook(),
     _ => null,
   };
 

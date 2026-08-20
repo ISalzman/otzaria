@@ -7,7 +7,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_notes_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
 
 typedef PersonalNotesLoader =
     Future<List<PersonalNote>> Function(
@@ -128,11 +128,13 @@ class PersonalNotesRepository {
           if (dbBook.isFileBacked && dbBook.filePath != null) {
             final file = File(dbBook.filePath!);
             if (await file.exists()) {
+              // PDF מחזיר null — '' הוא הסיגנל לעיגון-לפי-עמוד בהמשך.
               return await readFileBackedBookText(
-                file,
-                dbBook.fileType,
-                bookId,
-              );
+                    file,
+                    dbBook.fileType,
+                    bookId,
+                  ) ??
+                  '';
             }
           }
 
@@ -150,7 +152,7 @@ class PersonalNotesRepository {
             location.filePath != null) {
           final file = File(location.filePath!);
           if (await file.exists()) {
-            return await readFileBackedBookText(file, null, bookId);
+            return await readFileBackedBookText(file, null, bookId) ?? '';
           }
         }
       }

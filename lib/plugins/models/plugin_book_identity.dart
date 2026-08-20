@@ -1,4 +1,5 @@
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 typedef PluginBookIdentityKey = ({
   String bookId,
@@ -16,15 +17,24 @@ class PluginBookIdentity {
     _ => null,
   };
 
-  static String typeOf(Book book) {
-    final fileType = book.fileType?.trim().toLowerCase();
-    return switch (book) {
-      PdfBook() => 'pdf',
-      ExternalLibraryBook() => 'external',
-      DocxBook() || TextBook() when fileType == 'docx' => 'docx',
-      EpubBook() || TextBook() when fileType == 'epub' => 'epub',
-      _ => 'text',
-    };
+  static String typeOf(Book book) => switch (book) {
+    PdfBook() => 'pdf',
+    ExternalLibraryBook() => 'external',
+    // אותו ספר מגיע לכאן גם כמחלקת המסמך שלו וגם כ-`TextBook` (דרך
+    // `toTextBook()` בחיפוש ובאינדוקס); שני המסלולים חייבים לחלוק את אותו
+    // חישוב, אחרת אותו ספר מקבל שתי זהויות.
+    ConvertibleDocumentBook() || TextBook() => _formatIdentity(book.fileType),
+    _ => 'text',
+  };
+
+  /// הזהות היא הסיומת הקנונית עצמה — כך פורמט חדש מקבל identity יציב בלי
+  /// ענף נוסף, וזהות ה-DOCX/EPUB הקיימת נשמרת בדיוק.
+  ///
+  /// פורמט שממודל כ-TextBook (טקסט, Markdown) הוא `text`, כפי שהיה: שינוי
+  /// הזהות שלו היה מייתם את הנתונים ששמרו עליו תוספים קיימים.
+  static String _formatIdentity(String? fileType) {
+    final format = documentFormatFromFileType(fileType);
+    return format != null && format.isDocumentBook ? format.extension : 'text';
   }
 
   static String sourceOf(Book book) => switch (book) {

@@ -8,13 +8,14 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/user_content_import/services/user_links_loader.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/data/book_locator.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'dart:io';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'dart:isolate';
 
 class BookContentRange {
@@ -96,15 +97,9 @@ class TextBookRepository {
       if (dbBook.isFileBacked && dbBook.filePath != null) {
         final file = File(dbBook.filePath!);
         if (await file.exists()) {
-          final ext = (dbBook.fileType ?? '').toLowerCase();
-          if (ext == 'docx') {
-            return await convertDocxWithCache(file, title);
-          }
-          if (ext == 'epub') {
-            return await convertEpubWithCache(file, title);
-          }
-          if (ext == 'pdf') return '';
-          return await readTextFileSmart(file);
+          // PDF מוחזר '' — אין ממנו טקסט, והקוראים שלו בצנרת נפרדת.
+          return await readFileBackedBookText(file, dbBook.fileType, title) ??
+              '';
         }
       }
 
@@ -130,6 +125,12 @@ class TextBookRepository {
   }) async {
     final categoryId = book.categoryId;
     final fileType = book.fileType ?? 'txt';
+
+    // מסד ספרי המשתמש שומר את שורות מקור ה-Markdown בעוד שהקורא מציג HTML
+    // מומר; טעינת טווח מהמסד תערבב שתי מפות אינדקסים ותשבור ניווט וקישורים.
+    if (isMarkdownBook(fileType: fileType, filePath: book.filePath)) {
+      return null;
+    }
 
     // ספרי seforim.db בלבד: השאילתה וה-split רצים ב-isolate (כמו הקישורים),
     // כדי שלא יחסמו את ה-UI thread בזמן גלילה. ה-isolate פותח רק את seforim.db,
@@ -333,17 +334,16 @@ class TextBookRepository {
       if (dbBook.isFileBacked && dbBook.filePath != null) {
         final file = File(dbBook.filePath!);
         if (await file.exists()) {
-          final ext = (dbBook.fileType ?? '').toLowerCase();
-          final String content;
-          if (ext == 'docx') {
-            content = await convertDocxWithCache(file, title);
-          } else if (ext == 'epub') {
-            content = await convertEpubWithoutEmbeddedImages(file, title);
-          } else if (ext == 'pdf') {
-            content = '';
-          } else {
-            content = await readTextFileSmart(file);
-          }
+          final format = documentFormatOf(
+            fileType: dbBook.fileType,
+            path: file.path,
+          );
+          // PDF הוא file-backed אך אינו טקסט — הוא בונה TOC מה-outline שלו
+          // במסלול נפרד, ושליחתו לממיר טקסט זורקת.
+          final content = format == null || !format.isTextual
+              ? ''
+              // בלי תמונות: לתוכן העניינים נדרש רק מבנה הכותרות.
+              : await convertDocumentForIndex(file, title, format);
           if (content.isNotEmpty) {
             return await Isolate.run(
               () => TocParser.parseEntriesFromContent(content),

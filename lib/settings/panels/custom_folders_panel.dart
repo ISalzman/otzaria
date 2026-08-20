@@ -16,6 +16,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/widgets/dialogs/zip_extraction_progress_dialog.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
 /// סיווג הרכב הקבצים בתיקייה מותאמת אישית — קובע אילו אפשרויות אחסון
@@ -27,10 +28,10 @@ enum _FolderContentKind {
   /// רק קבצי טקסט (TXT) — ניתן לשמור כעותק עצמאי בתוכנה.
   textOnly,
 
-  /// רק קבצי PDF/Word/EPUB — נקראים תמיד ישירות מהקבצים.
+  /// רק קבצים שאינם טקסט (PDF, Word, EPUB, ODT…) — נקראים תמיד מהקבצים.
   binaryOnly,
 
-  /// גם טקסט וגם PDF/Word/EPUB — רק הטקסט יישמר כעותק עצמאי.
+  /// גם טקסט וגם קבצים שאינם טקסט — רק הטקסט יישמר כעותק עצמאי.
   mixed,
 }
 
@@ -90,13 +91,12 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
         followLinks: false,
       )) {
         if (entity is! File) continue;
-        final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.txt')) {
-          hasText = true;
-        } else if (lower.endsWith('.pdf') ||
-            lower.endsWith('.docx') ||
-            lower.endsWith('.epub')) {
+        final format = documentFormatFromExtension(entity.path);
+        if (format == null || !format.isProductionSupported) continue;
+        if (format.requiresConversion || !format.isTextual) {
           hasBinary = true;
+        } else {
+          hasText = true;
         }
         if (hasText && hasBinary) break;
       }
@@ -364,7 +364,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     final kind = _folderKinds[folder.path];
     final cs = Theme.of(context).colorScheme;
 
-    // קבצי PDF/Word נקראים תמיד מהקבצים — אין משמעות ל"עותק עצמאי".
+    // קובץ שאינו טקסט נקרא תמיד מהדיסק — אין משמעות ל"עותק עצמאי".
     final binaryOnly = kind == _FolderContentKind.binaryOnly;
 
     return SettingsActionTile.path(
@@ -390,7 +390,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
             height: 20,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
-        // בחירת מצב אחסון. כשהתיקייה מכילה רק PDF/Word אין בחירה (הם
+        // בחירת מצב אחסון. כשהתיקייה מכילה רק קבצים שאינם טקסט אין בחירה (הם
         // תמיד נקראים מהקבצים), ולכן מוצגת תווית במקום הפקד.
         if (!binaryOnly)
           Opacity(
@@ -417,7 +417,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
           )
         else
           Text(
-            context.settingsText('קבצי PDF/Word — נקראים ישירות מהקבצים'),
+            context.settingsText('קבצים שאינם טקסט — נקראים ישירות מהקבצים'),
             style: AppTextStyles.settingSubtitle.copyWith(
               color: cs.onSurfaceVariant,
             ),
@@ -435,7 +435,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
         title: context.settingsText('הצגה או הוספה של הקבצים למערכת'),
         subtitle: context.settingsText(
           'הצגה: בודק את הקבצים בכל פתיחה של התוכנה ובכל פתיחת ספר, שינוי הספר מוצג מיידית בתוכנה.\n'
-          'הוספה: מוסיף את התוכן הקיים לתוכנה, תוכן הקבצים ישתנה רק בסריקה מחדש, (קבצי PDF/Word רק יוצגו בתוכנה)',
+          'הוספה: מוסיף את התוכן הקיים לתוכנה, תוכן הקבצים ישתנה רק בסריקה מחדש, (קבצים שאינם טקסט רק יוצגו בתוכנה)',
         ),
         actions: [
           IconButton(
@@ -525,7 +525,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
             ),
             item(
               FluentIcons.info_24_regular,
-              context.settingsText('קבצי PDF ו-Word'),
+              context.settingsText('קבצים שאינם טקסט'),
               context.settingsText(
                 'אין אפשרות להוספה, והם רק מוצגים ונקראים ישירות מהקבצים שבדיסק.',
               ),

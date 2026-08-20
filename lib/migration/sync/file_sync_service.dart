@@ -14,6 +14,8 @@ import '../generator/generator.dart';
 import '../models/book.dart';
 import '../models/category.dart';
 import '../../utils/file/file_hidden_utils.dart';
+import '../../utils/file/document_converter.dart';
+import '../../utils/file/document_format.dart';
 
 /// Result of a file sync operation
 class FileSyncResult {
@@ -629,12 +631,15 @@ class FileSyncService {
     required _FolderScanCaches caches,
   }) async {
     final title = path.basenameWithoutExtension(filePath);
-    final extension = path.extension(filePath).toLowerCase();
+    final format = documentFormatFromExtension(filePath);
+    if (format == null) {
+      // ‏[_findNewFiles] כבר סינן מול ה-registry, ולכן זהו באג ולא קלט חוקי.
+      _log.warning('Unsupported file reached the sync pipeline: $filePath');
+      return const _FileProcessResult(wasAdded: false, wasUpdated: false);
+    }
 
-    // PDF, DOCX and EPUB files always act as external (content never in DB)
-    final isBinaryFormat =
-        extension == '.pdf' || extension == '.docx' || extension == '.epub';
-    final effectiveInsertContent = isBinaryFormat ? false : insertContent;
+    // פורמטים שמומרים בזמן קריאה נשארים חיצוניים כדי שהמטמון יבודד גרסאות.
+    final effectiveInsertContent = format.canStoreLinesInDb && insertContent;
 
     // Build category path
     final relativeCategories = _parsePathToCategories(filePath, basePath);
@@ -658,13 +663,7 @@ class FileSyncService {
         ? categoryResult.categoriesCreated
         : 0;
 
-    // Extract file type from extension (remove the dot)
-    final fileType = extension.replaceFirst('.', '').toLowerCase();
-
-    // רישום מפתח הספר — הקובץ קיים בדיסק, ולכן ה-prune של קבצים שנמחקו
-    // לא יסיר אותו מה-DB. המפתח אינו תלוי ב-filePath, כדי לכסות גם ספרים
-    // ששמורים כעותק עצמאי (txt עם content בתוך ה-DB, filePath=null).
-    validBookKeys?.add('$categoryId|$title|$fileType');
+    final fileType = format.extension;
 
     // ספרי תיקיות מותאמות חיים ב-user_books.db; תמונת-המצב נטענה משם —
     // ל-seforim.db v3 אין עמודת fileType (וגם הוא read-only).
@@ -701,6 +700,9 @@ class FileSyncService {
       final sourceChanged = existingSourceName != customSourceName;
 
       if (fileChanged || storageChanged || sourceChanged) {
+        if (fileChanged) {
+          await _validateConvertedDocument(file, title, format);
+        }
         if (storageChanged) {
           debugPrint(
             '[FileSyncService] Storage preference changed for ${existingBook.title}: isFileBacked=${existingBook.isFileBacked} -> $expectedIsContentExternal',
@@ -720,6 +722,7 @@ class FileSyncService {
         );
       }
     } else {
+      await _validateConvertedDocument(File(filePath), title, format);
       wasAdded = true;
       await generator.createAndProcessBook(
         filePath,
@@ -739,12 +742,24 @@ class FileSyncService {
       }
     }
 
+    // רק קובץ שעבר את ההמרה (או ספר קיים שלא השתנה) נחשב תקין ל-prune.
+    validBookKeys?.add('$categoryId|$title|$fileType');
+
     return _FileProcessResult(
       wasAdded: wasAdded,
       wasUpdated: wasUpdated,
       categoriesCreated: categoriesCreated,
       updatedBookId: wasUpdated ? existingBook?.id : null,
     );
+  }
+
+  Future<void> _validateConvertedDocument(
+    File file,
+    String title,
+    DocumentFormat format,
+  ) async {
+    if (!format.isTextual || !format.requiresConversion) return;
+    await convertDocumentForIndex(file, title, format);
   }
 
   /// Pure sync logic — receives all inputs, touches no Settings.
@@ -961,18 +976,14 @@ class FileSyncService {
   Future<List<String>> _findNewFiles(String basePath) async {
     final newFiles = <String>[];
     final dir = Directory(basePath);
-    final supportedExtensions = {'.txt', '.pdf', '.docx', '.epub'};
-
     if (!await dir.exists()) return newFiles;
 
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
         if (isHiddenOrSystem(entity.path)) continue;
-        final ext = path.extension(entity.path).toLowerCase();
-        if (supportedExtensions.contains(ext)) {
-          final title = path.basenameWithoutExtension(entity.path);
+        if (await isSupportedBookFileByContent(entity.path)) {
           newFiles.add(entity.path);
-          _log.fine('Found file to process: $title ($ext)');
+          _log.fine('Found file to process: ${path.basename(entity.path)}');
         }
       }
     }

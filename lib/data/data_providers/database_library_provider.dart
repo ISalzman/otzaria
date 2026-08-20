@@ -24,14 +24,12 @@ import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/book.dart' as db_models;
 import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import 'package:otzaria/utils/file/file_hidden_utils.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/migration/models/alt_toc_entry.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
-import 'package:otzaria/utils/file/docx_to_otzaria.dart';
-import 'package:otzaria/utils/file/docx_cache.dart';
-import 'package:otzaria/utils/file/epub_to_otzaria.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -71,7 +69,7 @@ class _DiscoveredBook {
   final int lastModified;
   final List<String> categoryPath;
 
-  /// Pre-parsed TOC for TXT / DOCX files (parsed inside the isolate).
+  /// Pre-parsed TOC for every textual format (parsed inside the isolate).
   /// null for PDF (platform channel) or for metadata-update-only books.
   final List<_RawTocEntry>? tocEntries;
 
@@ -79,7 +77,7 @@ class _DiscoveredBook {
   /// (size or mtime) changed. Phase 2 only updates metadata; no insert needed.
   final int? existingBookId;
 
-  /// Non-null when DOCX conversion failed (e.g. unsupported encoding).
+  /// Non-null when the document conversion failed (corrupt/encrypted file).
   /// Books with this field set are counted as failures and not inserted.
   final String? conversionError;
 
@@ -98,7 +96,7 @@ class _DiscoveredBook {
 
 /// Entry point for [Isolate.run]: scans [folderPath] recursively,
 /// filters out already-indexed unchanged books via a direct sqlite3 read,
-/// and parses TXT / DOCX TOC for genuinely NEW books.
+/// and parses the TOC of every textual format for genuinely NEW books.
 /// PDF TOC is intentionally skipped here (pdfrx uses platform channels).
 Future<List<_DiscoveredBook>> _scanExternalFolderInIsolate(
   (String folderPath, String folderName, String dbPath) args,
@@ -143,19 +141,16 @@ Future<void> _collectBookFilesRecursive(
           db,
         );
       } else if (entity is File) {
-        final lower = name.toLowerCase();
-        String fileType;
-        if (lower.endsWith('.txt')) {
-          fileType = 'txt';
-        } else if (lower.endsWith('.docx')) {
-          fileType = 'docx';
-        } else if (lower.endsWith('.epub')) {
-          fileType = 'epub';
-        } else if (lower.endsWith('.pdf')) {
-          fileType = 'pdf';
-        } else {
+        final format = documentFormatFromExtension(name);
+        if (format == null || !format.isProductionSupported) continue;
+        // ‎.xml‎ ו-‎.wbk‎ נאספים רק אם תוכנם אכן מסמך — אותו שער בדיוק שבסורק
+        // הסנכרון וב-generator. בלעדיו כל קובץ XML שיושב בתיקיית ספרים היה
+        // מדווח למשתמש ככשל המרה.
+        if (format.needsContentSniffing &&
+            !await isSupportedBookFileByContent(entity.path)) {
           continue;
         }
+        final fileType = format.extension;
 
         final stat = await entity.stat();
         final title = getTitleFromPath(entity.path);
@@ -186,24 +181,21 @@ Future<void> _collectBookFilesRecursive(
         }
         // ──────────────────────────────────────────────────────────────────
 
-        // New or changed book — parse TOC for TXT / DOCX / EPUB.
+        // New or changed book — parse the TOC of every textual format.
+        // PDF: rawToc stays null — parsed on the main isolate from its outline.
         List<_RawTocEntry>? rawToc;
         String? conversionError;
-        if (fileType == 'txt') {
-          try {
-            final content = await entity.readAsString();
-            // Synchronous call — we are already in a background isolate.
-            final parsed = TocParser.parseEntriesFromContent(content);
-            rawToc = _flattenTocToRaw(parsed);
-          } catch (_) {
-            // TOC parse failure is non-fatal.
-          }
-        } else if (fileType == 'docx' || fileType == 'epub') {
+        if (format.isTextual) {
           try {
             final bytes = await entity.readAsBytes();
-            final content = fileType == 'docx'
-                ? docxToText(bytes, title)
-                : epubToText(bytes, title, embedImages: false);
+            // Synchronous call — we are already in a background isolate.
+            final content = convertDocumentBytesSync(
+              bytes,
+              title,
+              format: format,
+              embedImages: false,
+              path: entity.path,
+            );
             try {
               final parsed = TocParser.parseEntriesFromContent(content);
               rawToc = _flattenTocToRaw(parsed);
@@ -214,7 +206,6 @@ Future<void> _collectBookFilesRecursive(
             conversionError = e.toString();
           }
         }
-        // PDF: rawToc stays null — parsed on the main isolate.
 
         books.add(
           _DiscoveredBook(
@@ -1889,22 +1880,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
         if (book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
-            // PDF אינו טקסט — הקוראים עוברים דרך זרימת ה-PDF, לא לקרוא כקובץ.
-            if ((book.fileType ?? '').toLowerCase() == 'pdf' ||
-                file.path.toLowerCase().endsWith('.pdf')) {
-              return null;
-            }
-            // DOCX/EPUB הם בינאריים — חובה להמיר, לא readAsString (זבל/זורק).
-            if ((book.fileType ?? '').toLowerCase() == 'docx' ||
-                file.path.toLowerCase().endsWith('.docx')) {
-              return await convertDocxWithCache(file, title);
-            }
-            if ((book.fileType ?? '').toLowerCase() == 'epub' ||
-                file.path.toLowerCase().endsWith('.epub')) {
-              return await convertEpubWithCache(file, title);
-            }
-            // קבצים אישיים ישנים עשויים להיות ב-Windows-1255/UTF-16 ולא UTF-8.
-            return await readTextFileSmart(file);
+            // PDF מוחזר null — הקוראים שלו עוברים בצנרת נפרדת. פורמט בינארי
+            // (ZIP/OLE) לעולם אינו נקרא כטקסט אלא מומר.
+            return await readFileBackedBookText(file, book.fileType, title);
           }
         }
         // נופל לטעינה מתוך ה-DB עצמו (טבלת `line`).
@@ -1927,13 +1905,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
         if (book != null && book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
           if (await file.exists()) {
-            if ((book.fileType ?? '').toLowerCase() == 'docx') {
-              return await convertDocxWithCache(file, title);
-            }
-            if ((book.fileType ?? '').toLowerCase() == 'epub') {
-              return await convertEpubWithCache(file, title);
-            }
-            return await readTextFileSmart(file);
+            return await readFileBackedBookText(file, book.fileType, title);
           }
         }
         // If not external or file not found, try DB text
@@ -1990,16 +1962,19 @@ class DatabaseLibraryProvider implements LibraryProvider {
           fileType,
         );
         if (book == null) return null;
-        // DOCX/EPUB: ה-TOC נגזר מהתוכן המומר (במטמון) ולא משורות ה-DB —
+        // פורמט שדורש המרה: ה-TOC נגזר מהתוכן המומר (במטמון) ולא משורות ה-DB —
         // רשומות ה-DB נבנות בסריקה ומתיישנות כשגרסת הממיר עולה (אינדקסי
         // השורות זזים ותוכן העניינים המוטמע לא היה נלקח בחשבון).
         if (book.isFileBacked && book.filePath != null) {
           final file = File(book.filePath!);
-          final ext = (book.fileType ?? '').toLowerCase();
-          if ((ext == 'docx' || ext == 'epub') && await file.exists()) {
-            final content = ext == 'docx'
-                ? await convertDocxWithCache(file, title)
-                : await convertEpubWithoutEmbeddedImages(file, title);
+          final format = documentFormatOf(
+            fileType: book.fileType,
+            path: file.path,
+          );
+          if (format != null &&
+              format.requiresConversion &&
+              await file.exists()) {
+            final content = await convertDocumentForIndex(file, title, format);
             if (content.isNotEmpty) {
               final toc = await Isolate.run(
                 () => TocParser.parseEntriesFromContent(content),
@@ -3000,73 +2975,17 @@ class DatabaseLibraryProvider implements LibraryProvider {
       return null;
     }
 
-    if (filePath != null && fileType == 'pdf') {
-      final resolvedFilePath = resolveMovedFileBookPath(filePath);
-      return PdfBook(
-        id: id,
-        title: title,
-        category: category,
-        path: resolvedFilePath,
-        filePath: resolvedFilePath,
-        author: author,
-        heShortDesc: metaHeShortDesc,
-        heDesc: metaHeDesc,
-        pubDate: pubDate,
-        pubPlace: pubPlace,
-        order: order,
-        topics: topics,
-        categoryPath: categoryPath,
-        categoryId: categoryId,
-        isUserBook: isUserBook,
-      );
-    }
+    final resolvedFilePath = filePath == null
+        ? null
+        : resolveMovedFileBookPath(filePath);
 
-    if (filePath != null && fileType == 'docx') {
-      final resolvedFilePath = resolveMovedFileBookPath(filePath);
-      return DocxBook(
-        id: id,
-        title: title,
-        category: category,
-        path: resolvedFilePath,
-        filePath: resolvedFilePath,
-        author: author,
-        heShortDesc: metaHeShortDesc,
-        heDesc: metaHeDesc,
-        pubDate: pubDate,
-        pubPlace: pubPlace,
-        order: order,
-        topics: topics,
-        categoryPath: categoryPath,
-        categoryId: categoryId,
-        isUserBook: isUserBook,
-      );
-    }
-
-    if (filePath != null && fileType == 'epub') {
-      final resolvedFilePath = resolveMovedFileBookPath(filePath);
-      return EpubBook(
-        id: id,
-        title: title,
-        category: category,
-        path: resolvedFilePath,
-        filePath: resolvedFilePath,
-        author: author,
-        heShortDesc: metaHeShortDesc,
-        heDesc: metaHeDesc,
-        pubDate: pubDate,
-        pubPlace: pubPlace,
-        order: order,
-        topics: topics,
-        categoryPath: categoryPath,
-        categoryId: categoryId,
-        isUserBook: isUserBook,
-      );
-    }
-
-    return TextBook(
+    return buildBookForFileType(
+      fileType: normalizedFileType,
       id: id,
       title: title,
       category: category,
+      path: resolvedFilePath ?? title,
+      filePath: resolvedFilePath,
       author: author,
       heShortDesc: metaHeShortDesc,
       heDesc: metaHeDesc,
@@ -3372,15 +3291,21 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // ספר file-backed (תיקייה שנוספה בלי "הוסף למסד הנתונים") — אין שורות
       // ב-DB, התוכן נקרא מהקובץ עצמו לפי אותו פיצול שורות של הסורק.
       final dbBook = resolvedBook.book;
-      final dbBookFileType = (dbBook.fileType ?? 'txt').toLowerCase();
+      final dbBookFormat = documentFormatOf(
+        fileType: dbBook.fileType,
+        path: dbBook.filePath,
+      );
       if (dbBook.isFileBacked &&
           dbBook.filePath != null &&
-          (dbBookFileType == 'txt' || dbBookFileType == 'docx')) {
+          (dbBookFormat?.isTextual ?? false)) {
         final file = File(dbBook.filePath!);
         if (!await file.exists()) return 'שגיאה: הקובץ לא נמצא';
-        final text = dbBookFileType == 'docx'
-            ? await convertDocxWithCache(file, dbBook.title)
-            : await readTextFileSmart(file);
+        // הווריאנט המלא ולא חסר-התמונות: זה שהקורא מקבל ממילא, ולכן הוא כבר
+        // במטמון. וריאנט נפרד היה מכפיל את טקסט הספר ב-`cache.db` ומציג
+        // בתצוגת המפרש תג תמונה ריק במקום התמונה.
+        final text =
+            await readFileBackedBookText(file, dbBook.fileType, dbBook.title) ??
+            '';
         final lines = text.split('\n');
         final start = link.index2 - 1;
         if (start >= lines.length) return 'שגיאה: אינדקס מחוץ לטווח';
@@ -3684,7 +3609,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
 
       // Phase 1 (background isolate): scan directory, check DB existence via a
-      // direct sqlite3 read-only connection, and parse TXT/DOCX TOC only for
+      // direct sqlite3 read-only connection, and parse the TOC only for
       // genuinely new books. Unchanged books are filtered out here.
       //
       // ה-DB שאליו משווים בסריקה הוא `user_books.db` (לא `seforim.db`),
@@ -3710,7 +3635,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
         await Future<void>.delayed(Duration.zero);
         if (book.conversionError != null) {
           debugPrint(
-            '⚠️ DOCX conversion failed for ${book.title}: ${book.conversionError}',
+            '⚠️ המרת מסמך נכשלה — ${book.title} (${book.fileType}): '
+            '${book.conversionError}',
           );
           failedDetails.add((book.title, book.conversionError!));
           failed++;
@@ -3758,7 +3684,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
           List<db_models.TocEntry>? tocEntries;
           if (book.tocEntries != null && book.tocEntries!.isNotEmpty) {
-            // TXT / DOCX: already parsed inside the isolate.
+            // כל פורמט טקסטואלי: כבר נפרסר בתוך ה-isolate.
             tocEntries = _rawTocToDbEntries(book.tocEntries!);
           } else if (book.fileType == 'pdf') {
             // PDF: parse outline here — pdfrx serializes everything through a

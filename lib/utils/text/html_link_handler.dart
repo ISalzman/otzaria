@@ -10,6 +10,8 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 
+import 'package:otzaria/utils/text/heading_slug.dart';
+
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
   /// מנסה לפענח URL בצורה בטוחה, תומך בטקסט רגיל ו-URL encoded
@@ -230,7 +232,15 @@ class HtmlLinkHandler {
       // חיפוש הכותרת בתוכן הספציפי
       final viewportExtent =
           context.size?.height ?? MediaQuery.sizeOf(context).height;
-      final resolved = await _findHeaderPath(state.book, segments);
+      // עוגן בתוכן שהקורא מציג כרגע קודם לפענוח הנתיב: טעינה מחדש של הספר
+      // מחזירה אינדקסים של שורות המקור, שאינם באותה מפה כמו ה-HTML המוצג
+      // (ספרי Markdown).
+      final anchorIndex = segments.length == 1
+          ? findAnchorIndex(state.content, segments.single)
+          : null;
+      final resolved = anchorIndex != null
+          ? HeaderPathResult(index: anchorIndex, reachedHeader: segments.single)
+          : await _findHeaderPath(state.book, segments);
 
       if (resolved.index != null) {
         // ניווט לאינדקס שנמצא
@@ -470,6 +480,11 @@ class HtmlLinkHandler {
     final lines = content.split('\n');
     final tagPattern = RegExp(r'<[^>]*>');
 
+    // יעד עוגן מפורש קודם להתאמת טקסט: כך מסמכי Markdown מסמנים יעדי ניווט
+    // שאינם ה-slug של הכותרת.
+    final anchorIndex = findAnchorIndex(lines, headerName);
+    if (anchorIndex != null) return anchorIndex;
+
     for (int i = 0; i < lines.length; i++) {
       if (isHeaderMatch(
         lines[i].replaceAll(tagPattern, '').trim(),
@@ -514,7 +529,39 @@ class HtmlLinkHandler {
   static bool isHeaderMatch(String text, String headerName) {
     final cleanText = text.trim().replaceAll(RegExp(r'\s+'), '');
     final cleanHeader = headerName.trim().replaceAll(RegExp(r'\s+'), '');
-    return cleanText == cleanHeader;
+    if (cleanText == cleanHeader) return true;
+    return headingSlug(text) == headingSlug(headerName);
+  }
+
+  /// מחפש כותרת בכל עומק תוכן העניינים, כולל עוגני Markdown בסגנון GitHub.
+  @visibleForTesting
+  static int? findHeaderIndexInToc(
+    List<TocEntry> entries,
+    String headerName,
+  ) {
+    for (final entry in flattenToc(entries)) {
+      if (isHeaderMatch(entry.text, headerName)) return entry.index;
+    }
+    return null;
+  }
+
+  /// מחפש יעד עוגן מפורש בשורות המוצגות — `id` על כותרת או `name`/`id` על
+  /// `<a>`. כך מסמכי Markdown מסמנים יעדי ניווט שאינם ה-slug של הכותרת.
+  @visibleForTesting
+  static int? findAnchorIndex(List<String> lines, String anchor) {
+    final trimmed = anchor.trim();
+    if (trimmed.isEmpty) return null;
+    final pattern = RegExp(
+      '<(?:h[1-6]|a)\\b[^>]*\\b(?:name|id)\\s*=\\s*(["\\\'])'
+      '${RegExp.escape(trimmed)}\\1',
+      caseSensitive: false,
+    );
+    for (var index = 0; index < lines.length; index++) {
+      // סינון מוקדם: התאמת regex על כל שורה בספר יקרה מהותית מחיפוש מחרוזת.
+      if (!lines[index].contains(trimmed)) continue;
+      if (pattern.hasMatch(lines[index])) return index;
+    }
+    return null;
   }
 }
 

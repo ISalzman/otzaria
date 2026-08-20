@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 
@@ -123,9 +124,13 @@ void main() {
       expect(result.indexOf('ראשון'), lessThan(result.indexOf('שני')));
     });
 
-    test('EPUB פגום (לא ZIP) מחזיר לפחות את הכותרת בלי לזרוק', () {
-      final result = epubToText(Uint8List.fromList([1, 2, 3, 4]), 'ספר פגום');
-      expect(result, '<h1>ספר פגום</h1>');
+    test('EPUB פגום (לא ZIP) זורק חריגה מוקלדת', () {
+      // פלט "כותרת בלבד" נראה כספר תקין וריק: הוא נשמר במטמון ל-90 יום,
+      // מאונדקס, ומסמן כל הערה אישית מעבר לשורה 1 כחסרה — לצמיתות.
+      expect(
+        () => epubToText(Uint8List.fromList([1, 2, 3, 4]), 'ספר פגום'),
+        throwsA(isA<CorruptedDocumentException>()),
+      );
     });
 
     test('פריט spine עם linear="no" מדולג', () {

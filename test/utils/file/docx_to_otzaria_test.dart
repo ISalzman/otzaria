@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -902,10 +903,15 @@ void main() {
       expect(tableLine, contains('</table>'));
     });
 
-    test('XML פגום לא מקריס את היבוא ומחזיר לפחות את הכותרת', () {
+    test('XML פגום זורק חריגה מוקלדת ואינו מחזיר כותרת בלבד', () {
+      // פלט "כותרת בלבד" נראה כמו ספר תקין וריק: הוא נשמר במטמון ל-90 יום,
+      // מאונדקס, ומסמן כל הערה אישית שמעבר לשורה 1 כחסרה — לצמיתות.
       final docx = _buildDocx(_utf8Xml('<w:document not-closed'));
-      final result = docxToText(docx, 'כותרת');
-      expect(result, contains('<h1>כותרת</h1>'));
+
+      expect(
+        () => docxToText(docx, 'כותרת'),
+        throwsA(isA<CorruptedDocumentException>()),
+      );
     });
   });
 
@@ -1798,6 +1804,137 @@ void main() {
         isNot(contains('background-image')),
         reason: 'לא div ריק עם background-image (חסר גובה, לא מציג)',
       );
+    });
+
+    test('תיבת-טקסט בקידומת namespace אחרת אינה מוכפלת', () {
+      // Word כותב את אותה תיבה פעמיים לתאימות, לעיתים בקידומות שונות
+      // (`w:txbxContent` ו-`wne:txbxContent`). זיהוי לפי קידומת אחת בלבד
+      // השאיר את השנייה כטקסט חופשי — כלומר כפילות של כל תוכן התיבות.
+      final xml =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $drawNs '
+          'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml">'
+          '<w:body><w:p><w:r>'
+          '<w:pict><v:shape><v:textbox><w:txbxContent>'
+          '<w:p><w:r><w:t>בתיבה</w:t></w:r></w:p>'
+          '</w:txbxContent></v:textbox></v:shape></w:pict>'
+          '<w:drawing><wp:txbx><wne:txbxContent>'
+          '<w:p><w:r><w:t>בתיבה</w:t></w:r></w:p>'
+          '</wne:txbxContent></wp:txbx></w:drawing>'
+          '</w:r></w:p></w:body></w:document>';
+      final result = docxToText(_buildDocx(_utf8Xml(xml)), 'ב');
+      expect('בתיבה'.allMatches(result).length, 1);
+      expect(result, contains('border: 1px solid #999; padding: 8px'));
+    });
+
+    test('מילוי-תמונה של VML הוא רקע התיבה, גם ביעד "חיצוני"', () {
+      // Word כותב למילוי-תמונה יחס עם TargetMode="External" שנתיבו מפנה
+      // לחבילה עצמה (`ooxWord://…`). בלי נרמול הנתיב תמונת הרקע אובדת.
+      final docXml =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $drawNs><w:body><w:p><w:r><w:pict>'
+          '<v:shape><v:fill r:id="rId1" type="frame"/>'
+          '<v:textbox><w:txbxContent>'
+          '<w:p><w:r><w:t>על הרקע</w:t></w:r></w:p>'
+          '</w:txbxContent></v:textbox></v:shape>'
+          '</w:pict></w:r></w:p></w:body></w:document>';
+      final relsXml =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          '<Relationship Id="rId1" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+          'Target="ooxWord://word/media/i.png" TargetMode="External"/>'
+          '</Relationships>';
+      final archive = Archive();
+      final d = utf8.encode(docXml);
+      final rels = utf8.encode(relsXml);
+      final png = [0x89, 0x50, 0x4E, 0x47];
+      archive.addFile(ArchiveFile('word/document.xml', d.length, d));
+      archive.addFile(
+        ArchiveFile('word/_rels/document.xml.rels', rels.length, rels),
+      );
+      archive.addFile(ArchiveFile('word/media/i.png', png.length, png));
+      final result = docxToText(
+        Uint8List.fromList(ZipEncoder().encode(archive)),
+        'ב',
+      );
+      expect(result, contains('background-image: url(data:image/png;base64,'));
+      expect(result, contains('על הרקע'));
+    });
+
+    test('יעד חיצוני אמיתי אינו מוטמע ואינו נקרא מהרשת', () {
+      final docXml =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $drawNs><w:body><w:p><w:r><w:drawing>'
+          '<a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
+          '</w:body></w:document>';
+      final relsXml =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          '<Relationship Id="rId1" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+          'Target="https://example.com/i.png" TargetMode="External"/>'
+          '</Relationships>';
+      final archive = Archive();
+      final d = utf8.encode(docXml);
+      final rels = utf8.encode(relsXml);
+      archive.addFile(ArchiveFile('word/document.xml', d.length, d));
+      archive.addFile(
+        ArchiveFile('word/_rels/document.xml.rels', rels.length, rels),
+      );
+      final result = docxToText(
+        Uint8List.fromList(ZipEncoder().encode(archive)),
+        'ב',
+      );
+      expect(result, isNot(contains('<img')));
+      expect(result, isNot(contains('example.com')));
+    });
+  });
+
+  group('יישור לוגי (w:jc start/end)', () {
+    String convert(String pPr) => docxToText(
+      _buildDocx(
+        _utf8Xml(
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<w:document $_xmlNs><w:body><w:p><w:pPr>$pPr</w:pPr>'
+          '<w:r><w:t>טקסט</w:t></w:r></w:p></w:body></w:document>',
+        ),
+      ),
+      'ב',
+    );
+
+    test('בפסקה LTR (ברירת המחדל): end→ימין, start→שמאל', () {
+      expect(
+        convert('<w:jc w:val="end"/>'),
+        contains('<div style="text-align: right;">'),
+      );
+      expect(
+        convert('<w:jc w:val="start"/>'),
+        contains('<div style="text-align: left;">'),
+      );
+    });
+
+    test('בפסקה RTL יישור לוגי מדולג — מפיקי המסמכים חלוקים בפירושו', () {
+      expect(convert('<w:bidi/><w:jc w:val="end"/>'), isNot(contains('<div')));
+      expect(
+        convert('<w:bidi/><w:jc w:val="start"/>'),
+        isNot(contains('<div')),
+      );
+    });
+
+    test('w:bidi מבוטל (val=0) חוזר לכיוון LTR', () {
+      expect(
+        convert('<w:bidi w:val="0"/><w:jc w:val="end"/>'),
+        contains('<div style="text-align: right;">'),
+      );
+    });
+
+    test('ערכים פיזיים ו-both אינם מושפעים מהכיוון', () {
+      expect(
+        convert('<w:bidi/><w:jc w:val="right"/>'),
+        contains('<div style="text-align: right;">'),
+      );
+      expect(convert('<w:jc w:val="both"/>'), isNot(contains('<div')));
     });
   });
 }

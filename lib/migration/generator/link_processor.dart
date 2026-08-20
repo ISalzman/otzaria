@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:logging/logging.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:path/path.dart' as path;
 
 import '../models/link.dart';
@@ -90,7 +91,10 @@ class LinkProcessor {
 
     final books = await _repository.getAllBooks();
     for (final book in books) {
-      if (book.fileType != 'txt') {
+      // קישורים ממופים ל-`lineIndex` בשורות שב-DB; ספר file-backed אינו
+      // מחזיק שורות שם ואין למה למפות.
+      if (!(documentFormatFromFileType(book.fileType)?.canStoreLinesInDb ??
+          false)) {
         continue;
       }
       _bookTitleToId[book.title] = book.id;

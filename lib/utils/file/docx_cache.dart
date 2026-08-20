@@ -7,14 +7,19 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/migration/models/docx_text_cache_entry.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
+import 'package:otzaria/utils/text/html_escape.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
-import 'package:path/path.dart' as p;
+import 'package:otzaria/utils/file/legacy_word_to_otzaria.dart';
+import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
+import 'package:otzaria/utils/file/odt_to_otzaria.dart';
+import 'package:otzaria/utils/file/rtf_to_otzaria.dart';
+import 'package:otzaria/utils/file/word_xml_to_otzaria.dart';
 
-/// משך חיים של רשומת מטמון המרה (docx/epub) ללא גישה. רשומות של ספרים שלא
-/// נפתחו מעבר לפרק זמן זה מנוקות — כדי ש-`cache.db` לא יגדל ללא הגבלה (כל
-/// רשומה מכילה את טקסט הספר המלא, כולל base64 של תמונות).
-const Duration _docxCacheTtl = Duration(days: 90);
+/// משך חיים של רשומת מטמון המרה ללא גישה. רשומות של ספרים שלא נפתחו מעבר
+/// לפרק זמן זה מנוקות — כדי ש-`cache.db` לא יגדל ללא הגבלה (כל רשומה מכילה
+/// את טקסט הספר המלא, כולל base64 של תמונות).
+const Duration _conversionCacheTtl = Duration(days: 90);
 
 /// תדירות מקסימלית לעדכון `accessedAt` (יום). מונע כתיבת WAL בכל פתיחה.
 const int _touchThrottleMs = 24 * 60 * 60 * 1000;
@@ -30,24 +35,121 @@ bool _shouldOpportunisticPrune() => _pruneSampler.nextInt(20) == 0;
 /// לפני שהמטמון נכתב.
 final Map<String, Future<String>> _inFlight = {};
 
-/// ממיר קובץ docx חיצוני לטקסט של אוצריא, עם מטמון מתמשך ב-`cache.db`.
+/// ממיר מסמך Word מבוסס OOXML (DOCX/DOCM/DOTX/DOTM) לטקסט של אוצריא, עם
+/// מטמון מתמשך ב-`cache.db`.
 ///
-/// ההמרה (פירוק XML מלא ב-[docxToText]) יקרה — לאלפי דפים מדובר בשניות בכל
-/// פתיחה. המטמון נמנע מכך: מפתח-התוקף הוא גודל הקובץ + זמן-השינוי + גרסת
-/// הממיר. אם הקובץ לא השתנה — מחזיר את הטקסט השמור מיידית; אם המשתמש ערך
-/// את הקובץ (ספרים אישיים) — הערכים משתנים וההמרה מתבצעת מחדש. כך הטריות
-/// נשמרת. כשל מטמון אינו פוגע — נופלים להמרה רגילה.
+/// ההמרה (פירוק XML מלא) יקרה — לאלפי דפים מדובר בשניות בכל פתיחה. המטמון
+/// נמנע מכך: מפתח-התוקף הוא גודל הקובץ + זמן-השינוי + גרסת הממיר. אם הקובץ
+/// לא השתנה — מחזיר את הטקסט השמור מיידית; אם המשתמש ערך את הקובץ (ספרים
+/// אישיים) — הערכים משתנים וההמרה מתבצעת מחדש. כשל מטמון אינו פוגע —
+/// נופלים להמרה רגילה.
 ///
 /// הכותרת ([title]) אינה חלק ממפתח המטמון — היא מוזרקת מחדש בכל קריאה
 /// (ראו [_withFreshTitle]), כך ששינוי שם הספר אינו פוסל את המטמון אך
 /// הכותרת המוצגת תמיד עדכנית.
-Future<String> convertDocxWithCache(File file, String title) =>
-    _convertWithCache(file, title, kDocxConverterVersion, docxToText);
+///
+/// הווריאנט חסר-התמונות נשמר במפתח נפרד — הוא נועד ל-TOC ולאינדוקס, ואסור
+/// שיוגש למסך הקריאה שבו התמונות נדרשות.
+Future<String> convertOoxmlWordWithCache(
+  File file,
+  String title,
+  DocumentFormat format, {
+  bool embedImages = true,
+}) => _convertWithCache(
+  file,
+  title,
+  kOoxmlWordConverterVersion,
+  // הפורמט המדויק עובר לממיר גם במסלול עם התמונות: הוא זה שנרשם בחריגה,
+  // ובלעדיו כל כשל של DOCM/DOTX/DOTM מדווח כ-DOCX.
+  (bytes, t) =>
+      ooxmlWordToText(bytes, t, format: format, embedImages: embedImages),
+  cacheVariant: embedImages ? null : 'ooxml-without-images',
+);
 
 /// ממיר קובץ EPUB לטקסט של אוצריא — אותו מנגנון מטמון כמו
-/// [convertDocxWithCache] (הרשומות חולקות טבלה; המפתח הוא נתיב הקובץ).
+/// [convertOoxmlWordWithCache] (הרשומות חולקות טבלה; המפתח הוא נתיב הקובץ).
 Future<String> convertEpubWithCache(File file, String title) =>
     _convertWithCache(file, title, kEpubConverterVersion, epubToText);
+
+/// ממיר קובץ ODT דרך אותו מטמון.
+Future<String> convertOdtWithCache(
+  File file,
+  String title, {
+  bool embedImages = true,
+}) => _convertWithCache(
+  file,
+  title,
+  kOdtConverterVersion,
+  embedImages
+      ? odtToText
+      : (bytes, t) => odtToText(bytes, t, embedImages: false),
+  cacheVariant: embedImages ? 'odt' : 'odt-without-images',
+);
+
+/// ממיר קובץ RTF דרך אותו מטמון.
+Future<String> convertRtfWithCache(
+  File file,
+  String title, {
+  bool embedImages = true,
+}) => _convertWithCache(
+  file,
+  title,
+  kRtfConverterVersion,
+  embedImages
+      ? rtfToText
+      : (bytes, t) => rtfToText(bytes, t, embedImages: false),
+  cacheVariant: embedImages ? 'rtf' : 'rtf-without-images',
+);
+
+/// ממיר מסמך Word שנשמר כ-XML (Flat OPC / WordML 2003) דרך אותו מטמון.
+Future<String> convertWordXmlWithCache(
+  File file,
+  String title, {
+  bool embedImages = true,
+}) => _convertWithCache(
+  file,
+  title,
+  kWordXmlConverterVersion,
+  (bytes, t) => wordXmlToText(bytes, t, embedImages: embedImages),
+  cacheVariant: embedImages ? 'word-xml' : 'word-xml-without-images',
+);
+
+/// ממיר מסמך Word בינארי ישן (‎.doc‎/‎.dot‎) דרך אותו מטמון.
+Future<String> convertLegacyWordWithCache(
+  File file,
+  String title,
+  DocumentFormat format, {
+  bool embedImages = true,
+}) {
+  // הנתיב נלכד כמחרוזת ולא דרך ה-`File`: ה-closure נשלח ל-isolate, ומחרוזת
+  // בטוחה להעברה בעוד שאובייקט אינו מובטח ככזה.
+  final path = file.path;
+  return _convertWithCache(
+    file,
+    title,
+    kLegacyWordConverterVersion,
+    (bytes, t) => legacyWordToText(
+      bytes,
+      t,
+      format: format,
+      path: path,
+      embedImages: embedImages,
+    ),
+    cacheVariant: embedImages ? 'legacy-word' : 'legacy-word-without-images',
+  );
+}
+
+/// ממיר Markdown דרך מטמון ההמרות המשותף ומטמיע תמונות מקומיות לאחר השליפה.
+Future<String> convertMarkdownWithCache(File file, String title) async {
+  final html = await _convertWithCache(
+    file,
+    title,
+    kMarkdownConverterVersion,
+    markdownBytesToHtml,
+    cacheVariant: 'markdown',
+  );
+  return const MarkdownToOtzaria().finalizeCachedHtml(html, file.parent.path);
+}
 
 /// ממיר EPUB ללא נתוני התמונות, תוך שימור placeholders ואינדקסי השורות.
 /// מיועד ל-TOC, טביעות אצבע ואינדוקס ואינו מקצה מחרוזות Base64 גדולות.
@@ -62,30 +164,6 @@ Future<String> convertEpubWithoutEmbeddedImages(File file, String title) =>
 
 String _epubToTextWithoutEmbeddedImages(Uint8List bytes, String title) =>
     epubToText(bytes, title, embedImages: false);
-
-/// קורא ספר שתוכנו יושב בקובץ חיצוני, לפי סוגו. DOCX/EPUB הם ZIP בינארי —
-/// קריאתם כטקסט זורקת; PDF אינו טקסט כלל ומוחזר ריק. [fileType] ריק/null —
-/// נגזר מסיומת הקובץ.
-Future<String> readFileBackedBookText(
-  File file,
-  String? fileType,
-  String title,
-) async {
-  final declared = (fileType ?? '').toLowerCase();
-  final ext = declared.isNotEmpty
-      ? declared
-      : p.extension(file.path).replaceFirst('.', '').toLowerCase();
-  switch (ext) {
-    case 'docx':
-      return convertDocxWithCache(file, title);
-    case 'epub':
-      return convertEpubWithCache(file, title);
-    case 'pdf':
-      return '';
-    default:
-      return readTextFileSmart(file);
-  }
-}
 
 Future<String> _convertWithCache(
   File file,
@@ -116,7 +194,7 @@ Future<String> _convertWithCache(
         unawaited(
           repo
               .pruneDocxTextCacheAccessedBefore(
-                now - _docxCacheTtl.inMilliseconds,
+                now - _conversionCacheTtl.inMilliseconds,
               )
               .catchError((_) {}),
         );
@@ -124,14 +202,16 @@ Future<String> _convertWithCache(
       return _withFreshTitle(entry.text, title);
     }
   } catch (e) {
-    debugPrint('⚠️ docx cache read failed (falling back to convert): $e');
+    debugPrint('⚠️ document cache read failed (falling back to convert): $e');
   }
 
   // ── נתיב המרה ──────────────────────────────────────────────────────────
   // דה-דופ המרות מקבילות: אם כבר רצה המרה לאותו קובץ, נצרף אליה.
   final key = '$cachePath|$size|$mtime|$converterVersion';
   final pending = _inFlight[key];
-  if (pending != null) return _withFreshTitle(await pending, title);
+  if (pending != null) {
+    return _withFreshTitle(await pending, title);
+  }
 
   final future = _convert(path, title, converter);
   _inFlight[key] = future;
@@ -185,16 +265,16 @@ Future<void> _persist(
       ),
     );
     await repo.pruneDocxTextCacheAccessedBefore(
-      now - _docxCacheTtl.inMilliseconds,
+      now - _conversionCacheTtl.inMilliseconds,
     );
   } catch (e) {
-    debugPrint('⚠️ docx cache write failed (text still returned): $e');
+    debugPrint('⚠️ document cache write failed (text still returned): $e');
   }
 }
 
-/// מחליף את שורת הכותרת (h1, שורה 0 ש-[docxToText] תמיד מייצר) ב-[title]
-/// הנוכחי. כך המטמון נשמר לפי הקובץ ולא לפי שם הספר — שינוי-שם אינו פוסל
-/// את המטמון, אך הכותרת המוצגת מתעדכנת מיד. אם הפלט אינו פותח ב-`<h1>`
+/// מחליף את שורת הכותרת (h1, שורה 0 שכל הממירים מייצרים) ב-[title] הנוכחי.
+/// כך המטמון נשמר לפי הקובץ ולא לפי שם הספר — שינוי-שם אינו פוסל את
+/// המטמון, אך הכותרת המוצגת מתעדכנת מיד. אם הפלט אינו פותח ב-`<h1>`
 /// (לא אמור לקרות) — מוחזר כפי שהוא.
 @visibleForTesting
 String withFreshDocxTitle(String cachedText, String title) =>
@@ -204,7 +284,10 @@ String _withFreshTitle(String cachedText, String title) {
   final nl = cachedText.indexOf('\n');
   final head = nl < 0 ? cachedText : cachedText.substring(0, nl);
   if (!head.startsWith('<h1>')) return cachedText;
-  final rest = nl < 0 ? '' : cachedText.substring(nl);
   // escape כדי ששם קובץ עם `<`/`&` לא ישבור את ה-HTML.
-  return '<h1>${escapeHtmlText(title)}</h1>$rest';
+  final fresh = '<h1>${escapeHtmlText(title)}</h1>';
+  // ברוב הפתיחות הכותרת לא השתנתה, והעתקה של עשרות MB רק כדי לקבל בחזרה
+  // את אותה מחרוזת היא בזבוז נטו.
+  if (head == fresh) return cachedText;
+  return nl < 0 ? fresh : '$fresh${cachedText.substring(nl)}';
 }

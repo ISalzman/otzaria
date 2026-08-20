@@ -1,8 +1,4 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/data/data_providers/library_provider_manager.dart';
-import 'package:otzaria/utils/file/text_encoding.dart';
 
 /// Shared TOC parsing utilities used by both the TextBook navigator and
 /// the Shamor Zachor scanner. This ensures a single source of truth for
@@ -18,71 +14,6 @@ bool isTocExcludedHeadingLine(String lowerLine) {
 }
 
 class TocParser {
-  /// Parse TOC from a file path or database and return a flat structure compatible with
-  /// Shamor Zachor scanner (list of maps with text/index/level).
-  static Future<List<Map<String, dynamic>>> parseFlatFromFile(
-    String bookPath,
-  ) async {
-    try {
-      // Extract book title from path
-      final bookTitle = bookPath
-          .split(Platform.pathSeparator)
-          .last
-          .replaceAll('.txt', '');
-
-      // Try to get TOC from LibraryProviderManager (handles both DB and files)
-      try {
-        final tocEntries = await LibraryProviderManager.instance.getBookToc(
-          bookTitle,
-          fileType: 'txt',
-        );
-        if (tocEntries != null && tocEntries.isNotEmpty) {
-          // Convert hierarchical TOC to flat structure
-          final flatToc = <Map<String, dynamic>>[];
-          void flattenToc(List<TocEntry> entries) {
-            for (final entry in entries) {
-              flatToc.add({
-                'text': entry.text,
-                'index': entry.index,
-                'level': entry.level,
-              });
-              if (entry.children.isNotEmpty) {
-                flattenToc(entry.children);
-              }
-            }
-          }
-
-          flattenToc(tocEntries);
-          return flatToc;
-        }
-      } catch (e) {
-        if (kDebugMode) debugPrint('Error getting TOC from provider: $e');
-        // Fall through to file reading
-      }
-
-      // Fallback to file reading
-      final file = File(bookPath);
-      if (!await file.exists()) {
-        if (kDebugMode) debugPrint('Book file not found: $bookPath');
-        return [];
-      }
-      final content = await readTextFileSmart(file);
-      final headers = _extractHeaders(content);
-      return headers
-          .map(
-            (h) => {
-              'text': h.text,
-              'index': h.index,
-              'level': h.level,
-            },
-          )
-          .toList();
-    } catch (e) {
-      if (kDebugMode) debugPrint('Error parsing TOC from $bookPath: $e');
-      return [];
-    }
-  }
-
   /// Parse TOC entries (hierarchical) from the full book content.
   static List<TocEntry> parseEntriesFromContent(String content) {
     final headers = _extractHeaders(content);
