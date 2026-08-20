@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart' show Text;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 
@@ -505,6 +506,150 @@ void main() {
       expect(AppFonts.debugIsPlausibleBoldBasename('arial', 'ariblk'), isFalse);
       expect(AppFonts.debugIsPlausibleBoldBasename('arial', 'arial'), isFalse);
       expect(AppFonts.debugIsPlausibleBoldBasename('', 'anything'), isFalse);
+    });
+  });
+
+  group('קיבוץ גופני מערכת לפי משפחה (debugBuildScan)', () {
+    test('face רגיל + בולד מאותה משפחה → כניסה אחת עם boldPath', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\frank-medium.ttf',
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+        ),
+        MapEntry(
+          r'C:\fonts\frank-bold.ttf',
+          _bundledFont('FrankRuehlCLM-Bold.ttf'),
+        ),
+      ]);
+
+      expect(scan.fonts, hasLength(1));
+      expect(scan.fonts.single.value, 'Frank Ruehl CLM');
+      expect(scan.fonts.single.label, 'Frank Ruehl CLM');
+      final family = scan.families['Frank Ruehl CLM']!;
+      expect(family.regularPath, contains('medium'));
+      expect(family.boldPath, contains('bold'));
+    });
+
+    test('משפחה שקיימת רק בבולד עדיין מופיעה, בלי boldPath נפרד', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\frank-bold.ttf',
+          _bundledFont('FrankRuehlCLM-Bold.ttf'),
+        ),
+      ]);
+
+      expect(scan.fonts, hasLength(1));
+      final family = scan.families['Frank Ruehl CLM']!;
+      expect(family.regularPath, contains('bold'));
+      expect(family.boldPath, isNull);
+    });
+
+    test('שם קובץ שרירותי: השם ברשימה הוא המשפחה, והכינוי ממופה אליה', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\בדיקה.ttf',
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+        ),
+      ]);
+
+      expect(scan.fonts.single.value, 'Frank Ruehl CLM');
+      expect(scan.aliases['בדיקה'], 'Frank Ruehl CLM');
+    });
+
+    test('גופן משתנה מסומן hasWeightAxis ובלי face בולד נפרד', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\rubik.ttf',
+          _bundledFont('Rubik-VariableFont_wght.ttf'),
+        ),
+        MapEntry(
+          r'C:\fonts\frank-bold.ttf',
+          _bundledFont('FrankRuehlCLM-Bold.ttf'),
+        ),
+      ]);
+
+      final rubik = scan.families.values.firstWhere(
+        (f) => f.regularPath.contains('rubik'),
+      );
+      expect(rubik.hasWeightAxis, isTrue);
+      expect(rubik.boldPath, isNull);
+    });
+
+    test('גופן ללא עברית אינו נכלל', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(r'C:\fonts\latin.ttf', _buildSfnt(hebrewRange: false)),
+      ]);
+
+      expect(scan.fonts, isEmpty);
+    });
+
+    test('גופן עברי בלי טבלת name נופל לשם הקובץ', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(r'C:\fonts\noname.ttf', _buildSfnt(hebrewRange: true)),
+      ]);
+
+      expect(scan.fonts.single.value, 'noname');
+    });
+
+    test('הרשימה ממוינת לפי שם', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\zzz.ttf',
+          _bundledFont('ShofarRegular.ttf'),
+        ),
+        MapEntry(
+          r'C:\fonts\aaa.ttf',
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+        ),
+      ]);
+
+      final labels = scan.fonts.map((f) => f.label).toList();
+      expect(labels, [...labels]..sort((a, b) => a.compareTo(b)));
+    });
+  });
+
+  group('תאימות לאחור לערך שמור ישן (שם קובץ)', () {
+    tearDown(AppFonts.debugResetSystemFontsCache);
+
+    test('legacySystemFontDisplayName מחזיר את שם המשפחה, ללא תלות רישיות', () {
+      AppFonts.debugStoreScan(
+        AppFonts.debugBuildScan([
+          MapEntry(
+            r'C:\fonts\gfrank.ttf',
+            _bundledFont('FrankRuehlCLM-Medium.ttf'),
+          ),
+        ]),
+      );
+
+      expect(
+        AppFonts.legacySystemFontDisplayName('GFrank'),
+        'Frank Ruehl CLM',
+      );
+      expect(AppFonts.legacySystemFontDisplayName('unknown'), isNull);
+    });
+
+    test('buildDropdownItems מציג ערך ישן בשם המשפחה ולא כ"לא זמין"', () {
+      AppFonts.debugStoreScan(
+        AppFonts.debugBuildScan([
+          MapEntry(
+            r'C:\fonts\gfrank.ttf',
+            _bundledFont('FrankRuehlCLM-Medium.ttf'),
+          ),
+        ]),
+      );
+
+      final items = AppFonts.buildDropdownItems(selectedValue: 'gfrank');
+      final first = items.first.child as Text;
+      expect(items.first.value, 'gfrank');
+      expect(first.data, 'Frank Ruehl CLM');
+    });
+
+    test('ערך לא מוכר עדיין מסומן "לא זמין במחשב זה"', () {
+      AppFonts.debugStoreScan(AppFonts.debugBuildScan(const []));
+
+      final items = AppFonts.buildDropdownItems(selectedValue: 'NoSuchFont');
+      final first = items.first.child as Text;
+      expect(first.data, contains('לא זמין במחשב זה'));
     });
   });
 
