@@ -132,6 +132,10 @@ class HtmlLinkHandler {
 
       // בדיקה אם זה קישור פנימי לכותרת באותו ספר
       if (url.startsWith('#')) {
+        // עוגן id (קישורי הערות שוליים כמו #footnote-1) — לפני מסלול הכותרות.
+        final fragment = _safeDecode(url.substring(1)).trim();
+        if (await _navigateToIdAnchor(context, fragment)) return true;
+        if (!context.mounted) return true;
         await _navigateToHeader(context, _headerSegments(url.substring(1)));
         return true;
       }
@@ -165,6 +169,45 @@ class HtmlLinkHandler {
         UiSnack.show(CommonMessages.linkOpenError(e));
       }
 
+      return false;
+    }
+  }
+
+  /// מאתר את השורה שמכילה עוגן `id="[fragment]"` בגוף הספר, או null.
+  @visibleForTesting
+  static int? findIdAnchorLine(List<String> lines, String fragment) {
+    if (fragment.isEmpty || fragment.contains('#')) return null;
+    final idPattern = RegExp('\\bid\\s*=\\s*"${RegExp.escape(fragment)}"');
+    final index = lines.indexWhere(idPattern.hasMatch);
+    return index < 0 ? null : index;
+  }
+
+  /// מנווט לעוגן id בספר הנוכחי (הערות שוליים בסגנון #footnote-N ↔ #noteref-N).
+  /// מחזיר false כשאין עוגן כזה — והקישור ממשיך למסלול הכותרות.
+  static Future<bool> _navigateToIdAnchor(
+    BuildContext context,
+    String fragment,
+  ) async {
+    try {
+      final state = context.read<TextBookBloc>().state;
+      if (state is! TextBookLoaded) return false;
+      final index = findIdAnchorLine(state.content, fragment);
+      if (index == null) return false;
+      final viewportExtent =
+          context.size?.height ?? MediaQuery.sizeOf(context).height;
+      await scrollToSourceLine(
+        scrollController: state.scrollController,
+        scrollOffsetController: state.scrollOffsetController,
+        positionsListener: state.positionsListener,
+        segments: state.readingSegments,
+        lineIndex: index,
+        viewportExtent: viewportExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.ease,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('שגיאה בניווט לעוגן id: $e');
       return false;
     }
   }
