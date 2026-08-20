@@ -169,6 +169,17 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   InAppWebViewController? webViewController;
   late String localHtmlPath;
+
+  /// נבדק פעם אחת ולא בכל build: existsSync בכל פריים resize הוא I/O סינכרוני,
+  /// וכשל חולף אחד (נעילת אנטי-וירוס) היה מפיל את ה-WebView וטוען אותו מאפס.
+  late bool _entrypointMissing;
+
+  /// צורת העץ של build ננעלת לכל חיי ה-State: מעבר FutureBuilder ↔ ישיר
+  /// היה מייצר הורה חדש ל-WebView והורס אותו.
+  late final bool _usePrereqGate = _needsWebViewPrerequisites;
+
+  /// GlobalKey ל-InAppWebView — שורד החלפת הורה באותו פריים בלי טעינה מחדש.
+  final GlobalKey _webViewKey = GlobalKey();
   late final PluginBridgeHandler _bridge;
   late final PluginBridgeAdapter _adapter;
   late final PluginRegistryRepository _pluginRegistryRepository;
@@ -192,6 +203,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
     localHtmlPath = widget.plugin.isLocalhostDev
         ? widget.plugin.devRootPath!.replaceAll(RegExp(r'/+$'), '')
         : '${widget.plugin.resolvedRootPath}/${widget.plugin.entrypointPath}';
+    _entrypointMissing =
+        !widget.plugin.isLocalhostDev && !File(localHtmlPath).existsSync();
     final historyBloc = context.read<HistoryBloc>();
     final tabsBloc = context.read<TabsBloc>();
     final navigationBloc = context.read<NavigationBloc>();
@@ -391,6 +404,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         widget.plugin.resolvedRootPath,
         manifest.entrypoint,
       );
+      _entrypointMissing = !File(localHtmlPath).existsSync();
       await webViewController?.loadUrl(
         urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
       );
@@ -465,7 +479,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       return Center(child: Text('שגיאה בטעינת הקובץ: $localHtmlPath'));
     }
 
-    if (!widget.plugin.isLocalhostDev && !File(localHtmlPath).existsSync()) {
+    if (_entrypointMissing) {
       return const SizedBox.shrink(); // התוסף כבר הוסר — הטאב ייסגר בקרוב
     }
 
@@ -483,7 +497,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       );
     }
 
-    if (_needsWebViewPrerequisites) {
+    if (_usePrereqGate) {
       return FutureBuilder<_WebViewPrereqStatus>(
         future: _prereqFuture ??= _resolveWebViewPrerequisites(),
         builder: (context, snapshot) {
@@ -550,6 +564,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         : WebUri.uri(Uri.file(localHtmlPath));
 
     final webView = InAppWebView(
+      key: _webViewKey,
       webViewEnvironment: WebViewEnvironmentHolder.environment,
       initialUrlRequest: URLRequest(url: initialUrl),
       initialSettings: buildPluginTabWebViewSettings(
