@@ -89,6 +89,19 @@ Set<String> effectiveCommentaryTypes({
   availableKeys: availableKeys,
 );
 
+/// האם המעבר משורות המקור [previous] אל [current] הוא מעבר לקטע אחר, שבו יש
+/// להציג את המפרשים מתחילתם. שורת העוגן (הראשונה) קובעת: הרחבת הבחירה
+/// (Ctrl+לחיצה) או גדילת חלון הנראוּת סביב אותו עוגן אינן מעבר לקטע.
+@visibleForTesting
+bool isCommentarySectionChange({
+  required List<int> previous,
+  required List<int> current,
+}) {
+  if (previous.isEmpty && current.isEmpty) return false;
+  if (previous.isEmpty || current.isEmpty) return true;
+  return previous.first != current.first;
+}
+
 class CommentaryListBase extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final double fontSize;
@@ -205,6 +218,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
   final Map<String, int> _searchResultsPerLink = {};
   int _lastScrollIndex = 0; // שומר את מיקום הגלילה האחרון
+  // שורות המקור שהרשימה מציגה כרגע — לזיהוי מעבר לקטע אחר.
+  List<int>? _sectionIndexes;
+  bool _scrollToTopScheduled = false;
+  // bucket מקומי: ScrollablePositionedList משחזר מיקום מ-PageStorage ודורס בכך
+  // את initialScrollIndex, כך שקטע חדש נפתח על היסט הקטע הקודם (issue #846).
+  final PageStorageBucket _listStorageBucket = PageStorageBucket();
   // מצב גלובלי של פתיחה/סגירה של כל המפרשים — חשוף ככ-ValueListenable כדי
   // שצרכנים חיצוניים (למשל CommentatorsTabScreen) יוכלו להאזין ולעדכן UI.
   final ValueNotifier<bool> _allExpandedNotifier = ValueNotifier<bool>(true);
@@ -878,13 +897,32 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
+  /// מציג את הרשימה מתחילתה. `jumpTo` ולא גלילה מונפשת: התוכן שמתחתיה מוחלף,
+  /// ואנימציה על תוכן חדש נראית כתקלה. הקפיצה נדחית לסוף הפריים כדי שאפשר
+  /// יהיה לקרוא לזה גם מתוך build.
   void scrollToTop() {
-    if (_itemScrollController.isAttached) {
-      _itemScrollController.scrollTo(
-        index: 0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+    _lastScrollIndex = 0;
+    if (_scrollToTopScheduled) return;
+    _scrollToTopScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToTopScheduled = false;
+      if (!mounted || !_itemScrollController.isAttached) return;
+      _itemScrollController.jumpTo(index: 0);
+    });
+  }
+
+  /// מעבר לקטע מקור אחר מציג את המפרשים מתחילתם — היסט הגלילה של הקטע הקודם
+  /// אינו מתאים לתוכן החדש (issue #846).
+  void _syncSectionScroll(List<int> currentIndexes) {
+    final previous = _sectionIndexes;
+    if (previous != null && listEquals(previous, currentIndexes)) return;
+    _sectionIndexes = List<int>.unmodifiable(currentIndexes);
+    if (previous == null) return;
+    if (isCommentarySectionChange(
+      previous: previous,
+      current: currentIndexes,
+    )) {
+      scrollToTop();
     }
   }
 
@@ -1495,6 +1533,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       loadingWidget: const Center(),
       builder: (context, state) {
         final selectedCommentators = _selectedCommentators(state);
+        _syncSectionScroll(_currentIndexes(state));
         // איפוס ה-latch: ברגע שיש בחירה לא-ריקה, ריקון עתידי שלה צריך
         // לפתוח שוב את הבחירה (אך לא בכל rebuild בזמן שהבחירה נשארת ריקה).
         if (selectedCommentators.isNotEmpty) {
@@ -1567,24 +1606,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              // בודק מראש אם יש קישורים רלוונטיים לאינדקסים הנוכחיים.
               // ריבוי-בחירה: כל הקטעים שנבחרו (Ctrl+לחיצה), לא רק העוגן.
-              final currentIndexesRaw =
-                  widget.indexes ??
-                  (state.selectedIndices.isNotEmpty
-                      ? state.selectedIndices.toList()
-                      : state.visibleIndices);
-
-              // בהפעלה מחדש/מצבים נדירים יכול להגיע לכאן עם רשימת אינדקסים ריקה,
-              // מה שגורם ל"אין מפרשים" גם כשיש. נבחר אינדקס ברירת מחדל יציב.
-              final currentIndexes = currentIndexesRaw.isNotEmpty
-                  ? currentIndexesRaw
-                  : [
-                      state.selectedIndex ??
-                          (state.visibleIndices.isNotEmpty
-                              ? state.visibleIndices.first
-                              : 0),
-                    ];
+              final currentIndexes = _currentIndexes(state);
 
               Widget? notesWidget;
               if (notesIsActive) {
@@ -1843,7 +1866,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                     0,
                                     flatItems.length - 1,
                                   ),
-                            key: PageStorageKey(
+                            key: ValueKey(
                               'commentary_${selectedCommentators.join(',')}',
                             ),
                             physics: const ClampingScrollPhysics(),
@@ -1893,7 +1916,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                   itemPositionsListener: _itemPositionsListener,
                                   itemCount: flatItems.length,
                                   child: SmoothWheelScroll(
-                                    child: _constrainToContentWidth(listView),
+                                    child: PageStorage(
+                                      bucket: _listStorageBucket,
+                                      child: _constrainToContentWidth(listView),
+                                    ),
                                   ),
                                 ),
                               ),

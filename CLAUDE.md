@@ -743,6 +743,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | SimpleTextViewer | `test/text_book/view/page_shape/simple_text_viewer_test.dart` |
 | Selected text copy/restore | `test/text_book/view/selection/selected_text_copy_test.dart`, `…selected_text_restore_test.dart` |
 | SelectionSyncController | `test/text_book/view/selection/selection_sync_controller_test.dart` |
+| איפוס גלילת המפרשים במעבר קטע (מדיניות + מסלול הטעינה) | `test/text_book/view/commentary_list_scroll_reset_test.dart` |
 | Commentary open-filter request | `test/text_book/view/commentary_list_base_open_filter_test.dart` |
 | Commentary search focus | `test/text_book/view/commentary_search_focus_test.dart` |
 | Commentary grouping | `test/text_book/commentary_grouping_test.dart` |
