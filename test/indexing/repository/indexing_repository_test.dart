@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
@@ -678,7 +679,7 @@ void main() {
       final provider = _RecordingTantivyDataProvider(engine);
       final library = Library(categories: []);
       library.books.add(
-        PdfBook(title: 'שבת', path: r'C:ooks\שבת.pdf', id: 7),
+        PdfBook(title: 'שבת', path: r'C:\books\שבת.pdf', id: 7),
       );
       final repository = IndexingRepository(provider);
 
@@ -696,7 +697,7 @@ void main() {
       final provider = _RecordingTantivyDataProvider(engine);
       final library = Library(categories: []);
       library.books.add(
-        PdfBook(title: 'שבת', path: r'C:ooks\שבת.pdf', id: 7),
+        PdfBook(title: 'שבת', path: r'C:\books\שבת.pdf', id: 7),
       );
       final repository = IndexingRepository(provider);
 
@@ -1503,65 +1504,22 @@ void main() {
       expect(earlierBookLateSegment, lessThan(laterBookFirstSegment));
     });
 
-    test('ספר חסר מקבל אותו מזהה בכל ריצה — יציב בין הפעלות', () {
-      // רגרסיה: סדר חלופי לפי מונה רץ השתנה בין ריצות, ולכן ריצה אחרת
-      // חילקה אותו סדר לספר חסר אחר — מזהי מסמך מתנגשים.
-      final small = _buildLibrary(bavliBooks: const [('שבת', 1)]);
-      final grown = _buildLibrary(
-        bavliBooks: const [('שבת', 1), ('עירובין', 2)],
-      );
-
-      expect(
-        IndexingRepository.buildCatalogueOrderResolver(
-          grown,
-        ).orderFor('id:404'),
-        IndexingRepository.buildCatalogueOrderResolver(
-          small,
-        ).orderFor('id:404'),
-      );
-    });
-
-    test('ספר שאינו בספרייה נכנס ב-u64 וממוין אחרי הספר האחרון', () {
+    test('הסדר המרבי החוקי יוצר מזהה שנכנס ב-u64', () {
       final u64Max = (BigInt.one << 64) - BigInt.one;
-      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
-      final resolver = IndexingRepository.buildCatalogueOrderResolver(library);
-      final lastKnown = resolver.orderFor(
-        IndexingRepository.catalogueOrderKey(library.getAllBooks().last),
+      final documentId = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: CatalogueOrderResolver.maxCatalogueOrder,
+        ordinal: 0,
       );
 
-      // חריגה מ-u64 נחתכת בגשר ל-Rust ומתגלגלת למזהה 1 — הספר היה קופץ
-      // לראש תוצאות החיפוש במקום להישאר אחרון.
-      final unknownBook = IndexingRepository.buildCatalogueDocumentId(
-        catalogueOrder: resolver.orderFor('uid:404'),
-        ordinal: 1000000,
-      );
-
-      expect(unknownBook, lessThanOrEqualTo(u64Max));
-      expect(
-        IndexingRepository.buildCatalogueDocumentId(
-          catalogueOrder: lastKnown,
-          ordinal: 0,
-        ),
-        lessThan(unknownBook),
-      );
+      expect(documentId, u64Max - BigInt.from(0xFFFFFFFE));
+      expect(documentId, lessThanOrEqualTo(u64Max));
     });
 
-    test('שני ספרים שאינם בספרייה מקבלים מזהים שונים באותה שורה', () {
-      // רגרסיה: מזהה משותף הפר את חוזה המנוע — מחיקה לפי id בכתיבת ספר
-      // אחד מחקה את מסמכי האחר, והשניים חלקו גם sectionId.
+    test('ספר שאינו במפת הספרייה נדחה לפני יצירת מזהה מסמך', () {
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
       final resolver = IndexingRepository.buildCatalogueOrderResolver(library);
 
-      final first = IndexingRepository.buildCatalogueDocumentId(
-        catalogueOrder: resolver.orderFor('uid:404'),
-        ordinal: 0,
-      );
-      final second = IndexingRepository.buildCatalogueDocumentId(
-        catalogueOrder: resolver.orderFor('uid:405'),
-        ordinal: 0,
-      );
-
-      expect(first, isNot(second));
+      expect(() => resolver.orderFor('uid:404'), throwsStateError);
     });
   });
 
