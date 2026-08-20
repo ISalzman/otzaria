@@ -133,7 +133,7 @@ class TextRendererService {
   ///
   /// הפתרון: sup *מספרי* (עם או בלי class — שניהם משמשים כמרקרים בספרים)
   /// מומר לספרות-עיליות יוניקוד (¹²³…) — טקסט טהור שמוצג מוגבה ומוקטן בכל
-  /// הגופנים, ללא WidgetSpan. כל sup לא-מספרי נפלט כ-span טקסט טהור, בשני
+  /// הגופנים, ללא WidgetSpan. sup פשוט ולא-מספרי נפלט כ-span טקסט טהור, בשני
   /// טעמים ששומרים על המטריקות המקוריות של כל אחד:
   ///   * מרקר הערה (`class="footnote-marker"`) → `footnote-marker-number`,
   ///     מוקטן ל-0.75em ונטוי.
@@ -163,6 +163,14 @@ class TextRendererService {
       }
 
       final wrappedInner = _wrapWithBidiIsolate(innerHtml);
+      final isFootnoteMarker = _footnoteMarkerClassRegex.hasMatch(attrs);
+
+      // sup סמנטי או מעוצב נשאר בנתיב ה-HTML כדי לא לאבד attributes וסגנונות
+      // מקוננים שהציור המורם אינו יכול לשחזר מ-TextStyle הבסיסי בלבד.
+      if (!isFootnoteMarker &&
+          (attrs.trim().isNotEmpty || _htmlTagRegex.hasMatch(innerHtml))) {
+        return '<sup$attrs>$wrappedInner</sup>';
+      }
 
       // מספר טהור → ספרות-עיליות יוניקוד (מוגבה ומוקטן מטבעו, ללא תגית).
       // חל גם על <sup>1</sup> חשוף בלי class: חלק מספרי ההערות-inline
@@ -176,7 +184,7 @@ class TextRendererService {
       }
 
       // מרקר הערה מסומן — 0.75em ונטוי.
-      if (_footnoteMarkerClassRegex.hasMatch(attrs)) {
+      if (isFootnoteMarker) {
         return '<span class="$kFootnoteMarkerClass">$wrappedInner</span>';
       }
 

@@ -109,7 +109,8 @@ void main() {
     expect(
       overhead,
       lessThan(4.0),
-      reason: 'תקורת ציור של $overhead ms לפריים חונקת את הגלילה '
+      reason:
+          'תקורת ציור של $overhead ms לפריים חונקת את הגלילה '
           '(תקציב פריים ~16ms). לפני המיזוג לפי פריסה זה היה ~40ms.',
     );
   });

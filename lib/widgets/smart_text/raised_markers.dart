@@ -2,7 +2,7 @@
 ///
 /// הרקע: fwfh מממש `<sup>` ב-WidgetSpan, ומנוע Flutter משבץ placeholders
 /// בפסקת RTL בסדר ויזואלי במקום לוגי — שני סימונים באותה פסקה מוצגים הפוך
-/// (ראו `_fixFootnoteMarkers` ב-text_renderer_service.dart). לכן כל sup
+/// (ראו `_fixFootnoteMarkers` ב-text_renderer_service.dart). לכן sup פשוט
 /// לא-מספרי מומר שם ל-span טקסט טהור, שסדרו מובטח.
 ///
 /// אבל ל-fwfh אין תמיכה ב-`position`/`top` — הן היו no-op גם קודם, ולכן
@@ -27,6 +27,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'package:otzaria/text_book/utils/link_anchor_variants.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
@@ -269,9 +270,11 @@ class RaisedMarkers {
   /// טקסט גלוי: בלי תגים ועם רצפי רווחים מכווצים — אותם כללי נרמול שחלים על
   /// הטקסט בפריסה, כך שספירת המופעים תואמת את מה שמוצג.
   static String _visibleText(String html) {
-    return html
-        .replaceAll(_htmlTagRegex, '')
-        .replaceAll(_whitespaceRegex, ' ');
+    final withoutTags = html.replaceAll(_htmlTagRegex, '');
+    final decoded = withoutTags.contains('&')
+        ? html_parser.parseFragment(withoutTags).text ?? withoutTags
+        : withoutTags;
+    return decoded.replaceAll(_whitespaceRegex, ' ');
   }
 
   /// ספירת מופעים לא-חופפת — חייבת להישאר זהה ללולאת האיתור שבשכבת הציור.
@@ -359,7 +362,12 @@ class RaisedMarkerOverlay extends SingleChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderRaisedMarkerOverlay(markers, baseStyle, linkColor, activeBackground);
+      RenderRaisedMarkerOverlay(
+        markers,
+        baseStyle,
+        linkColor,
+        activeBackground,
+      );
 
   @override
   void updateRenderObject(
@@ -492,7 +500,10 @@ class RenderRaisedMarkerOverlay extends RenderProxyBox {
       // כשחלונית התצוגה שלה פתוחה — אותו מראה שהיה לגליף לפני שהוסתר.
       final variantIndex = marker.variantIndex;
       if (variantIndex != null) {
-        style = applyLinkAnchorVariant(kLinkAnchorVariants[variantIndex], style);
+        style = applyLinkAnchorVariant(
+          kLinkAnchorVariants[variantIndex],
+          style,
+        );
       }
       if (marker.useLinkColor && _linkColor != null) {
         style = style.copyWith(color: _linkColor);

@@ -25,7 +25,7 @@ void main() {
     TextRendererService.clearRenderCacheForTesting();
   });
 
-  group('processText — כל sup לא-מספרי הופך ל-span טקסט טהור', () {
+  group('processText — sup פשוט ולא-מספרי הופך ל-span טקסט טהור', () {
     String process(String html) =>
         TextRendererService.processText(html, const RenderSettings());
 
@@ -74,12 +74,34 @@ void main() {
 
     test('תוכן הסימון עטוף בבידוד כיווניות', () {
       final out = process('ברא<sup>א</sup>');
-      expect(out, contains('$rli' 'א' '$pdi'));
+      expect(
+        out,
+        contains(
+          '$rli'
+          'א'
+          '$pdi',
+        ),
+      );
     });
 
     test('סימון לועזי מקבל בידוד LTR', () {
       final out = process('text<sup>a</sup>');
-      expect(out, contains('$lri' 'a' '$pdi'));
+      expect(
+        out,
+        contains(
+          '$lri'
+          'a'
+          '$pdi',
+        ),
+      );
+    });
+
+    test('HTML entity מפוענח לאותו טקסט שמוצג בפריסה', () {
+      final marker = RaisedMarkers.extract(
+        process('לפני<sup>&ast;</sup>אחרי'),
+      ).single;
+
+      expect(marker.text, '$lri*$pdi');
     });
   });
 
@@ -90,28 +112,43 @@ void main() {
 
     test('סימון אחד נקלט עם תווי הבידוד', () {
       final markers = RaisedMarkers.extract(
-        'ברא<span class="$kFootnoteMarkerClass">$rli' 'א' '$pdi</span>',
+        'ברא<span class="$kFootnoteMarkerClass">$rli'
+        'א'
+        '$pdi</span>',
       );
       expect(markers, hasLength(1));
-      expect(markers.single.text, '$rli' 'א' '$pdi');
+      expect(
+        markers.single.text,
+        '$rli'
+        'א'
+        '$pdi',
+      );
       expect(markers.single.occurrence, 1);
     });
 
     test('שני סימונים באותה שורה — שניהם, לפי הסדר', () {
       final markers = RaisedMarkers.extract(
-        'בראשית<span class="$kFootnoteMarkerClass">$rli' 'א' '$pdi</span>'
+        'בראשית<span class="$kFootnoteMarkerClass">$rli'
+        'א'
+        '$pdi</span>'
         ' ברא ואת<span class="$kFootnoteMarkerClass">$rli'
         'ב'
         '$pdi</span>',
       );
-      expect(markers.map((m) => m.text.replaceAll(rli, '').replaceAll(pdi, '')),
-          ['א', 'ב']);
+      expect(
+        markers.map((m) => m.text.replaceAll(rli, '').replaceAll(pdi, '')),
+        ['א', 'ב'],
+      );
     });
 
     test('אותו סימון פעמיים — מספר המופע עולה', () {
       final markers = RaisedMarkers.extract(
-        'א<span class="$kFootnoteMarkerClass">$rli' 'א' '$pdi</span>'
-        'ב<span class="$kFootnoteMarkerClass">$rli' 'א' '$pdi</span>',
+        'א<span class="$kFootnoteMarkerClass">$rli'
+        'א'
+        '$pdi</span>'
+        'ב<span class="$kFootnoteMarkerClass">$rli'
+        'א'
+        '$pdi</span>',
       );
       expect(markers, hasLength(2));
       expect(markers[0].occurrence, 1);
@@ -120,7 +157,9 @@ void main() {
 
     test('המטמון מחזיר את אותה רשימה לקלט זהה', () {
       final html =
-          'ברא<span class="$kFootnoteMarkerClass">$rli' 'א' '$pdi</span>';
+          'ברא<span class="$kFootnoteMarkerClass">$rli'
+          'א'
+          '$pdi</span>';
       expect(
         identical(RaisedMarkers.extract(html), RaisedMarkers.extract(html)),
         isTrue,
@@ -179,6 +218,14 @@ void main() {
       );
     });
 
+    testWidgets('סימון שמקודד כ-HTML entity אינו נעלם', (tester) async {
+      final overlay = await pump(tester, 'לפני<sup>&ast;</sup> אחרי');
+      final placement = overlay.debugPlacements().single;
+
+      expect(placement.text, '$lri*$pdi');
+      expect(placement.paintRect.top, lessThan(placement.anchorRect.top));
+    });
+
     testWidgets('שני סימונים באותה שורה — הסדר לא מתהפך', (tester) async {
       final overlay = await pump(
         tester,
@@ -234,8 +281,9 @@ void main() {
       expect(p.paintRect.top, greaterThanOrEqualTo(0.0));
     });
 
-    testWidgets('גלישת שורה: הסימון נשאר על השורה של המילה שלו',
-        (tester) async {
+    testWidgets('גלישת שורה: הסימון נשאר על השורה של המילה שלו', (
+      tester,
+    ) async {
       final overlay = await pump(
         tester,
         'ובחרת בחיים למען תחיה אתה וזרעך<sup>א</sup> לאהבה את השם',
@@ -283,20 +331,26 @@ void main() {
       expect(find.byType(RaisedMarkerOverlay), findsNothing);
     });
 
-    testWidgets('תמיכה בסיסית: שורת סימונים נשארת במסלול המהיר (בלי HtmlWidget)',
-        (tester) async {
-      final overlay = await pump(
-        tester,
-        'בראשית<sup>א</sup> ברא ואת<sup>ב</sup> הארץ',
-      );
-      // SimpleInlineHtml מזהה את תגי הסימון בעצמו — אין נפילה ל-HtmlWidget.
-      expect(find.byType(HtmlWidget), findsNothing,
-          reason: 'שורת סימונים חייבת להישאר במסלול המהיר');
-      expect(overlay.debugPlacements(), hasLength(2));
-    });
+    testWidgets(
+      'תמיכה בסיסית: שורת סימונים נשארת במסלול המהיר (בלי HtmlWidget)',
+      (tester) async {
+        final overlay = await pump(
+          tester,
+          'בראשית<sup>א</sup> ברא ואת<sup>ב</sup> הארץ',
+        );
+        // SimpleInlineHtml מזהה את תגי הסימון בעצמו — אין נפילה ל-HtmlWidget.
+        expect(
+          find.byType(HtmlWidget),
+          findsNothing,
+          reason: 'שורת סימונים חייבת להישאר במסלול המהיר',
+        );
+        expect(overlay.debugPlacements(), hasLength(2));
+      },
+    );
 
-    testWidgets('תמיכה בסיסית: גליפי הסימון במסלול המהיר שקופים ומוקטנים',
-        (tester) async {
+    testWidgets('תמיכה בסיסית: גליפי הסימון במסלול המהיר שקופים ומוקטנים', (
+      tester,
+    ) async {
       await pump(tester, 'בראשית<sup>א</sup> ברא');
       TextStyle? markerStyle;
       for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
@@ -314,13 +368,21 @@ void main() {
         visit(rich.text);
       }
       expect(markerStyle, isNotNull, reason: 'לא נמצא ספאן סימון שקוף');
-      expect(markerStyle!.fontSize, closeTo(18.0 * kHtmlSmallerFontScale, 0.001),
-          reason: 'sup חשוף חייב לשמור על יחס 5/6 גם במסלול המהיר');
-      expect(markerStyle!.fontStyle ?? FontStyle.normal, FontStyle.normal,
-          reason: 'sup חשוף אינו נוטה');
+      expect(
+        markerStyle!.fontSize,
+        closeTo(18.0 * kHtmlSmallerFontScale, 0.001),
+        reason: 'sup חשוף חייב לשמור על יחס 5/6 גם במסלול המהיר',
+      );
+      expect(
+        markerStyle!.fontStyle ?? FontStyle.normal,
+        FontStyle.normal,
+        reason: 'sup חשוף אינו נוטה',
+      );
     });
 
-    testWidgets('מסלול HtmlWidget (תגים מורכבים) — אותה התנהגות', (tester) async {
+    testWidgets('מסלול HtmlWidget (תגים מורכבים) — אותה התנהגות', (
+      tester,
+    ) async {
       // span זר מפיל את המסלול המהיר — מוודאים שהשכבה עובדת גם שם.
       final overlay = await pump(
         tester,
@@ -372,39 +434,44 @@ void main() {
       expect(found!.color!.a, 0, reason: 'הגליף שקוף — השכבה מציירת אותו');
     });
 
-    test('buildInlineHtmlSpans: בלי שכבה הסימון נשאר גלוי (hideRaisedMarkers)',
-        () {
-      final html = TextRendererService.processText(
-        'ברא<sup>א</sup>',
-        const RenderSettings(),
-      );
-      TextStyle? styleOf(List<InlineSpan> spans) {
-        TextStyle? found;
-        void visit(InlineSpan s, TextStyle? inherited) {
-          if (s is! TextSpan) return;
-          final style = s.style ?? inherited;
-          if ((s.text ?? '').contains('א')) found = style;
-          for (final c in s.children ?? const <InlineSpan>[]) {
-            visit(c, style);
+    test(
+      'buildInlineHtmlSpans: בלי שכבה הסימון נשאר גלוי (hideRaisedMarkers)',
+      () {
+        final html = TextRendererService.processText(
+          'ברא<sup>א</sup>',
+          const RenderSettings(),
+        );
+        TextStyle? styleOf(List<InlineSpan> spans) {
+          TextStyle? found;
+          void visit(InlineSpan s, TextStyle? inherited) {
+            if (s is! TextSpan) return;
+            final style = s.style ?? inherited;
+            if ((s.text ?? '').contains('א')) found = style;
+            for (final c in s.children ?? const <InlineSpan>[]) {
+              visit(c, style);
+            }
           }
+
+          for (final s in spans) {
+            visit(s, null);
+          }
+          return found;
         }
 
-        for (final s in spans) {
-          visit(s, null);
-        }
-        return found;
-      }
+        const base = TextStyle(fontSize: 18, color: Colors.black);
+        final hidden = styleOf(buildInlineHtmlSpans(html, base));
+        expect(hidden?.color?.a, 0, reason: 'ברירת המחדל: שקוף לטובת השכבה');
 
-      const base = TextStyle(fontSize: 18, color: Colors.black);
-      final hidden = styleOf(buildInlineHtmlSpans(html, base));
-      expect(hidden?.color?.a, 0, reason: 'ברירת המחדל: שקוף לטובת השכבה');
-
-      final visible = styleOf(
-        buildInlineHtmlSpans(html, base, hideRaisedMarkers: false),
-      );
-      expect(visible?.color?.a, isNot(0),
-          reason: 'קורא בלי שכבה חייב לקבל גליפים גלויים');
-    });
+        final visible = styleOf(
+          buildInlineHtmlSpans(html, base, hideRaisedMarkers: false),
+        );
+        expect(
+          visible?.color?.a,
+          isNot(0),
+          reason: 'קורא בלי שכבה חייב לקבל גליפים גלויים',
+        );
+      },
+    );
 
     testWidgets('מצב קריאה רציפה — הסימון מורם גם שם', (tester) async {
       const base = TextStyle(fontSize: 20, fontFamily: 'FrankRuhlCLM');
@@ -471,8 +538,9 @@ void main() {
       );
     });
 
-    testWidgets('סימון מספרי לא עובר בשכבה (ספרת-עילית יוניקוד)',
-        (tester) async {
+    testWidgets('סימון מספרי לא עובר בשכבה (ספרת-עילית יוניקוד)', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Directionality(
@@ -665,8 +733,9 @@ void main() {
       );
     });
 
-    testWidgets('לחיצה על הציור המורם מפעילה את העוגן (הפניית hit-test)',
-        (tester) async {
+    testWidgets('לחיצה על הציור המורם מפעילה את העוגן (הפניית hit-test)', (
+      tester,
+    ) async {
       String? tapped;
       final overlay = await pump(
         tester,
@@ -751,8 +820,9 @@ void main() {
       expect(placements[1].marker.variantIndex, 1);
     });
 
-    testWidgets('קטע עם סימונים לא-לחיצים בלבד אינו סורק ב-hit-test',
-        (tester) async {
+    testWidgets('קטע עם סימונים לא-לחיצים בלבד אינו סורק ב-hit-test', (
+      tester,
+    ) async {
       final overlay = await pump(tester, 'בראשית<sup>א</sup> ברא');
       // לחיצה על אמצע הקטע — לא אמורה לזרוק ולא להפנות לשום מקום.
       await tester.tapAt(overlay.localToGlobal(const Offset(50, 10)));
@@ -760,7 +830,9 @@ void main() {
       expect(overlay.debugPlacements(), hasLength(1));
     });
 
-    testWidgets('קריאה רציפה: אות מפרש מורמת ולחיצה עליה מנתבת', (tester) async {
+    testWidgets('קריאה רציפה: אות מפרש מורמת ולחיצה עליה מנתבת', (
+      tester,
+    ) async {
       final tapped = <String>[];
       await tester.pumpWidget(
         MaterialApp(
