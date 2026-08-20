@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
@@ -148,7 +149,7 @@ class NavTreeTile extends StatelessWidget {
     String? subtitle,
     bool isSelected = false,
     int? count,
-    IconData icon = FluentIcons.book_24_regular,
+    IconData icon = OtzariaIcons.book_24_regular,
     Widget? leading,
     Widget? trailing,
     VoidCallback? onClearFilter,

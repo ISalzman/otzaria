@@ -1,6 +1,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/widgets.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/utils/file/document_format.dart';
 
 /// אייקון הספר לפי פורמט המסמך — מקור יחיד לכל רשימות הספרייה, תוצאות
@@ -18,10 +19,10 @@ IconData bookFormatIcon(Book book) {
       documentFormatFromFileType(book.fileType);
   if (format == null) {
     return book is PdfBook
-        ? FluentIcons.document_pdf_24_regular
+        ? OtzariaIcons.book_pdf_24_regular
         : FluentIcons.document_text_24_regular;
   }
-  if (format == DocumentFormat.pdf) return FluentIcons.document_pdf_24_regular;
+  if (format == DocumentFormat.pdf) return OtzariaIcons.book_pdf_24_regular;
   if (format.isWordDocument) return FluentIcons.document_edit_24_regular;
   return FluentIcons.document_text_24_regular;
 }

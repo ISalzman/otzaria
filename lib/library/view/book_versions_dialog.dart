@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/models/book_version.dart';
@@ -205,8 +205,8 @@ class BookVersionTile extends StatelessWidget {
       enabled: openable,
       leading: Icon(
         isDisplayedText
-            ? FluentIcons.book_open_24_regular
-            : FluentIcons.stack_24_regular,
+            ? OtzariaIcons.otzaria_icon_2_page_24_regular
+            : OtzariaIcons.books_stacked_high_24_regular,
         color: openable ? theme.colorScheme.primary : null,
       ),
       title: Text(version.displayTitle),

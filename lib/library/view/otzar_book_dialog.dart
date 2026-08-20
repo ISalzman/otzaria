@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import '../../models/books.dart';
 import '../../utils/navigation/otzar_utils.dart';
@@ -70,7 +71,7 @@ class OtzarBookDialog extends StatelessWidget {
                     ),
                     _buildInfoRow(
                       context,
-                      FluentIcons.person_24_regular,
+                      OtzariaIcons.person_24_regular,
                       'מחבר',
                       book.author ?? 'לא ידוע',
                     ),
@@ -82,7 +83,7 @@ class OtzarBookDialog extends StatelessWidget {
                     ),
                     _buildInfoRow(
                       context,
-                      FluentIcons.calendar_24_regular,
+                      OtzariaIcons.calendar_24_regular,
                       'שנת הדפסה',
                       book.pubDate ?? 'לא ידוע',
                     ),

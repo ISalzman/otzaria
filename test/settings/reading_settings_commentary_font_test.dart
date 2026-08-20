@@ -65,13 +65,19 @@ void main() {
 
       expect(find.text('גודל גופן מפרשים'), findsOneWidget);
       expect(find.text('גופן מפרשים'), findsOneWidget);
+      // כל אחת מארבע ההגדרות מקבלת אייקון משלה: גודל/גופן × טקסט/מפרשים.
       expect(
         find.byIcon(OtzariaIcons.alef_near_alef_24_regular),
-        findsNWidgets(2),
+        findsOneWidget,
       );
+      expect(find.byIcon(OtzariaIcons.tet_near_tet_24_regular), findsOneWidget);
       expect(
         find.byIcon(OtzariaIcons.beit_near_alef_24_regular),
-        findsNWidgets(2),
+        findsOneWidget,
+      );
+      expect(
+        find.byIcon(OtzariaIcons.beit_behind_alef_24_regular),
+        findsOneWidget,
       );
       expect(
         find.byIcon(OtzariaIcons.alef_with_score_24_regular),

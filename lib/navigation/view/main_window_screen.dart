@@ -382,8 +382,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     ),
     (
       screen: Screen.reading,
-      icon: OtzariaIcons.book_open_large_24_regular,
-      iconFilled: OtzariaIcons.book_open_large_24_filled,
+      icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
+      iconFilled: OtzariaIcons.otzaria_icon_2_page_24_filled,
       label: 'עיון',
       shortcutKey: 'key-shortcut-open-reading-screen',
     ),

@@ -1,4 +1,4 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library/view/library_daf_yomi.dart';
@@ -20,7 +20,7 @@ void main() {
       await tester.pumpWidget(wrap(LibraryDafYomi(onDafYomiTap: (_, _) {})));
 
       expect(
-        buttonForIcon(tester, FluentIcons.book_24_regular).onPressed,
+        buttonForIcon(tester, OtzariaIcons.book_24_regular).onPressed,
         isNotNull,
       );
     });
@@ -33,11 +33,11 @@ void main() {
       );
 
       expect(
-        buttonForIcon(tester, FluentIcons.book_24_regular).onPressed,
+        buttonForIcon(tester, OtzariaIcons.book_24_regular).onPressed,
         isNull,
       );
       expect(
-        buttonForIcon(tester, FluentIcons.calendar_24_regular).onPressed,
+        buttonForIcon(tester, OtzariaIcons.calendar_24_regular).onPressed,
         isNotNull,
       );
     });

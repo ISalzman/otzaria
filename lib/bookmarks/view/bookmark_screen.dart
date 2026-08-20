@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/dialogs/reusable_items_dialog.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
@@ -298,13 +299,14 @@ class _BookmarkViewState extends State<BookmarkView> {
             }
           },
           hintText: 'חפש בסימניות...',
+          searchIcon: OtzariaIcons.search_in_titles_24_regular,
           emptyText: bookFilter == null ? 'אין סימניות' : 'אין סימניות בספר זה',
           notFoundText: 'לא נמצאו תוצאות',
           clearAllText: bookFilter == null
               ? 'מחק את כל הסימניות'
               : 'מחק סימניות הספר',
           leadingIconBuilder: (item) => item.book is PdfBook
-              ? const Icon(FluentIcons.document_pdf_24_regular)
+              ? const Icon(OtzariaIcons.book_pdf_24_regular)
               : null,
           subtitleBuilder: (item) {
             final label = (item as Bookmark).label?.trim();

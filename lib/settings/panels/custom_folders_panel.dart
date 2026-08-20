@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
@@ -531,7 +532,7 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
               ),
             ),
             item(
-              FluentIcons.link_24_regular,
+              OtzariaIcons.link_24_regular,
               context.settingsText('דורות וקישורים'),
               context.settingsText(
                 'לייבוא סדר דורות וקישורים לספרים האישיים השתמש בכפתור '

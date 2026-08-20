@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -99,8 +100,8 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                     ? 'חפש רק בכותרת'
                     : 'חפש גם בתיאור',
                 icon: widget.state.searchInDescriptions
-                    ? FluentIcons.document_text_24_regular
-                    : FluentIcons.text_t_24_regular,
+                    ? OtzariaIcons.search_in_the_text_24_regular
+                    : OtzariaIcons.search_in_the_document_24_regular,
                 onPressed: () =>
                     context.read<CalendarCubit>().toggleSearchInDescriptions(
                       !widget.state.searchInDescriptions,
@@ -319,7 +320,7 @@ class _CalendarEventsPanelState extends State<CalendarEventsPanel> {
                           child: Align(
                             alignment: AlignmentDirectional.bottomStart,
                             child: _EventMetaChip(
-                              icon: FluentIcons.calendar_24_regular,
+                              icon: OtzariaIcons.calendar_24_regular,
                               text: splitDate
                                   ? formatEventDate(
                                       event.baseGregorianDate,

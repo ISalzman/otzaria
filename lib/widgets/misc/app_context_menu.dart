@@ -19,7 +19,7 @@ import 'package:otzaria/widgets/misc/overlay_scroll_anchor.dart';
 //       const AppContextMenuEntry.divider(),
 //       AppContextMenuEntry(
 //         label: 'מפרשים',
-//         icon: FluentIcons.book_24_regular,
+//         icon: OtzariaIcons.book_24_regular,
 //         children: [...],
 //       ),
 //     ],

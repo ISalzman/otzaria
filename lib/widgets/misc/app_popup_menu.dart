@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -837,7 +838,7 @@ class _AnchoredSearchMenuContentState<T>
                         ),
                         isDense: true,
                         prefixIcon: Icon(
-                          FluentIcons.search_24_regular,
+                          OtzariaIcons.search_24_regular,
                           size: widget.metrics.iconSize,
                           color: cs.onSurfaceVariant,
                         ),

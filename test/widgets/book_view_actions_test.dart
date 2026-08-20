@@ -1,4 +1,4 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
@@ -12,7 +12,7 @@ void main() {
       var pressed = false;
 
       final action = ActionButtonData.simple(
-        icon: FluentIcons.search_24_regular,
+        icon: OtzariaIcons.search_24_regular,
         tooltip: 'חיפוש',
         onPressed: () {
           pressed = true;
@@ -27,7 +27,7 @@ void main() {
         ),
       );
 
-      expect(action.icon, FluentIcons.search_24_regular);
+      expect(action.icon, OtzariaIcons.search_24_regular);
       expect(action.tooltip, 'חיפוש');
       expect(action.onPressed, isNotNull);
 
@@ -78,7 +78,7 @@ void main() {
 ActionButtonData _action(String tooltip) {
   return ActionButtonData(
     widget: const SizedBox.shrink(),
-    icon: FluentIcons.book_24_regular,
+    icon: OtzariaIcons.book_24_regular,
     tooltip: tooltip,
     onPressed: () {},
   );

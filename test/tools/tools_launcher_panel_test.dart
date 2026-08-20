@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,7 +45,7 @@ ToolCatalogEntry _entry(
   toolId: toolId,
   label: label,
   order: 10,
-  icon: icon ?? FluentIcons.calendar_24_regular,
+  icon: icon ?? OtzariaIcons.calendar_24_regular,
   imageIcon: imageIcon,
 );
 
@@ -566,7 +567,7 @@ void main() {
       final cs = Theme.of(context).colorScheme;
 
       final icon = tester.widget<Icon>(
-        find.byIcon(FluentIcons.calendar_24_regular),
+        find.byIcon(OtzariaIcons.calendar_24_regular),
       );
       expect(icon.color, cs.onSecondaryContainer);
       expect(icon.size, NavTreeTile.iconContentSize);
@@ -577,7 +578,7 @@ void main() {
       await tester.pumpWidget(_tileHost(buildTile()));
 
       final iconCenter = tester.getCenter(
-        find.byIcon(FluentIcons.calendar_24_regular),
+        find.byIcon(OtzariaIcons.calendar_24_regular),
       );
       final textCenter = tester.getCenter(find.text('לוח שנה'));
 

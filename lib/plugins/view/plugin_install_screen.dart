@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -191,15 +192,12 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
         !isTemporarilyUnavailable && (_permissionToggles[permission] ?? true);
     final isSensitive = permission == pluginRunOnStartupPermission;
     final isCritical = permission == pluginBackgroundKeepAlivePermission;
-    final iconData = isSensitive || isCritical
-        ? (isGranted
-              ? FluentIcons.warning_24_filled
-              : FluentIcons.warning_24_regular)
-        : (isGranted
-              ? FluentIcons.shield_checkmark_24_regular
-              : FluentIcons.shield_error_24_regular);
     return SettingsActionTile.switchTile(
-      icon: iconData,
+      icon: pluginPermissionIcon(
+        permission,
+        isGranted: isGranted,
+        manifest: widget.manifest,
+      ),
       iconColor: isCritical
           ? colorScheme.error
           : isSensitive
@@ -254,7 +252,7 @@ class _PluginInstallScreenState extends State<PluginInstallScreen> {
                   subtitle: widget.manifest.description,
                 ),
               SettingsActionTile.text(
-                icon: FluentIcons.person_24_regular,
+                icon: OtzariaIcons.person_24_regular,
                 title: 'מחבר: ${widget.manifest.author}',
                 subtitle: isUpdate
                     ? 'עדכון גרסה ${widget.previousVersion}  ←  ${widget.manifest.version}'

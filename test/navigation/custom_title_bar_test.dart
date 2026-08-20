@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -446,8 +447,8 @@ void main() {
     expect(find.text('מפרשים | ספר א'), findsOneWidget);
     expect(tester.takeException(), isNull);
     // רק טאב-PDF מקבל אייקון-סוג; בטאב מפרשים אין אייקון מוביל.
-    expect(find.byIcon(FluentIcons.book_24_regular), findsNothing);
-    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsNothing);
+    expect(find.byIcon(OtzariaIcons.book_24_regular), findsNothing);
+    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsNothing);
   });
 
   testWidgets('טאב PDF רחב מציג אייקון PDF ליד שם הספר', (tester) async {
@@ -475,7 +476,7 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsOneWidget);
+    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsOneWidget);
   });
 
   testWidgets('טאב PDF צר (רוחב < 100) מסתיר את אייקון ה-PDF', (tester) async {
@@ -506,7 +507,7 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.byIcon(FluentIcons.document_pdf_16_regular), findsNothing);
+    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsNothing);
   });
 
   testWidgets('CombinedTab מציג את התחלת שני הספרים, כל אחד בחצי', (

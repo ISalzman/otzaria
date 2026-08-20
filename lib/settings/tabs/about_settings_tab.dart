@@ -184,7 +184,7 @@ class AboutSettingsTab extends StatelessWidget {
                   actions: [
                     _InfoChipWrap(
                       items: aboutEssentialPeople,
-                      icon: FluentIcons.person_24_regular,
+                      icon: OtzariaIcons.person_24_regular,
                     ),
                   ],
                 ),
@@ -202,7 +202,7 @@ class AboutSettingsTab extends StatelessWidget {
                 _padded(
                   _InfoChipSection(
                     items: aboutDevelopers,
-                    icon: FluentIcons.person_24_regular,
+                    icon: OtzariaIcons.person_24_regular,
                   ),
                 ),
                 SettingsActionTile.text(

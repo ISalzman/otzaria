@@ -173,7 +173,7 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
                         ),
                         child: isSelected
                             ? const Icon(
-                                Icons.check,
+                                FluentIcons.checkmark_24_regular,
                                 color: Colors.white,
                                 size: 20,
                               )

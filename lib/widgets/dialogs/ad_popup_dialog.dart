@@ -1,9 +1,10 @@
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/support_organization.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/services/ad_popup_service.dart';
 import 'package:otzaria/services/support_organizations_service.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
@@ -321,7 +322,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                 value: 'week',
                 child: Row(
                   children: [
-                    RtlIcon(FluentIcons.calendar_24_regular, size: 20),
+                    Icon(OtzariaIcons.calendar_24_regular, size: 20),
                     SizedBox(width: 12),
                     Text('למשך שבוע'),
                   ],
@@ -331,7 +332,7 @@ class _AdPopupDialogState extends State<AdPopupDialog>
                 value: 'month',
                 child: Row(
                   children: [
-                    Icon(FluentIcons.calendar_month_24_regular, size: 20),
+                    RtlIcon(FluentIcons.calendar_month_24_regular, size: 20),
                     SizedBox(width: 12),
                     Text('למשך חודש'),
                   ],
@@ -558,8 +559,8 @@ class _ExpandableOrgCardState extends State<_ExpandableOrgCard> {
                   );
                   final arrow = Icon(
                     _isExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
+                        ? FluentIcons.chevron_up_24_regular
+                        : FluentIcons.chevron_down_24_regular,
                     color: Colors.grey[600],
                   );
 

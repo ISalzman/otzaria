@@ -258,7 +258,7 @@ class TextSettingsTab extends StatelessWidget {
                 },
               ),
               _FontDropdown(
-                icon: OtzariaIcons.alef_near_alef_24_regular,
+                icon: OtzariaIcons.tet_near_tet_24_regular,
                 label: context.settingsText('גופן טקסט'),
                 value: state.fontFamily,
                 onChanged: (value) {
@@ -294,7 +294,7 @@ class TextSettingsTab extends StatelessWidget {
                   },
                 ),
               _FontDropdown(
-                icon: OtzariaIcons.beit_near_alef_24_regular,
+                icon: OtzariaIcons.beit_behind_alef_24_regular,
                 label: context.settingsText('גופן מפרשים'),
                 value: state.commentatorsFontFamily,
                 onChanged: (value) {
@@ -595,7 +595,7 @@ class TextSettingsTab extends StatelessWidget {
       title: context.settingsText('הגדרות לפי ספר'),
       children: [
         SettingsActionTile.switchTile(
-          icon: FluentIcons.book_open_24_regular,
+          icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
           title: context.settingsText('שמירת התאמות לכל ספר בנפרד'),
           subtitle: context.settingsText(
             state.enablePerBookSettings

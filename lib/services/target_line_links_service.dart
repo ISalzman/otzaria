@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/widgets.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -289,7 +289,7 @@ class TargetLineLinksService {
       removeNikud: removeNikud,
       removePunctuation: removePunctuation,
       label: 'מפרשים',
-      icon: FluentIcons.book_24_regular,
+      icon: OtzariaIcons.book_24_regular,
       emptyLabel: 'אין מפרשים על קטע זה',
       select: (data) => data.commentaries,
       groupByEra: true,
@@ -309,7 +309,7 @@ class TargetLineLinksService {
       removeNikud: removeNikud,
       removePunctuation: removePunctuation,
       label: 'קישורים',
-      icon: FluentIcons.link_24_regular,
+      icon: OtzariaIcons.link_24_regular,
       emptyLabel: 'אין קישורים על קטע זה',
       select: (data) => data.references,
       groupByEra: false,

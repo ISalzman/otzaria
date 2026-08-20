@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -567,6 +568,7 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       controller: _searchController,
       focusNode: _searchFocusNode,
       autofocus: true,
+      icon: OtzariaIcons.search_24_regular,
       hintText: 'חיפוש כלי או תוסף',
       onChanged: _onQueryChanged,
       onClear: () => _onQueryChanged(''),

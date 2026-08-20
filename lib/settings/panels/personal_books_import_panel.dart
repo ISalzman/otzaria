@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
@@ -13,7 +14,6 @@ import 'package:otzaria/settings/services/custom_folders/personal_books_import_s
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/theme/app_tokens.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:path/path.dart' as p;
 
@@ -234,8 +234,8 @@ class _PersonalBooksImportPanelState extends State<PersonalBooksImportPanel> {
     return ListTile(
       dense: true,
       hoverColor: Colors.transparent,
-      leading: RtlIcon(
-        FluentIcons.book_24_regular,
+      leading: Icon(
+        OtzariaIcons.book_24_regular,
         color: cs.primary,
         size: 20,
       ),

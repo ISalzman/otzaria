@@ -6,6 +6,9 @@ import 'package:test/test.dart';
 /// ב-lib/widgets/misc/rtl_icon.dart (ב-_fluentMirrorMap, _materialMirrorMap,
 /// או _flippableIcons).
 ///
+/// אייקוני OtzariaIcons מצוירים RTL מלכתחילה, ולכן RtlIcon עליהם הוא תמיד
+/// הפרה — הוא יהפוך אייקון שכבר פונה לכיוון הנכון.
+///
 /// שימוש עם משתנה (למשל RtlIcon(rtlIcon)) — לא נבדק כאן, זו אחריות הקורא.
 void main() {
   test('כל ליטרל אייקון ב-RtlIcon() רשום ב-rtl_icon.dart', () {
@@ -24,8 +27,9 @@ void main() {
       reason:
           'שימושי RtlIcon עם אייקונים לא רשומים:\n${violations.join('\n')}'
           '\n\nאפשרויות:\n'
-          '  1. אייקון סימטרי? השתמש ב-Icon(...) רגיל.\n'
-          '  2. אייקון כיווני? הוסף אותו ל-rtl_icon.dart ואז השתמש ב-RtlIcon.',
+          '  1. אייקון OtzariaIcons? השתמש ב-Icon(...) — הוא כבר RTL.\n'
+          '  2. אייקון סימטרי? השתמש ב-Icon(...) רגיל.\n'
+          '  3. אייקון כיווני? הוסף אותו ל-rtl_icon.dart ואז השתמש ב-RtlIcon.',
     );
   });
 }
@@ -49,9 +53,9 @@ Set<String> _extractRegisteredIcons() {
 List<String> _findViolations(Set<String> registered) {
   final violations = <String>[];
 
-  // תופס: RtlIcon( ואז ליטרל FluentIcons.xxx או Icons.xxx (עם רווחים/שורות חדשות)
+  // תופס: RtlIcon( ואז ליטרל FluentIcons.xxx / OtzariaIcons.xxx / Icons.xxx
   final pattern = RegExp(
-    r'RtlIcon\(\s*((?:FluentIcons|Icons)\.\w+)',
+    r'RtlIcon\(\s*((?:FluentIcons|OtzariaIcons|Icons)\.\w+)',
     multiLine: true,
   );
 

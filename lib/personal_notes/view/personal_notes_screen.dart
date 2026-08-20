@@ -364,6 +364,7 @@ class _PersonalNotesManagerScreenState
             ),
           ],
           center: OtzariaSearchField(
+            icon: OtzariaIcons.search_in_the_document_24_regular,
             controller: _searchController,
             focusNode: _searchFocusNode,
             hintText: 'חפש בהערות...',
@@ -388,8 +389,7 @@ class _PersonalNotesManagerScreenState
                     : 'סנן לפי תאריך',
                 icon: _dateRange != null
                     ? FluentIcons.calendar_checkmark_24_filled
-                    : FluentIcons.calendar_24_regular,
-                flipInRtl: true,
+                    : OtzariaIcons.calendar_24_regular,
                 onPressed: _pickDateRange,
               ),
             ),
@@ -1055,8 +1055,8 @@ class _PersonalNotesManagerScreenState
       ),
       child: Row(
         children: [
-          RtlIcon(
-            FluentIcons.calendar_24_regular,
+          Icon(
+            OtzariaIcons.calendar_24_regular,
             size: 18,
             color: cs.onSecondaryContainer,
           ),
@@ -1171,7 +1171,7 @@ class _PersonalNotesManagerScreenState
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _InfoChip(
-                      icon: FluentIcons.calendar_24_regular,
+                      icon: OtzariaIcons.calendar_24_regular,
                       text: hebrewDate,
                       backgroundColor: cs.secondaryContainer,
                       foregroundColor: cs.onSecondaryContainer,
@@ -1205,7 +1205,7 @@ class _PersonalNotesManagerScreenState
                   if (!isMissing)
                     BarButton.icon(
                       tooltip: 'פתח ספר בשורה',
-                      icon: FluentIcons.book_open_24_regular,
+                      icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
                       onPressed: () => _openNoteInBook(note),
                     ),
                   BarButton.icon(

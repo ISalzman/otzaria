@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 
 class CommentatorsFilterButton extends StatelessWidget {
   final bool isActive;
@@ -23,7 +23,7 @@ class CommentatorsFilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: Icon(
-        FluentIcons.apps_list_24_regular,
+        OtzariaIcons.apps_list_24_regular,
         color: isActive
             ? Theme.of(context).colorScheme.primary
             : Theme.of(

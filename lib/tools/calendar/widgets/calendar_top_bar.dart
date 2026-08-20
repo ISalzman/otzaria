@@ -17,6 +17,7 @@ import 'dart:math' as math;
 import 'package:otzaria/theme/app_tokens.dart';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -660,8 +661,8 @@ class _CalendarTopBarState extends State<CalendarTopBar>
             icon:
                 widget.isSidePanelVisible &&
                     widget.activeSidePanelView == CalendarSidePanelView.events
-                ? FluentIcons.task_list_square_rtl_24_filled
-                : FluentIcons.task_list_square_rtl_24_regular,
+                ? OtzariaIcons.task_list_square_24_filled
+                : OtzariaIcons.task_list_square_24_regular,
             selected:
                 widget.isSidePanelVisible &&
                 widget.activeSidePanelView == CalendarSidePanelView.events,

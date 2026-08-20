@@ -1936,11 +1936,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           70,
           ActionButtonData(
             widget: IconButton(
-              icon: const Icon(FluentIcons.book_information_24_regular),
+              icon: const Icon(OtzariaIcons.book_information_24_regular),
               tooltip: 'אודות הספר',
               onPressed: () => _handleBookSourcePress(context, state),
             ),
-            icon: FluentIcons.book_information_24_regular,
+            icon: OtzariaIcons.book_information_24_regular,
             tooltip: 'אודות הספר',
             onPressed: () => _handleBookSourcePress(context, state),
           ),
@@ -1985,7 +1985,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               ),
               ActionButtonData(
                 widget: const SizedBox.shrink(),
-                icon: FluentIcons.book_information_24_regular,
+                icon: OtzariaIcons.book_information_24_regular,
                 tooltip: 'אודות הספר',
                 onPressed: () => _handleBookSourcePress(context, state),
               ),
@@ -2590,17 +2590,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       return ActionButtonData(
         widget: BarButton.icon(
           tooltip: tooltip,
-          icon: FluentIcons.document_pdf_24_regular,
+          icon: OtzariaIcons.book_pdf_24_regular,
           compact: compact,
           onPressed: () => _openParallelEdition(context, state, primary),
         ),
-        icon: FluentIcons.document_pdf_24_regular,
+        icon: OtzariaIcons.book_pdf_24_regular,
         tooltip: tooltip,
         onPressed: () => _openParallelEdition(context, state, primary),
       );
     }
     return ActionButtonData.split(
-      icon: FluentIcons.document_pdf_24_regular,
+      icon: OtzariaIcons.book_pdf_24_regular,
       tooltip: tooltip,
       compact: compact,
       onPressed: () => _openParallelEdition(context, state, primary),
@@ -2609,8 +2609,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ActionButtonData(
             widget: const SizedBox.shrink(),
             icon: edition.isCompanion
-                ? FluentIcons.document_pdf_24_regular
-                : FluentIcons.book_24_regular,
+                ? OtzariaIcons.book_pdf_24_regular
+                : OtzariaIcons.book_24_regular,
             tooltip: edition.isCompanion
                 ? '${edition.book.title} — מהדורה מודפסת (אוצריא)'
                 : edition.book.title,

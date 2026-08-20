@@ -1100,11 +1100,11 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               ActionButtonData(
                 widget: BarButton.icon(
                   tooltip: 'חיפוש',
-                  icon: FluentIcons.search_24_regular,
+                  icon: OtzariaIcons.search_24_regular,
                   compact: context.read<SettingsBloc>().state.compactMenuMode,
                   onPressed: _openSearchPane,
                 ),
-                icon: FluentIcons.search_24_regular,
+                icon: OtzariaIcons.search_24_regular,
                 tooltip: 'חיפוש',
                 onPressed: _openSearchPane,
               ),
@@ -1239,13 +1239,13 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
               label: 'ניווט',
             ),
             (
-              icon: FluentIcons.apps_list_24_regular,
-              iconFilled: FluentIcons.apps_list_24_filled,
+              icon: OtzariaIcons.apps_list_24_regular,
+              iconFilled: OtzariaIcons.apps_list_24_filled,
               label: 'מפרשים',
             ),
             (
-              icon: FluentIcons.search_24_regular,
-              iconFilled: FluentIcons.search_24_filled,
+              icon: OtzariaIcons.search_24_regular,
+              iconFilled: OtzariaIcons.search_24_filled,
               label: 'חיפוש',
             ),
           ],
@@ -1746,8 +1746,8 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       level: 1,
       isSelected: isSelected,
       icon: isAllChapter
-          ? FluentIcons.book_24_regular
-          : FluentIcons.text_bullet_list_24_regular,
+          ? OtzariaIcons.book_24_regular
+          : OtzariaIcons.text_bullet_list_24_regular,
       onTap: onTap,
     );
   }

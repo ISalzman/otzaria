@@ -144,13 +144,11 @@ class _PluginSettingsScreenState extends State<PluginSettingsScreen> {
                         final isCritical =
                             p == pluginBackgroundKeepAlivePermission;
                         final colorScheme = Theme.of(context).colorScheme;
-                        final iconData = isSensitive || isCritical
-                            ? (isGranted
-                                  ? FluentIcons.warning_24_filled
-                                  : FluentIcons.warning_24_regular)
-                            : (isGranted
-                                  ? FluentIcons.shield_checkmark_24_regular
-                                  : FluentIcons.shield_error_24_regular);
+                        final iconData = pluginPermissionIcon(
+                          p,
+                          isGranted: isGranted,
+                          manifest: currentPlugin.manifest,
+                        );
                         final iconColor = isCritical
                             ? colorScheme.error
                             : isSensitive

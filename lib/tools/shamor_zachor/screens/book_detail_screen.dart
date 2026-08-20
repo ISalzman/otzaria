@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
 
@@ -235,7 +236,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    FluentIcons.book_24_regular,
+                    OtzariaIcons.book_24_regular,
                     size: 64,
                     color: cs.onSurfaceVariant,
                   ),
@@ -269,7 +270,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
 
     if (learnableItems.isEmpty) {
       return const ToolEmptyState(
-        icon: FluentIcons.book_24_regular,
+        icon: OtzariaIcons.book_24_regular,
         message: 'אין פריטים ללימוד בספר זה',
       );
     }

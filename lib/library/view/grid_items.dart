@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -716,7 +717,7 @@ class _BookGridActionColumn extends StatelessWidget {
                       const AppMenuEntry<String>(
                         value: 'versions',
                         label: 'גרסאות',
-                        icon: FluentIcons.stack_24_regular,
+                        icon: OtzariaIcons.books_stacked_high_24_regular,
                       ),
                     if (canDelete)
                       const AppMenuEntry<String>(

@@ -370,7 +370,7 @@ class DesignSettingsTab extends StatelessWidget {
                   title: context.settingsText('תצוגת PDF'),
                   children: [
                     SettingsActionTile.switchTile(
-                      icon: FluentIcons.book_open_24_regular,
+                      icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
                       title: context.settingsText('תצוגת ספר בPDF'),
                       subtitle: context.settingsText(
                         state.enablePerBookSettings

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/library/view/library_empty_state_widget.dart';
 import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
@@ -154,7 +154,7 @@ void main() {
   group('ToolEmptyState', () {
     const sizes = [Size(640, 200), Size(800, 180)];
     ToolEmptyState build() => const ToolEmptyState(
-      icon: FluentIcons.search_24_regular,
+      icon: OtzariaIcons.search_24_regular,
       message: 'לא נמצאו תוצאות עבור החיפוש שהוזן',
       subtitle: 'ניתן לנסות ניסוח אחר או להרחיב את טווח החיפוש',
     );
@@ -172,7 +172,7 @@ void main() {
         tester,
         const Size(640, 180),
         const ToolEmptyState(
-          icon: FluentIcons.search_24_regular,
+          icon: OtzariaIcons.search_24_regular,
           message: 'לא נמצאו תוצאות עבור החיפוש שהוזן',
         ),
       );

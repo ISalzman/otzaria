@@ -1281,7 +1281,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     return Column(
       children: [
         ListTile(
-          leading: const Icon(FluentIcons.document_bullet_list_24_regular),
+          leading: const Icon(OtzariaIcons.document_bullet_list_24_regular),
           title: Text(
             report.bookTitle,
             style: kSettingsTitleStyle,
@@ -1928,7 +1928,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           actions: [
             if (_bookCount != null)
               ActionButton.ghost(
-                icon: FluentIcons.list_24_regular,
+                icon: OtzariaIcons.list_24_regular,
                 text: context.settingsText('הצג רשימה'),
                 onPressed: () => _openBooksListDialog(context),
               ),
@@ -2482,7 +2482,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 onChanged: () => setState(() {}),
               ),
               _BackupOptionTile(
-                icon: FluentIcons.book_24_regular,
+                icon: OtzariaIcons.book_24_regular,
                 title: context.settingsText('שמור וזכור'),
                 subtitle: context.settingsText('ספרים ומעקב לימוד'),
                 settingKey: _keyBackupShamorZachor,

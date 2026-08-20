@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/tools_messages.dart';
@@ -183,7 +184,7 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
       autofocus: true,
       decoration: InputDecoration(
         hintText: 'חיפוש ספר...',
-        prefixIcon: const Icon(FluentIcons.search_24_regular),
+        prefixIcon: const Icon(OtzariaIcons.search_in_the_book_24_regular),
         suffixIcon: _searchController.text.isEmpty
             ? null
             : IconButton(
@@ -345,8 +346,8 @@ class _AddBooksToTrackingDialogState extends State<AddBooksToTrackingDialog> {
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               )
             : null,
-        secondary: RtlIcon(
-          FluentIcons.book_24_regular,
+        secondary: Icon(
+          OtzariaIcons.book_24_regular,
           size: 18,
           color: colorScheme.onSurfaceVariant,
         ),

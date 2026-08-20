@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_spinbox/flutter_spinbox.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
@@ -319,7 +320,7 @@ class _ScopeAndMatchMenu extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              FluentIcons.apps_list_24_regular,
+              OtzariaIcons.apps_list_24_regular,
               size: 20,
               color: isDefault ? colorScheme.onSurface : colorScheme.primary,
             ),

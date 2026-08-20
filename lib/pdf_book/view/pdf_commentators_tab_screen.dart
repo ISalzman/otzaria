@@ -870,11 +870,11 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
               ActionButtonData(
                 widget: BarButton.icon(
                   tooltip: 'חיפוש',
-                  icon: FluentIcons.search_24_regular,
+                  icon: OtzariaIcons.search_24_regular,
                   compact: isCompact,
                   onPressed: _openSearchPanel,
                 ),
-                icon: FluentIcons.search_24_regular,
+                icon: OtzariaIcons.search_24_regular,
                 tooltip: 'חיפוש',
                 onPressed: _openSearchPanel,
               ),
@@ -974,13 +974,13 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
               label: 'ניווט',
             ),
             (
-              icon: FluentIcons.apps_list_24_regular,
-              iconFilled: FluentIcons.apps_list_24_filled,
+              icon: OtzariaIcons.apps_list_24_regular,
+              iconFilled: OtzariaIcons.apps_list_24_filled,
               label: 'מפרשים',
             ),
             (
-              icon: FluentIcons.search_24_regular,
-              iconFilled: FluentIcons.search_24_filled,
+              icon: OtzariaIcons.search_24_regular,
+              iconFilled: OtzariaIcons.search_24_filled,
               label: 'חיפוש',
             ),
           ],
@@ -1246,7 +1246,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       title: text,
       level: 1,
       isSelected: isSelected,
-      icon: FluentIcons.text_bullet_list_24_regular,
+      icon: OtzariaIcons.text_bullet_list_24_regular,
       onTap: onTap,
     );
   }

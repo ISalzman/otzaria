@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -356,7 +356,7 @@ class _TocViewerState extends State<TocViewer>
             title: title,
             level: level,
             isSelected: selected,
-            icon: FluentIcons.text_bullet_list_24_regular,
+            icon: OtzariaIcons.text_bullet_list_24_regular,
             onTap: navigateToEntry,
           )
         : NavTreeTile.category(

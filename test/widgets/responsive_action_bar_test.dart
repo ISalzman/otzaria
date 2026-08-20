@@ -1,4 +1,5 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
@@ -42,14 +43,14 @@ void main() {
 
       final actions = [
         ActionButtonData(
-          widget: buildAction(FluentIcons.book_24_regular, 'ספר'),
-          icon: FluentIcons.book_24_regular,
+          widget: buildAction(OtzariaIcons.book_24_regular, 'ספר'),
+          icon: OtzariaIcons.book_24_regular,
           tooltip: 'ספר',
           onPressed: () {},
         ),
         ActionButtonData(
-          widget: buildAction(FluentIcons.search_24_regular, 'חיפוש'),
-          icon: FluentIcons.search_24_regular,
+          widget: buildAction(OtzariaIcons.search_24_regular, 'חיפוש'),
+          icon: OtzariaIcons.search_24_regular,
           tooltip: 'חיפוש',
           onPressed: () {},
         ),
@@ -92,8 +93,8 @@ void main() {
       );
 
       expect(find.byIcon(FluentIcons.more_vertical_24_regular), findsOneWidget);
-      expect(find.byIcon(FluentIcons.book_24_regular), findsOneWidget);
-      expect(find.byIcon(FluentIcons.search_24_regular), findsOneWidget);
+      expect(find.byIcon(OtzariaIcons.book_24_regular), findsOneWidget);
+      expect(find.byIcon(OtzariaIcons.search_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.settings_24_regular), findsNothing);
     },
   );
@@ -592,7 +593,7 @@ void main() {
     });
 
     testWidgets('השורה מוצגת גם במצב הישן (originalOrder)', (tester) async {
-      final visible = [action(FluentIcons.search_24_regular, 'חיפוש')];
+      final visible = [action(OtzariaIcons.search_24_regular, 'חיפוש')];
       await pumpBar(
         tester,
         actions: visible,
@@ -612,14 +613,14 @@ void main() {
       await pumpBar(
         tester,
         actions: [
-          action(FluentIcons.search_24_regular, 'חיפוש'),
+          action(OtzariaIcons.search_24_regular, 'חיפוש'),
           action(FluentIcons.settings_24_regular, 'הגדרות'),
         ],
         menuHeaderActions: navActions(onPressed: (_) {}),
         maxVisibleButtons: 2,
       );
 
-      expect(find.byIcon(FluentIcons.search_24_regular), findsOneWidget);
+      expect(find.byIcon(OtzariaIcons.search_24_regular), findsOneWidget);
       expect(find.byIcon(FluentIcons.settings_24_regular), findsOneWidget);
       // אייקוני הניווט מופיעים רק אחרי פתיחת התפריט
       expect(find.byIcon(FluentIcons.chevron_right_24_regular), findsNothing);

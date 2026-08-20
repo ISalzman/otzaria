@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/theme/app_fonts.dart';
@@ -14,7 +15,6 @@ import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/controls/segmented_control.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// סוג שמירת הגדרות מפרשים
 enum CommentatorSaveScope {
@@ -343,7 +343,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
   IconData get _displaySettingsIcon {
     switch (_displaySettingsScope) {
       case PageShapeDisplaySettingsScope.book:
-        return FluentIcons.book_24_regular;
+        return OtzariaIcons.book_24_regular;
       case PageShapeDisplaySettingsScope.workspace:
         return FluentIcons.window_24_regular;
       case PageShapeDisplaySettingsScope.global:
@@ -354,8 +354,8 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
   Widget _buildDisplaySettingsIcon(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
     if (_displaySettingsScope == PageShapeDisplaySettingsScope.book) {
-      return RtlIcon(
-        FluentIcons.book_24_regular,
+      return Icon(
+        OtzariaIcons.book_24_regular,
         size: 20,
         color: color,
       );

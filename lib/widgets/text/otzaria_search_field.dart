@@ -15,6 +15,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -242,6 +243,10 @@ class OtzariaSearchField extends StatefulWidget {
   final Widget? leading;
   final List<Widget>? trailingActions;
 
+  /// אייקון החיפוש. עדיף למקד אותו לפי מה שמחפשים בו — למשל
+  /// `search_in_the_library_24_regular` בספרייה. `leading` דוחה אותו.
+  final IconData icon;
+
   /// `null` = יורש אוטומטית מ-compactMenuMode אם זמין.
   /// `true` = שדה צר, `false` = שדה רחב.
   final bool? slim;
@@ -267,6 +272,7 @@ class OtzariaSearchField extends StatefulWidget {
     this.maxWidth,
     this.leading,
     this.trailingActions,
+    this.icon = OtzariaIcons.search_24_regular,
     this.slim,
     this.isCompact = false,
     this.onExpand,
@@ -358,7 +364,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
         padding: EdgeInsets.zero,
         visualDensity: VisualDensity.compact,
         icon: Icon(
-          FluentIcons.search_24_regular,
+          widget.icon,
           size: 20,
           color: cs.onSurfaceVariant,
         ),
@@ -438,7 +444,7 @@ class _OtzariaSearchFieldState extends State<OtzariaSearchField> {
     final prefixIcon =
         widget.leading ??
         Icon(
-          FluentIcons.search_24_regular,
+          widget.icon,
           size: prefixIconSize,
           color: _hasFocus && widget.enabled ? focusedIconColor : hintColor,
         );

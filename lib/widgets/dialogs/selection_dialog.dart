@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/keyboard_dialog_navigation.dart';
@@ -91,7 +92,7 @@ class _SelectionDialogState<T> extends State<SelectionDialog<T>>
               Expanded(
                 child: filteredItems.isEmpty
                     ? const ToolEmptyState(
-                        icon: FluentIcons.search_24_regular,
+                        icon: OtzariaIcons.search_24_regular,
                         message: 'לא נמצאו תוצאות',
                       )
                     : ListView.builder(
