@@ -355,6 +355,7 @@ class TantivyDataProvider {
 
     try {
       indexPath = await AppPaths.getIndexPath();
+      final canonicalIndexPath = indexPath;
       final parentDir = Directory(indexPath).parent;
       if (!parentDir.existsSync()) {
         parentDir.createSync(recursive: true);
@@ -415,6 +416,11 @@ class TantivyDataProvider {
       try {
         await sentinelFile.delete();
       } catch (_) {}
+
+      // תיקיות שהוזזו הצידה ב_corrupted_/_new_ (למעלה) לא ננוקות בשום
+      // מסלול אחר ומצטברות בלי הגבלה (issue #835 BUG-07) — best-effort,
+      // לא חוסם את פתיחת האינדקס.
+      unawaited(deleteQuarantinedIndexSiblings(canonicalIndexPath));
 
       // טעינת מילון מורפולוגי לחיפוש המקורב (best-effort, לא חוסם).
       await _attachMagicDictionary(engine);
@@ -886,12 +892,55 @@ class TantivyDataProvider {
 
     for (final path in paths) {
       final dir = Directory(path);
-      if (!dir.existsSync()) continue;
+      if (dir.existsSync()) {
+        try {
+          dir.deleteSync(recursive: true);
+          debugPrint('🧹 נמחקה תיקיית אינדקס: $path');
+        } catch (e) {
+          debugPrint('⚠️ כשל במחיקת תיקיית אינדקס $path: $e');
+        }
+      }
+      await deleteQuarantinedIndexSiblings(path);
+    }
+  }
+
+  /// האם שם תיקייה בתיקיית ההורה של האינדקס הוא שריד-הסגר: אינדקס שהוזז
+  /// הצידה ב_initEngine בכשל פתיחה כפול (`_corrupted_...`) או נתיב חלופי
+  /// מכשל בהעברה עצמה (`_new_...`). שרידים אלה תפחו לגדלים של GB-ים בלי
+  /// שום מסלול שמנקה אותם (issue #835 BUG-07).
+  @visibleForTesting
+  static bool isQuarantinedIndexSiblingName(
+    String siblingName,
+    String activeIndexDirName,
+  ) =>
+      siblingName.startsWith('${activeIndexDirName}_corrupted_') ||
+      siblingName.startsWith('${activeIndexDirName}_new_');
+
+  /// מוחק, best-effort, תיקיות שריד-הסגר ליד [indexPath]. לא זורק —
+  /// נקרא גם באתחול רגיל (unawaited) וגם מ-[_deleteAllKnownIndexDirectories].
+  @visibleForTesting
+  static Future<void> deleteQuarantinedIndexSiblings(String indexPath) async {
+    final parent = Directory(indexPath).parent;
+    if (!parent.existsSync()) return;
+    final activeDirName = p.basename(indexPath);
+
+    List<FileSystemEntity> entries;
+    try {
+      entries = parent.listSync();
+    } catch (e) {
+      debugPrint('⚠️ כשל בסריקת תיקיות אינדקס נטושות: $e');
+      return;
+    }
+
+    for (final entry in entries) {
+      if (entry is! Directory) continue;
+      final name = p.basename(entry.path);
+      if (!isQuarantinedIndexSiblingName(name, activeDirName)) continue;
       try {
-        dir.deleteSync(recursive: true);
-        debugPrint('🧹 נמחקה תיקיית אינדקס: $path');
+        entry.deleteSync(recursive: true);
+        debugPrint('🧹 נמחקה תיקיית אינדקס נטושה: ${entry.path}');
       } catch (e) {
-        debugPrint('⚠️ כשל במחיקת תיקיית אינדקס $path: $e');
+        debugPrint('⚠️ כשל במחיקת תיקיית אינדקס נטושה ${entry.path}: $e');
       }
     }
   }
