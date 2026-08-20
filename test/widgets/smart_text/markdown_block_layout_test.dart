@@ -19,11 +19,8 @@ final _horizontalScroll = find.byWidgetPredicate(
 );
 
 void main() {
-  // רגרסיה: fwfh עוטף <pre> ו-<table> ב-SingleChildScrollView אופקי. תחת RTL
-  // הוא מצמיד את התוכן לימין ומאפס את היישור הפנימי — בלוק קוד הופיע מוזח
-  // מהשמאל ורוחב הטבלה לא התפרס.
   group('SmartTextWidget — פריסת בלוקי Markdown', () {
-    testWidgets('בלוק קוד של Markdown אינו נעטף בגלילה אופקית', (tester) async {
+    testWidgets('בלוק קוד של Markdown שומר על גלילה אופקית', (tester) async {
       await tester.pumpWidget(
         _wrap(
           const SmartTextWidget(
@@ -36,7 +33,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_horizontalScroll, findsNothing);
+      expect(_horizontalScroll, findsOneWidget);
       final code = tester
           .widgetList<RichText>(find.byType(RichText))
           .firstWhere((w) => w.text.toPlainText().contains('final value = 1;'));
@@ -44,7 +41,7 @@ void main() {
       expect(code.textAlign, TextAlign.left);
     });
 
-    testWidgets('טבלת Markdown אינה נעטפת בגלילה אופקית', (tester) async {
+    testWidgets('טבלת Markdown שומרת על גלילה אופקית', (tester) async {
       await tester.pumpWidget(
         _wrap(
           const SmartTextWidget(
@@ -58,7 +55,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_horizontalScroll, findsNothing);
+      expect(_horizontalScroll, findsOneWidget);
     });
 
     testWidgets('בלוק קוד בספר רגיל שומר על הגלילה האופקית', (tester) async {

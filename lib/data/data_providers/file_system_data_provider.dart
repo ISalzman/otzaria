@@ -13,6 +13,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
@@ -698,6 +699,41 @@ class FileSystemData {
       if (index <= 0) {
         debugPrint('⚠️ Invalid line index: $index for file: $path');
         return 'שגיאה: אינדקס שורה לא תקין';
+      }
+
+      final isPlainText =
+          documentFormatFromExtension(path) == DocumentFormat.txt;
+      final textHead = isPlainText
+          ? await file
+                .openRead(0, 4)
+                .fold<List<int>>(
+                  [],
+                  (bytes, chunk) => bytes..addAll(chunk),
+                )
+          : const <int>[];
+      final hasUnicodeBom =
+          (textHead.length >= 2 &&
+              ((textHead[0] == 0xff && textHead[1] == 0xfe) ||
+                  (textHead[0] == 0xfe && textHead[1] == 0xff))) ||
+          (textHead.length >= 4 &&
+              ((textHead[0] == 0 && textHead[1] == 0 && textHead[2] == 0xfe) ||
+                  (textHead[0] == 0xff &&
+                      textHead[1] == 0xfe &&
+                      textHead[2] == 0 &&
+                      textHead[3] == 0)));
+      if (isPlainText && !hasUnicodeBom && !textHead.contains(0)) {
+        try {
+          return await file
+              .openRead()
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .skip(index - 1)
+              .first;
+        } on FormatException {
+          // קידוד שאינו UTF-8 ממשיך למסלול הזיהוי המלא שמתחת.
+        } on StateError {
+          return 'שגיאה: אינדקס השורה חורג מגודל הקובץ';
+        }
       }
 
       final text = await readFileBackedBookText(

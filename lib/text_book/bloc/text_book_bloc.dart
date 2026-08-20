@@ -2029,17 +2029,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     _setLoadedContentFlags(currentState.book, nextLoadedFlags);
 
-    final renderedToc = TocParser.parseEntriesFromContent(
-      event.content.join('\n'),
-    );
-
     final updatedState = _withInlineNotesCommentator(
       currentState.copyWith(
         content: event.content,
         contentVersion: currentState.contentVersion + 1,
-        tableOfContents: renderedToc.isEmpty
-            ? currentState.tableOfContents
-            : renderedToc,
         readingSegments: buildReadingSegments(
           event.content,
           continuous: currentState.continuousReadingMode,

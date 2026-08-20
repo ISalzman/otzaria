@@ -218,7 +218,7 @@ void main() {
       await bloc.close();
     });
 
-    test('החלפת תוכן רקע מלא מרעננת תוכן עניינים מהתוכן המוצג', () async {
+    test('החלפת תוכן רקע מלא שומרת את תוכן העניינים של הספר', () async {
       final bloc = _createBloc(
         repository: _FakeTextBookRepository(),
         showPageShapeView: false,
@@ -234,6 +234,8 @@ void main() {
       );
       await _waitFor(() => bloc.state is TextBookLoaded);
 
+      final initialToc = (bloc.state as TextBookLoaded).tableOfContents;
+
       bloc.add(
         const ApplyFullBookContent(
           bookTitle: 'ספר מיושן',
@@ -244,13 +246,8 @@ void main() {
           ],
         ),
       );
-      await _waitFor(
-        () => (bloc.state as TextBookLoaded).tableOfContents.isNotEmpty,
-      );
-
       final toc = (bloc.state as TextBookLoaded).tableOfContents;
-      expect(toc.single.index, 0);
-      expect(toc.single.children.single.index, 2);
+      expect(toc, initialToc);
       await bloc.close();
     });
 
