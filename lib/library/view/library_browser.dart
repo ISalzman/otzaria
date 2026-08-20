@@ -222,6 +222,28 @@ calculateLibraryPreviewPaneWidths({
   );
 }
 
+/// הפעולה שמקש Backspace מבצע בספרייה.
+enum LibraryBackspaceAction { none, navigateUp, clearSearch }
+
+/// מכריע מה Backspace עושה לפי מצב הפוקוס והחיפוש: בשדה טקסט המקש נשאר
+/// מחיקת תו, למעט שדה החיפוש של הספרייה כשהוא ריק — אז עולים תיקייה.
+@visibleForTesting
+LibraryBackspaceAction resolveLibraryBackspaceAction({
+  required bool isEditableTextFocused,
+  required bool isLibrarySearchFocused,
+  required bool isSearchTextEmpty,
+}) {
+  if (isEditableTextFocused) {
+    return isLibrarySearchFocused && isSearchTextEmpty
+        ? LibraryBackspaceAction.navigateUp
+        : LibraryBackspaceAction.none;
+  }
+  // הפוקוס על כרטיס/רכיב אחר: חיפוש פעיל נסגר תחילה, אחרת עולים תיקייה.
+  return isSearchTextEmpty
+      ? LibraryBackspaceAction.navigateUp
+      : LibraryBackspaceAction.clearSearch;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LibraryBrowser extends StatefulWidget {
@@ -236,7 +258,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   @override
   bool get wantKeepAlive => true;
 
-  final FocusNode _firstSearchResultFocusNode = FocusNode();
+  final FocusNode _firstGridItemFocusNode = FocusNode();
   final GlobalKey _tourLibraryKey = GlobalKey();
   final GlobalKey _tourLibrarySearchKey = GlobalKey();
   final GlobalKey _tourBookCardKey = GlobalKey();
@@ -335,7 +357,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   @override
   void dispose() {
-    _firstSearchResultFocusNode.dispose();
+    _firstGridItemFocusNode.dispose();
     _scrollDebounce?.cancel();
     _searchDebounce?.cancel();
     _secondaryRowVisible.dispose();
@@ -434,70 +456,80 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               return Stack(
                 key: _tourLibraryKey,
                 children: [
-                  Scaffold(
-                    backgroundColor: AppSurfaces.panelBackground(context),
-                    body: LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        // האם יש מספיק מקום ל-DafYomi בשורה הראשית?
-                        final dafYomiInline =
-                            constraints.maxWidth >= _kDafYomiInlineMinWidth;
-                        final isCompact = settingsState.compactMenuMode;
+                  Focus(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                    onKeyEvent: (node, event) =>
+                        _handleLibraryKey(event, state, settingsState),
+                    child: Scaffold(
+                      backgroundColor: AppSurfaces.panelBackground(context),
+                      body: LayoutBuilder(
+                        builder: (ctx, constraints) {
+                          // האם יש מספיק מקום ל-DafYomi בשורה הראשית?
+                          final dafYomiInline =
+                              constraints.maxWidth >= _kDafYomiInlineMinWidth;
+                          final isCompact = settingsState.compactMenuMode;
 
-                        // גובה הסרגל הראשי (קבוע) — ממנו נגזר ה-padding התחתון
-                        final primaryBarH = AppTopBar.barHeight(isCompact);
+                          // גובה הסרגל הראשי (קבוע) — ממנו נגזר ה-padding התחתון
+                          final primaryBarH = AppTopBar.barHeight(isCompact);
 
-                        // גובה השורה השניה המקסימלי משמש כ-fallback לפני שיש
-                        // מדידה בפועל מה-AppTopBar.
-                        const double kSecondaryRowMaxH = 52.0;
-                        final hasSecondaryRow = !dafYomiInline;
-                        final topPad = hasSecondaryRow
-                            ? primaryBarH + kSecondaryRowMaxH
-                            : primaryBarH;
+                          // גובה השורה השניה המקסימלי משמש כ-fallback לפני שיש
+                          // מדידה בפועל מה-AppTopBar.
+                          const double kSecondaryRowMaxH = 52.0;
+                          final hasSecondaryRow = !dafYomiInline;
+                          final topPad = hasSecondaryRow
+                              ? primaryBarH + kSecondaryRowMaxH
+                              : primaryBarH;
 
-                        // Stack: תוכן מאחורה עם padding קבוע, סרגל צף מעל
-                        // כך הסרגל לא גורם ל-reflow של ה-ScrollView בגלילה.
-                        return Stack(
-                          children: [
-                            Positioned.fill(
-                              child: ValueListenableBuilder<double>(
-                                valueListenable: _topBarTotalHeight,
-                                builder: (context, topBarHeight, child) {
-                                  final effectiveTopPad = topBarHeight > 0
-                                      ? topBarHeight
-                                      : topPad;
-                                  return AnimatedPadding(
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOut,
-                                    padding: EdgeInsets.only(
-                                      top: effectiveTopPad,
-                                    ),
-                                    child: child,
-                                  );
-                                },
-                                child: NotificationListener<ScrollNotification>(
-                                  onNotification: _handleScrollNotification,
-                                  child: _buildBodyRow(
-                                    ctx,
-                                    state,
-                                    settingsState,
-                                  ),
+                          // Stack: תוכן מאחורה עם padding קבוע, סרגל צף מעל
+                          // כך הסרגל לא גורם ל-reflow של ה-ScrollView בגלילה.
+                          return Stack(
+                            children: [
+                              Positioned.fill(
+                                child: ValueListenableBuilder<double>(
+                                  valueListenable: _topBarTotalHeight,
+                                  builder: (context, topBarHeight, child) {
+                                    final effectiveTopPad = topBarHeight > 0
+                                        ? topBarHeight
+                                        : topPad;
+                                    return AnimatedPadding(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      curve: Curves.easeOut,
+                                      padding: EdgeInsets.only(
+                                        top: effectiveTopPad,
+                                      ),
+                                      child: child,
+                                    );
+                                  },
+                                  child:
+                                      NotificationListener<ScrollNotification>(
+                                        onNotification:
+                                            _handleScrollNotification,
+                                        child: _buildBodyRow(
+                                          ctx,
+                                          state,
+                                          settingsState,
+                                        ),
+                                      ),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: _buildAppTopBar(
-                                ctx,
-                                state,
-                                settingsState,
-                                dafYomiInline: dafYomiInline,
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: _buildAppTopBar(
+                                  ctx,
+                                  state,
+                                  settingsState,
+                                  dafYomiInline: dafYomiInline,
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
                   ValueListenableBuilder<double>(
@@ -742,19 +774,52 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   // ── Search bar ────────────────────────────────────────────────────────────
 
+  /// מקלדת בשדה החיפוש: Tab/חץ-מטה נכנסים לרשת הספרים תמיד, וימינה/שמאלה
+  /// רק כשהשדה ריק — עם טקסט הם נשארים תזוזת סמן רגילה.
+  KeyEventResult _handleSearchFieldKey(
+    KeyEvent event,
+    LibraryState state,
+    BuildContext fieldContext,
+  ) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed ||
+        keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.tab) {
+      if (!_focusFirstGridItem(state)) {
+        FocusScope.of(fieldContext).nextFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _focusFirstGridItem(state);
+      return KeyEventResult.handled;
+    }
+    if ((key == LogicalKeyboardKey.arrowLeft ||
+            key == LogicalKeyboardKey.arrowRight) &&
+        context.read<FocusRepository>().librarySearchController.text.isEmpty) {
+      return _focusFirstGridItem(state)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    return KeyEventResult.ignored;
+  }
+
   Widget _buildSearchBar(LibraryState state, bool isCompact) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, settingsState) {
         final focusRepository = context.read<FocusRepository>();
-        return CallbackShortcuts(
-          bindings: {
-            const SingleActivator(LogicalKeyboardKey.tab): () {
-              final moved = _focusFirstSearchResult(state);
-              if (!moved) {
-                FocusScope.of(context).nextFocus();
-              }
-            },
-          },
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: (node, event) =>
+              _handleSearchFieldKey(event, state, context),
           child: KeyedSubtree(
             key: _tourLibrarySearchKey,
             child: OtzariaSearchField(
@@ -1081,6 +1146,72 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
   }
 
+  static final _arrowKeys = {
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+  };
+
+  /// קיצורי המקלדת של מסך הספרייה: Backspace = עלייה תיקייה (כמו בסייר של
+  /// Windows), וחץ מחוץ לרשת מחזיר את הפוקוס לספרים במקום לטייל בין לחצנים.
+  ///
+  /// בשדה טקסט Backspace נשאר מחיקת תו; רק בשדה החיפוש של הספרייה, כשהוא
+  /// ריק (ובלחיצה חדשה, לא בחזרת-מקש), הוא עולה תיקייה.
+  KeyEventResult _handleLibraryKey(
+    KeyEvent event,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    if (event is KeyUpEvent || _settingsPanelOpen.value) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed ||
+        keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    final repo = context.read<FocusRepository>();
+    final focusedWidget = FocusManager.instance.primaryFocus?.context?.widget;
+    final isEditableTextFocused =
+        focusedWidget is EditableText || focusedWidget is TextField;
+
+    if (_arrowKeys.contains(event.logicalKey)) {
+      if (isEditableTextFocused) return KeyEventResult.ignored;
+      // כשהפוקוס על כרטיס, LibraryGridKeyNavigator כבר טיפל באירוע לפנינו —
+      // כאן הפוקוס על לחצן אחר במסך, והחץ מחזיר אותו לרשת הספרים.
+      return _focusFirstGridItem(state)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.backspace) {
+      return KeyEventResult.ignored;
+    }
+
+    final action = resolveLibraryBackspaceAction(
+      isEditableTextFocused: isEditableTextFocused,
+      isLibrarySearchFocused: repo.librarySearchFocusNode.hasFocus,
+      isSearchTextEmpty: repo.librarySearchController.text.isEmpty,
+    );
+    switch (action) {
+      case LibraryBackspaceAction.none:
+        return KeyEventResult.ignored;
+      case LibraryBackspaceAction.navigateUp:
+        _handleNavigateUp(context, state, settingsState);
+      case LibraryBackspaceAction.clearSearch:
+        repo.librarySearchController.clear();
+        context.read<LibraryBloc>().add(const UpdateSearchQuery(''));
+        context.read<LibraryBloc>().add(const SearchBooks());
+        _refocusSearchBar();
+    }
+    return KeyEventResult.handled;
+  }
+
   void _handleNavigateHome(
     BuildContext context,
     LibraryState state,
@@ -1233,21 +1364,28 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       );
     }
 
+    // הפריט הראשון ברשת מקבל את צומת הפוקוס — כניסה מהחיפוש ב-Tab/חץ-מטה.
     final allItems = <Widget>[
-      ...filteredSubCategories.map(
-        (c) => KeyedSubtree(
-          key: _tourCategoryKeys.putIfAbsent(c.path, GlobalKey.new),
+      ...filteredSubCategories.indexed.map(
+        ((int, Category) entry) => KeyedSubtree(
+          key: _tourCategoryKeys.putIfAbsent(entry.$2.path, GlobalKey.new),
           child: CategoryGridItem(
-            category: c,
-            onCategoryClickCallback: () => _openCategory(c),
+            category: entry.$2,
+            onCategoryClickCallback: () => _openCategory(entry.$2),
+            focusNode: entry.$1 == 0 ? _firstGridItemFocusNode : null,
           ),
         ),
       ),
     ];
 
     var attachedTourKey = false;
-    for (final book in filteredBooks) {
-      final item = _buildBookItem(book);
+    for (final (bookIndex, book) in filteredBooks.indexed) {
+      final item = _buildBookItem(
+        book,
+        focusNode: filteredSubCategories.isEmpty && bookIndex == 0
+            ? _firstGridItemFocusNode
+            : null,
+      );
       final isTourBook =
           _tourPreviewBook != null &&
           !attachedTourKey &&
@@ -1264,7 +1402,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         attachedTourKey = true;
       }
     }
-    items.add(MyGridView(items: allItems));
+    items.add(
+      MyGridView(
+        items: allItems,
+        onExitTop: () => _refocusSearchBar(selectAll: true),
+      ),
+    );
     return items;
   }
 
@@ -1333,7 +1476,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           books[index],
           0,
           itemStyle: _LibraryListItemStyle.search,
-          focusNode: index == 0 ? _firstSearchResultFocusNode : null,
+          focusNode: index == 0 ? _firstGridItemFocusNode : null,
         );
       },
     );
@@ -2190,23 +2333,25 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  bool _focusFirstSearchResult(LibraryState state) {
+  bool _focusFirstGridItem(LibraryState state) {
+    // הצומת מחובר לפריט הראשון גם בעיון בקטגוריות, לא רק בתוצאות חיפוש.
+    if (_firstGridItemFocusNode.context != null &&
+        _firstGridItemFocusNode.canRequestFocus) {
+      LibraryGridKeyNavigator.focusCard(_firstGridItemFocusNode);
+      return true;
+    }
+
     final results = state.searchResults;
     if (results == null || results.isEmpty) {
       return false;
-    }
-
-    if (_firstSearchResultFocusNode.canRequestFocus) {
-      _firstSearchResultFocusNode.requestFocus();
-      return true;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      if (_firstSearchResultFocusNode.canRequestFocus) {
-        _firstSearchResultFocusNode.requestFocus();
+      if (_firstGridItemFocusNode.canRequestFocus) {
+        _firstGridItemFocusNode.requestFocus();
       }
     });
     return true;
@@ -2221,33 +2366,35 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
-          child: FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: 2,
-                crossAxisSpacing: kLibraryGridSpacing,
-                mainAxisSpacing: kLibraryGridSpacing,
-              ),
-              itemCount: displayLimit,
-              itemBuilder: (context, index) {
-                final orderIndex = index;
-                final focusNode = index == 0
-                    ? _firstSearchResultFocusNode
-                    : null;
+          child: LibraryGridKeyNavigator(
+            crossAxisCount: crossAxisCount,
+            onExitTop: () => _refocusSearchBar(selectAll: true),
+            child: FocusTraversalGroup(
+              policy: OrderedTraversalPolicy(),
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: 2,
+                  crossAxisSpacing: kLibraryGridSpacing,
+                  mainAxisSpacing: kLibraryGridSpacing,
+                ),
+                itemCount: displayLimit,
+                itemBuilder: (context, index) {
+                  final orderIndex = index;
+                  final focusNode = index == 0 ? _firstGridItemFocusNode : null;
 
-                return FocusTraversalOrder(
-                  order: NumericFocusOrder(orderIndex.toDouble()),
-                  child: _buildBookItem(
-                    books[index],
-                    showTopics: true,
-                    focusNode: focusNode,
-                  ),
-                );
-              },
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+                  return FocusTraversalOrder(
+                    order: NumericFocusOrder(orderIndex.toDouble()),
+                    child: _buildBookItem(
+                      books[index],
+                      showTopics: true,
+                      focusNode: focusNode,
+                    ),
+                  );
+                },
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+              ),
             ),
           ),
         );

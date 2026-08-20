@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -308,37 +309,39 @@ class CategoryGridItem extends StatelessWidget {
             ),
             const SizedBox(width: 18),
             if (infoText != null)
-              Tooltip(
-                message: infoText,
-                waitDuration: const Duration(milliseconds: 400),
-                textAlign: TextAlign.right,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                margin: const EdgeInsets.all(12),
-                constraints: const BoxConstraints(maxWidth: 320),
-                textStyle: _libraryTooltipTextStyle(context),
-                decoration: _libraryTooltipDecoration(context),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
+              ExcludeFocusTraversal(
+                child: Tooltip(
+                  message: infoText,
+                  waitDuration: const Duration(milliseconds: 400),
+                  textAlign: TextAlign.right,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-                  child: IconButton(
-                    onPressed: () =>
-                        showCategoryDetailsDialog(context, category),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                  margin: const EdgeInsets.all(12),
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  textStyle: _libraryTooltipTextStyle(context),
+                  decoration: _libraryTooltipDecoration(context),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    icon: Icon(
-                      FluentIcons.info_24_regular,
-                      size: 15,
-                      color: theme.colorScheme.onSurfaceVariant,
+                    child: IconButton(
+                      onPressed: () =>
+                          showCategoryDetailsDialog(context, category),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      icon: Icon(
+                        FluentIcons.info_24_regular,
+                        size: 15,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
@@ -654,86 +657,89 @@ class _BookGridActionColumn extends StatelessWidget {
       ),
     );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (infoTooltipText != null)
-          Tooltip(
-            message: infoTooltipText,
-            waitDuration: const Duration(milliseconds: 400),
-            textAlign: TextAlign.right,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            margin: const EdgeInsets.all(12),
-            constraints: const BoxConstraints(maxWidth: 320),
-            textStyle: _libraryTooltipTextStyle(context),
-            decoration: _libraryTooltipDecoration(context),
-            child: infoButton,
-          )
-        else
-          infoButton,
-        FutureBuilder<List<bool>>(
-          future: Future.wait([
-            _canDeleteBookFromLibrary(book),
-            versionsEligible
-                ? DatabaseLibraryProvider.instance.hasSelectableBookVersions(
-                    book.title,
-                    book.categoryId!,
-                  )
-                : Future.value(false),
-          ]),
-          builder: (context, snapshot) {
-            // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
-            // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
-            // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
-            final canDelete = snapshot.data?[0] ?? false;
-            final showVersions = snapshot.data?[1] ?? false;
-            if (!canDelete && !showVersions) {
-              return const SizedBox.shrink();
-            }
+    // הפעולות המשניות מוחרגות ממסלול הפוקוס — חיצים/Tab עוצרים רק על הכרטיס.
+    return ExcludeFocusTraversal(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (infoTooltipText != null)
+            Tooltip(
+              message: infoTooltipText,
+              waitDuration: const Duration(milliseconds: 400),
+              textAlign: TextAlign.right,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              margin: const EdgeInsets.all(12),
+              constraints: const BoxConstraints(maxWidth: 320),
+              textStyle: _libraryTooltipTextStyle(context),
+              decoration: _libraryTooltipDecoration(context),
+              child: infoButton,
+            )
+          else
+            infoButton,
+          FutureBuilder<List<bool>>(
+            future: Future.wait([
+              _canDeleteBookFromLibrary(book),
+              versionsEligible
+                  ? DatabaseLibraryProvider.instance.hasSelectableBookVersions(
+                      book.title,
+                      book.categoryId!,
+                    )
+                  : Future.value(false),
+            ]),
+            builder: (context, snapshot) {
+              // מחיקה מהספרייה מותרת רק לספרי משתמש מסוג "עותק עצמאי"
+              // (התוכן שמור בתוכנה). ספר "קריאה מהקבצים" נמחק רק ע"י מחיקת
+              // הקובץ מהדיסק, והספרייה הרשמית (seforim.db) אינה ניתנת למחיקה.
+              final canDelete = snapshot.data?[0] ?? false;
+              final showVersions = snapshot.data?[1] ?? false;
+              if (!canDelete && !showVersions) {
+                return const SizedBox.shrink();
+              }
 
-            return SizedBox(
-              width: 28,
-              height: 28,
-              child: AppPopupMenuButton<String>(
-                icon: Icon(
-                  FluentIcons.more_vertical_24_regular,
-                  size: 15,
-                  color: theme.colorScheme.secondary,
+              return SizedBox(
+                width: 28,
+                height: 28,
+                child: AppPopupMenuButton<String>(
+                  icon: Icon(
+                    FluentIcons.more_vertical_24_regular,
+                    size: 15,
+                    color: theme.colorScheme.secondary,
+                  ),
+                  tooltip: 'אפשרויות נוספות',
+                  position: PopupMenuPosition.under,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      _showDeleteBookDialog(context, book, onBookDeleted);
+                    } else if (value == 'versions') {
+                      showBookVersionsDialog(context, book as TextBook);
+                    }
+                  },
+                  entries: [
+                    if (showVersions)
+                      const AppMenuEntry<String>(
+                        value: 'versions',
+                        label: 'גרסאות',
+                        icon: FluentIcons.stack_24_regular,
+                      ),
+                    if (canDelete)
+                      const AppMenuEntry<String>(
+                        value: 'delete',
+                        label: 'מחק מהספרייה',
+                        icon: FluentIcons.delete_24_regular,
+                        isDestructive: true,
+                      ),
+                  ],
                 ),
-                tooltip: 'אפשרויות נוספות',
-                position: PopupMenuPosition.under,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 28,
-                  minHeight: 28,
-                ),
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    _showDeleteBookDialog(context, book, onBookDeleted);
-                  } else if (value == 'versions') {
-                    showBookVersionsDialog(context, book as TextBook);
-                  }
-                },
-                entries: [
-                  if (showVersions)
-                    const AppMenuEntry<String>(
-                      value: 'versions',
-                      label: 'גרסאות',
-                      icon: FluentIcons.stack_24_regular,
-                    ),
-                  if (canDelete)
-                    const AppMenuEntry<String>(
-                      value: 'delete',
-                      label: 'מחק מהספרייה',
-                      icon: FluentIcons.delete_24_regular,
-                      isDestructive: true,
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -754,10 +760,88 @@ const double kNarrowGridCardMinHeight = 112;
 /// השוליים האופקיים של רשת הספרייה — משמשים גם בחישוב רוחב התא בפועל.
 const double _kGridHorizontalPadding = 30;
 
+/// ניווט חיצים בין כרטיסי הרשת בלבד — הפוקוס עובר ברצף בין הכרטיסים
+/// ולא בורח לכפתורי הסרגל/הצד (המסלול הכיווני של Flutter אינו תחום לרשת).
+///
+/// חיצי צד נעים ברצף על פני כל הפריטים (גם בין שורות); מעלה/מטה נעים בטור.
+/// [onExitTop] נקרא בחץ-מעלה מהשורה הראשונה (חזרה לשדה החיפוש).
+class LibraryGridKeyNavigator extends StatelessWidget {
+  final int crossAxisCount;
+  final VoidCallback? onExitTop;
+  final Widget child;
+
+  const LibraryGridKeyNavigator({
+    super.key,
+    required this.crossAxisCount,
+    this.onExitTop,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) => _handleKey(context, node, event),
+      child: child,
+    );
+  }
+
+  KeyEventResult _handleKey(
+    BuildContext context,
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    final int? delta = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowLeft => isRtl ? 1 : -1,
+      LogicalKeyboardKey.arrowRight => isRtl ? -1 : 1,
+      LogicalKeyboardKey.arrowDown => crossAxisCount,
+      LogicalKeyboardKey.arrowUp => -crossAxisCount,
+      _ => null,
+    };
+    if (delta == null) return KeyEventResult.ignored;
+
+    final cards = node.traversalDescendants.toList();
+    final primary = FocusManager.instance.primaryFocus;
+    final index = primary == null ? -1 : cards.indexOf(primary);
+    if (index < 0) return KeyEventResult.ignored;
+
+    var target = index + delta;
+    if (delta.abs() == 1) target = target.clamp(0, cards.length - 1);
+    if (target < 0) {
+      onExitTop?.call();
+      return KeyEventResult.handled;
+    }
+    if (target == index || target >= cards.length) {
+      return KeyEventResult.handled;
+    }
+    focusCard(cards[target]);
+    return KeyEventResult.handled;
+  }
+
+  /// ממקד כרטיס וגולל אותו לתצוגה (requestFocus לבדו אינו גולל).
+  static void focusCard(FocusNode target) {
+    target.requestFocus();
+    final targetContext = target.context;
+    if (targetContext == null) return;
+    Scrollable.ensureVisible(
+      targetContext,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
+    Scrollable.ensureVisible(
+      targetContext,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+    );
+  }
+}
+
 class MyGridView extends StatelessWidget {
   final List<Widget> items;
+  final VoidCallback? onExitTop;
 
-  const MyGridView({super.key, required this.items});
+  const MyGridView({super.key, required this.items, this.onExitTop});
 
   @override
   Widget build(BuildContext context) {
@@ -792,27 +876,31 @@ class MyGridView extends StatelessWidget {
           childAspectRatio = (baseRatio * textAdjustment).clamp(1.45, 2.15);
         }
 
-        return FocusTraversalGroup(
-          policy: ReadingOrderTraversalPolicy(),
-          child: Padding(
-            // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
-            padding: const EdgeInsets.only(
-              top: 8,
-              left: _kGridHorizontalPadding,
-              right: _kGridHorizontalPadding,
-              bottom: 8,
-            ),
-            child: GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: childAspectRatio,
-                crossAxisSpacing: kLibraryGridSpacing,
-                mainAxisSpacing: kLibraryGridSpacing,
+        return LibraryGridKeyNavigator(
+          crossAxisCount: crossAxisCount,
+          onExitTop: onExitTop,
+          child: FocusTraversalGroup(
+            policy: ReadingOrderTraversalPolicy(),
+            child: Padding(
+              // top: 8 או מרווח מתאים; horizontal: 45 או רוחב אף
+              padding: const EdgeInsets.only(
+                top: 8,
+                left: _kGridHorizontalPadding,
+                right: _kGridHorizontalPadding,
+                bottom: 8,
               ),
-              itemCount: items.length,
-              itemBuilder: (context, index) => items[index],
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: childAspectRatio,
+                  crossAxisSpacing: kLibraryGridSpacing,
+                  mainAxisSpacing: kLibraryGridSpacing,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) => items[index],
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+              ),
             ),
           ),
         );
