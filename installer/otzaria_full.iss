@@ -1616,10 +1616,15 @@ var
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
+  // ארכיון חסר = כשל (נמחק מ-{tmp} ע"י ניקוי דיסק וכד') — דילוג שקט השאיר
+  // התקנה "מוצלחת" בלי ספרייה (issue #862).
   if not FileExists(ArchivePath) then
   begin
-    Log('Bundled database archive not found, skipping: ' + ArchivePath);
-    exit;
+    Log('Bundled database archive not found: ' + ArchivePath);
+    MsgBox('קובץ הספרייה ' + ArchiveName + ' חסר בקבצי ההתקנה הזמניים.'
+      + #13#10 + 'ייתכן שתוכנת ניקוי דיסק מחקה אותו או שאין מספיק מקום פנוי. פנה מקום ונסה להתקין שוב.',
+      mbCriticalError, MB_OK);
+    Abort;
   end;
 
   DatabasePath := TargetRoot + '\' + DatabaseName;
@@ -1652,8 +1657,11 @@ begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
-    Log('Bundled archive not found, skipping: ' + ArchivePath);
-    exit;
+    Log('Bundled archive not found: ' + ArchivePath);
+    MsgBox('ארכיון ' + ArchiveName + ' חסר בקבצי ההתקנה הזמניים.'
+      + #13#10 + 'ייתכן שתוכנת ניקוי דיסק מחקה אותו או שאין מספיק מקום פנוי. פנה מקום ונסה להתקין שוב.',
+      mbCriticalError, MB_OK);
+    Abort;
   end;
 
   ParentDir := TargetRoot;
@@ -1748,6 +1756,16 @@ begin
     except
       Log('Lexical version marker was not written: ' + GetExceptionMessage);
     end;
+  end;
+
+  // אימות אחרון לפני ההחלפה — כמו במסלול המאונדקס; ספרייה בלי seforim.db
+  // אסור שתחליף ספרייה קיימת ותוצג כהתקנה מוצלחת (issue #862).
+  if not FileExists(StagingBooks + '\seforim.db') then
+  begin
+    Log('Staging library is missing seforim.db - aborting swap');
+    MsgBox('חילוץ הספרייה לא הושלם — מסד הנתונים seforim.db חסר.',
+      mbCriticalError, MB_OK);
+    Abort;
   end;
 
   WizardForm.StatusLabel.Caption := 'מחליף את הספרייה הקודמת...';

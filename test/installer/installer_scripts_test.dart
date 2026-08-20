@@ -204,6 +204,50 @@ void main() {
       );
       expect(moveNew, greaterThan(backupOld));
     });
+
+    test(
+      '$_full: ארכיון חסר או ספרייה בלי seforim.db מכשילים — לא דילוג שקט',
+      () {
+        final script = _script(_full);
+
+        for (final proc in [
+          'procedure ExtractBundledDatabase(',
+          'procedure ExtractBundledTarArchive(',
+        ]) {
+          final body = _routine(script, proc);
+          expect(
+            body,
+            isNot(contains('skipping')),
+            reason:
+                'דילוג שקט על ארכיון חסר הסתיים כהתקנה "מוצלחת" בלי ספרייה '
+                '(issue #862)',
+          );
+          final notFound = body.indexOf('not FileExists(ArchivePath)');
+          final abortPos = body.indexOf('Abort;');
+          expect(notFound, greaterThanOrEqualTo(0));
+          expect(
+            abortPos,
+            greaterThan(notFound),
+            reason: 'ארכיון חסר חייב להציג שגיאה ולעצור את החילוץ',
+          );
+        }
+
+        final extract = _routine(
+          script,
+          'procedure ExtractEmbeddedLibraryArchives();',
+        );
+        final verify = extract.indexOf("StagingBooks + '\\seforim.db'");
+        final swap = extract.indexOf(
+          'RenameFile(StagingBooks, SelectedBooksPath)',
+        );
+        expect(verify, greaterThanOrEqualTo(0));
+        expect(
+          swap,
+          greaterThan(verify),
+          reason: 'אימות seforim.db חייב לבוא לפני החלפת הספרייה (issue #862)',
+        );
+      },
+    );
   });
 
   group('מתקין FULL מאונדקס מפוצל', () {
