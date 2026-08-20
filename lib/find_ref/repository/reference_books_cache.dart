@@ -532,6 +532,10 @@ class ReferenceBooksCache {
     final starts = <ReferenceBookHit>[];
     final contains = <ReferenceBookHit>[];
 
+    // מסננת הביגרמים חוסכת את המעבר על כינויי כל הספרים בכל הקלדה — היא
+    // קבוצת-על, ולכן הלולאה שמתחתיה נשארת הפוסקת היחידה על הדירוג.
+    final acronymCandidates = AcronymsCache.instance.candidatesFor(q);
+
     for (final book in BooksCache.instance.books) {
       final t = _normalizedTitles[book.id] ?? '';
       if (t.isEmpty) continue;
@@ -546,7 +550,7 @@ class ReferenceBooksCache {
         matchRank = 1;
       } else if (t.contains(q)) {
         matchRank = 2;
-      } else {
+      } else if (acronymCandidates?.contains(book.id) ?? true) {
         // התאמת ראשי תיבות — המונחים כבר מנורמלים בעת טעינת הקאש.
         final normalizedAcronyms = AcronymsCache.instance.getAcronymsForBook(
           book.id,
@@ -565,9 +569,7 @@ class ReferenceBooksCache {
               titleTokens ??= titleMatchTokens(t);
               final tailIsTitle = _acronymTailIsTitleWords(a, q, titleTokens);
               // דירוג טוב יותר גובר על קודמיו — אחרת מונח "contains" (5) שנסרק
-              // קודם היה מקבע 5 ומונע מהתאמת-התחילית הזו לדרג 4. ובין מונחי
-              // תחילית — עדיף זה שהזנב שלו מילות-כותרת (ראו [ReferenceBookHit
-              // .acronymTailIsTitleWords]).
+              // קודם היה מקבע 5 ומונע מהתאמת-התחילית הזו לדרג 4.
               if (matchRank == null ||
                   matchRank > 4 ||
                   (tailIsTitle && !tailIsTitleWords)) {
