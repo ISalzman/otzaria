@@ -450,6 +450,9 @@ class IndexingRepository {
             debugPrint(
               '💾 commit אחרי $indexedSinceCommit ספרים: ${commitStopwatch.elapsedMilliseconds}ms',
             );
+            // גם כאן, ולא רק ב-commit הסופי: ביטול או קריסה אחרי מאות
+            // ספרים שנשמרו היו מותירים אינדקס מלא בלי חותם.
+            _stampCatalogueOrderAfterCommit();
             indexedSinceCommit = 0;
           }
 

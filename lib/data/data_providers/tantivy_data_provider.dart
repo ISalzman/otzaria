@@ -156,7 +156,9 @@ class TantivyDataProvider {
 
     // אינדוקס באותה הפעלה כבר מילא את האינדקס בסדר הנוכחי — ניסיון חוזר
     // לחתום מונע הכרזת "ישן" על אינדקס תקין בפתיחה מחדש שבאמצע ההפעלה.
-    ensureCatalogueOrderStamp();
+    if (indexStateIsKnown) {
+      ensureCatalogueOrderStamp();
+    }
 
     _catalogueOrderStale = CatalogueOrderRevision.isStale(
       storedRevision: CatalogueOrderRevision.read(indexPath),

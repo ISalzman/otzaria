@@ -23,13 +23,6 @@ void main() {
       expect(resolver.fallbackKeys, {'uid:404', 'uid:405'});
     });
 
-    test('הסדר החלופי בא אחרי הספר האחרון שבספרייה', () {
-      final resolver = CatalogueOrderResolver({'id:1': 0, 'id:2': 7});
-
-      expect(resolver.orderFor('uid:404'), 8);
-      expect(resolver.orderFor('uid:405'), 9);
-    });
-
     test('מפתח חסר חוזר מחזיר את אותו סדר — לא מקצה חדש בכל קריאה', () {
       final resolver = CatalogueOrderResolver({'id:1': 0});
 
@@ -37,13 +30,6 @@ void main() {
 
       expect(resolver.orderFor('uid:404'), first);
       expect(resolver.fallbackKeys, hasLength(1));
-    });
-
-    test('ספרייה ריקה — הסדר החלופי מתחיל מאפס', () {
-      final resolver = CatalogueOrderResolver({});
-
-      expect(resolver.orderFor('uid:404'), 0);
-      expect(resolver.orderFor('uid:405'), 1);
     });
 
     test('מזהי המסמכים של שני ספרים חסרים אינם מתנגשים באותה שורה', () {
@@ -64,12 +50,61 @@ void main() {
       );
     });
 
-    test('חריגה מטווח הסדר זורקת במקום לגלוש מעבר ל-u64', () {
-      final resolver = CatalogueOrderResolver({
-        'id:1': CatalogueOrderResolver.maxCatalogueOrder,
-      });
+    test('הסדר החלופי ממוין אחרי כל ספר אפשרי בספרייה', () {
+      final resolver = CatalogueOrderResolver({'id:1': 0, 'id:2': 7});
 
-      expect(() => resolver.orderFor('uid:404'), throwsStateError);
+      // מיליון ספרים הוא הרבה מעבר לספרייה בפועל, והטווח השמור מעליהם.
+      expect(resolver.orderFor('uid:404'), greaterThan(1000000));
+      expect(
+        resolver.orderFor('uid:404'),
+        lessThanOrEqualTo(CatalogueOrderResolver.maxCatalogueOrder),
+      );
+    });
+
+    test('אותו מפתח מקבל אותו סדר במוסרים נפרדים — יציב בין ריצות', () {
+      // רגרסיה: הקצאה לפי מונה רץ נתנה לספר חסר סדר שתלוי במי נשאל לפניו,
+      // ולכן ריצה אחרת חילקה אותו סדר לספר אחר — מזהי מסמך מתנגשים.
+      final first = CatalogueOrderResolver({'id:1': 0});
+      final second = CatalogueOrderResolver({'id:1': 0, 'id:2': 1, 'id:3': 2});
+
+      first.orderFor('uid:999');
+
+      expect(second.orderFor('uid:404'), first.orderFor('uid:404'));
+    });
+
+    test('סדר הקריאות אינו משפיע על הסדר שמוקצה', () {
+      final ascending = CatalogueOrderResolver({'id:1': 0});
+      final descending = CatalogueOrderResolver({'id:1': 0});
+
+      ascending.orderFor('uid:404');
+      ascending.orderFor('uid:405');
+      descending.orderFor('uid:405');
+      descending.orderFor('uid:404');
+
+      expect(ascending.orderFor('uid:404'), descending.orderFor('uid:404'));
+      expect(ascending.orderFor('uid:405'), descending.orderFor('uid:405'));
+    });
+
+    test('הגיבוב יציב ואינו נשען על hashCode', () {
+      expect(
+        CatalogueOrderResolver.stableFallbackHash('uid:404'),
+        CatalogueOrderResolver.stableFallbackHash('uid:404'),
+      );
+      expect(
+        CatalogueOrderResolver.stableFallbackHash('uid:404'),
+        isNot(CatalogueOrderResolver.stableFallbackHash('uid:405')),
+      );
+      // ערך מקובע: שינוי במימוש הגיבוב משנה מזהים שכבר נצרבו לאינדקס.
+      expect(CatalogueOrderResolver.stableFallbackHash(''), 0x811C9DC5);
+    });
+
+    test('התנגשות גיבוב אינה מייצרת סדר כפול', () {
+      final resolver = CatalogueOrderResolver({'id:1': 0});
+      final orders = {
+        for (var i = 0; i < 500; i++) resolver.orderFor('uid:$i'),
+      };
+
+      expect(orders, hasLength(500));
     });
 
     test('הסדר המרבי נשאר בתוך u64 גם בשורות מאוחרות', () {

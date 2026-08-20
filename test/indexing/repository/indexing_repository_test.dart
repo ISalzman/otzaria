@@ -1503,6 +1503,24 @@ void main() {
       expect(earlierBookLateSegment, lessThan(laterBookFirstSegment));
     });
 
+    test('ספר חסר מקבל אותו מזהה בכל ריצה — יציב בין הפעלות', () {
+      // רגרסיה: סדר חלופי לפי מונה רץ השתנה בין ריצות, ולכן ריצה אחרת
+      // חילקה אותו סדר לספר חסר אחר — מזהי מסמך מתנגשים.
+      final small = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final grown = _buildLibrary(
+        bavliBooks: const [('שבת', 1), ('עירובין', 2)],
+      );
+
+      expect(
+        IndexingRepository.buildCatalogueOrderResolver(
+          grown,
+        ).orderFor('id:404'),
+        IndexingRepository.buildCatalogueOrderResolver(
+          small,
+        ).orderFor('id:404'),
+      );
+    });
+
     test('ספר שאינו בספרייה נכנס ב-u64 וממוין אחרי הספר האחרון', () {
       final u64Max = (BigInt.one << 64) - BigInt.one;
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
