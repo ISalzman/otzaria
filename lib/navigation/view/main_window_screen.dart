@@ -102,6 +102,9 @@ import 'package:otzaria/core/sequential_dialog_queue.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/core/external_uri_router.dart';
+import 'package:otzaria/core/info/app_info_service.dart';
+import 'package:otzaria/core/info/view/app_info_dialog.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
@@ -353,6 +356,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   bool _hasInitializedPageController = false;
   bool _isProcessingExternalActivations = false;
+
+  /// מונע הערמת פופאפים כשמגיעים כמה קישורי `info` בזה אחר זה.
+  bool _isShowingInfoReport = false;
   StreamSubscription<FileSystemEvent>? _externalActivationWatchSub;
   StreamSubscription<String>? _externalActivationChannelSub;
   final WindowsJumpListService _jumpListService = WindowsJumpListService();
@@ -1287,6 +1293,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case OpenBookmarksAction():
         showDialog(context: context, builder: (_) => const BookmarksDialog());
         return true;
+      case ShowInfoAction():
+        return await _showInfoReport(action);
       case OpenSettingsTabAction(:final tab):
         context.read<NavigationBloc>().add(
           const NavigateToScreen(Screen.settings),
@@ -1299,6 +1307,43 @@ class MainWindowScreenState extends State<MainWindowScreen>
         }
         return true;
     }
+  }
+
+  /// אוסף את דוח המידע ומציג אותו בפופאפ. אינו מנווט לשום מקום — קישור `info`
+  /// הוא שאילתה, לא יעד.
+  ///
+  /// הדיאלוג נדחה לפוסט-פריים ואינו מומתן: המתנה לסגירתו הייתה חוסמת את
+  /// `_processPendingExternalActivations` (שמתנקז רק בעקבות אירוע קובץ), וכן
+  /// גורמת ל-`Navigator.pop` של הקורא — דיאלוג איתור מקורות — לסגור את
+  /// הפופאפ הזה במקום את עצמו.
+  Future<bool> _showInfoReport(ShowInfoAction action) async {
+    if (_isShowingInfoReport) return true;
+    _isShowingInfoReport = true;
+
+    final pluginState = context.read<PluginSystemBloc>().state;
+    final report = await AppInfoService.collect(
+      action.topic,
+      // מצב שאינו Loaded אינו "אין תוספים" — קוראים מהמרשם, אותו מקור שה-CLI
+      // משתמש בו, כדי ששני הערוצים לא ידווחו מספרים שונים.
+      pluginsLoader: () async => pluginState is PluginSystemLoaded
+          ? pluginState.plugins
+          : await PluginRegistryRepository().getAllPlugins(),
+      errorLimit: action.errorLimit,
+    );
+    if (!mounted) {
+      _isShowingInfoReport = false;
+      return false;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (mounted) await showAppInfoDialog(context, report);
+      } finally {
+        _isShowingInfoReport = false;
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+    return true;
   }
 
   void _runExternalSearch(String query, {SearchMode? mode}) {
