@@ -120,6 +120,31 @@ class CopyUtils {
     }
   }
 
+  /// גוזר מ-reference של תוצאת חיפוש את חלק הנתיב שאחרי שם הספר, כדי
+  /// ש-[formatTextWithHeaders] (שמרכיב "שם ספר, נתיב") לא יכפיל את השם:
+  /// המנוע מחזיר לעיתים reference שכבר פותח בשם הספר ("עבודה זרה, דף עג.")
+  /// ולעיתים נתיב בלבד ("סימן א").
+  static String referencePath({
+    required String bookName,
+    required String reference,
+  }) {
+    final ref = reference.trim();
+    final book = bookName.trim();
+    if (book.isEmpty || ref == book) return ref == book ? '' : ref;
+    if (!ref.startsWith(book)) return ref;
+    final suffix = ref.substring(book.length);
+    if (suffix.isNotEmpty &&
+        !suffix.startsWith(',') &&
+        suffix.trimLeft() == suffix) {
+      return ref;
+    }
+    var rest = suffix.trimLeft();
+    if (rest.startsWith(',')) {
+      rest = rest.substring(1).trimLeft();
+    }
+    return rest;
+  }
+
   /// מעצב טקסט עם כותרות בהתאם להגדרות
   static String formatTextWithHeaders({
     required String originalText,

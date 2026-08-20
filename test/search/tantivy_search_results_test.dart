@@ -400,6 +400,108 @@ void main() {
       expect(tester.getSize(badge).height, lessThan(30));
     });
 
+    // מיפוי התקלה: המשתמש מגדיר "העתקה עם כותרת" (copyWithHeaders +
+    // copyHeaderFormat) — ההגדרה מכובדת בהעתקה ממסך הקריאה
+    // (context_menu_utils) אבל כפתור ההעתקה בתוצאות החיפוש התעלם ממנה
+    // והעתיק את הטקסט בלבד, בלי המקור והכותרת.
+    group('העתקה עם כותרת ומקור לפי ההגדרות', () {
+      Future<String?> copyWithSettings(
+        WidgetTester tester, {
+        required String copyWithHeaders,
+        required String copyHeaderFormat,
+        int resultIndex = _kPlainTextIndex,
+      }) async {
+        final headersSettingsBloc = MockSettingsBloc();
+        addTearDown(headersSettingsBloc.close);
+        whenListen(
+          headersSettingsBloc,
+          const Stream<SettingsState>.empty(),
+          initialState: SettingsState.initial().copyWith(
+            copyWithHeaders: copyWithHeaders,
+            copyHeaderFormat: copyHeaderFormat,
+          ),
+        );
+
+        String? copiedText;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copiedText = (call.arguments as Map)['text'] as String?;
+            }
+            return null;
+          },
+        );
+
+        await tester.pumpWidget(
+          buildWidget(overrideSettingsBloc: headersSettingsBloc),
+        );
+        await tester.pump();
+
+        final copyButtons = find.byWidgetPredicate(
+          (w) => w is Icon && w.icon == FluentIcons.copy_24_regular,
+        );
+        await tester.tap(copyButtons.at(resultIndex));
+        await tester.pump();
+        return copiedText;
+      }
+
+      testWidgets('שם ספר ומקור בשורה נפרדת לפני הטקסט', (tester) async {
+        final copied = await copyWithSettings(
+          tester,
+          copyWithHeaders: 'book_and_path',
+          copyHeaderFormat: 'separate_line_before',
+        );
+        expect(copied, 'ספר א, סימן א\nטקסט בדיקה 0');
+      });
+
+      testWidgets('שם ספר בלבד, בסוגריים אחרי הטקסט', (tester) async {
+        final copied = await copyWithSettings(
+          tester,
+          copyWithHeaders: 'book_name',
+          copyHeaderFormat: 'same_line_after_brackets',
+        );
+        expect(copied, 'טקסט בדיקה 0 (ספר א)');
+      });
+
+      testWidgets('מקור שכבר פותח בשם הספר אינו מוכפל בכותרת', (tester) async {
+        // כמו תוצאה אמיתית מהמנוע: reference = "עבודה זרה, דף עג." כשהספר
+        // "עבודה זרה" — הכותרת חייבת להיות המקור המלא, בלי שם ספר כפול.
+        searchBloc.emitState(
+          searchBloc.state.copyWith(
+            results: [
+              SearchResult(
+                id: BigInt.from(1),
+                title: 'ספר א',
+                reference: 'ספר א, סימן א',
+                text: 'טקסט בדיקה 0',
+                segment: BigInt.zero,
+                isPdf: false,
+                filePath: 'book_0.txt',
+                mergedCount: 1,
+                merged: const [],
+              ),
+            ],
+          ),
+        );
+        final copied = await copyWithSettings(
+          tester,
+          copyWithHeaders: 'book_and_path',
+          copyHeaderFormat: 'same_line_after_brackets',
+        );
+        expect(copied, 'טקסט בדיקה 0 (ספר א, סימן א)');
+      });
+
+      testWidgets('ברירת המחדל none נשארת העתקת טקסט בלבד', (tester) async {
+        final copied = await copyWithSettings(
+          tester,
+          copyWithHeaders: 'none',
+          copyHeaderFormat: 'same_line_after_brackets',
+        );
+        expect(copied, 'טקסט בדיקה 0');
+      });
+    });
+
     testWidgets(
       'כאשר replaceHolyNames פעיל, הטקסט המועתק כולל החלפת שמות קודש',
       (tester) async {

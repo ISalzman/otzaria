@@ -25,6 +25,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
@@ -817,8 +818,29 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                       final plainText = utils.stripHtmlIfNeeded(
                                         rawHtml,
                                       );
+                                      // אותה התנהגות כמו העתקה ממסך הקריאה:
+                                      // המקור והכותרת מצורפים לפי ההגדרות.
+                                      // titleText כבר עבר החלפת שמות קודש.
+                                      final bookName =
+                                          settingsState.replaceHolyNames
+                                          ? utils.replaceHolyNames(result.title)
+                                          : result.title;
+                                      final textToCopy =
+                                          CopyUtils.formatTextWithHeaders(
+                                            originalText: plainText,
+                                            copyWithHeaders:
+                                                settingsState.copyWithHeaders,
+                                            copyHeaderFormat:
+                                                settingsState.copyHeaderFormat,
+                                            bookName: bookName,
+                                            currentPath:
+                                                CopyUtils.referencePath(
+                                                  bookName: bookName,
+                                                  reference: titleText,
+                                                ),
+                                          );
                                       Clipboard.setData(
-                                        ClipboardData(text: plainText),
+                                        ClipboardData(text: textToCopy),
                                       );
                                       UiSnack.show(UiSnack.textCopied);
                                     },
