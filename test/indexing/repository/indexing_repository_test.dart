@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
@@ -669,6 +670,47 @@ void main() {
       expect(result.completed, isTrue);
       expect(engine.addedDocuments, isEmpty);
       expect(provider.indexedFilePaths, isEmpty);
+    });
+
+    test('אחרי commit מוצלח מושלם חותם הסדר הקטלוגי שנכשל באתחול', () async {
+      // רגרסיה: חותם שלא נכתב באתחול הותיר את האינדקס המלא "ישן" בהפעלה
+      // הבאה, והמשתמש נדרש למחוק ולבנות הכול מחדש.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(
+        PdfBook(title: 'שבת', path: r'C:\books\שבת.pdf', id: 7),
+      );
+      final repository = IndexingRepository(provider);
+
+      await repository.indexAllBooks(
+        library,
+        includePdfBooks: false,
+        onProgress: (_, _) {},
+      );
+
+      expect(provider.ensureCatalogueOrderStampCount, 1);
+    });
+
+    test('commit שנכשל אינו נחתם — החותם מעיד על אינדקס שנשמר', () async {
+      final engine = _RecordingSearchEngine()..failCommit = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(
+        PdfBook(title: 'שבת', path: r'C:\books\שבת.pdf', id: 7),
+      );
+      final repository = IndexingRepository(provider);
+
+      await expectLater(
+        repository.indexAllBooks(
+          library,
+          includePdfBooks: false,
+          onProgress: (_, _) {},
+        ),
+        throwsA(anything),
+      );
+
+      expect(provider.ensureCatalogueOrderStampCount, 0);
     });
 
     test('fast path מחזיר מוקדם בלי להפעיל isolate ובלי callbacks', () async {
@@ -1461,6 +1503,24 @@ void main() {
 
       expect(earlierBookLateSegment, lessThan(laterBookFirstSegment));
     });
+
+    test('הסדר המרבי החוקי יוצר מזהה שנכנס ב-u64', () {
+      final u64Max = (BigInt.one << 64) - BigInt.one;
+      final documentId = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: CatalogueOrderResolver.maxCatalogueOrder,
+        ordinal: 0,
+      );
+
+      expect(documentId, u64Max - BigInt.from(0xFFFFFFFE));
+      expect(documentId, lessThanOrEqualTo(u64Max));
+    });
+
+    test('ספר שאינו במפת הספרייה נדחה לפני יצירת מזהה מסמך', () {
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final resolver = IndexingRepository.buildCatalogueOrderResolver(library);
+
+      expect(() => resolver.orderFor('uid:404'), throwsStateError);
+    });
   });
 
   group('IndexingRepository.catalogueOrderKey', () {
@@ -1684,6 +1744,16 @@ class _RecordingTantivyDataProvider implements TantivyDataProvider {
 
   @override
   bool get requiresManualReindex => false;
+
+  /// כמו האמיתי: משלים חותם סדר קטלוגי שכתיבתו נכשלה באתחול.
+  int ensureCatalogueOrderStampCount = 0;
+  bool catalogueOrderStampWriteSucceeds = true;
+
+  @override
+  bool ensureCatalogueOrderStamp() {
+    ensureCatalogueOrderStampCount++;
+    return catalogueOrderStampWriteSucceeds;
+  }
 
   @override
   Future<SearchEngine> get engine async => _engine;

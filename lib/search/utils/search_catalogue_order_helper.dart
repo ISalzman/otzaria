@@ -68,15 +68,17 @@ class SearchCatalogueOrderHelper {
         );
       }
 
-      for (final subCategory in sortedSubCategories) {
-        collectBooks(subCategory);
-      }
-
+      // ספרי הקטגוריה קודמים לתת-הקטגוריות: "מפרשים" הוא תת-קטגוריה של
+      // הספר שהוא מפרש, וסריקתו קודם הציבה את המפרשים לפני המדרש עצמו.
       final sortedBooks = category.books.toList()
         ..sort((a, b) => a.order.compareTo(b.order));
 
       for (final book in sortedBooks) {
         orderedKeys.add(keyOf(book));
+      }
+
+      for (final subCategory in sortedSubCategories) {
+        collectBooks(subCategory);
       }
     }
 
