@@ -42,11 +42,16 @@ class _LibraryDafYomiState extends State<LibraryDafYomi> {
 
   @override
   Widget build(BuildContext context) {
-    final Daf dafYomi = getDafYomi(DateTime.now());
+    // היום הלוחי בא מלוח השנה, שמעביר יום בשקיעה/צאת/ר"ת לפי העיר.
+    // DateTime.now() מתחלף בחצות, ולכן הציג כל הערב יום ודף אחרים מהלוח.
+    final calendarDay = context.select<CalendarCubit, DateTime>(
+      (cubit) => cubit.state.todayGregorianDate,
+    );
+    final Daf dafYomi = getDafYomi(calendarDay);
     final tractate = dafYomi.getMasechta();
     final dafAmud = dafYomi.getDaf();
     final dafText = '$tractate ${formatAmud(dafAmud)}';
-    final dateText = getHebrewDateFormattedAsString(DateTime.now());
+    final dateText = getHebrewDateFormattedAsString(calendarDay);
 
     final content = Row(
       mainAxisSize: MainAxisSize.min,

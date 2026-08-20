@@ -867,6 +867,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Windows installer scripts (`.iss` invariants) | `test/installer/installer_scripts_test.dart` |
 | App paths / install-mode detection | `test/core/app_paths_test.dart` |
 | Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart`, `…library_browser_flat_tree_test.dart` |
+| תאריך עברי + דף יומי בסרגל הספרייה (היום הלוחי) | `test/library/view/library_daf_yomi_test.dart` |
 | Empty library screen | `test/empty_library/empty_library_screen_test.dart` |
 | PDF isolate / rasterizer | `test/printing/pdf_isolate_test.dart`, `…pdf_text_rasterizer_test.dart` |
 | PDF in-book search highlight pattern | `test/pdf_book/pdf_search_highlight_pattern_test.dart` |
