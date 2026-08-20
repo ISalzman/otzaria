@@ -21,6 +21,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/view/sibling_commentaries_menu.dart';
+import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -204,6 +205,21 @@ bool hasCommentariesForLine({
     }
     return lastTitle != null && activeCommentatorsSet.contains(lastTitle!);
   });
+}
+
+@visibleForTesting
+({String text, Link? link})? commentarySelectionForCopy({
+  required SelectionSyncController? controller,
+  required Object mainTextOwner,
+}) {
+  final text = controller?.activeSelectionText;
+  if (controller == null ||
+      identical(controller.activeOwner, mainTextOwner) ||
+      text == null ||
+      text.trim().isEmpty) {
+    return null;
+  }
+  return (text: text, link: controller.activeSelectionLink);
 }
 
 /// מעבד טקסט גולמי לפי הגדרות התצוגה (טעמים/ניקוד/פיסוק), כך שפעולת
@@ -1439,6 +1455,21 @@ class _CombinedViewState extends State<CombinedView> {
     debugPrint('_currentSelectedIndex: ${_currentSelectedIndex.value}');
 
     if (plainText == null || plainText.trim().isEmpty) {
+      final controller = widget.selectionSyncController;
+      final commentarySelection = commentarySelectionForCopy(
+        controller: controller,
+        mainTextOwner: _selectionOwner,
+      );
+      if (commentarySelection != null) {
+        final settingsState = context.read<SettingsBloc>().state;
+        await ContextMenuUtils.copyFormattedText(
+          context: context,
+          savedSelectedText: commentarySelection.text,
+          fontSize: settingsState.commentatorsFontSize,
+          link: commentarySelection.link,
+        );
+        return;
+      }
       UiSnack.show(TextBookMessages.selectTextToCopy);
       return;
     }
@@ -1611,7 +1642,10 @@ class _CombinedViewState extends State<CombinedView> {
                       _selectionStartColumn = null;
                       return;
                     }
-                    widget.selectionSyncController?.activate(_selectionOwner);
+                    widget.selectionSyncController?.activate(
+                      _selectionOwner,
+                      selectionText: plain,
+                    );
                     // כניסה למצב בחירה כשיש טקסט נבחר
                     if (!_selectionManager.isInSelectionMode) {
                       // שימוש באינדקס העליון הנראה במקום 0

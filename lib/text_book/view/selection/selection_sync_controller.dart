@@ -1,18 +1,30 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/models/links.dart';
 
 /// מסנכרן בחירת טקסט בין כמה אזורי SelectionArea באותו מסך: רק אזור אחד
 /// מחזיק בחירה בכל רגע, והשאר מנקים את שלהם כשהבעלות עוברת.
 class SelectionSyncController extends ChangeNotifier {
   Object? _activeOwner;
+  String? _activeSelectionText;
+  Link? _activeSelectionLink;
 
   Object? get activeOwner => _activeOwner;
+  String? get activeSelectionText => _activeSelectionText;
+  Link? get activeSelectionLink => _activeSelectionLink;
 
-  void activate(Object owner) {
-    if (identical(_activeOwner, owner)) {
+  void activate(
+    Object owner, {
+    String? selectionText,
+    Link? selectionLink,
+  }) {
+    final changedOwner = !identical(_activeOwner, owner);
+    _activeOwner = owner;
+    _activeSelectionText = selectionText;
+    _activeSelectionLink = selectionLink;
+    if (!changedOwner) {
       return;
     }
 
-    _activeOwner = owner;
     notifyListeners();
   }
 
@@ -22,6 +34,8 @@ class SelectionSyncController extends ChangeNotifier {
     }
 
     _activeOwner = null;
+    _activeSelectionText = null;
+    _activeSelectionLink = null;
     notifyListeners();
   }
 }

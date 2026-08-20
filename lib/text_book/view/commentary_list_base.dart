@@ -964,6 +964,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _searchUpdateDebounce?.cancel();
     _searchComputeDebounce?.cancel();
     _itemPositionsListener.itemPositions.removeListener(_updateLastScrollIndex);
+    widget.selectionSyncController?.clear(_selectionOwner);
     widget.selectionSyncController?.removeListener(
       _handleExternalSelectionChange,
     );
@@ -1376,7 +1377,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (rtlSelectionPriming) return;
     if (text != null && text.trim().isNotEmpty) {
       _savedSelectedText.value = text;
-      widget.selectionSyncController?.activate(_selectionOwner);
+      widget.selectionSyncController?.activate(
+        _selectionOwner,
+        selectionText: _restoreLineBreaks(text),
+        selectionLink: _selectionSpansMultipleItems()
+            ? null
+            : _lastSelectedLink.value,
+      );
     } else {
       _savedSelectedText.value = null;
       _lastSelectedLink.value = null;
@@ -1586,6 +1593,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     state: state,
                     reportLineIndex:
                         state.selectedIndex ?? currentIndexes.first,
+                    selectionSyncController: widget.selectionSyncController,
                   );
                 } else if (selectedCommentators.isEmpty) {
                   notesWidget = Center(
@@ -2490,6 +2498,7 @@ class _NotesCommentaryWidget extends StatefulWidget {
 
   /// אינדקס השורה שאליה מיוחסות ההערות המוצגות — לדיווח הטעות.
   final int reportLineIndex;
+  final SelectionSyncController? selectionSyncController;
 
   const _NotesCommentaryWidget({
     required this.notes,
@@ -2498,6 +2507,7 @@ class _NotesCommentaryWidget extends StatefulWidget {
     required this.openBookCallback,
     required this.state,
     required this.reportLineIndex,
+    this.selectionSyncController,
   });
 
   @override
@@ -2506,6 +2516,25 @@ class _NotesCommentaryWidget extends StatefulWidget {
 
 class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
   String? _selectedText;
+  final Object _selectionOwner = Object();
+
+  void _onNotesSelectionChanged(String? text) {
+    _selectedText = text;
+    if (text != null && text.trim().isNotEmpty) {
+      widget.selectionSyncController?.activate(
+        _selectionOwner,
+        selectionText: text,
+      );
+    } else {
+      widget.selectionSyncController?.clear(_selectionOwner);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.selectionSyncController?.clear(_selectionOwner);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2519,7 +2548,7 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
             // ביטול תפריט ברירת המחדל של Flutter — נשתמש ב-AppContextMenuRegion.
             contextMenuBuilder: (context, _) => const SizedBox.shrink(),
             onSelectionChanged: (selection) =>
-                _selectedText = selection?.plainText,
+                _onNotesSelectionChanged(selection?.plainText),
             child: AppContextMenuRegion(
               // לחיצה ימנית על טקסט מסומן לא תשחרר את הבחירה (ברירת המחדל של
               // SelectableRegion ב-Windows); לחיצה מחוץ לבחירה מבטלת כרגיל.

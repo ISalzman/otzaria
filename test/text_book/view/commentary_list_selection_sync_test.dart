@@ -232,6 +232,52 @@ void main() {
       reason: 'בלי טקסט נבחר אין להעתיק כלום — ובוודאי לא מחרוזת ריקה',
     );
   });
+
+  testWidgets('בחירת מפרש מתפרסמת ב-controller', (tester) async {
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+
+    await _pump(
+      tester,
+      textBookBloc: textBookBloc,
+      settingsBloc: settingsBloc,
+      controller: controller,
+    );
+
+    _regionState(tester).selectAll();
+    await _pumpUntil(
+      tester,
+      () => controller.activeSelectionText?.trim().isNotEmpty == true,
+    );
+
+    expect(controller.activeOwner, isNotNull);
+    expect(controller.activeSelectionText?.trim(), isNotEmpty);
+  });
+
+  testWidgets('פירוק חלונית מפרשים מנקה בחירה שפורסמה', (tester) async {
+    final controller = SelectionSyncController();
+    addTearDown(controller.dispose);
+
+    await _pump(
+      tester,
+      textBookBloc: textBookBloc,
+      settingsBloc: settingsBloc,
+      controller: controller,
+    );
+
+    _regionState(tester).selectAll();
+    await _pumpUntil(
+      tester,
+      () => controller.activeSelectionText?.trim().isNotEmpty == true,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(controller.activeOwner, isNull);
+    expect(controller.activeSelectionText, isNull);
+    expect(controller.activeSelectionLink, isNull);
+  });
 }
 
 Finder _selectionAreaFinder() => find.descendant(

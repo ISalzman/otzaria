@@ -306,6 +306,72 @@ void main() {
     );
   });
 
+  group('commentarySelectionForCopy', () {
+    test('מחזירה null ללא controller', () {
+      expect(
+        commentarySelectionForCopy(
+          controller: null,
+          mainTextOwner: Object(),
+        ),
+        isNull,
+      );
+    });
+
+    test('מחזירה null לבחירה ריקה', () {
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+      controller.activate(Object(), selectionText: '  ');
+
+      expect(
+        commentarySelectionForCopy(
+          controller: controller,
+          mainTextOwner: Object(),
+        ),
+        isNull,
+      );
+    });
+
+    test('אינה נופלת לבחירה ששייכת לטקסט הראשי', () {
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+      final mainTextOwner = Object();
+      controller.activate(mainTextOwner, selectionText: 'בחירת טקסט ראשי');
+
+      expect(
+        commentarySelectionForCopy(
+          controller: controller,
+          mainTextOwner: mainTextOwner,
+        ),
+        isNull,
+      );
+    });
+
+    test('מחזירה בחירת מפרש ואת הקישור שלה', () {
+      final controller = SelectionSyncController();
+      addTearDown(controller.dispose);
+      final link = Link(
+        heRef: 'בראשית א א',
+        index1: 1,
+        path2: 'רש"י.txt',
+        index2: 1,
+        connectionType: 'COMMENTARY',
+      );
+      controller.activate(
+        Object(),
+        selectionText: 'בחירת מפרש',
+        selectionLink: link,
+      );
+
+      final selection = commentarySelectionForCopy(
+        controller: controller,
+        mainTextOwner: Object(),
+      );
+
+      expect(selection?.text, 'בחירת מפרש');
+      expect(selection?.link, same(link));
+    });
+  });
+
   group('אזור הבחירה של התצוגה המשולבת (issue #674)', () {
     Future<SelectionSyncController> pumpCombinedView(
       WidgetTester tester,

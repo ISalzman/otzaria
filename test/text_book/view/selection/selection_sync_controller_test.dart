@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 
 void main() {
@@ -40,6 +41,57 @@ void main() {
       expect(notifications, 1);
     });
 
+    test('שומר את הטקסט והקישור של הבחירה הפעילה', () {
+      final controller = SelectionSyncController();
+      final owner = Object();
+      final link = Link(
+        heRef: 'בראשית א א',
+        index1: 1,
+        path2: 'רש"י.txt',
+        index2: 1,
+        connectionType: 'COMMENTARY',
+      );
+
+      controller.activate(
+        owner,
+        selectionText: 'טקסט מפרש נבחר',
+        selectionLink: link,
+      );
+
+      expect(controller.activeOwner, same(owner));
+      expect(controller.activeSelectionText, 'טקסט מפרש נבחר');
+      expect(controller.activeSelectionLink, same(link));
+    });
+
+    test('מעדכן את הטקסט של אותו בעלים בלי notify נוסף', () {
+      final controller = SelectionSyncController();
+      final owner = Object();
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.activate(owner, selectionText: 'בחירה ראשונה');
+      controller.activate(owner, selectionText: 'בחירה מעודכנת');
+
+      expect(controller.activeSelectionText, 'בחירה מעודכנת');
+      expect(notifications, 1);
+    });
+
+    test('מעבר לבעלים ללא טקסט אינו משאיר בחירה ישנה', () {
+      final controller = SelectionSyncController();
+      final commentaryOwner = Object();
+      final mainTextOwner = Object();
+
+      controller.activate(
+        commentaryOwner,
+        selectionText: 'בחירת מפרש ישנה',
+      );
+      controller.activate(mainTextOwner);
+
+      expect(controller.activeOwner, same(mainTextOwner));
+      expect(controller.activeSelectionText, isNull);
+      expect(controller.activeSelectionLink, isNull);
+    });
+
     test('מתעלם מניקוי של אזור שכבר איבד בעלות', () {
       final controller = SelectionSyncController();
       final firstOwner = Object();
@@ -72,6 +124,18 @@ void main() {
 
       expect(controller.activeOwner, isNull);
       expect(notifications, 2);
+    });
+
+    test('ניקוי הבעלים הפעיל מנקה גם את נתוני הבחירה', () {
+      final controller = SelectionSyncController();
+      final owner = Object();
+
+      controller.activate(owner, selectionText: 'טקסט שנבחר');
+      controller.clear(owner);
+
+      expect(controller.activeOwner, isNull);
+      expect(controller.activeSelectionText, isNull);
+      expect(controller.activeSelectionLink, isNull);
     });
 
     test('אחרי ניקוי בעלות, activeOwner הוא null במופע ההודעה', () {
