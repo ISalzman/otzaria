@@ -780,6 +780,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     return explicitTitle?.trim().isEmpty ?? true ? null : explicitTitle!.trim();
   }
 
+  /// תקרת-זמן לשליפת ה-TOC של רזולוציית הכותרת: הרזולוציה היא best-effort
+  /// (null ⇒ טאב חדש), ושליפה תקועה חוסמת לצמיתות כל פתיחת ספר (issue #853).
+  @visibleForTesting
+  static Duration locationTitleResolveTimeout = const Duration(seconds: 5);
+
   Future<String?> _resolveTextTabLocationTitle(TextBookTab tab) async {
     final currentTitle = tab.currentTitle.value.trim();
     if (currentTitle.isNotEmpty) {
@@ -787,7 +792,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
 
     try {
-      final ref = await refFromIndex(tab.index, tab.book.tableOfContents);
+      final ref = await refFromIndex(
+        tab.index,
+        tab.book.tableOfContents,
+      ).timeout(locationTitleResolveTimeout);
       return ref.trim().isEmpty ? null : ref;
     } catch (_) {
       return null;

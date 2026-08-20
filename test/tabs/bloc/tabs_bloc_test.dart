@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter_test/flutter_test.dart';
@@ -283,6 +285,31 @@ void main() {
 
       expect(bloc.state.tabs, hasLength(2));
       expect(bloc.state.currentTabIndex, 1);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('שליפת TOC תקועה אינה חוסמת את פתיחת הספר (issue #853)', () async {
+      final previousTimeout = TabsBloc.locationTitleResolveTimeout;
+      TabsBloc.locationTitleResolveTimeout = const Duration(milliseconds: 50);
+      addTearDown(
+        () => TabsBloc.locationTitleResolveTimeout = previousTimeout,
+      );
+
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final tab = TextBookTab(
+        book: _HangingTocBook(title: 'ספר תקוע', categoryId: 1),
+        index: 3,
+      );
+
+      // בלי targetTitle וללא currentTitle — הרזולוציה נופלת לשליפת ה-TOC,
+      // שכאן לעולם אינה מסתיימת; בלי תקרת-הזמן הטאב לא היה נפתח לעולם.
+      bloc.add(OpenOrFocusTab(tab));
+      await bloc.stream
+          .firstWhere((s) => s.tabs.length == 1)
+          .timeout(const Duration(seconds: 5));
+
+      expect(bloc.state.tabs.single, same(tab));
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
@@ -2110,6 +2137,15 @@ class _RecordingTextBookBloc extends Bloc<TextBookEvent, TextBookState>
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// ספר ששליפת תוכן העניינים שלו לעולם אינה מסתיימת — מדמה שכבת DB תקועה.
+class _HangingTocBook extends TextBook {
+  _HangingTocBook({required super.title, super.categoryId});
+
+  @override
+  Future<List<TocEntry>> get tableOfContents =>
+      Completer<List<TocEntry>>().future;
 }
 
 TextBookTab _createTextTab(String title, {int index = 0, int? categoryId}) {
