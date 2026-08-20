@@ -431,29 +431,36 @@ class _PluginTabPageState extends State<PluginTabPage> {
       owner: widget.instanceId,
     );
     _creationWatchdog?.cancel();
-    _adapter.dispose();
-    // ביטול הרישום רק אם הדף הזה עדיין הבעלים. עדכון תוסף משנה את ה-key,
-    // ו-initState של הדף החדש רץ *לפני* ה-dispose של הישן — בלי הבדיקה הישן
-    // היה מוחק את הרישום של החדש ומשתיק אותו.
-    if (PluginRuntimeDispatcher.instance.ownsForegroundController(
-      widget.plugin.pluginId,
-      webViewController,
-      instanceId: widget.instanceId,
-    )) {
-      PluginPageLauncher.instance.markPageClosed(
-        widget.plugin.pluginId,
-        instanceId: widget.instanceId,
+    final pluginId = widget.plugin.pluginId;
+    final instanceId = widget.instanceId;
+    final controller = webViewController;
+    // העץ נעול בזמן dispose וניקוי הרישומים מודיע ל-ListenableBuilders
+    // (הדגשות, סרגל כלים) — לכן נדחה למיקרוטסק, אחרי שחרור הנעילה.
+    scheduleMicrotask(() {
+      _adapter.dispose();
+      // ביטול הרישום רק אם הדף הזה עדיין הבעלים. עדכון תוסף משנה את ה-key,
+      // ו-initState של הדף החדש רץ *לפני* ה-dispose של הישן — בלי הבדיקה
+      // הישן היה מוחק את הרישום של החדש ומשתיק אותו.
+      if (PluginRuntimeDispatcher.instance.ownsForegroundController(
+        pluginId,
+        controller,
+        instanceId: instanceId,
+      )) {
+        PluginPageLauncher.instance.markPageClosed(
+          pluginId,
+          instanceId: instanceId,
+        );
+        PluginRuntimeDispatcher.instance.unregisterController(
+          pluginId,
+          instanceId: instanceId,
+        );
+      }
+      PluginRuntimeDispatcher.instance.unregisterReloadCallback(
+        pluginId,
+        instanceId: instanceId,
+        token: this,
       );
-      PluginRuntimeDispatcher.instance.unregisterController(
-        widget.plugin.pluginId,
-        instanceId: widget.instanceId,
-      );
-    }
-    PluginRuntimeDispatcher.instance.unregisterReloadCallback(
-      widget.plugin.pluginId,
-      instanceId: widget.instanceId,
-      token: this,
-    );
+    });
     super.dispose();
   }
 

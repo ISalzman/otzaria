@@ -664,19 +664,25 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
 
   @override
   void dispose() {
-    _adapter.dispose();
-    PluginLazyActivationService.instance.onBackgroundInstanceClosed(
-      widget.plugin.pluginId,
-      generation: widget.activationGeneration,
-    );
-    PluginRuntimeDispatcher.instance.unregisterController(
-      widget.plugin.pluginId,
-      instanceId: PluginInstanceIds.background,
-    );
-    PluginRuntimeDispatcher.instance.unregisterReloadCallback(
-      widget.plugin.pluginId,
-      instanceId: PluginInstanceIds.background,
-    );
+    final pluginId = widget.plugin.pluginId;
+    final generation = widget.activationGeneration;
+    // העץ נעול בזמן dispose וניקוי הרישומים מודיע ל-ListenableBuilders
+    // (הדגשות, סרגל כלים) — לכן נדחה למיקרוטסק, אחרי שחרור הנעילה.
+    scheduleMicrotask(() {
+      _adapter.dispose();
+      PluginLazyActivationService.instance.onBackgroundInstanceClosed(
+        pluginId,
+        generation: generation,
+      );
+      PluginRuntimeDispatcher.instance.unregisterController(
+        pluginId,
+        instanceId: PluginInstanceIds.background,
+      );
+      PluginRuntimeDispatcher.instance.unregisterReloadCallback(
+        pluginId,
+        instanceId: PluginInstanceIds.background,
+      );
+    });
     super.dispose();
   }
 
