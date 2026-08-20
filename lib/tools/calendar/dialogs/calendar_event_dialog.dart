@@ -6,6 +6,7 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:otzaria/core/messages/tools_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
@@ -379,7 +380,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
       return false;
     }
     if (minDate != null && parsed.isBefore(minDate)) {
-      UiSnack.showError('תאריך הסיום חייב להיות אחרי תאריך ההתחלה.');
+      UiSnack.showError(ToolsMessages.eventEndBeforeStart);
       return false;
     }
     onPicked(parsed);
@@ -640,7 +641,7 @@ class _CalendarEventDialogState extends State<CalendarEventDialog> {
         _selectedEndDate!.day,
       );
       if (end.isBefore(start)) {
-        UiSnack.showError('תאריך הסיום חייב להיות אחרי תאריך ההתחלה.');
+        UiSnack.showError(ToolsMessages.eventEndBeforeStart);
         return;
       }
       endDate = isRecurring || end.isAfter(start) ? end : null;
