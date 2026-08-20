@@ -128,6 +128,56 @@ Future<void> main() async {
     });
   });
 
+  group('TextRendererService - טקסט תחתי (issue #842)', () {
+    const settings = RenderSettings();
+
+    test('sub מספרי מומר לספרות-תחתיות יוניקוד (טקסט טהור, נכלל בבחירה)', () {
+      const line = 'מים H<sub>2</sub>O וגם A<sub>14</sub> סוף';
+
+      final out = TextRendererService.processText(line, settings);
+
+      expect(out, isNot(contains('<sub')));
+      expect(out, contains('₂'));
+      expect(out, contains('₁₄'));
+    });
+
+    test('sub עברי נפלט כ-span מוקטן — לא WidgetSpan ששובר שורה ובחירה', () {
+      const line = 'מילה<sub>הערה</sub> המשך';
+
+      final out = TextRendererService.processText(line, settings);
+
+      expect(out, isNot(contains('<sub')));
+      expect(out, contains('<span class="subscript-text">'));
+      expect(out, contains('הערה'));
+    });
+
+    test('תוכן ה-sub עטוף בסימני בידוד דו-כיווניים', () {
+      const line = 'מילה<sub>3</sub> עוד';
+
+      final out = TextRendererService.processText(line, settings);
+
+      expect(out, contains('\u2066₃\u2069'));
+    });
+
+    test('sub ריק מוסר לחלוטין', () {
+      const line = 'טקסט<sub> </sub> המשך';
+
+      final out = TextRendererService.processText(line, settings);
+
+      expect(out, isNot(contains('<sub')));
+      expect(out, isNot(contains('subscript-text')));
+    });
+
+    test('sub עם attributes מטופל אף הוא', () {
+      const line = 'טקסט<sub class="x">ב</sub> המשך';
+
+      final out = TextRendererService.processText(line, settings);
+
+      expect(out, isNot(contains('<sub')));
+      expect(out, contains('<span class="subscript-text">'));
+    });
+  });
+
   group('TextRendererService - מטמון render', () {
     setUp(TextRendererService.clearRenderCacheForTesting);
 

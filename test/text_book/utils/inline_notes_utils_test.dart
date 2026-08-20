@@ -14,6 +14,21 @@ void main() {
       expect(result, contains('>א</a><i class="footnote">תוכן</i>'));
     });
 
+    test('מרקר מספרי הופך לספרות-עיליות בתוך קישור מוגבה', () {
+      const line =
+          'גוף<sup class="footnote-marker">3</sup>'
+          '<i class="footnote">תוכן</i>';
+
+      final result = addInlineNotePreviewLinks(line, lineIndex: 7);
+
+      final lri = String.fromCharCode(0x2066);
+      final pdi = String.fromCharCode(0x2069);
+      expect(result, contains('class="book-note-marker-sup"'));
+      expect(result, contains('href="otzaria://book-note?line=7&note=0"'));
+      expect(result, contains('>$lri³$pdi</a>'));
+      expect(result, isNot(contains('<sup')));
+    });
+
     test('מחלץ את ההערה לפי כתובת הריחוף', () {
       const content = [
         'גוף<sup class="footnote-marker">א</sup>'

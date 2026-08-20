@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 /// ממפה מרחק גרירה מצטבר ל-progress של דפדוף. הקצה החופשי חוצה את הכפולה
 /// כולה (פעמיים רוחב עמוד) בדפדוף מלא.
@@ -29,6 +30,33 @@ bool shouldCommitPageTurn({
 /// בבת אחת כשהתצוגה החיה מחליפה את האנימציה, וזה נראה כקפיצה.
 double pageTurnDecorationFade(double progress) =>
     sin(progress.clamp(0.0, 1.0) * pi).clamp(0.0, 1.0).toDouble();
+
+/// חותך רצועת ציור לתחום שהצילום מכסה, וגוזר מהמקור את אותו חלק יחסי.
+///
+/// כשהכפולה גולשת מהתצוגה, חיתוך המקור לבדו מותח את התמונה למלוא היעד —
+/// הדף המתהפך נראה מתוח וקופץ חזרה בסיום האנימציה.
+({Rect dest, Rect source})? clampStripToSnapshotCoverage({
+  required Rect dest,
+  required Rect source,
+  required Rect coverage,
+}) {
+  if (dest.width <= 0 || dest.height <= 0) return null;
+  final visible = dest.intersect(coverage);
+  if (visible.width <= 0 || visible.height <= 0) return null;
+  if (visible == dest) return (dest: dest, source: source);
+
+  double fx(double x) => (x - dest.left) / dest.width;
+  double fy(double y) => (y - dest.top) / dest.height;
+  return (
+    dest: visible,
+    source: Rect.fromLTRB(
+      source.left + fx(visible.left) * source.width,
+      source.top + fy(visible.top) * source.height,
+      source.left + fx(visible.right) * source.width,
+      source.top + fy(visible.bottom) * source.height,
+    ),
+  );
+}
 
 /// רצועה אנכית אחת של הדף המתהפך, אחרי הקרנה למסך.
 class PageTurnStrip {

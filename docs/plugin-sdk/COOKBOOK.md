@@ -8,6 +8,7 @@
 2. [אייקונים מאוצריא](#2-אייקונים-מאוצריא)
 3. [חלונית הגדרות בסגנון אוצריא](#3-חלונית-הגדרות-בסגנון-אוצריא)
 4. [סרגל כותרת התוסף (Top Bar)](#4-סרגל-כותרת-התוסף-top-bar)
+5. [הצגת מפרשים לפסוק הנוכחי](#5-הצגת-מפרשים-לפסוק-הנוכחי)
 
 ---
 
@@ -562,6 +563,61 @@ body { overflow: hidden; }          /* הגלילה בתוכן, לא בעמוד 
 | כותרת | 16px, `w600`, `onSurface` | `AppTopBar.titleStyle` |
 | כותרת משנה / מחבר | 12px, `w400`, `onSurfaceVariant` | `AppTopBar.subtitleStyle` |
 | pill ניווט פעיל | `secondaryContainer` / `onSecondaryContainer` | סרגל הניווט הצדי |
+
+---
+
+## 5. הצגת מפרשים לפסוק הנוכחי
+
+שלוש קריאות: איפה המשתמש עומד → אילו קישורים יוצאים משם → מה כתוב בצד השני.
+
+**הרשאות:** `reader.open`, `library.links.read`, `library.content.read`.
+
+```javascript
+async function commentariesForCurrentLine() {
+  // 1. המיקום הנוכחי בקורא. currentIndex הוא מספר שורה 0-based.
+  const { data: loc } = await Otzaria.call('reader.getCurrentRef');
+  if (!loc || loc.currentBookId == null) return [];
+
+  // 2. הקישורים על השורה הזו. החלון מוגבל ל-200 שורות; כאן די בשורה אחת.
+  const { data: links } = await Otzaria.call('library.getLinks', {
+    bookId: loc.currentBookId,
+    startLine: loc.currentIndex,
+    endLine: loc.currentIndex,
+  });
+
+  const commentaries = links.links.filter((l) => l.isCommentary);
+  if (commentaries.length === 0) return [];
+
+  // 3. התוכן — עד 25 פריטים בקריאה. מעבירים את שדות היעד כמות שהם.
+  const batch = commentaries.slice(0, 25);
+  const { data: contents } = await Otzaria.call('library.getLinkContent', {
+    links: batch.map((l) => ({
+      targetTitle: l.targetTitle,
+      targetLine: l.targetLine,
+      targetLineEnd: l.targetLineEnd,
+      targetCategoryId: l.targetCategoryId,
+      targetIsUserBook: l.targetIsUserBook,
+    })),
+  });
+
+  // items חוזר באותו סדר של הקלט.
+  return batch.map((link, i) => ({
+    title: link.targetTitle,
+    ref: link.targetHeRef,
+    html: contents.items[i].content ?? null,
+  }));
+}
+```
+
+### המלכודים
+
+| מלכוד | מה קורה | הפתרון |
+|-------|---------|--------|
+| השוואת שם ספר מול ליטרל `'רש"י על בראשית'` | שמות הספרים במסד בגרשיים עבריים (`״` U+05F4) — ההשוואה נכשלת בשקט | להשתמש במחרוזת שהתקבלה מה-API, לא בליטרל שהוקלד |
+| בקשת חלון גדול "ליתר ביטחון" | מעל 200 שורות מוחזר `error.invalid_params` | לבקש בדיוק את השורות שמוצגות |
+| קריאת `getLinks` לכל הספר כדי לדעת מי המפרשים | תשובה כבדה שנחתכת ב-2,000 רשומות | `library.getLinkTargetsSummary` — כל ספרי היעד בקריאה אחת |
+| שליחת יותר מ-25 פריטים ל-`getLinkContent` | `error.invalid_params` | לחלק לאצוות של 25 |
+| `targetCategoryId` שנשמט | ספר אישי ששמו זהה לרשמי עלול להחזיר את התוכן של הספר האחר | להעביר את כל שדות היעד מ-`getLinks` כמות שהם |
 
 ---
 

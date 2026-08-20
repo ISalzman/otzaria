@@ -49,37 +49,40 @@ void main() {
     },
   );
 
-  test('matchPages מועברים לפותח כ-ExternalBookMatches ממוין וללא כפולים', () async {
-    final opener = _BookOpener();
-    final action = _compiler().compileResolved(
-      {
-        'type': 'reader.openBook',
-        'args': {
-          'identity': {'id': 10, 'type': 'pdf'},
-          'index': 7,
-          'searchQuery': 'שבת',
-          'matchPages': [12, 8, 12, 30],
-          'matchedTerms': ['שבת'],
+  test(
+    'matchPages מועברים לפותח כ-ExternalBookMatches ממוין וללא כפולים',
+    () async {
+      final opener = _BookOpener();
+      final action = _compiler().compileResolved(
+        {
+          'type': 'reader.openBook',
+          'args': {
+            'identity': {'id': 10, 'type': 'pdf'},
+            'index': 7,
+            'searchQuery': 'שבת',
+            'matchPages': [12, 8, 12, 30],
+            'matchedTerms': ['שבת'],
+          },
         },
-      },
-      contextSignature: 'book-7',
-      programGeneration: 7,
-    );
+        contextSignature: 'book-7',
+        programGeneration: 7,
+      );
 
-    await DeclarativeHostActionExecutor(bookOpener: opener).execute(
-      action: action,
-      plugin: _plugin(),
-      grantedPermissions: const {'reader.open'},
-      currentContextSignature: 'book-7',
-      currentProgramGeneration: 7,
-    );
+      await DeclarativeHostActionExecutor(bookOpener: opener).execute(
+        action: action,
+        plugin: _plugin(),
+        grantedPermissions: const {'reader.open'},
+        currentContextSignature: 'book-7',
+        currentProgramGeneration: 7,
+      );
 
-    final matches = opener.externalMatches.single;
-    expect(matches, isNotNull);
-    expect(matches!.pages, [8, 12, 30]);
-    expect(matches.matchedTerms, ['שבת']);
-    expect(matches.query, 'שבת');
-  });
+      final matches = opener.externalMatches.single;
+      expect(matches, isNotNull);
+      expect(matches!.pages, [8, 12, 30]);
+      expect(matches.matchedTerms, ['שבת']);
+      expect(matches.query, 'שבת');
+    },
+  );
 
   test('matchPages עם עמוד לא חיובי נדחה בזמן קומפילציה', () {
     expect(
@@ -180,6 +183,169 @@ void main() {
     );
     expect(opener.identities, isEmpty);
   });
+
+  group('storage.set / storage.remove', () {
+    test(
+      'מקמפל ומבצע storage.set — הכתיבה מגיעה לכותב עם מזהה התוסף',
+      () async {
+        final writer = _StorageWriter();
+
+        final done =
+            await DeclarativeHostActionExecutor(
+              bookOpener: _BookOpener(),
+              storageWriter: writer,
+            ).execute(
+              action: _compileStorageAction(),
+              plugin: _plugin(),
+              grantedPermissions: const {'plugin.storage.write'},
+              currentContextSignature: 'book-7',
+              currentProgramGeneration: 7,
+            );
+
+        expect(done, isTrue);
+        final write = writer.sets.single;
+        expect(write.pluginId, 'test.declarative.plugin');
+        expect(write.key, 'savedBooks');
+        expect(write.value, {'id': 10});
+        expect(writer.removes, isEmpty);
+      },
+    );
+
+    test('storage.remove מוחק לפי key בלבד', () async {
+      final writer = _StorageWriter();
+
+      await DeclarativeHostActionExecutor(
+        bookOpener: _BookOpener(),
+        storageWriter: writer,
+      ).execute(
+        action: _storageCompiler().compileResolved(
+          {
+            'type': 'storage.remove',
+            'args': {'key': 'savedBooks'},
+          },
+          contextSignature: 'book-7',
+          programGeneration: 7,
+        ),
+        plugin: _plugin(),
+        grantedPermissions: const {'plugin.storage.write'},
+        currentContextSignature: 'book-7',
+        currentProgramGeneration: 7,
+      );
+
+      expect(writer.removes.single, (
+        pluginId: 'test.declarative.plugin',
+        key: 'savedBooks',
+      ));
+      expect(writer.sets, isEmpty);
+    });
+
+    test('הרשאה שלא הוצהרה במניפסט נדחית בקומפילציה', () {
+      expect(
+        () => _compiler().compileResolved(
+          {
+            'type': 'storage.set',
+            'args': {'key': 'k', 'value': 1},
+          },
+          contextSignature: 'book-7',
+          programGeneration: 7,
+        ),
+        _throwsProgramError('declarative.permission_not_declared'),
+      );
+    });
+
+    test('הרשאה שנשללה חוסמת את הכתיבה בזמן הלחיצה', () async {
+      final writer = _StorageWriter();
+
+      await expectLater(
+        DeclarativeHostActionExecutor(
+          bookOpener: _BookOpener(),
+          storageWriter: writer,
+        ).execute(
+          action: _compileStorageAction(),
+          plugin: _plugin(),
+          grantedPermissions: const {},
+          currentContextSignature: 'book-7',
+          currentProgramGeneration: 7,
+        ),
+        _throwsProgramError('declarative.permission_denied'),
+      );
+      expect(writer.sets, isEmpty);
+    });
+
+    test('חתימת הקשר ישנה חוסמת את הכתיבה', () async {
+      final writer = _StorageWriter();
+
+      await expectLater(
+        DeclarativeHostActionExecutor(
+          bookOpener: _BookOpener(),
+          storageWriter: writer,
+        ).execute(
+          action: _compileStorageAction(),
+          plugin: _plugin(),
+          grantedPermissions: const {'plugin.storage.write'},
+          currentContextSignature: 'book-8',
+          currentProgramGeneration: 7,
+        ),
+        _throwsProgramError('declarative.stale_action'),
+      );
+      expect(writer.sets, isEmpty);
+    });
+
+    test('key חסר, ארוך מדי או עם תווי בקרה נדחה בקומפילציה', () {
+      expect(
+        () => _compileStorageAction(args: {'value': 1}),
+        _throwsProgramError('declarative.invalid_args'),
+      );
+      expect(
+        () => _compileStorageAction(args: {'key': 'k' * 129, 'value': 1}),
+        _throwsProgramError('declarative.invalid_args'),
+      );
+      expect(
+        () => _compileStorageAction(args: {'key': 'a\nb', 'value': 1}),
+        _throwsProgramError('declarative.invalid_args'),
+      );
+    });
+
+    test('value חסר או null נדחה בקומפילציה', () {
+      expect(
+        () => _compileStorageAction(args: {'key': 'k'}),
+        _throwsProgramError('declarative.invalid_args'),
+      );
+      expect(
+        () => _compileStorageAction(args: {'key': 'k', 'value': null}),
+        _throwsProgramError('declarative.invalid_args'),
+      );
+    });
+
+    test('value גדול או עמוק מדי נדחה בקומפילציה', () {
+      expect(
+        () => _compileStorageAction(
+          args: {
+            'key': 'k',
+            'value': List.generate(300, (i) => i),
+          },
+        ),
+        _throwsProgramError('declarative.value_too_large'),
+      );
+      Object deep = 1;
+      for (var i = 0; i < 12; i++) {
+        deep = [deep];
+      }
+      expect(
+        () => _compileStorageAction(args: {'key': 'k', 'value': deep}),
+        _throwsProgramError('declarative.value_too_large'),
+      );
+    });
+
+    test('namespace אינו ארגומנט מוכר ונדחה בקומפילציה', () {
+      expect(
+        () => _compileStorageAction(
+          args: {'key': 'k', 'value': 1, 'namespace': 'prefs'},
+        ),
+        _throwsProgramError('declarative.unknown_field'),
+      );
+    });
+  });
 }
 
 class _BookOpener implements DeclarativeBookOpener {
@@ -202,8 +368,43 @@ class _BookOpener implements DeclarativeBookOpener {
   }
 }
 
+class _StorageWriter implements DeclarativeStorageWriter {
+  final sets = <({String pluginId, String key, Object? value})>[];
+  final removes = <({String pluginId, String key})>[];
+
+  @override
+  Future<void> set(String pluginId, String key, Object? value) async {
+    sets.add((pluginId: pluginId, key: key, value: value));
+  }
+
+  @override
+  Future<void> remove(String pluginId, String key) async {
+    removes.add((pluginId: pluginId, key: key));
+  }
+}
+
 DeclarativeActionCompiler _compiler() => const DeclarativeActionCompiler(
   declaredPermissions: {'reader.open'},
+);
+
+DeclarativeActionCompiler _storageCompiler() => const DeclarativeActionCompiler(
+  declaredPermissions: {'plugin.storage.write'},
+);
+
+CompiledDeclarativeAction _compileStorageAction({
+  Map<String, dynamic>? args,
+}) => _storageCompiler().compileResolved(
+  {
+    'type': 'storage.set',
+    'args':
+        args ??
+        {
+          'key': 'savedBooks',
+          'value': {'id': 10},
+        },
+  },
+  contextSignature: 'book-7',
+  programGeneration: 7,
 );
 
 CompiledDeclarativeAction _compileAction({

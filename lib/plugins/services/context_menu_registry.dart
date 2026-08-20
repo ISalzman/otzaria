@@ -1,22 +1,67 @@
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_selection_action.dart';
+import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 
 class ContextMenuRegistry extends ChangeNotifier {
   static const int maxTopLevelItemsPerPlugin = 2;
 
   static final ContextMenuRegistry instance = ContextMenuRegistry._();
-  ContextMenuRegistry._();
+  ContextMenuRegistry._() {
+    _attachEvaluator(PluginConditionEvaluator.instance);
+  }
 
   @visibleForTesting
-  ContextMenuRegistry.forTesting();
+  ContextMenuRegistry.forTesting({PluginConditionEvaluator? evaluator}) {
+    if (evaluator != null) _attachEvaluator(evaluator);
+  }
 
   /// מופע מנותק לפרסינג-יבש בוולידציה (אריזה/התקנה) — לא נוגע ב-UI.
   ContextMenuRegistry.detached();
 
-  final Map<String, List<PluginContextMenuItem>> _items = {};
+  final Map<PluginInstanceKey, List<PluginContextMenuItem>> _items = {};
+  PluginConditionEvaluator? _evaluator;
 
-  void register(String pluginId, PluginContextMenuItem item) {
-    final list = _items.putIfAbsent(pluginId, () => []);
+  void _attachEvaluator(PluginConditionEvaluator evaluator) {
+    _evaluator = evaluator;
+    evaluator.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    _evaluator?.removeListener(notifyListeners);
+    super.dispose();
+  }
+
+  PluginInstanceKey _key(String pluginId, String instanceId) =>
+      (pluginId: pluginId, instanceId: instanceId);
+
+  /// הרשימה של [instanceId] אם היא מכילה את [itemId]; אחרת הרשימה ברמת
+  /// התוסף — כך JS של מופע יכול לעדכן/להסיר פריט שהוצהר במניפסט.
+  List<PluginContextMenuItem>? _listContaining(
+    String pluginId,
+    String instanceId,
+    String itemId,
+  ) {
+    final own = _items[_key(pluginId, instanceId)];
+    if (own != null && own.any((item) => item.id == itemId)) return own;
+    if (instanceId == PluginInstanceIds.pluginLevel) return null;
+    final shared = _items[_key(pluginId, PluginInstanceIds.pluginLevel)];
+    if (shared != null && shared.any((item) => item.id == itemId)) {
+      return shared;
+    }
+    return null;
+  }
+
+  void register(
+    String pluginId,
+    PluginContextMenuItem item, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _items.putIfAbsent(_key(pluginId, instanceId), () => []);
     final index = list.indexWhere((existing) => existing.id == item.id);
     if (index >= 0) {
       list[index] = item;
@@ -34,19 +79,21 @@ class ContextMenuRegistry extends ChangeNotifier {
 
   PluginContextMenuItem registerPayload(
     String pluginId,
-    Map<String, dynamic> payload,
-  ) {
+    Map<String, dynamic> payload, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
     final item = _parseItem(payload, depth: 0);
-    register(pluginId, item);
+    register(pluginId, item, instanceId: instanceId);
     return item;
   }
 
   PluginContextMenuItem update(
     String pluginId,
     String itemId,
-    Map<String, dynamic> patch,
-  ) {
-    final list = _items[pluginId];
+    Map<String, dynamic> patch, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _listContaining(pluginId, instanceId, itemId);
     final index = list?.indexWhere((item) => item.id == itemId) ?? -1;
     if (list == null || index < 0) {
       throw const PluginContextMenuException(
@@ -68,24 +115,64 @@ class ContextMenuRegistry extends ChangeNotifier {
     return updated;
   }
 
-  void remove(String pluginId, String itemId) {
-    final list = _items[pluginId];
-    final previousLength = list?.length ?? 0;
-    list?.removeWhere((item) => item.id == itemId);
-    if (list?.isEmpty == true) _items.remove(pluginId);
-    if ((list?.length ?? 0) != previousLength) notifyListeners();
+  void remove(
+    String pluginId,
+    String itemId, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _listContaining(pluginId, instanceId, itemId);
+    if (list == null) return;
+    list.removeWhere((item) => item.id == itemId);
+    _items.removeWhere((_, items) => items.isEmpty);
+    notifyListeners();
   }
 
+  /// ניקוי מלא ברמת התוסף — כל המופעים והרישומים הדקלרטיביים.
   void removeAll(String pluginId) {
-    if (_items.remove(pluginId) != null) notifyListeners();
+    final before = _items.length;
+    _items.removeWhere((key, _) => key.pluginId == pluginId);
+    if (_items.length != before) notifyListeners();
   }
 
-  List<(String pluginId, PluginContextMenuItem item)> getAll() {
-    return List.unmodifiable([
-      for (final entry in _items.entries)
-        for (final item in entry.value) (entry.key, item),
-    ]);
+  /// מסיר רק את הרישומים של המופע [key] (סגירת טאב אחד של התוסף).
+  void removeInstance(PluginInstanceKey key) {
+    if (_items.remove(key) != null) notifyListeners();
   }
+
+  /// הפריטים המוצגים בפועל — פריט שתנאי ה-`when` שלו אינו מתקיים מסונן החוצה
+  /// (ונשאר רשום, כך שהוא חוזר כשהתנאי מתקיים).
+  ///
+  /// תצוגה מאוחדת: פריט אחד לכל (pluginId, itemId) גם כשכמה מופעים רשמו
+  /// אותו; רישום של מופע חי גובר על העותק הדקלרטיבי, המיקום לפי הראשון.
+  List<(String pluginId, PluginContextMenuItem item)> getAll() {
+    final evaluator = _evaluator;
+    final deduped = <(String, String), (String, PluginContextMenuItem)>{};
+    for (final entry in _items.entries) {
+      final pluginId = entry.key.pluginId;
+      for (final item in entry.value) {
+        if (!(evaluator?.isVisible(pluginId, item.when) ?? true)) continue;
+        final dedupeKey = (pluginId, item.id);
+        if (!deduped.containsKey(dedupeKey) ||
+            entry.key.instanceId != PluginInstanceIds.pluginLevel) {
+          deduped[dedupeKey] = (pluginId, item);
+        }
+      }
+    }
+    return List.unmodifiable(deduped.values);
+  }
+
+  /// מזהי המופעים שרשמו את [itemId] (כולל בתוך תתי-פריטים), בסדר הרישום —
+  /// הקלט לניתוב הלחיצה למופע הנכון.
+  List<String> instanceIdsForItem(String pluginId, String itemId) => [
+    for (final entry in _items.entries)
+      if (entry.key.pluginId == pluginId &&
+          entry.value.any((item) => _treeContains(item, itemId)))
+        entry.key.instanceId,
+  ];
+
+  bool _treeContains(PluginContextMenuItem item, String itemId) =>
+      item.id == itemId ||
+      item.children.any((child) => _treeContains(child, itemId));
 
   PluginContextMenuItem _parseItem(
     Map<String, dynamic> json, {
@@ -130,6 +217,7 @@ class ContextMenuRegistry extends ChangeNotifier {
     const supportedContexts = {
       'reader-selection',
       'reader-page-shape-selection',
+      'reader-highlight',
     };
     if (contexts.isEmpty ||
         contexts.toSet().length != contexts.length ||
@@ -240,7 +328,56 @@ class ContextMenuRegistry extends ChangeNotifier {
       openPlugin: json['openPlugin'] == true,
       param: json['param'],
       showWhenContainsAny: _parseShowWhen(json['showWhen']),
+      when: _parseWhen(json['when'], depth: depth),
+      action: _parseAction(json),
     );
+  }
+
+  /// פעולת host דקלרטיבית על הפריט — ולידציה מבנית בלבד; הצהרת ההרשאה
+  /// נבדקת בוולידטור ההתקנה ושוב בזמן הלחיצה.
+  Map<String, dynamic>? _parseAction(Map<String, dynamic> json) {
+    final value = json['action'];
+    if (value == null) return null;
+    if (json['type'] != null && json['type'] != 'item') {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action is only allowed on items',
+      );
+    }
+    if (json['onClickEvent'] != null || json['openPlugin'] == true) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action cannot be combined with onClickEvent or openPlugin',
+      );
+    }
+    if (value is! Map) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'action must be an object',
+      );
+    }
+    final action = Map<String, dynamic>.from(value);
+    try {
+      DeclarativeSelectionAction.validateTemplate(action);
+    } on DeclarativeProgramException catch (error) {
+      throw PluginContextMenuException('error.invalid_params', '$error');
+    }
+    return action;
+  }
+
+  PluginWhenCondition? _parseWhen(Object? value, {required int depth}) {
+    if (value == null) return null;
+    if (depth > 0) {
+      throw const PluginContextMenuException(
+        'error.invalid_params',
+        'when is only allowed on top-level items',
+      );
+    }
+    try {
+      return PluginWhenCondition.fromJson(value);
+    } on PluginWhenConditionException catch (error) {
+      throw PluginContextMenuException('error.invalid_params', '$error');
+    }
   }
 
   /// `showWhen: {selectionContainsAny: [...]}` — עד 50 מילים, כל אחת עד 100

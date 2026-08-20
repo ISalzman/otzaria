@@ -44,6 +44,8 @@ void main() {
         'fontSize': 18.0,
         'fontFamily': 'Rubik',
         'commentatorsFontFamily': 'NotoRashiHebrew',
+        // issue #849 — נטען בעליית התוכנה כדי שגופן מערכת לא יתאפס ל-fallback.
+        'pageShapeBottomFont': 'NotoSerifHebrew',
         'commentatorsFontSize': 22.0,
         'lineHeight': 1.5,
         'showOtzarHachochma': true,

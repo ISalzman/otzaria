@@ -28,6 +28,27 @@ bool shouldRequestToolContentFocus({
   return contentIsAttached && !contentHasFocus;
 }
 
+/// מייצב את תוצאת [lookupTool] מול מצבי ביניים של רישום התוספים.
+///
+/// `PluginSystemBloc` אינו נמצא ב-`PluginSystemLoaded` לאורך כל חייו: טעינה
+/// מחדש של הרישום (אחרי התקנה, הצמדה, סידור מחדש) ודיאלוג ההרשאות של התקנה
+/// מעבירים אותו במצבים אחרים, ובהם `lookupTool` מחזיר `loading` — כלומר
+/// "עדיין לא ידוע", לא "אינו זמין". החלפת הכלי בספינר באותם רגעים מוציאה את
+/// `PluginTabPage` מהעץ, הורסת את ה-WebView של התוסף וגורמת לו להיטען מאפס.
+/// לכן כל עוד ידוע כלי קודם — ממשיכים להציג אותו.
+@visibleForTesting
+ToolLookupResult resolveToolLookup(
+  ToolLookupResult lookup,
+  ToolCatalogEntry? lastEntry,
+) {
+  if (lastEntry != null &&
+      lookup is ToolUnavailable &&
+      lookup.reason == ToolUnavailableReason.loading) {
+    return ToolAvailable(lastEntry);
+  }
+  return lookup;
+}
+
 /// מסך של כלי מובנה או תוסף בתוך מסך העיון.
 class ToolTabScreen extends StatefulWidget {
   final ToolTab tab;
@@ -50,6 +71,9 @@ class ToolTabScreenState extends State<ToolTabScreen>
 
   /// התוכן נבנה רק כשהטאב מוצג, כדי לא ליצור WebView מראש.
   bool _activated = false;
+
+  /// הכלי שהוצג לאחרונה — ראה [resolveToolLookup].
+  ToolCatalogEntry? _lastEntry;
 
   @override
   bool get wantKeepAlive => _activated;
@@ -140,15 +164,19 @@ class ToolTabScreenState extends State<ToolTabScreen>
 
     final settingsState = context.watch<SettingsBloc>().state;
     final pluginState = context.watch<PluginSystemBloc>().state;
-    final lookup = lookupTool(
-      widget.tab.toolId,
-      hiddenBuiltInToolIds: settingsState.hiddenBuiltInToolIds,
-      isOfflineMode: settingsState.isOfflineMode,
-      pluginState: pluginState,
+    final lookup = resolveToolLookup(
+      lookupTool(
+        widget.tab.toolId,
+        hiddenBuiltInToolIds: settingsState.hiddenBuiltInToolIds,
+        isOfflineMode: settingsState.isOfflineMode,
+        pluginState: pluginState,
+      ),
+      _lastEntry,
     );
 
     final Widget content = switch (lookup) {
-      ToolAvailable(:final entry) => _buildToolContent(entry),
+      ToolAvailable(:final entry) => _buildToolContent(_lastEntry = entry),
+      // ספינר רק בטעינה הראשונה — אחריה resolveToolLookup מחזיר את הכלי הקודם.
       ToolUnavailable(reason: ToolUnavailableReason.loading) => const Center(
         child: CircularProgressIndicator(),
       ),
@@ -175,7 +203,9 @@ class ToolTabScreenState extends State<ToolTabScreen>
 
   Widget _buildToolContent(ToolCatalogEntry entry) {
     final plugin = entry.plugin;
-    if (plugin != null) return buildPluginToolPage(plugin);
+    if (plugin != null) {
+      return buildPluginToolPage(plugin, instanceId: widget.tab.instanceId);
+    }
     return buildBuiltInToolPage(
           entry.toolId,
           calendarKey: _calendarKey,
@@ -187,6 +217,8 @@ class ToolTabScreenState extends State<ToolTabScreen>
   }
 
   Widget _buildUnavailable(ToolUnavailable unavailable) {
+    // הכלי אינו זמין (הוסר/הושבת/הוסתר) — אין למה לחזור בטעינה הבאה.
+    _lastEntry = null;
     final name = unavailable.name ?? widget.tab.title;
     final (message, subtitle) = switch (unavailable.reason) {
       ToolUnavailableReason.builtInHidden => (

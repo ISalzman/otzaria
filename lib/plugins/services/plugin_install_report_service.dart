@@ -57,16 +57,18 @@ class PluginInstallReportService {
   }
 
   /// שולח את תוצאת ההתקנה. [success]=false מלווה ב-[errorMessage] שיוצג
-  /// למשתמש בדף החנות.
+  /// למשתמש בדף החנות. [updated] מסמן שהתוסף כבר היה מותקן ורק עודכן.
   static Future<void> report(
     PluginInstallReportContext context, {
     required bool success,
     String? errorMessage,
+    bool updated = false,
   }) {
     return _post(
       context,
       status: success ? 'success' : 'failure',
       errorMessage: errorMessage,
+      updated: updated,
     );
   }
 
@@ -74,6 +76,7 @@ class PluginInstallReportService {
     PluginInstallReportContext context, {
     required String status,
     String? errorMessage,
+    bool updated = false,
   }) async {
     try {
       String? appVersion;
@@ -90,6 +93,9 @@ class PluginInstallReportService {
               'status': status,
               if (errorMessage != null && errorMessage.isNotEmpty)
                 'error': errorMessage,
+              // נשלח רק בעדכון: אתר ישן שאינו מכיר את השדה מתעלם ממנו,
+              // ובהתקנה רגילה הגוף נשאר זהה לחלוטין למה שנשלח היום.
+              if (updated) 'updated': true,
               'appVersion': ?appVersion,
             }),
           )

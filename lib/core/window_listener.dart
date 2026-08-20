@@ -8,6 +8,7 @@ import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -92,6 +93,10 @@ class AppWindowListener extends WindowListener {
       return;
     }
     _isClosing = true;
+
+    // סגירה יזומה אינה קריסה — לנקות canaries של טעינות תוספים שבטיסה
+    // לפני שה-WebViews נהרסים (dispose של הטאבים לא רץ במסלול היציאה).
+    PluginCrashGuard.markCleanShutdownSync();
 
     if (kDebugMode) {
       debugPrint('Window close requested');

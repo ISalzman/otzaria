@@ -3,6 +3,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -139,7 +140,9 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
       _bottomCommentator = widget.currentBottom;
       _bottomRightCommentator = widget.currentBottomRight;
       _bottomFontFamily =
-          Settings.getValue<String>('page_shape_bottom_font') ??
+          Settings.getValue<String>(
+            SettingsRepository.keyPageShapeBottomFont,
+          ) ??
           AppFonts.defaultFont;
       _commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
       _highlightRelatedCommentators =
@@ -197,7 +200,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
 
     // שמירת הגופן של המפרשים התחתונים בלבד (תמיד גלובלי)
     await Settings.setValue<String>(
-      'page_shape_bottom_font',
+      SettingsRepository.keyPageShapeBottomFont,
       _bottomFontFamily,
     );
 

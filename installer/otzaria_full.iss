@@ -77,10 +77,8 @@ Type: filesandordirs; Name: "{app}\default.isar";
 ; המסמן נכתב רק בהתקנת מנהל (ראה [INI]) והאפליקציה גוזרת ממנו את מיקום
 ; ברירת המחדל של הספרייה — מסמן ששרד מעבר להתקנת משתמש מפנה אותה ל-ProgramData.
 Type: files; Name: "{app}\system_install.marker"; Check: (not IsAdminInstallMode) or IsPortableInstall
-; במתקין המשובץ מוחקים לפני הפריסה; במתקין המפוצל מחליפים רק אחרי אימות וחילוץ מלא.
-#ifndef IndexedSplitFull
-Type: filesandordirs; Name: "{code:GetSelectedBooksPath}"
-#endif
+; אין כאן מחיקה של תיקיית הספרים: בשני מצבי הבנייה הספרייה מוחלפת רק אחרי
+; חילוץ מלא ומוצלח ל-staging — מחיקה מוקדמת השאירה משדרגים בלי ספרייה (issue #867).
 
 [Dirs]
 ; במצב נייד הנתונים יושבים ב-otzaria_data ליד ה-EXE — האפליקציה יוצרת אותה בעצמה.
@@ -136,6 +134,8 @@ var
   RelaunchingForModeChange: Boolean;
   RegularInstallDirDefault: String;
   PortableInstallDirDefault: String;
+  // המשתמש בחר לדלג על חילוץ הספרייה בהתקנה ניידת — קיימת ספרייה במחשב.
+  PortableSkipLibrary: Boolean;
 
   FeaturesPage: TWizardPage;
   SlideshowImage: TBitmapImage;
@@ -147,6 +147,8 @@ var
   // קבצי האפליקציה. ברירת המחדל False — נשמר כדי לא לאבד נתונים בעדכון
   // שקט (Inno Setup מריץ את ה-uninstaller הישן עם /SILENT).
   DeleteUserDataOnUninstall: Boolean;
+  // נתיב ספרייה מותאם מה-prefs; איפוס הגדרות מדלג עליו כדי לא למחוק ספרים.
+  ProtectedLibraryPath: String;
 
 #ifdef IndexedSplitFull
   IndexedDownloadPage: TDownloadWizardPage;
@@ -406,6 +408,11 @@ var
   FindRec: TFindRec;
   ChildPath: String;
 begin
+  // הספרייה המוגנת עשויה להיות הנתיב הנמחק עצמו, לא רק תת-תיקייה שלו.
+  if (ProtectedLibraryPath <> '') and
+     (Lowercase(Path) = Lowercase(ProtectedLibraryPath)) then
+    exit;
+
   if not DirExists(Path) then
     exit;
 
@@ -419,7 +426,9 @@ begin
 
           if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
           begin
-            if Lowercase(FindRec.Name) <> 'backups' then
+            if (Lowercase(FindRec.Name) <> 'backups') and
+               ((ProtectedLibraryPath = '') or
+                (Lowercase(ChildPath) <> Lowercase(ProtectedLibraryPath))) then
             begin
               DelTreeExceptBackups(ChildPath);
               RemoveDir(ChildPath);
@@ -603,6 +612,9 @@ end;
 procedure WriteLibraryPathToPrefs(const LibraryPath: String);
 begin
   WriteStringPreferenceToPrefs('key-library-path', LibraryPath);
+  // ערך stale בשם תת-התיקייה מפנה את האפליקציה ל-<books>\<folder>\seforim.db
+  // שאינו קיים בפריסה החדשה — והספרייה שהותקנה זה עתה "נעלמת" (issue #871).
+  WriteStringPreferenceToPrefs('key-library-folder-name', '');
 #ifdef IndexedSplitFull
   WriteStringPreferenceToPrefs('key-index-path',
     ExtractFileDir(LibraryPath) + '\index');
@@ -687,6 +699,44 @@ begin
     SelectedBooksPath := CustomPath;
 end;
 
+// מאתר ספרייה קיימת במחשב: הנתיב המותאם מה-prefs, ואחריו נתיבי ברירת
+// המחדל של התקנת משתמש ושל התקנת מנהל.
+function FindExistingLibraryPath(): String;
+begin
+  Result := GetCustomLibraryPath();
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := ExpandConstant('{userappdata}\otzaria\books');
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := ExpandConstant('{commonappdata}\otzaria\books');
+  if IsOtzariaBooksFolder(Result) then
+    exit;
+  Result := '';
+end;
+
+// בהתקנה ניידת עם ספרייה קיימת במחשב — שואל אם לחלץ עותק נוסף של
+// גיגה-בייטים לתיקייה הניידת, או לדלג ולהשתמש בקיימת (issue #861).
+procedure AskPortableLibraryChoice();
+var
+  ExistingPath: String;
+begin
+  PortableSkipLibrary := False;
+  if not PortableMode then
+    exit;
+  ExistingPath := FindExistingLibraryPath();
+  if ExistingPath = '' then
+    exit;
+  PortableSkipLibrary := MsgBox(
+    'נמצאה ספרייה קיימת במחשב זה:' + #13#10 +
+    ExistingPath + #13#10#13#10 +
+    'האם לחלץ עותק ספרייה נוסף לתיקייה הניידת?' + #13#10 +
+    'עותק נוסף תופס כמה גיגה-בייטים בדיסק.' + #13#10#13#10 +
+    'בחירה ב"לא" תדלג על החילוץ, ובפתיחת אוצריא הניידת ניתן יהיה ' +
+    'להצביע על הספרייה הקיימת דרך "שימוש בספרייה קיימת במקומה".',
+    mbConfirmation, MB_YESNO) = IDNO;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
@@ -697,8 +747,8 @@ var
 begin
   Result := True;
 
-  // אתחול ברירות מחדל כבר עכשיו, כדי ש-GetSelectedBooksPath (שמשמש
-  // ב-[InstallDelete]) יחזיר ערך תקין בכל מסלול ריצה.
+  // אתחול ברירות מחדל כבר עכשיו, כדי ש-GetSelectedBooksPath יחזיר ערך
+  // תקין בכל מסלול ריצה.
   InstallWV2 := WebView2NeedsInstall;
   SelectedBooksPath := GetDataDir('') + '\books';
 
@@ -1172,7 +1222,12 @@ begin
     CreateBooksPage;
 
     RegularInstallDirDefault := WizardForm.DirEdit.Text;
-    PortableInstallDirDefault := ExpandConstant('{userdocs}\OtzariaPortable');
+    // {userdocs} זורק כשלחשבון המנהל שאישר את ה-UAC אין פרופיל/Documents מלא.
+    try
+      PortableInstallDirDefault := ExpandConstant('{userdocs}\OtzariaPortable');
+    except
+      PortableInstallDirDefault := ExpandConstant('{sd}\OtzariaPortable');
+    end;
 
     // בחירה מוקדמת בעמוד סוג ההתקנה: ‎/PORTABLE — מצב נייד; ריצה במצב מנהל
     // (שיגור-מחדש עם /ALLUSERS) או תהליך מורם — לכל המשתמשים.
@@ -1306,10 +1361,15 @@ begin
       Result := False;
     end;
   end;
-#ifdef IndexedSplitFull
   if (CurPageID = wpReady) and Result then
-    Result := PrepareIndexedLibrary();
+  begin
+    AskPortableLibraryChoice();
+#ifdef IndexedSplitFull
+    // בדילוג על הספרייה אין צורך להוריד את חבילת הספרייה המאונדקסת.
+    if not PortableSkipLibrary then
+      Result := PrepareIndexedLibrary();
 #endif
+  end;
 end;
 
 procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
@@ -1550,19 +1610,24 @@ begin
     Result := 'קובץ היעד נעול על ידי תהליך אחר. סגור את אוצריא ותוכנות אחרות שעשויות להשתמש בקבצים ונסה שוב.';
 end;
 
-procedure ExtractBundledDatabase(const ArchiveName, DatabaseName: String);
+procedure ExtractBundledDatabase(const ArchiveName, DatabaseName, TargetRoot: String);
 var
   ArchivePath, DatabasePath, ZstdPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
 begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
+  // ארכיון חסר = כשל (נמחק מ-{tmp} ע"י ניקוי דיסק וכד') — דילוג שקט השאיר
+  // התקנה "מוצלחת" בלי ספרייה (issue #862).
   if not FileExists(ArchivePath) then
   begin
-    Log('Bundled database archive not found, skipping: ' + ArchivePath);
-    exit;
+    Log('Bundled database archive not found: ' + ArchivePath);
+    MsgBox('קובץ הספרייה ' + ArchiveName + ' חסר בקבצי ההתקנה הזמניים.'
+      + #13#10 + 'ייתכן שתוכנת ניקוי דיסק מחקה אותו או שאין מספיק מקום פנוי. פנה מקום ונסה להתקין שוב.',
+      mbCriticalError, MB_OK);
+    Abort;
   end;
 
-  DatabasePath := SelectedBooksPath + '\' + DatabaseName;
+  DatabasePath := TargetRoot + '\' + DatabaseName;
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
 
   ForceDirectories(ExtractFileDir(DatabasePath));
@@ -1584,7 +1649,7 @@ begin
   DeleteFile(ArchivePath);
 end;
 
-procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName: String);
+procedure ExtractBundledTarArchive(const ArchiveName, TargetDirName, TargetRoot: String);
 var
   ArchivePath, TarPath, ParentDir, TargetDir, ZstdPath, SevenZipPath, Params, ErrOutput, Hint: String;
   ResultCode: Integer;
@@ -1592,13 +1657,16 @@ begin
   ArchivePath := ExpandConstant('{tmp}\' + ArchiveName);
   if not FileExists(ArchivePath) then
   begin
-    Log('Bundled archive not found, skipping: ' + ArchivePath);
-    exit;
+    Log('Bundled archive not found: ' + ArchivePath);
+    MsgBox('ארכיון ' + ArchiveName + ' חסר בקבצי ההתקנה הזמניים.'
+      + #13#10 + 'ייתכן שתוכנת ניקוי דיסק מחקה אותו או שאין מספיק מקום פנוי. פנה מקום ונסה להתקין שוב.',
+      mbCriticalError, MB_OK);
+    Abort;
   end;
 
-  ParentDir := SelectedBooksPath;
+  ParentDir := TargetRoot;
   TarPath := ParentDir + '\' + ChangeFileExt(ArchiveName, '');
-  TargetDir := SelectedBooksPath + '\' + TargetDirName;
+  TargetDir := TargetRoot + '\' + TargetDirName;
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
   SevenZipPath := ExpandConstant('{tmp}\7za.exe');
 
@@ -1644,6 +1712,85 @@ begin
   end;
   DeleteFile(ArchivePath);
 end;
+
+#ifndef IndexedSplitFull
+// מחלץ את כל רכיבי הספרייה המשובצים לתיקיית staging, ומחליף את הספרייה
+// הקיימת רק אחרי שהכל הצליח — כשל באמצע משאיר את הספרייה הישנה שלמה (issue #867).
+procedure ExtractEmbeddedLibraryArchives();
+var
+  LibraryRoot, StagingBooks, BooksBackup: String;
+  BooksBackedUp: Boolean;
+begin
+  LibraryRoot := ExtractFileDir(SelectedBooksPath);
+  StagingBooks := LibraryRoot + '\.otzaria-books-staging';
+  BooksBackup := LibraryRoot + '\.otzaria-books-backup';
+
+  ForceDirectories(LibraryRoot);
+  DelTree(StagingBooks, True, True, True);
+  ForceDirectories(StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('seforim.db.zst', 'seforim.db', StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db',
+    StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי',
+    StagingBooks);
+
+  WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
+  WizardForm.StatusLabel.Update;
+  ExtractBundledDatabase('lexical.db.zst', 'lexical.db', StagingBooks);
+  // בלי קובץ הגרסה בדיקת העדכון הראשונה מורידה את המילון (~57MB) מחדש;
+  // ה-sha256 של הקובץ הוא ה-digest של נכס ה-release שהאפליקציה משווה מולו.
+  if FileExists(StagingBooks + '\lexical.db') then
+  begin
+    try
+      SaveStringToFile(StagingBooks + '\lexical.db.version',
+        Lowercase(GetSHA256OfFile(StagingBooks + '\lexical.db')), False);
+    except
+      Log('Lexical version marker was not written: ' + GetExceptionMessage);
+    end;
+  end;
+
+  // אימות אחרון לפני ההחלפה — כמו במסלול המאונדקס; ספרייה בלי seforim.db
+  // אסור שתחליף ספרייה קיימת ותוצג כהתקנה מוצלחת (issue #862).
+  if not FileExists(StagingBooks + '\seforim.db') then
+  begin
+    Log('Staging library is missing seforim.db - aborting swap');
+    MsgBox('חילוץ הספרייה לא הושלם — מסד הנתונים seforim.db חסר.',
+      mbCriticalError, MB_OK);
+    Abort;
+  end;
+
+  WizardForm.StatusLabel.Caption := 'מחליף את הספרייה הקודמת...';
+  WizardForm.StatusLabel.Update;
+  DelTree(BooksBackup, True, True, True);
+  BooksBackedUp := (not DirExists(SelectedBooksPath)) or
+    RenameFile(SelectedBooksPath, BooksBackup);
+  if not BooksBackedUp then
+  begin
+    DelTree(StagingBooks, True, True, True);
+    MsgBox('לא ניתן להחליף את תיקיית הספרים הקיימת. ודא שאוצריא סגורה.',
+      mbCriticalError, MB_OK);
+    Abort;
+  end;
+  if not RenameFile(StagingBooks, SelectedBooksPath) then
+  begin
+    if DirExists(BooksBackup) then
+      RenameFile(BooksBackup, SelectedBooksPath);
+    DelTree(StagingBooks, True, True, True);
+    MsgBox('העברת הספרייה למיקום שנבחר נכשלה.', mbCriticalError, MB_OK);
+    Abort;
+  end;
+  DelTree(BooksBackup, True, True, True);
+end;
+#endif
 
 #ifdef IndexedSplitFull
 procedure ExtractIndexedLibraryArchive();
@@ -1903,6 +2050,61 @@ begin
   end;
 end;
 
+// תיקיית ההתקנה של רשומת uninstall בהיקף הנתון — בלי לדרוש שהתיקייה קיימת.
+function GetRegisteredInstallDir(RootKey: Integer): String;
+begin
+  if not RegQueryStringValue(RootKey, UninstallRegKey, 'Inno Setup: App Path', Result) then
+    Result := '';
+  if Result = '' then
+    RegQueryStringValue(RootKey, UninstallRegKey, 'InstallLocation', Result);
+end;
+
+function SameInstallDir(PathA, PathB: String): Boolean;
+begin
+  Result := CompareText(RemoveBackslash(PathA), RemoveBackslash(PathB)) = 0;
+end;
+
+// מסיר התקנת אוצריא שנותרה רשומה בהיקף אחר (issue #886): רשומה בנתיב אחר
+// מוסרת דרך ה-uninstaller שלה (מוחק גם קבצים וקיצורים שאחרת ימשיכו להריץ
+// בינארי ישן); רשומה שמצביעה על {app} נמחקת מהרישום בלבד — הקבצים שלנו.
+procedure RemoveStaleScopeRegistration(RootKey: Integer);
+var
+  StaleDir, UninstallExe: String;
+  ResultCode: Integer;
+begin
+  if not RegKeyExists(RootKey, UninstallRegKey) then
+    exit;
+
+  StaleDir := GetRegisteredInstallDir(RootKey);
+  if (StaleDir <> '') and
+     (not SameInstallDir(StaleDir, ExpandConstant('{app}'))) and
+     RegQueryStringValue(RootKey, UninstallRegKey, 'UninstallString', UninstallExe) then
+  begin
+    UninstallExe := RemoveQuotes(Trim(UninstallExe));
+    if FileExists(UninstallExe) and
+       Exec(UninstallExe, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
+         SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
+      exit;
+    end;
+  end;
+
+  Log('Deleting stale uninstall registration for ' + StaleDir);
+  RegDeleteKeyIncludingSubkeys(RootKey, UninstallRegKey);
+end;
+
+// התקנת מנהל מנקה רשומות שנותרו בהיקפים האחרים: HKCU (התקנת משתמש מקבילה,
+// המצב של issue #886) ו-WOW6432Node (מתקיני מנהל 32-ביט ישנים). ההיקף
+// הנגדי אינו מנוקה בהתקנת משתמש — מחיקה ב-HKLM דורשת הרשאות מנהל.
+procedure RemoveOtherScopeInstalls();
+begin
+  if PortableMode or (not IsAdminInstallMode) then
+    exit;
+  RemoveStaleScopeRegistration(HKCU);
+  RemoveStaleScopeRegistration(HKLM32);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
@@ -1940,6 +2142,9 @@ begin
 
     if WizardIsTaskSelected('resetsettings') then
     begin
+      // נקרא לפני מחיקת ה-prefs — מגן על ספרייה מותאמת שיושבת בתוך נתיב נמחק.
+      ProtectedLibraryPath := RemoveBackslash(GetCustomLibraryPath());
+
       AppDataPath := GetDataDir('');
       if DirExists(AppDataPath) then
         DelTreeExceptBackups(AppDataPath);
@@ -1962,14 +2167,11 @@ begin
       if DirExists(AppDataPath) then
         DelTreeExceptBackups(AppDataPath);
 
-      // נתיבים ישנים מאוד: LocalAppData בעברית (לפני גרסה 0.9.x)
+      // נתיב ישן מאוד: LocalAppData בעברית (לפני גרסה 0.9.x) — גם כאן
+      // גיבויים נשמרים; DelTree מלא מחק שם ספריות שלמות (issue #873).
       AppDataPath := ExpandConstant('{localappdata}\אוצריא');
       if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
-
-      AppDataPath := ExpandConstant('{localappdata}\אוצריא\Data');
-      if DirExists(AppDataPath) then
-        DelTree(AppDataPath, True, True, True);
+        DelTreeExceptBackups(AppDataPath);
     end;
   end;
 
@@ -1979,6 +2181,14 @@ begin
   // במצב נייד GetSelectedBooksPath מחזיר את הנתיב שבתוך התיקייה הניידת —
   // מיישרים את המשתנה כדי שכל החילוץ בהמשך ילך לשם.
   SelectedBooksPath := GetSelectedBooksPath('');
+
+  // המשתמש בחר לדלג על חילוץ הספרייה: רק ה-marker נכתב, ומסך הפתיחה של
+  // אוצריא יציע להצביע על הספרייה הקיימת.
+  if PortableMode and PortableSkipLibrary then
+  begin
+    SaveStringToFile(ExpandConstant('{app}\portable.marker'), '', False);
+    exit;
+  end;
 
   ZstdPath := ExpandConstant('{tmp}\zstd.exe');
   SevenZipPath := ExpandConstant('{tmp}\7za.exe');
@@ -2004,32 +2214,7 @@ begin
   WizardForm.StatusLabel.Update;
   ExtractIndexedLibraryArchive();
 #else
-  WizardForm.StatusLabel.Caption := 'מחלץ מסד הנתונים seforim.db...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('seforim.db.zst', 'seforim.db');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ קטלוג אוצר החכמה...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('otzar-HB_catalog.db.zst', 'otzar-HB_catalog.db');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ ספרי תלמוד בבלי...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledTarArchive('talmud_bavli_latest.tar.zst', 'תלמוד בבלי');
-
-  WizardForm.StatusLabel.Caption := 'מחלץ מילון לחיפוש המקורב...';
-  WizardForm.StatusLabel.Update;
-  ExtractBundledDatabase('lexical.db.zst', 'lexical.db');
-  // בלי קובץ הגרסה בדיקת העדכון הראשונה מורידה את המילון (~57MB) מחדש;
-  // ה-sha256 של הקובץ הוא ה-digest של נכס ה-release שהאפליקציה משווה מולו.
-  if FileExists(SelectedBooksPath + '\lexical.db') then
-  begin
-    try
-      SaveStringToFile(SelectedBooksPath + '\lexical.db.version',
-        Lowercase(GetSHA256OfFile(SelectedBooksPath + '\lexical.db')), False);
-    except
-      Log('Lexical version marker was not written: ' + GetExceptionMessage);
-    end;
-  end;
+  ExtractEmbeddedLibraryArchives();
 #endif
 
   WizardForm.ProgressGauge.Style := npbstNormal;
@@ -2048,6 +2233,8 @@ begin
     ForceDirectories(SelectedBooksPath);
     WriteLibraryPathToPrefs(SelectedBooksPath);
   end;
+
+  RemoveOtherScopeInstalls();
 
   // בהתקנה שקטה משיקים את אוצריא רק עכשיו — אחרי שהחילוץ הסתיים — כי רשומת
   // postinstall לא רצה ב-VERYSILENT, ורשומת [Run] רגילה הייתה רצה לפני
@@ -2078,7 +2265,7 @@ Name: "{autodesktop}\לוח שנה - {#MyAppName}"; Filename: "{app}\{#MyAppExeN
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "calendaricon"; Description: "צור קיצור דרך ישירות ללוח שנה"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "resetsettings"; Description: "איפוס הגדרות משתמש והסרת התקנות קודמות (מומלץ למעדכנים מגרסה < 0.9.80, שים לב: זה ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! תיקיית הגיבויים נשמרת)"; Flags: unchecked
+Name: "resetsettings"; Description: "איפוס הגדרות משתמש — אזהרה: ימחק הערות אישיות, סימניות, היסטוריה ונתוני תוספים! (תיקיית הגיבויים נשמרת והספרייה מותקנת מחדש. נדרש רק בשדרוג מגרסה ישנה מ-0.9.80 או לפתרון תקלות)"; Flags: unchecked
 
 [Files]
 ; Copy DLL files without compression to prevent corruption

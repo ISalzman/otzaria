@@ -782,6 +782,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | קיבוע מדויק של גובה השורה (סימוני הערות, `<big>`) בשלושת מסלולי הרינדור | `test/widgets/smart_text/exact_line_height_test.dart` |
 | Work/indexing status overlays | `test/widgets/work_status_overlay_test.dart`, `…indexing_status_overlay_test.dart` |
 | App dropdown/search menu | `test/widgets/app_dropdown_field_test.dart`, `…app_search_menu_test.dart` |
+| שימור כיוון הפותח בתפריטים מעוגנים (הגדרות באנגלית) | `test/widgets/app_menu_direction_test.dart` |
+| כיוון כרטיסי הסיור/טיפים לפי שפת ההגדרות | `test/tour/widgets/tour_cards_direction_test.dart` |
 | Search pane base | `test/widgets/search_pane_base_test.dart` |
 | נתוני פופאפ "אוצריא מתגייסת" (`assets/support_organizations.json`) | `test/services/support_organizations_test.dart` |
 | פופאפ "אוצריא מתגייסת" (תצוגה, שגיאת טעינה, פענוח לוגואים ומטמון) | `test/widgets/dialogs/ad_popup_dialog_test.dart` |
@@ -798,6 +800,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Bookmarks BLoC | `test/bookmarks/bookmark_bloc_test.dart` |
 | Workspaces BLoC | `test/workspaces/bloc/workspace_bloc_test.dart` |
 | מחוות החלקה בין טאבים (סינון התקנים, כיוון) | `test/tabs/reading_screen_move_tab_state_test.dart`, `…tab_swipe_direction_test.dart` |
+| מעבר לטאב שנפתח כשמסך הקריאה מנותק (issue #877) | `test/tabs/reading_screen_offscreen_tab_open_test.dart` |
 | Windows installer scripts (`.iss` invariants) | `test/installer/installer_scripts_test.dart` |
 | App paths / install-mode detection | `test/core/app_paths_test.dart` |
 | Library browser | `test/library/view/library_browser_preview_width_test.dart`, `…grid_items_test.dart`, `…library_browser_flat_tree_test.dart` |
@@ -811,6 +814,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Indexing repository | `test/indexing/repository/indexing_repository_test.dart` |
 | External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
 | Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
+| הודעות לחיצות מתוסף (`ui.show*` + tapEvent) | `test/plugins/bridge/plugin_bridge_ui_message_tap_test.dart` |
+| לחיצוּת הודעות UiSnack (onTap) | `test/core/ui_snack_tap_test.dart` |
 | Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
 | Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
 

@@ -74,6 +74,7 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provide
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
 import 'package:otzaria/core/http_client_registry.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -95,6 +96,7 @@ import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
+import 'package:otzaria/plugins/utils/plugin_dev_tools_mode.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/core/sentry_event_filter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -276,6 +278,8 @@ void main(List<String> args) async {
   if (await _maybeRunCliCommand(args)) {
     return;
   }
+
+  PluginDevToolsMode.initFromArgs(args);
 
   SentryWidgetsFlutterBinding.ensureInitialized();
 
@@ -699,6 +703,8 @@ Future<void> _runDeferredErrorReportFlush() async {
     final reportService = DirectErrorReportService();
     HttpClientRegistry.register(reportService.closeHttpClient);
     await reportService.startAutomaticFlush();
+    // תור דיווחי התוספים משתמש ב-client סטטי שכבר רשום ב-HttpClientRegistry.
+    await PluginReportService().startAutomaticFlush();
   } catch (error, stackTrace) {
     _logNonFatalInitializationError(
       'Direct error report queue',
@@ -1175,10 +1181,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
               final host = DeclarativePluginHostService(
                 loadPlugin: repository.getPlugin,
                 loadPermissions: (pluginId) async =>
-                    (await repository.getPluginPermissions(pluginId))
-                        .where((permission) => permission.granted)
-                        .map((permission) => permission.permission)
-                        .toSet(),
+                    (await repository.getGrantedPermissionNames(
+                      pluginId,
+                    )).toSet(),
                 bookResolver: bookAccess,
                 bookOpener: bookAccess,
                 parallelEditionsFinder: bookAccess.parallelEditionsForIdentity,
@@ -1210,6 +1215,7 @@ Future<void> initHive() async {
     Hive.openBox<dynamic>('history'),
     Hive.openBox<dynamic>('bookmarks'),
     Hive.openBox<dynamic>('error_reports_queue'),
+    Hive.openBox<dynamic>(PluginReportService.queueBoxName),
   ]);
 }
 

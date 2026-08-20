@@ -84,6 +84,44 @@ void main() {
     }
   });
 
+  test('פריט עם action מבוצע דרך מבצע פעולות הסימון בלבד', () async {
+    const item = PluginContextMenuItem(
+      id: 'save',
+      label: 'שמור לרשימה',
+      action: {
+        'type': 'storage.set',
+        'args': {
+          'key': 'savedBooks',
+          'value': {r'$selection': 'id'},
+        },
+      },
+    );
+    final calls = <(String, Map<String, dynamic>, Map<String, dynamic>)>[];
+
+    final entry = buildPluginContextMenuEntries(
+      records: const [('lists', item)],
+      selection: const {
+        'text': 'טקסט מסומן',
+        'id': 42,
+        'bookTitle': 'ברכות',
+        'sectionIndex': 7,
+      },
+      selectionActionDispatcher: (pluginId, action, payload) async {
+        calls.add((pluginId, action, payload));
+      },
+    ).single;
+
+    entry.onTap!();
+
+    final (pluginId, action, payload) = calls.single;
+    expect(pluginId, 'lists');
+    expect(action, item.action);
+    expect(payload['id'], 42);
+    expect(payload['currentBook'], 'ברכות');
+    expect(payload['currentIndex'], 7);
+    expect(payload['selectedText'], 'טקסט מסומן');
+  });
+
   test('showWhen hides items whose words are absent from the selection', () {
     const conditional = PluginContextMenuItem(
       id: 'lookup',

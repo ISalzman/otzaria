@@ -816,14 +816,18 @@ class _FontDropdown extends StatelessWidget {
     final hasSelectedFont =
         value.isEmpty || fontEntries.any((entry) => entry.value == value);
     if (!hasSelectedFont) {
+      // ערך שמור מגרסה ישנה (שם קובץ) מוצג בשם המשפחה שלו, לא כ"לא זמין".
+      final legacyName = AppFonts.legacySystemFontDisplayName(value);
       fontEntries.insert(
         0,
         AppMenuEntry(
           value: value,
-          label: context.settingsText(
-            '{font} (לא זמין במחשב זה)',
-            args: {'font': value},
-          ),
+          label:
+              legacyName ??
+              context.settingsText(
+                '{font} (לא זמין במחשב זה)',
+                args: {'font': value},
+              ),
         ),
       );
     }

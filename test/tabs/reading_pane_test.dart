@@ -104,40 +104,52 @@ void main() {
     });
   });
 
-  group('ToolTab.visiblePluginIdsOf', () {
+  group('ToolTab.visiblePluginInstancesOf', () {
     test('כרטיסיית תוסף בודדת', () {
-      expect(
-        ToolTab.visiblePluginIdsOf(_tool('com.example.plugin')),
-        {'com.example.plugin'},
-      );
+      final tool = _tool('com.example.plugin');
+      expect(ToolTab.visiblePluginInstancesOf(tool), {
+        (pluginId: 'com.example.plugin', instanceId: tool.instanceId),
+      });
     });
 
     test('כלי מובנה אינו תוסף ואינו נכנס לקבוצה', () {
-      expect(ToolTab.visiblePluginIdsOf(_tool('builtin.calendar')), isEmpty);
+      expect(
+        ToolTab.visiblePluginInstancesOf(_tool('builtin.calendar')),
+        isEmpty,
+      );
     });
 
     test('כרטיסיית ספר — קבוצה ריקה', () {
-      expect(ToolTab.visiblePluginIdsOf(_book('בראשית')), isEmpty);
+      expect(ToolTab.visiblePluginInstancesOf(_book('בראשית')), isEmpty);
     });
 
-    test('טאב מפוצל מחזיר את התוספים שבשתי החלוניות', () {
-      final split = CombinedTab(
-        rightTab: _tool('com.a'),
-        leftTab: _tool('com.b'),
-      );
-      expect(ToolTab.visiblePluginIdsOf(split), {'com.a', 'com.b'});
+    test('טאב מפוצל מחזיר את מופעי התוספים שבשתי החלוניות', () {
+      final a = _tool('com.a');
+      final b = _tool('com.b');
+      final split = CombinedTab(rightTab: a, leftTab: b);
+      expect(ToolTab.visiblePluginInstancesOf(split), {
+        (pluginId: 'com.a', instanceId: a.instanceId),
+        (pluginId: 'com.b', instanceId: b.instanceId),
+      });
     });
 
     test('חלונית ספר בטאב מפוצל אינה מוסיפה תוסף', () {
-      final split = CombinedTab(
-        rightTab: _tool('com.a'),
-        leftTab: _book('בראשית'),
-      );
-      expect(ToolTab.visiblePluginIdsOf(split), {'com.a'});
+      final a = _tool('com.a');
+      final split = CombinedTab(rightTab: a, leftTab: _book('בראשית'));
+      expect(ToolTab.visiblePluginInstancesOf(split), {
+        (pluginId: 'com.a', instanceId: a.instanceId),
+      });
+    });
+
+    test('שני מופעים של אותו תוסף בטאב מפוצל — שני מפתחות נפרדים', () {
+      final a1 = _tool('com.a');
+      final a2 = _tool('com.a');
+      final split = CombinedTab(rightTab: a1, leftTab: a2);
+      expect(ToolTab.visiblePluginInstancesOf(split), hasLength(2));
     });
 
     test('null — קבוצה ריקה', () {
-      expect(ToolTab.visiblePluginIdsOf(null), isEmpty);
+      expect(ToolTab.visiblePluginInstancesOf(null), isEmpty);
     });
   });
 }

@@ -162,7 +162,7 @@ class TourSteps {
         id: 'tools',
         title: 'כלים נוספים',
         body:
-            'כאן תמצא לוח שנה יהודי, גימטריות, מילון ארמי, ראשי תיבות, ממיר יחידות, תוכנית לימוד והערות אישיות.\n\nקיצור: {shortcut}',
+            'כאן תמצא לוח שנה יהודי, גימטריות, מילון ארמי, ראשי תיבות, ממיר מידות, תוכנית לימוד והערות אישיות.\n\nקיצור: {shortcut}',
         area: TourSpotlightArea.tools,
         action: TourStepAction.openTools,
         shortcut: TourShortcutHint.tools,

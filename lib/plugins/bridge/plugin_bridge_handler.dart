@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_request.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/models/plugin_rpc_response.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
@@ -99,12 +100,15 @@ class PluginBridgeHandler {
 
   /// האם הקריאה מנהלת חסם זמן או משאבים בתוך השירות שלה,
   /// ולכן אינה כפופה ל-timeout הגנרי של 30 שניות.
+  // feedback.report ממתין לדיאלוג אישור ללא הגבלה; timeout גנרי היה מחזיר
+  // error.timeout אחרי שהדיווח כבר נשלח, וגורם לכפילות בניסיון חוזר.
   static bool hasOwnTimeout(String method) =>
       method == 'search.query' ||
       method == 'network.fetch' ||
       method == 'network.fetchStream' ||
       method == 'network.download' ||
-      method == 'fs.extractZip';
+      method == 'fs.extractZip' ||
+      method == 'feedback.report';
 
   Future<dynamic> _handleRpc(
     List<dynamic> args, {
@@ -132,7 +136,11 @@ class PluginBridgeHandler {
     final requiredPermission = _getRequiredPermission(domain, action);
     final declaresPermission =
         requiredPermission == null ||
-        plugin.manifest.permissions.contains(requiredPermission);
+        pluginBaselinePermissions.contains(requiredPermission) ||
+        plugin.manifest.permissions.contains(requiredPermission) ||
+        plugin.manifest.permissions.contains(
+          pluginLegacyPermissionAliases[requiredPermission],
+        );
 
     // ההחרגה ממגביל הקצב חלה רק על קריאת תוכן שההרשאה לה *הוענקה בפועל* (לא רק
     // הוצהרה במניפסט). לכן בודקים את ההענקה כבר עכשיו עבור getBookContent —
@@ -246,8 +254,14 @@ class PluginBridgeHandler {
         if (action == 'getBookContent' ||
             action == 'getBookToc' ||
             action == 'listBookAltStructures' ||
-            action == 'getBookAltToc') {
+            action == 'getBookAltToc' ||
+            action == 'getLinkContent') {
           return 'library.content.read';
+        }
+        if (action == 'getCommentators' ||
+            action == 'getLinks' ||
+            action == 'getLinkTargetsSummary') {
+          return pluginLinksReadPermission;
         }
         return 'library.books.read';
       case 'search':
@@ -283,6 +297,10 @@ class PluginBridgeHandler {
         }
         return 'notes.read';
       case 'ui':
+        // בחירת תיקייה היא גבול ההסכמה של פעולות ה-fs — הרשאה נפרדת.
+        if (action == 'pickFolder') {
+          return pluginFolderAccessPermission;
+        }
         return 'ui.feedback';
       case 'storage':
         if (action == 'get' || action == 'list') {
@@ -296,6 +314,12 @@ class PluginBridgeHandler {
       case 'publishedData':
         return 'published_data.write';
       case 'feedback':
+        // report אינה דורשת הרשאת manifest: הדיווח נשלח רק אחרי שהמשתמש
+        // אישר אותו בדיאלוג, וההסכמה בדיאלוג היא גבול האבטחה.
+        // hasReporterEmail מחזירה ביט קיום בלבד, בלי הכתובת עצמה.
+        if (action == 'report' || action == 'hasReporterEmail') {
+          return null;
+        }
         return 'feedback.send_email';
       case 'history':
         if (action == 'clear' || action == 'remove') {
@@ -329,6 +353,10 @@ class PluginBridgeHandler {
         // openSelf מעביר את המשתמש למסך אחר — דורש הרשאת ניווט.
         if (action == 'openSelf') {
           return 'navigation.write';
+        }
+        // openOther מפעיל תוסף שלישי — הרשאה נפרדת וחזקה יותר.
+        if (action == 'openOther') {
+          return pluginOpenOtherPermission;
         }
         return null;
       default:

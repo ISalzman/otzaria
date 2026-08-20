@@ -7,6 +7,7 @@ import 'package:otzaria/tools/calendar/dialogs/calendar_event_dialog.dart';
 import 'package:otzaria/tools/calendar/dialogs/jump_to_date_dialog.dart'
     show JumpToDatePanel;
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
+import 'package:otzaria/tools/calendar/widgets/calendar_date_picker_panel.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_print_helpers.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
@@ -316,6 +317,54 @@ void main() {
       await tester.tap(find.byTooltip('כל היום'));
       await tester.pumpAndSettle();
       expect(find.text('הוספת שעה'), findsOneWidget);
+    });
+
+    testWidgets('תאריך סיום נבחר בבורר עברי/לועזי ולא בבורר לועזי בלבד', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() {
+        tester.view.resetDevicePixelRatio();
+        tester.binding.setSurfaceSize(null);
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showCalendarEventDialog(
+                  context: context,
+                  state: CalendarState.initial(),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('תאריך סיום'), findsOneWidget);
+      await tester.tap(find.text('בחר'));
+      await tester.pumpAndSettle();
+
+      // הבורר המשותף נפתח: לוח עם מתג עברי/לועזי + שדה הקלדה חופשית,
+      // ולא ה-DatePickerDialog הלועזי של המערכת.
+      expect(find.byType(CalendarDatePickerPanel), findsOneWidget);
+      expect(find.byType(CalendarTypeToggleButton), findsOneWidget);
+      expect(find.text('חיפוש תאריך'), findsOneWidget);
+      expect(find.byType(DatePickerDialog), findsNothing);
+
+      // הקלדת תאריך עברי עתידי ואישור ב-Enter קובעים תאריך סיום.
+      await tester.enterText(find.byType(TextField).last, 'טו תמוז תשצה');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('סיום:'), findsOneWidget);
     });
 
     testWidgets('recurring event requires a positive number of years', (

@@ -31,6 +31,19 @@ class BookContentRange {
   });
 }
 
+/// מפרש של ספר כפי שהוא יושב בשאילתות הקישורים: השם, המחבר ומספר הקישורים.
+class CommentatorInfo {
+  final String title;
+  final String? author;
+  final int linkCount;
+
+  const CommentatorInfo({
+    required this.title,
+    this.author,
+    this.linkCount = 0,
+  });
+}
+
 class TextBookRepository {
   final FileSystemData _fileSystem;
   final SqliteDataProvider _sqliteProvider;
@@ -364,6 +377,17 @@ class TextBookRepository {
   Future<({List<String> all, Set<String> rare})> getCommentatorsWithRarity(
     TextBook book,
   ) async {
+    final detailed = await getCommentatorsDetailed(book);
+    return (
+      all: [for (final c in detailed.commentators) c.title],
+      rare: detailed.rare,
+    );
+  }
+
+  /// אותם מפרשים של [getCommentatorsWithRarity], בלי לאבד את המחבר ומספר
+  /// הקישורים שהשאילתה כבר מחזירה. ממוין לפי שם.
+  Future<({List<CommentatorInfo> commentators, Set<String> rare})>
+  getCommentatorsDetailed(TextBook book) async {
     // מפרשים מקישורי-משתמש (user_books.db) — נוספים לרשימת המפרשים של כל
     // ספר; מפרש מיובא לעולם אינו "נדיר" (יובא במכוון).
     final userCommentators = (await loadUserCommentatorTitles(
@@ -371,8 +395,13 @@ class TextBookRepository {
       bookCategoryId: book.categoryId,
       isUserBook: book.isUserBook,
     )).toSet();
-    userOnly() =>
-        (all: userCommentators.toList()..sort(), rare: const <String>{});
+    userOnly() => (
+      commentators: [
+        for (final title in userCommentators.toList()..sort())
+          CommentatorInfo(title: title),
+      ],
+      rare: const <String>{},
+    );
 
     // ספרים אישיים אינם כוללים קישורי מפרשים במסד הנתונים הרשמי.
     // חיפוש לפי book.id ב-seforim.db יחזיר מפרשים של ספר רשמי עם אותו ID.
@@ -397,11 +426,16 @@ class TextBookRepository {
     // מפרש עשוי להופיע בכמה שורות (מחבר לכל שורה) עם אותו linkCount; לוקחים
     // את הערך המרבי כמספר הקישורים לספר.
     final linkCountByTitle = <String, int>{};
+    final authorByTitle = <String, String>{};
     for (final row in commentatorsData) {
       final title = row['targetBookTitle'] as String;
       final count = (row['linkCount'] as int?) ?? 0;
       if (count > (linkCountByTitle[title] ?? 0)) {
         linkCountByTitle[title] = count;
+      }
+      final author = row['author'] as String?;
+      if (author != null && author.isNotEmpty) {
+        authorByTitle.putIfAbsent(title, () => author);
       }
     }
 
@@ -411,7 +445,59 @@ class TextBookRepository {
       bookTotalLines: dbBook.totalLines,
       linkCountByCommentator: linkCountByTitle,
     ).difference(userCommentators);
-    return (all: all, rare: rare);
+    return (
+      commentators: [
+        for (final title in all)
+          CommentatorInfo(
+            title: title,
+            author: authorByTitle[title],
+            linkCount: linkCountByTitle[title] ?? 0,
+          ),
+      ],
+      rare: rare,
+    );
+  }
+
+  /// מפרשי הספר על טווח שורות המקור [startLine]–[endLine] (0-based, כולל) —
+  /// חיווט של `selectCommentatorsByLineRange` ששימשה עד כה רק את FindRef.
+  Future<List<CommentatorInfo>> getCommentatorsInLineRange(
+    TextBook book, {
+    required int startLine,
+    required int endLine,
+  }) async {
+    final repository = _sqliteProvider.repository;
+    if (repository == null || book.isUserBook) return const [];
+
+    final dbBook = book.categoryId != null
+        ? await repository.getBookByTitleAndCategory(
+            book.title,
+            book.categoryId!,
+          )
+        : await repository.getBookByTitle(book.title);
+    if (dbBook == null) return const [];
+
+    // הגבול העליון בשאילתה בלעדי, בעוד ש-[endLine] כולל את שורת הסיום.
+    final rows = await repository.database.linkDao
+        .selectCommentatorsByLineRange(
+          dbBook.id,
+          startLine,
+          endLine + 1,
+        );
+
+    final byTitle = <String, CommentatorInfo>{};
+    for (final row in rows) {
+      final title = row['targetBookTitle'] as String;
+      final count = (row['linkCount'] as int?) ?? 0;
+      final existing = byTitle[title];
+      if (existing == null || count > existing.linkCount) {
+        byTitle[title] = CommentatorInfo(
+          title: title,
+          author: row['author'] as String?,
+          linkCount: count,
+        );
+      }
+    }
+    return byTitle.values.toList()..sort((a, b) => a.title.compareTo(b.title));
   }
 
   /// מחזיר את "המפרשים הנוספים" על הקטע שבו יושבת שורת המקור [sourceLineIndex]

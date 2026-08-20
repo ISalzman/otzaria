@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
@@ -34,9 +35,10 @@ void main() {
   });
 
   setUp(() {
-    DataRepository.instance.library = Future.value(
-      Library(categories: const []),
-    );
+    // מפתח יציב ('id:1') חייב ספר תואם בקטלוג — מפתח שנעלם נחסם כאינדקס ישן.
+    final library = Library(categories: const []);
+    library.books.add(TextBook(id: 1, title: 'בראשית'));
+    DataRepository.instance.library = Future.value(library);
   });
 
   Future<TextBookTab> openFirstResult(
@@ -70,11 +72,13 @@ void main() {
       initialState: SettingsState.initial(),
     );
     final tabsBloc = _RecordingTabsBloc();
-    // הפותח קורא את הקונפיגורציה מה-bloc של טאב החיפוש עצמו.
+    // הפותח קורא את הקונפיגורציה מה-bloc של טאב החיפוש עצמו — מוזרם ה-bloc
+    // הסטטי, שגם עוקף את אימות טביעת האצבע האמיתי מול המנוע.
     final searchingTab = SearchingTab(
       'חיפוש',
       'תדע זרעך',
       initialConfiguration: configuration,
+      searchBloc: searchBloc,
     );
 
     addTearDown(() async {

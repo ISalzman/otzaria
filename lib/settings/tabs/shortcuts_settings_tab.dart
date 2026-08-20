@@ -706,6 +706,12 @@ class ShortcutsSettingsTab extends StatelessWidget {
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
+              settingKey: 'key-shortcut-search-tabs',
+              label: context.settingsText('חיפוש כרטיסיות'),
+              icon: FluentIcons.chevron_down_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
               settingKey: 'key-shortcut-toggle-nav-pane',
               label: context.settingsText('פתח/סגור חלונית ניווט'),
               icon: FluentIcons.panel_left_24_regular,

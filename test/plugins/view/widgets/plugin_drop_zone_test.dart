@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_inappwebview_windows/flutter_inappwebview_windows.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
@@ -9,8 +9,8 @@ import 'package:otzaria/plugins/services/plugin_file_drop_service.dart';
 import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
-import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 
 class _RecordingPluginSystemBloc
     extends Bloc<PluginSystemEvent, PluginSystemState>
@@ -47,9 +47,7 @@ void main() {
 
   setUp(() {
     pluginBloc = _RecordingPluginSystemBloc();
-    service = PluginFileDropService(
-      channel: const MethodChannel('test_file_drop'),
-    );
+    service = PluginFileDropService();
     PluginFileDropService.instance = service;
   });
 
@@ -91,28 +89,21 @@ void main() {
     await tester.pump();
   }
 
-  MethodCall drag(
-    String event, {
+  WindowsFileDropEvent at({
     List<String> paths = const [],
     required double logicalX,
     required double logicalY,
-  }) => MethodCall('onFileDrop', {
-    'event': event,
-    'paths': paths,
-    'x': logicalX * _ratio,
-    'y': logicalY * _ratio,
-  });
+  }) => WindowsFileDropEvent(
+    paths: paths,
+    x: logicalX * _ratio,
+    y: logicalY * _ratio,
+  );
 
   testWidgets('גרירת ‎.otzplugin‎ מעל האזור מציגה חיווי שחרור', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag(
-        'enter',
-        paths: ['C:/x.otzplugin'],
-        logicalX: 50,
-        logicalY: 50,
-      ),
+    service.handleDrag(
+      at(paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
     );
     await tester.pump();
 
@@ -122,13 +113,8 @@ void main() {
   testWidgets('גרירה מחוץ לאזור אינה מציגה חיווי', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag(
-        'enter',
-        paths: ['C:/x.otzplugin'],
-        logicalX: 300,
-        logicalY: 300,
-      ),
+    service.handleDrag(
+      at(paths: ['C:/x.otzplugin'], logicalX: 300, logicalY: 300),
     );
     await tester.pump();
 
@@ -138,62 +124,59 @@ void main() {
   testWidgets('קובץ שאינו תוסף אינו מציג חיווי', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('enter', paths: ['C:/x.txt'], logicalX: 50, logicalY: 50),
-    );
+    service.handleDrag(at(paths: ['C:/x.txt'], logicalX: 50, logicalY: 50));
     await tester.pump();
 
     expect(find.text('שחרר כדי להתקין את התוסף'), findsNothing);
   });
 
-  testWidgets('סמן הגרירה מאושר רק מעל האזור', (tester) async {
+  testWidgets('הגרירה מאושרת ל-native רק מעל האזור', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('enter', paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
+    // ה-enter הראשון מגיע לפני שהאזור סימן את עצמו, ולכן עדיין אינו מאושר.
+    service.handleDrag(
+      at(paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
     );
-    await tester.pump();
-    expect(service.acceptedForTest, isTrue);
+    expect(
+      service.handleDrag(
+        at(paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
+      ),
+      isTrue,
+    );
 
-    await service.handleNativeCall(
-      drag('over', logicalX: 300, logicalY: 300),
-    );
-    await tester.pump();
-    expect(service.acceptedForTest, isFalse);
+    expect(service.handleDrag(at(logicalX: 300, logicalY: 300)), isFalse);
   });
 
-  testWidgets('קובץ שאינו תוסף אינו מאשר את הסמן', (tester) async {
+  testWidgets('קובץ שאינו תוסף אינו מאושר', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('enter', paths: ['C:/x.txt'], logicalX: 50, logicalY: 50),
-    );
-    await tester.pump();
+    service.handleDrag(at(paths: ['C:/x.txt'], logicalX: 50, logicalY: 50));
 
-    expect(service.acceptedForTest, isFalse);
+    expect(
+      service.handleDrag(at(paths: ['C:/x.txt'], logicalX: 50, logicalY: 50)),
+      isFalse,
+    );
   });
 
-  testWidgets('סיום הגרירה מבטל את אישור הסמן', (tester) async {
+  testWidgets('סיום הגרירה מנקה את מצב האזור', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('enter', paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
+    service.handleDrag(
+      at(paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
     );
     await tester.pump();
-    expect(service.acceptedForTest, isTrue);
+    expect(find.text('שחרר כדי להתקין את התוסף'), findsOneWidget);
 
-    await service.handleNativeCall(
-      MethodCall('onFileDrop', {'event': 'leave'}),
-    );
+    service.handleLeave();
     await tester.pump();
-    expect(service.acceptedForTest, isFalse);
+    expect(find.text('שחרר כדי להתקין את התוסף'), findsNothing);
   });
 
   testWidgets('שחרור בתוך האזור מבקש התקנה', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('drop', paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
+    await service.handleDrop(
+      at(paths: ['C:/x.otzplugin'], logicalX: 50, logicalY: 50),
     );
     await tester.pumpAndSettle();
 
@@ -205,8 +188,8 @@ void main() {
   testWidgets('שחרור מחוץ לאזור אינו מבקש התקנה', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('drop', paths: ['C:/x.otzplugin'], logicalX: 300, logicalY: 300),
+    await service.handleDrop(
+      at(paths: ['C:/x.otzplugin'], logicalX: 300, logicalY: 300),
     );
     await tester.pumpAndSettle();
 
@@ -216,8 +199,8 @@ void main() {
   testWidgets('שחרור קובץ שאינו תוסף אינו מבקש התקנה', (tester) async {
     await pumpZone(tester);
 
-    await service.handleNativeCall(
-      drag('drop', paths: ['C:/x.txt'], logicalX: 50, logicalY: 50),
+    await service.handleDrop(
+      at(paths: ['C:/x.txt'], logicalX: 50, logicalY: 50),
     );
     await tester.pumpAndSettle();
 

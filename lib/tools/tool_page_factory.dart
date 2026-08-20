@@ -45,10 +45,14 @@ Widget? buildBuiltInToolPage(
 /// ה-key כולל `version` ו-`updatedAt` כדי שעדכון התוסף יאלץ יצירה מחדש של
 /// ה-State: ל-`PluginTabPage.initState` יש לוגיקה שתלויה בנתיב ובגשר, ובלי
 /// הרחבת המפתח Flutter היה משתמש שוב ב-State הישן עם הנתיב הישן.
-Widget buildPluginToolPage(InstalledPlugin plugin) => PluginTabPage(
+Widget buildPluginToolPage(
+  InstalledPlugin plugin, {
+  required String instanceId,
+}) => PluginTabPage(
   key: ValueKey(
     'plugin-tab-${plugin.pluginId}-${plugin.version}-'
     '${plugin.updatedAt.millisecondsSinceEpoch}',
   ),
   plugin: plugin,
+  instanceId: instanceId,
 );

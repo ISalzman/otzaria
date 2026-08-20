@@ -102,6 +102,25 @@ void main() {
       expect(adding, isTrue);
     });
 
+    test(
+      'לחיצה על מפרש פעיל אינה מסירה אותו ומסומנת כהוספה (פתיחת חלונית)',
+      () {
+        List<String>? updated;
+        bool? adding;
+        final entries = build(
+          active: const ['רש"י', 'רמב"ן'],
+          onChange: (commentators, {required isAdding}) {
+            updated = commentators;
+            adding = isAdding;
+          },
+        );
+
+        entryNamed(entries, 'רש"י').onTap!();
+        expect(updated, ['רש"י', 'רמב"ן']);
+        expect(adding, isTrue);
+      },
+    );
+
     test('לחיצה על קבוצה פעילה מסירה את כל מפרשיה בלבד', () {
       List<String>? updated;
       bool? adding;

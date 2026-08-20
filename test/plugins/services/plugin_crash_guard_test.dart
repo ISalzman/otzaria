@@ -31,7 +31,8 @@ void main() {
 
     test('markLoadAttempt persists the plugin id', () async {
       await PluginCrashGuard.markLoadAttempt('com.example.plugin');
-      expect(PluginCrashGuard.isBlocked('com.example.plugin'), true);
+      // בתוך הסשן שבו הניסיון קרה — לא חסום (הטעינה עוד בטיסה, לא קריסה)
+      expect(PluginCrashGuard.isBlocked('com.example.plugin'), false);
 
       // simulate a fresh app launch
       PluginCrashGuard.resetForTesting();
@@ -170,9 +171,9 @@ void main() {
       await PluginCrashGuard.retry('com.crash.plugin');
       expect(PluginCrashGuard.isBlocked('com.crash.plugin'), false);
 
-      // Retry triggers a new load attempt
+      // Retry triggers a new load attempt — עדיין לא חסום בסשן הנוכחי
       await PluginCrashGuard.markLoadAttempt('com.crash.plugin');
-      expect(PluginCrashGuard.isBlocked('com.crash.plugin'), true);
+      expect(PluginCrashGuard.isBlocked('com.crash.plugin'), false);
 
       // Crashes again (no success call). Third launch: still blocked.
       PluginCrashGuard.resetForTesting();
@@ -193,8 +194,6 @@ void main() {
 
     test('markLoadSuccessSync clears the plugin from disk', () async {
       await PluginCrashGuard.markLoadAttempt('com.sync.plugin');
-      // sanity: blocked now
-      expect(PluginCrashGuard.isBlocked('com.sync.plugin'), true);
 
       // sync clear (the path used by dispose())
       PluginCrashGuard.markLoadSuccessSync('com.sync.plugin');
@@ -214,7 +213,7 @@ void main() {
     test('markLoadAttemptSync persists immediately', () async {
       await PluginCrashGuard.ensureInitialized();
       PluginCrashGuard.markLoadAttemptSync('com.sync.attempt');
-      expect(PluginCrashGuard.isBlocked('com.sync.attempt'), true);
+      expect(PluginCrashGuard.isBlocked('com.sync.attempt'), false);
 
       // verified on next "launch"
       PluginCrashGuard.resetForTesting();
@@ -224,6 +223,94 @@ void main() {
 
     test('markLoadAttemptSync is safe when not initialized yet', () {
       PluginCrashGuard.markLoadAttemptSync('something'); // לא זורק
+    });
+
+    test('ניסיון בסשן הנוכחי אינו נחשב חסימה — rebuild באמצע טעינה לא '
+        'מציג "התוסף קרס"', () async {
+      // תוסף שנחסם בהפעלה קודמת (ניסיון בלי הצלחה), המשתמש לחץ "נסה שוב"
+      await PluginCrashGuard.markLoadAttempt('com.live.plugin');
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.live.plugin'), true);
+
+      await PluginCrashGuard.retry('com.live.plugin');
+      await PluginCrashGuard.markLoadAttempt('com.live.plugin');
+
+      // ה-canary על הדיסק, אבל בסשן הזה אסור לחסום את הטעינה החיה
+      expect(PluginCrashGuard.isBlocked('com.live.plugin'), false);
+
+      // ואם בכל זאת קרס — ההפעלה הבאה כן חוסמת
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.live.plugin'), true);
+    });
+
+    test(
+      'markCleanShutdownSync מנקה canaries בטיסה אך לא quarantine קיים',
+      () async {
+        // quarantine מהפעלה קודמת + טעינה חדשה שבטיסה ברגע הסגירה
+        await PluginCrashGuard.markLoadAttempt('com.old.blocked');
+        PluginCrashGuard.resetForTesting();
+        await PluginCrashGuard.ensureInitialized();
+        await PluginCrashGuard.markLoadAttempt('com.inflight.plugin');
+
+        PluginCrashGuard.markCleanShutdownSync();
+
+        // הפעלה הבאה: הבטיסה נוקתה, החסום נשאר חסום
+        PluginCrashGuard.resetForTesting();
+        await PluginCrashGuard.ensureInitialized();
+        expect(PluginCrashGuard.isBlocked('com.inflight.plugin'), false);
+        expect(PluginCrashGuard.isBlocked('com.old.blocked'), true);
+      },
+    );
+
+    test('markCleanShutdownSync בטוח לפני אתחול', () {
+      PluginCrashGuard.markCleanShutdownSync(); // לא זורק
+    });
+
+    test('canary נשאר עד אירוע מפורש — אין ניקוי לפי זמן', () async {
+      await PluginCrashGuard.markLoadAttempt('com.slow.plugin');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      // קריסה אחרי טעינה איטית — עדיין נתפסת בהפעלה הבאה
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.slow.plugin'), true);
+    });
+
+    test('שני מופעים טוענים — סגירת האחד לא מנקה canary של השני', () async {
+      await PluginCrashGuard.ensureInitialized();
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-2');
+
+      // המופע הראשון נסגר תקין בזמן שהשני עוד באמצע טעינה — ואז קריסה.
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-1');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), true);
+    });
+
+    test('שני מופעים — ה-canary נמחק רק כשהאחרון שבהם מסיים', () async {
+      await PluginCrashGuard.ensureInitialized();
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadAttemptSync('com.two.plugin', owner: 'tab-2');
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-1');
+      PluginCrashGuard.markLoadSuccessSync('com.two.plugin', owner: 'tab-2');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), false);
+    });
+
+    test('מסלול async עם שני מופעים מתנהג זהה למסלול ה-sync', () async {
+      await PluginCrashGuard.markLoadAttempt('com.two.plugin', owner: 'tab-1');
+      await PluginCrashGuard.markLoadAttempt('com.two.plugin', owner: 'tab-2');
+      await PluginCrashGuard.markLoadSuccess('com.two.plugin', owner: 'tab-1');
+
+      PluginCrashGuard.resetForTesting();
+      await PluginCrashGuard.ensureInitialized();
+      expect(PluginCrashGuard.isBlocked('com.two.plugin'), true);
     });
 
     test('attempt+success סינכרוני אטומי — אין race', () async {

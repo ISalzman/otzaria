@@ -772,7 +772,7 @@ void main() {
             actions: const [
               ToolTileAction(
                 icon: FluentIcons.arrow_left_24_regular,
-                label: 'הזז אחורה',
+                label: 'הזז קדימה',
                 onTap: null,
               ),
             ],
@@ -784,7 +784,7 @@ void main() {
       await tester.pumpAndSettle();
       final item = tester.widget<PopupMenuItem<VoidCallback>>(
         find.ancestor(
-          of: find.text('הזז אחורה'),
+          of: find.text('הזז קדימה'),
           matching: find.byType(PopupMenuItem<VoidCallback>),
         ),
       );
@@ -845,7 +845,7 @@ void main() {
                 children: [
                   ToolTileAction(
                     icon: FluentIcons.arrow_left_24_regular,
-                    label: 'הזז אחורה',
+                    label: 'הזז קדימה',
                     onTap: () => moved++,
                   ),
                 ],
@@ -858,11 +858,11 @@ void main() {
       await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
       await tester.pumpAndSettle();
       expect(find.text('הזזה'), findsOneWidget);
-      expect(find.text('הזז אחורה'), findsNothing);
+      expect(find.text('הזז קדימה'), findsNothing);
 
       await tester.tap(find.text('הזזה'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('הזז אחורה'));
+      await tester.tap(find.text('הזז קדימה'));
       await tester.pumpAndSettle();
       expect(moved, 1);
     });
@@ -879,7 +879,7 @@ void main() {
                 children: [
                   ToolTileAction(
                     icon: FluentIcons.arrow_left_24_regular,
-                    label: 'הזז אחורה',
+                    label: 'הזז קדימה',
                     onTap: null,
                   ),
                 ],
@@ -897,7 +897,7 @@ void main() {
       // היא מרונדרת כשורה רגילה מעומעמת — בלי תת-פעולות בכלל.
       await tester.tap(find.text('הזזה'));
       await tester.pumpAndSettle();
-      expect(find.text('הזז אחורה'), findsNothing);
+      expect(find.text('הזז קדימה'), findsNothing);
     });
 
     testWidgets('פעימת הזזה אינה זורקת ומתייצבת', (tester) async {
@@ -1182,11 +1182,11 @@ void main() {
       expect(find.text('הסר מסרגל הניווט'), findsOneWidget);
     });
 
-    // בראש הקבוצה אין "אחורה" — הלחיצה על פריט מושבת אינה משנה סדר.
-    testWidgets('בראש הקבוצה "הזז אחורה" אינו עושה דבר', (tester) async {
+    // בראש הקבוצה אין "קדימה" — הלחיצה על פריט מושבת אינה משנה סדר.
+    testWidgets('בראש הקבוצה "הזז קדימה" אינו עושה דבר', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז קדימה');
 
       expect(
         settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>(),
@@ -1194,10 +1194,10 @@ void main() {
       );
     });
 
-    testWidgets('בסוף הקבוצה "הזז קדימה" אינו עושה דבר', (tester) async {
+    testWidgets('בסוף הקבוצה "הזז אחורה" אינו עושה דבר', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'ראשי תיבות');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז אחורה');
 
       expect(
         settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>(),
@@ -1207,10 +1207,10 @@ void main() {
 
     // ── פעולות בפועל ────────────────────────────────────────────────────────
 
-    testWidgets('"הזז קדימה" על כלי מובנה שומר סדר חדש', (tester) async {
+    testWidgets('"הזז אחורה" על כלי מובנה שומר סדר חדש', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז אחורה');
 
       final event = settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>();
       expect(event, hasLength(1));
@@ -1225,10 +1225,10 @@ void main() {
       );
     });
 
-    testWidgets('"הזז אחורה" על כלי מובנה מקדים אותו לשכנו', (tester) async {
+    testWidgets('"הזז קדימה" על כלי מובנה מקדים אותו לשכנו', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'הערות אישיות');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז קדימה');
 
       final order = settingsBloc.recorded
           .whereType<UpdateBuiltInToolsOrder>()
@@ -1325,10 +1325,10 @@ void main() {
       expect(event.builtInToolsPinnedToNavRail, {'builtin.gematria'});
     });
 
-    testWidgets('"הזז קדימה" על תוסף משגר סידור תוספים', (tester) async {
+    testWidgets('"הזז אחורה" על תוסף משגר סידור תוספים', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'תוסף א');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז אחורה');
 
       final event = pluginSystemBloc.recorded
           .whereType<ReorderPluginsRequested>()
@@ -1710,7 +1710,7 @@ void main() {
     ) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז אחורה');
 
       expect(tester.takeException(), isNull);
       expect(

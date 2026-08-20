@@ -1,8 +1,14 @@
 import 'dart:collection';
+import 'dart:convert';
 
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
 
 abstract interface class DeclarativeBookResolver {
   /// מחזיר זהויות קנוניות לפי סדר הקלט; התאמה שאינה יחידה מוחזרת כ-null.
@@ -16,16 +22,24 @@ abstract interface class DeclarativeBookResolver {
 typedef DeclarativeParallelEditionsFinder =
     Future<List<Map<String, dynamic>>> Function(Map<String, dynamic> identity);
 
+Object? _defaultSettingReader(String key) => Settings.getValue(key);
+
 class DeclarativeProgramExecutor {
   final PluginDatabaseService _databaseService;
+  final PluginRegistryRepository _registryRepository;
+  final PluginSettingReader _settingReader;
   final DeclarativeBookResolver? bookResolver;
   final DeclarativeParallelEditionsFinder? parallelEditionsFinder;
 
   DeclarativeProgramExecutor({
     PluginDatabaseService? databaseService,
+    PluginRegistryRepository? registryRepository,
+    PluginSettingReader? settingReader,
     this.bookResolver,
     this.parallelEditionsFinder,
-  }) : _databaseService = databaseService ?? PluginDatabaseService();
+  }) : _databaseService = databaseService ?? PluginDatabaseService(),
+       _registryRepository = registryRepository ?? PluginRegistryRepository(),
+       _settingReader = settingReader ?? _defaultSettingReader;
 
   Future<DeclarativeProgramResult> execute({
     required CompiledDeclarativeProgram program,
@@ -136,6 +150,24 @@ class DeclarativeProgramExecutor {
               row: row,
             ),
         ];
+      case 'settings.get':
+        final key = command.args['key'] as String;
+        if (!PluginSettingsAccessPolicy.isReadable(key)) return null;
+        return _settingReader(key);
+      case 'storage.get':
+        // נעול ל-namespace של הגשר — namespaces פנימיים
+        // (user_file_grants, otzaria.startup) אינם חשופים לתוסף.
+        final raw = await _registryRepository.getKV(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+          command.args['key'] as String,
+        );
+        if (raw == null) return null;
+        try {
+          return jsonDecode(raw);
+        } on FormatException {
+          return raw;
+        }
       case 'library.parallelEditions':
         final finder = parallelEditionsFinder;
         if (finder == null) {

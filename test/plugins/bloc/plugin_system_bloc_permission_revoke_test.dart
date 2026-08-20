@@ -25,6 +25,9 @@ class _FakeRepo implements PluginRegistryRepository {
       [];
 
   @override
+  Future<List<String>> getGrantedPermissionNames(String id) async => [];
+
+  @override
   Future<List<InstalledPlugin>> getAllPlugins() async => [];
 
   @override
@@ -50,6 +53,13 @@ class _FakeDeclarativeHost implements DeclarativePluginHost {
   Future<void> dispatchAction(
     String pluginId,
     CompiledDeclarativeAction action,
+  ) async {}
+
+  @override
+  Future<void> dispatchSelectionAction(
+    String pluginId,
+    Map<String, dynamic> actionTemplate,
+    Map<String, dynamic> selectionPayload,
   ) async {}
 
   @override

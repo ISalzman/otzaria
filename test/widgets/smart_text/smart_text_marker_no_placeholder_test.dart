@@ -48,6 +48,9 @@ void main() {
     'סמן הערת ספר':
         'לפני <a class="book-note-marker" href="otzaria://note?id=1">א</a> '
         'אחרי',
+    'סמן הערת ספר מספרי (ספרות-עיליות)':
+        'לפני <a class="book-note-marker-sup" href="otzaria://note?id=1">³</a> '
+        'אחרי',
     'עוגן מפרש':
         'לפני <a class="link-anchor link-anchor-2" '
         'href="otzaria://anchor?ref=3_0">א</a> אחרי',

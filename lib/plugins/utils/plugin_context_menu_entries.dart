@@ -1,15 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:provider/provider.dart';
+
+/// ביצוע פעולת host דקלרטיבית של פריט תפריט הקשר (`item.action`) —
+/// מסופק ע"י DeclarativePluginHost, בלי להעיר את מנוע התוסף.
+typedef PluginSelectionActionDispatcher =
+    Future<void> Function(
+      String pluginId,
+      Map<String, dynamic> actionTemplate,
+      Map<String, dynamic> selectionPayload,
+    );
+
+/// איתור מבצע פעולות הסימון מעץ ה-widgets. עץ בלי PluginSystemBloc
+/// (בדיקות widget) מחזיר null — פריט עם action פשוט לא יבצע דבר.
+PluginSelectionActionDispatcher? pluginSelectionActionDispatcherOf(
+  BuildContext context,
+) {
+  try {
+    return context
+        .read<PluginSystemBloc>()
+        .declarativeHost
+        ?.dispatchSelectionAction;
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
 
 List<AppContextMenuEntry> buildPluginContextMenuEntries({
   required List<(String pluginId, PluginContextMenuItem item)> records,
   required Map<String, dynamic> selection,
   String context = 'reader-selection',
   PluginRuntimeDispatcher? dispatcher,
+  PluginSelectionActionDispatcher? selectionActionDispatcher,
 }) {
   final runtime = dispatcher ?? PluginRuntimeDispatcher.instance;
   final selectedText = _selectedTextOf(selection);
@@ -23,6 +51,7 @@ List<AppContextMenuEntry> buildPluginContextMenuEntries({
           selection: selection,
           context: context,
           dispatcher: runtime,
+          selectionActionDispatcher: selectionActionDispatcher,
         ),
   ];
 }
@@ -36,6 +65,7 @@ AppContextMenuEntry _buildEntry({
   required Map<String, dynamic> selection,
   required String context,
   required PluginRuntimeDispatcher dispatcher,
+  PluginSelectionActionDispatcher? selectionActionDispatcher,
 }) {
   if (item.type == 'separator') return const AppContextMenuEntry.divider();
   if (item.type == 'color-row') {
@@ -57,6 +87,7 @@ AppContextMenuEntry _buildEntry({
               'selection': selection,
             },
             preferBackground: true,
+            instanceId: _targetInstanceId(dispatcher, pluginId, item),
           ),
         ),
     ]);
@@ -75,8 +106,21 @@ AppContextMenuEntry _buildEntry({
               selection: selection,
               context: context,
               dispatcher: dispatcher,
+              selectionActionDispatcher: selectionActionDispatcher,
             ),
       ],
+    );
+  }
+  final action = item.action;
+  if (action != null) {
+    return AppContextMenuEntry(
+      label: item.label,
+      icon: fluentIconFromName(item.icon),
+      onTap: () => selectionActionDispatcher?.call(
+        pluginId,
+        action,
+        _clickPayload(item: item, selection: selection),
+      ),
     );
   }
   return AppContextMenuEntry(
@@ -91,26 +135,41 @@ AppContextMenuEntry _buildEntry({
   );
 }
 
+Map<String, dynamic> _clickPayload({
+  required PluginContextMenuItem item,
+  required Map<String, dynamic> selection,
+}) => {
+  'itemId': item.id,
+  'selection': selection,
+  'selectedText': selection['renderedSelectedText'] ?? selection['text'] ?? '',
+  'currentRef': selection['currentRef'],
+  'currentBook': selection['bookTitle'] ?? selection['currentBook'],
+  'currentBookId': selection['bookId'] ?? selection['currentBookId'],
+  'currentIndex': selection['sectionIndex'] ?? selection['currentIndex'],
+  if (selection['id'] != null) 'id': selection['id'],
+  if (selection['type'] != null) 'type': selection['type'],
+  if (selection['source'] != null) 'source': selection['source'],
+  'param': item.param,
+};
+
+/// מופע היעד ללחיצה על [item]: קדמי גלוי מבין המופעים שרשמו אותו, אחרת
+/// הקדמי האחרון שנרשם; אין קדמי חי — null והדיספצ'ר בוחר (רקע/החייאה).
+String? _targetInstanceId(
+  PluginRuntimeDispatcher dispatcher,
+  String pluginId,
+  PluginContextMenuItem item,
+) => dispatcher.pickContributionTarget(
+  pluginId,
+  ContextMenuRegistry.instance.instanceIdsForItem(pluginId, item.id),
+);
+
 Future<void> _dispatchItemClick({
   required PluginRuntimeDispatcher dispatcher,
   required String pluginId,
   required PluginContextMenuItem item,
   required Map<String, dynamic> selection,
 }) async {
-  final payload = <String, dynamic>{
-    'itemId': item.id,
-    'selection': selection,
-    'selectedText':
-        selection['renderedSelectedText'] ?? selection['text'] ?? '',
-    'currentRef': selection['currentRef'],
-    'currentBook': selection['bookTitle'] ?? selection['currentBook'],
-    'currentBookId': selection['bookId'] ?? selection['currentBookId'],
-    'currentIndex': selection['sectionIndex'] ?? selection['currentIndex'],
-    if (selection['id'] != null) 'id': selection['id'],
-    if (selection['type'] != null) 'type': selection['type'],
-    if (selection['source'] != null) 'source': selection['source'],
-    'param': item.param,
-  };
+  final payload = _clickPayload(item: item, selection: selection);
   if (item.openPlugin) {
     // אותם אירועים כמו במסלול הרגיל, בתור המסירה של דף התוסף.
     PluginPageLauncher.instance.open(
@@ -127,11 +186,13 @@ Future<void> _dispatchItemClick({
     }
     return;
   }
+  final instanceId = _targetInstanceId(dispatcher, pluginId, item);
   await dispatcher.dispatchEventToPlugin(
     pluginId,
     item.onClickEvent ?? 'contextMenu.itemClicked',
     payload,
     preferBackground: true,
+    instanceId: instanceId,
   );
   if (item.onClickEvent == null) {
     await dispatcher.dispatchEventToPlugin(
@@ -139,6 +200,7 @@ Future<void> _dispatchItemClick({
       'reader.context_menu_item_clicked',
       payload,
       preferBackground: true,
+      instanceId: instanceId,
     );
   }
 }

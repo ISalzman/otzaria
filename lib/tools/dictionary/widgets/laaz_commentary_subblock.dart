@@ -19,7 +19,7 @@ bool isRashiTitle(String title) {
 }
 
 /// תת-בלוק המציג את ערכי "אוצר לעזי רש"י" המקושרים לשורת הרש"י הנוכחית,
-/// מתחת לטקסט הפירוש. כל ערך: שם הלעז מודגש + הפירוש העברי באותה שורה.
+/// מתחת לטקסט הפירוש. כל ערך: מילת הערך מרש"י — שם הלעז מודגש + הפירוש.
 /// נעדר בשקט אם אין לעז לשורה או אם הספר חסר במסד.
 class LaazCommentarySubBlock extends StatefulWidget {
   /// חיווט מבוסס-Link: גוזר את כותרת הרש"י והשורה מתוך יעד הקישור.
@@ -146,8 +146,8 @@ class _LaazCommentarySubBlockState extends State<LaazCommentarySubBlock> {
   }
 }
 
-/// שורת ערך-לעז בודדת: שם הלעז מודגש ואחריו הפירוש העברי.
-/// פירוש ריק => שם הלעז לבד (בלי שורת פירוש ריקה).
+/// שורת ערך-לעז בודדת: מילת הערך מדברי רש"י (העוגן), שם הלעז מודגש והפירוש.
+/// המילה חובה בתצוגה — הלעז לעיתים אינו מודפס ברש"י כלל (issue #884).
 class _LaazEntryLine extends StatelessWidget {
   const _LaazEntryLine({
     required this.entry,
@@ -162,7 +162,6 @@ class _LaazEntryLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final title = entry.laazHebrew.isNotEmpty ? entry.laazHebrew : entry.lemma;
     final baseStyle = TextStyle(
       fontFamily: fontFamily,
       fontSize: fontSize,
@@ -176,12 +175,19 @@ class _LaazEntryLine extends StatelessWidget {
         TextSpan(
           children: [
             TextSpan(
-              text: title,
-              style: baseStyle.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
+              text: entry.lemma,
+              style: baseStyle.copyWith(fontWeight: FontWeight.bold),
             ),
+            if (entry.laazHebrew.isNotEmpty) ...[
+              TextSpan(text: ' — ', style: baseStyle),
+              TextSpan(
+                text: entry.laazHebrew,
+                style: baseStyle.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
             if (entry.meaning.isNotEmpty)
               TextSpan(text: ' ${entry.meaning}', style: baseStyle),
           ],

@@ -508,7 +508,7 @@ void main() {
           'notes.read',
           pluginStartupContributionsPermission,
           pluginRunOnStartupPermission,
-          'ui.feedback',
+          'calendar.read',
         ],
       ),
       screenHeight: 1400,
@@ -519,11 +519,11 @@ void main() {
         .getTopLeft(find.text('הוספת רכיבים לתוכנה'))
         .dy;
     final notesY = tester.getTopLeft(find.text('צפייה בהערות')).dy;
-    final feedbackY = tester.getTopLeft(find.text('הודעות ודיאלוגים')).dy;
+    final calendarY = tester.getTopLeft(find.text('לוח שנה עברי')).dy;
     expect(sensitiveY, lessThan(notesY));
     expect(contributionsY, lessThan(notesY));
-    expect(sensitiveY, lessThan(feedbackY));
-    expect(notesY, lessThan(feedbackY), reason: 'סדר המניפסט נשמר בין השאר');
+    expect(sensitiveY, lessThan(calendarY));
+    expect(notesY, lessThan(calendarY), reason: 'סדר המניפסט נשמר בין השאר');
   });
 
   testWidgets('הרשאת הוספת רכיבים מתחילה כבויה ברירת מחדל', (tester) async {
@@ -569,11 +569,11 @@ void main() {
     await _openDialog(
       tester,
       bloc,
-      _manifest(permissions: ['app.info.read']),
+      _manifest(permissions: ['notes.read']),
     );
 
     final rowFinder = find.ancestor(
-      of: find.text('מידע אפליקציה'),
+      of: find.text('צפייה בהערות'),
       matching: find.byType(ListTile),
     );
     expect(rowFinder, findsOneWidget);
@@ -727,6 +727,34 @@ void main() {
     },
   );
 
+  testWidgets('הגרסה הקודמת נשלחת ב-ConfirmPluginInstall ומסמנת עדכון', (
+    tester,
+  ) async {
+    await _openDialog(tester, bloc, _manifest(), previousVersion: '1.0.0');
+
+    await tester.ensureVisible(find.text('עדכן'));
+    await tester.tap(find.text('עדכן'));
+    await tester.pumpAndSettle();
+
+    final event = bloc.capturedEvents.whereType<ConfirmPluginInstall>().first;
+    expect(event.previousVersion, '1.0.0');
+    expect(event.isUpdate, isTrue);
+  });
+
+  testWidgets('בהתקנה ראשונה ConfirmPluginInstall אינו מסומן כעדכון', (
+    tester,
+  ) async {
+    await _openDialog(tester, bloc, _manifest());
+
+    await tester.ensureVisible(find.text('התקן'));
+    await tester.tap(find.text('התקן'));
+    await tester.pumpAndSettle();
+
+    final event = bloc.capturedEvents.whereType<ConfirmPluginInstall>().first;
+    expect(event.previousVersion, isNull);
+    expect(event.isUpdate, isFalse);
+  });
+
   // ── עדכון: רק הרשאות חדשות/כבויות ──
 
   testWidgets('עדכון ללא הרשאות חדשות — דיאלוג אישור עדכון בלבד', (
@@ -798,9 +826,9 @@ void main() {
     await _openDialog(
       tester,
       bloc,
-      _manifest(permissions: ['app.info.read', 'notes.read']),
+      _manifest(permissions: ['calendar.read', 'notes.read']),
       previousVersion: '1.0.0',
-      previousGrantedPermissions: const {'app.info.read': false},
+      previousGrantedPermissions: const {'calendar.read': false},
       screenHeight: 1400,
     );
 
@@ -812,7 +840,7 @@ void main() {
         .whereType<ConfirmPluginInstall>()
         .first
         .grantedPermissions;
-    expect(perms['app.info.read'], isFalse, reason: 'החלטת העבר נשמרת');
+    expect(perms['calendar.read'], isFalse, reason: 'החלטת העבר נשמרת');
     expect(
       perms['notes.read'],
       isTrue,
@@ -895,7 +923,7 @@ void main() {
       await _openDialog(
         tester,
         bloc,
-        _manifest(permissions: ['app.info.read']),
+        _manifest(permissions: ['notes.read']),
       );
 
       await tester.ensureVisible(find.text('התקן'));
@@ -906,7 +934,7 @@ void main() {
           .whereType<ConfirmPluginInstall>();
       expect(confirmEvents, isNotEmpty);
       expect(
-        confirmEvents.first.grantedPermissions['app.info.read'],
+        confirmEvents.first.grantedPermissions['notes.read'],
         isTrue,
         reason: 'הרשאה רגילה חייבת להיות true ברירת מחדל',
       );
@@ -953,7 +981,7 @@ void main() {
       await _openDialog(
         tester,
         bloc,
-        _manifest(permissions: [pluginRunOnStartupPermission, 'app.info.read']),
+        _manifest(permissions: [pluginRunOnStartupPermission, 'notes.read']),
         screenHeight: 1400,
       );
 
@@ -971,9 +999,9 @@ void main() {
         reason: 'app.run_on_startup חייב להיות false',
       );
       expect(
-        perms['app.info.read'],
+        perms['notes.read'],
         isTrue,
-        reason: 'app.info.read חייב להיות true',
+        reason: 'notes.read חייב להיות true',
       );
     },
   );

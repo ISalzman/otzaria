@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
 /// הפעלה עצלה של מופע רקע לתוסף עם תרומות עלייה (`contributes.startup`).
@@ -12,10 +15,15 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 class PluginLazyActivationService {
   static final PluginLazyActivationService instance =
       PluginLazyActivationService._();
-  PluginLazyActivationService._();
+  PluginLazyActivationService._()
+    : _conditions = PluginConditionEvaluator.instance;
 
   @visibleForTesting
-  PluginLazyActivationService.forTesting();
+  PluginLazyActivationService.forTesting({
+    PluginConditionEvaluator? conditionEvaluator,
+  }) : _conditions = conditionEvaluator ?? PluginConditionEvaluator.instance;
+
+  final PluginConditionEvaluator _conditions;
 
   static const int _maxPendingPerPlugin = 20;
 
@@ -55,6 +63,10 @@ class PluginLazyActivationService {
   /// נושאי שידור שמעירים כל תוסף (מסונכרן כולל בדיקת הרשאת subscribe).
   final Map<String, Set<String>> _broadcastTopics = {};
 
+  /// pluginId → נושא → תנאי `when` שחייב להתקיים כדי להעיר את המנוע.
+  final Map<String, Map<String, PluginWhenCondition>> _activationConditions =
+      {};
+
   final Map<String, List<({String topic, Map<String, dynamic> payload})>>
   _pending = {};
   final Map<String, int> _activating = {};
@@ -79,10 +91,16 @@ class PluginLazyActivationService {
     required Set<String> broadcastTopics,
     required bool scheduleStartup,
     bool keepAlive = false,
+    Map<String, PluginWhenCondition> activationConditions = const {},
   }) {
     _activationGenerations.putIfAbsent(pluginId, () => 0);
     _activatable.add(pluginId);
     _broadcastTopics[pluginId] = Set.unmodifiable(broadcastTopics);
+    if (activationConditions.isEmpty) {
+      _activationConditions.remove(pluginId);
+    } else {
+      _activationConditions[pluginId] = Map.unmodifiable(activationConditions);
+    }
     if (keepAlive) {
       _keepAlive.add(pluginId);
       _idleTimers.remove(pluginId)?.cancel();
@@ -92,7 +110,14 @@ class PluginLazyActivationService {
     }
     if (scheduleStartup && _startupFired.add(pluginId)) {
       Timer(startupDelayOverride ?? startupActivationDelay, () {
-        if (_activatable.contains(pluginId)) _activate(pluginId);
+        if (!_activatable.contains(pluginId)) return;
+        if (!_activationAllowed(
+          pluginId,
+          PluginStartupContributions.startupActivationTopic,
+        )) {
+          return;
+        }
+        _activate(pluginId);
       });
     }
   }
@@ -105,6 +130,7 @@ class PluginLazyActivationService {
     );
     _activatable.remove(pluginId);
     _broadcastTopics.remove(pluginId);
+    _activationConditions.remove(pluginId);
     _pending.remove(pluginId);
     _activating.remove(pluginId);
     _keepAlive.remove(pluginId);
@@ -217,6 +243,19 @@ class PluginLazyActivationService {
     _idleTimers.remove(pluginId)?.cancel();
   }
 
+  /// שער הערת המנוע: תנאי `when` על נושא ההפעלה. חל רק על הערת מנוע כבוי —
+  /// אירועים למנוע חי אינם עוברים כאן כלל.
+  bool _activationAllowed(String pluginId, String topic) {
+    final condition = _activationConditions[pluginId]?[topic];
+    if (condition == null) return true;
+    return _conditions.evaluate(pluginId, condition);
+  }
+
+  /// האם תנאי `when` על [topic] חוסם כרגע את הערת המנוע של [pluginId].
+  /// אירוע חסום נזרק — גם לא נופל לפתיחת דף התוסף.
+  bool isActivationBlocked(String pluginId, String topic) =>
+      !_activationAllowed(pluginId, topic);
+
   /// אירוע ממוקד (לחיצת פקד/תפריט) לתוסף בלי מנוע חי. מחזיר true אם התוסף
   /// ניתן להערה והאירוע נכנס לתור; false אומר לקורא שהאירוע אבד.
   bool queueTargetedEvent(
@@ -225,6 +264,7 @@ class PluginLazyActivationService {
     Map<String, dynamic> payload,
   ) {
     if (!_activatable.contains(pluginId)) return false;
+    if (!_activationAllowed(pluginId, topic)) return false;
     final list = _pending.putIfAbsent(pluginId, () => []);
     if (list.length >= _maxPendingPerPlugin) list.removeAt(0);
     list.add((topic: topic, payload: payload));

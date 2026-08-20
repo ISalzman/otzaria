@@ -8,7 +8,6 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SettingsGroup, SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 // import 'package:path/path.dart' as p;
@@ -34,9 +33,12 @@ import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/models/direct_error_report.dart';
+import 'package:otzaria/plugins/models/plugin_report_record.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/services/data_collection_service.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -50,6 +52,7 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -335,6 +338,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   bool _isSentReportsExpanded = false;
   String? _sendingPendingReportId;
+  bool _isFlushingPluginReports = false;
+  bool _isClearingPluginPendingReports = false;
+  bool _isExportingPluginReports = false;
+  bool _isClearingPluginSentReports = false;
+  bool _isPluginPendingReportsExpanded = false;
+  bool _isPluginSentReportsExpanded = false;
+  String? _sendingPluginReportId;
   String _resolvedBackupPath = '';
   String _defaultBackupPath = '';
 
@@ -361,12 +371,19 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     super.dispose();
   }
 
+  /// התרגום נעשה כאן ולא בטעינה: `context.settingsText` בגוף הסינכרוני של
+  /// [_loadVersionInfo] רץ בתוך `initState` ושם רישום תלות ב-InheritedWidget זורק.
+  String _libraryVersionLabel(BuildContext context) {
+    final version = _libraryVersion;
+    if (version == null) return context.settingsText('טוען...');
+    if (version == 'unknown') return context.settingsText('לא ידוע');
+    return version;
+  }
+
   Future<void> _loadVersionInfo() async {
-    final unknownText = context.settingsText('לא ידוע');
     final packageInfo = await PackageInfo.fromPlatform();
     final dataService = DataCollectionService();
-    String? libVersion = await dataService.readLibraryVersion();
-    if (libVersion == 'unknown') libVersion = unknownText;
+    final libVersion = await dataService.readLibraryVersion();
 
     int? count;
     try {
@@ -795,16 +812,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       'בחר מיקום לשמירת סקריפט השליחה',
     );
     final downloadsDirectory = await getDownloadsDirectory();
-    final path = await FilePicker.saveFile(
+    final path = await saveFileWithExtension(
       dialogTitle: saveDialogTitle,
       fileName: script.fileName,
       initialDirectory: downloadsDirectory?.path,
-      allowedExtensions: [
-        target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
-      ],
-      type: FileType.custom,
+      extension: target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
       bytes: Uint8List.fromList(utf8.encode(script.content)),
-      lockParentWindow: true,
     );
     if (path == null || !mounted) {
       return;
@@ -860,58 +873,67 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsBloc, SettingsState>(
       builder: (context, state) {
-        return BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
-          bloc: _librarySelectionBloc,
-          listener: (context, librarySelectionState) async {
-            if (librarySelectionState is EmptyLibraryDirectorySelected) {
-              await context.read<NavigationBloc>().refreshLibrary();
-              if (!context.mounted) {
-                return;
+        return BlocListener<LibraryBloc, LibraryState>(
+          // הספרייה נטענת מחדש אחרי עדכון/החלפת מיקום — בלי ריענון כאן
+          // כרטיס "מערכת" ממשיך להציג גרסת ספרייה ישנה (issue #895).
+          listenWhen: LibraryState.reloadCompleted,
+          listener: (context, libraryState) => _loadVersionInfo(),
+          child: BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
+            bloc: _librarySelectionBloc,
+            listener: (context, librarySelectionState) async {
+              if (librarySelectionState is EmptyLibraryDirectorySelected) {
+                await context.read<NavigationBloc>().refreshLibrary();
+                if (!context.mounted) {
+                  return;
+                }
+                context.read<LibraryBloc>().add(RefreshLibrary());
+                UiSnack.showSuccess(SettingsMessages.libraryLoaded);
               }
-              context.read<LibraryBloc>().add(RefreshLibrary());
-              UiSnack.showSuccess(SettingsMessages.libraryLoaded);
-            }
 
-            if (librarySelectionState is EmptyLibraryError &&
-                librarySelectionState.errorMessage != null) {
-              UiSnack.showError(librarySelectionState.errorMessage!);
-            }
-
-            // [בדיקת אנדרואיד] דיאלוג ה-SAF להעתקת seforim.db לאחסון פנימי.
-            // אינו ניתן-להתנעה כרגע (שום דבר לא משגר PickDirectoryRequested
-            // ל-bloc זה) — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
-            if (librarySelectionState is EmptyLibraryAskingDbCopy) {
-              if (librarySelectionState.errorMessage != null) {
+              if (librarySelectionState is EmptyLibraryError &&
+                  librarySelectionState.errorMessage != null) {
                 UiSnack.showError(librarySelectionState.errorMessage!);
               }
-              if (!context.mounted) {
-                return;
+
+              // [בדיקת אנדרואיד] דיאלוג ה-SAF להעתקת seforim.db לאחסון פנימי.
+              // אינו ניתן-להתנעה כרגע (שום דבר לא משגר PickDirectoryRequested
+              // ל-bloc זה) — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
+              if (librarySelectionState is EmptyLibraryAskingDbCopy) {
+                if (librarySelectionState.errorMessage != null) {
+                  UiSnack.showError(librarySelectionState.errorMessage!);
+                }
+                if (!context.mounted) {
+                  return;
+                }
+                _showLibraryDbCopyDialog(context, librarySelectionState);
               }
-              _showLibraryDbCopyDialog(context, librarySelectionState);
-            }
-          },
-          child: SingleChildScrollView(
-            primary: true,
-            padding: const EdgeInsets.all(16.0),
-            child: ToolPanelWrapper(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. גרסאות + נתיב ספרייה
-                  _buildVersionAndPathSection(context, state),
+            },
+            child: SingleChildScrollView(
+              primary: true,
+              padding: const EdgeInsets.all(16.0),
+              child: ToolPanelWrapper(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. גרסאות + נתיב ספרייה
+                    _buildVersionAndPathSection(context, state),
 
-                  // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                  _buildSystemUpdatesSection(context, state),
+                    // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                    _buildSystemUpdatesSection(context, state),
 
-                  // 3. דיווחי טעויות
-                  _buildErrorReportsSection(context, state),
+                    // 3. דיווחי טעויות
+                    _buildErrorReportsSection(context, state),
 
-                  // 4. מתקדם (גיבוי + מצב סייפר)
-                  _buildAdvancedSection(context, state),
+                    // 3ב. דיווחים על תוספים
+                    _buildPluginReportsSection(context, state),
 
-                  // 6. איפוס
-                  _buildResetSection(context),
-                ],
+                    // 4. מתקדם (גיבוי + מצב סייפר)
+                    _buildAdvancedSection(context, state),
+
+                    // 6. איפוס
+                    _buildResetSection(context),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1363,6 +1385,510 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  //  דיווחים על תוספים
+  // ════════════════════════════════════════════════════════════════════════════
+
+  String _pluginReportTypeLabel(BuildContext context, String reportType) {
+    switch (reportType) {
+      case 'bug':
+        return context.settingsText('תקלה');
+      case 'crash':
+        return context.settingsText('קריסה');
+      case 'content':
+        return context.settingsText('תוכן לא תקין');
+      default:
+        return context.settingsText('אחר');
+    }
+  }
+
+  String _formatPluginReportDate(DateTime date) {
+    return '${date.day}.${date.month}.${date.year}';
+  }
+
+  Future<void> _flushPluginReports() async {
+    setState(() {
+      _isFlushingPluginReports = true;
+    });
+
+    final reportService = PluginReportService();
+    final pendingBefore = await reportService.getPendingReportsCount();
+    final sentCount = await reportService.flushPendingReports();
+    final pendingAfter = await reportService.getPendingReportsCount();
+
+    if (!mounted) return;
+    setState(() {
+      _isFlushingPluginReports = false;
+    });
+
+    if (sentCount > 0) {
+      UiSnack.showSuccess(ReportMessages.pendingFlushed(sentCount));
+    } else if (pendingBefore == 0) {
+      UiSnack.show(ReportMessages.noPendingToSend);
+    } else {
+      UiSnack.show(ReportMessages.pendingFlushFailed(pendingAfter));
+    }
+  }
+
+  Future<void> _sendPendingPluginReport(PluginReportRecord record) async {
+    setState(() {
+      _sendingPluginReportId = record.reportId;
+    });
+
+    PluginReportDeliveryStatus? status;
+    try {
+      status = await PluginReportService().submitPendingReport(record);
+    } catch (e) {
+      debugPrint('Failed to send pending plugin report: $e');
+      if (mounted) {
+        UiSnack.showError(ReportMessages.sendError(e));
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingPluginReportId = null;
+        });
+      }
+    }
+
+    if (!mounted) return;
+    if (status == PluginReportDeliveryStatus.sent) {
+      setState(() {});
+      UiSnack.showSuccess(ReportMessages.sentToOtzaria);
+    } else {
+      UiSnack.show(ReportMessages.queuedAfterFailure('אוצריא'));
+    }
+  }
+
+  Future<void> _deletePendingPluginReport(PluginReportRecord record) async {
+    await PluginReportService().deletePendingReport(record.reportId);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show(ReportMessages.removedFromQueue);
+  }
+
+  Future<void> _deleteSentPluginReport(PluginReportRecord record) async {
+    await PluginReportService().deleteSentReport(record.reportId);
+    if (!mounted) return;
+    setState(() {});
+    UiSnack.show(ReportMessages.deletedFromHistory);
+  }
+
+  Future<void> _clearPluginPendingReports() async {
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: context.settingsText('למחוק דיווחים שמורים?'),
+      content: context.settingsText('כל הדיווחים השמורים בתור יימחקו מהמחשב.'),
+      subtitle: context.settingsText('לא ניתן לשחזר דיווחים שנמחקו.'),
+      cancelText: context.settingsText('ביטול'),
+      confirmText: context.settingsText('מחק'),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClearingPluginPendingReports = true;
+    });
+
+    await PluginReportService().clearPendingReports();
+
+    if (!mounted) return;
+    setState(() {
+      _isClearingPluginPendingReports = false;
+    });
+    UiSnack.show(ReportMessages.pendingCleared);
+  }
+
+  Future<void> _clearPluginSentReports() async {
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: context.settingsText('לנקות את היסטוריית הדיווחים?'),
+      content: context.settingsText(
+        'כל הדיווחים שנשלחו יימחקו מההיסטוריה המקומית.',
+      ),
+      subtitle: context.settingsText(
+        'הפעולה לא מוחקת דיווחים שכבר נשלחו למפתחים.',
+      ),
+      cancelText: context.settingsText('ביטול'),
+      confirmText: context.settingsText('נקה'),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClearingPluginSentReports = true;
+    });
+
+    await PluginReportService().clearSentReports();
+
+    if (!mounted) return;
+    setState(() {
+      _isClearingPluginSentReports = false;
+    });
+    UiSnack.show(ReportMessages.historyCleared);
+  }
+
+  Future<void> _exportPluginReportsScript() async {
+    final verified = await verifySaferModePassword(context);
+    if (!verified) {
+      return;
+    }
+
+    final reportService = PluginReportService();
+    final records = await reportService.getPendingReports();
+    if (records.isEmpty) {
+      if (!mounted) return;
+      UiSnack.show(ReportMessages.noPendingToExport);
+      return;
+    }
+
+    final target = await _resolveOfflineSendTarget();
+    if (target == null || !mounted) {
+      return;
+    }
+
+    final script = reportService.buildOfflineSendScript(
+      records,
+      target: target,
+    );
+
+    final saveDialogTitle = context.settingsText(
+      'בחר מיקום לשמירת סקריפט השליחה',
+    );
+    final downloadsDirectory = await getDownloadsDirectory();
+    final path = await saveFileWithExtension(
+      dialogTitle: saveDialogTitle,
+      fileName: script.fileName,
+      initialDirectory: downloadsDirectory?.path,
+      extension: target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
+      bytes: Uint8List.fromList(utf8.encode(script.content)),
+    );
+    if (path == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isExportingPluginReports = true;
+    });
+
+    try {
+      // קובץ .sh נשמר ללא הרשאת הרצה; מוסיפים אותה כדי שאפשר יהיה להפעילו ישירות.
+      if (target == OfflineSendScriptTarget.unix &&
+          (Platform.isLinux || Platform.isMacOS)) {
+        await Process.run('chmod', ['+x', path]);
+      }
+
+      if (!mounted) return;
+      UiSnack.showSuccess(
+        target == OfflineSendScriptTarget.unix
+            ? ReportMessages.scriptSavedUnix(script.fileName)
+            : ReportMessages.scriptSavedWindows,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      UiSnack.showError(ReportMessages.scriptSaveError(e));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingPluginReports = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showPluginReportDetails(
+    PluginReportRecord record, {
+    required bool sent,
+  }) async {
+    final typeLabel = _pluginReportTypeLabel(context, record.reportType);
+    final date = _formatPluginReportDate(record.createdAt);
+    await showSingleActionDialog(
+      context: context,
+      title: context.settingsText(
+        sent ? 'פרטי דיווח שנשלח' : 'פרטי דיווח שמור',
+      ),
+      content:
+          '${record.pluginName} (${record.pluginVersion})\n'
+          '$typeLabel · $date\n\n${record.details}',
+      confirmText: context.settingsText('סגור'),
+    );
+  }
+
+  Widget _buildPluginReportsSection(
+    BuildContext context,
+    SettingsState state,
+  ) {
+    final reportService = PluginReportService();
+
+    return SettingsCard(
+      cardId: 'system.pluginReports',
+      title: context.settingsText('דיווחים על תוספים'),
+      subtitle: context.settingsText(
+        'דיווחים ששלחתם למפתחי תוספים דרך אתר אוצריא, כולל תור אוטומטי במצב אופליין.',
+      ),
+      children: [
+        FutureBuilder<List<PluginReportRecord>>(
+          future: reportService.getPendingReports(),
+          builder: (context, snapshot) {
+            final pendingRecords =
+                snapshot.data ?? const <PluginReportRecord>[];
+            final pendingCount = pendingRecords.length;
+            final hasReports = pendingCount > 0;
+
+            return ExpandableSection(
+              icon: OtzariaIcons.task_list_24_regular,
+              title: context.settingsText('ניהול דיווחים שמורים'),
+              subtitle: pendingCount == 0
+                  ? context.settingsText('אין כרגע דיווחים שמורים בתור')
+                  : context.settingsText(
+                      'יש כרגע {count} דיווחים שמורים בתור',
+                      args: {'count': pendingCount},
+                    ),
+              hasContent: hasReports,
+              onTap: () => setState(
+                () => _isPluginPendingReportsExpanded =
+                    !_isPluginPendingReportsExpanded,
+              ),
+              isExpanded: _isPluginPendingReportsExpanded,
+              children: [
+                if (hasReports)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: 16,
+                      left: 16,
+                      top: 8,
+                      bottom: 16,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow =
+                            constraints.maxWidth < LayoutBreakpoints.compact;
+                        final sendButton = _buildManagedActionButton(
+                          enabled: !state.isOfflineMode,
+                          child: ActionButton.recommended(
+                            text: context.settingsText('שלח עכשיו'),
+                            icon: FluentIcons.arrow_sync_24_regular,
+                            onPressed: _flushPluginReports,
+                            isLoading: _isFlushingPluginReports,
+                          ),
+                        );
+                        final clearButton = _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: ActionButton.neutral(
+                            text: context.settingsText('נקה דיווחים'),
+                            icon: FluentIcons.delete_24_regular,
+                            onPressed: _clearPluginPendingReports,
+                            isLoading: _isClearingPluginPendingReports,
+                          ),
+                        );
+                        final exportButton = _buildManagedActionButton(
+                          enabled: hasReports,
+                          child: ActionButton.neutral(
+                            text: context.settingsText(
+                              'הורד לשליחה במחשב מחובר',
+                            ),
+                            icon: FluentIcons.arrow_download_24_regular,
+                            onPressed: _exportPluginReportsScript,
+                            isLoading: _isExportingPluginReports,
+                          ),
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              sendButton,
+                              const SizedBox(height: 8),
+                              clearButton,
+                              const SizedBox(height: 8),
+                              exportButton,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: sendButton),
+                            const SizedBox(width: 12),
+                            Expanded(child: clearButton),
+                            const SizedBox(width: 12),
+                            Expanded(child: exportButton),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                if (state.isOfflineMode && hasReports)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: 16,
+                      left: 16,
+                      bottom: 16,
+                    ),
+                    child: Text(
+                      context.settingsText(
+                        'במצב מנותק אי אפשר לשלוח כעת, אך ניתן להוריד סקריפט לשליחה ממחשב מחובר.',
+                      ),
+                      style: kSettingsSubtitleStyle,
+                    ),
+                  ),
+                ...pendingRecords.map(
+                  (record) => _buildPluginPendingReportTile(
+                    context,
+                    record,
+                    canSend: !state.isOfflineMode,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        FutureBuilder<List<PluginReportRecord>>(
+          future: reportService.getSentReports(),
+          builder: (context, snapshot) {
+            final sentRecords = snapshot.data ?? const <PluginReportRecord>[];
+
+            return ExpandableSection(
+              icon: FluentIcons.checkmark_circle_24_regular,
+              title: context.settingsText('דיווחים שנשלחו'),
+              hasContent: sentRecords.isNotEmpty,
+              subtitle: sentRecords.isEmpty
+                  ? context.settingsText('עדיין אין דיווחים שנשלחו דרך המערכת')
+                  : context.settingsText(
+                      'נשמרו {count} דיווחים שנשלחו',
+                      args: {'count': sentRecords.length},
+                    ),
+              onTap: () => setState(
+                () => _isPluginSentReportsExpanded =
+                    !_isPluginSentReportsExpanded,
+              ),
+              isExpanded: _isPluginSentReportsExpanded,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    right: 16,
+                    left: 16,
+                    bottom: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildManagedActionButton(
+                          enabled: sentRecords.isNotEmpty,
+                          child: ActionButton.neutral(
+                            text: context.settingsText(
+                              'נקה את כל ההיסטוריה',
+                            ),
+                            icon: FluentIcons.delete_24_regular,
+                            onPressed: _clearPluginSentReports,
+                            isLoading: _isClearingPluginSentReports,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ...sentRecords.map(
+                  (record) => _buildPluginSentReportTile(context, record),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPluginPendingReportTile(
+    BuildContext context,
+    PluginReportRecord record, {
+    required bool canSend,
+  }) {
+    final isSending = _sendingPluginReportId == record.reportId;
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(FluentIcons.puzzle_piece_24_regular),
+          title: Text(
+            record.pluginName,
+            style: kSettingsTitleStyle,
+          ),
+          subtitle: Text(
+            '${_pluginReportTypeLabel(context, record.reportType)} · '
+            '${record.details}',
+            style: kSettingsSubtitleStyle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _buildReportActions(
+          children: [
+            ActionButton.neutral(
+              text: context.settingsText('צפה'),
+              icon: FluentIcons.eye_24_regular,
+              onPressed: () => _showPluginReportDetails(record, sent: false),
+            ),
+            ActionButton.neutral(
+              text: context.settingsText('מחק'),
+              icon: FluentIcons.delete_24_regular,
+              onPressed: () => _deletePendingPluginReport(record),
+            ),
+            _buildManagedActionButton(
+              enabled: canSend,
+              child: ActionButton.recommended(
+                text: context.settingsText('שלח'),
+                icon: FluentIcons.send_24_regular,
+                isLoading: isSending,
+                onPressed: () => _sendPendingPluginReport(record),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPluginSentReportTile(
+    BuildContext context,
+    PluginReportRecord record,
+  ) {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(FluentIcons.checkmark_24_regular),
+          title: Text(
+            record.pluginName,
+            style: kSettingsTitleStyle,
+          ),
+          subtitle: Text(
+            '${_pluginReportTypeLabel(context, record.reportType)} · '
+            '${record.details}',
+            style: kSettingsSubtitleStyle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _buildReportActions(
+          children: [
+            ActionButton.neutral(
+              text: context.settingsText('צפה'),
+              icon: FluentIcons.eye_24_regular,
+              onPressed: () => _showPluginReportDetails(record, sent: true),
+            ),
+            ActionButton.neutral(
+              text: context.settingsText('מחק'),
+              icon: FluentIcons.delete_24_regular,
+              onPressed: () => _deleteSentPluginReport(record),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   //  2. גרסאות + נתיב ספרייה
   // ════════════════════════════════════════════════════════════════════════════
 
@@ -1391,9 +1917,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           icon: FluentIcons.library_24_regular,
           title: context.settingsText(
             'גרסת ספרייה {version}',
-            args: {
-              'version': _libraryVersion ?? context.settingsText('טוען...'),
-            },
+            args: {'version': _libraryVersionLabel(context)},
           ),
           subtitle: _bookCount != null
               ? context.settingsText(

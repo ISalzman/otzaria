@@ -14,6 +14,9 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
+import 'package:otzaria/navigation/view/tab_context_menu.dart';
+import 'package:otzaria/navigation/view/tab_search_menu.dart';
+import 'package:otzaria/navigation/view/tab_visuals.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -35,10 +38,6 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
-import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
-import 'package:otzaria/workspaces/bloc/workspace_event.dart';
-import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
@@ -75,6 +74,16 @@ const double _kTabMaxWidth = 140.0;
 
 /// מתחת לרוחב הזה כפתור ה-X מוסתר ומופיע רק ב-hover/בטאב הנבחר (כמו כרום).
 const double _kTabCloseHideBelowWidth = 80.0;
+
+/// רוחב כפתור ה-X בכרטיסיה. בכרטיסיה צרה הוא מצטמצם לרוחב שנותר בה.
+const double _kTabCloseExtent = 25.0;
+
+/// רוחב אייקון ה-X עצמו — מתחת לזה הוא נחתך, ולכן אינו מוצג גם בריחוף.
+const double _kTabCloseMinExtent = 10.0;
+
+/// מידות האייקונים שלצד הכותרת — הנעץ ואייקון סוג הכרטיסיה, כולל הרווח שאחריהם.
+const double _kTabPinExtent = 18.0;
+const double _kTabLeadingIconExtent = 18.0;
 
 /// רוחב מזערי לטאב הנבחר: מבטיח שכפתור ה-X שלו תמיד נכנס (כמו כרום).
 /// כשהחלוקה השווה יורדת מתחת לזה, שאר הטאבים מתחלקים ביתרה.
@@ -183,12 +192,26 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     }
   }
 
+  bool _isReadingScreen(NavigationState navState) =>
+      navState.currentScreen == Screen.reading ||
+      navState.currentScreen == Screen.search;
+
   bool _useStackedTabs(BuildContext context, NavigationState navState) {
-    final isReading =
-        navState.currentScreen == Screen.reading ||
-        navState.currentScreen == Screen.search;
-    if (!isReading) return false;
+    if (!_isReadingScreen(navState)) return false;
     return MediaQuery.of(context).orientation == Orientation.portrait;
+  }
+
+  /// במצב "בצד" הכרטיסיות מוצגות בעמודה אנכית שבמסך הראשי, ולכן הרצועה
+  /// שבכותרת אינה נבנית כלל. במסך לאורך נשמרת ההתנהגות הקיימת (שורה שנייה).
+  bool _useSideTabs(
+    BuildContext context,
+    NavigationState navState,
+    SettingsState settingsState,
+  ) {
+    if (!_isReadingScreen(navState) || !settingsState.readingTabsOnSide) {
+      return false;
+    }
+    return MediaQuery.of(context).orientation == Orientation.landscape;
   }
 
   @override
@@ -240,7 +263,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
                         // תוכן הכותרת (טאבים או כותרת רגילה)
                         Expanded(
-                          child: _buildContent(context, navState),
+                          child: _buildContent(
+                            context,
+                            navState,
+                            settingsState,
+                          ),
                         ),
 
                         // כפתורי חלון (רק בדסקטופ)
@@ -363,13 +390,19 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
-  Widget _buildContent(BuildContext context, NavigationState navState) {
-    if (navState.currentScreen == Screen.reading ||
-        navState.currentScreen == Screen.search) {
-      if (_useStackedTabs(context, navState)) {
+  Widget _buildContent(
+    BuildContext context,
+    NavigationState navState,
+    SettingsState settingsState,
+  ) {
+    if (_isReadingScreen(navState)) {
+      final stacked = _useStackedTabs(context, navState);
+      if (stacked || _useSideTabs(context, navState, settingsState)) {
         return Row(
           children: [
             const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+            // במצב "בצד" כפתור חיפוש הכרטיסיות יושב בראש העמודה עצמה.
+            if (stacked) TabSearchButton(style: _kIconButtonStyle),
             _buildReadingSettingsButton(context),
           ],
         );
@@ -457,7 +490,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         return Row(
           children: [
             Expanded(child: _buildScrollableTabsArea(state)),
-            const SizedBox(width: 36),
+            TabSearchButton(style: _kIconButtonStyle),
+            const SizedBox(width: 8),
             _buildReadingSettingsButton(context),
           ],
         );
@@ -709,32 +743,32 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     if (_pointerInsideTabStrip && _lastComputedTabWidths != null) {
       _pinnedTabWidths ??= _lastComputedTabWidths;
     }
-    context.read<HistoryBloc>().add(AddHistory(tab));
-    context.read<TabsBloc>().add(RemoveTab(tab));
+    closeTabWithHistory(context, tab);
+  }
+
+  /// סוגר חלונית אחת מלשונית מפוצלת; אחותה נשארת ככרטיסייה רגילה במקומה.
+  void closePane(OpenedTab pane, BuildContext context) =>
+      closePaneWithHistory(context, pane);
+
+  /// החלונית שהחצי שלה בלשונית נמצא מתחת ל-[dx] (קואורדינטה מקומית, LTR).
+  OpenedTab _paneAtDx(
+    BuildContext context,
+    CombinedTab tab,
+    double dx,
+    double tabWidth,
+  ) {
+    final inFirstHalf = Directionality.of(context) == TextDirection.rtl
+        ? dx >= tabWidth / 2
+        : dx < tabWidth / 2;
+    return inFirstHalf ? tab.rightTab : tab.leftTab;
   }
 
   /// סוגר את כל הכרטיסיות שבבחירה המרובה בפעולה אחת.
   void closeSelectedTabs(BuildContext context) {
-    final tabsBloc = context.read<TabsBloc>();
-    final tabsToClose = List<OpenedTab>.from(tabsBloc.state.selectedTabs);
-    if (tabsToClose.isEmpty) return;
     if (_pointerInsideTabStrip && _lastComputedTabWidths != null) {
       _pinnedTabWidths ??= _lastComputedTabWidths;
     }
-    // אירוע קבוצתי אחד — אירועי AddHistory נפרדים מעובדים במקביל ועלולים
-    // לדרוס זה את זה.
-    context.read<HistoryBloc>().add(AddHistoryForTabs(tabsToClose));
-    tabsBloc.add(RemoveTabs(tabsToClose));
-  }
-
-  void closeAllTabs(TabsState state, BuildContext context) {
-    context.read<TabsBloc>().add(CloseAllTabs());
-  }
-
-  void closeAllTabsButCurrent(TabsState state, BuildContext context) {
-    if (state.currentTab != null) {
-      context.read<TabsBloc>().add(CloseOtherTabs(state.currentTab!));
-    }
+    closeSelectedTabsWithHistory(context);
   }
 
   /// רקע הכרטיסיה: סימון בחירה מרובה, ואחריו הכרטיסיה הפעילה.
@@ -751,6 +785,17 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     return isSelected
         ? _TabBackgroundPainter(AppSurfaces.topBarBackground(context))
         : null;
+  }
+
+  /// מפריד מוצג רק כשאין הבלטה משני צדיו: הכרטיסיה הפעילה והכרטיסיה שבריחוף
+  /// נצבעות, ופס צמוד להן היה חוצה את ההבלטה.
+  ///
+  /// המפריד של הכרטיסיה הראשונה מפריד אותה מלחצני הפעולה שלפניה.
+  bool _showLeadingDivider(TabsState state, int index) {
+    bool emphasized(int i) =>
+        i == state.currentTabIndex || identical(_hoveredTab, state.tabs[i]);
+    if (index == 0) return !emphasized(0);
+    return !emphasized(index) && !emphasized(index - 1);
   }
 
   /// הצללת הריחוף, שמצוירת מעל הרקע.
@@ -775,40 +820,37 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     double tabWidth,
   ) {
     final isSelected = index == state.currentTabIndex;
-    final showLeadingDivider = index == 0
-        ? !isSelected
-        : !isSelected && index - 1 != state.currentTabIndex;
-    bool isTabHovered = identical(_hoveredTab, tab);
+    final showLeadingDivider = _showLeadingDivider(state, index);
+    final isTabHovered = identical(_hoveredTab, tab);
 
     return _wrapWithTabPointer(
       context,
       tab,
       index,
       state,
+      tabWidth: tabWidth,
       child: AppContextMenuRegion(
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
-        child: StatefulBuilder(
-          builder: (context, setLocalState) => MouseRegion(
-            onEnter: (_) => setLocalState(() {
-              isTabHovered = true;
-              _hoveredTab = tab;
-            }),
-            onExit: (_) => setLocalState(() {
-              isTabHovered = false;
-              if (identical(_hoveredTab, tab)) _hoveredTab = null;
-            }),
+        child: MouseRegion(
+          onEnter: (_) => _setHoveredTab(tab),
+          onExit: (_) => _clearHoveredTab(tab),
+          // אין כאן כותרת כלל, ולכן ה-tooltip הוא הדרך היחידה לזהות את
+          // הכרטיסיה — ומוצג בכל שטחה.
+          child: Tooltip(
+            message: tab.title,
             child: Row(
               children: [
-                if (showLeadingDivider)
-                  Container(
-                    // ברוחב שברירי המפריד עצמו רחב מהכרטיסיה כולה, וקו קבוע
-                    // של 1 היה גולש ממנה.
-                    width: math.min(1.0, tabWidth),
-                    height: 24,
-                    margin: const EdgeInsets.only(top: 6, bottom: 6),
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+                Container(
+                  // ברוחב שברירי המפריד עצמו רחב מהכרטיסיה כולה, וקו קבוע
+                  // של 1 היה גולש ממנה.
+                  width: math.min(1.0, tabWidth),
+                  height: 24,
+                  margin: const EdgeInsets.only(top: 6, bottom: 6),
+                  color: showLeadingDivider
+                      ? Theme.of(context).colorScheme.outlineVariant
+                      : null,
+                ),
                 Expanded(
                   child: Container(
                     constraints: const BoxConstraints(
@@ -844,6 +886,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  /// הכותרת שמתעדכנת תוך כדי קריאה (המיקום בספר, שאילתת החיפוש), או `null`
+  /// לכרטיסיה שכותרתה סטטית.
+  ValueListenable<String>? _liveTitleOf(OpenedTab tab) {
+    if (tab is SearchingTab) return tab.titleNotifier;
+    if (tab is PdfBookTab) return tab.currentTitle;
+    if (tab is PdfCommentatorsTab) return tab.sourceTab.currentTitle;
+    if (tab is TextBookTab) return tab.currentTitle;
+    return null;
+  }
+
   Widget _buildTab(
     BuildContext context,
     OpenedTab tab,
@@ -859,121 +911,65 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     final closeTabShortcut =
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
 
-    bool isTabActive(int tabIndex) => tabIndex == state.currentTabIndex;
-    bool isTabHovered = identical(_hoveredTab, tab);
+    final isTabHovered = identical(_hoveredTab, tab);
 
-    // כותרת בשורה אחת שמוצגת מההתחלה (RTL: מימין) ונדהית רק בקצה הסוף, כמו
-    // כרום. TextOverflow.fade/clip של פלאטר מציג בעברית את *סוף* הכותרת
-    // (הפוך מהרצוי), לכן מצמידים את הטקסט בעצמנו: OverflowBox ברוחב טבעי מיושר
-    // ל-start (ימין ב-RTL) → ההתחלה גלויה, הסוף גולש; ClipRect חותך אותו;
-    // ו-ShaderMask מדהה רק את קצה הסוף. בכותרת קצרה הקצה ריק והדהייה נעלמת.
-    Widget fadedTitle(String title) {
-      final isLtr = Directionality.of(context) == TextDirection.ltr;
-      return ClipRect(
-        child: ShaderMask(
-          blendMode: BlendMode.dstIn,
-          shaderCallback: (rect) => LinearGradient(
-            begin: isLtr ? Alignment.centerLeft : Alignment.centerRight,
-            end: isLtr ? Alignment.centerRight : Alignment.centerLeft,
-            stops: const [0.0, 0.82, 1.0],
-            colors: const [Colors.white, Colors.white, Colors.transparent],
-          ).createShader(rect),
-          child: OverflowBox(
-            alignment: AlignmentDirectional.centerStart,
-            minWidth: 0,
-            maxWidth: double.infinity,
-            child: Text(title, maxLines: 1, softWrap: false),
+    Widget fadedTitle(String title) => buildFadedTabTitle(context, title);
+
+    // X של חצי לשונית — סוגר רק את החלונית שלו, בסגנון ה-X של לשונית רגילה.
+    Widget paneCloseButton(OpenedTab pane, double extent) {
+      return Tooltip(
+        preferBelow: false,
+        message: 'סגור חלונית',
+        child: MetaData(
+          metaData: _kTabCloseButtonHitMarker,
+          child: IconButton(
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: EdgeInsets.zero,
+            ),
+            constraints: BoxConstraints.tightFor(
+              width: extent,
+              height: _kTabCloseExtent,
+            ),
+            onPressed: () => closePane(pane, context),
+            icon: const Icon(FluentIcons.dismiss_24_regular, size: 10),
           ),
         ),
       );
     }
 
-    Widget buildTabContent() {
+    Widget buildTabContent(
+      String displayTitle, {
+      required double paneCloseExtent,
+      bool showPaneClose = false,
+    }) {
       if (tab is CombinedTab) {
         // כל חלונית מפוצלת מציגה את תחילת שמה בחלק שווה מרוחב הטאב.
         // פסים מפרידים מוצגים רק כשיש להם מקום.
-        final paneTitles = leafPanes(tab).map((p) => p.title).toList();
-        final showDividers = tabWidth >= 100 * (paneTitles.length - 1);
-        return Tooltip(
-          message: tab.title,
-          child: Row(
-            children: [
-              for (var i = 0; i < paneTitles.length; i++) ...[
-                if (i > 0 && showDividers)
-                  Container(
-                    width: 2,
-                    height: 14,
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                Expanded(child: fadedTitle(paneTitles[i])),
-              ],
+        final panes = leafPanes(tab);
+        final showDividers = tabWidth >= 100 * (panes.length - 1);
+        return Row(
+          children: [
+            for (var i = 0; i < panes.length; i++) ...[
+              if (i > 0 && showDividers)
+                Container(
+                  width: 2,
+                  height: 14,
+                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              Expanded(child: fadedTitle(panes[i].title)),
+              if (showPaneClose) paneCloseButton(panes[i], paneCloseExtent),
             ],
-          ),
+          ],
         );
       }
 
-      if (tab is SearchingTab) {
-        return ValueListenableBuilder<String>(
-          valueListenable: tab.titleNotifier,
-          builder: (context, title, child) =>
-              Tooltip(message: title, child: fadedTitle(title)),
-        );
-      }
-
-      if (tab is PdfBookTab) {
-        return ValueListenableBuilder<String>(
-          valueListenable: tab.currentTitle,
-          builder: (context, currentTitleValue, child) {
-            final tooltipMessage = currentTitleValue.isNotEmpty
-                ? '${tab.title}, $currentTitleValue'
-                : tab.title;
-            return Tooltip(
-              message: tooltipMessage,
-              child: fadedTitle(tab.title),
-            );
-          },
-        );
-      }
-
-      if (tab is PdfCommentatorsTab) {
-        return ValueListenableBuilder<String>(
-          valueListenable: tab.sourceTab.currentTitle,
-          builder: (context, currentTitleValue, child) {
-            final tooltipMessage = currentTitleValue.isNotEmpty
-                ? '${tab.title}, $currentTitleValue'
-                : tab.title;
-            return Tooltip(
-              message: tooltipMessage,
-              child: fadedTitle(tab.title),
-            );
-          },
-        );
-      }
-
-      // כל טיפוס שאין לו כותרת חיה (כולל ToolTab) — כותרת סטטית. ברירת
-      // המחדל שאחריה היא cast ל-TextBookTab, ולכן היא חייבת להיות אחרונה.
-      if (tab is! TextBookTab) {
-        return Tooltip(message: tab.title, child: fadedTitle(tab.title));
-      }
-
-      final textTab = tab;
-      return ValueListenableBuilder<String>(
-        valueListenable: textTab.currentTitle,
-        builder: (context, currentTitleValue, child) {
-          final tooltipMessage = currentTitleValue.isNotEmpty
-              ? '${tab.title}, $currentTitleValue'
-              : tab.title;
-          return Tooltip(message: tooltipMessage, child: fadedTitle(tab.title));
-        },
-      );
+      return fadedTitle(displayTitle);
     }
 
-    Widget buildTabAppearance(StateSetter? setState) {
-      // הטאב הראשון מקבל מפריד מול לחצני הפעולה שלפניו; שאר הטאבים מול הקודם.
-      final showLeadingDivider = index == 0
-          ? !isTabActive(index)
-          : !isTabActive(index) && !isTabActive(index - 1);
+    Widget buildTabAppearance(String displayTitle, String tooltipMessage) {
+      final showLeadingDivider = _showLeadingDivider(state, index);
       final colorScheme = Theme.of(context).colorScheme;
 
       // בטאב צר הריפודים האופקיים מתכווצים בהדרגה (8→3, 6→3) — אחרת ריפוד קבוע
@@ -982,16 +978,35 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       final outerPad = 3 + 3 * padScale;
       final innerPad = 3 + 5 * padScale;
 
-      // תקציב הרוחב לאלמנטים שאינם הכותרת (X/נעץ), אחרי ה-paddings ורווח הטאב
-      // הנבחר. מציגים X/נעץ רק אם נשאר מקום פיזי — אחרת הם היו גולשים בטאב צר.
+      // הרוחב שנשאר לתוכן הכרטיסיה אחרי המפריד, ה-paddings ורווח הטאב הנבחר.
       // הכותרת תמיד ב-Expanded ומתכווצת לאפס בעת הצורך.
-      final extrasBudget =
-          tabWidth - 2 * (outerPad + innerPad) - (isSelected ? 4 : 0);
+      final contentWidth =
+          tabWidth -
+          1 -
+          outerPad -
+          (index == 0 ? 0 : outerPad) -
+          2 * innerPad -
+          (isSelected ? 4 : 0);
+      // בלשונית מפוצלת כל חצי מקבל X משלו במקום X יחיד ללשונית.
+      final isCombined = tab is CombinedTab;
+      final closeVisibleByState =
+          tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered;
+      // ה-X מצטמצם לרוחב שנותר במקום להיעלם, כדי שבריחוף הוא יהיה שם תמיד.
+      final closeExtent = math.min(_kTabCloseExtent, contentWidth);
+      final paneCloseExtent = math.min(_kTabCloseExtent, contentWidth / 2);
       final showClose =
-          extrasBudget >= 25 &&
-          (tabWidth >= _kTabCloseHideBelowWidth || isSelected || isTabHovered);
+          !isCombined &&
+          closeVisibleByState &&
+          closeExtent >= _kTabCloseMinExtent;
+      final showPaneClose =
+          isCombined &&
+          closeVisibleByState &&
+          paneCloseExtent >= _kTabCloseMinExtent;
+      final closeBudget = showClose
+          ? closeExtent
+          : (showPaneClose ? 2 * paneCloseExtent : 0);
       final showPin =
-          tab.isPinned && (extrasBudget - (showClose ? 25 : 0)) >= 20;
+          tab.isPinned && (contentWidth - closeBudget) >= _kTabPinExtent;
       // אייקון ליד שם הטאב — רק כשהטאב רחב (אותו סף כמו מפריד ה-CombinedTab).
       final showPdfIcon = tab is PdfBookTab && tabWidth >= 100;
       final toolIcon = tab is ToolTab && tabWidth >= 100
@@ -1002,15 +1017,31 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             )
           : null;
 
-      return Row(
+      final titleStyle = TextStyle(
+        color: colorScheme.onSurface,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        fontSize: 14,
+      );
+      // הרוחב שבו הכותרת מרונדרת בפועל — לפיו נקבע אם היא נחתכה, וה-tooltip
+      // עוטף בזכותו את כל הכרטיסיה במקום את הכותרת בלבד.
+      final titleWidth = math.max(
+        0.0,
+        contentWidth -
+            closeBudget -
+            (showPin ? _kTabPinExtent : 0) -
+            (showPdfIcon || toolIcon != null ? _kTabLeadingIconExtent : 0),
+      );
+
+      final tabRow = Row(
         children: [
-          if (showLeadingDivider)
-            Container(
-              width: 1,
-              height: 24,
-              margin: const EdgeInsets.only(top: 6, bottom: 6),
-              color: colorScheme.outlineVariant,
-            ),
+          // מקום המפריד שמור גם כשאינו נצבע: הסתרתו הייתה מזיזה את תוכן
+          // הכרטיסיה בפיקסל בכל ריחוף.
+          Container(
+            width: 1,
+            height: 24,
+            margin: const EdgeInsets.only(top: 6, bottom: 6),
+            color: showLeadingDivider ? colorScheme.outlineVariant : null,
+          ),
           // הטאב ממלא את הרוחב הקבוע שמכתיב ה-SizedBox; הכותרת ב-Expanded כדי
           // שתתכווץ ותטושטש לקראת הסוף. ה-X/נעץ מוצגים רק אם נשאר להם מקום.
           Expanded(
@@ -1038,13 +1069,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: innerPad),
                     child: DefaultTextStyle(
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        fontSize: 14,
-                      ),
+                      style: titleStyle,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -1064,7 +1089,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                               padding: const EdgeInsetsDirectional.only(end: 4),
                               child: toolIcon,
                             ),
-                          Expanded(child: buildTabContent()),
+                          Expanded(
+                            child: buildTabContent(
+                              displayTitle,
+                              paneCloseExtent: paneCloseExtent,
+                              showPaneClose: showPaneClose,
+                            ),
+                          ),
                           if (showClose)
                             Tooltip(
                               preferBelow: false,
@@ -1081,11 +1112,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                         MaterialTapTargetSize.shrinkWrap,
                                     padding: EdgeInsets.zero,
                                   ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 25,
-                                    minHeight: 25,
-                                    maxWidth: 25,
-                                    maxHeight: 25,
+                                  constraints: BoxConstraints.tightFor(
+                                    width: closeExtent,
+                                    height: _kTabCloseExtent,
                                   ),
                                   onPressed: () => closeTab(tab, context),
                                   icon: const Icon(
@@ -1105,6 +1134,37 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           ),
         ],
       );
+
+      // ה-tooltip עוטף את הכרטיסיה כולה ולא את הכותרת בלבד, כדי שיופיע בריחוף
+      // בכל שטחה — גם כשהכותרת מצטמצמת לאפס בכרטיסיה צרה.
+      return TabTitleTooltip(
+        message: tooltipMessage,
+        title: displayTitle,
+        titleWidth: titleWidth,
+        titleStyle: titleStyle,
+        alwaysShow: isCombined,
+        child: tabRow,
+      );
+    }
+
+    // בכרטיסיה עם כותרת חיה הזוג (כותרת מוצגת, הודעת tooltip) נגזר מהערך העדכני;
+    // בכל השאר שניהם שם הכרטיסיה.
+    final liveTitle = _liveTitleOf(tab);
+    Widget buildLiveTabAppearance() {
+      if (liveTitle == null) {
+        return buildTabAppearance(tab.title, tab.title);
+      }
+      return ValueListenableBuilder<String>(
+        valueListenable: liveTitle,
+        builder: (context, value, child) {
+          // בכרטיסיית חיפוש הערך הוא הכותרת עצמה; בשאר הוא המיקום שמתווסף לה.
+          if (tab is SearchingTab) return buildTabAppearance(value, value);
+          return buildTabAppearance(
+            tab.title,
+            value.isEmpty ? tab.title : '${tab.title}, $value',
+          );
+        },
+      );
     }
 
     return _wrapWithTabPointer(
@@ -1112,33 +1172,35 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       tab,
       index,
       state,
+      tabWidth: tabWidth,
       child: AppContextMenuRegion(
         menuBuilder: (menuCtx, _) =>
             _buildTabContextMenuEntries(menuCtx, tab, state),
-        child: StatefulBuilder(
-          builder: (context, setLocalState) {
-            return MouseRegion(
-              // setLocalState מצייר מחדש את הטאב הזה בלבד; השדה שומר את המצב
-              // כך שישרוד rebuild של שורת הטאבים.
-              onEnter: (_) => setLocalState(() {
-                isTabHovered = true;
-                _hoveredTab = tab;
-              }),
-              onExit: (_) => setLocalState(() {
-                isTabHovered = false;
-                if (identical(_hoveredTab, tab)) _hoveredTab = null;
-              }),
-              child: buildTabAppearance(setLocalState),
-            );
-          },
+        // הריחוף מרענן את השורה כולה ולא רק את הכרטיסיה: המפריד שנעלם בצדה
+        // שייך לכרטיסיה השכנה.
+        child: MouseRegion(
+          onEnter: (_) => _setHoveredTab(tab),
+          onExit: (_) => _clearHoveredTab(tab),
+          child: buildLiveTabAppearance(),
         ),
       ),
     );
   }
 
+  void _setHoveredTab(OpenedTab tab) {
+    if (identical(_hoveredTab, tab)) return;
+    setState(() => _hoveredTab = tab);
+  }
+
+  void _clearHoveredTab(OpenedTab tab) {
+    if (!identical(_hoveredTab, tab)) return;
+    setState(() => _hoveredTab = null);
+  }
+
   /// עוטף כרטיסיה בטיפול הלחיצות שלה.
   ///
-  /// בחירת הטאב על pointer-down: לחצן אמצעי סוגר, לחצן ראשי (או תחילת גרירה)
+  /// בחירת הטאב על pointer-down: לחצן אמצעי סוגר (בלשונית מפוצלת — רק את
+  /// החלונית שהחצי שלה נלחץ), לחצן ראשי (או תחילת גרירה)
   /// בוחר. לחצן ימני אינו בוחר — אחרת הבחירה גוררת rebuild שהורס את
   /// ה-AppContextMenuRegion לפני שתפריט ההקשר נפתח. משתמשים ב-Listener פסיבי
   /// כי הגרירה המיידית (ReorderableDragStartListener) זוכה ב-arena וחוסמת onTap.
@@ -1147,6 +1209,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     OpenedTab tab,
     int index,
     TabsState state, {
+    required double tabWidth,
     required Widget child,
   }) {
     return Listener(
@@ -1166,7 +1229,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         // מונע מבחירה קודמת להשפיע על שחרור הלחיצה הנוכחי.
         _pendingTabSelection = null;
         if (event.buttons == 4) {
-          closeTab(tab, context);
+          // בלשונית מפוצלת נסגרת רק החלונית שהחצי שלה נלחץ.
+          if (tab is CombinedTab) {
+            closePane(
+              _paneAtDx(context, tab, event.localPosition.dx, tabWidth),
+              context,
+            );
+          } else {
+            closeTab(tab, context);
+          }
           return;
         }
         if (event.buttons != 1 ||
@@ -1194,205 +1265,18 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
-  /// בונה פריט תפריט להעברת טאב לשולחן עבודה אחר
-  AppContextMenuEntry _buildMoveToWorkspaceMenuEntry(
-    BuildContext context,
-    OpenedTab tab,
-  ) {
-    final workspaceState = context.read<WorkspaceBloc>().state;
-
-    final otherWorkspaces = workspaceState.workspaces
-        .where((w) => w.id != workspaceState.activeWorkspaceId)
-        .toList();
-
-    if (otherWorkspaces.isEmpty) {
-      return AppContextMenuEntry(
-        label: 'העבר לשולחן עבודה',
-        enabled: false,
-      );
-    }
-
-    return AppContextMenuEntry(
-      label: 'העבר לשולחן עבודה',
-      children: otherWorkspaces.map((workspace) {
-        return AppContextMenuEntry(
-          label: workspace.name,
-          onTap: () {
-            _moveTabToWorkspace(context, tab, workspace.id);
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  /// מעביר טאב לשולחן עבודה אחר
-  void _moveTabToWorkspace(
-    BuildContext context,
-    OpenedTab tab,
-    String targetWorkspaceId,
-  ) {
-    final tabsBloc = context.read<TabsBloc>();
-    final workspaceBloc = context.read<WorkspaceBloc>();
-    final tabsState = tabsBloc.state;
-    final workspaceState = workspaceBloc.state;
-
-    final targetWorkspace = workspaceState.workspaces.firstWhere(
-      (w) => w.id == targetWorkspaceId,
-    );
-
-    tabsBloc.add(RemoveTab(tab));
-
-    final currentTabs = tabsState.tabs.where((t) => t != tab).toList();
-    final newActiveIndex = currentTabs.isEmpty
-        ? 0
-        : tabsState.currentTabIndex.clamp(0, currentTabs.length - 1);
-
-    workspaceBloc.add(
-      MoveTabToWorkspace(
-        tab: tab,
-        targetWorkspaceId: targetWorkspaceId,
-        currentTabs: currentTabs,
-        currentTabIndex: newActiveIndex,
-      ),
-    );
-
-    UiSnack.show(LibraryMessages.tabMovedToWorkspace(targetWorkspace.name));
-  }
-
   List<AppContextMenuEntry> _buildTabContextMenuEntries(
     BuildContext menuCtx,
     OpenedTab tab,
     TabsState state,
   ) {
-    final entries = <AppContextMenuEntry>[
-      AppContextMenuEntry(
-        label: tab.isPinned ? 'בטל הצמדת כרטיסיה' : 'הצמד כרטיסיה',
-        onTap: () => context.read<TabsBloc>().add(TogglePinTab(tab)),
-      ),
-      // על טאב שנכלל בבחירה מרובה "סגור" הופך לסגירת כל הקבוצה (כמו בדפדפן).
-      if (state.selectedTabs.length > 1 && state.selectedTabs.contains(tab))
-        AppContextMenuEntry(
-          label: 'סגור ${state.selectedTabs.length} כרטיסיות',
-          onTap: () => closeSelectedTabs(context),
-        )
-      else
-        AppContextMenuEntry(
-          label: 'סגור',
-          onTap: () => closeTab(tab, context),
-        ),
-      AppContextMenuEntry(
-        label: 'סגור הכל',
-        onTap: () => closeAllTabs(state, context),
-      ),
-      AppContextMenuEntry(
-        label: 'סגור את האחרים',
-        onTap: () => closeAllTabsButCurrent(state, context),
-      ),
-      if (tab is! ToolTab || tab.isBuiltIn)
-        AppContextMenuEntry(
-          label: 'שיכפול',
-          onTap: () => context.read<TabsBloc>().add(CloneTab(tab)),
-        ),
-      const AppContextMenuEntry.divider(),
-    ];
-
-    // טאב שכבר מפוצל אינו נכנס לפיצול נוסף: הפיצול הוא לשתי חלוניות בלבד.
-    final otherTabs = tab is CombinedTab
-        ? const <OpenedTab>[]
-        : state.tabs.where((t) => t != tab && t is! CombinedTab).toList();
-    if (otherTabs.isEmpty) {
-      entries.add(AppContextMenuEntry(label: 'הצג לצד', enabled: false));
-    } else {
-      entries.add(
-        AppContextMenuEntry(
-          label: 'הצג לצד',
-          children: otherTabs
-              .map(
-                (otherTab) => AppContextMenuEntry(
-                  label: otherTab.title,
-                  onTap: () => context.read<TabsBloc>().add(
-                    CreateCombinedTab(rightTab: tab, leftTab: otherTab),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      );
-    }
-
-    if (tab is CombinedTab) {
-      // לחיצה ימנית אינה מחליפה טאב פעיל, לכן האירועים מקבלים אינדקס מפורש.
-      final tabIndex = state.tabs.indexOf(tab);
-      entries.addAll([
-        AppContextMenuEntry(
-          label: 'סגור חלונית',
-          children: [
-            for (final pane in leafPanes(tab))
-              AppContextMenuEntry(
-                label: pane.title,
-                onTap: () {
-                  // רושמים היסטוריה לפני שהחלונית מוסרת מהטאב.
-                  context.read<HistoryBloc>().add(AddHistory(pane));
-                  context.read<TabsBloc>().add(ClosePane(pane));
-                },
-              ),
-          ],
-        ),
-        AppContextMenuEntry(
-          label: 'החלף צדדים',
-          onTap: () => context.read<TabsBloc>().add(
-            SwapSideBySideTabs(tabIndex: tabIndex),
-          ),
-        ),
-        AppContextMenuEntry(
-          label: 'חזרה לתצוגה רגילה',
-          onTap: () =>
-              context.read<TabsBloc>().add(ExpandCombinedTab(tabIndex)),
-        ),
-      ]);
-    }
-
-    entries.addAll([
-      const AppContextMenuEntry.divider(),
-      AppContextMenuEntry(
-        label: 'כרטיסיות פתוחות',
-        // childrenBuilder + stream: הרשימה נבנית מחדש בכל שינוי במצב הכרטיסיות,
-        // כך שסגירת כרטיסייה דרך ה-X מסירה את שורתה והתפריט נשאר פתוח.
-        childrenBuilder: () =>
-            _getOpenTabsMenuEntries(context.read<TabsBloc>().state.tabs),
-        childrenRefreshStream: context.read<TabsBloc>().stream,
-      ),
-      _buildMoveToWorkspaceMenuEntry(context, tab),
-    ]);
-
-    return entries;
-  }
-
-  List<AppContextMenuEntry> _getOpenTabsMenuEntries(List<OpenedTab> tabs) {
-    // ללא מיון — הרשימה משקפת את סדר הכרטיסיות בשורת הכרטיסיות.
-    return tabs.map((tab) {
-      return AppContextMenuEntry(
-        label: tab.title,
-        onTap: () {
-          final index = tabs.indexOf(tab);
-          context.read<TabsBloc>().add(SetCurrentTab(index));
-        },
-        trailing: Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: IconButton(
-            tooltip: 'סגור',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            icon: const Icon(FluentIcons.dismiss_24_regular, size: 14),
-            // סגירת הכרטיסייה מעדכנת את ה-TabsBloc; ה-childrenRefreshStream
-            // יבנה מחדש את הרשימה ושורת הכרטיסייה תיעלם.
-            onPressed: () => closeTab(tab, context),
-            splashRadius: 16,
-          ),
-        ),
-      );
-    }).toList();
+    return buildTabContextMenuEntries(
+      context,
+      tab,
+      state,
+      onCloseTab: (target) => closeTab(target, context),
+      onCloseSelectedTabs: () => closeSelectedTabs(context),
+    );
   }
 }
 

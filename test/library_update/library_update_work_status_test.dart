@@ -35,6 +35,56 @@ void main() {
       expect(result.onTap, isNotNull);
     });
 
+    test('סיבת הכשל מצורפת להודעה — המשתמש לא נשאר עם "שגיאה" סתמית', () {
+      final result = item(
+        const LibraryUpdateState(
+          status: LibraryUpdateStatus.error,
+          message: 'שגיאה בהורדה המלאה',
+          errorMessage: 'אין מספיק מקום פנוי בכונן',
+        ),
+      )!;
+
+      expect(result.message, 'שגיאה בהורדה המלאה\nאין מספיק מקום פנוי בכונן');
+      expect(result.detail, 'לחץ לניסיון חוזר');
+    });
+
+    test('סיבת כשל ארוכה נחתכת כדי שהחיווי לא יתנפח', () {
+      final longError = 'א' * 500;
+      final result = item(
+        LibraryUpdateState(
+          status: LibraryUpdateStatus.error,
+          message: 'שגיאה בהורדה המלאה',
+          errorMessage: longError,
+        ),
+      )!;
+
+      expect(result.message.length, lessThan(250));
+      expect(result.message, endsWith('…'));
+    });
+
+    test('סיבה זהה להודעה או ריקה אינה מוכפלת', () {
+      expect(
+        item(
+          const LibraryUpdateState(
+            status: LibraryUpdateStatus.error,
+            message: 'שגיאה בבדיקת עדכונים',
+            errorMessage: 'שגיאה בבדיקת עדכונים',
+          ),
+        )!.message,
+        'שגיאה בבדיקת עדכונים',
+      );
+      expect(
+        item(
+          const LibraryUpdateState(
+            status: LibraryUpdateStatus.error,
+            message: 'שגיאה בבדיקת עדכונים',
+            errorMessage: '  ',
+          ),
+        )!.message,
+        'שגיאה בבדיקת עדכונים',
+      );
+    });
+
     test('הלחיצה על הכשל מפעילה את הניסיון החוזר שהוזרק', () {
       var retries = 0;
       final result = item(

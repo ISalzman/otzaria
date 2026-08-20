@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:io' as io show Link;
 
 import 'package:archive/archive_io.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:http/http.dart' as http;
@@ -27,15 +28,21 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
+import 'package:otzaria/data/repository/hive_list_repository.dart';
+import 'package:otzaria/plugins/models/plugin_report_record.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
@@ -266,15 +273,42 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   Future<void> removeKV(String pluginId, String namespace, String key) async {
     kv.remove('$namespace/$key');
   }
+
+  /// התוספים ה"מותקנים" — plugin.openOther נבדק מולם.
+  List<InstalledPlugin> installed = [];
+
+  @override
+  Future<List<InstalledPlugin>> getAllPlugins() async => installed;
+}
+
+class _EnabledRegistryRepo extends Fake implements PluginRegistryRepository {
+  @override
+  Future<bool> getIsEnabled(String pluginId) async => true;
+}
+
+/// קולט את ה-JS שהאירוע נמסר בו, לאימות תוכן ה-payload.
+class _RecordingWebViewController extends Fake
+    implements InAppWebViewController {
+  final List<String> jsCalls = [];
+
+  @override
+  Future<dynamic> evaluateJavascript({
+    required String source,
+    ContentWorld? contentWorld,
+  }) async {
+    jsCalls.add(source);
+    return null;
+  }
 }
 
 InstalledPlugin _buildInstalledPlugin({
   List<String> permissions = const [],
   bool networkEnabled = false,
   List<String> networkAllowlist = const [],
+  String pluginId = 'test.plugin',
 }) {
   return InstalledPlugin(
-    pluginId: 'test.plugin',
+    pluginId: pluginId,
     name: 'Test Plugin',
     version: '1.0.0',
     installPath: '/',
@@ -283,7 +317,7 @@ InstalledPlugin _buildInstalledPlugin({
     pinned: true,
     manifest: PluginManifest(
       schemaVersion: 1,
-      id: 'test.plugin',
+      id: pluginId,
       name: 'Test Plugin',
       version: '1.0.0',
       description: '',
@@ -553,7 +587,11 @@ Future<void> main() async {
             await adapter.execute('app', 'getGrantedPermissions', {})
                 as Map<String, dynamic>;
 
-        expect(response['permissions'], ['app.info.read', 'reader.open']);
+        // הרשאות הבסיס מצטרפות אוטומטית; notes.write שנשללה אינה מופיעה.
+        expect(
+          response['permissions'],
+          withBaselinePermissions(['app.info.read', 'reader.open']),
+        );
       },
     );
 
@@ -2463,13 +2501,16 @@ Future<void> main() async {
   group('PluginBridgeAdapter plugin.openSelf + context menu openPlugin', () {
     late PluginBridgeAdapter adapter;
 
+    late _StubPluginRegistryRepository registry;
+
     setUp(() {
+      registry = _StubPluginRegistryRepository();
       adapter = PluginBridgeAdapter(
         _buildInstalledPlugin(
           permissions: const ['navigation.write', 'reader.context_menu'],
         ),
         dependencies: _buildNetworkDeps(),
-        pluginRepository: _StubPluginRegistryRepository(),
+        pluginRepository: registry,
       );
     });
 
@@ -2488,6 +2529,67 @@ Future<void> main() async {
 
       expect(result, isTrue);
       expect(navigations, ['test.plugin']);
+    });
+
+    test('plugin.openOther מנווט לתוסף היעד ומוסר לו openedBy', () async {
+      registry.installed = [_buildInstalledPlugin(pluginId: 'other.plugin')];
+      final navigations = <String>[];
+      PluginPageLauncher.instance.navigator = navigations.add;
+      final dispatcher = PluginRuntimeDispatcher.instance;
+      final controller = _RecordingWebViewController();
+      dispatcher.repositoryForTesting = _EnabledRegistryRepo();
+      dispatcher.registerController('other.plugin', controller);
+      addTearDown(() {
+        PluginPageLauncher.instance.markPageClosed('other.plugin');
+        dispatcher.unregisterController('other.plugin');
+        dispatcher.repositoryForTesting = PluginRegistryRepository();
+      });
+
+      final result = await adapter.execute('plugin', 'openOther', {
+        'pluginId': 'other.plugin',
+        'param': 'x',
+      });
+      PluginPageLauncher.instance.markPageReady('other.plugin');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(result, isTrue);
+      expect(navigations, ['other.plugin']);
+      expect(controller.jsCalls.single, contains('plugin.page_opened'));
+      expect(controller.jsCalls.single, contains('"openedBy":"test.plugin"'));
+    });
+
+    test(
+      'plugin.openOther על תוסף שאינו מותקן → not_found, בלי ניווט',
+      () async {
+        registry.installed = [_buildInstalledPlugin(pluginId: 'other.plugin')];
+        final navigations = <String>[];
+        PluginPageLauncher.instance.navigator = navigations.add;
+
+        await expectLater(
+          adapter.execute('plugin', 'openOther', {'pluginId': 'ghost.plugin'}),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('not_found'),
+            ),
+          ),
+        );
+        expect(navigations, isEmpty);
+      },
+    );
+
+    test('plugin.openOther ללא pluginId → invalid_params', () async {
+      await expectLater(
+        adapter.execute('plugin', 'openOther', <String, dynamic>{}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('invalid_params'),
+          ),
+        ),
+      );
     });
 
     test('addContextMenuItem שומר openPlugin ו-param ב-registry', () async {
@@ -2515,6 +2617,32 @@ Future<void> main() async {
       expect(item.openPlugin, isFalse);
       expect(item.param, isNull);
     });
+
+    test(
+      'updateContextMenuItem עם when על storage רושם את המפתח למעקב',
+      () async {
+        addTearDown(
+          () => PluginConditionEvaluator.instance.removePlugin('test.plugin'),
+        );
+        registry.kv['default/flag'] = '"on"';
+
+        await adapter.execute('reader', 'addContextMenuItem', {
+          'id': 'item-3',
+          'label': 'מותנה',
+        });
+        await adapter.execute('reader', 'updateContextMenuItem', {
+          'id': 'item-3',
+          'patch': {
+            'when': {
+              'storage': {'key': 'flag', 'equals': 'on'},
+            },
+          },
+        });
+
+        // בלי רישום המפתח, הערך הקיים ב-KV לא נטען והפריט היה מוסתר לצמיתות.
+        expect(ContextMenuRegistry.instance.getAll(), hasLength(1));
+      },
+    );
   });
 
   group('PluginBridgeAdapter — reader.addToolbarItem', () {
@@ -2566,6 +2694,34 @@ Future<void> main() async {
 
       await adapter.execute('reader', 'removeToolbarItem', {'id': 'mark'});
       expect(PluginToolbarRegistry.instance.getAll(), isEmpty);
+    });
+
+    test('updateToolbarItem עם when על storage רושם את המפתח למעקב', () async {
+      addTearDown(
+        () => PluginConditionEvaluator.instance.removePlugin('test.plugin'),
+      );
+      final repo = _StubPluginRegistryRepository()..kv['default/flag'] = '"on"';
+      final conditionedAdapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const ['reader.toolbar']),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: repo,
+      );
+
+      await conditionedAdapter.execute('reader', 'addToolbarItem', {
+        'id': 'mark',
+        'title': 'סמן',
+        'icon': 'bookmark_24_regular',
+      });
+      await conditionedAdapter.execute('reader', 'updateToolbarItem', {
+        'id': 'mark',
+        'patch': {
+          'when': {
+            'storage': {'key': 'flag', 'equals': 'on'},
+          },
+        },
+      });
+
+      expect(PluginToolbarRegistry.instance.getAll(), hasLength(1));
     });
   });
 
@@ -3269,6 +3425,350 @@ Future<void> main() async {
       expect(pdfResult['type'], 'pdf');
     });
   });
+
+  group('PluginBridgeAdapter feedback.report', () {
+    PluginBridgeDependencies buildDeps({
+      required Future<bool> Function(String title, String content) onConfirm,
+    }) {
+      return PluginBridgeDependencies(
+        historyBloc: _MockHistoryBloc(),
+        tabsBloc: _StubTabsBloc(),
+        navigationBloc: _MockNavigationBloc(),
+        calendarCubit: _StubCalendarCubit(
+          _buildCalendarState(DateTime(2026, 1, 1), inIsrael: true),
+        ),
+        workspaceBloc: _MockWorkspaceBloc(),
+        searchRepository: _MockSearchRepository(),
+        personalNotesRepository: _MockPersonalNotesRepository(),
+        bookOpenCoordinator: _MockBookOpenCoordinator(),
+        themePayloadBuilder: () => <String, dynamic>{},
+        showConfirmDialog: ({required title, required content}) =>
+            onConfirm(title, content),
+        showWarningDialog:
+            ({required title, required content, required subtitle}) async =>
+                true,
+      );
+    }
+
+    PluginBridgeAdapter buildAdapter({
+      required Future<bool> Function(String title, String content) onConfirm,
+      required http.Client client,
+      _InMemoryPluginReportQueue? queue,
+    }) {
+      return PluginBridgeAdapter(
+        _buildInstalledPlugin(),
+        dependencies: buildDeps(onConfirm: onConfirm),
+        pluginRepository: _StubPluginRegistryRepository(),
+        reportService: PluginReportService(
+          client: client,
+          queueRepository: queue ?? _InMemoryPluginReportQueue(),
+          sentRepository: _InMemoryPluginReportQueue(),
+        ),
+      );
+    }
+
+    setUp(() async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+    });
+
+    test('details חסר → שגיאה, ואין דיאלוג ואין שליחה', () async {
+      var confirmCalls = 0;
+      var posted = false;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async {
+          confirmCalls++;
+          return true;
+        },
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': '   '}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('details required'),
+          ),
+        ),
+      );
+      expect(confirmCalls, 0);
+      expect(posted, isFalse);
+    });
+
+    test('ביטול בדיאלוג → cancelled ואין שליחה', () async {
+      var posted = false;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => false,
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'התוסף קורס',
+      });
+
+      expect(result, 'cancelled');
+      expect(posted, isFalse);
+    });
+
+    test('אישור → POST עם שדות התוסף, סוג לא מוכר הופך ל-other', () async {
+      String? dialogTitle;
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (title, content) async {
+          dialogTitle = title;
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'התוסף קורס',
+        'reportType': 'nonsense',
+      });
+
+      expect(result, 'sent');
+      expect(dialogTitle, 'שליחת דיווח למפתח התוסף');
+      expect(dialogContent, contains('Test Plugin'));
+      expect(dialogContent, contains('התוסף קורס'));
+      expect(body['pluginUid'], 'test.plugin');
+      expect(body['pluginName'], 'Test Plugin');
+      expect(body['pluginVersion'], '1.0.0');
+      expect(body['reportType'], 'other');
+      expect(body['details'], 'התוסף קורס');
+      expect(body.containsKey('reporterEmail'), isFalse);
+    });
+
+    test('פירוט ארוך נחתך ל-5000 תווים גם בתצוגה המקדימה', () async {
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, content) async {
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {'details': 'א' * 6000});
+
+      expect((body['details'] as String).length, 5000);
+      expect(dialogContent!.length, lessThan(600));
+    });
+
+    test('כתובת חוזרת נלקחת מהגדרות דיווח השגיאות כשלא נמסרה', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'user@example.com',
+      );
+      String? dialogContent;
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, content) async {
+          dialogContent = content;
+          return true;
+        },
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {'details': 'משהו'});
+
+      expect(body['reporterEmail'], 'user@example.com');
+      expect(dialogContent, contains('user@example.com'));
+    });
+
+    test('כתובת שמורה בהגדרות גוברת על כתובת שנמסרה מהתוסף', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'saved@example.com',
+      );
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+        'reporterEmail': 'plugin@example.com',
+      });
+
+      expect(body['reporterEmail'], 'saved@example.com');
+    });
+
+    test('כתובת מהתוסף משמשת רק כשאין כתובת שמורה', () async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+      late Map<String, dynamic> body;
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response('{"success":true}', 200);
+        }),
+      );
+
+      await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+        'reporterEmail': 'plugin@example.com',
+      });
+
+      expect(body['reporterEmail'], 'plugin@example.com');
+    });
+
+    test('hasReporterEmail מחזירה קיום בלבד, בלי הכתובת', () async {
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('{}', 200)),
+      );
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        '',
+      );
+      expect(
+        await adapter.execute('feedback', 'hasReporterEmail', {}),
+        isFalse,
+      );
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyErrorReportSenderEmail,
+        'user@example.com',
+      );
+      expect(
+        await adapter.execute('feedback', 'hasReporterEmail', {}),
+        isTrue,
+      );
+    });
+
+    test('דחייה קבועה (400) → חריגה מוחזרת לתוסף ולא נשמר בתור', () async {
+      final queue = _InMemoryPluginReportQueue();
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('bad', 400)),
+        queue: queue,
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': 'משהו'}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('400'),
+          ),
+        ),
+      );
+      expect(await queue.load(), isEmpty);
+    });
+
+    test('כשל זמני (500) → queued והדיווח נשמר בתור', () async {
+      final queue = _InMemoryPluginReportQueue();
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async => http.Response('nope', 500)),
+        queue: queue,
+      );
+
+      final result = await adapter.execute('feedback', 'report', {
+        'details': 'משהו',
+      });
+
+      expect(result, 'queued');
+      final queued = await queue.load();
+      expect(queued.single.pluginUid, 'test.plugin');
+      expect(queued.single.details, 'משהו');
+    });
+
+    test('מצב לא-מקוון עם תור כבוי → חריגה, בלי רשת ובלי תור', () async {
+      await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, true);
+      await Settings.setValue<bool>(
+        SettingsRepository.keyQueueErrorReportsWhenOffline,
+        false,
+      );
+      addTearDown(() async {
+        await Settings.setValue<bool>(
+          SettingsRepository.keyOfflineMode,
+          false,
+        );
+        await Settings.setValue<bool>(
+          SettingsRepository.keyQueueErrorReportsWhenOffline,
+          true,
+        );
+      });
+
+      var posted = false;
+      final queue = _InMemoryPluginReportQueue();
+      final adapter = buildAdapter(
+        onConfirm: (_, _) async => true,
+        client: MockClient((_) async {
+          posted = true;
+          return http.Response('{}', 200);
+        }),
+        queue: queue,
+      );
+
+      await expectLater(
+        adapter.execute('feedback', 'report', {'details': 'משהו'}),
+        throwsA(isA<Exception>()),
+      );
+      expect(posted, isFalse);
+      expect(await queue.load(), isEmpty);
+    });
+  });
+}
+
+class _InMemoryPluginReportQueue
+    extends HiveListRepository<PluginReportRecord> {
+  List<PluginReportRecord> _items = [];
+
+  _InMemoryPluginReportQueue()
+    : super(
+        boxName: 'in_memory',
+        key: 'pending_reports',
+        fromJson: PluginReportRecord.fromJson,
+        toJson: (record) => record.toJson(),
+      );
+
+  @override
+  Future<List<PluginReportRecord>> load() async {
+    return List<PluginReportRecord>.from(_items);
+  }
+
+  @override
+  Future<void> save(List<PluginReportRecord> items) async {
+    _items = List<PluginReportRecord>.from(items);
+  }
+
+  @override
+  Future<void> clear() async {
+    _items = [];
+  }
 }
 
 class _FakeBookProvider implements LibraryProvider {

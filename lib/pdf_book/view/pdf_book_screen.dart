@@ -144,6 +144,28 @@ int pdfImageCacheBytesForPanes(int pdfPaneCount) {
       : perPane;
 }
 
+/// מלבן הכפולה במרחב התצוגה, בלי חיתוך לגבולותיה. גאומטריית הדפדוף נשענת
+/// עליו: מרכזו הוא השדרה, וחצי מרוחבו הוא עמוד אחד.
+@visibleForTesting
+Rect pdfSpreadTurnViewportRect(Matrix4 matrix, Rect spreadRect) =>
+    MatrixUtils.transformRect(matrix, spreadRect);
+
+/// החלק הנראה של הכפולה — למסכת התצוגה ולאזורי הגרירה, שחייבים להישאר
+/// בתוך המסך. אסור להאכיל בו את גאומטריית הדפדוף: הוא מזיז את השדרה.
+@visibleForTesting
+Rect? pdfSpreadVisibleViewportRect(
+  Matrix4 matrix,
+  Rect spreadRect,
+  Size viewportSize,
+) {
+  final clippedRect = pdfSpreadTurnViewportRect(
+    matrix,
+    spreadRect,
+  ).intersect(Offset.zero & viewportSize);
+  if (clippedRect.width <= 0 || clippedRect.height <= 0) return null;
+  return clippedRect;
+}
+
 /// מחזיר את מדיניות שינוי גודל ה-PDF לפי מצב התצוגה.
 @visibleForTesting
 PdfViewerSizeDelegateProvider pdfSizeDelegateProviderForLayoutMode(
@@ -420,6 +442,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// שה-layout התייצב, ה-controller באמת נמצא בעמוד זה (ולא נדחף
   /// משם בגלל ממדי עמודי רקע שהתעדכנו).
   int? _stableLayoutTargetPage;
+
+  /// מתי התחיל ה-tracking הנוכחי — בסיס לתקרת [_kStableLayoutMaxWait].
+  DateTime? _stableLayoutStartedAt;
 
   /// הגנה מפני לולאת תיקון אינסופית: אם אחרי [_kStableLayoutMaxRetries]
   /// נסיונות עוד לא הגענו לעמוד היעד, מסתפקים במה שיש ומסירים את
@@ -1359,6 +1384,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: 0.2,
+      panAxis: pdfPanAxis(isMobile: Platform.isAndroid || Platform.isIOS),
       interactionDelegateProvider:
           const PdfViewerScrollInteractionDelegateProviderPhysics(),
       onDocumentLoadFinished: (documentRef, succeeded) {
@@ -1516,11 +1542,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ),
         );
 
-        // פתיחה ל"עמוד יעד" (דף יומי/חיפוש/קישור/היסטוריה/סימניה) —
-        // progressive loading עלול לעדכן ממדי עמודים ברקע ולדחוף את
-        // עמוד היעד מהמסך. כל פתיחה לעמוד שאינו הראשון צריכה overlay
-        // עד שה-layout מתייצב, גם אם הקורא לא הגדיר requiresStableLayout
-        // במפורש (היסטוריה/סימניה לא מסמנים את הדגל הזה).
+        // פתיחה ל"עמוד יעד" — progressive loading עלול לדחוף את עמוד היעד
+        // כשממדי עמודים מתעדכנים ברקע; ה-tracking מתקן בחזרה. overlay מוצג
+        // רק כשהקורא ביקש requiresStableLayout (ראה isLoading ב-bloc).
         if (widget.tab.requiresStableLayout || initialTargetPage > 1) {
           _beginStableLayoutTracking(initialTargetPage);
         }
@@ -1857,24 +1881,33 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
   }
 
-  Rect? _currentSpreadViewportRect(
+  Rect? _currentSpreadViewportRect(PdfViewerController controller) {
+    final spreadRect = _currentSpreadRect(controller);
+    if (spreadRect == null) return null;
+    final viewportRect = pdfSpreadTurnViewportRect(
+      controller.value,
+      spreadRect,
+    );
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return null;
+    return viewportRect;
+  }
+
+  Rect? _visibleSpreadViewportRect(
     PdfViewerController controller,
     Size viewportSize,
   ) {
     final spreadRect = _currentSpreadRect(controller);
     if (spreadRect == null) return null;
-    final viewportRect = MatrixUtils.transformRect(
+    return pdfSpreadVisibleViewportRect(
       controller.value,
       spreadRect,
+      viewportSize,
     );
-    final clippedRect = viewportRect.intersect(Offset.zero & viewportSize);
-    if (clippedRect.width <= 0 || clippedRect.height <= 0) return null;
-    return clippedRect;
   }
 
   Widget _buildBookViewViewportMask(Size viewportSize) {
     if (!_isBookViewModeActive()) return const SizedBox.shrink();
-    final spreadViewportRect = _currentSpreadViewportRect(
+    final spreadViewportRect = _visibleSpreadViewportRect(
       widget.tab.pdfViewerController,
       viewportSize,
     );
@@ -1916,10 +1949,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final viewportBounds = Offset.zero & viewportSize;
     final pages = <_VisibleBookPage>[];
 
+    final pageLayouts = controller.layout.pageLayouts;
+
     for (final pageNumber in pageNumbers) {
+      // מיקום שמור עלול להצביע מחוץ למסמך הנטען (עמוד ממסמך אחר) — אותה
+      // שמירת טווח שקיימת ב-[_spreadRectForPageLayout].
+      if (pageNumber - 1 >= pageLayouts.length) continue;
       final pageRect = MatrixUtils.transformRect(
         effectiveMatrix,
-        controller.layout.pageLayouts[pageNumber - 1],
+        pageLayouts[pageNumber - 1],
       );
       if (!pageRect.overlaps(viewportBounds)) continue;
 
@@ -1990,7 +2028,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
     final horizontalPadding = min(28.0, viewportSize.width * 0.018);
     final colorScheme = Theme.of(context).colorScheme;
-    final spreadRect = _currentSpreadViewportRect(
+    final spreadRect = _visibleSpreadViewportRect(
       widget.tab.pdfViewerController,
       widget.tab.pdfViewerController.viewSize,
     );
@@ -2513,10 +2551,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         : _previousSpreadTargetPage();
     if (targetPage == null) return;
 
-    final spreadRect = _currentSpreadViewportRect(
-      controller,
-      controller.viewSize,
-    );
+    final spreadRect = _currentSpreadViewportRect(controller);
     if (spreadRect == null) return;
 
     _isPageTurnInProgress = true;
@@ -3072,7 +3107,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     try {
       final currentSpreadViewportRect = _currentSpreadViewportRect(
         widget.tab.pdfViewerController,
-        widget.tab.pdfViewerController.viewSize,
       );
 
       if (currentSpreadViewportRect == null) {
@@ -3343,10 +3377,15 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const Duration _kStableLayoutDebounce = Duration(milliseconds: 800);
   static const int _kStableLayoutMaxRetries = 3;
 
+  // תקרת המתנה ל-onDocumentLoadFinished: במסמכים גדולים הוא עלול להתעכב
+  // דקה — קפיצת עמוד נדירה עדיפה על overlay תקוע (issue #824).
+  static const Duration _kStableLayoutMaxWait = Duration(seconds: 2);
+
   void _beginStableLayoutTracking(int targetPage) {
     if (!mounted) return;
     _stableLayoutTargetPage = targetPage;
     _stableLayoutRetryCount = 0;
+    _stableLayoutStartedAt = DateTime.now();
     // לא מאפסים _documentFullyLoaded כאן — race: onDocumentLoadFinished
     // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
     // מנוהל ריכוזית ב-_createDocumentRef.
@@ -3370,11 +3409,13 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _restartStableLayoutDebounce();
       return;
     }
-    // אינדיקטור חזק נדרש: בלי ש-onDocumentLoadFinished ירה (= כל
-    // המטא-דאטה נטענה), 800ms של debounce ריק עדיין משאיר אפשרות
-    // שעמודי רקע ימשיכו להידחק ולדחוף את עמוד היעד. בלי הבדיקה הזו
-    // נראו קפיצות גלויות אחרי שה-overlay הוסר ב-bookView.
-    if (!_documentFullyLoaded) {
+    // בלי onDocumentLoadFinished עמודי רקע עוד עלולים לדחוף את עמוד היעד,
+    // אבל ממתינים לו רק עד _kStableLayoutMaxWait — לא לנצח (issue #824).
+    final startedAt = _stableLayoutStartedAt;
+    final maxWaitReached =
+        startedAt != null &&
+        DateTime.now().difference(startedAt) >= _kStableLayoutMaxWait;
+    if (!_documentFullyLoaded && !maxWaitReached) {
       _restartStableLayoutDebounce();
       return;
     }
@@ -3416,6 +3457,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
     _stableLayoutTargetPage = null;
+    _stableLayoutStartedAt = null;
     if (!_waitingForStableLayout) return;
     if (mounted) {
       setState(() {
@@ -3431,6 +3473,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTimer?.cancel();
     _stableLayoutTimer = null;
     _stableLayoutTargetPage = null;
+    _stableLayoutStartedAt = null;
     _stableLayoutRetryCount = 0;
     _waitingForStableLayout = false;
     // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
@@ -5826,6 +5869,15 @@ class _BookPageTurnPainter extends CustomPainter {
     final backImage = targetSnapshot ?? snapshot;
     Rect? backBounds;
 
+    // תחום הצילום בקואורדינטות המקומיות של הכפולה — כשהכפולה גולשת
+    // מהתצוגה, רצועות נחתכות אליו יעד-ומקור יחד כדי שלא להימתח.
+    final snapshotCoverage = Rect.fromLTWH(
+      -snapshotViewportRect.left,
+      -snapshotViewportRect.top,
+      viewportLogicalSize.width,
+      viewportLogicalSize.height,
+    );
+
     // מהשדרה אל הקצה החופשי — כך הרצועות שכבר התקפלו נצבעות מעל אלה שמתחתן.
     for (final strip in geometry.strips) {
       if (strip.width <= 0.01) {
@@ -5838,28 +5890,34 @@ class _BookPageTurnPainter extends CustomPainter {
         strip.height,
       );
       final sourceImage = strip.showsFront ? snapshot : backImage;
-      final sourceRect = _turningPageSourceStripRect(
-        image: sourceImage,
-        viewportRect: viewportRect,
-        turnLeftPage: turnLeftPage,
-        sampleOppositeHalf: !strip.showsFront && hasTarget,
-        u0: strip.u0,
-        u1: strip.u1,
+      final clamped = clampStripToSnapshotCoverage(
+        dest: destinationRect,
+        source: _turningPageSourceStripRect(
+          image: sourceImage,
+          viewportRect: viewportRect,
+          turnLeftPage: turnLeftPage,
+          sampleOppositeHalf: !strip.showsFront && hasTarget,
+          u0: strip.u0,
+          u1: strip.u1,
+        ),
+        coverage: snapshotCoverage,
       );
+      if (clamped == null) {
+        continue;
+      }
 
       final paint = Paint();
       if (!strip.showsFront) {
-        canvas.drawRect(destinationRect, Paint()..color = pageBackColor);
+        canvas.drawRect(clamped.dest, Paint()..color = pageBackColor);
         if (!hasTarget) {
           paint.colorFilter = ColorFilter.mode(
             pageBackColor.withValues(alpha: 0.30),
             BlendMode.srcATop,
           );
         }
-        backBounds =
-            backBounds?.expandToInclude(destinationRect) ?? destinationRect;
+        backBounds = backBounds?.expandToInclude(clamped.dest) ?? clamped.dest;
       }
-      canvas.drawImageRect(sourceImage, sourceRect, destinationRect, paint);
+      canvas.drawImageRect(sourceImage, clamped.source, clamped.dest, paint);
 
       // הצללה לפי ההטיה: כהה יותר ככל שהרצועה קרובה לקו הקיפול.
       final shadeAlpha = strip.showsFront
@@ -5867,7 +5925,7 @@ class _BookPageTurnPainter extends CustomPainter {
           : strip.tilt * (0.05 + 0.22 * (1 - strip.distance));
       if (shadeAlpha > 0.01) {
         canvas.drawRect(
-          destinationRect,
+          clamped.dest,
           Paint()..color = shadowColor.withValues(alpha: shadeAlpha),
         );
       }
@@ -6008,12 +6066,6 @@ class _BookPageTurnPainter extends CustomPainter {
   }
 
   Rect _sourceRectForLocalRect(ui.Image image, Rect localRect) {
-    final fullImageRect = Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
     final pixelRatioX = image.width / viewportLogicalSize.width;
     final pixelRatioY = image.height / viewportLogicalSize.height;
 
@@ -6022,7 +6074,7 @@ class _BookPageTurnPainter extends CustomPainter {
       (snapshotViewportRect.top + localRect.top) * pixelRatioY,
       localRect.width * pixelRatioX,
       localRect.height * pixelRatioY,
-    ).intersect(fullImageRect);
+    );
   }
 
   @override

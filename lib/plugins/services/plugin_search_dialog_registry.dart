@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_search_dialog_item.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 
 /// רישום שורות חיפוש סטטיות של תוספים.
@@ -9,18 +11,41 @@ import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 class PluginSearchDialogRegistry extends ChangeNotifier {
   static final PluginSearchDialogRegistry instance =
       PluginSearchDialogRegistry._();
-  PluginSearchDialogRegistry._();
+  PluginSearchDialogRegistry._() {
+    _attachEvaluator(PluginConditionEvaluator.instance);
+  }
 
   @visibleForTesting
-  PluginSearchDialogRegistry.forTesting();
+  PluginSearchDialogRegistry.forTesting({PluginConditionEvaluator? evaluator}) {
+    if (evaluator != null) _attachEvaluator(evaluator);
+  }
 
   PluginSearchDialogRegistry.detached();
 
-  final Map<String, List<PluginSearchDialogItem>> _items = {};
+  final Map<PluginInstanceKey, List<PluginSearchDialogItem>> _items = {};
+  PluginConditionEvaluator? _evaluator;
 
-  void registerPayload(String pluginId, Map<String, dynamic> payload) {
+  void _attachEvaluator(PluginConditionEvaluator evaluator) {
+    _evaluator = evaluator;
+    evaluator.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    _evaluator?.removeListener(notifyListeners);
+    super.dispose();
+  }
+
+  void registerPayload(
+    String pluginId,
+    Map<String, dynamic> payload, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
     final item = PluginSearchDialogItem.fromPayload(payload);
-    final items = _items.putIfAbsent(pluginId, () => []);
+    final items = _items.putIfAbsent(
+      (pluginId: pluginId, instanceId: instanceId),
+      () => [],
+    );
     final existing = items.indexWhere((candidate) => candidate.id == item.id);
     if (existing < 0 &&
         items.length >= PluginSearchDialogItem.maxItemsPerPlugin) {
@@ -45,26 +70,47 @@ class PluginSearchDialogRegistry extends ChangeNotifier {
     notifyListeners();
   }
 
-  void remove(String pluginId, String itemId) {
-    final items = _items[pluginId];
+  void remove(
+    String pluginId,
+    String itemId, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final items = _items[(pluginId: pluginId, instanceId: instanceId)];
     if (items == null) return;
     final before = items.length;
     items.removeWhere((item) => item.id == itemId);
-    if (items.isEmpty) _items.remove(pluginId);
+    _items.removeWhere((_, list) => list.isEmpty);
     if (items.length != before) notifyListeners();
   }
 
+  /// ניקוי מלא ברמת התוסף — כל המופעים והרישומים הדקלרטיביים.
   void removeAll(String pluginId) {
-    if (_items.remove(pluginId) != null) notifyListeners();
+    final before = _items.length;
+    _items.removeWhere((key, _) => key.pluginId == pluginId);
+    if (_items.length != before) notifyListeners();
   }
 
+  /// מסיר רק את הרישומים של המופע [key] (סגירת טאב אחד של התוסף).
+  void removeInstance(PluginInstanceKey key) {
+    if (_items.remove(key) != null) notifyListeners();
+  }
+
+  /// השורות המוצגות בפועל — שורה שתנאי ה-`when` שלה אינו מתקיים מסוננת החוצה
+  /// (ונשארת רשומה, כך שהיא חוזרת כשהתנאי מתקיים). שורה זהה שנרשמה מכמה
+  /// מופעים מוצגת פעם אחת.
   List<(String pluginId, PluginSearchDialogItem item)> getAll() {
-    final values = <(String pluginId, PluginSearchDialogItem item)>[];
+    final deduped = <(String, String), (String, PluginSearchDialogItem)>{};
     for (final entry in _items.entries) {
+      final pluginId = entry.key.pluginId;
       for (final item in entry.value) {
-        values.add((entry.key, item));
+        if (!(_evaluator?.isVisible(pluginId, item.when) ?? true)) continue;
+        final dedupeKey = (pluginId, item.id);
+        if (!deduped.containsKey(dedupeKey) ||
+            entry.key.instanceId != PluginInstanceIds.pluginLevel) {
+          deduped[dedupeKey] = (pluginId, item);
+        }
       }
     }
-    return List.unmodifiable(values);
+    return List.unmodifiable(deduped.values);
   }
 }

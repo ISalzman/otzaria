@@ -239,4 +239,54 @@ void main() {
       expect(hasPdfPageRange(startPage: 30, endPage: 50), isTrue);
     });
   });
+
+  group('pdfPageRangeSummary', () {
+    test('עמוד אחד בגיליון — בלי תוספת גיליונות', () {
+      expect(
+        pdfPageRangeSummary(
+          startPage: 1,
+          endPage: 4,
+          totalPages: 4,
+          pagesPerSheet: 1,
+        ),
+        '4 עמודים מתוך 4',
+      );
+    });
+
+    test('2 בגיליון — מציג את מספר הגיליונות בפועל (issue #817)', () {
+      expect(
+        pdfPageRangeSummary(
+          startPage: 1,
+          endPage: 4,
+          totalPages: 4,
+          pagesPerSheet: 2,
+        ),
+        '4 עמודים מתוך 4 (2 גיליונות)',
+      );
+    });
+
+    test('טווח שאינו מתחלק — מעגל כלפי מעלה', () {
+      expect(
+        pdfPageRangeSummary(
+          startPage: 1,
+          endPage: 3,
+          totalPages: 4,
+          pagesPerSheet: 2,
+        ),
+        '3 עמודים מתוך 4 (2 גיליונות)',
+      );
+    });
+
+    test('כל הטווח נכנס בגיליון אחד — לשון יחיד', () {
+      expect(
+        pdfPageRangeSummary(
+          startPage: 3,
+          endPage: 4,
+          totalPages: 4,
+          pagesPerSheet: 4,
+        ),
+        '2 עמודים מתוך 4 (גיליון אחד)',
+      );
+    });
+  });
 }

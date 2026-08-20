@@ -12,7 +12,6 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
-import 'package:otzaria/theme/app_tokens.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -600,11 +599,11 @@ void main() {
       );
 
       expect(_chipRowCount(tester), 2);
-      expect(_rowLabelsAt(tester, 0), ['אחרונים']);
-      expect(_rowLabelsAt(tester, 1), ['עין משפט']);
+      expect(_rowLabelsAt(tester, 0), ['עין משפט']);
+      expect(_rowLabelsAt(tester, 1), ['אחרונים']);
     });
 
-    testWidgets('שתי הקבוצות באותה שורה — הדורות מימין והסוגים משמאל', (
+    testWidgets('יש רוחב לשני הצירים — שורה אחת, הסוגים מימין והדורות משמאל', (
       tester,
     ) async {
       await _pumpView(
@@ -617,137 +616,34 @@ void main() {
 
       final eras = tester.getRect(find.byKey(linkEraChipsRowKey));
       final types = tester.getRect(find.byKey(linkTypeChipsRowKey));
-      expect(types.right, lessThanOrEqualTo(eras.left));
-      expect(eras.top, types.top);
+      expect(eras.right, lessThanOrEqualTo(types.left));
+      expect(eras.center.dy, moreOrLessEquals(types.center.dy, epsilon: 1));
     });
 
-    testWidgets('קו מפריד ניצב בין שתי הקבוצות', (tester) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'EIN_MISHPAT'),
-          _link(title: 'אחרונים א', type: 'REFERENCE'),
-        ],
-      );
-
-      final divider = tester.getRect(find.byKey(chipAxesDividerKey));
-      final eras = tester.getRect(find.byKey(linkEraChipsRowKey));
-      final types = tester.getRect(find.byKey(linkTypeChipsRowKey));
-      expect(divider.left, greaterThanOrEqualTo(types.right));
-      expect(divider.right, lessThanOrEqualTo(eras.left));
-      // חצי-חצי קבוע: לשני הצירים אותו רוחב, ולכן הקו במרכז.
-      expect(eras.width, moreOrLessEquals(types.width, epsilon: 1));
-    });
-
-    testWidgets('לקו יש ריווח משני צדיו ולא רק עובי הקו', (tester) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'EIN_MISHPAT'),
-          _link(title: 'אחרונים א', type: 'REFERENCE'),
-        ],
-      );
-
-      final divider = tester.widget<VerticalDivider>(
-        find.byKey(chipAxesDividerKey),
-      );
-      expect(divider.thickness, 1);
-      expect(divider.width, AppTokens.spaceSM * 2 + 1);
-    });
-
-    testWidgets('מרכז הקו מרוחק מכל אחד משני הצירים', (tester) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'EIN_MISHPAT'),
-          _link(title: 'אחרונים א', type: 'REFERENCE'),
-        ],
-      );
-
-      // הקו מצויר במרכז ה-VerticalDivider, ולכן המרווח לכל ציר הוא חצי מרוחבו.
-      final divider = tester.getRect(find.byKey(chipAxesDividerKey));
-      final eras = tester.getRect(find.byKey(linkEraChipsRowKey));
-      final types = tester.getRect(find.byKey(linkTypeChipsRowKey));
-
-      expect(
-        divider.center.dx - types.right,
-        greaterThanOrEqualTo(AppTokens.spaceSM - 0.5),
-      );
-      expect(
-        eras.left - divider.center.dx,
-        greaterThanOrEqualTo(AppTokens.spaceSM - 0.5),
-      );
-    });
-
-    testWidgets('רגרסיה: צ׳יפ שממלא את הציר אינו נוגע בקו', (tester) async {
-      await tester.binding.setSurfaceSize(const Size(300, 600));
+    testWidgets('אין רוחב לשני הצירים — שתי שורות, הסוגים מעל הדורות', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(320, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await _pumpView(
         tester,
         links: [
           _link(title: 'ראשונים א', type: 'SIFREI_MITZVOT'),
-          _link(title: 'ראשונים ב', type: 'QUOTATION'),
-          _link(title: 'ראשונים ג', type: 'ALLUSION'),
+          _link(title: 'ראשונים ב', type: 'MESORAT_HASHAS'),
+          _link(title: 'ראשונים ג', type: 'QUOTATION'),
+          _link(title: 'חז"ל א', type: 'REFERENCE'),
           _link(title: 'אחרונים א', type: 'REFERENCE'),
-        ],
-      );
-
-      final divider = tester.getRect(find.byKey(chipAxesDividerKey));
-      final typeChips = tester
-          .widgetList<Chip>(
-            find.descendant(
-              of: find.byKey(linkTypeChipsRowKey),
-              matching: find.byType(Chip),
-            ),
-          )
-          .toList();
-      expect(typeChips, isNotEmpty);
-
-      for (final chip in typeChips) {
-        final rect = tester.getRect(find.byWidget(chip));
-        expect(
-          divider.center.dx - rect.right,
-          greaterThanOrEqualTo(AppTokens.spaceSM - 0.5),
-          reason: 'הצ׳יפ "${(chip.label as Text).data}" נצמד לקו',
-        );
-      }
-    });
-
-    testWidgets('הריווח נגזל מהקו ולא מציר אחד — החלוקה נשארת חצי-חצי', (
-      tester,
-    ) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'SIFREI_MITZVOT'),
-          _link(title: 'ראשונים ב', type: 'QUOTATION'),
-          _link(title: 'ראשונים ג', type: 'ALLUSION'),
-          _link(title: 'אחרונים א', type: 'REFERENCE'),
+          _link(title: 'זמננו א', type: 'REFERENCE'),
         ],
       );
 
       final eras = tester.getRect(find.byKey(linkEraChipsRowKey));
       final types = tester.getRect(find.byKey(linkTypeChipsRowKey));
-      expect(eras.width, moreOrLessEquals(types.width, epsilon: 1));
+      expect(types.bottom, lessThanOrEqualTo(eras.top));
     });
 
-    testWidgets('ציר יחיד — אין קו ולכן אין ריווח מבוזבז', (tester) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'EIN_MISHPAT'),
-          _link(title: 'ראשונים ב', type: 'QUOTATION'),
-        ],
-      );
-
-      expect(find.byKey(chipAxesDividerKey), findsNothing);
-      final types = tester.getRect(find.byKey(linkTypeChipsRowKey));
-      final row = tester.getRect(find.byType(IntrinsicHeight));
-      expect(types.width, moreOrLessEquals(row.width, epsilon: 1));
-    });
-
-    testWidgets('פאנל צר עם ריווח הקו — אין overflow', (tester) async {
+    testWidgets('פאנל צר — אין overflow ושני הצירים מוצגים', (tester) async {
       await tester.binding.setSurfaceSize(const Size(160, 600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -761,19 +657,7 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.byKey(chipAxesDividerKey), findsOneWidget);
-    });
-
-    testWidgets('ציר יחיד — אין קו מפריד', (tester) async {
-      await _pumpView(
-        tester,
-        links: [
-          _link(title: 'ראשונים א', type: 'EIN_MISHPAT'),
-          _link(title: 'ראשונים ב', type: 'QUOTATION'),
-        ],
-      );
-
-      expect(find.byKey(chipAxesDividerKey), findsNothing);
+      expect(_chipRowCount(tester), 2);
     });
 
     testWidgets('רק צ׳יפי סוג — שורה אחת בלבד', (tester) async {
@@ -829,8 +713,8 @@ void main() {
       final expected = splitChipKeysByAxis(buildLinkChipKeys(links));
       String label(String key) => CommentaryService.chipKeyLabel(key);
 
-      expect(_rowLabelsAt(tester, 0), expected.eras.map(label).toList());
-      expect(_rowLabelsAt(tester, 1), expected.types.map(label).toList());
+      expect(_rowLabelsAt(tester, 0), expected.types.map(label).toList());
+      expect(_rowLabelsAt(tester, 1), expected.eras.map(label).toList());
     });
 
     testWidgets('רגרסיה: לחיצה בשורת הסוגים אינה מוחקת בחירת דור', (
@@ -2010,7 +1894,7 @@ void main() {
   });
 }
 
-/// קבוצות הצ׳יפים לפי סדר התצוגה — דורות (מימין) ואז סוגים (משמאל). קבוצה
+/// קבוצות הצ׳יפים לפי סדר התצוגה — סוגים ואז דורות. קבוצה
 /// שאינה מוצגת נשמטת, ולכן האינדקס מתייחס לקבוצות הקיימות בפועל.
 final Finder _chipRowFinder = find.byWidgetPredicate(
   (widget) =>

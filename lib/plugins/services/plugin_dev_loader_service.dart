@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
 import 'package:otzaria/plugins/services/plugin_extended_validator.dart';
@@ -256,7 +257,10 @@ class PluginDevLoaderService {
     InstalledPlugin? existingPlugin,
     Map<String, bool>? explicitDecisions,
   ) async {
-    final requested = manifest.permissions.toSet();
+    final effectivePermissions = effectiveManifestPermissions(
+      manifest.permissions,
+    );
+    final requested = effectivePermissions.toSet();
     if (explicitDecisions != null) {
       final supplied = explicitDecisions.keys.toSet();
       if (supplied.difference(requested).isNotEmpty ||
@@ -270,7 +274,9 @@ class PluginDevLoaderService {
 
     final existingGrants = <String, bool>{};
     if (existingPlugin != null) {
-      for (final permission in existingPlugin.manifest.permissions) {
+      for (final permission in effectiveManifestPermissions(
+        existingPlugin.manifest.permissions,
+      )) {
         final granted = await _repository.getPermission(
           manifest.id,
           permission,
@@ -279,7 +285,7 @@ class PluginDevLoaderService {
       }
     }
     return Map.unmodifiable({
-      for (final permission in manifest.permissions)
+      for (final permission in effectivePermissions)
         permission: existingGrants[permission] ?? (existingPlugin == null),
     });
   }

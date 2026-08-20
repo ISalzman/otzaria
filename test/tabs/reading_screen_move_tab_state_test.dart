@@ -124,6 +124,54 @@ void main() {
         factory!.constructor() as HorizontalDragGestureRecognizer;
     addTearDown(recognizer.dispose);
     expect(recognizer.supportedDevices, const {PointerDeviceKind.trackpad});
+
+    // ה"בולען" האנכי — המתחרה שמונע מהאופקי לזכות מיד כחבר יחיד בזירה
+    // מעל תוכן ללא Scrollable (WebView של תוסף).
+    final verticalFactory = detector.gestures[VerticalDragGestureRecognizer];
+    expect(verticalFactory, isNotNull);
+    final vertical =
+        verticalFactory!.constructor() as VerticalDragGestureRecognizer;
+    addTearDown(vertical.dispose);
+    expect(vertical.supportedDevices, const {PointerDeviceKind.trackpad});
+  });
+
+  testWidgets('גלילה אנכית ב-trackpad אינה גוררת את ה-PageView', (
+    tester,
+  ) async {
+    // טאב אמצעי — בקצה ה-clamp על minScrollExtent היה מסתיר את הרעד.
+    final tabs = [_tab('א'), _tab('ב'), _tab('ג')];
+    addTearDown(() {
+      for (final t in tabs) {
+        t.dispose();
+      }
+    });
+    final bloc = await pumpReadingScreen(tester, tabs, currentTabIndex: 1);
+
+    final center = tester.getCenter(find.byType(PageView));
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.trackpad,
+    );
+    await gesture.panZoomStart(center, timeStamp: Duration.zero);
+    // גלילה אנכית מהירה עם ג'יטר אופקי קל — הפרופיל של גלילת תוכן אמיתית.
+    for (var i = 1; i <= 6; i++) {
+      await gesture.panZoomUpdate(
+        center,
+        pan: Offset(i.isEven ? 3.0 : -3.0, -80.0 * i),
+        timeStamp: Duration(milliseconds: 10 * i),
+      );
+      await tester.pump();
+      expect(
+        tester.widget<PageView>(find.byType(PageView)).controller!.page,
+        1,
+        reason: 'מחווה אנכית אסור שתזיז את התצוגה — גם לא רעד רגעי',
+      );
+    }
+    await gesture.panZoomEnd(timeStamp: const Duration(milliseconds: 70));
+    await tester.pumpAndSettle();
+
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(pageView.controller!.page, 1);
+    expect(bloc.state.currentTabIndex, 1);
   });
 
   group('החלקת trackpad — גרירה הדרגתית והתיישבות', () {

@@ -69,6 +69,20 @@ class DeclarativeCommandRegistry {
       optionalArgs: {'maxItems'},
       outputKind: DeclarativeValueKind.list,
     ),
+    'settings.get': DeclarativeCommandDefinition(
+      type: 'settings.get',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'settings.read',
+      requiredArgs: {'key'},
+      outputKind: DeclarativeValueKind.any,
+    ),
+    'storage.get': DeclarativeCommandDefinition(
+      type: 'storage.get',
+      phase: DeclarativeCommandPhase.computation,
+      requiredPermission: 'plugin.storage.read',
+      requiredArgs: {'key'},
+      outputKind: DeclarativeValueKind.any,
+    ),
     'library.resolveBooks': DeclarativeCommandDefinition(
       type: 'library.resolveBooks',
       phase: DeclarativeCommandPhase.computation,
@@ -99,6 +113,20 @@ class DeclarativeCommandRegistry {
       requiredPermission: 'reader.open',
       requiredArgs: {'identity'},
       optionalArgs: {'index', 'searchQuery', 'matchPages', 'matchedTerms'},
+      outputKind: DeclarativeValueKind.any,
+    ),
+    'storage.set': DeclarativeCommandDefinition(
+      type: 'storage.set',
+      phase: DeclarativeCommandPhase.action,
+      requiredPermission: 'plugin.storage.write',
+      requiredArgs: {'key', 'value'},
+      outputKind: DeclarativeValueKind.any,
+    ),
+    'storage.remove': DeclarativeCommandDefinition(
+      type: 'storage.remove',
+      phase: DeclarativeCommandPhase.action,
+      requiredPermission: 'plugin.storage.write',
+      requiredArgs: {'key'},
       outputKind: DeclarativeValueKind.any,
     ),
   };

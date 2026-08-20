@@ -15,6 +15,7 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/personal_notes/services/personal_notes_import_export_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
@@ -476,13 +477,11 @@ class _PersonalNotesManagerScreenState
         ),
       ),
     );
-    final path = await FilePicker.saveFile(
+    final path = await saveFileWithExtension(
       dialogTitle: 'בחר מיקום לשמירת קובץ הגיבוי',
       fileName: 'otzaria_notes_backup.json',
-      allowedExtensions: ['json'],
-      type: FileType.custom,
+      extension: 'json',
       bytes: bytes,
-      lockParentWindow: true,
     );
     if (!mounted) return;
     if (path == null) return;
@@ -513,13 +512,11 @@ class _PersonalNotesManagerScreenState
         ),
       ),
     );
-    final path = await FilePicker.saveFile(
+    final path = await saveFileWithExtension(
       dialogTitle: 'בחר מיקום לשמירת קובץ הטקסט',
       fileName: 'otzaria_notes.txt',
-      allowedExtensions: ['txt'],
-      type: FileType.custom,
+      extension: 'txt',
       bytes: bytes,
-      lockParentWindow: true,
     );
     if (!mounted) return;
     if (path == null) return;

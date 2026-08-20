@@ -362,4 +362,93 @@ void main() {
 
     expect(result, isFalse);
   });
+
+  // clickIsOnTextOccurrence — זיהוי לחיצה על טקסט מודגש ללא בחירה פעילה.
+
+  testWidgets('occurrence: לחיצה על מופע של הטקסט מחזירה true', (tester) async {
+    final paragraph = await pumpRichText(tester);
+    final topLeft = tester.getTopLeft(find.byType(RichText));
+    final size = tester.getSize(find.byType(RichText));
+    final centerY = topLeft.dy + size.height / 2;
+
+    final onText = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.1, centerY),
+      text: 'AAAA',
+    );
+    expect(onText, isTrue);
+
+    final offText = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      text: 'AAAA',
+    );
+    expect(offText, isFalse);
+  });
+
+  testWidgets('occurrence: טקסט שאינו בפסקה מחזיר null', (tester) async {
+    final paragraph = await pumpRichText(tester);
+
+    final result = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: tester.getCenter(find.byType(RichText)),
+      text: 'CCCC',
+    );
+
+    expect(result, isNull);
+  });
+
+  testWidgets('occurrence: מופע ידוע — לחיצה על מופע זהה אחר מחזירה false', (
+    tester,
+  ) async {
+    // "AAAA BBBB AAAA": רק המופע הראשון (השמאלי) מודגש. לחיצה על המופע
+    // הזהה הימני אסור שתיחשב לחיצה על ההדגשה.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              'AAAA BBBB AAAA',
+              textDirection: TextDirection.ltr,
+              style: TextStyle(fontSize: 20),
+            ),
+          ),
+        ),
+      ),
+    );
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.byType(RichText),
+    );
+    final topLeft = tester.getTopLeft(find.byType(RichText));
+    final size = tester.getSize(find.byType(RichText));
+    final centerY = topLeft.dy + size.height / 2;
+
+    final onHighlighted = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.1, centerY),
+      text: 'AAAA',
+      occurrenceIndex: 0,
+      occurrenceCount: 2,
+    );
+    expect(onHighlighted, isTrue);
+
+    final onIdenticalUnhighlighted = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      text: 'AAAA',
+      occurrenceIndex: 0,
+      occurrenceCount: 2,
+    );
+    expect(onIdenticalUnhighlighted, isFalse);
+
+    // מספר מופעים לא תואם — המיפוי דו-משמעי, חוזרים לבדיקת כל המופעים.
+    final ambiguousFallback = clickIsOnTextOccurrence(
+      root: paragraph,
+      globalPosition: Offset(topLeft.dx + size.width * 0.9, centerY),
+      text: 'AAAA',
+      occurrenceIndex: 0,
+      occurrenceCount: 3,
+    );
+    expect(ambiguousFallback, isTrue);
+  });
 }

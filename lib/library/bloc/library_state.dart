@@ -44,6 +44,11 @@ class LibraryState extends Equatable {
     this.isSearching = false,
   });
 
+  /// מעבר "טעינה הסתיימה בהצלחה" — משמש להאזנה לריענון הספרייה (עדכון,
+  /// החלפת מיקום) במקומות שמציגים נתונים הנגזרים ממנה, כמו גרסת הספרייה.
+  static bool reloadCompleted(LibraryState previous, LibraryState current) =>
+      previous.isLoading && !current.isLoading && current.library != null;
+
   factory LibraryState.initial() {
     // יצירת ספרייה ראשונית עם כל הקטגוריות מה-DB
     final placeholderCategories = [

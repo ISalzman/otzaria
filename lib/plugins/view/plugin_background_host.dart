@@ -24,6 +24,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
@@ -45,8 +46,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
-
-const String _backgroundInstanceId = 'background';
 
 // Restricts localhost access to the exact dev server origin (host + scheme + port).
 bool _isDevServerUri(Uri uri, String? devRootPath) {
@@ -618,6 +617,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     _adapter = PluginBridgeAdapter(
       widget.plugin,
       dependencies: dependencies,
+      instanceId: PluginInstanceIds.background,
       pluginRepository: pluginRegistryRepository,
     );
     _bridge = PluginBridgeHandler(
@@ -636,7 +636,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     PluginRuntimeDispatcher.instance.registerReloadCallback(
       widget.plugin.pluginId,
       _reloadFromDisk,
-      instanceId: _backgroundInstanceId,
+      instanceId: PluginInstanceIds.background,
     );
   }
 
@@ -671,11 +671,11 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     );
     PluginRuntimeDispatcher.instance.unregisterController(
       widget.plugin.pluginId,
-      instanceId: _backgroundInstanceId,
+      instanceId: PluginInstanceIds.background,
     );
     PluginRuntimeDispatcher.instance.unregisterReloadCallback(
       widget.plugin.pluginId,
-      instanceId: _backgroundInstanceId,
+      instanceId: PluginInstanceIds.background,
     );
     super.dispose();
   }
@@ -703,6 +703,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         useShouldOverrideUrlLoading: true,
         useShouldInterceptRequest: true,
         useOnDownloadStart: PluginDownloadHandler.isSupported,
+        // ב-Windows ה-status bar של WebView2 מציג את ה-URI בריחוף על קישור
+        // ומאפשר לתוסף לכתוב לשם טקסט חופשי (window.status).
+        statusBarEnabled: false,
         cacheEnabled: !widget.plugin.isDevelopment,
         isInspectable: kDebugMode,
       ),
@@ -720,13 +723,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           PluginRuntimeDispatcher.instance.registerController(
             widget.plugin.pluginId,
             controller,
-            instanceId: _backgroundInstanceId,
+            instanceId: PluginInstanceIds.background,
           );
           _bridge.register(controller);
         } catch (e) {
           PluginRuntimeDispatcher.instance.unregisterController(
             widget.plugin.pluginId,
-            instanceId: _backgroundInstanceId,
+            instanceId: PluginInstanceIds.background,
           );
           debugPrint(
             'Background plugin [${widget.plugin.pluginId}] init error: $e',
@@ -871,7 +874,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           final packageInfo =
               _cachedPackageInfo ?? await PackageInfo.fromPlatform();
           final permissions = await _pluginRegistryRepository
-              .getPluginPermissions(
+              .getGrantedPermissionNames(
                 widget.plugin.pluginId,
               );
           final bootPayload = {
@@ -897,10 +900,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             },
             'connectivity': ConnectivityStatusService.instance.bootPayload(),
             'theme': theme,
-            'permissions': permissions
-                .where((permission) => permission.granted)
-                .map((permission) => permission.permission)
-                .toList(),
+            'permissions': permissions,
           };
           final jsonPayload = jsonEncode(bootPayload);
           await controller.evaluateJavascript(

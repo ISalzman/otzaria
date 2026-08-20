@@ -450,6 +450,237 @@ void main() {
     });
   });
 
+  group('ציר אנכי', () {
+    /// רצועה אנכית של שלוש כרטיסיות בגובה קבוע.
+    Widget verticalHost({
+      required _StripLog log,
+      required List<OpenedTab> tabs,
+      TextDirection textDirection = TextDirection.rtl,
+      // גובה הרצועה. ברירת המחדל מכילה את כל הכרטיסיות; גובה קטן ממנה הופך
+      // אותה לנגללת.
+      double? stripHeight,
+    }) {
+      const itemHeight = 40.0;
+      return MaterialApp(
+        home: Directionality(
+          textDirection: textDirection,
+          child: Scaffold(
+            body: Row(
+              children: [
+                SizedBox(
+                  key: stripKey,
+                  width: 200,
+                  height: stripHeight ?? tabs.length * itemHeight,
+                  child: ReadingTabStrip(
+                    axis: Axis.vertical,
+                    scrollable: true,
+                    crossExtent: 200,
+                    tabs: tabs,
+                    widths: [for (final _ in tabs) itemHeight],
+                    onReorder: log.reorder,
+                    onDragStarted: () => log.dragStarts++,
+                    onSpringOpen: log.springOpened.add,
+                    tabBuilder: (tab, index, extent) => SizedBox(
+                      height: extent,
+                      child: ColoredBox(
+                        color: const Color(0xFFDDDDDD),
+                        child: Center(child: Text(tab.title)),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: PaneDropTarget(
+                    key: paneKey,
+                    tab: _StubTab('מוצג'),
+                    onDrop: (_, _) {},
+                    child: const ColoredBox(
+                      color: Color(0xFFEEEEEE),
+                      child: SizedBox.expand(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('גרירה מטה מעבירה את הכרטיסיה אחורה ברשימה', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(verticalHost(log: log, tabs: tabs));
+
+      await dragFrom(tester, 'א', tester.getCenter(find.text('ג')));
+
+      expect(log.moves, 1);
+      expect(log.movedTab, same(tabs[0]));
+      expect(log.newIndex, 2);
+    });
+
+    testWidgets('גרירה מעלה מעבירה את הכרטיסיה לראש הרשימה', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(verticalHost(log: log, tabs: tabs));
+
+      final strip = tester.getRect(find.byKey(stripKey));
+      await dragFrom(tester, 'ג', Offset(strip.center.dx, strip.top + 4));
+
+      expect(log.moves, 1);
+      expect(log.newIndex, 0);
+    });
+
+    testWidgets('הכיוון האנכי זהה ב-RTL וב-LTR — אין היפוך', (tester) async {
+      final results = <TextDirection, int?>{};
+      for (final direction in TextDirection.values) {
+        final log = _StripLog();
+        final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+        await tester.pumpWidget(
+          verticalHost(log: log, tabs: tabs, textDirection: direction),
+        );
+        await dragFrom(tester, 'א', tester.getCenter(find.text('ג')));
+        results[direction] = log.newIndex;
+      }
+
+      expect(results[TextDirection.rtl], 2);
+      expect(
+        results[TextDirection.ltr],
+        results[TextDirection.rtl],
+        reason: 'בציר אנכי הכיווניות אינה מהפכת את סדר הכרטיסיות',
+      );
+    });
+
+    testWidgets('שחרור מעל אזור הקריאה מפצל ואינו מסדר מחדש', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב')];
+      await tester.pumpWidget(verticalHost(log: log, tabs: tabs));
+
+      await dragFrom(tester, 'א', tester.getCenter(find.byKey(paneKey)));
+
+      expect(log.moves, 0);
+      expect(log.dragStarts, 1);
+    });
+
+    group('גלילה אוטומטית בגרירה', () {
+      /// 12 כרטיסיות בגובה 40 בתוך רצועה של 200 — רק חמש נראות.
+      List<OpenedTab> manyTabs() => [
+        for (var i = 0; i < 12; i++) _StubTab('כרטיסיה $i'),
+      ];
+
+      ScrollPosition stripPosition(WidgetTester tester) => tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byType(ReadingTabStrip),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+
+      testWidgets('גרירה אל הקצה התחתון גוללת את הרשימה', (tester) async {
+        final log = _StripLog();
+        await tester.pumpWidget(
+          verticalHost(log: log, tabs: manyTabs(), stripHeight: 200),
+        );
+
+        final strip = tester.getRect(find.byKey(stripKey));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('כרטיסיה 0')),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+        await gesture.moveTo(Offset(strip.center.dx, strip.bottom - 8));
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(
+          stripPosition(tester).pixels,
+          greaterThan(0),
+          reason: 'הרשימה נגללת כשהסמן נכנס לאזור הקצה',
+        );
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('הגלילה נעצרת בסוף הרשימה ואינה משאירה שעון פעיל', (
+        tester,
+      ) async {
+        final log = _StripLog();
+        await tester.pumpWidget(
+          verticalHost(log: log, tabs: manyTabs(), stripHeight: 200),
+        );
+
+        final strip = tester.getRect(find.byKey(stripKey));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('כרטיסיה 0')),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+        await gesture.moveTo(Offset(strip.center.dx, strip.bottom - 8));
+        // מספיק זמן כדי להגיע לקצה — משם הגלילה חייבת לעצור מעצמה.
+        await tester.pumpAndSettle();
+
+        final position = stripPosition(tester);
+        expect(position.pixels, position.maxScrollExtent);
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('חזרה למרכז הרצועה עוצרת את הגלילה', (tester) async {
+        final log = _StripLog();
+        await tester.pumpWidget(
+          verticalHost(log: log, tabs: manyTabs(), stripHeight: 200),
+        );
+
+        final strip = tester.getRect(find.byKey(stripKey));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('כרטיסיה 0')),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+        await gesture.moveTo(Offset(strip.center.dx, strip.bottom - 8));
+        await tester.pump(const Duration(milliseconds: 100));
+        await gesture.moveTo(strip.center);
+        await tester.pump();
+
+        final afterStop = stripPosition(tester).pixels;
+        expect(afterStop, greaterThan(0));
+
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(stripPosition(tester).pixels, afterStop);
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('גלילת הקצה מאפשרת להעביר כרטיסיה אל סוף רשימה ארוכה', (
+        tester,
+      ) async {
+        final log = _StripLog();
+        final tabs = manyTabs();
+        await tester.pumpWidget(
+          verticalHost(log: log, tabs: tabs, stripHeight: 200),
+        );
+
+        final strip = tester.getRect(find.byKey(stripKey));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('כרטיסיה 0')),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+        await gesture.moveTo(Offset(strip.center.dx, strip.bottom - 8));
+        await tester.pumpAndSettle();
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(log.moves, 1);
+        expect(log.movedTab, same(tabs[0]));
+        expect(
+          log.newIndex,
+          tabs.length - 1,
+          reason: 'בלי גלילה היעד היה נעצר על הכרטיסיה האחרונה שנראתה',
+        );
+      });
+    });
+  });
+
   group('מקרי קצה', () {
     testWidgets('כרטיסיה יחידה אינה מסדרת מחדש', (tester) async {
       final log = _StripLog();

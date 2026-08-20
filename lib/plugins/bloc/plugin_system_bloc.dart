@@ -120,7 +120,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     LoadPlugins event,
     Emitter<PluginSystemState> emit,
   ) async {
-    emit(PluginSystemLoading());
+    // מצב "טוען" רק כשאין עדיין רשימה בזיכרון. טעינה חוזרת (אחרי התקנה,
+    // הצמדה, סידור מחדש וכו') היא רענון — ואם נעבור דרך PluginSystemLoading
+    // כל צרכן שבודק `is! PluginSystemLoaded` יראה לרגע "אין תוספים": מסך הכלי
+    // יחליף את התוסף בספינר, ה-WebView ייהרס ויטען מאפס.
+    if (state is! PluginSystemLoaded) emit(PluginSystemLoading());
     try {
       final plugins = await repository.getAllPlugins();
       devWatchService.syncWatchers(await repository.getDevelopmentPlugins());
@@ -255,6 +259,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     PluginInstallReportContext? report, {
     required bool success,
     String? errorMessage,
+    bool updated = false,
   }) {
     if (report == null) return;
     unawaited(
@@ -262,6 +267,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         report,
         success: success,
         errorMessage: errorMessage,
+        updated: updated,
       ),
     );
   }
@@ -409,8 +415,16 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         grantedPermissions: event.grantedPermissions,
       );
 
-      UiSnack.showSuccess(PluginMessages.pluginInstalledSuccess);
-      _reportInstallResult(event.reportContext, success: true);
+      UiSnack.showSuccess(
+        event.isUpdate
+            ? PluginMessages.pluginUpdatedSuccess
+            : PluginMessages.pluginInstalledSuccess,
+      );
+      _reportInstallResult(
+        event.reportContext,
+        success: true,
+        updated: event.isUpdate,
+      );
       add(LoadPlugins());
     } catch (e) {
       await _installerService.cancelInstall(event.tempDirPath);
@@ -521,11 +535,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         }
       }
       PluginRuntimeDispatcher.instance.invalidatePlugin(event.pluginId);
-      final permissions = await repository.getPluginPermissions(event.pluginId);
-      final grantedPermissions = permissions
-          .where((permission) => permission.granted)
-          .map((permission) => permission.permission)
-          .toList();
+      final grantedPermissions = await repository.getGrantedPermissionNames(
+        event.pluginId,
+      );
       PluginRuntimeDispatcher.instance.dispatchEvent(
         'plugin.permissions_changed',
         {'permissions': grantedPermissions},
@@ -680,7 +692,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         );
       }
       add(LoadPlugins());
-      UiSnack.showSuccess(PluginMessages.devPluginInstalledSuccess);
+      UiSnack.showSuccess(
+        event.isUpdate
+            ? PluginMessages.devPluginUpdatedSuccess
+            : PluginMessages.devPluginInstalledSuccess,
+      );
     } catch (e) {
       UiSnack.showError(PluginMessages.installDevPluginError(e));
       add(LoadPlugins());

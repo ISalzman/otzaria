@@ -346,6 +346,94 @@ void main() {
     expect(panel.currentLeft, 'מלאכת שלמה על משנה מקואות');
   });
 
+  testWidgets('הגדרת קטגוריה נטענת גם כש-heCategories מגיע מההעשרה ברקע', (
+    tester,
+  ) async {
+    // issue #770: בפתיחת ספר heCategories הוא null עד שההעשרה ברקע מסתיימת.
+    // הטעינה הראשונה מדלגת על הגדרת הקטגוריה ומציגה ברירות מחדל, וכשההעשרה
+    // מגיעה המסך חייב לטעון מחדש — אחרת בחירת המשתמש "נעלמת".
+    await PageShapeSettingsManager.saveConfiguration(
+      'בראשית',
+      const {
+        'left': null,
+        'right': 'תרגום אונקלוס על בראשית',
+        'bottom': 'רש"י על בראשית',
+        'bottomRight': 'רמב"ן על בראשית',
+      },
+      saveToCategory: 'תורה',
+    );
+
+    const commentators = [
+      'רש"י על בראשית',
+      'רמב"ן על בראשית',
+      'תרגום אונקלוס על בראשית',
+    ];
+    final bloc = _TestTextBookBloc(
+      _loadedState(
+        book: TextBook(title: 'בראשית'),
+        availableCommentators: commentators,
+      ),
+    );
+    addTearDown(bloc.close);
+
+    final openSettingsNotifier = ValueNotifier<int>(0);
+    addTearDown(openSettingsNotifier.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: bloc),
+            BlocProvider<PersonalNotesBloc>.value(
+              value: _TestPersonalNotesBloc(
+                const PersonalNotesState(
+                  isLoading: false,
+                  bookId: 'בראשית',
+                  locatedNotes: [],
+                  missingNotes: [],
+                  errorMessage: null,
+                  filteredLocatedNotes: [],
+                  filteredMissingNotes: [],
+                ),
+              ),
+            ),
+            BlocProvider<SettingsBloc>.value(
+              value: _TestSettingsBloc(SettingsState.initial()),
+            ),
+          ],
+          child: PageShapeScreen(
+            openBookCallback: (_) {},
+            openSettingsNotifier: openSettingsNotifier,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    // ההעשרה ברקע הסתיימה — הספר מקבל heCategories.
+    bloc.emitState(
+      _loadedState(
+        book: TextBook(title: 'בראשית', heCategories: 'תנ"ך, תורה'),
+        availableCommentators: commentators,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    openSettingsNotifier.value++;
+    await tester.pump();
+    await tester.pump();
+
+    final panel = tester.widget<PageShapeSettingsPanel>(
+      find.byType(PageShapeSettingsPanel),
+    );
+    expect(panel.currentLeft, isNull);
+    expect(panel.currentRight, 'תרגום אונקלוס על בראשית');
+    expect(panel.currentBottom, 'רש"י על בראשית');
+    expect(panel.currentBottomRight, 'רמב"ן על בראשית');
+  });
+
   testWidgets('כשל טעינת מפרש תחתון אינו שומר הסתרה גלובלית', (tester) async {
     const missingCommentator = 'מפרש בדיקה שלא קיים במאגר';
 
@@ -440,6 +528,8 @@ class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
   _TestTextBookBloc(super.initialState) {
     on<TextBookEvent>((event, emit) {});
   }
+
+  void emitState(TextBookState newState) => emit(newState);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

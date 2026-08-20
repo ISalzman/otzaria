@@ -76,9 +76,12 @@ void main() {
   TextBookLoaded buildLoadedState({
     required List<String> content,
     List<int> visibleIndices = const [0],
+    bool continuousReadingMode = false,
   }) => TextBookLoaded(
     book: book,
     content: content,
+    supportsContinuousReadingMode: continuousReadingMode,
+    continuousReadingMode: continuousReadingMode,
     fontSize: 20,
     showLeftPane: true,
     showSplitView: false,
@@ -127,6 +130,24 @@ void main() {
             .having((s) => s.content[1000], 'שורה נראית נשמרת', 'שורה 1000')
             .having((s) => s.content[0], 'שורה רחוקה משוחררת', '')
             .having((s) => s.content[2500], 'שורה רחוקה משוחררת', ''),
+      ],
+    );
+
+    blocTest<TextBookBloc, TextBookState>(
+      'מצב קריאה רציף אינו משוחרר בהסתרה — כיווץ הסגמנטים דורס את '
+      'מקום הקריאה ברשימה החיה של טאב הרקע (issue #912)',
+      build: () => bloc,
+      seed: () => buildLoadedState(
+        content: longContent,
+        visibleIndices: const [1000],
+        continuousReadingMode: true,
+      ),
+      act: (bloc) {
+        bloc.add(proveRangeLoading);
+        bloc.add(const SetTabVisibility(false));
+      },
+      expect: () => [
+        isA<TextBookLoaded>(), // החלת הטווח המוכיח בלבד — אין emission שחרור
       ],
     );
 

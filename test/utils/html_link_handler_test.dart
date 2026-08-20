@@ -132,4 +132,38 @@ void main() {
       expect(result.reachedHeader, 'סימן ב');
     });
   });
+
+  group('findIdAnchorLine', () {
+    final lines = [
+      'שורת גמרא רגילה',
+      'טקסט עם סימן <a href="#footnote-1" id="noteref-1">[1]</a> בגוף',
+      '<a href="#noteref-1" id="footnote-1">[1]</a> גוף ההערה הראשונה',
+      '<a href="#noteref-11" id="footnote-11">[11]</a> גוף ההערה האחת-עשרה',
+    ];
+
+    test('קישור #footnote-1 מגיע לשורת גוף ההערה', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'footnote-1'), 2);
+    });
+
+    test('קישור חזרה #noteref-1 מגיע לשורת הסימן בגוף', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'noteref-1'), 1);
+    });
+
+    test('href="#..." לבדו אינו עוגן - id שאינו קיים לא נמצא', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'footnote-2'), isNull);
+    });
+
+    test('אין התאמת קידומת - footnote-1 אינו תופס את footnote-11', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'footnote-11'), 3);
+    });
+
+    test('כותרת עברית רגילה אינה מזוהה כעוגן', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'דף ב'), isNull);
+    });
+
+    test('fragment ריק או היררכי אינו עוגן', () {
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, ''), isNull);
+      expect(HtmlLinkHandler.findIdAnchorLine(lines, 'א#ב'), isNull);
+    });
+  });
 }

@@ -8,10 +8,10 @@ import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 ///
 /// URL מאושר רק אם:
 /// 1. הוא הוצהר ב-`network.allowlist` של התוסף עצמו.
-/// 2. הוא מופיע במקור אמון רשמי של אוצריא: הרשימה המקומפלת (חירום בלבד),
-///    או הקובץ `plugin_network_allowlist.txt` בשורש ענף `dev` בריפו אוצריא
-///    ב-GitHub. עריכת הקובץ נכנסת לתוקף מיד אצל כל המשתמשים, בלי release
-///    (ראו תיעוד ב-plugin_network_allowlist.dart).
+/// 2. הוא מופיע בקובץ `plugin_network_allowlist.txt`: הגרסה החיה בשורש ענף
+///    `dev` בריפו אוצריא ב-GitHub, או — כשאין רשת — העותק המקומפל שמחולל
+///    מאותו קובץ בזמן הבנייה. עריכת הקובץ נכנסת לתוקף מיד אצל כל
+///    המשתמשים, בלי release (ראו תיעוד ב-plugin_network_allowlist.dart).
 ///
 /// אישורים שהגיעו מהקובץ הרשמי ב-GitHub נשמרים **בזיכרון בלבד** עד סגירת
 /// האפליקציה; לא נכתבת שום קובץ cache לדיסק.
@@ -65,12 +65,12 @@ class PluginNetworkAccessResolver {
     final officialAllowlist = await _loadOfficialAllowlist();
     if (officialAllowlist != null) {
       // הקובץ בענף הייעודי הוא מקור האמת כשהוא זמין. חשוב לא לבדוק קודם את
-      // הרשימה המקומפלת: אחרת אי-אפשר לבטל במהירות כתובת שנפרצה או הוסרה.
+      // העותק המקומפל: אחרת אי-אפשר לבטל במהירות כתובת שנפרצה או הוסרה.
       return matchingNetworkAllowlistPrefix(uri, officialAllowlist) != null;
     }
 
-    // גיבוי לא-מקוון בלבד. הוא שומר על תוספים קיימים כש-GitHub אינו זמין,
-    // אך אינו גובר על רשימה רשמית שהצלחנו לטעון.
+    // גיבוי לא-מקוון בלבד — אותו קובץ כפי שקומפל בזמן הבנייה. שומר על
+    // תוספים קיימים כש-GitHub אינו זמין, אך אינו גובר על הרשימה החיה.
     return isUriAllowedForPluginNetwork(uri);
   }
 

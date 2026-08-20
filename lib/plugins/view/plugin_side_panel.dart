@@ -1,5 +1,4 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:otzaria/widgets/misc/app_cursors.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_dev_tools_mode.dart';
 import 'package:otzaria/plugins/view/plugin_actions.dart';
 import 'package:otzaria/plugins/view/plugin_settings_screen.dart';
 import 'package:otzaria/plugins/view/widgets/plugin_drop_zone.dart';
@@ -20,13 +20,15 @@ import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 
 class PluginSidePanel extends StatefulWidget {
   final Function(InstalledPlugin)? onPluginSelected;
-  final bool showDevTools;
+
+  /// `null` — לפי [PluginDevToolsMode.enabled] (debug או דגל `--dev-plugins`).
+  final bool? showDevTools;
   final VoidCallback? onClose;
 
   const PluginSidePanel({
     super.key,
     this.onPluginSelected,
-    this.showDevTools = kDebugMode,
+    this.showDevTools,
     this.onClose,
   });
 
@@ -97,6 +99,7 @@ class _PluginSidePanelState extends State<PluginSidePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final showDevTools = widget.showDevTools ?? PluginDevToolsMode.enabled;
     return PluginDropZone(
       child: Column(
         children: [
@@ -122,19 +125,19 @@ class _PluginSidePanelState extends State<PluginSidePanel> {
                   tooltip: 'התקן תוסף חדש',
                   onPressed: () => _installPlugin(context),
                 ),
-                if (widget.showDevTools)
+                if (showDevTools)
                   IconButton(
                     icon: Icon(FluentIcons.folder_add_24_regular),
                     tooltip: 'טען תיקיית תוסף',
                     onPressed: () => _loadDevPlugin(context),
                   ),
-                if (widget.showDevTools)
+                if (showDevTools)
                   IconButton(
                     icon: Icon(FluentIcons.globe_add_24_regular),
                     tooltip: 'טען תוסף מ-localhost',
                     onPressed: () => _loadLocalhostPlugin(context),
                   ),
-                if (widget.showDevTools)
+                if (showDevTools)
                   IconButton(
                     icon: Icon(FluentIcons.arrow_sync_24_regular),
                     tooltip: 'רענן תוספים',

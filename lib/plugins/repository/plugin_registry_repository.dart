@@ -1,6 +1,7 @@
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 
 class PluginRegistryRepository {
@@ -145,7 +146,21 @@ class PluginRegistryRepository {
   }
 
   Future<bool?> getPermission(String pluginId, String permission) async {
-    return _db.getPermission(pluginId, permission);
+    if (pluginBaselinePermissions.contains(permission)) return true;
+    final stored = await _db.getPermission(pluginId, permission);
+    if (stored != null) return stored;
+    // תוסף ותיק: החלטה שנשמרה על ההרשאה הישנה מכסה את זו שפוצלה ממנה.
+    final legacy = pluginLegacyPermissionAliases[permission];
+    if (legacy == null) return null;
+    return _db.getPermission(pluginId, legacy);
+  }
+
+  /// שמות ההרשאות המוענקות בפועל, כולל הרשאות הבסיס האוטומטיות.
+  Future<List<String>> getGrantedPermissionNames(String pluginId) async {
+    final grants = await getPluginPermissions(pluginId);
+    return withBaselinePermissions(
+      grants.where((g) => g.granted).map((g) => g.permission),
+    );
   }
 
   Future<List<PluginPermissionGrant>> getPluginPermissions(

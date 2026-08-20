@@ -93,7 +93,7 @@ void main() {
     await Settings.init(cacheProvider: MemorySettingsCache());
   });
 
-  testWidgets('מציג רק שם-לעז + פירוש תחת קישור רש"י', (tester) async {
+  testWidgets('מציג מילת-ערך + שם-לעז + פירוש תחת קישור רש"י', (tester) async {
     final repository = await _repositoryWith(
       entries: [
         _entry(
@@ -119,7 +119,8 @@ void main() {
     await tester.pump();
 
     final text = _renderedText(tester);
-    // מוצג: שם הלעז והפירוש העברי.
+    // מוצג: מילת הערך מרש"י (העוגן — issue #884), שם הלעז והפירוש העברי.
+    expect(text, contains('כרתי'));
     expect(text, contains('פילטרי"ש'));
     expect(text, contains('לבדים'));
     // מוסתר: לטינית, אנגלית ומיקום המקור.
@@ -270,7 +271,7 @@ void main() {
     expect(text, contains('פירוש-ב'));
   });
 
-  testWidgets('פירוש ריק => שם הלעז לבד, בלי fallback להערה/אנגלית', (
+  testWidgets('פירוש ריק => מילת-ערך ולעז בלבד, בלי fallback להערה/אנגלית', (
     tester,
   ) async {
     final repository = await _repositoryWith(
@@ -303,6 +304,30 @@ void main() {
     expect(text, isNot(contains('columns')));
   });
 
+  testWidgets('תעתיק ריק => מילת הערך לבד בלי מפריד תלוי', (tester) async {
+    final repository = await _repositoryWith(
+      entries: [
+        _entry(sourceLineIndex: 1, laazHebrew: '', meaning: 'דוכסות, מחוז'),
+      ],
+      links: [_link(path2: 'רש"י על מכות', index2: 15)],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        LaazCommentarySubBlock(
+          link: _link(path2: 'רש"י על מכות', index2: 15),
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final text = _renderedText(tester);
+    expect(text, contains('כרתי'));
+    expect(text, contains('דוכסות, מחוז'));
+    expect(text, isNot(contains(' — ')));
+  });
+
   group('LaazCommentarySubBlock.forLine (ללא Link)', () {
     testWidgets('מציג שם-לעז + פירוש לפי כותרת רש"י ומספר שורה', (
       tester,
@@ -326,6 +351,7 @@ void main() {
       await tester.pump();
 
       final text = _renderedText(tester);
+      expect(text, contains('כרתי'));
       expect(text, contains('פילטרי"ש'));
       expect(text, contains('לבדים'));
     });

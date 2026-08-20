@@ -28,7 +28,7 @@ WorkStatusItem? libraryUpdateWorkStatusItem(
     return WorkStatusItem(
       id: kLibraryUpdateWorkStatusId,
       title: 'עדכון ספרייה',
-      message: state.message,
+      message: _messageWithErrorDetail(state),
       detail: 'לחץ לניסיון חוזר',
       kind: WorkStatusKind.failed,
       onTap: onRetry,
@@ -36,6 +36,20 @@ WorkStatusItem? libraryUpdateWorkStatusItem(
   }
 
   return null;
+}
+
+/// מצרף את סיבת הכשל להודעה — בלעדיה המשתמש נותר עם "שגיאה" בלי לדעת מה
+/// נכשל. נחתך כדי שהחיווי לא יתנפח על הודעות שגיאה ארוכות.
+String _messageWithErrorDetail(LibraryUpdateState state) {
+  final error = state.errorMessage?.trim();
+  if (error == null || error.isEmpty || error == state.message) {
+    return state.message;
+  }
+  const maxChars = 200;
+  final trimmed = error.length <= maxChars
+      ? error
+      : '${error.substring(0, maxChars)}…';
+  return '${state.message}\n$trimmed';
 }
 
 /// מד הבתים תקף רק בזמן ההורדה — בשלבים הבאים הוא שארית דבוקה על 100%.

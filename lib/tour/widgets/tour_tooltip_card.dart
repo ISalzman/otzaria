@@ -51,130 +51,134 @@ class TourTooltipCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final shortcutText = tourShortcutText(context, shortcut);
 
-    return Material(
-      color: colorScheme.secondaryContainer,
-      elevation: 18,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppTokens.borderRadiusAll,
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.85),
+    // הכרטיס יושב ב-Overlay שכיוונו RTL תמיד; כיוונו נקבע לפי שפת ההגדרות.
+    return Directionality(
+      textDirection: SettingsTextScope.languageOf(context).textDirection,
+      child: Material(
+        color: colorScheme.secondaryContainer,
+        elevation: 18,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppTokens.borderRadiusAll,
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.85),
+          ),
         ),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 430, minWidth: 300),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface.withValues(alpha: 0.28),
-                      borderRadius: AppTokens.borderRadiusAll,
-                    ),
-                    child: Icon(
-                      isLastStep
-                          ? FluentIcons.checkmark_circle_24_regular
-                          : FluentIcons.sparkle_24_regular,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      context.settingsText(title),
-                      style: textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430, minWidth: 300),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface.withValues(alpha: 0.28),
+                        borderRadius: AppTokens.borderRadiusAll,
+                      ),
+                      child: Icon(
+                        isLastStep
+                            ? FluentIcons.checkmark_circle_24_regular
+                            : FluentIcons.sparkle_24_regular,
                         color: colorScheme.onSecondaryContainer,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                context.settingsText(
-                  body,
-                  args: shortcutText == null
-                      ? null
-                      : {'shortcut': shortcutText},
-                ),
-                style: textTheme.bodyLarge?.copyWith(
-                  height: 1.45,
-                  color: colorScheme.onSecondaryContainer,
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (currentIndex >= 0)
-                TourProgressDots(
-                  currentIndex: currentIndex,
-                  total: totalSteps,
-                  onDotTap: onDotTap,
-                ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  if (!isLastStep)
-                    ActionButton.neutral(
-                      icon: FluentIcons.dismiss_24_regular,
-                      text: context.settingsText(
-                        isRestartEntry
-                            ? 'ביטול'
-                            : isWelcomeStep
-                            ? 'דלג — אגלה לבד'
-                            : 'דלג על הסיור',
-                      ),
-                      onPressed: onSkip,
-                    )
-                  else
-                    const SizedBox.shrink(),
-                  const Spacer(),
-                  if (!isLastStep && !isWelcomeStep && !isRestartEntry) ...[
-                    Tooltip(
-                      message: context.settingsText(
-                        isAutoPlaying
-                            ? 'עצור הצגה אוטומטית'
-                            : 'הצגה אוטומטית — מעבר אוטומטי בין השלבים כל 4 שניות',
-                      ),
-                      child: FilledButton.tonal(
-                        onPressed: onToggleAutoPlay,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(44, 44),
-                          padding: EdgeInsets.zero,
-                        ),
-                        child: Icon(
-                          isAutoPlaying
-                              ? FluentIcons.pause_circle_24_regular
-                              : FluentIcons.play_circle_24_regular,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        context.settingsText(title),
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
                   ],
-                  _TourNextButton(
-                    icon: isLastStep
-                        ? FluentIcons.checkmark_24_regular
-                        : FluentIcons.arrow_left_24_regular,
-                    text: context.settingsText(
-                      isLastStep
-                          ? 'סגור'
-                          : isRestartEntry
-                          ? 'אני מוכן'
-                          : isWelcomeStep
-                          ? 'בוא נתחיל'
-                          : 'הבא',
-                    ),
-                    onPressed: onNext,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  context.settingsText(
+                    body,
+                    args: shortcutText == null
+                        ? null
+                        : {'shortcut': shortcutText},
                   ),
-                ],
-              ),
-            ],
+                  style: textTheme.bodyLarge?.copyWith(
+                    height: 1.45,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (currentIndex >= 0)
+                  TourProgressDots(
+                    currentIndex: currentIndex,
+                    total: totalSteps,
+                    onDotTap: onDotTap,
+                  ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    if (!isLastStep)
+                      ActionButton.neutral(
+                        icon: FluentIcons.dismiss_24_regular,
+                        text: context.settingsText(
+                          isRestartEntry
+                              ? 'ביטול'
+                              : isWelcomeStep
+                              ? 'דלג — אגלה לבד'
+                              : 'דלג על הסיור',
+                        ),
+                        onPressed: onSkip,
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const Spacer(),
+                    if (!isLastStep && !isWelcomeStep && !isRestartEntry) ...[
+                      Tooltip(
+                        message: context.settingsText(
+                          isAutoPlaying
+                              ? 'עצור הצגה אוטומטית'
+                              : 'הצגה אוטומטית — מעבר אוטומטי בין השלבים כל 4 שניות',
+                        ),
+                        child: FilledButton.tonal(
+                          onPressed: onToggleAutoPlay,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: Icon(
+                            isAutoPlaying
+                                ? FluentIcons.pause_circle_24_regular
+                                : FluentIcons.play_circle_24_regular,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _TourNextButton(
+                      icon: isLastStep
+                          ? FluentIcons.checkmark_24_regular
+                          : FluentIcons.arrow_left_24_regular,
+                      text: context.settingsText(
+                        isLastStep
+                            ? 'סגור'
+                            : isRestartEntry
+                            ? 'אני מוכן'
+                            : isWelcomeStep
+                            ? 'בוא נתחיל'
+                            : 'הבא',
+                      ),
+                      onPressed: onNext,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

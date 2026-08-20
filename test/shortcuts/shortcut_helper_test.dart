@@ -895,6 +895,51 @@ void main() {
       expect(ctrlAltActivator.accepts(arrowUp, keyboard), isTrue);
     });
   });
+
+  group('ShortcutHelper.isPlainCtrlOrCmdPressed', () {
+    testWidgets('Ctrl לבדו נחשב לחוץ', (tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      expect(ShortcutHelper.isPlainCtrlOrCmdPressed, isTrue);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(ShortcutHelper.isPlainCtrlOrCmdPressed, isFalse);
+    });
+
+    testWidgets('AltGr של Windows (Ctrl סינתטי + AltRight) נשלל', (
+      tester,
+    ) async {
+      ShortcutHelper.isWindowsForTesting = true;
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      expect(ShortcutHelper.isPlainCtrlOrCmdPressed, isFalse);
+
+      await tester.sendKeyUpEvent(
+        LogicalKeyboardKey.altRight,
+        physicalKey: PhysicalKeyboardKey.altRight,
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    });
+
+    testWidgets('Ctrl+Alt שמאלי נשלל אף הוא', (tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      expect(ShortcutHelper.isPlainCtrlOrCmdPressed, isFalse);
+
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    });
+
+    testWidgets('ב-Mac גם Cmd נחשב', (tester) async {
+      ShortcutHelper.isMacForTesting = true;
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      expect(ShortcutHelper.isPlainCtrlOrCmdPressed, isTrue);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    });
+  });
 }
 
 /// אירוע מקש אות בפריסה עברית: `physicalKey` תקין, `logicalKey` הוא התו העברי

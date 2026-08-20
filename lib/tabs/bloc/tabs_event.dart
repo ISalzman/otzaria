@@ -133,6 +133,17 @@ class RestoreLastClosedTab extends TabsEvent {
   List<Object?> get props => [];
 }
 
+/// משחזר כרטיסיה מסוימת מרשימת הנסגרות לאחרונה, לפי המופע שנשמר בה
+/// (`TabsBloc.recentlyClosedTabs`).
+class RestoreClosedTab extends TabsEvent {
+  final OpenedTab tab;
+
+  const RestoreClosedTab(this.tab);
+
+  @override
+  List<Object?> get props => [tab];
+}
+
 class SetCurrentTab extends TabsEvent {
   final int index;
 

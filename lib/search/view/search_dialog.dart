@@ -209,9 +209,12 @@ class _SearchDialogState extends State<SearchDialog> {
         ? initialDimensions
         : SearchScopePreferences.loadDimensionFacets();
 
+    // טאב טרי שנוצר כאן נושא את ברירת המחדל ['/'] — זה אינו scope מפורש,
+    // ורק טאב שהגיע מבחוץ (קיים/בעריכה) גובר על ההעדפה השמורה.
+    final tabDefinesScope =
+        widget.existingTab != null || widget.editTab != null;
     final Set<String> categories;
-    if (initialCategories.isNotEmpty) {
-      // הטאב מגדיר scope מפורש — כבד אותו תמיד
+    if (tabDefinesScope && initialCategories.isNotEmpty) {
       categories = initialCategories.contains('/')
           ? {'/'}
           : Set<String>.from(initialCategories);

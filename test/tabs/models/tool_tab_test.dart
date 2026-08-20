@@ -26,6 +26,15 @@ void main() {
       expect(plugin.dedupeKey, 'tool:com.example.plugin');
     });
 
+    test('dedupeKey מבוטל כשהטאב נפתח כמופע נוסף', () {
+      final plugin = ToolTab(
+        toolId: 'com.example.plugin',
+        title: 'תוסף',
+        allowMultipleInstances: true,
+      );
+      expect(plugin.dedupeKey, isNull);
+    });
+
     test('toJson/fromJson roundtrip', () {
       final builtIn = ToolTab(
         toolId: 'builtin.notes',
@@ -45,6 +54,31 @@ void main() {
       expect(restoredPlugin.dedupeKey, 'tool:com.example.plugin');
       expect(restoredBuiltIn.isPinned, isTrue);
       expect(restoredPlugin.isPinned, isTrue);
+      expect(restoredBuiltIn.instanceId, builtIn.instanceId);
+      expect(restoredPlugin.instanceId, plugin.instanceId);
+    });
+
+    test('roundtrip של מופע נוסף משמר את היעדר ה-dedupeKey', () {
+      final tab = ToolTab(
+        toolId: 'com.example.plugin',
+        title: 'תוסף',
+        allowMultipleInstances: true,
+      );
+      final restored = ToolTab.fromJson(tab.toJson());
+      expect(restored.dedupeKey, isNull);
+      expect(restored.allowMultipleInstances, isTrue);
+      expect(restored.instanceId, tab.instanceId);
+    });
+
+    test('JSON ישן בלי instanceId מקבל מזהה טרי ו-dedupeKey רגיל', () {
+      final restored = ToolTab.fromJson({
+        'type': 'ToolTab',
+        'toolId': 'com.example.plugin',
+        'title': 'תוסף',
+      });
+      expect(restored.instanceId, isNotEmpty);
+      expect(restored.dedupeKey, 'tool:com.example.plugin');
+      expect(restored.allowMultipleInstances, isFalse);
     });
 
     test('OpenedTab.fromJson מפענח ToolTab', () {
@@ -83,6 +117,26 @@ void main() {
       expect(cloned, isA<ToolTab>());
       expect((cloned as ToolTab).toolId, tab.toolId);
       expect(cloned.isPinned, isTrue);
+    });
+
+    // שכפול טאב = מופע ריצה חדש; מזהה משותף היה גורם לשני טאבים
+    // להירשם אצל הדיספצ'ר תחת אותו מופע.
+    test('clone מייצר instanceId חדש ומשמר allowMultipleInstances', () {
+      final tab = ToolTab(
+        toolId: 'com.example.plugin',
+        title: 'תוסף',
+        allowMultipleInstances: true,
+      );
+      final cloned = tab.clone() as ToolTab;
+      expect(cloned.instanceId, isNot(tab.instanceId));
+      expect(cloned.allowMultipleInstances, isTrue);
+      expect(cloned.dedupeKey, isNull);
+    });
+
+    test('שני טאבים חדשים מקבלים instanceId שונה', () {
+      final a = ToolTab(toolId: 'builtin.calendar', title: 'לוח שנה');
+      final b = ToolTab(toolId: 'builtin.calendar', title: 'לוח שנה');
+      expect(a.instanceId, isNot(b.instanceId));
     });
 
     test('OpenedTab.from משכפל ולא מחזיר את אותו אובייקט', () {

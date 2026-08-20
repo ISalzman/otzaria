@@ -310,6 +310,86 @@ export interface AltStructure {
   heTitle: string | null;
 }
 
+/**
+ * מפרש של ספר כפי שמוחזר מ-`library.getCommentators`. `isRare` נכון רק
+ * בקריאה ללא טווח שורות — הנדירות מוגדרת ביחס לספר כולו.
+ */
+export interface CommentatorInfo {
+  title: string;
+  author?: string;
+  linkCount: number;
+  isRare: boolean;
+}
+
+/** קבוצת מפרשים לפי דור, כפי שהממשק מציג אותה. */
+export interface CommentatorGroup {
+  title: string;
+  commentators: string[];
+}
+
+export type GetCommentatorsResult =
+  | { commentators: CommentatorInfo[] }
+  | { groups: CommentatorGroup[] };
+
+/** עוגן-מילה של קישור בשורת המקור (אופסטים בתווים גלויים). */
+export interface LinkAnchor {
+  start: number;
+  end: number | null;
+  label: string | null;
+}
+
+/** קישור יחיד כפי שמוחזר מ-`library.getLinks`. כל השורות 0-based. */
+export interface BookLink {
+  sourceLine: number;
+  targetTitle: string;
+  targetLine: number;
+  /** סוף טווח בצד המקושר, או `null` לקישור לשורה בודדת. */
+  targetLineEnd: number | null;
+  targetHeRef: string;
+  connectionType: string;
+  /** `true` למפרש/תרגום/מדרש; `false` להפניה. */
+  isCommentary: boolean;
+  targetIsUserBook: boolean;
+  targetCategoryId: number | null;
+  /** מוחזר רק כאשר `includeAnchors: true` ולקישור יש עוגן. */
+  anchor?: LinkAnchor;
+}
+
+export interface GetLinksResult {
+  links: BookLink[];
+  /** `true` כשהתשובה נחתכה בתקרת 2,000 הרשומות. */
+  truncated: boolean;
+}
+
+export interface LinkTargetSummary {
+  targetTitle: string;
+  connectionType: string;
+  linkCount: number;
+}
+
+export interface GetLinkTargetsSummaryResult {
+  targets: LinkTargetSummary[];
+  /** השורה הגבוהה ביותר שיש עליה קישור (0-based), או ‎-1‎ כשאין קישורים. */
+  maxSourceLine: number;
+}
+
+export type LinkContentItem = { content: string } | { error: 'not_found' };
+
+export interface GetLinkContentResult {
+  /** באותו סדר של פריטי הקלט. */
+  items: LinkContentItem[];
+}
+
+/** מצב המפרשים של טאב הקריאה (`reader.getActiveCommentators`). */
+export interface ActiveCommentators {
+  available: string[];
+  active: string[];
+  /** ריק בטאב PDF. */
+  rare: string[];
+  /** ריק בטאב PDF. */
+  groups: CommentatorGroup[];
+}
+
 export type JewishHolidayKind =
   | 'yomTov'
   | 'roshChodesh'
@@ -410,6 +490,39 @@ export interface ReaderSelection {
   direction?: 'rtl' | 'ltr' | 'mixed';
   /** ISO 8601 */
   createdAt?: string;
+  /** Multi-paragraph selection: one fully-anchored entry per section, in
+   * reading order. The top-level fields then carry no sourceRange. From 0.9.97. */
+  sections?: ReaderSelectionSection[];
+  /** `reader-highlight` context only: the plugin highlights found under the
+   * click position. Act only on your own ids. From 0.9.97. */
+  clickedHighlights?: ClickedHighlightRef[];
+}
+
+/** One section of a multi-paragraph selection (same shape as a verified
+ * single-section selection, scoped to that section). */
+export interface ReaderSelectionSection {
+  schemaVersion: 1;
+  selectionId: string;
+  bookId: string;
+  bookTitle?: string;
+  sectionIndex: number;
+  /** Mirrors `sectionIndex` for legacy consumers. */
+  currentIndex: number;
+  currentRef: string | null;
+  renderedSelectedText: string;
+  sourceSelectedText: string;
+  normalizedSelectedText: string;
+  sourceRange: TextRangeAnchor;
+  renderedRange: TextRangeAnchor;
+  direction: 'rtl' | 'ltr' | 'mixed';
+  /** ISO 8601 */
+  createdAt: string;
+}
+
+export interface ClickedHighlightRef {
+  highlightId: string;
+  /** Owner plugin id — skip entries that are not yours. */
+  pluginId: string;
 }
 
 export interface TextOffset {
@@ -643,7 +756,10 @@ export interface ReaderSectionContentChangedEvent {
 
 export type ContextMenuContext =
   | 'reader-selection'
-  | 'reader-page-shape-selection';
+  | 'reader-page-shape-selection'
+  /** Right-click on a plugin highlight, with or without an active selection.
+   * The click payload carries `selection.clickedHighlights`. From 0.9.97. */
+  | 'reader-highlight';
 
 export interface ContextMenuColor {
   id: string;
@@ -875,8 +991,11 @@ export interface OtzariaEventMap {
     /** The `param` value passed to `reader.addContextMenuItem`, or null. */
     param: unknown;
   };
-  /** The plugin page was opened via `plugin.openSelf`. Carries the param passed to the call. */
-  'plugin.page_opened': { param: unknown };
+  /**
+   * The plugin page was opened via `plugin.openSelf`, or by another plugin via
+   * `plugin.openOther` — in which case `openedBy` holds that plugin's id.
+   */
+  'plugin.page_opened': { param: unknown; openedBy?: string };
   /** A checked static search row routed submission to its owning plugin. */
   'search.requested': { itemId: string; request: SearchQueryParams };
   /** External-search page request sent only to the plugin owning `provider`. */
@@ -1056,6 +1175,10 @@ export type OtzariaMethod =
   | 'library.getBookToc'
   | 'library.listBookAltStructures'
   | 'library.getBookAltToc'
+  | 'library.getCommentators'
+  | 'library.getLinks'
+  | 'library.getLinkTargetsSummary'
+  | 'library.getLinkContent'
   | 'search.fullText'
   | 'search.query'
   | 'search.getOptions'
@@ -1069,6 +1192,7 @@ export type OtzariaMethod =
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
   | 'reader.getSelection'
+  | 'reader.getActiveCommentators'
   | 'reader.findTextOccurrences'
   | 'reader.getSectionTextMap'
   | 'navigation.goTo'
@@ -1098,6 +1222,8 @@ export type OtzariaMethod =
   | 'publishedData.remove'
   | 'publishedData.listOwn'
   | 'feedback.sendEmail'
+  | 'feedback.report'
+  | 'feedback.hasReporterEmail'
   | 'history.list'
   | 'history.listSearches'
   | 'history.clear'
@@ -1118,6 +1244,7 @@ export type OtzariaMethod =
   | 'network.download'
   | 'shortcut.create'
   | 'plugin.openSelf'
+  | 'plugin.openOther'
   | 'plugin.backgroundDone'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'

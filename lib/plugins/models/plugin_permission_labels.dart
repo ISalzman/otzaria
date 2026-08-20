@@ -166,6 +166,11 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     label: 'תוכן ספרים',
     description: 'קריאת תוכן הספרים מהספרייה',
   ),
+  'library.links.read': PluginPermissionInfo(
+    label: 'מפרשים וקישורים',
+    description:
+        'צפייה ברשימת המפרשים של ספר ובקישורים בין הספרים, בלי תוכן הספרים',
+  ),
 
   // ===== חיפוש =====
   'search.fulltext.read': PluginPermissionInfo(
@@ -187,6 +192,12 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   'navigation.write': PluginPermissionInfo(
     label: 'ניווט במסכים',
     description: 'מעבר בין מסכים שונים באפליקציה',
+  ),
+  'plugin.open_other': PluginPermissionInfo(
+    label: 'פתיחת תוסף אחר',
+    description:
+        'פתיחת דף של תוסף אחר שמותקן אצלך, כולל הפעלת הקוד שלו. התוסף הנפתח '
+        'פועל בהרשאות שלו בלבד',
   ),
 
   // ===== הערות אישיות =====
@@ -219,6 +230,19 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   'ui.create_shortcut': PluginPermissionInfo(
     label: 'יצירת קיצור דרך',
     description: 'יצירת קיצור דרך בשולחן העבודה או בתפריט ההתחל (לאחר אישור)',
+  ),
+
+  // ===== קבצים אישיים =====
+  'fs.user_files.read': PluginPermissionInfo(
+    label: 'קבצים אישיים',
+    description:
+        'בחירה וקריאה של קבצים שתבחר במפורש בדיאלוג — לא גישה חופשית לדיסק',
+  ),
+  'fs.folder_access': PluginPermissionInfo(
+    label: 'גישה לתיקייה שתבחר',
+    description:
+        'בחירת תיקייה בדיאלוג מערכת ועבודה על קבצים בתוכה (חילוץ ומחיקה). '
+        'הגישה מוגבלת לתיקיות שאישרת בדיאלוג בלבד',
   ),
 
   // ===== אחסון תוסף =====

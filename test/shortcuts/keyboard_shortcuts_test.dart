@@ -30,6 +30,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -1110,6 +1111,27 @@ void main() {
 
       await sendCtrlW(tester);
       expect(tabsBloc.state.tabs, hasLength(2));
+    });
+
+    testWidgets('Ctrl+W בטאב מפוצל סוגר רק את החלונית הפעילה', (tester) async {
+      final tabsBloc = await pumpOnScreen(tester, Screen.reading);
+      final right = tabsBloc.state.tabs[0];
+      final left = tabsBloc.state.tabs[1];
+      tabsBloc.add(CreateCombinedTab(rightTab: right, leftTab: left));
+      await tester.pump();
+      expect(tabsBloc.state.tabs, hasLength(1));
+      expect(tabsBloc.state.tabs.single, isA<CombinedTab>());
+
+      // החלונית הפעילה (ברירת המחדל: הימנית) נסגרת; אחותה נשארת ככרטיסייה.
+      await sendCtrlW(tester);
+      expect(tabsBloc.state.tabs, hasLength(1));
+      expect(identical(tabsBloc.state.tabs.single, left), isTrue);
+
+      // כשהטאב כבר אינו מפוצל — הקיצור סוגר את הכרטיסייה עצמה.
+      await sendCtrlW(tester);
+      expect(tabsBloc.state.tabs, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 400));
     });
   });
 

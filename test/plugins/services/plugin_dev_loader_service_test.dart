@@ -96,7 +96,8 @@ void main() {
           'version': '1.0.0',
           'name': 'Real Loader',
           'entrypoint': 'index.html',
-          'permissions': ['app.info.read'], // valid permission
+          // הרשאה תקפה שאינה הרשאת בסיס — כדי שהחלטות משתמש יישמרו עליה.
+          'permissions': ['reader.open'],
         }),
       );
 
@@ -122,7 +123,7 @@ void main() {
         expect(fakeRepo.savedPlugin!.isDevelopment, isTrue);
         // Ensure the validator rules were passed seamlessly via the loader
         expect(
-          fakeRepo.savedPlugin!.manifest.permissions.contains('app.info.read'),
+          fakeRepo.savedPlugin!.manifest.permissions.contains('reader.open'),
           isTrue,
         );
       },
@@ -134,11 +135,11 @@ void main() {
       await devLoader.loadDevelopmentPlugin(
         tempDir.path,
         preValidatedManifest: manifest,
-        grantedPermissions: const {'app.info.read': false},
+        grantedPermissions: const {'reader.open': false},
         allowOrderBeforeBuiltInsGranted: false,
       );
 
-      expect(fakeRepo.recordedGrants, {'app.info.read': false});
+      expect(fakeRepo.recordedGrants, {'reader.open': false});
       expect(
         fakeRepo.savedPlugin!.allowOrderBeforeBuiltInsGranted,
         isFalse,
@@ -325,7 +326,7 @@ void main() {
     test(
       'loadDevelopmentPlugin preserves existing grants and clears removed permissions',
       () async {
-        // Setup: existing plugin had two permissions – app.info.read (granted), network.request (denied)
+        // Setup: existing plugin had two permissions – reader.open (granted), network.request (denied)
         fakeRepo.mockExistingPlugin = InstalledPlugin(
           pluginId: 'test.grants.plugin',
           name: 'Grants Plugin',
@@ -342,7 +343,7 @@ void main() {
             name: 'Grants Plugin',
             entrypoint: 'dummy.html',
             defaultPinned: true,
-            permissions: ['app.info.read', 'network.request'],
+            permissions: ['reader.open', 'network.request'],
             description: '',
             author: '',
             homepage: '',
@@ -359,13 +360,13 @@ void main() {
         );
 
         // getPermission reads from recordedGrants (fixed above).
-        // app.info.read = granted, network.request = denied previously.
+        // reader.open = granted, network.request = denied previously.
         fakeRepo.recordedGrants = {
-          'app.info.read': true,
+          'reader.open': true,
           'network.request': false,
         };
 
-        // New manifest: network.request removed, app.info.read kept.
+        // New manifest: network.request removed, reader.open kept.
         final manifestFile = File(p.join(tempDir.path, 'manifest.json'));
         manifestFile.writeAsStringSync(
           jsonEncode({
@@ -374,7 +375,7 @@ void main() {
             'version': '1.0.1',
             'name': 'Grants Update',
             'entrypoint': 'index.html',
-            'permissions': ['app.info.read'],
+            'permissions': ['reader.open'],
           }),
         );
         File(p.join(tempDir.path, 'index.html')).createSync();
@@ -383,7 +384,7 @@ void main() {
 
         expect(fakeRepo.recordedGrants, isNot(contains('network.request')));
         expect(
-          fakeRepo.recordedGrants['app.info.read'],
+          fakeRepo.recordedGrants['reader.open'],
           true,
         );
       },

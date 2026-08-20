@@ -128,7 +128,8 @@ class PluginInBookSearchService {
     }
   }
 
-  /// תשובת התוסף לבקשה. [pages] מבוססי-1; תשובה זרה או שפגה נדחית.
+  /// תשובת התוסף לבקשה. [pages] מבוססי-1; תשובה זרה, שפגה, או ממופע אחר
+  /// של התוסף ([instanceId]) נדחית.
   bool respond(
     String pluginId,
     String requestId, {
@@ -136,6 +137,7 @@ class PluginInBookSearchService {
     List<String> matchedTerms = const [],
     String query = '',
     String? error,
+    String? instanceId,
   }) {
     final pending = _pending[requestId];
     if (pending == null ||
@@ -143,6 +145,7 @@ class PluginInBookSearchService {
         pending.completer.isCompleted) {
       return false;
     }
+    if (!pending.bindResponder(instanceId)) return false;
     _pending.remove(requestId);
     final completer = pending.completer;
     if (error != null && error.isNotEmpty) {
@@ -165,5 +168,15 @@ class _PendingInBookSearch {
   final Completer<ExternalBookMatches> completer =
       Completer<ExternalBookMatches>();
 
+  /// המופע שענה ראשון — ניסיון חוזר (retry) עלול להימסר למופע אחר.
+  String? _responderInstanceId;
+
   _PendingInBookSearch(this.pluginId);
+
+  /// נועל את הבקשה למופע העונה הראשון; תשובה ממופע אחר נדחית (false).
+  bool bindResponder(String? instanceId) {
+    if (instanceId == null) return true;
+    _responderInstanceId ??= instanceId;
+    return _responderInstanceId == instanceId;
+  }
 }

@@ -5,8 +5,10 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
+import 'package:otzaria/navigation/view/tab_search_menu.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
@@ -150,6 +152,7 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final restoreClosedTabShortcut = shortcutOf(
       'key-shortcut-restore-closed-tab',
     );
+    final searchTabsShortcut = shortcutOf('key-shortcut-search-tabs');
     final readingScreenShortcut = shortcutOf(
       'key-shortcut-open-reading-screen',
     );
@@ -309,6 +312,15 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
       final historyBloc = context.read<HistoryBloc>();
       // הקיצור סוגר את כל הבחירה המרובה כשהכרטיסיה הפעילה חלק ממנה.
       final closeGroup = tabsBloc.state.currentCloseGroup;
+      // בטאב מפוצל (שאינו חלק מבחירה מרובה) נסגרת רק החלונית הפעילה.
+      if (closeGroup.length <= 1 && tabsBloc.state.currentTab is CombinedTab) {
+        final pane = tabsBloc.state.activePane;
+        if (pane != null) {
+          historyBloc.add(AddHistory(pane));
+          tabsBloc.add(ClosePane(pane));
+          return KeyEventResult.handled;
+        }
+      }
       if (closeGroup.length > 1) {
         historyBloc.add(AddHistoryForTabs(closeGroup));
       } else if (closeGroup.isNotEmpty) {
@@ -335,6 +347,12 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     if (isReadingScreen &&
         ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
       context.read<TabsBloc>().add(const RestoreLastClosedTab());
+      return KeyEventResult.handled;
+    }
+
+    if (isReadingScreen &&
+        ShortcutHelper.matchesShortcut(event, searchTabsShortcut)) {
+      showTabSearchMenu(context);
       return KeyEventResult.handled;
     }
 

@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 
 /// סוגי פקד שילדיהם הם פריטי תפריט.
 const _typesWithChildren = {'menu', 'split'};
@@ -10,18 +13,58 @@ class PluginToolbarRegistry extends ChangeNotifier {
   static const int maxMenuChildren = 20;
 
   static final PluginToolbarRegistry instance = PluginToolbarRegistry._();
-  PluginToolbarRegistry._();
+  PluginToolbarRegistry._() {
+    _attachEvaluator(PluginConditionEvaluator.instance);
+  }
 
   @visibleForTesting
-  PluginToolbarRegistry.forTesting();
+  PluginToolbarRegistry.forTesting({PluginConditionEvaluator? evaluator}) {
+    if (evaluator != null) _attachEvaluator(evaluator);
+  }
 
   /// מופע מנותק לפרסינג-יבש בוולידציה (אריזה/התקנה) — לא נוגע ב-UI.
   PluginToolbarRegistry.detached();
 
-  final Map<String, List<PluginToolbarItem>> _items = {};
+  final Map<PluginInstanceKey, List<PluginToolbarItem>> _items = {};
+  PluginConditionEvaluator? _evaluator;
 
-  void register(String pluginId, PluginToolbarItem item) {
-    final list = _items.putIfAbsent(pluginId, () => []);
+  void _attachEvaluator(PluginConditionEvaluator evaluator) {
+    _evaluator = evaluator;
+    evaluator.addListener(notifyListeners);
+  }
+
+  @override
+  void dispose() {
+    _evaluator?.removeListener(notifyListeners);
+    super.dispose();
+  }
+
+  PluginInstanceKey _key(String pluginId, String instanceId) =>
+      (pluginId: pluginId, instanceId: instanceId);
+
+  /// הרשימה של [instanceId] אם היא מכילה את [itemId]; אחרת הרשימה ברמת
+  /// התוסף — כך JS של מופע יכול לעדכן/להסיר פריט שהוצהר במניפסט.
+  List<PluginToolbarItem>? _listContaining(
+    String pluginId,
+    String instanceId,
+    String itemId,
+  ) {
+    final own = _items[_key(pluginId, instanceId)];
+    if (own != null && own.any((item) => item.id == itemId)) return own;
+    if (instanceId == PluginInstanceIds.pluginLevel) return null;
+    final shared = _items[_key(pluginId, PluginInstanceIds.pluginLevel)];
+    if (shared != null && shared.any((item) => item.id == itemId)) {
+      return shared;
+    }
+    return null;
+  }
+
+  void register(
+    String pluginId,
+    PluginToolbarItem item, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _items.putIfAbsent(_key(pluginId, instanceId), () => []);
     final index = list.indexWhere((existing) => existing.id == item.id);
     if (index >= 0) {
       list[index] = item;
@@ -39,19 +82,21 @@ class PluginToolbarRegistry extends ChangeNotifier {
 
   PluginToolbarItem registerPayload(
     String pluginId,
-    Map<String, dynamic> payload,
-  ) {
+    Map<String, dynamic> payload, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
     final item = _parseItem(payload, isChild: false);
-    register(pluginId, item);
+    register(pluginId, item, instanceId: instanceId);
     return item;
   }
 
   PluginToolbarItem update(
     String pluginId,
     String itemId,
-    Map<String, dynamic> patch,
-  ) {
-    final list = _items[pluginId];
+    Map<String, dynamic> patch, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _listContaining(pluginId, instanceId, itemId);
     final index = list?.indexWhere((item) => item.id == itemId) ?? -1;
     if (list == null || index < 0) {
       throw const PluginToolbarException(
@@ -66,19 +111,32 @@ class PluginToolbarRegistry extends ChangeNotifier {
     return updated;
   }
 
-  void remove(String pluginId, String itemId) {
-    final list = _items[pluginId];
-    final previousLength = list?.length ?? 0;
-    list?.removeWhere((item) => item.id == itemId);
-    if (list?.isEmpty == true) _items.remove(pluginId);
-    if ((list?.length ?? 0) != previousLength) notifyListeners();
+  void remove(
+    String pluginId,
+    String itemId, {
+    String instanceId = PluginInstanceIds.pluginLevel,
+  }) {
+    final list = _listContaining(pluginId, instanceId, itemId);
+    if (list == null) return;
+    list.removeWhere((item) => item.id == itemId);
+    _items.removeWhere((_, items) => items.isEmpty);
+    notifyListeners();
   }
 
+  /// ניקוי מלא ברמת התוסף — כל המופעים והרישומים הדקלרטיביים.
   void removeAll(String pluginId) {
-    if (_items.remove(pluginId) != null) notifyListeners();
+    final before = _items.length;
+    _items.removeWhere((key, _) => key.pluginId == pluginId);
+    if (_items.length != before) notifyListeners();
+  }
+
+  /// מסיר רק את הרישומים של המופע [key] (סגירת טאב אחד של התוסף).
+  void removeInstance(PluginInstanceKey key) {
+    if (_items.remove(key) != null) notifyListeners();
   }
 
   /// מחליף קבוצת פריטים מנוהלת בעדכון יחיד, בלי לגעת בפריטים אחרים.
+  /// פריטים מנוהלים הם דקלרטיביים — חיים ברמת התוסף.
   void replaceManagedItems(
     String pluginId, {
     required Set<String> managedIds,
@@ -91,8 +149,9 @@ class PluginToolbarRegistry extends ChangeNotifier {
         'managed toolbar items must have unique declared ids',
       );
     }
+    final key = _key(pluginId, PluginInstanceIds.pluginLevel);
     final next = [
-      for (final item in _items[pluginId] ?? const <PluginToolbarItem>[])
+      for (final item in _items[key] ?? const <PluginToolbarItem>[])
         if (!managedIds.contains(item.id)) item,
       ...items,
     ];
@@ -104,19 +163,47 @@ class PluginToolbarRegistry extends ChangeNotifier {
       );
     }
     if (next.isEmpty) {
-      _items.remove(pluginId);
+      _items.remove(key);
     } else {
-      _items[pluginId] = next;
+      _items[key] = next;
     }
     notifyListeners();
   }
 
+  /// הפריטים המוצגים בפועל — פריט שתנאי ה-`when` שלו אינו מתקיים מסונן החוצה
+  /// (ונשאר רשום, כך שהוא חוזר כשהתנאי מתקיים).
+  ///
+  /// תצוגה מאוחדת: פריט אחד לכל (pluginId, itemId) גם כשכמה מופעים רשמו
+  /// אותו; רישום של מופע חי גובר על העותק הדקלרטיבי, המיקום לפי הראשון.
   List<(String pluginId, PluginToolbarItem item)> getAll() {
-    return List.unmodifiable([
-      for (final entry in _items.entries)
-        for (final item in entry.value) (entry.key, item),
-    ]);
+    final evaluator = _evaluator;
+    final deduped = <(String, String), (String, PluginToolbarItem)>{};
+    for (final entry in _items.entries) {
+      final pluginId = entry.key.pluginId;
+      for (final item in entry.value) {
+        if (!(evaluator?.isVisible(pluginId, item.when) ?? true)) continue;
+        final dedupeKey = (pluginId, item.id);
+        if (!deduped.containsKey(dedupeKey) ||
+            entry.key.instanceId != PluginInstanceIds.pluginLevel) {
+          deduped[dedupeKey] = (pluginId, item);
+        }
+      }
+    }
+    return List.unmodifiable(deduped.values);
   }
+
+  /// מזהי המופעים שרשמו את [itemId] (כולל בתוך תפריטי ילדים), בסדר הרישום —
+  /// הקלט לניתוב הלחיצה למופע הנכון.
+  List<String> instanceIdsForItem(String pluginId, String itemId) => [
+    for (final entry in _items.entries)
+      if (entry.key.pluginId == pluginId &&
+          entry.value.any((item) => _treeContains(item, itemId)))
+        entry.key.instanceId,
+  ];
+
+  bool _treeContains(PluginToolbarItem item, String itemId) =>
+      item.id == itemId ||
+      item.children.any((child) => _treeContains(child, itemId));
 
   PluginToolbarItem _parseItem(
     Map<String, dynamic> json, {
@@ -260,7 +347,23 @@ class PluginToolbarRegistry extends ChangeNotifier {
       param: json['param'],
       placement: placement,
       order: rawOrder as int? ?? PluginToolbarItem.defaultOrder,
+      when: _parseWhen(json['when'], isChild: isChild),
     );
+  }
+
+  PluginWhenCondition? _parseWhen(Object? value, {required bool isChild}) {
+    if (value == null) return null;
+    if (isChild) {
+      throw const PluginToolbarException(
+        'error.invalid_params',
+        'when is only allowed on top-level items',
+      );
+    }
+    try {
+      return PluginWhenCondition.fromJson(value);
+    } on PluginWhenConditionException catch (error) {
+      throw PluginToolbarException('error.invalid_params', '$error');
+    }
   }
 
   String _safeText(

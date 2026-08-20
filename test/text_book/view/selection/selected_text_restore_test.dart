@@ -419,4 +419,64 @@ void main() {
       expect(restored.contains('\n'), isTrue);
     });
   });
+
+  group('locateSelectionRangesPerLine', () {
+    test('בחירה על פני שלוש שורות: סיומת, שורה מלאה, תחילית', () {
+      final ranges = locateSelectionRangesPerLine(
+        selectedText: 'דהו\nזחט\nיכל',
+        visibleLines: const ['אבג דהו', 'זחט', 'יכל מנס'],
+      );
+
+      expect(ranges, [
+        (line: 0, start: 4, end: 7),
+        (line: 1, start: 0, end: 3),
+        (line: 2, start: 0, end: 3),
+      ]);
+    });
+
+    test('רמז עמודה מכריע בין מופעים חוזרים', () {
+      final ranges = locateSelectionRangesPerLine(
+        selectedText: 'דג',
+        visibleLines: const ['דג וגם דג'],
+        startColumnHint: 7,
+      );
+
+      expect(ranges, [(line: 0, start: 7, end: 9)]);
+    });
+
+    test('סובל הבדלי רווחים (NBSP בבחירה, רווח רגיל בתצוגה)', () {
+      final ranges = locateSelectionRangesPerLine(
+        selectedText: 'דהו זחט',
+        visibleLines: const ['אבג דהו', 'זחט יכל'],
+      );
+
+      expect(ranges, [
+        (line: 0, start: 4, end: 7),
+        (line: 1, start: 0, end: 3),
+      ]);
+    });
+
+    test('מחזיר null כשהבחירה לא נמצאת בשורות', () {
+      final ranges = locateSelectionRangesPerLine(
+        selectedText: 'טקסט שאיננו',
+        visibleLines: const ['אבג', 'דהו'],
+      );
+
+      expect(ranges, isNull);
+    });
+
+    test('מעדיף מופע שפרוש מהשורה הראשונה עד האחרונה', () {
+      // 'דהו' מופיע גם בתוך השורה הראשונה, אבל המופע הנכון הוא זה
+      // שמתחיל בשורה 0 ומסתיים בשורה האחרונה.
+      final ranges = locateSelectionRangesPerLine(
+        selectedText: 'דהו\nזחט',
+        visibleLines: const ['דהו זחט דהו', 'זחט'],
+      );
+
+      expect(ranges, [
+        (line: 0, start: 8, end: 11),
+        (line: 1, start: 0, end: 3),
+      ]);
+    });
+  });
 }

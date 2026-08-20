@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/services/plugin_highlight_registry.dart';
 
 void main() {
@@ -531,6 +532,149 @@ void main() {
       expect(registry.revision, 0);
       expect(registry.clearAll(ownerPluginId: 'plugin.a'), 0);
       expect(registry.revision, 0);
+    });
+  });
+
+  group('ריבוי מופעים של אותו תוסף', () {
+    const i1 = 'instance-1';
+    const i2 = 'instance-2';
+
+    PluginInstanceKey key(String instanceId) => (
+      pluginId: 'plugin.a',
+      instanceId: instanceId,
+    );
+
+    test('אותה הדגשה משני מופעים מצוירת פעם אחת', () {
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i1,
+        payload: _payload(id: 'shared'),
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i2,
+        payload: _payload(id: 'shared'),
+      );
+
+      expect(
+        registry.getAllHighlights(bookId: 'book', sectionIndex: 1),
+        hasLength(1),
+      );
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i1),
+        hasLength(1),
+      );
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i2),
+        hasLength(1),
+      );
+    });
+
+    test('בציור מועדף העותק של המופע הגלוי', () {
+      registry = PluginHighlightRegistry.forTesting(
+        isInstanceVisible: (instanceKey) => instanceKey.instanceId == i2,
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i1,
+        payload: _payload(id: 'shared'),
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i2,
+        payload: {
+          ..._payload(id: 'shared'),
+          'style': {'backgroundColor': '#112233'},
+        },
+      );
+
+      final rendered = registry
+          .getAllHighlights(bookId: 'book', sectionIndex: 1)
+          .single;
+      expect(rendered.style.backgroundColor, '#112233');
+    });
+
+    test('removeInstance מסיר רק את המופע והציור חושף את העותק השני', () {
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i1,
+        payload: _payload(id: 'shared'),
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i2,
+        payload: _payload(id: 'shared'),
+      );
+
+      registry.removeInstance(key(i1));
+
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i1),
+        isEmpty,
+      );
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i2),
+        hasLength(1),
+      );
+      expect(
+        registry.getAllHighlights(bookId: 'book', sectionIndex: 1),
+        hasLength(1),
+      );
+    });
+
+    test('מחיקה ממופע אחד אינה נוגעת בעותק של המופע השני', () {
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i1,
+        payload: _payload(id: 'shared'),
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i2,
+        payload: _payload(id: 'shared'),
+      );
+
+      expect(
+        registry.clearHighlight(
+          ownerPluginId: 'plugin.a',
+          ownerInstanceId: i1,
+          highlightId: 'shared',
+        ),
+        isTrue,
+      );
+
+      expect(
+        registry.getAllHighlights(bookId: 'book', sectionIndex: 1),
+        hasLength(1),
+      );
+    });
+
+    test('removePlugin מנקה את כל המופעים', () {
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i1,
+        payload: _payload(id: 'shared'),
+      );
+      registry.setHighlight(
+        ownerPluginId: 'plugin.a',
+        ownerInstanceId: i2,
+        payload: _payload(id: 'shared'),
+      );
+
+      registry.removePlugin('plugin.a');
+
+      expect(
+        registry.getAllHighlights(bookId: 'book', sectionIndex: 1),
+        isEmpty,
+      );
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i1),
+        isEmpty,
+      );
+      expect(
+        registry.getHighlights(ownerPluginId: 'plugin.a', ownerInstanceId: i2),
+        isEmpty,
+      );
     });
   });
 }

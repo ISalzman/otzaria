@@ -17,6 +17,10 @@ import 'package:otzaria/tour/widgets/tour_tooltip_card.dart';
 
 const Duration tourCardSwitchDuration = Duration(milliseconds: 260);
 const int _targetMonitorMaxFramesAfterMove = 45;
+
+/// תקרת ההמתנה לכרטיס הספר (~2 שניות ב-60fps) — מספיקה למעבר מסך
+/// ולבניית רשימת הספרים. בלעדיה הרינדור-מחדש חוזר בכל פריים לנצח.
+const int _bookCardMaxRetryFrames = 120;
 const int _targetMonitorStableFrames = 3;
 const double _targetMonitorRectTolerance = 0.5;
 
@@ -71,6 +75,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
   List<Rect>? _lastMeasuredTargetRects;
   bool _skipCardTransition = false;
   bool _retryScheduled = false;
+  int _bookCardRetryFramesLeft = _bookCardMaxRetryFrames;
   bool _targetMonitorRetryScheduled = false;
   int _targetMonitorFramesLeft = 0;
   int _targetMonitorStableFrameCount = 0;
@@ -87,6 +92,7 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
         if (step != null) {
           _lastStepId = step.id;
           _lastResolvedRect = null;
+          _bookCardRetryFramesLeft = _bookCardMaxRetryFrames;
           _resetTargetMonitor(step.id);
           widget.onStepChanged(step);
         }
@@ -273,10 +279,11 @@ class _TourOverlayScreenState extends State<TourOverlayScreen> {
   }
 
   void _scheduleRetry() {
-    if (_retryScheduled) {
+    if (_retryScheduled || _bookCardRetryFramesLeft <= 0) {
       return;
     }
     _retryScheduled = true;
+    _bookCardRetryFramesLeft--;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;

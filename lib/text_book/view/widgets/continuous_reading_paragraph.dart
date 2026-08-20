@@ -379,6 +379,12 @@ List<InlineSpan> _nodeToSpans(
           ? childStyle
           : node.classes.contains('numbered-note-marker')
           ? childStyle.copyWith(color: linkStyle?.color)
+          // מרקר ספרות-עיליות: צבע עוגן בלי קו תחתון (הגליף כבר מוגבה).
+          : node.classes.contains('book-note-marker-sup')
+          ? childStyle.copyWith(
+              color: linkStyle?.color,
+              decoration: TextDecoration.none,
+            )
           : node.classes.contains('link-anchor-range')
           ? childStyle.copyWith(
               decoration: TextDecoration.none,
@@ -498,6 +504,12 @@ TextStyle _styleForElement(
     if (hideRaisedMarkers && element.classes.contains(kRaisedSupClass)) {
       style = style.copyWith(color: const Color(0x00000000));
     }
+  }
+  // טקסט תחתי שהומר ל-span (ראו TextRendererService._fixSubscripts) — מוקטן.
+  if (element.classes.contains('subscript-text')) {
+    style = style.copyWith(
+      fontSize: (style.fontSize ?? 18) * kHtmlSmallerFontScale,
+    );
   }
   if (element.classes.contains(kFootnoteMarkerClass) ||
       element.classes.contains('book-note-marker')) {

@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart' show IterableExtension;
-import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +56,7 @@ import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
+import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
@@ -688,14 +688,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         successMessage = TextBookMessages.textFileSaved;
       }
 
-      final path = await FilePicker.saveFile(
+      final path = await saveFileWithExtension(
         dialogTitle: 'ייצוא הספר',
         fileName:
             '${sanitizeTextBookExportFileName(state.book.title)}.$extension',
-        type: FileType.custom,
-        allowedExtensions: [extension],
+        extension: extension,
         bytes: bytes,
-        lockParentWindow: true,
       );
       if (path == null) return;
       if (!mounted) return;
@@ -1474,13 +1472,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         // (ellipsis) לפי המקום הפנוי, אך המיקום נשאר גלוי במלואו — נחוץ לחברותא
         // שבה אין מידע אחר על המיקום.
         final namePrefix = '${state.book.title}, ';
-        // מיקום שאינו נכנס בעצמו ברוחב הפנוי (כותרת Word שהיא פסקה שלמה) חייב
-        // להיחתך כמחרוזת אחת — כשני חלקים הוא חורג מהסרגל ודורס את הכפתורים.
+        // מיקום שאינו משאיר לצדו מקום אף ל"..." של השם חייב להיחתך כמחרוזת
+        // אחת — כשני חלקים ה-Row גולש מהסרגל ומצייר את פס האזהרה (#891).
         final hasSeparateLocation =
             displayText.startsWith(namePrefix) &&
-            !measure(
-              displayText.substring(namePrefix.length),
-            ).didExceedMaxLines;
+            measure(displayText.substring(namePrefix.length)).width +
+                    measure('…').width <=
+                constraints.maxWidth;
         final rowAlignment = switch (textAlign) {
           TextAlign.center => MainAxisAlignment.center,
           TextAlign.start => MainAxisAlignment.start,
@@ -2300,7 +2298,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     if (positions.isEmpty) return;
     state.scrollController.scrollTo(
       duration: const Duration(milliseconds: 300),
-      index: _bottommostVisibleIndex(state) + 1,
+      index: _topmostVisibleIndex(state) + 1,
     );
   }
 
@@ -2404,7 +2402,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex = _bottommostVisibleSourceLine(state);
+    final currentIndex = _topmostVisibleSourceLine(state);
     final nextIndex = _findNextTocIndex(
       state.tableOfContents,
       currentIndex,
@@ -3007,11 +3005,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 int _topmostVisibleIndex(TextBookLoaded state) =>
     topmostVisibleIndex(state.positionsListener.itemPositions.value);
 
-int _bottommostVisibleIndex(TextBookLoaded state) =>
-    bottommostVisibleIndex(state.positionsListener.itemPositions.value);
-
 // ה-helpers הבאים הם wrapper-ים דקים לפונקציות הטהורות ב-visible_index.dart
-// (`resolveTopmostSourceLine`/`resolveBottommostSourceLine`/`resolveItemIndexForSourceLine`).
+// (`resolveTopmostSourceLine`/`resolveItemIndexForSourceLine`).
 // הלוגיקה נבדקת ב-test/text_book/utils/visible_index_test.dart.
 
 int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
@@ -3019,13 +3014,6 @@ int _topmostVisibleSourceLine(TextBookLoaded state) => resolveTopmostSourceLine(
   continuousReadingMode: state.continuousReadingMode,
   readingSegments: state.readingSegments,
 );
-
-int _bottommostVisibleSourceLine(TextBookLoaded state) =>
-    resolveBottommostSourceLine(
-      positions: state.positionsListener.itemPositions.value,
-      continuousReadingMode: state.continuousReadingMode,
-      readingSegments: state.readingSegments,
-    );
 
 int _itemIndexForSourceLine(TextBookLoaded state, int lineIndex) =>
     resolveItemIndexForSourceLine(
@@ -3237,9 +3225,7 @@ bool _handleGlobalKeyEvent(
 
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
   // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
-  final isCtrlOrCmd =
-      HardwareKeyboard.instance.isControlPressed ||
-      (Platform.isMacOS && HardwareKeyboard.instance.isMetaPressed);
+  final isCtrlOrCmd = ShortcutHelper.isPlainCtrlOrCmdPressed;
 
   if (event is KeyDownEvent && isCtrlOrCmd) {
     switch (event.logicalKey) {

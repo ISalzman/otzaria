@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/core/messages/library_messages.dart';
@@ -564,8 +565,14 @@ class IndexingRepository {
         book.fileType ?? 'txt',
         book.isUserBook,
       );
+      // ניקוי תמונות מוטמעות חייב לרוץ גם כאן, כמו באימות הטביעה — אחרת
+      // החתימה לעולם לא תתאים ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
+      if (bytes != null && bytesContainDataUriScheme(bytes)) {
+        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
+        bytes = null;
+      }
     }
-    if (bytes == null || bytes.isEmpty) {
+    if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
       // מסלול הנפילה (docx/epub, ספר בלי categoryId): טקסט דרך LibraryProvider.
       // תמונות מוטמעות מסולקות — ראו [stripDataUrisForIndex].
       text = await _loadTextForIndex(book);
@@ -1019,13 +1026,62 @@ class IndexingRepository {
   /// data URIs (תמונות מוטמעות בספרי EPUB/DOCX מומרים) — עשרות MB לספר
   /// מצויר. אינם ניתנים לחיפוש, מנפחים את האינדקס, וגרמו ל-abort של ה-VM
   /// בזמן אינדוקס. ההחלפה משמרת את מבנה השורות (אין מחיקת שורות).
-  static final RegExp _dataUriPattern = RegExp(
-    r'data:[A-Za-z0-9+/;,=.\-]{64,}',
-  );
-
+  ///
+  /// סריקה ידנית ולא RegExp — מנוע ה-regex של Dart ממוטט את המחסנית
+  /// (Stack Overflow) על data URI באורך מיליוני תווים.
   @visibleForTesting
-  static String stripDataUrisForIndex(String text) =>
-      text.contains('data:') ? text.replaceAll(_dataUriPattern, '') : text;
+  static String stripDataUrisForIndex(String text) {
+    const scheme = 'data:';
+    const minPayloadLength = 64;
+    var matchStart = text.indexOf(scheme);
+    if (matchStart < 0) return text;
+
+    final buffer = StringBuffer();
+    var copiedUpTo = 0;
+    while (matchStart >= 0) {
+      var end = matchStart + scheme.length;
+      while (end < text.length && _isDataUriChar(text.codeUnitAt(end))) {
+        end++;
+      }
+      if (end - matchStart - scheme.length >= minPayloadLength) {
+        buffer.write(text.substring(copiedUpTo, matchStart));
+        copiedUpTo = end;
+      }
+      matchStart = text.indexOf(scheme, end);
+    }
+    if (copiedUpTo == 0) return text;
+    buffer.write(text.substring(copiedUpTo));
+    return buffer.toString();
+  }
+
+  /// סריקת bytes ל-'data:' (ASCII, ולכן תקפה על UTF-8) — מכריעה אם מסלול
+  /// ה-bytes המהיר חייב לרדת לפענוח וניקוי. false = אין מה לנקות.
+  @visibleForTesting
+  static bool bytesContainDataUriScheme(Uint8List bytes) {
+    const scheme = [0x64, 0x61, 0x74, 0x61, 0x3A]; // 'data:'
+    final last = bytes.length - scheme.length;
+    for (var i = 0; i <= last; i++) {
+      if (bytes[i] != scheme[0]) continue;
+      var j = 1;
+      while (j < scheme.length && bytes[i + j] == scheme[j]) {
+        j++;
+      }
+      if (j == scheme.length) return true;
+    }
+    return false;
+  }
+
+  static bool _isDataUriChar(int c) =>
+      (c >= 0x41 && c <= 0x5A) || // A-Z
+      (c >= 0x61 && c <= 0x7A) || // a-z
+      (c >= 0x30 && c <= 0x39) || // 0-9
+      c == 0x2B || // +
+      c == 0x2F || // /
+      c == 0x3B || // ;
+      c == 0x2C || // ,
+      c == 0x3D || // =
+      c == 0x2E || // .
+      c == 0x2D; // -
 
   Future<String?> _loadTextBookText(TextBook book) async {
     String? text;

@@ -151,6 +151,30 @@ class AppPaths {
     );
   }
 
+  /// האם ההתקנה ב-Windows מערכתית (כמנהל). מקור אמת יחיד — גם למנגנון
+  /// העדכון, שגוזר ממנו את דגלי המתקין השקט.
+  ///
+  /// ה-marker (נכתב ע"י ה-installer בהתקנת מנהל) וה-exe תחת Program Files
+  /// הם אותות יציבים שאינם משתנים כשהמשתמש מעביר את הספרייה. בכוונה אין
+  /// כאן fallback לפי נתיב הספרייה — הוא היה גורם לזיהוי להתהפך ל-perUser
+  /// (וברירת מחדל ל-AppData) ברגע שהספרייה הועברה מחוץ ל-ProgramData.
+  static bool get isWindowsSystemInstall {
+    if (!Platform.isWindows || isPortable) {
+      return false;
+    }
+    final exeDir = p.dirname(_resolvedExecutable);
+    if (File(p.join(exeDir, 'system_install.marker')).existsSync()) {
+      return true;
+    }
+    final exeDirLower = exeDir.toLowerCase();
+    final pf = (Platform.environment['ProgramFiles'] ?? r'C:\Program Files')
+        .toLowerCase();
+    final pfX86 =
+        (Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)')
+            .toLowerCase();
+    return exeDirLower.startsWith(pf) || exeDirLower.startsWith(pfX86);
+  }
+
   /// מזהה אם ההתקנה מערכתית (כמנהל) או התקנת משתמש.
   static Future<InstallMode> detectInstallMode() async {
     // מצב נייד לעולם אינו התקנה מערכתית — הנתונים יושבים ליד ה-executable
@@ -163,25 +187,8 @@ class AppPaths {
         return InstallMode.systemWide;
       }
     }
-    if (Platform.isWindows) {
-      final exeDir = p.dirname(_resolvedExecutable);
-      // ה-marker (נכתב ע"י ה-installer בהתקנת מנהל) וה-exe תחת Program Files
-      // הם אותות יציבים שאינם משתנים כשהמשתמש מעביר את הספרייה. בכוונה אין
-      // כאן fallback לפי נתיב הספרייה — הוא היה גורם לזיהוי להתהפך ל-perUser
-      // (וברירת מחדל ל-AppData) ברגע שהספרייה הועברה מחוץ ל-ProgramData.
-      if (File(p.join(exeDir, 'system_install.marker')).existsSync()) {
-        return InstallMode.systemWide;
-      }
-      final exeDirLower = exeDir.toLowerCase();
-      final pf = (Platform.environment['ProgramFiles'] ?? r'C:\Program Files')
-          .toLowerCase();
-      final pfX86 =
-          (Platform.environment['ProgramFiles(x86)'] ??
-                  r'C:\Program Files (x86)')
-              .toLowerCase();
-      if (exeDirLower.startsWith(pf) || exeDirLower.startsWith(pfX86)) {
-        return InstallMode.systemWide;
-      }
+    if (Platform.isWindows && isWindowsSystemInstall) {
+      return InstallMode.systemWide;
     }
     if (Platform.isLinux) {
       if (await Directory('/var/lib/otzaria').exists()) {

@@ -5,8 +5,11 @@ import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
 import 'package:otzaria/plugins/models/plugin_permission_grant.dart';
 import 'package:otzaria/plugins/models/plugin_published_record.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_search_dialog_registry.dart';
@@ -32,6 +35,10 @@ class _FakeRepo implements PluginRegistryRepository {
         grantedAt: DateTime(2026),
       ),
   ];
+
+  @override
+  Future<List<String>> getGrantedPermissionNames(String id) async =>
+      withBaselinePermissions(grantedByPlugin[id] ?? const <String>{});
 
   @override
   Future<void> publishRecord(
@@ -627,5 +634,172 @@ void main() {
     expect(toolbar.getAll(), hasLength(1));
     expect(contextMenu.getAll(), hasLength(1));
     expect(searchDialog.getAll(), hasLength(1));
+  });
+
+  group('רישום מפתחות האחסון של תנאי when', () {
+    late PluginConditionEvaluator evaluator;
+    late PluginToolbarRegistry conditionalToolbar;
+    late PluginStartupContributionsService conditionalService;
+
+    Map<String, dynamic> startupWithWhen() => {
+      'toolbarItems': [
+        {
+          'id': 'b1',
+          'title': 'כפתור',
+          'icon': 'apps_24_regular',
+          'when': {
+            'storage': {'key': 'showButton', 'equals': 'yes'},
+          },
+        },
+      ],
+    };
+
+    setUp(() {
+      evaluator = PluginConditionEvaluator.forTesting();
+      conditionalToolbar = PluginToolbarRegistry.forTesting(
+        evaluator: evaluator,
+      );
+      conditionalService = PluginStartupContributionsService.forTesting(
+        toolbarRegistry: conditionalToolbar,
+        contextMenuRegistry: ContextMenuRegistry.forTesting(
+          evaluator: evaluator,
+        ),
+        activationService: PluginLazyActivationService.forTesting(),
+        searchDialogRegistry: PluginSearchDialogRegistry.forTesting(
+          evaluator: evaluator,
+        ),
+        externalEditionsRegistry: PluginExternalEditionsRegistry.detached(),
+        conditionEvaluator: evaluator,
+      );
+    });
+
+    test('הסנכרון טוען את ערך המפתח ומכריע את התצוגה', () async {
+      repo.grantedByPlugin['p1'] = {..._allPermissions};
+      repo.kv['p1|default|showButton'] = jsonEncode('yes');
+
+      await conditionalService.sync([
+        _plugin(startup: startupWithWhen()),
+      ], repo);
+
+      expect(conditionalToolbar.getAll(), hasLength(1));
+    });
+
+    test('מפתח חסר ב-KV מסתיר את הפריט', () async {
+      repo.grantedByPlugin['p1'] = {..._allPermissions};
+
+      await conditionalService.sync([
+        _plugin(startup: startupWithWhen()),
+      ], repo);
+
+      expect(conditionalToolbar.getAll(), isEmpty);
+      evaluator.onStorageValueChanged('p1', 'showButton', 'yes');
+      expect(conditionalToolbar.getAll(), hasLength(1));
+    });
+
+    test('הסרת התוסף מנקה את הרישום ב-evaluator', () async {
+      repo.grantedByPlugin['p1'] = {..._allPermissions};
+      repo.kv['p1|default|showButton'] = jsonEncode('yes');
+      await conditionalService.sync([
+        _plugin(startup: startupWithWhen()),
+      ], repo);
+
+      await conditionalService.sync([], repo);
+
+      evaluator.onStorageValueChanged('p1', 'showButton', 'yes');
+      expect(
+        evaluator.evaluate(
+          'p1',
+          PluginWhenCondition.fromJson({
+            'storage': {'key': 'showButton', 'equals': 'yes'},
+          }),
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('תנאי when על activationEvents', () {
+    late PluginConditionEvaluator evaluator;
+    late PluginLazyActivationService conditionalActivation;
+    late PluginStartupContributionsService conditionalService;
+
+    Map<String, dynamic> startupWithGatedEvent() => {
+      'toolbarItems': [
+        {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
+      ],
+      'activationEvents': [
+        {
+          'topic': 'reader.sectionContentChanged',
+          'when': {
+            'storage': {'key': 'listen', 'equals': 'yes'},
+          },
+        },
+      ],
+    };
+
+    setUp(() {
+      evaluator = PluginConditionEvaluator.forTesting();
+      conditionalActivation = PluginLazyActivationService.forTesting(
+        conditionEvaluator: evaluator,
+      );
+      conditionalService = PluginStartupContributionsService.forTesting(
+        toolbarRegistry: PluginToolbarRegistry.forTesting(
+          evaluator: evaluator,
+        ),
+        contextMenuRegistry: ContextMenuRegistry.forTesting(
+          evaluator: evaluator,
+        ),
+        activationService: conditionalActivation,
+        searchDialogRegistry: PluginSearchDialogRegistry.forTesting(
+          evaluator: evaluator,
+        ),
+        externalEditionsRegistry: PluginExternalEditionsRegistry.detached(),
+        conditionEvaluator: evaluator,
+      );
+      repo.grantedByPlugin['p1'] = {..._allPermissions, 'app.run_on_startup'};
+    });
+
+    test('מפתח האחסון של האירוע נטען והתנאי חוסם הערה', () async {
+      await conditionalService.sync([
+        _plugin(startup: startupWithGatedEvent()),
+      ], repo);
+
+      expect(
+        conditionalActivation.queueTargetedEvent(
+          'p1',
+          'reader.sectionContentChanged',
+          {},
+        ),
+        isFalse,
+      );
+
+      // המפתח נרשם למעקב בסנכרון, ולכן עדכון חי מהגשר מהפך את התוצאה.
+      evaluator.onStorageValueChanged('p1', 'listen', 'yes');
+      expect(
+        conditionalActivation.queueTargetedEvent(
+          'p1',
+          'reader.sectionContentChanged',
+          {},
+        ),
+        isTrue,
+      );
+    });
+
+    test('ערך קיים ב-KV מאפשר הערה מיד', () async {
+      repo.kv['p1|default|listen'] = jsonEncode('yes');
+
+      await conditionalService.sync([
+        _plugin(startup: startupWithGatedEvent()),
+      ], repo);
+
+      expect(
+        conditionalActivation.queueTargetedEvent(
+          'p1',
+          'reader.sectionContentChanged',
+          {},
+        ),
+        isTrue,
+      );
+    });
   });
 }

@@ -67,6 +67,8 @@ import 'package:otzaria/plugins/services/plugin_highlight_renderer.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/reader_selection_service.dart';
 import 'package:otzaria/plugins/models/plugin_book_identity.dart';
+import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
+import 'package:otzaria/plugins/utils/highlight_click_resolver.dart';
 import 'package:otzaria/plugins/utils/plugin_context_menu_entries.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/utils/commentators_context_menu.dart';
@@ -104,6 +106,9 @@ Map<String, dynamic> buildPageShapePluginSelectionPayload({
   required String bookTitle,
   required int sectionIndex,
   String? currentRef,
+  int? bookDbId,
+  String? bookType,
+  String? bookSource,
 }) {
   return {
     'text': selectedText,
@@ -114,6 +119,9 @@ Map<String, dynamic> buildPageShapePluginSelectionPayload({
     'bookId': bookTitle,
     'currentIndex': sectionIndex,
     'sectionIndex': sectionIndex,
+    'id': ?bookDbId,
+    'type': ?bookType,
+    'source': ?bookSource,
   };
 }
 
@@ -1209,7 +1217,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           : SearchMatchPolicy.standard,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+      fontWeight:
+          (widget.isMainText
+              ? settingsState.fontBold
+              : settingsState.commentatorsFontBold)
+          ? FontWeight.bold
+          : null,
       lineHeight: settingsState.lineHeight,
     );
   }
@@ -1325,13 +1338,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       _selectionStartColumn = startColumn;
     });
     if (widget.isMainText) {
-      final firstLineLength = restoredText.split('\n').first.length;
+      // בבחירה רב-שורתית אין טווח חד-פסקתי תקף — start/end של השורה
+      // הראשונה בלבד גרמו ל-reader.getSelection להחזיר עוגן חלקי מטעה.
+      final isSingleSectionSelection = !restoredText.contains('\n');
       context.read<TextBookBloc>().add(
         UpdateSelectedTextForNote(
           text: restoredText,
           sectionIndex: selectedIndex,
-          start: startColumn,
-          end: startColumn != null ? startColumn + firstLineLength : null,
+          start: isSingleSectionSelection ? startColumn : null,
+          end: isSingleSectionSelection && startColumn != null
+              ? startColumn + restoredText.length
+              : null,
         ),
       );
       unawaited(
@@ -1346,6 +1363,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 textBookState.selectedIndex ??
                 0,
             currentRef: textBookState.currentTitle,
+            bookDbId: textBookState.book.id,
+            bookType: PluginBookIdentity.typeOf(textBookState.book),
+            bookSource: PluginBookIdentity.sourceOf(textBookState.book),
           ),
         ),
       );
@@ -1804,48 +1824,109 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     if (widget.isMainText) {
       final pluginItems = ContextMenuRegistry.instance.getAll();
       final hasPluginSelection = capturedText?.trim().isNotEmpty == true;
-      final sectionIndex = index;
       if (pluginItems.isNotEmpty &&
-          hasPluginSelection &&
-          sectionIndex >= 0 &&
-          sectionIndex < widget.content.length) {
-        const selectionService = ReaderSelectionService();
+          index >= 0 &&
+          index < widget.content.length) {
         final selectionSettings = _selectionRenderSettings(
           state: state,
           settingsState: menuContext.read<SettingsBloc>().state,
           removeNikud: _removeNikud(state),
         );
-        final renderedLine = renderSelectionLine(
-          rawText: widget.content[sectionIndex],
-          settings: selectionSettings,
-        );
-        final localRange = selectionService.locateRenderedRange(
-          renderedText: renderedLine,
-          selectedText: capturedText ?? '',
-          startHint: _selectionPointerColumn ?? _selectionStartColumn,
-        );
-        final selection = selectionService.buildPayload(
-          bookId: state.book.title,
-          bookTitle: state.book.title,
-          sectionIndex: sectionIndex,
-          rawText: widget.content[sectionIndex],
-          settings: selectionSettings,
-          selectedText: capturedText ?? '',
-          renderedStartUtf16: localRange?.start,
-          renderedEndUtf16: localRange?.end,
-          currentRef: state.currentTitle,
-          bookDbId: state.book.id,
-          bookType: PluginBookIdentity.typeOf(state.book),
-          bookSource: PluginBookIdentity.sourceOf(state.book),
-        );
-        entries.add(const AppContextMenuEntry.divider());
-        entries.addAll(
-          buildPluginContextMenuEntries(
-            records: pluginItems,
-            selection: selection,
-            context: 'reader-page-shape-selection',
-          ),
-        );
+        if (!hasPluginSelection) {
+          entries.addAll(
+            _buildClickedHighlightEntries(
+              state: state,
+              paragraphIndex: index,
+              menuContext: menuContext,
+              tapPosition: tapPosition,
+              settings: selectionSettings,
+              pluginItems: pluginItems,
+            ),
+          );
+        } else {
+          const selectionService = ReaderSelectionService();
+          final lineStart = _selectionLineStart;
+          final lineEnd = _selectionLineEnd;
+          final Map<String, dynamic> selection;
+          if (lineStart != null &&
+              lineEnd != null &&
+              lineEnd > lineStart &&
+              lineStart >= 0 &&
+              lineEnd < widget.content.length) {
+            // בחירה חוצת-פסקאות: עוגן נפרד לכל פסקה שנכללת בבחירה.
+            final rawTexts = [
+              for (var i = lineStart; i <= lineEnd; i++) widget.content[i],
+            ];
+            final renderedLines = [
+              for (final raw in rawTexts)
+                renderSelectionLine(rawText: raw, settings: selectionSettings),
+            ];
+            selection = selectionService.buildMultiSectionPayload(
+              bookId: state.book.title,
+              bookTitle: state.book.title,
+              firstSectionIndex: lineStart,
+              rawTexts: rawTexts,
+              lineRanges:
+                  locateSelectionRangesPerLine(
+                    selectedText: capturedText ?? '',
+                    visibleLines: renderedLines,
+                    startColumnHint: _selectionStartColumn,
+                  ) ??
+                  const [],
+              settings: selectionSettings,
+              selectedText: capturedText ?? '',
+              currentRef: state.currentTitle,
+              bookDbId: state.book.id,
+              bookType: PluginBookIdentity.typeOf(state.book),
+              bookSource: PluginBookIdentity.sourceOf(state.book),
+            );
+          } else {
+            // העוגן נקבע בפסקה שבה הבחירה מתחילה — לא בפסקת הלחיצה, אחרת
+            // צירוף שחוזר גם בפסקת הלחיצה גונב את העוגן.
+            final sectionIndex =
+                (lineStart != null &&
+                    lineStart >= 0 &&
+                    lineStart < widget.content.length)
+                ? lineStart
+                : index;
+            final renderedLine = renderSelectionLine(
+              rawText: widget.content[sectionIndex],
+              settings: selectionSettings,
+            );
+            final localRange = selectionService.locateRenderedRange(
+              renderedText: renderedLine,
+              selectedText: capturedText ?? '',
+              startHint: sectionIndex == index
+                  ? (_selectionPointerColumn ?? _selectionStartColumn)
+                  : _selectionStartColumn,
+            );
+            selection = selectionService.buildPayload(
+              bookId: state.book.title,
+              bookTitle: state.book.title,
+              sectionIndex: sectionIndex,
+              rawText: widget.content[sectionIndex],
+              settings: selectionSettings,
+              selectedText: capturedText ?? '',
+              renderedStartUtf16: localRange?.start,
+              renderedEndUtf16: localRange?.end,
+              currentRef: state.currentTitle,
+              bookDbId: state.book.id,
+              bookType: PluginBookIdentity.typeOf(state.book),
+              bookSource: PluginBookIdentity.sourceOf(state.book),
+            );
+          }
+          entries.add(const AppContextMenuEntry.divider());
+          entries.addAll(
+            buildPluginContextMenuEntries(
+              records: pluginItems,
+              selection: selection,
+              context: 'reader-page-shape-selection',
+              selectionActionDispatcher: pluginSelectionActionDispatcherOf(
+                menuContext,
+              ),
+            ),
+          );
+        }
       }
     } else {
       // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
@@ -1868,6 +1949,48 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     return _normalizeEntries(entries);
+  }
+
+  /// פריטי תוסף להקשר `reader-highlight` — לחיצה ימנית על טקסט מודגש
+  /// כשאין בחירה פעילה. מוצגים רק כשהלחיצה נופלת על הדגשה בפועל.
+  List<AppContextMenuEntry> _buildClickedHighlightEntries({
+    required TextBookLoaded state,
+    required int paragraphIndex,
+    required BuildContext menuContext,
+    required Offset tapPosition,
+    required RenderSettings settings,
+    required List<(String, PluginContextMenuItem)> pluginItems,
+  }) {
+    final root = context.findRenderObject();
+    if (root == null) return const [];
+    final clicked = resolveClickedHighlights(
+      root: root,
+      globalPosition: tapPosition,
+      bookId: state.book.title,
+      sectionIndex: paragraphIndex,
+      rawText: widget.content[paragraphIndex],
+      settings: settings,
+    );
+    if (clicked.isEmpty) return const [];
+    final entries = buildPluginContextMenuEntries(
+      records: pluginItems,
+      selection: buildClickedHighlightsPayload(
+        highlights: clicked,
+        bookId: state.book.title,
+        bookTitle: state.book.title,
+        sectionIndex: paragraphIndex,
+        currentRef: state.currentTitle,
+        bookDbId: state.book.id,
+        bookType: PluginBookIdentity.typeOf(state.book),
+        bookSource: PluginBookIdentity.sourceOf(state.book),
+      ),
+      context: 'reader-highlight',
+      selectionActionDispatcher: pluginSelectionActionDispatcherOf(
+        menuContext,
+      ),
+    );
+    if (entries.isEmpty) return const [];
+    return [const AppContextMenuEntry.divider(), ...entries];
   }
 
   /// תתי-התפריטים "מפרשים" ו"קישורים" של שורת המפרש שנלחצה — כמו בלחיצה ימנית
@@ -2786,7 +2909,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                             false),
                     fontSize: widget.fontSize,
                     fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-                    fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+                    fontWeight:
+                        (widget.isMainText
+                            ? settingsState.fontBold
+                            : settingsState.commentatorsFontBold)
+                        ? FontWeight.bold
+                        : null,
                     lineHeight: settingsState.lineHeight,
                   ),
                   onOpenBook: widget.openBookCallback,
@@ -3047,7 +3175,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           (state.searchResultLines?.contains(lineIndex) ?? false),
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
-      fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+      fontWeight:
+          (widget.isMainText
+              ? settingsState.fontBold
+              : settingsState.commentatorsFontBold)
+          ? FontWeight.bold
+          : null,
       lineHeight: settingsState.lineHeight,
     );
     final processedHtml = TextRendererService.processText(

@@ -201,4 +201,130 @@ void main() {
       },
     );
   });
+
+  group('toggleRangeForColumnById', () {
+    BookDetails tenPageBook() => BookDetails(
+      id: 42,
+      contentType: 'text',
+      parts: const [BookPart(name: 'ראשי', startPage: 1, endPage: 10)],
+    );
+
+    Future<ShamorZachorProgressProvider> loadedProvider(
+      _FakeProgressService service,
+    ) async {
+      final provider = ShamorZachorProgressProvider(progressService: service);
+      await provider.ensureLoaded();
+      return provider;
+    }
+
+    test('marks only the items inside the range', () async {
+      final service = _FakeProgressService(
+        progressById: {},
+        completionDatesById: {},
+      );
+      final provider = await loadedProvider(service);
+
+      await provider.toggleRangeForColumnById(
+        42,
+        tenPageBook(),
+        'learn',
+        2,
+        5,
+        true,
+      );
+
+      expect(provider.getProgressForItemById(42, 1).learn, isFalse);
+      expect(provider.getProgressForItemById(42, 2).learn, isTrue);
+      expect(provider.getProgressForItemById(42, 5).learn, isTrue);
+      expect(provider.getProgressForItemById(42, 6).learn, isFalse);
+    });
+
+    test('reversed edges select the same range', () async {
+      final service = _FakeProgressService(
+        progressById: {},
+        completionDatesById: {},
+      );
+      final provider = await loadedProvider(service);
+
+      await provider.toggleRangeForColumnById(
+        42,
+        tenPageBook(),
+        'learn',
+        5,
+        2,
+        true,
+      );
+
+      expect(provider.getProgressForItemById(42, 2).learn, isTrue);
+      expect(provider.getProgressForItemById(42, 5).learn, isTrue);
+      expect(provider.getProgressForItemById(42, 6).learn, isFalse);
+    });
+
+    test('clears a range without touching other columns', () async {
+      final service = _FakeProgressService(
+        progressById: {
+          42: {
+            '2': PageProgress(learn: true, review1: true),
+            '3': PageProgress(learn: true),
+          },
+        },
+        completionDatesById: {},
+      );
+      final provider = await loadedProvider(service);
+
+      await provider.toggleRangeForColumnById(
+        42,
+        tenPageBook(),
+        'learn',
+        2,
+        3,
+        false,
+      );
+
+      expect(provider.getProgressForItemById(42, 2).learn, isFalse);
+      expect(provider.getProgressForItemById(42, 2).review1, isTrue);
+      expect(provider.getProgressForItemById(42, 3).learn, isFalse);
+    });
+
+    test('ignores a column that is not configured for the book', () async {
+      final service = _FakeProgressService(
+        progressById: {},
+        completionDatesById: {},
+      );
+      final provider = await loadedProvider(service);
+
+      await provider.toggleRangeForColumnById(
+        42,
+        tenPageBook(),
+        'unknown',
+        0,
+        3,
+        true,
+      );
+
+      expect(provider.getProgressForBookById(42), isEmpty);
+    });
+
+    test('marking the full range records the completion date', () async {
+      final service = _FakeProgressService(
+        progressById: {},
+        completionDatesById: {},
+        columnsById: {
+          42: const [ProgressColumn(id: 'learn', label: 'לימוד')],
+        },
+      );
+      final provider = await loadedProvider(service);
+
+      await provider.toggleRangeForColumnById(
+        42,
+        tenPageBook(),
+        'learn',
+        0,
+        9,
+        true,
+      );
+
+      expect(provider.getCompletionDateSyncById(42), isNotNull);
+    });
+  });
 }

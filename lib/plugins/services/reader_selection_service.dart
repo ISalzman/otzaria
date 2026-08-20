@@ -86,6 +86,62 @@ class ReaderSelectionService {
     return selection == null ? legacy : {...legacy, ...selection.toJson()};
   }
 
+  /// בונה payload לבחירה חוצת-פסקאות: שדות legacy ברמה העליונה + מערך
+  /// `sections` עם עוגן מלא לכל פסקה. פסקה שלא ניתן לעגן מושמטת; פסקה
+  /// יחידה מתמזגת לרמה העליונה — זהה לבחירה רגילה בפסקה אחת.
+  Map<String, dynamic> buildMultiSectionPayload({
+    required String bookId,
+    required String bookTitle,
+    required int firstSectionIndex,
+    required List<String> rawTexts,
+    required List<({int line, int start, int end})> lineRanges,
+    required RenderSettings settings,
+    required String selectedText,
+    String? currentRef,
+    int? bookDbId,
+    String? bookType,
+    String? bookSource,
+  }) {
+    final sections = <Map<String, dynamic>>[];
+    for (final range in lineRanges) {
+      if (range.line < 0 || range.line >= rawTexts.length) continue;
+      final selection = build(
+        bookId: bookId,
+        bookTitle: bookTitle,
+        sectionIndex: firstSectionIndex + range.line,
+        rawText: rawTexts[range.line],
+        settings: settings,
+        renderedStartUtf16: range.start,
+        renderedEndUtf16: range.end,
+        currentRef: currentRef,
+        bookDbId: bookDbId,
+        bookType: bookType,
+        bookSource: bookSource,
+      );
+      if (selection != null) {
+        sections.add({
+          ...selection.toJson(),
+          'currentIndex': selection.sectionIndex,
+        });
+      }
+    }
+    final legacy = <String, dynamic>{
+      'id': ?bookDbId,
+      'type': ?bookType,
+      'source': ?bookSource,
+      'text': selectedText,
+      'start': null,
+      'end': null,
+      'currentRef': currentRef,
+      'currentBook': bookTitle,
+      'currentBookId': bookId,
+      'currentIndex': firstSectionIndex,
+    };
+    if (sections.isEmpty) return legacy;
+    if (sections.length == 1) return {...legacy, ...sections.single};
+    return {...legacy, 'sections': sections};
+  }
+
   PluginReaderSelection? build({
     required String bookId,
     required String bookTitle,

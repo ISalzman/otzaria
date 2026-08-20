@@ -913,6 +913,9 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
     final isEverything =
         (categoryPart.isEmpty || categoryPart.contains('/')) &&
         _dimensionPart.isEmpty;
+    // בחירה חלקית בעץ (ספרים/קטגוריות ספציפיים) → סימן ביניים על "כל הספרים".
+    final hasPartialCategories =
+        categoryPart.isNotEmpty && !categoryPart.contains('/');
     final baseSelected = _selection.contains(FacetHelper.baseDimensionFacet);
 
     return [
@@ -926,7 +929,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
       _MenuItem(
         label: 'כל הספרים',
         icon: FluentIcons.library_24_regular,
-        check: isEverything,
+        check: isEverything ? true : (hasPartialCategories ? null : false),
         onToggle: (_) => isEverything ? _clearAll() : _apply({'/'}),
         onDrill: () => _enterView(_View.categories),
       ),
@@ -1157,7 +1160,9 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         child: Row(
           children: [
-            if (item.check != null)
+            // check==null עם onToggle = מצב ביניים (tristate); בלי onToggle
+            // זו שורת פעולה (כמו "נקה הכל") שאין לה תיבה.
+            if (item.onToggle != null)
               SizedBox(
                 width: 28,
                 height: 28,

@@ -19,7 +19,9 @@ String bookIdentity(Book book) {
 
 String _baseBookIdentity(Book book) {
   if (book.id != null) {
-    return 'id:${book.id}';
+    // PDF של מסכת בבלי נבנה עם ה-id של מהדורת הטקסט; בלי הסיומת אינדקס שורה
+    // בטקסט היה משוחזר כמספר עמוד ב-PDF.
+    return book is PdfBook ? 'id:${book.id}|pdf' : 'id:${book.id}';
   }
   final externalId = book.externalLibraryId;
   if (externalId != null && externalId.isNotEmpty) {

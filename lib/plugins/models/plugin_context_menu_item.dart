@@ -1,3 +1,5 @@
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+
 class PluginContextMenuColor {
   final String id;
   final String color;
@@ -43,6 +45,13 @@ class PluginContextMenuItem {
   /// מאפשר פריט תלוי-תוכן גם כשהתוסף אינו רץ (רישום דקלרטיבי מהמניפסט).
   final List<String> showWhenContainsAny;
 
+  /// תנאי הצגה על ערכי הגדרות/אחסון — מצטבר עם [showWhenContainsAny] (AND).
+  final PluginWhenCondition? when;
+
+  /// תבנית פעולת host דקלרטיבית — הלחיצה מבוצעת ע"י התוכנה בלי להעיר את
+  /// מנוע התוסף. סותר את [onClickEvent] ואת [openPlugin].
+  final Map<String, dynamic>? action;
+
   const PluginContextMenuItem({
     required this.id,
     this.type = 'item',
@@ -57,6 +66,8 @@ class PluginContextMenuItem {
     this.openPlugin = false,
     this.param,
     this.showWhenContainsAny = const [],
+    this.when,
+    this.action,
   }) : title = title ?? label;
 
   /// האם להציג את הפריט עבור [selectedText] לפי [showWhenContainsAny].
@@ -83,6 +94,8 @@ class PluginContextMenuItem {
     if (param != null) 'param': param,
     if (showWhenContainsAny.isNotEmpty)
       'showWhen': {'selectionContainsAny': showWhenContainsAny},
+    if (when != null) 'when': when!.toJson(),
+    if (action != null) 'action': action,
   };
 }
 

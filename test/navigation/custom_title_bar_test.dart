@@ -19,6 +19,7 @@ import 'package:otzaria/navigation/view/custom_title_bar.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
@@ -67,6 +68,93 @@ void main() {
     );
 
     expect(find.byTooltip('ספר א, פרק א'), findsOneWidget);
+  });
+
+  testWidgets('כרטיסיה שכותרתה נכנסת במלואה אינה מקבלת tooltip', (
+    tester,
+  ) async {
+    final tab = _makeTextTab('ספר א');
+    final tabsBloc = _TestTabsBloc(
+      TabsState(tabs: [tab], currentTabIndex: 0),
+    );
+    final navigationBloc = _TestNavigationBloc(
+      const NavigationState(currentScreen: Screen.reading),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    addTearDown(() async {
+      tab.dispose();
+      await tabsBloc.close();
+      await navigationBloc.close();
+      await settingsBloc.close();
+    });
+
+    await _setSurfaceSize(tester, const Size(1200, 800));
+    await _pumpTitleBar(
+      tester,
+      tabsBloc: tabsBloc,
+      navigationBloc: navigationBloc,
+      settingsBloc: settingsBloc,
+    );
+
+    expect(find.byTooltip('ספר א'), findsNothing);
+  });
+
+  group('מיקום הכרטיסיות', () {
+    /// שורת כותרת עם כרטיסיה אחת, במיקום הכרטיסיות הנתון.
+    Future<void> pumpWithPlacement(
+      WidgetTester tester,
+      String placement,
+    ) async {
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(
+        SettingsState.initial().copyWith(readingTabsPlacement: placement),
+      );
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('במצב "בצד" הרצועה שבכותרת אינה נבנית', (tester) async {
+      await pumpWithPlacement(
+        tester,
+        SettingsRepository.readingTabsPlacementSide,
+      );
+
+      expect(find.byType(ReadingTabStrip), findsNothing);
+      expect(find.text('ספר א'), findsNothing);
+      // כפתור הגדרות הקריאה נשאר בכותרת גם בלי הרצועה.
+      expect(find.byTooltip('הגדרות תצוגת הספרים'), findsOneWidget);
+    });
+
+    testWidgets('במצב "למעלה" הרצועה נבנית כרגיל', (tester) async {
+      await pumpWithPlacement(
+        tester,
+        SettingsRepository.readingTabsPlacementTop,
+      );
+
+      expect(find.byType(ReadingTabStrip), findsOneWidget);
+      expect(find.text('ספר א'), findsOneWidget);
+    });
   });
 
   group('שורה עמוסה בכרטיסיות', () {
@@ -485,6 +573,162 @@ void main() {
       findsOneWidget,
       reason: 'יש פס מפריד בין שני הספרים בטאב המפוצל',
     );
+  });
+
+  group('סגירת חצי של לשונית מפוצלת', () {
+    late TextBookTab right;
+    late TextBookTab left;
+    late _TestTabsBloc tabsBloc;
+    late _TestHistoryBloc historyBloc;
+
+    Future<void> pumpCombined(WidgetTester tester) async {
+      right = _makeTextTab('ימין');
+      left = _makeTextTab('שמאל');
+      final tab = CombinedTab(rightTab: right, leftTab: left);
+      tabsBloc = _TestTabsBloc(TabsState(tabs: [tab], currentTabIndex: 0));
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      historyBloc = _TestHistoryBloc();
+
+      addTearDown(() async {
+        tab.dispose(); // מפנה גם את right ו-left
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+        await historyBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+        historyBloc: historyBloc,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('לכל חצי יש X משלו, ולחיצה עליו סוגרת רק את החלונית שלו', (
+      tester,
+    ) async {
+      await pumpCombined(tester);
+
+      final closeButtons = find.byTooltip('סגור חלונית');
+      expect(closeButtons, findsNWidgets(2), reason: 'X לכל אחד משני החצאים');
+
+      // ה-X של חצי צמוד לכותרת שלו — מזהים אותו לפי הקרבה אליה, כך שהבדיקה
+      // אינה תלויה בכיוון הפריסה של סביבת הבדיקה (LTR מול RTL באפליקציה).
+      // סימולציית tap נבלעת ע"י ה-reorder recognizer — קוראים ל-onPressed ישירות.
+      final titleCenter = tester.getCenter(find.text('ימין'));
+      final xOfRight = closeButtons
+          .evaluate()
+          .map((e) => find.byWidget(e.widget))
+          .reduce(
+            (a, b) =>
+                (tester.getCenter(a) - titleCenter).distance <
+                    (tester.getCenter(b) - titleCenter).distance
+                ? a
+                : b,
+          );
+      tester
+          .widget<IconButton>(
+            find.descendant(of: xOfRight, matching: find.byType(IconButton)),
+          )
+          .onPressed!();
+      await tester.pump();
+
+      final closed = tabsBloc.addedEvents.whereType<ClosePane>().toList();
+      expect(closed, hasLength(1));
+      expect(closed.single.pane, same(right), reason: 'נסגר רק החצי הימני');
+      expect(tabsBloc.addedEvents.whereType<RemoveTab>(), isEmpty);
+      expect(
+        historyBloc.addedEvents.whereType<AddHistory>().map((e) => e.tab),
+        contains(same(right)),
+        reason: 'החלונית שנסגרה נרשמת בהיסטוריה',
+      );
+    });
+
+    testWidgets('לחיצת גלגלת על חצי סוגרת רק את החלונית שמתחת לסמן', (
+      tester,
+    ) async {
+      await pumpCombined(tester);
+
+      Future<void> middleClickAt(Offset pos) async {
+        final gesture = await tester.startGesture(
+          pos,
+          kind: PointerDeviceKind.mouse,
+          buttons: kMiddleMouseButton,
+        );
+        await gesture.up();
+        await tester.pump();
+      }
+
+      // הלחיצה על כותרת החצי — כך הבדיקה אינה תלויה בכיוון הפריסה.
+      await middleClickAt(tester.getCenter(find.text('ימין')));
+      var closed = tabsBloc.addedEvents.whereType<ClosePane>().toList();
+      expect(closed, hasLength(1));
+      expect(closed.single.pane, same(right));
+
+      await middleClickAt(tester.getCenter(find.text('שמאל')));
+      closed = tabsBloc.addedEvents.whereType<ClosePane>().toList();
+      expect(closed, hasLength(2));
+      expect(closed.last.pane, same(left));
+
+      expect(
+        tabsBloc.addedEvents.whereType<RemoveTab>(),
+        isEmpty,
+        reason: 'גלגלת על לשונית מפוצלת אינה סוגרת את הלשונית כולה',
+      );
+    });
+
+    testWidgets('לחיצת גלגלת על לשונית רגילה עדיין סוגרת את כולה', (
+      tester,
+    ) async {
+      final tab = _makeTextTab('ספר א');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      final historyBloc = _TestHistoryBloc();
+
+      addTearDown(() async {
+        tab.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+        await historyBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+        historyBloc: historyBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('ספר א')),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        tabsBloc.addedEvents.whereType<RemoveTab>().map((e) => e.tab),
+        contains(same(tab)),
+      );
+      expect(tabsBloc.addedEvents.whereType<ClosePane>(), isEmpty);
+    });
   });
 
   group('בחירה וגרירת-סידור של טאבים', () {
@@ -1759,6 +2003,124 @@ void main() {
         resizeCalls,
         contains('maximize'),
         reason: 'לחיצה כפולה על אזור ריק צריכה לשנות את גודל החלון',
+      );
+    });
+  });
+
+  group('ריחוף על כרטיסיה', () {
+    /// שורת כותרת עם [count] כרטיסיות; ככל שיש יותר הן צרות יותר.
+    Future<List<OpenedTab>> pumpTabs(
+      WidgetTester tester,
+      int count, {
+      Size size = const Size(900, 800),
+    }) async {
+      final tabs = List.generate(count, (i) => _makeTextTab('ספר מספר $i'));
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: tabs, currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        for (final t in tabs) {
+          t.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, size);
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+      return tabs;
+    }
+
+    /// מרחף מעל [position] ומחזיר את המחווה, לשחרור בסוף הבדיקה.
+    Future<TestGesture> hoverAt(WidgetTester tester, Offset position) async {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: position);
+      addTearDown(gesture.removePointer);
+      await tester.pumpAndSettle();
+      return gesture;
+    }
+
+    /// המפרידים שבין הכרטיסיות — קווים ברוחב 1 וגובה 24.
+    Iterable<Container> dividers(WidgetTester tester) => tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byType(ReadingTabStrip),
+            matching: find.byType(Container),
+          ),
+        )
+        .where(
+          (c) => c.constraints == BoxConstraints.tightFor(width: 1, height: 24),
+        );
+
+    testWidgets('ה-X מוצג בריחוף גם בכרטיסיה צרה מאוד', (tester) async {
+      // 20 כרטיסיות ברוחב 900 → ~25px לכרטיסיה, פחות מרוחב ה-X המלא.
+      await pumpTabs(tester, 20);
+
+      final tab = find.byType(Tab).at(5);
+      final closeButton = find.descendant(
+        of: tab,
+        matching: find.byIcon(FluentIcons.dismiss_24_regular),
+      );
+      expect(closeButton, findsNothing, reason: 'בלי ריחוף ה-X מוסתר');
+
+      await hoverAt(tester, tester.getCenter(tab));
+      expect(
+        closeButton,
+        findsOneWidget,
+        reason: 'ה-X מצטמצם לרוחב שנותר במקום להיעלם',
+      );
+    });
+
+    testWidgets('ה-tooltip מוצג בריחוף על כל שטח הכרטיסיה', (tester) async {
+      final tabs = await pumpTabs(tester, 12);
+      final title = tabs[5].title;
+      final tabRect = tester.getRect(find.byType(Tab).at(5));
+
+      // פינת הכרטיסיה — הרחק מהכותרת עצמה, ששם היה ה-tooltip קודם.
+      await hoverAt(tester, tabRect.topLeft + const Offset(2, 2));
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(
+        find.text(title),
+        findsNWidgets(2),
+        reason: 'הכותרת שבכרטיסיה ועותק נוסף ב-tooltip שנפתח',
+      );
+    });
+
+    testWidgets('הפסים משני צדי הכרטיסיה שבריחוף נעלמים בלי להזיז דבר', (
+      tester,
+    ) async {
+      final tabs = await pumpTabs(tester, 4, size: const Size(1200, 800));
+
+      final coloredBefore = dividers(
+        tester,
+      ).where((c) => c.color != null).length;
+      expect(coloredBefore, greaterThan(0));
+      final neighborBefore = tester.getTopLeft(find.text(tabs[3].title));
+
+      await hoverAt(tester, tester.getCenter(find.byType(Tab).at(2)));
+
+      expect(
+        dividers(tester).where((c) => c.color != null).length,
+        coloredBefore - 2,
+        reason: 'הפס שלפני הכרטיסיה שבריחוף והפס שאחריה מתבטלים',
+      );
+      expect(
+        tester.getTopLeft(find.text(tabs[3].title)),
+        neighborBefore,
+        reason: 'מקום הפס שמור גם כשאינו נצבע — התוכן לא זז',
       );
     });
   });

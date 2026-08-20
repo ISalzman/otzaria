@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/utils/trackpad_axis_lock.dart';
 
@@ -192,6 +192,16 @@ void main() {
       result = lock.apply(scrollEvent(2, 30)) as PointerScrollEvent;
       expect(lock.lockedAxis, Axis.vertical);
       expect(result.scrollDelta, const Offset(0, 30));
+    });
+  });
+
+  group('pdfPanAxis - מדיניות ציר ה-pan של הצפיין (issue #821)', () {
+    test('בדסקטופ ננעל לציר - מחוות pan מגיעות רק מלוח מגע', () {
+      expect(pdfPanAxis(isMobile: false), PanAxis.aligned);
+    });
+
+    test('במגע גרירה ישירה נשארת חופשית', () {
+      expect(pdfPanAxis(isMobile: true), PanAxis.free);
     });
   });
 }

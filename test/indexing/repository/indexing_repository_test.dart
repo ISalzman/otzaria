@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_test/flutter_test.dart';
@@ -607,6 +609,44 @@ void main() {
         identical(IndexingRepository.stripDataUrisForIndex(text), text),
         isTrue,
       );
+    });
+
+    test('data URI ענק (מיליוני תווים) מסולק בלי Stack Overflow', () {
+      final img = 'data:image/jpeg;base64,${'B' * 5000000}';
+      final text = 'לפני\n$img\nאחרי';
+
+      final stripped = IndexingRepository.stripDataUrisForIndex(text);
+
+      expect(stripped, 'לפני\n\nאחרי');
+    });
+
+    test('רצף data: קצר מ-64 תווים נשמר (אותו מופע)', () {
+      final text = 'ראו data:text/plain,${'A' * 20} בהמשך';
+      expect(
+        identical(IndexingRepository.stripDataUrisForIndex(text), text),
+        isTrue,
+      );
+    });
+  });
+
+  group('IndexingRepository.bytesContainDataUriScheme', () {
+    // מכריעה אם מסלול ה-bytes המהיר של האינדוקס חייב לרדת לפענוח וניקוי.
+    // בלי הניקוי, טביעת האצבע באינדקס לעולם לא תואמת את האימות (issue #828).
+    test('מזהה data: בתוך טקסט UTF-8 עברי', () {
+      final bytes = Uint8List.fromList(
+        utf8.encode('שורה\n<img src="data:image/png;base64,AAAA"/>'),
+      );
+      expect(IndexingRepository.bytesContainDataUriScheme(bytes), isTrue);
+    });
+
+    test('טקסט בלי data: מחזיר false', () {
+      final bytes = Uint8List.fromList(utf8.encode('טקסט רגיל עם date: בלבד'));
+      expect(IndexingRepository.bytesContainDataUriScheme(bytes), isFalse);
+    });
+
+    test('bytes קצרים מהתבנית מחזירים false', () {
+      final bytes = Uint8List.fromList(utf8.encode('dat'));
+      expect(IndexingRepository.bytesContainDataUriScheme(bytes), isFalse);
     });
   });
 

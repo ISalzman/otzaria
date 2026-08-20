@@ -497,14 +497,6 @@ void main() {
       final bloc = _createBloc(
         repository: repository,
         showPageShapeView: true,
-        commentators: const [
-          'אבן עזרא על בראשית',
-          'תרגום אונקלוס על בראשית',
-          'אברבנאל על תורה',
-          'בעל הטורים על בראשית',
-          'כלי יקר על בראשית',
-          'רש"י על בראשית',
-        ],
       );
 
       bloc.add(
@@ -516,16 +508,102 @@ void main() {
         ),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _waitFor(
+        () => bloc.state is TextBookLoaded,
+        description: 'initial load',
+      );
+
+      bloc.add(
+        const UpdateAvailableCommentators(
+          [
+            'אבן עזרא על בראשית',
+            'תרגום אונקלוס על בראשית',
+            'אברבנאל על תורה',
+            'בעל הטורים על בראשית',
+            'כלי יקר על בראשית',
+            'רש"י על בראשית',
+          ],
+          [],
+        ),
+      );
+
+      await _waitFor(
+        () => repository.lastTargetBookTitles?.isNotEmpty == true,
+        description: 'page-shape links load',
+      );
 
       expect(
         repository.lastTargetBookTitles,
-        [
+        unorderedEquals(const [
           'אבן עזרא על בראשית',
           'תרגום אונקלוס על בראשית',
           'אברבנאל על תורה',
           'בעל הטורים על בראשית',
-        ],
+        ]),
+      );
+
+      await bloc.close();
+    });
+
+    test('בצורת הדף גלילה שומרת גם את מפרשי חלונית הצד (issue #906)', () async {
+      final repository = _FakeTextBookRepository();
+      await PageShapeSettingsManager.saveConfiguration(
+        'בראשית',
+        {
+          'left': 'אבן עזרא על בראשית',
+          'right': null,
+          'bottom': null,
+          'bottomRight': null,
+        },
+      );
+
+      final bloc = _createBloc(
+        repository: repository,
+        showPageShapeView: true,
+        commentators: const ['כלי יקר על בראשית'],
+      );
+
+      bloc.add(
+        const LoadContent(
+          fontSize: 20,
+          showSplitView: false,
+          removeNikud: false,
+          loadCommentators: false,
+        ),
+      );
+
+      await _waitFor(
+        () => bloc.state is TextBookLoaded,
+        description: 'initial load',
+      );
+
+      bloc.add(
+        const UpdateAvailableCommentators(
+          ['אבן עזרא על בראשית', 'כלי יקר על בראשית'],
+          [],
+        ),
+      );
+
+      await _waitFor(
+        () => repository.lastTargetBookTitles?.isNotEmpty == true,
+        description: 'page-shape links load',
+      );
+
+      bloc.add(const UpdateVisibleIndecies([84, 85, 86]));
+
+      await _waitFor(
+        () =>
+            (bloc.state as TextBookLoaded).visibleIndices.first == 84 &&
+            repository.lastStartIndex == 24,
+        description: 'links reload after scroll',
+      );
+
+      expect(
+        repository.lastTargetBookTitles,
+        unorderedEquals(const [
+          'אבן עזרא על בראשית',
+          'כלי יקר על בראשית',
+        ]),
       );
 
       await bloc.close();
@@ -568,12 +646,6 @@ void main() {
       final bloc = _createBloc(
         repository: repository,
         showPageShapeView: true,
-        commentators: const [
-          'אבן עזרא על בראשית',
-          'תרגום אונקלוס על בראשית',
-          'אברבנאל על תורה',
-          'בעל הטורים על בראשית',
-        ],
       );
 
       bloc.add(
@@ -586,7 +658,24 @@ void main() {
       );
 
       await _waitFor(
-        () => repository.getBookLinksInRangeCalls >= 1,
+        () => bloc.state is TextBookLoaded,
+        description: 'initial load',
+      );
+
+      bloc.add(
+        const UpdateAvailableCommentators(
+          [
+            'אבן עזרא על בראשית',
+            'תרגום אונקלוס על בראשית',
+            'אברבנאל על תורה',
+            'בעל הטורים על בראשית',
+          ],
+          [],
+        ),
+      );
+
+      await _waitFor(
+        () => repository.lastTargetBookTitles?.isNotEmpty == true,
         description: 'initial links load',
       );
 
@@ -597,7 +686,7 @@ void main() {
         ),
       );
       await _waitFor(
-        () => repository.getBookLinksInRangeCalls >= 2,
+        () => repository.lastTargetBookTitles?.length == 1,
         description: 'workspace-1 links reload',
       );
       expect(repository.lastTargetBookTitles, ['אבן עזרא על בראשית']);
@@ -609,7 +698,9 @@ void main() {
         ),
       );
       await _waitFor(
-        () => repository.getBookLinksInRangeCalls >= 3,
+        () =>
+            repository.lastTargetBookTitles?.length == 1 &&
+            repository.lastTargetBookTitles?.first == 'תרגום אונקלוס על בראשית',
         description: 'workspace-2 links reload',
       );
       expect(repository.lastTargetBookTitles, ['תרגום אונקלוס על בראשית']);

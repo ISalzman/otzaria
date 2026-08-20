@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+// dart:io מגדיר Link משלו (קישור בקובץ־מערכת) שמתנגש ב-Link של הקישורים.
+import 'dart:io' hide Link;
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
+import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -25,6 +27,10 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
@@ -66,15 +72,20 @@ import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
+import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
@@ -89,45 +100,6 @@ import 'package:otzaria/plugins/services/plugin_text_occurrence_service.dart';
 import 'package:otzaria/plugins/services/text_source_map_service.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
-
-// ===================================================================
-// Spec-compliant allowlist for settings.get/getMany
-// keys a plugin CAN read (from plugin_system_plan.md#L954)
-// ===================================================================
-const _settingsAllowlist = {
-  SettingsRepository.keyDarkMode,
-  SettingsRepository.keyFollowSystemTheme,
-  SettingsRepository.keySwatchColor,
-  SettingsRepository.keyDarkSwatchColor,
-  SettingsRepository.keyFontSize,
-  SettingsRepository.keyFontFamily,
-  SettingsRepository.keyCommentatorsFontFamily,
-  SettingsRepository.keyCommentatorsFontSize,
-  SettingsRepository.keyLineHeight,
-  SettingsRepository.keySelectedCity,
-  SettingsRepository.keyCalendarType,
-  SettingsRepository.keySettingsLanguage,
-  SettingsRepository.keyShowTeamim,
-  SettingsRepository.keyDefaultNikud,
-  SettingsRepository.keyRemoveNikudFromTanach,
-  SettingsRepository.keyReplaceHolyNames,
-  SettingsRepository.keyLibraryViewMode,
-  SettingsRepository.keyCopyWithHeaders,
-  SettingsRepository.keyCopyHeaderFormat,
-  SettingsRepository.keyHebrewBooksPath,
-};
-
-// keys a plugin CANNOT read even if attempted
-const _settingsBlocklist = {
-  SettingsRepository.keyProtectedModePasswordHash,
-  SettingsRepository.keyGoogleCalendarClientSecret,
-  SettingsRepository.keyGoogleCalendarCredentialsJson,
-  SettingsRepository.keyDbEffectivePath,
-  SettingsRepository.keyLibraryPath,
-  SettingsRepository.keyIndexPath,
-  SettingsRepository.keyBackupPath,
-  SettingsRepository.keyErrorReportSenderEmail,
-};
 
 // ===================================================================
 // Helper: build the main colorScheme roles + typography from Flutter theme
@@ -328,10 +300,35 @@ class PluginBridgeDependencies {
   final Future<List<AltTocEntryRow>> Function(int structureId)?
   altTocEntriesProvider;
 
+  /// מקור הקישורים והמפרשים ל-`library.getLinks` / `library.getCommentators`.
+  /// אופציונלי — ברירת המחדל היא [TextBookRepository] מעל מערכת הקבצים.
+  final TextBookRepository? textBookRepository;
+
+  /// סיכום יעדי הקישורים של ספר (`library.getLinkTargetsSummary`). אופציונלי —
+  /// ברירת המחדל היא [DatabaseLibraryProvider.instance].
+  final Future<({List<LinkTargetSummary> targets, int maxSourceLine})?>
+  Function(String title, int categoryId)?
+  linkTargetsSummaryProvider;
+
+  /// טוען את תוכן הקישור (`library.getLinkContent`). אופציונלי — ברירת המחדל
+  /// היא [Link.content] עם המטמון שלו.
+  final Future<String> Function(Link link)? linkContentLoader;
+
   /// `plugin.backgroundDone` — התוסף מכריז שסיים את עבודת הרקע. מחווט רק
   /// במופע הרקע (PluginBackgroundHost); בדף התוסף נשאר null, כך שקריאה
   /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
   final bool Function()? onBackgroundInstanceDone;
+
+  /// שולח אירוע ממוקד לתוסף (לחיצה על הודעת snack) — עם [instanceId]
+  /// האירוע חוזר למופע שהציג את ההודעה. אופציונלי — ברירת המחדל היא
+  /// [PluginRuntimeDispatcher.dispatchEventToPlugin]; קיים להזרקה בבדיקות.
+  final Future<void> Function(
+    String pluginId,
+    String topic,
+    Map<String, dynamic> payload, {
+    String? instanceId,
+  })?
+  dispatchEventToPlugin;
 
   const PluginBridgeDependencies({
     required this.historyBloc,
@@ -352,9 +349,20 @@ class PluginBridgeDependencies {
     this.resolveRefToLine,
     this.altStructuresProvider,
     this.altTocEntriesProvider,
+    this.textBookRepository,
+    this.linkTargetsSummaryProvider,
+    this.linkContentLoader,
     this.onBackgroundInstanceDone,
+    this.dispatchEventToPlugin,
   });
 }
+
+/// חלון השורות המרבי לקריאת `library.getLinks` אחת, ותקרת הרשומות בתשובה.
+const int _pluginLinksMaxWindowLines = 200;
+const int _pluginLinksMaxRecords = 2000;
+
+/// מספר הפריטים המרבי בקריאת `library.getLinkContent` אחת.
+const int _pluginLinkContentMaxItems = 25;
 
 typedef PluginRpcEventSink =
     Future<void> Function(
@@ -383,6 +391,10 @@ class _PluginNetworkRequest {
 // ===================================================================
 class PluginBridgeAdapter {
   final InstalledPlugin plugin;
+
+  /// מזהה מופע הריצה שה-adapter משרת (טאב או 'background') — רישומי ה-UI
+  /// וההדגשות ממופתחים לפיו, וניקויים ב-dispose מסיר רק אותם.
+  final String instanceId;
   final PluginRegistryRepository _pluginRepo;
   final PluginBridgeDependencies _dependencies;
   final NotificationService _notificationService;
@@ -392,6 +404,7 @@ class PluginBridgeAdapter {
   PluginBridgeAdapter(
     this.plugin, {
     required this._dependencies,
+    this.instanceId = PluginInstanceIds.defaultForeground,
     PluginRegistryRepository? pluginRepository,
     NotificationService? notificationService,
     PluginDatabaseService? databaseService,
@@ -401,7 +414,9 @@ class PluginBridgeAdapter {
     PluginShortcutService? shortcutService,
     PluginFileServer? fileServer,
     PluginHighlightRegistry? highlightRegistry,
+    PluginReportService? reportService,
   }) : _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
+       _pluginReportService = reportService,
        _notificationService = notificationService ?? NotificationService(),
        _databaseService = databaseService ?? PluginDatabaseService(),
        _highlightRegistry =
@@ -424,6 +439,12 @@ class PluginBridgeAdapter {
   // נוצר עם השימוש הראשון. אינו מחזיק משאבים ולכן אינו דורש שחרור ב-dispose.
   PluginFsService? _pluginFsService;
   PluginFsService get _fsService => _pluginFsService ??= PluginFsService();
+
+  // שירות שליחת דיווחי משתמש על התוסף (feedback.report) — מופע יחיד לכל
+  // adapter, נוצר עם השימוש הראשון.
+  PluginReportService? _pluginReportService;
+  PluginReportService get _reportService =>
+      _pluginReportService ??= PluginReportService();
 
   // שירות יצירת קיצורי דרך (shortcut.create) — מופע יחיד לכל adapter.
   PluginShortcutService? _pluginShortcutService;
@@ -483,6 +504,12 @@ class PluginBridgeAdapter {
   }
 
   void dispose() {
+    // מסיר רק את תרומות המופע הזה — מופע אחר של אותו תוסף ממשיך לתפקד,
+    // וה-dedup בציור חושף את העותקים שלו.
+    final key = (pluginId: plugin.pluginId, instanceId: instanceId);
+    ContextMenuRegistry.instance.removeInstance(key);
+    PluginToolbarRegistry.instance.removeInstance(key);
+    _highlightRegistry.removeInstance(key);
     for (final cancel in _activeSearchStreams.values) {
       unawaited(cancel());
     }
@@ -864,9 +891,280 @@ class PluginBridgeAdapter {
             : _findCategoryByPath(library, path);
         if (root == null) return null;
         return _categoryToTree(root, includeBooks: includeBooks);
+      case 'getCommentators':
+        return await _getCommentators(library, args);
+      case 'getLinks':
+        return await _getLinks(library, args);
+      case 'getLinkTargetsSummary':
+        return await _getLinkTargetsSummary(library, args);
+      case 'getLinkContent':
+        return await _getLinkContent(args);
       default:
         throw Exception('Unknown action in library: $action');
     }
+  }
+
+  // ----------------------------------------------------------------
+  // library.* — מפרשים וקישורים
+  // ----------------------------------------------------------------
+
+  TextBookRepository get _linksRepository =>
+      _dependencies.textBookRepository ??
+      TextBookRepository(fileSystem: FileSystemData.instance);
+
+  /// מאתר את ספר הטקסט של קריאות הקישורים. `bookId` (=כותרת) עם `categoryId`
+  /// אופציונלי שמכריע בין ספרים שווי-שם; אחרת נופל לזיהוי הרגיל לפי `id`.
+  TextBook? _findLinksTextBook(Library library, Map<String, dynamic> args) {
+    _ensureBookIndex(library);
+    final bookId = (args['bookId'] ?? args['title']) as String?;
+    if (PluginBookIdentity.parseId(args['id']) == null && bookId != null) {
+      final categoryId = args['categoryId'] as int?;
+      return (_booksByTitle[bookId] ?? const <Book>[])
+          .whereType<TextBook>()
+          .where((b) => categoryId == null || b.categoryId == categoryId)
+          .firstOrNull;
+    }
+    final book = _findPluginBook(library, args);
+    return book is TextBook ? book : null;
+  }
+
+  /// קורא מספר שורה מה-wire (0-based) ומאמת שהוא שלם אי-שלילי.
+  int _requireWireLine(dynamic raw, String name) {
+    if (raw is! int || raw < 0) {
+      throw Exception(
+        'error.invalid_params: $name must be a non-negative integer',
+      );
+    }
+    return raw;
+  }
+
+  List<String>? _optionalStringList(dynamic raw, String name) {
+    if (raw == null) return null;
+    if (raw is! List) {
+      throw Exception('error.invalid_params: $name must be an array');
+    }
+    final values = <String>[];
+    for (final item in raw) {
+      if (item is! String || item.trim().isEmpty) {
+        throw Exception('error.invalid_params: $name entries must be strings');
+      }
+      values.add(item.trim());
+    }
+    return values;
+  }
+
+  Future<dynamic> _getCommentators(
+    Library library,
+    Map<String, dynamic> args,
+  ) async {
+    final rawStart = args['startLine'];
+    final rawEnd = args['endLine'];
+    if ((rawStart == null) != (rawEnd == null)) {
+      throw Exception(
+        'error.invalid_params: startLine and endLine must be given together',
+      );
+    }
+    final book = _findLinksTextBook(library, args);
+    if (book == null) throw Exception('error.not_found: book not found');
+
+    final List<CommentatorInfo> commentators;
+    Set<String> rare = const {};
+    if (rawStart != null) {
+      final startLine = _requireWireLine(rawStart, 'startLine');
+      final endLine = _requireWireLine(rawEnd, 'endLine');
+      if (endLine < startLine) {
+        throw Exception('error.invalid_params: endLine must be >= startLine');
+      }
+      commentators = await _linksRepository.getCommentatorsInLineRange(
+        book,
+        startLine: startLine,
+        endLine: endLine,
+      );
+    } else {
+      final detailed = await _linksRepository.getCommentatorsDetailed(book);
+      commentators = detailed.commentators;
+      rare = detailed.rare;
+    }
+
+    if (args['grouped'] as bool? ?? false) {
+      final titles = [for (final c in commentators) c.title];
+      final eras = await splitByEra(titles);
+      return {
+        'groups': _commentatorGroupsToJson(
+          buildCommentatorGroups(eras, titles),
+        ),
+      };
+    }
+
+    return {
+      'commentators': [
+        for (final c in commentators)
+          {
+            'title': c.title,
+            if (c.author != null && c.author!.isNotEmpty) 'author': c.author,
+            'linkCount': c.linkCount,
+            'isRare': rare.contains(c.title),
+          },
+      ],
+    };
+  }
+
+  List<Map<String, dynamic>> _commentatorGroupsToJson(
+    List<CommentatorGroup> groups,
+  ) => [
+    for (final group in groups)
+      if (group.commentators.isNotEmpty)
+        {'title': group.title, 'commentators': group.commentators},
+  ];
+
+  Future<dynamic> _getLinks(Library library, Map<String, dynamic> args) async {
+    final startLine = _requireWireLine(args['startLine'], 'startLine');
+    final endLine = _requireWireLine(args['endLine'], 'endLine');
+    if (endLine < startLine) {
+      throw Exception('error.invalid_params: endLine must be >= startLine');
+    }
+    if (endLine - startLine + 1 > _pluginLinksMaxWindowLines) {
+      throw Exception(
+        'error.invalid_params: line window must not exceed '
+        '$_pluginLinksMaxWindowLines lines',
+      );
+    }
+    final targetTitles = _optionalStringList(
+      args['targetTitles'],
+      'targetTitles',
+    );
+    final connectionTypes = _optionalStringList(
+      args['connectionTypes'],
+      'connectionTypes',
+    );
+    final includeAnchors = args['includeAnchors'] as bool? ?? false;
+
+    final book = _findLinksTextBook(library, args);
+    if (book == null) throw Exception('error.not_found: book not found');
+
+    final links = await _linksRepository.getBookLinksInRange(
+      book,
+      startIndex: startLine,
+      endIndex: endLine,
+      targetBookTitles: targetTitles,
+    );
+
+    final titlesFilter = targetTitles?.toSet();
+    final typesFilter = connectionTypes?.map(LinkTypes.normalize).toSet();
+    final records = <Map<String, dynamic>>[];
+    var truncated = false;
+    for (final link in links) {
+      final targetTitle = getTitleFromPath(link.path2);
+      if (titlesFilter != null && !titlesFilter.contains(targetTitle)) continue;
+      if (typesFilter != null &&
+          !typesFilter.contains(LinkTypes.normalize(link.connectionType)) &&
+          !typesFilter.contains(LinkTypes.canonicalType(link.connectionType))) {
+        continue;
+      }
+      if (records.length >= _pluginLinksMaxRecords) {
+        truncated = true;
+        break;
+      }
+      // index1/index2 הם 1-based במודל; ה-wire כולו 0-based — זו נקודת ההמרה.
+      records.add({
+        'sourceLine': link.index1 - 1,
+        'targetTitle': targetTitle,
+        'targetLine': link.index2 - 1,
+        'targetLineEnd': link.index2End == null ? null : link.index2End! - 1,
+        'targetHeRef': link.heRef,
+        'connectionType': link.connectionType,
+        'isCommentary': LinkTypes.isDependentTextLink(link.connectionType),
+        'targetIsUserBook': link.targetIsUserBook,
+        'targetCategoryId': link.targetCategoryId,
+        if (includeAnchors) ...?_linkAnchorJson(link),
+      });
+    }
+    return {'links': records, 'truncated': truncated};
+  }
+
+  Map<String, dynamic>? _linkAnchorJson(Link link) {
+    final span = link.anchorSpans.firstOrNull;
+    final start = span?.start ?? link.anchorStart;
+    if (start == null) return null;
+    return {
+      'anchor': {
+        'start': start,
+        'end': span?.end ?? link.anchorEnd,
+        'label': span?.label ?? link.anchorLabel,
+      },
+    };
+  }
+
+  Future<dynamic> _getLinkTargetsSummary(
+    Library library,
+    Map<String, dynamic> args,
+  ) async {
+    final book = _findLinksTextBook(library, args);
+    if (book?.categoryId == null) {
+      throw Exception('error.not_found: book not found');
+    }
+    final provider =
+        _dependencies.linkTargetsSummaryProvider ??
+        DatabaseLibraryProvider.instance.getBookLinkTargetsSummary;
+    final summary = await provider(book!.title, book.categoryId!);
+    if (summary == null) {
+      throw Exception('error.internal: link targets summary unavailable');
+    }
+    return {
+      'targets': [
+        for (final target in summary.targets)
+          {
+            'targetTitle': target.targetTitle,
+            'connectionType': target.connectionType,
+            'linkCount': target.linkCount,
+          },
+      ],
+      // maxSourceLine מגיע 1-based מהמסד; ‎-1‎ = לספר אין קישורים כלל.
+      'maxSourceLine': summary.maxSourceLine - 1,
+    };
+  }
+
+  Future<dynamic> _getLinkContent(Map<String, dynamic> args) async {
+    final rawItems = args['links'];
+    if (rawItems is! List ||
+        rawItems.isEmpty ||
+        rawItems.length > _pluginLinkContentMaxItems) {
+      throw Exception(
+        'error.invalid_params: links must be an array with at most '
+        '$_pluginLinkContentMaxItems entries',
+      );
+    }
+    final loader = _dependencies.linkContentLoader;
+    final items = <Map<String, dynamic>>[];
+    for (final raw in rawItems) {
+      if (raw is! Map) {
+        throw Exception('error.invalid_params: links entries must be objects');
+      }
+      final targetTitle = raw['targetTitle'];
+      final targetLine = raw['targetLine'];
+      if (targetTitle is! String || targetTitle.isEmpty || targetLine is! int) {
+        throw Exception(
+          'error.invalid_params: targetTitle and targetLine are required',
+        );
+      }
+      final targetLineEnd = raw['targetLineEnd'];
+      final link = Link(
+        heRef: targetTitle,
+        index1: 1,
+        path2: targetTitle,
+        index2: targetLine + 1,
+        index2End: targetLineEnd is int ? targetLineEnd + 1 : null,
+        connectionType: LinkTypes.commentary,
+        targetCategoryId: raw['targetCategoryId'] as int?,
+        targetIsUserBook: raw['targetIsUserBook'] as bool? ?? false,
+      );
+      try {
+        items.add({'content': await (loader?.call(link) ?? link.content)});
+      } catch (_) {
+        items.add(const {'error': 'not_found'});
+      }
+    }
+    return {'items': items};
   }
 
   /// טוען את מבני ה-AltToc של ספר (דרך התלות המוזרקת או ה-DB).
@@ -1304,6 +1602,7 @@ class PluginBridgeAdapter {
                 .toList(),
             query: args['query'] as String? ?? '',
             error: args['error'] as String?,
+            instanceId: instanceId,
           );
           if (!accepted) {
             throw Exception(
@@ -1387,6 +1686,7 @@ class PluginBridgeAdapter {
             done: args['done'] != false,
             index: args['index'] as List?,
             error: args['error'] as String?,
+            instanceId: instanceId,
           );
           if (!accepted) {
             throw Exception(
@@ -1550,6 +1850,8 @@ class PluginBridgeAdapter {
           };
         }
         return snapshot.toJson();
+      case 'getActiveCommentators':
+        return _getActiveCommentators();
       case 'getSelection':
         final currentPane = _dependencies.tabsBloc.state.readingPane;
         final snapshot = await resolveReaderLocation(currentPane);
@@ -1559,12 +1861,21 @@ class PluginBridgeAdapter {
       case 'getSectionTextMap':
         return _getSectionTextMap(args);
       case 'addContextMenuItem':
-        ContextMenuRegistry.instance.registerPayload(plugin.pluginId, args);
+        ContextMenuRegistry.instance.registerPayload(
+          plugin.pluginId,
+          args,
+          instanceId: instanceId,
+        );
+        await _trackWhenStorageKeys(args);
         return true;
       case 'removeContextMenuItem':
         final id = args['id'] as String?;
         if (id == null) throw Exception('error.invalid_params: id required');
-        ContextMenuRegistry.instance.remove(plugin.pluginId, id);
+        ContextMenuRegistry.instance.remove(
+          plugin.pluginId,
+          id,
+          instanceId: instanceId,
+        );
         return true;
       case 'updateContextMenuItem':
         final id = args['id'];
@@ -1579,15 +1890,26 @@ class PluginBridgeAdapter {
           plugin.pluginId,
           id,
           Map<String, dynamic>.from(patch),
+          instanceId: instanceId,
         );
+        await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'addToolbarItem':
-        PluginToolbarRegistry.instance.registerPayload(plugin.pluginId, args);
+        PluginToolbarRegistry.instance.registerPayload(
+          plugin.pluginId,
+          args,
+          instanceId: instanceId,
+        );
+        await _trackWhenStorageKeys(args);
         return true;
       case 'removeToolbarItem':
         final id = args['id'] as String?;
         if (id == null) throw Exception('error.invalid_params: id required');
-        PluginToolbarRegistry.instance.remove(plugin.pluginId, id);
+        PluginToolbarRegistry.instance.remove(
+          plugin.pluginId,
+          id,
+          instanceId: instanceId,
+        );
         return true;
       case 'updateToolbarItem':
         final id = args['id'];
@@ -1602,12 +1924,18 @@ class PluginBridgeAdapter {
           plugin.pluginId,
           id,
           Map<String, dynamic>.from(patch),
+          instanceId: instanceId,
         );
+        await _trackWhenStorageKeys(Map<String, dynamic>.from(patch));
         return true;
       case 'setHighlight':
         if (args['range'] is Map && args['style'] is Map) {
           return _highlightRegistry
-              .setHighlight(ownerPluginId: plugin.pluginId, payload: args)
+              .setHighlight(
+                ownerPluginId: plugin.pluginId,
+                ownerInstanceId: instanceId,
+                payload: args,
+              )
               .toJson();
         }
         final bookId = args['bookId'];
@@ -1626,6 +1954,7 @@ class PluginBridgeAdapter {
         }
         _highlightRegistry.setLegacyHighlight(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: bookId,
           sectionIndex: index,
           color: color as String?,
@@ -1634,7 +1963,11 @@ class PluginBridgeAdapter {
         return true;
       case 'updateHighlight':
         return _highlightRegistry
-            .updateHighlight(ownerPluginId: plugin.pluginId, payload: args)
+            .updateHighlight(
+              ownerPluginId: plugin.pluginId,
+              ownerInstanceId: instanceId,
+              payload: args,
+            )
             .toJson();
       case 'getHighlights':
         final bookId = args['bookId'];
@@ -1649,6 +1982,7 @@ class PluginBridgeAdapter {
         return _highlightRegistry
             .getHighlights(
               ownerPluginId: plugin.pluginId,
+              ownerInstanceId: instanceId,
               bookId: bookId as String?,
               sectionIndex: sectionIndex as int?,
               includeStale: args['includeStale'] == true,
@@ -1665,6 +1999,7 @@ class PluginBridgeAdapter {
         }
         final matches = _highlightRegistry.getHighlights(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           includeStale: true,
         );
         final highlight = matches.cast<dynamic>().firstWhere(
@@ -1696,6 +2031,7 @@ class PluginBridgeAdapter {
         if (highlightId is String) {
           final removed = _highlightRegistry.clearHighlight(
             ownerPluginId: plugin.pluginId,
+            ownerInstanceId: instanceId,
             highlightId: highlightId,
             expectedVersion: args['expectedVersion'],
             expectedEtag: args['expectedEtag'],
@@ -1718,6 +2054,7 @@ class PluginBridgeAdapter {
         }
         final matches = _highlightRegistry.getHighlights(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: legacyBookId,
           sectionIndex: legacyIndex,
           includeStale: true,
@@ -1725,6 +2062,7 @@ class PluginBridgeAdapter {
         for (final match in matches) {
           _highlightRegistry.clearHighlight(
             ownerPluginId: plugin.pluginId,
+            ownerInstanceId: instanceId,
             highlightId: match.highlightId,
           );
         }
@@ -1741,6 +2079,7 @@ class PluginBridgeAdapter {
         }
         _highlightRegistry.clearAll(
           ownerPluginId: plugin.pluginId,
+          ownerInstanceId: instanceId,
           bookId: bookId as String?,
           sectionIndex: sectionIndex as int?,
         );
@@ -2146,13 +2485,22 @@ class PluginBridgeAdapter {
   Future<dynamic> _handleUi(String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'showMessage':
-        UiSnack.show(args['message'] as String? ?? '');
+        UiSnack.show(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showSuccess':
-        UiSnack.showSuccess(args['message'] as String? ?? '');
+        UiSnack.showSuccess(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showError':
-        UiSnack.showError(args['message'] as String? ?? '');
+        UiSnack.showError(
+          args['message'] as String? ?? '',
+          onTap: _messageTapHandler(args),
+        );
         return true;
       case 'showConfirm':
         final result = await _dependencies.showConfirmDialog(
@@ -2181,6 +2529,40 @@ class PluginBridgeAdapter {
       default:
         throw Exception("Unknown action in ui: $action");
     }
+  }
+
+  static final _tapEventTopicPattern = RegExp(r'^[A-Za-z0-9._-]{1,64}$');
+
+  /// בונה מטפל לחיצה להודעת snack: הלחיצה משגרת לתוסף את האירוע שביקש
+  /// ב-`tapEvent` (או `ui.messageClicked`) עם `tapPayload`. null כשלא התבקש.
+  VoidCallback? _messageTapHandler(Map<String, dynamic> args) {
+    final openPlugin = args['tapOpenPlugin'] == true;
+    if (!openPlugin &&
+        !args.containsKey('tapEvent') &&
+        !args.containsKey('tapPayload')) {
+      return null;
+    }
+    final topic = args['tapEvent'] as String? ?? 'ui.messageClicked';
+    // שם האירוע משוקע לתוך JS בעת השיגור — תבנית קשיחה חוסמת הזרקת קוד.
+    if (!_tapEventTopicPattern.hasMatch(topic)) {
+      throw Exception('Invalid tapEvent: $topic');
+    }
+    final payload = <String, dynamic>{'payload': args['tapPayload']};
+    if (openPlugin) {
+      // ניווט לדף התוסף עם מסירת האירוע — כמו openPlugin בתפריט ההקשר.
+      return () => PluginPageLauncher.instance.open(
+        plugin.pluginId,
+        topic: topic,
+        payload: payload,
+      );
+    }
+    final dispatch =
+        _dependencies.dispatchEventToPlugin ??
+        PluginRuntimeDispatcher.instance.dispatchEventToPlugin;
+    // הלחיצה חוזרת למופע שהציג את ההודעה — לא לבחירת הדיספצ'ר.
+    return () => unawaited(
+      dispatch(plugin.pluginId, topic, payload, instanceId: instanceId),
+    );
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
@@ -2473,6 +2855,24 @@ class PluginBridgeAdapter {
     }
   }
 
+  /// רושם למעקב את מפתחות ה-KV של תנאי ה-`when` בפריט שנרשם בזמן ריצה,
+  /// אחרת הסינון שלו לא יגיב ל-`storage.set`.
+  Future<void> _trackWhenStorageKeys(Map<String, dynamic> args) async {
+    final raw = args['when'];
+    if (raw == null) return;
+    try {
+      final keys = PluginWhenCondition.fromJson(raw).storageKeys;
+      if (keys.isEmpty) return;
+      await PluginConditionEvaluator.instance.trackStorageKeys(
+        plugin.pluginId,
+        keys,
+        _pluginRepo,
+      );
+    } on PluginWhenConditionException {
+      return;
+    }
+  }
+
   // ----------------------------------------------------------------
   // storage.*
   // ----------------------------------------------------------------
@@ -2484,7 +2884,11 @@ class PluginBridgeAdapter {
       case 'get':
         final key = args['key'] as String?;
         if (key == null) throw Exception("key required");
-        final value = await _pluginRepo.getKV(plugin.pluginId, 'default', key);
+        final value = await _pluginRepo.getKV(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+          key,
+        );
         return value != null ? jsonDecode(value) : null;
       case 'set':
         final key = args['key'] as String?;
@@ -2494,18 +2898,34 @@ class PluginBridgeAdapter {
         }
         await _pluginRepo.setKV(
           plugin.pluginId,
-          'default',
+          kDefaultStorageNamespace,
           key,
           jsonEncode(value),
+        );
+        PluginConditionEvaluator.instance.onStorageValueChanged(
+          plugin.pluginId,
+          key,
+          value,
         );
         return true;
       case 'remove':
         final key = args['key'] as String?;
         if (key == null) throw Exception("key required");
-        await _pluginRepo.removeKV(plugin.pluginId, 'default', key);
+        await _pluginRepo.removeKV(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+          key,
+        );
+        PluginConditionEvaluator.instance.onStorageRemoved(
+          plugin.pluginId,
+          key,
+        );
         return true;
       case 'list':
-        return _pluginRepo.listKVKeys(plugin.pluginId, 'default');
+        return _pluginRepo.listKVKeys(
+          plugin.pluginId,
+          kDefaultStorageNamespace,
+        );
       default:
         throw Exception("Unknown action in storage: $action");
     }
@@ -2518,8 +2938,7 @@ class PluginBridgeAdapter {
     String action,
     Map<String, dynamic> args,
   ) async {
-    bool isAllowed(String key) =>
-        _settingsAllowlist.contains(key) && !_settingsBlocklist.contains(key);
+    bool isAllowed(String key) => PluginSettingsAccessPolicy.isReadable(key);
 
     switch (action) {
       case 'get':
@@ -2783,6 +3202,65 @@ class PluginBridgeAdapter {
           throw Exception('Failed to open email client: $e');
         }
 
+      case 'report':
+        final rawDetails = args['details'];
+        final details = rawDetails is String ? rawDetails.trim() : '';
+        if (details.isEmpty) {
+          throw Exception('details required');
+        }
+        final cappedDetails =
+            details.length > PluginReportService.maxDetailsLength
+            ? details.substring(0, PluginReportService.maxDetailsLength)
+            : details;
+
+        // המייל השמור בהגדרות גובר — כתובת מהתוסף משמשת רק כשאין שמור,
+        // כדי שתוסף לא יוכל לעקוף את הכתובת שהמשתמש קבע.
+        final rawEmail = args['reporterEmail'];
+        var email =
+            Settings.getValue<String>(
+              SettingsRepository.keyErrorReportSenderEmail,
+            )?.trim() ??
+            '';
+        if (email.isEmpty && rawEmail is String) {
+          email = rawEmail.trim();
+        }
+
+        final preview = cappedDetails.length > 300
+            ? '${cappedDetails.substring(0, 300)}…'
+            : cappedDetails;
+        // הדיאלוג הוא גבול האבטחה, ולכן חייב לחשוף גם את הכתובת שתישלח —
+        // היא עשויה להגיע מהגדרות המשתמש בלי שהתוסף ביקש אותה.
+        final emailLine = email.isEmpty ? '' : '\n\nכתובת לחזרה: $email';
+        final confirmed = await _dependencies.showConfirmDialog(
+          title: 'שליחת דיווח למפתח התוסף',
+          content:
+              'התוסף "${plugin.name}" מבקש לשלוח דיווח לאתר אוצריא, '
+              'שיעביר אותו למפתח התוסף.\n\nתוכן הדיווח:\n$preview$emailLine',
+        );
+        if (!confirmed) {
+          return 'cancelled';
+        }
+
+        final record = await _reportService.buildRecord(
+          pluginUid: plugin.pluginId,
+          pluginName: plugin.name,
+          pluginVersion: plugin.version,
+          details: cappedDetails,
+          reportType: args['reportType'] is String
+              ? args['reportType'] as String
+              : null,
+          reporterEmail: email.isEmpty ? null : email,
+        );
+        final status = await _reportService.submitReport(record);
+        return status == PluginReportDeliveryStatus.sent ? 'sent' : 'queued';
+
+      // ביט אחד בלבד: קיום כתובת שמורה, בלי לחשוף את הכתובת עצמה לתוסף.
+      case 'hasReporterEmail':
+        final saved = Settings.getValue<String>(
+          SettingsRepository.keyErrorReportSenderEmail,
+        )?.trim();
+        return saved != null && saved.isNotEmpty;
+
       default:
         throw Exception('Unknown action in feedback: $action');
     }
@@ -2897,16 +3375,17 @@ class PluginBridgeAdapter {
           throw Exception('message required');
         }
 
+        final onTap = _messageTapHandler(args);
         switch (type) {
           case 'success':
-            UiSnack.showSuccess(message);
+            UiSnack.showSuccess(message, onTap: onTap);
             break;
           case 'error':
-            UiSnack.showError(message);
+            UiSnack.showError(message, onTap: onTap);
             break;
           case 'info':
           default:
-            UiSnack.show(message);
+            UiSnack.show(message, onTap: onTap);
             break;
         }
         return true;
@@ -3246,14 +3725,7 @@ class PluginBridgeAdapter {
   }
 
   Future<List<String>> _getGrantedPermissions() async {
-    final permissions = await _pluginRepo.getPluginPermissions(plugin.pluginId);
-    final grantedPermissions =
-        permissions
-            .where((permission) => permission.granted)
-            .map((permission) => permission.permission)
-            .toList()
-          ..sort();
-    return grantedPermissions;
+    return _pluginRepo.getGrantedPermissionNames(plugin.pluginId);
   }
 
   /// הספר שמייצג טאב כלפי התוספים.
@@ -3261,6 +3733,43 @@ class PluginBridgeAdapter {
   /// בטאב מפוצל הכותרת המשולבת אינה ספר, ולכן מדווחת החלונית הפעילה (ובטאב
   /// שאינו הנוכחי — הראשונה). דיווח כל החלוניות מחייב הרחבת הסכמה של
   /// `openTabs`, שהיא שינוי API בפני עצמו.
+  /// מצב המפרשים של טאב הקריאה כפי שהוא כבר טעון בטאב — בלי שאילתה נוספת.
+  /// `null` כשאין טאב קריאה, כשמצב הטאב עדיין לא נטען או כשאין בו מפרשים.
+  Map<String, dynamic>? _getActiveCommentators() {
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is TextBookTab) {
+      final state = pane.bloc.state;
+      if (state is! TextBookLoaded) return null;
+      if (state.availableCommentators.isEmpty &&
+          state.activeCommentators.isEmpty) {
+        return null;
+      }
+      return {
+        'available': state.availableCommentators,
+        'active': state.activeCommentators,
+        'rare': state.rareCommentators.toList()..sort(),
+        'groups': _commentatorGroupsToJson(state.commentatorGroups),
+      };
+    }
+    if (pane is PdfBookTab) {
+      // ל-PDF אין מצב מפרשים טעון; הרשימה נגזרת מהקישורים שכבר בטאב.
+      final available = <String>{
+        for (final link in pane.links)
+          if (LinkTypes.isDependentTextLink(link.connectionType))
+            getTitleFromPath(link.path2),
+      }.toList()..sort();
+      final active = pane.activeCommentators.toList()..sort();
+      if (available.isEmpty && active.isEmpty) return null;
+      return {
+        'available': available,
+        'active': active,
+        'rare': const <String>[],
+        'groups': const <Map<String, dynamic>>[],
+      };
+    }
+    return null;
+  }
+
   OpenedTab _paneForPlugins(OpenedTab tab) {
     if (tab is! CombinedTab) return tab;
     final state = _dependencies.tabsBloc.state;
@@ -3427,6 +3936,24 @@ class PluginBridgeAdapter {
           plugin.pluginId,
           topic: 'plugin.page_opened',
           payload: {'param': args['param']},
+        );
+        return true;
+      case 'openOther':
+        final targetId = (args['pluginId'] as String?)?.trim();
+        if (targetId == null || targetId.isEmpty) {
+          throw Exception('error.invalid_params: pluginId required');
+        }
+        // רק תוסף מותקן — כלים מובנים אינם נפתחים בערוץ הזה, כדי שההרשאה
+        // תישאר במשמעות שהוצגה למשתמש. שאר סיבות אי-הזמינות (מושבת, מוסתר,
+        // מנותק) נשארות ל-openToolTabById, שמציג הודעה מדויקת אחת.
+        final installed = await _pluginRepo.getAllPlugins();
+        if (!installed.any((p) => p.pluginId == targetId)) {
+          throw Exception('error.not_found: plugin not installed: $targetId');
+        }
+        PluginPageLauncher.instance.open(
+          targetId,
+          topic: 'plugin.page_opened',
+          payload: {'param': args['param'], 'openedBy': plugin.pluginId},
         );
         return true;
       case 'backgroundDone':

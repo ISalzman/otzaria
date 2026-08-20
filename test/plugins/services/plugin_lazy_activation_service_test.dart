@@ -1,17 +1,25 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 
 void main() {
   late PluginLazyActivationService service;
+  late Map<String, Object?> settings;
   late List<String> activations;
   late List<(String pluginId, String topic, Map<String, dynamic> payload)>
   delivered;
 
   setUp(() {
-    service = PluginLazyActivationService.forTesting()
-      ..startupDelayOverride = Duration.zero;
+    settings = {};
+    service = PluginLazyActivationService.forTesting(
+      conditionEvaluator: PluginConditionEvaluator.forTesting(
+        settingReader: (key) => settings[key],
+      ),
+    )..startupDelayOverride = Duration.zero;
     activations = [];
     delivered = [];
     service.backgroundActivator = (pluginId) async {
@@ -390,5 +398,167 @@ void main() {
 
     expect(service.isBootPending('p1'), isTrue);
     expect(activations, ['p1', 'p1']);
+  });
+
+  group('תנאי when על נושאי הפעלה', () {
+    PluginWhenCondition darkModeIs(bool value) => PluginWhenCondition.fromJson({
+      'setting': {'key': SettingsRepository.keyDarkMode, 'equals': value},
+    });
+
+    test('אירוע ממוקד נזרק כשהתנאי לא מתקיים', () {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+
+      expect(
+        service.queueTargetedEvent('p1', 'reader.sectionContentChanged', {}),
+        isFalse,
+      );
+      expect(activations, isEmpty);
+    });
+
+    test('אותו אירוע עובר כשהתנאי מתקיים', () {
+      settings[SettingsRepository.keyDarkMode] = true;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+
+      expect(
+        service.queueTargetedEvent('p1', 'reader.sectionContentChanged', {}),
+        isTrue,
+      );
+      expect(activations, ['p1']);
+    });
+
+    test('isActivationBlocked רק כשיש תנאי לנושא והוא אינו מתקיים', () {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+
+      expect(
+        service.isActivationBlocked('p1', 'reader.sectionContentChanged'),
+        isTrue,
+      );
+      expect(service.isActivationBlocked('p1', 'click'), isFalse);
+      expect(
+        service.isActivationBlocked('other', 'reader.sectionContentChanged'),
+        isFalse,
+      );
+
+      settings[SettingsRepository.keyDarkMode] = true;
+      expect(
+        service.isActivationBlocked('p1', 'reader.sectionContentChanged'),
+        isFalse,
+      );
+    });
+
+    test('נושא אחר באותו תוסף אינו משתנה', () {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+
+      expect(service.queueTargetedEvent('p1', 'click', {}), isTrue);
+      expect(activations, ['p1']);
+    });
+
+    test('שידור חסום לתוסף שתנאיו לא מתקיים', () {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'blocked',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+      service.syncPlugin(
+        'free',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+      );
+
+      service.onBroadcast(
+        'reader.sectionContentChanged',
+        {},
+        hasUsableInstance: (_) => false,
+      );
+
+      expect(activations, ['free']);
+    });
+
+    test('מנוע חי אינו עובר דרך השער כלל', () {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'alive',
+        broadcastTopics: const {'reader.sectionContentChanged'},
+        scheduleStartup: false,
+        activationConditions: {
+          'reader.sectionContentChanged': darkModeIs(true),
+        },
+      );
+
+      var asked = false;
+      service.onBroadcast(
+        'reader.sectionContentChanged',
+        {},
+        hasUsableInstance: (_) {
+          asked = true;
+          return true;
+        },
+      );
+
+      // השער יושב אחרי בדיקת המופע החי, ולכן אינו משפיע עליו.
+      expect(asked, isTrue);
+      expect(activations, isEmpty);
+    });
+
+    test('app.startup עם תנאי שאינו מתקיים אינו מעיר', () async {
+      settings[SettingsRepository.keyDarkMode] = false;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: true,
+        activationConditions: {'app.startup': darkModeIs(true)},
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(activations, isEmpty);
+    });
+
+    test('app.startup נבדק ברגע ירי הטיימר', () async {
+      settings[SettingsRepository.keyDarkMode] = true;
+      service.syncPlugin(
+        'p1',
+        broadcastTopics: const {},
+        scheduleStartup: true,
+        activationConditions: {'app.startup': darkModeIs(true)},
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(activations, ['p1']);
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+
 /// תרומות עלייה דקלרטיביות של תוסף (`contributes.startup` במניפסט).
 ///
 /// נקראות ומופעלות ע"י Flutter בלי להרים מנוע JS. דורשות את ההרשאה
@@ -34,6 +36,9 @@ class PluginStartupContributions {
   /// עד שאירוע כזה קורה בפועל), או [startupActivationTopic].
   final List<String> activationEvents;
 
+  /// תנאי `when` פר-נושא הפעלה — נושא בלי רשומה כאן מעיר תמיד.
+  final Map<String, PluginWhenCondition> activationConditions;
+
   /// האם התוסף מבקש להשאיר מופע רקע עצל פעיל ללא כיבוי אוטומטי.
   /// הבקשה חלה רק אם המשתמש אישר את ההרשאה המתאימה.
   final bool keepAlive;
@@ -46,6 +51,7 @@ class PluginStartupContributions {
     this.searchDialogItems = const [],
     this.externalEditions = const [],
     this.activationEvents = const [],
+    this.activationConditions = const {},
     this.keepAlive = false,
   });
 
@@ -103,6 +109,7 @@ class PluginStartupContributions {
       case 'color-row':
         return true;
       default:
+        if (item.containsKey('action')) return false;
         return item['openPlugin'] != true;
     }
   }
@@ -120,6 +127,30 @@ class PluginStartupContributions {
     }
 
     final events = json['activationEvents'];
+    final topics = <String>[];
+    final conditions = <String, PluginWhenCondition>{};
+    if (events is List) {
+      for (final entry in events) {
+        if (entry is String) {
+          topics.add(entry);
+          continue;
+        }
+        if (entry is! Map) continue;
+        // מפתח לא מוכר (למשל "wen") נדחה — אחרת התנאי היה נעלם בשקט.
+        if (entry.keys.any((key) => key != 'topic' && key != 'when')) continue;
+        final topic = entry['topic'];
+        if (topic is! String || topic.isEmpty) continue;
+        final rawWhen = entry['when'];
+        if (rawWhen != null) {
+          try {
+            conditions[topic] = PluginWhenCondition.fromJson(rawWhen);
+          } on PluginWhenConditionException {
+            continue;
+          }
+        }
+        topics.add(topic);
+      }
+    }
     return PluginStartupContributions(
       toolbarItems: mapList('toolbarItems'),
       contextMenuItems: mapList('contextMenuItems'),
@@ -127,12 +158,8 @@ class PluginStartupContributions {
       programs: mapList('programs'),
       searchDialogItems: mapList('searchDialogItems'),
       externalEditions: mapList('externalEditions'),
-      activationEvents: events is List
-          ? [
-              for (final entry in events)
-                if (entry is String) entry,
-            ]
-          : const [],
+      activationEvents: topics,
+      activationConditions: Map.unmodifiable(conditions),
       keepAlive: json['keepAlive'] == true,
     );
   }
@@ -144,7 +171,14 @@ class PluginStartupContributions {
     if (programs.isNotEmpty) 'programs': programs,
     if (searchDialogItems.isNotEmpty) 'searchDialogItems': searchDialogItems,
     if (externalEditions.isNotEmpty) 'externalEditions': externalEditions,
-    if (activationEvents.isNotEmpty) 'activationEvents': activationEvents,
+    if (activationEvents.isNotEmpty)
+      'activationEvents': [
+        for (final topic in activationEvents)
+          if (activationConditions[topic] case final condition?)
+            {'topic': topic, 'when': condition.toJson()}
+          else
+            topic,
+      ],
     if (keepAlive) 'keepAlive': true,
   };
 }

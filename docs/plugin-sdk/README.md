@@ -302,6 +302,10 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `library.getBookToc` | `library.content.read` | `{ bookId }` | `TocEntry[]` |
 | `library.listBookAltStructures` | `library.content.read` | `{ bookId }` | `AltStructure[]` |
 | `library.getBookAltToc` | `library.content.read` | `{ bookId, structureKey? }` | `TocEntry[]` |
+| `library.getCommentators` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, grouped? }` | `{ commentators }` או `{ groups }` |
+| `library.getLinks` | `library.links.read` | `{ bookId, categoryId?, startLine, endLine, connectionTypes?, targetTitles?, includeAnchors? }` (חלון עד 200 שורות) | `{ links, truncated }` |
+| `library.getLinkTargetsSummary` | `library.links.read` | `{ bookId, categoryId? }` | `{ targets, maxSourceLine }` |
+| `library.getLinkContent` | `library.content.read` | `{ links }` (עד 25) | `{ items }` |
 
 ### network.*
 
@@ -357,6 +361,16 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `ui.showError` | `ui.feedback` | `{ message }` | `boolean` |
 | `ui.showConfirm` | `ui.feedback` | `{ title, content }` | `{ confirmed: boolean }` |
 | `ui.showWarning` | `ui.feedback` | `{ title, content, subtitle? }` | `{ confirmed: boolean }` |
+
+### feedback.*
+
+| Method | הרשאה | פרמטרים | החזרה |
+|--------|-------|----------|-------|
+| `feedback.sendEmail` | `feedback.send_email` | `{ to, subject, body, includeSystemInfo? }` | `boolean` |
+| `feedback.report` | — (אישור המשתמש בדיאלוג) | `{ details, reportType?, reporterEmail? }` | `'sent' \| 'queued' \| 'cancelled'` |
+| `feedback.hasReporterEmail` | — (ביט קיום בלבד) | — | `boolean` |
+
+`feedback.report` שולח דיווח של המשתמש על התוסף לאתר אוצריא, שמעביר אותו למפתח התוסף. מוצג דיאלוג אישור חובה; `'queued'` פירושו שהדיווח נשמר בתור מקומי ויישלח אוטומטית כשיהיה חיבור. כתובת לחזרה השמורה בהגדרות גוברת על `reporterEmail`; בדקו קיומה מראש עם `feedback.hasReporterEmail` (הכתובת עצמה אינה נחשפת לתוסף).
 
 ### storage.*
 
@@ -506,6 +520,14 @@ const { data: keys } = await Otzaria.call('storage.list');
 
 התוסף מצהיר על ההרשאות שלו ב-manifest. בעת התקנה, המשתמש רואה את ההרשאות ומאשר.
 
+### הרשאות בסיס (מ-0.9.97 — אין צורך להצהיר)
+
+ההרשאות הבאות ניתנות **אוטומטית לכל תוסף**, אינן מוצגות למשתמש, והצהרה עליהן
+במניפסט מיותרת (נסבלת לתאימות לאחור, עם אזהרת ולידטור):
+
+`plugin.storage.read` · `plugin.storage.write` · `app.info.read` ·
+`ui.feedback` · `notifications.send` · `events.subscribe:theme.changed`
+
 ### רשימת ההרשאות המלאה
 
 | הרשאה | מה מאפשרת |
@@ -514,9 +536,11 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `app.open_url` | פתיחת קישור http/https בדפדפן ברירת המחדל של מערכת ההפעלה |
 | `library.books.read` | חיפוש וקריאת metadata של ספרים |
 | `library.content.read` | קריאת תוכן ספרים (TOC + טקסט) |
+| `library.links.read` | קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן) |
 | `search.fulltext.read` | חיפוש טקסט מלא |
 | `reader.open` | פתיחת ספרים + קריאת מצב הקורא |
 | `navigation.write` | ניווט בין מסכים |
+| `plugin.open_other` | פתיחת דף של תוסף אחר המותקן אצל המשתמש (`plugin.openOther`), כולל הפעלת הקוד שלו |
 | `notes.read` | קריאת הערות אישיות |
 | `notes.write` | הוספה/עדכון/מחיקה של הערות |
 | `calendar.read` | גישה לנתוני לוח שנה |
@@ -529,6 +553,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `network.access` | גישה לאינטרנט (דורש `network.enabled: true` במניפסט + שה-URL מופיע ב-allowlist הרשמי של אוצריא ב-GitHub) |
 | `network.localhost` | גישה לשירות מקומי על המחשב (`localhost` / `127.0.0.1`), כמו Ollama / LM Studio. נפרדת מ-`network.access` — אינה מתירה אינטרנט, ואינה דורשת allowlist גלובלי |
 | `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
+| `fs.folder_access` | בחירת תיקייה בדיאלוג מערכת (`ui.pickFolder`) ועבודה על קבצים בתוכה. מ-0.9.97 — פוצלה מ-`ui.feedback`; הצהרה ותיקה על `ui.feedback` עדיין מכסה אותה |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
 | `app.run_on_startup` | **הרשאה רגישה** — הפעלת WebView ברקע לפי אירוע שהוצהר ב-`contributes.startup`. ברירת מחדל: **כבויה**. בתוסף ישן ללא `contributes.startup`, מפעילה זמנית בעליית אוצריא עד 0.9.97. |
@@ -680,6 +705,11 @@ Otzaria.on('plugin.boot', async (payload) => {
 ### window.open
 חסום לחלוטין מטעמי אבטחה.
 
+### זום דפדפן
+זום ברמת הדפדפן **מבוטל** בטאב של תוסף — גם צביטת מגע (Page Scale) וגם Ctrl+גלגלת / Ctrl+מינוס-פלוס. הסיבה: מחוות זום של הדפדפן משנות את הסקאלה של כל התוסף בלי דרך גלויה למשתמש לאפס אותה.
+
+זה **לא** מגביל זום שהתוסף מממש בעצמו: אירועי המגע והגלגלת ממשיכים להגיע לדף כרגיל, כך שקנבס או תצוגה עם pinch-zoom משלכם (האזנה ל-pointer/touch events, בדרך כלל עם `touch-action: none` על האלמנט) עובדים ללא הפרעה — ואף בלי תחרות מצד זום הדפדפן על אותה מחווה.
+
 ---
 
 ## מסך "אודות" וקיצור דרך לתוסף
@@ -763,14 +793,29 @@ function renderAbout() {
 | **טעינה מתיקייה** | תוספים פשוטים — HTML/CSS/JS ישיר ללא bundler |
 | **טעינה משרת localhost** | תוספים עם Vite / webpack — מקבלים HMR (החלפת מודול בזמן אמת) |
 
+### הפעלת כלי הפיתוח
+
+כפתורי הפיתוח (טעינת תיקייה, localhost, רענון) מופיעים בפאנל "תוספים" ובפאנל "כלים ותוספים" באחד משני מצבים:
+
+- **הרצת אוצריא במצב debug** (דרך IDE או `flutter run`) — הכפתורים מופיעים תמיד.
+- **גרסה רגילה (מותקנת) עם דגל ההפעלה `--dev-plugins`**:
+
+  ```
+  otzaria.exe --dev-plugins
+  ```
+
+  טיפ: צרו קיצור דרך ייעודי עם הדגל בשדה Target — "אוצריא למפתחים" בלחיצה אחת.
+
+> **שימו לב:** אוצריא היא single-instance. אם אוצריא כבר רצה בלי הדגל, הפעלה נוספת עם הדגל רק תמקד את החלון הקיים — סגרו את אוצריא והפעילו מחדש דרך הקיצור.
+
 ---
 
 ### שיטה א: טעינה מתיקייה מקומית
 
-1. **סביבת הרצה**: הריצו את אוצריא במצב debug (דרך IDE או `flutter run`).
+1. **סביבת הרצה**: הפעילו את כלי הפיתוח (מצב debug או דגל `--dev-plugins`, ראו למעלה).
 2. **טעינת התיקייה**:
    - פתחו את פאנל "תוספים" באוצריא.
-   - לחצו על אייקון התיקייה בסרגל העליון (יופיע רק במצב debug).
+   - לחצו על אייקון התיקייה בסרגל העליון.
    - בחרו את התיקייה שבה ממוקם `manifest.json`.
 3. **סמל DEV**: התוסף יופיע עם תג `DEV`.
 
@@ -795,7 +840,7 @@ function renderAbout() {
    ```
 
 2. **טען משרת localhost**:
-   - פתחו את פאנל "תוספים" באוצריא (במצב debug).
+   - פתחו את פאנל "תוספים" באוצריא (עם כלי הפיתוח פעילים — ראו למעלה).
    - לחצו על אייקון הגלובוס בסרגל העליון.
    - הכניסו את כתובת השרת (ברירת מחדל: `http://localhost:3000`).
 
@@ -1032,9 +1077,7 @@ Rename-Item .\my-plugin.zip my-plugin.otzplugin
 מאמת את התוסף (אותן בדיקות בדיוק כמו בחנות), בונה את ה-`.otzplugin`, ו**מפרסם אותו לחנות**
 אוטומטית — מזהה את התוסף לפי ה-`id` שב-`manifest.json`, כך שאין צורך לדעת מזהים פנימיים.
 
-### Workflow מינימלי
-
-הוסיפו לריפו של התוסף את `.github/workflows/release.yml`:
+Workflow מינימלי, ב-`.github/workflows/release.yml`:
 
 ```yaml
 name: Publish plugin
@@ -1053,73 +1096,16 @@ jobs:
           otzaria-password: ${{ secrets.OTZARIA_PASSWORD }}
 ```
 
-זה הכל. כל `push` ל-`main` שמעלה את `version` ב-`manifest.json` → מאמת, בונה, ומפרסם.
+מגדירים את `OTZARIA_USER`/`OTZARIA_PASSWORD` כ-Secrets בריפו של התוסף
+(`Settings → Secrets and variables → Actions`) — ומכאן כל `push` ל-`main` שמעלה `version`
+ב-`manifest.json` מאמת, בונה ומפרסם אוטומטית. בלי הסודות ה-Action רק מאמת, בלי לפרסם —
+מצוין כבדיקת PR; מטעמי אבטחה, פרסום לחנות **לעולם לא רץ** באירוע `pull_request`.
 
-### הסודות שיש להגדיר
-
-ב-`Settings → Secrets and variables → Actions` בריפו של התוסף:
-
-| Secret | מה זה |
-|---|---|
-| `OTZARIA_USER` | האימייל / שם המשתמש של חשבון החנות שלכם (יוצר התוסף). |
-| `OTZARIA_PASSWORD` | הסיסמה לאותו חשבון. |
-
-**אין צורך במזהה תוסף** — הוא נפתר אוטומטית מה-`id` שב-`manifest.json`.
-
-### מה חשוב לדעת
-
-- **זיהוי לפי `manifest.id`**: התוסף מזוהה לפי ה-`id` שלו. שנו אותו — והחנות תראה תוסף אחר.
-- **חובה עליית גרסה**: כל פרסום מחייב `version` גבוה מהקיים בחנות (אחרת הריצה מדלגת/נכשלת).
-- **אישור מנהל**: עדכון של בעלים נכנס כ"ממתין לאישור"; הגרסה הקודמת ממשיכה בחנות עד שמנהל מאשר.
-- **דחיפה ראשונה (תוסף חדש)**: החנות מחייבת לפחות צילום מסך אחד. ספקו אותו בקלט `screenshots`:
-  ```yaml
-      - uses: Otzaria/otzaria-plugin-validator@v1
-        with:
-          otzaria-user: ${{ secrets.OTZARIA_USER }}
-          otzaria-password: ${{ secrets.OTZARIA_PASSWORD }}
-          screenshots: screenshots/main.png
-  ```
-- **בטיחות**: הפרסום **לעולם לא רץ ב-`pull_request`** (כדי שלא ידלפו סודות מ-fork). בלי הסודות
-  ה-Action רק מאמת — מצוין כבדיקת PR.
-- **קלטים אופציונליים**: `fail-on-warnings` (אזהרות מפילות), `force` (פרסום מחדש של אותה גרסה),
-  `sync-metadata` (סנכרון שדות מה-manifest, פעיל כברירת מחדל).
-
-### החרגת קבצים מהבנייה (`.otzignore`)
-
-ה-Action כבר מחריג אוטומטית תיקיות פיתוח (`node_modules/`, `.git/`…), קובצי מטא-דאטה
-(`README`, `LICENSE`, קבצי `.md`, dotfiles) ותיקיות כמו `.github/` ו-`screenshots/`.
-כדי להחריג קבצים נוספים שאין בהם צורך בזמן ריצה (מקורות גולמיים, source maps, נתונים
-גדולים), הוסיפו קובץ **`.otzignore`** בשורש תיקיית התוסף. התחביר זהה ל-`.gitignore`:
-
-```gitignore
-# הערות מותרות בתחילת שורה בלבד (כמו .gitignore) — לא בסוף שורת תבנית
-
-# glob לפי שם הקובץ בכל עומק
-*.map
-
-# תיקייה שלמה (וכל מה שתחתיה)
-src/
-
-# נתיב מעוגן לשורש התוסף
-data/raw.json
-
-# ** חוצה מפרידי נתיב
-build/**
-
-# ! מחזיר קובץ שהוחרג ע"י כלל קודם
-!src/keep.js
-```
-
-- `*` מתאים בתוך מקטע נתיב יחיד, `**` חוצה מקטעים, `?` תו בודד.
-- `/` בסוף = תיקייה בלבד; `/` בתוך התבנית מעגן אותה לשורש התוסף; בלי `/` ההתאמה לפי שם הקובץ בכל עומק.
-- `!` בתחילת שורה מחזיר נתיב שהוחרג ע"י כלל קודם (הכלל האחרון שמתאים קובע).
-- ה-`.otzignore` עצמו לעולם לא נארז; מספר הקבצים שהוחרגו נכתב ללוג הבנייה.
-
-ההחרגה משפיעה רק על **בניית ה-`.otzplugin`** — אל תחריגו את ה-`entrypoint` או נכסים שהוא טוען
-(אם בכל זאת תנסו, האריזה תיכשל עם שגיאה ברורה). אותו קובץ `.otzignore` נכבד גם ע"י האריזה המקומית
-[`otzaria pack-plugin`](#אריזה-והפצה--יצירת-קובץ-otzplugin), כך שה-CI והאריזה הידנית מחריגים בדיוק אותם קבצים.
-
-תיעוד מלא של כל הקלטים והפלטים: ב-README של [המאגר](https://github.com/Otzaria/otzaria-plugin-validator).
+כל השאר מתועד במלואו, ומתעדכן ראשון, ב-README של
+[המאגר עצמו](https://github.com/Otzaria/otzaria-plugin-validator#readme): רשימת כל
+הקלטים/פלטים, אימות מקומי לפני דחיפה (כולל git hook מוכן), תגובת סיכום אוטומטית שמתעדכנת
+על ה-PR, החרגת קבצים מהבנייה עם `.otzignore`, ומה בדיוק קורה מול חנות (אישור מנהל, עדכון
+גרסה, ההבדל בין יוצר למנהל).
 
 ---
 

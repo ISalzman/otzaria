@@ -5,6 +5,7 @@ import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/messages/pdf_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_bloc.dart';
 import 'package:otzaria/pdf_book/bloc/pdf_book_event.dart';
@@ -116,6 +117,20 @@ class PdfBookSearchView extends StatefulWidget {
     return visualIdx;
   }
 
+  /// הודעה כשמסלול המנוע החזיר 0 תוצאות והספר כלל אינו באינדקס —
+  /// בלעדיה "אין תוצאות" הגנרי מסתיר מהמשתמש את הסיבה האמיתית.
+  @visibleForTesting
+  static String? missingFromIndexNotice({
+    required String? pdfFilePath,
+    required bool indexInitialized,
+    required Set<String> indexedFilePaths,
+  }) {
+    if (pdfFilePath == null || pdfFilePath.isEmpty) return null;
+    if (!indexInitialized) return null;
+    if (indexedFilePaths.contains(pdfFilePath)) return null;
+    return PdfMessages.bookNotInSearchIndex;
+  }
+
   /// תקרת מונחים ייחודיים לתבנית ההדגשה, כדי שהרגקס לא יתנפח.
   static const int _maxHighlightTerms = 50;
 
@@ -148,7 +163,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
   bool _isSearching = false;
   List<SearchResult> _searchResults = [];
 
-  /// הודעת שגיאה אחרונה בחיפוש (כשל מנוע/FFI). ראו doc ב-[SearchPaneBase].
+  /// מוצגת במקום "אין תוצאות" הגנרי: כשל מנוע/FFI או ספר שאינו באינדקס.
   String? _searchErrorMessage;
   String? _bookPath;
   final Map<int, String> _pageTitles = <int, String>{};
@@ -525,6 +540,13 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       setState(() {
         _searchResults = results;
         _isSearching = false;
+        if (results.isEmpty) {
+          _searchErrorMessage = PdfBookSearchView.missingFromIndexNotice(
+            pdfFilePath: widget.pdfFilePath,
+            indexInitialized: TantivyDataProvider.instance.isInitialized.value,
+            indexedFilePaths: TantivyDataProvider.instance.indexedFilePaths,
+          );
+        }
       });
       _updateAdvancedHighlight(results);
       _scheduleScrollToCurrentPage();

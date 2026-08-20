@@ -35,6 +35,41 @@ Future<void> main() async {
       expect(SearchBloc.isFacetNarrowing(['/תנך/תורה'], ['/תנך']), isFalse);
       expect(SearchBloc.isFacetNarrowing(['/'], []), isFalse);
     });
+
+    test('intersectFacetWithScope: מכל facet בהיקף נשמר הצד הצר', () {
+      // התרחיש מ-issue #874: היקף `@בבלי` שכולל קטגוריה וספר-הלכה; לחיצה
+      // על "הלכה" צריכה להחזיר רק את ספר ההיקף, לא את כל ההלכה בספרייה.
+      expect(
+        SearchBloc.intersectFacetWithScope('/הלכה', [
+          '/תלמוד בבלי',
+          '/הלכה/ערוך השולחן|id:3779',
+        ]),
+        ['/הלכה/ערוך השולחן|id:3779'],
+      );
+      // לחיצה על ענף בתוך facet של ההיקף — הענף הנלחץ הוא הצר.
+      expect(
+        SearchBloc.intersectFacetWithScope('/תלמוד בבלי/סדר מועד', [
+          '/תלמוד בבלי',
+          '/הלכה/ערוך השולחן|id:3779',
+        ]),
+        ['/תלמוד בבלי/סדר מועד'],
+      );
+      // לחיצה על השורש מחזירה את כל ההיקף.
+      expect(
+        SearchBloc.intersectFacetWithScope('/', ['/תנך', '/הלכה']),
+        unorderedEquals(['/תנך', '/הלכה']),
+      );
+      // ענף זר להיקף (העץ הראה אותו בגלל פערי מיפוי) — נופל לענף עצמו.
+      expect(
+        SearchBloc.intersectFacetWithScope('/קבלה', ['/תנך']),
+        ['/קבלה'],
+      );
+      // facet שהוא גם ההיקף עצמו אינו מוכפל.
+      expect(
+        SearchBloc.intersectFacetWithScope('/תנך', ['/תנך']),
+        ['/תנך'],
+      );
+    });
   });
 
   group('SearchBloc facet counts', () {

@@ -6,6 +6,7 @@ import 'package:archive/archive_io.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_manifest_validator.dart';
@@ -155,7 +156,10 @@ class PluginInstallerService {
     Directory? stagedInstallDir;
     var installCommitted = false;
     try {
-      final requestedPermissions = manifest.permissions.toSet();
+      // הרשאות הבסיס אינן החלטות משתמש — ההשוואה מול הרשימה האפקטיבית.
+      final requestedPermissions = effectiveManifestPermissions(
+        manifest.permissions,
+      ).toSet();
       if (grantedPermissions.keys
               .toSet()
               .difference(requestedPermissions)

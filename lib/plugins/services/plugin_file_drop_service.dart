@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview_windows/flutter_inappwebview_windows.dart';
 
 /// גרירת קבצים מהמערכת מעל חלון האפליקציה.
 @immutable
@@ -16,22 +17,18 @@ class PluginFileDrag {
   const PluginFileDrag({required this.paths, required this.physicalPosition});
 }
 
-/// מקבל גרירות קבצים מה-`IDropTarget` של flutter_inappwebview.
+/// מרכז את גרירות הקבצים של החלון ומחלק אותן לאזורי הקליטה.
 ///
-/// ל-Windows יש `IDropTarget` יחיד לכל חלון, והוא בבעלות הפורק של
-/// flutter_inappwebview — לכן הגרירה מגיעה משם ולא מחבילת גרירה נפרדת.
+/// ל-Windows יש `IDropTarget` יחיד לכל חלון, והוא בבעלות
+/// flutter_inappwebview — לכן הגרירה מגיעה מ-[WindowsFileDropManager].
+/// למנהל הזה יש מאזין יחיד, ולכן השירות הוא המנוי היחיד שמפצל לאזורים.
 class PluginFileDropService {
-  PluginFileDropService({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(channelName) {
-    _channel.setMethodCallHandler(_handleNativeCall);
-  }
-
-  static const String channelName =
-      'com.pichillilorenzo/flutter_inappwebview_filedrop';
+  PluginFileDropService({WindowsFileDropManager? manager})
+    : _manager = manager ?? WindowsFileDropManager.instance;
 
   static PluginFileDropService instance = PluginFileDropService();
 
-  final MethodChannel _channel;
+  final WindowsFileDropManager _manager;
 
   /// הגרירה הפעילה, או `null` כשאין גרירת קבצים מעל החלון.
   final ValueNotifier<PluginFileDrag?> drag = ValueNotifier(null);
@@ -47,7 +44,35 @@ class PluginFileDropService {
 
   int _zones = 0;
   final Set<Object> _accepting = {};
-  bool _lastAccepted = false;
+
+  /// מפעיל את קליטת הגרירה כל עוד קיים אזור קליטה מותקן. בלי אזור פעיל
+  /// החלון ממשיך לדחות קבצים כמקודם.
+  Future<void> acquire() async {
+    _zones++;
+    if (_zones != 1 || !isSupported) return;
+    try {
+      await _manager.start(
+        onDrag: _handleDrag,
+        onDrop: _handleDrop,
+        onLeave: _handleLeave,
+      );
+    } on MissingPluginException {
+      // בנייה ללא הצד ה-native של הפורק — גרירה פשוט לא תעבוד.
+    }
+  }
+
+  Future<void> release() async {
+    if (_zones == 0) return;
+    _zones--;
+    if (_zones != 0) return;
+    drag.value = null;
+    if (!isSupported) return;
+    try {
+      await _manager.stop();
+    } on MissingPluginException {
+      // כנ"ל.
+    }
+  }
 
   /// מדווח אם [zone] מוכן לקבל את הגרירה הנוכחית. הצד ה-native משתמש בזה
   /// כדי להציג סמן גרירה רק מעל אזור שבאמת יקלוט את הקובץ.
@@ -57,84 +82,40 @@ class PluginFileDropService {
     } else {
       _accepting.remove(zone);
     }
-    final accepted = _accepting.isNotEmpty;
-    if (accepted == _lastAccepted) return;
-    _lastAccepted = accepted;
-    _setAccepted(accepted);
-  }
-
-  Future<void> _setAccepted(bool accepted) async {
-    if (!isSupported) return;
-    try {
-      await _channel.invokeMethod<void>('setAccepted', {'accepted': accepted});
-    } on MissingPluginException {
-      // בנייה ללא הצד ה-native של הפורק.
-    }
   }
 
   @visibleForTesting
-  bool get acceptedForTest => _lastAccepted;
+  bool handleDrag(WindowsFileDropEvent event) => _handleDrag(event);
 
-  /// מפעיל את קליטת הגרירה כל עוד קיים אזור קליטה מותקן. בלי אזור פעיל
-  /// החלון ממשיך לדחות קבצים כמקודם.
-  Future<void> acquire() async {
-    _zones++;
-    if (_zones == 1) await _setEnabled(true);
-  }
-
-  Future<void> release() async {
-    if (_zones == 0) return;
-    _zones--;
-    if (_zones == 0) {
-      drag.value = null;
-      await _setEnabled(false);
-    }
-  }
-
-  Future<void> _setEnabled(bool enabled) async {
-    if (!isSupported) return;
-    try {
-      await _channel.invokeMethod<void>('setEnabled', {'enabled': enabled});
-    } on MissingPluginException {
-      // בנייה ללא הצד ה-native של הפורק — גרירה פשוט לא תעבוד.
-    }
-  }
-
-  @visibleForTesting
-  Future<void> handleNativeCall(MethodCall call) => _handleNativeCall(call);
-
-  Future<void> _handleNativeCall(MethodCall call) async {
-    if (call.method != 'onFileDrop') return;
-    final args = (call.arguments as Map).cast<Object?, Object?>();
-    final event = args['event'] as String?;
-    if (event == 'leave') {
-      drag.value = null;
-      return;
-    }
-
-    final position = Offset(
-      (args['x'] as num?)?.toDouble() ?? 0,
-      (args['y'] as num?)?.toDouble() ?? 0,
+  bool _handleDrag(WindowsFileDropEvent event) {
+    // אירוע ה-over אינו נושא נתיבים — שומרים את אלה שהתקבלו ב-enter.
+    final paths = event.paths.isNotEmpty
+        ? event.paths
+        : (drag.value?.paths ?? const <String>[]);
+    // עדכון ה-notifier מריץ את מאזיני האזורים מיידית, ולכן התשובה שמוחזרת
+    // כאן כבר משקפת את מצבם.
+    drag.value = PluginFileDrag(
+      paths: paths,
+      physicalPosition: Offset(event.x, event.y),
     );
-    final paths = (args['paths'] as List?)?.cast<String>() ?? const <String>[];
-
-    switch (event) {
-      case 'enter':
-        drag.value = PluginFileDrag(paths: paths, physicalPosition: position);
-      case 'over':
-        // אירוע ה-over לא נושא נתיבים — שומרים את אלה שהתקבלו ב-enter.
-        final current = drag.value;
-        if (current != null) {
-          drag.value = PluginFileDrag(
-            paths: current.paths,
-            physicalPosition: position,
-          );
-        }
-      case 'drop':
-        drag.value = null;
-        _drops.add(
-          PluginFileDrag(paths: paths, physicalPosition: position),
-        );
-    }
+    return _accepting.isNotEmpty;
   }
+
+  @visibleForTesting
+  Future<void> handleDrop(WindowsFileDropEvent event) => _handleDrop(event);
+
+  Future<void> _handleDrop(WindowsFileDropEvent event) async {
+    drag.value = null;
+    _drops.add(
+      PluginFileDrag(
+        paths: event.paths,
+        physicalPosition: Offset(event.x, event.y),
+      ),
+    );
+  }
+
+  @visibleForTesting
+  void handleLeave() => _handleLeave();
+
+  void _handleLeave() => drag.value = null;
 }

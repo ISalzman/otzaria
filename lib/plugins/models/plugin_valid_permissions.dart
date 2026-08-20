@@ -16,6 +16,10 @@ const Map<String, String> apiCallToPermissionHint = {
   'library.getBookToc': 'library.content.read',
   'library.listBookAltStructures': 'library.content.read',
   'library.getBookAltToc': 'library.content.read',
+  'library.getLinkContent': 'library.content.read',
+  'library.getCommentators': pluginLinksReadPermission,
+  'library.getLinks': pluginLinksReadPermission,
+  'library.getLinkTargetsSummary': pluginLinksReadPermission,
 
   // app.*
   'app.getUserEmail': 'app.user_email.read',
@@ -31,6 +35,9 @@ const Map<String, String> apiCallToPermissionHint = {
 
   // shortcut.*
   'shortcut.create': 'ui.create_shortcut',
+
+  // ui.* (בחירת תיקייה)
+  'ui.pickFolder': 'fs.folder_access',
 
   // fs.* (user-selected files)
   'fs.pickUserFile': 'fs.user_files.read',
@@ -55,6 +62,7 @@ const Map<String, String> apiCallToPermissionHint = {
 
   // plugin.*
   'plugin.openSelf': 'navigation.write',
+  'plugin.openOther': pluginOpenOtherPermission,
 
   // reader.* (new APIs)
   'reader.addContextMenuItem': 'reader.context_menu',
@@ -71,7 +79,16 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.revealHighlight': 'reader.highlight',
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
+  'reader.getActiveCommentators': 'reader.open',
 };
+
+/// הרשאה לקריאת מפת הקישורים של הספרייה — המפרשים על ספר, קישורי טווח השורות
+/// וסיכום היעדים. נפרדת מ-`library.content.read` כי היא חושפת מבנה בלבד.
+const pluginLinksReadPermission = 'library.links.read';
+
+/// הרשאה לפתיחת דף של תוסף **אחר** (`plugin.openOther`). נפרדת מ-navigation.write
+/// כי היא מפעילה את ה-WebView של תוסף שלישי, ולא רק מזיזה את המשתמש בין מסכים.
+const pluginOpenOtherPermission = 'plugin.open_other';
 
 /// הרשאה להפעלת מנוע התוסף ברקע ללא פתיחת הדף שלו.
 /// בתוסף דקלרטיבי ההפעלה נעשית רק בעקבות אירוע.
@@ -92,6 +109,43 @@ const pluginStartupContributionsPermission = 'app.startup_contributions';
 /// שם ההרשאה לגישה לאינטרנט. מטופלת בנפרד בממשק: במצב 'מנותק' היא מתחילה
 /// כבויה במסך ההתקנה, ותוסף שהמשתמש כיבה בו הרשאה זו ממשיך להופיע גם במצב 'מנותק'.
 const pluginNetworkAccessPermission = 'network.access';
+
+/// הרשאת בחירת תיקייה (`ui.pickFolder`) — פוצלה מ-ui.feedback כי התיקייה
+/// שנבחרת היא גבול ההסכמה של פעולות הקבצים (fs.extractZip / fs.deleteFile).
+const pluginFolderAccessPermission = 'fs.folder_access';
+
+/// הרשאות בסיס — מוענקות לכל תוסף אוטומטית, בלי הצהרה במניפסט ובלי הצגה
+/// למשתמש. הצהרה קיימת נסבלת לתאימות לאחור (הוולידטור רק ממליץ להסירה).
+const pluginBaselinePermissions = <String>{
+  'plugin.storage.read',
+  'plugin.storage.write',
+  'app.info.read',
+  'ui.feedback',
+  'notifications.send',
+  'events.subscribe:theme.changed',
+};
+
+/// הרשאה חדשה (key) שהצהרה ותיקה (value) נחשבת כמכסה אותה —
+/// ui.pickFolder ישב היסטורית תחת ui.feedback.
+const pluginLegacyPermissionAliases = <String, String>{
+  pluginFolderAccessPermission: 'ui.feedback',
+};
+
+/// ההרשאות שמוצגות למשתמש ונשמרות כהחלטות: הרשאות המניפסט ללא הרשאות הבסיס.
+List<String> effectiveManifestPermissions(List<String> manifestPermissions) {
+  final result = <String>[];
+  for (final permission in manifestPermissions) {
+    if (pluginBaselinePermissions.contains(permission)) continue;
+    if (!result.contains(permission)) result.add(permission);
+  }
+  return result;
+}
+
+/// מאחד את הרשאות הבסיס לרשימת הרשאות מוענקות — ל-boot payload,
+/// ל-app.getGrantedPermissions ולאירוע plugin.permissions_changed.
+List<String> withBaselinePermissions(Iterable<String> granted) {
+  return {...granted, ...pluginBaselinePermissions}.toList()..sort();
+}
 
 const pluginValidPermissions = <String>[
   // ===== מידע על האפליקציה =====
@@ -122,6 +176,9 @@ const pluginValidPermissions = <String>[
   /// קריאת תוכן ספרים
   'library.content.read',
 
+  /// קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן)
+  pluginLinksReadPermission,
+
   // ===== חיפוש =====
   /// ביצוע חיפוש טקסט מלא
   'search.fulltext.read',
@@ -145,6 +202,9 @@ const pluginValidPermissions = <String>[
   // ===== ניווט =====
   /// מעבר בין מסכים באפליקציה
   'navigation.write',
+
+  /// פתיחת דף של תוסף אחר המותקן אצל המשתמש
+  pluginOpenOtherPermission,
 
   // ===== הערות אישיות =====
   /// קריאת הערות אישיות
@@ -172,6 +232,9 @@ const pluginValidPermissions = <String>[
   /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').
   /// הגישה מוגבלת לקבצים שהמשתמש בחר בדיאלוג — לא לנתיב חופשי בדיסק.
   'fs.user_files.read',
+
+  /// בחירת תיקייה בדיאלוג מערכת ועבודה על קבצים בתוכה (חילוץ/מחיקה).
+  pluginFolderAccessPermission,
 
   // ===== אחסון תוסף =====
   /// קריאה מאחסון מפתח-ערך של התוסף

@@ -76,13 +76,11 @@ List<AppContextMenuEntry> buildCommentatorsContextMenuChildren({
           label: title,
           isSelected: isActive,
           onTap: () {
+            // מפרש פעיל אינו מוסר מכאן — לחיצה עליו רק פותחת את החלונית.
+            // הסרה שקטה גרמה ללולאת הוסף/הסר בכל ניסיון חוזר (issue #904).
             final updated = List<String>.from(activeCommentators);
-            if (isActive) {
-              updated.remove(title);
-            } else {
-              updated.add(title);
-            }
-            onCommentatorsChanged(updated, isAdding: !isActive);
+            if (!isActive) updated.add(title);
+            onCommentatorsChanged(updated, isAdding: true);
           },
         );
       }),

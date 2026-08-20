@@ -5,6 +5,8 @@ import 'package:otzaria/plugins/declarative/compiler/declarative_toolbar_templat
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_startup_contributions.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
+import 'package:otzaria/plugins/models/plugin_when_condition.dart';
+import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_external_editions_registry.dart';
@@ -28,7 +30,8 @@ class PluginStartupContributionsService {
       _contextMenu = ContextMenuRegistry.instance,
       _searchDialog = PluginSearchDialogRegistry.instance,
       _externalEditions = PluginExternalEditionsRegistry.instance,
-      _lazyActivation = PluginLazyActivationService.instance;
+      _lazyActivation = PluginLazyActivationService.instance,
+      _conditions = PluginConditionEvaluator.instance;
 
   @visibleForTesting
   PluginStartupContributionsService.forTesting({
@@ -37,7 +40,9 @@ class PluginStartupContributionsService {
     required PluginLazyActivationService activationService,
     PluginSearchDialogRegistry? searchDialogRegistry,
     PluginExternalEditionsRegistry? externalEditionsRegistry,
-  }) : _toolbar = toolbarRegistry,
+    PluginConditionEvaluator? conditionEvaluator,
+  }) : _conditions = conditionEvaluator ?? PluginConditionEvaluator.instance,
+       _toolbar = toolbarRegistry,
        _contextMenu = contextMenuRegistry,
        _searchDialog =
            searchDialogRegistry ?? PluginSearchDialogRegistry.instance,
@@ -50,6 +55,7 @@ class PluginStartupContributionsService {
   final PluginSearchDialogRegistry _searchDialog;
   final PluginExternalEditionsRegistry _externalEditions;
   final PluginLazyActivationService _lazyActivation;
+  final PluginConditionEvaluator _conditions;
   Future<void> _syncTail = Future<void>.value();
 
   /// קידומת המפתח של רשומות publishedData שנזרעו מהמניפסט — מבדילה אותן
@@ -111,16 +117,19 @@ class PluginStartupContributionsService {
         }
         continue;
       }
-      final grants = await repository.getPluginPermissions(plugin.pluginId);
-      final granted = grants
-          .where((g) => g.granted)
-          .map((g) => g.permission)
-          .toSet();
+      final granted = (await repository.getGrantedPermissionNames(
+        plugin.pluginId,
+      )).toSet();
       if (!granted.contains(pluginStartupContributionsPermission)) {
         await _removePlugin(plugin.pluginId, repository);
         continue;
       }
       _managedPlugins.add(plugin.pluginId);
+      await _conditions.registerStorageKeys(
+        plugin.pluginId,
+        _collectStorageKeys(startup),
+        repository,
+      );
 
       final legacyToolbarItems = startup.toolbarItems
           .where(
@@ -219,10 +228,13 @@ class PluginStartupContributionsService {
         continue;
       }
       final broadcastTopics = <String>{};
+      final activationConditions = <String, PluginWhenCondition>{};
       var scheduleStartup = false;
       for (final topic in startup.activationEvents) {
+        final condition = startup.activationConditions[topic];
         if (topic == PluginStartupContributions.startupActivationTopic) {
           scheduleStartup = true;
+          if (condition != null) activationConditions[topic] = condition;
           continue;
         }
         // נושא שהוגדרה לו הרשאת subscribe מכובד רק אם ההרשאה הוענקה.
@@ -230,12 +242,14 @@ class PluginStartupContributionsService {
         if (!pluginValidPermissions.contains(permission) ||
             granted.contains(permission)) {
           broadcastTopics.add(topic);
+          if (condition != null) activationConditions[topic] = condition;
         }
       }
       _lazyActivation.syncPlugin(
         plugin.pluginId,
         broadcastTopics: broadcastTopics,
         scheduleStartup: scheduleStartup,
+        activationConditions: activationConditions,
         keepAlive:
             startup.keepAlive &&
             granted.contains(pluginBackgroundKeepAlivePermission),
@@ -270,6 +284,29 @@ class PluginStartupContributionsService {
         (id, i) => _searchDialog.registerPayload(id, i),
       );
     }
+  }
+
+  /// מפתחות ה-KV שתנאי ה-`when` של התרומות קוראים. תנאי פגום מדולג כאן —
+  /// הפריט עצמו נדחה בפרסינג של ה-registry.
+  Set<String> _collectStorageKeys(PluginStartupContributions startup) {
+    final keys = <String>{};
+    for (final item in [
+      ...startup.toolbarItems,
+      ...startup.contextMenuItems,
+      ...startup.searchDialogItems,
+    ]) {
+      final raw = item['when'];
+      if (raw == null) continue;
+      try {
+        keys.addAll(PluginWhenCondition.fromJson(raw).storageKeys);
+      } on PluginWhenConditionException {
+        continue;
+      }
+    }
+    for (final condition in startup.activationConditions.values) {
+      keys.addAll(condition.storageKeys);
+    }
+    return keys;
   }
 
   void _applyItems(
@@ -494,6 +531,7 @@ class PluginStartupContributionsService {
       _externalEditions.remove,
     );
     _lazyActivation.removePlugin(pluginId);
+    _conditions.removePlugin(pluginId);
     await _removeSeededData(pluginId, repository);
   }
 }

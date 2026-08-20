@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
+import 'package:otzaria/utils/text/superscript_digits.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
@@ -57,6 +58,9 @@ class TextRendererService {
 
     // 0. תיקון סדר סימוני הערות (<sup>) ב-RTL
     processed = _fixFootnoteMarkers(processed);
+
+    // 0a. המרת טקסט תחתי (<sub>) לטקסט טהור — ראו _fixSubscripts.
+    processed = _fixSubscripts(processed);
 
     // 0b. הסרת גוף הערות inline (<i class="footnote">...</i>) - מוצגות כמפרש בצד.
     processed = notes.stripInlineNotes(processed);
@@ -175,11 +179,8 @@ class TextRendererService {
       // מספר טהור → ספרות-עיליות יוניקוד (מוגבה ומוקטן מטבעו, ללא תגית).
       // חל גם על <sup>1</sup> חשוף בלי class: חלק מספרי ההערות-inline
       // מקודדים כך את המרקרים, וההמרה חסרת-אובדן גם ל-superscript מספרי אמיתי.
-      final trimmedInner = innerText.trim();
-      if (_digitsOnlyRegex.hasMatch(trimmedInner)) {
-        final superscript = trimmedInner.split('').map((d) {
-          return _superscriptDigits[d]!;
-        }).join();
+      final superscript = superscriptDigitsOrNull(innerText.trim());
+      if (superscript != null) {
         return _wrapWithBidiIsolate(superscript);
       }
 
@@ -195,23 +196,56 @@ class TextRendererService {
     });
   }
 
-  static final RegExp _digitsOnlyRegex = RegExp(r'^[0-9]+$');
+  static final RegExp _subRegex = RegExp(
+    r'<sub(\s[^>]*)?>(.*?)</sub>',
+    caseSensitive: false,
+    dotAll: true,
+  );
 
-  /// מיפוי ספרה רגילה → ספרת-עילית יוניקוד. 1–3 בבלוק Latin-1 (U+00B9/B2/B3),
-  /// השאר בבלוק Superscripts (U+2070, U+2074–U+2079) — אלה נקודות הקוד
-  /// הקנוניות; אין חלופות ל-1–3 בבלוק U+2070.
-  static const Map<String, String> _superscriptDigits = {
-    '0': '⁰',
-    '1': '¹',
-    '2': '²',
-    '3': '³',
-    '4': '⁴',
-    '5': '⁵',
-    '6': '⁶',
-    '7': '⁷',
-    '8': '⁸',
-    '9': '⁹',
+  /// ממיר תגי <sub> לטקסט טהור.
+  ///
+  /// HtmlWidget מממש `<sub>` כ-WidgetSpan עם padding עליון (0.4×fontSize),
+  /// ולכן הוא מותח את השורה / נשבר לשורה נפרדת, ואינו נכלל בבחירת טקסט
+  /// (SelectableRegion מדלג על WidgetSpan). sub *מספרי* מומר לספרות-תחתיות
+  /// יוניקוד (₁₂₃…); לתוכן אחר (למשל עברית) אין גליפים תחתיים — נפלט
+  /// כ-`<span class="subscript-text">` שמוקטן ב-CSS ונשאר טקסט נבחר.
+  static String _fixSubscripts(String text) {
+    if (!_subRegex.hasMatch(text)) return text;
+
+    return text.replaceAllMapped(_subRegex, (match) {
+      final innerHtml = match[2] ?? '';
+      final innerText = innerHtml.replaceAll(_htmlTagRegex, '');
+      if (innerText.trim().isEmpty) {
+        return '';
+      }
+
+      final trimmedInner = innerText.trim();
+      if (_digitsOnlyRegex.hasMatch(trimmedInner)) {
+        final subscript = trimmedInner.split('').map((d) {
+          return _subscriptDigits[d]!;
+        }).join();
+        return _wrapWithBidiIsolate(subscript);
+      }
+
+      return '<span class="subscript-text">${_wrapWithBidiIsolate(innerHtml)}</span>';
+    });
+  }
+
+  /// מיפוי ספרה רגילה → ספרת-תחתית יוניקוד (U+2080–U+2089).
+  static const Map<String, String> _subscriptDigits = {
+    '0': '₀',
+    '1': '₁',
+    '2': '₂',
+    '3': '₃',
+    '4': '₄',
+    '5': '₅',
+    '6': '₆',
+    '7': '₇',
+    '8': '₈',
+    '9': '₉',
   };
+
+  static final RegExp _digitsOnlyRegex = RegExp(r'^[0-9]+$');
 
   static String _wrapWithBidiIsolate(String innerHtml) {
     if (innerHtml.isEmpty) return innerHtml;

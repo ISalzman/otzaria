@@ -47,6 +47,16 @@ class ShortcutHelper {
     return keyboard.isAltPressed || _isAltGrPressed(keyboard);
   }
 
+  /// האם Ctrl (או Cmd ב-Mac) לחוץ כ-modifier נקי — ללא Alt/AltGr.
+  /// AltGr בפריסה לא-לטינית מדווח כ-Ctrl+Alt, ובלעדי השלילה קיצורי Ctrl
+  /// קבועים היו נתפסים בהקלדת תווים מיוחדים.
+  static bool get isPlainCtrlOrCmdPressed {
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isAltPressed || _isAltGrPressed(keyboard)) return false;
+    return keyboard.isControlPressed ||
+        (_treatCtrlAsMeta && keyboard.isMetaPressed);
+  }
+
   static bool _isAltGrPressed(HardwareKeyboard keyboard) =>
       keyboard.isLogicalKeyPressed(LogicalKeyboardKey.altGraph) ||
       (_treatRightAltAsAltGr &&

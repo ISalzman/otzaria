@@ -168,20 +168,86 @@ void main() {
       }
     });
 
-    test('$_full: התיקייה שנמחקת היא התיקייה שנכתבת', () {
+    test('$_full: הספרייה מוחלפת רק אחרי חילוץ מלא — לא נמחקת מראש', () {
       final script = _script(_full);
       final installDelete = _section(script, 'InstallDelete');
 
       expect(
         installDelete,
-        contains(r'Name: "{code:GetSelectedBooksPath}"'),
-        reason: 'מחיקה לפי נתיב אחר מהיעד תמחק ספרייה לא נכונה',
+        isNot(contains('GetSelectedBooksPath')),
+        reason:
+            'מחיקת הספרייה בתחילת ההתקנה השאירה משדרגים בלי ספרייה '
+            'כשהחילוץ נקטע (issue #867)',
+      );
+
+      final extract = _routine(
+        script,
+        'procedure ExtractEmbeddedLibraryArchives();',
       );
       expect(
-        _routine(script, 'function GetSelectedBooksPath('),
-        contains('SelectedBooksPath'),
+        extract,
+        contains('ExtractFileDir(SelectedBooksPath)'),
+        reason: 'ה-staging חייב לשבת ליד היעד — rename עובד רק באותו כונן',
       );
+
+      final lastExtract = extract.lastIndexOf('ExtractBundled');
+      final backupOld = extract.indexOf(
+        'RenameFile(SelectedBooksPath, BooksBackup)',
+      );
+      final moveNew = extract.indexOf(
+        'RenameFile(StagingBooks, SelectedBooksPath)',
+      );
+      expect(
+        backupOld,
+        greaterThan(lastExtract),
+        reason: 'ההחלפה חייבת לבוא אחרי שכל החילוצים הצליחו',
+      );
+      expect(moveNew, greaterThan(backupOld));
     });
+
+    test(
+      '$_full: ארכיון חסר או ספרייה בלי seforim.db מכשילים — לא דילוג שקט',
+      () {
+        final script = _script(_full);
+
+        for (final proc in [
+          'procedure ExtractBundledDatabase(',
+          'procedure ExtractBundledTarArchive(',
+        ]) {
+          final body = _routine(script, proc);
+          expect(
+            body,
+            isNot(contains('skipping')),
+            reason:
+                'דילוג שקט על ארכיון חסר הסתיים כהתקנה "מוצלחת" בלי ספרייה '
+                '(issue #862)',
+          );
+          final notFound = body.indexOf('not FileExists(ArchivePath)');
+          final abortPos = body.indexOf('Abort;');
+          expect(notFound, greaterThanOrEqualTo(0));
+          expect(
+            abortPos,
+            greaterThan(notFound),
+            reason: 'ארכיון חסר חייב להציג שגיאה ולעצור את החילוץ',
+          );
+        }
+
+        final extract = _routine(
+          script,
+          'procedure ExtractEmbeddedLibraryArchives();',
+        );
+        final verify = extract.indexOf("StagingBooks + '\\seforim.db'");
+        final swap = extract.indexOf(
+          'RenameFile(StagingBooks, SelectedBooksPath)',
+        );
+        expect(verify, greaterThanOrEqualTo(0));
+        expect(
+          swap,
+          greaterThan(verify),
+          reason: 'אימות seforim.db חייב לבוא לפני החלפת הספרייה (issue #862)',
+        );
+      },
+    );
   });
 
   group('מתקין FULL מאונדקס מפוצל', () {
@@ -288,6 +354,21 @@ void main() {
       expect(
         writer,
         contains("SharedPrefsKey := '\"flutter.' + PreferenceKey"),
+      );
+    });
+
+    test('$_full: הכתיבה מאפסת שם תת-תיקייה ישן (issue #871)', () {
+      final body = _routine(
+        _script(_full),
+        'procedure WriteLibraryPathToPrefs(',
+      );
+
+      expect(
+        body,
+        contains("'${SettingsRepository.keyLibraryFolderName}', ''"),
+        reason:
+            'ערך stale ב-keyLibraryFolderName מפנה את האפליקציה לתת-תיקייה '
+            'שאינה קיימת — והספרייה שהותקנה זה עתה "נעלמת"',
       );
     });
 
@@ -406,6 +487,67 @@ void main() {
     }
   });
 
+  group('ניקוי התקנה מקבילה בהיקף השני (issue #886)', () {
+    for (final name in _scripts) {
+      test('$name: התקנת מנהל מנקה את HKCU ואת WOW6432Node אחרי ההתקנה', () {
+        final script = _script(name);
+        final cleanup = _routine(
+          script,
+          'procedure RemoveOtherScopeInstalls();',
+        );
+
+        expect(
+          cleanup,
+          contains('if PortableMode or (not IsAdminInstallMode) then'),
+          reason:
+              'התקנת משתמש אינה יכולה למחוק ב-HKLM, והתקנה ניידת לא נוגעת '
+              'ברישום כלל',
+        );
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU)'));
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKLM32)'));
+
+        final postInstall = _routine(script, 'procedure CurStepChanged(');
+        expect(
+          postInstall,
+          contains('RemoveOtherScopeInstalls()'),
+          reason:
+              'בלי הקריאה, ההתקנה בהיקף השני נשארת והקיצור הישן ממשיך '
+              'להריץ בינארי ישן',
+        );
+      });
+
+      test('$name: רשומה בנתיב אחר מוסרת דרך ה-uninstaller שלה, בשקט', () {
+        final body = _routine(
+          _script(name),
+          'procedure RemoveStaleScopeRegistration(',
+        );
+
+        expect(
+          body,
+          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'"),
+          reason:
+              'בלי דגלי השקט ה-uninstaller שואל על מחיקת נתונים; '
+              'ברירת המחדל השקטה שלו משמרת אותם',
+        );
+        expect(body, contains('ewWaitUntilTerminated'));
+        expect(
+          body,
+          contains('SameInstallDir(StaleDir'),
+          reason:
+              'הרצת uninstaller על רשומה שמצביעה על {app} הייתה מוחקת '
+              'את הקבצים שזה עתה הותקנו',
+        );
+        expect(
+          body,
+          contains('RegDeleteKeyIncludingSubkeys(RootKey, UninstallRegKey)'),
+          reason:
+              'רשומה שמצביעה על {app} (או בלי uninstaller) נמחקת '
+              'מהרישום בלבד',
+        );
+      });
+    }
+  });
+
   group('שיגור-מחדש עם מצב מפורש — בלי לשאול שוב', () {
     for (final name in _scripts) {
       test('$name: ShouldSkipPage מדלג על עמודי הפתיחה והמצב', () {
@@ -419,6 +561,82 @@ void main() {
         expect(body, contains("CmdLineParamExists('/CURRENTUSER')"));
         expect(body, contains('FeaturesPage.ID'));
         expect(body, contains('ModePage.ID'));
+      });
+    }
+  });
+
+  group('איפוס הגדרות לא מוחק ספרים (issue #873)', () {
+    // שם פרוצדורת המחיקה-עם-החרגות בכל סקריפט: הרגיל משמר גם books,
+    // ה-FULL רק backups כי הספרייה מותקנת בו מחדש.
+    const exceptProc = {
+      _regular: 'DelTreeExceptBooksAndBackups',
+      _full: 'DelTreeExceptBackups',
+    };
+
+    for (final name in _scripts) {
+      test('$name: הנתיב העברי הישן נמחק עם החרגות ולא ב-DelTree מלא', () {
+        final body = _routine(_script(name), 'procedure CurStepChanged(');
+        final legacy = body.indexOf(r'{localappdata}\אוצריא');
+        expect(legacy, greaterThanOrEqualTo(0));
+
+        final end = legacy + 250 > body.length ? body.length : legacy + 250;
+        final after = body.substring(legacy, end);
+        expect(
+          after,
+          contains('${exceptProc[name]}(AppDataPath)'),
+          reason: 'DelTree מלא על הנתיב העברי מחק ספריות וגיבויים שלמים',
+        );
+        expect(after, isNot(contains('DelTree(AppDataPath')));
+        expect(
+          body,
+          isNot(contains(r'אוצריא\Data')),
+          reason: 'קוד מת — תת-התיקייה נמחקת ממילא עם ההורה',
+        );
+      });
+
+      test('$name: נתיב הספרייה המותאם נקרא לפני המחיקה ומוגן ממנה', () {
+        final body = _routine(_script(name), 'procedure CurStepChanged(');
+        final protect = body.indexOf(
+          'ProtectedLibraryPath := RemoveBackslash(GetCustomLibraryPath())',
+        );
+        final firstDelete = body.indexOf('${exceptProc[name]}(');
+
+        expect(protect, greaterThanOrEqualTo(0));
+        expect(
+          firstDelete,
+          greaterThan(protect),
+          reason: 'הנתיב נשמר ב-prefs — חייבים לקרוא אותו לפני שה-prefs נמחק',
+        );
+
+        final delProc = _routine(
+          _script(name),
+          'procedure ${exceptProc[name]}(',
+        );
+        expect(
+          delProc,
+          contains('Lowercase(ChildPath) <> Lowercase(ProtectedLibraryPath)'),
+          reason: 'ספרייה מותאמת בתוך נתיב נתונים נמחקה יחד איתו',
+        );
+        expect(
+          delProc,
+          contains('Lowercase(Path) = Lowercase(ProtectedLibraryPath)'),
+          reason: 'ספרייה שהיא הנתיב הנמחק עצמו חייבת יציאה מוקדמת',
+        );
+      });
+
+      test('$name: תיאור משימת האיפוס מוביל באזהרה ולא ממליץ עליה', () {
+        final tasks = _section(_script(name), 'Tasks');
+        final line = tasks
+            .split('\n')
+            .firstWhere((l) => l.contains('resetsettings'));
+
+        expect(
+          line,
+          isNot(contains('מומלץ')),
+          reason: 'הניסוח "מומלץ למעדכנים" גרם למשתמשים לסמן ולאבד נתונים',
+        );
+        expect(line.indexOf('אזהרה'), greaterThanOrEqualTo(0));
+        expect(line.indexOf('אזהרה'), lessThan(line.indexOf('ימחק')));
       });
     }
   });
@@ -460,13 +678,16 @@ void main() {
   group('סימון גרסת מילון החיפוש בחבילות FULL', () {
     // בלי הסימון האפליקציה מורידה מחדש ~57MB בבדיקת העדכון הראשונה (issue #665).
     test('$_full: אחרי חילוץ lexical.db נכתב סימון מ-sha256 של הקובץ', () {
-      final body = _routine(_script(_full), 'procedure CurStepChanged(');
+      final body = _routine(
+        _script(_full),
+        'procedure ExtractEmbeddedLibraryArchives();',
+      );
 
       expect(body, contains("'\\lexical.db.version'"));
       expect(
         body,
         contains(
-          "Lowercase(GetSHA256OfFile(SelectedBooksPath + '\\lexical.db'))",
+          "Lowercase(GetSHA256OfFile(StagingBooks + '\\lexical.db'))",
         ),
         reason: 'הנכס ב-release אינו דחוס — ה-digest מחושב על הקובץ המחולץ',
       );
@@ -483,6 +704,97 @@ void main() {
         expect(step, contains(r'$BUNDLE_ROOT/אוצריא/lexical.db.version'));
       });
     }
+  });
+
+  group('התקנה ניידת — שאלה לפני שכפול ספרייה קיימת (issue #861)', () {
+    test('$_full: השאלה נשאלת בלחיצת "התקן" ומזהה ספרייה קיימת בלבד', () {
+      final script = _script(_full);
+      final ask = _routine(script, 'procedure AskPortableLibraryChoice(');
+
+      expect(ask, contains('if not PortableMode then'));
+      expect(ask, contains('FindExistingLibraryPath()'));
+      expect(
+        ask,
+        contains('MB_YESNO) = IDNO'),
+        reason: 'ברירת המחדל (Yes) חייבת להישאר חילוץ — דילוג רק בבחירה מפורשת',
+      );
+
+      final next = _routine(script, 'function NextButtonClick(');
+      expect(
+        next,
+        contains('AskPortableLibraryChoice()'),
+        reason: 'השאלה חייבת לרוץ בעמוד Ready, לפני תחילת ההתקנה',
+      );
+    });
+
+    test('$_full: הזיהוי מכסה את ה-prefs ואת שני נתיבי ברירת המחדל', () {
+      final find = _routine(
+        _script(_full),
+        'function FindExistingLibraryPath(',
+      );
+
+      expect(find, contains('GetCustomLibraryPath()'));
+      expect(find, contains(r"'{userappdata}\otzaria\books'"));
+      expect(find, contains(r"'{commonappdata}\otzaria\books'"));
+      expect(
+        RegExp('IsOtzariaBooksFolder').allMatches(find).length,
+        3,
+        reason: 'כל מועמד חייב אימות תוכן לפני שהוא נחשב ספרייה קיימת',
+      );
+    });
+
+    test('$_full: הדילוג כותב את ה-marker ויוצא לפני החילוץ', () {
+      final body = _routine(_script(_full), 'procedure CurStepChanged(');
+      final skipAt = body.indexOf('PortableMode and PortableSkipLibrary');
+      final extractAt = body.indexOf('zstd.exe');
+
+      expect(skipAt, greaterThan(0));
+      expect(
+        skipAt,
+        lessThan(extractAt),
+        reason: 'בלוק הדילוג חייב לקדום לחילוץ — אחרת העותק הכפול כבר נוצר',
+      );
+
+      final skipBlock = body.substring(skipAt, extractAt);
+      expect(
+        skipBlock,
+        contains(r"'{app}\portable.marker'"),
+        reason: 'גם בדילוג ההתקנה חייבת להישאר ניידת',
+      );
+      expect(skipBlock, contains('exit;'));
+    });
+
+    test('שירות הספרייה היתומה מזהה התקנת מנהל לפי ה-AppId של המתקינים', () {
+      final service = File(
+        'lib/settings/services/orphan_library_service.dart',
+      ).readAsStringSync();
+      final guid = RegExp(
+        r'\{[0-9A-F-]{36}\}_is1',
+      ).firstMatch(service)?.group(0);
+
+      expect(guid, isNotNull, reason: 'מפתח ההסרה נעלם מהשירות');
+      final appId = guid!.substring(0, guid.length - 4);
+      for (final name in _scripts) {
+        expect(
+          _script(name),
+          contains('AppId={$appId'),
+          reason:
+              'שינוי AppId במתקין ישבור את זיהוי התקנת המנהל '
+              'ב-OrphanLibraryService — יש לעדכן את שניהם יחד',
+        );
+      }
+    });
+
+    test('$_full: בדילוג לא מורידים את חבילת הספרייה המאונדקסת', () {
+      final next = _routine(_script(_full), 'function NextButtonClick(');
+      expect(
+        next,
+        contains(
+          'if not PortableSkipLibrary then\n'
+          '      Result := PrepareIndexedLibrary();',
+        ),
+      );
+    });
   });
 }
 
