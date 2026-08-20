@@ -35,6 +35,30 @@ class _FakeRegistryRepo extends Fake implements PluginRegistryRepository {
       this.permission;
 }
 
+class _TabClosingRepo extends Fake implements PluginRegistryRepository {
+  _TabClosingRepo({this.onFirstEnabledCheck, this.onPermissionCheck});
+  final VoidCallback? onFirstEnabledCheck;
+  final void Function(String pluginId)? onPermissionCheck;
+  bool _enabledFired = false;
+
+  @override
+  Future<bool> getIsEnabled(String pluginId) async {
+    await Future<void>.delayed(Duration.zero);
+    if (!_enabledFired) {
+      _enabledFired = true;
+      onFirstEnabledCheck?.call();
+    }
+    return true;
+  }
+
+  @override
+  Future<bool?> getPermission(String pluginId, String permission) async {
+    await Future<void>.delayed(Duration.zero);
+    onPermissionCheck?.call(pluginId);
+    return true;
+  }
+}
+
 // ── fake repository לסנכרון תרומות עלייה (הרשאות מוענקות, בלי SQLite) ──────
 class _ContributionsRepo extends Fake implements PluginRegistryRepository {
   static const _granted = ['app.startup_contributions', 'reader.toolbar'];
@@ -1365,5 +1389,72 @@ void main() {
         expect(b.jsEvents, contains(contains('navigation.changed')));
       },
     );
+  });
+
+  group('סגירת טאב תוך כדי פעולה אסינכרונית', () {
+    tearDown(() => _d.repositoryForTesting = PluginRegistryRepository());
+
+    test('הסרת תוסף באמצע ה-await אינה מפילה את השידור', () async {
+      const pids = [
+        'crash.a',
+        'crash.b',
+        'crash.c',
+        'crash.d',
+        'crash.e',
+        'crash.f',
+      ];
+      final controllers = {
+        for (final pid in pids) pid: _FakeWebViewController(),
+      };
+      controllers.forEach(_d.registerController);
+      addTearDown(() {
+        for (final pid in pids) {
+          _d.unregisterController(pid);
+        }
+      });
+
+      _d.repositoryForTesting = _TabClosingRepo(
+        onFirstEnabledCheck: () => _d.unregisterController(pids.last),
+      );
+
+      await expectLater(
+        _d.dispatchEvent('navigation.changed', {'screen': 'library'}),
+        completes,
+      );
+
+      for (final pid in pids.take(pids.length - 1)) {
+        expect(controllers[pid]!.evaluateJavascriptCalls, 1, reason: pid);
+      }
+      expect(controllers[pids.last]!.evaluateJavascriptCalls, 0);
+    });
+
+    test('הסרת תוסף בבדיקת ההרשאה אינה מונעת resume מתוסף אחר', () async {
+      const closing = 'perm.closing';
+      const survivor = 'perm.survivor';
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      _d.resetVisibilityForTesting();
+      await _d.dispatchEvent('theme.changed', {'mode': 'dark'});
+
+      final closingController = _LifecycleFakeController();
+      final survivorController = _LifecycleFakeController();
+      _d.registerController(closing, closingController);
+      _d.registerController(survivor, survivorController);
+      addTearDown(() {
+        _d.unregisterController(closing);
+        _d.unregisterController(survivor);
+      });
+
+      _d.repositoryForTesting = _TabClosingRepo(
+        onPermissionCheck: (pluginId) {
+          if (pluginId == closing) _d.unregisterController(closing);
+        },
+      );
+
+      _d.setVisiblePluginInstances({_fg(closing), _fg(survivor)});
+      await pumpEventQueue();
+
+      expect(survivorController.resumeCalls, 1);
+    });
   });
 }

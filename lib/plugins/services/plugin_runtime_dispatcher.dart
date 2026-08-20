@@ -547,15 +547,12 @@ class PluginRuntimeDispatcher {
     _enabledCache[pluginId] = isEnabled;
     if (!isEnabled) return false;
 
-    _permissionCache[pluginId] ??= {};
+    final permissions = _permissionCache[pluginId] ??= {};
     final permKey = 'events.subscribe:$topic';
-    if (!_permissionCache[pluginId]!.containsKey(permKey)) {
-      _permissionCache[pluginId]![permKey] = await _repository.getPermission(
-        pluginId,
-        permKey,
-      );
+    if (!permissions.containsKey(permKey)) {
+      permissions[permKey] = await _repository.getPermission(pluginId, permKey);
     }
-    return _permissionCache[pluginId]![permKey] == true;
+    return permissions[permKey] == true;
   }
 
   Future<void> dispatchEvent(String topic, Map<String, dynamic> payload) async {
