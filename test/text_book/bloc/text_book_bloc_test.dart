@@ -728,12 +728,15 @@ void main() {
         description: 'page-shape links load',
       );
 
-      bloc.add(const UpdateVisibleIndecies([84, 85, 86]));
+      bloc.add(
+        const UpdateVisibleIndecies([_farLine, _farLine + 1, _farLine + 2]),
+      );
 
       await _waitFor(
         () =>
-            (bloc.state as TextBookLoaded).visibleIndices.first == 84 &&
-            repository.lastStartIndex == 24,
+            (bloc.state as TextBookLoaded).visibleIndices.first == _farLine &&
+            repository.lastStartIndex ==
+                _farLine - TextBookBloc.linkLookBehindLines,
         description: 'links reload after scroll',
       );
 
@@ -1166,7 +1169,13 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 80));
           final afterOverride = repository.getBookLinksInRangeCalls;
 
-          bloc.add(const UpdateVisibleIndecies([12, 13, 14]));
+          bloc.add(
+            const UpdateVisibleIndecies([
+              _farLine,
+              _farLine + 1,
+              _farLine + 2,
+            ]),
+          );
 
           await _waitFor(
             () => repository.getBookLinksInRangeCalls > afterOverride,
