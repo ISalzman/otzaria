@@ -124,9 +124,9 @@ class TextBookTab extends OpenedTab {
     @visibleForTesting TextBookBloc? blocOverride,
     // מהדורה חלופית מקבלת כותרת טאב עם שם המהדורה, להבחנה מהנוסח הממוזג.
   }) : super(
-         book.versionTitle == null
+         book.versionDisplayTitle == null
              ? book.title
-             : '${book.title} (${book.versionTitle})',
+             : '${book.title} (${book.versionDisplayTitle})',
          isPinned: isPinned,
          dedupeKey: dedupeKey,
        ) {

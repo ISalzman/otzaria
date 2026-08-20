@@ -209,6 +209,25 @@ void main() {
         equals(PerBookSettings.bookKey(book)),
       );
     });
+
+    test('נוסח חלופי נפרד מהנוסח הראשי — הם נפתחים זה לצד זה', () {
+      final merged = TextBook(title: 'ספר', categoryId: 1);
+      final version = merged.copyWith(versionTitle: 'Davidson');
+
+      expect(
+        PerBookSettings.bookKey(merged),
+        isNot(PerBookSettings.bookKey(version)),
+      );
+    });
+
+    test('שני נוסחים של אותו ספר נפרדים זה מזה', () {
+      final book = TextBook(title: 'ספר', categoryId: 1);
+
+      expect(
+        PerBookSettings.bookKey(book.copyWith(versionTitle: 'Davidson')),
+        isNot(PerBookSettings.bookKey(book.copyWith(versionTitle: 'Wiki'))),
+      );
+    });
   });
 
   group('PdfBookPerBookSettings — שמירה/טעינה בפועל', () {

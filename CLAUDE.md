@@ -686,6 +686,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Commentary grouping | `test/text_book/commentary_grouping_test.dart` |
 | Book source dialog | `test/text_book/view/book_source_dialog_test.dart` |
 | Error report dialog | `test/text_book/view/error_report_dialog_test.dart` |
+| נוסחאות הספר (זכאות, דיאלוג הבחירה, פתיחה בכרטיסייה חדשה) | `test/text_book/utils/book_versions_action_test.dart`, `test/library/view/book_versions_dialog_test.dart`, `test/text_book/view/text_book_screen_actions_test.dart` |
 
 **Text Book BLoC**
 | Area | Test File |

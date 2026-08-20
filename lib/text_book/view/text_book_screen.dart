@@ -29,6 +29,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/utils/book_versions_action.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
@@ -41,6 +42,7 @@ import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 // [EDITING DISABLED] import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/library/view/book_versions_dialog.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/print_content_models.dart';
@@ -263,6 +265,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   bool _hasResolvedCompanionPdf = false;
   // מהדורות מקבילות ללחצן המובנה: המובנית ראשונה, אחריה היברובוקס מקומיות.
   List<ParallelEdition> _parallelEditions = const [];
+  bool _hasBookVersions = false;
   bool _leftPaneAutoCloseQueuedByScroll = false;
   // מצב חלונית הצד שזוהה לאחרונה, לעיגון-מחדש של הטקסט בעת פתיחה/סגירה.
   bool _lastShowLeftPaneForReanchor = false;
@@ -732,6 +735,8 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         return;
       }
 
+      _resolveBookVersions();
+
       context.read<ShamorZachorDataProvider>().ensureLoaded().then((_) {
         if (mounted) {
           context.read<ShamorZachorProgressProvider>().ensureLoaded();
@@ -934,6 +939,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       });
     } catch (e, stackTrace) {
       debugPrint('שגיאה בפתרון מהדורות מקבילות: $e\n$stackTrace');
+    }
+  }
+
+  /// בודק אם לספר יש נוסחאות (מהדורות) שניתן לפתוח — הבדיקה קובעת אם הפעולה
+  /// תופיע בתפריט. נקראת אחרי הפריים הראשון, כדי שהשאילתה לא תתחרה עם טעינת
+  /// תוכן הספר בעלייה.
+  Future<void> _resolveBookVersions() async {
+    try {
+      final hasVersions = await hasBookVersionsToOpen(widget.tab.book);
+      if (!mounted || !hasVersions) return;
+      setState(() => _hasBookVersions = true);
+    } catch (e) {
+      debugPrint('שגיאה בבדיקת נוסחאות הספר: $e');
     }
   }
 
@@ -1429,7 +1447,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       state.book.title,
     );
 
-    final author = state.book.author;
+    // בכרטיסייה של נוסח חלופי הכותרת זהה לזו של הנוסח הראשי; שם המהדורה הוא מה
+    // שמבחין ביניהן, ולכן הוא מוצג במקום שם המחבר.
+    final versionTitle = state.book.versionDisplayTitle;
+    final subtitle = versionTitle == null
+        ? state.book.author
+        : 'נוסח: $versionTitle';
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -1493,15 +1516,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                 ),
         );
 
-        // אם יש מחבר, מציגים אותו מתחת לכותרת
-        final child = author != null && author.isNotEmpty
+        // אם יש מחבר (או שם מהדורה), מציגים אותו מתחת לכותרת
+        final child = subtitle != null && subtitle.isNotEmpty
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   titleWidget,
                   Text(
-                    author,
+                    subtitle,
                     style: authorStyle,
                     textAlign: textAlign,
                     maxLines: 1,
@@ -1513,7 +1536,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
         if (textPainter.didExceedMaxLines) {
           return Tooltip(
-            message: author != null ? '$displayText\n$author' : displayText,
+            message: subtitle != null ? '$displayText\n$subtitle' : displayText,
             child: child,
           );
         }
@@ -1835,7 +1858,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         ),
       ),
 
-      // 4) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת) - לא בתצוגה משולבת
+      // 4) נוסחאות (מהדורות) הספר
+      if (_hasBookVersions)
+        (
+          35,
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
+            icon: FluentIcons.stack_24_regular,
+            tooltip: 'הצג נוסחאות נוספות',
+            onPressed: () => _showBookVersions(context, state),
+          ),
+        ),
+
+      // 5) איפוס הגדרות פר-ספר (מוצג רק כשההגדרה מופעלת) - לא בתצוגה משולבת
       if (!widget.isInCombinedView &&
           context.read<SettingsBloc>().state.enablePerBookSettings)
         (
@@ -2646,6 +2681,29 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ignoreHistory: true,
       requiresStableLayout: true,
       insertAdjacent: true,
+    );
+  }
+
+  /// פותח את רשימת הנוסחאות של הספר; הנוסח שייבחר נפתח בכרטיסייה חדשה סמוכה,
+  /// בשורה שמוצגת כרגע.
+  void _showBookVersions(BuildContext context, TextBookLoaded state) {
+    final lineIndex = _topmostVisibleSourceLine(state);
+    showBookVersionsDialog(
+      context,
+      state.book,
+      title: 'נוסחאות נוספות — ${state.book.title}',
+      hint: 'הנוסח שייבחר ייפתח בכרטיסייה חדשה, באותו מיקום.',
+      onVersionSelected: (target) => openBook(
+        context,
+        target,
+        lineIndex,
+        '',
+        // המיקום נלקח מהשורה הנראית ולא מהיסטוריית הקריאה של אותו נוסח, וכרטיסייה
+        // פתוחה שלו נגללת אליו במקום רק לקבל מיקוד.
+        ignoreHistory: true,
+        insertAdjacent: true,
+        navigateToPositionIfReused: true,
+      ),
     );
   }
 
