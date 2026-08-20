@@ -132,7 +132,13 @@ class CopyUtils {
     final book = bookName.trim();
     if (book.isEmpty || ref == book) return ref == book ? '' : ref;
     if (!ref.startsWith(book)) return ref;
-    var rest = ref.substring(book.length).trimLeft();
+    final suffix = ref.substring(book.length);
+    if (suffix.isNotEmpty &&
+        !suffix.startsWith(',') &&
+        suffix.trimLeft() == suffix) {
+      return ref;
+    }
+    var rest = suffix.trimLeft();
     if (rest.startsWith(',')) {
       rest = rest.substring(1).trimLeft();
     }

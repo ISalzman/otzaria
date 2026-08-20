@@ -30,6 +30,13 @@ void main() {
       );
     });
 
+    test('reference שמתחיל במילה עם קידומת שם הספר מוחזר כמות שהוא', () {
+      expect(
+        CopyUtils.referencePath(bookName: 'ספר', reference: 'ספרים, שער א'),
+        'ספרים, שער א',
+      );
+    });
+
     test('reference שזהה לשם הספר — נתיב ריק (בלי הכפלה)', () {
       expect(
         CopyUtils.referencePath(bookName: 'ספר א', reference: 'ספר א'),
