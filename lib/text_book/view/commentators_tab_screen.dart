@@ -809,6 +809,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           indexes: effectiveIndexes,
           showSearch: true,
           autofocus: true,
+          // shrinkWrap היה כופה layout של כל המפרשים בפריים אחד — פתיחה
+          // איטית מאוד על קטע עם הרבה מפרשים (issue #844).
+          shrinkWrap: false,
           useAvailableCommentators: _selectedCommentatorsOverride == null,
           selectedCommentatorsOverride: _selectedCommentatorsOverride,
           onSelectedCommentatorsOverrideChanged: _updateSelectedCommentators,

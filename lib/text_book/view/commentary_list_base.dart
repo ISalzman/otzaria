@@ -214,6 +214,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
   String? _cachedGroupingSignature;
   Future<List<CommentaryGroup>>? _cachedGroupsFuture;
 
+  // הרשימה השטוחה: פריט נפרד לכל כותרת מפרש ולכל קטע — כך הרשימה נבנית
+  // בעצלנות ולא כל מפרשי הקטע בבת אחת (מקור האיטיות ב-issue #844).
+  Map<String, int> _groupHeaderFlatIndex = const {};
+  Map<String, int> _linkFlatIndex = const {};
+  // הערות אישיות פר ספר-מפרש, משותפות לכל הקטעים של אותו מפרש.
+  final Map<String, Future<List<PersonalNote>>> _personalNotesByGroup = {};
+
   // Anti-jitter search stats
   Timer? _searchUpdateDebounce;
   final Map<String, int> _pendingCounts = {};
@@ -308,6 +315,54 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     _cachedGroupingSignature = signature;
     _cachedGroupsFuture = CommentaryService.groupConsecutiveLinksAsync(links);
     return _cachedGroupsFuture!;
+  }
+
+  /// בונה את פריטי הרשימה השטוחה מהקבוצות, לפי מצב הכיווץ הנוכחי, ומעדכן
+  /// את מיפויי האינדקסים לגלילה (כותרת קבוצה / קטע מפרש → אינדקס ברשימה).
+  List<CommentaryFlatItem> _buildFlatItems(List<CommentaryGroup> groups) {
+    final headerIdx = <String, int>{};
+    final linkIdx = <String, int>{};
+    final items = buildCommentaryFlatItems(
+      groups: groups,
+      isGroupExpanded: (title) => _expansionStates[title] ?? _allExpanded,
+      linkKey: _getLinkKey,
+      headerIndexOut: headerIdx,
+      linkIndexOut: linkIdx,
+    );
+    _groupHeaderFlatIndex = headerIdx;
+    _linkFlatIndex = linkIdx;
+    return items;
+  }
+
+  void _toggleGroupExpansion(CommentaryGroup group) {
+    final key = group.bookTitle;
+    final expanded = !(_expansionStates[key] ?? _allExpanded);
+    setState(() {
+      _expansionStates[key] = expanded;
+      _updateGlobalExpansionState();
+    });
+    if (expanded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final headerIndex = _groupHeaderFlatIndex[key];
+        if (headerIndex != null) _ensureExpandedGroupVisible(headerIndex);
+      });
+    }
+  }
+
+  Future<List<PersonalNote>> _personalNotesForGroup(CommentaryGroup group) {
+    return _personalNotesByGroup.putIfAbsent(group.bookTitle, () {
+      final loader = widget.personalNotesLoader;
+      if (loader == null) return Future.value(const <PersonalNote>[]);
+      return loader(
+        group.bookTitle,
+        categoryId: group.links.firstOrNull?.targetCategoryId,
+      );
+    });
+  }
+
+  void _refreshGroupPersonalNotes(String groupTitle) {
+    setState(() => _personalNotesByGroup.remove(groupTitle));
   }
 
   List<CommentatorGroup> _commentatorGroups(TextBookLoaded state) {
@@ -845,31 +900,19 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       if (!mounted || !_itemScrollController.isAttached) return;
       final title = _pendingCommentatorScrollTitle;
       if (title == null) return;
-      final groupIndex = _findGroupIndexByTitle(title);
-      if (groupIndex < 0) return;
+      final headerIndex = _groupHeaderFlatIndex[title];
+      if (headerIndex == null) return;
       _pendingCommentatorScrollTitle = null;
       if (_expansionStates[title] == false) {
         setState(() => _expansionStates[title] = true);
       }
       _itemScrollController.scrollTo(
-        index: groupIndex,
+        index: headerIndex,
         alignment: 0.0,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
     });
-  }
-
-  int _findGroupIndexByTitle(String title) {
-    // _orderedLinks מסודר לפי קבוצות — מחפש את האינדקס הקבוצתי
-    // על ידי מניית קבוצות ייחודיות (כמו ב-ScrollablePositionedList)
-    final seen = <String>[];
-    for (final link in _orderedLinks) {
-      final t = utils.getTitleFromPath(link.path2);
-      if (!seen.contains(t)) seen.add(t);
-    }
-    final idx = seen.indexOf(title);
-    return idx; // -1 אם לא נמצא
   }
 
   void _updateLastScrollIndex() {
@@ -887,31 +930,22 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     }
   }
 
-  /// גולל כדי שתוכן מפרש שזה עתה נפתח ייכנס לתצוגה, רק אם הוא חורג מתחתיתה.
-  /// גולל את המינימום הנדרש; אם התוכן ארוך מהתצוגה מביא את הכותרת לראש.
-  void _ensureExpandedGroupVisible(int groupIndex) {
+  /// גולל כדי שתוכן קבוצה שזה עתה נפתחה ייכנס לתצוגה. ברשימה השטוחה הכותרת
+  /// היא פריט קטן שאינו יודע את גובה התוכן שנפתח מתחתיו, לכן גוללים את
+  /// הכותרת לראש רק כשהיא בחצי התחתון (שם לתוכן שנפתח אין מקום נראה).
+  void _ensureExpandedGroupVisible(int headerIndex) {
     if (!_itemScrollController.isAttached) return;
     ItemPosition? pos;
     for (final p in _itemPositionsListener.itemPositions.value) {
-      if (p.index == groupIndex) {
+      if (p.index == headerIndex) {
         pos = p;
         break;
       }
     }
-    // התוכן כבר נכנס במלואו, או שהכותרת כבר בראש – אין צורך לגלול
-    if (pos == null ||
-        pos.itemTrailingEdge <= 1.0 ||
-        pos.itemLeadingEdge <= 0.05) {
-      return;
-    }
-    final double overflow = pos.itemTrailingEdge - 1.0;
-    final double targetLeading = (pos.itemLeadingEdge - overflow).clamp(
-      0.05,
-      pos.itemLeadingEdge,
-    );
+    if (pos == null || pos.itemLeadingEdge <= 0.5) return;
     _itemScrollController.scrollTo(
-      index: groupIndex,
-      alignment: targetLeading,
+      index: headerIndex,
+      alignment: 0.05,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
@@ -1033,26 +1067,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       return;
     }
 
-    // 2. מוצא את ה-group שמכיל את ה-link
-    final groups = await _getCachedGroups(_orderedLinks);
-    int targetGroupIndex = -1;
-    CommentaryGroup? targetGroup;
-
-    for (int i = 0; i < groups.length; i++) {
-      final group = groups[i];
-      if (group.links.any((l) => _getLinkKey(l) == _getLinkKey(targetLink!))) {
-        targetGroupIndex = i;
-        targetGroup = group;
-        break;
-      }
-    }
-
-    if (targetGroupIndex == -1 || targetGroup == null) {
-      return;
-    }
-
-    // 3. מבטיח שה-ExpansionTile של הקבוצה פתוח
-    final groupKey = targetGroup.bookTitle;
+    // 2. מבטיח שהקבוצה של ה-link פתוחה (בקבוצה מכווצת הקטעים אינם ברשימה)
+    final groupKey = utils.getTitleFromPath(targetLink.path2);
 
     final bool isCurrentlyExpanded = _expansionStates[groupKey] ?? true;
 
@@ -1083,11 +1099,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           itemContext.mounted &&
           itemContext.findRenderObject() is RenderBox;
 
-      // שלב א': גלילה גסה לקבוצה – רק אם הפריט לא בעץ הרינדור
+      // שלב א': גלילה גסה לפריט השטוח של הקטע – רק אם הוא לא בעץ הרינדור
       if (!itemInRenderTree) {
-        if (_itemScrollController.isAttached) {
+        final flatIndex = _linkFlatIndex[linkKey];
+        if (flatIndex != null && _itemScrollController.isAttached) {
           _itemScrollController.scrollTo(
-            index: targetGroupIndex,
+            index: flatIndex,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
             alignment: 0.05,
@@ -1302,24 +1319,24 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     // אם יש מצב מעורב, לא משנים את _allExpanded
   }
 
-  Widget _buildCommentaryGroupTile({
-    required CommentaryGroup group,
-    required TextBookLoaded state,
-    required int groupIndex,
-  }) {
-    final groupKey = group.bookTitle;
+  Widget _buildGroupHeader(CommentaryGroup group) {
+    return _CommentaryGroupHeader(
+      key: ValueKey('h:${group.bookTitle}'),
+      bookTitle: group.bookTitle,
+      fontSize: widget.fontSize,
+      isExpanded: _expansionStates[group.bookTitle] ?? _allExpanded,
+      onTap: () => _toggleGroupExpansion(group),
+    );
+  }
 
-    // אם אין מצב שמור עבור הקבוצה הזו, משתמש במצב הגלובלי
-    if (!_expansionStates.containsKey(groupKey)) {
-      _expansionStates[groupKey] = _allExpanded;
-    }
-
-    final isExpanded = _expansionStates[groupKey] ?? _allExpanded;
-
-    return _CollapsibleCommentaryGroup(
-      key: PageStorageKey(groupKey),
-      group: group,
-      isExpanded: isExpanded,
+  Widget _buildLinkItem(
+    CommentaryGroup group,
+    Link link,
+    TextBookLoaded state,
+  ) {
+    return _CommentaryLinkItem(
+      key: ValueKey(_getLinkKey(link)),
+      link: link,
       fontSize: widget.fontSize,
       openBookCallback: widget.openBookCallback,
       removeNikud: state.commentaryRemoveNikud,
@@ -1338,19 +1355,6 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       getLinkKey: _getLinkKey,
       savedSelectedTextListenable: _savedSelectedText,
       lastSelectedLinkListenable: _lastSelectedLink,
-      onExpansionChanged: (expanded) {
-        _expansionStates[groupKey] = expanded;
-        // בודק אם כל המפרשים פתוחים או סגורים ומעדכן את המצב הגלובלי
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() {
-            _updateGlobalExpansionState();
-          });
-          if (expanded) {
-            _ensureExpandedGroupVisible(groupIndex);
-          }
-        });
-      },
       // לחיצת עכבר על מפרש מסמנת אותו כיעד הייחוס להעתקת מקלדת (Ctrl+C),
       // כי ל-SelectionArea היחיד אין מידע על המפרש הספציפי שבו הבחירה.
       onLinkPointerDown: (link) => _lastSelectedLink.value = link,
@@ -1362,7 +1366,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
       onOpenPersonalNote: widget.onOpenPersonalNote,
-      personalNotesLoader: widget.personalNotesLoader,
+      personalNotes: _personalNotesForGroup(group),
+      onNoteSaved: () => _refreshGroupPersonalNotes(group.bookTitle),
       restoreLineBreaks: _restoreLineBreaks,
     );
   }
@@ -1824,27 +1829,37 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                               () => _allExpanded,
                             );
                           }
+                          final flatItems = _buildFlatItems(groups);
 
                           final listView = ScrollablePositionedList.builder(
                             itemScrollController: _itemScrollController,
                             itemPositionsListener: _itemPositionsListener,
-                            initialScrollIndex: _lastScrollIndex.clamp(
-                              0,
-                              groups.length - 1,
-                            ),
+                            initialScrollIndex: flatItems.isEmpty
+                                ? 0
+                                : _lastScrollIndex.clamp(
+                                    0,
+                                    flatItems.length - 1,
+                                  ),
                             key: PageStorageKey(
                               'commentary_${selectedCommentators.join(',')}',
                             ),
                             physics: const ClampingScrollPhysics(),
                             scrollOffsetController: scrollController,
                             shrinkWrap: widget.shrinkWrap,
-                            itemCount: groups.length,
-                            itemBuilder: (context, groupIndex) {
-                              final group = groups[groupIndex];
-                              return _buildCommentaryGroupTile(
-                                group: group,
-                                state: state,
-                                groupIndex: groupIndex,
+                            itemCount: flatItems.length,
+                            itemBuilder: (context, index) {
+                              final item = flatItems[index];
+                              final link = item.link;
+                              final child = link == null
+                                  ? _buildGroupHeader(item.group)
+                                  : _buildLinkItem(item.group, link, state);
+                              if (!item.showDivider) return child;
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  child,
+                                  const Divider(height: 1),
+                                ],
                               );
                             },
                           );
@@ -1873,7 +1888,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                                   scrollController: _itemScrollController,
                                   offsetController: scrollController,
                                   itemPositionsListener: _itemPositionsListener,
-                                  itemCount: groups.length,
+                                  itemCount: flatItems.length,
                                   child: SmoothWheelScroll(
                                     child: _constrainToContentWidth(listView),
                                   ),
@@ -2109,11 +2124,124 @@ class _SkeletonLine extends StatelessWidget {
   }
 }
 
-/// Widget מותאם אישית להצגת קבוצת מפרשים עם אפשרות כיווץ/הרחבה
-/// שלא מפריע לבחירת טקסט והעתקה (במקום ExpansionTile)
-class _CollapsibleCommentaryGroup extends StatefulWidget {
+/// פריט ברשימת המפרשים השטוחה: כותרת קבוצה (כש-[link] הוא null) או קטע מפרש
+/// בודד. [showDivider] — הפריט האחרון של הקבוצה (המפריד מצויר אחריו).
+@visibleForTesting
+class CommentaryFlatItem {
   final CommentaryGroup group;
+  final Link? link;
+  final bool showDivider;
+
+  const CommentaryFlatItem({
+    required this.group,
+    this.link,
+    required this.showDivider,
+  });
+}
+
+/// בונה את פריטי הרשימה השטוחה: פריט כותרת לכל קבוצה, ופריט לכל קטע רק
+/// בקבוצה מורחבת — כך הרשימה נבנית בעצלנות (issue #844). [headerIndexOut]
+/// ו-[linkIndexOut] מקבלים את מיפוי האינדקסים לגלילה.
+@visibleForTesting
+List<CommentaryFlatItem> buildCommentaryFlatItems({
+  required List<CommentaryGroup> groups,
+  required bool Function(String bookTitle) isGroupExpanded,
+  required String Function(Link link) linkKey,
+  required Map<String, int> headerIndexOut,
+  required Map<String, int> linkIndexOut,
+}) {
+  final items = <CommentaryFlatItem>[];
+  for (final group in groups) {
+    final expanded = isGroupExpanded(group.bookTitle);
+    headerIndexOut[group.bookTitle] = items.length;
+    items.add(CommentaryFlatItem(group: group, showDivider: !expanded));
+    if (!expanded) continue;
+    for (int i = 0; i < group.links.length; i++) {
+      final link = group.links[i];
+      linkIndexOut[linkKey(link)] = items.length;
+      items.add(
+        CommentaryFlatItem(
+          group: group,
+          link: link,
+          showDivider: i == group.links.length - 1,
+        ),
+      );
+    }
+  }
+  return items;
+}
+
+/// כותרת קבוצת מפרשים ברשימה השטוחה — לחיצה מרחיבה/מכווצת דרך ההורה,
+/// בלי להפריע לבחירת טקסט והעתקה (במקום ExpansionTile).
+class _CommentaryGroupHeader extends StatelessWidget {
+  final String bookTitle;
+  final double fontSize;
   final bool isExpanded;
+  final VoidCallback onTap;
+
+  const _CommentaryGroupHeader({
+    super.key,
+    required this.bookTitle,
+    required this.fontSize,
+    required this.isExpanded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16.0,
+          vertical: 12.0,
+        ),
+        child: Row(
+          children: [
+            AnimatedRotation(
+              turns: isExpanded ? -0.25 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                Icons.keyboard_arrow_left,
+                size: 20,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: BlocBuilder<SettingsBloc, SettingsState>(
+                builder: (context, settingsState) {
+                  String displayTitle = bookTitle;
+                  if (settingsState.replaceHolyNames) {
+                    displayTitle = utils.replaceHolyNames(displayTitle);
+                  }
+                  return Text(
+                    displayTitle,
+                    style: TextStyle(
+                      fontSize: fontSize * 0.85,
+                      fontWeight: FontWeight.bold,
+                      fontVariations: AppFonts.boldFontVariations(
+                        settingsState.commentatorsFontFamily,
+                      ),
+                      fontFamily: settingsState.commentatorsFontFamily,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// קטע מפרש בודד ברשימה השטוחה. פריט עצמאי ברשימה — נבנה רק כשהוא נגלל
+/// לתצוגה, כך שפתיחת קטע עם המון מפרשים אינה בונה את כולם בבת אחת.
+class _CommentaryLinkItem extends StatefulWidget {
+  final Link link;
   final double fontSize;
   final Function(OpenedTab) openBookCallback;
   final bool removeNikud;
@@ -2129,7 +2257,12 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   final String Function(Link) getLinkKey;
   final ValueListenable<String?> savedSelectedTextListenable;
   final ValueListenable<Link?> lastSelectedLinkListenable;
-  final void Function(bool) onExpansionChanged;
+
+  /// הערות ספר המפרש. אותו Future משותף לכל קטעי המפרש בקבוצה.
+  final Future<List<PersonalNote>> personalNotes;
+
+  /// נקרא אחרי שמירת הערה — ההורה מרענן את ה-Future המשותף של הקבוצה.
+  final VoidCallback onNoteSaved;
 
   /// נקרא בלחיצת עכבר על פריט מפרש — לסימון המפרש הנבחר לייחוס העתקה.
   final void Function(Link link)? onLinkPointerDown;
@@ -2146,12 +2279,10 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
   /// מחרוזת להדגשה מה-BLoC החיצוני, ללא שדה החיפוש הפנימי.
   final ValueListenable<String>? highlightQueryListenable;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
-  final PersonalNotesLoader? personalNotesLoader;
 
-  const _CollapsibleCommentaryGroup({
+  const _CommentaryLinkItem({
     super.key,
-    required this.group,
-    required this.isExpanded,
+    required this.link,
     required this.fontSize,
     required this.openBookCallback,
     required this.removeNikud,
@@ -2167,33 +2298,21 @@ class _CollapsibleCommentaryGroup extends StatefulWidget {
     required this.getLinkKey,
     required this.savedSelectedTextListenable,
     required this.lastSelectedLinkListenable,
-    required this.onExpansionChanged,
+    required this.personalNotes,
+    required this.onNoteSaved,
     this.onLinkPointerDown,
     this.onLinkRendered,
     this.onLinkTitleRendered,
     this.restoreLineBreaks,
     this.highlightQueryListenable,
     this.onOpenPersonalNote,
-    this.personalNotesLoader,
   });
 
   @override
-  State<_CollapsibleCommentaryGroup> createState() =>
-      _CollapsibleCommentaryGroupState();
+  State<_CommentaryLinkItem> createState() => _CommentaryLinkItemState();
 }
 
-class _CollapsibleCommentaryGroupState
-    extends State<_CollapsibleCommentaryGroup> {
-  late bool _isExpanded;
-  late Future<List<PersonalNote>> _personalNotes;
-
-  @override
-  void initState() {
-    super.initState();
-    _isExpanded = widget.isExpanded;
-    _loadPersonalNotes();
-  }
-
+class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
   /// פותח את יעד הקישור בכרטיסייה חדשה (טקסט או PDF, לפי תבנית הפתיחה).
   Future<void> _navigateToLink(Link link) async {
     final tab = await buildLinkTargetTab(link);
@@ -2202,285 +2321,189 @@ class _CollapsibleCommentaryGroupState
   }
 
   @override
-  void didUpdateWidget(_CollapsibleCommentaryGroup oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.isExpanded != widget.isExpanded) {
-      _isExpanded = widget.isExpanded;
-    }
-    if (oldWidget.group.bookTitle != widget.group.bookTitle) {
-      _loadPersonalNotes();
-    }
-  }
-
-  void _loadPersonalNotes() {
-    final loader = widget.personalNotesLoader;
-    if (loader == null) {
-      _personalNotes = Future.value(const <PersonalNote>[]);
-      return;
-    }
-    final categoryId = widget.group.links.firstOrNull?.targetCategoryId;
-    _personalNotes = loader(
-      widget.group.bookTitle,
-      categoryId: categoryId,
-    );
-  }
-
-  void _refreshPersonalNotes() {
-    setState(_loadPersonalNotes);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // כותרת הקבוצה - ניתנת ללחיצה להרחבה/כיווץ
-        InkWell(
-          onTap: () {
-            setState(() {
-              _isExpanded = !_isExpanded;
-            });
-            widget.onExpansionChanged(_isExpanded);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 12.0,
-            ),
-            child: Row(
-              children: [
-                AnimatedRotation(
-                  turns: _isExpanded ? -0.25 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.keyboard_arrow_left,
-                    size: 20,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String displayTitle = widget.group.bookTitle;
-                      if (settingsState.replaceHolyNames) {
-                        displayTitle = utils.replaceHolyNames(displayTitle);
-                      }
-                      return Text(
-                        displayTitle,
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.85,
-                          fontWeight: FontWeight.bold,
-                          fontVariations: AppFonts.boldFontVariations(
-                            settingsState.commentatorsFontFamily,
-                          ),
-                          fontFamily: settingsState.commentatorsFontFamily,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+    final link = widget.link;
+    final Widget itemContent = ValueListenableBuilder<String?>(
+      valueListenable: widget.savedSelectedTextListenable,
+      child: Padding(
+        key: widget.itemKeys[widget.getLinkKey(link)],
+        padding: const EdgeInsets.only(
+          right: 32.0,
+          left: 16.0,
+          top: 8.0,
+          bottom: 8.0,
         ),
-        // תוכן המפרשים - מוצג רק כשמורחב
-        if (_isExpanded)
-          ...widget.group.links.map((link) {
-            final Widget itemContent = ValueListenableBuilder<String?>(
-              valueListenable: widget.savedSelectedTextListenable,
-              child: Padding(
-                key: widget.itemKeys[widget.getLinkKey(link)],
-                padding: const EdgeInsets.only(
-                  right: 32.0,
-                  left: 16.0,
-                  top: 8.0,
-                  bottom: 8.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    BlocBuilder<SettingsBloc, SettingsState>(
-                      builder: (context, settingsState) {
-                        return FutureBuilder<String>(
-                          future: link.displayReference,
-                          builder: (context, snapshot) {
-                            String displayTitle =
-                                snapshot.data ?? link.fallbackDisplayReference;
-                            // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף
-                            // הטקסט מוצגת גם לפני כותרת ההערה.
-                            if (link.anchorStart != null) {
-                              final markerLetter = anchorMarkerLetter(link);
-                              if (markerLetter != null) {
-                                displayTitle = '($markerLetter) $displayTitle';
-                              }
-                            }
-                            if (settingsState.replaceHolyNames) {
-                              displayTitle = utils.replaceHolyNames(
-                                displayTitle,
-                              );
-                            }
-                            final reportedTitle = displayTitle;
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (!mounted) return;
-                              widget.onLinkTitleRendered?.call(
-                                link,
-                                reportedTitle,
-                              );
-                            });
-                            return Text(
-                              displayTitle,
-                              style: TextStyle(
-                                fontSize: widget.fontSize * 0.75,
-                                fontWeight: FontWeight.normal,
-                                fontFamily:
-                                    settingsState.commentatorsFontFamily,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.5),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    AnimatedBuilder(
-                      animation: Listenable.merge([
-                        widget.searchQueryListenable,
-                        widget.currentSearchIndexListenable,
-                        widget.totalSearchResultsListenable,
-                        if (widget.highlightQueryListenable != null)
-                          widget.highlightQueryListenable!,
-                      ]),
-                      builder: (context, _) {
-                        // שדה החיפוש הפנימי גובר כשהוקלד בו; כשהוא ריק נופלים
-                        // להדגשת מונח החיפוש החיצוני (מתוצאה שנחתה בהערה).
-                        final internalQuery = widget.showSearch
-                            ? widget.searchQueryListenable.value
-                            : '';
-                        final searchQuery = internalQuery.isNotEmpty
-                            ? internalQuery
-                            : (widget.highlightQueryListenable?.value ?? '');
-                        final currentSearchIndex =
-                            (widget.showSearch ||
-                                widget.highlightQueryListenable != null)
-                            ? widget.getItemSearchIndex(link)
-                            : 0;
-                        return AppContextMenuRegion(
-                          // ריחוף מקדים את טעינת קישורי קטע היעד, כדי שהתפריט
-                          // ייבנה מוכן. הלחיצה מכסה מגע/עט, שאין בהם ריחוף.
-                          onHoverEnter: () => TargetLineLinksService.instance
-                              .prefetchOnHover(link),
-                          onSecondaryTapDown: (_) =>
-                              TargetLineLinksService.instance.prefetch(link),
-                          // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה
-                          // (התנהגות ברירת המחדל של SelectableRegion ב-Windows);
-                          // לחיצה על חלק לא-מסומן מבטלת כרגיל. אין כאן מעקב
-                          // פר-שורה — הבחירה מנוהלת ע"י SelectionArea יחיד — לכן
-                          // מחשבים את קטע הבחירה ישירות מול הפסקה שעליה לחצו.
-                          shouldPreserveSelectionOnSecondaryTap:
-                              (globalPosition) {
-                                final selected =
-                                    widget.savedSelectedTextListenable.value;
-                                if (selected == null || selected.isEmpty) {
-                                  return false;
-                                }
-                                final root = context.findRenderObject();
-                                if (root == null) return true; // סלחני
-                                return clickIsOnSelectionWithinArea(
-                                      root: root,
-                                      globalPosition: globalPosition,
-                                      selectedText: selected,
-                                    ) ??
-                                    true; // לא הוכרע — סלחני
-                              },
-                          menuBuilder: (menuCtx, _) {
-                            final savedTextAtBuild = captureSelectedTextForMenu(
-                              widget.savedSelectedTextListenable,
-                            );
-                            return ContextMenuUtils.buildCommentaryContextMenu(
-                              context: menuCtx,
-                              link: link,
-                              openBookCallback: widget.openBookCallback,
-                              fontSize: widget.fontSize,
-                              removeNikud: widget.removeNikud,
-                              removePunctuation: widget.removePunctuation,
-                              savedSelectedText: savedTextAtBuild,
-                              onNavigateToLink: _navigateToLink,
-                              onNoteSaved: _refreshPersonalNotes,
-                              onCopySelected: () => ContextMenuUtils.copyFormattedText(
-                                context: menuCtx,
-                                savedSelectedText:
-                                    (widget.restoreLineBreaks ?? (s) => s)(
-                                      savedTextAtBuild,
-                                    ),
-                                fontSize: widget.fontSize,
-                                // במצב הפאנל/כרטיסייה אין מעקב פר-פריט אחר
-                                // המפרש הנבחר (אין SelectionArea פר-פריט), לכן
-                                // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
-                                link:
-                                    widget.lastSelectedLinkListenable.value ??
-                                    link,
-                              ),
-                            );
-                          },
-                          child: CommentaryContent(
-                            key: ValueKey(
-                              '${link.index1}_${link.path2}_${link.index2}',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BlocBuilder<SettingsBloc, SettingsState>(
+              builder: (context, settingsState) {
+                return FutureBuilder<String>(
+                  future: link.displayReference,
+                  builder: (context, snapshot) {
+                    String displayTitle =
+                        snapshot.data ?? link.fallbackDisplayReference;
+                    // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף
+                    // הטקסט מוצגת גם לפני כותרת ההערה.
+                    if (link.anchorStart != null) {
+                      final markerLetter = anchorMarkerLetter(link);
+                      if (markerLetter != null) {
+                        displayTitle = '($markerLetter) $displayTitle';
+                      }
+                    }
+                    if (settingsState.replaceHolyNames) {
+                      displayTitle = utils.replaceHolyNames(
+                        displayTitle,
+                      );
+                    }
+                    final reportedTitle = displayTitle;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      widget.onLinkTitleRendered?.call(
+                        link,
+                        reportedTitle,
+                      );
+                    });
+                    return Text(
+                      displayTitle,
+                      style: TextStyle(
+                        fontSize: widget.fontSize * 0.75,
+                        fontWeight: FontWeight.normal,
+                        fontFamily: settingsState.commentatorsFontFamily,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            AnimatedBuilder(
+              animation: Listenable.merge([
+                widget.searchQueryListenable,
+                widget.currentSearchIndexListenable,
+                widget.totalSearchResultsListenable,
+                if (widget.highlightQueryListenable != null)
+                  widget.highlightQueryListenable!,
+              ]),
+              builder: (context, _) {
+                // שדה החיפוש הפנימי גובר כשהוקלד בו; כשהוא ריק נופלים
+                // להדגשת מונח החיפוש החיצוני (מתוצאה שנחתה בהערה).
+                final internalQuery = widget.showSearch
+                    ? widget.searchQueryListenable.value
+                    : '';
+                final searchQuery = internalQuery.isNotEmpty
+                    ? internalQuery
+                    : (widget.highlightQueryListenable?.value ?? '');
+                final currentSearchIndex =
+                    (widget.showSearch ||
+                        widget.highlightQueryListenable != null)
+                    ? widget.getItemSearchIndex(link)
+                    : 0;
+                return AppContextMenuRegion(
+                  // ריחוף מקדים את טעינת קישורי קטע היעד, כדי שהתפריט
+                  // ייבנה מוכן. הלחיצה מכסה מגע/עט, שאין בהם ריחוף.
+                  onHoverEnter: () =>
+                      TargetLineLinksService.instance.prefetchOnHover(link),
+                  onSecondaryTapDown: (_) =>
+                      TargetLineLinksService.instance.prefetch(link),
+                  // לחיצה ימנית על הטקסט המסומן בפועל לא תשחרר את הבחירה
+                  // (התנהגות ברירת המחדל של SelectableRegion ב-Windows);
+                  // לחיצה על חלק לא-מסומן מבטלת כרגיל. אין כאן מעקב
+                  // פר-שורה — הבחירה מנוהלת ע"י SelectionArea יחיד — לכן
+                  // מחשבים את קטע הבחירה ישירות מול הפסקה שעליה לחצו.
+                  shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+                    final selected = widget.savedSelectedTextListenable.value;
+                    if (selected == null || selected.isEmpty) {
+                      return false;
+                    }
+                    final root = context.findRenderObject();
+                    if (root == null) return true; // סלחני
+                    return clickIsOnSelectionWithinArea(
+                          root: root,
+                          globalPosition: globalPosition,
+                          selectedText: selected,
+                        ) ??
+                        true; // לא הוכרע — סלחני
+                  },
+                  menuBuilder: (menuCtx, _) {
+                    final savedTextAtBuild = captureSelectedTextForMenu(
+                      widget.savedSelectedTextListenable,
+                    );
+                    return ContextMenuUtils.buildCommentaryContextMenu(
+                      context: menuCtx,
+                      link: link,
+                      openBookCallback: widget.openBookCallback,
+                      fontSize: widget.fontSize,
+                      removeNikud: widget.removeNikud,
+                      removePunctuation: widget.removePunctuation,
+                      savedSelectedText: savedTextAtBuild,
+                      onNavigateToLink: _navigateToLink,
+                      onNoteSaved: widget.onNoteSaved,
+                      onCopySelected: () => ContextMenuUtils.copyFormattedText(
+                        context: menuCtx,
+                        savedSelectedText:
+                            (widget.restoreLineBreaks ?? (s) => s)(
+                              savedTextAtBuild,
                             ),
-                            link: link,
-                            fontSize: widget.fontSize,
-                            openBookCallback: widget.openBookCallback,
-                            removeNikud: widget.removeNikud,
-                            removePunctuation: widget.removePunctuation,
-                            searchQuery: searchQuery,
-                            currentSearchIndex: currentSearchIndex,
-                            onSearchResultsCountChanged:
-                                (widget.showSearch ||
-                                    widget.highlightQueryListenable != null)
-                                ? (count) => widget.updateSearchResultsCount(
-                                    link,
-                                    count,
-                                  )
-                                : null,
-                            onSearchSnippetsChanged:
-                                widget.showSearch &&
-                                    widget.updateSearchSnippets != null
-                                ? (snippets) => widget.updateSearchSnippets!(
-                                    link,
-                                    snippets,
-                                  )
-                                : null,
-                            onRendered: (text) =>
-                                widget.onLinkRendered?.call(link, text),
-                            personalNotes: _personalNotes,
-                            onOpenPersonalNote: widget.onOpenPersonalNote,
-                          ),
-                        );
-                      },
+                        fontSize: widget.fontSize,
+                        // במצב הפאנל/כרטיסייה אין מעקב פר-פריט אחר
+                        // המפרש הנבחר (אין SelectionArea פר-פריט), לכן
+                        // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
+                        link: widget.lastSelectedLinkListenable.value ?? link,
+                      ),
+                    );
+                  },
+                  child: CommentaryContent(
+                    key: ValueKey(
+                      '${link.index1}_${link.path2}_${link.index2}',
                     ),
-                  ],
-                ),
-              ),
-              builder: (context, selectedText, child) => child!,
-            );
+                    link: link,
+                    fontSize: widget.fontSize,
+                    openBookCallback: widget.openBookCallback,
+                    removeNikud: widget.removeNikud,
+                    removePunctuation: widget.removePunctuation,
+                    searchQuery: searchQuery,
+                    currentSearchIndex: currentSearchIndex,
+                    onSearchResultsCountChanged:
+                        (widget.showSearch ||
+                            widget.highlightQueryListenable != null)
+                        ? (count) => widget.updateSearchResultsCount(
+                            link,
+                            count,
+                          )
+                        : null,
+                    onSearchSnippetsChanged:
+                        widget.showSearch && widget.updateSearchSnippets != null
+                        ? (snippets) => widget.updateSearchSnippets!(
+                            link,
+                            snippets,
+                          )
+                        : null,
+                    onRendered: (text) =>
+                        widget.onLinkRendered?.call(link, text),
+                    personalNotes: widget.personalNotes,
+                    onOpenPersonalNote: widget.onOpenPersonalNote,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+      builder: (context, selectedText, child) => child!,
+    );
 
-            // הרשימה כולה עטופה ב-SelectionArea יחיד (בפאנל/בכרטיסייה/בתצוגה
-            // המשולבת), ולכן מחזירים את התוכן ישירות — בלי SelectionArea
-            // פר-פריט (שהיה הופך כל פריט ל"בלוק אטום" בבחירת מקלדת). עוטפים
-            // ב-Listener שקוף כדי לזהות על איזה מפרש לחץ המשתמש (לייחוס בהעתקת
-            // מקלדת Ctrl+C, שאין לה פריט-יעד).
-            return Listener(
-              onPointerDown: (_) => widget.onLinkPointerDown?.call(link),
-              child: itemContent,
-            );
-          }),
-        const Divider(height: 1),
-      ],
+    // הרשימה כולה עטופה ב-SelectionArea יחיד (בפאנל/בכרטיסייה/בתצוגה
+    // המשולבת), ולכן מחזירים את התוכן ישירות — בלי SelectionArea
+    // פר-פריט (שהיה הופך כל פריט ל"בלוק אטום" בבחירת מקלדת). עוטפים
+    // ב-Listener שקוף כדי לזהות על איזה מפרש לחץ המשתמש (לייחוס בהעתקת
+    // מקלדת Ctrl+C, שאין לה פריט-יעד).
+    return Listener(
+      onPointerDown: (_) => widget.onLinkPointerDown?.call(link),
+      child: itemContent,
     );
   }
 }
