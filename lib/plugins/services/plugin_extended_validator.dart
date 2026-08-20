@@ -108,6 +108,7 @@ const Set<String> _knownApiMethods = {
   'plugin.openSelf',
   'plugin.openOther',
   'plugin.backgroundDone',
+  'plugin.listInstalled',
   'notes.list',
   'notes.getBookNotesSummary',
   'notes.add',
@@ -181,7 +182,6 @@ const Set<String> _knownApiMethods = {
 /// APIs קיימות בתוספים אך אינן מתועדות פומבית — לא נאזהיר עליהן.
 /// שתיהן מיועדות לתוסף חנות התוספים בלבד; ב-d.ts הן מסומנות `@internal`.
 const Set<String> _knownUndocumentedMethods = {
-  'plugin.listInstalled',
   'plugin.requestInstall',
 };
 
@@ -462,6 +462,7 @@ const Map<String, String> _methodMinVersion = {
   'library.getBookAltToc': '0.9.96',
   // 0.9.97
   'plugin.backgroundDone': '0.9.97',
+  'plugin.listInstalled': '0.9.97',
   'app.getConnectivity': '0.9.96',
   'fs.writeFile': '0.9.97',
   'fs.readFile': '0.9.97',

@@ -311,8 +311,11 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   /// התוספים ה"מותקנים" — plugin.openOther נבדק מולם.
   List<InstalledPlugin> installed = [];
 
+  List<InstalledPlugin> installedPlugins = [];
+
   @override
-  Future<List<InstalledPlugin>> getAllPlugins() async => installed;
+  Future<List<InstalledPlugin>> getAllPlugins() async =>
+      [...installed, ...installedPlugins];
 }
 
 class _EnabledRegistryRepo extends Fake implements PluginRegistryRepository {
@@ -4821,6 +4824,190 @@ Future<void> main() async {
       },
       skip: engineReady ? false : searchEngineSkipReason,
     );
+  });
+
+  // ---------------------------------------------------------------
+  // plugin.listInstalled
+  // ---------------------------------------------------------------
+  group('plugin.listInstalled', () {
+    late _StubPluginRegistryRepository repo;
+    late PluginBridgeAdapter adapter;
+
+    InstalledPlugin makePlugin({
+      required String pluginId,
+      required String name,
+      required String version,
+      bool enabled = true,
+      bool showInTools = true,
+      String? toolTabIconName,
+    }) {
+      return InstalledPlugin(
+        pluginId: pluginId,
+        name: name,
+        version: version,
+        installPath: '/',
+        entrypointPath: 'index.html',
+        enabled: enabled,
+        pinned: false,
+        showInTools: showInTools,
+        manifest: PluginManifest(
+          schemaVersion: 1,
+          id: pluginId,
+          name: name,
+          version: version,
+          description: '',
+          author: '',
+          homepage: '',
+          entrypoint: 'index.html',
+          minAppVersion: '1.0.0',
+          sdkVersion: '1.x',
+          permissions: const [],
+          networkEnabled: false,
+          networkAllowlist: const [],
+          toolTabTitle: name,
+          toolTabOrder: 1,
+          defaultPinned: false,
+          toolTabIconName: toolTabIconName,
+          publishedDataTypes: const [],
+        ),
+        installedAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+    }
+
+    setUp(() {
+      repo = _StubPluginRegistryRepository();
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: repo,
+      );
+    });
+
+    test('מחזיר את כל השדות הנדרשים לכל תוסף', () async {
+      repo.installedPlugins = [
+        makePlugin(
+          pluginId: 'org.test.alpha',
+          name: 'Alpha',
+          version: '2.0.0',
+          enabled: true,
+          showInTools: true,
+          toolTabIconName: 'calendar_24_regular',
+        ),
+      ];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+
+      expect(result, hasLength(1));
+      final entry = result.first as Map<String, dynamic>;
+      expect(entry['pluginId'], 'org.test.alpha');
+      expect(entry['name'], 'Alpha');
+      expect(entry['version'], '2.0.0');
+      expect(entry['enabled'], isTrue);
+      expect(entry['showInTools'], isTrue);
+      expect(entry['toolTabIconName'], 'calendar_24_regular');
+    });
+
+    test(
+      'toolTabIconName: שם אייקון לא קיים → fallback puzzle_piece_24_regular',
+      () async {
+        repo.installedPlugins = [
+          makePlugin(
+            pluginId: 'org.test.beta',
+            name: 'Beta',
+            version: '1.0.0',
+            toolTabIconName: 'nonexistent_icon_name',
+          ),
+        ];
+
+        final result =
+            await adapter.execute('plugin', 'listInstalled', {}) as List;
+        final entry = result.first as Map<String, dynamic>;
+
+        expect(entry['toolTabIconName'], 'puzzle_piece_24_regular');
+      },
+    );
+
+    test(
+      'toolTabIconName: null במניפסט → fallback puzzle_piece_24_regular',
+      () async {
+        repo.installedPlugins = [
+          makePlugin(
+            pluginId: 'org.test.gamma',
+            name: 'Gamma',
+            version: '1.0.0',
+            toolTabIconName: null,
+          ),
+        ];
+
+        final result =
+            await adapter.execute('plugin', 'listInstalled', {}) as List;
+        final entry = result.first as Map<String, dynamic>;
+
+        expect(entry['toolTabIconName'], 'puzzle_piece_24_regular');
+      },
+    );
+
+    test('enabled=false ו-showInTools=false מוחזרים נכון', () async {
+      repo.installedPlugins = [
+        makePlugin(
+          pluginId: 'org.test.delta',
+          name: 'Delta',
+          version: '0.1.0',
+          enabled: false,
+          showInTools: false,
+        ),
+      ];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+      final entry = result.first as Map<String, dynamic>;
+
+      expect(entry['enabled'], isFalse);
+      expect(entry['showInTools'], isFalse);
+    });
+
+    test('רשימה ריקה → מחזיר []', () async {
+      repo.installedPlugins = [];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+
+      expect(result, isEmpty);
+    });
+
+    test('מספר תוספים — כולם מוחזרים', () async {
+      repo.installedPlugins = [
+        makePlugin(pluginId: 'a', name: 'A', version: '1.0.0'),
+        makePlugin(pluginId: 'b', name: 'B', version: '2.0.0'),
+      ];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+
+      expect(result, hasLength(2));
+      expect(
+        result.map((e) => (e as Map)['pluginId']),
+        containsAll(['a', 'b']),
+      );
+    });
+
+    test('סדר הרשימה נשמר כפי שמגיע מ-getAllPlugins ללא מיון נוסף', () async {
+      repo.installedPlugins = [
+        makePlugin(pluginId: 'zzz', name: 'ZPlugin', version: '1.0.0'),
+        makePlugin(pluginId: 'aaa', name: 'APlugin', version: '1.0.0'),
+        makePlugin(pluginId: 'mmm', name: 'MPlugin', version: '1.0.0'),
+      ];
+
+      final result =
+          await adapter.execute('plugin', 'listInstalled', {}) as List;
+
+      expect(
+        result.map((e) => (e as Map)['pluginId']),
+        orderedEquals(['zzz', 'aaa', 'mmm']),
+      );
+    });
   });
 }
 
