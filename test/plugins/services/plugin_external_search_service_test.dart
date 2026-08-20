@@ -90,6 +90,39 @@ void main() {
     });
 
     test(
+      'אפשרויות מילה פעילות נשלחות באירוע; מפה ריקה משמיטה את השדה',
+      () async {
+        service.register('hebrewbooks', 'owner');
+        final withOptions = service.search(
+          provider: 'hebrewbooks',
+          query: 'ברכת המזון',
+          options: const {'קידומות דקדוקיות': true},
+          wordOptions: const {
+            'ברכת_0': {'קידומות דקדוקיות': true},
+            'המזון_1': {'קידומות דקדוקיות': true},
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(request['options'], {'קידומות דקדוקיות': true});
+        expect(request['wordOptions'], {
+          'ברכת_0': {'קידומות דקדוקיות': true},
+          'המזון_1': {'קידומות דקדוקיות': true},
+        });
+        expect(withOptions, throwsStateError);
+
+        final withoutOptions = service.search(
+          provider: 'hebrewbooks',
+          query: 'ברכת המזון',
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(request.containsKey('options'), isFalse);
+        expect(request.containsKey('wordOptions'), isFalse);
+        expect(withoutOptions, throwsStateError);
+        service.removePlugin('owner');
+      },
+    );
+
+    test(
       'עמוד המשך ועמוד לפי מזהים אינם מזמינים שמות — אין בהם אינדקס',
       () async {
         service.register('hebrewbooks', 'owner');
