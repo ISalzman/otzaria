@@ -53,6 +53,9 @@ class TantivyDataProvider {
   /// נקבע באתחול: האינדקס מכיל ספרים שנצרב בהם סדר קטלוגי מגרסה ישנה.
   bool _catalogueOrderStale = false;
 
+  /// תיקיית האינדקס שחתימת הסדר הקטלוגי עליה נכשלה באתחול, אם נכשלה.
+  String? _pendingCatalogueOrderStampPath;
+
   /// Clear global cache when starting new search
   static void clearGlobalCache() {
     debugPrint(
@@ -134,15 +137,26 @@ class TantivyDataProvider {
     required bool indexStateIsKnown,
   }) {
     final hasIndexedBooks = indexedFilePaths.isNotEmpty;
+    if (_pendingCatalogueOrderStampPath != indexPath) {
+      _pendingCatalogueOrderStampPath = null;
+    }
 
     if (CatalogueOrderRevision.shouldStamp(
       indexStateIsKnown: indexStateIsKnown,
       hasIndexedBooks: hasIndexedBooks,
     )) {
       _catalogueOrderStale = false;
-      CatalogueOrderRevision.write(indexPath);
+      // כשל כתיבה כאן שקט אך יקר: האינדקס המלא שייבנה מיד יימצא בלי חותם,
+      // כלומר "ישן", והמשתמש יידרש לבנות הכול מחדש.
+      _pendingCatalogueOrderStampPath = CatalogueOrderRevision.write(indexPath)
+          ? null
+          : indexPath;
       return;
     }
+
+    // אינדוקס באותה הפעלה כבר מילא את האינדקס בסדר הנוכחי — ניסיון חוזר
+    // לחתום מונע הכרזת "ישן" על אינדקס תקין בפתיחה מחדש שבאמצע ההפעלה.
+    ensureCatalogueOrderStamp();
 
     _catalogueOrderStale = CatalogueOrderRevision.isStale(
       storedRevision: CatalogueOrderRevision.read(indexPath),
@@ -153,6 +167,16 @@ class TantivyDataProvider {
     if (_catalogueOrderStale) {
       debugPrint('⚠️ האינדקס נבנה בסדר קטלוגי ישן — נדרשת בנייה מחדש');
     }
+  }
+
+  /// כותב מחדש חותם סדר קטלוגי שכתיבתו נכשלה באתחול, כשהאינדקס שעל הדיסק
+  /// אכן נבנה בסדר הנוכחי. מחזיר האם החותם קיים כעת (כולל "לא נדרש דבר").
+  bool ensureCatalogueOrderStamp() {
+    final pendingPath = _pendingCatalogueOrderStampPath;
+    if (pendingPath == null) return true;
+    if (!CatalogueOrderRevision.write(pendingPath)) return false;
+    _pendingCatalogueOrderStampPath = null;
+    return true;
   }
 
   /// טוען מהאינדקס עצמו את רשימת הספרים שיש להם מסמכים חיים.

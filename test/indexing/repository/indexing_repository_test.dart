@@ -671,6 +671,47 @@ void main() {
       expect(provider.indexedFilePaths, isEmpty);
     });
 
+    test('אחרי commit מוצלח מושלם חותם הסדר הקטלוגי שנכשל באתחול', () async {
+      // רגרסיה: חותם שלא נכתב באתחול הותיר את האינדקס המלא "ישן" בהפעלה
+      // הבאה, והמשתמש נדרש למחוק ולבנות הכול מחדש.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(
+        PdfBook(title: 'שבת', path: r'C:ooks\שבת.pdf', id: 7),
+      );
+      final repository = IndexingRepository(provider);
+
+      await repository.indexAllBooks(
+        library,
+        includePdfBooks: false,
+        onProgress: (_, _) {},
+      );
+
+      expect(provider.ensureCatalogueOrderStampCount, 1);
+    });
+
+    test('commit שנכשל אינו נחתם — החותם מעיד על אינדקס שנשמר', () async {
+      final engine = _RecordingSearchEngine()..failCommit = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(
+        PdfBook(title: 'שבת', path: r'C:ooks\שבת.pdf', id: 7),
+      );
+      final repository = IndexingRepository(provider);
+
+      await expectLater(
+        repository.indexAllBooks(
+          library,
+          includePdfBooks: false,
+          onProgress: (_, _) {},
+        ),
+        throwsA(anything),
+      );
+
+      expect(provider.ensureCatalogueOrderStampCount, 0);
+    });
+
     test('fast path מחזיר מוקדם בלי להפעיל isolate ובלי callbacks', () async {
       final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
       final indexedFilePaths = library
@@ -1462,35 +1503,47 @@ void main() {
       expect(earlierBookLateSegment, lessThan(laterBookFirstSegment));
     });
 
-    test('מזהה של ספר שאינו במפת הסדר נכנס ב-u64 וממוין אחרון', () {
+    test('ספר שאינו בספרייה נכנס ב-u64 וממוין אחרי הספר האחרון', () {
       final u64Max = (BigInt.one << 64) - BigInt.one;
-      final unknownBook = IndexingRepository.buildCatalogueDocumentId(
-        catalogueOrder: IndexingRepository.unknownCatalogueOrder,
-        ordinal: 0,
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final resolver = IndexingRepository.buildCatalogueOrderResolver(library);
+      final lastKnown = resolver.orderFor(
+        IndexingRepository.catalogueOrderKey(library.getAllBooks().last),
       );
 
       // חריגה מ-u64 נחתכת בגשר ל-Rust ומתגלגלת למזהה 1 — הספר היה קופץ
       // לראש תוצאות החיפוש במקום להישאר אחרון.
+      final unknownBook = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: resolver.orderFor('uid:404'),
+        ordinal: 1000000,
+      );
+
       expect(unknownBook, lessThanOrEqualTo(u64Max));
       expect(
         IndexingRepository.buildCatalogueDocumentId(
-          catalogueOrder: 100000,
+          catalogueOrder: lastKnown,
           ordinal: 0,
         ),
         lessThan(unknownBook),
       );
     });
 
-    test('מזהה של ספר לא ידוע נשאר בתוך u64 גם בשורות מאוחרות', () {
-      final u64Max = (BigInt.one << 64) - BigInt.one;
+    test('שני ספרים שאינם בספרייה מקבלים מזהים שונים באותה שורה', () {
+      // רגרסיה: מזהה משותף הפר את חוזה המנוע — מחיקה לפי id בכתיבת ספר
+      // אחד מחקה את מסמכי האחר, והשניים חלקו גם sectionId.
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+      final resolver = IndexingRepository.buildCatalogueOrderResolver(library);
 
-      expect(
-        IndexingRepository.buildCatalogueDocumentId(
-          catalogueOrder: IndexingRepository.unknownCatalogueOrder,
-          ordinal: 1000000,
-        ),
-        lessThanOrEqualTo(u64Max),
+      final first = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: resolver.orderFor('uid:404'),
+        ordinal: 0,
       );
+      final second = IndexingRepository.buildCatalogueDocumentId(
+        catalogueOrder: resolver.orderFor('uid:405'),
+        ordinal: 0,
+      );
+
+      expect(first, isNot(second));
     });
   });
 
@@ -1715,6 +1768,16 @@ class _RecordingTantivyDataProvider implements TantivyDataProvider {
 
   @override
   bool get requiresManualReindex => false;
+
+  /// כמו האמיתי: משלים חותם סדר קטלוגי שכתיבתו נכשלה באתחול.
+  int ensureCatalogueOrderStampCount = 0;
+  bool catalogueOrderStampWriteSucceeds = true;
+
+  @override
+  bool ensureCatalogueOrderStamp() {
+    ensureCatalogueOrderStampCount++;
+    return catalogueOrderStampWriteSucceeds;
+  }
 
   @override
   Future<SearchEngine> get engine async => _engine;

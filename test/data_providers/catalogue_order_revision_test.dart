@@ -182,6 +182,27 @@ void main() {
       expect(CatalogueOrderRevision.read(tempDir.path), isNull);
     });
 
+    test('כתיבה שנכשלה מחזירה false ואינה מותירה חותם', () {
+      // רגרסיה: ערך ההחזרה נבלע, האינדקס המלא נבנה בלי חותם, ובהפעלה
+      // הבאה זוהה כישן — המשתמש נדרש למחוק ולבנות הכול מחדש.
+      final blocked = p.join(tempDir.path, 'index');
+      File(blocked).writeAsStringSync('קובץ במקום תיקיית האינדקס');
+
+      expect(CatalogueOrderRevision.write(blocked), isFalse);
+      expect(CatalogueOrderRevision.read(blocked), isNull);
+    });
+
+    test('כתיבה חוזרת אחרי כשל משלימה את החותם', () {
+      final blocked = p.join(tempDir.path, 'index');
+      final blocker = File(blocked)..writeAsStringSync('חוסם');
+      expect(CatalogueOrderRevision.write(blocked), isFalse);
+
+      blocker.deleteSync();
+
+      expect(CatalogueOrderRevision.write(blocked), isTrue);
+      expect(CatalogueOrderRevision.read(blocked), kCatalogueOrderRevision);
+    });
+
     test('גרסה ישנה שנכתבה נקראת כמיושנת', () {
       CatalogueOrderRevision.write(tempDir.path, revision: 1);
 

@@ -11,6 +11,7 @@ import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
+import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -265,11 +266,7 @@ class IndexingRepository {
       final engineForBulk = await _tantivyDataProvider.engine;
       await engineForBulk.setBulkIndexing(enabled: true);
 
-      final catalogueOrderByBookKey =
-          SearchCatalogueOrderHelper.buildKeyOrderMap(
-            library,
-            keyOf: (book) => catalogueOrderKey(book as Book),
-          );
+      final catalogueOrder = buildCatalogueOrderResolver(library);
       await Future.wait([
         GenerationCache.instance.warmUp(),
         ReferenceBooksCache.instance.warmUp(),
@@ -317,7 +314,7 @@ class IndexingRepository {
           try {
             final droppedPages = await _indexPdfBook(
               readyBook,
-              catalogueOrderByBookKey: catalogueOrderByBookKey,
+              catalogueOrder: catalogueOrder,
               preExtracted: ready.extraction,
               onActualIndexingStarted: () {
                 if (didStartActualIndexing) return;
@@ -343,7 +340,7 @@ class IndexingRepository {
             final handled = await _markPermanentPdfFailure(
               readyBook,
               failure,
-              catalogueOrderByBookKey,
+              catalogueOrder,
               failures,
             );
             if (handled) {
@@ -372,7 +369,7 @@ class IndexingRepository {
               onProgress(bookIndex + 1, totalBooks);
               await _indexTextBook(
                 textBookForIndex,
-                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                catalogueOrder: catalogueOrder,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
                     return;
@@ -411,7 +408,7 @@ class IndexingRepository {
               );
               final droppedPages = await _indexPdfBook(
                 book,
-                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                catalogueOrder: catalogueOrder,
                 preExtracted: preExtracted,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
@@ -479,7 +476,7 @@ class IndexingRepository {
           final handled = await _markPermanentPdfFailure(
             book,
             failure,
-            catalogueOrderByBookKey,
+            catalogueOrder,
             failures,
           );
           if (handled) {
@@ -510,6 +507,7 @@ class IndexingRepository {
           ..start();
         await index.commit();
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
+        _stampCatalogueOrderAfterCommit();
         final optimizeStopwatch = Stopwatch()..start();
         await optimizeIndexBestEffort(index.optimize);
         debugPrint('⚙️ optimize: ${optimizeStopwatch.elapsedMilliseconds}ms');
@@ -546,7 +544,7 @@ class IndexingRepository {
 
   Future<void> _indexTextBook(
     TextBook book, {
-    required Map<String, int> catalogueOrderByBookKey,
+    required CatalogueOrderResolver catalogueOrder,
     void Function()? onActualIndexingStarted,
   }) async {
     // כל הכנת הספר — פיצול לשורות, מעקב reference trail, נרמול, טביעת
@@ -592,9 +590,7 @@ class IndexingRepository {
       final title = book.title;
       final topics = _bookTopics(book);
       final filePath = buildIndexedBookFilePath(book);
-      final catalogueOrder =
-          catalogueOrderByBookKey[catalogueOrderKey(book)] ??
-          unknownCatalogueOrder;
+      final order = catalogueOrder.orderFor(catalogueOrderKey(book));
       final generationOrder = chronologicalOrderForBook(book);
       final engineStopwatch = Stopwatch()..start();
       final extraFacets = _bookExtraFacets(book);
@@ -603,7 +599,7 @@ class IndexingRepository {
               title: title,
               topics: topics,
               filePath: filePath,
-              catalogueOrder: catalogueOrder,
+              catalogueOrder: order,
               generationOrder: generationOrder,
               text: bytes,
               extraFacets: extraFacets,
@@ -612,7 +608,7 @@ class IndexingRepository {
               title: title,
               topics: topics,
               filePath: filePath,
-              catalogueOrder: catalogueOrder,
+              catalogueOrder: order,
               generationOrder: generationOrder,
               text: text!,
               extraFacets: extraFacets,
@@ -635,14 +631,14 @@ class IndexingRepository {
       // אין תוכן ⇒ אין טביעת אצבע; במסלול המלא המנוע חותם אותה בעצמו.
       await _writeEmptyBookMarker(
         book,
-        catalogueOrderByBookKey: catalogueOrderByBookKey,
+        catalogueOrder: catalogueOrder,
       );
     }
   }
 
   Future<int> _indexPdfBook(
     PdfBook book, {
-    required Map<String, int> catalogueOrderByBookKey,
+    required CatalogueOrderResolver catalogueOrder,
     void Function()? onActualIndexingStarted,
     Future<PdfExtraction>? preExtracted,
   }) async {
@@ -675,7 +671,7 @@ class IndexingRepository {
       added = await _addPdfBookToEngine(
         book,
         pages,
-        catalogueOrderByBookKey: catalogueOrderByBookKey,
+        catalogueOrder: catalogueOrder,
         onActualIndexingStarted: onActualIndexingStarted,
       );
     }
@@ -687,7 +683,7 @@ class IndexingRepository {
         added = await _addPdfBookToEngine(
           book,
           sidecarPages,
-          catalogueOrderByBookKey: catalogueOrderByBookKey,
+          catalogueOrder: catalogueOrder,
           onActualIndexingStarted: onActualIndexingStarted,
         );
       }
@@ -713,7 +709,7 @@ class IndexingRepository {
     if (added == 0) {
       await _writeEmptyBookMarker(
         book,
-        catalogueOrderByBookKey: catalogueOrderByBookKey,
+        catalogueOrder: catalogueOrder,
       );
     }
     return extracted.droppedPages;
@@ -742,7 +738,7 @@ class IndexingRepository {
   Future<int> _addPdfBookToEngine(
     PdfBook book,
     List<({String reference, String text, int pageIndex})> pages, {
-    required Map<String, int> catalogueOrderByBookKey,
+    required CatalogueOrderResolver catalogueOrder,
     void Function()? onActualIndexingStarted,
   }) async {
     onActualIndexingStarted?.call();
@@ -755,9 +751,7 @@ class IndexingRepository {
       title: book.title,
       topics: _bookTopics(book),
       filePath: buildIndexedBookFilePath(book),
-      catalogueOrder:
-          catalogueOrderByBookKey[catalogueOrderKey(book)] ??
-          unknownCatalogueOrder,
+      catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(book)),
       generationOrder: chronologicalOrderForBook(book),
       extraFacets: _bookExtraFacets(book),
       pages: [
@@ -783,7 +777,7 @@ class IndexingRepository {
   /// הפעלה. בלי זה, מצב האינדוקס (שנקרא מהאינדקס) לעולם לא היה שלם.
   Future<void> _writeEmptyBookMarker(
     Book book, {
-    required Map<String, int> catalogueOrderByBookKey,
+    required CatalogueOrderResolver catalogueOrder,
   }) async {
     if (!_tantivyDataProvider.isIndexing.value) {
       return;
@@ -795,9 +789,7 @@ class IndexingRepository {
       docs: [
         DocumentInput(
           id: buildCatalogueDocumentId(
-            catalogueOrder:
-                catalogueOrderByBookKey[catalogueOrderKey(book)] ??
-                unknownCatalogueOrder,
+            catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(book)),
             ordinal: 0,
           ),
           title: book.title,
@@ -816,7 +808,7 @@ class IndexingRepository {
   Future<bool> _markPermanentPdfFailure(
     Book book,
     IndexingFailure failure,
-    Map<String, int> catalogueOrderByBookKey,
+    CatalogueOrderResolver catalogueOrder,
     List<IndexingFailure> failures,
   ) async {
     if (book is! PdfBook || failure.isRetryable) return false;
@@ -825,7 +817,7 @@ class IndexingRepository {
     try {
       await _writeEmptyBookMarker(
         book,
-        catalogueOrderByBookKey: catalogueOrderByBookKey,
+        catalogueOrder: catalogueOrder,
       );
     } catch (error, stackTrace) {
       failures.add(
@@ -1173,10 +1165,24 @@ class IndexingRepository {
     }
   }
 
-  /// הסדר שניתן לספר שאינו נמצא במפת הסדר הקטלוגי — ממוין אחרי כל הספרים
-  /// המוכרים. לא 0xFFFFFFFF: [buildCatalogueDocumentId] מוסיף 1 לפני ההזזה,
-  /// והתוצאה הייתה חורגת מ-u64 ונחתכת בגשר ל-1 — כלומר ראש הרשימה.
-  static const int unknownCatalogueOrder = 0xFFFFFFFE;
+  /// משלים חותם סדר קטלוגי שכתיבתו נכשלה באתחול. בלעדיו האינדקס שזה עתה
+  /// נחתם ייראה בהפעלה הבאה כאילו נבנה בסדר ישן, והמשתמש יידרש לבנות מחדש.
+  void _stampCatalogueOrderAfterCommit() {
+    if (_tantivyDataProvider.ensureCatalogueOrderStamp()) return;
+    debugPrint(
+      '⚠️ חותם הסדר הקטלוגי לא נכתב — ההפעלה הבאה תדרוש בניית אינדקס מחדש',
+    );
+  }
+
+  /// מוסר הסדר הקטלוגי של הספרייה — הבסיס לחצי העליון של מזהה המסמך.
+  @visibleForTesting
+  static CatalogueOrderResolver buildCatalogueOrderResolver(Library library) =>
+      CatalogueOrderResolver(
+        SearchCatalogueOrderHelper.buildKeyOrderMap(
+          library,
+          keyOf: (book) => catalogueOrderKey(book as Book),
+        ),
+      );
 
   @visibleForTesting
   static BigInt buildCatalogueDocumentId({
@@ -1252,10 +1258,7 @@ class IndexingRepository {
     final text = await _loadTextBookText(textBook);
     if (text == null) return false;
 
-    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (candidate) => catalogueOrderKey(candidate as Book),
-    );
+    final catalogueOrder = buildCatalogueOrderResolver(library);
     await Future.wait([
       GenerationCache.instance.warmUp(),
       ReferenceBooksCache.instance.warmUp(),
@@ -1265,9 +1268,7 @@ class IndexingRepository {
           text: text,
           title: textBook.title,
           topics: _bookTopics(textBook),
-          catalogueOrder:
-              catalogueOrderByBookKey[catalogueOrderKey(textBook)] ??
-              unknownCatalogueOrder,
+          catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(textBook)),
           generationOrder: chronologicalOrderForBook(textBook),
           extraFacets: _bookExtraFacets(textBook),
         ) ==
@@ -1319,12 +1320,8 @@ class IndexingRepository {
       );
     }
 
-    // בנה מפת סדר קטלוג מהספרייה הטרייה שהועברה כפרמטר
-    // חשוב: משתמשים בספרייה המלאה כדי שהסדר הגלובלי יהיה נכון לכל הספרים
-    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => catalogueOrderKey(book as Book),
-    );
+    // הספרייה המלאה, ולא רשימת הספרים שמאונדקסת, כדי שהסדר יהיה גלובלי.
+    final catalogueOrder = buildCatalogueOrderResolver(library);
     await Future.wait([
       GenerationCache.instance.warmUp(),
       ReferenceBooksCache.instance.warmUp(),
@@ -1356,7 +1353,7 @@ class IndexingRepository {
               debugPrint('📖 מאנדקס ספר טקסט חדש: ${book.title}');
               await _indexTextBook(
                 textBookForIndex,
-                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                catalogueOrder: catalogueOrder,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) return;
                   didStartActualIndexing = true;
@@ -1378,7 +1375,7 @@ class IndexingRepository {
               debugPrint('📄 מאנדקס PDF חדש: ${book.title}');
               final droppedPages = await _indexPdfBook(
                 book,
-                catalogueOrderByBookKey: catalogueOrderByBookKey,
+                catalogueOrder: catalogueOrder,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) return;
                   didStartActualIndexing = true;
@@ -1409,7 +1406,7 @@ class IndexingRepository {
           final handled = await _markPermanentPdfFailure(
             book,
             failure,
-            catalogueOrderByBookKey,
+            catalogueOrder,
             failures,
           );
           if (!handled &&
@@ -1434,6 +1431,7 @@ class IndexingRepository {
         final commitStopwatch = Stopwatch()..start();
         await index.commit();
         debugPrint('💾 commit: ${commitStopwatch.elapsedMilliseconds}ms');
+        _stampCatalogueOrderAfterCommit();
       }
     } finally {
       await _setDbReadBoost(false);
@@ -1666,11 +1664,8 @@ class IndexingRepository {
 
     final textLoader = loadText ?? _loadTextBookText;
     // שחזור אותה חתימה קנונית שהאינדוקס חותם — טקסט + metadata (קטגוריה,
-    // סדר קטלוגי, דור, ממדי סינון) — דורש את אותם מפה ומטמונים.
-    final catalogueOrderByBookKey = SearchCatalogueOrderHelper.buildKeyOrderMap(
-      library,
-      keyOf: (book) => catalogueOrderKey(book as Book),
-    );
+    // סדר קטלוגי, דור, ממדי סינון) — דורש את אותם מוסר ומטמונים.
+    final catalogueOrder = buildCatalogueOrderResolver(library);
     await Future.wait([
       GenerationCache.instance.warmUp(),
       ReferenceBooksCache.instance.warmUp(),
@@ -1684,9 +1679,7 @@ class IndexingRepository {
           text: text,
           title: book.title,
           topics: _bookTopics(book),
-          catalogueOrder:
-              catalogueOrderByBookKey[catalogueOrderKey(book)] ??
-              unknownCatalogueOrder,
+          catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(book)),
           generationOrder: chronologicalOrderForBook(book),
           extraFacets: _bookExtraFacets(book),
         ));
