@@ -1,5 +1,6 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/book_version.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/utils/book_versions_action.dart';
@@ -22,6 +23,45 @@ void main() {
 
     test('ספר בלי categoryId נדחה — המהדורות מאותרות לפי הקטגוריה', () async {
       expect(await hasBookVersionsToOpen(TextBook(title: 'ספר')), isFalse);
+    });
+
+    test('נוסח יחיד שכבר פתוח אינו מוצע שוב', () async {
+      availableBookVersionsProbeForTesting = (_) async => const [
+        BookVersionInfo(
+          versionTitle: 'Davidson',
+          heVersionTitle: 'מהדורת דיווידסון',
+          hasContent: true,
+        ),
+      ];
+      addTearDown(() => availableBookVersionsProbeForTesting = null);
+
+      final book = TextBook(title: 'ספר', categoryId: 7).copyWith(
+        versionTitle: 'Davidson',
+      );
+
+      expect(await hasBookVersionsToOpen(book), isFalse);
+    });
+
+    test('נוסח פתוח עדיין מציע נוסחים אחרים', () async {
+      availableBookVersionsProbeForTesting = (_) async => const [
+        BookVersionInfo(
+          versionTitle: 'Davidson',
+          heVersionTitle: 'מהדורת דיווידסון',
+          hasContent: true,
+        ),
+        BookVersionInfo(
+          versionTitle: 'Vilna',
+          heVersionTitle: 'מהדורת וילנא',
+          hasContent: true,
+        ),
+      ];
+      addTearDown(() => availableBookVersionsProbeForTesting = null);
+
+      final book = TextBook(title: 'ספר', categoryId: 7).copyWith(
+        versionTitle: 'Davidson',
+      );
+
+      expect(await hasBookVersionsToOpen(book), isTrue);
     });
   });
 
