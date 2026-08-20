@@ -53,6 +53,8 @@ void main() {
       await libraryBloc.close();
     });
 
+    // רכיב נשלט: הבחירה מוזנת חזרה דרך onChanged, כמו בדיאלוג האמיתי.
+    var selection = selected;
     await tester.binding.setSurfaceSize(const Size(600, 700));
     await tester.pumpWidget(
       MaterialApp(
@@ -60,7 +62,12 @@ void main() {
         home: BlocProvider<LibraryBloc>.value(
           value: libraryBloc,
           child: Scaffold(
-            body: SearchScopeMenuButton(selected: selected, onChanged: (_) {}),
+            body: StatefulBuilder(
+              builder: (context, setState) => SearchScopeMenuButton(
+                selected: selection,
+                onChanged: (next) => setState(() => selection = next),
+              ),
+            ),
           ),
         ),
       ),
@@ -70,17 +77,27 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   }
 
+  /// ה-finder של התיבה שבאותה שורה של [label] בתפריט הפתוח.
+  Finder checkboxFinder(String label) => find.descendant(
+    of: find.ancestor(of: find.text(label), matching: find.byType(InkWell)),
+    matching: find.byType(Checkbox),
+  );
+
   /// התיבה שבאותה שורה של [label] בתפריט הפתוח.
   Checkbox checkboxOf(WidgetTester tester, String label) =>
-      tester.widget<Checkbox>(
-        find.descendant(
-          of: find.ancestor(
-            of: find.text(label),
-            matching: find.byType(InkWell),
-          ),
-          matching: find.byType(Checkbox),
-        ),
-      );
+      tester.widget<Checkbox>(checkboxFinder(label));
+
+  /// כניסה למסך הפנימי של "כל הספרים" (רשימת התיקיות).
+  Future<void> drillIntoAllBooks(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(ListView),
+        matching: find.text('כל הספרים'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 
   group('סימן ביניים בתפריט היקף החיפוש', () {
     testWidgets('בחירה חלקית מציגה סימן ביניים על "כל הספרים"', (tester) async {
@@ -97,16 +114,38 @@ void main() {
       await pumpMenu(tester, {'/תנ״ך/תורה/בראשית'});
       // כניסה ל"כל הספרים" ← רמת הקטגוריות; "תנ״ך" חלקית — התיבה חייבת
       // להישאר מוצגת (רגרסיה: check==null פורש כ"אין תיבה").
-      // ה-finder ממוקד לרשימת התפריט — הטקסט קיים גם כ-chip מתחת לשדה.
-      await tester.tap(
-        find.descendant(
-          of: find.byType(ListView),
-          matching: find.text('כל הספרים'),
-        ),
-      );
+      await drillIntoAllBooks(tester);
+      expect(checkboxOf(tester, 'תנ״ך').value, isNull);
+    });
+
+    testWidgets('לחיצה על התיבה של "כל הספרים" מבטלת את הסימון', (
+      tester,
+    ) async {
+      // issue #923: הסימון נשאר מלא לנצח כי גם בחירה ריקה הוצגה כ-וי מלא,
+      // בעוד התיקיות במסך הפנימי כבר הוצגו לא מסומנות.
+      await pumpMenu(tester, {'/'});
+      await tester.tap(checkboxFinder('כל הספרים'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(checkboxOf(tester, 'תנ״ך').value, isNull);
+      expect(checkboxOf(tester, 'כל הספרים').value, isFalse);
+
+      await drillIntoAllBooks(tester);
+      expect(checkboxOf(tester, 'תנ״ך').value, isFalse);
+    });
+
+    testWidgets('בחירה ריקה מוצגת כ"כל הספרים" לא מסומן, ולחיצה מסמנת', (
+      tester,
+    ) async {
+      await pumpMenu(tester, <String>{});
+      expect(checkboxOf(tester, 'כל הספרים').value, isFalse);
+
+      await tester.tap(checkboxFinder('כל הספרים'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(checkboxOf(tester, 'כל הספרים').value, isTrue);
+
+      await drillIntoAllBooks(tester);
+      expect(checkboxOf(tester, 'תנ״ך').value, isTrue);
     });
 
     testWidgets('שורת "נקה הכל" נשארת ללא תיבה', (tester) async {

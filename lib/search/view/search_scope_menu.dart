@@ -910,13 +910,14 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
 
   List<_MenuItem> _rootItems() {
     final categoryPart = _categoryPart;
-    // "כל הספרים" מסומן רק כשאין שום צמצום (לא קטגוריה ולא ממד).
+    // "נקה הכל" מוצג רק כשיש צמצום כלשהו (קטגוריה או ממד).
     final isEverything =
         (categoryPart.isEmpty || categoryPart.contains('/')) &&
         _dimensionPart.isEmpty;
-    // בחירה חלקית בעץ (ספרים/קטגוריות ספציפיים) → סימן ביניים על "כל הספרים".
-    final hasPartialCategories =
-        categoryPart.isNotEmpty && !categoryPart.contains('/');
+    // התיבה משקפת את חלק הקטגוריות בלבד, בעקביות עם התיקיות שבמסך הפנימי:
+    // סט ריק = לא מסומן (אף שחיפוש בלי שום סינון עדיין רץ על הכול).
+    final hasAllCategories = categoryPart.contains('/');
+    final hasPartialCategories = categoryPart.isNotEmpty && !hasAllCategories;
     final baseSelected = _selection.contains(FacetHelper.baseDimensionFacet);
 
     return [
@@ -930,8 +931,8 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
       _MenuItem(
         label: 'כל הספרים',
         icon: FluentIcons.library_24_regular,
-        check: isEverything ? true : (hasPartialCategories ? null : false),
-        onToggle: (_) => isEverything ? _clearAll() : _apply({'/'}),
+        check: hasAllCategories ? true : (hasPartialCategories ? null : false),
+        onToggle: (v) => _setCategorySelection(v ? {'/'} : {}),
         onDrill: () => _enterView(_View.categories),
       ),
       _MenuItem(
