@@ -353,12 +353,14 @@ bool _highlightCacheValid = false;
 /// המנוע נסרק אסינכרונית בזמן ריצת החיפוש (ראה `search_engine_gateway`) —
 /// שניות לפני שספר נפתח מהתוצאות — כך שהרינדור הסינכרוני מוצא כאן תבנית
 /// שמדגישה את הווריאנטים שהחיפוש באמת התאים באינדקס (שגיאות כתיב, קידומות,
-/// חלק ממילה), בזהות מלאה להדגשת ה-snippets. רשומה יכולה להיות null (שאילתה
-/// ללא מילים ברות-הדגשה) — לכן containsKey ולא lookup.
+/// חלק ממילה), בזהות מלאה להדגשת ה-snippets. נשמרות רק תבניות שקומפלו
+/// בהצלחה — fetch שהחזיר null אינו נכנס, אחרת היה גובר על ה-fallback
+/// וחוסם גם ניסיון הזנה חוזר.
 ///
-/// כשאין רשומה (חיפוש שלא עבר דרך ה-gateway, או שההזנה נכשלה/טרם הסתיימה)
-/// ממשיכים ל-fallback הסינכרוני שמכיר רק את צורת השאילתה — ההתנהגות הקודמת.
-final LinkedHashMap<String, _CompiledHighlightPattern?> _primedHighlightCache =
+/// כשאין רשומה (חיפוש שלא עבר דרך ה-gateway, או שההזנה נכשלה/החזירה
+/// null/טרם הסתיימה) ממשיכים ל-fallback הסינכרוני שמכיר רק את צורת
+/// השאילתה — ההתנהגות הקודמת.
+final LinkedHashMap<String, _CompiledHighlightPattern> _primedHighlightCache =
     LinkedHashMap();
 const int _maxPrimedHighlightEntries = 8;
 final Set<String> _primedHighlightInFlight = <String>{};
@@ -412,12 +414,14 @@ Future<void> primeHighlightPattern({
   try {
     final pattern = await fetch();
     final compiled = _compileHighlightPattern(pattern);
-    _primedHighlightCache[key] = compiled;
-    while (_primedHighlightCache.length > _maxPrimedHighlightEntries) {
-      _primedHighlightCache.remove(_primedHighlightCache.keys.first);
-    }
-    // תבנית מדויקת חדשה זמינה — מאותת לרינדור להתרנן מחדש.
+    // null אינו נשמר: רשומת null הייתה גוברת על ה-fallback (containsKey)
+    // וחוסמת גם ניסיון הזנה חוזר — לשאילתה לא הייתה נשארת שום הדגשה.
     if (compiled != null) {
+      _primedHighlightCache[key] = compiled;
+      while (_primedHighlightCache.length > _maxPrimedHighlightEntries) {
+        _primedHighlightCache.remove(_primedHighlightCache.keys.first);
+      }
+      // תבנית מדויקת חדשה זמינה — מאותת לרינדור להתרנן מחדש.
       _highlightPatternRevision.value++;
     }
   } catch (error) {
@@ -496,8 +500,9 @@ _CompiledHighlightPattern? _resolveHighlightPattern(
   );
   // תבנית מבוססת-אינדקס שהוזנה מראש קודמת ל-fallback: היא מדגישה את
   // הווריאנטים שהחיפוש באמת התאים, לא רק את צורת השאילתה.
-  if (_primedHighlightCache.containsKey(key)) {
-    return _primedHighlightCache[key];
+  final primed = _primedHighlightCache[key];
+  if (primed != null) {
+    return primed;
   }
   if (_highlightCacheValid && key == _highlightCacheKey) {
     return _highlightCacheValue;

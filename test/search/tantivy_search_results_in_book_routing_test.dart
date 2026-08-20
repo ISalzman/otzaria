@@ -44,6 +44,7 @@ void main() {
   Future<TextBookTab> openFirstResult(
     WidgetTester tester, {
     required SearchConfiguration configuration,
+    String? typedAfterSearch,
   }) async {
     final searchBloc = _StaticSearchBloc(
       SearchState(
@@ -72,8 +73,8 @@ void main() {
       initialState: SettingsState.initial(),
     );
     final tabsBloc = _RecordingTabsBloc();
-    // הפותח קורא את הקונפיגורציה מה-bloc של טאב החיפוש עצמו — מוזרם ה-bloc
-    // הסטטי, שגם עוקף את אימות טביעת האצבע האמיתי מול המנוע.
+    // הפותח קורא את הקונפיגורציה והשאילתה מה-bloc של טאב החיפוש עצמו —
+    // באפליקציה זהו אותו מופע שמוזרק כ-Provider, ולכן גם כאן הם משותפים.
     final searchingTab = SearchingTab(
       'חיפוש',
       'תדע זרעך',
@@ -106,6 +107,12 @@ void main() {
       ),
     );
     await tester.pump();
+
+    if (typedAfterSearch != null) {
+      // המשתמש מקליד בתיבה בלי להפעיל חיפוש חדש — state.searchQuery נשאר
+      // השאילתה שבוצעה, ורק הטקסט בבקר משתנה.
+      searchingTab.queryController.text = typedAfterSearch;
+    }
 
     await tester.tap(find.text('בראשית, פרק טו').first);
     for (var i = 0; i < 6; i++) {
@@ -208,10 +215,27 @@ void main() {
 
     final initialState = tab.bloc.state;
     expect(initialState, isA<TextBookInitial>());
-    expect(
-      (initialState as TextBookInitial).matchPolicy.proximityScope,
-      SearchScope.sameSection,
+    final initial = initialState as TextBookInitial;
+    expect(initial.matchPolicy.proximityScope, SearchScope.sameSection);
+    expect(initial.initialSearchResultLines, {389});
+  });
+
+  testWidgets('הקלדה אחרי החיפוש אינה מחליפה את השאילתה שבוצעה', (
+    tester,
+  ) async {
+    // הבאג: הפותח קרא את queryController.text במקום את state.searchQuery,
+    // וכך טקסט שהוקלד-אך-לא-חופש הפך ל-searchText של טאב הקריאה — ההדגשה
+    // בספר חיפשה מחרוזת שהתוצאה מעולם לא נמצאה בה.
+    final tab = await openFirstResult(
+      tester,
+      configuration: const SearchConfiguration(
+        searchMode: SearchMode.advanced,
+        distance: 3,
+      ),
+      typedAfterSearch: 'טקסט שהוקלד ולא חופש',
     );
+
+    expect(tab.searchText, 'תדע זרעך');
   });
 
   testWidgets('שאילתה ליטרלית נפתחת כחיפוש מדויק מקומי', (tester) async {

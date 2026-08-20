@@ -61,6 +61,7 @@ class TextBookInitial extends TextBookState {
   final SearchMode searchMode;
   final int searchDistance;
   final SearchMatchPolicy matchPolicy;
+  final Set<int>? initialSearchResultLines;
   final bool splitedView;
   final bool showPageShapeView;
 
@@ -88,6 +89,7 @@ class TextBookInitial extends TextBookState {
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.initialSearchResultLines,
     this.splitedView = true,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -109,6 +111,7 @@ class TextBookInitial extends TextBookState {
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.initialSearchResultLines,
     bool? splitedView,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -129,6 +132,7 @@ class TextBookInitial extends TextBookState {
     searchMode,
     searchDistance,
     matchPolicy,
+    initialSearchResultLines,
     splitedView,
     showPageShapeView,
     pinpointHighlightIndex,
@@ -376,6 +380,10 @@ class TextBookLoaded extends TextBookState {
       hasLinksFile: false,
     );
   }
+
+  /// רק שורה שהמנוע החזיר משתתפת בהדגשה במדיניות שאינה סטנדרטית.
+  bool lineParticipatesInSearchHighlight(int lineIndex) =>
+      searchResultLines?.contains(lineIndex) ?? false;
 
   /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות.
   bool get commentaryRemoveNikud =>

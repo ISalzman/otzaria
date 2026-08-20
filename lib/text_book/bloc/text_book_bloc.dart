@@ -621,6 +621,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     SearchMode searchMode = SearchMode.exact;
     int searchDistance = 0;
     SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard;
+    Set<int>? searchResultLines;
     bool showLeftPane;
     List<String> commentators;
     late final List<int> visibleIndices;
@@ -649,6 +650,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       searchMode = currentState.searchMode;
       searchDistance = currentState.searchDistance;
       matchPolicy = currentState.matchPolicy;
+      searchResultLines = currentState.searchResultLines;
       showLeftPane = currentState.showLeftPane;
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
@@ -681,6 +683,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       searchMode = initial.searchMode;
       searchDistance = initial.searchDistance;
       matchPolicy = initial.matchPolicy;
+      searchResultLines = initial.initialSearchResultLines;
       showLeftPane = initial.showLeftPane;
       commentators = initial.commentators;
       visibleIndices = [initial.index < 0 ? 0 : initial.index];
@@ -1023,6 +1026,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         searchMode: searchMode,
         searchDistance: searchDistance,
         matchPolicy: matchPolicy,
+        searchResultLines: searchResultLines,
         scrollController: scrollController,
         positionsListener: positionsListener,
         scrollOffsetController: scrollOffsetController,
