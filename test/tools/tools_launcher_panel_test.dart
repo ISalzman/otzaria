@@ -1503,6 +1503,178 @@ void main() {
       });
     });
 
+    // ── issue #929: שחרור בשטח הריק וגלילת קצה ──────────────────────────────
+
+    /// גורר שורה אל השטח הריק שמתחת לרשימה, בלי לשחרר.
+    Future<TestGesture> dragTileToEmptySpace(
+      WidgetTester tester,
+      String from,
+    ) async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text(from)),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final list = tester.getRect(find.byType(ListView));
+      await gesture.moveTo(Offset(list.center.dx, list.bottom - 8));
+      await tester.pump();
+      return gesture;
+    }
+
+    testWidgets('שחרור בשטח הריק שמתחת לרשימה מעביר תוסף לסוף קבוצתו', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'תוסף א');
+
+        // קו ההוספה מוצג על סוף קבוצת התוספים — חיווי שהשחרור יתקבל.
+        expect(find.byKey(kToolDropIndicatorKey), findsOneWidget);
+        final line = tester.getRect(find.byKey(kToolDropIndicatorKey));
+        final lastRow = tester.getRect(
+          find.ancestor(
+            of: find.text('תוסף ב'),
+            matching: find.byType(ToolTile),
+          ),
+        );
+        expect(line.center.dy, greaterThan(lastRow.center.dy));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(
+          pluginSystemBloc.recorded
+              .whereType<ReorderPluginsRequested>()
+              .single
+              .orderedPluginIds,
+          ['com.example.b', 'com.example.a'],
+        );
+      });
+    });
+
+    testWidgets('שחרור בשטח הריק עם כלי מובנה מעביר אותו לסוף הכלים', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'לוח שנה');
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        final order = settingsBloc.recorded
+            .whereType<UpdateBuiltInToolsOrder>()
+            .single
+            .builtInToolsOrder;
+        expect(order.last, 'builtin.calendar');
+        expect(
+          pluginSystemBloc.recorded.whereType<ReorderPluginsRequested>(),
+          isEmpty,
+        );
+      });
+    });
+
+    testWidgets('שחרור בשטח הריק כשהמקור כבר אחרון אינו משנה דבר', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'תוסף ב');
+
+        expect(find.byKey(kToolDropIndicatorKey), findsNothing);
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(
+          pluginSystemBloc.recorded.whereType<ReorderPluginsRequested>(),
+          isEmpty,
+        );
+      });
+    });
+
+    testWidgets('גרירה אל הקצה התחתון גוללת את הרשימה אוטומטית', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(
+          tester,
+          pluginState: PluginSystemLoaded([
+            for (var i = 0; i < 20; i++)
+              _pluginEntry('com.example.p$i', 'תוסף מספר $i').plugin!,
+          ]),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        expect(position.pixels, 0);
+
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('גימטריה')),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        final list = tester.getRect(find.byType(ListView));
+        await gesture.moveTo(Offset(list.center.dx, list.bottom - 10));
+        await tester.pump();
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(position.pixels, greaterThan(0));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+    });
+
+    testWidgets('גרירה אל הקצה העליון גוללת את הרשימה חזרה למעלה', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(
+          tester,
+          pluginState: PluginSystemLoaded([
+            for (var i = 0; i < 20; i++)
+              _pluginEntry('com.example.p$i', 'תוסף מספר $i').plugin!,
+          ]),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        position.jumpTo(200);
+        await tester.pump();
+
+        // שורה רחוקה מהקצה — גרירה מהשורה העליונה אל הקצה קצרה מסף ה-slop
+        // והמחווה אינה מזוהה כגרירה.
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(ToolTile).at(3)),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        final list = tester.getRect(find.byType(ListView));
+        await gesture.moveTo(Offset(list.center.dx, list.top + 10));
+        await tester.pump();
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(position.pixels, lessThan(200));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+    });
+
     // הבאג: Draggable רגיל תופס את המחווה כבר בפיקסל אחד בעכבר, ואז לחיצה
     // שהיד רעדה בה לא הגיעה ללחצן — הכלי לא נפתח.
     testWidgets('לחיצה עם רעידת עכבר קטנה עדיין פותחת את הכלי', (tester) async {
