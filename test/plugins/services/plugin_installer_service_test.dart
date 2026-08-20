@@ -668,6 +668,68 @@ void main() {
       );
     });
 
+    test(
+      'finalizeInstall preserves showInTools=false on update — '
+      'a plugin hidden from tools must stay hidden after an update',
+      () async {
+        const pluginId = 'test.hidden.persist';
+        repository.plugin = InstalledPlugin(
+          pluginId: pluginId,
+          name: 'Hidden Pers',
+          version: '1.0.0',
+          installPath: tempDir.path,
+          entrypointPath: 'index.html',
+          enabled: true,
+          pinned: false,
+          showInTools: false,
+          manifest: _buildInstalledManifest(
+            id: pluginId,
+            version: '1.0.0',
+            name: 'Hidden Pers',
+          ),
+          installedAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+
+        final stagedDir = Directory.systemTemp.createTempSync(
+          'otzaria_install_staging_',
+        );
+        File(p.join(stagedDir.path, 'manifest.json')).writeAsStringSync(
+          jsonEncode({
+            'schemaVersion': 1,
+            'id': pluginId,
+            'version': '1.0.1',
+            'name': 'Hidden Pers',
+            'entrypoint': 'index.html',
+          }),
+        );
+        File(p.join(stagedDir.path, 'index.html')).writeAsStringSync('<html/>');
+
+        final newManifest = PluginManifest.fromJson({
+          'schemaVersion': 1,
+          'id': pluginId,
+          'version': '1.0.1',
+          'name': 'Hidden Pers',
+          'entrypoint': 'index.html',
+        });
+
+        await installer.finalizeInstall(
+          stagedDir.path,
+          newManifest,
+          allowOrderBeforeBuiltInsGranted: false,
+          grantedPermissions: const {},
+        );
+
+        expect(repository.savedPlugins, hasLength(1));
+        expect(
+          repository.savedPlugins.single.showInTools,
+          isFalse,
+          reason:
+              '"הסתר מהממשק" is a user decision — an update must not reset it.',
+        );
+      },
+    );
+
     test('finalizeInstall leaves userOrder=null on a fresh first-time install '
         'when no other plugin has a manual order yet', () async {
       // אין plugin קיים — repository.plugin = null
