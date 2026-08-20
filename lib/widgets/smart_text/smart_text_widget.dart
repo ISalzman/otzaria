@@ -11,6 +11,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/utils/text/html_link_handler.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/exact_line_height.dart';
+import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/simple_inline_html.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
@@ -182,6 +183,10 @@ class SmartTextWidget extends StatelessWidget {
       processedHtml = rendering.html;
       frameRanges = rendering.ranges;
     }
+    // סימונים מורמים (sup פשוט ולא-מספרי שהומר ל-span ב-processText): מחולצים
+    // מה-HTML הסופי. ה-HTML לא משתנה — הגליפים נשארים בשורה (שקופים, בסדר
+    // הנכון), ושכבת הציור מציירת אותם מורמים מעל מקומם האמיתי.
+    final raisedMarkers = RaisedMarkers.extract(processedHtml);
     final textStyle = TextStyle(
       fontSize: settings.fontSize,
       fontFamily: settings.fontFamily,
@@ -195,6 +200,8 @@ class SmartTextWidget extends StatelessWidget {
 
     // מסלול מהיר: רוב השורות הן טקסט פשוט (או עם תגי עיצוב בסיסיים) —
     // רינדור ישיר ב-Text.rich חוסך את מלוא עלות הפרסור של HtmlWidget.
+    // גם סימונים מורמים נתמכים כאן באופן בסיסי: SimpleInlineHtml מזהה את
+    // שני תגי הסימון, והשכבה נעטפת בדיוק כמו במסלול ה-HtmlWidget.
     if (renderMode == RenderMode.column) {
       final simpleSpan = SimpleInlineHtml.tryParse(processedHtml, textStyle);
       if (simpleSpan != null) {
@@ -205,148 +212,178 @@ class SmartTextWidget extends StatelessWidget {
         // ב-Center (הגבלת רוחב קריאה) ימרכזו שורות קצרות בטעות.
         return _withPluginFrames(
           frameRanges,
-          SizedBox(
-            key: widgetKey,
-            width: double.infinity,
-            child: Text.rich(
-              simpleSpan,
-              style: textStyle,
-              strutStyle: exactLineHeightStrut(textStyle, simpleSpan),
-              textAlign: settings.justifyText
-                  ? TextAlign.justify
-                  : TextAlign.right,
+          _withRaisedMarkers(
+            context,
+            raisedMarkers,
+            textStyle,
+            SizedBox(
+              key: widgetKey,
+              width: double.infinity,
+              child: Text.rich(
+                simpleSpan,
+                style: textStyle,
+                strutStyle: exactLineHeightStrut(textStyle, simpleSpan),
+                textAlign: settings.justifyText
+                    ? TextAlign.justify
+                    : TextAlign.right,
+              ),
             ),
           ),
         );
       }
     }
 
-    // עוגן-מילה נפלט כ-<a> לחיץ; fwfh צובע <a> בצבע primary. מחזירים לצבע
-    // הטקסט הסביבתי בערך מפורש (inherit לא נתמך בפרסר הצבעים של fwfh).
+    // סמן-מספר וטווח-ציטוט נשארים בשורה בצבע ה-primary; fwfh לא מכיר
+    // inherit ולכן הערך מפורש. צבעי אותיות המפרשים המורמות נפתרים ב-wrap.
     final colorScheme = Theme.of(context).colorScheme;
-    String toCssHex(Color color) =>
-        '#${(color.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0')}';
-    final anchorColorCss = toCssHex(
-      DefaultTextStyle.of(context).style.color ?? colorScheme.onSurface,
-    );
-    final anchorLinkColorCss = toCssHex(colorScheme.primary);
-    final anchorActiveBgCss = toCssHex(colorScheme.primaryContainer);
+    final anchorLinkColorCss =
+        '#${(colorScheme.primary.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0')}';
 
     return _withPluginFrames(
       frameRanges,
-      HtmlWidget(
-        TextRendererService.wrapWithRtlDiv(
-          processedHtml,
-          justifyText: settings.justifyText,
-        ),
-        key: widgetKey,
-        renderMode: renderMode,
-        textStyle: textStyle,
-        // WidgetFactory מותאם לשתי מטרות: (1) בולד אמיתי לגופן משתנה — fwfh בונה
-        // font-weight:bold בלי FontVariation, לכן מזריקים אותו לפי הגופן שנפתר.
-        // (2) ריחוף על עוגני-מילה — fwfh לא חושף hover על <a>, לכן מזריקים
-        // onEnter/onExit ל-TextSpan של כל עוגן, בלי לגעת בזרימת הטקסט.
-        factoryBuilder: () => _SmartTextWidgetFactory(
-          onAnchorHover: onAnchorHover,
-          onAnchorHoverExit: onAnchorHoverExit,
-        ),
-        customStylesBuilder: (dom.Element element) {
-          final headingWeight = AppFonts.headingFontWeightOverride(
-            element.localName,
-            settings.fontFamily,
-          );
-          if (headingWeight != null) {
-            return {'font-weight': headingWeight};
-          }
-          if (element.localName == 'span' &&
-              element.classes.contains('footnote-marker-number')) {
-            return {
-              'font-size': '0.75em',
-              'font-style': 'italic',
-              'position': 'relative',
-              'top': '-0.55em',
-            };
-          }
-          if (element.localName == 'a' &&
-              element.classes.contains('book-note-marker')) {
-            return {
-              'font-size': '0.75em',
-              'font-style': 'italic',
-              'position': 'relative',
-              'top': '-0.55em',
-              'color': anchorColorCss,
-              'text-decoration': 'none',
-            };
-          }
-          // סמן-מספר מודפס בגוף הספר, למשל (9): נשאר בגודלו ובמקומו — רק
-          // נצבע בגוון הנושא כדי לרמז שאפשר לרחף עליו.
-          if (element.localName == 'a' &&
-              element.classes.contains('numbered-note-marker')) {
-            return {'color': anchorLinkColorCss, 'text-decoration': 'none'};
-          }
-          // סמן-אות של מפרש (עוגן-נקודה): אות קטנה מורמת בצבע ה-primary, עם
-          // וריאנט טיפוגרפי קבוע לכל מפרש (ראו anchorStyleIndexByCommentator).
-          if ((element.localName == 'span' || element.localName == 'a') &&
-              element.classes.contains('link-anchor')) {
-            final style = <String, String>{
-              'font-size': '${kLinkAnchorMarkerScale}em',
-              'position': 'relative',
-              'top': '-0.55em',
-              'white-space': 'nowrap',
-              'color': anchorLinkColorCss,
-              'text-decoration': 'none',
-              ...linkAnchorVariantCss(
-                linkAnchorVariantFromClasses(element.classes),
-              ),
-            };
-            // האות שחלונית התצוגה שלה פתוחה — מודגשת (רקע + מודגש).
-            if (element.classes.contains('link-anchor-active')) {
-              style['background-color'] = anchorActiveBgCss;
-              style['font-weight'] = 'bold';
+      _withRaisedMarkers(
+        context,
+        raisedMarkers,
+        textStyle,
+        HtmlWidget(
+          TextRendererService.wrapWithRtlDiv(
+            processedHtml,
+            justifyText: settings.justifyText,
+          ),
+          key: widgetKey,
+          renderMode: renderMode,
+          textStyle: textStyle,
+          // WidgetFactory מותאם לשתי מטרות: (1) בולד אמיתי לגופן משתנה — fwfh בונה
+          // font-weight:bold בלי FontVariation, לכן מזריקים אותו לפי הגופן שנפתר.
+          // (2) ריחוף על עוגני-מילה — fwfh לא חושף hover על <a>, לכן מזריקים
+          // onEnter/onExit ל-TextSpan של כל עוגן, בלי לגעת בזרימת הטקסט.
+          factoryBuilder: () => _SmartTextWidgetFactory(
+            onAnchorHover: onAnchorHover,
+            onAnchorHoverExit: onAnchorHoverExit,
+          ),
+          customStylesBuilder: (dom.Element element) {
+            final headingWeight = AppFonts.headingFontWeightOverride(
+              element.localName,
+              settings.fontFamily,
+            );
+            if (headingWeight != null) {
+              return {'font-weight': headingWeight};
             }
-            return style;
-          }
-          // טווח-ציטוט (לינקר): צבע ה-primary בגופן הטקסט הסובב, בלי קו תחתון.
-          // בלי וריאנט טיפוגרפי — הוא שייך לסמני-האות של המפרשים בלבד.
-          if ((element.localName == 'span' || element.localName == 'a') &&
-              element.classes.contains('link-anchor-range')) {
-            return <String, String>{
-              'text-decoration': 'none',
-              'color': anchorLinkColorCss,
-            };
-          }
-          return null;
-        },
-        onTapUrl:
-            (onOpenBook != null || onNoteTap != null || onAnchorTap != null)
-            ? (url) async {
-                // עוגן-מילה — תצוגה מקדימה של המפרש, לפני שאר הקישורים.
-                if (url.startsWith('otzaria://anchor') && onAnchorTap != null) {
-                  onAnchorTap!(url);
-                  return true;
-                }
-                // סמן-מספר של הערה — הפעולה שלו היא ריחוף בלבד.
-                if (url.startsWith('otzaria://note-marker')) return true;
-                // סימון הערה אישית inline — נטפל לפני שאר הקישורים.
-                if (url.startsWith('otzaria://note')) {
-                  final lineIndex = int.tryParse(
-                    Uri.parse(url).queryParameters['line'] ?? '',
-                  );
-                  if (lineIndex != null) {
-                    onNoteTap?.call(lineIndex);
-                  }
-                  return true;
-                }
-                if (url.startsWith('otzaria://book-note')) return true;
-                if (onOpenBook == null) return false;
-                return await HtmlLinkHandler.handleLink(
-                  context,
-                  url,
-                  (tab) => onOpenBook!(tab),
-                );
+            // סימונים מורמים: הגליפים נשארים בשורה — תופסים את המקום ואת הסדר
+            // הנכון, וזמינים לבחירה ולהעתקה — אבל שקופים, ו-RaisedMarkerOverlay
+            // מצייר אותם מורמים מעל מקומם. `position`/`top` אינם נתמכים ב-fwfh
+            // כלל (היו no-op גם קודם), ולכן הרמה בפריסה אינה אפשרית כאן.
+            if (element.localName == 'span' &&
+                element.classes.contains(kFootnoteMarkerClass)) {
+              return {
+                'font-size': '${kFootnoteMarkerScale}em',
+                'font-style': 'italic',
+                'color': 'transparent',
+              };
+            }
+            if (element.localName == 'span' &&
+                element.classes.contains(kRaisedSupClass)) {
+              return {
+                'font-size': '${kHtmlSmallerFontScale}em',
+                'color': 'transparent',
+              };
+            }
+            // סימון הערה מוטמעת לחיץ: כמו מרקר הערה — הגליף שקוף ומורם בשכבה;
+            // ה-recognizer והריחוף נשארים על הספאן, והשכבה מפנה אליו לחיצות.
+            if (element.localName == 'a' &&
+                element.classes.contains('book-note-marker')) {
+              return {
+                'font-size': '${kFootnoteMarkerScale}em',
+                'font-style': 'italic',
+                'color': 'transparent',
+                'text-decoration': 'none',
+              };
+            }
+            // סמן-מספר מודפס בגוף הספר, למשל (9): נשאר בגודלו ובמקומו — רק
+            // נצבע בגוון הנושא כדי לרמז שאפשר לרחף עליו.
+            if (element.localName == 'a' &&
+                element.classes.contains('numbered-note-marker')) {
+              return {'color': anchorLinkColorCss, 'text-decoration': 'none'};
+            }
+            // סמן-אות של מפרש (עוגן-נקודה): הגליף שקוף — הווריאנט הטיפוגרפי
+            // נשאר עליו כדי שרוחב המקום בשורה יתאים לציור המורם, שנושא את
+            // הצבע, הרקע הפעיל וההדגשה (ראו RaisedMarkerOverlay).
+            if ((element.localName == 'span' || element.localName == 'a') &&
+                element.classes.contains('link-anchor')) {
+              final style = <String, String>{
+                'font-size': '${kLinkAnchorMarkerScale}em',
+                'white-space': 'nowrap',
+                'color': 'transparent',
+                'text-decoration': 'none',
+                ...linkAnchorVariantCss(
+                  linkAnchorVariantFromClasses(element.classes),
+                ),
+              };
+              // אות פעילה מצוירת מודגשת — ההדגשה נשארת גם על הגליף השקוף כדי
+              // שרוחבו יתאים; הרקע עבר לציור המורם.
+              if (element.classes.contains('link-anchor-active')) {
+                style['font-weight'] = 'bold';
               }
-            : null,
+              return style;
+            }
+            // טווח-ציטוט (לינקר): צבע ה-primary בגופן הטקסט הסובב, בלי קו תחתון.
+            // בלי וריאנט טיפוגרפי — הוא שייך לסמני-האות של המפרשים בלבד.
+            if ((element.localName == 'span' || element.localName == 'a') &&
+                element.classes.contains('link-anchor-range')) {
+              return <String, String>{
+                'text-decoration': 'none',
+                'color': anchorLinkColorCss,
+              };
+            }
+            return null;
+          },
+          onTapUrl:
+              (onOpenBook != null || onNoteTap != null || onAnchorTap != null)
+              ? (url) async {
+                  // עוגן-מילה — תצוגה מקדימה של המפרש, לפני שאר הקישורים.
+                  if (url.startsWith('otzaria://anchor') &&
+                      onAnchorTap != null) {
+                    onAnchorTap!(url);
+                    return true;
+                  }
+                  // סמן-מספר של הערה — הפעולה שלו היא ריחוף בלבד.
+                  if (url.startsWith('otzaria://note-marker')) return true;
+                  // סימון הערה אישית inline — נטפל לפני שאר הקישורים.
+                  if (url.startsWith('otzaria://note')) {
+                    final lineIndex = int.tryParse(
+                      Uri.parse(url).queryParameters['line'] ?? '',
+                    );
+                    if (lineIndex != null) {
+                      onNoteTap?.call(lineIndex);
+                    }
+                    return true;
+                  }
+                  if (url.startsWith('otzaria://book-note')) return true;
+                  if (onOpenBook == null) return false;
+                  return await HtmlLinkHandler.handleLink(
+                    context,
+                    url,
+                    (tab) => onOpenBook!(tab),
+                  );
+                }
+              : null,
+        ),
       ),
+    );
+  }
+
+  /// עוטף את ווידג'ט הטקסט בשכבת הציור של הסימונים המורמים, אם יש כאלה.
+  Widget _withRaisedMarkers(
+    BuildContext context,
+    List<RaisedMarker> markers,
+    TextStyle textStyle,
+    Widget child,
+  ) {
+    return RaisedMarkerOverlay.wrap(
+      context: context,
+      markers: markers,
+      baseStyle: textStyle,
+      child: child,
     );
   }
 

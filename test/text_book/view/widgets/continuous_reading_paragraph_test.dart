@@ -610,12 +610,41 @@ void main() {
           decoration: TextDecoration.underline,
         ),
         recognizerSink: recognizers,
+        // המראה המלא בשורה — לקורא שאינו עוטף ב-RaisedMarkerOverlay.
+        hideRaisedMarkers: false,
       );
       final link = _findLinkSpan(spans);
       expect(link, isNotNull);
       // צבע primary אך בלי קו תחתון — סמן-נקודה נשאר ללא קו.
       expect(link!.style?.color, const Color(0xFF6750A4));
       expect(link.style?.decoration, isNot(TextDecoration.underline));
+      for (final r in recognizers) {
+        r.dispose();
+      }
+    });
+
+    test('עם שכבת הציור (ברירת המחדל) גליף העוגן שקוף ושומר recognizer', () {
+      final recognizers = <TapGestureRecognizer>[];
+      final spans = buildInlineHtmlSpans(
+        'לפני <a class="link-anchor link-anchor-0" '
+        'href="otzaria://anchor?ref=3_0">(א)</a> אחרי',
+        const TextStyle(fontSize: 20, color: Color(0xFF111111)),
+        onTapUrl: (_) async => true,
+        linkStyle: const TextStyle(
+          color: Color(0xFF6750A4),
+          decoration: TextDecoration.underline,
+        ),
+        recognizerSink: recognizers,
+      );
+      final link = _findLinkSpan(spans);
+      expect(link, isNotNull);
+      expect(
+        link!.style?.color?.toARGB32(),
+        isNotNull,
+        reason: 'לגליף חייב להיות צבע מפורש (שקוף) — לא ירושה מהטקסט',
+      );
+      expect(link.style!.color!.toARGB32() >> 24, 0);
+      expect(link.recognizer, isA<TapGestureRecognizer>());
       for (final r in recognizers) {
         r.dispose();
       }
@@ -836,6 +865,7 @@ void main() {
             onTapUrl: (_) async => true,
             linkStyle: linkStyle,
             recognizerSink: sink,
+            hideRaisedMarkers: false,
           ),
       ];
 

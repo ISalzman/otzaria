@@ -4,6 +4,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
 import 'package:otzaria/text_book/utils/link_anchor_variants.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
@@ -76,22 +77,45 @@ void main() {
         'לפני <a class="link-anchor link-anchor-$variantIndex link-anchor-active" '
         'href="otzaria://anchor?ref=3_0">(א)</a> אחרי';
 
-    TextStyle continuousStyleOf(String html, String needle) {
+    TextStyle continuousStyleOf(
+      String html,
+      String needle, {
+      bool hideRaisedMarkers = true,
+    }) {
       final spans = buildInlineHtmlSpans(
         TextRendererService.processText(html, settings),
         base,
         onTapUrl: (_) async => true,
         linkStyle: linkStyle,
         anchorActiveBackground: activeBackground,
+        hideRaisedMarkers: hideRaisedMarkers,
       );
       return _findStyle(spans, needle, base)!;
     }
 
-    test('קריאה רציפה — רקע והדגשה', () {
-      final style = continuousStyleOf(activeMarker(0), '(א)');
+    // קורא בלי שכבת סימונים מורמים (hideRaisedMarkers: false) מקבל את המראה
+    // המלא בשורה — כמו לפני שהאות עברה לציור המורם.
+    test('קורא בלי שכבה — רקע והדגשה על הגליף עצמו', () {
+      final style = continuousStyleOf(
+        activeMarker(0),
+        '(א)',
+        hideRaisedMarkers: false,
+      );
       expect(_background(style), activeBackground.toARGB32());
       expect(style.fontWeight, FontWeight.bold);
       expect(style.color, linkColor);
+    });
+
+    test('ברירת המחדל (עם שכבה): הגליף שקוף והרקע עובר לציור המורם', () {
+      final style = continuousStyleOf(activeMarker(0), '(א)');
+      expect(
+        style.color!.toARGB32() >> 24,
+        0,
+        reason: 'הגליף בשורה חייב להיות שקוף — הציור המורם נושא את הצבע',
+      );
+      expect(_background(style), isNull);
+      // ההדגשה נשארת כדי שרוחב המקום בשורה יתאים לציור המודגש.
+      expect(style.fontWeight, FontWeight.bold);
     });
 
     test('קריאה רציפה — סמן לא-פעיל בלי רקע', () {
@@ -99,6 +123,7 @@ void main() {
         'לפני <a class="link-anchor link-anchor-0" '
             'href="otzaria://anchor?ref=3_0">(א)</a> אחרי',
         '(א)',
+        hideRaisedMarkers: false,
       );
       expect(_background(style), isNull);
     });
@@ -106,17 +131,30 @@ void main() {
     test('הווריאנט נשמר גם כשהסמן פעיל', () {
       // וריאנט 3 = כתב רש"י; ההדגשה מתווספת עליו ולא מחליפה אותו.
       expect(
-        continuousStyleOf(activeMarker(3), '(א)').fontFamily,
+        continuousStyleOf(
+          activeMarker(3),
+          '(א)',
+          hideRaisedMarkers: false,
+        ).fontFamily,
         kLinkAnchorRashiFont,
       );
       // וריאנט 5 = קו תחתון, סימנו המבחין של המפרש — חייב לשרוד את ההדגשה.
       expect(
-        continuousStyleOf(activeMarker(5), '(א)').decoration,
+        continuousStyleOf(
+          activeMarker(5),
+          '(א)',
+          hideRaisedMarkers: false,
+        ).decoration,
         TextDecoration.underline,
+      );
+      // הווריאנט נשאר גם על הגליף השקוף — רוחב המקום חייב להתאים לציור.
+      expect(
+        continuousStyleOf(activeMarker(3), '(א)').fontFamily,
+        kLinkAnchorRashiFont,
       );
     });
 
-    testWidgets('שני המסלולים מדגישים את הסמן הפעיל באותו אופן', (
+    testWidgets('שני המסלולים מסתירים את הגליף ומעבירים את ההדגשה לשכבה', (
       tester,
     ) async {
       for (var index = 0; index < kLinkAnchorVariants.length; index++) {
@@ -143,34 +181,37 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // הגליף בשורה שקוף ובלי רקע — בשני המסלולים.
         final htmlStyle = _findWidgetStyle(tester, '(א)')!;
         final continuousStyle = continuousStyleOf(html, '(א)');
-
         expect(
-          _background(continuousStyle),
-          _background(htmlStyle),
-          reason: 'רקע, וריאנט $index',
+          htmlStyle.color!.toARGB32() >> 24,
+          0,
+          reason: 'גליף שקוף במסלול HtmlWidget, וריאנט $index',
         );
         expect(
-          _background(htmlStyle),
-          activeBackground.toARGB32(),
-          reason: 'הרקע חייב להיות מיושם בפועל, וריאנט $index',
+          continuousStyle.color!.toARGB32() >> 24,
+          0,
+          reason: 'גליף שקוף בקריאה רציפה, וריאנט $index',
         );
+        expect(_background(htmlStyle), isNull, reason: 'וריאנט $index');
+        expect(_background(continuousStyle), isNull, reason: 'וריאנט $index');
         expect(
           continuousStyle.fontFamily,
           htmlStyle.fontFamily,
-          reason: 'גופן, וריאנט $index',
+          reason: 'גופן זהה לרוחב מקום זהה, וריאנט $index',
         );
-        expect(
-          continuousStyle.decoration ?? TextDecoration.none,
-          htmlStyle.decoration ?? TextDecoration.none,
-          reason: 'קו תחתון, וריאנט $index',
+
+        // הציור המורם נושא את מלוא העיצוב: וריאנט, מצב פעיל וצבעי הנושא.
+        final overlay = tester.widget<RaisedMarkerOverlay>(
+          find.byType(RaisedMarkerOverlay),
         );
-        expect(
-          continuousStyle.fontWeight,
-          FontWeight.bold,
-          reason: 'הדגשה, וריאנט $index',
-        );
+        final marker = overlay.markers.single;
+        expect(marker.active, isTrue, reason: 'וריאנט $index');
+        expect(marker.useLinkColor, isTrue, reason: 'וריאנט $index');
+        expect(marker.variantIndex, index);
+        expect(overlay.linkColor, linkColor);
+        expect(overlay.activeBackground, activeBackground);
       }
     });
   });

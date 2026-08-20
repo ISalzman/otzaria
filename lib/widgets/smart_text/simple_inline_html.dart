@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:otzaria/theme/app_fonts.dart';
+import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 
 /// יחסי הגדלים של fwfh ל-`<small>`/`<sup>` ול-`<big>`.
 ///
@@ -15,7 +16,10 @@ const double kHtmlLargerFontScale = 6 / 5;
 /// כדי לעקוף את עלות הפרסור ובניית העץ של HtmlWidget עבור רוב שורות הספרים.
 ///
 /// כל markup שאינו ברשימה הלבנה (תגים עם attributes, קישורים, spans, כותרות,
-/// entities) מחזיר null — והקורא נופל חזרה ל-HtmlWidget המלא.
+/// entities) מחזיר null — והקורא נופל חזרה ל-HtmlWidget המלא. יוצא הדופן
+/// היחיד: שני תגי הסימונים המורמים (ראו raised_markers.dart), שמזוהים
+/// במדויק — כך שורות עם סימונים נשארות במסלול המהיר, והתמיכה בהם היא חלק
+/// מצנרת הטקסט הבסיסית ולא נפילה ל-HtmlWidget.
 class SimpleInlineHtml {
   SimpleInlineHtml._();
 
@@ -25,6 +29,13 @@ class SimpleInlineHtml {
     r'&[a-zA-Z]{2,10};|&#x?[0-9a-fA-F]{1,6};',
   );
   static final RegExp _whitespaceRegex = RegExp(r'\s+');
+
+  /// תגי הפתיחה של סימונים מורמים, כפי שנפלטים מ-`_fixFootnoteMarkers`
+  /// (מחרוזות קבועות, ולכן השוואה מדויקת). כל span אחר עדיין מפיל ל-HtmlWidget.
+  static const String _footnoteMarkerOpen =
+      '<span class="$kFootnoteMarkerClass">';
+  static const String _raisedSupOpen = '<span class="$kRaisedSupClass">';
+  static const String _spanClose = '</span>';
 
   /// מנסה להמיר את [html]. מחזיר null אם נדרש HtmlWidget.
   static TextSpan? tryParse(String html, TextStyle baseStyle) {
@@ -37,6 +48,10 @@ class SimpleInlineHtml {
     }
 
     var bold = 0, italic = 0, underline = 0, big = 0, small = 0;
+    var footnoteMarkers = 0, raisedSups = 0;
+    // איזה סוג סימון כל `</span>` סוגר (true = מרקר הערה, false = raised-sup).
+    // אלה שני תגי ה-span היחידים שהמסלול מקבל, ולכן מחסנית בוליאנית מספיקה.
+    final markerStack = <bool>[];
     final segments = <_Segment>[];
 
     TextStyle? styleForCurrent() {
@@ -44,26 +59,37 @@ class SimpleInlineHtml {
           italic == 0 &&
           underline == 0 &&
           big == 0 &&
-          small == 0) {
+          small == 0 &&
+          footnoteMarkers == 0 &&
+          raisedSups == 0) {
         return null;
       }
       double? fontSize;
-      if (big > 0 || small > 0) {
+      if (big > 0 || small > 0 || footnoteMarkers > 0 || raisedSups > 0) {
         final base = baseStyle.fontSize ?? 14.0;
         fontSize =
             base *
             math.pow(kHtmlLargerFontScale, big) *
-            math.pow(kHtmlSmallerFontScale, small);
+            // raised-sup מוקטן באותו יחס כמו <small>/<sup> — פריטי הגדלים
+            // בין המסלולים (ראו התיעוד של kHtmlSmallerFontScale).
+            math.pow(kHtmlSmallerFontScale, small + raisedSups) *
+            math.pow(kFootnoteMarkerScale, footnoteMarkers);
       }
+      final insideMarker = footnoteMarkers > 0 || raisedSups > 0;
       return TextStyle(
         fontWeight: bold > 0 ? FontWeight.bold : null,
         // בולד אמיתי לגופן משתנה — הבסיס יורש דרך Text.rich לספאנים לא-מודגשים.
         fontVariations: bold > 0
             ? AppFonts.boldFontVariations(baseStyle.fontFamily)
             : null,
-        fontStyle: italic > 0 ? FontStyle.italic : null,
+        fontStyle: (italic > 0 || footnoteMarkers > 0)
+            ? FontStyle.italic
+            : null,
         decoration: underline > 0 ? TextDecoration.underline : null,
         fontSize: fontSize,
+        // גליפי סימון שקופים: תופסים את מקומם בשורה (סדר, בחירה, העתקה),
+        // ו-RaisedMarkerOverlay מצייר אותם מורמים — ראו raised_markers.dart.
+        color: insideMarker ? const Color(0x00000000) : null,
       );
     }
 
@@ -80,7 +106,31 @@ class SimpleInlineHtml {
       addText(html.substring(index, match.start));
       index = match.end;
 
-      final tagMatch = _simpleTagRegex.firstMatch(match[0]!);
+      final rawTag = match[0]!;
+      // סימונים מורמים — השוואת מחרוזת מדויקת, בלי פרסור attributes.
+      if (rawTag == _footnoteMarkerOpen || rawTag == _raisedSupOpen) {
+        final isFootnote = rawTag == _footnoteMarkerOpen;
+        markerStack.add(isFootnote);
+        if (isFootnote) {
+          footnoteMarkers++;
+        } else {
+          raisedSups++;
+        }
+        continue;
+      }
+      if (rawTag == _spanClose) {
+        // `</span>` יתום — לא נפתח על-ידי סימון שלנו; span זר כבר היה מפיל
+        // את השורה בתג הפתיחה שלו, אז זה markup שבור: נופלים ל-HtmlWidget.
+        if (markerStack.isEmpty) return null;
+        if (markerStack.removeLast()) {
+          footnoteMarkers = math.max(0, footnoteMarkers - 1);
+        } else {
+          raisedSups = math.max(0, raisedSups - 1);
+        }
+        continue;
+      }
+
+      final tagMatch = _simpleTagRegex.firstMatch(rawTag);
       if (tagMatch == null) return null;
       final isClosing = tagMatch[1] == '/';
       final delta = isClosing ? -1 : 1;

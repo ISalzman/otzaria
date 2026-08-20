@@ -22,12 +22,17 @@ void main() {
 
   // הייצור מריץ processText על השורה לפני הפירסור בשני המסלולים; בלעדיו
   // עיצוב הסוגריים (<small> סביב "(א)") היה חסר כאן ומקלקל את ההשוואה.
-  TextStyle continuousStyleOf(String html, String needle) {
+  TextStyle continuousStyleOf(
+    String html,
+    String needle, {
+    bool hideRaisedMarkers = true,
+  }) {
     final spans = buildInlineHtmlSpans(
       TextRendererService.processText(html, settings),
       base,
       onTapUrl: (_) async => true,
       linkStyle: linkStyle,
+      hideRaisedMarkers: hideRaisedMarkers,
     );
     return _findStyle(spans, needle, base)!;
   }
@@ -77,9 +82,18 @@ void main() {
       );
     });
 
-    test('צבע הנושא מוחל על הסמן', () {
-      final style = continuousStyleOf(marker(2, 'א'), '(א)');
+    test('צבע הנושא מוחל על הסמן אצל קורא בלי שכבת ציור', () {
+      final style = continuousStyleOf(
+        marker(2, 'א'),
+        '(א)',
+        hideRaisedMarkers: false,
+      );
       expect(style.color, linkStyle.color);
+    });
+
+    test('עם שכבת הציור הגליף שקוף — הצבע עובר לציור המורם', () {
+      final style = continuousStyleOf(marker(2, 'א'), '(א)');
+      expect(style.color!.toARGB32() >> 24, 0);
     });
 
     test('ציטוט לינקר נשאר בגופן הטקסט בלי קו תחתון', () {
