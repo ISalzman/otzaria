@@ -322,6 +322,10 @@ class SimpleTextViewer extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final ItemScrollController? scrollController;
   final ItemPositionsListener? positionsListener;
+
+  /// גלילה יחסית בפיקסלים. הטקסט הראשי לוקח אותו מה-state; מפרש שמסונכרן
+  /// ברציפות מקבל כאן controller משלו, ובלעדיו הסנכרון נופל לקפיצות.
+  final ScrollOffsetController? scrollOffsetController;
   final bool isMainText; // האם זה הטקסט המרכזי או מפרש
   final String? title; // כותרת (לכותרת עליונה)
   final String? bookTitle; // שם הספר (למפרשים - לפתיחה בטאב נפרד)
@@ -367,6 +371,7 @@ class SimpleTextViewer extends StatefulWidget {
     required this.openBookCallback,
     this.scrollController,
     this.positionsListener,
+    this.scrollOffsetController,
     this.isMainText = false,
     this.title,
     this.bookTitle,
@@ -2404,6 +2409,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         // תוכן
         Expanded(
           child: BlocBuilder<TextBookBloc, TextBookState>(
+            buildWhen: textBookStateDiffersBeyondVisibleIndices,
             builder: (context, state) {
               if (state is! TextBookLoaded) {
                 return const Center(child: CircularProgressIndicator());
@@ -2545,7 +2551,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                         scrollOffsetController:
                                             widget.isMainText
                                             ? state.scrollOffsetController
-                                            : null,
+                                            : widget.scrollOffsetController,
                                         itemCount: itemCount,
                                         padding: const EdgeInsets.all(4),
                                         itemBuilder: (context, index) =>

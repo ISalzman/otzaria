@@ -35,9 +35,21 @@ import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
-  static const int _linkLookBehindLines = 60;
-  static const int _linkLookAheadLines = 140;
-  static const int _linksReloadThresholdLines = 20;
+  // השאילתה עצמה רצה ב-Isolate, אבל כל טעינה גוררת פענוח התוצאה, מיזוג
+  // הקישורים ובנייה מחדש של חלונית המפרשים על ה-thread שמצייר. הסף — ולא
+  // גודל החלון — הוא שקובע את התדירות: טעינה כל ~120 שורות במקום כל ~20.
+  /// כמה שורות אחורה נטענות סביב הנראה. חייב להיות ≥ [linksReloadThresholdLines].
+  @visibleForTesting
+  static const int linkLookBehindLines = 150;
+
+  /// כמה שורות קדימה נטענות סביב הנראה. חייב להיות ≥ [linksReloadThresholdLines],
+  /// אחרת שורות בין קצה הכיסוי לנקודת הטעינה יישארו בלי קישורים.
+  @visibleForTesting
+  static const int linkLookAheadLines = 200;
+
+  /// המרחק מקצה החלון הטעון שבו נטענת מנה חדשה. קובע את תדירות הטעינות.
+  @visibleForTesting
+  static const int linksReloadThresholdLines = 120;
   static const int _initialContentLookBehindLines = 80;
   static const int _initialContentLookAheadLines = 180;
   static const int _contentLookBehindLines = 120;
@@ -1508,15 +1520,15 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   ({int start, int end}) _calculateLinksWindow(List<int> visibleIndices) {
     if (visibleIndices.isEmpty) {
-      return (start: 0, end: _linkLookAheadLines);
+      return (start: 0, end: linkLookAheadLines);
     }
 
     final minVisible = visibleIndices.reduce((a, b) => a < b ? a : b);
     final maxVisible = visibleIndices.reduce((a, b) => a > b ? a : b);
 
     return (
-      start: (minVisible - _linkLookBehindLines).clamp(0, minVisible),
-      end: maxVisible + _linkLookAheadLines,
+      start: (minVisible - linkLookBehindLines).clamp(0, minVisible),
+      end: maxVisible + linkLookAheadLines,
     );
   }
 
@@ -1530,8 +1542,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         _loadedLinksStart != null &&
         _loadedLinksEnd != null &&
         _loadedLinksTargetBookTitlesSignature == targetBookTitlesSignature &&
-        start >= (_loadedLinksStart! - _linksReloadThresholdLines) &&
-        end <= (_loadedLinksEnd! + _linksReloadThresholdLines);
+        start >= (_loadedLinksStart! - linksReloadThresholdLines) &&
+        end <= (_loadedLinksEnd! + linksReloadThresholdLines);
   }
 
   List<String>? _normalizeTargetBookTitles(Iterable<String>? targetBookTitles) {
