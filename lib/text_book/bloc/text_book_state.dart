@@ -61,6 +61,7 @@ class TextBookInitial extends TextBookState {
   final SearchMode searchMode;
   final int searchDistance;
   final SearchMatchPolicy matchPolicy;
+  final Set<int>? initialSearchResultLines;
   final bool splitedView;
   final bool showPageShapeView;
 
@@ -88,6 +89,7 @@ class TextBookInitial extends TextBookState {
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.initialSearchResultLines,
     this.splitedView = true,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -109,6 +111,7 @@ class TextBookInitial extends TextBookState {
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.initialSearchResultLines,
     bool? splitedView,
     this.showPageShapeView = false,
     this.highlightText = '',
@@ -129,6 +132,7 @@ class TextBookInitial extends TextBookState {
     searchMode,
     searchDistance,
     matchPolicy,
+    initialSearchResultLines,
     splitedView,
     showPageShapeView,
     pinpointHighlightIndex,
@@ -377,13 +381,9 @@ class TextBookLoaded extends TextBookState {
     );
   }
 
-  /// האם השורה משתתפת בהדגשת חיפוש במדיניות התאמה שאינה ברירת המחדל.
-  ///
-  /// null — חיפוש-מנוע בתוך הספר לא רץ (למשל ספר שנפתח מתוצאת חיפוש
-  /// גלובלית בלי חלונית צד): אין מידע לפסול לפיו, וההדגשה נשארת פעילה.
-  /// סט (גם ריק) — מוסמך: רק שורות שהמנוע החזיר מודגשות.
+  /// רק שורה שהמנוע החזיר משתתפת בהדגשה במדיניות שאינה סטנדרטית.
   bool lineParticipatesInSearchHighlight(int lineIndex) =>
-      searchResultLines?.contains(lineIndex) ?? true;
+      searchResultLines?.contains(lineIndex) ?? false;
 
   /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות.
   bool get commentaryRemoveNikud =>

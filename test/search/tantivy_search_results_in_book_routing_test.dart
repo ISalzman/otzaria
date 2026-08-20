@@ -215,10 +215,9 @@ void main() {
 
     final initialState = tab.bloc.state;
     expect(initialState, isA<TextBookInitial>());
-    expect(
-      (initialState as TextBookInitial).matchPolicy.proximityScope,
-      SearchScope.sameSection,
-    );
+    final initial = initialState as TextBookInitial;
+    expect(initial.matchPolicy.proximityScope, SearchScope.sameSection);
+    expect(initial.initialSearchResultLines, {389});
   });
 
   testWidgets('הקלדה אחרי החיפוש אינה מחליפה את השאילתה שבוצעה', (

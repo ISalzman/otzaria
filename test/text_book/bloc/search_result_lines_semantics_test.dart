@@ -16,10 +16,10 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 /// רק שורות שהמנוע החזיר מודגשות.
 void main() {
   group('TextBookLoaded.lineParticipatesInSearchHighlight', () {
-    test('null — חיפוש בתוך הספר לא רץ — אינו חוסם אף שורה', () {
+    test('null — אין תוצאות מנוע ידועות — חוסם כל שורה', () {
       final state = _loadedState(searchResultLines: null);
-      expect(state.lineParticipatesInSearchHighlight(0), isTrue);
-      expect(state.lineParticipatesInSearchHighlight(389), isTrue);
+      expect(state.lineParticipatesInSearchHighlight(0), isFalse);
+      expect(state.lineParticipatesInSearchHighlight(389), isFalse);
     });
 
     test('סט מוסמך: שורה שהמנוע החזיר משתתפת', () {

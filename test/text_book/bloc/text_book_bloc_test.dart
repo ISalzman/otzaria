@@ -1865,6 +1865,33 @@ void main() {
         await bloc.close();
       });
 
+      test(
+        'שורת תוצאה גלובלית נשמרת מהמצב ההתחלתי אל TextBookLoaded',
+        () async {
+          final bloc = _createBloc(
+            repository: _FakeTextBookRepository(),
+            showPageShapeView: false,
+            initialSearchResultLines: {10},
+          );
+
+          bloc.add(
+            const LoadContent(
+              fontSize: 20,
+              showSplitView: false,
+              removeNikud: false,
+              loadCommentators: false,
+            ),
+          );
+          await _waitFor(
+            () => bloc.state is TextBookLoaded,
+            description: 'טעינת תוכן',
+          );
+
+          expect((bloc.state as TextBookLoaded).searchResultLines, {10});
+          await bloc.close();
+        },
+      );
+
       test('UpdateSearchText מעדכן את מדיניות ההתאמה', () async {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
@@ -1942,6 +1969,7 @@ TextBookBloc _createBloc({
   TextBook? book,
   int initialIndex = 10,
   SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+  Set<int>? initialSearchResultLines,
   Future<String?> Function(
     String title,
     int currentLine, {
@@ -1961,6 +1989,7 @@ TextBookBloc _createBloc({
       commentators,
       searchMode: SearchMode.exact,
       matchPolicy: matchPolicy,
+      initialSearchResultLines: initialSearchResultLines,
       showPageShapeView: showPageShapeView,
     ),
     scrollController: ItemScrollController(),

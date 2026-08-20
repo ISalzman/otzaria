@@ -313,6 +313,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         searchMode: inBookMode,
         searchDistance: inBookDistance,
         matchPolicy: inBookMatchPolicy,
+        initialSearchResultLines: {segment},
         showPageShapeView: PageShapeSettingsManager.getViewModePreference(
           title,
         ),
