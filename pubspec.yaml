@@ -112,6 +112,11 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_inappwebview
       ref: master
       path: flutter_inappwebview_windows
+  flutter_inappwebview_linux:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_linux
   otzaria_search_engine:
     git:
       url: https://github.com/Otzaria/otzaria_search_engine
