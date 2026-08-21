@@ -68,6 +68,9 @@ jobs:
           dart run tool/generate_settings_l10n.dart
 
       - name: Build Linux app
+        env:
+          CXXFLAGS=-Wno-unknown-warning-option
+          CFLAGS=-Wno-unknown-warning-option
         run: flutter build linux --release
 
       - name: Prepare app bundle
