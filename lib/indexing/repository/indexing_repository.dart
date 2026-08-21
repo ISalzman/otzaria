@@ -1264,7 +1264,12 @@ class IndexingRepository {
     final text = await _loadTextBookText(textBook);
     if (text == null) return true;
 
-    return computeContentFingerprint(text: text) == indexHash;
+    // הגרסה הסינכרונית הייתה מגבבת ספר שלם על ה-UI isolate; מסלול ה-bytes
+    // האסינכרוני מריץ את הגיבוב על ה-thread pool של המנוע.
+    final hash = await computeContentFingerprintBytes(
+      text: utf8.encode(text),
+    );
+    return hash == indexHash;
   }
 
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת

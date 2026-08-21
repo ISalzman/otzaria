@@ -1,29 +1,42 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/utils/index_freshness_warner.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 import '../support/search_engine_test_init.dart';
+import '../test_helpers/memory_cache_provider.dart';
 
 /// האזהרה הלא-חוסמת על דריפט תוכן (issue #828): התוצאה נפתחת תמיד,
-/// האזהרה מוצגת רק על אי-התאמה ודאית, מפת החתימות נטענת פעם אחת לדור
-/// אינדקס, וכל המטמונים מתאפסים כשהאינדקס נבנה או נפתח מחדש.
+/// האזהרה מוצגת רק על אי-התאמה ודאית, מפת החתימות נטענת פעם אחת לדור,
+/// וכל המטמונים מתאפסים כשמתחלף דור האינדקס **או** דור הספרייה.
 Future<void> main() async {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final engineReady = await tryInitSearchEngine();
 
   final warner = IndexFreshnessWarner.instance;
   late _FakeTantivyDataProvider provider;
 
+  setUpAll(() async {
+    await Settings.init(cacheProvider: MemoryCacheProvider());
+  });
+
   setUp(() {
     warner.resetForTesting();
     provider = _FakeTantivyDataProvider(_FakeSearchEngine());
     warner.providerResolver = () => provider;
+    DataRepository.instance.library = Future.value(
+      Library(categories: const []),
+    );
   });
   tearDown(warner.resetForTesting);
 
@@ -108,6 +121,68 @@ Future<void> main() async {
 
     expect(verifierCalls, 2);
     expect(provider.fakeEngine.fingerprintFetches, 1);
+  });
+
+  test('רענון ספרייה בלי שום אות אינדוקס מאפס את המטמון', () async {
+    // רגרסיה מהביקורת: כשעדכון אינדקס אוטומטי כבוי, רענון DB מחליף את
+    // תוכן הספרייה בלי reopen ובלי מעבר isIndexing — ההחלפה של ה-Future
+    // ב-DataRepository היא האות היחיד, ובלעדיו ספר שנערך מדולג לנצח.
+    final book = TextBook(id: 1, title: 'ספר');
+    var verifierCalls = 0;
+    warner.debugBookVerifier = (_, _) async {
+      verifierCalls++;
+      return true;
+    };
+
+    await warner.warnIfContentDrifted(book);
+    DataRepository.instance.library = Future.value(
+      Library(categories: const []),
+    );
+    await warner.warnIfContentDrifted(book);
+
+    expect(verifierCalls, 2);
+  });
+
+  test('בדיקה שנפתחה לפני איפוס אינה מזהירה מהדור הישן', () async {
+    // הדור מתחלף בזמן ה-await על מפת החתימות: התוצאה הישנה נבלעת, ובדיקה
+    // חדשה של אותו ספר רצה מלאה ומזהירה.
+    final gate = Completer<Map<String, BigInt>>();
+    provider.fakeEngine.pendingFingerprints = gate;
+    final notifications = <String>[];
+    warner.debugBookVerifier = (_, _) async => false;
+    warner.debugNotifier = notifications.add;
+
+    final stale = warner.warnIfContentDrifted(TextBook(id: 1, title: 'ספר'));
+    provider.isIndexing.value = true;
+    provider.isIndexing.value = false;
+    gate.complete(const {});
+    await stale;
+    expect(notifications, isEmpty, reason: 'תוצאה מדור ישן אינה מוצגת');
+
+    await warner.warnIfContentDrifted(TextBook(id: 1, title: 'ספר'));
+    expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+  });
+
+  test('כשל מדור ישן אינו נוגע במטמונים של הדור החדש', () async {
+    final gate = Completer<Map<String, BigInt>>();
+    provider.fakeEngine.pendingFingerprints = gate;
+    warner.debugBookVerifier = (_, _) async => true;
+
+    final stale = warner.warnIfContentDrifted(TextBook(id: 1, title: 'א'));
+    provider.isIndexing.value = true;
+    provider.isIndexing.value = false;
+    // הדור החדש טוען מפה תקינה ונשמר במטמון.
+    await warner.warnIfContentDrifted(TextBook(id: 2, title: 'ב'));
+    // ה-catch של הדור הישן — אסור לו למחוק את המפה החדשה.
+    gate.completeError(StateError('old generation failed'));
+    await stale;
+    await warner.warnIfContentDrifted(TextBook(id: 3, title: 'ג'));
+
+    expect(
+      provider.fakeEngine.fingerprintFetches,
+      2,
+      reason: 'המפה של הדור החדש שרדה את הכשל הישן',
+    );
   });
 
   test('כשל בטעינת המפה אינו נצרב — לא לספר ולא למפה', () async {
@@ -206,14 +281,22 @@ class _FakeSearchEngine implements SearchEngine {
   int fingerprintFetches = 0;
   int failuresBeforeSuccess = 0;
 
+  /// טעינה חד-פעמית שנשלטת מהבדיקה (לתרחישי איפוס באמצע המתנה).
+  Completer<Map<String, BigInt>>? pendingFingerprints;
+
   @override
-  Future<Map<String, BigInt>> getBookTextFingerprints() async {
+  Future<Map<String, BigInt>> getBookTextFingerprints() {
     fingerprintFetches++;
+    final pending = pendingFingerprints;
+    if (pending != null) {
+      pendingFingerprints = null;
+      return pending.future;
+    }
     if (failuresBeforeSuccess > 0) {
       failuresBeforeSuccess--;
-      throw StateError('engine down');
+      return Future.error(StateError('engine down'));
     }
-    return Map.of(textFingerprints);
+    return Future.value(Map.of(textFingerprints));
   }
 
   @override
