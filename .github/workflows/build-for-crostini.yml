@@ -1,0 +1,168 @@
+name: "Build for Crostini"
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-22.04
+    env:
+      PKG_CONFIG_PATH: /opt/wpe-sdk/lib/pkgconfig
+      LD_LIBRARY_PATH: /opt/wpe-sdk/lib
+      LIBRARY_PATH: /opt/wpe-sdk/lib
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          sudo apt update -y
+          sudo apt install -y \
+            libgtk-3-dev \
+            libcurl4-openssl-dev \
+            libwpewebkit-1.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libwebkit2gtk-4.1-dev
+
+      - name: Download prebuilt WPE runtime SDK
+        shell: bash
+        env:
+          WPE_RUNTIME_VERSION: "2.48.7"
+          WPE_RUNTIME_SHA256: "d89fa37074898afe3fb6087628f3c8b983f962c53651c393efafbed8556de49d"
+          WPE_RUNTIME_REPO: "/Otzaria/otzaria-wpe-runtime"
+        run: |
+          WPE_RUNTIME_TAG="wpe-${WPE_RUNTIME_VERSION}"
+          WPE_RUNTIME_ASSET="wpe-runtime-${WPE_RUNTIME_VERSION}-linux-x86_64.tar.zst"
+          WPE_RUNTIME_BASEURL="https://github.com/${WPE_RUNTIME_REPO}/releases/download/${WPE_RUNTIME_TAG}"
+
+          echo "Downloading ${WPE_RUNTIME_ASSET} ..."
+          curl -fSL --retry 3 --retry-delay 5 -o "/tmp/${WPE_RUNTIME_ASSET}" "${WPE_RUNTIME_BASEURL}/${WPE_RUNTIME_ASSET}"
+          printf '%s  %s\n' "${WPE_RUNTIME_SHA256}" "/tmp/${WPE_RUNTIME_ASSET}" | sha256sum -c -
+
+          mkdir -p /opt
+          tar xf "/tmp/${WPE_RUNTIME_ASSET}" --zstd -C /opt
+          cat /opt/wpe-sdk/VERSIONS 2>/dev/null
+
+          test -f /opt/wpe-sdk/lib/pkgconfig/wpe-webkit-2.0.pc
+          pkg-config --print-errors --exists wpe-webkit-2.0 wpe-platform-2.0 wpe-platform-headless-2.0 wpe-1.0
+          echo "wpe-webkit-2.0 = $(pkg-config --modversion wpe-webkit-2.0)"
+
+      - name: Prepare Flutter dependencies
+        shell: bash
+        run: |
+          flutter pub get
+
+          # Generate the settings .g.dart files: search index + translation catalog.
+          dart run tool/generate_search_index.dart
+          dart run tool/generate_settings_l10n.dart
+
+      - name: Build Linux app
+        run: flutter build linux --release
+
+      - name: Prepare app bundle
+        shell: bash
+        run: |
+          BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
+
+          # No longer necessary
+          #ZSTD_LIB=$(find build -type f -name 'libzstandard_linux.so' | head -n 1)
+          #cp -v $ZSTD_LIB $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
+          #chmod 644 $BUNDLE_DIR/lib/$(basename $ZSTD_LIB)
+
+          RPATH=$(patchelf --print-rpath $BUNDLE_DIR/lib/libzstandard_linux_plugin.so)
+          patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
+
+          # portable.marker makes the raw package portable:
+          # All data is stored in the otzaria_data folder next to the executable
+          # See lib/core/app_paths.dart - isPortable
+          touch $BUNDLE_DIR/portable.marker
+
+          tar -czf otzaria-linux-app.tar.gz -C $BUNDLE_DIR .
+
+      - name: Prepare full bundle
+        if: false
+        shell: bash
+        run: |
+          LIBRARY=library_db
+          FULL_DIR=otzaria-linux-full
+          BOOKS_DIR=otzaria_library
+          BUNDLE_DIR=$(find build -type d -name 'bundle' | head -n 1)
+
+          mkdir -p $LIBRARY
+          curl -Lf https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst -o $LIBRARY/seforim.db.zst
+          curl -Lf https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o $LIBRARY/otzar-HB_catalog.db.zst
+          curl -Lf https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o $LIBRARY/talmud_bavli_latest.tar.zst
+          curl -Lf https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o $LIBRARY/lexical.db
+
+          rm -rf FULL_DIR
+          cp -rf $BUNDLE_DIR $FULL_DIR
+          mkdir -p $FULL_DIR/$BOOKS_DIR
+
+          zstd -d -c --long=31 --memory=2048MB $LIBRARY/seforim.db.zst > $FULL_DIR/$BOOKS_DIR/seforim.db
+          zstd -d -c --long=31 --memory=2048MB $LIBRARY/otzar-HB_catalog.db.zst > $FULL_DIR/$BOOKS_DIR/otzar-HB_catalog.db
+          zstd -d -c --long=31 --memory=2048MB $LIBRARY/talmud_bavli_latest.tar.zst | tar -xf - -C $FULL_DIR/$BOOKS_DIR
+
+          # The related search dictionary (lexical.db) is not compressed, copy it as is next to seforim.db.
+          cp $LIBRARY/lexical.db $FULL_DIR/$BOOKS_DIR/lexical.db
+
+          # The FULL package is not portable (user data remains in the user folder)
+          # Remove the marker file from the linux build
+          rm -f "$FULL_DIR/portable.marker"
+
+          # A marker file that signals to the application that the folder is a bundled library of the full package
+          # See lib/core/app_paths.dart - _detectBundledLibraryPath.
+          touch "$FULL_DIR/$BOOKS_DIR/.otzaria_bundled_library"
+
+          tar -czf otzaria-linux-full.tar.gz -C $FULL_DIR .
+
+      - name: Build Linux DEB package
+        if: false
+        shell: bash
+        run: |
+          dart pub global activate fastforge
+          fastforge release --name=production --jobs=release-linux-deb
+
+      - name: Prepare DEB package
+        id: find_packages
+        shell: bash
+        run: |
+          if [ -d dist ]; then
+            DEB_FILE=$(find dist -type f -name '*-linux.deb' | head -n 1)
+            if [ -n "$DEB_FILE" ]; then
+              echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+              echo "deb_name=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Upload linux app bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: otzaria-linux-app
+          path: otzaria-linux-app.tar.gz
+          archive: false
+
+      - name: Upload linux full bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: otzaria-linux-full
+          path: otzaria-linux-full.tar.gz
+          archive: false
+
+      - name: Upload linux deb package
+        if: steps.find_packages.outputs.deb_file != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: otzaria-linux-deb
+          path: ${{ steps.find_packages.outputs.deb_file }}
+          archive: false
