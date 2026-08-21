@@ -62,6 +62,24 @@ const double _kCommentaryPaneWidthFactor = 0.17;
 /// רוחב הכותרת האנכית + רווחים + מפריד (20 לכותרת + 4 לרווח + 8 למפריד)
 const double _kCommentaryLabelAndSpacingWidth = 32.0;
 
+@visibleForTesting
+double pageShapeAnchorProgress(ItemPosition position) {
+  final extent = position.itemTrailingEdge - position.itemLeadingEdge;
+  if (position.itemLeadingEdge >= 0 || extent <= 0) return 0;
+  return (-position.itemLeadingEdge / extent).clamp(0.0, 1.0);
+}
+
+@visibleForTesting
+double pageShapeAnchorRestorationOffset({
+  required ItemPosition position,
+  required double progress,
+  required double viewportExtent,
+}) {
+  final itemExtent =
+      (position.itemTrailingEdge - position.itemLeadingEdge) * viewportExtent;
+  return position.itemLeadingEdge * viewportExtent + progress * itemExtent;
+}
+
 /// מסך תצוגת צורת הדף - מציג את הטקסט המרכזי עם מפרשים מסביב
 class PageShapeScreen extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
@@ -112,6 +130,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   );
   final ValueNotifier<int> _closeCommentatorsFilterNotifier =
       ValueNotifier<int>(0);
+  final GlobalKey _mainTextViewerKey = GlobalKey();
+  int _reanchorGeneration = 0;
 
   // גדלים לחלוניות - יחושבו לפי גודל המסך
   double? _leftSidebarWidth;
@@ -219,6 +239,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
 
   /// עיגון מחדש לפריט העליון הנראה לפני שינוי רוחב התוכן.
   void _reanchorMainText() {
+    final generation = ++_reanchorGeneration;
     final blocState = context.read<TextBookBloc>().state;
     if (blocState is! TextBookLoaded) return;
 
@@ -237,10 +258,63 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final anchor = atOrBelowFold.isNotEmpty
         ? pickByMin(atOrBelowFold)
         : pickByMin(visible);
+    final progress = pageShapeAnchorProgress(anchor);
 
     controller.jumpTo(
       index: anchor.index,
       alignment: anchor.itemLeadingEdge.clamp(0.0, 1.0),
+    );
+
+    final offsetController = blocState.scrollOffsetController;
+    if (progress == 0 || offsetController == null) return;
+    unawaited(
+      _restoreMainTextAnchor(
+        generation: generation,
+        anchorIndex: anchor.index,
+        progress: progress,
+        offsetController: offsetController,
+      ),
+    );
+  }
+
+  Future<void> _restoreMainTextAnchor({
+    required int generation,
+    required int anchorIndex,
+    required double progress,
+    required ScrollOffsetController offsetController,
+  }) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || generation != _reanchorGeneration) return;
+
+    final blocState = context.read<TextBookBloc>().state;
+    if (blocState is! TextBookLoaded ||
+        blocState.scrollOffsetController != offsetController ||
+        !blocState.scrollController.isAttached) {
+      return;
+    }
+
+    final measured = blocState.positionsListener.itemPositions.value
+        .where((position) => position.index == anchorIndex)
+        .firstOrNull;
+    final viewportExtent = _mainTextViewerKey.currentContext?.size?.height;
+    if (measured == null ||
+        viewportExtent == null ||
+        !viewportExtent.isFinite ||
+        viewportExtent <= 0) {
+      return;
+    }
+
+    final offset = pageShapeAnchorRestorationOffset(
+      position: measured,
+      progress: progress,
+      viewportExtent: viewportExtent,
+    );
+    if (!offset.isFinite || offset.abs() < 0.5) return;
+
+    await offsetController.animateScroll(
+      offset: offset,
+      duration: const Duration(milliseconds: 1),
+      curve: Curves.linear,
     );
   }
 
@@ -905,6 +979,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
             }
           },
         ),
+        BlocListener<TextBookBloc, TextBookState>(
+          // שינוי גודל גופן משנה את גובה כל הפריטים; בלי עיגון-מחדש ההיסט
+          // בפיקסלים נוחת על מקום אחר (issue #915).
+          listenWhen: (previous, current) =>
+              previous is TextBookLoaded &&
+              current is TextBookLoaded &&
+              previous.fontSize != current.fontSize,
+          listener: (context, state) => _reanchorMainText(),
+        ),
         BlocListener<PersonalNotesBloc, PersonalNotesState>(
           // מאזינים גם לשינוי newNoteBookId, כדי לתפוס מעבר ישיר מטיוטה
           // של ספר אחד לטיוטה של ספר אחר (isCreatingNewNote נשאר true).
@@ -1126,6 +1209,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                                     onPointerDown: (_) =>
                                                         _focusMainBookNotes(),
                                                     child: SimpleTextViewer(
+                                                      key: _mainTextViewerKey,
                                                       content: state.content,
                                                       fontSize: state.fontSize,
                                                       selectionSyncController:

@@ -259,6 +259,37 @@ Future<void> main() async {
     });
   });
 
+  group('normalizeGlobalOptionsForMode — מפה גלובלית אחת לפי המצב', () {
+    test('רגיל משאיר רק אפשרויות מילה פעילות של המצב הרגיל', () {
+      final exact = SearchQueryBuilder.normalizeGlobalOptionsForMode(
+        SearchMode.exact,
+        const {
+          'קידומות דקדוקיות': true,
+          'כתיב מלא/חסר': true,
+          'ניקוד': true,
+          'ראשי תיבות': true,
+          'חלק ממילה': false,
+        },
+      );
+
+      expect(exact, {'קידומות דקדוקיות': true, 'כתיב מלא/חסר': true});
+    });
+
+    test('מתקדם משאיר כל אפשרות פעילה; מקורב — ללא אפשרויות', () {
+      final advanced = SearchQueryBuilder.normalizeGlobalOptionsForMode(
+        SearchMode.advanced,
+        const {'ראשי תיבות': true, 'תרגום ארמי': false},
+      );
+      expect(advanced, {'ראשי תיבות': true});
+
+      final fuzzy = SearchQueryBuilder.normalizeGlobalOptionsForMode(
+        SearchMode.fuzzy,
+        const {'קידומות דקדוקיות': true},
+      );
+      expect(fuzzy, isEmpty);
+    });
+  });
+
   group('SearchEngineGateway', () {
     test('search מפנה לפונקציה המתאימה לפי מצב החיפוש', () async {
       final engine = _RecordingSearchEngineOperations();

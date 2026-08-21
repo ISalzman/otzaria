@@ -197,6 +197,7 @@ class PluginInstallerService {
         enabled: existingPlugin?.enabled ?? true,
         pinned: existingPlugin?.pinned ?? manifest.defaultPinned,
         pinnedToNavRail: existingPlugin?.pinnedToNavRail ?? false,
+        showInTools: existingPlugin?.showInTools ?? true,
         allowOrderBeforeBuiltInsGranted: allowOrderBeforeBuiltInsGranted,
         manifest: manifest,
         installedAt: existingPlugin?.installedAt ?? DateTime.now(),

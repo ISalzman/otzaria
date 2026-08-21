@@ -773,7 +773,7 @@ void main() {
             actions: const [
               ToolTileAction(
                 icon: FluentIcons.arrow_left_24_regular,
-                label: 'הזז קדימה',
+                label: 'הזז למעלה',
                 onTap: null,
               ),
             ],
@@ -785,7 +785,7 @@ void main() {
       await tester.pumpAndSettle();
       final item = tester.widget<PopupMenuItem<VoidCallback>>(
         find.ancestor(
-          of: find.text('הזז קדימה'),
+          of: find.text('הזז למעלה'),
           matching: find.byType(PopupMenuItem<VoidCallback>),
         ),
       );
@@ -846,7 +846,7 @@ void main() {
                 children: [
                   ToolTileAction(
                     icon: FluentIcons.arrow_left_24_regular,
-                    label: 'הזז קדימה',
+                    label: 'הזז למעלה',
                     onTap: () => moved++,
                   ),
                 ],
@@ -859,11 +859,11 @@ void main() {
       await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
       await tester.pumpAndSettle();
       expect(find.text('הזזה'), findsOneWidget);
-      expect(find.text('הזז קדימה'), findsNothing);
+      expect(find.text('הזז למעלה'), findsNothing);
 
       await tester.tap(find.text('הזזה'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('הזז קדימה'));
+      await tester.tap(find.text('הזז למעלה'));
       await tester.pumpAndSettle();
       expect(moved, 1);
     });
@@ -880,7 +880,7 @@ void main() {
                 children: [
                   ToolTileAction(
                     icon: FluentIcons.arrow_left_24_regular,
-                    label: 'הזז קדימה',
+                    label: 'הזז למעלה',
                     onTap: null,
                   ),
                 ],
@@ -898,7 +898,7 @@ void main() {
       // היא מרונדרת כשורה רגילה מעומעמת — בלי תת-פעולות בכלל.
       await tester.tap(find.text('הזזה'));
       await tester.pumpAndSettle();
-      expect(find.text('הזז קדימה'), findsNothing);
+      expect(find.text('הזז למעלה'), findsNothing);
     });
 
     testWidgets('פעימת הזזה אינה זורקת ומתייצבת', (tester) async {
@@ -1129,7 +1129,7 @@ void main() {
       expect(find.text('מחק תוסף'), findsNothing);
       expect(find.text('השבת'), findsNothing);
       // פעולות ההזזה עצמן חבויות בתת-תפריט ואינן מציפות את התפריט הראשי.
-      expect(find.text('הזז אחורה'), findsNothing);
+      expect(find.text('הזז למטה'), findsNothing);
       expect(find.text('הזז לסוף'), findsNothing);
     });
 
@@ -1137,8 +1137,8 @@ void main() {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'גימטריה');
 
-      expect(find.text('הזז אחורה'), findsOneWidget);
-      expect(find.text('הזז קדימה'), findsOneWidget);
+      expect(find.text('הזז למטה'), findsOneWidget);
+      expect(find.text('הזז למעלה'), findsOneWidget);
       expect(find.text('הזז לתחילה'), findsOneWidget);
       expect(find.text('הזז לסוף'), findsOneWidget);
     });
@@ -1184,10 +1184,10 @@ void main() {
     });
 
     // בראש הקבוצה אין "קדימה" — הלחיצה על פריט מושבת אינה משנה סדר.
-    testWidgets('בראש הקבוצה "הזז קדימה" אינו עושה דבר', (tester) async {
+    testWidgets('בראש הקבוצה "הזז למעלה" אינו עושה דבר', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז למעלה');
 
       expect(
         settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>(),
@@ -1195,10 +1195,10 @@ void main() {
       );
     });
 
-    testWidgets('בסוף הקבוצה "הזז אחורה" אינו עושה דבר', (tester) async {
+    testWidgets('בסוף הקבוצה "הזז למטה" אינו עושה דבר', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'ראשי תיבות');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז למטה');
 
       expect(
         settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>(),
@@ -1208,10 +1208,10 @@ void main() {
 
     // ── פעולות בפועל ────────────────────────────────────────────────────────
 
-    testWidgets('"הזז אחורה" על כלי מובנה שומר סדר חדש', (tester) async {
+    testWidgets('"הזז למטה" על כלי מובנה שומר סדר חדש', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז למטה');
 
       final event = settingsBloc.recorded.whereType<UpdateBuiltInToolsOrder>();
       expect(event, hasLength(1));
@@ -1226,10 +1226,10 @@ void main() {
       );
     });
 
-    testWidgets('"הזז קדימה" על כלי מובנה מקדים אותו לשכנו', (tester) async {
+    testWidgets('"הזז למעלה" על כלי מובנה מקדים אותו לשכנו', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'הערות אישיות');
-      await tapMenuItem(tester, 'הזז קדימה');
+      await tapMenuItem(tester, 'הזז למעלה');
 
       final order = settingsBloc.recorded
           .whereType<UpdateBuiltInToolsOrder>()
@@ -1326,10 +1326,10 @@ void main() {
       expect(event.builtInToolsPinnedToNavRail, {'builtin.gematria'});
     });
 
-    testWidgets('"הזז אחורה" על תוסף משגר סידור תוספים', (tester) async {
+    testWidgets('"הזז למטה" על תוסף משגר סידור תוספים', (tester) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'תוסף א');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז למטה');
 
       final event = pluginSystemBloc.recorded
           .whereType<ReorderPluginsRequested>()
@@ -1500,6 +1500,178 @@ void main() {
           isEmpty,
         );
         expect(find.byKey(kToolDropIndicatorKey), findsNothing);
+      });
+    });
+
+    // ── issue #929: שחרור בשטח הריק וגלילת קצה ──────────────────────────────
+
+    /// גורר שורה אל השטח הריק שמתחת לרשימה, בלי לשחרר.
+    Future<TestGesture> dragTileToEmptySpace(
+      WidgetTester tester,
+      String from,
+    ) async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text(from)),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final list = tester.getRect(find.byType(ListView));
+      await gesture.moveTo(Offset(list.center.dx, list.bottom - 8));
+      await tester.pump();
+      return gesture;
+    }
+
+    testWidgets('שחרור בשטח הריק שמתחת לרשימה מעביר תוסף לסוף קבוצתו', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'תוסף א');
+
+        // קו ההוספה מוצג על סוף קבוצת התוספים — חיווי שהשחרור יתקבל.
+        expect(find.byKey(kToolDropIndicatorKey), findsOneWidget);
+        final line = tester.getRect(find.byKey(kToolDropIndicatorKey));
+        final lastRow = tester.getRect(
+          find.ancestor(
+            of: find.text('תוסף ב'),
+            matching: find.byType(ToolTile),
+          ),
+        );
+        expect(line.center.dy, greaterThan(lastRow.center.dy));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(
+          pluginSystemBloc.recorded
+              .whereType<ReorderPluginsRequested>()
+              .single
+              .orderedPluginIds,
+          ['com.example.b', 'com.example.a'],
+        );
+      });
+    });
+
+    testWidgets('שחרור בשטח הריק עם כלי מובנה מעביר אותו לסוף הכלים', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'לוח שנה');
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        final order = settingsBloc.recorded
+            .whereType<UpdateBuiltInToolsOrder>()
+            .single
+            .builtInToolsOrder;
+        expect(order.last, 'builtin.calendar');
+        expect(
+          pluginSystemBloc.recorded.whereType<ReorderPluginsRequested>(),
+          isEmpty,
+        );
+      });
+    });
+
+    testWidgets('שחרור בשטח הריק כשהמקור כבר אחרון אינו משנה דבר', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(tester);
+        final gesture = await dragTileToEmptySpace(tester, 'תוסף ב');
+
+        expect(find.byKey(kToolDropIndicatorKey), findsNothing);
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(
+          pluginSystemBloc.recorded.whereType<ReorderPluginsRequested>(),
+          isEmpty,
+        );
+      });
+    });
+
+    testWidgets('גרירה אל הקצה התחתון גוללת את הרשימה אוטומטית', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(
+          tester,
+          pluginState: PluginSystemLoaded([
+            for (var i = 0; i < 20; i++)
+              _pluginEntry('com.example.p$i', 'תוסף מספר $i').plugin!,
+          ]),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        expect(position.pixels, 0);
+
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('גימטריה')),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        final list = tester.getRect(find.byType(ListView));
+        await gesture.moveTo(Offset(list.center.dx, list.bottom - 10));
+        await tester.pump();
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(position.pixels, greaterThan(0));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+      });
+    });
+
+    testWidgets('גרירה אל הקצה העליון גוללת את הרשימה חזרה למעלה', (
+      tester,
+    ) async {
+      await _asDesktop(() async {
+        await pumpPanel(
+          tester,
+          pluginState: PluginSystemLoaded([
+            for (var i = 0; i < 20; i++)
+              _pluginEntry('com.example.p$i', 'תוסף מספר $i').plugin!,
+          ]),
+        );
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        position.jumpTo(200);
+        await tester.pump();
+
+        // שורה רחוקה מהקצה — גרירה מהשורה העליונה אל הקצה קצרה מסף ה-slop
+        // והמחווה אינה מזוהה כגרירה.
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(ToolTile).at(3)),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        final list = tester.getRect(find.byType(ListView));
+        await gesture.moveTo(Offset(list.center.dx, list.top + 10));
+        await tester.pump();
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+
+        expect(position.pixels, lessThan(200));
+
+        await gesture.up();
+        await tester.pumpAndSettle();
       });
     });
 
@@ -1711,7 +1883,7 @@ void main() {
     ) async {
       await pumpPanel(tester);
       await openMoveSubmenu(tester, 'לוח שנה');
-      await tapMenuItem(tester, 'הזז אחורה');
+      await tapMenuItem(tester, 'הזז למטה');
 
       expect(tester.takeException(), isNull);
       expect(

@@ -279,6 +279,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   @visibleForTesting
   int reanchorOnPaneToggleCount = 0;
 
+  // גודל הגופן שזוהה לאחרונה, לעיגון-מחדש של הטקסט בעת שינוי גודל (issue #915).
+  double? _lastFontSizeForReanchor;
+
+  /// מונה כמה פעמים רץ ה-reanchor בעקבות שינוי גודל גופן. לבדיקת הרגרסיה.
+  @visibleForTesting
+  int reanchorOnFontSizeCount = 0;
+
+  // details.scale מצטבר מתחילת המחווה, ולכן חובה בסיס קבוע שנלכד בתחילתה —
+  // הכפלה ב-state החי מתרכבת בכל rebuild והגופן קופץ לקצה ה-clamp.
+  double? _pinchStartFontSize;
+
   // Key עבור PageShapeScreen
   final Key _pageShapeKey = UniqueKey();
 
@@ -745,6 +756,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _focusRepository = context.read<FocusRepository>();
     _focusRepository!.registerBookContentFocusNode(_bookContentFocusNode);
 
+    // ה-listener מקבל רק שינויים אחרי ההרשמה; כשהמסך נבנה על state שכבר
+    // טעון, בלי זריעה כאן שינוי הגופן הראשון היה נחשב "ראשון" ומדלג על העיגון.
+    final initialBlocState = context.read<TextBookBloc>().state;
+    if (initialBlocState is TextBookLoaded) {
+      _lastFontSizeForReanchor = initialBlocState.fontSize;
+    }
+
     // טעינת הגדרות פר-ספר
     _loadPerBookSettings();
 
@@ -1194,6 +1212,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                     _lastShowLeftPaneForReanchor = state.showLeftPane;
                     if (_paneUsesPushLayout) {
                       reanchorOnPaneToggleCount++;
+                      _reanchorMainContentToTopmostVisible();
+                    }
+                  }
+                  // שינוי גודל גופן משנה את גובה כל הפריטים; בלי עיגון-מחדש
+                  // ההיסט בפיקסלים נוחת על מקום אחר (issue #915).
+                  if (state.fontSize != _lastFontSizeForReanchor) {
+                    final isFirstLoadedState = _lastFontSizeForReanchor == null;
+                    _lastFontSizeForReanchor = state.fontSize;
+                    if (!isFirstLoadedState) {
+                      reanchorOnFontSizeCount++;
                       _reanchorMainContentToTopmostVisible();
                     }
                   }
@@ -2762,9 +2790,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // את פס הגלילה מדופן החלון בשונה משאר החלוניות.
       padding: const EdgeInsets.only(bottom: 5),
       child: GestureDetector(
+        onScaleStart: (details) {
+          final currentState = context.read<TextBookBloc>().state;
+          _pinchStartFontSize = currentState is TextBookLoaded
+              ? currentState.fontSize
+              : null;
+        },
         onScaleUpdate: (details) {
+          final baseFontSize = _pinchStartFontSize;
+          if (baseFontSize == null) return;
           context.read<TextBookBloc>().add(
-            UpdateFontSize((state.fontSize * details.scale).clamp(15, 60)),
+            UpdateFontSize((baseFontSize * details.scale).clamp(15, 60)),
           );
         },
         onScaleEnd: (details) {

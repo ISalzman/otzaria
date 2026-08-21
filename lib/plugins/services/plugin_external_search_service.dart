@@ -161,6 +161,8 @@ class PluginExternalSearchService {
     int offset = 0,
     int limit = 20,
     List<int>? ids,
+    Map<String, bool> options = const {},
+    Map<String, Map<String, bool>> wordOptions = const {},
     void Function(ExternalSearchPage partial)? onUpdate,
   }) async {
     final pluginId = _providerToPlugin[provider];
@@ -197,6 +199,12 @@ class PluginExternalSearchService {
       // עמוד לפי מזהים מפורשים: דפדוף בתוצאות מסוננות-קטגוריה שהקורא
       // חישב מהאינדקס. הספק מגיש אותם מהמטמון של החיפוש.
       'ids': ?ids,
+      // אפשרויות חיפוש בפורמט של search.requested — הספק מחיל את מה שהמנוע
+      // שלו תומך בו. options היא המפה הגלובלית (חלה על כל מילות השאילתה) —
+      // בלעדיה ספק שמפרק את השאילתה למילים אחרת (מקף, פיסוק) לא היה מזהה
+      // את מפתחות ה-wordOptions והאפשרויות היו מתבטלות בשקט.
+      'options': ?(options.isEmpty ? null : options),
+      'wordOptions': ?(wordOptions.isEmpty ? null : wordOptions),
       // הקורא צורך שמות ספרים באינדקס. ספק ותיק מתעלם מהשדה ושולח רשומות
       // בלי שם; ספק שמכיר אותו יודע שהשם לא ייזרק — ומארח ותיק, שאינו
       // שולח את השדה, לא יקבל רשומות שהיה זורק בסניטציה. רק בקשת העמוד

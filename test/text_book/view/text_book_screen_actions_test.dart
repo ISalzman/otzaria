@@ -775,6 +775,75 @@ void main() {
     });
   });
 
+  group('reanchor בשינוי גודל גופן', () {
+    // רגרסיה (issue #915): שינוי גודל גופן משנה את גובה כל הפריטים, ובלי
+    // עיגון-מחדש ההיסט בפיקסלים נוחת על מקום אחר והקורא מאבד את מקומו.
+
+    Future<int> pumpAndChangeFontSize(
+      WidgetTester tester, {
+      required Size size,
+    }) async {
+      final book = TextBook(title: 'ספר בדיקה');
+      final loaded = _loadedState(book);
+      final bloc = _TestTextBookBloc(loaded);
+      final tab = TextBookTab(book: book, index: 0, blocOverride: bloc);
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, size);
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+      await tester.pump();
+
+      bloc.emitStateForTest(loaded.copyWith(fontSize: loaded.fontSize + 3));
+      await tester.pump();
+
+      final dynamic state = tester.state(find.byType(TextBookViewerBloc));
+      return state.reanchorOnFontSizeCount as int;
+    }
+
+    testWidgets('שינוי גודל גופן מפעיל עיגון-מחדש', (tester) async {
+      final count = await pumpAndChangeFontSize(
+        tester,
+        size: const Size(1600, 900),
+      );
+      expect(count, greaterThan(0));
+    });
+
+    testWidgets('העיגון רץ גם במסך צר — גובה הפריטים משתנה בכל פריסה', (
+      tester,
+    ) async {
+      final count = await pumpAndChangeFontSize(
+        tester,
+        size: const Size(780, 900),
+      );
+      expect(count, greaterThan(0));
+    });
+  });
+
   group('שמירת פוקוס מקלדת', () {
     testWidgets(
       'מסך הספר לא חוטף פוקוס משדה קלט בדיאלוג כשה-viewport משתנה (מקלדת וירטואלית)',

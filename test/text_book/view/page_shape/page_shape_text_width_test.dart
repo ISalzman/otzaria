@@ -35,6 +35,29 @@ void main() {
   const bookTitle = 'ספר בדיקה';
   const screenWidth = 2000.0;
 
+  test('עיגון פסקה גבוהה משמר את ההתקדמות היחסית בתוכה', () {
+    const oldPosition = ItemPosition(
+      index: 4,
+      itemLeadingEdge: -0.5,
+      itemTrailingEdge: 1.5,
+    );
+    const measuredPosition = ItemPosition(
+      index: 4,
+      itemLeadingEdge: 0.02,
+      itemTrailingEdge: 2.02,
+    );
+
+    final progress = pageShapeAnchorProgress(oldPosition);
+    final offset = pageShapeAnchorRestorationOffset(
+      position: measuredPosition,
+      progress: progress,
+      viewportExtent: 400,
+    );
+
+    expect(progress, 0.25);
+    expect(offset, 208);
+  });
+
   setUp(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
     // קונפיגורציה ריקה + טורים מוסתרים → אין _CommentaryPane ואין גישה ל-DB.
