@@ -9,7 +9,6 @@ const Object _unset = Object();
 
 class SearchState {
   final String? filterQuery;
-  final List<Book>? filteredBooks;
   final List<SearchResult> results;
   final Set<Book> booksToSearch;
   final bool isLoading;
@@ -49,7 +48,6 @@ class SearchState {
     this.totalResults = 0,
     this.totalGroups,
     this.filterQuery,
-    this.filteredBooks,
     this.facetCounts = const {},
     this.configuration = const SearchConfiguration(),
     this.errorMessage,
@@ -65,7 +63,6 @@ class SearchState {
     int? totalResults,
     Object? totalGroups = _unset,
     String? filterQuery,
-    List<Book>? filteredBooks,
     Map<String, int>? facetCounts,
     SearchConfiguration? configuration,
     Object? errorMessage = _unset,
@@ -82,7 +79,6 @@ class SearchState {
           ? this.totalGroups
           : totalGroups as int?,
       filterQuery: filterQuery,
-      filteredBooks: filteredBooks,
       facetCounts: facetCounts ?? this.facetCounts,
       configuration: configuration ?? this.configuration,
       errorMessage: identical(errorMessage, _unset)
