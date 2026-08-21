@@ -473,11 +473,8 @@ class PluginRuntimeDispatcher {
     }
   }
 
-  /// האם ה-controller הרשום למופע [instanceId] של התוסף הוא [controller].
-  ///
-  /// דף שמוחלף (עדכון תוסף משנה את ה-key) חייב לבדוק זאת לפני שהוא מבטל
-  /// רישום: ה-`initState` של הדף החדש רץ לפני ה-`dispose` של הישן.
-  bool ownsForegroundController(
+  /// האם ה-controller הרשום למופע [instanceId] הוא [controller].
+  bool ownsController(
     String pluginId,
     InAppWebViewController? controller, {
     PluginInstanceId instanceId = PluginInstanceIds.defaultForeground,

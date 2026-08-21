@@ -441,7 +441,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       // ביטול הרישום רק אם הדף הזה עדיין הבעלים. עדכון תוסף משנה את ה-key,
       // ו-initState של הדף החדש רץ *לפני* ה-dispose של הישן — בלי הבדיקה
       // הישן היה מוחק את הרישום של החדש ומשתיק אותו.
-      if (PluginRuntimeDispatcher.instance.ownsForegroundController(
+      if (PluginRuntimeDispatcher.instance.ownsController(
         pluginId,
         controller,
         instanceId: instanceId,

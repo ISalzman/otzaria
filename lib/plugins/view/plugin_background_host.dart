@@ -637,6 +637,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       widget.plugin.pluginId,
       _reloadFromDisk,
       instanceId: PluginInstanceIds.background,
+      token: this,
     );
   }
 
@@ -666,6 +667,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   void dispose() {
     final pluginId = widget.plugin.pluginId;
     final generation = widget.activationGeneration;
+    final controller = _controller;
     // העץ נעול בזמן dispose וניקוי הרישומים מודיע ל-ListenableBuilders
     // (הדגשות, סרגל כלים) — לכן נדחה למיקרוטסק, אחרי שחרור הנעילה.
     scheduleMicrotask(() {
@@ -674,13 +676,20 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         pluginId,
         generation: generation,
       );
-      PluginRuntimeDispatcher.instance.unregisterController(
+      if (PluginRuntimeDispatcher.instance.ownsController(
         pluginId,
+        controller,
         instanceId: PluginInstanceIds.background,
-      );
+      )) {
+        PluginRuntimeDispatcher.instance.unregisterController(
+          pluginId,
+          instanceId: PluginInstanceIds.background,
+        );
+      }
       PluginRuntimeDispatcher.instance.unregisterReloadCallback(
         pluginId,
         instanceId: PluginInstanceIds.background,
+        token: this,
       );
     });
     super.dispose();
