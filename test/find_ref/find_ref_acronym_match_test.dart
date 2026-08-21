@@ -274,6 +274,18 @@ void main() {
       expect(hit.matchRank, 3);
     });
 
+    test('שאילתה בת תו אחד עדיין מתאימה לפי ראש-תיבות', () {
+      // מסננת הביגרמים אינה חלה על שאילתה קצרה מ-2 תווים, ולולאת הביטויים
+      // ב-findRefs יורדת עד טוקן בודד — אסור שהמסננת תחסום אותו.
+      seedLibrary(const [
+        (id: 401, title: 'שולחן ערוך אורח חיים', acronyms: ['ק']),
+      ]);
+      final hit = ReferenceBooksCache.instance.search('ק').single;
+
+      expect(hit.bookId, 401);
+      expect(hit.matchRank, 3);
+    });
+
     test('תחילית שכל זנבה מילות-כותרת → rank 4 עם '
         'acronymTailIsTitleWords', () async {
       seedLibrary(const [_rambamTefila]);

@@ -716,6 +716,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | TantivyDataProvider (search index) | `test/data/data_providers/tantivy_data_provider_test.dart` |
 | External books scanner | `test/data/data_providers/scan_external_books_test.dart` |
 | Library book search (fuzzy + acronyms) | `test/data/repository/book_search_fuzzy_match_test.dart` |
+| אינדקס הביגרמים של הכינויים (איתור מקורות — קבוצת-על) | `test/data/cache/acronyms_bigram_index_test.dart` |
+| פתרון ספר של מפרש בדיאלוג "איתור מקורות" (id → כותרת, אינדקס העץ) | `test/find_ref/find_ref_book_by_id_test.dart` |
 
 **Search**
 | Area | Test File |
