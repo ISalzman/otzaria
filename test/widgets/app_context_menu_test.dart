@@ -743,6 +743,19 @@ void main() {
     expect(find.text('העתק'), findsNothing);
   });
 
+  testWidgets('בחירה פעילה: הרמה אחרי הזכייה פותחת תפריט ואינה נבלעת', (
+    tester,
+  ) async {
+    final outerFired = await touchHoldAndReportOuterTapDown(
+      tester,
+      preserveSelection: true,
+      hold: const Duration(milliseconds: 200),
+    );
+
+    expect(outerFired, isFalse);
+    expect(find.text('העתק'), findsOneWidget);
+  });
+
   testWidgets('בחירה פעילה: גרירה במגע אינה נחסמת ואינה פותחת תפריט', (
     tester,
   ) async {
@@ -757,6 +770,44 @@ void main() {
       findsNothing,
       reason: 'תנועה מעבר ל-slop לפני הזכייה דוחה את ה-recognizer — גלילה חיה',
     );
+  });
+
+  testWidgets('בחירה פעילה: גרירה שמתחילה אחרי הזכייה ממשיכה לגלול', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppContextMenuRegion(
+            shouldPreserveSelectionOnSecondaryTap: (_) => true,
+            menuBuilder: (_, _) => [
+              AppContextMenuEntry(label: 'העתק', onTap: () {}),
+            ],
+            child: ListView(
+              controller: controller,
+              children: const [
+                SizedBox(height: 1200),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.touch);
+    addTearDown(gesture.removePointer);
+    const start = Offset(200, 300);
+    await gesture.down(start);
+    await tester.pump(const Duration(milliseconds: 150));
+    await gesture.moveBy(const Offset(0, -80));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, greaterThan(0));
+    expect(find.text('העתק'), findsNothing);
   });
 
   testWidgets('onSecondaryTapDown נקרא בלחיצה ימנית עבור שמירת ההקשר', (
