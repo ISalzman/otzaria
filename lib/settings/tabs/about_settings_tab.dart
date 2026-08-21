@@ -832,7 +832,9 @@ class _DonationButtonState extends State<_DonationButton> {
 
   Future<void> _onPressed() async {
     setState(() => _checkingConnection = true);
-    final connectivity = await ConnectivityStatusService.instance.snapshot();
+    final connectivity = await ConnectivityStatusService.instance.snapshot(
+      forceRefresh: true,
+    );
     if (!mounted) return;
     setState(() => _checkingConnection = false);
     if (connectivity.isOnline) {

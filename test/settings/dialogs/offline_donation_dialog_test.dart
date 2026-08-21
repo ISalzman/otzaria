@@ -41,10 +41,14 @@ void main() {
 
   tearDown(() => ConnectivityStatusService.instance = originalService);
 
-  void useConnectivity({required bool offlineMode, required bool hasNetwork}) {
+  void useConnectivity({
+    required bool offlineMode,
+    required bool hasNetwork,
+    Future<bool> Function()? networkProbe,
+  }) {
     ConnectivityStatusService.instance = ConnectivityStatusService(
       offlineModeReader: () => offlineMode,
-      networkProbe: () async => hasNetwork,
+      networkProbe: networkProbe ?? () async => hasNetwork,
     );
   }
 
@@ -105,6 +109,24 @@ void main() {
 
       expect(find.text('תרומה בנדרים+'), findsNothing);
       expect(launcher.launched, [donationUrl]);
+    });
+
+    testWidgets('בדיקת רשת חדשה מונעת פתיחת דפדפן אחרי נפילת חיבור', (
+      tester,
+    ) async {
+      var hasNetwork = true;
+      useConnectivity(
+        offlineMode: false,
+        hasNetwork: true,
+        networkProbe: () async => hasNetwork,
+      );
+      await ConnectivityStatusService.instance.snapshot();
+      hasNetwork = false;
+
+      await tapDonate(tester);
+
+      expect(find.text('תרומה בנדרים+'), findsOneWidget);
+      expect(launcher.launched, isEmpty);
     });
   });
 }
