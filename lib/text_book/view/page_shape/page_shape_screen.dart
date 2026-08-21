@@ -905,6 +905,15 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
             }
           },
         ),
+        BlocListener<TextBookBloc, TextBookState>(
+          // שינוי גודל גופן משנה את גובה כל הפריטים; בלי עיגון-מחדש ההיסט
+          // בפיקסלים נוחת על מקום אחר (issue #915).
+          listenWhen: (previous, current) =>
+              previous is TextBookLoaded &&
+              current is TextBookLoaded &&
+              previous.fontSize != current.fontSize,
+          listener: (context, state) => _reanchorMainText(),
+        ),
         BlocListener<PersonalNotesBloc, PersonalNotesState>(
           // מאזינים גם לשינוי newNoteBookId, כדי לתפוס מעבר ישיר מטיוטה
           // של ספר אחד לטיוטה של ספר אחר (isCreatingNewNote נשאר true).
