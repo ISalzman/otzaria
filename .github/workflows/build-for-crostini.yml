@@ -69,8 +69,8 @@ jobs:
 
       - name: Build Linux app
         env:
-          CXXFLAGS=-Wno-unknown-warning-option
-          CFLAGS=-Wno-unknown-warning-option
+          CXXFLAGS: -Wno-unknown-warning-option
+          CFLAGS: -Wno-unknown-warning-option
         run: flutter build linux --release
 
       - name: Prepare app bundle
