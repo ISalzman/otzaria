@@ -255,5 +255,31 @@ void main() {
         completes,
       );
     });
+
+    test('אינו מוחק fallback פעיל מסוג _new_', () async {
+      final parent = Directory.systemTemp.createTempSync(
+        'otzaria_active_fallback_gc_test_',
+      );
+      addTearDown(() async {
+        if (parent.existsSync()) await parent.delete(recursive: true);
+      });
+
+      final indexPath = '${parent.path}/index';
+      final activeFallback = Directory('${indexPath}_new_222')
+        ..createSync(recursive: true);
+      final staleFallback = Directory('${indexPath}_new_111')
+        ..createSync(recursive: true);
+      final corrupted = Directory('${indexPath}_corrupted_333')
+        ..createSync(recursive: true);
+
+      await TantivyDataProvider.deleteQuarantinedIndexSiblings(
+        indexPath,
+        activeIndexPath: activeFallback.path,
+      );
+
+      expect(activeFallback.existsSync(), isTrue);
+      expect(staleFallback.existsSync(), isFalse);
+      expect(corrupted.existsSync(), isFalse);
+    });
   });
 }
