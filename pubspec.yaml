@@ -66,7 +66,6 @@ dependencies:
   path: ^1.9.1
   http: ^1.6.0
   zstandard: ^1.5.0
-  zstandard_native: ^1.5.0
   ffi: ^2.2.0
   win32: ^6.3.0
   win32_registry: ^3.0.3
@@ -113,6 +112,10 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_inappwebview
       ref: master
       path: flutter_inappwebview_windows
+  otzaria_search_engine:
+    git:
+      url: https://github.com/Otzaria/otzaria_search_engine
+      ref: refactor
 
 flutter_launcher_icons:
   android: true
