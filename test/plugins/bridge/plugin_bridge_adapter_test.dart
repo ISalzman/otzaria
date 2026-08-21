@@ -46,6 +46,7 @@ import 'package:otzaria/plugins/models/plugin_report_record.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
@@ -3880,10 +3881,11 @@ Future<void> main() async {
     });
 
     test(
-      'settings.options מרחיבים אפשרויות מילה לכל מילות השאילתה',
+      'settings.options נשמרים למסלול החיפוש הידני',
       () async {
         await adapter.execute('reader', 'openSearchTab', {
           'query': 'ואהבת לרעך',
+          'autoSearch': false,
           'settings': {
             'mode': 'advanced',
             'options': {'קידומות דקדוקיות': true},
@@ -3894,9 +3896,29 @@ Future<void> main() async {
         for (final options in tab.searchOptions.values) {
           expect(options['קידומות דקדוקיות'], isTrue);
         }
+        expect(tab.useGlobalSearchOptions.value, isFalse);
+        expect(tab.effectiveSearchOptions(), tab.searchOptions);
       },
       skip: engineReady ? false : searchEngineSkipReason,
     );
+
+    test('שומר את העדפות תצוגת התוצאות של המשתמש', () async {
+      SearchDefaults.saveSortOrderDefault(ResultsOrder.relevance);
+      SearchDefaults.saveResultGroupingDefault(ResultGroupingMode.sameSection);
+      addTearDown(() {
+        SearchDefaults.saveSortOrderDefault(ResultsOrder.catalogue);
+        SearchDefaults.saveResultGroupingDefault(ResultGroupingMode.none);
+      });
+
+      await adapter.execute('reader', 'openSearchTab', {
+        'query': 'ברכת המזון',
+        'autoSearch': false,
+      });
+
+      final config = capturedSearchTab().searchBloc.state.configuration;
+      expect(config.sortBy, ResultsOrder.relevance);
+      expect(config.resultGrouping, ResultGroupingMode.sameSection);
+    });
 
     test(
       'settings.wordOptions נשמרים פר-מילה בטאב',

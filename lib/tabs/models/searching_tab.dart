@@ -454,6 +454,9 @@ class SearchingTab extends OpenedTab {
       json['searchText'],
       isPinned: json['isPinned'] ?? false,
       initialConfiguration: initialConfig,
+      autoRunInitialSearch: json['autoRunInitialSearch'] is bool
+          ? json['autoRunInitialSearch'] as bool
+          : true,
     );
     tab.negativeQueryController.text = json['negativeSearchText'] ?? '';
 
@@ -605,6 +608,7 @@ class SearchingTab extends OpenedTab {
       'title': title,
       'searchText': queryController.text,
       'negativeSearchText': negativeQueryController.text,
+      'autoRunInitialSearch': autoRunInitialSearch,
       'isPinned': isPinned,
       'type': 'SearchingTabWindow',
       'distance': config.distance,

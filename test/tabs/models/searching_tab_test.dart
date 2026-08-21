@@ -54,6 +54,20 @@ Future<void> main() async {
       );
     });
 
+    test('toJson/fromJson משחזר autoRunInitialSearch', () {
+      final source = SearchingTab(
+        'חיפוש',
+        'שלום',
+        autoRunInitialSearch: false,
+      );
+      addTearDown(source.dispose);
+
+      final restored = SearchingTab.fromJson(source.toJson());
+      addTearDown(restored.dispose);
+
+      expect(restored.autoRunInitialSearch, isFalse);
+    });
+
     test('toJson/fromJson משחזר בחירות חיפוש של תוספים', () {
       final source = SearchingTab(
         'חיפוש',

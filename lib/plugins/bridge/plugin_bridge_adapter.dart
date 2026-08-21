@@ -33,6 +33,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
@@ -1640,22 +1641,27 @@ class PluginBridgeAdapter {
           final tab = SearchingTab(
             SearchingTab.titleForQuery(query),
             query,
-            initialConfiguration: SearchConfiguration(
-              searchMode: settings.searchMode,
-              distance: settings.distance,
-              proximityScope: settings.proximityScope,
-              wordMatchMode: settings.wordMatchMode,
-              wordMatchCount: settings.wordMatchCount,
-              pluginSearchSelections: {
-                for (final itemId in selectItems)
-                  '${plugin.pluginId}/$itemId': true,
-              },
+            initialConfiguration: SearchDefaults.withResultPreferences(
+              SearchConfiguration(
+                searchMode: settings.searchMode,
+                distance: settings.distance,
+                proximityScope: settings.proximityScope,
+                wordMatchMode: settings.wordMatchMode,
+                wordMatchCount: settings.wordMatchCount,
+                pluginSearchSelections: {
+                  for (final itemId in selectItems)
+                    '${plugin.pluginId}/$itemId': true,
+                },
+              ),
             ),
             autoRunInitialSearch: autoSearch,
           );
           // אפשרויות פר-מילה נשמרות בטאב (לתצוגה ב-UI ולחיפוש ידני),
           // ומועברות גם להרצה האוטומטית כדי שלא תרוץ ללא 'קידומות' וכד'.
           tab.searchOptions.addAll(settings.searchOptions);
+          if (settings.searchOptions.isNotEmpty) {
+            tab.useGlobalSearchOptions.value = false;
+          }
           if (autoSearch) {
             tab.searchBloc.add(
               UpdateSearchQuery(
