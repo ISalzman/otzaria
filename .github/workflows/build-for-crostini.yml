@@ -33,7 +33,8 @@ jobs:
             libcurl4-openssl-dev \
             libwpewebkit-1.0-dev \
             libwpebackend-fdo-1.0-dev \
-            libwebkit2gtk-4.1-dev
+            libwebkit2gtk-4.1-dev \
+            libicu-dev libjpeg-dev libjxl-dev libavif-dev libgstreamer-plugins-bad1.0-dev
 
       - name: Download prebuilt WPE runtime SDK
         shell: bash
