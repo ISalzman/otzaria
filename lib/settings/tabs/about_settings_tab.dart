@@ -1,12 +1,14 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/widgets/layout/adaptive_row.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/settings/dialogs/offline_donation_dialog.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/tabs/about_settings_data.dart';
@@ -171,11 +173,7 @@ class AboutSettingsTab extends StatelessWidget {
               cardId: 'about.donors',
               title: context.settingsText('תורמים'),
               children: [
-                _padded(
-                  _MemorialCardsGrid(
-                    onDonationTap: () => _openUrl('https://nedar.im/ezOd'),
-                  ),
-                ),
+                _padded(const _MemorialCardsGrid()),
                 SettingsActionTile(
                   title: Text(
                     context.settingsText('תרמו מהונם ומזמנם'),
@@ -710,8 +708,7 @@ class _ZayitCreditState extends State<_ZayitCredit> {
 // ── _MemorialCardsGrid ────────────────────────────────────────────────────────
 
 class _MemorialCardsGrid extends StatelessWidget {
-  final VoidCallback onDonationTap;
-  const _MemorialCardsGrid({required this.onDonationTap});
+  const _MemorialCardsGrid();
 
   @override
   Widget build(BuildContext context) {
@@ -730,7 +727,7 @@ class _MemorialCardsGrid extends StatelessWidget {
           description:
               "ולהצלחת דוד ב\"ר יחזקאל ומשפחתו בתורה וביראת שמים\nתרומה גדולה ורבה לפיתוח התוכנה",
         ),
-        _MemorialCard.donation(onDonate: onDonationTap),
+        const _MemorialCard.donation(),
       ],
     );
   }
@@ -758,20 +755,21 @@ class _MemorialCard extends StatelessWidget {
   final String title;
   final double titleFontSize;
   final String? description;
-  final VoidCallback? onDonate;
+  final bool showDonateButton;
 
   const _MemorialCard.donor({required this.title, required this.description})
     : icon = FluentIcons.fire_24_filled,
       dimIcon = false,
       titleFontSize = 14,
-      onDonate = null;
+      showDonateButton = false;
 
-  const _MemorialCard.donation({required this.onDonate})
+  const _MemorialCard.donation()
     : icon = FluentIcons.heart_24_regular,
       dimIcon = true,
       title = 'מקום זה יכול להיות מונצח לע"נ יקירך',
       titleFontSize = 13,
-      description = null;
+      description = null,
+      showDonateButton = true;
 
   @override
   Widget build(BuildContext context) {
@@ -807,17 +805,50 @@ class _MemorialCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (onDonate != null) ...[
+            if (showDonateButton) ...[
               const SizedBox(height: 8),
-              ActionButton.recommended(
-                icon: FluentIcons.payment_24_regular,
-                text: 'נדרים+',
-                onPressed: onDonate!,
-              ),
+              const _DonationButton(),
             ],
           ],
         ),
       ),
     );
   }
+}
+
+// ── _DonationButton ───────────────────────────────────────────────────────────
+
+/// כפתור התרומה בנדרים+. בודק חיבור לפני הפתיחה, ובלי חיבור מציג את הוראות
+/// התרומה בחלונית — במקום דפדפן שנפתח על דף שגיאה.
+class _DonationButton extends StatefulWidget {
+  const _DonationButton();
+
+  @override
+  State<_DonationButton> createState() => _DonationButtonState();
+}
+
+class _DonationButtonState extends State<_DonationButton> {
+  bool _checkingConnection = false;
+
+  Future<void> _onPressed() async {
+    setState(() => _checkingConnection = true);
+    final connectivity = await ConnectivityStatusService.instance.snapshot(
+      forceRefresh: true,
+    );
+    if (!mounted) return;
+    setState(() => _checkingConnection = false);
+    if (connectivity.isOnline) {
+      await _launchUrl(kNedarimDonationUrl);
+    } else {
+      await showOfflineDonationDialog(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ActionButton.recommended(
+    icon: FluentIcons.payment_24_regular,
+    text: 'נדרים+',
+    isLoading: _checkingConnection,
+    onPressed: _onPressed,
+  );
 }
