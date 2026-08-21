@@ -4383,6 +4383,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                             bookTitle: widget.tab.book.title,
                             bookTopics: widget.tab.book.topics,
                             bookCategoryPath: widget.tab.book.categoryPath,
+                            bookId: widget.tab.book.id,
+                            isUserBook: widget.tab.book.isUserBook,
+                            externalLibraryId:
+                                widget.tab.book.externalLibraryId,
                             pdfFilePath: _resolvedPdfPath,
                             initialSearchText: widget.tab.searchText,
                             initialSearchOptions: widget.tab.searchOptions,
