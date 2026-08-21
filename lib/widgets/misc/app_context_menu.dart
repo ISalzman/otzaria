@@ -49,6 +49,9 @@ class AppContextMenuRegion extends StatefulWidget {
   /// בכפתור הימני, וכך מונעת מ-[SelectableRegion] של Flutter לאסוף/לשחרר את
   /// הבחירה (התנהגות ברירת המחדל ב-Windows). כשהלחיצה מחוץ לטקסט המסומן — מחזיר
   /// `false`, וה-recognizer אינו מתערב כך שההתנהגות הרגילה (ביטול) נשמרת.
+  ///
+  /// אותו callback משמש גם ללחיצה ארוכה במגע/עט (כש-[openOnLongPress] פעיל):
+  /// החזקה על הטקסט המסומן שומרת את הבחירה ופותחת את התפריט ביחס אליה.
   final bool Function(Offset globalPosition)?
   shouldPreserveSelectionOnSecondaryTap;
 
@@ -399,6 +402,23 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
                 ),
                 (instance) {},
               ),
+          // המקבילה ללחיצה ארוכה במגע/עט: זוכה בזירה לפני ה-deadline של
+          // SelectableRegion כשההחזקה על הבחירה, ופותחת את התפריט בעצמה.
+          if (widget.openOnLongPress)
+            _PreserveSelectionLongPressRecognizer:
+                GestureRecognizerFactoryWithHandlers<
+                  _PreserveSelectionLongPressRecognizer
+                >(
+                  () => _PreserveSelectionLongPressRecognizer(
+                    shouldPreserve: (globalPosition) =>
+                        widget.shouldPreserveSelectionOnSecondaryTap?.call(
+                          globalPosition,
+                        ) ??
+                        false,
+                    onOpenMenu: _openContextMenu,
+                  ),
+                  (instance) {},
+                ),
         },
         child: Listener(
           behavior: HitTestBehavior.translucent,
@@ -1128,6 +1148,101 @@ class _PreserveSelectionSecondaryTapRecognizer extends EagerGestureRecognizer {
 
   @override
   String get debugDescription => 'preserve-selection secondary tap';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _PreserveSelectionLongPressRecognizer — חוסם שחרור בחירה בלחיצה ארוכה במגע
+//
+// אותו מלכוד כמו בלחיצה הימנית: ה-TapAndHorizontalDragGestureRecognizer של
+// SelectableRegion יורה onTapDown אחרי kPressTimeout (100ms) גם בלי לזכות
+// בזירה, וב-Windows זה מריץ clearSelection — כך שהחזקת אצבע על טקסט מסומן
+// מוחקת את הבחירה עוד לפני שהלחיצה הארוכה נורית. recognizer זה מצטרף לזירה
+// רק כשההחזקה על הבחירה, זוכה רגע לפני ה-100ms (רק אם האצבע נייחת — תנועה
+// או הרמה לפני כן דוחות אותו, כך שגלילה והקשה רגילות אינן נפגעות), ובחלוף
+// kLongPressTimeout פותח את התפריט בעצמו כשהבחירה שמורה.
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PreserveSelectionLongPressRecognizer
+    extends PrimaryPointerGestureRecognizer {
+  _PreserveSelectionLongPressRecognizer({
+    required this.shouldPreserve,
+    required this.onOpenMenu,
+  }) : super(
+         deadline: _winDeadline,
+         supportedDevices: const {
+           PointerDeviceKind.touch,
+           PointerDeviceKind.stylus,
+           PointerDeviceKind.invertedStylus,
+         },
+         allowedButtonsFilter: _primaryOnly,
+       );
+
+  /// חייב להיות קטן מ-kPressTimeout — הזכייה דוחה את SelectableRegion מהזירה
+  /// לפני שה-deadline שלו מריץ clearSelection.
+  static final Duration _winDeadline =
+      kPressTimeout - const Duration(milliseconds: 10);
+
+  static bool _primaryOnly(int buttons) => buttons & kPrimaryButton != 0;
+
+  final bool Function(Offset globalPosition) shouldPreserve;
+  final void Function(Offset globalPosition) onOpenMenu;
+
+  Timer? _menuTimer;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (shouldPreserve(event.position)) {
+      super.addAllowedPointer(event);
+    }
+    // אחרת: לא מצטרפים לזירה — מגע מחוץ לבחירה מתנהג כרגיל.
+  }
+
+  @override
+  void didExceedDeadline() {
+    resolve(GestureDisposition.accepted);
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    super.acceptGesture(pointer);
+    if (pointer != primaryPointer || _menuTimer != null) return;
+    final position = initialPosition?.global;
+    if (position == null) return;
+    _menuTimer = Timer(kLongPressTimeout - _winDeadline, () {
+      _menuTimer = null;
+      onOpenMenu(position);
+    });
+  }
+
+  @override
+  void handlePrimaryPointer(PointerEvent event) {
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _cancelMenuTimer();
+      // לפני הזכייה: דחייה עצמית כדי שהקשה קצרה תגיע ל-SelectableRegion
+      // (כיווץ הבחירה כרגיל). אחרי הזכייה זהו no-op.
+      resolve(GestureDisposition.rejected);
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _cancelMenuTimer();
+    super.didStopTrackingLastPointer(pointer);
+  }
+
+  @override
+  void dispose() {
+    _cancelMenuTimer();
+    super.dispose();
+  }
+
+  void _cancelMenuTimer() {
+    _menuTimer?.cancel();
+    _menuTimer = null;
+  }
+
+  @override
+  String get debugDescription => 'preserve-selection long press';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
