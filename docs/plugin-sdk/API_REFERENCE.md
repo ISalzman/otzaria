@@ -112,6 +112,7 @@ if (response.success) {
 | `search.getOptions` | 0.9.97 |
 | `reader.openBook` | 0.9.89 |
 | `reader.openBookAtRef` | 0.9.89 |
+| `reader.openSearchTab` | 0.9.89 |
 | `reader.getCurrentState` | 0.9.89 |
 | `reader.getCurrentRef` | 0.9.89 |
 | `reader.getSelection` | 0.9.89 |
@@ -1122,13 +1123,52 @@ window.addEventListener('search.external.requested', async (event) => {
 זה מפעיל בה את מדור התוצאות החיצוני. מפתחות הבחירה נגזרים תמיד מה-pluginId
 של הקורא — תוסף אינו יכול לסמן שורות של תוסף אחר.
 
+`autoSearch` (אופציונלי, ברירת מחדל `true`) — כש-`false` הכרטיסייה נפתחת עם
+השאילתה בשדה החיפוש **מבלי להריץ את החיפוש**; המשתמש מפעיל אותו ידנית
+(Enter או כפתור החיפוש). שימושי כשהתוסף רוצה להראות למשתמש את השאילתה
+ולאפשר לו לערוך אותה לפני ההרצה. בשני המקרים השאילתה מוצגת בשדה וניתנת
+לעריכה.
+
+`settings` (אופציונלי) — הגדרות החיפוש איתן תיפתח הכרטיסייה: מצב, מרחק,
+מדיניות התאמה ואפשרויות מילה. הפרמטרים והערכים זהים ל-`search.query` (ראו
+`search.getOptions` לערכים החוקיים), ומפתחות `wordOptions` פר-מילה נבדקים
+מול פיצול מילות השאילתה.
+
 ```javascript
 await Otzaria.call('reader.openSearchTab', {
   query: 'ברכת המזון',
   selectItems: ['include-hebrewbooks'],
 });
 // true
+
+// פתיחה עם הטקסט בשדה בלי להריץ, והגדרות חיפוש קבועות מראש:
+await Otzaria.call('reader.openSearchTab', {
+  query: 'ואהבת לרעך',
+  autoSearch: false,
+  settings: {
+    mode: 'advanced',
+    distance: 2,
+    proximityScope: 'sameParagraph',
+    wordMatchMode: 'all',
+    options: { 'קידומות דקדוקיות': true },
+  },
+});
 ```
+
+**פרמטרים של `settings`**
+
+| פרמטר | ברירת מחדל | משמעות |
+|-------|-----------|--------|
+| `mode` | `'advanced'` | `'exact'` \| `'advanced'` \| `'fuzzy'` |
+| `distance` | `0` | מרווח מילים בין מילות החיפוש; במצב `'fuzzy'` הטווח 0–2 |
+| `proximityScope` | `'wordDistance'` | `'wordDistance'` \| `'sameParagraph'` \| `'sameSection'` |
+| `wordMatchMode` | `'all'` | `'all'` \| `'anyWord'` \| `'mostWords'` \| `'atLeast'` |
+| `wordMatchCount` | `2` | חוקי רק עם `mode: 'advanced'` ו-`wordMatchMode: 'atLeast'` |
+| `options` | `{}` | אפשרויות מילה שחלות על כל מילות השאילתה (למשל `'קידומות דקדוקיות'`) |
+| `wordOptions` | `{}` | אפשרויות פר-מילה במפתח `"{מילה}_{אינדקס}"`; גובר על `options` |
+
+שגיאות אפשריות: `error.invalid_params` (פרמטר או ערך לא מוכר, פרמטר שאינו
+נתמך במצב שנבחר, או מפתח פר-מילה שאינו תואם לשאילתה).
 
 ### `reader.openBookAtRef`
 **הרשאה:** `reader.open`

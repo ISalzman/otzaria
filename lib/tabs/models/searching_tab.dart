@@ -88,6 +88,11 @@ class SearchingTab extends OpenedTab {
     super.dedupeKey,
     SearchConfiguration? initialConfiguration,
     SearchBloc? searchBloc,
+
+    /// האם להריץ אוטומטית שאילתה ממתינה (queryController) כשהטאב מוצג
+    /// לראשונה. תוספים יכולים לפתוח טאב עם הטקסט בשדה בלי להריץ חיפוש
+    /// (reader.openSearchTab עם autoSearch: false) — אז המשתמש מריץ ידנית.
+    this.autoRunInitialSearch = true,
   }) {
     // בלי configuration מפורשת זה טאב חיפוש חדש — הוא נפתח עם המיון ומצב
     // האיחוד שהמשתמש בחר לאחרונה.
@@ -104,6 +109,9 @@ class SearchingTab extends OpenedTab {
     }
   }
 
+  /// האם להריץ אוטומטית שאילתה ממתינה בפתיחה הראשונה של הטאב.
+  final bool autoRunInitialSearch;
+
   factory SearchingTab.clone(SearchingTab other) {
     // ה-configuration מועברת ל-Bloc בעת בנייתו, ולא דרך events אחר-כך,
     // כדי למנוע race condition עם UpdateSearchQuery ש-UI שולח ב-initState
@@ -114,6 +122,7 @@ class SearchingTab extends OpenedTab {
       isPinned: other.isPinned,
       dedupeKey: other.dedupeKey,
       initialConfiguration: other.searchBloc.state.configuration,
+      autoRunInitialSearch: other.autoRunInitialSearch,
     );
 
     cloned.searchOptions.addAll(
@@ -445,6 +454,9 @@ class SearchingTab extends OpenedTab {
       json['searchText'],
       isPinned: json['isPinned'] ?? false,
       initialConfiguration: initialConfig,
+      autoRunInitialSearch: json['autoRunInitialSearch'] is bool
+          ? json['autoRunInitialSearch'] as bool
+          : true,
     );
     tab.negativeQueryController.text = json['negativeSearchText'] ?? '';
 
@@ -596,6 +608,7 @@ class SearchingTab extends OpenedTab {
       'title': title,
       'searchText': queryController.text,
       'negativeSearchText': negativeQueryController.text,
+      'autoRunInitialSearch': autoRunInitialSearch,
       'isPinned': isPinned,
       'type': 'SearchingTabWindow',
       'distance': config.distance,

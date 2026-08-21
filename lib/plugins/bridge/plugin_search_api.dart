@@ -784,3 +784,97 @@ class PluginSearchRequest {
   Map<String, Map<String, bool>> get effectiveNegativeSearchOptions =>
       _negativeParameters.searchOptions;
 }
+
+/// הגדרות פתיחת טאב חיפוש מתוסף (`reader.openSearchTab` → `settings`).
+///
+/// תת-קבוצה של פרמטרי `search.query` — מצב, מרווח, מדיניות התאמה ואפשרויות
+/// מילה (קידומות, סיומות וכד'). ה-parser משתמש באותו מסלול אימות של
+/// `PluginSearchRequest` כדי שהתוסף לא יקבל התנהגות שונה ממסך החיפוש: מפתח
+/// לא מוכר, אפשרות שאין למצב הנבחר, או מפתח פר-מילה שאינו תואם לשאילתה —
+/// נדחים ב-`error.invalid_params` ולא נבלעים בשקט.
+class PluginOpenSearchTabSettings {
+  final SearchMode searchMode;
+  final int distance;
+  final engine.SearchScope proximityScope;
+  final engine.WordMatchMode wordMatchMode;
+  final int wordMatchCount;
+
+  /// אפשרויות פר-מילה אפקטיביות (גלובליות מורחבות לכל מילה + פר-מילה),
+  /// מנורמלות למצב — בדיוק מה שמסך החיפוש שולח למנוע.
+  final Map<String, Map<String, bool>> searchOptions;
+
+  const PluginOpenSearchTabSettings({
+    required this.searchMode,
+    required this.distance,
+    required this.proximityScope,
+    required this.wordMatchMode,
+    required this.wordMatchCount,
+    required this.searchOptions,
+  });
+
+  /// מפתחות ה-`settings` הנתמכים על ידי `reader.openSearchTab`.
+  static const Set<String> _allowedKeys = {
+    'mode',
+    'distance',
+    'proximityScope',
+    'wordMatchMode',
+    'wordMatchCount',
+    'options',
+    'wordOptions',
+  };
+
+  /// ברירות המחדל של הטאב — זהות ל-`SearchConfiguration()`.
+  static const PluginOpenSearchTabSettings _defaults =
+      PluginOpenSearchTabSettings(
+    searchMode: SearchMode.advanced,
+    distance: 0,
+    proximityScope: engine.SearchScope.wordDistance,
+    wordMatchMode: engine.WordMatchMode.all,
+    wordMatchCount: 2,
+    searchOptions: {},
+  );
+
+  static PluginOpenSearchTabSettings parse(
+    Object? raw, {
+    required String query,
+  }) {
+    if (raw == null) return _defaults;
+    if (raw is! Map) {
+      PluginSearchApi._invalid('settings must be an object');
+    }
+    final args = Map<String, dynamic>.from(raw);
+    final unknownKeys =
+        args.keys.where((key) => !_allowedKeys.contains(key)).toList();
+    if (unknownKeys.isNotEmpty) {
+      PluginSearchApi._invalid(
+        'unknown settings parameter "${unknownKeys.first}"',
+      );
+    }
+
+    // בונים מפה מינימלית עבור PluginSearchRequest — כך כל האימות של
+    // search.query (מגבלות מצב, מפתחות אפשרויות, מבני ערכים) חל כאן גם.
+    final miniArgs = <String, dynamic>{
+      'query': query,
+      'mode': args['mode'] ?? 'advanced',
+      if (args['distance'] != null) 'distance': args['distance'],
+      if (args['proximityScope'] != null)
+        'proximityScope': args['proximityScope'],
+      if (args['wordMatchMode'] != null)
+        'wordMatchMode': args['wordMatchMode'],
+      if (args['wordMatchCount'] != null)
+        'wordMatchCount': args['wordMatchCount'],
+      if (args['options'] != null) 'options': args['options'],
+      if (args['wordOptions'] != null) 'wordOptions': args['wordOptions'],
+    };
+    final request = PluginSearchRequest.fromArgs(miniArgs)
+      ..validateAgainstQuery();
+    return PluginOpenSearchTabSettings(
+      searchMode: request.searchMode,
+      distance: request.distance,
+      proximityScope: request.proximityScope,
+      wordMatchMode: request.wordMatchMode,
+      wordMatchCount: request.wordMatchCount,
+      searchOptions: request.effectiveSearchOptions,
+    );
+  }
+}

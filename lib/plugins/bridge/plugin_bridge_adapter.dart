@@ -33,6 +33,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
@@ -1613,14 +1614,19 @@ class PluginBridgeAdapter {
           return true;
         }
       case 'openSearchTab':
-        // spec: openSearchTab({ query, selectItems? })
+        // spec: openSearchTab({ query, autoSearch?, selectItems?, settings? })
         // פותח כרטיסיית חיפוש מובנית עם השאילתה; selectItems מסמן שורות
         // דיאלוג של התוסף הקורא (מפתחי הבחירה נגזרים מ-pluginId שלו בלבד).
+        // autoSearch: false פותח את הטאב עם השאילתה בשדה מבלי להריץ חיפוש
+        // (ברירת המחדל true — הרצה אוטומטית). settings מקבל את הגדרות
+        // החיפוש (מצב, מרחק, מדיניות התאמה ואפשרויות מילה) בדיוק כמו
+        // search.query — ראה PluginOpenSearchTabSettings.
         {
           final query = (args['query'] as String? ?? '').trim();
           if (query.isEmpty || query.length > 500) {
             throw Exception('query required');
           }
+          final autoSearch = args['autoSearch'] as bool? ?? true;
           final selectItems = (args['selectItems'] as List? ?? const [])
               .whereType<String>()
               .where(
@@ -1628,17 +1634,42 @@ class PluginBridgeAdapter {
               )
               .take(4)
               .toList();
+          final settings = PluginOpenSearchTabSettings.parse(
+            args['settings'],
+            query: query,
+          );
           final tab = SearchingTab(
             SearchingTab.titleForQuery(query),
             query,
-            initialConfiguration: SearchConfiguration(
-              pluginSearchSelections: {
-                for (final itemId in selectItems)
-                  '${plugin.pluginId}/$itemId': true,
-              },
+            initialConfiguration: SearchDefaults.withResultPreferences(
+              SearchConfiguration(
+                searchMode: settings.searchMode,
+                distance: settings.distance,
+                proximityScope: settings.proximityScope,
+                wordMatchMode: settings.wordMatchMode,
+                wordMatchCount: settings.wordMatchCount,
+                pluginSearchSelections: {
+                  for (final itemId in selectItems)
+                    '${plugin.pluginId}/$itemId': true,
+                },
+              ),
             ),
+            autoRunInitialSearch: autoSearch,
           );
-          tab.searchBloc.add(UpdateSearchQuery(query));
+          // אפשרויות פר-מילה נשמרות בטאב (לתצוגה ב-UI ולחיפוש ידני),
+          // ומועברות גם להרצה האוטומטית כדי שלא תרוץ ללא 'קידומות' וכד'.
+          tab.searchOptions.addAll(settings.searchOptions);
+          if (settings.searchOptions.isNotEmpty) {
+            tab.useGlobalSearchOptions.value = false;
+          }
+          if (autoSearch) {
+            tab.searchBloc.add(
+              UpdateSearchQuery(
+                query,
+                searchOptions: settings.searchOptions,
+              ),
+            );
+          }
           final coordinator = _dependencies.bookOpenCoordinator;
           coordinator.historyBloc.add(AddHistory(tab));
           coordinator.tabsBloc.add(AddTab(tab));
