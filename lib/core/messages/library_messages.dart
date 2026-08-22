@@ -27,6 +27,9 @@ abstract class LibraryMessages {
   static const String searchResultIndexOutOfDate =
       'תוצאת החיפוש שייכת לאינדקס ישן. יש לעדכן את אינדקס החיפוש.';
 
+  static const String searchResultContentDrifted =
+      'תוכן הספר השתנה מאז עדכון האינדקס — מומלץ לעדכן את אינדקס החיפוש.';
+
   static String indexingCompletedWithFailures(int count) =>
       'האינדוקס הסתיים עם $count בעיות. הפרטים נשמרו בקובץ השגיאות.';
 

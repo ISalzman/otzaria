@@ -556,27 +556,9 @@ class IndexingRepository {
     // (UTF-8 כפי שמאוחסן ב-SQLite) ונמסר ל-addTextBookBytes — בלי פענוח
     // ל-String וקידוד חוזר על הגשר (~180ms/MB שנמדדו בלוגים).
     final loadStopwatch = Stopwatch()..start();
-    Uint8List? bytes;
-    String? text;
-    if (book.categoryId != null) {
-      bytes = await SqliteDataProvider.instance.getBookTextBytesFromDb(
-        book.title,
-        book.categoryId,
-        book.fileType ?? 'txt',
-        book.isUserBook,
-      );
-      // ניקוי תמונות מוטמעות חייב לרוץ גם כאן, כמו באימות הטביעה — אחרת
-      // החתימה לעולם לא תתאים ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
-      if (bytes != null && bytesContainDataUriScheme(bytes)) {
-        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
-        bytes = null;
-      }
-    }
-    if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
-      // מסלול הנפילה (פורמט מומר, ספר בלי categoryId): טקסט דרך LibraryProvider.
-      // תמונות מוטמעות מסולקות — ראו [stripDataUrisForIndex].
-      text = await _loadTextForIndex(book);
-    }
+    final source = await _loadTextBookSource(book);
+    final bytes = source.bytes;
+    final text = source.text;
     loadStopwatch.stop();
 
     final hasBytes = bytes != null && bytes.isNotEmpty;
@@ -1076,6 +1058,35 @@ class IndexingRepository {
       c == 0x2E || // .
       c == 0x2D; // -
 
+  /// מקור הספר בדיוק כפי שנמסר למנוע באינדוקס: bytes גולמיים מה-DB כשאפשר
+  /// (בלי פענוח/קידוד על ה-UI isolate), וירידה לטקסט מפוענח ומנוקה רק
+  /// כשחייבים (תמונות מוטמעות, פורמט מומר, ספר בלי categoryId). משותף
+  /// לאינדוקס ולאימות הטריות — כך שתי החתימות מחושבות על אותו קלט בדיוק.
+  Future<({Uint8List? bytes, String? text})> _loadTextBookSource(
+    TextBook book,
+  ) async {
+    Uint8List? bytes;
+    String? text;
+    if (book.categoryId != null) {
+      bytes = await SqliteDataProvider.instance.getBookTextBytesFromDb(
+        book.title,
+        book.categoryId,
+        book.fileType ?? 'txt',
+        book.isUserBook,
+      );
+      // ניקוי תמונות מוטמעות חייב לרוץ בשני הצדדים — אחרת חתימת האינדוקס
+      // לעולם לא תתאים לאימות ו-reconcile יאנדקס את הספר מחדש בכל ריצה.
+      if (bytes != null && bytesContainDataUriScheme(bytes)) {
+        text = stripDataUrisForIndex(utf8.decode(bytes, allowMalformed: true));
+        bytes = null;
+      }
+    }
+    if ((bytes == null || bytes.isEmpty) && (text == null || text.isEmpty)) {
+      text = await _loadTextForIndex(book);
+    }
+    return (bytes: bytes, text: text);
+  }
+
   Future<String?> _loadTextBookText(TextBook book) async {
     String? text;
 
@@ -1246,36 +1257,29 @@ class IndexingRepository {
     required String indexedTitle,
   }) => book?.title == indexedTitle ? book : null;
 
-  /// בודק שספר טקסט עדיין זהה למסמכים הקיימים באינדקס.
-  Future<bool> textBookMatchesIndexedFingerprint(
-    Book book,
-    Library library,
-    Map<String, BigInt> indexFingerprints,
-  ) async {
-    final indexHash = indexFingerprints[buildIndexedBookFilePath(book)];
+  /// בודק שתוכן ספר טקסט עדיין תואם את חתימת הטקסט שבאינדקס — בלי תלות
+  /// ב-metadata (סדר קטלוגי וכו', שנפסלים מכל הוספת ספר — issue #828).
+  /// [indexHash] הוא ערך `textHash` מהאינדקס (`getBookTextFingerprint`).
+  ///
+  /// בדיקה רכה: `true` גם כשאין חתימה או שהספר לא ניתן לאימות — אזהרה
+  /// מוצדקת רק על אי-התאמה ודאית.
+  Future<bool> textBookContentMatchesIndex(Book book, BigInt indexHash) async {
     final textBook = _asTextBookForIndex(book);
-    if (indexHash == null || indexHash == BigInt.zero || textBook == null) {
-      return false;
+    if (indexHash == BigInt.zero || textBook == null) {
+      return true;
     }
 
-    final text = await _loadTextBookText(textBook);
-    if (text == null) return false;
+    // אותו מקור בדיוק שמסלול האינדוקס חתם: במקרה הנפוץ bytes גולמיים
+    // מה-DB עוברים כמות שהם, וה-UI isolate לא מפענח, מקודד או מגבב דבר —
+    // הגיבוב רץ על ה-thread pool של המנוע.
+    final source = await _loadTextBookSource(textBook);
+    final text = source.text;
+    final bytes =
+        source.bytes ??
+        (text == null || text.isEmpty ? null : utf8.encode(text));
+    if (bytes == null || bytes.isEmpty) return true;
 
-    final catalogueOrder = buildCatalogueOrderResolver(library);
-    await Future.wait([
-      GenerationCache.instance.warmUp(),
-      ReferenceBooksCache.instance.warmUp(),
-      BookFacetMetadataCache.instance.warmUp(),
-    ]);
-    return computeBookFingerprint(
-          text: text,
-          title: textBook.title,
-          topics: _bookTopics(textBook),
-          catalogueOrder: catalogueOrder.orderFor(catalogueOrderKey(textBook)),
-          generationOrder: chronologicalOrderForBook(textBook),
-          extraFacets: _bookExtraFacets(textBook),
-        ) ==
-        indexHash;
+    return await computeContentFingerprintBytes(text: bytes) == indexHash;
   }
 
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
