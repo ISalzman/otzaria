@@ -27,17 +27,18 @@ class PluginReportService {
     HiveListRepository<PluginReportRecord>? queueRepository,
     HiveListRepository<PluginReportRecord>? sentRepository,
   }) : _client = client ?? _shared,
-       _queueRepository = queueRepository ?? _defaultRepository(_queueKey),
-       _sentRepository = sentRepository ?? _defaultRepository(_sentKey);
+       _queueRepository =
+           queueRepository ?? _defaultRepository(pendingReportsKey),
+       _sentRepository = sentRepository ?? _defaultRepository(sentReportsKey);
 
   static final Uri endpoint = Uri.parse(
     'https://otzaria.org/api/plugin-reports',
   );
 
   static const String queueBoxName = 'plugin_reports_queue';
-  static const String _queueKey = 'pending_reports';
-  static const String _sentKey = 'sent_reports';
-  static const int _maxSentReportsToKeep = 100;
+  static const String pendingReportsKey = 'pending_reports';
+  static const String sentReportsKey = 'sent_reports';
+  static const int maxSentReportsToKeep = 100;
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _flushInterval = Duration(minutes: 5);
   static const int _maxQueuedFlushPerRun = 20;
@@ -305,8 +306,8 @@ class PluginReportService {
     final sentRecords = await _sentRepository.load();
     sentRecords.removeWhere((item) => item.reportId == record.reportId);
     sentRecords.insert(0, record);
-    if (sentRecords.length > _maxSentReportsToKeep) {
-      sentRecords.removeRange(_maxSentReportsToKeep, sentRecords.length);
+    if (sentRecords.length > maxSentReportsToKeep) {
+      sentRecords.removeRange(maxSentReportsToKeep, sentRecords.length);
     }
     await _sentRepository.save(sentRecords);
   }

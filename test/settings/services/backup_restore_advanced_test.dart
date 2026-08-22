@@ -15,7 +15,9 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
 import 'package:otzaria/settings/services/backup/backup_rotation.dart';
@@ -43,6 +45,10 @@ void main() {
     await Hive.openBox<dynamic>('workspaces');
     await Hive.openBox<dynamic>('bookmarks');
     await Hive.openBox<dynamic>('history');
+    // כמו ב-initHive: תורי הדיווחים פתוחים לכל אורך הריצה, ובלעדיהם הגיבוי
+    // מסמן את עצמו כחלקי ולא רק "בלי דיווחים".
+    await Hive.openBox<dynamic>(DirectErrorReportService.queueBoxName);
+    await Hive.openBox<dynamic>(PluginReportService.queueBoxName);
     await Settings.init(cacheProvider: HiveCache());
     await Settings.setValue<String>(
       SettingsRepository.keyBackupPath,

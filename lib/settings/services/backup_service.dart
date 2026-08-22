@@ -20,6 +20,8 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/services/plugin_report_service.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
 import 'package:otzaria/settings/services/backup/backup_store.dart';
@@ -122,6 +124,7 @@ class BackupService {
         if (perBookSettings.hadFailures) {
           skippedSections.add('perBookSettings');
         }
+        backupData['reportQueues'] = _backupReportQueues(skippedSections);
       }
 
       // Backup bookmarks
@@ -206,6 +209,8 @@ class BackupService {
     'databases',
     'plugins',
     'per_book_settings',
+    'error_reports_queue',
+    'plugin_reports_queue',
   };
 
   /// מקומות שמירה שאינם מגובים במכוון, עם הסיבה לכל אחד.
@@ -214,7 +219,6 @@ class BackupService {
   /// `backup_storage_coverage_test` סורק את הקוד ונכשל על מקום שאינו מוצהר,
   /// כך שתיקייה חדשה לא תישמט מהגיבוי בשקט כפי שקרה ל-`per_book_settings`.
   static const Map<String, String> unbackedStores = {
-    'error_reports_queue': 'תור זמני — הדיווחים נשלחים והתור מתרוקן',
     'pending_external_activations.jsonl':
         'תור זמני של בקשות פתיחה מחוץ לתוכנה, מתרוקן בעיבוד',
     'books': 'תוכן הספרייה, מגיע מההתקנה או מההורדה',
@@ -517,6 +521,67 @@ class BackupService {
     return TabsRepository().exportRaw();
   }
 
+  /// תורי הדיווחים השמורים. לשני ה-boxes מבנה זהה — רשימת ממתינים ורשימת
+  /// נשלחים — ולכן אותו גיבוי ושחזור משרת את שניהם.
+  static const List<
+    ({String box, String pendingKey, String sentKey, int maxSent})
+  >
+  _reportQueues = [
+    (
+      box: DirectErrorReportService.queueBoxName,
+      pendingKey: DirectErrorReportService.pendingReportsKey,
+      sentKey: DirectErrorReportService.sentReportsKey,
+      maxSent: DirectErrorReportService.maxSentReportsToKeep,
+    ),
+    (
+      box: PluginReportService.queueBoxName,
+      pendingKey: PluginReportService.pendingReportsKey,
+      sentKey: PluginReportService.sentReportsKey,
+      maxSent: PluginReportService.maxSentReportsToKeep,
+    ),
+  ];
+
+  /// גיבוי הדיווחים השמורים — הממתינים לשליחה וההיסטוריה שנשלחה.
+  ///
+  /// הדיווחים נכנסים לסעיף ההגדרות: הם מנוהלים באותו מקום במסך ההגדרות
+  /// שבו נשמרת כתובת המייל, שכבר נכנסת לסעיף הזה. דיווח שממתין לשליחה
+  /// במצב לא-מקוון הוא תוכן שהמשתמש כתב, ואיפוס הגדרות מוחק אותו.
+  static Map<String, dynamic> _backupReportQueues(
+    List<String> skippedSections,
+  ) {
+    final queues = <String, dynamic>{};
+    for (final queue in _reportQueues) {
+      if (!Hive.isBoxOpen(queue.box)) {
+        _logger.warning(
+          '_backupReportQueues: ${queue.box} not open — skipping (partial backup)',
+        );
+        if (!skippedSections.contains('reportQueues')) {
+          skippedSections.add('reportQueues');
+        }
+        continue;
+      }
+      final box = Hive.box<dynamic>(queue.box);
+      queues[queue.box] = {
+        'pending': _reportList(box.get(queue.pendingKey)),
+        'sent': _reportList(box.get(queue.sentKey)),
+      };
+    }
+    return queues;
+  }
+
+  /// המרת רשימת דיווחים מ-Hive/JSON לרשימת מפות עם מפתחות מחרוזת.
+  static List<Map<String, dynamic>> _reportList(Object? raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  /// מזהה הדיווח, שנקרא `id` בדיווחי הטעות ו-`reportId` בדיווחי התוספים.
+  static String? _reportId(Map<String, dynamic> report) =>
+      (report['id'] ?? report['reportId'])?.toString();
+
   /// Backup Shamor Zachor data - backs up all sz: keys found in Hive
   static Future<Map<String, dynamic>> _backupShamorZachor() async {
     if (!Hive.isBoxOpen(HiveCache.keyName)) {
@@ -608,6 +673,10 @@ class BackupService {
             const {},
       );
       if (perBookHadFailures) runtimeSkipped.add('perBookSettings');
+      final reportsSkipped = await _restoreReportQueues(
+        (backupData['reportQueues'] as Map?)?.cast<String, dynamic>(),
+      );
+      if (reportsSkipped) runtimeSkipped.add('reportQueues');
     }
 
     // Restore bookmarks
@@ -719,6 +788,62 @@ class BackupService {
       }
     }
     return hadFailures;
+  }
+
+  /// שחזור הדיווחים השמורים (ראה [_backupReportQueues]).
+  ///
+  /// מיזוג ולא החלפה: דיווח שנוצר אחרי הגיבוי נשאר, ודיווח שכבר נשלח אינו
+  /// חוזר לתור — בלי זה שחזור של גיבוי ישן היה שולח שוב לצוות אוצריא כל
+  /// דיווח שנשלח מאז.
+  static Future<bool> _restoreReportQueues(Map<String, dynamic>? queues) async {
+    if (queues == null || queues.isEmpty) return false;
+
+    var skipped = false;
+    for (final queue in _reportQueues) {
+      final backedUp = (queues[queue.box] as Map?)?.cast<String, dynamic>();
+      if (backedUp == null) continue;
+      if (!Hive.isBoxOpen(queue.box)) {
+        _logger.warning(
+          '_restoreReportQueues: ${queue.box} not open — skipping (partial restore)',
+        );
+        skipped = true;
+        continue;
+      }
+
+      final box = Hive.box<dynamic>(queue.box);
+      final sent = _mergeReports(
+        _reportList(box.get(queue.sentKey)),
+        _reportList(backedUp['sent']),
+      );
+      if (sent.length > queue.maxSent) {
+        sent.removeRange(queue.maxSent, sent.length);
+      }
+      final sentIds = sent.map(_reportId).whereType<String>().toSet();
+      final pending = _mergeReports(
+        _reportList(box.get(queue.pendingKey)),
+        _reportList(backedUp['pending']),
+      ).where((report) => !sentIds.contains(_reportId(report))).toList();
+
+      await box.put(queue.pendingKey, pending);
+      await box.put(queue.sentKey, sent);
+    }
+    return skipped;
+  }
+
+  /// איחוד שתי רשימות דיווחים לפי מזהה — המקומי מנצח, כי הוא העדכני.
+  /// דיווח בלי מזהה נשמר כמות שהוא: אין דרך לזהות אותו ככפול.
+  static List<Map<String, dynamic>> _mergeReports(
+    List<Map<String, dynamic>> local,
+    List<Map<String, dynamic>> backedUp,
+  ) {
+    final merged = [...local];
+    final localIds = local.map(_reportId).whereType<String>().toSet();
+    for (final report in backedUp) {
+      final id = _reportId(report);
+      if (id != null && localIds.contains(id)) continue;
+      merged.add(report);
+    }
+    return merged;
   }
 
   /// האם סעיף ההגדרות נאסף מרשימת מפתחות מוצהרת ולכן חסר את השאר.

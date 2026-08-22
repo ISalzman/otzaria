@@ -1221,7 +1221,7 @@ Future<void> initHive() async {
     Hive.openBox<dynamic>('workspaces'),
     Hive.openBox<dynamic>('history'),
     Hive.openBox<dynamic>('bookmarks'),
-    Hive.openBox<dynamic>('error_reports_queue'),
+    Hive.openBox<dynamic>(DirectErrorReportService.queueBoxName),
     Hive.openBox<dynamic>(PluginReportService.queueBoxName),
   ]);
 }

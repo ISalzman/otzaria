@@ -10,18 +10,25 @@ import 'package:otzaria/settings/services/backup_service.dart';
 /// בלי השומר, מקום שמירה חדש נשמט מהגיבוי בשקט — כך אבדו ההתאמות הפר-ספריות,
 /// שיושבות בקבצי JSON מחוץ ל-Hive ולכן לא נתפסו על ידי שומר מפתחות ההגדרות.
 ///
-/// היקף הסריקה: Hive boxes (בשם מילולי או דרך קבוע באותו קובץ), ומקומות
-/// שנבנים מ*שורש הנתונים* דרך `p.join`. שני דפוסים אינם בתחום ולא ייתפסו:
-/// נתיב שנבנה באינטרפולציה (`'$root/x'`), ו-`p.join` על משתנה שאין בשמו
-/// `dataRoot`. יעד שנבנה מנתיב בסיס אחר (יומני הריצה, שנופלים ל-temp כשאין
-/// שורש נתונים) אינו בתחום אף הוא.
+/// היקף הסריקה: Hive boxes (בשם מילולי או דרך קבוע, גם `Class.const` מקובץ
+/// אחר), ומקומות שנבנים מ*שורש הנתונים* דרך `p.join`. שני דפוסים אינם בתחום
+/// ולא ייתפסו: נתיב שנבנה באינטרפולציה (`'$root/x'`), ו-`p.join` על משתנה
+/// שאין בשמו `dataRoot`. יעד שנבנה מנתיב בסיס אחר (יומני הריצה, שנופלים
+/// ל-temp כשאין שורש נתונים) אינו בתחום אף הוא.
 void main() {
   /// שמות ה-Hive boxes שנפתחים בקוד: `openBox…('name')`.
   final boxPattern = RegExp(r"""openBox[^(]*\(\s*'([^']+)'""");
 
-  /// `openBox…(kBoxName)` — השם מגיע מקבוע, ונפתר מהצהרתו באותו קובץ.
+  /// `openBox…(kBoxName)` ו-`openBox…(Service.boxName)` — השם מגיע מקבוע,
+  /// ונפתר מהצהרתו בכל קובצי `lib`. בלי פתירה בין קבצים, box שנפתח דרך קבוע
+  /// של מחלקה אחרת נשמט מהסריקה כולה והשומר היה ירוק על מקום לא מוכרע.
   final boxViaIdentifierPattern = RegExp(
-    r"""openBox[^(]*\(\s*([A-Za-z_]\w*)\s*[,)]""",
+    r"""openBox[^(]*\(\s*(?:[A-Za-z_]\w*\s*\.\s*)?([A-Za-z_]\w*)\s*[,)]""",
+  );
+
+  /// הצהרת קבוע מחרוזת: `static const String kName = 'value';`
+  final constDeclarationPattern = RegExp(
+    r"""const\s+(?:String\s+)?([A-Za-z_]\w*)\s*=\s*'([^']+)'""",
   );
 
   /// תיקיות שנוצרות ישירות תחת שורש הנתונים: `p.join(<dataRoot>, 'name')`.
@@ -35,24 +42,36 @@ void main() {
   late Set<String> discovered;
 
   setUpAll(() {
-    final names = <String>{settingsBoxName};
+    final sources = <String>[];
     for (final file in Directory('lib').listSync(recursive: true)) {
       if (file is! File || !file.path.endsWith('.dart')) continue;
       // קוד מוערך אינו מקום שמירה קיים (`user_overrides` נוטרל בהערה).
-      final source = file
-          .readAsLinesSync()
-          .where((line) => !line.trimLeft().startsWith('//'))
-          .join('\n');
+      sources.add(
+        file
+            .readAsLinesSync()
+            .where((line) => !line.trimLeft().startsWith('//'))
+            .join('\n'),
+      );
+    }
+
+    // אותו שם קבוע מוצהר בכמה מחלקות (`queueBoxName` בשני שירותי הדיווחים),
+    // ולכן כל הערכים נאספים: עודף גילוי רק מחייב הכרעה, וזה הכיוון הבטוח.
+    final constants = <String, Set<String>>{};
+    for (final source in sources) {
+      for (final match in constDeclarationPattern.allMatches(source)) {
+        constants.putIfAbsent(match.group(1)!, () => {}).add(match.group(2)!);
+      }
+    }
+
+    final names = <String>{settingsBoxName};
+    for (final source in sources) {
       for (final pattern in [boxPattern, dataRootDirPattern]) {
         for (final match in pattern.allMatches(source)) {
           names.add(match.group(1)!);
         }
       }
       for (final match in boxViaIdentifierPattern.allMatches(source)) {
-        final resolved = RegExp(
-          RegExp.escape(match.group(1)!) + r"""\s*=\s*'([^']+)'""",
-        ).firstMatch(source);
-        if (resolved != null) names.add(resolved.group(1)!);
+        names.addAll(constants[match.group(1)!] ?? const <String>{});
       }
     }
     discovered = names;
@@ -70,6 +89,10 @@ void main() {
         'tabs',
         'per_book_settings',
         'plugins',
+        // נפתח דרך `DirectErrorReportService.queueBoxName` /
+        // `PluginReportService.queueBoxName` — פתירת קבוע בין קבצים.
+        'error_reports_queue',
+        'plugin_reports_queue',
       ]),
     );
   });

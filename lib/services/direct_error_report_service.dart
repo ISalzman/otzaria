@@ -57,10 +57,10 @@ class DirectReportDeliveryResult {
 
 class DirectErrorReportService {
   static const String _endpoint = 'https://otzaria.org/api/reportingerrors';
-  static const String _queueBoxName = 'error_reports_queue';
-  static const String _queueKey = 'pending_reports';
-  static const String _sentKey = 'sent_reports';
-  static const int _maxSentReportsToKeep = 100;
+  static const String queueBoxName = 'error_reports_queue';
+  static const String pendingReportsKey = 'pending_reports';
+  static const String sentReportsKey = 'sent_reports';
+  static const int maxSentReportsToKeep = 100;
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _flushInterval = Duration(minutes: 5);
   static const int _maxQueuedFlushPerRun = 20;
@@ -82,16 +82,16 @@ class DirectErrorReportService {
        _queueRepository =
            queueRepository ??
            HiveListRepository<DirectErrorReport>(
-             boxName: _queueBoxName,
-             key: _queueKey,
+             boxName: queueBoxName,
+             key: pendingReportsKey,
              fromJson: DirectErrorReport.fromJson,
              toJson: (report) => report.toJson(),
            ),
        _sentRepository =
            sentRepository ??
            HiveListRepository<DirectErrorReport>(
-             boxName: _queueBoxName,
-             key: _sentKey,
+             boxName: queueBoxName,
+             key: sentReportsKey,
              fromJson: DirectErrorReport.fromJson,
              toJson: (report) => report.toJson(),
            );
@@ -379,8 +379,8 @@ class DirectErrorReportService {
     final sentReports = await _sentRepository.load();
     sentReports.removeWhere((item) => item.id == report.id);
     sentReports.insert(0, report);
-    if (sentReports.length > _maxSentReportsToKeep) {
-      sentReports.removeRange(_maxSentReportsToKeep, sentReports.length);
+    if (sentReports.length > maxSentReportsToKeep) {
+      sentReports.removeRange(maxSentReportsToKeep, sentReports.length);
     }
     await _sentRepository.save(sentReports);
   }

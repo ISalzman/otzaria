@@ -59,6 +59,11 @@ class BackupMerge {
     );
     if (perBook != null) result['perBookSettings'] = perBook;
 
+    // דיווחים שמורים: החדש מנצח בשלמותו. השחזור עצמו ממזג מול התור המקומי
+    // ומדלג על מה שנשלח מאז, ולכן אין צורך לשמר כאן דיווחים ישנים.
+    final reportQueues = newer['reportQueues'] ?? older['reportQueues'];
+    if (reportQueues != null) result['reportQueues'] = reportQueues;
+
     final bookmarks = _mergeItemLists(
       older['bookmarks'],
       newer['bookmarks'],
