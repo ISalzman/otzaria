@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
-import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/utils/index_freshness_warner.dart';
@@ -17,8 +17,8 @@ import '../support/search_engine_test_init.dart';
 import '../test_helpers/memory_cache_provider.dart';
 
 /// האזהרה הלא-חוסמת על דריפט תוכן (issue #828): התוצאה נפתחת תמיד,
-/// האזהרה מוצגת רק על אי-התאמה ודאית, מפת החתימות נטענת פעם אחת לדור,
-/// וכל המטמונים מתאפסים כשמתחלף דור האינדקס **או** דור הספרייה.
+/// האזהרה מוצגת רק על אי-התאמה ודאית, החתימה נקראת פר-ספר, והמטמון נפסל
+/// בכל התחלפות דור (אינדקס/ספרייה) או שינוי בקובץ המקור.
 Future<void> main() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   final engineReady = await tryInitSearchEngine();
@@ -40,14 +40,17 @@ Future<void> main() async {
   });
   tearDown(warner.resetForTesting);
 
-  test('מפת החתימות נטענת מהמנוע פעם אחת עבור כמה ספרים', () async {
-    // getBookTextFingerprints סורק את כל האינדקס — קריאה פר-ספר היא
-    // נסיגת ביצועים (ביקורת P1 על ה-PR).
+  test('החתימה נקראת פר-ספר, פעם אחת לכל ספר', () async {
+    // ה-API הממוקד מחליף את מפת הקורפוס המלאה: כל ספר נקרא בנפרד, ובדיקה
+    // חוזרת של אותו ספר אינה פונה למנוע שוב.
+    warner.debugBookVerifier = (_, _) async => true;
+
     for (var id = 1; id <= 3; id++) {
       await warner.warnIfContentDrifted(TextBook(id: id, title: 'ספר $id'));
     }
+    await warner.warnIfContentDrifted(TextBook(id: 1, title: 'ספר 1'));
 
-    expect(provider.fakeEngine.fingerprintFetches, 1);
+    expect(provider.fakeEngine.requestedPaths, ['id:1', 'id:2', 'id:3']);
   });
 
   test('ספר עם דריפט מזהיר פעם אחת בלבד', () async {
@@ -77,20 +80,21 @@ Future<void> main() async {
     expect(notifications, isEmpty);
   });
 
-  test('ספר שאינו באינדקס — לא ניתן לאימות, אין אזהרה (מסלול אמיתי)', () async {
-    final notifications = <String>[];
-    warner.debugNotifier = notifications.add;
+  test(
+    'ספר בלי חתימה באינדקס — לא ניתן לאימות, אין אזהרה (מסלול אמיתי)',
+    () async {
+      final notifications = <String>[];
+      warner.debugNotifier = notifications.add;
 
-    // בלי debugBookVerifier: textBookContentMatchesIndex האמיתי רץ, ומחזיר
-    // true מוקדם כי המפה מהמנוע המזויף ריקה.
-    await warner.warnIfContentDrifted(TextBook(id: 3, title: 'לא באינדקס'));
+      // בלי debugBookVerifier: textBookContentMatchesIndex האמיתי רץ ומחזיר
+      // true מוקדם, כי המנוע המזויף מחזיר 0 ("לא ניתן לאימות").
+      await warner.warnIfContentDrifted(TextBook(id: 3, title: 'לא באינדקס'));
 
-    expect(notifications, isEmpty);
-  });
+      expect(notifications, isEmpty);
+    },
+  );
 
-  test('סוף ריצת אינדוקס מאפס את המטמונים — הספר נבדק מחדש', () async {
-    // ביקורת P1: מטמון לכל חיי התהליך מחמיץ דריפט אחרי בנייה מחדש, וגם
-    // ספר שלא היה ניתן לאימות חייב להיבדק שוב אחרי בנייה.
+  test('סוף ריצת אינדוקס מאפס את המטמון — הספר נבדק מחדש', () async {
     final book = TextBook(id: 1, title: 'ספר');
     var verifierCalls = 0;
     warner.debugBookVerifier = (_, _) async {
@@ -104,10 +108,9 @@ Future<void> main() async {
     await warner.warnIfContentDrifted(book);
 
     expect(verifierCalls, 2);
-    expect(provider.fakeEngine.fingerprintFetches, 2);
   });
 
-  test('reopen (החלפת ה-Future של המנוע) מאפס את המטמונים', () async {
+  test('reopen (החלפת ה-Future של המנוע) מאפס את המטמון', () async {
     final book = TextBook(id: 1, title: 'ספר');
     var verifierCalls = 0;
     warner.debugBookVerifier = (_, _) async {
@@ -120,13 +123,9 @@ Future<void> main() async {
     await warner.warnIfContentDrifted(book);
 
     expect(verifierCalls, 2);
-    expect(provider.fakeEngine.fingerprintFetches, 1);
   });
 
   test('רענון ספרייה בלי שום אות אינדוקס מאפס את המטמון', () async {
-    // רגרסיה מהביקורת: כשעדכון אינדקס אוטומטי כבוי, רענון DB מחליף את
-    // תוכן הספרייה בלי reopen ובלי מעבר isIndexing — ההחלפה של ה-Future
-    // ב-DataRepository היא האות היחיד, ובלעדיו ספר שנערך מדולג לנצח.
     final book = TextBook(id: 1, title: 'ספר');
     var verifierCalls = 0;
     warner.debugBookVerifier = (_, _) async {
@@ -143,49 +142,52 @@ Future<void> main() async {
     expect(verifierCalls, 2);
   });
 
-  test('בדיקה שנפתחה לפני איפוס אינה מזהירה מהדור הישן', () async {
-    // הדור מתחלף בזמן ה-await על מפת החתימות: התוצאה הישנה נבלעת, ובדיקה
-    // חדשה של אותו ספר רצה מלאה ומזהירה.
-    final gate = Completer<Map<String, BigInt>>();
-    provider.fakeEngine.pendingFingerprints = gate;
-    final notifications = <String>[];
-    warner.debugBookVerifier = (_, _) async => false;
-    warner.debugNotifier = notifications.add;
+  group('פסילת מטמון בזמן ההמתנה', () {
+    late TextBook book;
+    late Completer<bool> gate;
+    late List<String> notifications;
 
-    final stale = warner.warnIfContentDrifted(TextBook(id: 1, title: 'ספר'));
-    provider.isIndexing.value = true;
-    provider.isIndexing.value = false;
-    gate.complete(const {});
-    await stale;
-    expect(notifications, isEmpty, reason: 'תוצאה מדור ישן אינה מוצגת');
+    setUp(() {
+      book = TextBook(id: 1, title: 'ספר');
+      gate = Completer<bool>();
+      notifications = [];
+      warner.debugBookVerifier = (_, _) => gate.future;
+      warner.debugNotifier = notifications.add;
+    });
 
-    await warner.warnIfContentDrifted(TextBook(id: 1, title: 'ספר'));
-    expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+    test('החלפת ספרייה באמצע ההמתנה מבטלת את התוצאה הישנה', () async {
+      // רגרסיה: ה-epoch לבדו לא הגן, כי החלפת ה-Future אינה מודיעה ל-warner
+      // והיא מזוהה רק בכניסה הבאה לבדיקה.
+      final pending = warner.warnIfContentDrifted(book);
+      DataRepository.instance.library = Future.value(
+        Library(categories: const []),
+      );
+      gate.complete(false);
+      await pending;
+
+      expect(notifications, isEmpty, reason: 'תוצאה מדור ישן אינה מוצגת');
+
+      // ולא נצרבה: בדיקה חדשה של אותו ספר רצה במלואה ומזהירה.
+      warner.debugBookVerifier = (_, _) async => false;
+      await warner.warnIfContentDrifted(book);
+      expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+    });
+
+    test('reopen באמצע ההמתנה מבטל את התוצאה הישנה', () async {
+      final pending = warner.warnIfContentDrifted(book);
+      provider.replaceEngine(_FakeSearchEngine());
+      gate.complete(false);
+      await pending;
+
+      expect(notifications, isEmpty);
+
+      warner.debugBookVerifier = (_, _) async => false;
+      await warner.warnIfContentDrifted(book);
+      expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+    });
   });
 
-  test('כשל מדור ישן אינו נוגע במטמונים של הדור החדש', () async {
-    final gate = Completer<Map<String, BigInt>>();
-    provider.fakeEngine.pendingFingerprints = gate;
-    warner.debugBookVerifier = (_, _) async => true;
-
-    final stale = warner.warnIfContentDrifted(TextBook(id: 1, title: 'א'));
-    provider.isIndexing.value = true;
-    provider.isIndexing.value = false;
-    // הדור החדש טוען מפה תקינה ונשמר במטמון.
-    await warner.warnIfContentDrifted(TextBook(id: 2, title: 'ב'));
-    // ה-catch של הדור הישן — אסור לו למחוק את המפה החדשה.
-    gate.completeError(StateError('old generation failed'));
-    await stale;
-    await warner.warnIfContentDrifted(TextBook(id: 3, title: 'ג'));
-
-    expect(
-      provider.fakeEngine.fingerprintFetches,
-      2,
-      reason: 'המפה של הדור החדש שרדה את הכשל הישן',
-    );
-  });
-
-  test('כשל בטעינת המפה אינו נצרב — לא לספר ולא למפה', () async {
+  test('כשל בקריאת החתימה אינו נצרב — ניסיון חוזר בפתיחה הבאה', () async {
     final book = TextBook(id: 1, title: 'ספר');
     provider.fakeEngine.failuresBeforeSuccess = 1;
     final notifications = <String>[];
@@ -196,8 +198,65 @@ Future<void> main() async {
     expect(notifications, isEmpty);
 
     await warner.warnIfContentDrifted(book);
-    expect(provider.fakeEngine.fingerprintFetches, 2);
     expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+  });
+
+  group('revision של קובץ מקור', () {
+    late Directory dir;
+    late File sourceFile;
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('freshness_revision');
+      sourceFile = File('${dir.path}/book.txt')..writeAsStringSync('שורה');
+    });
+
+    tearDown(() {
+      try {
+        dir.deleteSync(recursive: true);
+      } on FileSystemException {
+        // ignore
+      }
+    });
+
+    test('עריכת קובץ המקור מחייבת בדיקה מחדש בלי דור חדש', () async {
+      // רגרסיה: ספר file-backed נקרא ישירות מהדיסק, ואין רענון ספרייה
+      // שמסמן עריכה חיצונית — המטמון היה מחזיר "תקין" לנצח.
+      final book = TextBook(id: 1, title: 'ספר', filePath: sourceFile.path);
+      var verifierCalls = 0;
+      warner.debugBookVerifier = (_, _) async {
+        verifierCalls++;
+        return true;
+      };
+
+      await warner.warnIfContentDrifted(book);
+      expect(verifierCalls, 1);
+
+      await warner.warnIfContentDrifted(book);
+      expect(verifierCalls, 1, reason: 'בלי שינוי בקובץ — מהמטמון');
+
+      sourceFile.writeAsStringSync('שורה ערוכה וארוכה יותר');
+      await warner.warnIfContentDrifted(book);
+
+      expect(
+        verifierCalls,
+        2,
+        reason: 'שינוי בקובץ פוסל את המטמון בלי engine/library חדשים',
+      );
+    });
+
+    test('ספר בלי קובץ מקור נשמר במטמון כרגיל', () async {
+      var verifierCalls = 0;
+      warner.debugBookVerifier = (_, _) async {
+        verifierCalls++;
+        return true;
+      };
+      final book = TextBook(id: 9, title: 'ספר DB');
+
+      await warner.warnIfContentDrifted(book);
+      await warner.warnIfContentDrifted(book);
+
+      expect(verifierCalls, 1);
+    });
   });
 
   group('אינטגרציה מול המנוע האמיתי', () {
@@ -232,71 +291,66 @@ Future<void> main() async {
       await engine.commit();
     }
 
-    test('אינדוקס → getBookTextFingerprints → שינוי תוכן מזוהה', () async {
+    test('אינדוקס → getBookTextFingerprint → שינוי תוכן מזוהה', () async {
       await indexBook(bookText);
 
-      final fingerprints = await engine.getBookTextFingerprints();
+      // ה-API הממוקד — זה שהאזהרה קוראת בפועל — ובאותו נשימה גם parity
+      // מול הגרסה האסינכרונית שהאימות משתמש בה.
+      final indexed = await engine.getBookTextFingerprint(filePath: 'id:1');
       expect(
-        fingerprints['id:1'],
+        indexed,
+        await computeContentFingerprintBytes(text: utf8Bytes(bookText)),
+        reason: 'החתימה באינדקס זהה לחישוב האסינכרוני על תוכן הספר',
+      );
+      expect(
+        indexed,
         computeContentFingerprint(text: bookText),
-        reason: 'החתימה באינדקס זהה לחישוב על תוכן הספר',
+        reason: 'parity בין המסלול הסינכרוני לאסינכרוני',
       );
 
       const editedText = '$bookText\nשורה שנוספה בעריכה';
       expect(
-        fingerprints['id:1'],
-        isNot(computeContentFingerprint(text: editedText)),
+        indexed,
+        isNot(
+          await computeContentFingerprintBytes(text: utf8Bytes(editedText)),
+        ),
         reason: 'תוכן שהשתנה אינו תואם את החתימה הישנה',
       );
 
-      // אינדוקס מחדש של התוכן הערוך — החתימה החדשה תואמת אותו.
       await engine.deleteDocumentsByFilePath(filePath: 'id:1');
       await indexBook(editedText);
-      final refreshed = await engine.getBookTextFingerprints();
-      expect(refreshed['id:1'], computeContentFingerprint(text: editedText));
+      expect(
+        await engine.getBookTextFingerprint(filePath: 'id:1'),
+        await computeContentFingerprintBytes(text: utf8Bytes(editedText)),
+      );
     }, skip: !engineReady);
 
-    test('textBookContentMatchesIndex מכריע מול חתימות אמיתיות', () async {
+    test('ספר שאינו באינדקס מוכרע "לא ניתן לאימות" (0)', () async {
       await indexBook(bookText);
-      final fingerprints = await engine.getBookTextFingerprints();
-      final repository = IndexingRepository(
-        _FakeTantivyDataProvider(
-          _FakeSearchEngine(),
-        ),
+      expect(
+        await engine.getBookTextFingerprint(filePath: 'id:404'),
+        BigInt.zero,
       );
-
-      // הספר אינו נטען מ-DB בבדיקה — ההשוואה מוזנת ישירות במפה: ספר שאין
-      // לו חתימה מוכרע "לא ניתן לאימות" (true), בלי לגעת במנוע.
-      final unverifiable = await repository.textBookContentMatchesIndex(
-        TextBook(id: 999, title: 'ספר אחר'),
-        fingerprints,
-      );
-      expect(unverifiable, isTrue);
     }, skip: !engineReady);
   });
 }
 
+Uint8List utf8Bytes(String text) =>
+    Uint8List.fromList(const Utf8Encoder().convert(text));
+
 class _FakeSearchEngine implements SearchEngine {
+  final List<String> requestedPaths = [];
   final Map<String, BigInt> textFingerprints = {};
-  int fingerprintFetches = 0;
   int failuresBeforeSuccess = 0;
 
-  /// טעינה חד-פעמית שנשלטת מהבדיקה (לתרחישי איפוס באמצע המתנה).
-  Completer<Map<String, BigInt>>? pendingFingerprints;
-
   @override
-  Future<Map<String, BigInt>> getBookTextFingerprints() {
-    fingerprintFetches++;
-    final pending = pendingFingerprints;
-    if (pending != null) {
-      pendingFingerprints = null;
-      return pending.future;
-    }
+  Future<BigInt> getBookTextFingerprint({required String filePath}) {
+    requestedPaths.add(filePath);
     if (failuresBeforeSuccess > 0) {
       failuresBeforeSuccess--;
       return Future.error(StateError('engine down'));
     }
-    return Future.value(Map.of(textFingerprints));
+    return Future.value(textFingerprints[filePath] ?? BigInt.zero);
   }
 
   @override
