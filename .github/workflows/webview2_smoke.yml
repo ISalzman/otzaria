@@ -2,7 +2,6 @@ name: Windows WebView2 Smoke
 
 on:
   pull_request:
-    types: [labeled]
     branches:
       - main
       - dev
@@ -29,7 +28,6 @@ concurrency:
 jobs:
   smoke:
     name: Live WebView2 lifecycle
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'run-tests')
     runs-on: windows-2022
     timeout-minutes: 25
 
