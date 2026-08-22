@@ -262,6 +262,34 @@ Future<void> main() async {
     expect(notifications, [LibraryMessages.searchResultContentDrifted]);
   });
 
+  test('כשל בריצה משותפת נבלע גם אצל הקורא המצטרף', () async {
+    // רגרסיה: הקורא המצטרף קיבל את ה-Future המשותף ב-return בלי await —
+    // השגיאה עקפה את ה-try שלו והפכה ל-async error גלובלי.
+    final book = TextBook(id: 1, title: 'ספר');
+    final gate = Completer<bool>();
+    // ההמתנה לכניסה ל-verifier מבטיחה שיש מאזין ל-gate לפני השגיאה,
+    // אחרת היא נזקפת כ-unhandled לפני שהמסלול הגיע אליה בכלל.
+    final entered = Completer<void>();
+    warner.debugBookVerifier = (_, _) {
+      if (!entered.isCompleted) entered.complete();
+      return gate.future;
+    };
+
+    final first = warner.warnIfContentDrifted(book);
+    final second = warner.warnIfContentDrifted(book);
+    await entered.future;
+    gate.completeError(StateError('verification failed'));
+    // שני הקוראים משלימים בלי throw.
+    await Future.wait([first, second]);
+
+    // והכשל לא נצרב: קריאה מאוחרת מנסה מחדש ומצליחה להזהיר.
+    final notifications = <String>[];
+    warner.debugNotifier = notifications.add;
+    warner.debugBookVerifier = (_, _) async => false;
+    await warner.warnIfContentDrifted(book);
+    expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+  });
+
   test('כשל בקריאת החתימה אינו נצרב — ניסיון חוזר בפתיחה הבאה', () async {
     final book = TextBook(id: 1, title: 'ספר');
     provider.fakeEngine.failuresBeforeSuccess = 1;
@@ -317,6 +345,34 @@ Future<void> main() async {
         2,
         reason: 'שינוי בקובץ פוסל את המטמון בלי engine/library חדשים',
       );
+    });
+
+    test('שינוי הקובץ בזמן האימות מבטל את התוצאה הישנה', () async {
+      // רגרסיה: ה-revision נלכד בכניסה אך לא נבדק שוב בסוף — continuation
+      // ישן כתב revision ישן והציג אזהרה שכבר אינה נכונה לתוכן הנוכחי.
+      final book = TextBook(id: 1, title: 'ספר', filePath: sourceFile.path);
+      final gate = Completer<bool>();
+      final notifications = <String>[];
+      warner.debugBookVerifier = (_, _) => gate.future;
+      warner.debugNotifier = notifications.add;
+
+      final pending = warner.warnIfContentDrifted(book);
+      await Future<void>.delayed(Duration.zero);
+      sourceFile.writeAsStringSync('תוכן חדש שנכתב באמצע האימות');
+      gate.complete(false);
+      await pending;
+
+      expect(notifications, isEmpty, reason: 'תוצאה מול תוכן ישן אינה מוצגת');
+
+      // ולא נצרבה: פתיחה חדשה בודקת את ה-revision החדש ומזהירה.
+      var checkedAgain = false;
+      warner.debugBookVerifier = (_, _) async {
+        checkedAgain = true;
+        return false;
+      };
+      await warner.warnIfContentDrifted(book);
+      expect(checkedAgain, isTrue);
+      expect(notifications, [LibraryMessages.searchResultContentDrifted]);
     });
 
     test('ספר בלי קובץ מקור נשמר במטמון כרגיל', () async {

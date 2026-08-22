@@ -117,7 +117,13 @@ class IndexFreshnessWarner {
       // שתי פתיחות מקבילות של אותו ספר היו שתיהן מפספסות את המטמון.
       final runKey = '$key|$revision|$token';
       final running = _inFlightByKey[runKey];
-      if (running != null) return running;
+      if (running != null) {
+        // await ולא return: שגיאה מריצה משותפת חייבת להיתפס כאן — Future
+        // שמוחזר כמות שהוא עוקף את ה-try והקורא המצטרף (unawaited) היה
+        // מקבל async error גלובלי.
+        await running;
+        return;
+      }
 
       final run = _checkAndWarn(
         book: book,
@@ -153,6 +159,10 @@ class IndexFreshnessWarner {
     final engine = await engineGeneration;
     final indexHash = await engine.getBookTextFingerprint(filePath: key);
     final matches = await (debugBookVerifier ?? _bookMatches)(book, indexHash);
+
+    // קובץ מקור שנערך בזמן האימות: התוצאה שייכת לתוכן שכבר איננו — לא
+    // נצרבת ולא מוצגת; הפתיחה הבאה תבדוק את ה-revision החדש.
+    if (await _sourceRevision(book) != revision) return;
 
     // אין await בין הבדיקה הזו לבין ההצגה/הכתיבה למטמון.
     if (!_generationUnchanged(
