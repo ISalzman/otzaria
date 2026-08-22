@@ -173,6 +173,22 @@ Future<void> main() async {
       expect(notifications, [LibraryMessages.searchResultContentDrifted]);
     });
 
+    test('מעבר isIndexing באמצע ההמתנה מבטל את התוצאה הישנה', () async {
+      // רגרסיה: זהויות ה-Future אינן משתנות בריצת אינדוקס, ולכן ההשוואה
+      // מולן לבדה לא הגנה — נדרש מונה שעולה בכל פסילת מטמון.
+      final pending = warner.warnIfContentDrifted(book);
+      provider.isIndexing.value = true;
+      provider.isIndexing.value = false;
+      gate.complete(false);
+      await pending;
+
+      expect(notifications, isEmpty, reason: 'תוצאה מדור ישן אינה מוצגת');
+
+      warner.debugBookVerifier = (_, _) async => false;
+      await warner.warnIfContentDrifted(book);
+      expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+    });
+
     test('reopen באמצע ההמתנה מבטל את התוצאה הישנה', () async {
       final pending = warner.warnIfContentDrifted(book);
       provider.replaceEngine(_FakeSearchEngine());
@@ -185,6 +201,29 @@ Future<void> main() async {
       await warner.warnIfContentDrifted(book);
       expect(notifications, [LibraryMessages.searchResultContentDrifted]);
     });
+  });
+
+  test('שתי בדיקות מקבילות לאותו ספר מתאחדות לריצה אחת', () async {
+    // רגרסיה: הרשומה נכנסת למטמון רק בסוף הבדיקה, ולכן שתי פתיחות מקבילות
+    // גיבבו את הספר פעמיים והציגו שתי אזהרות.
+    final book = TextBook(id: 1, title: 'ספר');
+    final gate = Completer<bool>();
+    var verifierCalls = 0;
+    final notifications = <String>[];
+    warner.debugBookVerifier = (_, _) {
+      verifierCalls++;
+      return gate.future;
+    };
+    warner.debugNotifier = notifications.add;
+
+    final first = warner.warnIfContentDrifted(book);
+    final second = warner.warnIfContentDrifted(book);
+    gate.complete(false);
+    await Future.wait([first, second]);
+
+    expect(verifierCalls, 1, reason: 'הספר גובב פעם אחת');
+    expect(provider.fakeEngine.requestedPaths, ['id:1']);
+    expect(notifications, [LibraryMessages.searchResultContentDrifted]);
   });
 
   test('כשל בקריאת החתימה אינו נצרב — ניסיון חוזר בפתיחה הבאה', () async {

@@ -40,23 +40,36 @@ class IndexFreshnessWarner {
 
   /// המפתח באינדקס → ה-revision של המקור בזמן הבדיקה המוצלחת האחרונה.
   final Map<String, String> _checkedRevisionByKey = {};
+
+  /// בדיקות שכבר רצות, לפי מפתח+revision+דור — שתי פתיחות של אותו ספר
+  /// חולקות ריצה אחת במקום לגבב אותו פעמיים ולהזהיר פעמיים.
+  final Map<String, Future<void>> _inFlightByKey = {};
   ValueNotifier<bool>? _hookedIsIndexing;
   Future<SearchEngine>? _engineGeneration;
   Future<Library>? _libraryGeneration;
 
+  /// מונה שעולה בכל פסילת מטמון. זהויות ה-Future אינן מספיקות: מעבר
+  /// isIndexing מאפס את המטמון בלי לשנות אף אחת מהן.
+  int _invalidationToken = 0;
+
   @visibleForTesting
   void resetForTesting() {
     _checkedRevisionByKey.clear();
+    _inFlightByKey.clear();
     _hookedIsIndexing?.removeListener(_invalidate);
     _hookedIsIndexing = null;
     _engineGeneration = null;
     _libraryGeneration = null;
+    _invalidationToken = 0;
     providerResolver = () => TantivyDataProvider.instance;
     debugBookVerifier = null;
     debugNotifier = null;
   }
 
-  void _invalidate() => _checkedRevisionByKey.clear();
+  void _invalidate() {
+    _invalidationToken++;
+    _checkedRevisionByKey.clear();
+  }
 
   /// reopen מחליף את `provider.engine`, ורענון ספרייה את
   /// `DataRepository.instance.library` — התחלפות של אחד מהם פוסלת את כל
@@ -81,12 +94,13 @@ class IndexFreshnessWarner {
     final provider = providerResolver();
     _hookIndexingInvalidation(provider);
 
-    // צילום זהויות הדור *לפני* כל await: אינדקס שנפתח מחדש או ספרייה
-    // שהתרעננה בזמן ההמתנה הופכים את התוצאה הזו ללא-רלוונטית, גם אם שום
-    // בדיקה אחרת לא נכנסה בינתיים כדי להבחין בכך.
+    // צילום הדור *לפני* כל await: אינדקס שנפתח מחדש, ספרייה שהתרעננה או
+    // ריצת אינדוקס בזמן ההמתנה הופכים את התוצאה הזו ללא-רלוונטית, גם אם
+    // שום בדיקה אחרת לא נכנסה בינתיים כדי להבחין בכך.
     final engineGeneration = provider.engine;
     final libraryGeneration = DataRepository.instance.library;
     _invalidateOnGenerationChange(engineGeneration, libraryGeneration);
+    final token = _invalidationToken;
 
     final key = IndexingRepository.buildIndexedBookFilePath(book);
     try {
@@ -95,29 +109,61 @@ class IndexFreshnessWarner {
       final revision = await _sourceRevision(book);
       if (_checkedRevisionByKey[key] == revision) return;
 
-      final engine = await engineGeneration;
-      final indexHash = await engine.getBookTextFingerprint(filePath: key);
-      final matches = await (debugBookVerifier ?? _bookMatches)(
-        book,
-        indexHash,
-      );
+      // איחוד ריצות: הבדיקה נכתבת למטמון רק בסופה, ולכן בלי השורות האלה
+      // שתי פתיחות מקבילות של אותו ספר היו שתיהן מפספסות את המטמון.
+      final runKey = '$key|$revision|$token';
+      final running = _inFlightByKey[runKey];
+      if (running != null) return running;
 
-      // אין await בין הבדיקה הזו לבין ההצגה/הכתיבה למטמון.
-      if (!_generationsUnchanged(
-        provider,
-        engineGeneration,
-        libraryGeneration,
-      )) {
-        return;
-      }
-      _checkedRevisionByKey[key] = revision;
-      if (!matches) {
-        (debugNotifier ?? UiSnack.show)(
-          LibraryMessages.searchResultContentDrifted,
-        );
+      final run = _checkAndWarn(
+        book: book,
+        key: key,
+        revision: revision,
+        token: token,
+        provider: provider,
+        engineGeneration: engineGeneration,
+        libraryGeneration: libraryGeneration,
+      );
+      _inFlightByKey[runKey] = run;
+      try {
+        await run;
+      } finally {
+        if (identical(_inFlightByKey[runKey], run)) {
+          _inFlightByKey.remove(runKey);
+        }
       }
     } catch (error) {
       debugPrint('אימות טריות האינדקס נכשל עבור "${book.title}": $error');
+    }
+  }
+
+  Future<void> _checkAndWarn({
+    required Book book,
+    required String key,
+    required String revision,
+    required int token,
+    required TantivyDataProvider provider,
+    required Future<SearchEngine> engineGeneration,
+    required Future<Library> libraryGeneration,
+  }) async {
+    final engine = await engineGeneration;
+    final indexHash = await engine.getBookTextFingerprint(filePath: key);
+    final matches = await (debugBookVerifier ?? _bookMatches)(book, indexHash);
+
+    // אין await בין הבדיקה הזו לבין ההצגה/הכתיבה למטמון.
+    if (!_generationUnchanged(
+      provider,
+      token,
+      engineGeneration,
+      libraryGeneration,
+    )) {
+      return;
+    }
+    _checkedRevisionByKey[key] = revision;
+    if (!matches) {
+      (debugNotifier ?? UiSnack.show)(
+        LibraryMessages.searchResultContentDrifted,
+      );
     }
   }
 
@@ -138,11 +184,13 @@ class IndexFreshnessWarner {
     }
   }
 
-  bool _generationsUnchanged(
+  bool _generationUnchanged(
     TantivyDataProvider provider,
+    int token,
     Future<SearchEngine> engineGeneration,
     Future<Library> libraryGeneration,
   ) =>
+      token == _invalidationToken &&
       identical(provider.engine, engineGeneration) &&
       identical(DataRepository.instance.library, libraryGeneration);
 
