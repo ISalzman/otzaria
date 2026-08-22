@@ -203,6 +203,42 @@ Future<void> main() async {
     });
   });
 
+  test('אינדוקס פעיל לכל אורך הבדיקה אינו מזהיר ואינו נצרב', () async {
+    // רגרסיה: כשהערך כבר true בכניסה אין מעבר, ולכן ה-token נשאר תקף —
+    // והבדיקה קראה אינדקס שבאמצע בנייה והזהירה לשווא.
+    final book = TextBook(id: 1, title: 'ספר');
+    final notifications = <String>[];
+    warner.debugBookVerifier = (_, _) async => false;
+    warner.debugNotifier = notifications.add;
+
+    provider.isIndexing.value = true;
+    await warner.warnIfContentDrifted(book);
+
+    expect(notifications, isEmpty, reason: 'אין השוואה מול אינדקס בבנייה');
+    expect(provider.fakeEngine.requestedPaths, isEmpty);
+
+    // אחרי סיום האינדוקס אותו ספר נבדק כרגיל.
+    provider.isIndexing.value = false;
+    await warner.warnIfContentDrifted(book);
+
+    expect(notifications, [LibraryMessages.searchResultContentDrifted]);
+  });
+
+  test('אינדוקס שמתחיל באמצע ההמתנה מבטל את התוצאה', () async {
+    final book = TextBook(id: 1, title: 'ספר');
+    final gate = Completer<bool>();
+    final notifications = <String>[];
+    warner.debugBookVerifier = (_, _) => gate.future;
+    warner.debugNotifier = notifications.add;
+
+    final pending = warner.warnIfContentDrifted(book);
+    provider.isIndexing.value = true;
+    gate.complete(false);
+    await pending;
+
+    expect(notifications, isEmpty);
+  });
+
   test('שתי בדיקות מקבילות לאותו ספר מתאחדות לריצה אחת', () async {
     // רגרסיה: הרשומה נכנסת למטמון רק בסוף הבדיקה, ולכן שתי פתיחות מקבילות
     // גיבבו את הספר פעמיים והציגו שתי אזהרות.

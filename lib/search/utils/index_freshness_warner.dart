@@ -93,6 +93,10 @@ class IndexFreshnessWarner {
   Future<void> warnIfContentDrifted(Book book) async {
     final provider = providerResolver();
     _hookIndexingInvalidation(provider);
+    // אינדקס שנמצא באמצע בנייה אינו בסיס להשוואה: חלק מהמסמכים כבר
+    // הוחלפו וחלק לא. אין בדיקה ואין כתיבה למטמון — הפתיחה הבאה, אחרי
+    // סיום האינדוקס, תבדוק מחדש.
+    if (provider.isIndexing.value) return;
 
     // צילום הדור *לפני* כל await: אינדקס שנפתח מחדש, ספרייה שהתרעננה או
     // ריצת אינדוקס בזמן ההמתנה הופכים את התוצאה הזו ללא-רלוונטית, גם אם
@@ -191,6 +195,9 @@ class IndexFreshnessWarner {
     Future<Library> libraryGeneration,
   ) =>
       token == _invalidationToken &&
+      // אינדוקס שהתחיל בזמן ההמתנה אינו מנפיק מעבר שה-token יתפוס אם הוא
+      // עדיין פעיל — הערך עצמו הוא התנאי.
+      !provider.isIndexing.value &&
       identical(provider.engine, engineGeneration) &&
       identical(DataRepository.instance.library, libraryGeneration);
 
