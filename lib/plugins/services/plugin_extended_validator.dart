@@ -118,6 +118,8 @@ const Set<String> _knownApiMethods = {
   'fs.resolveFileUrl',
   'fs.readTextFile',
   'fs.revokeFile',
+  'fs.beginBinaryWrite',
+  'fs.commitUserFileWrite',
   'feedback.sendEmail',
   'feedback.report',
   'feedback.hasReporterEmail',
@@ -260,6 +262,8 @@ const Map<String, String> _methodRequiredPermission = {
   'fs.resolveFileUrl': 'fs.user_files.read',
   'fs.readTextFile': 'fs.user_files.read',
   'fs.revokeFile': 'fs.user_files.read',
+  'fs.beginBinaryWrite': 'fs.user_files.write',
+  'fs.commitUserFileWrite': 'fs.user_files.write',
   'feedback.sendEmail': 'feedback.send_email',
   'history.list': 'history.read',
   'history.listSearches': 'history.read',
@@ -407,6 +411,8 @@ const Map<String, String> _methodMinVersion = {
   'fs.readTextFile': '0.9.94',
   'fs.resolveFileUrl': '0.9.94',
   'fs.revokeFile': '0.9.94',
+  'fs.beginBinaryWrite': '0.9.97',
+  'fs.commitUserFileWrite': '0.9.97',
   // 0.9.95
   'app.openUrl': '0.9.95',
   // 0.9.96

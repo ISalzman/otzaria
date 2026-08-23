@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 // dart:io מגדיר Link משלו (קישור בקובץ־מערכת) שמתנגש ב-Link של הקישורים.
 import 'dart:io' hide Link;
 import 'dart:math' as math;
@@ -278,6 +279,16 @@ class PluginBridgeDependencies {
   })?
   pickFile;
 
+  /// פותח דיאלוג „שמור בשם” ומחזיר את הנתיב שנבחר, או `null` אם המשתמש ביטל.
+  /// **אינו כותב** את הקובץ — הכתיבה נעשית באדפטר, אטומית. אופציונלי; אם לא
+  /// סופק, האדפטר משתמש ב-[FilePicker.saveFile]. קיים כדי לאפשר הזרקה בבדיקות.
+  final Future<String?> Function({
+    required String suggestedName,
+    List<String>? allowedExtensions,
+    String? title,
+  })?
+  pickSaveLocation;
+
   /// פותר הפניה חופשית (שם ספר + ref, למשל "תלמוד ירושלמי עירובין פ\"ו ה\"ז")
   /// למיקום, דרך מנוע `find_ref` המודע-להקשר. מחזיר התאמות עם מיקום ה-index.
   /// אופציונלי — אם לא סופק, `openBookAtRef` נופל להתאמת TOC מקומית בלבד.
@@ -347,6 +358,7 @@ class PluginBridgeDependencies {
     this.requestPluginInstall,
     this.pickFolder,
     this.pickFile,
+    this.pickSaveLocation,
     this.resolveReference,
     this.resolveRefToLine,
     this.altStructuresProvider,
@@ -2657,6 +2669,10 @@ class PluginBridgeAdapter {
         return true;
       case 'pickUserFile':
         return await _pickUserFile(args);
+      case 'beginBinaryWrite':
+        return await _beginBinaryWrite(args);
+      case 'commitUserFileWrite':
+        return await _commitUserFileWrite(args);
       case 'resolveFileUrl':
         return await _resolveUserFileUrl(args);
       case 'readTextFile':
@@ -2702,6 +2718,20 @@ class PluginBridgeAdapter {
               .where((e) => e.isNotEmpty)
               .toList()
         : null;
+    // ברירת המחדל נשארת קריאה: תוסף ותיק שאינו מכיר את השדה מקבל בדיוק מה
+    // שקיבל תמיד. בקשת כתיבה דורשת גם את הרשאת הכתיבה, בנוסף להרשאת הקריאה
+    // שהגשר כבר אכף.
+    final access = args['access'] as String? ?? 'read';
+    if (access != 'read' && access != 'readwrite') {
+      throw Exception("error.invalid_params: access must be 'read' or 'readwrite'");
+    }
+    final writable = access == 'readwrite';
+    if (writable && !await _hasWritePermission()) {
+      throw Exception(
+        'error.permission_denied: fs.user_files.write is required for readwrite access',
+      );
+    }
+
     final path = await picker(
       allowedExtensions: extensions,
       title: args['title'] as String?,
@@ -2717,14 +2747,212 @@ class PluginBridgeAdapter {
       pluginId: plugin.pluginId,
       canonicalPath: canonical,
     );
-    await _saveUserFileGrant(registration.token, canonical);
+    await _saveUserFileGrant(registration.token, canonical, writable: writable);
     return {
       'cancelled': false,
       'token': registration.token,
       'url': registration.url,
       'name': p.basename(canonical),
       'size': await File(canonical).length(),
+      'access': access,
     };
+  }
+
+  Future<bool> _hasWritePermission() async =>
+      await _pluginRepo.getPermission(plugin.pluginId, 'fs.user_files.write') ??
+      false;
+
+  /// `fs.beginBinaryWrite` — פותח העלאה ומחזיר לאן לשלוח את הבייטים.
+  ///
+  /// הבייטים אינם עוברים בגשר: התוסף שולח אותם ב-PUT יחיד לשרת ה-loopback,
+  /// והכתיבה לדיסק נעשית רק ב-commit. base64 ב-JSON-RPC היה מכפיל את הזיכרון
+  /// ותוקע את ה-UI על מסמך גדול.
+  Future<Map<String, dynamic>> _beginBinaryWrite(
+    Map<String, dynamic> args,
+  ) async {
+    final purpose = args['purpose'] as String? ?? 'user-file';
+    if (purpose != 'user-file') {
+      // 'plugin-file' (טיוטה פרטית) יתווסף בשלב נפרד, עם quota משלו.
+      throw Exception("error.unsupported: purpose must be 'user-file'");
+    }
+
+    final rawSize = args['expectedSize'];
+    final expectedSize = rawSize is num ? rawSize.toInt() : null;
+
+    try {
+      final ticket = await _fileServer.beginUpload(
+        pluginId: plugin.pluginId,
+        expectedSize: expectedSize,
+      );
+      return {
+        'writeToken': ticket.writeToken,
+        'uploadUrl': ticket.uploadUrl,
+        'expiresAt': ticket.expiresAt.toIso8601String(),
+        'maxBytes': ticket.maxBytes,
+      };
+    } on PluginUploadException catch (e) {
+      throw Exception('${e.code}: ${e.message}');
+    }
+  }
+
+  /// `fs.commitUserFileWrite` — כותב את ההעלאה לקובץ של המשתמש.
+  ///
+  /// שני מסלולים: `targetToken` של קובץ שנפתח עם `access: 'readwrite'` נכתב
+  /// במקום, בלי דיאלוג; בלעדיו נפתח „שמור בשם”. בשני המקרים הכתיבה אטומית —
+  /// staging באותה תיקייה ואז rename — ולכן כשל באמצע אינו הורס את הקובץ הקיים.
+  /// ביטול הדיאלוג מוחק את ה-temp ואינו משנה שום grant.
+  Future<Map<String, dynamic>> _commitUserFileWrite(
+    Map<String, dynamic> args,
+  ) async {
+    final writeToken = args['writeToken'] as String?;
+    if (writeToken == null) {
+      throw Exception('error.invalid_params: writeToken required');
+    }
+
+    final upload = await _fileServer.takeUpload(
+      pluginId: plugin.pluginId,
+      writeToken: writeToken,
+    );
+    if (upload == null) {
+      // לא מוכר, של תוסף אחר, פג, טרם הושלם, או שנצרך כבר — הכול אותו כשל.
+      throw Exception('error.not_found: unknown or incomplete upload');
+    }
+
+    try {
+      final targetToken = args['targetToken'] as String?;
+      if (targetToken != null) {
+        final grant = await _loadUserFileGrant(targetToken);
+        if (grant == null) {
+          throw Exception('error.not_found: unknown file token');
+        }
+        if (!grant.writable) {
+          // token של פתיחה לקריאה אינו יעד כתיבה. „שמור” הראשון שלו חייב
+          // לעבור דרך „שמור בשם”, ומשם מתקבל token שכן ניתן לכתיבה.
+          throw Exception('error.permission_denied: file token is read-only');
+        }
+        final canonical = canonicalizeNearestExisting(grant.path);
+        if (canonical == null || !File(canonical).existsSync()) {
+          await _removeUserFileGrant(targetToken);
+          throw Exception('error.not_found: file no longer exists');
+        }
+        await _atomicWrite(upload, canonical);
+        return {
+          'cancelled': false,
+          'token': targetToken,
+          'name': p.basename(canonical),
+          'size': await File(canonical).length(),
+        };
+      }
+
+      final extension = (args['extension'] as String?)
+          ?.replaceAll('.', '')
+          .toLowerCase();
+      final suggested = _suggestedSaveName(
+        args['suggestedName'] as String?,
+        extension,
+      );
+      final saver = _dependencies.pickSaveLocation ?? _defaultPickSaveLocation;
+      final chosen = await saver(
+        suggestedName: suggested,
+        allowedExtensions: extension == null ? null : [extension],
+        title: args['title'] as String?,
+      );
+      if (chosen == null || chosen.isEmpty) {
+        return {'cancelled': true};
+      }
+
+      final canonical = canonicalizeNearestExisting(chosen);
+      if (canonical == null) {
+        throw Exception('error.invalid_params: could not resolve target path');
+      }
+      await _atomicWrite(upload, canonical);
+      final registration = await _fileServer.register(
+        pluginId: plugin.pluginId,
+        canonicalPath: canonical,
+      );
+      await _saveUserFileGrant(registration.token, canonical, writable: true);
+      return {
+        'cancelled': false,
+        'token': registration.token,
+        'name': p.basename(canonical),
+        'size': await File(canonical).length(),
+      };
+    } finally {
+      // ה-temp אינו נשאר בשום מסלול — הצלחה, ביטול או שגיאה.
+      try {
+        if (await upload.exists()) await upload.delete();
+      } catch (_) {
+        // נעול או נמחק במקביל.
+      }
+    }
+  }
+
+  /// שם ברירת מחדל לדיאלוג. תווים שאינם חוקיים בשם קובץ מוסרים כאן ולא
+  /// נסמכים על הדיאלוג, שמתנהג שונה בכל פלטפורמה.
+  String _suggestedSaveName(String? requested, String? extension) {
+    final cleaned = (requested ?? '')
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+        .trim();
+    final base = cleaned.isEmpty ? 'מסמך' : cleaned;
+    if (extension == null || extension.isEmpty) return base;
+    return base.toLowerCase().endsWith('.$extension')
+        ? base
+        : '$base.$extension';
+  }
+
+  Future<String?> _defaultPickSaveLocation({
+    required String suggestedName,
+    List<String>? allowedExtensions,
+    String? title,
+  }) {
+    final hasExtensions =
+        allowedExtensions != null && allowedExtensions.isNotEmpty;
+    // bytes ריק בכוונה: הדיאלוג משמש כאן כבורר נתיב בלבד. file_picker מדלג על
+    // הכתיבה כשהמערך ריק, והכתיבה עצמה נעשית ב-_atomicWrite. אם גרסה עתידית
+    // תכתוב בכל זאת, ה-rename שאחריה עדיין מביא את היעד למצב הנכון.
+    return FilePicker.saveFile(
+      dialogTitle: title,
+      fileName: suggestedName,
+      lockParentWindow: true,
+      type: hasExtensions ? FileType.custom : FileType.any,
+      allowedExtensions: hasExtensions ? allowedExtensions : null,
+      bytes: Uint8List(0),
+    );
+  }
+
+  /// מעתיק את ההעלאה ליעד בצורה אטומית: staging באותה תיקייה, ואז rename.
+  ///
+  /// ה-staging חייב לשבת באותה תיקייה כדי ש-rename יהיה באותו volume ולכן
+  /// אטומי; העלאה שיושבת ב-temp של המערכת עלולה להיות על volume אחר. עד
+  /// ה-rename הקובץ המקורי שלם, ולכן כשל באמצע אינו מאבד את המסמך הקודם.
+  Future<void> _atomicWrite(File source, String targetPath) async {
+    final target = File(targetPath);
+    final suffix = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final staging = File(
+      p.join(target.parent.path, '.${p.basename(targetPath)}.$suffix.otztmp'),
+    );
+
+    try {
+      if (!await target.parent.exists()) {
+        await target.parent.create(recursive: true);
+      }
+      await source.copy(staging.path);
+      try {
+        await staging.rename(targetPath);
+      } on FileSystemException {
+        // מערכת קבצים שאינה מתירה rename על קובץ קיים. לא אטומי, ולכן רק
+        // כמסלול אחרון — אבל עדיף מלהשאיר את היעד חסר.
+        await staging.copy(targetPath);
+        await staging.delete();
+      }
+    } catch (_) {
+      try {
+        if (await staging.exists()) await staging.delete();
+      } catch (_) {
+        // אין מה לעשות; ה-staging מוסתר ויימחק בניקוי הבא.
+      }
+      rethrow;
+    }
   }
 
   /// `fs.resolveFileUrl` — בונה מחדש URL טרי לקובץ שכבר אושר (לפי token שהתוסף
@@ -2771,7 +2999,7 @@ class PluginBridgeAdapter {
     if (stored == null) {
       throw Exception('error.not_found: unknown file token');
     }
-    final canonical = canonicalizeNearestExisting(stored);
+    final canonical = canonicalizeNearestExisting(stored.path);
     if (canonical == null || !File(canonical).existsSync()) {
       await _removeUserFileGrant(token);
       throw Exception('error.not_found: file no longer exists');
@@ -2798,9 +3026,16 @@ class PluginBridgeAdapter {
     }
   }
 
-  Future<void> _saveUserFileGrant(String token, String path) async {
+  Future<void> _saveUserFileGrant(
+    String token,
+    String path, {
+    required bool writable,
+  }) async {
     final grants = await _readUserFileGrants();
-    grants[token] = path;
+    grants[token] = {
+      'path': path,
+      'access': writable ? 'readwrite' : 'read',
+    };
     await _pluginRepo.setKV(
       plugin.pluginId,
       '_internal',
@@ -2809,9 +3044,22 @@ class PluginBridgeAdapter {
     );
   }
 
-  Future<String?> _loadUserFileGrant(String token) async {
+  /// קורא grant, כולל הפורמט הישן.
+  ///
+  /// עד הוספת הכתיבה ה-grant היה `token -> path` כמחרוזת. מיגרציה: מחרוזת
+  /// נקראת כהרשאת קריאה בלבד. אין המרה בכתיבה — grant ישן נשאר כמחרוזת עד
+  /// שיישמר מחדש, וכך גרסה קודמת של אוצריא עדיין קוראת אותו.
+  Future<({String path, bool writable})?> _loadUserFileGrant(
+    String token,
+  ) async {
     final value = (await _readUserFileGrants())[token];
-    return value is String ? value : null;
+    if (value is String) return (path: value, writable: false);
+    if (value is Map) {
+      final path = value['path'];
+      if (path is! String) return null;
+      return (path: path, writable: value['access'] == 'readwrite');
+    }
+    return null;
   }
 
   Future<void> _removeUserFileGrant(String token) async {

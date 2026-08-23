@@ -44,6 +44,8 @@ const Map<String, String> apiCallToPermissionHint = {
   'fs.resolveFileUrl': 'fs.user_files.read',
   'fs.readTextFile': 'fs.user_files.read',
   'fs.revokeFile': 'fs.user_files.read',
+  'fs.beginBinaryWrite': 'fs.user_files.write',
+  'fs.commitUserFileWrite': 'fs.user_files.write',
 
   // history.*
   'history.list': 'history.read',
@@ -232,6 +234,11 @@ const pluginValidPermissions = <String>[
   /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').
   /// הגישה מוגבלת לקבצים שהמשתמש בחר בדיאלוג — לא לנתיב חופשי בדיסק.
   'fs.user_files.read',
+
+  /// כתיבה לקובץ שהמשתמש בחר, או שמירה לקובץ חדש דרך דיאלוג „שמור בשם”.
+  /// אין לתוסף דרך להזין נתיב: היעד הוא תמיד קובץ שהמשתמש בחר בדיאלוג —
+  /// או בפתיחה עם `access: 'readwrite'`, או בשמירה עצמה.
+  'fs.user_files.write',
 
   /// בחירת תיקייה בדיאלוג מערכת ועבודה על קבצים בתוכה (חילוץ/מחיקה).
   pluginFolderAccessPermission,

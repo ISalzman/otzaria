@@ -290,6 +290,13 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     description:
         'בחירה וקריאה של קבצים שתבחר במפורש בדיאלוג — לא גישה חופשית לדיסק',
   ),
+  'fs.user_files.write': PluginPermissionInfo(
+    label: 'שמירה לקבצים אישיים',
+    icon: FluentIcons.save_24_regular,
+    description:
+        'שמירה לקובץ שתבחר בדיאלוג, או יצירת קובץ חדש דרך „שמור בשם” — '
+        'לא כתיבה חופשית לדיסק',
+  ),
   'fs.folder_access': PluginPermissionInfo(
     label: 'גישה לתיקייה שתבחר',
     icon: FluentIcons.folder_24_regular,

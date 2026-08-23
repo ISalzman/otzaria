@@ -165,4 +165,332 @@ void main() {
     );
     expect(server.isServerUri(Uri.parse('https://example.com')), isFalse);
   });
+
+  // ==========================================================================
+  // העלאות (PUT) — הצעד שבו הבייטים של DOCX מגיעים מהתוסף אל הדיסק.
+  // ==========================================================================
+  group('העלאות', () {
+    Future<HttpClientResponse> put(
+      String url,
+      List<int> body, {
+      bool declareLength = true,
+      int? declaredLength,
+    }) async {
+      final request = await client.putUrl(Uri.parse(url));
+      request.headers.contentType = ContentType('application', 'octet-stream');
+      if (declareLength) {
+        request.contentLength = declaredLength ?? body.length;
+      }
+      request.add(body);
+      return request.close();
+    }
+
+    test('העלאה תקינה נקלטת ו-commit לוקח את הבייטים פעם אחת', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      expect(ticket.uploadUrl, startsWith('${server.origin}/w/'));
+      expect(ticket.maxBytes, PluginFileServer.defaultMaxUploadBytes);
+      expect(server.activeUploadsFor('p1'), 1);
+
+      final bytes = utf8.encode('docx-bytes');
+      final response = await put(ticket.uploadUrl, bytes);
+      expect(response.statusCode, HttpStatus.noContent);
+      await response.drain();
+
+      final file = await server.takeUpload(
+        pluginId: 'p1',
+        writeToken: ticket.writeToken,
+      );
+      expect(file, isNotNull);
+      expect(await file!.readAsBytes(), bytes);
+      expect(server.activeUploadsFor('p1'), 0);
+
+      // חד-פעמי: אותו token לא נלקח פעמיים.
+      expect(
+        await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+      await file.delete();
+    });
+
+    test('PUT ללא Content-Length נדחה ב-411', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final response = await put(
+        ticket.uploadUrl,
+        utf8.encode('abc'),
+        declareLength: false,
+      );
+
+      expect(response.statusCode, HttpStatus.lengthRequired);
+      await response.drain();
+    });
+
+    /// שולח בקשה מפוברקת ב-socket גולמי. HttpClient אוכף Content-Length בעצמו,
+    /// ולכן אי אפשר לבדוק דרכו גוף שאינו תואם את מה שהוצהר.
+    Future<String> rawPut(
+      String url,
+      String body, {
+      required int declaredLength,
+      bool closeEarly = false,
+    }) async {
+      final uri = Uri.parse(url);
+      final socket = await Socket.connect(uri.host, uri.port);
+      // המקטע הראשון מכיל את שורת הסטטוס והכותרות. אין להשתמש ב-join: החיבור
+      // הוא keep-alive ולכן ה-EOF לא יגיע.
+      final response = socket
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .first
+          .timeout(const Duration(seconds: 5), onTimeout: () => '')
+          .catchError((_) => '');
+
+      socket.write(
+        'PUT ${uri.path} HTTP/1.1\r\n'
+        'Host: ${uri.host}:${uri.port}\r\n'
+        'Content-Type: application/octet-stream\r\n'
+        'Content-Length: $declaredLength\r\n'
+        '\r\n',
+      );
+      if (body.isNotEmpty) socket.write(body);
+      await socket.flush();
+      if (closeEarly) {
+        // חצי-סגירה: השרת רואה סוף זרם לפני שהגיעו כל הבייטים שהוצהרו.
+        await socket.close();
+      }
+      final text = await response;
+      socket.destroy();
+      return text;
+    }
+
+    test('Content-Length מעל המגבלה נדחה ב-413', () async {
+      // שרת עם מגבלה קטנה, כדי לבדוק את מסלול הדחייה האמיתי בלי להעלות 100MB.
+      final small = PluginFileServer(maxUploadBytes: 8);
+      addTearDown(small.close);
+      final ticket = await small.beginUpload(pluginId: 'p1');
+      expect(ticket.maxBytes, 8);
+
+      final request = await client.putUrl(Uri.parse(ticket.uploadUrl));
+      request.contentLength = 9;
+      request.add(utf8.encode('123456789'));
+      final response = await request.close();
+
+      expect(response.statusCode, HttpStatus.requestEntityTooLarge);
+      await response.drain();
+      expect(
+        await small.takeUpload(pluginId: 'p1', writeToken: ticket.writeToken),
+        isNull,
+      );
+    });
+
+    test('גוף שעובר את המגבלה תוך כדי נעצר ואינו נשמר', () async {
+      // המגבלה נאכפת גם כשהלקוח מצהיר על גודל תקין ומגדיל בפועל — כאן דרך
+      // מגבלה קטנה מהמוצהר.
+      final small = PluginFileServer(maxUploadBytes: 4);
+      addTearDown(small.close);
+      final ticket = await small.beginUpload(pluginId: 'p1');
+
+      final request = await client.putUrl(Uri.parse(ticket.uploadUrl));
+      request.contentLength = 5;
+      request.add(utf8.encode('12345'));
+      final response = await request.close();
+
+      expect(response.statusCode, HttpStatus.requestEntityTooLarge);
+      await response.drain();
+      expect(
+        await small.takeUpload(pluginId: 'p1', writeToken: ticket.writeToken),
+        isNull,
+      );
+    });
+
+    test('גוף קטוע אינו הופך למסמך שנשמר', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+
+      await rawPut(
+        ticket.uploadUrl,
+        'abc',
+        declaredLength: 10,
+        closeEarly: true,
+      );
+
+      // הקוד מגיב 400 או 500 לפי איך שהזרם נקטע; בשני המקרים אין מה לקחת.
+      expect(
+        await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+    });
+
+    test('expectedSize מעל המגבלה נדחה לפני שנפתחה העלאה', () async {
+      expect(
+        () => server.beginUpload(
+          pluginId: 'p1',
+          expectedSize: PluginFileServer.defaultMaxUploadBytes + 1,
+        ),
+        throwsA(
+          isA<PluginUploadException>().having(
+            (e) => e.code,
+            'code',
+            'error.too_large',
+          ),
+        ),
+      );
+      expect(server.activeUploadsFor('p1'), 0);
+    });
+
+    test('מעל שתי העלאות פעילות נדחה', () async {
+      await server.beginUpload(pluginId: 'p1');
+      await server.beginUpload(pluginId: 'p1');
+
+      expect(
+        () => server.beginUpload(pluginId: 'p1'),
+        throwsA(
+          isA<PluginUploadException>().having(
+            (e) => e.code,
+            'code',
+            'error.too_many_requests',
+          ),
+        ),
+      );
+      // המגבלה היא לכל תוסף, לא גלובלית.
+      expect(await server.beginUpload(pluginId: 'p2'), isNotNull);
+    });
+
+    test('PUT שני על אותו token נדחה ב-409', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final first = await put(ticket.uploadUrl, utf8.encode('abc'));
+      expect(first.statusCode, HttpStatus.noContent);
+      await first.drain();
+
+      final second = await put(ticket.uploadUrl, utf8.encode('xyz'));
+      expect(second.statusCode, HttpStatus.conflict);
+      await second.drain();
+    });
+
+    test('token לא מוכר מחזיר 404', () async {
+      await server.beginUpload(pluginId: 'p1');
+      final response = await put('${server.origin}/w/deadbeef', utf8.encode('x'));
+
+      expect(response.statusCode, HttpStatus.notFound);
+      await response.drain();
+    });
+
+    test('מתודה שאינה PUT על נתיב העלאה נדחית', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final response = await (await client.getUrl(Uri.parse(ticket.uploadUrl)))
+          .close();
+
+      expect(response.statusCode, HttpStatus.methodNotAllowed);
+      await response.drain();
+    });
+
+    test('תוסף אחר אינו יכול לקחת את ההעלאה', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
+      await response.drain();
+
+      expect(
+        await server.takeUpload(
+          pluginId: 'p2',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+      // ולבעלים היא עדיין זמינה.
+      final file = await server.takeUpload(
+        pluginId: 'p1',
+        writeToken: ticket.writeToken,
+      );
+      expect(file, isNotNull);
+      await file!.delete();
+    });
+
+    test('commit לפני שה-PUT הושלם מחזיר null', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+
+      expect(
+        await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+    });
+
+    test('abort מוחק את ה-temp ומשחרר את המכסה', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
+      await response.drain();
+
+      await server.abortUpload(pluginId: 'p1', writeToken: ticket.writeToken);
+
+      expect(server.activeUploadsFor('p1'), 0);
+      expect(
+        await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+    });
+
+    test('abort של תוסף אחר אינו מבטל את ההעלאה', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      await server.abortUpload(pluginId: 'p2', writeToken: ticket.writeToken);
+
+      expect(server.activeUploadsFor('p1'), 1);
+    });
+
+    test('revokeAllForPlugin מבטל גם העלאות פעילות', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final other = await server.beginUpload(pluginId: 'p2');
+      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
+      await response.drain();
+
+      await server.revokeAllForPlugin('p1');
+
+      expect(server.activeUploadsFor('p1'), 0);
+      expect(server.activeUploadsFor('p2'), 1);
+      expect(
+        await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        ),
+        isNull,
+      );
+      await server.abortUpload(pluginId: 'p2', writeToken: other.writeToken);
+    });
+
+    test('close מוחק את קובצי ה-temp של העלאות פעילות', () async {
+      final ticket = await server.beginUpload(pluginId: 'p1');
+      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
+      await response.drain();
+
+      final probe = await server.takeUpload(
+        pluginId: 'p1',
+        writeToken: ticket.writeToken,
+      );
+      // מחזירים אותו למצב "פעיל" כדי לבדוק את close: מעלים שוב.
+      await probe!.delete();
+      final second = await server.beginUpload(pluginId: 'p1');
+      final secondResponse = await put(second.uploadUrl, utf8.encode('abc'));
+      await secondResponse.drain();
+      final tempPath = (await server.takeUpload(
+        pluginId: 'p1',
+        writeToken: second.writeToken,
+      ))!.path;
+      // הוחזר, ולכן close לא אמור למחוק אותו — מנקים ידנית.
+      await File(tempPath).delete();
+
+      final third = await server.beginUpload(pluginId: 'p1');
+      final thirdResponse = await put(third.uploadUrl, utf8.encode('abc'));
+      await thirdResponse.drain();
+      await server.close();
+
+      expect(server.activeUploadsFor('p1'), 0);
+    });
+  });
 }

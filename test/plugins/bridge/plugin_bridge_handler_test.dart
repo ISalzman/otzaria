@@ -806,6 +806,58 @@ void main() {
       expect(adapter.lastAction, 'pickUserFile');
     });
 
+    test('כתיבה דורשת fs.user_files.write, ולא מספיקה הרשאת קריאה', () async {
+      for (final method in ['fs.beginBinaryWrite', 'fs.commitUserFileWrite']) {
+        final adapter = _FakeAdapter();
+        final handler = PluginBridgeHandler(
+          // קריאה בלבד: מי שמצהיר על read אינו יכול לכתוב.
+          _buildInstalledPlugin(permissions: const ['fs.user_files.read']),
+          adapter: adapter,
+          registry: _StubRegistry(true),
+        );
+
+        final resp =
+            await handler.handleRpcForTesting([
+                  {'method': method, 'payload': const <String, dynamic>{}},
+                ])
+                as Map;
+
+        expect(resp['success'], isFalse, reason: method);
+        expect(resp['error']['code'], 'permission_denied', reason: method);
+        expect(adapter.executeCalls, 0, reason: method);
+      }
+    });
+
+    test('כתיבה עם ההרשאה המוצהרת והמוענקת → execute נקרא', () async {
+      final adapter = _FakeAdapter(result: {'cancelled': true});
+      final handler = PluginBridgeHandler(
+        _buildInstalledPlugin(
+          permissions: const ['fs.user_files.read', 'fs.user_files.write'],
+        ),
+        adapter: adapter,
+        registry: _StubRegistry(true),
+      );
+
+      final resp =
+          await handler.handleRpcForTesting([
+                {
+                  'method': 'fs.commitUserFileWrite',
+                  'payload': {'writeToken': 'x'},
+                },
+              ])
+              as Map;
+
+      expect(resp['success'], isTrue);
+      expect(adapter.lastAction, 'commitUserFileWrite');
+    });
+
+    test('commitUserFileWrite אינו כפוף ל-timeout הגנרי', () {
+      // הוא ממתין לדיאלוג „שמור בשם”; timeout גנרי היה מחזיר error.timeout
+      // בזמן שהמשתמש בוחר תיקייה, אחרי שהבייטים כבר עלו.
+      expect(PluginBridgeHandler.hasOwnTimeout('fs.commitUserFileWrite'), isTrue);
+      expect(PluginBridgeHandler.hasOwnTimeout('fs.beginBinaryWrite'), isFalse);
+    });
+
     test(
       'deleteFile נשאר ללא הרשאת manifest (execute נקרא גם בלי הרשאה)',
       () async {

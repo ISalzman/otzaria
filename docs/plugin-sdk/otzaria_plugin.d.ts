@@ -1200,6 +1200,40 @@ export interface ShortcutCreateResult {
   path?: string;
 }
 
+/** תוצאת `fs.pickUserFile` / `fs.resolveFileUrl`. */
+export interface UserFileHandle {
+  cancelled?: boolean;
+  /** מזהה אטום ששורד טעינה מחדש. יש לשמור אותו, לא את ה-URL. */
+  token: string;
+  /** URL מ-loopback, תקף לריצה הנוכחית בלבד (הפורט מתחלף). */
+  url: string;
+  name: string;
+  size: number;
+  /** קיים מ-0.9.97. `readwrite` = ניתן לשמש כ-`targetToken` בכתיבה. */
+  access?: 'read' | 'readwrite';
+}
+
+/** תוצאת `fs.beginBinaryWrite` — לאן לשלוח את הבייטים ועד מתי. */
+export interface BinaryWriteTicket {
+  /** חד-פעמי, פג תוך שתי דקות. */
+  writeToken: string;
+  /** יעד ל-PUT יחיד עם `Content-Length`. */
+  uploadUrl: string;
+  /** ISO-8601. */
+  expiresAt: string;
+  maxBytes: number;
+}
+
+/** תוצאת `fs.commitUserFileWrite`. */
+export interface UserFileWriteResult {
+  /** `true` כשהמשתמש ביטל את „שמור בשם”. אין שינוי בקובץ ובהרשאות. */
+  cancelled: boolean;
+  /** token לכתיבה — אפשר להעביר אותו כ-`targetToken` בשמירה הבאה. */
+  token?: string;
+  name?: string;
+  size?: number;
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1290,6 +1324,8 @@ export type OtzariaMethod =
   | 'fs.resolveFileUrl'
   | 'fs.readTextFile'
   | 'fs.revokeFile'
+  | 'fs.beginBinaryWrite'
+  | 'fs.commitUserFileWrite'
   | 'fs.extractZip'
   | 'fs.deleteFile'
   | 'shortcut.create'

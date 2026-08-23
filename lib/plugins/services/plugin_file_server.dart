@@ -15,6 +15,48 @@ class PluginFileGrant {
 /// תוצאת רישום קובץ חדש: ה-token שנוצר וה-URL לטעינה ב-WebView.
 typedef PluginFileRegistration = ({String token, String url});
 
+/// כרטיס העלאה: לאן התוסף שולח את הבייטים, ועד מתי.
+typedef PluginUploadTicket = ({
+  String writeToken,
+  String uploadUrl,
+  DateTime expiresAt,
+  int maxBytes,
+});
+
+/// כשל בפתיחת העלאה, עם קוד בפורמט של שגיאות ה-SDK.
+class PluginUploadException implements Exception {
+  const PluginUploadException(this.code, this.message);
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => '$code: $message';
+}
+
+/// העלאה פעילה — קובץ temp שממתין ל-commit.
+class _UploadSession {
+  _UploadSession({
+    required this.pluginId,
+    required this.tempFile,
+    required this.maxBytes,
+    required this.expiresAt,
+  });
+
+  final String pluginId;
+  final File tempFile;
+  final int maxBytes;
+  final DateTime expiresAt;
+
+  /// ה-PUT התחיל. חוסם PUT שני על אותו token.
+  bool started = false;
+
+  /// ה-PUT הושלם והבייטים על הדיסק.
+  bool received = false;
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
 /// שרת `HttpServer` פנימי שמגיש קבצים אישיים של המשתמש ל-WebView של תוספים.
 ///
 /// **למה שרת ולא base64 דרך הגשר:** קובץ PDF גדול שמועבר כ-base64 ב-JSON-RPC
@@ -27,13 +69,30 @@ typedef PluginFileRegistration = ({String token, String url});
 /// אקראי בן 256 ביט. נתיב מה-URL אינו נוגע בדיסק — רק חיפוש token. כך אין
 /// path-traversal דרך ה-URL, ותוסף יכול לטעון רק קבצים שהמשתמש בחר במפורש.
 class PluginFileServer {
-  PluginFileServer();
+  PluginFileServer({this.maxUploadBytes = defaultMaxUploadBytes});
 
   static final PluginFileServer instance = PluginFileServer();
 
+  /// גבול הבייטים להעלאה אחת. פרמטר ולא קונסטנטה כדי שבדיקות יוכלו לאמת את
+  /// מסלול הדחייה בלי להעלות 100MB.
+  final int maxUploadBytes;
+
   HttpServer? _server;
   final Map<String, PluginFileGrant> _grants = {};
+  final Map<String, _UploadSession> _uploads = {};
   final Random _random = Random.secure();
+
+  /// גדול מכל DOCX סביר, וקטן מלגרום ללחץ זיכרון או למלא את הדיסק בטעות.
+  static const int defaultMaxUploadBytes = 100 * 1024 * 1024;
+
+  /// חלון הזמן שבו ה-writeToken תקף. ההעלאה היא צעד אחד בשמירה, לא אחסון.
+  static const Duration uploadTtl = Duration(minutes: 2);
+
+  /// שתי העלאות במקביל מספיקות ל"שמור" ול"שמור בשם" שנלחצו יחד; יותר מזה הוא
+  /// כבר תוסף שמשתמש בשרת כאחסון.
+  static const int maxActiveUploadsPerPlugin = 2;
+
+  static const String _uploadDirName = 'otzaria_plugin_uploads';
 
   /// ה-origin של השרת (`http://127.0.0.1:<port>`), או `null` אם טרם הופעל.
   String? get origin {
@@ -82,18 +141,161 @@ class PluginFileServer {
     return '$origin/f/$token';
   }
 
+  /// פותח העלאה: מקצה writeToken חד-פעמי, קובץ temp ו-URL ל-PUT.
+  ///
+  /// הבייטים אינם עוברים בגשר ה-JS — התוסף שולח אותם ב-PUT יחיד לשרת ה-loopback,
+  /// וה-commit (בצד ה-RPC) הוא זה שמחליט לאן הם נכתבים. ה-token הוא ההרשאה:
+  /// הוא אקראי בן 256 ביט, משויך לתוסף, חד-פעמי ופג תוך [uploadTtl].
+  Future<PluginUploadTicket> beginUpload({
+    required String pluginId,
+    int? expectedSize,
+  }) async {
+    await _ensureStarted();
+    await _sweepExpiredUploads();
+
+    if (expectedSize != null && expectedSize > maxUploadBytes) {
+      throw PluginUploadException(
+        'error.too_large',
+        'expectedSize exceeds $maxUploadBytes bytes',
+      );
+    }
+    if (expectedSize != null && expectedSize <= 0) {
+      throw const PluginUploadException(
+        'error.invalid_params',
+        'expectedSize must be positive',
+      );
+    }
+
+    final active = _uploads.values.where((u) => u.pluginId == pluginId).length;
+    if (active >= maxActiveUploadsPerPlugin) {
+      throw const PluginUploadException(
+        'error.too_many_requests',
+        'too many active uploads for this plugin',
+      );
+    }
+
+    final token = _generateToken();
+    final dir = await _uploadDir();
+    final session = _UploadSession(
+      pluginId: pluginId,
+      tempFile: File(p.join(dir.path, '$token.part')),
+      maxBytes: maxUploadBytes,
+      expiresAt: DateTime.now().add(uploadTtl),
+    );
+    _uploads[token] = session;
+
+    return (
+      writeToken: token,
+      uploadUrl: '$origin/w/$token',
+      expiresAt: session.expiresAt,
+      maxBytes: maxUploadBytes,
+    );
+  }
+
+  /// לוקח העלאה שהושלמה, פעם אחת. מחזיר `null` אם ה-token אינו מוכר, אינו של
+  /// התוסף הזה, פג, או שה-PUT טרם הושלם — כולם מתמזגים לכשל אחד בכוונה, כדי
+  /// שלא ניתן יהיה להסיק דבר על token של תוסף אחר.
+  Future<File?> takeUpload({
+    required String pluginId,
+    required String writeToken,
+  }) async {
+    final session = _uploads[writeToken];
+    if (session == null) return null;
+    if (session.pluginId != pluginId) return null;
+    if (session.isExpired) {
+      _uploads.remove(writeToken);
+      await _deleteQuietly(session.tempFile);
+      return null;
+    }
+    if (!session.received) return null;
+
+    _uploads.remove(writeToken);
+    return session.tempFile;
+  }
+
+  /// מבטל העלאה ומוחק את ה-temp שלה. ביטול „שמור בשם” עובר כאן.
+  Future<void> abortUpload({
+    required String pluginId,
+    required String writeToken,
+  }) async {
+    final session = _uploads[writeToken];
+    if (session == null || session.pluginId != pluginId) return;
+    _uploads.remove(writeToken);
+    await _deleteQuietly(session.tempFile);
+  }
+
+  /// מספר ההעלאות הפעילות של תוסף. לבדיקות ולאכיפת המגבלה.
+  int activeUploadsFor(String pluginId) =>
+      _uploads.values.where((u) => u.pluginId == pluginId).length;
+
   /// סוגר את השרת ומשחרר את כל ה-grants. בפרודקשן השרת חי לכל אורך חיי
   /// האפליקציה; משמש בעיקר לניקוי בין בדיקות.
   Future<void> close() async {
     _grants.clear();
+    // snapshot: PUT שבאוויר מסיר את ה-session שלו בזמן שאנחנו מוחקים temp,
+    // וזה מבטל את האיטרטור.
+    final sessions = _uploads.values.toList();
+    _uploads.clear();
+    for (final session in sessions) {
+      await _deleteQuietly(session.tempFile);
+    }
     await _server?.close(force: true);
     _server = null;
   }
 
   void revoke(String token) => _grants.remove(token);
 
-  void revokeAllForPlugin(String pluginId) =>
-      _grants.removeWhere((_, grant) => grant.pluginId == pluginId);
+  Future<void> revokeAllForPlugin(String pluginId) async {
+    _grants.removeWhere((_, grant) => grant.pluginId == pluginId);
+    final tokens = _uploads.entries
+        .where((e) => e.value.pluginId == pluginId)
+        .map((e) => e.key)
+        .toList();
+    for (final token in tokens) {
+      final session = _uploads.remove(token);
+      if (session != null) await _deleteQuietly(session.tempFile);
+    }
+  }
+
+  Future<Directory> _uploadDir() async {
+    final dir = Directory(p.join(Directory.systemTemp.path, _uploadDirName));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  /// מוחק temp של העלאות שפגו, וגם שאריות `.part` מריצה קודמת שקרסה.
+  Future<void> _sweepExpiredUploads() async {
+    final expired = _uploads.entries
+        .where((e) => e.value.isExpired)
+        .map((e) => e.key)
+        .toList();
+    for (final token in expired) {
+      final session = _uploads.remove(token);
+      if (session != null) await _deleteQuietly(session.tempFile);
+    }
+
+    // שאריות מריצה שקרסה: אין להן session בזיכרון, ולכן אף אחד לא ימחק אותן.
+    try {
+      final dir = await _uploadDir();
+      final live = _uploads.values.map((u) => u.tempFile.path).toSet();
+      await for (final entry in dir.list(followLinks: false)) {
+        if (entry is! File || !entry.path.endsWith('.part')) continue;
+        if (live.contains(entry.path)) continue;
+        final age = DateTime.now().difference((await entry.stat()).modified);
+        if (age > uploadTtl) await _deleteQuietly(entry);
+      }
+    } catch (_) {
+      // ניקוי best-effort; אין להפיל בגללו העלאה.
+    }
+  }
+
+  Future<void> _deleteQuietly(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // קובץ שנעול או נמחק במקביל — אין מה לעשות.
+    }
+  }
 
   /// האם [uri] מצביעה לשרת הקבצים הפנימי (loopback + הפורט שהוקצה).
   bool isServerUri(Uri uri) {
@@ -110,7 +312,8 @@ class PluginFileServer {
     try {
       // loopback + token אקראי; מתירים גישת fetch מ-origin file:// (Origin: null).
       response.headers.set('Access-Control-Allow-Origin', '*');
-      response.headers.set('Access-Control-Allow-Headers', 'Range');
+      response.headers.set('Access-Control-Allow-Methods', 'GET, HEAD, PUT, OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'Range, Content-Type');
       response.headers.set(
         'Access-Control-Expose-Headers',
         'Content-Range, Accept-Ranges, Content-Length',
@@ -120,12 +323,20 @@ class PluginFileServer {
         response.statusCode = HttpStatus.noContent;
         return;
       }
+
+      final segments = request.uri.pathSegments;
+
+      // העלאה: PUT יחיד ל-/w/<writeToken>.
+      if (segments.length == 2 && segments[0] == 'w') {
+        await _handleUpload(request, segments[1]);
+        return;
+      }
+
       if (request.method != 'GET' && request.method != 'HEAD') {
         response.statusCode = HttpStatus.methodNotAllowed;
         return;
       }
 
-      final segments = request.uri.pathSegments;
       if (segments.length != 2 || segments[0] != 'f') {
         response.statusCode = HttpStatus.notFound;
         return;
@@ -170,7 +381,114 @@ class PluginFileServer {
     } catch (_) {
       // הזרם נקטע (ניווט/ביטול בצד התוסף) או שגיאת IO — אין מה לעשות מעבר לסגירה.
     } finally {
-      await response.close();
+      try {
+        await response.close();
+      } catch (_) {
+        // התשובה כבר נסגרה (דחיית העלאה מנתקת את ה-socket), או שהלקוח נעלם.
+      }
+    }
+  }
+
+  /// קולט את גוף ה-PUT אל קובץ ה-temp של ההעלאה.
+  ///
+  /// כל כשל מוחק את ה-temp ומסיים את ה-session: העלאה חלקית אינה יכולה להפוך
+  /// למסמך שנשמר. ה-token חד-פעמי — PUT שני על אותו token נדחה.
+  Future<void> _handleUpload(HttpRequest request, String token) async {
+    final response = request.response;
+
+    /// דחייה בלי לקרוא את הגוף.
+    ///
+    /// ב-Dart התשובה נשטפת רק אחרי שגוף הבקשה נצרך, ולכן לקוח שמצהיר על גוף
+    /// ואינו שולח אותו לא יראה את הסטטוס. `fetch(uploadUrl, { body: blob })`
+    /// תמיד שולח את הגוף עד הסוף, ולכן הוא מקבל את הסטטוס — גם כשהדחייה
+    /// הוחלטה לפני הבייט הראשון. `persistentConnection = false` מונע שימוש חוזר
+    /// בחיבור שגופו לא נצרך.
+    void reject(int statusCode) {
+      response.statusCode = statusCode;
+      response.persistentConnection = false;
+    }
+
+    if (request.method != 'PUT') {
+      reject(HttpStatus.methodNotAllowed);
+      return;
+    }
+
+    final session = _uploads[token];
+    // token לא מוכר, של תוסף אחר או שפג — כולם 404, בלי להסביר מה מהם.
+    if (session == null) {
+      reject(HttpStatus.notFound);
+      return;
+    }
+    if (session.isExpired) {
+      _uploads.remove(token);
+      await _deleteQuietly(session.tempFile);
+      reject(HttpStatus.gone);
+      return;
+    }
+    if (session.started) {
+      reject(HttpStatus.conflict);
+      return;
+    }
+
+    final declared = request.contentLength;
+    if (declared <= 0) {
+      reject(HttpStatus.lengthRequired);
+      return;
+    }
+    if (declared > session.maxBytes) {
+      reject(HttpStatus.requestEntityTooLarge);
+      return;
+    }
+
+    session.started = true;
+    final sink = session.tempFile.openWrite();
+    var closed = false;
+    var written = 0;
+
+    Future<void> closeSink() async {
+      if (closed) return;
+      closed = true;
+      try {
+        await sink.close();
+      } catch (_) {
+        // הזרם נקטע או כבר נסגר.
+      }
+    }
+
+    Future<void> discard() async {
+      await closeSink();
+      _uploads.remove(token);
+      await _deleteQuietly(session.tempFile);
+    }
+
+    try {
+      await for (final chunk in request) {
+        written += chunk.length;
+        // הגנה, לא מסלול צפוי: framing של HTTP קובע את אורך הגוף לפי
+        // Content-Length, ולכן גוף ארוך מהמוצהר אינו אמור להגיע לכאן בכלל.
+        // נשאר כי המחיר אפס והחלופה היא לכתוב לדיסק בלי גבול.
+        if (written > declared || written > session.maxBytes) {
+          await discard();
+          reject(HttpStatus.requestEntityTooLarge);
+          return;
+        }
+        sink.add(chunk);
+      }
+      await sink.flush();
+      await closeSink();
+
+      if (written != declared) {
+        // גוף קטוע: הצהיר יותר ממה ששלח.
+        await discard();
+        response.statusCode = HttpStatus.badRequest;
+        return;
+      }
+
+      session.received = true;
+      response.statusCode = HttpStatus.noContent;
+    } catch (_) {
+      await discard();
+      response.statusCode = HttpStatus.internalServerError;
     }
   }
 

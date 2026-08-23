@@ -152,6 +152,8 @@ if (response.success) {
 | `fs.resolveFileUrl` | 0.9.94 |
 | `fs.readTextFile` | 0.9.94 |
 | `fs.revokeFile` | 0.9.94 |
+| `fs.beginBinaryWrite` | 0.9.97 |
+| `fs.commitUserFileWrite` | 0.9.97 |
 | `feedback.sendEmail` | 0.9.89 |
 | `feedback.report` | 0.9.97 |
 | `feedback.hasReporterEmail` | 0.9.97 |
@@ -1743,14 +1745,20 @@ await Otzaria.call('fs.deleteFile', {
 ```javascript
 const res = await Otzaria.call('fs.pickUserFile', {
   title: 'בחר קובץ PDF',
-  extensions: ['pdf'] // אופציונלי
+  extensions: ['pdf'], // אופציונלי
+  access: 'read'       // אופציונלי: 'read' (ברירת מחדל) או 'readwrite'
 });
-// res.data = { cancelled: false, token, url, name, size }  — או { cancelled: true }
+// res.data = { cancelled: false, token, url, name, size, access }  — או { cancelled: true }
 if (res.success && !res.data.cancelled) {
   await Otzaria.call('storage.set', { key: 'lastFile', value: res.data.token });
   document.querySelector('iframe').src = res.data.url;
 }
 ```
+
+`access: 'readwrite'` (מגרסה 0.9.97) מבקש token שאפשר לכתוב אליו בחזרה דרך
+[`fs.commitUserFileWrite`](#fscommituserfilewrite), בלי דיאלוג נוסף. הוא דורש
+**גם** את ההרשאה `fs.user_files.write`, ובלעדיה מוחזר `error.permission_denied`.
+קריאה בלי `access` מקבלת token לקריאה בלבד, בדיוק כמו קודם.
 
 ### `fs.resolveFileUrl`
 **הרשאה:** `fs.user_files.read`
@@ -1775,6 +1783,73 @@ const { data } = await Otzaria.call('fs.resolveFileUrl', { token });
 const { data } = await Otzaria.call('fs.readTextFile', { token });
 // "תוכן הקובץ..."
 ```
+
+### `fs.beginBinaryWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+פותח העלאה ומחזיר לאן לשלוח את הבייטים. **הבייטים אינם עוברים בגשר ה-JS** —
+העברת קובץ כ-base64 ב-JSON-RPC מכפילה את הזיכרון ותוקעת את הממשק. במקום זה
+התוסף שולח `PUT` יחיד לשרת ה-loopback הפנימי, והכתיבה לדיסק נעשית רק
+ב-[`fs.commitUserFileWrite`](#fscommituserfilewrite).
+
+```javascript
+const { data } = await Otzaria.call('fs.beginBinaryWrite', {
+  purpose: 'user-file',      // הערך הנתמך היחיד כרגע
+  expectedSize: blob.size    // אופציונלי; נדחה מעל maxBytes
+});
+// data = { writeToken, uploadUrl, expiresAt, maxBytes }
+
+await fetch(data.uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': blob.type },
+  body: blob
+});
+```
+
+מגבלות: 100MB להעלאה, שתי העלאות פעילות לכל תוסף, וה-`writeToken` פג תוך שתי
+דקות. ה-`PUT` חייב לכלול `Content-Length` (`fetch` עם `body: blob` עושה זאת
+לבד), הוא חד-פעמי, והוא היחיד שמותר על ה-URL הזה. גוף חלקי או חורג נמחק ואינו
+יכול להפוך למסמך שנשמר.
+
+שגיאות: `error.too_large` (`expectedSize` מעל המגבלה), `error.too_many_requests`
+(יותר משתי העלאות), `error.unsupported` (`purpose` אחר), `error.permission_denied`.
+
+### `fs.commitUserFileWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+כותב העלאה שהושלמה אל קובץ של המשתמש. שני מסלולים:
+
+- **עם `targetToken`** — token שהתקבל מ-`pickUserFile({ access: 'readwrite' })`
+  או מ-commit קודם. נכתב במקום, בלי דיאלוג. זה „שמור”.
+- **בלי `targetToken`** — נפתח דיאלוג „שמור בשם”. זה גם המסלול של token
+  שנפתח לקריאה בלבד: הוא **אינו** יעד כתיבה חוקי ומוחזר עליו
+  `error.permission_denied`.
+
+```javascript
+// שמור בשם
+const { data } = await Otzaria.call('fs.commitUserFileWrite', {
+  writeToken: data.writeToken,
+  suggestedName: 'חידושים',
+  extension: 'docx',
+  title: 'שמירת המסמך'   // אופציונלי, כותרת הדיאלוג
+});
+// data = { cancelled: false, token, name, size }  — או { cancelled: true }
+
+// שמור (לאותו קובץ, בלי דיאלוג)
+await Otzaria.call('fs.commitUserFileWrite', {
+  writeToken: next.writeToken,
+  targetToken: data.token
+});
+```
+
+הכתיבה **אטומית**: הקובץ נכתב ל-staging באותה תיקייה ואז מוחלף ב-rename, ולכן
+כשל באמצע אינו הורס את הקובץ הקיים. ביטול הדיאלוג מחזיר `{ cancelled: true }`,
+מוחק את ההעלאה ואינו משנה שום הרשאה. ה-token שחוזר הוא token לכתיבה, כך
+שהשמירה הבאה יכולה להשתמש בו כ-`targetToken`.
+
+שגיאות: `error.not_found` (העלאה לא מוכרת, לא הושלמה, פגה או נצרכה כבר; או
+קובץ יעד שנמחק), `error.permission_denied` (token לקריאה בלבד),
+`error.invalid_params` (`writeToken` חסר).
 
 ### `fs.revokeFile`
 **הרשאה:** `fs.user_files.read`
