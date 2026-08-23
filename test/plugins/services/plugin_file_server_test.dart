@@ -607,22 +607,30 @@ void main() {
         expect(await held.temp.exists(), isFalse);
       });
 
-      test('commit שנתקע פג בסופו של דבר ומשוחרר', () async {
-        // מופע שנהרג באמצע „שמור בשם” אינו יכול להשאיר סלוט תפוס עד סוף
-        // הריצה — אין למי לנקות אותו.
-        final stuck = PluginFileServer(
-          commitTtl: const Duration(milliseconds: 300),
+      test('commit חי אינו פג גם אחרי הרבה זמן', () async {
+        // דיאלוג „שמור בשם” יכול להישאר פתוח זמן בלתי מוגבל, וה-sweep רץ בכל
+        // beginUpload של כל תוסף. אם שעון היה מוחק את ה-temp, ה-commit היה
+        // נכשל בדיוק ברגע שהמשתמש לוחץ „שמור”.
+        final shortLived = PluginFileServer(
+          uploadTtl: const Duration(milliseconds: 300),
         );
-        addTearDown(stuck.close);
-        final held = await uploadInCommit(stuck);
-        expect(stuck.activeUploadsFor('p1'), 1);
+        addTearDown(shortLived.close);
+        final held = await uploadInCommit(shortLived);
 
         await Future<void>.delayed(const Duration(milliseconds: 400));
-        // beginUpload מריץ sweep, וזה מה שמשחרר.
-        await stuck.beginUpload(pluginId: 'p2');
+        await shortLived.beginUpload(pluginId: 'p2');
+        await shortLived.beginUpload(pluginId: 'p3');
 
-        expect(stuck.activeUploadsFor('p1'), 0);
+        expect(await held.temp.exists(), isTrue);
+        expect(shortLived.activeUploadsFor('p1'), 1);
+
+        // מה שמשחרר הוא סיום הפעולה, לא הזמן.
+        await shortLived.finishCommit(
+          pluginId: 'p1',
+          writeToken: held.ticket.writeToken,
+        );
         expect(await held.temp.exists(), isFalse);
+        expect(shortLived.activeUploadsFor('p1'), 0);
       });
 
       test('finishCommit של תוסף אחר אינו נוגע בה', () async {

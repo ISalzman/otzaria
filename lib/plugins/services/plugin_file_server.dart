@@ -41,17 +41,12 @@ class _UploadSession {
     required this.tempFile,
     required this.maxBytes,
     required this.expiresAt,
-    required this.commitTtl,
   });
 
   final String pluginId;
   final File tempFile;
   final int maxBytes;
   final DateTime expiresAt;
-
-  /// כמה זמן commit יכול להיות פתוח. נדיב ביחס לכל דיאלוג שמירה סביר, וקצר
-  /// ביחס ל"לנצח".
-  final Duration commitTtl;
 
   /// ה-PUT התחיל. חוסם PUT שני על אותו token.
   bool started = false;
@@ -65,15 +60,15 @@ class _UploadSession {
 
   bool get committing => committingSince != null;
 
-  /// ה-TTL חל על שלב ההעלאה בלבד: דיאלוג שמירה יכול להימשך יותר משתי דקות,
-  /// והקובץ לא יכול להיעלם מתחת לידי המשתמש. אבל commit אינו יכול להיות
-  /// פתוח לנצח — מופע שנהרג באמצע היה משאיר סלוט תפוס במכסה עד סוף הריצה,
-  /// ואין למי לנקות אותו (close/revokeAllForPlugin אינם נקראים במחזור החיים).
-  bool get isExpired {
-    final since = committingSince;
-    if (since != null) return DateTime.now().difference(since) > commitTtl;
-    return DateTime.now().isAfter(expiresAt);
-  }
+  /// ה-TTL חל על שלב ההעלאה בלבד.
+  ///
+  /// commit חי **אינו פג**, ולא בגלל אדיבות: הוא מריץ דיאלוג של המערכת, ואם
+  /// שעון היה מוחק את ה-temp מתחתיו — וה-sweep רץ בכל `beginUpload` של כל
+  /// תוסף — ה-commit היה נכשל בדיוק ברגע שהמשתמש לוחץ „שמור”. הניקוי קשור
+  /// לסיום הפעולה ולא לזמן: `finishCommit` נקרא ב-`finally` של ה-commit,
+  /// שרץ בצד ה-Host ולכן מסתיים גם אם ה-WebView של התוסף נעלם באמצע.
+  bool get isExpired =>
+      committingSince == null && DateTime.now().isAfter(expiresAt);
 }
 
 /// שרת `HttpServer` פנימי שמגיש קבצים אישיים של המשתמש ל-WebView של תוספים.
@@ -91,7 +86,6 @@ class PluginFileServer {
   PluginFileServer({
     this.maxUploadBytes = defaultMaxUploadBytes,
     this.uploadTtl = defaultUploadTtl,
-    this.commitTtl = defaultCommitTtl,
   });
 
   static final PluginFileServer instance = PluginFileServer();
@@ -113,12 +107,6 @@ class PluginFileServer {
   final Duration uploadTtl;
 
   static const Duration defaultUploadTtl = Duration(minutes: 2);
-
-  /// כמה זמן commit (כלומר דיאלוג „שמור בשם” פתוח) יכול להחזיק העלאה. פרמטר
-  /// ולא קונסטנטה, כדי שבדיקות יוכלו לאמת את השחרור.
-  final Duration commitTtl;
-
-  static const Duration defaultCommitTtl = Duration(minutes: 30);
 
   /// גיל מינימלי לשארית `.part` שאין לה session — כלומר מריצה שקרסה. נדיב
   /// בכוונה; ההעלאות עצמן נמחקות לפי [uploadTtl] ולא לפי זה.
@@ -220,7 +208,6 @@ class PluginFileServer {
       tempFile: File(p.join(dir.path, '$token.part')),
       maxBytes: maxUploadBytes,
       expiresAt: DateTime.now().add(uploadTtl),
-      commitTtl: commitTtl,
     );
     _uploads[token] = session;
 
@@ -306,9 +293,10 @@ class PluginFileServer {
   /// (טאב + רקע) שהיה מאבד את ההעלאה שלו.
   ///
   /// מופע שנסגר באמצע אינו מדליף לאורך זמן, וזה לא תלוי בקריאה כאן: העלאה
-  /// שלא הועלתה פגה תוך [uploadTtl], העלאה שב-commit פגה תוך
-  /// [commitTtl], ובשני המקרים ה-sweep מוחק את ה-temp. בלי
-  /// ה-token, שנעלם עם ה-WebView, איש אינו יכול לעשות בה commit.
+  /// שלא הועלתה פגה תוך [uploadTtl] וה-sweep מוחק את ה-temp, ו-commit שרץ
+  /// מסתיים בצד ה-Host גם אם ה-WebView נעלם — ה-`finally` שלו קורא
+  /// ל-[finishCommit]. אחרי הפעלה מחדש של האפליקציה אין sessions בזיכרון,
+  /// ולכן שאריות `.part` נמחקות כ-orphan (ראו [orphanMinAge]).
   Future<void> revokeAllForPlugin(String pluginId) async {
     _grants.removeWhere((_, grant) => grant.pluginId == pluginId);
     final tokens = _uploads.entries
