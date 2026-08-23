@@ -64,11 +64,12 @@ jobs:
 
       - name: Build Linux app
         env:
+          CFLAGS: -Wno-unknown-warning-option
+          CXXFLAGS: -Wno-unknown-warning-option
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          LIBRARY_PATH: /opt/wpe-sdk/lib
           PKG_CONFIG_PATH: /opt/wpe-sdk/lib/pkgconfig
           LD_LIBRARY_PATH: /opt/wpe-sdk/lib
-          LIBRARY_PATH: /opt/wpe-sdk/lib
-          CXXFLAGS: -Wno-unknown-warning-option
-          CFLAGS: -Wno-unknown-warning-option
         run: flutter build linux --release
 
       - name: Prepare app bundle
