@@ -58,6 +58,7 @@ import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
+import 'package:otzaria/plugins/bloc/plugin_updates_cubit.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_library_book_access.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_plugin_host_service.dart';
@@ -1172,6 +1173,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
             ),
+          ),
+          BlocProvider<PluginUpdatesCubit>(
+            lazy: true,
+            create: (_) => PluginUpdatesCubit(),
           ),
           BlocProvider<PluginSystemBloc>(
             create: (context) {
