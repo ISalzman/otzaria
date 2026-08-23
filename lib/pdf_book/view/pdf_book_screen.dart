@@ -427,6 +427,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _readerFocusAndHideQueued = false;
   bool _bookHasCommentaryLinks = false;
 
+  /// מצב יד — גרירת עכבר גוללת את הדף במקום לסמן טקסט (issue #916).
+  bool _isHandMode = false;
+
   /// פעיל רק בפתיחה לעמוד שאינו ראשון (דף יומי, חיפוש, היסטוריה,
   /// קישור מטקסט). כשהדגל true:
   ///   1. ה-overlay נשאר על המסך עד שה-layout מתייצב על עמוד היעד.
@@ -1384,6 +1387,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: 0.2,
+      textSelectionParams: PdfTextSelectionParams(enabled: !_isHandMode),
       panAxis: pdfPanAxis(isMobile: Platform.isAndroid || Platform.isIOS),
       interactionDelegateProvider:
           const PdfViewerScrollInteractionDelegateProviderPhysics(),
@@ -1798,13 +1802,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   onTap: () {
                     _pdfViewFocusNode.requestFocus();
                   },
-                  child: PdfViewer(
-                    _pdfDocumentRef,
-                    controller: widget.tab.pdfViewerController,
-                    initialPageNumber: widget.tab.pageNumber < 1
-                        ? 1
-                        : widget.tab.pageNumber,
-                    params: _buildPdfViewerParams(layoutMode),
+                  child: MouseRegion(
+                    cursor: _isHandMode ? AppCursors.grab : MouseCursor.defer,
+                    child: PdfViewer(
+                      _pdfDocumentRef,
+                      controller: widget.tab.pdfViewerController,
+                      initialPageNumber: widget.tab.pageNumber < 1
+                          ? 1
+                          : widget.tab.pageNumber,
+                      params: _buildPdfViewerParams(layoutMode),
+                    ),
                   ),
                 ),
         );
@@ -4826,6 +4833,18 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: _ensureSearchTabIsActive,
         compact: isCompact,
       ),
+      if (!Platform.isAndroid && !Platform.isIOS)
+        ActionButtonData.simple(
+          icon: _isHandMode
+              ? FluentIcons.hand_left_24_filled
+              : FluentIcons.hand_left_24_regular,
+          tooltip: _isHandMode
+              ? 'מצב יד פעיל — לחץ לחזרה לסימון טקסט'
+              : 'מצב יד — גלילה בגרירת העכבר',
+          selected: _isHandMode,
+          onPressed: () => setState(() => _isHandMode = !_isHandMode),
+          compact: isCompact,
+        ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
         tooltip: 'הגדל את התצוגה',
