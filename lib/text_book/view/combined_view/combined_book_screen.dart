@@ -1879,21 +1879,23 @@ class _CombinedViewState extends State<CombinedView> {
                         final selectionText = fixedPlain?.trim() ?? '';
                         if (selectionText.isNotEmpty && loadedState != null) {
                           unawaited(
-                            PluginRuntimeDispatcher.instance
-                                .dispatchEvent('reader.selection_changed', {
-                                  'text': selectionText,
-                                  'currentRef': loadedState.currentTitle ?? '',
-                                  'currentBook': loadedState.book.title,
-                                  'currentBookId': loadedState.book.title,
-                                  'currentIndex': foundIndex ?? 0,
-                                  'id': ?loadedState.book.id,
-                                  'type': PluginBookIdentity.typeOf(
-                                    loadedState.book,
-                                  ),
-                                  'source': PluginBookIdentity.sourceOf(
-                                    loadedState.book,
-                                  ),
-                                }),
+                            PluginRuntimeDispatcher.instance.dispatchEvent(
+                              'reader.selection_changed',
+                              {
+                                'text': selectionText,
+                                'currentRef': loadedState.currentTitle ?? '',
+                                'currentBook': loadedState.book.title,
+                                'currentBookId': loadedState.book.title,
+                                'currentIndex': foundIndex ?? 0,
+                                'id': ?loadedState.book.id,
+                                'type': PluginBookIdentity.typeOf(
+                                  loadedState.book,
+                                ),
+                                'source': PluginBookIdentity.sourceOf(
+                                  loadedState.book,
+                                ),
+                              },
+                            ),
                           );
                         }
                       }
@@ -2008,6 +2010,14 @@ class _CombinedViewState extends State<CombinedView> {
     final itemCount = state.readingSegments.isNotEmpty
         ? state.readingSegments.length
         : widget.data.length;
+    // כמו ב-buildOuterList: פתיחה במיקום הטאב (תצוגה מקדימה של תוצאת
+    // חיפוש נפתחת בקטע שנמצא, לא בראש הספר).
+    final initialIndex = state.readingSegments.isNotEmpty
+        ? segmentIndexForLine(state.readingSegments, widget.tab.index)
+        : widget.tab.index;
+    final clampedInitial = itemCount == 0
+        ? 0
+        : initialIndex.clamp(0, itemCount - 1);
 
     return ScrollablePositionedListScrollbar(
       scrollController: widget.tab.scrollController,
@@ -2016,6 +2026,7 @@ class _CombinedViewState extends State<CombinedView> {
       itemCount: itemCount,
       child: SmoothWheelScroll(
         child: ScrollablePositionedList.builder(
+          initialScrollIndex: clampedInitial,
           itemScrollController: widget.tab.scrollController,
           itemPositionsListener: widget.tab.positionsListener,
           scrollOffsetController: widget.tab.mainOffsetController,
