@@ -8,12 +8,11 @@ on:
 
 jobs:
   build_linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     container:
       image: debian:bookworm-slim
     steps:
       - name: Install container build dependencies
-        shell: bash
         run: |
           apt update -y
           apt install -y \
@@ -29,7 +28,7 @@ jobs:
         env:
           WPE_RUNTIME_VERSION: "2.48.7"
           WPE_RUNTIME_SHA256: "d89fa37074898afe3fb6087628f3c8b983f962c53651c393efafbed8556de49d"
-          WPE_RUNTIME_REPO: "/Otzaria/otzaria-wpe-runtime"
+          WPE_RUNTIME_REPO: "Otzaria/otzaria-wpe-runtime"
         run: |
           WPE_RUNTIME_TAG="wpe-${WPE_RUNTIME_VERSION}"
           WPE_RUNTIME_ASSET="wpe-runtime-${WPE_RUNTIME_VERSION}-linux-x86_64.tar.zst"
@@ -67,7 +66,6 @@ jobs:
           cache: true
 
       - name: Prepare Flutter dependencies
-        shell: bash
         run: |
           flutter pub get
 
@@ -83,7 +81,7 @@ jobs:
           LIBRARY_PATH: /opt/wpe-sdk/lib
           PKG_CONFIG_PATH: /opt/wpe-sdk/lib/pkgconfig
           LD_LIBRARY_PATH: /opt/wpe-sdk/lib
-        run: flutter build linux --release --verbose
+        run: flutter build linux --release
 
       - name: Prepare app bundle
         shell: bash
@@ -98,10 +96,16 @@ jobs:
           RPATH=$(patchelf --print-rpath $BUNDLE_DIR/lib/libzstandard_linux_plugin.so)
           patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
 
+          # Remove WPE Runtime libraries
+          rm -f $BUNDLE_DIR/lib/libwpe*.so
+          rm -f $BUNDLE_DIR/lib/libWPE*.so
+          rm -f $BUNDLE_DIR/lib/WPE*.so
+          rm -rf $BUNDLE_DIR/lib/cmake
+
           # portable.marker makes the raw package portable:
           # All data is stored in the otzaria_data folder next to the executable
           # See lib/core/app_paths.dart - isPortable
-          touch $BUNDLE_DIR/portable.marker
+          #touch $BUNDLE_DIR/portable.marker
 
           tar -czf otzaria-linux-app.tar.gz -C $BUNDLE_DIR .
 
@@ -143,7 +147,6 @@ jobs:
 
       - name: Build Linux DEB package
         if: false
-        shell: bash
         run: |
           dart pub global activate fastforge
           fastforge release --name=production --jobs=release-linux-deb
