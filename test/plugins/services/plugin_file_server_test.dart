@@ -264,7 +264,13 @@ void main() {
       return text;
     }
 
-    test('Content-Length מעל המגבלה נדחה ב-413', () async {
+    /// הנתיב שבו השרת מחזיק את ה-temp של העלאה. דטרמיניסטי לפי ה-token, ולכן
+    /// אפשר לאמת שלא נכתב בכלל.
+    File tempFileFor(String writeToken) => File(
+      '${Directory.systemTemp.path}/otzaria_plugin_uploads/$writeToken.part',
+    );
+
+    test('Content-Length מעל המגבלה נדחה לפני שנכתב בייט', () async {
       // שרת עם מגבלה קטנה, כדי לבדוק את מסלול הדחייה האמיתי בלי להעלות 100MB.
       final small = PluginFileServer(maxUploadBytes: 8);
       addTearDown(small.close);
@@ -278,10 +284,70 @@ void main() {
 
       expect(response.statusCode, HttpStatus.requestEntityTooLarge);
       await response.drain();
+      // העיקר: הדחייה על סמך הכותרת בלבד — הקובץ לא נוצר. בלי האסרשן הזאת
+      // הבדיקה עוברת גם אם המגבלה נאכפת רק אחרי שהבייטים ירדו לדיסק.
+      expect(await tempFileFor(ticket.writeToken).exists(), isFalse);
       expect(
         await small.takeUpload(pluginId: 'p1', writeToken: ticket.writeToken),
         isNull,
       );
+    });
+
+    group('פקיעת writeToken', () {
+      Future<PluginFileServer> expiredServer() async {
+        final server = PluginFileServer(
+          uploadTtl: const Duration(milliseconds: 1),
+        );
+        addTearDown(server.close);
+        return server;
+      }
+
+      test('PUT אחרי שה-token פג מוחזר 410 והקובץ אינו נוצר', () async {
+        final server = await expiredServer();
+        final ticket = await server.beginUpload(pluginId: 'p1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        final request = await client.putUrl(Uri.parse(ticket.uploadUrl));
+        request.contentLength = 3;
+        request.add(utf8.encode('abc'));
+        final response = await request.close();
+
+        expect(response.statusCode, HttpStatus.gone);
+        await response.drain();
+        expect(await tempFileFor(ticket.writeToken).exists(), isFalse);
+      });
+
+      test('commit אחרי פקיעה מחזיר null ומוחק את ה-temp', () async {
+        final server = await expiredServer();
+        final ticket = await server.beginUpload(pluginId: 'p1');
+        final request = await client.putUrl(Uri.parse(ticket.uploadUrl));
+        request.contentLength = 3;
+        request.add(utf8.encode('abc'));
+        await (await request.close()).drain();
+        expect(await tempFileFor(ticket.writeToken).exists(), isTrue);
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(
+          await server.takeUpload(
+            pluginId: 'p1',
+            writeToken: ticket.writeToken,
+          ),
+          isNull,
+        );
+        expect(await tempFileFor(ticket.writeToken).exists(), isFalse);
+        expect(server.activeUploadsFor('p1'), 0);
+      });
+
+      test('העלאה שפגה משוחררת מהמכסה בפתיחה הבאה', () async {
+        final server = await expiredServer();
+        await server.beginUpload(pluginId: 'p1');
+        await server.beginUpload(pluginId: 'p1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        // בלי ה-sweep שב-beginUpload שתי אלה היו חוסמות את המכסה לנצח.
+        expect(await server.beginUpload(pluginId: 'p1'), isNotNull);
+      });
     });
 
     test('גוף שעובר את המגבלה תוך כדי נעצר ואינו נשמר', () async {

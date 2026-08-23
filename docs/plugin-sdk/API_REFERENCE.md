@@ -1811,8 +1811,15 @@ await fetch(data.uploadUrl, {
 לבד), הוא חד-פעמי, והוא היחיד שמותר על ה-URL הזה. גוף חלקי או חורג נמחק ואינו
 יכול להפוך למסמך שנשמר.
 
-שגיאות: `error.too_large` (`expectedSize` מעל המגבלה), `error.too_many_requests`
-(יותר משתי העלאות), `error.unsupported` (`purpose` אחר), `error.permission_denied`.
+`purpose` חסר נחשב `'user-file'`. `expectedSize` הוא אופציונלי ומשמש לדחייה
+מוקדמת בלבד — המגבלה נאכפת בכל מקרה על ה-`Content-Length` ועל הבייטים בפועל.
+
+שגיאות: `error.too_large` (`expectedSize` מעל המגבלה), `error.invalid_params`
+(`expectedSize` אינו חיובי), `error.too_many_requests` (יותר משתי העלאות),
+`error.unsupported` (`purpose` אחר), `error.permission_denied`.
+
+תשובות ה-`PUT`: `204` הצלחה · `404` token לא מוכר · `410` פג · `409` העלאה שנייה
+על אותו token · `411` חסר `Content-Length` · `413` מעל המגבלה · `400` גוף קטוע.
 
 ### `fs.commitUserFileWrite`
 **הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
@@ -1847,9 +1854,16 @@ await Otzaria.call('fs.commitUserFileWrite', {
 מוחק את ההעלאה ואינו משנה שום הרשאה. ה-token שחוזר הוא token לכתיבה, כך
 שהשמירה הבאה יכולה להשתמש בו כ-`targetToken`.
 
+`extension` חייב להיות סיומת ממש (אותיות/ספרות, עד 10 תווים); כל דבר אחר
+מתעלמים ממנו, כדי שלא ייקבע דרכו נתיב או שם מלא בדיאלוג.
+
 שגיאות: `error.not_found` (העלאה לא מוכרת, לא הושלמה, פגה או נצרכה כבר; או
 קובץ יעד שנמחק), `error.permission_denied` (token לקריאה בלבד),
-`error.invalid_params` (`writeToken` חסר).
+`error.invalid_params` (`writeToken` חסר, או נתיב יעד שלא ניתן לפתור).
+
+הערת תאימות: ברגע שקובץ נבחר בגרסה שתומכת ב-`access`, ה-grant שלו נשמר בצורה
+החדשה. גרסה קודמת של אוצריא תמשיך לקרוא grants ותיקים שלא נשמרו מחדש, אך לא את
+החדשים.
 
 ### `fs.revokeFile`
 **הרשאה:** `fs.user_files.read`

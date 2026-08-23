@@ -2844,9 +2844,13 @@ class PluginBridgeAdapter {
         };
       }
 
-      final extension = (args['extension'] as String?)
-          ?.replaceAll('.', '')
-          .toLowerCase();
+      // רק סיומת ממש: כל דבר אחר עלול להגיע ל-fileName של הדיאלוג עם מפרידי
+      // נתיב, ולקבוע לאן הוא ייפתח — בניגוד לכלל שאין דרך להזין נתיב מה-JS.
+      final rawExtension = (args['extension'] as String?)?.toLowerCase().trim();
+      final extension =
+          rawExtension != null && RegExp(r'^\.?[a-z0-9]{1,10}$').hasMatch(rawExtension)
+          ? rawExtension.replaceAll('.', '')
+          : null;
       final suggested = _suggestedSaveName(
         args['suggestedName'] as String?,
         extension,
@@ -2927,16 +2931,28 @@ class PluginBridgeAdapter {
   /// ה-rename הקובץ המקורי שלם, ולכן כשל באמצע אינו מאבד את המסמך הקודם.
   Future<void> _atomicWrite(File source, String targetPath) async {
     final target = File(targetPath);
-    final suffix = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final suffix = _randomSuffix();
     final staging = File(
-      p.join(target.parent.path, '.${p.basename(targetPath)}.$suffix.otztmp'),
+      p.join(target.parent.path, '.${p.basename(targetPath)}.$suffix$_stagingExt'),
     );
 
+    // שאריות מכתיבה שנקטעה (קריסה בין ה-copy ל-rename) — אין להן שום מנגנון
+    // אחר שינקה אותן, והן יושבות בתיקיית המסמכים של המשתמש.
+    await _sweepStagingLeftovers(target.parent);
+
     try {
-      if (!await target.parent.exists()) {
-        await target.parent.create(recursive: true);
-      }
       await source.copy(staging.path);
+
+      // flush לפני ה-rename: File.copy אינו מבטיח שהבייטים ירדו לדיסק, ובלי
+      // זה rename שנרשם ל-journal לפני הנתונים יכול להשאיר יעד קטוע אחרי
+      // הפסקת חשמל. מול מות תהליך בלבד ה-rename מספיק; זה מכסה גם את השאר.
+      final handle = await staging.open(mode: FileMode.append);
+      try {
+        await handle.flush();
+      } finally {
+        await handle.close();
+      }
+
       try {
         await staging.rename(targetPath);
       } on FileSystemException {
@@ -2949,9 +2965,41 @@ class PluginBridgeAdapter {
       try {
         if (await staging.exists()) await staging.delete();
       } catch (_) {
-        // אין מה לעשות; ה-staging מוסתר ויימחק בניקוי הבא.
+        // נעול (אנטי-וירוס ב-Windows) — יימחק ב-sweep של הכתיבה הבאה לתיקייה.
       }
       rethrow;
+    }
+  }
+
+  static const String _stagingExt = '.otztmp';
+
+  /// suffix אקראי ולא חתימת זמן: שתי שמירות באותה מיקרו-שנייה היו מתנגשות.
+  String _randomSuffix() {
+    final random = math.Random.secure();
+    return List<int>.generate(8, (_) => random.nextInt(256))
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
+  /// מוחק קובצי staging נטושים בתיקיית היעד.
+  ///
+  /// גיל מינימלי, כדי לא למחוק staging של שמירה שמתרחשת במקביל בתוסף אחר.
+  Future<void> _sweepStagingLeftovers(Directory dir) async {
+    const minAge = Duration(minutes: 10);
+    try {
+      if (!await dir.exists()) return;
+      await for (final entry in dir.list(followLinks: false)) {
+        if (entry is! File || !entry.path.endsWith(_stagingExt)) continue;
+        final age = DateTime.now().difference((await entry.stat()).modified);
+        if (age < minAge) continue;
+        try {
+          await entry.delete();
+        } catch (_) {
+          // נעול או של תהליך אחר — לא בעיה שלנו.
+        }
+      }
+    } catch (_) {
+      // ניקוי best-effort; אין להפיל בגללו שמירה.
     }
   }
 

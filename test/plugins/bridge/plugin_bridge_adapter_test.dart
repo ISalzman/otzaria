@@ -2900,6 +2900,75 @@ Future<void> main() async {
       );
     });
 
+    test('כשל באמצע הכתיבה אינו פוגע בקובץ הקיים', () async {
+      final file = File(p.join(tempDir.path, 'protected.docx'))
+        ..writeAsStringSync('הגרסה שאסור לאבד');
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => file.path,
+      );
+      final picked =
+          await adapter.execute('fs', 'pickUserFile', {'access': 'readwrite'})
+              as Map;
+      final ticket =
+          await adapter.execute('fs', 'beginBinaryWrite', {}) as Map;
+      await upload(ticket['uploadUrl'] as String, 'גרסה חדשה');
+
+      // תיקייה לקריאה בלבד: ה-staging אינו יכול להיווצר, ולכן הכתיבה נכשלת
+      // בדיוק בשלב שבו הקובץ המקורי עוד שלם.
+      final dir = Directory(tempDir.path);
+      final mode = Process.runSync('stat', ['-f', '%Lp', dir.path]).stdout
+          .toString()
+          .trim();
+      Process.runSync('chmod', ['555', dir.path]);
+      addTearDown(() => Process.runSync('chmod', [mode, dir.path]));
+
+      await expectLater(
+        adapter.execute('fs', 'commitUserFileWrite', {
+          'writeToken': ticket['writeToken'],
+          'targetToken': picked['token'],
+        }),
+        throwsA(isA<Exception>()),
+      );
+
+      Process.runSync('chmod', [mode, dir.path]);
+      expect(file.readAsStringSync(), 'הגרסה שאסור לאבד');
+      expect(
+        Directory(tempDir.path)
+            .listSync()
+            .where((e) => e.path.endsWith('.otztmp'))
+            .toList(),
+        isEmpty,
+      );
+    }, skip: Platform.isWindows ? 'chmod אינו זמין ב-Windows' : null);
+
+    test('extension עם מפרידי נתיב אינו מגיע לדיאלוג', () async {
+      String? seenName;
+      List<String>? seenExtensions;
+      final target = p.join(tempDir.path, 'clean.docx');
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => null,
+        pickSaveLocation:
+            ({required suggestedName, allowedExtensions, title}) async {
+              seenName = suggestedName;
+              seenExtensions = allowedExtensions;
+              return target;
+            },
+      );
+
+      final ticket =
+          await adapter.execute('fs', 'beginBinaryWrite', {}) as Map;
+      await upload(ticket['uploadUrl'] as String, 'DOCX');
+      await adapter.execute('fs', 'commitUserFileWrite', {
+        'writeToken': ticket['writeToken'],
+        'suggestedName': 'מסמך',
+        'extension': '../../Windows/System32/x',
+      });
+
+      // סיומת לא חוקית נזרקת לגמרי; אין מפרידי נתיב בשם ואין בסינון.
+      expect(seenName, 'מסמך');
+      expect(seenExtensions, isNull);
+    });
+
     test('כתיבה ליעד שנמחק נדחית ומנקה את ה-grant', () async {
       final file = File(p.join(tempDir.path, 'gone.docx'))
         ..writeAsStringSync('x');

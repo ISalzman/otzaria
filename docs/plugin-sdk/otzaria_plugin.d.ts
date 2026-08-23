@@ -1200,18 +1200,27 @@ export interface ShortcutCreateResult {
   path?: string;
 }
 
-/** תוצאת `fs.pickUserFile` / `fs.resolveFileUrl`. */
+/** קובץ אישי מאושר — התוצאה של `fs.resolveFileUrl`. */
 export interface UserFileHandle {
-  cancelled?: boolean;
   /** מזהה אטום ששורד טעינה מחדש. יש לשמור אותו, לא את ה-URL. */
   token: string;
   /** URL מ-loopback, תקף לריצה הנוכחית בלבד (הפורט מתחלף). */
   url: string;
   name: string;
   size: number;
-  /** קיים מ-0.9.97. `readwrite` = ניתן לשמש כ-`targetToken` בכתיבה. */
-  access?: 'read' | 'readwrite';
 }
+
+/**
+ * תוצאת `fs.pickUserFile`. בביטול חוזר `{ cancelled: true }` בלבד, ולכן זהו
+ * union ולא אובייקט עם שדות אופציונליים.
+ */
+export type PickUserFileResult =
+  | { cancelled: true }
+  | ({
+      cancelled: false;
+      /** קיים מ-0.9.97. `readwrite` = ניתן לשמש כ-`targetToken` בכתיבה. */
+      access?: 'read' | 'readwrite';
+    } & UserFileHandle);
 
 /** תוצאת `fs.beginBinaryWrite` — לאן לשלוח את הבייטים ועד מתי. */
 export interface BinaryWriteTicket {

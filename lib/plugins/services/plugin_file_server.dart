@@ -69,7 +69,10 @@ class _UploadSession {
 /// אקראי בן 256 ביט. נתיב מה-URL אינו נוגע בדיסק — רק חיפוש token. כך אין
 /// path-traversal דרך ה-URL, ותוסף יכול לטעון רק קבצים שהמשתמש בחר במפורש.
 class PluginFileServer {
-  PluginFileServer({this.maxUploadBytes = defaultMaxUploadBytes});
+  PluginFileServer({
+    this.maxUploadBytes = defaultMaxUploadBytes,
+    this.uploadTtl = defaultUploadTtl,
+  });
 
   static final PluginFileServer instance = PluginFileServer();
 
@@ -86,7 +89,14 @@ class PluginFileServer {
   static const int defaultMaxUploadBytes = 100 * 1024 * 1024;
 
   /// חלון הזמן שבו ה-writeToken תקף. ההעלאה היא צעד אחד בשמירה, לא אחסון.
-  static const Duration uploadTtl = Duration(minutes: 2);
+  /// פרמטר ולא קונסטנטה, כדי שבדיקות יוכלו לאמת את מסלולי הפקיעה.
+  final Duration uploadTtl;
+
+  static const Duration defaultUploadTtl = Duration(minutes: 2);
+
+  /// גיל מינימלי לשארית `.part` שאין לה session — כלומר מריצה שקרסה. נדיב
+  /// בכוונה; ההעלאות עצמן נמחקות לפי [uploadTtl] ולא לפי זה.
+  static const Duration orphanMinAge = Duration(hours: 1);
 
   /// שתי העלאות במקביל מספיקות ל"שמור" ול"שמור בשם" שנלחצו יחד; יותר מזה הוא
   /// כבר תוסף שמשתמש בשרת כאחסון.
@@ -105,6 +115,9 @@ class PluginFileServer {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _server = server;
     server.listen(_handleRequest);
+    // שאריות `.part` מריצה שקרסה — עד 100MB לכל אחת. הניקוי כאן ולא רק
+    // ב-beginUpload, כדי שהן לא ימתינו לתוסף הבא שישמור.
+    await _sweepExpiredUploads();
   }
 
   String _generateToken() {
@@ -232,6 +245,7 @@ class PluginFileServer {
   /// האפליקציה; משמש בעיקר לניקוי בין בדיקות.
   Future<void> close() async {
     _grants.clear();
+    await _sweepExpiredUploads();
     // snapshot: PUT שבאוויר מסיר את ה-session שלו בזמן שאנחנו מוחקים temp,
     // וזה מבטל את האיטרטור.
     final sessions = _uploads.values.toList();
@@ -245,6 +259,13 @@ class PluginFileServer {
 
   void revoke(String token) => _grants.remove(token);
 
+  /// מנקה הכול עבור תוסף: grants והעלאות פעילות.
+  ///
+  /// מיועד להסרה/כיבוי של תוסף. **אינו נקרא מ-`PluginBridgeAdapter.dispose`
+  /// בכוונה:** ה-dispose הוא של מופע, ואותו תוסף יכול להחזיק מופע נוסף חי
+  /// (טאב + רקע) שהיה מאבד את ההעלאה שלו. מופע שנסגר באמצע העלאה אינו מדליף
+  /// לאורך זמן — ה-writeToken פג תוך [uploadTtl] וה-temp נמחק ב-sweep, ואיש
+  /// אינו יכול לעשות בו commit בלי ה-token שנעלם עם ה-WebView.
   Future<void> revokeAllForPlugin(String pluginId) async {
     _grants.removeWhere((_, grant) => grant.pluginId == pluginId);
     final tokens = _uploads.entries
@@ -275,6 +296,10 @@ class PluginFileServer {
     }
 
     // שאריות מריצה שקרסה: אין להן session בזיכרון, ולכן אף אחד לא ימחק אותן.
+    // הגיל נמדד מול [orphanMinAge] ולא מול [uploadTtl] בכוונה: התיקייה משותפת
+    // לכל מופעי השרת, וסף קצר היה גורם למופע אחד למחוק temp פעיל של אחר.
+    // ל-session חי אין בעיה כזאת — הוא מזוהה ב-live ומדולג — אבל מופע אחר
+    // אינו מופיע שם.
     try {
       final dir = await _uploadDir();
       final live = _uploads.values.map((u) => u.tempFile.path).toSet();
@@ -282,7 +307,7 @@ class PluginFileServer {
         if (entry is! File || !entry.path.endsWith('.part')) continue;
         if (live.contains(entry.path)) continue;
         final age = DateTime.now().difference((await entry.stat()).modified);
-        if (age > uploadTtl) await _deleteQuietly(entry);
+        if (age > orphanMinAge) await _deleteQuietly(entry);
       }
     } catch (_) {
       // ניקוי best-effort; אין להפיל בגללו העלאה.
