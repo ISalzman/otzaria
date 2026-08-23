@@ -499,6 +499,77 @@ void main() {
       );
     });
 
+    group('ביטול העלאה', () {
+      test('מוחק את ה-temp ומשחרר את המכסה מיד', () async {
+        final ticket = await server.beginUpload(pluginId: 'p1');
+        await (await put(ticket.uploadUrl, utf8.encode('abc'))).drain();
+        expect(await tempFileFor(ticket.writeToken).exists(), isTrue);
+
+        final aborted = await server.abortUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        );
+
+        expect(aborted, isTrue);
+        expect(server.activeUploadsFor('p1'), 0);
+        expect(await tempFileFor(ticket.writeToken).exists(), isFalse);
+      });
+
+      test('עובד גם על העלאה שטרם קיבלה בייטים', () async {
+        final ticket = await server.beginUpload(pluginId: 'p1');
+
+        expect(
+          await server.abortUpload(
+            pluginId: 'p1',
+            writeToken: ticket.writeToken,
+          ),
+          isTrue,
+        );
+        expect(server.activeUploadsFor('p1'), 0);
+      });
+
+      test('אידמפוטנטי — token שאינו קיים מחזיר true', () async {
+        expect(
+          await server.abortUpload(pluginId: 'p1', writeToken: 'deadbeef'),
+          isTrue,
+        );
+      });
+
+      test('תוסף אחר אינו יכול לבטל', () async {
+        final ticket = await server.beginUpload(pluginId: 'p1');
+
+        expect(
+          await server.abortUpload(
+            pluginId: 'p2',
+            writeToken: ticket.writeToken,
+          ),
+          isFalse,
+        );
+        expect(server.activeUploadsFor('p1'), 1);
+      });
+
+      test('אינו מבטל commit חי', () async {
+        // ביטול באמצע commit היה מוחק את ה-temp מתחת לדיאלוג „שמור בשם” פתוח.
+        final ticket = await server.beginUpload(pluginId: 'p1');
+        await (await put(ticket.uploadUrl, utf8.encode('abc'))).drain();
+        final file = await server.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        );
+        expect(file, isNotNull);
+
+        expect(
+          await server.abortUpload(
+            pluginId: 'p1',
+            writeToken: ticket.writeToken,
+          ),
+          isFalse,
+        );
+        expect(await file!.exists(), isTrue);
+        expect(server.activeUploadsFor('p1'), 1);
+      });
+    });
+
     test('revokeAllForPlugin מבטל גם העלאות פעילות', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
       // העלאה של תוסף אחר, כדי לוודא שהניקוי ממוקד.

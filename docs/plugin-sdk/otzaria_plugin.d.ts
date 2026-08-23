@@ -1335,6 +1335,7 @@ export type OtzariaMethod =
   | 'fs.revokeFile'
   | 'fs.beginBinaryWrite'
   | 'fs.commitUserFileWrite'
+  | 'fs.abortBinaryWrite'
   | 'fs.extractZip'
   | 'fs.deleteFile'
   | 'shortcut.create'

@@ -2830,6 +2830,60 @@ Future<void> main() async {
       );
     });
 
+    test('abortBinaryWrite משחרר את ההעלאה ואת המכסה מיד', () async {
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => null,
+      );
+
+      final ticket =
+          await adapter.execute('fs', 'beginBinaryWrite', {}) as Map;
+      await upload(ticket['uploadUrl'] as String, 'DOCX');
+      final temp = File(
+        '${Directory.systemTemp.path}/otzaria_plugin_uploads/'
+        '${ticket['writeToken']}.part',
+      );
+      expect(temp.existsSync(), isTrue);
+      expect(fileServer.activeUploadsFor('test.plugin'), 1);
+
+      final aborted = await adapter.execute('fs', 'abortBinaryWrite', {
+        'writeToken': ticket['writeToken'],
+      });
+
+      expect(aborted, isTrue);
+      expect(temp.existsSync(), isFalse);
+      expect(fileServer.activeUploadsFor('test.plugin'), 0);
+      // ואחריו commit על אותו token נדחה — אין מה לכתוב.
+      await expectLater(
+        adapter.execute('fs', 'commitUserFileWrite', {
+          'writeToken': ticket['writeToken'],
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('not_found'),
+          ),
+        ),
+      );
+    });
+
+    test('abortBinaryWrite בלי writeToken נדחה', () async {
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => null,
+      );
+
+      await expectLater(
+        adapter.execute('fs', 'abortBinaryWrite', const <String, dynamic>{}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('invalid_params'),
+          ),
+        ),
+      );
+    });
+
     test('commit על writeToken לא מוכר נדחה', () async {
       final adapter = buildAdapter(
         pickFile: ({allowedExtensions, title}) async => null,

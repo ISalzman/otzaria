@@ -264,6 +264,28 @@ class PluginFileServer {
     await _deleteQuietly(session.tempFile);
   }
 
+  /// מבטל העלאה שטרם נכנסה ל-commit, ומוחק את ה-temp שלה.
+  ///
+  /// נצרך כשהתוסף מחליט שההעלאה אינה רלוונטית יותר — למשל שמירה שהמסמך שלה
+  /// הוחלף באמצע. בלי זה ה-temp והסלוט במכסה נתפסים עד שה-token פג.
+  ///
+  /// **אינו מבטל commit חי**: אם דיאלוג „שמור בשם” פתוח, מחיקת ה-temp הייתה
+  /// מפילה אותו. מחזיר `true` אם אין יותר העלאה פעילה עם ה-token הזה — כלומר
+  /// גם כשלא היה מה לבטל, כדי שהפעולה תהיה אידמפוטנטית.
+  Future<bool> abortUpload({
+    required String pluginId,
+    required String writeToken,
+  }) async {
+    final session = _uploads[writeToken];
+    if (session == null) return true;
+    if (session.pluginId != pluginId) return false;
+    if (session.committing) return false;
+
+    _uploads.remove(writeToken);
+    await _deleteQuietly(session.tempFile);
+    return true;
+  }
+
   /// מספר ההעלאות הפעילות של תוסף. לבדיקות ולאכיפת המגבלה.
   int activeUploadsFor(String pluginId) =>
       _uploads.values.where((u) => u.pluginId == pluginId).length;

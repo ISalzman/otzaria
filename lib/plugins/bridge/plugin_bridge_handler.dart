@@ -350,6 +350,7 @@ class PluginBridgeHandler {
           // תלויה בארגומנט.
           case 'beginBinaryWrite':
           case 'commitUserFileWrite':
+          case 'abortBinaryWrite':
             return 'fs.user_files.write';
           // extractZip/deleteFile אינן דורשות הרשאת manifest: הן מגודרות בכך
           // שהנתיב חייב להיות בתוך תיקייה שהמשתמש בחר דרך ui.pickFolder

@@ -154,6 +154,7 @@ if (response.success) {
 | `fs.revokeFile` | 0.9.94 |
 | `fs.beginBinaryWrite` | 0.9.97 |
 | `fs.commitUserFileWrite` | 0.9.97 |
+| `fs.abortBinaryWrite` | 0.9.97 |
 | `feedback.sendEmail` | 0.9.89 |
 | `feedback.report` | 0.9.97 |
 | `feedback.hasReporterEmail` | 0.9.97 |
@@ -1871,6 +1872,22 @@ rename שנכשל מחזיר שגיאה, ולא מתדרדר להעתקה. אט�
 הערת תאימות: ברגע שקובץ נבחר בגרסה שתומכת ב-`access`, ה-grant שלו נשמר בצורה
 החדשה. גרסה קודמת של אוצריא תמשיך לקרוא grants ותיקים שלא נשמרו מחדש, אך לא את
 החדשים.
+
+### `fs.abortBinaryWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+מבטל העלאה שטרם נכתבה, ומשחרר מיד את הקובץ הזמני ואת מקומה במכסה. נצרך כשהתוסף
+מחליט שההעלאה אינה רלוונטית יותר — למשל שמירה שהמסמך שלה הוחלף באמצע. בלי
+הקריאה הזאת ההעלאה נתפסת עד שה-`writeToken` פג (שתי דקות).
+
+```javascript
+await Otzaria.call('fs.abortBinaryWrite', { writeToken });
+// data = true
+```
+
+אידמפוטנטי: `true` גם כשלא היה מה לבטל. מחזיר `false` כשה-`writeToken` שייך
+לתוסף אחר, או כש-[`fs.commitUserFileWrite`](#fscommituserfilewrite) שלו כבר רץ —
+ביטול באמצע commit היה מוחק את הקובץ מתחת לדיאלוג „שמור בשם” פתוח.
 
 ### `fs.revokeFile`
 **הרשאה:** `fs.user_files.read`

@@ -46,6 +46,7 @@ const Map<String, String> apiCallToPermissionHint = {
   'fs.revokeFile': 'fs.user_files.read',
   'fs.beginBinaryWrite': 'fs.user_files.write',
   'fs.commitUserFileWrite': 'fs.user_files.write',
+  'fs.abortBinaryWrite': 'fs.user_files.write',
 
   // history.*
   'history.list': 'history.read',

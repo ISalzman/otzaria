@@ -2673,6 +2673,15 @@ class PluginBridgeAdapter {
         return await _beginBinaryWrite(args);
       case 'commitUserFileWrite':
         return await _commitUserFileWrite(args);
+      case 'abortBinaryWrite':
+        final writeToken = args['writeToken'] as String?;
+        if (writeToken == null) {
+          throw Exception('error.invalid_params: writeToken required');
+        }
+        return await _fileServer.abortUpload(
+          pluginId: plugin.pluginId,
+          writeToken: writeToken,
+        );
       case 'resolveFileUrl':
         return await _resolveUserFileUrl(args);
       case 'readTextFile':
