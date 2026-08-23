@@ -185,7 +185,7 @@ void main() {
       return request.close();
     }
 
-    test('העלאה תקינה נקלטת ו-commit לוקח את הבייטים פעם אחת', () async {
+    test('העלאה תקינה נקלטת, ו-commit לוקח את הבייטים פעם אחת', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
       expect(ticket.uploadUrl, startsWith('${server.origin}/w/'));
       expect(ticket.maxBytes, PluginFileServer.defaultMaxUploadBytes);
@@ -202,9 +202,10 @@ void main() {
       );
       expect(file, isNotNull);
       expect(await file!.readAsBytes(), bytes);
-      expect(server.activeUploadsFor('p1'), 0);
+      // ה-session נשאר בבעלות השרת עד finishCommit — גם במכסה.
+      expect(server.activeUploadsFor('p1'), 1);
 
-      // חד-פעמי: אותו token לא נלקח פעמיים.
+      // חד-פעמי: commit שני אינו מקבל את הקובץ.
       expect(
         await server.takeUpload(
           pluginId: 'p1',
@@ -212,7 +213,13 @@ void main() {
         ),
         isNull,
       );
-      await file.delete();
+
+      await server.finishCommit(
+        pluginId: 'p1',
+        writeToken: ticket.writeToken,
+      );
+      expect(server.activeUploadsFor('p1'), 0);
+      expect(await file.exists(), isFalse);
     });
 
     test('PUT ללא Content-Length נדחה ב-411', () async {
@@ -538,31 +545,103 @@ void main() {
 
     test('close מוחק את קובצי ה-temp של העלאות פעילות', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
-      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
-      await response.drain();
+      await (await put(ticket.uploadUrl, utf8.encode('abc'))).drain();
+      final temp = tempFileFor(ticket.writeToken);
+      expect(await temp.exists(), isTrue);
 
-      final probe = await server.takeUpload(
-        pluginId: 'p1',
-        writeToken: ticket.writeToken,
-      );
-      // מחזירים אותו למצב "פעיל" כדי לבדוק את close: מעלים שוב.
-      await probe!.delete();
-      final second = await server.beginUpload(pluginId: 'p1');
-      final secondResponse = await put(second.uploadUrl, utf8.encode('abc'));
-      await secondResponse.drain();
-      final tempPath = (await server.takeUpload(
-        pluginId: 'p1',
-        writeToken: second.writeToken,
-      ))!.path;
-      // הוחזר, ולכן close לא אמור למחוק אותו — מנקים ידנית.
-      await File(tempPath).delete();
-
-      final third = await server.beginUpload(pluginId: 'p1');
-      final thirdResponse = await put(third.uploadUrl, utf8.encode('abc'));
-      await thirdResponse.drain();
       await server.close();
 
       expect(server.activeUploadsFor('p1'), 0);
+      expect(await temp.exists(), isFalse);
+    });
+
+    group('העלאה בזמן commit', () {
+      /// „שמור בשם” פותח דיאלוג, וכל עוד הוא פתוח הקובץ חייב להישאר בבעלות
+      /// השרת. אחרת הוא יתום: close ו-revoke אינם מכירים אותו, וה-sweep עלול
+      /// למחוק אותו מתחת לידיים.
+      Future<({PluginUploadTicket ticket, File temp})> uploadInCommit(
+        PluginFileServer target,
+      ) async {
+        final ticket = await target.beginUpload(pluginId: 'p1');
+        await (await put(ticket.uploadUrl, utf8.encode('abc'))).drain();
+        final file = await target.takeUpload(
+          pluginId: 'p1',
+          writeToken: ticket.writeToken,
+        );
+        expect(file, isNotNull);
+        return (ticket: ticket, temp: file!);
+      }
+
+      test('נספרת במכסה', () async {
+        final first = await uploadInCommit(server);
+        await server.beginUpload(pluginId: 'p1');
+
+        expect(server.activeUploadsFor('p1'), 2);
+        await expectLater(
+          server.beginUpload(pluginId: 'p1'),
+          throwsA(isA<PluginUploadException>()),
+        );
+
+        await server.finishCommit(
+          pluginId: 'p1',
+          writeToken: first.ticket.writeToken,
+        );
+        expect(server.activeUploadsFor('p1'), 1);
+      });
+
+      test('close מוחק גם אותה', () async {
+        final held = await uploadInCommit(server);
+
+        await server.close();
+
+        expect(await held.temp.exists(), isFalse);
+        expect(server.activeUploadsFor('p1'), 0);
+      });
+
+      test('revokeAllForPlugin מוחק גם אותה', () async {
+        final held = await uploadInCommit(server);
+
+        await server.revokeAllForPlugin('p1');
+
+        expect(await held.temp.exists(), isFalse);
+        expect(server.activeUploadsFor('p1'), 0);
+      });
+
+      test('אינה נמחקת ב-sweep גם אחרי שה-TTL עבר', () async {
+        // דיאלוג שמירה יכול להישאר פתוח יותר משתי דקות; ה-TTL חל על שלב
+        // ההעלאה בלבד.
+        // TTL קצר אך מספיק כדי להשלים PUT ו-takeUpload לפני שהוא עובר.
+        final shortLived = PluginFileServer(
+          uploadTtl: const Duration(milliseconds: 400),
+        );
+        addTearDown(shortLived.close);
+        final held = await uploadInCommit(shortLived);
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        // beginUpload מריץ sweep.
+        await shortLived.beginUpload(pluginId: 'p2');
+
+        expect(await held.temp.exists(), isTrue);
+        expect(shortLived.activeUploadsFor('p1'), 1);
+
+        await shortLived.finishCommit(
+          pluginId: 'p1',
+          writeToken: held.ticket.writeToken,
+        );
+        expect(await held.temp.exists(), isFalse);
+      });
+
+      test('finishCommit של תוסף אחר אינו נוגע בה', () async {
+        final held = await uploadInCommit(server);
+
+        await server.finishCommit(
+          pluginId: 'p2',
+          writeToken: held.ticket.writeToken,
+        );
+
+        expect(await held.temp.exists(), isTrue);
+        expect(server.activeUploadsFor('p1'), 1);
+      });
     });
   });
 }

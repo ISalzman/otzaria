@@ -54,7 +54,14 @@ class _UploadSession {
   /// ה-PUT הושלם והבייטים על הדיסק.
   bool received = false;
 
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
+  /// commit לקח את הקובץ ועובד עליו — ייתכן שדיאלוג „שמור בשם” פתוח כרגע.
+  /// כל עוד זה דלוק ה-session נשאר בבעלות השרת: הוא נספר במכסה, נמחק
+  /// ב-close/revoke, ואינו נחשב פג.
+  bool committing = false;
+
+  /// commit יכול לחכות למשתמש זמן בלתי מוגבל, ולכן ה-TTL חל על שלב ההעלאה
+  /// בלבד. בלי זה דיאלוג שמירה שנמשך מעל שתי דקות היה מאבד את הקובץ מתחת לידיו.
+  bool get isExpired => !committing && DateTime.now().isAfter(expiresAt);
 }
 
 /// שרת `HttpServer` פנימי שמגיש קבצים אישיים של המשתמש ל-WebView של תוספים.
@@ -205,9 +212,16 @@ class PluginFileServer {
     );
   }
 
-  /// לוקח העלאה שהושלמה, פעם אחת. מחזיר `null` אם ה-token אינו מוכר, אינו של
-  /// התוסף הזה, פג, או שה-PUT טרם הושלם — כולם מתמזגים לכשל אחד בכוונה, כדי
-  /// שלא ניתן יהיה להסיק דבר על token של תוסף אחר.
+  /// לוקח העלאה שהושלמה, פעם אחת, ומעביר אותה למצב commit.
+  ///
+  /// ה-session **אינו** מוסר כאן: „שמור בשם” פותח דיאלוג, וכל עוד הוא פתוח
+  /// הקובץ חייב להישאר בבעלות השרת — אחרת `close`, `revokeAllForPlugin`
+  /// וה-sweep אינם מכירים אותו, והוא מדליף או נמחק מתחת לידיים. הקורא מחויב
+  /// לסגור את המצב הזה ב-[finishCommit].
+  ///
+  /// `null` אם ה-token אינו מוכר, אינו של התוסף הזה, פג, שה-PUT טרם הושלם, או
+  /// שכבר נלקח — כולם מתמזגים לכשל אחד בכוונה, כדי שלא ניתן יהיה להסיק דבר
+  /// על token של תוסף אחר.
   Future<File?> takeUpload({
     required String pluginId,
     required String writeToken,
@@ -221,9 +235,23 @@ class PluginFileServer {
       return null;
     }
     if (!session.received) return null;
+    // חד-פעמי: commit שני על אותו token לא מקבל את הקובץ.
+    if (session.committing) return null;
 
-    _uploads.remove(writeToken);
+    session.committing = true;
     return session.tempFile;
+  }
+
+  /// מסיים commit: מסיר את ה-session ומוחק את ה-temp. חייב להיקרא בכל מסלול
+  /// יציאה מ-commit — הצלחה, ביטול או שגיאה.
+  Future<void> finishCommit({
+    required String pluginId,
+    required String writeToken,
+  }) async {
+    final session = _uploads[writeToken];
+    if (session == null || session.pluginId != pluginId) return;
+    _uploads.remove(writeToken);
+    await _deleteQuietly(session.tempFile);
   }
 
   /// מבטל העלאה ומוחק את ה-temp שלה. ביטול „שמור בשם” עובר כאן.

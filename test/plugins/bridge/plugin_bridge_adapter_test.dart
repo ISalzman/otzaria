@@ -2941,6 +2941,88 @@ Future<void> main() async {
       );
     }, skip: Platform.isWindows ? 'chmod אינו זמין ב-Windows' : null);
 
+    test('אין מסלול שכותב ישירות על קובץ היעד', () {
+      // בדיקת מקור ולא בדיקת התנהגות, בכוונה: כדי לתפוס fallback של copy
+      // צריך מצב שבו rename נכשל ו-copy מצליח, ואת זה אי אפשר לביים מקומית
+      // (rename באותה תיקייה נכשל רק כשגם copy ייכשל). מה שכן אפשר לקבע הוא
+      // שהמסלול הזה לא קיים בקוד — וזאת הדרישה: כשל rename נכשל, ולא מתדרדר
+      // להעתקה לא אטומית על מסמך של המשתמש.
+      final source = File(
+        'lib/plugins/bridge/plugin_bridge_adapter.dart',
+      ).readAsStringSync();
+      final atomicWrite = source.substring(
+        source.indexOf('Future<void> _atomicWrite('),
+        source.indexOf('static const String _stagingExt'),
+      );
+
+      expect(atomicWrite, contains('await staging.rename(targetPath)'));
+      expect(atomicWrite, isNot(contains('copy(targetPath)')));
+      expect(atomicWrite, isNot(contains('openWrite')));
+    });
+
+    test('כשל בהחלפת היעד אינו הורס אותו', () async {
+      // יעד שהוא תיקייה: ה-copy ל-staging מצליח וה-rename נכשל. זה בדיוק
+      // המסלול שבו fallback של copy היה כותב ישירות על היעד — כלומר על מסמך
+      // של המשתמש, בלי אטומיות.
+      final targetDir = Directory(p.join(tempDir.path, 'target-as-dir'))
+        ..createSync();
+      final marker = File(p.join(targetDir.path, 'inside.txt'))
+        ..writeAsStringSync('התוכן שאסור לאבד');
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => null,
+        pickSaveLocation:
+            ({required suggestedName, allowedExtensions, title}) async =>
+                targetDir.path,
+      );
+
+      final ticket =
+          await adapter.execute('fs', 'beginBinaryWrite', {}) as Map;
+      await upload(ticket['uploadUrl'] as String, 'DOCX');
+
+      await expectLater(
+        adapter.execute('fs', 'commitUserFileWrite', {
+          'writeToken': ticket['writeToken'],
+        }),
+        throwsA(isA<Exception>()),
+      );
+
+      // היעד לא נדרס, מה שבתוכו שלם, ואין שאריות staging.
+      expect(targetDir.existsSync(), isTrue);
+      expect(marker.readAsStringSync(), 'התוכן שאסור לאבד');
+      expect(
+        Directory(tempDir.path)
+            .listSync()
+            .where((e) => e.path.endsWith('.otztmp'))
+            .toList(),
+        isEmpty,
+      );
+    });
+
+    test('ביטול „שמור בשם” מוחק את קובץ ההעלאה', () async {
+      final adapter = buildAdapter(
+        pickFile: ({allowedExtensions, title}) async => null,
+        pickSaveLocation:
+            ({required suggestedName, allowedExtensions, title}) async => null,
+      );
+
+      final ticket =
+          await adapter.execute('fs', 'beginBinaryWrite', {}) as Map;
+      await upload(ticket['uploadUrl'] as String, 'DOCX');
+      final temp = File(
+        '${Directory.systemTemp.path}/otzaria_plugin_uploads/'
+        '${ticket['writeToken']}.part',
+      );
+      expect(temp.existsSync(), isTrue);
+
+      await adapter.execute('fs', 'commitUserFileWrite', {
+        'writeToken': ticket['writeToken'],
+      });
+
+      // ה-session נסגר ב-finally, ולכן ה-temp אינו נשאר יתום.
+      expect(temp.existsSync(), isFalse);
+      expect(fileServer.activeUploadsFor('test.plugin'), 0);
+    });
+
     test('extension עם מפרידי נתיב אינו מגיע לדיאלוג', () async {
       String? seenName;
       List<String>? seenExtensions;

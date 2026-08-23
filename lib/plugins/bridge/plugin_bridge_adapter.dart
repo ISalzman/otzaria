@@ -2882,12 +2882,13 @@ class PluginBridgeAdapter {
         'size': await File(canonical).length(),
       };
     } finally {
-      // ה-temp אינו נשאר בשום מסלול — הצלחה, ביטול או שגיאה.
-      try {
-        if (await upload.exists()) await upload.delete();
-      } catch (_) {
-        // נעול או נמחק במקביל.
-      }
+      // סוגר את ה-session ומוחק את ה-temp — בכל מסלול: הצלחה, ביטול או שגיאה.
+      // עד לרגע הזה ההעלאה בבעלות השרת, כדי שדיאלוג „שמור בשם” שפתוח לא ישאיר
+      // קובץ יתום.
+      await _fileServer.finishCommit(
+        pluginId: plugin.pluginId,
+        writeToken: writeToken,
+      );
     }
   }
 
@@ -2924,11 +2925,21 @@ class PluginBridgeAdapter {
     );
   }
 
-  /// מעתיק את ההעלאה ליעד בצורה אטומית: staging באותה תיקייה, ואז rename.
+  /// מעתיק את ההעלאה ליעד: staging באותה תיקייה, ואז rename.
   ///
-  /// ה-staging חייב לשבת באותה תיקייה כדי ש-rename יהיה באותו volume ולכן
-  /// אטומי; העלאה שיושבת ב-temp של המערכת עלולה להיות על volume אחר. עד
-  /// ה-rename הקובץ המקורי שלם, ולכן כשל באמצע אינו מאבד את המסמך הקודם.
+  /// ה-staging חייב לשבת באותה תיקייה כדי שה-rename יהיה באותו volume; העלאה
+  /// שיושבת ב-temp של המערכת עלולה להיות על volume אחר, ואז ה-rename נכשל או
+  /// מתדרדר להעתקה. עד ה-rename הקובץ המקורי שלם, ולכן כשל באמצע אינו מאבד
+  /// את המסמך הקודם.
+  ///
+  /// **אין fallback שכותב ישירות ליעד.** rename שנכשל הוא כשל של השמירה, וזה
+  /// בכוונה: העתקה על הקובץ הקיים היא בדיוק מה שהחוזה מבטיח שלא יקרה —
+  /// קריסה באמצעה משאירה את המסמך של המשתמש קטוע. עדיף להיכשל בגלוי ולהשאיר
+  /// את המקור שלם, והתוסף ינסה שוב או יציע „שמור בשם”.
+  ///
+  /// מה שכן מובטח: המקור אינו נהרס. אטומיות מלאה תלויה במערכת הקבצים —
+  /// התיעוד של `File.rename` אינו מבטיח אותה, ובפועל היא מתקיימת ב-POSIX
+  /// באותו volume וב-Windows דרך החלפה. לכן אין להצהיר „אטומי” בלי הסתייגות.
   Future<void> _atomicWrite(File source, String targetPath) async {
     final target = File(targetPath);
     final suffix = _randomSuffix();
@@ -2953,14 +2964,7 @@ class PluginBridgeAdapter {
         await handle.close();
       }
 
-      try {
-        await staging.rename(targetPath);
-      } on FileSystemException {
-        // מערכת קבצים שאינה מתירה rename על קובץ קיים. לא אטומי, ולכן רק
-        // כמסלול אחרון — אבל עדיף מלהשאיר את היעד חסר.
-        await staging.copy(targetPath);
-        await staging.delete();
-      }
+      await staging.rename(targetPath);
     } catch (_) {
       try {
         if (await staging.exists()) await staging.delete();
