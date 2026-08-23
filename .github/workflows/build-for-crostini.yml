@@ -21,7 +21,7 @@ jobs:
             build-essential ninja-build clang lld cmake \
             liblzma-dev libgtk-3-dev libcurl4-openssl-dev \
             libglib2.0-dev libsoup-3.0-dev libxkbcommon-dev \
-            libwebkit2gtk-4.1-dev libsecret-1-dev
+            libwebkit2gtk-4.1-dev libsecret-1-dev openjdk-17-jdk-headless
           git config --global --add safe.directory '*'
 
       - name: Download prebuilt WPE runtime SDK
