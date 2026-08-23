@@ -70,7 +70,7 @@ jobs:
           LIBRARY_PATH: /opt/wpe-sdk/lib
           PKG_CONFIG_PATH: /opt/wpe-sdk/lib/pkgconfig
           LD_LIBRARY_PATH: /opt/wpe-sdk/lib
-        run: flutter build linux --release
+        run: flutter build linux --release --verbose
 
       - name: Prepare app bundle
         shell: bash
