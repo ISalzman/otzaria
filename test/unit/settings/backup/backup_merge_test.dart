@@ -122,6 +122,54 @@ void main() {
       });
     });
 
+    test('הדיווחים השמורים נלקחים מהחדש, ומהישן כשאין חדש', () {
+      final merged = merge(
+        {
+          'reportQueues': {
+            'error_reports_queue': {
+              'pending': [
+                {'id': 'old'},
+              ],
+              'sent': [],
+            },
+          },
+        },
+        {
+          'reportQueues': {
+            'error_reports_queue': {
+              'pending': [
+                {'id': 'new'},
+              ],
+              'sent': [],
+            },
+          },
+        },
+      );
+      expect(
+        merged['reportQueues']['error_reports_queue']['pending'],
+        [
+          {'id': 'new'},
+        ],
+      );
+
+      final fromOlder = merge({
+        'reportQueues': {
+          'error_reports_queue': {
+            'pending': [
+              {'id': 'old'},
+            ],
+            'sent': [],
+          },
+        },
+      }, const {});
+      expect(
+        fromOlder['reportQueues']['error_reports_queue']['pending'],
+        [
+          {'id': 'old'},
+        ],
+      );
+    });
+
     test('חתימת מקור ההגדרות נשמרת עם הסעיף שנבחר', () {
       expect(
         merge(
