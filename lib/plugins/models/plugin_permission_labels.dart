@@ -201,6 +201,7 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
   ),
   'app.shortcuts': PluginPermissionInfo(
     label: 'קיצורי מקלדת',
+    icon: FluentIcons.keyboard_24_regular,
     description:
         'רישום קיצורי מקלדת שהתוסף מציע: הפעלת פקודות שלו או פעולות '
         'תפריט הלחיצה הימנית. הקיצורים נשלטים במסך הגדרות קיצורי המקשים.',
