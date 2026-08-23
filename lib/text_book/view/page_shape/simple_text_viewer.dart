@@ -425,6 +425,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _wasMenuFocused = false;
   String? _savedSelectedText;
   String? _contextMenuSelectedText;
+
+  /// זמן הלחיצה הימנית האחרונה — לזיהוי אירוע בחירה ריקה רגעי שהיא פולטת.
+  DateTime? _secondaryTapDownAt;
+
+  bool get _isWithinSecondaryTapWindow =>
+      _secondaryTapDownAt != null &&
+      DateTime.now().difference(_secondaryTapDownAt!) <
+          const Duration(milliseconds: 500);
   int? _savedSelectedIndex;
   // טווח אינדקסי השורות שבתוך הבחירה הנוכחית (כולל הקצוות). משמש כדי שלחיצה
   // ימנית ברווח שבין שורות נבחרות תזוהה כלחיצה "על הבחירה" ולא תבטל אותה —
@@ -2454,6 +2462,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                       contextMenuBuilder: (context, selectableRegionState) =>
                           const SizedBox.shrink(),
                       onSelectionChanged: (selection) {
+                        // לחיצה ימנית משמרת-בחירה פולטת אירוע בחירה ריקה רגעי;
+                        // עיבודו היה מוחק את הטקסט השמור ושובר את Ctrl+C (issue #937).
+                        if (selection != null &&
+                            selection.plainText.trim().isEmpty &&
+                            _isWithinSecondaryTapWindow) {
+                          return;
+                        }
                         if (selection != null &&
                             selection.plainText.trim().isNotEmpty) {
                           widget.selectionSyncController?.activate(
@@ -2762,6 +2777,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           // כך שגם כשלחיצה ימנית חוסמת את SelectableRegion ושומרת בחירה — האינדקס
           // עדיין נשמר עבור פעולות התפריט.
           onSecondaryTapDown: (details) {
+            _secondaryTapDownAt = DateTime.now();
             final root = context.findRenderObject();
             final selectedTextAtSecondaryTap =
                 _savedSelectedText?.trim().isNotEmpty == true
