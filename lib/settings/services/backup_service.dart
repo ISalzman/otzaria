@@ -541,11 +541,8 @@ class BackupService {
     ),
   ];
 
-  /// גיבוי הדיווחים השמורים — הממתינים לשליחה וההיסטוריה שנשלחה.
-  ///
-  /// הדיווחים נכנסים לסעיף ההגדרות: הם מנוהלים באותו מקום במסך ההגדרות
-  /// שבו נשמרת כתובת המייל, שכבר נכנסת לסעיף הזה. דיווח שממתין לשליחה
-  /// במצב לא-מקוון הוא תוכן שהמשתמש כתב, ואיפוס הגדרות מוחק אותו.
+  /// גיבוי הדיווחים השמורים — הממתינים לשליחה וההיסטוריה שנשלחה. נכנסים
+  /// לסעיף ההגדרות, שבו נשמרת כבר כתובת המייל שאליה הם משויכים.
   static Map<String, dynamic> _backupReportQueues(
     List<String> skippedSections,
   ) {
@@ -790,13 +787,15 @@ class BackupService {
     return hadFailures;
   }
 
-  /// שחזור הדיווחים השמורים (ראה [_backupReportQueues]).
-  ///
-  /// מיזוג ולא החלפה: דיווח שנוצר אחרי הגיבוי נשאר, ודיווח שכבר נשלח אינו
-  /// חוזר לתור — בלי זה שחזור של גיבוי ישן היה שולח שוב לצוות אוצריא כל
-  /// דיווח שנשלח מאז.
+  /// שחזור הדיווחים השמורים (ראה [_backupReportQueues]). ממזג ולא מחליף:
+  /// דיווח שנשלח מאז אינו חוזר לתור, אחרת היה נשלח שוב לצוות אוצריא.
   static Future<bool> _restoreReportQueues(Map<String, dynamic>? queues) async {
     if (queues == null || queues.isEmpty) return false;
+
+    // השליחה האוטומטית כותבת לאותם מפתחות אחרי בקשת רשת; בלי עצירה שלה
+    // הכתיבה כאן עלולה לדרוס את רשומת הנשלחים ולהחזיר דיווח שכבר נמסר.
+    await DirectErrorReportService.suspendAutomaticFlush();
+    await PluginReportService.suspendAutomaticFlush();
 
     var skipped = false;
     for (final queue in _reportQueues) {

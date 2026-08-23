@@ -69,6 +69,15 @@ class DirectErrorReportService {
 
   static Timer? _flushTimer;
   static bool _isFlushing = false;
+  static Completer<void>? _flushInFlight;
+
+  /// עוצר את השליחה האוטומטית וממתין לשליחה שבאמצע, כדי שכתיבה חיצונית לתור
+  /// (שחזור מגיבוי) לא תדרוס אותה. `startAutomaticFlush` מפעיל מחדש בעלייה.
+  static Future<void> suspendAutomaticFlush() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    await _flushInFlight?.future;
+  }
 
   final http.Client _client;
   final HiveListRepository<DirectErrorReport> _queueRepository;
@@ -289,6 +298,7 @@ class DirectErrorReportService {
     }
 
     _isFlushing = true;
+    final inFlight = _flushInFlight = Completer<void>();
     try {
       final pendingReports = await _queueRepository.load();
       if (pendingReports.isEmpty) {
@@ -338,6 +348,8 @@ class DirectErrorReportService {
       return sentCount;
     } finally {
       _isFlushing = false;
+      _flushInFlight = null;
+      inFlight.complete();
     }
   }
 

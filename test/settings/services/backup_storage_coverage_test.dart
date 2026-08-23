@@ -19,9 +19,8 @@ void main() {
   /// שמות ה-Hive boxes שנפתחים בקוד: `openBox…('name')`.
   final boxPattern = RegExp(r"""openBox[^(]*\(\s*'([^']+)'""");
 
-  /// `openBox…(kBoxName)` ו-`openBox…(Service.boxName)` — השם מגיע מקבוע,
-  /// ונפתר מהצהרתו בכל קובצי `lib`. בלי פתירה בין קבצים, box שנפתח דרך קבוע
-  /// של מחלקה אחרת נשמט מהסריקה כולה והשומר היה ירוק על מקום לא מוכרע.
+  /// `openBox…(kBoxName)` ו-`openBox…(Service.boxName)` — השם מגיע מקבוע ונפתר
+  /// מהצהרתו בכל קובצי `lib`; בלי פתירה בין קבצים ה-box נשמט מהסריקה כולה.
   final boxViaIdentifierPattern = RegExp(
     r"""openBox[^(]*\(\s*(?:[A-Za-z_]\w*\s*\.\s*)?([A-Za-z_]\w*)\s*[,)]""",
   );

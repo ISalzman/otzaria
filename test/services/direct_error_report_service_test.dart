@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -261,6 +262,47 @@ void main() {
         );
       },
     );
+  });
+
+  group('DirectErrorReportService.suspendAutomaticFlush', () {
+    test('ממתינה לשליחה שבאמצע, כדי שכתיבה חיצונית לא תדרוס אותה', () async {
+      final repository = InMemoryDirectErrorReportRepository();
+      final sentRepository = InMemoryDirectErrorReportRepository();
+      await repository.save([
+        _buildReport(
+          id: 'r-1',
+          queueType: DirectErrorReportQueueType.automaticRetry,
+        ),
+      ]);
+
+      final networkGate = Completer<http.Response>();
+      final service = DirectErrorReportService(
+        client: MockClient((_) => networkGate.future),
+        queueRepository: repository,
+        sentRepository: sentRepository,
+      );
+
+      final flush = service.flushPendingReports(onlyAutomaticRetry: true);
+      var suspended = false;
+      final suspend = DirectErrorReportService.suspendAutomaticFlush().then(
+        (_) => suspended = true,
+      );
+
+      await pumpEventQueue();
+      expect(
+        suspended,
+        isFalse,
+        reason: 'השחזור אינו יכול לכתוב לתור בזמן שהשליחה באוויר',
+      );
+
+      networkGate.complete(http.Response('', 200));
+      await flush;
+      await suspend;
+
+      expect(suspended, isTrue);
+      expect((await sentRepository.load()).single.id, 'r-1');
+      expect(await repository.load(), isEmpty);
+    });
   });
 
   group('DirectErrorReportService.submitReport', () {
