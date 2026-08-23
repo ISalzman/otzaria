@@ -4141,15 +4141,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   Widget _buildContent(BuildContext context) {
-    final wideScreen = MediaQuery.of(context).size.width >= 600;
     // מאזין לקיצורים כדי שהזום יתעדכן מיד עם שינוי ההגדרה, בלי לפתוח מחדש את הטאב.
     return BlocBuilder<SettingsBloc, SettingsState>(
       buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
-      builder: (context, _) => _buildShortcutScope(context, wideScreen),
+      builder: (context, _) => _buildShortcutScope(context),
     );
   }
 
-  Widget _buildShortcutScope(BuildContext context, bool wideScreen) {
+  Widget _buildShortcutScope(BuildContext context) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         // ב-Mac המוסכמה היא Cmd (Meta); בשאר הפלטפורמות Ctrl. שתי הגרסאות
@@ -4164,8 +4163,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         body: Column(
           children: [
             AppTopBar(
+              minCenterWidth: ReaderNavCenter.minTitleWidth,
               leadingItems: [
                 AppTopBarItem(
+                  flexible: true,
                   widget: BlocBuilder<PdfBookBloc, PdfBookState>(
                     buildWhen: (prev, curr) {
                       if (prev is PdfBookLoaded && curr is PdfBookLoaded) {
@@ -4204,10 +4205,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               center: _buildPdfCenter(context),
               trailingItems: [
                 AppTopBarItem(
-                  widget: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _buildPdfActions(context, wideScreen),
-                  ),
+                  flexible: true,
+                  widget: _buildPdfActions(context),
                 ),
               ],
             ),
@@ -4939,45 +4938,35 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     return result ?? false;
   }
 
-  List<Widget> _buildPdfActions(BuildContext context, bool wideScreen) {
-    final maxButtons = maxToolbarButtonsForWidth(
-      MediaQuery.of(context).size.width,
-    );
-
-    return [
-      ListenableBuilder(
-        listenable: PluginToolbarRegistry.instance,
-        builder: (context, _) => ResponsiveActionBar(
-          key: const ValueKey('pdf_actions'),
-          overflowMenuOffset: const Offset(0, 8),
-          overflowButtonKey: widget.enableTourTargets
-              ? pdfBookOverflowTourTargetKey
-              : null,
-          menuItemKeysByTooltip: widget.enableTourTargets
-              ? {
-                  'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
-                  'חיפוש': pdfBookOverflowSearchTourTargetKey,
-                  'הדפס': pdfBookOverflowPrintTourTargetKey,
-                }
-              : null,
-          actions: [
-            ..._buildDisplayOrderPdfActions(context),
-            ..._buildPluginActions(context),
-          ],
-          // מיזוג לפי משקל: פריטי תוסף עם order משתבצים בין הפריטים המובנים.
-          alwaysInMenu: mergeOrderedMenuActions(
-            _buildAlwaysInMenuPdfActions(context),
-            _buildOrderedPluginOverflowActions(context),
-          ),
-          // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
-          // הכפתורים שבראש תפריט ה-"...".
-          menuHeaderActions: widget.isInCombinedView
-              ? _buildNavigationActions()
-              : null,
-          maxVisibleButtons: maxButtons,
+  Widget _buildPdfActions(BuildContext context) {
+    return ListenableBuilder(
+      listenable: PluginToolbarRegistry.instance,
+      builder: (context, _) => ResponsiveActionBar(
+        key: const ValueKey('pdf_actions'),
+        overflowMenuOffset: const Offset(0, 8),
+        overflowButtonKey: widget.enableTourTargets
+            ? pdfBookOverflowTourTargetKey
+            : null,
+        menuItemKeysByTooltip: widget.enableTourTargets
+            ? {
+                'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
+                'חיפוש': pdfBookOverflowSearchTourTargetKey,
+                'הדפס': pdfBookOverflowPrintTourTargetKey,
+              }
+            : null,
+        actions: [
+          ..._buildDisplayOrderPdfActions(context),
+          ..._buildPluginActions(context),
+        ],
+        alwaysInMenu: mergeOrderedMenuActions(
+          _buildAlwaysInMenuPdfActions(context),
+          _buildOrderedPluginOverflowActions(context),
         ),
+        menuHeaderActions: widget.isInCombinedView
+            ? _buildNavigationActions()
+            : null,
       ),
-    ];
+    );
   }
 
   List<ActionButtonData> _buildPluginActions(BuildContext context) {
@@ -5031,6 +5020,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ),
         ),
         compact: isCompact,
+        actionId: ToolbarActionId.openCommentatorsTab,
       ),
       ActionButtonData(
         widget: BlocBuilder<PdfBookBloc, PdfBookState>(
@@ -5042,6 +5032,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ),
         icon: OtzariaIcons.book_open_small_24_regular,
         tooltip: 'מצב תצוגה',
+        actionId: ToolbarActionId.viewMode,
         onPressed: null,
       ),
       ActionButtonData.simple(
@@ -5050,6 +5041,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         tooltip: 'חיפוש',
         onPressed: _ensureSearchTabIsActive,
         compact: isCompact,
+        actionId: ToolbarActionId.search,
       ),
       if (!Platform.isAndroid && !Platform.isIOS)
         ActionButtonData.simple(
@@ -5068,12 +5060,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         tooltip: 'הגדל את התצוגה',
         onPressed: _zoomIn,
         compact: isCompact,
+        actionId: ToolbarActionId.zoomIn,
       ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_out_24_regular,
         tooltip: 'הקטן את התצוגה',
         onPressed: _zoomOut,
         compact: isCompact,
+        actionId: ToolbarActionId.zoomOut,
       ),
     ];
   }
@@ -5328,6 +5322,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         ),
         icon: OtzariaIcons.document_column_24_regular,
         tooltip: tooltip,
+        actionId: ToolbarActionId.parallelEdition,
         onPressed: () => _openParallelEdition(context, primary),
       );
     }
@@ -5335,6 +5330,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       icon: OtzariaIcons.document_column_24_regular,
       tooltip: tooltip,
       compact: compact,
+      actionId: ToolbarActionId.parallelEdition,
       onPressed: () => _openParallelEdition(context, primary),
       menuItems: [
         for (final edition in _parallelEditions)

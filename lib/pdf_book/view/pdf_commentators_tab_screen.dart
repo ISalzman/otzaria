@@ -835,6 +835,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     ? OtzariaIcons.alef_with_score_24_regular
                     : OtzariaIcons.alef_deletion_24_regular,
                 tooltip: _removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
+                actionId: ToolbarActionId.nikud,
                 onPressed: _toggleRemoveNikud,
               ),
               // פיסוק
@@ -851,6 +852,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     ? OtzariaIcons.alef_with_punctuation_24_regular
                     : OtzariaIcons.alef_with_eraser_24_regular,
                 tooltip: _removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
+                actionId: ToolbarActionId.punctuation,
                 onPressed: () => _toggleRemovePunctuation(),
               ),
               // הדפסת המפרשים המוצגים
@@ -864,6 +866,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 icon: FluentIcons.print_24_regular,
                 tooltip: 'הדפסה',
+                actionId: ToolbarActionId.print,
                 onPressed: () =>
                     _panelKey.currentState?.printDisplayedCommentaries(),
               ),
@@ -877,6 +880,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 icon: OtzariaIcons.search_24_regular,
                 tooltip: 'חיפוש',
+                actionId: ToolbarActionId.search,
                 onPressed: _openSearchPanel,
               ),
               // כיווץ/הרחבת כל המפרשים
@@ -903,6 +907,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 tooltip: _allExpandedInChild.value
                     ? 'כווץ את כל המפרשים'
                     : 'הרחב את כל המפרשים',
+                actionId: ToolbarActionId.expandAll,
                 onPressed: () => _panelKey.currentState?.toggleAllExpanded(),
               ),
               // הוסף סימניה
@@ -915,6 +920,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 icon: FluentIcons.bookmark_add_24_regular,
                 tooltip: 'הוסף סימניה',
+                actionId: ToolbarActionId.bookmarkAdd,
                 onPressed: () => _addBookmark(context),
               ),
               // הגדל גופן
@@ -927,6 +933,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 icon: FluentIcons.zoom_in_24_regular,
                 tooltip: 'הגדל את גודל הטקסט',
+                actionId: ToolbarActionId.zoomIn,
                 onPressed: () => _zoomIn(context),
               ),
               // הקטן גופן
@@ -939,6 +946,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                 ),
                 icon: FluentIcons.zoom_out_24_regular,
                 tooltip: 'הקטן את גודל הטקסט',
+                actionId: ToolbarActionId.zoomOut,
                 onPressed: () => _zoomOut(context),
               ),
             ],
