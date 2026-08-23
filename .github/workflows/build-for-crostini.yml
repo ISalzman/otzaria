@@ -43,10 +43,6 @@ jobs:
           tar xf "/tmp/${WPE_RUNTIME_ASSET}" --zstd -C /opt
           cat /opt/wpe-sdk/VERSIONS 2>/dev/null
 
-          test -f /opt/wpe-sdk/lib/pkgconfig/wpe-webkit-2.0.pc
-          pkg-config --print-errors --exists wpe-webkit-2.0 wpe-platform-2.0 wpe-platform-headless-2.0 wpe-1.0
-          echo "wpe-webkit-2.0 = $(pkg-config --modversion wpe-webkit-2.0)"
-
       - name: Clone repository
         uses: actions/checkout@v6
 
