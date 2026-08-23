@@ -1270,7 +1270,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
         );
         return true;
       case OpenDailyPageAction():
-        final Daf daf = getDafYomi(DateTime.now());
+        await _calendarCubit.initialized;
+        if (!mounted) return false;
+        final Daf daf = getDafYomi(_calendarCubit.state.todayGregorianDate);
         openDafYomiBook(
           context,
           daf.getMasechta(),

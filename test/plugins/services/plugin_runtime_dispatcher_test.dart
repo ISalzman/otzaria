@@ -300,6 +300,38 @@ void main() {
       _d.unregisterController(_kPid, instanceId: 'background');
     });
 
+    test('ניקוי מופע ישן אינו בעלים של controller חלופי', () {
+      final oldController = _FakeController();
+      final replacementController = _FakeController();
+      _d.registerController(
+        _kPid,
+        oldController,
+        instanceId: 'background',
+      );
+      _d.registerController(
+        _kPid,
+        replacementController,
+        instanceId: 'background',
+      );
+
+      expect(
+        _d.ownsController(
+          _kPid,
+          oldController,
+          instanceId: 'background',
+        ),
+        isFalse,
+      );
+      expect(
+        _d.ownsController(
+          _kPid,
+          replacementController,
+          instanceId: 'background',
+        ),
+        isTrue,
+      );
+    });
+
     test('invalidatePlugin על plugin לא רשום אינו קורס', () {
       expect(() => _d.invalidatePlugin('no.such.plugin'), returnsNormally);
     });
@@ -636,6 +668,33 @@ void main() {
       await _d.reloadPlugin(_kPid);
 
       expect(calls, equals(['fg']));
+    });
+
+    test('token של מופע ישן אינו מסיר callback חלופי', () async {
+      final oldOwner = Object();
+      final replacementOwner = Object();
+      var replacementCalled = false;
+      _d.registerReloadCallback(
+        _kPid,
+        () async {},
+        instanceId: 'background',
+        token: oldOwner,
+      );
+      _d.registerReloadCallback(
+        _kPid,
+        () async => replacementCalled = true,
+        instanceId: 'background',
+        token: replacementOwner,
+      );
+
+      _d.unregisterReloadCallback(
+        _kPid,
+        instanceId: 'background',
+        token: oldOwner,
+      );
+      await _d.reloadPlugin(_kPid);
+
+      expect(replacementCalled, isTrue);
     });
   });
 

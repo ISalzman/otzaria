@@ -18,9 +18,6 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
-// Constants
-const double _kMinQueryLength = 2;
-
 class SearchFacetFiltering extends StatefulWidget {
   final SearchingTab tab;
 
@@ -80,12 +77,11 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     );
   }
 
+  /// כל שינוי בשדה מפורסם ל-bloc, גם מחיקה לתו בודד: העץ נבנה מחדש רק
+  /// בתגובה ל-emit, ולכן דילוג על אורך שאינו מסנן היה משאיר אותו מסונן
+  /// לפי הטקסט הקודם.
   void _onQueryChanged(String query) {
-    if (query.length >= _kMinQueryLength) {
-      context.read<SearchBloc>().add(UpdateFilterQuery(query));
-    } else if (query.isEmpty) {
-      context.read<SearchBloc>().add(ClearFilter());
-    }
+    context.read<SearchBloc>().add(UpdateFilterQuery(query));
   }
 
   /// ב-Mac המוסכמה לריבוי בחירה היא Cmd+Click, בשאר הפלטפורמות Ctrl+Click.

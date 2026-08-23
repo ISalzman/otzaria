@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
@@ -170,5 +171,115 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       },
     );
+  });
+
+  group('TantivyDataProvider.isQuarantinedIndexSiblingName', () {
+    test('מזהה תיקיות _corrupted_ ו-_new_ של האינדקס הפעיל', () {
+      expect(
+        TantivyDataProvider.isQuarantinedIndexSiblingName(
+          'index_corrupted_123',
+          'index',
+        ),
+        isTrue,
+      );
+      expect(
+        TantivyDataProvider.isQuarantinedIndexSiblingName(
+          'index_new_456',
+          'index',
+        ),
+        isTrue,
+      );
+    });
+
+    test('לא מזהה את תיקיית האינדקס הפעילה עצמה או תיקיות לא-קשורות', () {
+      expect(
+        TantivyDataProvider.isQuarantinedIndexSiblingName('index', 'index'),
+        isFalse,
+      );
+      expect(
+        TantivyDataProvider.isQuarantinedIndexSiblingName(
+          'index_backup',
+          'index',
+        ),
+        isFalse,
+      );
+      expect(
+        TantivyDataProvider.isQuarantinedIndexSiblingName(
+          'other_index_corrupted_123',
+          'index',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('TantivyDataProvider.deleteQuarantinedIndexSiblings', () {
+    test(
+      'מוחק תיקיות _corrupted_/_new_ ליד האינדקס ומשאירה תיקיות אחרות',
+      () async {
+        // רגרסיה ל-issue #835 (BUG-07): תיקיות שהוזזו הצידה ב-_initEngine
+        // בכשל פתיחה כפול נשארו לנצח ותפחו לגדלים של GB-ים.
+        final parent = Directory.systemTemp.createTempSync(
+          'otzaria_index_gc_test_',
+        );
+        addTearDown(() {
+          if (parent.existsSync()) parent.deleteSync(recursive: true);
+        });
+
+        final indexPath = '${parent.path}/index';
+        Directory(indexPath).createSync(recursive: true);
+        final corrupted = Directory('${indexPath}_corrupted_111')
+          ..createSync(recursive: true);
+        final orphanedNew = Directory('${indexPath}_new_222')
+          ..createSync(recursive: true);
+        final unrelated = Directory('${parent.path}/other_index_corrupted_1')
+          ..createSync(recursive: true);
+
+        await TantivyDataProvider.deleteQuarantinedIndexSiblings(indexPath);
+
+        expect(Directory(indexPath).existsSync(), isTrue);
+        expect(corrupted.existsSync(), isFalse);
+        expect(orphanedNew.existsSync(), isFalse);
+        expect(unrelated.existsSync(), isTrue);
+      },
+    );
+
+    test('לא זורק כשתיקיית ההורה לא קיימת', () async {
+      final missingParent =
+          '${Directory.systemTemp.path}'
+          '/otzaria_missing_${DateTime.now().microsecondsSinceEpoch}';
+      await expectLater(
+        TantivyDataProvider.deleteQuarantinedIndexSiblings(
+          '$missingParent/index',
+        ),
+        completes,
+      );
+    });
+
+    test('אינו מוחק fallback פעיל מסוג _new_', () async {
+      final parent = Directory.systemTemp.createTempSync(
+        'otzaria_active_fallback_gc_test_',
+      );
+      addTearDown(() async {
+        if (parent.existsSync()) await parent.delete(recursive: true);
+      });
+
+      final indexPath = '${parent.path}/index';
+      final activeFallback = Directory('${indexPath}_new_222')
+        ..createSync(recursive: true);
+      final staleFallback = Directory('${indexPath}_new_111')
+        ..createSync(recursive: true);
+      final corrupted = Directory('${indexPath}_corrupted_333')
+        ..createSync(recursive: true);
+
+      await TantivyDataProvider.deleteQuarantinedIndexSiblings(
+        indexPath,
+        activeIndexPath: activeFallback.path,
+      );
+
+      expect(activeFallback.existsSync(), isTrue);
+      expect(staleFallback.existsSync(), isFalse);
+      expect(corrupted.existsSync(), isFalse);
+    });
   });
 }

@@ -355,6 +355,7 @@ class TantivyDataProvider {
 
     try {
       indexPath = await AppPaths.getIndexPath();
+      final canonicalIndexPath = indexPath;
       final parentDir = Directory(indexPath).parent;
       if (!parentDir.existsSync()) {
         parentDir.createSync(recursive: true);
@@ -415,6 +416,14 @@ class TantivyDataProvider {
       try {
         await sentinelFile.delete();
       } catch (_) {}
+
+      // ניקוי שרידי ההסגר רץ ברקע; fallback פעיל מסוג _new_ מוחרג ממנו.
+      unawaited(
+        deleteQuarantinedIndexSiblings(
+          canonicalIndexPath,
+          activeIndexPath: indexPath,
+        ),
+      );
 
       // טעינת מילון מורפולוגי לחיפוש המקורב (best-effort, לא חוסם).
       await _attachMagicDictionary(engine);
@@ -886,13 +895,62 @@ class TantivyDataProvider {
 
     for (final path in paths) {
       final dir = Directory(path);
-      if (!dir.existsSync()) continue;
-      try {
-        dir.deleteSync(recursive: true);
-        debugPrint('🧹 נמחקה תיקיית אינדקס: $path');
-      } catch (e) {
-        debugPrint('⚠️ כשל במחיקת תיקיית אינדקס $path: $e');
+      if (dir.existsSync()) {
+        try {
+          dir.deleteSync(recursive: true);
+          debugPrint('🧹 נמחקה תיקיית אינדקס: $path');
+        } catch (e) {
+          debugPrint('⚠️ כשל במחיקת תיקיית אינדקס $path: $e');
+        }
       }
+      await deleteQuarantinedIndexSiblings(path);
+    }
+  }
+
+  /// האם שם תיקייה הוא אינדקס שהועבר להסגר או fallback ישן מסוג `_new_`.
+  @visibleForTesting
+  static bool isQuarantinedIndexSiblingName(
+    String siblingName,
+    String activeIndexDirName,
+  ) =>
+      siblingName.startsWith('${activeIndexDirName}_corrupted_') ||
+      siblingName.startsWith('${activeIndexDirName}_new_');
+
+  /// מוחק, best-effort, תיקיות שריד-הסגר ליד [indexPath]. לא זורק —
+  /// נקרא גם באתחול רגיל (unawaited) וגם מ-[_deleteAllKnownIndexDirectories].
+  @visibleForTesting
+  static Future<void> deleteQuarantinedIndexSiblings(
+    String indexPath, {
+    String? activeIndexPath,
+  }) async {
+    final parent = Directory(indexPath).parent;
+    if (!await parent.exists()) return;
+    final activeDirName = p.basename(indexPath);
+    final normalizedActivePath = activeIndexPath == null
+        ? null
+        : p.normalize(p.absolute(activeIndexPath));
+
+    try {
+      await for (final entry in parent.list(followLinks: false)) {
+        if (entry is! Directory) continue;
+        final name = p.basename(entry.path);
+        if (!isQuarantinedIndexSiblingName(name, activeDirName)) continue;
+        if (normalizedActivePath != null &&
+            p.equals(
+              p.normalize(p.absolute(entry.path)),
+              normalizedActivePath,
+            )) {
+          continue;
+        }
+        try {
+          await entry.delete(recursive: true);
+          debugPrint('🧹 נמחקה תיקיית אינדקס נטושה: ${entry.path}');
+        } catch (e) {
+          debugPrint('⚠️ כשל במחיקת תיקיית אינדקס נטושה ${entry.path}: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ כשל בסריקת תיקיות אינדקס נטושות: $e');
     }
   }
 
@@ -915,10 +973,7 @@ class ReopenGate {
   Future<void>? _inFlight;
   DateTime? _lastRun;
 
-  Future<bool> run(
-    Future<void> Function() reopen, {
-    bool force = false,
-  }) async {
+  Future<bool> run(Future<void> Function() reopen, {bool force = false}) async {
     var inFlight = _inFlight;
     if (inFlight != null && !force) {
       debugPrint('⚠️ Index reopen already in progress, awaiting it...');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
+import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/view/external_result_title_row.dart';
@@ -207,6 +209,27 @@ class _ExternalSearchResultsSectionState
     return null;
   }
 
+  /// אפשרויות המילים האפקטיביות של הטאב, מנורמלות למצב החיפוש — אותה
+  /// סמנטיקה כמו המנוע המובנה, כך ששני המקורות מחפשים לפי אותן הגדרות.
+  Map<String, Map<String, bool>> _wordOptionsOf(SearchState state) =>
+      SearchQueryBuilder.normalizeParametersForMode(
+        state.configuration.searchMode,
+        searchOptions: widget.tab.effectiveSearchOptions(
+          query: state.searchQuery,
+        ),
+      ).searchOptions;
+
+  /// המפה הגלובלית של הטאב (במצב "אפשרויות לכל המילים"), מנורמלת למצב.
+  /// נשלחת לצד ה-wordOptions: מפתחות פר-מילה תלויים בטוקניזציה של המנוע
+  /// (מקף מפצל מילה), וספק שמפרק את השאילתה אחרת נופל למפה הזו.
+  Map<String, bool> _globalOptionsOf(SearchState state) =>
+      widget.tab.useGlobalSearchOptions.value
+      ? SearchQueryBuilder.normalizeGlobalOptionsForMode(
+          state.configuration.searchMode,
+          widget.tab.globalSearchOptions,
+        )
+      : const {};
+
   /// בחירת הקטגוריות הפעילה בעץ (בלי השורש ובלי ממדים) — הסינון של המדור.
   /// facet של ספר מתקפל לקטגוריית האם שלו.
   List<String> _selectedCategoryFacets(SearchState state) =>
@@ -241,7 +264,9 @@ class _ExternalSearchResultsSectionState
     final signature = active == null || query.isEmpty
         ? ''
         : '${active.$1} $query '
-              '${state.configuration.searchMode.name} ${state.distance}';
+              '${state.configuration.searchMode.name} ${state.distance} '
+              '${jsonEncode(_globalOptionsOf(state))} '
+              '${jsonEncode(_wordOptionsOf(state))}';
     final filterFacets = signature.isEmpty
         ? const <String>[]
         : _selectedCategoryFacets(state);
@@ -382,6 +407,8 @@ class _ExternalSearchResultsSectionState
         offset: offset,
         limit: _pageSize,
         ids: idsSlice,
+        options: _globalOptionsOf(state),
+        wordOptions: _wordOptionsOf(state),
         onUpdate: (partial) => applyPage(partial, done: false),
       );
       applyPage(page, done: true);

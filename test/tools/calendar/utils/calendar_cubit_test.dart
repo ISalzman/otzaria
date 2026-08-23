@@ -54,6 +54,8 @@ class _InMemorySettingsRepository implements SettingsRepository {
   String calendarZmanAlertsJson = '{}';
   String calendarEnabledZmanim = '';
   String savedEventsJson = '[]';
+  String selectedCity = 'ירושלים';
+  String calendarDayTransition = 'sunset';
 
   @override
   Future<void> updateCalendarEvents(String json) async {
@@ -64,14 +66,14 @@ class _InMemorySettingsRepository implements SettingsRepository {
   Future<Map<String, dynamic>> loadSettings() async {
     return {
       'calendarType': 'combined',
-      'selectedCity': 'ירושלים',
+      'selectedCity': selectedCity,
       'calendarEvents': '[]',
       'calendarNotificationsEnabled': false,
       'calendarNotificationTime': 60,
       'calendarNotificationSound': false,
       'calendarZmanAlerts': calendarZmanAlertsJson,
       'calendarEnabledZmanim': calendarEnabledZmanim,
-      'calendarDayTransition': 'sunset',
+      'calendarDayTransition': calendarDayTransition,
       'googleCalendarEnabled': false,
       'googleCalendarSelectedIds': 'primary',
       'googleCalendarSyncPastDays': 60,
@@ -98,6 +100,18 @@ class _InMemorySettingsRepository implements SettingsRepository {
 
   @override
   noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _DelayedSettingsRepository extends _InMemorySettingsRepository {
+  final Completer<void> _loadCompleter = Completer<void>();
+
+  @override
+  Future<Map<String, dynamic>> loadSettings() async {
+    await _loadCompleter.future;
+    return super.loadSettings();
+  }
+
+  void completeLoading() => _loadCompleter.complete();
 }
 
 /// SettingsRepository עם אירוע שמור + עיכוב מלאכותי ב-loadSettings.
@@ -284,6 +298,30 @@ void main() {
         transition: CalendarDayTransition.rabbeinuTam,
       );
       expect(afterRabbeinuTam, DateTime(2026, 4, 21));
+    });
+  });
+
+  group('CalendarCubit initialization', () {
+    test('initialized ממתין להגדרות שמגדירות את היום הלוחי', () async {
+      final settings = _DelayedSettingsRepository()
+        ..selectedCity = 'ניו יורק'
+        ..calendarDayTransition = 'midnight';
+      final cubit = CalendarCubit(
+        settingsRepository: settings,
+        notificationService: _FakeNotificationService(),
+      );
+      var isInitialized = false;
+      unawaited(cubit.initialized.then((_) => isInitialized = true));
+
+      await Future<void>.delayed(Duration.zero);
+      expect(isInitialized, isFalse);
+
+      settings.completeLoading();
+      await cubit.initialized;
+
+      expect(cubit.state.selectedCity, 'ניו יורק');
+      expect(cubit.state.dayTransition, CalendarDayTransition.midnight);
+      await cubit.close();
     });
   });
 

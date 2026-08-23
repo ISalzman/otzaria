@@ -9,7 +9,6 @@ import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// DataRepository acts as a centralized data access layer that coordinates between different
 /// data providers (file system, Hive storage, and Tantivy search engine).
@@ -212,13 +211,7 @@ class DataRepository {
     ];
   }
 
-  String _normalizeForSearch(String input) {
-    var cleaned = removeTeamim(removeVolwels(input));
-    cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-    cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
-    cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-    return cleaned.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  String _normalizeForSearch(String input) => _normalizeBookSearchText(input);
 }
 
 /// בונה [BookSearchEntry] לספר בודד. ה-lookups מוזרקים כדי לאפשר בדיקה
@@ -280,19 +273,25 @@ List<int> filterBookSearchEntries({
   required bool sortByRatio,
   required String normalizedQuery,
 }) {
+  // סינון הנושאים כמעט תמיד כבוי, ואז אף אחד לא קורא את קבוצת הנושאים של
+  // הרשומה — פיצול ובניית Set לכל ספר בכל הקלדה יהיו עבודה לאשפה.
+  final filtersByTopic = topics.isNotEmpty;
+
   final preparedEntries = entries.map((entry) {
     final normalizedTitle = _normalizeBookSearchText(entry.title);
     final normalizedAuthor = _normalizeBookSearchText(entry.author);
-    final topics = entry.topics
-        .split(',')
-        .map((topic) => topic.trim())
-        .where((topic) => topic.isNotEmpty)
-        .toSet();
+    final entryTopics = filtersByTopic
+        ? entry.topics
+              .split(',')
+              .map((topic) => topic.trim())
+              .where((topic) => topic.isNotEmpty)
+              .toSet()
+        : const <String>{};
 
     // כל המילים שמולן נבדקת השאילתה — כותרת, מחבר וכינויים יחד
     final searchWords = <String>{
       ...normalizedTitle.split(' '),
-      ...normalizedAuthor.split(' '),
+      if (normalizedAuthor.isNotEmpty) ...normalizedAuthor.split(' '),
       for (final acronym in entry.acronyms) ...acronym.split(' '),
     }..remove('');
 
@@ -300,7 +299,7 @@ List<int> filterBookSearchEntries({
       index: entry.index,
       normalizedTitle: normalizedTitle,
       searchWords: searchWords,
-      topics: topics,
+      topics: entryTopics,
       acronyms: entry.acronyms,
       eraOrder: entry.eraOrder,
       isUserBook: entry.isUserBook,
@@ -511,10 +510,54 @@ bool bookSearchWordMatchesFuzzy(String queryWord, String text) {
   return false;
 }
 
+/// חשיפה לבדיקת השקילות בלבד — ראה
+/// test/data/repository/book_search_normalization_test.dart
+@visibleForTesting
+String normalizeBookSearchTextForTesting(String input) =>
+    _normalizeBookSearchText(input);
+
+/// מסיר ניקוד, טעמים וגרשיים, ומחליף כל תו שאינו אות או ספרה ברווח.
+/// מעבר יחיד ולא שרשרת replaceAll — רץ על כל ספר בספרייה בכל הקלדה.
+/// שינוי כאן חייב לעבור את בדיקת השקילות למימוש הקודם ב-
+/// test/data/repository/book_search_normalization_test.dart
 String _normalizeBookSearchText(String input) {
-  var cleaned = removeTeamim(removeVolwels(input));
-  cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-  cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
-  cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-  return cleaned.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (input.isEmpty) return '';
+
+  final out = StringBuffer();
+  var pendingSpace = false;
+
+  for (var i = 0; i < input.length; i++) {
+    final c = input.codeUnitAt(i);
+
+    // ניקוד וטעמים נמחקים; מקף-חיבור ופסק הופכים לרווח
+    if (c >= 0x0591 && c <= 0x05C7) {
+      if (c == 0x05BE || c == 0x05C0) pendingSpace = true;
+      continue;
+    }
+
+    // גרשיים נמחקים בלי להשאיר רווח, כדי שרמב"ם ייקרא רמבם
+    if (c == 0x22 || c == 0x27 || c == 0x05F3 || c == 0x05F4) continue;
+
+    final int kept;
+    if (c >= 0x61 && c <= 0x7A) {
+      kept = c;
+    } else if (c >= 0x41 && c <= 0x5A) {
+      kept = c + 0x20;
+    } else if (c >= 0x30 && c <= 0x39) {
+      kept = c;
+    } else if (c >= 0x0590 && c <= 0x05FF) {
+      kept = c;
+    } else {
+      pendingSpace = true;
+      continue;
+    }
+
+    if (pendingSpace) {
+      pendingSpace = false;
+      if (out.isNotEmpty) out.writeCharCode(0x20);
+    }
+    out.writeCharCode(kept);
+  }
+
+  return out.toString();
 }

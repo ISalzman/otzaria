@@ -280,6 +280,19 @@ class SearchQueryBuilder {
     return result;
   }
 
+  /// כמו [normalizeParametersForMode] עבור מפת אפשרויות גלובלית אחת:
+  /// משאיר רק אפשרויות פעילות שהמצב תומך בהן (מקורב — ללא אפשרויות כלל).
+  static Map<String, bool> normalizeGlobalOptionsForMode(
+    SearchMode searchMode,
+    Map<String, bool> options,
+  ) {
+    final normalized = normalizeParametersForMode(
+      searchMode,
+      searchOptions: {'global_0': options},
+    ).searchOptions;
+    return normalized['global_0'] ?? const {};
+  }
+
   /// ההופכית של [expandGlobalOptionsToWords]: אפשרויות פר-מילה שכולן זהות
   /// מקורן במפה גלובלית אחת ומוחזרות אליה. null כשהן נבדלות בין מילים
   /// (מצב פר-מילה אמיתי) או כשאין אפשרויות כלל.

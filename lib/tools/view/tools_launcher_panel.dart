@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -184,8 +186,22 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   List<String>? _pendingBuiltInOrder;
   List<String>? _pendingPluginOrder;
 
+  /// אזור הרשימה כולו — קצוותיו הם אזורי גלילת הקצה בזמן גרירה.
+  final GlobalKey _listAreaKey = GlobalKey();
+
+  /// מסמן אפס-גובה אחרי השורה האחרונה — הגבול שמתחתיו שחרור הוא "לסוף".
+  final GlobalKey _listEndKey = GlobalKey();
+
+  /// גלילת הקצה בגרירה: הכיוון (1- למעלה, 1 למטה) והשעון שמניע אותה.
+  double _autoScrollDirection = 0;
+  Timer? _autoScrollTimer;
+
+  /// השורה שמציגה קו "אחרי" כשהגרירה מרחפת בשטח הריק שמתחת לרשימה.
+  String? _endDropIndicatorId;
+
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
     _searchController.dispose();
     _listScrollController.dispose();
     _searchFocusNode.dispose();
@@ -359,6 +375,88 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     }
   }
 
+  // ── שחרור בשטח הריק וגלילת קצה בגרירה ───────────────────────────────────────
+
+  /// היעד לשחרור בשטח הריק: השורה האחרונה בקבוצה של [source], או `null`
+  /// כשהמקור כבר אחרון ואין מה להזיז.
+  ToolCatalogEntry? _endOfGroupTarget(ToolCatalogEntry source) {
+    final last = _keyboardEntries.lastWhereOrNull(
+      (entry) =>
+          entry.isPlugin == source.isPlugin &&
+          entry.sortGroupPriority == source.sortGroupPriority,
+    );
+    return (last == null || last.toolId == source.toolId) ? null : last;
+  }
+
+  /// האם הסמן מתחת לשורה האחרונה — בשטח הריק של הרשימה.
+  bool _isBelowListRows(Offset globalPointer) {
+    final box = _listEndKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    return globalPointer.dy >= box.localToGlobal(Offset.zero).dy;
+  }
+
+  bool _acceptEndOfListDrop(DragTargetDetails<ToolCatalogEntry> details) {
+    final target = _isReorderEnabled && _isBelowListRows(details.offset)
+        ? _endOfGroupTarget(details.data)
+        : null;
+    _setEndDropIndicator(target?.toolId);
+    return target != null;
+  }
+
+  void _dropAtEndOfGroup(ToolCatalogEntry source) {
+    _onDragEnded();
+    final target = _endOfGroupTarget(source);
+    if (target == null) return;
+    _reorder(source: source, target: target, placeAfter: true);
+  }
+
+  void _setEndDropIndicator(String? toolId) {
+    if (toolId == _endDropIndicatorId) return;
+    setState(() => _endDropIndicatorId = toolId);
+  }
+
+  void _onDragEnded() {
+    _setEndDropIndicator(null);
+    _stopDragAutoScroll();
+  }
+
+  /// מזניק או עוצר את גלילת הקצה לפי מיקום הסמן באזור הרשימה.
+  void _updateDragAutoScroll(Offset globalPointer) {
+    final box = _listAreaKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return _stopDragAutoScroll();
+    final dy = box.globalToLocal(globalPointer).dy;
+    var direction = 0.0;
+    if (dy < _kListAutoScrollEdge) {
+      direction = -1;
+    } else if (dy > box.size.height - _kListAutoScrollEdge) {
+      direction = 1;
+    }
+    if (direction == 0) return _stopDragAutoScroll();
+    _autoScrollDirection = direction;
+    _autoScrollTimer ??= Timer.periodic(
+      _kListAutoScrollTick,
+      _onAutoScrollTick,
+    );
+  }
+
+  void _onAutoScrollTick(Timer _) {
+    if (!_listScrollController.hasClients) return _stopDragAutoScroll();
+    final position = _listScrollController.position;
+    final target =
+        (position.pixels + _autoScrollDirection * _kListAutoScrollStep).clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+    if (target == position.pixels) return _stopDragAutoScroll();
+    position.jumpTo(target);
+  }
+
+  void _stopDragAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    _autoScrollDirection = 0;
+  }
+
   /// פעולות השורה, בסדר שבו הן מוצגות בתפריט ⋯.
   List<ToolTileAction> _tileActions(
     ToolCatalogEntry entry, {
@@ -374,25 +472,23 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         label: 'הזזה',
         onTap: null,
         children: [
-          // לאייקוני החצים matchTextDirection, והמנוע מהפך אותם ב-RTL אחרי
-          // ההחלפה של RtlIcon — לכן מוצהר כאן הגליף כפי שייראה על המסך.
           ToolTileAction(
-            icon: FluentIcons.arrow_right_24_regular,
-            label: 'הזז קדימה',
+            icon: FluentIcons.arrow_up_24_regular,
+            label: 'הזז למעלה',
             onTap: onMoveEarlier,
           ),
           ToolTileAction(
-            icon: FluentIcons.arrow_left_24_regular,
-            label: 'הזז אחורה',
+            icon: FluentIcons.arrow_down_24_regular,
+            label: 'הזז למטה',
             onTap: onMoveLater,
           ),
           ToolTileAction(
-            icon: FluentIcons.arrow_next_24_regular,
+            icon: FluentIcons.arrow_upload_24_regular,
             label: 'הזז לתחילה',
             onTap: onMoveToStart,
           ),
           ToolTileAction(
-            icon: FluentIcons.arrow_previous_24_regular,
+            icon: FluentIcons.arrow_download_24_regular,
             label: 'הזז לסוף',
             onTap: onMoveToEnd,
           ),
@@ -625,26 +721,37 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       autofocus: false,
       onKeyEvent: (_, event) => _handleKey(event, entries),
       child: NavTreeFocusGroup(
-        child: ScrollConfiguration(
-          behavior: const EdgeScrollbarBehavior.right(),
-          child: ListView(
-            controller: _listScrollController,
-            padding: kNavTreeListPadding + EdgeInsets.only(bottom: bottomInset),
-            children: [
-              for (var i = 0; i < groups.length; i++) ...[
-                // קבוצות עוקבות באותה תווית (תוספים לפני/אחרי הכלים המובנים)
-                // נראות כמקטע אחד — הכותרת מוצגת רק במעבר תווית.
-                if (i == 0 || groups[i].label != groups[i - 1].label)
-                  NavTreeHeader(title: groups[i].label),
-                for (var j = 0; j < groups[i].entries.length; j++)
-                  _buildRow(
-                    group: groups[i].entries,
-                    indexInGroup: j,
-                    flatIndex: runningIndex++,
-                    openToolIds: openToolIds,
-                  ),
+        // היעד מאחורי הרשימה כולה: קולט שחרור בשטח הריק שמתחת לשורות, ומזין
+        // את גלילת הקצה בכל מקום שאין בו שורה קולטת.
+        child: DragTarget<ToolCatalogEntry>(
+          key: _listAreaKey,
+          onWillAcceptWithDetails: _acceptEndOfListDrop,
+          onMove: (details) => _updateDragAutoScroll(details.offset),
+          onLeave: (_) => _onDragEnded(),
+          onAcceptWithDetails: (details) => _dropAtEndOfGroup(details.data),
+          builder: (context, _, _) => ScrollConfiguration(
+            behavior: const EdgeScrollbarBehavior.right(),
+            child: ListView(
+              controller: _listScrollController,
+              padding:
+                  kNavTreeListPadding + EdgeInsets.only(bottom: bottomInset),
+              children: [
+                for (var i = 0; i < groups.length; i++) ...[
+                  // קבוצות עוקבות באותה תווית (תוספים לפני/אחרי הכלים המובנים)
+                  // נראות כמקטע אחד — הכותרת מוצגת רק במעבר תווית.
+                  if (i == 0 || groups[i].label != groups[i - 1].label)
+                    NavTreeHeader(title: groups[i].label),
+                  for (var j = 0; j < groups[i].entries.length; j++)
+                    _buildRow(
+                      group: groups[i].entries,
+                      indexInGroup: j,
+                      flatIndex: runningIndex++,
+                      openToolIds: openToolIds,
+                    ),
+                ],
+                SizedBox(key: _listEndKey, height: 0),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -677,6 +784,9 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
       key: ValueKey(entry.toolId),
       entry: entry,
       canDrag: canReorder,
+      showEndIndicator: entry.toolId == _endDropIndicatorId,
+      onDragOver: _updateDragAutoScroll,
+      onDragEnded: _onDragEnded,
       onAcceptSource: (source, {required placeAfter}) =>
           _reorder(source: source, target: entry, placeAfter: placeAfter),
       tile: ToolTile(
@@ -774,14 +884,26 @@ class _ReorderableToolTile extends StatefulWidget {
   final ToolCatalogEntry entry;
   final ToolTile tile;
   final bool canDrag;
+
+  /// קו "אחרי" כפוי — כשגרירה מרחפת בשטח הריק והשורה היא סוף קבוצת היעד.
+  final bool showEndIndicator;
   final void Function(ToolCatalogEntry source, {required bool placeAfter})
   onAcceptSource;
+
+  /// תזוזת גרירה מעל השורה — מזינה את גלילת הקצה של הרשימה.
+  final ValueChanged<Offset> onDragOver;
+
+  /// הגרירה עזבה את השורה או הסתיימה — עוצרת את גלילת הקצה.
+  final VoidCallback onDragEnded;
 
   const _ReorderableToolTile({
     super.key,
     required this.entry,
     required this.tile,
     required this.canDrag,
+    required this.showEndIndicator,
+    required this.onDragOver,
+    required this.onDragEnded,
     required this.onAcceptSource,
   });
 
@@ -814,12 +936,18 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
     return DragTarget<ToolCatalogEntry>(
       onWillAcceptWithDetails: (details) =>
           widget.canDrag && canReorderBetween(details.data, widget.entry),
-      onMove: (details) => _updateSide(details.data, details.offset),
+      onMove: (details) {
+        _updateSide(details.data, details.offset);
+        widget.onDragOver(details.offset);
+      },
+      onLeave: (_) => widget.onDragEnded(),
       onAcceptWithDetails: (details) =>
           widget.onAcceptSource(details.data, placeAfter: _placeAfter),
       builder: (context, candidates, _) {
         final tile = _DropInsertionIndicator(
-          placeAfter: candidates.isEmpty ? null : _placeAfter,
+          placeAfter: widget.showEndIndicator
+              ? true
+              : (candidates.isEmpty ? null : _placeAfter),
           child: widget.tile,
         );
         if (!widget.canDrag) return tile;
@@ -832,6 +960,7 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
                 dragAnchorStrategy: pointerDragAnchorStrategy,
                 feedback: feedback,
                 childWhenDragging: placeholder,
+                onDragEnd: (_) => widget.onDragEnded(),
                 child: tile,
               )
             : _SlopDraggable<ToolCatalogEntry>(
@@ -839,6 +968,7 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
                 dragAnchorStrategy: pointerDragAnchorStrategy,
                 feedback: feedback,
                 childWhenDragging: placeholder,
+                onDragEnd: (_) => widget.onDragEnded(),
                 child: tile,
               );
       },
@@ -851,6 +981,14 @@ class _ReorderableToolTileState extends State<_ReorderableToolTile> {
 /// ה-`Draggable` הרגיל תופס את המחווה כבר בפיקסל אחד בעכבר, ואז לחיצה שבה
 /// היד רעדה קלות אינה מגיעה ללחצן שבשורה — הכלי לא נפתח והתפריט לא נפתח.
 const double _kToolDragSlop = 12;
+
+/// עומק אזור הקצה שגרירה בתוכו גוללת את הרשימה, כמו ברצועת הכרטיסיות.
+const double _kListAutoScrollEdge = 40;
+
+/// קצב גלילת הקצה — פיקסלים לכל פעימה (פעימה לכל פריים בקירוב).
+const double _kListAutoScrollStep = 8;
+
+const Duration _kListAutoScrollTick = Duration(milliseconds: 16);
 
 /// מזהה גרירה מיידי עם סף תזוזה גדול מברירת המחדל. תומך במצביע מדויק בלבד:
 /// במגע הגרירה מתחילה בלחיצה ארוכה, כדי לא לחטוף את הגלילה.
@@ -895,6 +1033,7 @@ class _SlopDraggable<T extends Object> extends Draggable<T> {
     super.data,
     super.dragAnchorStrategy,
     super.childWhenDragging,
+    super.onDragEnd,
   });
 
   @override

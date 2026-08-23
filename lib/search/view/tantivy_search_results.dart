@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +15,7 @@ import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
+import 'package:otzaria/search/utils/index_freshness_warner.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
 import 'package:otzaria/search/view/external_search_results_section.dart';
@@ -352,6 +355,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       context.read<TabsBloc>().add(
         OpenOrFocusTab(tab, targetTitle: reference, insertAdjacent: true),
       );
+      unawaited(IndexFreshnessWarner.instance.warnIfContentDrifted(textBook));
     }
   }
 

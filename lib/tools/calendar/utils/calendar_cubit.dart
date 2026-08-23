@@ -326,11 +326,15 @@ class CalendarCubit extends Cubit<CalendarState> {
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
   final CalendarPluginSource _pluginCalendarAdapter;
+  final Completer<void> _initializationCompleter = Completer<void>();
   Timer? _todayRefreshTimer;
   int _pluginRefreshGeneration = 0;
 
   // Getter for accessing notification service from outside
   NotificationService get notificationService => _notificationService;
+
+  /// מסתיים לאחר שטעינת ההגדרות קבעה את היום הלוחי.
+  Future<void> get initialized => _initializationCompleter.future;
 
   CalendarCubit({
     SettingsRepository? settingsRepository,
@@ -452,6 +456,9 @@ class CalendarCubit extends Cubit<CalendarState> {
             : null,
       ),
     );
+    if (!_initializationCompleter.isCompleted) {
+      _initializationCompleter.complete();
+    }
     if (isClosed) return;
     _updateTimesForDate(selectedGregorianDate, selectedCity);
     await _rescheduleNotifications();
@@ -902,6 +909,9 @@ class CalendarCubit extends Cubit<CalendarState> {
   @override
   Future<void> close() {
     _todayRefreshTimer?.cancel();
+    if (!_initializationCompleter.isCompleted) {
+      _initializationCompleter.complete();
+    }
     return super.close();
   }
 

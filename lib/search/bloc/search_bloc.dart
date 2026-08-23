@@ -475,47 +475,16 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     );
   }
 
-  Future<void> _onUpdateFilterQuery(
+  /// שדה "איתור ספר" בחלונית סינון התוצאות. הסינון עצמו מתבצע ב-
+  /// [SearchNavigationTree] מול הספרים שיש להם תוצאות, ישירות מטקסט השדה —
+  /// ולכן כאן רק מפרסמים את השאילתה כדי שהעץ ייבנה מחדש. סינכרוני בכוונה:
+  /// חיפוש ספרייה כאן היה שורף שנייה של CPU בכל תו ומעכב את רענון העץ עד
+  /// שהסתיים.
+  void _onUpdateFilterQuery(
     UpdateFilterQuery event,
     Emitter<SearchState> emit,
-  ) async {
-    if (event.query.length < 3) {
-      emit(
-        state.copyWith(
-          filterQuery: event.query,
-          filteredBooks: null,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final results = await DataRepository.instance.findBooks(
-        event.query,
-        null,
-        sortByRatio: false,
-      );
-
-      emit(
-        state.copyWith(
-          filterQuery: event.query,
-          filteredBooks: results,
-        ),
-      );
-    } catch (e, stackTrace) {
-      // זיהוי שגיאה גם במסלול סינון הספרים — אחרת המשתמש רואה "אין תוצאות"
-      // ולא מבין שזו תקלה, בדיוק כמו במסלולי החיפוש הראשי וטעינת עוד.
-      // הסינון נורה על כל הקלדה, אך UiSnack מחזיק overlay יחיד שמתרענן
-      // (לא נערם), כך שאין הצפת toasts גם אם הכשל מתמשך.
-      debugPrint('❌ Book filter failed: $e\n$stackTrace');
-      UiSnack.showError(LibraryMessages.bookFilterError);
-      emit(
-        state.copyWith(
-          filterQuery: event.query,
-          filteredBooks: null,
-        ),
-      );
-    }
+  ) {
+    emit(state.copyWith(filterQuery: event.query));
   }
 
   void _onClearFilter(
