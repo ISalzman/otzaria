@@ -280,7 +280,7 @@ class PluginBridgeDependencies {
   pickFile;
 
   /// פותח דיאלוג „שמור בשם” ומחזיר את הנתיב שנבחר, או `null` אם המשתמש ביטל.
-  /// **אינו כותב** את הקובץ — הכתיבה נעשית באדפטר, אטומית. אופציונלי; אם לא
+  /// **אינו כותב** את הקובץ — הכתיבה נעשית באדפטר. אופציונלי; אם לא
   /// סופק, האדפטר משתמש ב-[FilePicker.saveFile]. קיים כדי לאפשר הזרקה בבדיקות.
   final Future<String?> Function({
     required String suggestedName,
@@ -2798,8 +2798,9 @@ class PluginBridgeAdapter {
   /// `fs.commitUserFileWrite` — כותב את ההעלאה לקובץ של המשתמש.
   ///
   /// שני מסלולים: `targetToken` של קובץ שנפתח עם `access: 'readwrite'` נכתב
-  /// במקום, בלי דיאלוג; בלעדיו נפתח „שמור בשם”. בשני המקרים הכתיבה אטומית —
-  /// staging באותה תיקייה ואז rename — ולכן כשל באמצע אינו הורס את הקובץ הקיים.
+  /// במקום, בלי דיאלוג; בלעדיו נפתח „שמור בשם”. בשני המקרים הכתיבה עוברת
+  /// staging באותה תיקייה ואז rename, ולכן **כשל אינו הורס את הקובץ הקיים** —
+  /// ראו [_atomicWrite] לגבי מה שמובטח ומה תלוי במערכת הקבצים.
   /// ביטול הדיאלוג מוחק את ה-temp ואינו משנה שום grant.
   Future<Map<String, dynamic>> _commitUserFileWrite(
     Map<String, dynamic> args,

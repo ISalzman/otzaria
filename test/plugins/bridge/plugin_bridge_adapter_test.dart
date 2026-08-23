@@ -2675,6 +2675,16 @@ Future<void> main() async {
               })
               as Map;
       expect(await fetch(resolved['url'] as String), 'DOCX1');
+      // ה-session שוחרר וה-temp נמחק. בלי האסרשן הזאת שמירה מוצלחת יכולה
+      // להדליף העלאה שנשארת committing לנצח — ואחרי שתיים התוסף חוסם את עצמו.
+      expect(fileServer.activeUploadsFor('test.plugin'), 0);
+      expect(
+        File(
+          '${Directory.systemTemp.path}/otzaria_plugin_uploads/'
+          '${ticket['writeToken']}.part',
+        ).existsSync(),
+        isFalse,
+      );
       // אין שאריות staging בתיקייה.
       expect(
         Directory(tempDir.path)
@@ -2716,6 +2726,14 @@ Future<void> main() async {
       expect(res['token'], picked['token']);
       expect(file.readAsStringSync(), 'גרסה שנייה');
       expect(saveDialogOpened, isFalse);
+      expect(fileServer.activeUploadsFor('test.plugin'), 0);
+      expect(
+        File(
+          '${Directory.systemTemp.path}/otzaria_plugin_uploads/'
+          '${ticket['writeToken']}.part',
+        ).existsSync(),
+        isFalse,
+      );
     });
 
     test('token לקריאה בלבד אינו יעד כתיבה, והקובץ אינו נוגע', () async {
@@ -2955,9 +2973,27 @@ Future<void> main() async {
         source.indexOf('static const String _stagingExt'),
       );
 
-      expect(atomicWrite, contains('await staging.rename(targetPath)'));
-      expect(atomicWrite, isNot(contains('copy(targetPath)')));
-      expect(atomicWrite, isNot(contains('openWrite')));
+      // קיבוע חיובי ולא רשימת איסורים: כל שורה שנוגעת ביעד מפורטת כאן, ולכן
+      // כל דרך חדשה לכתוב אליו — copy, writeAsBytes, openWrite — מפילה את
+      // הבדיקה. רשימת שלילות הייתה מפספסת בדיוק את הצורה שלא חשבנו עליה.
+      final targetLines = atomicWrite
+          .split('\n')
+          .map((line) => line.trim())
+          .where(
+            (line) =>
+                !line.startsWith('//') &&
+                !line.startsWith('///') &&
+                (line.contains('targetPath') || line.contains('target.')),
+          )
+          .toList();
+
+      expect(targetLines, [
+        'Future<void> _atomicWrite(File source, String targetPath) async {',
+        'final target = File(targetPath);',
+        "p.join(target.parent.path, '.\${p.basename(targetPath)}.\$suffix\$_stagingExt'),",
+        'await _sweepStagingLeftovers(target.parent);',
+        'await staging.rename(targetPath);',
+      ]);
     });
 
     test('כשל בהחלפת היעד אינו הורס אותו', () async {

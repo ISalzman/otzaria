@@ -41,6 +41,7 @@ class _UploadSession {
     required this.tempFile,
     required this.maxBytes,
     required this.expiresAt,
+    required this.commitTtl,
   });
 
   final String pluginId;
@@ -48,20 +49,31 @@ class _UploadSession {
   final int maxBytes;
   final DateTime expiresAt;
 
+  /// כמה זמן commit יכול להיות פתוח. נדיב ביחס לכל דיאלוג שמירה סביר, וקצר
+  /// ביחס ל"לנצח".
+  final Duration commitTtl;
+
   /// ה-PUT התחיל. חוסם PUT שני על אותו token.
   bool started = false;
 
   /// ה-PUT הושלם והבייטים על הדיסק.
   bool received = false;
 
-  /// commit לקח את הקובץ ועובד עליו — ייתכן שדיאלוג „שמור בשם” פתוח כרגע.
-  /// כל עוד זה דלוק ה-session נשאר בבעלות השרת: הוא נספר במכסה, נמחק
-  /// ב-close/revoke, ואינו נחשב פג.
-  bool committing = false;
+  /// מתי ה-commit התחיל — כלומר ייתכן שדיאלוג „שמור בשם” פתוח כרגע. כל עוד
+  /// זה מוגדר ה-session נשאר בבעלות השרת: נספר במכסה ונמחק ב-close/revoke.
+  DateTime? committingSince;
 
-  /// commit יכול לחכות למשתמש זמן בלתי מוגבל, ולכן ה-TTL חל על שלב ההעלאה
-  /// בלבד. בלי זה דיאלוג שמירה שנמשך מעל שתי דקות היה מאבד את הקובץ מתחת לידיו.
-  bool get isExpired => !committing && DateTime.now().isAfter(expiresAt);
+  bool get committing => committingSince != null;
+
+  /// ה-TTL חל על שלב ההעלאה בלבד: דיאלוג שמירה יכול להימשך יותר משתי דקות,
+  /// והקובץ לא יכול להיעלם מתחת לידי המשתמש. אבל commit אינו יכול להיות
+  /// פתוח לנצח — מופע שנהרג באמצע היה משאיר סלוט תפוס במכסה עד סוף הריצה,
+  /// ואין למי לנקות אותו (close/revokeAllForPlugin אינם נקראים במחזור החיים).
+  bool get isExpired {
+    final since = committingSince;
+    if (since != null) return DateTime.now().difference(since) > commitTtl;
+    return DateTime.now().isAfter(expiresAt);
+  }
 }
 
 /// שרת `HttpServer` פנימי שמגיש קבצים אישיים של המשתמש ל-WebView של תוספים.
@@ -79,6 +91,7 @@ class PluginFileServer {
   PluginFileServer({
     this.maxUploadBytes = defaultMaxUploadBytes,
     this.uploadTtl = defaultUploadTtl,
+    this.commitTtl = defaultCommitTtl,
   });
 
   static final PluginFileServer instance = PluginFileServer();
@@ -100,6 +113,12 @@ class PluginFileServer {
   final Duration uploadTtl;
 
   static const Duration defaultUploadTtl = Duration(minutes: 2);
+
+  /// כמה זמן commit (כלומר דיאלוג „שמור בשם” פתוח) יכול להחזיק העלאה. פרמטר
+  /// ולא קונסטנטה, כדי שבדיקות יוכלו לאמת את השחרור.
+  final Duration commitTtl;
+
+  static const Duration defaultCommitTtl = Duration(minutes: 30);
 
   /// גיל מינימלי לשארית `.part` שאין לה session — כלומר מריצה שקרסה. נדיב
   /// בכוונה; ההעלאות עצמן נמחקות לפי [uploadTtl] ולא לפי זה.
@@ -201,6 +220,7 @@ class PluginFileServer {
       tempFile: File(p.join(dir.path, '$token.part')),
       maxBytes: maxUploadBytes,
       expiresAt: DateTime.now().add(uploadTtl),
+      commitTtl: commitTtl,
     );
     _uploads[token] = session;
 
@@ -238,7 +258,7 @@ class PluginFileServer {
     // חד-פעמי: commit שני על אותו token לא מקבל את הקובץ.
     if (session.committing) return null;
 
-    session.committing = true;
+    session.committingSince = DateTime.now();
     return session.tempFile;
   }
 
@@ -250,17 +270,9 @@ class PluginFileServer {
   }) async {
     final session = _uploads[writeToken];
     if (session == null || session.pluginId != pluginId) return;
-    _uploads.remove(writeToken);
-    await _deleteQuietly(session.tempFile);
-  }
-
-  /// מבטל העלאה ומוחק את ה-temp שלה. ביטול „שמור בשם” עובר כאן.
-  Future<void> abortUpload({
-    required String pluginId,
-    required String writeToken,
-  }) async {
-    final session = _uploads[writeToken];
-    if (session == null || session.pluginId != pluginId) return;
+    // רק session שנלקח ל-commit נסגר כאן. בלי התנאי, קריאה מוקדמת בטעות הייתה
+    // מוחקת העלאה שעוד לא הועלתה.
+    if (!session.committing) return;
     _uploads.remove(writeToken);
     await _deleteQuietly(session.tempFile);
   }
@@ -291,9 +303,12 @@ class PluginFileServer {
   ///
   /// מיועד להסרה/כיבוי של תוסף. **אינו נקרא מ-`PluginBridgeAdapter.dispose`
   /// בכוונה:** ה-dispose הוא של מופע, ואותו תוסף יכול להחזיק מופע נוסף חי
-  /// (טאב + רקע) שהיה מאבד את ההעלאה שלו. מופע שנסגר באמצע העלאה אינו מדליף
-  /// לאורך זמן — ה-writeToken פג תוך [uploadTtl] וה-temp נמחק ב-sweep, ואיש
-  /// אינו יכול לעשות בו commit בלי ה-token שנעלם עם ה-WebView.
+  /// (טאב + רקע) שהיה מאבד את ההעלאה שלו.
+  ///
+  /// מופע שנסגר באמצע אינו מדליף לאורך זמן, וזה לא תלוי בקריאה כאן: העלאה
+  /// שלא הועלתה פגה תוך [uploadTtl], העלאה שב-commit פגה תוך
+  /// [commitTtl], ובשני המקרים ה-sweep מוחק את ה-temp. בלי
+  /// ה-token, שנעלם עם ה-WebView, איש אינו יכול לעשות בה commit.
   Future<void> revokeAllForPlugin(String pluginId) async {
     _grants.removeWhere((_, grant) => grant.pluginId == pluginId);
     final tokens = _uploads.entries

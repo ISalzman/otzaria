@@ -499,33 +499,10 @@ void main() {
       );
     });
 
-    test('abort מוחק את ה-temp ומשחרר את המכסה', () async {
-      final ticket = await server.beginUpload(pluginId: 'p1');
-      final response = await put(ticket.uploadUrl, utf8.encode('abc'));
-      await response.drain();
-
-      await server.abortUpload(pluginId: 'p1', writeToken: ticket.writeToken);
-
-      expect(server.activeUploadsFor('p1'), 0);
-      expect(
-        await server.takeUpload(
-          pluginId: 'p1',
-          writeToken: ticket.writeToken,
-        ),
-        isNull,
-      );
-    });
-
-    test('abort של תוסף אחר אינו מבטל את ההעלאה', () async {
-      final ticket = await server.beginUpload(pluginId: 'p1');
-      await server.abortUpload(pluginId: 'p2', writeToken: ticket.writeToken);
-
-      expect(server.activeUploadsFor('p1'), 1);
-    });
-
     test('revokeAllForPlugin מבטל גם העלאות פעילות', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
-      final other = await server.beginUpload(pluginId: 'p2');
+      // העלאה של תוסף אחר, כדי לוודא שהניקוי ממוקד.
+      await server.beginUpload(pluginId: 'p2');
       final response = await put(ticket.uploadUrl, utf8.encode('abc'));
       await response.drain();
 
@@ -540,7 +517,6 @@ void main() {
         ),
         isNull,
       );
-      await server.abortUpload(pluginId: 'p2', writeToken: other.writeToken);
     });
 
     test('close מוחק את קובצי ה-temp של העלאות פעילות', () async {
@@ -628,6 +604,24 @@ void main() {
           pluginId: 'p1',
           writeToken: held.ticket.writeToken,
         );
+        expect(await held.temp.exists(), isFalse);
+      });
+
+      test('commit שנתקע פג בסופו של דבר ומשוחרר', () async {
+        // מופע שנהרג באמצע „שמור בשם” אינו יכול להשאיר סלוט תפוס עד סוף
+        // הריצה — אין למי לנקות אותו.
+        final stuck = PluginFileServer(
+          commitTtl: const Duration(milliseconds: 300),
+        );
+        addTearDown(stuck.close);
+        final held = await uploadInCommit(stuck);
+        expect(stuck.activeUploadsFor('p1'), 1);
+
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        // beginUpload מריץ sweep, וזה מה שמשחרר.
+        await stuck.beginUpload(pluginId: 'p2');
+
+        expect(stuck.activeUploadsFor('p1'), 0);
         expect(await held.temp.exists(), isFalse);
       });
 
