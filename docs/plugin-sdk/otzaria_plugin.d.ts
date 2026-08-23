@@ -115,10 +115,21 @@ export interface BootPayload {
   plugin: { id: string; version: string };
   app: {
     version: string;
+    /** אינו נשלח כיום באף אחד ממסלולי ה-boot. */
     buildNumber?: string;
     platform: 'windows' | 'linux' | 'macos' | 'android' | 'ios' | string;
     locale: string;
+    /** קוד השפה של ממשק אוצריא, למשל `he`. */
+    language?: string;
     textDirection: 'ltr' | 'rtl';
+    /** `true` כשהתוסף נטען כתוסף פיתוח. בתוסף ארוז `false`. */
+    devMode?: boolean;
+    /**
+     * נשלח רק במסלול הרקע, שם ערכו תמיד `'background'`. בדף גלוי הוא
+     * `undefined` — לזיהוי מצב התוסף יש להשתמש ב-`plugin.suspended`
+     * ו-`plugin.resumed`.
+     */
+    runMode?: 'foreground' | 'background';
   };
   theme: ThemePayload;
   /** Connectivity as known at boot, without ever blocking on the network.
@@ -1209,6 +1220,8 @@ export type OtzariaMethod =
   | 'library.getLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
+  | 'library.getTree'
+  | 'library.resolveCategoryPaths'
   | 'search.fullText'
   | 'search.query'
   | 'search.getOptions'
@@ -1236,6 +1249,7 @@ export type OtzariaMethod =
   | 'ui.showError'
   | 'ui.showConfirm'
   | 'ui.showWarning'
+  | 'ui.pickFolder'
   | 'storage.get'
   | 'storage.set'
   | 'storage.remove'
@@ -1272,6 +1286,12 @@ export type OtzariaMethod =
   | 'network.fetch'
   | 'network.fetchStream'
   | 'network.download'
+  | 'fs.pickUserFile'
+  | 'fs.resolveFileUrl'
+  | 'fs.readTextFile'
+  | 'fs.revokeFile'
+  | 'fs.extractZip'
+  | 'fs.deleteFile'
   | 'shortcut.create'
   | 'plugin.openSelf'
   | 'plugin.openOther'

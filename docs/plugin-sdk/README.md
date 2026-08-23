@@ -82,7 +82,7 @@ my-plugin/
   "homepage": "https://example.com/my-plugin",
   "entrypoint": "index.html",
   "icon": "icon/icon.png",
-  "minAppVersion": "5.0.0",
+  "minAppVersion": "0.9.94",
   "sdkVersion": "1.x",
   "permissions": [
     "app.info.read",
@@ -120,6 +120,17 @@ my-plugin/
 | `entrypoint` | `string` | נתיב יחסי לקובץ HTML הראשי |
 | `minAppVersion` | `string` | גרסת אוצריא המינימלית הנתמכת |
 | `sdkVersion` | `string` | גרסת ה-SDK הנדרשת (כעת `"1.x"`) |
+
+`minAppVersion` נאכף משני הכיוונים, ולכן שווה לדייק בו:
+
+- **מלמעלה** — התקנה נדחית אם הערך גבוה מגרסת אוצריא המותקנת. ערך "עתידי" הופך
+  את התוסף לבלתי-מותקן.
+- **מלמטה** — האריזה נדחית אם התוסף קורא ל-API שנוסף בגרסה **מאוחרת** מהערך
+  המוצהר. הגרסה שבה נוספה כל מתודה מופיעה בטבלה שבראש
+  [API_REFERENCE.md](API_REFERENCE.md).
+
+כלומר הערך הנכון הוא הגרסה שבה נוסף ה-API החדש ביותר שהתוסף משתמש בו — לא
+הגרסה האחרונה שיצאה.
 
 ### שדות חובה לצורך העלאה לחנות
 
@@ -900,7 +911,7 @@ if (typeof Otzaria === 'undefined') {
     window.dispatchEvent(new CustomEvent('plugin.boot', {
       detail: {
         plugin: { id: 'dev', version: '0.0.0' },
-        app: { version: '5.0.0', platform: 'dev', locale: 'he-IL', textDirection: 'rtl' },
+        app: { version: '0.9.96', platform: 'dev', locale: 'he-IL', textDirection: 'rtl' },
         theme: {
           mode: 'light',
           colorScheme: {
