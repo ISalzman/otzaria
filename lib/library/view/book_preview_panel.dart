@@ -12,6 +12,8 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
+import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -68,14 +70,56 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
   void didUpdateWidget(BookPreviewPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // אם הספר או מיקום היעד השתנו, נצור tab חדש
-    if (widget.book != oldWidget.book ||
-        widget.initialTextIndex != oldWidget.initialTextIndex ||
-        widget.initialPdfPage != oldWidget.initialPdfPage) {
+    // ספר אחר — נצור tab חדש
+    if (widget.book != oldWidget.book) {
       _disposeCurrentTab();
       if (widget.book != null) {
         _createNewTab();
       }
+      return;
+    }
+
+    // אותו ספר, מיקום יעד אחר (מעבר בין תוצאות חיפוש) — גלילה בלבד,
+    // בלי לבנות את הספר מחדש.
+    if (widget.initialTextIndex != oldWidget.initialTextIndex &&
+        widget.initialTextIndex != null) {
+      if (_currentTextTab != null) {
+        _scrollPreviewToIndex(widget.initialTextIndex!);
+      } else {
+        _disposeCurrentTab();
+        _createNewTab();
+      }
+    }
+    if (widget.initialPdfPage != oldWidget.initialPdfPage &&
+        widget.initialPdfPage != null &&
+        _pdfController != null &&
+        _pdfController!.isReady) {
+      _pdfController!.goToPage(pageNumber: widget.initialPdfPage!);
+    }
+  }
+
+  /// גלילת התצוגה המקדימה הקיימת אל קטע יעד חדש באותו ספר, כולל העברת
+  /// סימון שורת התוצאה. אם התוכן עוד לא נטען — נופלים לבנייה מחדש.
+  void _scrollPreviewToIndex(int index) {
+    final tab = _currentTextTab!;
+    final state = tab.bloc.state;
+    if (state is! TextBookLoaded) {
+      _disposeCurrentTab();
+      _createNewTab();
+      return;
+    }
+    tab.index = index;
+    tab.bloc.add(UpdateSearchResultLines({index}));
+    final targetIndex = state.readingSegments.isNotEmpty
+        ? segmentIndexForLine(state.readingSegments, index)
+        : index;
+    if (tab.scrollController.isAttached) {
+      tab.scrollController.scrollTo(
+        index: targetIndex,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        alignment: kReadingAnchorAlignment,
+      );
     }
   }
 
@@ -448,9 +492,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       children: [
         PdfViewer.file(
           filePath,
-          key: ValueKey(
-            'pdf_${widget.book!.title}_${widget.initialPdfPage ?? 1}',
-          ),
+          key: ValueKey('pdf_${widget.book!.title}'),
           initialPageNumber: widget.initialPdfPage ?? 1,
           passwordProvider: () => passwordDialog(context),
           controller: _pdfController!,
