@@ -1813,7 +1813,18 @@ jobs:
           path: installer/otzaria-*-windows-full-indexed.exe
 
   create_release:
-    if: "!cancelled() && github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.create_release)"
+    if: >-
+      !cancelled() &&
+      github.event_name != 'release' &&
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || inputs.create_release) &&
+      inputs.build_windows && inputs.build_linux &&
+      inputs.build_android && inputs.build_macos &&
+      needs.build_windows.result == 'success' &&
+      needs.build_linux.result == 'success' &&
+      needs.build_android.result == 'success' &&
+      needs.build_macos.result == 'success' &&
+      needs.build_windows_indexed_full.result == 'success'
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       title: ${{ steps.version.outputs.title }}

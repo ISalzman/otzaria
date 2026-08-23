@@ -1180,6 +1180,7 @@ class _ScopeMenuPanelState extends State<_ScopeMenuPanel> {
         item.onOnly != null &&
         (Platform.isAndroid ||
             Platform.isIOS ||
+            Platform.isWindows ||
             index == _hoveredRow ||
             highlighted);
 
