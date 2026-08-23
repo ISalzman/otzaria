@@ -294,10 +294,12 @@ void main() {
     });
 
     group('פקיעת writeToken', () {
-      Future<PluginFileServer> expiredServer() async {
-        final server = PluginFileServer(
-          uploadTtl: const Duration(milliseconds: 1),
-        );
+      /// ברירת המחדל פוגה מיד — לבדיקות שה-token כבר פג בהן. בדיקה שצריכה
+      /// שההעלאה *תצליח* לפני הפקיעה חייבת [ttl] גדול מזמן ה-PUT.
+      Future<PluginFileServer> expiredServer({
+        Duration ttl = const Duration(milliseconds: 1),
+      }) async {
+        final server = PluginFileServer(uploadTtl: ttl);
         addTearDown(server.close);
         return server;
       }
@@ -318,7 +320,7 @@ void main() {
       });
 
       test('commit אחרי פקיעה מחזיר null ומוחק את ה-temp', () async {
-        final server = await expiredServer();
+        final server = await expiredServer(ttl: const Duration(seconds: 1));
         final ticket = await server.beginUpload(pluginId: 'p1');
         final request = await client.putUrl(Uri.parse(ticket.uploadUrl));
         request.contentLength = 3;
@@ -326,7 +328,7 @@ void main() {
         await (await request.close()).drain();
         expect(await tempFileFor(ticket.writeToken).exists(), isTrue);
 
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
 
         expect(
           await server.takeUpload(
@@ -438,7 +440,10 @@ void main() {
 
     test('token לא מוכר מחזיר 404', () async {
       await server.beginUpload(pluginId: 'p1');
-      final response = await put('${server.origin}/w/deadbeef', utf8.encode('x'));
+      final response = await put(
+        '${server.origin}/w/deadbeef',
+        utf8.encode('x'),
+      );
 
       expect(response.statusCode, HttpStatus.notFound);
       await response.drain();
@@ -446,8 +451,9 @@ void main() {
 
     test('מתודה שאינה PUT על נתיב העלאה נדחית', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
-      final response = await (await client.getUrl(Uri.parse(ticket.uploadUrl)))
-          .close();
+      final response = await (await client.getUrl(
+        Uri.parse(ticket.uploadUrl),
+      )).close();
 
       expect(response.statusCode, HttpStatus.methodNotAllowed);
       await response.drain();
