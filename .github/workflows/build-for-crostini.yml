@@ -97,9 +97,9 @@ jobs:
           patchelf --set-rpath "\$ORIGIN:$RPATH" $BUNDLE_DIR/lib/libzstandard_linux_plugin.so
 
           # Remove WPE Runtime libraries
-          rm -f $BUNDLE_DIR/lib/libwpe*.so
-          rm -f $BUNDLE_DIR/lib/libWPE*.so
-          rm -f $BUNDLE_DIR/lib/WPE*.so
+          rm -f $BUNDLE_DIR/lib/libwpe*
+          rm -f $BUNDLE_DIR/lib/libWPE*
+          rm -f $BUNDLE_DIR/lib/WPE*
           rm -rf $BUNDLE_DIR/lib/cmake
 
           # portable.marker makes the raw package portable:
