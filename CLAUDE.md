@@ -765,6 +765,8 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Indexing repository | `test/indexing/repository/indexing_repository_test.dart` |
 | External catalog | `test/external_catalog/external_catalog_repository_test.dart`, `…settings_helper_test.dart` |
 | Plugins | `test/plugins/utils/reader_location_resolver_test.dart`, `…plugin_store_link_parser_test.dart`, `…plugin_bridge_adapter_test.dart` |
+| Plugin links API (`getLinks`, `getRawLinks`, `getCommentators`, `getLinkContent`) | `test/plugins/bridge/plugin_bridge_links_api_test.dart` |
+| Plugin permission enforcement / rate limiting | `test/plugins/bridge/plugin_bridge_handler_test.dart` |
 | Plugin highlights / reader section tracking | `test/plugins/services/plugin_highlight_registry_test.dart`, `…reader_section_content_tracker_test.dart`, `…reader_section_sync_gate_test.dart` |
 | Plugin foreground suspend/resume | `test/plugins/services/plugin_runtime_dispatcher_test.dart` |
 | בדיקת עדכוני תוספים מהחנות (שירות batch, קוביט, צ'יפ "עדכון זמין") | `test/plugins/services/plugin_update_check_service_test.dart`, `test/plugins/bloc/plugin_updates_cubit_test.dart`, `test/plugins/view/plugin_update_chip_test.dart` |

@@ -302,16 +302,10 @@ class Link {
     if (end != null) 'end': end,
   };
 
-  /// Constructs a [Link] object from a JSON object.
+  /// בונה [Link] משורת `links.json`. סלחני בכוונה: מקבל אינדקסים כמספר או
+  /// כמחרוזת (`"3.0"` → `3`), וסוג חיבור ריק הופך ל-`reference`.
   ///
-  /// The JSON object should have the following keys:
-  /// - 'heRef_2': The Hebrew reference of the link.
-  /// - 'line_index_1': The index of the first book in the link.
-  /// - 'path_2': The path of the second book in the link.
-  /// - 'line_index_2': The index of the second book in the link.
-  /// - 'Conection Type': The type of the connection in the link.
-  /// - 'start': (optional) The start character position of the link.
-  /// - 'end': (optional) The end character position of the link.
+  /// עוגני-מילה, קישורי-טווח ו-[baseProvenance] מגיעים רק מהמסד ולכן מאופסים.
   Link.fromJson(Map<String, dynamic> json)
     : heRef = json['heRef_2'].toString(),
       index1 = int.parse(json['line_index_1'].toString().split('.').first),
