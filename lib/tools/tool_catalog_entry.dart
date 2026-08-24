@@ -164,7 +164,7 @@ List<ToolCatalogEntry> buildToolCatalog({
   if (pluginState is PluginSystemLoaded) {
     for (final plugin in pluginState.plugins) {
       if (!plugin.enabled) continue;
-      if (!plugin.showInTools && !plugin.pinnedToNavRail) continue;
+      if (!plugin.showInTools) continue;
       if (isOfflineMode && plugin.blockedInOfflineMode) continue;
       entries.add(ToolCatalogEntry.fromPlugin(plugin));
     }
@@ -210,6 +210,7 @@ ToolLookupResult lookupTool(
       name: plugin.name,
     );
   }
+  // מוצמד-לסרגל נפתח גם כשהוא מוסתר מהכלים — הלחיצה בסרגל עוברת כאן
   if (!plugin.showInTools && !plugin.pinnedToNavRail) {
     return ToolUnavailable(
       ToolUnavailableReason.pluginHiddenFromTools,
