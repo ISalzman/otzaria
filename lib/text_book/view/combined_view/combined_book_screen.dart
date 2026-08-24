@@ -1409,6 +1409,7 @@ class _CombinedViewState extends State<CombinedView> {
             bookDbId: state.book.id,
             bookType: PluginBookIdentity.typeOf(state.book),
             bookSource: PluginBookIdentity.sourceOf(state.book),
+            bookUid: PluginBookIdentity.uidOf(state.book),
           );
         }
         return <AppContextMenuEntry>[
@@ -1441,6 +1442,7 @@ class _CombinedViewState extends State<CombinedView> {
       root: root,
       globalPosition: tapPosition,
       bookId: state.book.title,
+      bookUid: PluginBookIdentity.uidOf(state.book),
       sectionIndex: paragraphIndex,
       rawText: widget.data[paragraphIndex],
       settings: settings,
@@ -1457,6 +1459,7 @@ class _CombinedViewState extends State<CombinedView> {
         bookDbId: state.book.id,
         bookType: PluginBookIdentity.typeOf(state.book),
         bookSource: PluginBookIdentity.sourceOf(state.book),
+        bookUid: PluginBookIdentity.uidOf(state.book),
       ),
       context: 'reader-highlight',
       selectionActionDispatcher: pluginSelectionActionDispatcherOf(menuContext),
@@ -2444,13 +2447,16 @@ class _CombinedViewState extends State<CombinedView> {
                           // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
                           final textWidget = SmartTextWidget(
                             text: dataWithLinks,
-                            highlightBookId: widget.tab.book.title,
-                            highlightBookDbId: widget.tab.book.id,
+                            highlightBookId: state.book.title,
+                            highlightBookUid: PluginBookIdentity.uidOf(
+                              state.book,
+                            ),
+                            highlightBookDbId: state.book.id,
                             highlightBookType: PluginBookIdentity.typeOf(
-                              widget.tab.book,
+                              state.book,
                             ),
                             highlightBookSource: PluginBookIdentity.sourceOf(
-                              widget.tab.book,
+                              state.book,
                             ),
                             highlightSectionIndex: primaryLineIndex,
                             highlightSourceText: widget.data[primaryLineIndex],
@@ -2799,13 +2805,14 @@ class _CombinedViewState extends State<CombinedView> {
       renderSettings,
     );
     return const PluginHighlightRenderer().renderWithRanges(
-      bookId: widget.tab.book.title,
+      bookId: state.book.title,
       sectionIndex: lineIndex,
       rawText: rawText,
       processedHtml: processedHtml,
       highlights: PluginHighlightRegistry.instance.getAllHighlights(
-        bookId: widget.tab.book.title,
+        bookId: state.book.title,
         sectionIndex: lineIndex,
+        bookUid: PluginBookIdentity.uidOf(state.book),
       ),
       revealedHighlightId: PluginHighlightRevealService.instance.highlightId,
     );

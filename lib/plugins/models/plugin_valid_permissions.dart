@@ -54,6 +54,15 @@ const Map<String, String> apiCallToPermissionHint = {
   'history.clear': 'history.write',
   'history.remove': 'history.write',
 
+  // bookmarks.*
+  'bookmarks.list': pluginBookmarksReadPermission,
+  'bookmarks.add': pluginBookmarksWritePermission,
+  'bookmarks.remove': pluginBookmarksWritePermission,
+
+  // tools.*
+  'tools.gematria': pluginToolsReadPermission,
+  'tools.dictionary': pluginToolsReadPermission,
+
   // notifications.*
   'notifications.showInApp': 'notifications.send',
   'notifications.sendSystem': 'notifications.system',
@@ -83,7 +92,21 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
   'reader.getActiveCommentators': 'reader.open',
+  'reader.setActiveCommentators': 'reader.open',
+  'reader.scrollToSection': 'reader.open',
+  'reader.getHighlightCapabilities': 'reader.open',
 };
+
+/// קריאת רשימת הסימניות של המשתמש. נפרדת מהכתיבה, בעקבות התקדים של
+/// `notes.read`/`notes.write`.
+const pluginBookmarksReadPermission = 'bookmarks.read';
+
+/// הוספה ומחיקה של סימניות.
+const pluginBookmarksWritePermission = 'bookmarks.write';
+
+/// קריאת כלי העזר המובנים (גימטריה, מילון) — נתוני עזר של התוכנה, ללא
+/// גישה לנתוני המשתמש.
+const pluginToolsReadPermission = 'tools.read';
 
 /// הרשאה לקריאת מפת הקישורים של הספרייה — המפרשים על ספר, קישורי טווח השורות
 /// וסיכום היעדים. נפרדת מ-`library.content.read` כי היא חושפת מבנה בלבד.
@@ -274,6 +297,17 @@ const pluginValidPermissions = <String>[
 
   /// מחיקה ועריכת היסטוריית קריאה
   'history.write',
+
+  // ===== סימניות =====
+  /// קריאת רשימת הסימניות
+  pluginBookmarksReadPermission,
+
+  /// הוספה ומחיקה של סימניות
+  pluginBookmarksWritePermission,
+
+  // ===== כלי עזר =====
+  /// שימוש בכלי העזר המובנים (גימטריה, מילון)
+  pluginToolsReadPermission,
 
   // ===== מסד נתונים =====
   /// קריאת נתונים ממקורות SQLite שהאפליקציה מאשרת לתוסף

@@ -383,6 +383,24 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 
 `feedback.report` שולח דיווח של המשתמש על התוסף לאתר אוצריא, שמעביר אותו למפתח התוסף. מוצג דיאלוג אישור חובה; `'queued'` פירושו שהדיווח נשמר בתור מקומי ויישלח אוטומטית כשיהיה חיבור. כתובת לחזרה השמורה בהגדרות גוברת על `reporterEmail`; בדקו קיומה מראש עם `feedback.hasReporterEmail` (הכתובת עצמה אינה נחשפת לתוסף).
 
+### fs.* — המרחב הפרטי (מ-0.9.97)
+
+תיקיית קבצים פרטית לכל תוסף, **בלי שום הרשאה**. כל הנתיבים יחסיים לשורש
+הפרטי, ונתיב שיוצא ממנו (`..`, נתיב מוחלט, UNC, symlink) נדחה ב-`error.forbidden`.
+מכסה 100MB לתוסף, ותקרה של 10MB לקריאה/כתיבה בודדת.
+
+| Method | הרשאה | פרמטרים | החזרה |
+|--------|-------|----------|-------|
+| `fs.writeFile` | — | `{ path, content, encoding?, append? }` | `{ path, size, usedBytes, quotaBytes }` |
+| `fs.readFile` | — | `{ path, encoding? }` | `{ path, encoding, size, content }` |
+| `fs.listDir` | — | `{ path? }` | `{ path, entries, usedBytes, quotaBytes }` |
+| `fs.makeDir` | — | `{ path }` | `boolean` |
+| `fs.deleteEntry` | — | `{ path, recursive? }` | `boolean` |
+| `fs.stat` | — | `{ path? }` | `{ exists, path?, name?, type?, size?, modified? }` |
+
+> אין לבקש `fs.folder_access` בשביל קבצי עבודה — היא ההרשאה הרחבה במערכת,
+> ונועדה לעבודה בתיקייה של המשתמש. הפירוט ב-[API_REFERENCE](API_REFERENCE.md).
+
 ### storage.*
 
 | Method | הרשאה |
@@ -399,15 +417,16 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `settings.get`     | `settings.read` | `{ key }` |
 | `settings.getMany` | `settings.read` | `{ keys: string[] }` |
 
-**מפתחות מותרים:**
-`keyDarkMode`, `keyFollowSystemTheme`, `keySwatchColor`, `keyDarkSwatchColor`,
-`keyFontSize`, `keyFontFamily`, `keyCommentatorsFontFamily`, `keyCommentatorsFontSize`,
-`keyLineHeight`, `keySelectedCity`, `keyCalendarType`, `keySettingsLanguage`, `keyShowTeamim`,
-`keyDefaultNikud`, `keyRemoveNikudFromTanach`, `keyReplaceHolyNames`,
-`keyLibraryViewMode`, `keyAlignTabsToRight`, `keyCopyWithHeaders`, `keyCopyHeaderFormat`,
-`key-hebrew-books-path`
+**מ-0.9.97 כל הגדרה קריאה, למעט רשימת חסומים** (עד אז הייתה רשימת היתר סגורה).
+חסומים: כל מפתח שבשמו `password` / `secret` / `credential` / `token` /
+`api-key` / `client-id`, כל מפתח שבשמו `path` / `folder` / `root` (נתיבים,
+כולל `key-hebrew-books-path` שהיה מותר עד 0.9.96), כל מפתח שבשמו `email`,
+וכן `key-google-calendar-*`, `key-calendar-event*`, `key-protected-mode-*`,
+`sz:*` ותוכן אישי (`key-bookmarks`, `key-tabs`, `key-workspaces` ודומיהם).
+הפירוט המלא ב-[API_REFERENCE](API_REFERENCE.md#settings---הגדרות-אפליקציה).
 
-> ⚠️ מפתחות לא-מורשים (סיסמאות, נתיבים אחרים ו־credentials) יחזירו `null` ולא ישלחו שגיאה.
+> ⚠️ `settings.get` על מפתח חסום מחזיר `error.forbidden` (מ-0.9.97; קודם החזיר
+> `null` בשקט). `settings.getMany` מדלג עליו — הוא חסר מהמפה המוחזרת.
 
 ### calendar.*
 
@@ -555,7 +574,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `notes.read` | קריאת הערות אישיות |
 | `notes.write` | הוספה/עדכון/מחיקה של הערות |
 | `calendar.read` | גישה לנתוני לוח שנה |
-| `settings.read` | קריאת הגדרות מהרשימה המותרת |
+| `settings.read` | קריאת הגדרות התוכנה (הכל למעט רשימת החסומים — סודות, נתיבים, מייל ותוכן אישי) |
 | `plugin.storage.read` | קריאת storage פרטי |
 | `plugin.storage.write` | כתיבה ל-storage פרטי |
 | `published_data.write` | פרסום נתונים לאפליקציה |
@@ -565,7 +584,10 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `network.localhost` | גישה לשירות מקומי על המחשב (`localhost` / `127.0.0.1`), כמו Ollama / LM Studio. נפרדת מ-`network.access` — אינה מתירה אינטרנט, ואינה דורשת allowlist גלובלי |
 | `fs.user_files.read` | בחירה וקריאה של קובץ אישי (PDF/טקסט) שהמשתמש בוחר בדיאלוג — מוגבל לקובץ שנבחר בלבד |
 | `fs.user_files.write` | שמירה לקובץ שהמשתמש בחר, או יצירת קובץ חדש דרך „שמור בשם”. אין דרך להזין נתיב מה-JS |
-| `fs.folder_access` | בחירת תיקייה בדיאלוג מערכת (`ui.pickFolder`) ועבודה על קבצים בתוכה. מ-0.9.97 — פוצלה מ-`ui.feedback`; הצהרה ותיקה על `ui.feedback` עדיין מכסה אותה |
+| `fs.folder_access` | בחירת תיקייה בדיאלוג מערכת (`ui.pickFolder`) ועבודה על קבצים בתוכה. מ-0.9.97 — פוצלה מ-`ui.feedback`; הצהרה ותיקה על `ui.feedback` עדיין מכסה אותה. **לקבצי עבודה השתמשו במרחב הפרטי (`fs.writeFile` וחבריו) — הוא אינו דורש הרשאה** |
+| `bookmarks.read` | קריאת רשימת הסימניות של המשתמש |
+| `bookmarks.write` | הוספה ומחיקה של סימניות |
+| `tools.read` | כלי העזר המובנים — גימטריה ומילוני ראשי תיבות/ארמית (`tools.*`) |
 | `notifications.send` | הצגת הודעות בתוך האפליקציה (UiSnack) |
 | `notifications.system` | התראות מערכת הפעלה (Native notifications) |
 | `app.run_on_startup` | **הרשאה רגישה** — הפעלת WebView ברקע לפי אירוע שהוצהר ב-`contributes.startup`. ברירת מחדל: **כבויה**. בתוסף ישן ללא `contributes.startup`, מפעילה זמנית בעליית אוצריא עד 0.9.97. |

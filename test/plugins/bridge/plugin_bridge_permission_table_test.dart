@@ -111,6 +111,22 @@ void main() {
         table['feedback.hasReporterEmail'],
         PluginBridgeHandler.noManifestPermission,
       );
+      // המרחב הפרטי: השורש הוא הגבול, ולכן אין הרשאת manifest — אבל הרישום
+      // חייב להיות מפורש, אחרת הטבלה fail-closed הופכת אותו לבלתי-נגיש.
+      for (final method in const [
+        'fs.writeFile',
+        'fs.readFile',
+        'fs.listDir',
+        'fs.makeDir',
+        'fs.deleteEntry',
+        'fs.stat',
+      ]) {
+        expect(
+          table[method],
+          PluginBridgeHandler.noManifestPermission,
+          reason: method,
+        );
+      }
       expect(table['plugin.listInstalled'], 'app.info.read');
       expect(table['plugin.requestInstall'], 'app.info.read');
     });

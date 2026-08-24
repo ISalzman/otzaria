@@ -34,21 +34,21 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
-import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
 import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
-import 'package:otzaria/search/bloc/search_event.dart';
-import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
-import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
+import 'package:otzaria/plugins/services/plugin_reader_actions.dart';
+import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/tools/gematria/gematria_search.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
@@ -56,6 +56,7 @@ import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -86,6 +87,7 @@ import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
@@ -328,6 +330,10 @@ class PluginBridgeDependencies {
   /// היא [Link.content] עם המטמון שלו.
   final Future<String> Function(Link link)? linkContentLoader;
 
+  /// מקור-האמת של הסימניות (`bookmarks.*`). ה-bloc מחזיק את הרשימה בזיכרון
+  /// וכותב לדיסק, ולכן כתיבה ישירה למחסן הייתה נדרסת. null = ה-API אינו זמין.
+  final BookmarkBloc? bookmarkBloc;
+
   /// `plugin.backgroundDone` — התוסף מכריז שסיים את עבודת הרקע. מחווט רק
   /// במופע הרקע (PluginBackgroundHost); בדף התוסף נשאר null, כך שקריאה
   /// משם היא no-op בטוח. מחזיר אם הכיבוי אכן תוזמן.
@@ -367,6 +373,7 @@ class PluginBridgeDependencies {
     this.textBookRepository,
     this.linkTargetsSummaryProvider,
     this.linkContentLoader,
+    this.bookmarkBloc,
     this.onBackgroundInstanceDone,
     this.dispatchEventToPlugin,
   });
@@ -489,6 +496,7 @@ class PluginBridgeAdapter {
   Library? _bookIndexLibrary;
   Map<int, List<Book>> _booksById = const {};
   Map<String, List<Book>> _booksByTitle = const {};
+  Map<String, Book> _booksByUid = const {};
   Map<String, Book> _booksByIndexedPath = const {};
   final Map<String, Future<void> Function()> _activeSearchStreams = {};
   final Set<String> _pendingSearchCancellations = {};
@@ -540,6 +548,7 @@ class PluginBridgeAdapter {
     _bookIndexLibrary = null;
     _booksById = const {};
     _booksByTitle = const {};
+    _booksByUid = const {};
     _booksByIndexedPath = const {};
   }
 
@@ -614,6 +623,10 @@ class PluginBridgeAdapter {
         return await _handleFeedback(action, args);
       case 'history':
         return await _handleHistory(action, args);
+      case 'bookmarks':
+        return await _handleBookmarks(action, args);
+      case 'tools':
+        return await _handleTools(action, args);
       case 'notifications':
         return await _handleNotifications(action, args);
       case 'database':
@@ -722,7 +735,7 @@ class PluginBridgeAdapter {
             // spec: returns [{id, type, bookId, title, author?, topics?}]
             .map(
               (b) => {
-                ...PluginBookIdentity.toJson(b as Book),
+                ...PluginBookIdentity.toJsonWithUid(b as Book),
                 'title': b.title,
               },
             )
@@ -733,13 +746,16 @@ class PluginBridgeAdapter {
         {
           final bookId = (args['bookId'] ?? args['title']) as String?;
           if (PluginBookIdentity.parseId(args['id']) == null &&
-              bookId == null) {
-            throw Exception('error.invalid_params: id or bookId required');
+              bookId == null &&
+              (args['bookUid'] as String?)?.trim().isNotEmpty != true) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
           }
           final book = _findPluginBook(library, args);
           if (book == null) return null;
           return {
-            ...PluginBookIdentity.toJson(book),
+            ...PluginBookIdentity.toJsonWithUid(book),
             'title': book.title,
             'topics': book.topics,
             'categoryPath': FacetHelper.resolveCategoryPath(book),
@@ -772,7 +788,7 @@ class PluginBridgeAdapter {
                 null
               else
                 {
-                  ...PluginBookIdentity.toJson(book),
+                  ...PluginBookIdentity.toJsonWithUid(book),
                   'title': book.title,
                   'categoryPath': FacetHelper.resolveCategoryPath(book),
                 },
@@ -810,7 +826,7 @@ class PluginBridgeAdapter {
             .take(20)
             .map(
               (b) => {
-                ...PluginBookIdentity.toJson(b.book),
+                ...PluginBookIdentity.toJsonWithUid(b.book),
                 'title': b.book.title,
                 'ref': b.ref,
               },
@@ -939,6 +955,11 @@ class PluginBridgeAdapter {
   /// אופציונלי שמכריע בין ספרים שווי-שם; אחרת נופל לזיהוי הרגיל לפי `id`.
   TextBook? _findLinksTextBook(Library library, Map<String, dynamic> args) {
     _ensureBookIndex(library);
+    final bookUid = (args['bookUid'] as String?)?.trim();
+    if (bookUid != null && bookUid.isNotEmpty) {
+      final byUid = _booksByUid[bookUid];
+      if (byUid is TextBook) return byUid;
+    }
     final bookId = (args['bookId'] ?? args['title']) as String?;
     if (PluginBookIdentity.parseId(args['id']) == null && bookId != null) {
       final categoryId = args['categoryId'] as int?;
@@ -1266,7 +1287,7 @@ class PluginBridgeAdapter {
   /// ממפה ספר לרשומה בעץ: id, type, bookId (= title באוצריא), title, author?, topics?.
   Map<String, dynamic> _bookToTreeEntry(Book book) {
     final entry = <String, dynamic>{
-      ...PluginBookIdentity.toJson(book),
+      ...PluginBookIdentity.toJsonWithUid(book),
       'title': book.title,
     };
     if (book.author != null && book.author!.isNotEmpty) {
@@ -1285,6 +1306,12 @@ class PluginBridgeAdapter {
   /// מחזיר את סוג הספר כמחרוזת עבור ה-Plugin SDK.
   Book? _findPluginBook(Library library, Map<String, dynamic> args) {
     _ensureBookIndex(library);
+    // `bookUid` הוא מזהה יציב וחד-משמעי — אם סופק, פותר ישירות בלי ניחוש.
+    final bookUid = (args['bookUid'] as String?)?.trim();
+    if (bookUid != null && bookUid.isNotEmpty) {
+      final byUid = _booksByUid[bookUid];
+      if (byUid != null) return byUid;
+    }
     final id = PluginBookIdentity.parseId(args['id']);
     final bookId = (args['bookId'] ?? args['title']) as String?;
     final type = args['type'] as String?;
@@ -1315,15 +1342,18 @@ class PluginBridgeAdapter {
     if (identical(_bookIndexLibrary, library)) return;
     final byId = <int, List<Book>>{};
     final byTitle = <String, List<Book>>{};
+    final byUid = <String, Book>{};
     for (final book in library.getAllBooks()) {
       if (book.id case final int id) {
         (byId[id] ??= []).add(book);
       }
       (byTitle[book.title] ??= []).add(book);
+      byUid[PluginBookIdentity.uidOf(book)] = book;
     }
     _bookIndexLibrary = library;
     _booksById = byId;
     _booksByTitle = byTitle;
+    _booksByUid = byUid;
     _booksByIndexedPath = PluginSearchApi.booksByIndexedFilePath(library);
   }
 
@@ -1495,7 +1525,7 @@ class PluginBridgeAdapter {
                 for (final entry in update.bookCounts!.entries)
                   if (booksByPath[entry.key] case final Book book)
                     {
-                      ...PluginBookIdentity.toJson(book),
+                      ...PluginBookIdentity.toJsonWithUid(book),
                       'title': book.title,
                       'count': entry.value,
                     },
@@ -1553,8 +1583,11 @@ class PluginBridgeAdapter {
           final externalMatches = _parseExternalMatches(args, searchQuery);
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
-              args['external'] == null) {
-            throw Exception('error.invalid_params: id or bookId required');
+              args['external'] == null &&
+              (args['bookUid'] as String?)?.trim().isNotEmpty != true) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
           }
           if (args['external'] != null) {
             final access = DeclarativeLibraryBookAccess.otzaria(
@@ -1661,45 +1694,16 @@ class PluginBridgeAdapter {
             args['settings'],
             query: query,
           );
-          final tab = SearchingTab(
-            SearchingTab.titleForQuery(query),
-            query,
-            initialConfiguration: SearchDefaults.withResultPreferences(
-              SearchConfiguration(
-                searchMode: settings.searchMode,
-                distance: settings.distance,
-                proximityScope: settings.proximityScope,
-                wordMatchMode: settings.wordMatchMode,
-                wordMatchCount: settings.wordMatchCount,
-                pluginSearchSelections: {
-                  for (final itemId in selectItems)
-                    '${plugin.pluginId}/$itemId': true,
-                },
-              ),
-            ),
-            autoRunInitialSearch: autoSearch,
+          return openPluginSearchTab(
+            coordinator: _dependencies.bookOpenCoordinator,
+            query: query,
+            autoSearch: autoSearch,
+            settings: settings,
+            pluginSearchSelections: {
+              for (final itemId in selectItems)
+                '${plugin.pluginId}/$itemId': true,
+            },
           );
-          // אפשרויות פר-מילה נשמרות בטאב (לתצוגה ב-UI ולחיפוש ידני),
-          // ומועברות גם להרצה האוטומטית כדי שלא תרוץ ללא 'קידומות' וכד'.
-          tab.searchOptions.addAll(settings.searchOptions);
-          if (settings.searchOptions.isNotEmpty) {
-            tab.useGlobalSearchOptions.value = false;
-          }
-          if (autoSearch) {
-            tab.searchBloc.add(
-              UpdateSearchQuery(
-                query,
-                searchOptions: settings.searchOptions,
-              ),
-            );
-          }
-          final coordinator = _dependencies.bookOpenCoordinator;
-          coordinator.historyBloc.add(AddHistory(tab));
-          coordinator.tabsBloc.add(AddTab(tab));
-          coordinator.navigationBloc.add(
-            const NavigateToScreen(Screen.search),
-          );
-          return true;
         }
       case 'registerExternalSearchProvider':
         // spec: registerExternalSearchProvider({ provider })
@@ -1758,8 +1762,11 @@ class PluginBridgeAdapter {
           int index = (args['index'] as num?)?.toInt() ?? 0;
           final highlight = args['highlight'] as bool? ?? false;
           if (PluginBookIdentity.parseId(args['id']) == null &&
-              bookId == null) {
-            throw Exception('error.invalid_params: id or bookId required');
+              bookId == null &&
+              (args['bookUid'] as String?)?.trim().isNotEmpty != true) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
           }
           final book = _findPluginBook(
             await DataRepository.instance.library,
@@ -1850,6 +1857,9 @@ class PluginBridgeAdapter {
                 ? PluginBookIdentity.sourceOf(tabBook)
                 : null,
             'bookId': t.title,
+            'bookUid': tabBook != null
+                ? PluginBookIdentity.uidOf(tabBook)
+                : null,
             'book': t.title,
             'index': t is TextBookTab
                 ? t.index
@@ -1862,6 +1872,7 @@ class PluginBridgeAdapter {
           return {
             'currentBook': null,
             'currentBookId': null,
+            'bookUid': null,
             'currentId': null,
             'currentType': null,
             'currentSource': null,
@@ -1877,6 +1888,9 @@ class PluginBridgeAdapter {
         return {
           'currentBook': currentPane.title,
           'currentBookId': currentPane.title,
+          'bookUid': currentPaneBook != null
+              ? PluginBookIdentity.uidOf(currentPaneBook)
+              : null,
           'currentId': currentPaneBook?.id,
           'currentType': currentPaneBook != null
               ? PluginBookIdentity.typeOf(currentPaneBook)
@@ -1898,6 +1912,7 @@ class PluginBridgeAdapter {
           return {
             'currentBook': null,
             'currentBookId': null,
+            'bookUid': null,
             'currentId': null,
             'currentType': null,
             'currentSource': null,
@@ -1908,6 +1923,30 @@ class PluginBridgeAdapter {
         return snapshot.toJson();
       case 'getActiveCommentators':
         return _getActiveCommentators();
+      case 'setActiveCommentators':
+        // spec: setActiveCommentators({ add?, remove? })
+        return _setActiveCommentators(args);
+      case 'getHighlightCapabilities':
+        // spec: getHighlightCapabilities() -> { surface, highlights,
+        //   selection, contextMenu }
+        return _getHighlightCapabilities();
+      case 'scrollToSection':
+        // spec: scrollToSection({ sectionIndex, highlight? })
+        // גולל את הספר הפתוח, בלי לפתוח אותו מחדש וללא הדגשה נדרשת.
+        {
+          final sectionIndex = args['sectionIndex'];
+          if (sectionIndex is! int || sectionIndex < 0) {
+            throw Exception(
+              'error.invalid_params: sectionIndex must be a non-negative integer',
+            );
+          }
+          return PluginReaderScrollService(
+            _dependencies.tabsBloc,
+          ).scrollToSection(
+            sectionIndex,
+            highlight: args['highlight'] == true,
+          );
+        }
       case 'getSelection':
         final currentPane = _dependencies.tabsBloc.state.readingPane;
         final snapshot = await resolveReaderLocation(currentPane);
@@ -2012,6 +2051,7 @@ class PluginBridgeAdapter {
           ownerPluginId: plugin.pluginId,
           ownerInstanceId: instanceId,
           bookId: bookId,
+          bookUid: args['bookUid'] as String?,
           sectionIndex: index,
           color: color as String?,
           label: label as String?,
@@ -2069,8 +2109,15 @@ class PluginBridgeAdapter {
           );
         }
         final allBooks = (await DataRepository.instance.library).getAllBooks();
+        final highlightUid = highlight.bookUid as String?;
         final book = allBooks.cast<dynamic>().firstWhere(
-          (item) => item?.title == highlight.bookId,
+          (item) {
+            if (item == null) return false;
+            if (highlightUid != null && highlightUid.isNotEmpty) {
+              return PluginBookIdentity.uidOf(item as Book) == highlightUid;
+            }
+            return item.title == highlight.bookId;
+          },
           orElse: () => null,
         );
         if (book == null) return false;
@@ -2201,7 +2248,11 @@ class PluginBridgeAdapter {
         'bookId, sectionIndex, and query are required',
       );
     }
-    final section = await _loadPluginTextSection(bookId, sectionIndex);
+    final section = await _loadPluginTextSection(
+      bookId,
+      sectionIndex,
+      bookUid: args['bookUid'] as String?,
+    );
     final map = const TextSourceMapService().build(
       bookId: bookId,
       sectionIndex: sectionIndex,
@@ -2240,13 +2291,22 @@ class PluginBridgeAdapter {
   }
 
   Future<({String rawText, RenderSettings settings, String? currentRef})>
-  _loadPluginTextSection(String bookId, int sectionIndex) async {
+  _loadPluginTextSection(
+    String bookId,
+    int sectionIndex, {
+    String? bookUid,
+  }) async {
     if (sectionIndex < 0) {
       throw const PluginTextOccurrenceException(
         'error.invalid_params',
         'sectionIndex must be non-negative',
       );
     }
+    final uid = bookUid?.trim();
+    // `bookUid` מזהה מדויק; בהיעדרו נשמר זיהוי לפי כותרת כמקודם.
+    bool matchesBook(Book b) => uid != null && uid.isNotEmpty
+        ? PluginBookIdentity.uidOf(b) == uid
+        : b.title == bookId;
     // סריקת חלוניות ולא טאבים: ספר שיושב רק בחלונית של טאב מפוצל לא נמצא,
     // והקריאה נפלה למסלול ה-DB שמאבד את מצב הניקוד החי. החלונית הפעילה
     // ראשונה, כי אותו ספר בשתי חלוניות יכול להיות בהגדרות ניקוד שונות.
@@ -2256,7 +2316,7 @@ class PluginBridgeAdapter {
       ..._dependencies.tabsBloc.state.tabs.expand(leafPanes),
     ];
     for (final tab in panes) {
-      if (tab is! TextBookTab || tab.title != bookId) continue;
+      if (tab is! TextBookTab || !matchesBook(tab.book)) continue;
       final state = tab.bloc.state;
       if (state is! TextBookLoaded || sectionIndex >= state.content.length) {
         continue;
@@ -2285,7 +2345,7 @@ class PluginBridgeAdapter {
     final library = await DataRepository.instance.library;
     TextBook? book;
     for (final candidate in library.getAllBooks().whereType<TextBook>()) {
-      if (candidate.title == bookId) {
+      if (matchesBook(candidate)) {
         book = candidate;
         break;
       }
@@ -2360,7 +2420,11 @@ class PluginBridgeAdapter {
       (message) =>
           throw PluginSectionTextMapException('error.invalid_params', message),
     );
-    final section = await _loadPluginTextSection(bookId, sectionIndex);
+    final section = await _loadPluginTextSection(
+      bookId,
+      sectionIndex,
+      bookUid: args['bookUid'] as String?,
+    );
     final map = const TextSourceMapService().build(
       bookId: bookId,
       sectionIndex: sectionIndex,
@@ -2691,6 +2755,32 @@ class PluginBridgeAdapter {
         }
         await _fsService.deleteFile(path);
         return true;
+      case 'writeFile':
+        return await _writeWorkspaceFile(args);
+      case 'readFile':
+        return await _readWorkspaceFile(args);
+      case 'listDir':
+        return await _listWorkspaceDir(args);
+      case 'makeDir':
+        await _fsService.makeWorkspaceDir(
+          root: await _workspaceRoot(),
+          relativePath: _workspacePathArg(args),
+        );
+        return true;
+      case 'deleteEntry':
+        return await _fsService.deleteWorkspaceEntry(
+          root: await _workspaceRoot(),
+          relativePath: _workspacePathArg(args),
+          recursive: args['recursive'] == true,
+        );
+      case 'stat':
+        final entry = await _fsService.statWorkspaceEntry(
+          root: await _workspaceRoot(),
+          relativePath: _workspacePathArg(args, allowRoot: true),
+        );
+        return entry == null
+            ? {'exists': false}
+            : {'exists': true, ...entry.toJson()};
       case 'pickUserFile':
         return await _pickUserFile(args);
       case 'beginBinaryWrite':
@@ -2721,6 +2811,112 @@ class PluginBridgeAdapter {
       default:
         throw Exception('error.unknown_method: Unknown action in fs: $action');
     }
+  }
+
+  /// שורש המרחב הפרטי של התוסף. תת-תיקייה של תיקיית הנתונים שלו, כדי שקבצים
+  /// שהאפליקציה עצמה תשמור שם בעתיד לא ייחשפו לתוסף. נמחקת בהסרת התוסף.
+  Future<String> _workspaceRoot() async {
+    final dataPath = await AppPaths.getPluginDataPath(plugin.pluginId);
+    return _fsService.ensureWorkspace(p.join(dataPath, 'files'));
+  }
+
+  /// קורא את הפרמטר `path` של פעולות המרחב הפרטי. נתיב ריק מותר רק לפעולות
+  /// שמשמעותן על השורש עצמו (`listDir`, `stat`).
+  String _workspacePathArg(
+    Map<String, dynamic> args, {
+    bool allowRoot = false,
+  }) {
+    final path = args['path'];
+    if (path == null && allowRoot) return '';
+    if (path is! String || (path.trim().isEmpty && !allowRoot)) {
+      throw Exception('error.invalid_params: path required');
+    }
+    return path;
+  }
+
+  Future<Map<String, dynamic>> _writeWorkspaceFile(
+    Map<String, dynamic> args,
+  ) async {
+    final relativePath = _workspacePathArg(args);
+    final encoding = (args['encoding'] as String?) ?? 'utf8';
+    final content = args['content'];
+    if (content is! String) {
+      throw Exception('error.invalid_params: content must be a string');
+    }
+    // חסימה מוקדמת לפי אורך המחרוזת — כדי לא לפענח base64 של מאות מגה-בייטים
+    // רק כדי לדחות אותו. התקרה המדויקת נאכפת בשירות על הבייטים עצמם.
+    if (content.length > _fsService.maxTransferBytes * 2) {
+      throw Exception('error.too_large: content exceeds the RPC size limit');
+    }
+    final List<int> bytes;
+    switch (encoding) {
+      case 'utf8':
+        bytes = utf8.encode(content);
+      case 'base64':
+        try {
+          bytes = base64Decode(content);
+        } on FormatException {
+          throw Exception('error.invalid_params: content is not valid base64');
+        }
+      default:
+        throw Exception(
+          'error.invalid_params: encoding must be utf8 or base64',
+        );
+    }
+    final root = await _workspaceRoot();
+    final size = await _fsService.writeWorkspaceFile(
+      root: root,
+      relativePath: relativePath,
+      bytes: bytes,
+      append: args['append'] == true,
+    );
+    return {
+      'path': relativePath,
+      'size': size,
+      'usedBytes': await _fsService.workspaceUsedBytes(root),
+      'quotaBytes': _fsService.maxWorkspaceBytes,
+    };
+  }
+
+  Future<Map<String, dynamic>> _readWorkspaceFile(
+    Map<String, dynamic> args,
+  ) async {
+    final relativePath = _workspacePathArg(args);
+    final encoding = (args['encoding'] as String?) ?? 'utf8';
+    if (encoding != 'utf8' && encoding != 'base64') {
+      throw Exception('error.invalid_params: encoding must be utf8 or base64');
+    }
+    final bytes = await _fsService.readWorkspaceFile(
+      root: await _workspaceRoot(),
+      relativePath: relativePath,
+    );
+    return {
+      'path': relativePath,
+      'encoding': encoding,
+      'size': bytes.length,
+      'content': encoding == 'base64'
+          ? base64Encode(bytes)
+          // הקובץ נכתב ע"י התוסף עצמו, אך עדיין עשוי להיות בינארי — allowMalformed
+          // מחזיר תווי החלפה במקום להפיל את הקריאה.
+          : utf8.decode(bytes, allowMalformed: true),
+    };
+  }
+
+  Future<Map<String, dynamic>> _listWorkspaceDir(
+    Map<String, dynamic> args,
+  ) async {
+    final relativePath = _workspacePathArg(args, allowRoot: true);
+    final root = await _workspaceRoot();
+    final entries = await _fsService.listWorkspaceDir(
+      root: root,
+      relativePath: relativePath,
+    );
+    return {
+      'path': relativePath,
+      'entries': entries.map((e) => e.toJson()).toList(),
+      'usedBytes': await _fsService.workspaceUsedBytes(root),
+      'quotaBytes': _fsService.maxWorkspaceBytes,
+    };
   }
 
   /// בורר הקבצים המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
@@ -3315,7 +3511,14 @@ class PluginBridgeAdapter {
     switch (action) {
       case 'get':
         final key = args['key'] as String?;
-        if (key == null || !isAllowed(key)) return null;
+        if (key == null) throw Exception('error.invalid_params: key required');
+        // מפתח חסום מוחזר כשגיאה ולא כ-null: null זהה להגדרה שלא נקבעה, ולתוסף
+        // לא הייתה דרך להבחין בין "אין ערך" ל"אסור לך לקרוא".
+        if (!isAllowed(key)) {
+          throw Exception(
+            'error.forbidden: setting is not readable by plugins',
+          );
+        }
         return Settings.getValue(key);
       case 'getMany':
         final keys = (args['keys'] as List?)?.cast<String>() ?? [];
@@ -3494,6 +3697,7 @@ class PluginBridgeAdapter {
         if (type == 'calendar.event') {
           _dependencies.calendarCubit.refreshPluginEvents(
             currentBookId: _currentBookId(),
+            currentBookUid: _currentBookUid(),
             currentWorkspaceId: _currentWorkspaceId(),
           );
         }
@@ -3510,6 +3714,7 @@ class PluginBridgeAdapter {
         if (type == 'calendar.event') {
           _dependencies.calendarCubit.refreshPluginEvents(
             currentBookId: _currentBookId(),
+            currentBookUid: _currentBookUid(),
             currentWorkspaceId: _currentWorkspaceId(),
           );
         }
@@ -3668,7 +3873,7 @@ class PluginBridgeAdapter {
             .take(limit)
             .map(
               (b) => {
-                ...PluginBookIdentity.toJson(b.book),
+                ...PluginBookIdentity.toJsonWithUid(b.book),
                 'title': b.book.title,
                 'ref': b.ref,
                 'index': b.index,
@@ -3705,8 +3910,12 @@ class PluginBridgeAdapter {
           final type = (args['type'] as String?)?.trim().toLowerCase();
           final source = (args['source'] as String?)?.trim().toLowerCase();
           final index = (args['index'] as num?)?.toInt();
-          if (id == null && bookId == null) {
-            throw Exception('error.invalid_params: id or bookId required');
+          if (id == null &&
+              bookId == null &&
+              (args['bookUid'] as String?)?.trim().isNotEmpty != true) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
           }
           final historyState = _dependencies.historyBloc.state;
           if (historyState is! HistoryLoaded) return false;
@@ -3720,6 +3929,7 @@ class PluginBridgeAdapter {
               item.book,
               id: id,
               bookId: bookId,
+              bookUid: args['bookUid'] as String?,
               type: type,
               source: source,
             )) {
@@ -3740,6 +3950,171 @@ class PluginBridgeAdapter {
       default:
         throw Exception(
           'error.unknown_method: Unknown action in history: $action',
+        );
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // bookmarks.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleBookmarks(
+    String action,
+    Map<String, dynamic> args,
+  ) async {
+    final bloc = _dependencies.bookmarkBloc;
+    if (bloc == null) {
+      throw Exception('error.unavailable: bookmarks are not available here');
+    }
+    switch (action) {
+      case 'list':
+        final limit = (args['limit'] as num?)?.toInt() ?? 50;
+        return bloc.state.bookmarks
+            .take(limit < 0 ? 0 : limit)
+            .map(
+              (b) => {
+                ...PluginBookIdentity.toJsonWithUid(b.book),
+                'title': b.book.title,
+                'ref': b.ref,
+                'index': b.index,
+                'label': b.label,
+                'targetKind': b.targetKind.name,
+                'createdAt': b.createdAt?.toIso8601String(),
+              },
+            )
+            .toList();
+
+      case 'add':
+        {
+          final index = (args['index'] as num?)?.toInt() ?? 0;
+          if (index < 0) {
+            throw Exception('error.invalid_params: index must not be negative');
+          }
+          final hasUid =
+              (args['bookUid'] as String?)?.trim().isNotEmpty == true;
+          if (!hasUid &&
+              PluginBookIdentity.parseId(args['id']) == null &&
+              (args['bookId'] ?? args['title']) == null) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
+          }
+          final book = _findPluginBook(
+            await DataRepository.instance.library,
+            args,
+          );
+          if (book == null) return false;
+          final label = (args['label'] as String?)?.trim();
+          var ref = (args['ref'] as String?)?.trim() ?? '';
+          if (ref.isEmpty) {
+            ref = book is TextBook
+                ? addBookTitleToRef(
+                    await refFromIndex(index, book.tableOfContents),
+                    book.title,
+                  )
+                : book.title;
+          }
+          return await bloc.addBookmarkAndSave(
+            ref: ref,
+            book: book,
+            index: index,
+            label: label == null || label.isEmpty ? null : label,
+          );
+        }
+
+      case 'remove':
+        {
+          final id = PluginBookIdentity.parseId(args['id']);
+          final bookId = args['bookId'] as String?;
+          if (id == null &&
+              bookId == null &&
+              (args['bookUid'] as String?)?.trim().isNotEmpty != true) {
+            throw Exception(
+              'error.invalid_params: id, bookUid or bookId required',
+            );
+          }
+          final type = (args['type'] as String?)?.trim().toLowerCase();
+          final source = (args['source'] as String?)?.trim().toLowerCase();
+          final index = (args['index'] as num?)?.toInt();
+          final bookmarks = bloc.state.bookmarks;
+          for (var i = 0; i < bookmarks.length; i++) {
+            final item = bookmarks[i];
+            if (!PluginBookIdentity.matches(
+              item.book,
+              id: id,
+              bookId: bookId,
+              bookUid: args['bookUid'] as String?,
+              type: type,
+              source: source,
+            )) {
+              continue;
+            }
+            if (index != null && item.index != index) continue;
+            return await bloc.removeBookmarkAndSave(i);
+          }
+          return false;
+        }
+
+      default:
+        throw Exception(
+          'error.unknown_method: Unknown action in bookmarks: $action',
+        );
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // tools.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleTools(
+    String action,
+    Map<String, dynamic> args,
+  ) async {
+    switch (action) {
+      case 'gematria':
+        {
+          final text = args['text'];
+          if (text is! String || text.trim().isEmpty || text.length > 2000) {
+            throw Exception('error.invalid_params: text required');
+          }
+          final method = (args['method'] as String?) ?? 'regular';
+          if (!const {'regular', 'small', 'finalLetters'}.contains(method)) {
+            throw Exception('error.invalid_params: unknown method "$method"');
+          }
+          var value = GimatriaSearch.gimatria(text, method: method);
+          final words = text
+              .split(RegExp(r'\s+'))
+              .where((w) => w.trim().isNotEmpty)
+              .length;
+          // "עם הכולל" אינו חלק מ-gimatria() — מסך הגימטריה מוסיף את מספר
+          // המילים בעצמו, ואותו חישוב נשמר כאן.
+          if (args['withKolel'] == true) value += words;
+          return {'value': value, 'method': method, 'words': words};
+        }
+
+      case 'dictionary':
+        {
+          final term = args['term'];
+          if (term is! String || term.trim().isEmpty || term.length > 200) {
+            throw Exception('error.invalid_params: term required');
+          }
+          final repository = DictionaryLookupRepository.instance;
+          await repository.ensureAcronymsLoaded();
+          await repository.ensureAramaicLoaded();
+          return {
+            'term': term.trim(),
+            'acronyms': repository
+                .findAcronymMatches(term)
+                .map((e) => {'acronym': e.acronym, 'meanings': e.meanings})
+                .toList(),
+            'aramaic': repository
+                .findAramaicMatches(term)
+                .map((e) => {'aramaic': e.aramaic, 'hebrew': e.hebrew})
+                .toList(),
+          };
+        }
+
+      default:
+        throw Exception(
+          'error.unknown_method: Unknown action in tools: $action',
         );
     }
   }
@@ -4178,6 +4553,85 @@ class PluginBridgeAdapter {
     return null;
   }
 
+  /// מוסיף/מסיר מפרשים בחלונית הקריאה הפעילה. מחזיר את הרשימה הפעילה
+  /// שאחרי השינוי, או `null` כשאין ספר טקסט פתוח.
+  Map<String, dynamic>? _setActiveCommentators(Map<String, dynamic> args) {
+    final add = _commentatorNames(args['add']);
+    final remove = _commentatorNames(args['remove']);
+    if (add.isEmpty && remove.isEmpty) {
+      throw Exception('error.invalid_params: add or remove is required');
+    }
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is! TextBookTab) return null;
+    final state = pane.bloc.state;
+    if (state is! TextBookLoaded) return null;
+    // רק מפרשים שקיימים בספר — שם שגוי היה מגיע לשמירה פר-ספר ונשאר שם.
+    final available = state.availableCommentators.toSet();
+    final unknown = add.where((name) => !available.contains(name)).toList();
+    if (unknown.isNotEmpty) {
+      throw Exception(
+        'error.not_found: unknown commentators: ${unknown.join(', ')}',
+      );
+    }
+    final active = state.activeCommentators.toList();
+    for (final name in remove) {
+      active.remove(name);
+    }
+    for (final name in add) {
+      if (!active.contains(name)) active.add(name);
+    }
+    pane.bloc.add(UpdateCommentators(active));
+    return {
+      'available': state.availableCommentators,
+      'active': active,
+      'rare': state.rareCommentators.toList()..sort(),
+      'groups': _commentatorGroupsToJson(state.commentatorGroups),
+    };
+  }
+
+  List<String> _commentatorNames(Object? raw) {
+    if (raw == null) return const [];
+    if (raw is! List) {
+      throw Exception('error.invalid_params: add/remove must be arrays');
+    }
+    return raw
+        .whereType<String>()
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  /// מה נתמך **בפועל** בהקשר הקריאה הנוכחי. הדגשות מצוירות רק בטור הטקסט
+  /// הראשי (תצוגה משולבת וצורת הדף), ואין הדגשות/בחירה/תפריט הקשר ב-PDF.
+  Map<String, dynamic> _getHighlightCapabilities() {
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is TextBookTab) {
+      final state = pane.bloc.state;
+      final pageShape = state is TextBookLoaded && state.showPageShapeView;
+      return {
+        'surface': pageShape ? 'pageShape' : 'combined',
+        'highlights': true,
+        'selection': true,
+        'contextMenu': const ['mainText'],
+      };
+    }
+    if (pane is PdfBookTab) {
+      return {
+        'surface': 'pdf',
+        'highlights': false,
+        'selection': false,
+        'contextMenu': const <String>[],
+      };
+    }
+    return {
+      'surface': null,
+      'highlights': false,
+      'selection': false,
+      'contextMenu': const <String>[],
+    };
+  }
+
   OpenedTab _paneForPlugins(OpenedTab tab) {
     if (tab is! CombinedTab) return tab;
     final state = _dependencies.tabsBloc.state;
@@ -4207,6 +4661,7 @@ class PluginBridgeAdapter {
       'id': currentTab.book.id,
       'type': PluginBookIdentity.typeOf(currentTab.book),
       'source': PluginBookIdentity.sourceOf(currentTab.book),
+      'bookUid': PluginBookIdentity.uidOf(currentTab.book),
       'text': selectedText,
       'start': state.selectedTextStart,
       'end': state.selectedTextEnd,
@@ -4251,6 +4706,14 @@ class PluginBridgeAdapter {
 
   String? _currentBookId() {
     return _dependencies.tabsBloc.state.readingPane?.title;
+  }
+
+  /// מזהה יציב של הספר בחלונית הקריאה, ל-scope של `book:<bookUid>`.
+  String? _currentBookUid() {
+    final pane = _dependencies.tabsBloc.state.readingPane;
+    if (pane is TextBookTab) return PluginBookIdentity.uidOf(pane.book);
+    if (pane is PdfBookTab) return PluginBookIdentity.uidOf(pane.book);
+    return null;
   }
 
   String? _currentWorkspaceId() {

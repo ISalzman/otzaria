@@ -178,7 +178,8 @@ class PluginFileServer {
   /// האם [uri] היא בקשה לשרת הקבצים שמותר ל-WebView של [pluginId] לבצע.
   ///
   /// זו נקודת האכיפה היחידה של בידוד בין תוספים: רק כאן ידוע מי הפונה.
-  /// URL בפורמט הישן (`/f/<token>`) עדיין מתקבל לגרסה אחת לצורך תאימות.
+  /// TODO: להסיר את קבלת הפורמט הישן (`/f/<token>`) בגרסה הבאה — הוא עוקף את
+  /// אכיפת ה-pluginId, ונשאר רק כדי לא לשבור URL ששמור אצל תוסף מלפני המעבר.
   static bool isUriForPlugin(Uri uri, String pluginId) {
     final segments = uri.pathSegments;
     if (segments.isEmpty || segments[0] != 'f') return false;

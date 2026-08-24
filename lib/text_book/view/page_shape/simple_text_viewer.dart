@@ -1928,6 +1928,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
               bookDbId: state.book.id,
               bookType: PluginBookIdentity.typeOf(state.book),
               bookSource: PluginBookIdentity.sourceOf(state.book),
+              bookUid: PluginBookIdentity.uidOf(state.book),
             );
           }
           entries.add(const AppContextMenuEntry.divider());
@@ -1982,6 +1983,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       root: root,
       globalPosition: tapPosition,
       bookId: state.book.title,
+      bookUid: PluginBookIdentity.uidOf(state.book),
       sectionIndex: paragraphIndex,
       rawText: widget.content[paragraphIndex],
       settings: settings,
@@ -1998,6 +2000,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         bookDbId: state.book.id,
         bookType: PluginBookIdentity.typeOf(state.book),
         bookSource: PluginBookIdentity.sourceOf(state.book),
+        bookUid: PluginBookIdentity.uidOf(state.book),
       ),
       context: 'reader-highlight',
       selectionActionDispatcher: pluginSelectionActionDispatcherOf(menuContext),
@@ -2882,6 +2885,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 final textWidget = SmartTextWidget(
                   text: annotatedData,
                   highlightBookId: widget.isMainText ? state.book.title : null,
+                  highlightBookUid: widget.isMainText
+                      ? PluginBookIdentity.uidOf(state.book)
+                      : null,
                   highlightBookDbId: widget.isMainText ? state.book.id : null,
                   highlightBookType: widget.isMainText
                       ? PluginBookIdentity.typeOf(state.book)
@@ -3221,6 +3227,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       highlights: PluginHighlightRegistry.instance.getAllHighlights(
         bookId: state.book.title,
         sectionIndex: lineIndex,
+        bookUid: PluginBookIdentity.uidOf(state.book),
       ),
       revealedHighlightId: PluginHighlightRevealService.instance.highlightId,
     );

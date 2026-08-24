@@ -26,11 +26,32 @@ class _SequencedPluginAdapter implements CalendarPluginSource {
     List<CustomEvent> existingEvents, {
     String? currentWorkspaceId,
     String? currentBookId,
+    String? currentBookUid,
   }) async {
     final idx = _call < _responses.length ? _call : _responses.length - 1;
     _call++;
     final pluginEvents = await _responses[idx];
     return [...existingEvents, ...pluginEvents];
+  }
+}
+
+/// מתעד את הארגומנטים שהגיעו למתאם — זו החוליה שנבדקת כאן.
+class _RecordingPluginAdapter implements CalendarPluginSource {
+  String? lastWorkspaceId;
+  String? lastBookId;
+  String? lastBookUid;
+
+  @override
+  Future<List<CustomEvent>> loadAndMergePluginEvents(
+    List<CustomEvent> existingEvents, {
+    String? currentWorkspaceId,
+    String? currentBookId,
+    String? currentBookUid,
+  }) async {
+    lastWorkspaceId = currentWorkspaceId;
+    lastBookId = currentBookId;
+    lastBookUid = currentBookUid;
+    return existingEvents;
   }
 }
 
@@ -468,6 +489,30 @@ void main() {
         cubit.close();
       },
     );
+  });
+
+  group('refreshPluginEvents — העברת זהות הספר', () {
+    test('currentBookUid מועבר למתאם התוספים', () async {
+      final adapter = _RecordingPluginAdapter();
+      final cubit = CalendarCubit(
+        settingsRepository: _InMemorySettingsRepository(),
+        notificationService: _FakeNotificationService(),
+        pluginCalendarAdapter: adapter,
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      await cubit.refreshPluginEvents(
+        currentWorkspaceId: 'ws-1',
+        currentBookId: 'גיטין',
+        currentBookUid: 'id:10',
+      );
+
+      expect(adapter.lastBookId, 'גיטין');
+      expect(adapter.lastBookUid, 'id:10');
+      expect(adapter.lastWorkspaceId, 'ws-1');
+
+      await cubit.close();
+    });
   });
 
   group('setZmanEnabled — הפעלה/כיבוי זמנים', () {

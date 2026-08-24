@@ -298,6 +298,7 @@ abstract class CalendarPluginSource {
     List<CustomEvent> existingEvents, {
     String? currentWorkspaceId,
     String? currentBookId,
+    String? currentBookUid,
   });
 }
 
@@ -310,10 +311,12 @@ class _DefaultPluginSource implements CalendarPluginSource {
     List<CustomEvent> existingEvents, {
     String? currentWorkspaceId,
     String? currentBookId,
+    String? currentBookUid,
   }) => PluginCalendarAdapter().loadAndMergePluginEvents(
     existingEvents,
     currentWorkspaceId: currentWorkspaceId,
     currentBookId: currentBookId,
+    currentBookUid: currentBookUid,
   );
 }
 
@@ -480,9 +483,11 @@ class CalendarCubit extends Cubit<CalendarState> {
   /// מה-DB לאחר upsert / remove.
   ///
   /// [currentWorkspaceId] / [currentBookId] — לסינון workspace/book scope.
+  /// [currentBookUid] — המזהה היציב, שמאפשר scope מסוג `book:<uid>`.
   Future<void> refreshPluginEvents({
     String? currentWorkspaceId,
     String? currentBookId,
+    String? currentBookUid,
   }) async {
     // בולע קריאות ישנות: רק הקריאה האחרונה שמסיימת מורשית ל-emit.
     final generation = ++_pluginRefreshGeneration;
@@ -491,6 +496,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       [],
       currentWorkspaceId: currentWorkspaceId,
       currentBookId: currentBookId,
+      currentBookUid: currentBookUid,
     );
 
     if (isClosed || generation != _pluginRefreshGeneration) return;

@@ -1,3 +1,4 @@
+import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -209,6 +210,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final navigationBloc = context.read<NavigationBloc>();
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
+    final bookmarkBloc = context.read<BookmarkBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
@@ -220,6 +222,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       navigationBloc: navigationBloc,
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
+      bookmarkBloc: bookmarkBloc,
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(

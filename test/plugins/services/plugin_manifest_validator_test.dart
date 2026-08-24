@@ -394,5 +394,39 @@ void main() {
       expect(errors.any((e) => e.contains('stability')), isTrue);
     });
 
+    // המזהה מרכיב את נתיב תיקיית הנתונים, ו-`..` היה מוציא את המרחב הפרטי
+    // מתיקיית התוסף — ובשחזור גיבוי גם מוחק תיקייה שרירותית.
+    test('isValidPluginId דוחה רצף נקודות ותווים אסורים', () {
+      for (final bad in [
+        '..',
+        '.',
+        '...',
+        'INVALID ID',
+        'a/b',
+        r'a\b',
+        'Upper',
+        '',
+        'a b',
+      ]) {
+        expect(
+          PluginManifestValidator.isValidPluginId(bad),
+          isFalse,
+          reason: 'צריך להידחות: "$bad"',
+        );
+      }
+      for (final good in [
+        'my.plugin',
+        'a-b_c.1',
+        'x',
+        '.hidden',
+        'a..b',
+      ]) {
+        expect(
+          PluginManifestValidator.isValidPluginId(good),
+          isTrue,
+          reason: 'צריך לעבור: "$good"',
+        );
+      }
+    });
   });
 }

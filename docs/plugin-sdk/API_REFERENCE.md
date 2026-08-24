@@ -13,6 +13,7 @@
   "id": 183,
   "type": "pdf",
   "bookId": "שם הספר",
+  "bookUid": "id:183",
   "source": "library"
 }
 ```
@@ -21,39 +22,46 @@
 |-----|--------|
 | `id` | המזהה המספרי של הספר במסד הנתונים (`int?` — יכול להיות `null` לספרים ללא מזהה. אם ה-id לא זמין, ניתן לחפש לפי `bookId` + `type`) |
 | `type` | סוג הספר: `"text"` \| `"pdf"` \| `"docx"` \| `"epub"` \| `"external"`. `null` עבור טאבים שאינם ספרים (SearchingTab, CombinedTab) |
-| `bookId` | שם הספר — נשמר לצורך תאימות לאחור ולאימות כאשר נשלח יחד עם `id` |
+| `bookId` | שם הספר — נשמר לצורך תאימות לאחור ולאימות כאשר נשלח יחד עם `id`. **אינו מובטח ייחודי** (שני ספרים בעלי אותו שם, ספר אישי מול רשמי, נוסחאות) ואינו יציב (עלול להשתנות בעדכון ספרייה) — עדיף `bookUid`. |
+| `bookUid` | **המזהה היציב המומלץ** — מחרוזת חוצה-ספקים (`id:<n>` לספרייה, `uid:<n>` לספר אישי, `ext:<...>` לספר חיצוני). זהו המזהה שמנוע החיפוש כבר משתמש בו: יציב בין עדכוני ספרייה והעברת ספרייה, ושורד שינויי כותרת. **מומלץ לתוסף לאחסן אותו במקום כותרת.** |
 | `source` | מקור הספר: `"library"` לספרייה המובנית, `"user"` ל־`user_books.db`, או `"external"` לקטלוג חיצוני. חובה לשלוח אותו עם `id` כאשר ה־ID עלול להתנגש בין מסדי נתונים. |
+
+> **יציבות `bookUid` ו-fallback חינני:** גם `bookUid` עלול להתייתם במקרה קצה נדיר — ספר שגם משנה שם וגם עובר עריכה מסיבית באותה גרסת ספרייה (זיהוי שינוי-השם הוא היוריסטי). תוסף השומר `bookUid` צריך לשמור לצדו גם את הכותרת האחרונה שנראתה, וליפול אליה בחן אם ה-`bookUid` לא נמצא עוד.
 
 ### APIs שמחזירים זהות מלאה
 
-| API | id | type | bookId |
-|-----|-----|------|--------|
-| `library.findBooks` | ✓ | ✓ | ✓ |
-| `library.getBookMetadata` | ✓ | ✓ | ✓ |
-| `library.listRecentBooks` | ✓ | ✓ | ✓ |
-| `library.getTree` | ✓ | ✓ | ✓ |
-| `reader.openBook` | קלט | קלט | קלט |
-| `reader.openBookAtRef` | קלט | קלט | קלט |
-| `reader.getCurrentState` | ✓ | ✓ | ✓ |
-| `reader.getCurrentRef` | ✓ | ✓ | ✓ |
-| `reader.getSelection` | ✓ | ✓ | ✓ |
-| `history.list` | ✓ | ✓ | ✓ |
-| `history.remove` | קלט | קלט | קלט |
-| `search.fullText` | ✗ (ראה הערה) | ✓ | — |
-| `search.query` | ✓ | ✓ | ✓ |
-| `library.getBookContent` | ✗ | ✗ | ✓ |
-| `library.getBookToc` | ✗ | ✗ | ✓ |
-| `library.getBookAltToc` | ✗ | ✗ | ✓ |
+| API | id | type | bookId | bookUid |
+|-----|-----|------|--------|---------|
+| `library.findBooks` | ✓ | ✓ | ✓ | ✓ |
+| `library.getBookMetadata` | ✓ | ✓ | ✓ | ✓ |
+| `library.listRecentBooks` | ✓ | ✓ | ✓ | ✓ |
+| `library.getTree` | ✓ | ✓ | ✓ | ✓ |
+| `reader.openBook` | קלט | קלט | קלט | קלט |
+| `reader.openBookAtRef` | קלט | קלט | קלט | קלט |
+| `reader.getCurrentState` | ✓ | ✓ | ✓ | ✓ |
+| `reader.getCurrentRef` | ✓ | ✓ | ✓ | ✓ |
+| `reader.getSelection` | ✓ | ✓ | ✓ | ✓ |
+| `history.list` | ✓ | ✓ | ✓ | ✓ |
+| `history.remove` | קלט | קלט | קלט | קלט |
+| `bookmarks.list` | ✓ | ✓ | ✓ | ✓ |
+| `bookmarks.add` | קלט | קלט | קלט | קלט |
+| `bookmarks.remove` | קלט | קלט | קלט | קלט |
+| `search.fullText` | ✗ (ראה הערה) | ✓ | — | — |
+| `search.query` | ✓ | ✓ | ✓ | ✓ |
+| `library.getBookContent` | ✗ | ✗ | ✓ | — |
+| `library.getBookToc` | ✗ | ✗ | ✓ | — |
+| `library.getBookAltToc` | ✗ | ✗ | ✓ | — |
 
 > **הערה על `search.fullText`:** מנוע החיפוש (Tantivy) אינו שומר את ה-`id` מה-DB. כדי לקבל `id` — קרא ל-`library.getBookMetadata({ bookId, type })` עם התוצאה.
 
 > **הערה על DocxBook / EpubBook:** ספרים בפורמטים אלו נפתחים בתצוגת טקסט, אך `type` נשאר `"docx"` או `"epub"` כדי לשמור על הזהות הקנונית.
 
-- **`bookId` לא השתנה** — תוספים קיימים שמסתמכים עליו ימשיכו לעבוד.
-- **כאשר שולחים כמה שדות זהות** (למשל `id` + `bookId` + `type` + `source`), כולם חייבים להתאים לאותו ספר. אם יש סתירה או שהזהות אינה חד-משמעית, ה-API מחזיר `null` / `false`.
+- **`bookId` לא השתנה** — תוספים קיימים שמסתמכים עליו ימשיכו לעבוד. `bookUid` נוסף כשדה חדש; שום שדה קיים לא הוסר.
+- **`bookUid` כקלט** — כל API שמקבל זהות ספר (`reader.openBook`, `reader.openBookAtRef`, `library.getBookMetadata`, `history.remove`, `bookmarks.add`, `bookmarks.remove` ועוד) מקבל גם `bookUid`. כשהוא נשלח הוא פותר את הספר **ישירות וחד-משמעית**, ומתעלם מ-`id`/`bookId`/`type` שאולי נשלחו לצדו.
+- **כאשר שולחים כמה שדות זהות** (למשל `id` + `bookId` + `type` + `source`, בלי `bookUid`), כולם חייבים להתאים לאותו ספר. אם יש סתירה או שהזהות אינה חד-משמעית, ה-API מחזיר `null` / `false`.
+- **חיפוש לפי `bookUid` בלבד** — הנתיב המומלץ; חד-משמעי ואינו דורש שדות נוספים.
 - **חיפוש לפי `id` בלבד** — נתמך ב-`library.getBookMetadata`, `reader.openBook`, `reader.openBookAtRef`.
-- **חיפוש לפי `bookId` בלבד** — נשמר לתאימות לאחור בכל API.
-- **שני ספרים בעלי אותו שם** — ניתן להבדיל ביניהם בעזרת `id` + `type`.
+- **חיפוש לפי `bookId` בלבד** — נשמר לתאימות לאחור בכל API. כשקיימים שני ספרים בעלי אותו שם, העדיפו `bookUid`.
 
 ---
 
@@ -148,6 +156,9 @@ if (response.success) {
 | `reader.getCurrentRef` | 0.9.89 |
 | `reader.getSelection` | 0.9.89 |
 | `reader.getActiveCommentators` | 0.9.97 |
+| `reader.setActiveCommentators` | 0.9.97 |
+| `reader.scrollToSection` | 0.9.97 |
+| `reader.getHighlightCapabilities` | 0.9.97 |
 | `reader.findTextOccurrences` | 0.9.95 |
 | `reader.getSectionTextMap` | 0.9.95 |
 | `reader.registerInBookSearchProvider` | 0.9.97 |
@@ -190,6 +201,12 @@ if (response.success) {
 | `fs.beginBinaryWrite` | 0.9.97 |
 | `fs.commitUserFileWrite` | 0.9.97 |
 | `fs.abortBinaryWrite` | 0.9.97 |
+| `fs.writeFile` | 0.9.97 |
+| `fs.readFile` | 0.9.97 |
+| `fs.listDir` | 0.9.97 |
+| `fs.makeDir` | 0.9.97 |
+| `fs.deleteEntry` | 0.9.97 |
+| `fs.stat` | 0.9.97 |
 | `feedback.sendEmail` | 0.9.89 |
 | `feedback.report` | 0.9.97 |
 | `feedback.hasReporterEmail` | 0.9.97 |
@@ -197,6 +214,11 @@ if (response.success) {
 | `history.listSearches` | 0.9.89 |
 | `history.clear` | 0.9.89 |
 | `history.remove` | 0.9.89 |
+| `bookmarks.list` | 0.9.97 |
+| `bookmarks.add` | 0.9.97 |
+| `bookmarks.remove` | 0.9.97 |
+| `tools.gematria` | 0.9.97 |
+| `tools.dictionary` | 0.9.97 |
 | `notifications.showInApp` | 0.9.89 |
 | `notifications.sendSystem` | 0.9.89 |
 | `notifications.scheduleSystem` | 0.9.89 |
@@ -1352,6 +1374,59 @@ const { data } = await Otzaria.call('reader.getActiveCommentators');
 // }
 ```
 
+### `reader.setActiveCommentators`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+מוסיף ומסיר מפרשים בטאב הקריאה הנוכחי. הפעולה מצטברת על הבחירה הקיימת —
+`add` מוסיף בסוף הסדר הקיים ו-`remove` מסיר; יש להעביר לפחות אחד מהם.
+מחזיר את אותה מבנה של `reader.getActiveCommentators` אחרי השינוי, או `null`
+כשאין טאב טקסט טעון (כולל PDF — שם הבחירה אינה נתמכת לכתיבה).
+
+שם שאינו ב-`available` של הספר נדחה ב-`error.not_found`, כדי שלא תישמר
+בחירה שאין לה מפרש.
+
+```javascript
+await Otzaria.call('reader.setActiveCommentators', {
+  add: ['רש״י על בראשית'],
+  remove: ['רמב״ן על בראשית']
+});
+```
+
+### `reader.scrollToSection`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+גולל את הספר ה**פתוח** לקטע, בלי לפתוח אותו מחדש ובלי לדרוש הדגשה. בספר
+טקסט `sectionIndex` הוא אינדקס השורה (מבוסס-0); ב-PDF זהו מספר העמוד
+(מבוסס-1) — אותה סמנטיקה של `currentIndex` ב-`reader.getCurrentState`.
+
+`highlight: true` מסמן גם את הקטע; ברירת המחדל `false` מנקה סימון קיים.
+מחזיר `false` כשאין חלונית קריאה, או ב-PDF שהצפיין שלו עדיין לא מוכן.
+
+```javascript
+await Otzaria.call('reader.scrollToSection', { sectionIndex: 42 });
+```
+
+### `reader.getHighlightCapabilities`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+מה נתמך **בפועל** בהקשר הקריאה הנוכחי, כדי שתוסף לא ינסה פעולה שאינה
+קיימת במשטח שבו המשתמש נמצא. הדגשות מצוירות רק בטור הטקסט הראשי — לא
+בחלוניות המפרשים — ו-PDF אינו תומך בהדגשות, בבחירת טקסט ובפריטי תפריט הקשר.
+
+| שדה | משמעות |
+|-----|--------|
+| `surface` | `'combined'` \| `'pageShape'` \| `'pdf'` \| `null` |
+| `highlights` | האם `reader.setHighlight` ייראה במשטח הזה |
+| `selection` | האם `reader.getSelection` יכול להחזיר בחירה |
+| `contextMenu` | האזורים שבהם פריטי `reader.addContextMenuItem` מוצגים |
+
+```javascript
+const { data } = await Otzaria.call('reader.getHighlightCapabilities');
+if (data.highlights) { /* ... */ }
+// { surface: 'combined', highlights: true, selection: true,
+//   contextMenu: ['mainText'] }
+```
+
 ### `reader.findTextOccurrences`
 **הרשאה:** `reader.open`
 
@@ -1772,6 +1847,103 @@ await Otzaria.call('fs.deleteFile', {
 
 ---
 
+## fs.* - המרחב הפרטי של התוסף (מ-0.9.97)
+
+> **אין צורך בשום הרשאה.** לכל תוסף יש תיקייה פרטית משלו, והוא כותב וקורא בה
+> בחופשיות. **אל תבקשו `fs.folder_access` בשביל קבצי עבודה** — היא נועדה לעבוד
+> בתיקייה של המשתמש, וזו ההרשאה הרחבה ביותר במערכת.
+>
+> כל הנתיבים ב-API הזה הם **יחסיים לשורש הפרטי**, ומופרדים ב-`/`. נתיב שיוצא
+> מהשורש — `..`, נתיב מוחלט או כתובת רשת (UNC) — נדחה ב-`error.forbidden`.
+> **כל רכיב symlink בנתיב נדחה**, בין אם יעדו בתוך השורש ובין אם מחוצה לו.
+> הנתיב המוחלט על הדיסק אינו נחשף לתוסף.
+>
+> **מכסה:** 100MB לכל תוסף. חריגה מוחזרת כ-`error.too_large`. `writeFile`
+> ו-`listDir` מחזירים `usedBytes`/`quotaBytes` כדי לעקוב.
+>
+> **תקרת רשומות:** 10,000 קבצים ותיקיות, ועומק עד 32 רמות. קובץ ריק ותיקייה
+> אינם צורכים בתים, ולכן המכסה לבדה לא הגבילה את מספרם. חריגה מוחזרת
+> כ-`error.too_large`.
+>
+> **תקרת העברה:** 10MB לקריאה או כתיבה בודדת — הגשר מעביר את התוכן כמחרוזת
+> JSON. לקבצים גדולים יותר יש `fs.pickUserFile` ושרת הקבצים.
+>
+> התיקייה נמחקת בהסרת התוסף, ונכללת בגיבוי ובשחזור של אוצריא.
+
+### `fs.writeFile`
+**הרשאה:** (אין)
+
+כתיבת קובץ. תיקיות האב נוצרות לפי הצורך. `encoding` הוא `'utf8'` (ברירת מחדל)
+או `'base64'` לתוכן בינארי. `append: true` מוסיף לסוף קובץ קיים — גם אז המכסה
+נאכפת על סך המרחב.
+
+```javascript
+const { data } = await Otzaria.call('fs.writeFile', {
+  path: 'cache/index.json',
+  content: JSON.stringify({ updated: Date.now() })
+});
+// data = { path, size, usedBytes, quotaBytes }
+```
+
+### `fs.readFile`
+**הרשאה:** (אין)
+
+```javascript
+const { data } = await Otzaria.call('fs.readFile', { path: 'cache/index.json' });
+// data = { path, encoding: 'utf8', size, content: '{"updated":...}' }
+```
+
+`encoding: 'base64'` מחזיר את הבייטים כ-base64. קובץ שאינו קיים מוחזר עם
+`error.not_found`.
+
+### `fs.listDir`
+**הרשאה:** (אין)
+
+פירוט תיקייה. `path` ריק או חסר = שורש המרחב. תיקיות מופיעות לפני קבצים.
+
+```javascript
+const { data } = await Otzaria.call('fs.listDir', { path: 'cache' });
+// data.entries = [{ path: 'cache/index.json', name: 'index.json',
+//                   type: 'file', size: 42, modified: '2026-08-24T...Z' }]
+```
+
+### `fs.makeDir`
+**הרשאה:** (אין)
+
+יוצר תיקייה וכל האבות שלה. idempotent.
+
+```javascript
+await Otzaria.call('fs.makeDir', { path: 'cache/images' });
+// true
+```
+
+### `fs.deleteEntry`
+**הרשאה:** (אין)
+
+מוחק קובץ או תיקייה. מחזיר `true` אם נמחק משהו ו-`false` אם הנתיב לא היה
+קיים (idempotent). מחיקת תיקייה **לא ריקה** דורשת `recursive: true`, אחרת
+מוחזר `error.invalid_params`. מחיקת השורש עצמו אינה אפשרית.
+
+```javascript
+await Otzaria.call('fs.deleteEntry', { path: 'cache', recursive: true });
+```
+
+### `fs.stat`
+**הרשאה:** (אין)
+
+```javascript
+const { data } = await Otzaria.call('fs.stat', { path: 'cache/index.json' });
+// { exists: true, path, name, type: 'file', size, modified }
+// או { exists: false }
+```
+
+שגיאות אפשריות: `error.forbidden` (נתיב שיוצא מהשורש),
+`error.invalid_params` (פרמטר חסר, קידוד לא מוכר, נתיב שהוא תיקייה בכתיבה,
+תיקייה לא ריקה במחיקה), `error.not_found` (קריאה מקובץ שאינו קיים),
+`error.too_large` (חריגה מהמכסה או מתקרת ההעברה), `error.internal`.
+
+---
+
 ## fs.* - קבצים אישיים של המשתמש
 
 > פעולות אלו מאפשרות לתוסף לפתוח קובץ אישי (PDF / טקסט וכו') שהמשתמש בוחר
@@ -2090,6 +2262,87 @@ const { data } = await Otzaria.call('history.remove', {
 
 ---
 
+## bookmarks.* - סימניות
+
+הסימניות של המשתמש. הקריאה והכתיבה הן שתי הרשאות נפרדות, כמו
+`notes.read`/`notes.write`.
+
+### `bookmarks.list`
+**הרשאה:** `bookmarks.read` · **מגרסה:** 0.9.97
+
+```javascript
+const { data } = await Otzaria.call('bookmarks.list', { limit: 50 });
+// [{ id, type, source, title: 'בראשית', ref: 'בראשית, פרק א',
+//    index: 0, label: 'בראשית ברא', targetKind: 'book',
+//    createdAt: '2026-08-24T10:00:00.000' }]
+```
+
+### `bookmarks.add`
+**הרשאה:** `bookmarks.write` · **מגרסה:** 0.9.97
+
+הספר מזוהה כמו בכל API אחר (`id` או `bookId`). כש-`ref` אינו נמסר הוא
+מחושב מתוכן העניינים של הספר, בדיוק כמו סימנייה שהמשתמש הוסיף מהתפריט.
+מחזיר `false` כשהספר לא נמצא **או** כשכבר קיימת סימנייה זהה (אותו ספר
+ואותו `index`) — אין כפילויות.
+
+```javascript
+await Otzaria.call('bookmarks.add', {
+  bookId: 'בראשית',
+  index: 12,
+  label: 'להמשיך מכאן'   // אופציונלי
+});
+```
+
+### `bookmarks.remove`
+**הרשאה:** `bookmarks.write` · **מגרסה:** 0.9.97
+
+מוחק את הסימנייה הראשונה שמתאימה לזהות. בלי `index` — הראשונה של הספר.
+
+```javascript
+await Otzaria.call('bookmarks.remove', { bookId: 'בראשית', index: 12 });
+// true או false
+```
+
+---
+
+## tools.* - כלי עזר מובנים
+
+**הרשאה:** `tools.read` — נתוני עזר של התוכנה בלבד, ללא גישה לנתוני המשתמש.
+
+### `tools.gematria`
+**מגרסה:** 0.9.97
+
+חישוב גימטריה של מחרוזת. `method` הוא `'regular'` (ברירת מחדל), `'small'`
+או `'finalLetters'`; `withKolel: true` מוסיף את מספר המילים ("עם הכולל").
+תווים שאינם אותיות עבריות מתעלמים. מגבלה: 2000 תווים.
+
+```javascript
+const { data } = await Otzaria.call('tools.gematria', { text: 'אברהם' });
+// { value: 248, method: 'regular', words: 1 }
+```
+
+> חיפוש הפוך (ערך → מילים) אינו נחשף: הוא סורק את ספרי הספרייה ואינו
+> פעולה זולה. לצורך זה השתמשו ב-`search.query`.
+
+### `tools.dictionary`
+**מגרסה:** 0.9.97
+
+חיפוש מונח במילוני העזר המצורפים לתוכנה: ראשי תיבות ומילון ארמית.
+`acronyms` מחזיר התאמה מדויקת, ואם אין — התאמות קידומת. `hebrew` בערכי
+הארמית הוא טקסט עם סימון מקורי. מגבלה: 200 תווים.
+
+```javascript
+const { data } = await Otzaria.call('tools.dictionary', { term: 'רמב״ם' });
+// { term: 'רמב״ם',
+//   acronyms: [{ acronym: 'רמב״ם', meanings: ['רבי משה בן מיימון'] }],
+//   aramaic: [] }
+```
+
+> לעזי רש"י אינם נכללים: הם נקראים ממסד הנתונים של הספרייה ומטבלת
+> הקישורים, ולא ממילון מצורף.
+
+---
+
 ## notifications.* - התראות
 
 ### `notifications.showInApp`
@@ -2296,24 +2549,61 @@ const { data } = await Otzaria.call('settings.getMany', {
 // { "key-font-size": 25, "key-font-family": "Frank Ruhl Libre" }
 ```
 
-**מפתחות מורשים לקריאה:**
-- `key-dark-mode`
-- `key-follow-system-theme`
-- `key-swatch-color`, `key-dark-swatch-color`
-- `key-font-size`, `key-font-family`
-- `key-commentators-font-family`, `key-commentators-font-size`
-- `key-line-height`
-- `key-selected-city`
-- `key-calendar-type`
-- `key-settings-language` (מ-0.9.97 — שפת הממשק שנבחרה, או `system`)
-- `key-show-teamim`
-- `key-default-nikud`
-- `key-remove-nikud-tanach`
-- `key-replace-holy-names`
-- `key-library-view-mode`
-- `key-copy-with-headers`, `key-copy-header-format`
-- `key-hebrew-books-path` — נתיב ספרי HebrewBooks, או `null`/מחרוזת ריקה
-  כשלא הוגדר מיקום
+### מה מותר לקרוא (השתנה ב-0.9.97)
+
+עד 0.9.97 הייתה רשימת היתר סגורה של ~19 מפתחות. **מ-0.9.97 הכלל הפוך:** כל
+הגדרה קריאה, למעט מה שחסום מטעמי פרטיות ואבטחה. כך העדפת תצוגה חדשה זמינה
+לתוספים מיד, בלי להמתין לרליס.
+
+**חסום לקריאה:**
+
+- כל מפתח שבשמו `password`, `secret`, `credential`, `token`, `api-key`,
+  `client-id` — סודות ואסימונים.
+- כל מפתח שבשמו `path`, `folder`, `root` — נתיבים במערכת הקבצים (כולל
+  `key-library-path`, `key-index-path`, `key-backup-path`,
+  `key-hebrew-books-path`, `key-custom-folders`). נתיב חושף את שם המשתמש ואת
+  מבנה הדיסק; לעבודה על קבצים יש את המרחב הפרטי ואת `ui.pickFolder`.
+- כל מפתח שבשמו `email` — כתובת המייל של המשתמש. היא נקראת רק דרך
+  `app.getUserEmail` עם ההרשאה `app.user_email.read`.
+- `key-google-calendar-*` — חשבון Google של המשתמש.
+- `key-calendar-event*` — אירועי לוח השנה. נקראים דרך `calendar.getEvents`
+  עם ההרשאה `calendar.read`.
+- `key-protected-mode-*`, `sz:*` (ספרים במעקב והתקדמות "שמור וזכור").
+- `page_shape_book_*`, `page_shape_highlight_*`, `page_shape_visibility_*`,
+  `page_shape_use_book_settings_*`, `page_shape_view_mode_*`,
+  `page_shape_category_*` — שם הספר או הקטגוריה הוא חלק מהמפתח, ולכן קריאתם
+  חושפת מה המשתמש לומד. ‎`page_shape_global_visibility_*`‎ **כן** קריא — הוא
+  העדפת תצוגה גלובלית בלי זהות ספר.
+- `key-shortcut-open-plugin-*` — קיצור פר-תוסף. קריאתו הייתה מונה את התוספים
+  האחרים המותקנים; לאוצריא אין API כזה ואין הרשאה כזו.
+- תוכן אישי: `key-bookmarks`, `key-tabs`, `key-current-tab`, `key-workspaces`,
+  `key-current-workspace-id`, `key-saved-alternative-words`,
+  `key-plugin-search-selections`.
+
+`settings.get` על מפתח חסום מחזיר `error.forbidden` (ולא `null`, כדי שאפשר
+יהיה להבחין בינו לבין הגדרה שלא נקבעה). `settings.getMany` **מדלג** על מפתח
+חסום — הוא פשוט חסר מהמפה המוחזרת, ואין דרך להבחין בינו לבין מפתח שלא נקבע.
+זו אי-סימטריה מכוונת: `getMany` נועד לקריאת אצווה של העדפות תצוגה, שבה מפתח
+חסר אינו מצב שגיאה.
+
+> **⚠️ שינוי שובר — יש לבדוק לפני שדרוג ל-0.9.97**
+>
+> עד 0.9.97 `settings.get` על **כל** מפתח שלא היה ברשימת ההיתר החזיר `null`
+> בשקט. מ-0.9.97 הוא זורק `error.forbidden`, ולכן קוד כמו
+> `const v = (await Otzaria.call('settings.get', {key})).data` על מפתח חסום
+> מקבל promise **נדחה** — חריגה לא-מטופלת במקום `null`.
+>
+> יש לעטוף בדיקות כאלה ב-`try/catch`, או לעבור ל-`settings.getMany` שמדלג
+> בשקט. שים לב שגם מפתחות שלא נראו חסומים קודם נחסמו כאן (משפחות
+> `page_shape_*` פר-ספר ו-`key-shortcut-open-plugin-*`).
+
+מפתחות נפוצים שאפשר לקרוא: `key-dark-mode`, `key-follow-system-theme`,
+`key-swatch-color`, `key-dark-swatch-color`, `key-font-size`,
+`key-font-family`, `key-commentators-font-family`,
+`key-commentators-font-size`, `key-line-height`, `key-selected-city`,
+`key-calendar-type`, `key-settings-language`, `key-show-teamim`,
+`key-default-nikud`, `key-remove-nikud-tanach`, `key-replace-holy-names`,
+`key-library-view-mode`, `key-copy-with-headers`, `key-copy-header-format`.
 
 ---
 
@@ -2452,7 +2742,7 @@ const { data } = await Otzaria.call('calendar.getEvents', {
 ```javascript
 await Otzaria.call('publishedData.upsert', {
   type: 'calendar.event',  // 'calendar.event' | 'saved.query' | 'note.draft' | 'reference.link' | 'tool.badge'
-  scope: 'global',          // 'global' | 'workspace:<id>' | 'book:<bookId>'
+  scope: 'global',          // 'global' | 'workspace:<id>' | 'book:<bookUid>' (מזוהה גם 'book:<כותרת>')
   key: 'myPlugin:event1',
   payload: {
     title: 'שקיעה',
@@ -2946,8 +3236,18 @@ async function scheduleReminder(title, body, dateTime) {
 
 החל מ־`minAppVersion: 0.9.96`, `startup.programs` מאפשר לחשב תרומת UI מתוך
 הקשר הקורא וממקורות DB שאוצריא אישרה. התכנית עוברת קומפילציה ואימות ב־Dart,
-ואינה טוענת HTML או JavaScript. בגרסה הנוכחית ה־trigger הנתמך הוא
-`reader.activeBookChanged` בלבד.
+ואינה טוענת HTML או JavaScript.
+
+ה־triggers הנתמכים:
+
+| trigger | מתי רץ | ההקשר (`$context`) |
+|---|---|---|
+| `reader.activeBookChanged` | בכל החלפת ספר/חלונית קריאה | `reader.context` ו־`reader.book` |
+| `app.startup` | פעם אחת לכל תוסף — בסיום סנכרון התוספים בעליית האפליקציה, וגם כשתוסף מותקן לאחר העלייה (בסיום ההתקנה שלו) | ריק, אלא אם ספר כבר פתוח |
+| `settings.changed` | בכל שינוי הגדרה, אחרי השהיית איחוד של 150ms | כנ"ל |
+
+שני האחרונים אינם נגזרים מהקשר הקריאה, ולכן `$context` יהיה ריק כשאין ספר
+פתוח — תכנית שנשענת על `reader.book` צריכה `reader.activeBookChanged`.
 
 דוגמה שמוצאת מהדורות היברובוקס המקבילות לספר הטקסט הפעיל:
 
@@ -3114,7 +3414,7 @@ async function scheduleReminder(title, body, dateTime) {
 | `data.choose` | — | מ־0.9.97: מחזיר `whenTrue` או `whenFalse` לפי `condition` מובנה |
 | `data.map` | — | מיפוי של עד 20 רשומות בעזרת `template` ו־`$row` |
 | `library.resolveBooks` | `library.books.read` | זהות קנונית רק להתאמה יחידה; עמימות מוחזרת כאי־התאמה |
-| `settings.get` | `settings.read` | מ־0.9.97: ערך הגדרת תוכנה לפי `key` (ליטרל מחרוזת). רק מפתחות שתוספים רשאים לקרוא — מפתח אחר נדחה כבר בהתקנה |
+| `settings.get` | `settings.read` | מ־0.9.97: ערך הגדרת תוכנה לפי `key` (ליטרל מחרוזת). רק מפתחות שתוספים רשאים לקרוא — מפתח חסום נכשל בזמן החישוב, לא בהתקנה |
 | `storage.get` | `plugin.storage.read` | מ־0.9.97: ערך מאחסון התוסף לפי `key` (ליטרל מחרוזת). נעול למרחב האחסון הרגיל של התוסף (אותו אחד של `storage.set`) — אין פרמטר namespace; מפתח שאינו קיים מחזיר `null` |
 | `library.parallelEditions` | `library.books.read` | מ־0.9.97: מהדורות מקבילות לזהות ספר — המהדורה המובנית בספרייה ואז מהדורות ספקים חיצוניים שנרשמו דרך `startup.externalEditions` ונפתחות מקומית; שורות `{title, isCompanion, identity}` |
 
@@ -3130,6 +3430,18 @@ async function scheduleReminder(title, body, dateTime) {
   `reader.openBookInSidePane` — אותם ארגומנטים ואותה הרשאה (`reader.open`),
   אלא שהספר נפתח כחלונית לצד הספר הנוכחי במקום להחליף אותו. בטאב שכבר מפוצל
   הפעולה יורדת לפתיחה ככרטיסייה רגילה.
+- מ־0.9.97 קיימות עוד שלוש פעולות host, כולן בלי להעיר את המנוע:
+  - `reader.scrollToRef` (‏`args: {ref, highlight?}`, הרשאה `reader.open`) —
+    גולל את הספר ה**פתוח** להפניה, בלי לפתוח אותו מחדש. ההפניה נפתרת מול
+    אותם מסלולים של `reader.openBookAtRef` (heRef פר-שורה, ואז תוכן
+    העניינים). נכשל כשאין ספר טקסט פתוח או שההפניה לא נפתרה.
+  - `search.open` (‏`args: {query, autoSearch?}`, הרשאה `reader.open`) —
+    פותח כרטיסיית חיפוש עם השאילתה. `autoSearch: false` ממלא את השדה בלי
+    להריץ, כמו ב-`reader.openSearchTab`.
+  - `ui.showSnack` (‏`args: {message, severity?}`, הרשאה `notifications.send`) —
+    הודעת מערכת. `severity`: `"info"` (ברירת מחדל), `"success"`, `"error"`.
+    ההודעה מוצגת עם ייחוס לתוסף — `<message> · מאת <שם התוסף>` — כדי שהמשתמש
+    ידע איזה תוסף פנה אליו; אין צורך להוסיף את שם התוסף ל-`message` בעצמכם.
 - מ־0.9.97 פעולה יכולה גם לכתוב לאחסון התוסף בלי להעיר את המנוע:
   `storage.set` (‏`args: {key, value}`) ו־`storage.remove` (‏`args: {key}`),
   בהרשאה `plugin.storage.write`. הכתיבה נעולה למרחב האחסון הרגיל של התוסף
@@ -3291,7 +3603,7 @@ Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי �
 
 - **לחיצה על פקד/פריט** שנרשם דקלרטיבית: אם הוגדר `openPlugin: true` — נפתח דף התוסף והאירוע נמסר לו. אחרת: עם `app.run_on_startup` — אוצריא מרימה מופע רקע שקט באותו רגע ואירוע הלחיצה נמסר אחרי ה-boot; **בלי** ההרשאה — הלחיצה נופלת לפתיחת דף התוסף (כמו `openPlugin: true`), כך שהפקד תמיד עובד וההפעלה גלויה.
 - **`activationEvents`**: כשאירוע מהרשימה קורה ואין לתוסף מנוע חי — מופע הרקע קם והאירוע נמסר לו. דורש `app.run_on_startup`, וכל נושא רגיל דורש בנוסף את הרשאת `events.subscribe:<topic>` שלו.
-- **`app.startup`**: טריגר מיוחד — מופע הרקע קם פעם אחת, כמה שניות **אחרי** שעליית אוצריא הסתיימה (לא מתחרה בעלייה). מיועד לתוספים שחייבים קוד בעלייה (למשל בדיקת עדכונים). דורש `app.run_on_startup` כמו כל הפעלה שקטה.
+- **`app.startup`**: טריגר מיוחד — נורה **פעם אחת לכל תוסף**: מופע הרקע קם כמה שניות **אחרי** שעליית אוצריא הסתיימה (לא מתחרה בעלייה), וגם כשתוסף מותקן לאחר שהאפליקציה כבר עלתה — הוא נורה לו בסיום ההתקנה. מיועד לתוספים שחייבים קוד בעלייה (למשל בדיקת עדכונים). דורש `app.run_on_startup` כמו כל הפעלה שקטה.
 
 ### כיבוי אוטומטי אחרי חוסר פעילות
 
@@ -3406,6 +3718,8 @@ API — מפונה. הפינוי שקוף באותו אופן ככיבוי אח�
 | `equals` | מחרוזת / מספר / בוליאני / `null` | שוויון מדויק לערך השמור |
 | `notEquals` | כנ"ל | היפוך של `equals` |
 | `exists` | `true` / `false` | האם קיים ערך שאינו `null` |
+| `contains` | מחרוזת / מספר / בוליאני | הכלה: במחרוזת — תת-מחרוזת; במערך — קיום איבר שווה. ערך שאינו מחרוזת ואינו מערך מוערך כ-`false` |
+| `greaterThan` | מספר | הערך השמור גדול ממנו. מחרוזת שנפרסת כמספר נבדקת כמספר; ערך שאינו מספרי מוערך כ-`false` |
 
 `exists` מבדיל בין "אין מפתח" ל"יש מפתח עם ערך": מפתח שלא נכתב מעולם ומפתח שערכו `null` מתנהגים שניהם כלא-קיימים, ולכן `{"exists": false}` מתקיים בשניהם ו-`{"equals": null}` מתקיים בשניהם.
 
@@ -3532,6 +3846,9 @@ Otzaria.on('plugin.boot', async (payload) => {
     "feedback.send_email",
     "history.read",
     "history.write",
+    "bookmarks.read",
+    "bookmarks.write",
+    "tools.read",
     "notifications.send",
     "notifications.system",
     "app.run_on_startup",

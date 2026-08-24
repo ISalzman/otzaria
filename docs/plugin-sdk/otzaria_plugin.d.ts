@@ -178,6 +178,13 @@ export type BookType =
 export interface BookMeta {
   id?: number | null;
   bookId: string;
+  /**
+   * מזהה ספר יציב, חוצה-ספקים (`id:<n>` / `uid:<n>` / `ext:<...>`). יציב בין
+   * עדכוני ספרייה והעברת ספרייה ושורד שינויי כותרת — עדיף על `bookId` (כותרת),
+   * שאינו מובטח ייחודי או יציב. מומלץ לתוסף לאחסן אותו במקום כותרת, עם fallback
+   * חינני לכותרת האחרונה שנראתה למקרה קצה של ייתום.
+   */
+  bookUid?: string;
   title: string;
   type?: BookType | null;
   source?: 'library' | 'user' | 'external' | null;
@@ -194,8 +201,14 @@ export interface SearchResult {
   index: number;
 }
 
-/** זהות ספר קנונית. בקלט די באחד מ-`id`/`bookId`; שדות שנשלחים יחד חייבים להתאים. */
+/**
+ * זהות ספר קנונית. בקלט די באחד מ-`bookUid`/`id`/`bookId`.
+ * `bookUid` (המזהה היציב) פותר את הספר ישירות וחד-משמעית ומתעלם משאר השדות;
+ * בהיעדרו, שדות שנשלחים יחד (`id`+`bookId`+`type`) חייבים להתאים לאותו ספר.
+ */
 export interface BookIdentity {
+  /** מזהה יציב מומלץ; ראה `BookMeta.bookUid`. פותר ישירות, מתעלם משאר השדות. */
+  bookUid?: string;
   id?: number | null;
   bookId?: string;
   type?: BookType | null;
@@ -448,6 +461,88 @@ export interface ActiveCommentators {
   groups: CommentatorGroup[];
 }
 
+/** ארגומנטים ל-`reader.setActiveCommentators`. יש להעביר לפחות אחד. */
+export interface SetActiveCommentatorsArgs {
+  add?: string[];
+  remove?: string[];
+}
+
+/** ארגומנטים ל-`reader.scrollToSection`. */
+export interface ScrollToSectionArgs {
+  /** בטקסט — אינדקס שורה (מבוסס-0); ב-PDF — מספר עמוד (מבוסס-1). */
+  sectionIndex: number;
+  /** ברירת מחדל false; false מנקה סימון קיים. */
+  highlight?: boolean;
+}
+
+/** משטח הקריאה הנוכחי, כפי ש-`reader.getHighlightCapabilities` מדווח. */
+export type ReaderSurface = 'combined' | 'pageShape' | 'pdf';
+
+/** מה נתמך בפועל בהקשר הקריאה הנוכחי. */
+export interface HighlightCapabilities {
+  /** null כשאין חלונית קריאה פתוחה. */
+  surface: ReaderSurface | null;
+  /** הדגשות מצוירות רק בטור הטקסט הראשי, ולא ב-PDF. */
+  highlights: boolean;
+  /** בחירת טקסט אינה נתמכת ב-PDF. */
+  selection: boolean;
+  /** האזורים שבהם פריטי תפריט הקשר של תוספים מוצגים. */
+  contextMenu: string[];
+}
+
+/** סימנייה (`bookmarks.list`). */
+export interface BookmarkEntry extends BookIdentity {
+  title: string;
+  ref: string;
+  /** בטקסט — אינדקס שורה; ב-PDF — מספר עמוד. */
+  index: number;
+  label: string | null;
+  targetKind: 'book' | 'commentators';
+  /** ISO 8601; null בסימניות מגרסאות קודמות. */
+  createdAt: string | null;
+}
+
+/** ארגומנטים ל-`bookmarks.add`. הספר מזוהה ב-`id` או ב-`bookId`. */
+export interface BookmarkAddArgs extends BookIdentity {
+  index?: number;
+  /** כשאינו נמסר — מחושב מתוכן העניינים של הספר. */
+  ref?: string;
+  label?: string;
+}
+
+/** ארגומנטים ל-`bookmarks.remove`. */
+export interface BookmarkRemoveArgs extends BookIdentity {
+  /** ללא index — הסימנייה הראשונה של הספר. */
+  index?: number;
+}
+
+export type GematriaMethod = 'regular' | 'small' | 'finalLetters';
+
+/** ארגומנטים ל-`tools.gematria`. עד 2000 תווים. */
+export interface GematriaArgs {
+  text: string;
+  /** ברירת מחדל 'regular'. */
+  method?: GematriaMethod;
+  /** "עם הכולל" — מוסיף את מספר המילים לערך. */
+  withKolel?: boolean;
+}
+
+/** תוצאת `tools.gematria`. */
+export interface GematriaResult {
+  value: number;
+  method: GematriaMethod;
+  /** מספר המילים בקלט — הבסיס ל-withKolel. */
+  words: number;
+}
+
+/** תוצאת `tools.dictionary`. */
+export interface DictionaryLookupResult {
+  term: string;
+  acronyms: Array<{ acronym: string; meanings: string[] }>;
+  /** `hebrew` הוא טקסט עם סימון מקורי. */
+  aramaic: Array<{ aramaic: string; hebrew: string }>;
+}
+
 export type JewishHolidayKind =
   | 'yomTov'
   | 'roshChodesh'
@@ -511,6 +606,8 @@ export interface CityInfo {
 export interface ReaderState {
   currentBook: string | null;
   currentBookId: string | null;
+  /** מזהה ספר יציב של הטאב הפעיל (`null` לטאב שאינו ספר / אין טאב). ראה `BookMeta.bookUid`. */
+  bookUid: string | null;
   /** Canonical book id of the active tab (`null` for a non-book tab / no tab). */
   currentId: number | null;
   currentType: BookType | null;
@@ -523,6 +620,8 @@ export interface ReaderState {
     type: BookType | null;
     source: 'library' | 'user' | 'external' | null;
     bookId: string;
+    /** מזהה ספר יציב (`null` לטאב שאינו ספר). ראה `BookMeta.bookUid`. */
+    bookUid: string | null;
     book: string;
     index: number;
     currentRef: string | null;
@@ -532,6 +631,8 @@ export interface ReaderState {
 export interface ReaderRefState {
   currentBook: string | null;
   currentBookId: string | null;
+  /** מזהה ספר יציב (`null` כשאין טאב ספר פעיל). ראה `BookMeta.bookUid`. */
+  bookUid: string | null;
   /** Canonical book id of the active tab (`null` when no book tab is active). */
   currentId: number | null;
   currentType: BookType | null;
@@ -548,6 +649,8 @@ export interface ReaderSelection {
   currentRef: string | null;
   currentBook: string;
   currentBookId: string;
+  /** מזהה ספר יציב של הספר שממנו נבחר הטקסט. ראה `BookMeta.bookUid`. */
+  bookUid?: string;
   currentIndex: number;
   /** Present when the Host can verify the selected range against the section. */
   schemaVersion?: 1;
@@ -772,6 +875,12 @@ export interface HighlightMetadataInput {
 export interface SetHighlightArgs {
   highlightId?: string;
   bookId: string;
+  /**
+   * מזהה ספר יציב (ראה `BookMeta.bookUid`). מומלץ מאוד לשלוח אותו: הדגשה
+   * שנשמרה עם `bookUid` שורדת שינוי כותרת ואינה מתנגשת עם ספר אחר בעל אותו
+   * שם. הדגשה ישנה שנשמרה עם `bookId` (כותרת) בלבד ממשיכה להימצא כמקודם.
+   */
+  bookUid?: string;
   sectionIndex: number;
   range: TextRangeAnchor;
   style: HighlightStyle;
@@ -792,6 +901,8 @@ export interface HighlightRecord {
   highlightId: string;
   ownerPluginId: string;
   bookId: string;
+  /** מזהה ספר יציב, כשההדגשה נשמרה איתו. ראה `BookMeta.bookUid`. */
+  bookUid?: string;
   sectionIndex: number;
   currentRef: string | null;
   range: TextRangeAnchor;
@@ -988,7 +1099,7 @@ export type PublishedDataType =
 
 export interface PublishedRecord<TPayload = unknown> {
   type: PublishedDataType;
-  /** 'global' | 'workspace:<id>' | 'book:<bookId>' */
+  /** 'global' | 'workspace:<id>' | 'book:<bookUid>' (מזוהה גם 'book:<כותרת>' לתאימות) */
   scope: string;
   key: string;
   payload: TPayload;
@@ -1284,6 +1395,60 @@ export interface UserFileWriteResult {
   size?: number;
 }
 
+/**
+ * The plugin's private file workspace (`fs.*`, since 0.9.97). No permission is
+ * required: every path is relative to the plugin's own root and cannot leave it
+ * (`..`, absolute paths, UNC and out-of-root symlinks are rejected with
+ * `error.forbidden`). Quota: 100MB per plugin; 10MB per single read/write.
+ */
+export type WorkspaceEncoding = 'utf8' | 'base64';
+
+export interface WorkspaceEntry {
+  /** Path relative to the workspace root, '/'-separated. */
+  path: string;
+  name: string;
+  type: 'file' | 'dir';
+  /** Always 0 for directories. */
+  size: number;
+  /** ISO-8601 UTC, or null when unavailable. */
+  modified: string | null;
+}
+
+export interface WorkspaceWriteArgs {
+  path: string;
+  content: string;
+  /** Defaults to `'utf8'`. */
+  encoding?: WorkspaceEncoding;
+  /** Append to an existing file instead of replacing it. */
+  append?: boolean;
+}
+
+export interface WorkspaceWriteResult {
+  path: string;
+  size: number;
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+export interface WorkspaceReadResult {
+  path: string;
+  encoding: WorkspaceEncoding;
+  size: number;
+  content: string;
+}
+
+export interface WorkspaceListResult {
+  path: string;
+  entries: WorkspaceEntry[];
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+/** Result of `fs.stat`: `WorkspaceEntry` fields are present only when it exists. */
+export type WorkspaceStatResult =
+  | ({ exists: true } & WorkspaceEntry)
+  | { exists: false };
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1322,6 +1487,9 @@ export type OtzariaMethod =
   | 'reader.getCurrentRef'
   | 'reader.getSelection'
   | 'reader.getActiveCommentators'
+  | 'reader.setActiveCommentators'
+  | 'reader.scrollToSection'
+  | 'reader.getHighlightCapabilities'
   | 'reader.findTextOccurrences'
   | 'reader.getSectionTextMap'
   | 'navigation.goTo'
@@ -1342,6 +1510,12 @@ export type OtzariaMethod =
   | 'fs.resolveFileUrl'
   | 'fs.readTextFile'
   | 'fs.revokeFile'
+  | 'fs.writeFile'
+  | 'fs.readFile'
+  | 'fs.listDir'
+  | 'fs.makeDir'
+  | 'fs.deleteEntry'
+  | 'fs.stat'
   | 'storage.get'
   | 'storage.set'
   | 'storage.remove'
@@ -1364,6 +1538,11 @@ export type OtzariaMethod =
   | 'history.listSearches'
   | 'history.clear'
   | 'history.remove'
+  | 'bookmarks.list'
+  | 'bookmarks.add'
+  | 'bookmarks.remove'
+  | 'tools.gematria'
+  | 'tools.dictionary'
   | 'notifications.showInApp'
   | 'notifications.sendSystem'
   | 'notifications.scheduleSystem'

@@ -72,7 +72,24 @@ class PluginConditionEvaluator extends ChangeNotifier {
         return !_valuesEqual(actual, condition.value);
       case PluginWhenLeafOperator.exists:
         return (actual != null) == (condition.value == true);
+      case PluginWhenLeafOperator.contains:
+        return _valueContains(actual, condition.value);
+      case PluginWhenLeafOperator.greaterThan:
+        final expected = condition.value;
+        final numeric = actual is num
+            ? actual
+            : (actual is String ? num.tryParse(actual) : null);
+        if (numeric == null || expected is! num) return false;
+        return numeric > expected;
     }
+  }
+
+  bool _valueContains(Object? actual, Object? expected) {
+    if (actual is String) return actual.contains(expected.toString());
+    if (actual is Iterable) {
+      return actual.any((item) => _valuesEqual(item, expected));
+    }
+    return false;
   }
 
   bool _valuesEqual(Object? actual, Object? expected) => actual == expected;
@@ -118,24 +135,17 @@ class PluginConditionEvaluator extends ChangeNotifier {
     Set<String> keys,
     PluginRegistryRepository repository,
   ) async {
-    // קריאה מקבילית: ה-repository אינו חושף קריאת KV מרוכזת, ומקביליות חוסכת
-    // את ההשהיה המצטברת של await מפתח-אחר-מפתח.
-    final entries = await Future.wait(
-      keys.map(
-        (key) async => (
-          key: key,
-          raw: await repository.getKV(pluginId, kDefaultStorageNamespace, key),
-        ),
-      ),
+    final raws = await repository.getKVMany(
+      pluginId,
+      kDefaultStorageNamespace,
+      keys,
     );
     final values = <String, Object?>{};
-    for (final entry in entries) {
-      final raw = entry.raw;
-      if (raw == null) continue;
+    for (final entry in raws.entries) {
       try {
-        values[entry.key] = jsonDecode(raw);
+        values[entry.key] = jsonDecode(entry.value);
       } on FormatException {
-        values[entry.key] = raw;
+        values[entry.key] = entry.value;
       }
     }
     return values;
@@ -166,8 +176,17 @@ class PluginConditionEvaluator extends ChangeNotifier {
     notifyListeners();
   }
 
+  final ValueNotifier<int> _settingsRevision = ValueNotifier(0);
+
+  /// עולה בכל שינוי הגדרות. ערוץ נפרד מ-[notifyListeners] כדי שצרכן שמתעניין
+  /// בהגדרות בלבד לא יתעורר גם משינויי אחסון.
+  ValueListenable<int> get settingsRevision => _settingsRevision;
+
   /// הגדרת תוכנה השתנתה — הערכות שנשענות עליה עשויות להתהפך.
-  void notifySettingsChanged() => notifyListeners();
+  void notifySettingsChanged() {
+    _settingsRevision.value++;
+    notifyListeners();
+  }
 
   @visibleForTesting
   void resetForTesting() {

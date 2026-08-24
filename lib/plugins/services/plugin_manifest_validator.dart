@@ -12,6 +12,13 @@ class PluginManifestValidator {
     'experimental',
   };
 
+  /// בודק שמזהה התוסף תקין. המזהה מרכיב נתיבי תיקייה (`getPluginDataPath`),
+  /// ולכן `.` ו-`..` — וכל רצף נקודות — נדחים גם כשהתו עצמו מותר.
+  static bool isValidPluginId(String id) {
+    if (!RegExp(r'^[a-z0-9_.-]+$').hasMatch(id)) return false;
+    return !RegExp(r'^\.+$').hasMatch(id);
+  }
+
   /// מאמת מניפסט וזורק חריגה אם נמצאה בעיה כלשהי. שומר על חוזה ה-throw של
   /// הקוראים הקיימים, אך אוסף את *כל* השגיאות ומצרף אותן להודעה אחת כדי
   /// שמפתח יראה את כולן בבת אחת (כמו manifestValidator.js).
@@ -48,7 +55,7 @@ class PluginManifestValidator {
       errors.add('גרסת סכמה ${manifest.schemaVersion} של התוסף אינה נתמכת');
     }
 
-    if (!RegExp(r'^[a-z0-9_.-]+$').hasMatch(manifest.id)) {
+    if (!isValidPluginId(manifest.id)) {
       errors.add('מזהה התוסף אינו תקין');
     }
 

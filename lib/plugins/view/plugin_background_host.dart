@@ -1,3 +1,4 @@
+import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -556,6 +557,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final navigationBloc = context.read<NavigationBloc>();
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
+    final bookmarkBloc = context.read<BookmarkBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
@@ -567,6 +569,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       navigationBloc: navigationBloc,
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
+      bookmarkBloc: bookmarkBloc,
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(

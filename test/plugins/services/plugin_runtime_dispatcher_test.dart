@@ -175,6 +175,32 @@ class _GatedController extends Fake implements InAppWebViewController {
   }
 }
 
+// ── fake controller שה-eval שלו פג בזמן (TimeoutException) ─────────────────
+// זורק ישירות במקום להיתקע 3 שניות אמיתיות: הדיספצ'ר עוטף כל eval ב-.timeout,
+// ומה שנבדק כאן הוא מה שקורה אחרי שפג הזמן — לא מנגנון ה-timeout של Dart.
+class _TimingOutController extends Fake implements InAppWebViewController {
+  bool timeOut = true;
+  int evalCalls = 0;
+  int pauseCalls = 0;
+  int resumeCalls = 0;
+
+  @override
+  Future<void> pause() async => pauseCalls++;
+
+  @override
+  Future<void> resume() async => resumeCalls++;
+
+  @override
+  Future<dynamic> evaluateJavascript({
+    required String source,
+    ContentWorld? contentWorld,
+  }) async {
+    evalCalls++;
+    if (timeOut) throw TimeoutException('eval timed out');
+    return null;
+  }
+}
+
 // ── fake controller עם pause/resume שניתן לעכב (gate) — לבדיקת serialization.
 // מתעד את רצף הפעולות הגלובלי בכל הבקרים כדי לוודא שאין חפיפה.
 class _SlowController extends Fake implements InAppWebViewController {
@@ -1504,6 +1530,115 @@ void main() {
       stuck.gate!.complete();
       await dispatch;
       expect(stuck.jsEvents, hasLength(1));
+    });
+  });
+
+  group('סימון controller שפג לו הזמן', () {
+    const pidA = 'timeout.a';
+    const pidB = 'timeout.b';
+
+    setUp(() {
+      _d.resetVisibilityForTesting();
+      _d.repositoryForTesting = _FakeRegistryRepo(
+        enabled: true,
+        permission: true,
+      );
+      _d.invalidatePlugin(pidA);
+      _d.invalidatePlugin(pidB);
+    });
+
+    tearDown(() {
+      _d.unregisterController(pidA);
+      _d.unregisterController(pidB);
+      _d.repositoryForTesting = PluginRegistryRepository();
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    test('מופע שפג לו הזמן מדולג בשידור הבא', () async {
+      final stuck = _TimingOutController();
+      _d.registerController(pidA, stuck);
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+      expect(stuck.evalCalls, 1);
+
+      stuck.timeOut = false;
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+
+      expect(
+        stuck.evalCalls,
+        1,
+        reason: 'בלי הסימון כל שידור היה משלם שוב 3 שניות על אותו מופע',
+      );
+    });
+
+    test('מופע תקוע אינו מונע מסירה למופע אחר של אותו תוסף', () async {
+      final stuck = _TimingOutController();
+      final healthy = _LifecycleFakeController();
+      _d.registerController(pidA, stuck, instanceId: 'i1');
+      _d.registerController(pidA, healthy, instanceId: 'i2');
+      addTearDown(() {
+        _d.unregisterController(pidA, instanceId: 'i1');
+        _d.unregisterController(pidA, instanceId: 'i2');
+      });
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+      healthy.jsEvents.clear();
+      stuck.timeOut = false;
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+
+      expect(stuck.evalCalls, 1);
+      expect(healthy.jsEvents, hasLength(1));
+    });
+
+    test('registerController מסיר את הסימון', () async {
+      final stuck = _TimingOutController();
+      _d.registerController(pidA, stuck);
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+
+      stuck.timeOut = false;
+      _d.registerController(pidA, stuck);
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+
+      expect(stuck.evalCalls, 2);
+    });
+
+    test('unregisterController מסיר את הסימון', () async {
+      // אותו object משמש שני תוספים: הסימון הוא לפי controller, ולכן ביטול
+      // הרישום באחד נמדד דרך מסירה לשני — בלי register מחדש שגם הוא מנקה.
+      final shared = _TimingOutController();
+      _d.registerController(pidA, shared);
+      _d.registerController(pidB, shared);
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+      final afterTimeout = shared.evalCalls;
+      shared.timeOut = false;
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+      expect(shared.evalCalls, afterTimeout, reason: 'שני התוספים מדלגים');
+
+      _d.unregisterController(pidA);
+      await _d.dispatchEvent('navigation.changed', {'screen': 'more'});
+
+      expect(shared.evalCalls, afterTimeout + 1);
+    });
+
+    test('החייאת מופע קדמי מסירה את הסימון', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      final stuck = _TimingOutController();
+      _d.registerController(pidA, stuck);
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'library'});
+      expect(stuck.evalCalls, 1);
+      stuck.timeOut = false;
+
+      // החייאה דרך מסך העיון — resume מסיר את הסימון.
+      _d.setVisiblePluginInstances({_fg(pidA)});
+      await pumpEventQueue();
+      final afterResume = stuck.evalCalls;
+
+      await _d.dispatchEvent('navigation.changed', {'screen': 'reading'});
+
+      expect(stuck.evalCalls, afterResume + 1);
     });
   });
 
