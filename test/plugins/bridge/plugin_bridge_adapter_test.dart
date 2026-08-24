@@ -14,6 +14,7 @@ import 'package:http/testing.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:path/path.dart' as p;
 import 'package:mockito/mockito.dart';
+import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
 import 'package:otzaria/data/data_providers/library_provider.dart';
@@ -289,6 +290,20 @@ class _StubPluginRegistryRepository extends PluginRegistryRepository {
   }
 
   @override
+  Future<Map<String, String>> getKVMany(
+    String pluginId,
+    String namespace,
+    Iterable<String> keys,
+  ) async {
+    final out = <String, String>{};
+    for (final key in keys) {
+      final value = kv['$namespace/$key'];
+      if (value != null) out[key] = value;
+    }
+    return out;
+  }
+
+  @override
   Future<void> removeKV(String pluginId, String namespace, String key) async {
     kv.remove('$namespace/$key');
   }
@@ -517,30 +532,197 @@ Future<void> main() async {
       );
     });
 
-    test('מחזיר את מיקום HebrewBooks שהוגדר', () async {
+    test('מחזיר הגדרת תצוגה שאינה חסומה', () async {
+      await Settings.setValue<double>(SettingsRepository.keyFontSize, 25);
+
+      final result = await adapter.execute('settings', 'get', {
+        'key': SettingsRepository.keyFontSize,
+      });
+
+      expect(result, 25);
+    });
+
+    test('מפתח חסום מוחזר כ-error.forbidden ולא כ-null', () async {
       await Settings.setValue<String>(
         SettingsRepository.keyHebrewBooksPath,
         '/books/hebrewbooks',
       );
 
-      final result = await adapter.execute('settings', 'get', {
-        'key': SettingsRepository.keyHebrewBooksPath,
-      });
-
-      expect(result, '/books/hebrewbooks');
+      await expectLater(
+        adapter.execute('settings', 'get', {
+          'key': SettingsRepository.keyHebrewBooksPath,
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.forbidden'),
+          ),
+        ),
+      );
     });
 
-    test('מחזיר מחרוזת ריקה כשהמיקום לא הוגדר', () async {
+    test('getMany מדלג על מפתח חסום ומחזיר את המותר', () async {
+      await Settings.setValue<double>(SettingsRepository.keyFontSize, 22);
       await Settings.setValue<String>(
-        SettingsRepository.keyHebrewBooksPath,
-        '',
+        SettingsRepository.keyLibraryPath,
+        '/library',
       );
 
-      final result = await adapter.execute('settings', 'get', {
-        'key': SettingsRepository.keyHebrewBooksPath,
-      });
+      final result =
+          await adapter.execute('settings', 'getMany', {
+                'keys': [
+                  SettingsRepository.keyFontSize,
+                  SettingsRepository.keyLibraryPath,
+                ],
+              })
+              as Map;
 
-      expect(result, '');
+      expect(result[SettingsRepository.keyFontSize], 22);
+      expect(result.containsKey(SettingsRepository.keyLibraryPath), isFalse);
+    });
+  });
+
+  group('PluginBridgeAdapter fs.* — המרחב הפרטי', () {
+    late Directory dataRoot;
+    late PluginBridgeAdapter adapter;
+
+    setUp(() async {
+      dataRoot = await Directory.systemTemp.createTemp('plugin_ws_adapter_');
+      AppPaths.debugOverrideDataRootPath(dataRoot.path);
+      // ללא הרשאות בכלל — המרחב הפרטי אינו דורש הרשאת manifest.
+      adapter = PluginBridgeAdapter(
+        _buildInstalledPlugin(permissions: const []),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+    });
+
+    tearDown(() async {
+      AppPaths.debugOverrideDataRootPath(null);
+      if (await dataRoot.exists()) await dataRoot.delete(recursive: true);
+    });
+
+    test('כתיבה, stat, listDir וקריאה — סבב שלם', () async {
+      final written =
+          await adapter.execute('fs', 'writeFile', {
+                'path': 'cache/a.json',
+                'content': '{"a":1}',
+              })
+              as Map;
+      expect(written['size'], 7);
+      expect(written['quotaBytes'], isPositive);
+
+      final stat =
+          await adapter.execute('fs', 'stat', {'path': 'cache/a.json'}) as Map;
+      expect(stat['exists'], isTrue);
+      expect(stat['type'], 'file');
+
+      final listed =
+          await adapter.execute('fs', 'listDir', {'path': 'cache'}) as Map;
+      expect((listed['entries'] as List).single['name'], 'a.json');
+
+      final read =
+          await adapter.execute('fs', 'readFile', {'path': 'cache/a.json'})
+              as Map;
+      expect(read['content'], '{"a":1}');
+    });
+
+    test('base64 עובר סבב שלם ללא שינוי', () async {
+      final bytes = [0, 1, 2, 250, 255];
+      await adapter.execute('fs', 'writeFile', {
+        'path': 'bin/blob',
+        'content': base64Encode(bytes),
+        'encoding': 'base64',
+      });
+      final read =
+          await adapter.execute('fs', 'readFile', {
+                'path': 'bin/blob',
+                'encoding': 'base64',
+              })
+              as Map;
+      expect(base64Decode(read['content'] as String), bytes);
+    });
+
+    test('נתיב שיוצא מהשורש נדחה ב-error.forbidden', () async {
+      final victim = File(p.join(dataRoot.path, 'victim.txt'))
+        ..writeAsStringSync('חשוב');
+      await expectLater(
+        adapter.execute('fs', 'writeFile', {
+          'path': '../../../../victim.txt',
+          'content': 'נדרס',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.forbidden'),
+          ),
+        ),
+      );
+      expect(victim.readAsStringSync(), 'חשוב');
+    });
+
+    test('deleteEntry idempotent, ו-makeDir יוצר תיקייה', () async {
+      expect(await adapter.execute('fs', 'makeDir', {'path': 'x/y'}), isTrue);
+      expect(
+        await adapter.execute('fs', 'deleteEntry', {
+          'path': 'x',
+          'recursive': true,
+        }),
+        isTrue,
+      );
+      expect(
+        await adapter.execute('fs', 'deleteEntry', {'path': 'x'}),
+        isFalse,
+      );
+    });
+
+    test('stat על נתיב שאינו קיים מחזיר exists:false', () async {
+      final stat = await adapter.execute('fs', 'stat', {'path': 'nope'}) as Map;
+      expect(stat, {'exists': false});
+    });
+
+    test('קידוד לא מוכר ותוכן שאינו מחרוזת נדחים', () async {
+      await expectLater(
+        adapter.execute('fs', 'writeFile', {
+          'path': 'a.txt',
+          'content': 'x',
+          'encoding': 'utf16',
+        }),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.invalid_params'),
+          ),
+        ),
+      );
+      await expectLater(
+        adapter.execute('fs', 'writeFile', {'path': 'a.txt', 'content': 5}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.invalid_params'),
+          ),
+        ),
+      );
+    });
+
+    test('המרחב מבודד בין תוספים', () async {
+      await adapter.execute('fs', 'writeFile', {
+        'path': 'mine.txt',
+        'content': 'א',
+      });
+      final other = PluginBridgeAdapter(
+        _buildInstalledPlugin(pluginId: 'other.plugin', permissions: const []),
+        dependencies: _buildNetworkDeps(),
+        pluginRepository: _StubPluginRegistryRepository(),
+      );
+      final listed =
+          await other.execute('fs', 'listDir', <String, dynamic>{}) as Map;
+      expect(listed['entries'], isEmpty);
     });
   });
 
@@ -2158,6 +2340,36 @@ Future<void> main() async {
       expect(file.existsSync(), isFalse);
     });
 
+    test('ui.pickFolder דוחה תיקייה מוגנת ואינו מעניק הרשאה', () async {
+      final protectedFolder = p.dirname(Platform.resolvedExecutable);
+      final adapter = buildAdapter(
+        pickFolder: ({title}) async => protectedFolder,
+      );
+
+      await expectLater(
+        adapter.execute('ui', 'pickFolder', {}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.forbidden'),
+          ),
+        ),
+      );
+
+      final file = File(p.join(protectedFolder, 'plugin_probe.tmp'));
+      await expectLater(
+        adapter.execute('fs', 'deleteFile', {'path': file.path}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('forbidden'),
+          ),
+        ),
+      );
+    });
+
     test('ביטול ui.pickFolder מחזיר {path:null} ואינו מעניק הרשאה', () async {
       final adapter = buildAdapter(pickFolder: ({title}) async => null);
 
@@ -3544,6 +3756,7 @@ Future<void> main() async {
           'id': 10,
           'type': 'text',
           'bookId': 'בראשית',
+          'bookUid': 'id:10',
           'source': 'library',
           'title': 'בראשית',
           'count': 812,
