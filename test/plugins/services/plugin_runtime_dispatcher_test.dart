@@ -158,6 +158,23 @@ class _LifecycleFakeController extends Fake implements InAppWebViewController {
   }
 }
 
+// ── fake controller ש-evaluateJavascript שלו נעצר עד לשחרור gate ────────────
+// לבדיקת מסירה מקבילית: תוסף תקוע לא חוסם מסירה לשאר.
+class _GatedController extends Fake implements InAppWebViewController {
+  final List<String> jsEvents = [];
+  Completer<void>? gate;
+
+  @override
+  Future<dynamic> evaluateJavascript({
+    required String source,
+    ContentWorld? contentWorld,
+  }) async {
+    if (gate != null) await gate!.future;
+    jsEvents.add(source);
+    return null;
+  }
+}
+
 // ── fake controller עם pause/resume שניתן לעכב (gate) — לבדיקת serialization.
 // מתעד את רצף הפעולות הגלובלי בכל הבקרים כדי לוודא שאין חפיפה.
 class _SlowController extends Fake implements InAppWebViewController {
@@ -1448,6 +1465,46 @@ void main() {
         expect(b.jsEvents, contains(contains('navigation.changed')));
       },
     );
+  });
+
+  group('מסירת שידור מקבילית', () {
+    const pidStuck = 'parallel.stuck';
+    const pidFast = 'parallel.fast';
+
+    setUp(() {
+      _d.repositoryForTesting = _FakeRegistryRepo(
+        enabled: true,
+        permission: true,
+      );
+      _d.invalidatePlugin(pidStuck);
+      _d.invalidatePlugin(pidFast);
+    });
+
+    tearDown(() {
+      _d.unregisterController(pidStuck);
+      _d.unregisterController(pidFast);
+      _d.repositoryForTesting = PluginRegistryRepository();
+    });
+
+    test('WebView תקוע של תוסף אחד אינו חוסם מסירה לתוסף אחר', () async {
+      final stuck = _GatedController()..gate = Completer<void>();
+      final fast = _LifecycleFakeController();
+      _d.registerController(pidStuck, stuck);
+      _d.registerController(pidFast, fast);
+
+      final dispatch = _d.dispatchEvent('navigation.changed', {
+        'screen': 'library',
+      });
+      await pumpEventQueue();
+
+      // התוסף התקוע עדיין תלוי, אך התוסף המהיר כבר קיבל את האירוע.
+      expect(fast.jsEvents, contains(contains('navigation.changed')));
+      expect(stuck.jsEvents, isEmpty);
+
+      stuck.gate!.complete();
+      await dispatch;
+      expect(stuck.jsEvents, hasLength(1));
+    });
   });
 
   group('סגירת טאב תוך כדי פעולה אסינכרונית', () {

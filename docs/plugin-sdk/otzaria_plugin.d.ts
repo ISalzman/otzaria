@@ -115,21 +115,18 @@ export interface BootPayload {
   plugin: { id: string; version: string };
   app: {
     version: string;
-    /** אינו נשלח כיום באף אחד ממסלולי ה-boot. */
-    buildNumber?: string;
     platform: 'windows' | 'linux' | 'macos' | 'android' | 'ios' | string;
+    /** Full locale tag, e.g. `'he-IL'` or `'en'`. */
     locale: string;
-    /** קוד השפה של ממשק אוצריא, למשל `he`. */
-    language?: string;
+    /** Language code only, e.g. `'he'` / `'en'` — mirrors `app.getLocale`. */
+    language: string;
     textDirection: 'ltr' | 'rtl';
-    /** `true` כשהתוסף נטען כתוסף פיתוח. בתוסף ארוז `false`. */
-    devMode?: boolean;
-    /**
-     * נשלח רק במסלול הרקע, שם ערכו תמיד `'background'`. בדף גלוי הוא
-     * `undefined` — לזיהוי מצב התוסף יש להשתמש ב-`plugin.suspended`
-     * ו-`plugin.resumed`.
-     */
-    runMode?: 'background';
+    /** `true` when the plugin was loaded as a development plugin
+     *  (`sourceType=development`); always `false` for a packaged plugin. */
+    devMode: boolean;
+    /** `'background'` for a silent background engine (no plugin page),
+     *  `'foreground'` for a visible tab. */
+    runMode: 'background' | 'foreground';
   };
   theme: ThemePayload;
   /** Connectivity as known at boot, without ever blocking on the network.
@@ -160,11 +157,29 @@ export interface PermissionSnapshot {
   permissions: string[];
 }
 
+/** זהות הפורמט של ספר. עבור ספר-מסמך זו הסיומת הקנונית עצמה, כך שפורמט
+ *  חדש מקבל זהות יציבה; טקסט ו-Markdown נשארים `'text'`. */
+export type BookType =
+  | 'text'
+  | 'pdf'
+  | 'external'
+  | 'epub'
+  | 'docx'
+  | 'docm'
+  | 'dotx'
+  | 'dotm'
+  | 'doc'
+  | 'dot'
+  | 'wbk'
+  | 'xml'
+  | 'rtf'
+  | 'odt';
+
 export interface BookMeta {
   id?: number | null;
   bookId: string;
   title: string;
-  type?: 'text' | 'pdf' | 'docx' | 'epub' | 'external' | null;
+  type?: BookType | null;
   source?: 'library' | 'user' | 'external' | null;
   topics?: string[];
   categoryPath?: string | null;
@@ -172,6 +187,8 @@ export interface BookMeta {
 }
 
 export interface SearchResult {
+  /** `'text'` for a text book, `'pdf'` for a PDF book. */
+  type: 'text' | 'pdf';
   book: string;
   text: string;
   index: number;
@@ -181,7 +198,7 @@ export interface SearchResult {
 export interface BookIdentity {
   id?: number | null;
   bookId?: string;
-  type?: 'text' | 'pdf' | 'docx' | 'epub' | 'external' | null;
+  type?: BookType | null;
   source?: 'library' | 'user' | 'external' | null;
   external?: { provider: 'hebrewbooks' | 'otzar'; id: number | string };
 }
@@ -494,14 +511,31 @@ export interface CityInfo {
 export interface ReaderState {
   currentBook: string | null;
   currentBookId: string | null;
+  /** Canonical book id of the active tab (`null` for a non-book tab / no tab). */
+  currentId: number | null;
+  currentType: BookType | null;
+  currentSource: 'library' | 'user' | 'external' | null;
   currentIndex: number;
   currentRef: string | null;
-  openTabs: Array<{ bookId: string; book: string; index: number; currentRef: string | null }>;
+  openTabs: Array<{
+    /** Canonical book id (`null` for a non-book tab such as search). */
+    id: number | null;
+    type: BookType | null;
+    source: 'library' | 'user' | 'external' | null;
+    bookId: string;
+    book: string;
+    index: number;
+    currentRef: string | null;
+  }>;
 }
 
 export interface ReaderRefState {
   currentBook: string | null;
   currentBookId: string | null;
+  /** Canonical book id of the active tab (`null` when no book tab is active). */
+  currentId: number | null;
+  currentType: BookType | null;
+  currentSource: 'library' | 'user' | 'external' | null;
   currentIndex: number;
   currentRef: string | null;
 }
@@ -1066,6 +1100,13 @@ export interface OtzariaEventMap {
   /** User clicked a plugin-registered toolbar item. Sent only to the registering plugin. */
   'reader.toolbar_item_clicked': ToolbarItemClickedEvent;
   'reader.sectionContentChanged': ReaderSectionContentChangedEvent;
+  /**
+   * The user tapped a clickable message shown via `ui.show*` /
+   * `notifications.showInApp`. Sent only to the plugin that raised the message,
+   * and only when it was raised with a `tapPayload` (and no explicit `tapEvent`
+   * overriding the topic). `payload` echoes back that `tapPayload`.
+   */
+  'ui.messageClicked': { payload: unknown };
 }
 
 /** 'more' נשמר לתאימות אחורה — פותח את פאנל הכלים. */
@@ -1254,6 +1295,8 @@ export type OtzariaMethod =
   | 'library.findBooks'
   | 'library.getBookMetadata'
   | 'library.resolveBooks'
+  | 'library.resolveCategoryPaths'
+  | 'library.getTree'
   | 'library.listRecentBooks'
   | 'library.getBookContent'
   | 'library.getBookToc'
@@ -1293,6 +1336,12 @@ export type OtzariaMethod =
   | 'ui.showConfirm'
   | 'ui.showWarning'
   | 'ui.pickFolder'
+  | 'fs.extractZip'
+  | 'fs.deleteFile'
+  | 'fs.pickUserFile'
+  | 'fs.resolveFileUrl'
+  | 'fs.readTextFile'
+  | 'fs.revokeFile'
   | 'storage.get'
   | 'storage.set'
   | 'storage.remove'
@@ -1341,6 +1390,10 @@ export type OtzariaMethod =
   | 'shortcut.create'
   | 'plugin.openSelf'
   | 'plugin.openOther'
+  /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
+  | 'plugin.requestInstall'
+  /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
+  | 'plugin.listInstalled'
   | 'plugin.backgroundDone'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'

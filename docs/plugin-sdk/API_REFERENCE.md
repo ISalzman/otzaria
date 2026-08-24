@@ -73,6 +73,37 @@ if (response.success) {
 
 כל שגיאה כוללת `schemaVersion: 1`,‏ `code`,‏ `message`,‏ `retryable` ו־`category`. השדות הקיימים נשמרו לתאימות לאחור.
 
+### קודי שגיאה נפוצים
+
+| קוד | קטגוריה | משמעות |
+|---|---|---|
+| `permission_denied` / `error.permission_denied` | `permission` | ההרשאה לא הוצהרה במניפסט או לא אושרה |
+| `error.forbidden` | `permission` | ההרשאה קיימת אך היעד עצמו חסום — נתיב מחוץ לתיקייה מאושרת, תיקייה מוגנת, או URL שאינו ב-allowlist |
+| `error.invalid_params` | `validation` | פרמטרים חסרים או שגויים |
+| `error.not_found` | `not_found` | הפריט המבוקש אינו קיים |
+| `error.conflict` | `conflict` | התנגשות — למשל שם ספק שכבר תפוס |
+| `error.timeout` | `timeout` | הפעולה לא הושלמה בזמן (`retryable: true`) |
+| `error.rate_limited` | `too_large` | יותר מ-100 קריאות בשנייה (`retryable: true`) |
+| `error.payload_too_large` / `error.section_too_large` | `too_large` | הקלט או הקטע גדולים מדי |
+| `error.unknown_method` | `unsupported` | ה-method אינו קיים במארח הזה — איות שגוי, או API חדש מ-`minAppVersion` שהוצהר |
+| `error.unavailable` | `unsupported` | ה-API קיים אך אינו זמין בהקשר הנוכחי (אין טאב קריאה פעיל, שירות כבוי) |
+| `error.unsupported_context` / `error.unsupported_layer` | `unsupported` | ההקשר או השכבה אינם נתמכים לפעולה הזו |
+| `error.internal` | `internal` | שגיאה פנימית בצד אוצריא |
+
+### ⚠️ הקריאות חייבות לצאת מה-frame הראשי
+
+הגשר נעול לדף התוסף עצמו: `Otzaria.call` נושא nonce שמוזרק רק ל-frame הראשי,
+ו-iframe חוצה-origin אינו יכול לקרוא בשמכם. שתי השלכות מעשיות:
+
+- **אל תקראו ל-`window.flutter_inappwebview.callHandler('otzaria_rpc', ...)` ישירות.**
+  קריאה כזו עוקפת את ה-nonce ותידחה. `Otzaria.call` הוא הממשק היחיד הנתמך.
+- **ה-nonce אינו מגן מפני iframe שיורש את ה-origin שלכם.** `iframe` מסוג
+  `srcdoc`, `about:blank` או `blob:` הוא same-origin עם הדף שלכם, ולכן יכול
+  לקרוא `parent.Otzaria.call(...)` בלי לדעת את ה-nonce. **תוסף שמרנדר HTML
+  מרוחק לתוך `iframe.srcdoc` מעניק לתוכן הזר את מלוא סמכות התוסף** — כל
+  ההרשאות שלכם, כולל רשת, קבצים והערות. הציגו תוכן שאינו שלכם רק כטקסט
+  מנוקה (sanitized), ואם אתם חייבים iframe — טענו אותו מ-URL עם origin נפרד.
+
 ---
 
 ## טבלת גרסאות API
@@ -119,6 +150,10 @@ if (response.success) {
 | `reader.getActiveCommentators` | 0.9.97 |
 | `reader.findTextOccurrences` | 0.9.95 |
 | `reader.getSectionTextMap` | 0.9.95 |
+| `reader.registerInBookSearchProvider` | 0.9.97 |
+| `reader.respondInBookSearch` | 0.9.97 |
+| `reader.registerExternalSearchProvider` | 0.9.97 |
+| `reader.respondExternalSearch` | 0.9.97 |
 | `reader.addContextMenuItem` | 0.9.89 |
 | `reader.removeContextMenuItem` | 0.9.89 |
 | `reader.updateContextMenuItem` | 0.9.95 |
@@ -176,11 +211,11 @@ if (response.success) {
 | `settings.get` | 0.9.89 |
 | `settings.getMany` | 0.9.89 |
 | `calendar.getSelectedDate` | 0.9.89 |
-| `calendar.getDailyTimes` | 0.9.97 |
-| `calendar.getHalachicTimes` | 0.9.97 |
+| `calendar.getDailyTimes` | 0.9.92 |
+| `calendar.getHalachicTimes` | 0.9.92 |
 | `calendar.getJewishDate` | 0.9.89 |
 | `calendar.getEvents` | 0.9.89 |
-| `calendar.getCities` | 0.9.97 |
+| `calendar.getCities` | 0.9.96 |
 | `publishedData.upsert` | 0.9.89 |
 | `publishedData.remove` | 0.9.89 |
 | `publishedData.listOwn` | 0.9.89 |
@@ -1227,8 +1262,9 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 //   currentRef: "בראשית פרק ג",
 //   openTabs: [
 //     {
-//       id: 183,        // מזהה מספרי
-//       type: "text",   // סוג הספר
+//       id: 183,          // מזהה מספרי
+//       type: "text",     // סוג הספר
+//       source: "library", // מקור הספר
 //       bookId: "בראשית",
 //       book: "בראשית",
 //       index: 42,
@@ -1237,6 +1273,7 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 //     {
 //       id: 204,
 //       type: "pdf",
+//       source: "library",
 //       bookId: "שמות",
 //       book: "שמות",
 //       index: 0,
@@ -1670,6 +1707,18 @@ const { data } = await Otzaria.call('ui.showWarning', {
 האבטחה לגישת התוסף לדיסק — היא נובעת מהסכמת המשתמש בדיאלוג, לא מהרשאת
 manifest. ההרשאה לתיקייה תקפה למשך ריצת התוסף.
 
+**תיקיות מוגנות:** בחירה בתיקייה רגישה נדחית עם `error.forbidden` — כלומר
+`ui.pickFolder` יכולה גם להיכשל, לא רק להחזיר `path: null`. נדחים:
+
+- שורש כונן (`C:\`, `/`), ותיקיית רשת (נתיב UNC).
+- תיקיית הבית של המשתמש עצמה (תת-תיקייה בתוכה, כמו `Documents\MyPlugin`, מותרת).
+- `Program Files`, `ProgramData`, `SystemRoot`, תיקיית ה-Startup — ובלינוקס/מק
+  `/etc`,‏ `/usr`,‏ `/bin`,‏ `/System`,‏ `/Library`,‏ `~/.ssh`,‏ `~/.config`.
+- תיקיית ההרצה של אוצריא, תיקיית הנתונים שלה ותיקיית הספרייה.
+- **כל אלה חלים גם על תת-תיקיותיהן** (למעט תיקיית הבית, שהיא בדיקה מדויקת).
+
+הפנו את המשתמש לתיקייה ייעודית — למשל תיקייה חדשה תחת `Documents`.
+
 ```javascript
 const res = await Otzaria.call('ui.pickFolder', {
   title: 'בחר תיקיית יעד'  // אופציונלי
@@ -1767,6 +1816,9 @@ if (res.success && !res.data.cancelled) {
 בונה URL טרי לקובץ שכבר אושר, לפי ה-`token` שנשמר. נצרך אחרי טעינה מחדש של
 התוסף (הפורט של השרת משתנה בכל הפעלה). מחזיר `error.not_found` אם ה-`token`
 לא מוכר או שהקובץ נמחק.
+
+> שמרו את ה-`token` בלבד, לעולם לא את ה-`url` — מבנה ה-URL אינו חוזה יציב,
+> ו-URL שנשמר מהפעלה קודמת יפסיק לעבוד.
 
 ```javascript
 const { data: token } = await Otzaria.call('storage.get', { key: 'lastFile' });
@@ -1958,7 +2010,7 @@ const { data } = await Otzaria.call('feedback.report', {
 
 **תור שליחה מאוחרת:** במצב לא-מקוון או בכשל רשת זמני הדיווח נשמר בתור מקומי (באותו מנגנון של דיווחי הטעויות בספרים): ניסיון חוזר אוטומטי כל 5 דקות, והמשתמש יכול לנהל את התור בהגדרות — לשלוח ידנית, למחוק, או להוריד סקריפט שליחה למחשב מחובר.
 
-**שגיאות אפשריות:** `error.internal` — `details` חסר או ריק, דחייה קבועה של השרת (HTTP 400/422), או מצב לא-מקוון כשהמשתמש כיבה את תור הדיווחים בהגדרות. דחייה קבועה אינה נכנסת לתור.
+**שגיאות אפשריות:** `error.invalid_params` — `details` חסר או ריק. `error.internal` — דחייה קבועה של השרת (HTTP 400/422), או מצב לא-מקוון כשהמשתמש כיבה את תור הדיווחים בהגדרות. דחייה קבועה אינה נכנסת לתור.
 
 ### `feedback.hasReporterEmail`
 **הרשאה:** אינה נדרשת — מוחזר ביט קיום בלבד, בלי הכתובת עצמה.
@@ -2044,6 +2096,10 @@ const { data } = await Otzaria.call('history.remove', {
 **הרשאה:** `notifications.send`
 
 הצגת התראה בתוך האפליקציה (UiSnack).
+
+> **Alias:** זו למעשה כפילות של `ui.showMessage` (עם `type` שבוחר בין
+> info/success/error). היא נשמרת לתאימות אחורה; לקוד חדש עדיפות משפחת
+> `ui.show*`. שימו לב שההרשאה שונה — כאן `notifications.send` ולא `ui.feedback`.
 
 ```javascript
 const { data } = await Otzaria.call('notifications.showInApp', {
@@ -2312,10 +2368,11 @@ const { data } = await Otzaria.call('calendar.getDailyTimes', {
 ### `calendar.getHalachicTimes`
 **הרשאה:** `calendar.read` · **מגרסה:** 0.9.97
 
-קבלת זמנים הלכתיים מלאים ליום (זהה ל-`getDailyTimes`).
+קבלת זמנים הלכתיים מלאים ליום.
 
-מקבל את אותם הפרמטרים האופציונליים (`date`, `city`, או `lat` ו-`lng`) כמו
-`calendar.getDailyTimes`.
+> **Alias:** מתודה זו היא כפילות מדויקת של `calendar.getDailyTimes` — אותה
+> תוצאה ואותם פרמטרים אופציונליים (`date`, `city`, או `lat` ו-`lng`). היא
+> קיימת לנוחות בלבד; אין הבדל התנהגותי בין השתיים.
 
 ```javascript
 const { data } = await Otzaria.call('calendar.getHalachicTimes');
@@ -2672,7 +2729,7 @@ Otzaria.on('event.name', (data) => {
 
 **הרשאה נדרשת:** כל אירוע מצריך הרשאה מתאימה מסוג `events.subscribe:<event_name>`
 
-- `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה). ה-payload כולל `app.runMode: 'foreground' | 'background'` — ראה §ריצת רקע — וכן `connectivity` (מצב האינטרנט; ראה [`app.getConnectivity`](#appgetconnectivity)).
+- `plugin.boot` - נורה פעם אחת בטעינת התוסף (ללא הרשאה). ה-payload כולל `app.runMode: 'foreground' | 'background'` — ראה §ריצת רקע — וכן `connectivity` (מצב האינטרנט; ראה [`app.getConnectivity`](#appgetconnectivity)). שדה ה-`app` כולל גם `language` (קוד השפה, זהה ל-[`app.getLocale`](#appgetlocale)) ו-`devMode` (`true` רק כשהתוסף נטען כתוסף פיתוח). שים לב: `buildNumber` אינו נשלח ב-`plugin.boot` — לקבלתו יש לקרוא ל-[`app.getInfo`](#appgetinfo).
 - `plugin.ready` - נורה אחרי boot (ללא הרשאה)
 - `plugin.suspended` - התוסף הושהה (יציאה מלשונית התוסף / מעבר לרקע). ללא הרשאה — ראה §השהיה ברקע ב-README
 - `plugin.resumed` - התוסף חזר מהשהיה (ללא הרשאה)
@@ -3244,6 +3301,17 @@ Host — יצרפו את מהדורות הספק לספר הפתוח, אחרי �
 - שמרו state שצריך לשרוד ב-`storage.set` (או ב-`localStorage`, שנשמר בפרופיל) — משתני JS בזיכרון אובדים בכיבוי.
 - מופעי `app.run_on_startup` במסלול הישן (טעינה בעלייה) אינם מכובים — רק מופעים שהוערו עצל.
 
+### תקרת מופעי רקע בו-זמניים
+
+אוצריא מחזיקה עד **4 מופעי רקע לפי-דרישה** בו-זמנית. כשמופע חמישי מתעורר,
+הוותיק ביותר שאינו `keepAlive`, אינו באמצע `plugin.boot` ואינו עסוק בקריאת
+API — מפונה. הפינוי שקוף באותו אופן ככיבוי אחרי חוסר פעילות: הטריגר הבא מעיר
+את התוסף מחדש, אבל **כל state שנשמר במשתני JS בזיכרון אובד**. לכן:
+
+- שמרו state ב-`storage.set` (או `localStorage`), לא בזיכרון.
+- תוסף שחייב רציפות (מנוע חיפוש ספק, מעקב מתמשך) יצהיר `"keepAlive": true`,
+  ואז אינו מועמד לפינוי.
+
 תוסף שחייב לשמור מנוע חי יכול להצהיר `"keepAlive": true`. עליו להצהיר גם על
 `app.background_keep_alive`, והמשתמש חייב לאשר אותה בנפרד. זו הרשאה רגישה,
 כבויה כברירת מחדל ומוצגת באדום, משום שהיא מאפשרת ל-WebView לצרוך משאבים ללא
@@ -3512,12 +3580,12 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 - ההרשאה הנדרשת היא **`network.localhost`** (לא `network.access`). השתיים נפרדות: `network.localhost` אינה מתירה גישה לאינטרנט, ו-`network.access` אינה מתירה גישה ל-localhost.
 - היעד חייב להופיע ב-`network.allowlist` של התוסף, אבל **אין צורך ב-PR לאוצריא** — localhost אינו נכלל ב-allowlist הגלובלי.
-- הצהרת host חשוף (`"127.0.0.1"` / `"localhost"`) מתירה כל פורט על אותו host; הצהרת URL מלא (`"http://127.0.0.1:11434"`) נועלת לפורט שהוצהר.
+- **חובה origin מלא כולל פורט** (`"http://127.0.0.1:11434"`). הצהרת host חשוף (`"127.0.0.1"` / `"localhost"`, בלי סכימה ופורט) **נחסמת**: היא הייתה מתירה כל פורט מקומי — נתיב SSRF לשירותים אחרים על מחשב המשתמש. תוסף שמצהיר כך יקבל `error.forbidden` בכל קריאה.
 - כמו כל גישת רשת — חובה גם `network.enabled: true` ב-manifest. הקריאות חייבות לעבור דרך `network.fetch` (לא `fetch()` ישיר מה-WebView, שנחסם ב-CORS מול שרת מקומי שדוחה `Origin: null`).
 
 ```json
 "permissions": ["network.localhost"],
-"network": { "enabled": true, "allowlist": ["127.0.0.1", "localhost"] }
+"network": { "enabled": true, "allowlist": ["http://127.0.0.1:11434"] }
 ```
 
 ### חובה: כתובות מדויקות בלבד

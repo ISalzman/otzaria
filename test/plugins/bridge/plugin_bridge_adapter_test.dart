@@ -2158,6 +2158,36 @@ Future<void> main() async {
       expect(file.existsSync(), isFalse);
     });
 
+    test('ui.pickFolder דוחה תיקייה מוגנת ואינו מעניק הרשאה', () async {
+      final protectedFolder = p.dirname(Platform.resolvedExecutable);
+      final adapter = buildAdapter(
+        pickFolder: ({title}) async => protectedFolder,
+      );
+
+      await expectLater(
+        adapter.execute('ui', 'pickFolder', {}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('error.forbidden'),
+          ),
+        ),
+      );
+
+      final file = File(p.join(protectedFolder, 'plugin_probe.tmp'));
+      await expectLater(
+        adapter.execute('fs', 'deleteFile', {'path': file.path}),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('forbidden'),
+          ),
+        ),
+      );
+    });
+
     test('ביטול ui.pickFolder מחזיר {path:null} ואינו מעניק הרשאה', () async {
       final adapter = buildAdapter(pickFolder: ({title}) async => null);
 

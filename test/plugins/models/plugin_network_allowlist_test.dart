@@ -90,21 +90,21 @@ void main() {
   });
 
   group('matchingLoopbackPrefix', () {
-    test('host חשוף מתיר כל פורט/נתיב על אותו host', () {
+    test('host חשוף אינו מתיר דבר — נדרש origin מלא', () {
       const allowlist = ['127.0.0.1', 'localhost'];
       expect(
         matchingLoopbackPrefix(
           Uri.parse('http://127.0.0.1:11434/api/tags'),
           allowlist,
         ),
-        isNotNull,
+        isNull,
       );
       expect(
         matchingLoopbackPrefix(
           Uri.parse('http://localhost:1234/v1/models'),
           allowlist,
         ),
-        isNotNull,
+        isNull,
       );
     });
 

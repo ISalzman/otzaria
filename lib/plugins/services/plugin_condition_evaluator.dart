@@ -118,18 +118,24 @@ class PluginConditionEvaluator extends ChangeNotifier {
     Set<String> keys,
     PluginRegistryRepository repository,
   ) async {
+    // קריאה מקבילית: ה-repository אינו חושף קריאת KV מרוכזת, ומקביליות חוסכת
+    // את ההשהיה המצטברת של await מפתח-אחר-מפתח.
+    final entries = await Future.wait(
+      keys.map(
+        (key) async => (
+          key: key,
+          raw: await repository.getKV(pluginId, kDefaultStorageNamespace, key),
+        ),
+      ),
+    );
     final values = <String, Object?>{};
-    for (final key in keys) {
-      final raw = await repository.getKV(
-        pluginId,
-        kDefaultStorageNamespace,
-        key,
-      );
+    for (final entry in entries) {
+      final raw = entry.raw;
       if (raw == null) continue;
       try {
-        values[key] = jsonDecode(raw);
+        values[entry.key] = jsonDecode(raw);
       } on FormatException {
-        values[key] = raw;
+        values[entry.key] = raw;
       }
     }
     return values;

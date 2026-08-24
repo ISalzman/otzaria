@@ -83,9 +83,79 @@ void main() {
   test('token לא מוכר מחזיר 404', () async {
     await server.register(pluginId: 'p1', canonicalPath: '/nonexistent');
     final origin = server.origin!;
-    final response = await get('$origin/f/deadbeef');
+    final response = await get('$origin/f/p1/deadbeef');
     expect(response.statusCode, 404);
     await response.drain();
+  });
+
+  test('ה-URL כולל את מזהה התוסף', () async {
+    final file = await writeFile('doc.txt', 'x');
+    final reg = await server.register(pluginId: 'p1', canonicalPath: file.path);
+    expect(reg.url, '${server.origin}/f/p1/${reg.token}');
+    await (await get(reg.url)).drain();
+  });
+
+  test('token של תוסף אחר בנתיב מחזיר 404', () async {
+    final file = await writeFile('doc.txt', 'secret');
+    final reg = await server.register(pluginId: 'pA', canonicalPath: file.path);
+
+    final response = await get('${server.origin}/f/pB/${reg.token}');
+    expect(response.statusCode, 404);
+    await response.drain();
+  });
+
+  test('URL בפורמט הישן /f/<token> עדיין מוגש (תאימות לגרסה אחת)', () async {
+    final file = await writeFile('doc.txt', 'legacy');
+    final reg = await server.register(pluginId: 'p1', canonicalPath: file.path);
+
+    final response = await get('${server.origin}/f/${reg.token}');
+    expect(response.statusCode, 200);
+    expect(await response.transform(utf8.decoder).join(), 'legacy');
+  });
+
+  test('נתיב עם מספר סגמנטים חריג מחזיר 404', () async {
+    final file = await writeFile('doc.txt', 'x');
+    final reg = await server.register(pluginId: 'p1', canonicalPath: file.path);
+
+    final response = await get('${server.origin}/f/p1/extra/${reg.token}');
+    expect(response.statusCode, 404);
+    await response.drain();
+  });
+
+  group('isUriForPlugin — אכיפת הבידוד בצד ה-WebView', () {
+    Uri uri(String path) => Uri.parse('http://127.0.0.1:1234$path');
+
+    test('מאשר רק URL עם מזהה התוסף עצמו', () {
+      expect(PluginFileServer.isUriForPlugin(uri('/f/pA/tok'), 'pA'), isTrue);
+      expect(PluginFileServer.isUriForPlugin(uri('/f/pB/tok'), 'pA'), isFalse);
+    });
+
+    test('פורמט ישן (2 סגמנטים) מאושר, נתיב אחר נדחה', () {
+      expect(PluginFileServer.isUriForPlugin(uri('/f/tok'), 'pA'), isTrue);
+      expect(PluginFileServer.isUriForPlugin(uri('/other/x'), 'pA'), isFalse);
+      expect(
+        PluginFileServer.isUriForPlugin(uri('/f/pA/x/tok'), 'pA'),
+        isFalse,
+      );
+      expect(PluginFileServer.isUriForPlugin(uri('/'), 'pA'), isFalse);
+    });
+  });
+
+  test('CORS מוחזר ל-origin של file:// בלבד', () async {
+    final file = await writeFile('doc.txt', 'x');
+    final reg = await server.register(pluginId: 'p1', canonicalPath: file.path);
+
+    final fileOrigin = await client.getUrl(Uri.parse(reg.url));
+    fileOrigin.headers.set('origin', 'null');
+    final allowed = await fileOrigin.close();
+    expect(allowed.headers.value('access-control-allow-origin'), 'null');
+    await allowed.drain();
+
+    final webOrigin = await client.getUrl(Uri.parse(reg.url));
+    webOrigin.headers.set('origin', 'https://evil.example.com');
+    final blocked = await webOrigin.close();
+    expect(blocked.headers.value('access-control-allow-origin'), isNull);
+    await blocked.drain();
   });
 
   test('לאחר revoke ה-token מחזיר 404', () async {
@@ -126,7 +196,7 @@ void main() {
       canonicalPath: file.path,
       token: token,
     );
-    expect(url, '${server.origin}/f/$token');
+    expect(url, '${server.origin}/f/p1/$token');
 
     final response = await get(url);
     expect(response.statusCode, 200);

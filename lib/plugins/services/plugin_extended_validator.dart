@@ -91,6 +91,10 @@ const Set<String> _knownApiMethods = {
   'reader.updateToolbarItem',
   'reader.findTextOccurrences',
   'reader.getSectionTextMap',
+  'reader.registerInBookSearchProvider',
+  'reader.respondInBookSearch',
+  'reader.registerExternalSearchProvider',
+  'reader.respondExternalSearch',
   'reader.setHighlight',
   'reader.updateHighlight',
   'reader.getHighlights',
@@ -161,10 +165,10 @@ const Set<String> _knownApiMethods = {
 };
 
 /// APIs קיימות בתוספים אך אינן מתועדות פומבית — לא נאזהיר עליהן.
+/// שתיהן מיועדות לתוסף חנות התוספים בלבד; ב-d.ts הן מסומנות `@internal`.
 const Set<String> _knownUndocumentedMethods = {
   'plugin.listInstalled',
   'plugin.requestInstall',
-  'plugin.uninstall',
 };
 
 /// אירועי lifecycle ו-events נתמכים.
@@ -181,6 +185,8 @@ const Set<String> _knownEvents = {
   'reader.sectionContentChanged',
   'reader.context_menu_item_clicked',
   'reader.toolbar_item_clicked',
+  'reader.inBookSearch.requested',
+  'ui.messageClicked',
   'plugin.page_opened',
   'contextMenu.itemClicked',
   'contextMenu.colorClicked',
@@ -237,6 +243,10 @@ const Map<String, String> _methodRequiredPermission = {
   'reader.updateToolbarItem': 'reader.toolbar',
   'reader.findTextOccurrences': 'reader.open',
   'reader.getSectionTextMap': 'reader.open',
+  'reader.registerInBookSearchProvider': 'reader.open',
+  'reader.respondInBookSearch': 'reader.open',
+  'reader.registerExternalSearchProvider': 'reader.open',
+  'reader.respondExternalSearch': 'reader.open',
   'reader.setHighlight': 'reader.highlight',
   'reader.updateHighlight': 'reader.highlight',
   'reader.getHighlights': 'reader.highlight',
@@ -348,6 +358,10 @@ const Map<String, String> _methodMinVersion = {
   'reader.updateToolbarItem': '0.9.97',
   'reader.findTextOccurrences': '0.9.95',
   'reader.getSectionTextMap': '0.9.95',
+  'reader.registerInBookSearchProvider': '0.9.97',
+  'reader.respondInBookSearch': '0.9.97',
+  'reader.registerExternalSearchProvider': '0.9.97',
+  'reader.respondExternalSearch': '0.9.97',
   'reader.setHighlight': '0.9.89',
   'reader.updateHighlight': '0.9.95',
   'reader.getHighlights': '0.9.89',
@@ -386,12 +400,11 @@ const Map<String, String> _methodMinVersion = {
   'settings.get': '0.9.89',
   'settings.getMany': '0.9.89',
   'calendar.getSelectedDate': '0.9.89',
-  'calendar.getDailyTimes': '0.9.97',
-  'calendar.getHalachicTimes': '0.9.97',
+  'calendar.getDailyTimes': '0.9.92',
+  'calendar.getHalachicTimes': '0.9.92',
   'calendar.getJewishDate': '0.9.89',
   'calendar.getEvents': '0.9.89',
-  // 0.9.97 — זמנים לפי תאריך/עיר שרירותיים ורשימת הערים.
-  'calendar.getCities': '0.9.97',
+  'calendar.getCities': '0.9.96',
   'publishedData.upsert': '0.9.89',
   'publishedData.remove': '0.9.89',
   'publishedData.listOwn': '0.9.89',

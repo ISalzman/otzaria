@@ -323,5 +323,108 @@ void main() {
         throwsA(predicate((error) => error.toString().contains('path'))),
       );
     });
+
+    test('דוחה ערך stability לא תקין', () async {
+      final manifest = PluginManifest(
+        schemaVersion: 1,
+        id: 'test.validator.stability',
+        name: 'Validator',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        stability: 'alpha',
+        permissions: const [],
+        networkEnabled: false,
+        networkAllowlist: const [],
+        toolTabTitle: 'Validator',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+      );
+
+      await expectLater(
+        PluginManifestValidator.validateManifest(
+          manifest: manifest,
+          directoryPath: '/',
+          skipAppVersionValidation: true,
+          skipFileValidation: true,
+        ),
+        throwsA(predicate((e) => e.toString().contains('stability'))),
+      );
+    });
+
+    test('collectManifestErrors אוסף את כל השגיאות בבת אחת', () async {
+      final manifest = PluginManifest(
+        schemaVersion: 2,
+        id: 'INVALID ID',
+        name: 'Validator',
+        version: 'not-a-version',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        stability: 'alpha',
+        permissions: const [],
+        networkEnabled: false,
+        networkAllowlist: const [],
+        toolTabTitle: 'Validator',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+      );
+
+      final errors = await PluginManifestValidator.collectManifestErrors(
+        manifest: manifest,
+        directoryPath: '/',
+        skipAppVersionValidation: true,
+        skipFileValidation: true,
+      );
+
+      // schemaVersion + id + version + stability — כולן מדווחות יחד.
+      expect(errors.length, greaterThanOrEqualTo(4));
+      expect(errors.any((e) => e.contains('סכמה')), isTrue);
+      expect(errors.any((e) => e.contains('מזהה התוסף')), isTrue);
+      expect(errors.any((e) => e.contains('SemVer')), isTrue);
+      expect(errors.any((e) => e.contains('stability')), isTrue);
+    });
+
+    test('הצהרת allowlist של host loopback ערום נדחית עם הסבר', () async {
+      final manifest = PluginManifest(
+        schemaVersion: 1,
+        id: 'test.validator.loopback',
+        name: 'Validator',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        homepage: '',
+        entrypoint: 'index.html',
+        minAppVersion: '1.0.0',
+        sdkVersion: '1.x',
+        permissions: const [],
+        networkEnabled: true,
+        networkAllowlist: const ['localhost', 'http://127.0.0.1:11434'],
+        toolTabTitle: 'Validator',
+        toolTabOrder: 900,
+        defaultPinned: false,
+        publishedDataTypes: const [],
+      );
+
+      final errors = await PluginManifestValidator.collectManifestErrors(
+        manifest: manifest,
+        directoryPath: '/',
+        skipAppVersionValidation: true,
+        skipFileValidation: true,
+      );
+
+      expect(errors.length, 1);
+      expect(errors.single, contains('localhost'));
+      expect(errors.single, contains('http://127.0.0.1:11434'));
+    });
   });
 }

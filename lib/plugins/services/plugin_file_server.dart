@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 /// רשומת קובץ אישי שהמשתמש אישר לתוסף, כפי שהיא מוחזקת בזיכרון השרת.
@@ -150,7 +151,7 @@ class PluginFileServer {
       pluginId: pluginId,
       canonicalPath: canonicalPath,
     );
-    return (token: token, url: '$origin/f/$token');
+    return (token: token, url: _urlFor(pluginId, token));
   }
 
   /// רושם מחדש קובץ עם token קיים (לאחר reload, כשרישום הזיכרון אבד אך
@@ -165,7 +166,31 @@ class PluginFileServer {
       pluginId: pluginId,
       canonicalPath: canonicalPath,
     );
-    return '$origin/f/$token';
+    return _urlFor(pluginId, token);
+  }
+
+  /// ה-URL כולל את מזהה התוסף כדי שה-WebView של התוסף יוכל לחסום בקשה
+  /// לקובץ של תוסף אחר; השרת עצמו אינו יכול לזהות את הפונה (pluginId אינו
+  /// סוד ודולף יחד עם ה-URL) — האכיפה היא ב-`shouldInterceptRequest`.
+  String _urlFor(String pluginId, String token) =>
+      '$origin/f/${Uri.encodeComponent(pluginId)}/$token';
+
+  /// האם [uri] היא בקשה לשרת הקבצים שמותר ל-WebView של [pluginId] לבצע.
+  ///
+  /// זו נקודת האכיפה היחידה של בידוד בין תוספים: רק כאן ידוע מי הפונה.
+  /// URL בפורמט הישן (`/f/<token>`) עדיין מתקבל לגרסה אחת לצורך תאימות.
+  static bool isUriForPlugin(Uri uri, String pluginId) {
+    final segments = uri.pathSegments;
+    if (segments.isEmpty || segments[0] != 'f') return false;
+    if (segments.length == 3) return segments[1] == pluginId;
+    if (segments.length == 2) {
+      debugPrint(
+        'PluginFileServer: legacy /f/<token> URL from plugin $pluginId — '
+        'התאימות תוסר בגרסה הבאה',
+      );
+      return true;
+    }
+    return false;
   }
 
   /// פותח העלאה: מקצה writeToken חד-פעמי, קובץ temp ו-URL ל-PUT.
@@ -391,13 +416,35 @@ class PluginFileServer {
     return uri.hasPort && uri.port == server.port;
   }
 
+  /// `null` הוא ה-origin של דף file:// (ה-WebView הארוז); loopback הוא שרת
+  /// הפיתוח המקומי של תוסף development.
+  bool _isAllowedOrigin(String origin) {
+    if (origin == 'null') return true;
+    final uri = Uri.tryParse(origin);
+    if (uri == null) return false;
+    const loopbacks = {'127.0.0.1', 'localhost', '::1'};
+    return loopbacks.contains(uri.host.toLowerCase());
+  }
+
   Future<void> _handleRequest(HttpRequest request) async {
     final response = request.response;
     try {
-      // loopback + token אקראי; מתירים גישת fetch מ-origin file:// (Origin: null).
-      response.headers.set('Access-Control-Allow-Origin', '*');
-      response.headers.set('Access-Control-Allow-Methods', 'GET, HEAD, PUT, OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+      // ה-WebView של תוסף רץ מ-origin file:// (Origin: null) או משרת פיתוח
+      // מקומי. משקפים רק את אלה — כדי שדף אינטרנט לא יוכל לקרוא את הקובץ.
+      final requestOrigin = request.headers.value('origin');
+      if (requestOrigin != null && _isAllowedOrigin(requestOrigin)) {
+        response.headers.set('Access-Control-Allow-Origin', requestOrigin);
+        response.headers.set('Vary', 'Origin');
+      }
+      // PUT ו-Content-Type נדרשים ל-preflight של העלאה.
+      response.headers.set(
+        'Access-Control-Allow-Methods',
+        'GET, HEAD, PUT, OPTIONS',
+      );
+      response.headers.set(
+        'Access-Control-Allow-Headers',
+        'Range, Content-Type',
+      );
       response.headers.set(
         'Access-Control-Expose-Headers',
         'Content-Range, Accept-Ranges, Content-Length',
@@ -421,12 +468,27 @@ class PluginFileServer {
         return;
       }
 
-      if (segments.length != 2 || segments[0] != 'f') {
+      if (segments.isEmpty || segments[0] != 'f') {
         response.statusCode = HttpStatus.notFound;
         return;
       }
-      final grant = _grants[segments[1]];
-      if (grant == null) {
+      // הפורמט הישן `/f/<token>` נתמך לגרסה אחת: URL שתוסף שמר ב-storage לפני
+      // המעבר ל-`/f/<pluginId>/<token>` היה מפסיק לעבוד בשקט.
+      final String token;
+      String? expectedPluginId;
+      if (segments.length == 3) {
+        expectedPluginId = segments[1];
+        token = segments[2];
+      } else if (segments.length == 2) {
+        token = segments[1];
+        debugPrint('PluginFileServer: legacy /f/<token> request served');
+      } else {
+        response.statusCode = HttpStatus.notFound;
+        return;
+      }
+      final grant = _grants[token];
+      if (grant == null ||
+          (expectedPluginId != null && grant.pluginId != expectedPluginId)) {
         response.statusCode = HttpStatus.notFound;
         return;
       }

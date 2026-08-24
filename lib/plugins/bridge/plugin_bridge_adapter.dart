@@ -82,6 +82,7 @@ import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
+import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
@@ -626,7 +627,7 @@ class PluginBridgeAdapter {
       case 'plugin':
         return await _handlePlugin(action, args);
       default:
-        throw Exception("Unknown domain: $domain");
+        throw Exception("error.unknown_method: Unknown domain: $domain");
     }
   }
 
@@ -693,7 +694,7 @@ class PluginBridgeAdapter {
       case 'getGrantedPermissions':
         return {'permissions': await _getGrantedPermissions()};
       default:
-        throw Exception("Unknown action in app: $action");
+        throw Exception("error.unknown_method: Unknown action in app: $action");
     }
   }
 
@@ -733,7 +734,7 @@ class PluginBridgeAdapter {
           final bookId = (args['bookId'] ?? args['title']) as String?;
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null) {
-            throw Exception('id or bookId required');
+            throw Exception('error.invalid_params: id or bookId required');
           }
           final book = _findPluginBook(library, args);
           if (book == null) return null;
@@ -748,12 +749,16 @@ class PluginBridgeAdapter {
         {
           final rawItems = args['items'];
           if (rawItems is! List || rawItems.length > 100) {
-            throw Exception('items must be an array with at most 100 entries');
+            throw Exception(
+              'error.invalid_params: items must be an array with at most 100 entries',
+            );
           }
           final identities = <Map<String, dynamic>>[];
           for (final item in rawItems) {
             if (item is! Map) {
-              throw Exception('items entries must be objects');
+              throw Exception(
+                'error.invalid_params: items entries must be objects',
+              );
             }
             identities.add(Map<String, dynamic>.from(item));
           }
@@ -781,7 +786,9 @@ class PluginBridgeAdapter {
           // החיפוש) בקריאה אחת, במקום קריאת resolveBooks לכל 100 מזהים.
           final rawIds = args['ids'];
           if (rawIds is! List || rawIds.length > 20000) {
-            throw Exception('ids must be an array with at most 20000 entries');
+            throw Exception(
+              'error.invalid_params: ids must be an array with at most 20000 entries',
+            );
           }
           final bookById = <int, Book>{
             for (final book in library.getAllBooks())
@@ -914,7 +921,9 @@ class PluginBridgeAdapter {
       case 'getLinkContent':
         return await _getLinkContent(args);
       default:
-        throw Exception('Unknown action in library: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in library: $action',
+        );
     }
   }
 
@@ -1371,7 +1380,9 @@ class PluginBridgeAdapter {
         }
         return await _runPluginSearch(args, eventSink: eventSink);
       default:
-        throw Exception("Unknown action in search: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in search: $action",
+        );
     }
   }
 
@@ -1543,7 +1554,7 @@ class PluginBridgeAdapter {
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null &&
               args['external'] == null) {
-            throw Exception('id or bookId required');
+            throw Exception('error.invalid_params: id or bookId required');
           }
           if (args['external'] != null) {
             final access = DeclarativeLibraryBookAccess.otzaria(
@@ -1636,7 +1647,7 @@ class PluginBridgeAdapter {
         {
           final query = (args['query'] as String? ?? '').trim();
           if (query.isEmpty || query.length > 500) {
-            throw Exception('query required');
+            throw Exception('error.invalid_params: query required');
           }
           final autoSearch = args['autoSearch'] as bool? ?? true;
           final selectItems = (args['selectItems'] as List? ?? const [])
@@ -1748,7 +1759,7 @@ class PluginBridgeAdapter {
           final highlight = args['highlight'] as bool? ?? false;
           if (PluginBookIdentity.parseId(args['id']) == null &&
               bookId == null) {
-            throw Exception('id or bookId required');
+            throw Exception('error.invalid_params: id or bookId required');
           }
           final book = _findPluginBook(
             await DataRepository.instance.library,
@@ -1850,6 +1861,7 @@ class PluginBridgeAdapter {
         if (currentPane == null) {
           return {
             'currentBook': null,
+            'currentBookId': null,
             'currentId': null,
             'currentType': null,
             'currentSource': null,
@@ -2129,7 +2141,9 @@ class PluginBridgeAdapter {
         );
         return true;
       default:
-        throw Exception('Unknown action in reader: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in reader: $action',
+        );
     }
   }
 
@@ -2421,7 +2435,7 @@ class PluginBridgeAdapter {
       case 'goTo':
         final target = args['target'] as String?;
         if (target == null) {
-          throw Exception("target required");
+          throw Exception("error.invalid_params: target required");
         }
         final Screen screen;
         switch (target) {
@@ -2439,13 +2453,15 @@ class PluginBridgeAdapter {
             break;
           default:
             throw Exception(
-              "Invalid navigation target: $target. Valid: library, reading, more, settings",
+              "error.invalid_params: Invalid navigation target: $target. Valid: library, reading, more, settings",
             );
         }
         _dependencies.navigationBloc.add(NavigateToScreen(screen));
         return true;
       default:
-        throw Exception("Unknown action in navigation: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in navigation: $action",
+        );
     }
   }
 
@@ -2457,7 +2473,9 @@ class PluginBridgeAdapter {
     switch (action) {
       case 'list':
         final bookId = args['bookId'] as String?;
-        if (bookId == null) throw Exception("bookId required");
+        if (bookId == null) {
+          throw Exception("error.invalid_params: bookId required");
+        }
         final notes = await repo.loadNotes(bookId);
         return notes
             .map(
@@ -2485,7 +2503,7 @@ class PluginBridgeAdapter {
         final lineNumber = args['lineNumber'] as int?;
         final content = args['content'] as String?;
         if (bookId == null || lineNumber == null || content == null) {
-          throw Exception("Missing arguments");
+          throw Exception("error.invalid_params: Missing arguments");
         }
         await repo.addNote(
           bookId: bookId,
@@ -2500,7 +2518,7 @@ class PluginBridgeAdapter {
         final noteId = args['noteId'] as String?;
         final content = args['content'] as String?;
         if (bookId == null || noteId == null || content == null) {
-          throw Exception("Missing arguments");
+          throw Exception("error.invalid_params: Missing arguments");
         }
         await repo.updateNote(
           bookId: bookId,
@@ -2514,12 +2532,14 @@ class PluginBridgeAdapter {
         final bookId = args['bookId'] as String?;
         final noteId = args['noteId'] as String?;
         if (bookId == null || noteId == null) {
-          throw Exception("Missing arguments");
+          throw Exception("error.invalid_params: Missing arguments");
         }
         await repo.deleteNote(bookId: bookId, noteId: noteId);
         return true;
       default:
-        throw Exception("Unknown action in notes: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in notes: $action",
+        );
     }
   }
 
@@ -2568,10 +2588,14 @@ class PluginBridgeAdapter {
         if (path == null || path.isEmpty) {
           return {'path': null};
         }
+        final rejection = await pluginFolderRejectionReason(path);
+        if (rejection != null) {
+          throw Exception('error.forbidden: $rejection');
+        }
         _grantedFolders.add(p.normalize(p.absolute(path)));
         return {'path': path};
       default:
-        throw Exception("Unknown action in ui: $action");
+        throw Exception("error.unknown_method: Unknown action in ui: $action");
     }
   }
 
@@ -2589,7 +2613,7 @@ class PluginBridgeAdapter {
     final topic = args['tapEvent'] as String? ?? 'ui.messageClicked';
     // שם האירוע משוקע לתוך JS בעת השיגור — תבנית קשיחה חוסמת הזרקת קוד.
     if (!_tapEventTopicPattern.hasMatch(topic)) {
-      throw Exception('Invalid tapEvent: $topic');
+      throw Exception('error.invalid_params: Invalid tapEvent: $topic');
     }
     final payload = <String, dynamic>{'payload': args['tapPayload']};
     if (openPlugin) {
@@ -2695,7 +2719,7 @@ class PluginBridgeAdapter {
         await _removeUserFileGrant(token);
         return true;
       default:
-        throw Exception('Unknown action in fs: $action');
+        throw Exception('error.unknown_method: Unknown action in fs: $action');
     }
   }
 
@@ -3195,7 +3219,9 @@ class PluginBridgeAdapter {
         );
         return {'created': true, 'path': path};
       default:
-        throw Exception('Unknown action in shortcut: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in shortcut: $action',
+        );
     }
   }
 
@@ -3227,7 +3253,7 @@ class PluginBridgeAdapter {
     switch (action) {
       case 'get':
         final key = args['key'] as String?;
-        if (key == null) throw Exception("key required");
+        if (key == null) throw Exception("error.invalid_params: key required");
         final value = await _pluginRepo.getKV(
           plugin.pluginId,
           kDefaultStorageNamespace,
@@ -3238,7 +3264,7 @@ class PluginBridgeAdapter {
         final key = args['key'] as String?;
         final value = args['value'];
         if (key == null || value == null) {
-          throw Exception("key and value required");
+          throw Exception("error.invalid_params: key and value required");
         }
         await _pluginRepo.setKV(
           plugin.pluginId,
@@ -3254,7 +3280,7 @@ class PluginBridgeAdapter {
         return true;
       case 'remove':
         final key = args['key'] as String?;
-        if (key == null) throw Exception("key required");
+        if (key == null) throw Exception("error.invalid_params: key required");
         await _pluginRepo.removeKV(
           plugin.pluginId,
           kDefaultStorageNamespace,
@@ -3271,7 +3297,9 @@ class PluginBridgeAdapter {
           kDefaultStorageNamespace,
         );
       default:
-        throw Exception("Unknown action in storage: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in storage: $action",
+        );
     }
   }
 
@@ -3297,7 +3325,9 @@ class PluginBridgeAdapter {
         }
         return res;
       default:
-        throw Exception("Unknown action in settings: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in settings: $action",
+        );
     }
   }
 
@@ -3317,29 +3347,33 @@ class PluginBridgeAdapter {
     Map<String, String> resolveDailyTimes() {
       final rawDate = args['date'];
       if (rawDate != null && rawDate is! String) {
-        throw Exception('Date must be an ISO-8601 string');
+        throw Exception(
+          'error.invalid_params: Date must be an ISO-8601 string',
+        );
       }
       final dateArg = rawDate == null ? null : DateTime.tryParse(rawDate);
       if (rawDate != null && dateArg == null) {
-        throw Exception('Invalid date: $rawDate');
+        throw Exception('error.invalid_params: Invalid date: $rawDate');
       }
       final cityArg = (args['city'] as String?)?.trim();
       final latArg = args['lat'], lngArg = args['lng'];
       final date = dateArg ?? calendarState.selectedGregorianDate;
 
       if ((latArg == null) != (lngArg == null)) {
-        throw Exception('Both lat and lng are required');
+        throw Exception('error.invalid_params: Both lat and lng are required');
       }
       if (latArg != null && lngArg != null) {
         if (latArg is! num || lngArg is! num) {
-          throw Exception('Coordinates must be numbers');
+          throw Exception('error.invalid_params: Coordinates must be numbers');
         }
         if (cityArg != null && cityArg.isNotEmpty) {
-          throw Exception('Pass either city or lat/lng, not both');
+          throw Exception(
+            'error.invalid_params: Pass either city or lat/lng, not both',
+          );
         }
         final lat = latArg.toDouble(), lng = lngArg.toDouble();
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          throw Exception('Coordinates out of range');
+          throw Exception('error.invalid_params: Coordinates out of range');
         }
         // בלי אזור זמן מפורש — אזור נומינלי מקו האורך (Etc/GMT הפוך-סימן:
         // Etc/GMT-3 הוא UTC+3). מומלץ להעביר מזהה IANA אמיתי.
@@ -3358,7 +3392,7 @@ class PluginBridgeAdapter {
             inIsrael: args['inIsrael'] as bool? ?? false,
           );
         } on tz.LocationNotFoundException {
-          throw Exception('Unknown timezone: $tzId');
+          throw Exception('error.invalid_params: Unknown timezone: $tzId');
         }
       }
 
@@ -3369,7 +3403,7 @@ class PluginBridgeAdapter {
           ? calendarState.selectedCity
           : cityArg;
       if (getCityData(city) == null) {
-        throw Exception('Unknown city: $city');
+        throw Exception('error.invalid_params: Unknown city: $city');
       }
       return zmanim_helpers.calculateDailyTimes(date, city);
     }
@@ -3426,7 +3460,9 @@ class PluginBridgeAdapter {
             .toList();
         return events;
       default:
-        throw Exception("Unknown action in calendar: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in calendar: $action",
+        );
     }
   }
 
@@ -3444,7 +3480,7 @@ class PluginBridgeAdapter {
         final key = args['key'] as String?;
         final payload = args['payload'];
         if (type == null || key == null || payload == null) {
-          throw Exception('type, key, payload required');
+          throw Exception('error.invalid_params: type, key, payload required');
         }
         await _pluginRepo.publishRecord(
           plugin.pluginId,
@@ -3467,7 +3503,7 @@ class PluginBridgeAdapter {
         final scope = args['scope'] as String? ?? 'global';
         final key = args['key'] as String?;
         if (type == null || key == null) {
-          throw Exception('type and key required');
+          throw Exception('error.invalid_params: type and key required');
         }
         await _pluginRepo.unpublishRecord(plugin.pluginId, type, scope, key);
         // רענון חי של לוח השנה
@@ -3493,7 +3529,9 @@ class PluginBridgeAdapter {
             )
             .toList();
       default:
-        throw Exception("Unknown action in publishedData: $action");
+        throw Exception(
+          "error.unknown_method: Unknown action in publishedData: $action",
+        );
     }
   }
 
@@ -3512,7 +3550,7 @@ class PluginBridgeAdapter {
         final includeSystemInfo = args['includeSystemInfo'] as bool? ?? false;
 
         if (to == null || subject == null || body == null) {
-          throw Exception('to, subject, body required');
+          throw Exception('error.invalid_params: to, subject, body required');
         }
 
         String finalBody = body;
@@ -3543,14 +3581,14 @@ class PluginBridgeAdapter {
           }
           return true;
         } catch (e) {
-          throw Exception('Failed to open email client: $e');
+          throw Exception('error.internal: Failed to open email client: $e');
         }
 
       case 'report':
         final rawDetails = args['details'];
         final details = rawDetails is String ? rawDetails.trim() : '';
         if (details.isEmpty) {
-          throw Exception('details required');
+          throw Exception('error.invalid_params: details required');
         }
         final cappedDetails =
             details.length > PluginReportService.maxDetailsLength
@@ -3606,7 +3644,9 @@ class PluginBridgeAdapter {
         return saved != null && saved.isNotEmpty;
 
       default:
-        throw Exception('Unknown action in feedback: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in feedback: $action',
+        );
     }
   }
 
@@ -3666,7 +3706,7 @@ class PluginBridgeAdapter {
           final source = (args['source'] as String?)?.trim().toLowerCase();
           final index = (args['index'] as num?)?.toInt();
           if (id == null && bookId == null) {
-            throw Exception('id or bookId required');
+            throw Exception('error.invalid_params: id or bookId required');
           }
           final historyState = _dependencies.historyBloc.state;
           if (historyState is! HistoryLoaded) return false;
@@ -3698,7 +3738,9 @@ class PluginBridgeAdapter {
         }
 
       default:
-        throw Exception('Unknown action in history: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in history: $action',
+        );
     }
   }
 
@@ -3716,7 +3758,7 @@ class PluginBridgeAdapter {
         final type = args['type'] as String? ?? 'info';
 
         if (message == null || message.isEmpty) {
-          throw Exception('message required');
+          throw Exception('error.invalid_params: message required');
         }
 
         final onTap = _messageTapHandler(args);
@@ -3741,17 +3783,21 @@ class PluginBridgeAdapter {
         final id = args['id'] as int?;
 
         if (title == null || body == null) {
-          throw Exception('title and body required');
+          throw Exception('error.invalid_params: title and body required');
         }
 
         // בדיקה אם השירות מאותחל
         if (!_notificationService.isInitialized) {
-          throw Exception('Notification service not initialized');
+          throw Exception(
+            'error.unavailable: Notification service not initialized',
+          );
         }
 
         // בדיקה אם יש הרשאות
         if (!_notificationService.hasPermissions) {
-          throw Exception('Notification permissions not granted');
+          throw Exception(
+            'error.forbidden: Notification permissions not granted',
+          );
         }
 
         // שליחת התראה מיידית
@@ -3777,24 +3823,34 @@ class PluginBridgeAdapter {
         final id = args['id'] as int?;
 
         if (title == null || body == null || scheduledTime == null) {
-          throw Exception('title, body, and scheduledTime required');
+          throw Exception(
+            'error.invalid_params: title, body, and scheduledTime required',
+          );
         }
 
         final dateTime = DateTime.tryParse(scheduledTime);
         if (dateTime == null) {
-          throw Exception('Invalid scheduledTime format. Use ISO 8601.');
+          throw Exception(
+            'error.invalid_params: Invalid scheduledTime format. Use ISO 8601.',
+          );
         }
 
         if (dateTime.isBefore(DateTime.now())) {
-          throw Exception('scheduledTime must be in the future');
+          throw Exception(
+            'error.invalid_params: scheduledTime must be in the future',
+          );
         }
 
         if (!_notificationService.isInitialized) {
-          throw Exception('Notification service not initialized');
+          throw Exception(
+            'error.unavailable: Notification service not initialized',
+          );
         }
 
         if (!_notificationService.hasPermissions) {
-          throw Exception('Notification permissions not granted');
+          throw Exception(
+            'error.forbidden: Notification permissions not granted',
+          );
         }
 
         final notificationId = id ?? DateTime.now().millisecondsSinceEpoch;
@@ -3815,10 +3871,12 @@ class PluginBridgeAdapter {
       case 'cancel':
         // ביטול התראה
         final id = args['id'] as int?;
-        if (id == null) throw Exception('id required');
+        if (id == null) throw Exception('error.invalid_params: id required');
 
         if (!_notificationService.isInitialized) {
-          throw Exception('Notification service not initialized');
+          throw Exception(
+            'error.unavailable: Notification service not initialized',
+          );
         }
 
         await _notificationService.cancelNotification(id);
@@ -3828,7 +3886,9 @@ class PluginBridgeAdapter {
       case 'cancelAll':
         // ביטול כל ההתראות של התוסף
         if (!_notificationService.isInitialized) {
-          throw Exception('Notification service not initialized');
+          throw Exception(
+            'error.unavailable: Notification service not initialized',
+          );
         }
 
         final notificationIds = await _getTrackedNotificationIds();
@@ -3853,14 +3913,18 @@ class PluginBridgeAdapter {
       case 'requestPermissions':
         // בקשת הרשאות התראות
         if (!_notificationService.isInitialized) {
-          throw Exception('Notification service not initialized');
+          throw Exception(
+            'error.unavailable: Notification service not initialized',
+          );
         }
 
         final granted = await _notificationService.requestPermissions();
         return {'granted': granted};
 
       default:
-        throw Exception('Unknown action in notifications: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in notifications: $action',
+        );
     }
   }
 
@@ -4231,7 +4295,9 @@ class PluginBridgeAdapter {
         return {'results': results};
 
       default:
-        throw Exception('Unknown database action: $action');
+        throw Exception(
+          'error.unknown_method: Unknown database action: $action',
+        );
     }
   }
 
@@ -4273,7 +4339,13 @@ class PluginBridgeAdapter {
       case 'listInstalled':
         final installed = await _pluginRepo.getAllPlugins();
         return installed
-            .map((p) => {'name': p.name, 'version': p.version})
+            .map(
+              (p) => {
+                'pluginId': p.pluginId,
+                'name': p.name,
+                'version': p.version,
+              },
+            )
             .toList();
       case 'openSelf':
         PluginPageLauncher.instance.open(
@@ -4303,51 +4375,57 @@ class PluginBridgeAdapter {
       case 'backgroundDone':
         return _dependencies.onBackgroundInstanceDone?.call() ?? false;
       default:
-        throw Exception('Unknown action in plugin: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in plugin: $action',
+        );
     }
   }
 
   // ----------------------------------------------------------------
   // network.*
   // ----------------------------------------------------------------
-  Future<_PluginNetworkRequest> _prepareNetworkRequest(
-    Map<String, dynamic> args,
-  ) async {
-    if (!plugin.manifest.networkEnabled) {
-      throw Exception(
-        'error.permission_denied: '
-        'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
-      );
-    }
-
+  /// מחלץ את `url` מהארגומנטים ומחזיר אותו רק אם התוסף רשאי לפנות אליו,
+  /// אחרת זורק את השגיאה המתאימה לשלב שנכשל.
+  Future<Uri> _requireAllowedNetworkUri(Map<String, dynamic> args) async {
     final url = args['url'] as String?;
     if (url == null) throw Exception('error.invalid_params: url required');
     final uri = Uri.tryParse(url);
     if (uri == null) throw Exception('error.invalid_params: invalid URL');
 
-    final requiredPermission = requiredNetworkPermissionFor(uri);
-    final granted = await _pluginRepo.getPermission(
-      plugin.pluginId,
-      requiredPermission,
+    final decision = await evaluatePluginNetworkAccess(
+      uri: uri,
+      pluginId: plugin.pluginId,
+      manifest: plugin.manifest,
+      registry: _pluginRepo,
     );
-    if (granted != true) {
-      final what = requiredPermission == 'network.localhost'
-          ? 'גישה לשירותים מקומיים (localhost)'
-          : 'גישה לאינטרנט';
-      throw Exception(
-        'error.permission_denied: '
-        'לתוסף אין הרשאת $what. '
-        'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
-      );
+    switch (decision) {
+      case PluginNetworkDecision.allowed:
+        return uri;
+      case PluginNetworkDecision.notDeclared:
+        throw Exception(
+          'error.permission_denied: '
+          'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
+        );
+      case PluginNetworkDecision.permissionMissing:
+        final what = requiredNetworkPermissionFor(uri) == 'network.localhost'
+            ? 'גישה לשירותים מקומיים (localhost)'
+            : 'גישה לאינטרנט';
+        throw Exception(
+          'error.permission_denied: '
+          'לתוסף אין הרשאת $what. '
+          'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
+        );
+      case PluginNetworkDecision.notAllowlisted:
+        throw Exception(
+          'error.forbidden: הכתובת אינה ברשימת ההיתר לגישת רשת של תוספים',
+        );
     }
+  }
 
-    final allowed = await PluginNetworkAccessResolver.instance
-        .isUriAllowedForPlugin(uri, plugin.manifest);
-    if (!allowed) {
-      throw Exception(
-        'error.forbidden: הכתובת אינה ברשימת ההיתר לגישת רשת של תוספים',
-      );
-    }
+  Future<_PluginNetworkRequest> _prepareNetworkRequest(
+    Map<String, dynamic> args,
+  ) async {
+    final uri = await _requireAllowedNetworkUri(args);
 
     final method = (args['method'] as String? ?? 'GET').toUpperCase();
     if (!RegExp(r'^[A-Z]+$').hasMatch(method)) {
@@ -4413,42 +4491,7 @@ class PluginBridgeAdapter {
         // הורדה רגילה של קובץ מ-URL מותר אל תיקיית ההורדות של המערכת.
         // הכל מתבצע בצד Flutter — ה-WebView (origin file://) אינו יכול
         // לכתוב לדיסק. נדרשת הרשאת רשת לפי היעד (אינטרנט או localhost).
-        if (!plugin.manifest.networkEnabled) {
-          throw Exception(
-            'error.permission_denied: '
-            'התוסף אינו מצהיר על גישה לאינטרנט במניפסט.',
-          );
-        }
-
-        final url = args['url'] as String?;
-        if (url == null) throw Exception('error.invalid_params: url required');
-
-        final uri = Uri.tryParse(url);
-        if (uri == null) throw Exception('error.invalid_params: invalid URL');
-
-        final requiredPermission = requiredNetworkPermissionFor(uri);
-        final granted = await _pluginRepo.getPermission(
-          plugin.pluginId,
-          requiredPermission,
-        );
-        if (granted != true) {
-          final what = requiredPermission == 'network.localhost'
-              ? 'גישה לשירותים מקומיים (localhost)'
-              : 'גישה לאינטרנט';
-          throw Exception(
-            'error.permission_denied: '
-            'לתוסף אין הרשאת $what. '
-            'ניתן להפעיל אותה בהגדרות, תחת ניהול תוספים.',
-          );
-        }
-
-        final allowed = await PluginNetworkAccessResolver.instance
-            .isUriAllowedForPlugin(uri, plugin.manifest);
-        if (!allowed) {
-          throw Exception(
-            'error.forbidden: הכתובת אינה ברשימת ההיתר לגישת רשת של תוספים',
-          );
-        }
+        final uri = await _requireAllowedNetworkUri(args);
 
         // destPath אופציונלי: הורדה אל נתיב קובץ מלא שבחר התוסף, במקום
         // תיקיית ההורדות. הנתיב חייב להיות בתוך תיקייה שהמשתמש אישר דרך
@@ -4483,7 +4526,9 @@ class PluginBridgeAdapter {
         return {'path': result.path, 'filename': result.filename};
 
       default:
-        throw Exception('Unknown action in network: $action');
+        throw Exception(
+          'error.unknown_method: Unknown action in network: $action',
+        );
     }
   }
 
