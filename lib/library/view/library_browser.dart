@@ -69,6 +69,7 @@ IconData libraryUpdateButtonIcon(LibraryUpdateStatus status) =>
     switch (status) {
       LibraryUpdateStatus.completed => FluentIcons.checkmark_circle_24_regular,
       LibraryUpdateStatus.disconnected => FluentIcons.cloud_off_24_regular,
+      LibraryUpdateStatus.error => FluentIcons.error_circle_24_regular,
       _ => FluentIcons.arrow_sync_24_regular,
     };
 

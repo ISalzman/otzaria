@@ -49,6 +49,9 @@ class WorkStatusItem {
   /// לחצני פעולה המוצגים מתחת לפרטי הפריט (רק בפריט הראשי).
   final List<WorkStatusAction> actions;
 
+  /// משך שאחריו הפריט יורד מעצמו; `null` = נשאר עד סגירה ידנית.
+  final Duration? autoDismissAfter;
+
   const WorkStatusItem({
     required this.id,
     required this.title,
@@ -58,6 +61,7 @@ class WorkStatusItem {
     this.kind = WorkStatusKind.running,
     this.onTap,
     this.actions = const [],
+    this.autoDismissAfter,
   });
 
   WorkStatusItem copyWith({
@@ -69,6 +73,7 @@ class WorkStatusItem {
     WorkStatusKind? kind,
     Object? onTap = _sentinel,
     List<WorkStatusAction>? actions,
+    Object? autoDismissAfter = _sentinel,
   }) {
     return WorkStatusItem(
       id: id ?? this.id,
@@ -79,6 +84,9 @@ class WorkStatusItem {
       kind: kind ?? this.kind,
       onTap: onTap == _sentinel ? this.onTap : onTap as VoidCallback?,
       actions: actions ?? this.actions,
+      autoDismissAfter: autoDismissAfter == _sentinel
+          ? this.autoDismissAfter
+          : autoDismissAfter as Duration?,
     );
   }
 
@@ -94,7 +102,8 @@ class WorkStatusItem {
           progress == other.progress &&
           kind == other.kind &&
           onTap == other.onTap &&
-          listEquals(actions, other.actions);
+          listEquals(actions, other.actions) &&
+          autoDismissAfter == other.autoDismissAfter;
 
   @override
   int get hashCode =>
@@ -105,7 +114,8 @@ class WorkStatusItem {
       progress.hashCode ^
       kind.hashCode ^
       onTap.hashCode ^
-      Object.hashAll(actions);
+      Object.hashAll(actions) ^
+      autoDismissAfter.hashCode;
 }
 
 const Object _sentinel = Object();
