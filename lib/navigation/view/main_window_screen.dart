@@ -1659,6 +1659,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       // שלא תירה מאוחר יותר, כשהתוכן נרשם, ותחטוף פוקוס משדה במסך הנוכחי.
       if (state.currentScreen != Screen.reading) {
         context.read<FocusRepository>().cancelPendingTabContentFocus();
+        PluginRuntimeDispatcher.instance.cancelPendingKeyboardFocus();
       }
       _lastScreen = state.currentScreen;
     }
