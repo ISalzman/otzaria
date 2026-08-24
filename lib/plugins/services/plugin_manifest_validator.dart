@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
-import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/utils/plugin_version_utils.dart';
 
@@ -119,17 +118,6 @@ class PluginManifestValidator {
         } else {
           errors.add('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
         }
-      }
-    }
-
-    // הצהרת host ערום נחסמת בזמן ריצה (SSRF לכל פורט מקומי). בלי השגיאה כאן
-    // התוסף מותקן נקי ונכשל רק כשהוא מנסה לפנות לרשת.
-    for (final entry in manifest.networkAllowlist) {
-      if (isLoopbackHost(entry.trim())) {
-        errors.add(
-          'ערך "$entry" ב-network.allowlist אינו מספיק — נדרש origin מלא '
-          'כולל פורט, למשל http://127.0.0.1:11434',
-        );
       }
     }
 

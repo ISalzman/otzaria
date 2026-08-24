@@ -50,14 +50,10 @@ class PluginNetworkAccessResolver {
 
   /// מאשר URL לתוסף אם הוא גם הוצהר במניפסט וגם אושר ע"י מקור אמון רשמי.
   Future<bool> isUriAllowedForPlugin(Uri uri, PluginManifest manifest) async {
-    // שירותי AI מקומיים: כתובת loopback מותרת אם המניפסט הצהיר על ה-origin
-    // המלא שלה, בלי לדרוש את ה-allowlist הגלובלי (שאינו נועד ל-localhost).
-    // מסננים הצהרות host-בלבד (localhost / 127.0.0.1): הן היו מתירות כל פורט
-    // מקומי — נתיב SSRF לשירותים אחרים על המחשב — ולכן נדרש origin מפורש.
-    final loopbackDeclarations = manifest.networkAllowlist.where(
-      (entry) => !isLoopbackHost(entry.trim()),
-    );
-    if (matchingLoopbackPrefix(uri, loopbackDeclarations) != null) {
+    // שירותי AI מקומיים: כתובת loopback מותרת אם היא תואמת הצהרת loopback
+    // במניפסט (לפי prefix — פורט/נתיב מפורשים נשמרים), בלי לדרוש את
+    // ה-allowlist הגלובלי (שאינו נועד ל-localhost).
+    if (matchingLoopbackPrefix(uri, manifest.networkAllowlist) != null) {
       return true;
     }
 

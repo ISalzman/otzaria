@@ -63,21 +63,22 @@ String requiredNetworkPermissionFor(Uri uri) =>
 
 /// מחזירה את הצהרת ה-loopback מתוך [allowlist] שמתירה את [uri], או `null`.
 ///
-/// מתאימה רק כאשר [uri] עצמו הוא loopback מקומי (http/https). ההצהרה חייבת
-/// להיות **origin מלא** (`http://127.0.0.1:11434`) — מותרים הוא ונתיביו
-/// (התאמת prefix רגילה, כולל פורט), כך שפורט אחר על אותו host נחסם.
-///
-/// ערך של host ערום (`127.0.0.1` / `localhost`) אינו מתיר דבר — הוא היה פותח
-/// כל פורט מקומי. הוולידטור מתריע על הצהרה כזו כבר בהתקנה.
+/// מתאימה רק כאשר [uri] עצמו הוא loopback מקומי (http/https). כל ערך הצהרה:
+/// - host בלבד (`127.0.0.1` / `localhost`) — מתיר כל פורט/נתיב על אותו host.
+/// - URL מלא (`http://127.0.0.1:11434`) — מתיר רק את אותו origin ונתיביו
+///   (התאמת prefix רגילה, כולל פורט), כך שפורט אחר על אותו host נחסם.
 String? matchingLoopbackPrefix(Uri uri, Iterable<String> allowlist) {
   if (uri.scheme != 'http' && uri.scheme != 'https') return null;
   if (!isLoopbackHost(uri.host)) return null;
 
+  final requestHost = uri.host.toLowerCase();
   for (final raw in allowlist) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) continue;
-    // host ערום היה מתיר כל פורט מקומי — נתיב SSRF לשירותים אחרים על המחשב.
-    if (isLoopbackHost(trimmed)) continue;
+    if (isLoopbackHost(trimmed)) {
+      if (trimmed.toLowerCase() == requestHost) return raw;
+      continue;
+    }
     if (matchingNetworkAllowlistPrefix(uri, <String>[trimmed]) != null) {
       return raw;
     }

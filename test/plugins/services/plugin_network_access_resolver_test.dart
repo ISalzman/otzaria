@@ -112,39 +112,11 @@ void main() {
     });
 
     test(
-      'חוסם הצהרת loopback של host-בלבד (פותחת כל פורט מקומי — SSRF)',
+      'מתיר loopback מקומי כשהמניפסט מצהיר עליו, בלי allowlist גלובלי',
       () async {
         final resolver = PluginNetworkAccessResolver();
         final manifest = _buildManifest(
           networkAllowlist: const ['127.0.0.1', 'localhost'],
-        );
-
-        expect(
-          await resolver.isUriAllowedForPlugin(
-            Uri.parse('http://127.0.0.1:11434/api/tags'),
-            manifest,
-          ),
-          isFalse,
-        );
-        expect(
-          await resolver.isUriAllowedForPlugin(
-            Uri.parse('http://localhost:1234/v1/models'),
-            manifest,
-          ),
-          isFalse,
-        );
-      },
-    );
-
-    test(
-      'מתיר loopback מקומי כשהמניפסט מצהיר origin מלא, בלי allowlist גלובלי',
-      () async {
-        final resolver = PluginNetworkAccessResolver();
-        final manifest = _buildManifest(
-          networkAllowlist: const [
-            'http://127.0.0.1:11434',
-            'http://localhost:1234',
-          ],
         );
 
         expect(

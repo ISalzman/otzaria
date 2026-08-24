@@ -3580,12 +3580,12 @@ Otzaria.on('plugin.boot', async (payload) => {
 
 - ההרשאה הנדרשת היא **`network.localhost`** (לא `network.access`). השתיים נפרדות: `network.localhost` אינה מתירה גישה לאינטרנט, ו-`network.access` אינה מתירה גישה ל-localhost.
 - היעד חייב להופיע ב-`network.allowlist` של התוסף, אבל **אין צורך ב-PR לאוצריא** — localhost אינו נכלל ב-allowlist הגלובלי.
-- **חובה origin מלא כולל פורט** (`"http://127.0.0.1:11434"`). הצהרת host חשוף (`"127.0.0.1"` / `"localhost"`, בלי סכימה ופורט) **נחסמת**: היא הייתה מתירה כל פורט מקומי — נתיב SSRF לשירותים אחרים על מחשב המשתמש. תוסף שמצהיר כך יקבל `error.forbidden` בכל קריאה.
+- הצהרת host חשוף (`"127.0.0.1"` / `"localhost"`) מתירה כל פורט על אותו host; הצהרת URL מלא (`"http://127.0.0.1:11434"`) נועלת לפורט שהוצהר.
 - כמו כל גישת רשת — חובה גם `network.enabled: true` ב-manifest. הקריאות חייבות לעבור דרך `network.fetch` (לא `fetch()` ישיר מה-WebView, שנחסם ב-CORS מול שרת מקומי שדוחה `Origin: null`).
 
 ```json
 "permissions": ["network.localhost"],
-"network": { "enabled": true, "allowlist": ["http://127.0.0.1:11434"] }
+"network": { "enabled": true, "allowlist": ["127.0.0.1", "localhost"] }
 ```
 
 ### חובה: כתובות מדויקות בלבד
