@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -175,6 +176,21 @@ class HtmlLinkHandler {
     }
   }
 
+  /// מאתר את הספר שקישור `book://` מפנה אליו, כ-TextBook לפתיחה בלשונית.
+  ///
+  /// ‏`findBookByTitle` משווה `runtimeType` ולא `is`, ולכן ספר-מסמך
+  /// (HTML/DOCX/EPUB/ODT) אינו נמצא בחיפוש אחר `TextBook` — אף שהקורא פותח
+  /// אותו דרך אותה לשונית בדיוק, בעטיפת `toTextBook()` (ראו
+  /// `OpenedTab.fromBook`). בלי ההשלמה כאן כל קישור `book://` אל ספר כזה
+  /// מת, ובקובצי HTML זו הדרך המתועדת לקשר בין ספרים.
+  @visibleForTesting
+  static TextBook? resolveBookLinkTarget(Library library, String title) {
+    final direct = library.findBookByTitle(title, TextBook);
+    if (direct is TextBook) return direct;
+    final any = library.findBookByTitle(title, null);
+    return any is ConvertibleDocumentBook ? any.toTextBook() : null;
+  }
+
   /// מאתר את השורה שמכילה עוגן `id="[fragment]"` בגוף הספר, או null.
   @visibleForTesting
   static int? findIdAnchorLine(List<String> lines, String fragment) {
@@ -291,12 +307,10 @@ class HtmlLinkHandler {
       // קבלת רשימת כל הספרים לבדיקה
       final allBooks = library.getAllBooks();
 
-      final foundBook = library.findBookByTitle(bookTitle, TextBook);
+      final anyBook = library.findBookByTitle(bookTitle, null);
+      final foundBook = resolveBookLinkTarget(library, bookTitle);
 
       if (foundBook == null) {
-        // נסה לחפש בלי להגביל לטיפוס TextBook
-        final anyBook = library.findBookByTitle(bookTitle, null);
-
         if (anyBook != null) {
           throw Exception(
             'הספר "$bookTitle" נמצא אבל הוא מטיפוס ${anyBook.runtimeType}, לא TextBook',
@@ -308,11 +322,6 @@ class HtmlLinkHandler {
         throw Exception(
           'לא נמצא ספר בשם: "$bookTitle".\nספרים זמינים (דוגמאות): $availableBooks',
         );
-      }
-
-      // וידוא שזה TextBook
-      if (foundBook is! TextBook) {
-        throw Exception('הספר $bookTitle אינו ספר טקסט');
       }
 
       final book = foundBook;

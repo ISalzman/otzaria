@@ -28,9 +28,12 @@ void main() {
         'ספר.odt',
         'ספר.rtf',
         'ספר.doc',
+        'ספר.html',
+        'ספר.htm',
         'ספר.xyz',
         'ספר',
         'ספר.DOCX',
+        'ספר.HTML',
       ];
       for (final path in paths) {
         expect(
@@ -104,7 +107,15 @@ void main() {
   });
 
   group('toTextBook — שימור זהות (§16, §17)', () {
-    for (final fileType in ['docx', 'epub', 'odt', 'rtf', 'docm']) {
+    for (final fileType in [
+      'docx',
+      'epub',
+      'odt',
+      'rtf',
+      'docm',
+      'html',
+      'htm',
+    ]) {
       test('$fileType שומר את כל שדות הזהות', () {
         final book =
             buildBookForFileType(
@@ -161,7 +172,7 @@ void main() {
     });
 
     test('DocumentBook עובר round-trip ושומר fileType', () {
-      for (final fileType in ['odt', 'rtf', 'docm', 'dotx']) {
+      for (final fileType in ['odt', 'rtf', 'docm', 'dotx', 'html', 'htm']) {
         final original = DocumentBook(
           id: 5,
           title: 'ספר',

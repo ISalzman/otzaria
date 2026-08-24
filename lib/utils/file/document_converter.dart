@@ -2,12 +2,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:path/path.dart' as p;
+
 import 'package:otzaria/utils/file/cfb_reader.dart';
 import 'package:otzaria/utils/file/docx_cache.dart';
 import 'package:otzaria/utils/file/docx_to_otzaria.dart';
 import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
 import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/epub_to_otzaria.dart';
+import 'package:otzaria/utils/file/html_to_otzaria.dart';
 import 'package:otzaria/utils/file/legacy_word_to_otzaria.dart';
 import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:otzaria/utils/file/odt_to_otzaria.dart';
@@ -55,6 +58,15 @@ String convertDocumentBytesSync(
       format: resolved,
       path: path,
       embedImages: embedImages,
+    );
+  }
+  if (resolved.isHtmlDocument) {
+    return htmlToText(
+      bytes,
+      title,
+      format: resolved,
+      embedImages: embedImages,
+      baseDirectory: path == null ? null : p.dirname(path),
     );
   }
   return switch (resolved) {
@@ -138,6 +150,14 @@ Future<String> convertDocumentWithCache(
   }
   if (resolved.isLegacyWord) {
     return convertLegacyWordWithCache(
+      file,
+      title,
+      resolved,
+      embedImages: embedImages,
+    );
+  }
+  if (resolved.isHtmlDocument) {
+    return convertHtmlWithCache(
       file,
       title,
       resolved,
@@ -336,6 +356,7 @@ int? converterVersionFor(DocumentFormat? format) {
   if (format == null) return null;
   if (format.isOoxmlWord) return kOoxmlWordConverterVersion;
   if (format.isLegacyWord) return kLegacyWordConverterVersion;
+  if (format.isHtmlDocument) return kHtmlConverterVersion;
   return switch (format) {
     DocumentFormat.epub => kEpubConverterVersion,
     DocumentFormat.md || DocumentFormat.markdown => kMarkdownConverterVersion,

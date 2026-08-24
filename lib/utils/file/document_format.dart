@@ -34,6 +34,11 @@ enum DocumentFormat {
 
   rtf,
   odt,
+
+  /// שתי סיומות HTML נפרדות; שתיהן עוברות את אותו מנוע ונשמרות כ-`fileType`
+  /// נבדל, מאותה סיבה כמו `md`/`markdown`.
+  html,
+  htm,
 }
 
 /// תכונות סמנטיות של פורמט. כל predicate מתאר מציאות *אחת* — אין כאן
@@ -83,6 +88,10 @@ extension DocumentFormatProperties on DocumentFormat {
   /// Word בינארי ישן (OLE Compound File).
   bool get isLegacyWord =>
       this == DocumentFormat.doc || this == DocumentFormat.dot;
+
+  /// מסמך HTML עצמאי — ‎.html‎ ו-‎.htm‎ עוברים את אותו מנוע המרה.
+  bool get isHtmlDocument =>
+      this == DocumentFormat.html || this == DocumentFormat.htm;
 
   /// האם המסמך הוא חבילת ZIP — קובע את מגבלות ה-decompression (ראו
   /// `zip_limits.dart`) ואת אופן זיהוי התוכן.
@@ -135,6 +144,7 @@ extension DocumentFormatProperties on DocumentFormat {
           DocumentFormat.md || DocumentFormat.markdown => 'Markdown',
           DocumentFormat.rtf => 'RTF',
           DocumentFormat.odt => 'ODT',
+          DocumentFormat.html || DocumentFormat.htm => 'HTML',
           _ => 'טקסט',
         };
 }
@@ -169,6 +179,10 @@ const Set<DocumentFormat> kProductionBookFormats = {
 
   // מסמך Word שנשמר כ-XML. נאסף בסריקה רק אם תוכנו אכן מסמך Word.
   DocumentFormat.xml,
+
+  // שתי סיומות ה-HTML, אותו מנוע.
+  DocumentFormat.html,
+  DocumentFormat.htm,
 };
 
 /// סיומות הספרים הנתמכות (ללא נקודה), נגזרות מ-[kProductionBookFormats].
@@ -323,6 +337,7 @@ bool _sameEngine(DocumentFormat a, DocumentFormat b) {
   if (a == b) return true;
   if (a.isOoxmlWord && b.isOoxmlWord) return true;
   if (a.isLegacyWord && b.isLegacyWord) return true;
+  if (a.isHtmlDocument && b.isHtmlDocument) return true;
   return false;
 }
 
