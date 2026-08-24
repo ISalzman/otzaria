@@ -2988,11 +2988,14 @@ Future<void> main() async {
       // תיקייה לקריאה בלבד: ה-staging אינו יכול להיווצר, ולכן הכתיבה נכשלת
       // בדיוק בשלב שבו הקובץ המקורי עוד שלם.
       final dir = Directory(tempDir.path);
-      final mode = Process.runSync('stat', ['-f', '%Lp', dir.path]).stdout
-          .toString()
-          .trim();
+      // ההרשאה משוחזרת לערך קבוע ולא לזו שנקראה מהדיסק: `stat -f '%Lp'` הוא
+      // תחביר BSD, וב-Linux הדגל `-f` מדפיס מידע על מערכת הקבצים ולא על
+      // הקובץ. שם ה-chmod המשחזר קיבל זבל, התיקייה נשארה 555, ומחיקת תיקיית
+      // ה-temp ב-tearDown נכשלה ב-EACCES — הבדיקה עברה במקומי ונפלה ב-CI.
+      // 700 הוא ההרשאה שתיקיית temp מקבלת מ-createTemp בלאו הכי.
+      const restoreMode = '700';
       Process.runSync('chmod', ['555', dir.path]);
-      addTearDown(() => Process.runSync('chmod', [mode, dir.path]));
+      addTearDown(() => Process.runSync('chmod', [restoreMode, dir.path]));
 
       await expectLater(
         adapter.execute('fs', 'commitUserFileWrite', {
@@ -3002,7 +3005,7 @@ Future<void> main() async {
         throwsA(isA<Exception>()),
       );
 
-      Process.runSync('chmod', [mode, dir.path]);
+      Process.runSync('chmod', [restoreMode, dir.path]);
       expect(file.readAsStringSync(), 'הגרסה שאסור לאבד');
       expect(
         Directory(tempDir.path)
