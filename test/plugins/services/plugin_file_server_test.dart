@@ -434,6 +434,23 @@ void main() {
       expect(await server.beginUpload(pluginId: 'p2'), isNotNull);
     });
 
+    test('קריאות beginUpload מקבילות אינן עוקפות את המכסה', () async {
+      final results = await Future.wait(
+        List.generate(3, (_) async {
+          try {
+            await server.beginUpload(pluginId: 'p1');
+            return true;
+          } on PluginUploadException catch (error) {
+            expect(error.code, 'error.too_many_requests');
+            return false;
+          }
+        }),
+      );
+
+      expect(results.where((accepted) => accepted), hasLength(2));
+      expect(server.activeUploadsFor('p1'), 2);
+    });
+
     test('PUT שני על אותו token נדחה ב-409', () async {
       final ticket = await server.beginUpload(pluginId: 'p1');
       final first = await put(ticket.uploadUrl, utf8.encode('abc'));

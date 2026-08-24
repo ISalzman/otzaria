@@ -129,7 +129,7 @@ export interface BootPayload {
      * `undefined` — לזיהוי מצב התוסף יש להשתמש ב-`plugin.suspended`
      * ו-`plugin.resumed`.
      */
-    runMode?: 'foreground' | 'background';
+    runMode?: 'background';
   };
   theme: ThemePayload;
   /** Connectivity as known at boot, without ever blocking on the network.

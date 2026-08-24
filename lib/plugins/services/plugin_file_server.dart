@@ -193,6 +193,9 @@ class PluginFileServer {
       );
     }
 
+    // מכינים את תיקיית ה-temp לפני בדיקת המכסה. מכאן ועד רישום ה-session אין
+    // נקודת השהיה, ולכן קריאות מקבילות אינן יכולות לעקוף את המכסה.
+    final dir = await _uploadDir();
     final active = _uploads.values.where((u) => u.pluginId == pluginId).length;
     if (active >= maxActiveUploadsPerPlugin) {
       throw const PluginUploadException(
@@ -202,7 +205,6 @@ class PluginFileServer {
     }
 
     final token = _generateToken();
-    final dir = await _uploadDir();
     final session = _UploadSession(
       pluginId: pluginId,
       tempFile: File(p.join(dir.path, '$token.part')),
