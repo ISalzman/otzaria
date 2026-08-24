@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -42,26 +44,9 @@ void main() {
     WidgetTester tester, {
     required bool showPreviewPane,
     bool searchShowPreview = true,
+    SearchBloc? providedSearchBloc,
   }) async {
-    final searchBloc = _StaticSearchBloc(
-      SearchState(
-        searchQuery: 'תדע זרעך',
-        totalResults: 1,
-        results: [
-          SearchResult(
-            id: BigInt.one,
-            title: 'בראשית',
-            reference: 'בראשית, פרק טו',
-            text: 'ידע תדע כי־גר יהיה זרעך',
-            segment: BigInt.from(389),
-            isPdf: false,
-            filePath: 'id:1',
-            mergedCount: 1,
-            merged: const [],
-          ),
-        ],
-      ),
-    );
+    final searchBloc = providedSearchBloc ?? _StaticSearchBloc(_searchState());
     final settingsBloc = _MockSettingsBloc();
     whenListen(
       settingsBloc,
@@ -148,6 +133,27 @@ void main() {
     expect(harness.tabsBloc.openedTabs, isEmpty);
   });
 
+  testWidgets('חיפוש חדש אינו מאפשר לפענוח קודם לפתוח תצוגה מקדימה', (
+    tester,
+  ) async {
+    final searchBloc = _DeferredResolutionSearchBloc(_searchState());
+    final harness = await pumpResults(
+      tester,
+      showPreviewPane: true,
+      providedSearchBloc: searchBloc,
+    );
+
+    await singleTap(tester, harness.resultFinder);
+    expect(searchBloc.resolutionRequests, 1);
+
+    searchBloc.updateState(_searchState(query: 'חיפוש חדש'));
+    await tester.pump();
+    searchBloc.completeResolution();
+    await tester.pump();
+
+    expect(harness.tab.previewTarget.value, isNull);
+  });
+
   testWidgets('לחיצה כפולה פותחת את התוצאה בעיון', (tester) async {
     final harness = await pumpResults(tester, showPreviewPane: true);
 
@@ -191,6 +197,24 @@ void main() {
   });
 }
 
+SearchState _searchState({String query = 'תדע זרעך'}) => SearchState(
+  searchQuery: query,
+  totalResults: 1,
+  results: [
+    SearchResult(
+      id: BigInt.one,
+      title: 'בראשית',
+      reference: 'בראשית, פרק טו',
+      text: 'ידע תדע כי־גר יהיה זרעך',
+      segment: BigInt.from(389),
+      isPdf: false,
+      filePath: 'id:1',
+      mergedCount: 1,
+      merged: const [],
+    ),
+  ],
+);
+
 class _StaticSearchBloc extends SearchBloc {
   _StaticSearchBloc(SearchState initialSearchState) {
     emit(initialSearchState);
@@ -198,6 +222,29 @@ class _StaticSearchBloc extends SearchBloc {
 
   @override
   void add(SearchEvent event) {}
+}
+
+class _DeferredResolutionSearchBloc extends _StaticSearchBloc {
+  _DeferredResolutionSearchBloc(super.initialSearchState);
+
+  final Completer<IndexedBookResolution> _resolution = Completer();
+
+  int resolutionRequests = 0;
+
+  void updateState(SearchState state) => emit(state);
+
+  void completeResolution() => _resolution.complete(
+    (book: TextBook(id: 1, title: 'בראשית'), isStale: false),
+  );
+
+  @override
+  Future<IndexedBookResolution> resolveBookForIndexedPath(
+    String indexedFilePath, {
+    required String indexedTitle,
+  }) {
+    resolutionRequests++;
+    return _resolution.future;
+  }
 }
 
 class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>

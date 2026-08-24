@@ -50,7 +50,10 @@ void main() {
     test('נתיב יחסי רגיל נפתר בתוך השורש', () {
       final resolved = resolveWithinRoot(root, 'cache/a.json');
       expect(resolved, isNotNull);
-      expect(p.isWithin(root, resolved!), isTrue);
+      expect(
+        p.isWithin(Directory(root).resolveSymbolicLinksSync(), resolved!),
+        isTrue,
+      );
     });
 
     test('ריק / נקודה מוחזרים כשורש עצמו', () {

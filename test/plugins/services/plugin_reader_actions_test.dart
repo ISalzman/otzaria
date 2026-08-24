@@ -20,6 +20,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
+import '../../support/search_engine_test_init.dart';
 
 class _MockNavigationBloc extends Mock implements NavigationBloc {}
 
@@ -154,6 +155,10 @@ void main() {
 
   group('PluginDeclarativeSearchOpener', () {
     test('פותח כרטיסיית חיפוש עם השאילתה', () async {
+      if (!await tryInitSearchEngine()) {
+        markTestSkipped(searchEngineSkipReason);
+        return;
+      }
       final tabsBloc = _CapturingTabsBloc();
       final historyBloc = _CapturingHistoryBloc();
       final opener = PluginDeclarativeSearchOpener(

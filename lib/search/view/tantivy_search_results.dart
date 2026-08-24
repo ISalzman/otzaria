@@ -75,6 +75,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   /// (אותה חתימה → שימור מיקום הגלילה).
   String? _lastSearchSignature;
 
+  int _previewRequestId = 0;
+
   /// רוחב חי של חלונית התצוגה המקדימה בזמן גרירה (לא נשמר בין הפעלות).
   double? _previewPaneWidthOverride;
 
@@ -265,6 +267,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required bool isPdf,
     required String filePath,
   }) async {
+    final requestId = ++_previewRequestId;
     final current = widget.tab.previewTarget.value;
     if (current != null &&
         current.matchesResult(
@@ -281,7 +284,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       filePath,
       indexedTitle: title,
     );
-    if (!mounted) return;
+    if (!mounted || requestId != _previewRequestId) return;
     if (resolution.isStale) {
       UiSnack.showError(LibraryMessages.searchResultIndexOutOfDate);
       return;
@@ -544,6 +547,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             final signature = _searchSignature(state);
             if (signature != _lastSearchSignature) {
               _lastSearchSignature = signature;
+              _previewRequestId++;
               // חיפוש חדש מחליף את התוצאות — התוצאה שבתצוגה המקדימה כבר
               // אינה ברשימה, לכן החלונית נסגרת.
               widget.tab.previewTarget.value = null;
