@@ -18,6 +18,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/indexing/indexing_work_status.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -65,7 +66,6 @@ import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/workspaces/bloc/workspace_state.dart';
 import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
-import 'package:otzaria/work_status/work_status_item.dart';
 import 'package:otzaria/work_status/work_status_overlay.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
@@ -2544,23 +2544,20 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               final cubit = context.read<WorkStatusCubit>();
               if (state is IndexingInProgress && state.isCreatingIndex) {
-                final total = state.totalBooks ?? 0;
-                final processed = state.booksProcessed ?? 0;
-                final progress = total > 0
-                    ? (processed / total).clamp(0.0, 1.0)
-                    : null;
+                final indexingBloc = context.read<IndexingBloc>();
                 cubit.upsert(
-                  WorkStatusItem(
-                    id: 'indexing',
-                    title: 'אינדוקס ספרים',
-                    message: 'התוכנה בתהליך אינדוקס',
-                    detail: 'התקדמות: $processed/$total',
-                    progress: progress,
+                  indexingWorkStatusItem(
+                    state,
+                    onTogglePause: () => indexingBloc.add(
+                      state.isPaused ? ResumeIndexing() : PauseIndexing(),
+                    ),
+                    onToggleEconomy: () =>
+                        indexingBloc.add(SetEconomyIndexing(!state.isEconomy)),
                     onTap: _openIndexingSettings,
                   ),
                 );
               } else {
-                cubit.remove('indexing');
+                cubit.remove(kIndexingWorkStatusId);
                 if (state is IndexingComplete && !state.isClean) {
                   UiSnack.show(
                     LibraryMessages.indexingCompletedWithFailures(
