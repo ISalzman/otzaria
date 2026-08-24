@@ -379,6 +379,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       archivePath = await _downloadService.downloadPluginArchive(
         Uri.parse(event.downloadUrl),
         appVersion: appVersion,
+        storeOnly: event.storeOnly,
       );
 
       final prepareInfo = await _installerService.prepareInstall(

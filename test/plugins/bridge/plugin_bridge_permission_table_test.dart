@@ -249,6 +249,8 @@ void _storeOriginGuardTests() {
         'https://nototzaria.org/p.otzplugin',
         'file:///C:/p.otzplugin',
         'ftp://otzaria.org/p.otzplugin',
+        // http פתוח ל-MITM, והמניפסט בדיאלוג ההרשאות מגיע מתוך הארכיון.
+        'http://otzaria.org/api/plugins/x/download',
       ]) {
         expect(
           PluginStoreLinkParser.isStoreDownloadUri(Uri.parse(url)),

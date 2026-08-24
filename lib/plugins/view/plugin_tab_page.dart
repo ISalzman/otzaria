@@ -287,6 +287,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           InstallRemotePluginRequested(
             downloadUrl,
             reportContext: reportContext,
+                      storeOnly: true,
           ),
         );
       },

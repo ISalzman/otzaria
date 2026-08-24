@@ -70,9 +70,10 @@ class PluginStoreLinkParser {
 
   /// האם [uri] הוא כתובת הורדה של החנות הרשמית. `plugin.requestInstall` מגודר
   /// בזה: בלעדיו כל תוסף היה גורם להורדה מכל כתובת, בלי הרשאת רשת.
+  /// https בלבד: המניפסט שמוצג בדיאלוג ההרשאות מגיע מתוך הארכיון, ולכן
+  /// MITM על http היה מציג מניפסט תמים ומתקין ארכיון אחר.
   static bool isStoreDownloadUri(Uri uri) =>
-      (uri.scheme == 'https' || uri.scheme == 'http') &&
-      _storeHosts.contains(uri.host.toLowerCase());
+      uri.scheme == 'https' && _storeHosts.contains(uri.host.toLowerCase());
 
   /// גרסה שהשרת מקבל: X[.Y[.Z[.W]]] עם סיומת prerelease/build אופציונלית.
   static final _appVersionPattern = RegExp(

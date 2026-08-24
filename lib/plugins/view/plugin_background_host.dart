@@ -638,6 +638,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           InstallRemotePluginRequested(
             downloadUrl,
             reportContext: reportContext,
+                      storeOnly: true,
           ),
         );
       },
