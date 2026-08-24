@@ -410,6 +410,10 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `storage.remove` | `plugin.storage.write` |
 | `storage.list`   | `plugin.storage.read` |
 
+> ⚠️ **שם המסלול שונה משם ההרשאה.** קריאה ל-`plugin.storage.get` אינה קיימת
+> ותיכשל בשקט אם התוסף אינו בודק את `success`. `storage.set` דורש `value`
+> שאינו `null` — למחיקה יש `storage.remove`.
+
 ### settings.*
 
 | Method | הרשאה | פרמטרים |
@@ -560,6 +564,8 @@ const { data: keys } = await Otzaria.call('storage.list');
 
 ### רשימת ההרשאות המלאה
 
+שש ההרשאות שברשימה למעלה נכללות גם כאן לשם השלמות — אין צורך להצהיר עליהן.
+
 | הרשאה | מה מאפשרת |
 |-------|-----------|
 | `app.info.read` | קריאת מידע על האפליקציה |
@@ -575,8 +581,8 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `notes.write` | הוספה/עדכון/מחיקה של הערות |
 | `calendar.read` | גישה לנתוני לוח שנה |
 | `settings.read` | קריאת הגדרות התוכנה (הכל למעט רשימת החסומים — סודות, נתיבים, מייל ותוכן אישי) |
-| `plugin.storage.read` | קריאת storage פרטי |
-| `plugin.storage.write` | כתיבה ל-storage פרטי |
+| `plugin.storage.read` | קריאת storage פרטי — ⚠️ המסלולים הם `storage.get`/`storage.list`, **לא** `plugin.storage.*` |
+| `plugin.storage.write` | כתיבה ל-storage פרטי — ⚠️ המסלולים הם `storage.set`/`storage.remove` |
 | `published_data.write` | פרסום נתונים לאפליקציה |
 | `ui.feedback` | הצגת הודעות ודיאלוגים |
 | `ui.create_shortcut` | יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל — דורש אישור משתמש |
@@ -709,12 +715,57 @@ Otzaria.on('plugin.boot', async (payload) => {
 ## אבטחה ומגבלות
 
 ### Rate limiting
-- מקסימום **100 קריאות לשנייה** לתוסף
-- חריגה מחזירה `{ success: false, error: { code: "error.rate_limited" } }`
+
+המגביל הוא **דלי אסימונים**, לא מכסה לשנייה:
+
+- **קיבולת הדלי: 50 אסימונים.** כל קריאה צורכת אחד.
+- **קצב המילוי: אסימון כל 10ms** — כלומר 100 קריאות לשנייה בקצב מתמשך.
+- חריגה מחזירה `{ success: false, error: { code: "error.rate_limited" } }`.
+
+שני המספרים חיים יחד, וזו ההשלכה המעשית: פרץ של 60 קריאות בבת אחת ייכשל
+בקריאה ה-51 — **גם אם חלפה שנייה שלמה מאז הקריאה הקודמת**, כי הדלי אינו
+מתמלא מעבר ל-50. תוסף שמנפיק פרצים גדולים חייב לפזר אותם בזמן.
+
+**שתי החרגות מהמגביל:**
+
+1. `library.getBookContent` — היא מחולקת ל-chunks של 5000 תווים, כך שספר
+   שלם מחייב עשרות קריאות רצופות. **המלכוד:** ההחרגה חלה רק כאשר ההרשאה
+   `library.content.read` **הוענקה בפועל**, לא כשהוצהרה במניפסט. תוסף
+   שההרשאה שלו כבויה יעבור דרך המגביל ועלול לקבל `error.rate_limited`
+   במקום `permission_denied` המצופה — אל תסיקו מהקוד הזה שהקריאה תקינה.
+2. **ביטול stream** — קריאת ביטול של `search.query` או של
+   `network.fetchStream` אינה נספרת, כדי שתמיד ניתן יהיה לעצור.
 
 ### Timeout
-- כל קריאת `Otzaria.call()` חייבת להסתיים תוך **30 שניות**
-- חריגה מחזירה `error.timeout`
+- כברירת מחדל, קריאת `Otzaria.call()` נחתכת אחרי **30 שניות** ומחזירה
+  `error.timeout`.
+- **שישה מסלולים מוחרגים** ומנהלים חסם זמן משלהם — הם עשויים להמתין ללא
+  הגבלה מצד ה-RPC: `search.query`,‏ `network.fetch`,‏ `network.fetchStream`,‏
+  `network.download`,‏ `fs.extractZip` ו-`feedback.report`.
+- **אל תעטפו אותם ב-timeout עצמי של 30 שניות.** `feedback.report` וכל פעולה
+  שממתינה לדיאלוג ממתינות למשתמש; ביטול מצד התוסף יקטע פעולה שהמשתמש
+  באמצע אישורה, ובמקרה של דיווח — אחרי שכבר נשלח.
+- שאילתות `database.*` הן מקרה נפרד: להן חסם משלהן של 3 שניות שמחזיר
+  `database.query_timeout` (ראו API_REFERENCE).
+
+### מפתחות ושמות שמורים
+
+ה-SDK משתמש בכמה שמות בתוך ה-payload ובמרחב האירועים של הדף. שימוש חוזר
+בהם **אינו מחזיר שגיאה** — הוא פשוט משבש את הזרימה בשקט:
+
+- **`__streamId`** ו-**`__cancelStreamId`** — ה-SDK מזריק אותם ל-payload של
+  `search.query` ושל `network.fetchStream` כדי לשייך chunks לזרם ולבטל אותו.
+  שדה משלכם באותו שם ידרוס אותם.
+- **`__otzaria.*`** — נושאי ה-`CustomEvent` שבהם ה-chunks מגיעים ל-דף
+  (`__otzaria.search.query.chunk`,‏ `__otzaria.network.fetchStream.chunk`).
+  אל תשלחו ואל תיירטו אירועים בקידומת הזאת.
+
+### `window.open` מנוטרל
+
+מטעמי אבטחה `window.open` מוחלף בפונקציה שמדפיסה לקונסולה ומחזירה `null`.
+היא **אינה זורקת**, ולכן ספריית צד-שלישי שנשענת עליה (פתיחת חלון תצוגה,
+הדפסה, OAuth popup) תיכשל בלי חריגה ובלי סימן. לפתיחת קישור חיצוני יש
+`app.openUrl` (הרשאה `app.open_url`).
 
 ### גישת קבצים
 התוסף יכול לטעון רק קבצים מ:
@@ -1200,7 +1251,7 @@ otzaria://open/plugin/<plugin-id>
 | קוד שגיאה | סיבה | פתרון |
 |-----------|------|--------|
 | `permission_denied` | הרשאה לא הוצהרה ב-manifest או לא אושרה | הוסף לרשימת `permissions` ב-manifest |
-| `error.rate_limited` | יותר מ-100 קריאות/שניה | הוסף debounce/throttle לקוד |
+| `error.rate_limited` | דלי של 50 אסימונים התרוקן (מילוי: אסימון כל 10ms) | הוסף debounce/throttle, ופזר פרצים גדולים בזמן |
 | `error.timeout` | הפעולה לא הושלמה תוך 30 שניות | חלק לפעולות קטנות יותר |
 | `error.invalid_params` | פרמטרים חסרים או שגויים | בדוק את החתימה של ה-method |
 | `error.internal` | שגיאה פנימית בצד אוצריא | בדוק לוגים בהגדרות → תוספים |

@@ -88,10 +88,11 @@ if (response.success) {
 | `permission_denied` / `error.permission_denied` | `permission` | ההרשאה לא הוצהרה במניפסט או לא אושרה |
 | `error.forbidden` | `permission` | ההרשאה קיימת אך היעד עצמו חסום — נתיב מחוץ לתיקייה מאושרת, תיקייה מוגנת, או URL שאינו ב-allowlist |
 | `error.invalid_params` | `validation` | פרמטרים חסרים או שגויים |
+| `error.selection_empty` | `validation` | הבחירה שהתבקשה ריקה — אין טקסט לחפש בו התאמות |
 | `error.not_found` | `not_found` | הפריט המבוקש אינו קיים |
 | `error.conflict` | `conflict` | התנגשות — למשל שם ספק שכבר תפוס |
 | `error.timeout` | `timeout` | הפעולה לא הושלמה בזמן (`retryable: true`) |
-| `error.rate_limited` | `too_large` | יותר מ-100 קריאות בשנייה (`retryable: true`) |
+| `error.rate_limited` | `too_large` | דלי אסימונים בקיבולת 50 שמתמלא אסימון כל 10ms — 100 קריאות/שנייה בקצב מתמשך, אך פרץ גדול מ-50 נכשל מיד (`retryable: true`) |
 | `error.payload_too_large` / `error.section_too_large` | `too_large` | הקלט או הקטע גדולים מדי |
 | `error.unknown_method` | `unsupported` | ה-method אינו קיים במארח הזה — איות שגוי, או API חדש מ-`minAppVersion` שהוצהר |
 | `error.unavailable` | `unsupported` | ה-API קיים אך אינו זמין בהקשר הנוכחי (אין טאב קריאה פעיל, שירות כבוי) |
@@ -405,7 +406,7 @@ const { data } = await Otzaria.call('app.getConnectivity', { forceRefresh: true 
 - **תוצאת בדיקת הרשת נשמרת ל-30 שניות.** קריאות בתוך החלון הזה זולות ואינן פותחות חיבורים חדשים. לאחר מכן הקריאה הבאה מרעננת את המצב.
 - **`forceRefresh: true` עוקף תוצאה שמורה**, אבל עדיין מתלכד עם בדיקה שכבר רצה. השתמשו בו בנקודות מעבר משמעותיות, לא בכל רינדור.
 - **`isOfflineMode` נקרא מחדש בכל קריאה**, ולכן שינוי ההגדרה נכנס לתוקף מיד גם כשתוצאת הרשת עדיין שמורה.
-- **אל תקראו לזה מכל רינדור.** הקריאה עצמה זולה בצד אוצריא, אבל היא נספרת במגביל הקצב של ה-RPC (כ-50 קריאות בפרץ), וקריאה מכל פריים תחזיר `error.rate_limited`. שמרו את הערך במשתנה ורעננו לפי צורך.
+- **אל תקראו לזה מכל רינדור.** הקריאה עצמה זולה בצד אוצריא, אבל היא נספרת במגביל הקצב של ה-RPC (דלי של 50 אסימונים שמתמלא אסימון כל 10ms), וקריאה מכל פריים תחזיר `error.rate_limited`. שמרו את הערך במשתנה ורעננו לפי צורך.
 - **במצב מנותק לא מתבצעת בדיקת רשת כלל** — התשובה מיידית, `hasNetwork` תמיד `false`.
 - הבדיקה מנסה את `otzaria.org` וגם יעדים ניטרליים. די בכך שאחד עונה, ולכן תקלה זמנית בשרת של אוצריא לא מסמנת את כל המשתמשים כמנותקים.
 
@@ -954,6 +955,11 @@ for await (const chunk of chunks) {
 הפסקת הלולאה (`break` או `return`) מבטלת את החיפוש בצד אוצריא. ה־chunk הראשון
 נושא את הספירות, והבאים נושאים עד 50 תוצאות כל אחד.
 
+> **צרכן איטי קוטע את הזרם.** ה-SDK מחזיק תור של 256 chunks; אם הלולאה אינה
+> מדביקה את הקצב, הזרם נכשל עם `Stream consumer is too slow` והחיפוש מבוטל.
+> תוסף שמרנדר DOM בתוך הלולאה לכל תוצאה יראה חיפוש שנקטע ללא סיבה נראית —
+> אספו את התוצאות למערך ורנדרו מחוץ ללולאה, או ב-`requestAnimationFrame`.
+
 ```javascript
 {
   sequence: 0,
@@ -1494,6 +1500,10 @@ const { data } = await Otzaria.call('reader.getSectionTextMap', {
 
 המגבלות הן 2,000 טוקנים לעמוד ו־50,000 grapheme clusters למקטע. מקטעי מפת המקור משתמשים רק בסוגים `identity`,‏ `substitution`,‏ `hidden` ו־`inserted`.
 
+> **`includeDomRects` שמור לעתיד ואינו נתמך.** הפרמטר מתקבל ומאומת כבוליאני,
+> אך `true` נדחה תמיד ב-`error.unsupported_context`. השאירו אותו `false`
+> או השמיטו אותו.
+
 ---
 
 ## navigation.* - ניווט באפליקציה
@@ -1731,7 +1741,7 @@ await Otzaria.call('ui.showError', {
 });
 ```
 
-### `ui.messageClicked` (Event)
+### Event: `ui.messageClicked`
 **הרשאה:** אין צורך בהרשאה נוספת — נשלח רק לתוסף שהציג את ההודעה
 
 נורה כאשר המשתמש לוחץ על הודעה שהתוסף הציג עם `tapPayload`. שם האירוע
@@ -2476,6 +2486,13 @@ const { data } = await Otzaria.call('notifications.requestPermissions');
 
 ## storage.* - אחסון נתונים
 
+> ⚠️ **המסלול הוא `storage.*`, ההרשאה היא `plugin.storage.*`.** קל לטעות
+> ולקרוא ל-`plugin.storage.get`: הנתב מפצל על הנקודה הראשונה, אינו מוצא
+> מסלול, והקריאה נכשלת בשקט אם התוסף אינו בודק את `success` — כל ההעדפות
+> פשוט אינן נשמרות. **קראו תמיד `storage.get` / `storage.set` /
+> `storage.remove` / `storage.list`**; `plugin.storage.*` הוא שם ההרשאה
+> במניפסט בלבד.
+
 ### `storage.get`
 **הרשאה:** `plugin.storage.read`
 
@@ -2488,6 +2505,8 @@ const { data } = await Otzaria.call('storage.get', {
 // כל ערך JSON או null
 ```
 
+`data` הוא **הערך עצמו**, לא `{ value }` עטוף. מפתח שאינו קיים מחזיר `null`.
+
 ### `storage.set`
 **הרשאה:** `plugin.storage.write`
 
@@ -2499,6 +2518,10 @@ await Otzaria.call('storage.set', {
   value: { count: 42, name: 'test' }
 });
 ```
+
+> **אי אפשר לשמור `null`.** `value` חייב להיות שונה מ-`null`, אחרת חוזרת
+> `error.invalid_params`. למחיקת ערך השתמשו ב-`storage.remove` — `null`
+> חוזר ממילא מ-`storage.get` על מפתח שאינו קיים.
 
 ### `storage.remove`
 **הרשאה:** `plugin.storage.write`
@@ -2805,10 +2828,71 @@ API זה מאפשר לתוסף לקרוא נתונים ממסדי נתונים S
 בכל רשומת `databaseSources` מותרים רק `id`,‏ `label` ו־`required`. נתיב הקובץ
 וה־policy נקבעים בלעדית על ידי אוצריא; שדה כמו `path` יגרום לדחיית המניפסט.
 
-המקור המובנה `external_catalog` חושף לקריאה את טבלת ההתאמה
-`otzaria_hebrew_books` ואת העמודות `id_book`,‏ `title`,‏ `author` של
-`hebrew_books`. הוא מוגבל ל־20 שורות ול־join יחיד על
-`otzaria_hebrew_books.hb_id = hebrew_books.id_book`.
+> **`required` אינו נאכף.** הוא מאומת כבוליאני בזמן אריזה, אך שום חלק
+> באוצריא אינו קורא את ערכו — תוסף שמצהיר `required: true` על מקור חסר
+> ייטען כרגיל. בדקו זמינות בעצמכם עם `database.listSources`.
+
+### מקורות הנתונים המובנים
+
+| `id` | תוכן | קובץ |
+|------|------|------|
+| `talmud_synopsis` | עדי נוסח לתלמוד הבבלי | `talmud_synopsis_pooled.db` |
+| `external_catalog` | מיפוי קטלוגים חיצוניים (HebrewBooks) | קטלוגים חיצוניים |
+
+#### `talmud_synopsis` — סכימה מנורמלת (pooled)
+
+**כל הטקסטים מרוכזים בטבלת `strings`.** אין עמודת טקסט ישירה בשום טבלה
+אחרת — כל שם, הפניה ונוסח מיוצגים כמזהה `*_text_id` שיש לחבר ל-`strings.id`
+ולקרוא מ-`strings.value`.
+
+| טבלה | עמודות |
+|------|--------|
+| `tractates` | `id`,‏ `sort_order`,‏ `name_text_id` |
+| `pages` | `id`,‏ `tractate_id`,‏ `sort_order`,‏ `name_text_id` |
+| `witnesses` | `id`,‏ `name_text_id` |
+| `alignments` | `id`,‏ `page_id`,‏ `kind`,‏ `sequence_number`,‏ `reference_text_id` |
+| `readings` | `alignment_id`,‏ `witness_id`,‏ `text_text_id` |
+| `strings` | `id`,‏ `value` |
+| `page_witnesses` | `page_id`,‏ `kind`,‏ `column_index`,‏ `witness_id` |
+
+**11 חוקי ה-join המותרים** (בשני הכיוונים):
+
+`tractates.id ↔ pages.tractate_id` · `pages.id ↔ alignments.page_id` ·
+`alignments.id ↔ readings.alignment_id` · `witnesses.id ↔ readings.witness_id` ·
+`pages.id ↔ page_witnesses.page_id` · `witnesses.id ↔ page_witnesses.witness_id` ·
+וחמישה חיבורים ל-`strings.id`: `tractates.name_text_id`,‏ `pages.name_text_id`,‏
+`witnesses.name_text_id`,‏ `alignments.reference_text_id`,‏ `readings.text_text_id`.
+
+**אותה טבלה מותרת כמה פעמים תחת aliases שונים.** שאילתה מלאה מחברת את
+`strings` חמש פעמים — פעם לכל שדה טקסט — ולכן `maxJoins` במקור הזה הוא **8**
+ולא ברירת המחדל 4.
+
+#### `external_catalog`
+
+| טבלה | עמודות |
+|------|--------|
+| `otzaria_hebrew_books` | `hb_id`,‏ `otzaria_id`,‏ `otzaria_title`,‏ `is_best`,‏ `confidence` |
+| `hebrew_books` | `id_book`,‏ `title`,‏ `author` |
+
+join יחיד מותר: `otzaria_hebrew_books.hb_id = hebrew_books.id_book`.
+
+### מגבלות ה-policy
+
+לכל מקור עשר מגבלות. שלוש מהן נחשפות ב-`database.describeSource`; השאר
+נאכפות בשקט ומחזירות `database.query_too_large` בחריגה.
+
+| מגבלה | ברירת מחדל | `talmud_synopsis` | `external_catalog` | מה חוסמת |
+|-------|-----------|-------------------|--------------------|----------|
+| `maxLimit` | 5000 | 5000 | 1000 | `limit` גדול מהערך → שגיאה (אינו נחתך) |
+| `maxBatchQueries` | 5 | 5 | 10 | מספר השאילתות ב-`database.batchQuery` |
+| `maxJoins` | 4 | **8** | 1 | מספר הרשומות במערך `joins` |
+| `maxColumns` | 32 | 32 | 8 | אורך `select`, ובנפרד אורך `orderBy` |
+| `maxOffset` | 10000 | 10000 | **0** | `offset` גדול מהערך → שגיאה |
+| `maxWhereConditions` | 32 | 32 | 8 | סך התנאים ב-`where`, כולל קבוצות `and`/`or` |
+| `maxInValues` | 100 | 100 | 1000 | אורך המערך ב-`{ op: 'in' }` |
+| `maxParameterBytes` | 64KB | 64KB | 16KB | גודל ערך פרמטר יחיד |
+| `maxResultBytes` | 4MB | 4MB | 256KB | גודל משוער של כלל התוצאה |
+| `maxQueryDuration` | 3 שניות | 3 שניות | 3 שניות | משך ריצה → `database.query_timeout` |
 
 ---
 
@@ -2825,6 +2909,14 @@ const { data } = await Otzaria.call('database.listSources');
 // }
 ```
 
+מוחזרים רק המקורות שהתוסף הצהיר עליהם במניפסט, בסדר ההצהרה.
+
+> **`available: false` מכסה שני מצבים שונים ואינו מבחין ביניהם:** מזהה שאוצריא
+> אינה מכירה כלל (בדרך כלל שגיאת כתיב ב-`id` שבמניפסט), וקובץ DB מוכר שאינו
+> קיים אצל המשתמש הזה. הסימן היחיד להבדל הוא ש-`label` נופל למזהה עצמו כשהמקור
+> אינו רשום — אבל אין להסתמך על כך. אל תציגו למשתמש "המסד חסר" על סמך
+> `available: false` בלבד; בדקו קודם את איות ה-`id` מול טבלת המקורות המובנים.
+
 ---
 
 ### `database.describeSource`
@@ -2839,14 +2931,18 @@ const { data } = await Otzaria.call('database.describeSource', {
 //   source: { id: "talmud_synopsis", label: "עדי נוסח בבלי" },
 //   schema: {
 //     tables: [
-//       { name: "line_alignments", columns: ["id", "page_id", "reference", "sequence_number"] },
-//       { name: "line_readings",   columns: ["alignment_id", "id", "text", "witness_id"] },
+//       { name: "alignments", columns: ["id", "kind", "page_id", "reference_text_id", "sequence_number"] },
+//       { name: "pages",      columns: ["id", "name_text_id", "sort_order", "tractate_id"] },
+//       { name: "readings",   columns: ["alignment_id", "text_text_id", "witness_id"] },
 //       ...
 //     ]
 //   },
-//   limits: { maxLimit: 5000, maxBatchQueries: 5 }
+//   limits: { maxLimit: 5000, maxBatchQueries: 5, maxQueryDurationMs: 3000 }
 // }
 ```
+
+הטבלאות והעמודות מוחזרות ממוינות אלפביתית. `limits` מחזיר שלושה שדות בלבד —
+שאר המגבלות אינן נחשפות (ראו הטבלה למעלה).
 
 ---
 
@@ -2870,45 +2966,48 @@ const { data } = await Otzaria.call('database.describeSource', {
 
 **דוגמה — קריאת עדי נוסח לדף:**
 
+הסכימה מנורמלת, ולכן כל שדה טקסט מחייב join נפרד ל-`strings` תחת alias משלו.
+הדוגמה מחברת את `strings` ארבע פעמים — `tn` (שם מסכת), `pn` (שם דף),
+`wn` (שם עד הנוסח) ו-`rt` (הנוסח עצמו).
+
 ```javascript
 const { data } = await Otzaria.call('database.query', {
   sourceId: 'talmud_synopsis',
   from: { table: 'tractates', alias: 't' },
   select: [
-    { expr: 'la.id',              as: 'alignment_id' },
-    { expr: 'la.sequence_number', as: 'sequence_number' },
-    { expr: 'la.reference',       as: 'reference' },
-    { expr: 'w.name',             as: 'witness_name' },
-    { expr: 'lr.text',            as: 'text' }
+    { expr: 'a.id',              as: 'alignment_id' },
+    { expr: 'a.sequence_number', as: 'sequence_number' },
+    { expr: 'wn.value',          as: 'witness_name' },
+    { expr: 'rt.value',          as: 'text' }
   ],
   joins: [
-    {
-      type: 'inner', table: 'pages', alias: 'p',
-      on: [{ left: 'p.tractate_id', op: '=', right: 't.id' }]
-    },
-    {
-      type: 'inner', table: 'line_alignments', alias: 'la',
-      on: [{ left: 'la.page_id', op: '=', right: 'p.id' }]
-    },
-    {
-      type: 'inner', table: 'line_readings', alias: 'lr',
-      on: [{ left: 'lr.alignment_id', op: '=', right: 'la.id' }]
-    },
-    {
-      type: 'inner', table: 'witnesses', alias: 'w',
-      on: [{ left: 'w.id', op: '=', right: 'lr.witness_id' }]
-    }
+    { type: 'inner', table: 'strings',    alias: 'tn',
+      on: [{ left: 'tn.id', op: '=', right: 't.name_text_id' }] },
+    { type: 'inner', table: 'pages',      alias: 'p',
+      on: [{ left: 'p.tractate_id', op: '=', right: 't.id' }] },
+    { type: 'inner', table: 'strings',    alias: 'pn',
+      on: [{ left: 'pn.id', op: '=', right: 'p.name_text_id' }] },
+    { type: 'inner', table: 'alignments', alias: 'a',
+      on: [{ left: 'a.page_id', op: '=', right: 'p.id' }] },
+    { type: 'inner', table: 'readings',   alias: 'r',
+      on: [{ left: 'r.alignment_id', op: '=', right: 'a.id' }] },
+    { type: 'inner', table: 'witnesses',  alias: 'w',
+      on: [{ left: 'w.id', op: '=', right: 'r.witness_id' }] },
+    { type: 'inner', table: 'strings',    alias: 'wn',
+      on: [{ left: 'wn.id', op: '=', right: 'w.name_text_id' }] },
+    { type: 'inner', table: 'strings',    alias: 'rt',
+      on: [{ left: 'rt.id', op: '=', right: 'r.text_text_id' }] }
   ],
   where: {
     op: 'and',
     conditions: [
-      { op: '=', left: 't.name', value: 'מסכת ברכות' },
-      { op: '=', left: 'p.name', value: 'ב' }
+      { op: '=', left: 'tn.value', value: 'מסכת ברכות' },
+      { op: '=', left: 'pn.value', value: 'ב' }
     ]
   },
   orderBy: [
-    { expr: 'la.sequence_number', direction: 'asc' },
-    { expr: 'w.name',             direction: 'asc' }
+    { expr: 'a.sequence_number', direction: 'asc' },
+    { expr: 'wn.value',          direction: 'asc' }
   ],
   limit: 2000,
   rowFormat: 'array'
@@ -2917,14 +3016,18 @@ const { data } = await Otzaria.call('database.query', {
 //   meta: { sourceId: "talmud_synopsis", rowCount: 240, limit: 2000, offset: 0, hasMore: false, elapsedMs: 12 },
 //   columns: [
 //     { name: "alignment_id" }, { name: "sequence_number" },
-//     { name: "reference" }, { name: "witness_name" }, { name: "text" }
+//     { name: "witness_name" }, { name: "text" }
 //   ],
 //   rows: [
-//     [1, 1, "ע\"א 1 - 14", "כ\"י מינכן 95", "..."],
+//     [1, 1, "כ\"י מינכן 95", "..."],
 //     ...
 //   ]
 // }
 ```
+
+הדוגמה משתמשת בשמונה joins — בדיוק ה-`maxJoins` של המקור הזה. הוספת
+`strings` חמישית (למשל עבור `a.reference_text_id`) תחזיר
+`database.query_too_large`; פצלו לשתי שאילתות או ל-`database.batchQuery`.
 
 **פורמט `object`:**
 
@@ -2943,12 +3046,37 @@ const { data } = await Otzaria.call('database.query', {
 
 | אופרטור | דוגמה |
 |---------|-------|
-| `=` `!=` `>` `>=` `<` `<=` | `{ op: '=', left: 'p.name', value: 'ב' }` |
-| `like` | `{ op: 'like', left: 'w.name', value: '%כ"י%' }` |
+| `=` `!=` `>` `>=` `<` `<=` | `{ op: '=', left: 'pn.value', value: 'ב' }` |
+| `like` | `{ op: 'like', left: 'wn.value', value: '%כ"י%' }` |
 | `in` | `{ op: 'in', left: 'p.id', value: [1, 2, 3] }` |
-| `between` | `{ op: 'between', left: 'la.sequence_number', value: [1, 50] }` |
-| `isNull` / `isNotNull` | `{ op: 'isNull', left: 'lr.text' }` |
+| `between` | `{ op: 'between', left: 'a.sequence_number', value: [1, 50] }` |
+| `isNull` / `isNotNull` | `{ op: 'isNull', left: 'r.text_text_id' }` |
 | `and` / `or` | `{ op: 'and', conditions: [...] }` |
+
+**כללי ולידציה שקל לפספס** — כולם מחזירים `database.invalid_spec`:
+
+- **שדה לא מוכר נדחה, ולא מתעלמים ממנו.** בכל רמה נאכפת רשימת מפתחות סגורה:
+  ברמת השאילתה רק `sourceId`,‏ `from`,‏ `select`,‏ `joins`,‏ `where`,‏ `orderBy`,‏
+  `limit`,‏ `offset`,‏ `rowFormat`; ב-`from` רק `table`/`alias`; ב-`join` רק
+  `type`/`table`/`alias`/`on`; ב-`select` רק `expr`/`as`; ב-`orderBy` רק
+  `expr`/`direction`. שגיאת כתיב בשם שדה מפילה את השאילתה.
+- **הפניה לעמודה חייבת להיות בדיוק `alias.column`** — שני חלקים, כל אחד מזהה
+  חוקי (`[a-zA-Z_][a-zA-Z0-9_]*`). `t.*`, שם טבלה ללא alias, או ביטוי SQL —
+  נדחים.
+- **האופרטור ב-`join.on` חייב להיות `=`.** אין תמיכה בשום אופרטור אחר, ולכל
+  join נדרש לפחות תנאי `on` אחד.
+- **כל join חייב לחבר את ה-alias החדש לטבלה שכבר נכנסה** — צד אחד של התנאי
+  ה-alias החדש, הצד השני alias קודם. alias כפול נדחה.
+- **`limit` מעבר ל-`maxLimit` זורק** `database.query_too_large` — הוא אינו
+  נחתך בשקט. כך גם `offset` מעבר ל-`maxOffset` (ב-`external_catalog` הוא 0,
+  כלומר כל `offset` חיובי נדחה). ערך שלילי בשניהם → `database.invalid_spec`.
+- **`select` ריק נדחה**, ושמות הפלט חייבים להיות ייחודיים — שתי עמודות
+  בשם זהה מחייבות `as` מבדיל. ב-`rowFormat: 'object'` כפילות מתגלה גם על
+  שמות העמודות שחוזרים מ-sqlite.
+- **`isNull`/`isNotNull` אסור שיכללו `value`**, וכל שאר האופרטורים חייבים
+  לכלול אותו. `in` דורש מערך לא ריק, `between` מערך בן שני איברים בדיוק.
+- **קינון `where` מוגבל ל-5 רמות**, וערכי פרמטר חייבים להיות סקלרים של JSON
+  (מחרוזת, מספר, בוליאני או `null`).
 
 ---
 
@@ -2981,7 +3109,8 @@ const { data } = await Otzaria.call('database.batchQuery', {
 ```
 
 **הגבלות:**
-- מקסימום 5 שאילתות ל-batch (ניתן לבדוק ב-`database.describeSource`)
+- מקסימום `maxBatchQueries` שאילתות ל-batch — 5 ב-`talmud_synopsis`,‏ 10
+  ב-`external_catalog` (ניתן לבדוק ב-`database.describeSource`)
 - כל שאילתה עוברת ולידציה נפרדת מול ה-policy
 - אין תמיכה ב-references בין תוצאות (כל שאילתה עצמאית)
 
@@ -2994,14 +3123,19 @@ const { data } = await Otzaria.call('database.batchQuery', {
 | `permission_denied` | חסרה הרשאת `database.read` (קוד גנרי של ה-RPC bridge) |
 | `database.source_not_found` | המקור לא הוצהר במניפסט |
 | `database.source_unavailable` | קובץ ה-DB לא קיים או לא רשום |
+| `database.source_not_read_only` | המקור רשום ככתיב — אוצריא מסרבת לפתוח אותו לתוסף |
 | `database.table_not_allowed` | טבלה לא מורשית |
 | `database.column_not_allowed` | עמודה לא מורשית |
 | `database.join_not_allowed` | join לא מורשה על פי ה-policy |
-| `database.query_too_large` | חריגה ממגבלת limit, joins, columns, או batch |
-| `database.invalid_spec` | בקשה לא תקינה (שדה חסר, ערך לא חוקי, alias כפול) |
-| `error.timeout` | השאילתה חרגה מ-30 שניות (מגבלת ה-RPC הכללית) |
+| `database.query_too_large` | חריגה מאחת ממגבלות ה-policy (ראו טבלת המגבלות) |
+| `database.invalid_spec` | בקשה לא תקינה (שדה לא מוכר, ערך לא חוקי, alias כפול) |
+| `database.query_timeout` | השאילתה חרגה מ-`maxQueryDuration` (3 שניות) |
+| `database.query_failed` | כשל ריצה ב-sqlite או ב-worker |
 
-> **הערה על timeout:** בגרסה נוכחית, שאילתות ש-sqlite3 מריץ באופן סינכרוני אינן ניתנות להפרעה. timeout נאכף על ידי מגבלת ה-RPC הכללית (30 שניות) שמחזירה `error.timeout`.
+> **timeout:** לשאילתות DB יש חסם זמן משלהן. השאילתה רצה ב-isolate נפרד
+> שנהרג בתום `maxQueryDuration` — 3 שניות כברירת מחדל — והשגיאה שחוזרת היא
+> `database.query_timeout`, לא `error.timeout` הגנרי. חסם 30 השניות של
+> ה-RPC לעולם אינו זה שנוגע בשאילתת DB.
 
 ---
 
@@ -4080,7 +4214,7 @@ await Otzaria.call('reader.updateContextMenuItem', {
 
 ---
 
-### `reader.context_menu_item_clicked` (Event)
+### Event: `reader.context_menu_item_clicked`
 **הרשאה:** אין צורך בהרשאה נוספת — נשלח רק לפלאגין שרשם את הפריט
 
 נורה כאשר המשתמש לוחץ על פריט תפריט שהפלאגין רשם.
@@ -4205,7 +4339,7 @@ await Otzaria.call('reader.updateToolbarItem', {
 
 ---
 
-### `reader.toolbar_item_clicked` (Event)
+### Event: `reader.toolbar_item_clicked`
 **הרשאה:** אין צורך בהרשאה נוספת — נשלח רק לפלאגין שרשם את הפקד
 
 נורה כאשר המשתמש לוחץ על פקד (או על פריט בתפריט נפתח) שהפלאגין רשם.
@@ -4232,7 +4366,7 @@ Otzaria.on('reader.toolbar_item_clicked', (data) => {
 
 ---
 
-### `reader.selection_changed` (Event)
+### Event: `reader.selection_changed`
 **הרשאה:** `events.subscribe:reader.selection_changed`
 
 נורה כאשר המשתמש מסמן טקסט בקורא. **לא** נורה כאשר הסימון מתנקה.
@@ -4258,7 +4392,7 @@ Otzaria.on('reader.selection_changed', (data) => {
 
 ---
 
-### `reader.sectionContentChanged` (Event)
+### Event: `reader.sectionContentChanged`
 **הרשאה:** `events.subscribe:reader.sectionContentChanged`
 
 **זמין מגרסה:** `0.9.95`

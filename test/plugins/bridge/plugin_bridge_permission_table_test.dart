@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -61,6 +62,7 @@ InstalledPlugin _plugin(List<String> permissions) => InstalledPlugin(
 );
 
 void main() {
+  _storeOriginGuardTests();
   group('טבלת ההרשאות של הגשר', () {
     const table = PluginBridgeHandler.methodPermissions;
 
@@ -219,6 +221,41 @@ void main() {
       );
       expect(a.bridgeNonce, isNot(b.bridgeNonce));
       expect(a.bridgeNonce.length, 32);
+    });
+  });
+}
+
+void _storeOriginGuardTests() {
+  group('plugin.requestInstall מוגבל למארחי החנות הרשמית', () {
+    test('כתובת החנות מתקבלת', () {
+      expect(
+        PluginStoreLinkParser.isStoreDownloadUri(
+          Uri.parse('https://otzaria.org/api/plugins/x/download'),
+        ),
+        isTrue,
+      );
+      expect(
+        PluginStoreLinkParser.isStoreDownloadUri(
+          Uri.parse('https://WWW.Otzaria.org/api/plugins/x/download'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('מארח זר נדחה — זהו ערוץ ההורדה שרץ לפני דיאלוג ההרשאות', () {
+      for (final url in <String>[
+        'https://evil.example.com/p.otzplugin',
+        'https://otzaria.org.evil.com/p.otzplugin',
+        'https://nototzaria.org/p.otzplugin',
+        'file:///C:/p.otzplugin',
+        'ftp://otzaria.org/p.otzplugin',
+      ]) {
+        expect(
+          PluginStoreLinkParser.isStoreDownloadUri(Uri.parse(url)),
+          isFalse,
+          reason: url,
+        );
+      }
     });
   });
 }

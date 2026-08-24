@@ -86,6 +86,7 @@ import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
+import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
@@ -4777,6 +4778,16 @@ class PluginBridgeAdapter {
         if (url == null) throw Exception('error.invalid_params: url required');
         final cb = _dependencies.requestPluginInstall;
         if (cb == null) throw Exception('error.unavailable: install not wired');
+
+        // ההורדה מתבצעת לפני דיאלוג ההרשאות ובלי הרשאת רשת, ולכן כתובת חופשית
+        // כאן הייתה ערוץ יציאה לרשת לכל תוסף. מותרת רק החנות הרשמית.
+        final parsedUrl = Uri.tryParse(url);
+        if (parsedUrl == null ||
+            !PluginStoreLinkParser.isStoreDownloadUri(parsedUrl)) {
+          throw Exception(
+            'error.forbidden: url must point to the official plugin store',
+          );
+        }
 
         // token+callback אופציונליים — מאפשרים לתוסף חנות לעקוב אחרי תוצאת
         // ההתקנה דרך ה-API של האתר. callback חייב להיות באותו origin של

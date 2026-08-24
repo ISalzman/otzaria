@@ -1245,7 +1245,11 @@ export interface DatabaseTableSchema {
 export interface DatabaseSourceDescription {
   source: { id: string; label: string };
   schema: { tables: DatabaseTableSchema[] };
-  limits: { maxLimit: number; maxBatchQueries: number };
+  limits: {
+    maxLimit: number;
+    maxBatchQueries: number;
+    maxQueryDurationMs: number;
+  };
 }
 
 export interface DatabaseSelectItem {
