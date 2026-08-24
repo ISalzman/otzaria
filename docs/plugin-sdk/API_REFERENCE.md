@@ -142,6 +142,7 @@ if (response.success) {
 | `library.getTree` | 0.9.93 |
 | `library.getCommentators` | 0.9.97 |
 | `library.getLinks` | 0.9.97 |
+| `library.getRawLinks` | 0.9.97 |
 | `library.getLinkTargetsSummary` | 0.9.97 |
 | `library.getLinkContent` | 0.9.97 |
 | `network.fetch` | 0.9.93 |
@@ -611,11 +612,13 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 
 ## מפרשים וקישורים
 
-ארבע הקריאות הבאות חושפות את מפת הקישורים של הספרייה: אילו מפרשים קיימים על
+חמש הקריאות הבאות חושפות את מפת הקישורים של הספרייה: אילו מפרשים קיימים על
 ספר, אילו קישורים יוצאים מטווח שורות נתון, ומה התוכן שבצד השני של הקישור.
 
 **כל מספרי השורות ב-API הזה 0-based** — כמו ה-`index` של `library.getBookToc`
-ושל `reader.getCurrentRef`. אין צורך בהיסט כלשהו בין הקריאות.
+ושל `reader.getCurrentRef`. אין צורך בהיסט כלשהו בין הקריאות. היוצא היחיד הוא
+ה**פלט** של `getRawLinks`, שנושא את מוסכמת ה-1-based של פורמט `links.json`;
+הפרמטרים שלו נשארים 0-based ככל השאר.
 
 > ⚠️ **גרשיים עבריים.** שמות הספרים במסד שמורים בגרשיים עבריים (`״` U+05F4,
 > `׳` U+05F3) ולא במרכאות ASCII (`"`, `'`). השוואה מול ליטרל כמו `'רש"י על
@@ -626,7 +629,13 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 
 > 💡 **התחילו מ-`getLinkTargetsSummary`.** הוא מחזיר את כל ספרי היעד של הספר
 > בקריאה אחת וזולה, כולל `maxSourceLine` — ומאפשר לבחור אילו יעדים לבקש
-> ב-`getLinks` (`targetTitles`) במקום לסרוק את כל הקישורים.
+> ב-`getLinks`/`getRawLinks` (`targetTitles`) במקום לסרוק את כל הקישורים.
+
+**`getLinks` או `getRawLinks`?** שתיהן בוחרות בדיוק את אותם קישורים ונבדלות
+רק בצורת הפלט. `getLinks` היא ברירת המחדל לכל שימוש תכנותי: 0-based כמו שאר
+ה-SDK, שמות שדות מפורשים, ומידע שקיים רק במסד (`isCommentary`, עוגני-מילה,
+קישורי-טווח, `targetCategoryId`, `targetIsUserBook`). `getRawLinks` מיועדת
+לכלי שכבר יודע לקרוא את פורמט `links.json` ומצפה בדיוק למפתחות שלו.
 
 ### `library.getCommentators`
 **הרשאה:** `library.links.read` · **מגרסה:** 0.9.97
@@ -697,6 +706,95 @@ const { data } = await Otzaria.call('library.getLinks', {
 //     anchor: { start: 4, end: 9, label: "א" }  // רק עם includeAnchors
 //   }]
 // }
+```
+
+### `library.getRawLinks`
+**הרשאה:** `library.links.read` · **מגרסה:** 0.9.97
+
+אותם קישורים בדיוק של `getLinks`, בחמשת המפתחות של פורמט `links.json`.
+מיועד לכלים שכבר יודעים לקרוא את הפורמט.
+
+> ⚠️ **זו צורת `links.json`, לא ייצוא נאמן שלו — ובוודאי לא גיבוי.**
+> הקישורים משוחזרים מהמסד, ולא נקראים מקובץ. שלוש השלכות:
+>
+> 1. **התשובה כוללת קישורים שלא היו באף `links.json`.** אוצריא מייצרת קישור
+>    הפוך (`SOURCE`) לכל מפרש שמצביע אל הספר, וממזגת קישורי-משתמש שיובאו
+>    מ-CSV. שניהם מוחזרים כאן ככל קישור אחר.
+> 2. **כתיבת התשובה לקובץ `<שם הספר>_links.json` וייבואה חזרה תשכפל את
+>    הספרייה בהיפוך.** הייבוא המובנה של אוצריא קורא בדיוק את תבנית השם הזו
+>    ומקבל `SOURCE`. אל תשתמשו בפלט הזה כגיבוי.
+> 3. **חלק מהערכים משוחזרים ולא מקוריים:** `path_2` הוא כותרת ספר היעד
+>    במסלול המסד, אך במסלול הקבצים הוא הנתיב כפי שהופיע בקובץ (עם תיקייה
+>    וסיומת); `heRef_2` נופל לכותרת היעד כשאין לשורה כתובת.
+
+> ⚠️ **שתי מוסכמות אינדוקס באותה קריאה.** `startLine`/`endLine` שבבקשה הם
+> 0-based כמו בכל ה-SDK, אך `line_index_1`/`line_index_2` שבפלט הם **1-based**
+> — זו מוסכמת `links.json`, ותיקונה היה שובר את הפורמט.
+>
+> המפתח `Conection Type` כתוב כך, בשגיאת כתיב, גם בפורמט המקורי. אל תתקנו.
+
+- `startLine`/`endLine` — אופציונליים, אך **חובה יחד** (0-based, כולל), כמו
+  ב-`getCommentators`. בלעדיהם נסרקות 1000 השורות הראשונות. חלון גדול מ-**1000
+  שורות** מוחזר כ-`error.invalid_params`. הטווח שנסרק בפועל חוזר בתשובה.
+- `targetTitles` / `connectionTypes` — סינון זהה לזה של `getLinks`.
+- התשובה נחתכת אחרי **10,000** קישורים ומסומנת `truncated: true`.
+
+הפלט נושא בדיוק את המפתחות שהפורמט מגדיר. `targetCategoryId`, `isCommentary`,
+`targetIsUserBook`, עוגני-מילה וקישורי-טווח **אינם** חלק ממנו — מי שצריך אותם
+משתמש ב-`getLinks`. שימו לב במיוחד ש-`targetIsUserBook` נשמט: קישור אישי לספר
+ששמו זהה לספר רשמי אינו ניתן להבחנה בפלט הזה.
+
+```javascript
+const { data } = await Otzaria.call('library.getRawLinks', {
+  bookId: 'בראשית',
+  startLine: 0,                     // אופציונלי, חובה יחד עם endLine
+  endLine: 40,
+  targetTitles: ['רש״י על בראשית'], // אופציונלי
+  connectionTypes: ['COMMENTARY']   // אופציונלי
+});
+// {
+//   truncated: false,
+//   startLine: 0,
+//   endLine: 40,                    // הטווח שנסרק בפועל
+//   links: [{
+//     "heRef_2": "רש״י על בראשית א, א",
+//     "line_index_1": 1,            // 1-based!
+//     "path_2": "רש״י על בראשית",
+//     "line_index_2": 4,            // 1-based!
+//     "Conection Type": "COMMENTARY"
+//     // "start" / "end" — רק בספרים שהקישורים שלהם נקראים מקובץ
+//   }]
+// }
+```
+
+לייצוא ספר שלם, קחו את `maxSourceLine` מ-`getLinkTargetsSummary` וצעדו
+בחלונות. **`endLine` הוא נקודת המשך תקפה רק כש-`truncated` הוא `false`** —
+בחלון שנחתך אין שום סימן היכן החיתוך נפל, ולכן חובה לצמצם ולנסות שוב במקום
+להתקדם:
+
+```javascript
+const { data: summary } = await Otzaria.call('library.getLinkTargetsSummary', {
+  bookId: 'בראשית'
+});
+
+const all = [];
+let line = 0;
+let window = 1000;                  // תקרת החלון של הקריאה
+while (line <= summary.maxSourceLine) {
+  const { data } = await Otzaria.call('library.getRawLinks', {
+    bookId: 'בראשית',
+    startLine: line,
+    endLine: line + window - 1
+  });
+  if (data.truncated) {
+    if (window === 1) throw new Error(`שורה ${line} חורגת מ-10,000 קישורים`);
+    window = Math.max(1, window >> 1);
+    continue;                       // אותה שורת התחלה, חלון קטן יותר
+  }
+  all.push(...data.links);
+  line = data.endLine + 1;
+  window = 1000;
+}
 ```
 
 ### `library.getLinkTargetsSummary`

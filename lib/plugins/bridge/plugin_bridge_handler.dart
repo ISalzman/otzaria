@@ -328,6 +328,7 @@ class PluginBridgeHandler {
     'library.getLinkContent': 'library.content.read',
     'library.getCommentators': pluginLinksReadPermission,
     'library.getLinks': pluginLinksReadPermission,
+    'library.getRawLinks': pluginLinksReadPermission,
     'library.getLinkTargetsSummary': pluginLinksReadPermission,
     'search.fullText': 'search.fulltext.read',
     'search.query': 'search.fulltext.read',

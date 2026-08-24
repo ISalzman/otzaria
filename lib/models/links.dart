@@ -283,6 +283,25 @@ class Link {
     return null;
   }
 
+  /// מסדר את הקישור לחמשת המפתחות של פורמט `links.json`, בדיוק כפי שהכותב
+  /// הקנוני של הפורמט פולט אותם (`LinkData.toJson` שב-`link_processor.dart`).
+  ///
+  /// אינו ההופכי של [Link.fromJson]: הקורא סלחני וקולט גם `category_id_2`,
+  /// `file_type_2`, `start` ו-`end`, אך אלה אינם חלק מהפורמט ואף כותב אינו
+  /// מייצר אותם — `category_id_2` הוא אפילו מזהה פנימי של seforim.db.
+  /// [start]/[end] נפלטים כשקיימים, כי הם מגיעים רק מקובץ שכבר נשא אותם.
+  ///
+  /// שגיאת הכתיב ב-`'Conection Type'` היא חלק מהפורמט. אל תתקנו.
+  Map<String, dynamic> toJson() => {
+    'heRef_2': heRef,
+    'line_index_1': index1,
+    'path_2': path2,
+    'line_index_2': index2,
+    'Conection Type': connectionType,
+    if (start != null) 'start': start,
+    if (end != null) 'end': end,
+  };
+
   /// Constructs a [Link] object from a JSON object.
   ///
   /// The JSON object should have the following keys:

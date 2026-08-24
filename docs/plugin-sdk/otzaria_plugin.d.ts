@@ -432,6 +432,37 @@ export interface GetLinksResult {
   truncated: boolean;
 }
 
+/**
+ * קישור יחיד בחמשת המפתחות של פורמט `links.json`, כפי שמוחזר מ-
+ * `library.getRawLinks`.
+ *
+ * ⚠️ בניגוד לשאר ה-SDK, `line_index_1`/`line_index_2` הם **1-based** — זו
+ * מוסכמת הפורמט. גם שגיאת הכתיב ב-`Conection Type` היא חלק ממנו.
+ *
+ * `start`/`end` מופיעים רק בספרים שהקישורים שלהם נקראים מקובץ ולא מהמסד.
+ */
+export interface RawBookLink {
+  heRef_2: string;
+  line_index_1: number;
+  path_2: string;
+  line_index_2: number;
+  'Conection Type': string;
+  start?: number;
+  end?: number;
+}
+
+export interface GetRawLinksResult {
+  links: RawBookLink[];
+  /** `true` כשהתשובה נחתכה בתקרת 10,000 הרשומות. */
+  truncated: boolean;
+  /**
+   * הטווח שנסרק בפועל (0-based, כולל). `endLine` הוא נקודת המשך תקפה רק
+   * כש-`truncated` הוא `false`.
+   */
+  startLine: number;
+  endLine: number;
+}
+
 export interface LinkTargetSummary {
   targetTitle: string;
   connectionType: string;
@@ -1483,6 +1514,7 @@ export type OtzariaMethod =
   | 'library.getBookAltToc'
   | 'library.getCommentators'
   | 'library.getLinks'
+  | 'library.getRawLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
   | 'library.getTree'
