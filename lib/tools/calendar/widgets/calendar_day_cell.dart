@@ -189,6 +189,7 @@ Widget buildDayCell(
                                   : (compactCell ? 1 : 2),
                               compact: compactCell,
                               additionalInfoLines: additionalInfoLines,
+                              isSelected: isSelected,
                             ),
                           ),
                         ),
@@ -213,6 +214,11 @@ class DayExtras extends StatelessWidget {
   final bool compact;
   final List<String> additionalInfoLines;
 
+  /// האם התא נבחר — אז הוא צבוע ב-primaryContainer, וכל שורות הטקסט בתוכו
+  /// חייבות לעבור ל-onPrimaryContainer (בערכות monochrome כמו "לבן" הרקע
+  /// כהה במיוחד וכתב onSurface היה נעלם עליו).
+  final bool isSelected;
+
   const DayExtras({
     super.key,
     required this.jewishCalendar,
@@ -220,6 +226,7 @@ class DayExtras extends StatelessWidget {
     this.maxVisibleItems = 2,
     this.compact = false,
     this.additionalInfoLines = const [],
+    this.isSelected = false,
   });
 
   @override
@@ -228,6 +235,7 @@ class DayExtras extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final cs = Theme.of(context).colorScheme;
     final cubit = context.read<CalendarCubit>();
     final events = cubit.eventsForDate(date);
     final List<Widget> lines = [];
@@ -242,7 +250,7 @@ class DayExtras extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: compact ? 10 : 11,
-            color: Theme.of(context).colorScheme.onSurface,
+            color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -254,7 +262,7 @@ class DayExtras extends StatelessWidget {
     for (final e in events.take(remainingSlots.clamp(0, maxVisibleItems))) {
       final dotColor =
           CalendarEventColors.colorForIndex(e.displayColorIndex, brightness) ??
-          Theme.of(context).colorScheme.onSurfaceVariant;
+          cs.onSurfaceVariant;
       visibleItems.add(
         Text.rich(
           TextSpan(
@@ -270,7 +278,9 @@ class DayExtras extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: compact ? 9 : 10,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: isSelected
+                ? cs.onPrimaryContainer.withValues(alpha: 0.85)
+                : cs.onSurfaceVariant,
           ),
         ),
       );
@@ -287,7 +297,7 @@ class DayExtras extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: compact ? 9 : 10,
-            color: Theme.of(context).colorScheme.primary,
+            color: isSelected ? cs.onPrimaryContainer : cs.primary,
             fontWeight: FontWeight.w600,
           ),
         ),

@@ -1124,8 +1124,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           child: Icon(
             icon,
             size: 16,
+            // בערכת "לבן" רקע הכפתור (primaryContainer) כהה במיוחד — החץ
+            // חייב להיות onPrimaryContainer (בהיר) כדי להיראות עליו.
             color: isEnabled
-                ? colorScheme.primary
+                ? colorScheme.onPrimaryContainer
                 : colorScheme.onSurfaceVariant,
           ),
         ),
