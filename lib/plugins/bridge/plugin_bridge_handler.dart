@@ -108,6 +108,10 @@ class PluginBridgeHandler {
       method == 'network.fetchStream' ||
       method == 'network.download' ||
       method == 'fs.extractZip' ||
+      // „שמור בשם” מחכה לדיאלוג של המערכת. timeout גנרי היה מחזיר
+      // error.timeout בזמן שהמשתמש בוחר תיקייה, והתוסף היה חושב שהשמירה נכשלה
+      // אחרי שהקובץ כבר נכתב.
+      method == 'fs.commitUserFileWrite' ||
       method == 'feedback.report';
 
   Future<dynamic> _handleRpc(
@@ -341,6 +345,13 @@ class PluginBridgeHandler {
           case 'readTextFile':
           case 'revokeFile':
             return 'fs.user_files.read';
+          // כתיבה לקובץ של המשתמש. `pickUserFile` עם access: 'readwrite'
+          // דורש את שתי ההרשאות — הקריאה נאכפת כאן והכתיבה באדפטר, כי היא
+          // תלויה בארגומנט.
+          case 'beginBinaryWrite':
+          case 'commitUserFileWrite':
+          case 'abortBinaryWrite':
+            return 'fs.user_files.write';
           // extractZip/deleteFile אינן דורשות הרשאת manifest: הן מגודרות בכך
           // שהנתיב חייב להיות בתוך תיקייה שהמשתמש בחר דרך ui.pickFolder
           // (הדורשת ui.feedback). הסכמת המשתמש בדיאלוג היא גבול האבטחה.

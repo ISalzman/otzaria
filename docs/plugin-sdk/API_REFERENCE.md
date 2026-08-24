@@ -152,6 +152,9 @@ if (response.success) {
 | `fs.resolveFileUrl` | 0.9.94 |
 | `fs.readTextFile` | 0.9.94 |
 | `fs.revokeFile` | 0.9.94 |
+| `fs.beginBinaryWrite` | 0.9.97 |
+| `fs.commitUserFileWrite` | 0.9.97 |
+| `fs.abortBinaryWrite` | 0.9.97 |
 | `feedback.sendEmail` | 0.9.89 |
 | `feedback.report` | 0.9.97 |
 | `feedback.hasReporterEmail` | 0.9.97 |
@@ -1743,14 +1746,20 @@ await Otzaria.call('fs.deleteFile', {
 ```javascript
 const res = await Otzaria.call('fs.pickUserFile', {
   title: 'בחר קובץ PDF',
-  extensions: ['pdf'] // אופציונלי
+  extensions: ['pdf'], // אופציונלי
+  access: 'read'       // אופציונלי: 'read' (ברירת מחדל) או 'readwrite'
 });
-// res.data = { cancelled: false, token, url, name, size }  — או { cancelled: true }
+// res.data = { cancelled: false, token, url, name, size, access }  — או { cancelled: true }
 if (res.success && !res.data.cancelled) {
   await Otzaria.call('storage.set', { key: 'lastFile', value: res.data.token });
   document.querySelector('iframe').src = res.data.url;
 }
 ```
+
+`access: 'readwrite'` (מגרסה 0.9.97) מבקש token שאפשר לכתוב אליו בחזרה דרך
+[`fs.commitUserFileWrite`](#fscommituserfilewrite), בלי דיאלוג נוסף. הוא דורש
+**גם** את ההרשאה `fs.user_files.write`, ובלעדיה מוחזר `error.permission_denied`.
+קריאה בלי `access` מקבלת token לקריאה בלבד, בדיוק כמו קודם.
 
 ### `fs.resolveFileUrl`
 **הרשאה:** `fs.user_files.read`
@@ -1775,6 +1784,110 @@ const { data } = await Otzaria.call('fs.resolveFileUrl', { token });
 const { data } = await Otzaria.call('fs.readTextFile', { token });
 // "תוכן הקובץ..."
 ```
+
+### `fs.beginBinaryWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+פותח העלאה ומחזיר לאן לשלוח את הבייטים. **הבייטים אינם עוברים בגשר ה-JS** —
+העברת קובץ כ-base64 ב-JSON-RPC מכפילה את הזיכרון ותוקעת את הממשק. במקום זה
+התוסף שולח `PUT` יחיד לשרת ה-loopback הפנימי, והכתיבה לדיסק נעשית רק
+ב-[`fs.commitUserFileWrite`](#fscommituserfilewrite).
+
+```javascript
+const { data } = await Otzaria.call('fs.beginBinaryWrite', {
+  purpose: 'user-file',      // הערך הנתמך היחיד כרגע
+  expectedSize: blob.size    // אופציונלי; נדחה מעל maxBytes
+});
+// data = { writeToken, uploadUrl, expiresAt, maxBytes }
+
+await fetch(data.uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': blob.type },
+  body: blob
+});
+```
+
+מגבלות: 100MB להעלאה, שתי העלאות פעילות לכל תוסף, וה-`writeToken` פג תוך שתי
+דקות. העלאה שנמצאת ב-commit — כלומר דיאלוג „שמור בשם” פתוח — ממשיכה לתפוס
+מקום במכסה עד שה-commit מסתיים, ואינה פגה בזמן הזה: המשתמש יכול להשאיר את
+הדיאלוג פתוח כמה שירצה. ה-`PUT` חייב לכלול `Content-Length` (`fetch` עם `body: blob` עושה זאת
+לבד), הוא חד-פעמי, והוא היחיד שמותר על ה-URL הזה. גוף חלקי או חורג נמחק ואינו
+יכול להפוך למסמך שנשמר.
+
+`purpose` חסר נחשב `'user-file'`. `expectedSize` הוא אופציונלי ומשמש לדחייה
+מוקדמת בלבד — המגבלה נאכפת בכל מקרה על ה-`Content-Length` ועל הבייטים בפועל.
+
+שגיאות: `error.too_large` (`expectedSize` מעל המגבלה), `error.invalid_params`
+(`expectedSize` אינו חיובי), `error.too_many_requests` (יותר משתי העלאות),
+`error.unsupported` (`purpose` אחר), `error.permission_denied`.
+
+תשובות ה-`PUT`: `204` הצלחה · `404` token לא מוכר · `410` פג · `409` העלאה שנייה
+על אותו token · `411` חסר `Content-Length` · `413` מעל המגבלה · `400` גוף קטוע.
+
+### `fs.commitUserFileWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+כותב העלאה שהושלמה אל קובץ של המשתמש. שני מסלולים:
+
+- **עם `targetToken`** — token שהתקבל מ-`pickUserFile({ access: 'readwrite' })`
+  או מ-commit קודם. נכתב במקום, בלי דיאלוג. זה „שמור”.
+- **בלי `targetToken`** — נפתח דיאלוג „שמור בשם”. זה גם המסלול של token
+  שנפתח לקריאה בלבד: הוא **אינו** יעד כתיבה חוקי ומוחזר עליו
+  `error.permission_denied`.
+
+```javascript
+// שמור בשם
+const { data } = await Otzaria.call('fs.commitUserFileWrite', {
+  writeToken: data.writeToken,
+  suggestedName: 'חידושים',
+  extension: 'docx',
+  title: 'שמירת המסמך'   // אופציונלי, כותרת הדיאלוג
+});
+// data = { cancelled: false, token, name, size }  — או { cancelled: true }
+
+// שמור (לאותו קובץ, בלי דיאלוג)
+await Otzaria.call('fs.commitUserFileWrite', {
+  writeToken: next.writeToken,
+  targetToken: data.token
+});
+```
+
+הכתיבה נעשית ל-staging באותה תיקייה כמו היעד, ואז מחליפה אותו ב-rename.
+**מה שמובטח: כשל אינו הורס את הקובץ הקיים.** אין מסלול שכותב ישירות על היעד —
+rename שנכשל מחזיר שגיאה, ולא מתדרדר להעתקה. אטומיות ההחלפה עצמה תלויה במערכת
+הקבצים ואינה מובטחת על ידי Dart; היא מתקיימת ב-POSIX באותו volume וב-Windows
+דרך החלפה. ביטול הדיאלוג מחזיר `{ cancelled: true }`,
+מוחק את ההעלאה ואינו משנה שום הרשאה. ההעלאה נשארת בבעלות המערכת עד שה-commit
+מסתיים — כולל כל הזמן שהדיאלוג פתוח — ולכן היא אינה פגה תחת ידיו של המשתמש
+ואינה נשארת יתומה אם התוסף נסגר באמצע. ה-token שחוזר הוא token לכתיבה, כך
+שהשמירה הבאה יכולה להשתמש בו כ-`targetToken`.
+
+`extension` חייב להיות סיומת ממש (אותיות/ספרות, עד 10 תווים); כל דבר אחר
+מתעלמים ממנו, כדי שלא ייקבע דרכו נתיב או שם מלא בדיאלוג.
+
+שגיאות: `error.not_found` (העלאה לא מוכרת, לא הושלמה, פגה או נצרכה כבר; או
+קובץ יעד שנמחק), `error.permission_denied` (token לקריאה בלבד),
+`error.invalid_params` (`writeToken` חסר, או נתיב יעד שלא ניתן לפתור).
+
+הערת תאימות: ברגע שקובץ נבחר בגרסה שתומכת ב-`access`, ה-grant שלו נשמר בצורה
+החדשה. גרסה קודמת של אוצריא תמשיך לקרוא grants ותיקים שלא נשמרו מחדש, אך לא את
+החדשים.
+
+### `fs.abortBinaryWrite`
+**הרשאה:** `fs.user_files.write` · מגרסה 0.9.97
+
+מבטל העלאה שטרם נכתבה, ומשחרר מיד את הקובץ הזמני ואת מקומה במכסה. נצרך כשהתוסף
+מחליט שההעלאה אינה רלוונטית יותר — למשל שמירה שהמסמך שלה הוחלף באמצע. בלי
+הקריאה הזאת ההעלאה נתפסת עד שה-`writeToken` פג (שתי דקות).
+
+```javascript
+await Otzaria.call('fs.abortBinaryWrite', { writeToken });
+// data = true
+```
+
+אידמפוטנטי: `true` גם כשלא היה מה לבטל. מחזיר `false` כשה-`writeToken` שייך
+לתוסף אחר, או כש-[`fs.commitUserFileWrite`](#fscommituserfilewrite) שלו כבר רץ —
+ביטול באמצע commit היה מוחק את הקובץ מתחת לדיאלוג „שמור בשם” פתוח.
 
 ### `fs.revokeFile`
 **הרשאה:** `fs.user_files.read`

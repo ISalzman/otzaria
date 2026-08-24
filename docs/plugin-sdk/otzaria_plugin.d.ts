@@ -115,10 +115,21 @@ export interface BootPayload {
   plugin: { id: string; version: string };
   app: {
     version: string;
+    /** אינו נשלח כיום באף אחד ממסלולי ה-boot. */
     buildNumber?: string;
     platform: 'windows' | 'linux' | 'macos' | 'android' | 'ios' | string;
     locale: string;
+    /** קוד השפה של ממשק אוצריא, למשל `he`. */
+    language?: string;
     textDirection: 'ltr' | 'rtl';
+    /** `true` כשהתוסף נטען כתוסף פיתוח. בתוסף ארוז `false`. */
+    devMode?: boolean;
+    /**
+     * נשלח רק במסלול הרקע, שם ערכו תמיד `'background'`. בדף גלוי הוא
+     * `undefined` — לזיהוי מצב התוסף יש להשתמש ב-`plugin.suspended`
+     * ו-`plugin.resumed`.
+     */
+    runMode?: 'background';
   };
   theme: ThemePayload;
   /** Connectivity as known at boot, without ever blocking on the network.
@@ -1189,6 +1200,49 @@ export interface ShortcutCreateResult {
   path?: string;
 }
 
+/** קובץ אישי מאושר — התוצאה של `fs.resolveFileUrl`. */
+export interface UserFileHandle {
+  /** מזהה אטום ששורד טעינה מחדש. יש לשמור אותו, לא את ה-URL. */
+  token: string;
+  /** URL מ-loopback, תקף לריצה הנוכחית בלבד (הפורט מתחלף). */
+  url: string;
+  name: string;
+  size: number;
+}
+
+/**
+ * תוצאת `fs.pickUserFile`. בביטול חוזר `{ cancelled: true }` בלבד, ולכן זהו
+ * union ולא אובייקט עם שדות אופציונליים.
+ */
+export type PickUserFileResult =
+  | { cancelled: true }
+  | ({
+      cancelled: false;
+      /** קיים מ-0.9.97. `readwrite` = ניתן לשמש כ-`targetToken` בכתיבה. */
+      access?: 'read' | 'readwrite';
+    } & UserFileHandle);
+
+/** תוצאת `fs.beginBinaryWrite` — לאן לשלוח את הבייטים ועד מתי. */
+export interface BinaryWriteTicket {
+  /** חד-פעמי, פג תוך שתי דקות. */
+  writeToken: string;
+  /** יעד ל-PUT יחיד עם `Content-Length`. */
+  uploadUrl: string;
+  /** ISO-8601. */
+  expiresAt: string;
+  maxBytes: number;
+}
+
+/** תוצאת `fs.commitUserFileWrite`. */
+export interface UserFileWriteResult {
+  /** `true` כשהמשתמש ביטל את „שמור בשם”. אין שינוי בקובץ ובהרשאות. */
+  cancelled: boolean;
+  /** token לכתיבה — אפשר להעביר אותו כ-`targetToken` בשמירה הבאה. */
+  token?: string;
+  name?: string;
+  size?: number;
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1209,6 +1263,8 @@ export type OtzariaMethod =
   | 'library.getLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
+  | 'library.getTree'
+  | 'library.resolveCategoryPaths'
   | 'search.fullText'
   | 'search.query'
   | 'search.getOptions'
@@ -1236,6 +1292,7 @@ export type OtzariaMethod =
   | 'ui.showError'
   | 'ui.showConfirm'
   | 'ui.showWarning'
+  | 'ui.pickFolder'
   | 'storage.get'
   | 'storage.set'
   | 'storage.remove'
@@ -1272,6 +1329,15 @@ export type OtzariaMethod =
   | 'network.fetch'
   | 'network.fetchStream'
   | 'network.download'
+  | 'fs.pickUserFile'
+  | 'fs.resolveFileUrl'
+  | 'fs.readTextFile'
+  | 'fs.revokeFile'
+  | 'fs.beginBinaryWrite'
+  | 'fs.commitUserFileWrite'
+  | 'fs.abortBinaryWrite'
+  | 'fs.extractZip'
+  | 'fs.deleteFile'
   | 'shortcut.create'
   | 'plugin.openSelf'
   | 'plugin.openOther'
