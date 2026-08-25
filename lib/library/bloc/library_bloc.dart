@@ -531,6 +531,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         searchQuery: null,
         searchResults: null,
         selectedTopics: null,
+        // מעבר תיקייה מנקה את התצוגה המקדימה — אחרת הפאנל ממשיך להציג
+        // ספר מהתיקייה הקודמת שהמשתמש לא בחר (issue #957). בחירה חדשה
+        // (למשל הספר הראשון בכניסה לקטגוריה) נשלחת אחר כך כאירוע נפרד.
+        clearPreviewBook: true,
       ),
     );
   }
@@ -539,13 +543,19 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateUp event,
     Emitter<LibraryState> emit,
   ) {
-    if (state.currentCategory?.parent != null) {
+    // בשורש הספרייה parent מצביע על עצמו (Library.parent = this) — אין
+    // לאן לעלות, ולכן לא נפלוט state שמנקה את התצוגה המקדימה על לא-כלום.
+    final parent = state.currentCategory?.parent;
+    if (parent != null && !identical(parent, state.currentCategory)) {
       emit(
         state.copyWith(
           currentCategory: state.currentCategory!.parent!,
           searchQuery: null,
           searchResults: null,
           selectedTopics: null,
+          // כמו ב-NavigateToCategory — הספר שנבחר בתיקייה שעזבנו אינו
+          // שייך לתצוגה של תיקיית האב (issue #957).
+          clearPreviewBook: true,
         ),
       );
     }
