@@ -589,11 +589,23 @@ jobs:
           fi
 
       - name: Set up Flutter
+        if: matrix.arch != 'aarch64'
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.44.0
           cache: true
+
+      # אין חבילת SDK רשמית של Flutter ללינוקס-ARM (המניפסט של flutter-action
+      # מכיל רק x64) — מתקינים מ-git באותו תג; ה-Dart SDK ל-arm64 יורד אוטומטית.
+      - name: Set up Flutter (aarch64, from git)
+        if: matrix.arch == 'aarch64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 3.44.0 https://github.com/flutter/flutter.git /opt/flutter
+          echo "/opt/flutter/bin" >> "$GITHUB_PATH"
+          /opt/flutter/bin/flutter --version
 
       - name: Create Google Calendar Credentials
         shell: bash
