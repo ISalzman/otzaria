@@ -519,31 +519,40 @@ jobs:
           path: otzaria-windows.zip
 
   build_linux:
-    name: Linux ${{ matrix.target }}
+    name: Linux ${{ matrix.target }} ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
         target: [deb, rpm, raw, full]
+        arch: [x86_64]
+        # ל-aarch64 נבנות בשלב זה רק deb + raw (rpm/full — לפי ביקוש).
+        include:
+          - target: deb
+            arch: aarch64
+          - target: raw
+            arch: aarch64
     # רץ בקונטיינר debian:bookworm — רצפת התאימות של ההפצה: glibc 2.36. רקע:
     # noble (Ubuntu 24.04) הסירה את wpewebkit מהארכיון, וה-WPE החבילתי (גם ב-trixie)
     # נבנה בלי DEVELOPER_MODE ולכן מתעלם מ-WEBKIT_EXEC_PATH — לא ניתן ל-self-contained.
     # לכן מורידים SDK של WPE 2.48.7 שנבנה מהמקור (Otzaria/otzaria-wpe-runtime על
     # bookworm, DEVELOPER_MODE=ON) ל-/opt/wpe-sdk ובונים מולו.
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_linux)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
       image: debian:bookworm-slim
     env:
       RUSTUP_HOME: ${{ github.workspace }}/.rustup
       CARGO_HOME:  ${{ github.workspace }}/.cargo
       DEBIAN_FRONTEND: noninteractive
+      # תיקיית הפלט של flutter נגזרת מארכיטקטורת המארח (x64 / arm64).
+      FLUTTER_BUILD_DIR: build/linux/${{ matrix.arch == 'aarch64' && 'arm64' || 'x64' }}/release
       # ה-SDK של WPE נפרס ל-/opt/wpe-sdk; pkg-config וה-loader מוצאים אותו דרך אלה.
       PKG_CONFIG_PATH: /opt/wpe-sdk/lib/pkgconfig
       LD_LIBRARY_PATH: /opt/wpe-sdk/lib
       # ה-try_compile של התוסף מלנקק בלי -L; בלי זה בדיקת WPEPlatform נכשלת ונופלים ל-FDO
       LIBRARY_PATH: /opt/wpe-sdk/lib
       # הפלאגין jni דורש כותרות JDK בזמן CMake (ב-runner הרגיל JDK מותקן מראש)
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
     steps:
       # חובה לפני actions/checkout: הקונטיינר מינימלי וחסרים בו git/curl/unzip/zstd.
       # בלי git ה-checkout מוריד tarball בלי היסטוריה ושלב בדיקת הגרסה (git log) נשבר;
@@ -650,17 +659,17 @@ jobs:
       - name: Download prebuilt WPE runtime SDK
         shell: bash
         env:
-          # גרסת ה-SDK; שם ה-asset נגזר ממנה (ראה Otzaria/otzaria-wpe-runtime).
+          # גרסת ה-SDK; שם ה-asset נגזר ממנה ומהארכיטקטורה (ראה Otzaria/otzaria-wpe-runtime).
           WPE_RUNTIME_VERSION: "2.48.7"
-          # digest שמפרסם GitHub לנכס של tag זה. עדכון גרסה מחייב עדכון מפורש
-          # של ה-hash, כדי שנכס שהוחלף ב-release לא ייכנס לבנייה בשקט.
-          WPE_RUNTIME_SHA256: "6890a2fe09735440316f4418fdc56b746d4b3f1a1d5a2d6a1dc608f8fa05d3b8"
+          # digest שמפרסם GitHub לנכס של tag זה, לפי ארכיטקטורה. עדכון גרסה מחייב
+          # עדכון מפורש של ה-hash, כדי שנכס שהוחלף ב-release לא ייכנס לבנייה בשקט.
+          WPE_RUNTIME_SHA256: ${{ matrix.arch == 'aarch64' && '71b24f245d982fc1e7054d8d00a1c64dcce755675f98f0c6103d1f05843e9b72' || '6890a2fe09735440316f4418fdc56b746d4b3f1a1d5a2d6a1dc608f8fa05d3b8' }}
         run: |
           set -euo pipefail
           # pin ל-tag מפורש (לא latest) — גרסת ה-SDK נגזרת רק מ-WPE_RUNTIME_VERSION.
           # מוסכמת ה-tag בריפו otzaria-wpe-runtime: wpe-<version>.
           tag="candidate-wpe-2.48.7-dmabuf-20260821"
-          asset="wpe-runtime-${WPE_RUNTIME_VERSION}-linux-x86_64.tar.zst"
+          asset="wpe-runtime-${WPE_RUNTIME_VERSION}-linux-${{ matrix.arch }}.tar.zst"
           base="https://github.com/Otzaria/otzaria-wpe-runtime/releases/download/${tag}"
           echo "Downloading ${asset} ..."
           curl -fSL --retry 3 --retry-delay 5 -o "/tmp/${asset}" "${base}/${asset}"
@@ -872,7 +881,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          search_lib="build/linux/x64/release/bundle/lib/libsearch_engine.so"
+          search_lib="${FLUTTER_BUILD_DIR}/bundle/lib/libsearch_engine.so"
           test -f "$search_lib"
           incompatible=$(strings "$search_lib" \
             | grep -Eo 'GLIBC_2\.(3[7-9]|[4-9][0-9])' \
@@ -888,8 +897,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 120 build/linux/x64/release/CMakeFiles/CMakeError.log 2>/dev/null || true
-          tail -n 40 build/linux/x64/release/CMakeFiles/CMakeConfigureLog.yaml 2>/dev/null || true
+          tail -n 120 "${FLUTTER_BUILD_DIR}/CMakeFiles/CMakeError.log" 2>/dev/null || true
+          tail -n 40 "${FLUTTER_BUILD_DIR}/CMakeFiles/CMakeConfigureLog.yaml" 2>/dev/null || true
 
       - name: Build and Patch Linux DEB package
         if: matrix.target == 'deb'
@@ -938,6 +947,11 @@ jobs:
             echo >> "$CONTROL_FILE"
           fi
 
+          # ה-distributor עלול להטביע ארכיטקטורה שגויה בבנייה צולבת-שם — מיישרים למארח.
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            sed -i 's/^Architecture:.*/Architecture: arm64/' "$CONTROL_FILE"
+          fi
+
           echo "--- Control file AFTER fix ---"
           cat "$CONTROL_FILE"
 
@@ -959,6 +973,11 @@ jobs:
           # במסך ההתקנה. (ל-rpm זה מגיע נטיבית דרך make_config.yaml.)
           mkdir -p "$DEB_DIR/usr/share/metainfo"
           cp linux/packaging/otzaria.metainfo.xml "$DEB_DIR/usr/share/metainfo/otzaria.metainfo.xml"
+
+          # שם קובץ מובחן ל-arm64 — אחרת שני ה-deb מתנגשים באותו שם ב-release.
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            DEB_OUTPUT_FILE="${DEB_OUTPUT_FILE%.deb}-arm64.deb"
+          fi
 
           echo "Re-packaging from directory: $DEB_DIR into $DEB_OUTPUT_FILE"
           dpkg-deb --build --root-owner-group "$DEB_DIR" "$DEB_OUTPUT_FILE"
@@ -1022,7 +1041,7 @@ jobs:
           # רץ אחרי בניות ה-deb/rpm של flutter_distributor (שבונות מחדש את ה-bundle
           # ולכן דורסות הזרקה מוקדמת) כדי שחבילות ה-raw וה-FULL, המועתקות מ-bundle
           # זה בשלב הבא, יהיו self-contained.
-          bash /tmp/bundle_wpe.sh "build/linux/x64/release/bundle/lib"
+          bash /tmp/bundle_wpe.sh "${FLUTTER_BUILD_DIR}/bundle/lib"
 
       - name: Verify WPE runtime in packaged artifacts
         shell: bash
@@ -1059,12 +1078,12 @@ jobs:
             verify_tree "rpm" /tmp/verify-rpm
           fi
 
-          verify_tree "raw-bundle" "build/linux/x64/release/bundle"
+          verify_tree "raw-bundle" "${FLUTTER_BUILD_DIR}/bundle"
 
       - name: Find and prepare Linux packages
         id: find_packages
         run: |
-          DEB_FILE=$(find dist -maxdepth 1 -name "*-linux.deb" | head -n 1)
+          DEB_FILE=$(find dist -maxdepth 1 -name "*-linux*.deb" | head -n 1)
           if [ -n "$DEB_FILE" ]; then
             echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
             echo "deb_name=$(basename $DEB_FILE)" >> $GITHUB_OUTPUT
@@ -1075,7 +1094,7 @@ jobs:
             echo "rpm_name=$(basename $RPM_FILE)" >> $GITHUB_OUTPUT
           fi
           mkdir -p linux-build
-          cp -r build/linux/x64/release/bundle/* linux-build/
+          cp -r "${FLUTTER_BUILD_DIR}"/bundle/* linux-build/
           # portable.marker הופך את חבילת ה-raw לניידת באמת: כל הנתונים
           # נשמרים בתיקיית otzaria_data ליד ה-executable (ראה
           # lib/core/app_paths.dart → isPortable). חבילת ה-FULL מעתיקה את
@@ -1086,7 +1105,7 @@ jobs:
         if: matrix.target == 'deb' && steps.find_packages.outputs.deb_file != ''
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: otzaria-linux-deb
+          name: otzaria-linux-deb${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: ${{ steps.find_packages.outputs.deb_file }}
           
       - name: Upload Linux RPM package
@@ -1100,7 +1119,7 @@ jobs:
         if: matrix.target == 'raw'
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: otzaria-linux-raw
+          name: otzaria-linux-raw${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: linux-build/*
 
       - name: Create Linux FULL portable bundle
@@ -1910,6 +1929,18 @@ jobs:
           if [ -d "artifacts/otzaria-linux-raw" ] && [ ! -f release-files/*.deb ]; then
             cd artifacts/otzaria-linux-raw
             zip -r ../../release-files/otzaria-linux-raw.zip *
+            cd ../..
+          fi
+
+          # Linux DEB (arm64)
+          if [ -d "artifacts/otzaria-linux-deb-arm64" ]; then
+            cp artifacts/otzaria-linux-deb-arm64/*.deb release-files/ || true
+          fi
+
+          # Linux raw build arm64 (fallback, כמו ב-x86_64)
+          if [ -d "artifacts/otzaria-linux-raw-arm64" ] && ! ls release-files/*arm64.deb >/dev/null 2>&1; then
+            cd artifacts/otzaria-linux-raw-arm64
+            zip -r ../../release-files/otzaria-linux-raw-arm64.zip *
             cd ../..
           fi
 
