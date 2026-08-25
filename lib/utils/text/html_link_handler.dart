@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 
 import 'package:otzaria/utils/text/heading_slug.dart';
+import 'package:path/path.dart' as p;
 
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
@@ -96,8 +97,9 @@ class HtmlLinkHandler {
   static String _getTitleFromPath(String path) {
     // הסרת סיומת קובץ ונתיב
     String title = path.split('/').last.split('\\').last;
-    if (title.endsWith('.txt')) {
-      title = title.substring(0, title.length - 4);
+    final extension = p.extension(title).toLowerCase();
+    if (extension == '.txt' || extension == '.text') {
+      title = title.substring(0, title.length - extension.length);
     }
     return title;
   }

@@ -20,6 +20,7 @@ void main() {
     test('isSupportedFile של הייבוא ו-isSupportedBookFile מסכימים', () {
       const paths = [
         'ספר.txt',
+        'ספר.text',
         'ספר.pdf',
         'ספר.docx',
         'ספר.epub',

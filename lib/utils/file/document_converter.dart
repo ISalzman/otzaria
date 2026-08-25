@@ -70,7 +70,7 @@ String convertDocumentBytesSync(
     );
   }
   return switch (resolved) {
-    DocumentFormat.txt => _decodeTextBytes(bytes, path),
+    DocumentFormat.txt || DocumentFormat.text => _decodeTextBytes(bytes, path),
     DocumentFormat.epub => epubToText(bytes, title, embedImages: embedImages),
     DocumentFormat.md ||
     DocumentFormat.markdown => markdownBytesToHtml(bytes, title),
@@ -165,7 +165,7 @@ Future<String> convertDocumentWithCache(
     );
   }
   return switch (resolved) {
-    DocumentFormat.txt => _readPlainTextFile(file),
+    DocumentFormat.txt || DocumentFormat.text => _readPlainTextFile(file),
     DocumentFormat.epub =>
       embedImages
           ? convertEpubWithCache(file, title)

@@ -34,6 +34,7 @@ import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:path/path.dart' as p;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Isolate helpers for scanning external-book folders.
@@ -3273,7 +3274,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     if (link.index2 <= 0) return 'שגיאה: אינדקס לא תקין';
 
     final targetTitle = link.path2.contains('/')
-        ? link.path2.split('/').last.replaceAll('.txt', '')
+        ? _bookTitleFromLinkPath(link.path2)
         : link.path2;
 
     final repository = _sqliteProvider.repository;
@@ -3341,6 +3342,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
       debugPrint('⚠️ Error in getLinkContent: $e');
       return 'שגיאה בטעינת תוכן המפרש';
     }
+  }
+
+  static String _bookTitleFromLinkPath(String value) {
+    final name = value.split('/').last;
+    final extension = p.extension(name).toLowerCase();
+    if (extension == '.txt' || extension == '.text') {
+      return name.substring(0, name.length - extension.length);
+    }
+    return name;
   }
 
   /// Get all alternative TOC structures available in the database for a specific book
