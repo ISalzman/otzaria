@@ -22,6 +22,7 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/bookmarks/view/save_group_bookmark_dialog.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -415,6 +416,17 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
         context: context,
         builder: (context) => const BookmarksDialog(),
       );
+      return KeyEventResult.handled;
+    }
+
+    // סימניה מרוכזת לכל הספרים הפתוחים (אופציונלי, ללא ברירת מחדל)
+    final saveGroupBookmarkShortcut = shortcutOf(
+      'key-shortcut-save-group-bookmark',
+    );
+    if (saveGroupBookmarkShortcut.isNotEmpty &&
+        ShortcutHelper.matchesShortcut(event, saveGroupBookmarkShortcut)) {
+      closeOverlayRoutes();
+      showSaveGroupBookmarkDialog(context);
       return KeyEventResult.handled;
     }
 

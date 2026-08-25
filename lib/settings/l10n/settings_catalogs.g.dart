@@ -790,6 +790,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'שמור הכל': 'Keep Everything',
     'שמור וזכור': 'Shamor VeZachor',
     'שמור וזכור: מעבר בין הסינונים': 'Shamor VeZachor: Switch Filters',
+    'שמור סימניה לכל הספרים הפתוחים': 'Save bookmark for all open books',
     'שמירה מצומצמת — גיבויים ישנים ממוזגים לארכיון מוקדם': 'Space-Saver — old backups merge into the archive sooner',
     'שמירת דיווחים אוטומטית כשאין חיבור': 'Save reports automatically when offline',
     'שמירת התאמות לכל ספר בנפרד': 'Keep these settings for all seforim',
