@@ -1,0 +1,124 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/theme/app_fonts.dart';
+import 'package:otzaria/utils/file/sfnt_metadata_reader.dart';
+
+/// כל הגופנים המובנים ב-repo — קורפוס אמיתי (סטטיים, משתנים, עם/בלי OS/2).
+List<File> _bundledFontFiles() =>
+    Directory('fonts')
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.toLowerCase().endsWith('.ttf'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+
+void main() {
+  test('יש קורפוס גופנים לבדוק מולו', () {
+    expect(_bundledFontFiles(), isNotEmpty);
+  });
+
+  group('קריאת מטא-דאטה חלקית שקולה לקריאת הקובץ המלא', () {
+    for (final file in _bundledFontFiles()) {
+      final name = file.uri.pathSegments.last;
+
+      test(name, () {
+        final full = Uint8List.fromList(file.readAsBytesSync());
+        final partial = SfntMetadataReader.readSync(file.path);
+
+        expect(partial, isNotNull, reason: 'הקריאה החלקית החזירה null');
+
+        // הזיהוי — כל מה שהסורק נשען עליו — חייב לצאת זהה.
+        expect(
+          AppFonts.debugSfntSupportsHebrew(partial!),
+          AppFonts.debugSfntSupportsHebrew(full),
+        );
+        expect(
+          AppFonts.debugSfntCategory(partial),
+          AppFonts.debugSfntCategory(full),
+        );
+        expect(
+          AppFonts.debugFontFamilyName(partial),
+          AppFonts.debugFontFamilyName(full),
+        );
+        expect(
+          AppFonts.debugFontWeightClass(partial),
+          AppFonts.debugFontWeightClass(full),
+        );
+        expect(
+          AppFonts.debugFontIsBoldStyle(partial),
+          AppFonts.debugFontIsBoldStyle(full),
+        );
+        expect(
+          AppFonts.debugFontIsItalic(partial),
+          AppFonts.debugFontIsItalic(full),
+        );
+        expect(
+          AppFonts.debugFontHasWeightAxis(partial),
+          AppFonts.debugFontHasWeightAxis(full),
+        );
+      });
+    }
+  });
+
+  test('נקראים רק הבייטים הדרושים — לא הקובץ כולו', () {
+    var fullBytes = 0;
+    var readBytes = 0;
+    for (final file in _bundledFontFiles()) {
+      final partial = SfntMetadataReader.readSync(file.path);
+      if (partial == null) continue;
+      fullBytes += file.lengthSync();
+      // ה-buffer דליל: אורכו כאורך ההיסט הגבוה, אך רק טווחי הטבלאות מלאים.
+      readBytes += partial.where((b) => b != 0).length;
+    }
+    expect(fullBytes, greaterThan(0));
+    expect(readBytes, lessThan(fullBytes ~/ 2));
+  });
+
+  group('קלט פגום — כשל שקט, בלי חריגה', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('sfnt_meta'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    File write(String name, List<int> bytes) =>
+        File('${tmp.path}/$name')..writeAsBytesSync(bytes);
+
+    test('קובץ שאינו קיים → null', () {
+      expect(SfntMetadataReader.readSync('${tmp.path}/nope.ttf'), isNull);
+    });
+
+    test('קובץ ריק → null', () {
+      expect(SfntMetadataReader.readSync(write('empty.ttf', []).path), isNull);
+    });
+
+    test('קצר מכותרת SFNT → null', () {
+      final f = write('short.ttf', List<int>.filled(8, 0));
+      expect(SfntMetadataReader.readSync(f.path), isNull);
+    });
+
+    test('numTables מופרך → null (אין טווח לקרוא)', () {
+      final d = ByteData(12)
+        ..setUint32(0, 0x00010000)
+        ..setUint16(4, 0);
+      final f = write('notables.ttf', d.buffer.asUint8List());
+      expect(SfntMetadataReader.readSync(f.path), isNull);
+    });
+
+    test('טבלה שהיסטה מחוץ לקובץ → הזיהוי נכשל בשקט', () {
+      final d = ByteData(12 + 16)
+        ..setUint32(0, 0x00010000)
+        ..setUint16(4, 1)
+        ..setUint8(12, 0x63) // 'c'
+        ..setUint8(13, 0x6D) // 'm'
+        ..setUint8(14, 0x61) // 'a'
+        ..setUint8(15, 0x70) // 'p'
+        ..setUint32(20, 0x7FFFFF00) // offset מעבר לסוף הקובץ
+        ..setUint32(24, 100);
+      final f = write('badoffset.ttf', d.buffer.asUint8List());
+      final partial = SfntMetadataReader.readSync(f.path);
+      expect(partial, isNotNull);
+      expect(AppFonts.debugSfntSupportsHebrew(partial!), isFalse);
+    });
+  });
+}

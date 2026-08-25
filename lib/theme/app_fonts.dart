@@ -12,6 +12,7 @@ import 'package:flutter/services.dart' show FontLoader;
 import 'package:path/path.dart' as p;
 import 'package:system_fonts/system_fonts.dart' show SystemFonts;
 import 'package:otzaria/utils/file/font_file_reader.dart';
+import 'package:otzaria/utils/file/sfnt_metadata_reader.dart';
 import 'package:otzaria/utils/file/system_font_locator.dart';
 
 /// סיווג גופן לפי סגנון: עם תגיות (serif) או חלק (sans-serif).
@@ -191,23 +192,27 @@ class AppFonts {
 
   static SystemFontScanResult _scanSystemFonts() {
     try {
-      final faces = <MapEntry<String, Uint8List>>[];
-      for (final path in SystemFontLocator.installedFontPaths()) {
-        final bytes = _readFontBytesSync(path);
-        if (bytes == null) continue;
-        faces.add(MapEntry(path, bytes));
-      }
-      return _buildScan(faces);
+      return _buildScan(_installedFacesLazily());
     } catch (_) {
       // אם אין גישה לגופני מערכת מסיבה כלשהי, נחזיר תוצאה ריקה.
       return const SystemFontScanResult.empty();
     }
   }
 
+  /// עצל בכוונה: הבייטים של כל גופן משתחררים לפני קריאת הבא, במקום להחזיק
+  /// את כל הגופנים המותקנים בזיכרון בבת אחת (מאות MB במחשב עם Office).
+  static Iterable<MapEntry<String, Uint8List>> _installedFacesLazily() sync* {
+    for (final path in SystemFontLocator.installedFontPaths()) {
+      final bytes = SfntMetadataReader.readSync(path);
+      if (bytes == null) continue;
+      yield MapEntry(path, bytes);
+    }
+  }
+
   /// מקבץ קבצי גופן למשפחות לפי שם המשפחה מטבלת ה-name (לא לפי שם הקובץ —
   /// התקנה פר-משתמש שומרת שמות קבצים שרירותיים שהמשתמש אינו מזהה).
   static SystemFontScanResult _buildScan(
-    List<MapEntry<String, Uint8List>> faces,
+    Iterable<MapEntry<String, Uint8List>> faces,
   ) {
     final builders = <String, _FamilyAccumulator>{};
     final aliases = <String, String>{};
@@ -684,7 +689,7 @@ class AppFonts {
       final map = SystemFonts().getFontMap();
       final selfPath = map[fontFamily];
       if (selfPath == null) return;
-      final selfBytes = _readFontBytesSync(selfPath);
+      final selfBytes = SfntMetadataReader.readSync(selfPath);
       if (selfBytes == null) return;
       final selfInfo = _sfntFaceInfo(selfBytes);
       if (selfInfo == null) return;
