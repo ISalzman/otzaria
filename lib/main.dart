@@ -424,6 +424,14 @@ Future<void> _initializeSentry() async {
 Future<void> _runAppBootstrap() async {
   // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
   if (!Platform.isMacOS && !Platform.isIOS) {
+    // שם התהליך משמש רק לשם קובץ ה-pid. בלעדיו החבילה מריצה tasklist/ps
+    // באופן חוסם לפני runApp — במחשב שסוכן סינון מאט בו יצירת תהליכים זה
+    // עיכב את העלייה בעשרות שניות (issue #989). חייב לגזור אותו כמו החבילה
+    // (שם ה-EXE בלי סיומת), אחרת מופע ישן וחדש לא יזהו זה את זה.
+    FlutterSingleInstance.processName ??= Platform.resolvedExecutable
+        .split(Platform.pathSeparator)
+        .last
+        .replaceAll(RegExp(r'\.exe$', caseSensitive: false), '');
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();
     bool isFirstInstance = await flutterSingleInstance.isFirstInstance();
     if (!isFirstInstance) {
