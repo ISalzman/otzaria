@@ -97,6 +97,16 @@ class ReferenceBooksCache {
       // Warm up shared caches
       await BooksCache.instance.warmUp();
       if (myGen != _generation) return;
+      // ה-warmUp של BooksCache בולע כשל וחוזר בלי לסמן loaded. בלי הבדיקה
+      // הזו נמשיך ונסמן קאש ריק כמוכן, ואיתור יחזיר "לא נמצא ספר" עד restart.
+      if (SqliteDataProvider.instance.repository != null &&
+          !BooksCache.instance.isLoaded) {
+        debugPrint(
+          '[ReferenceBooksCache] aborting warmUp — BooksCache not loaded; '
+          'next warmUp() will retry',
+        );
+        return;
+      }
       await AcronymsCache.instance.warmUp();
       if (myGen != _generation) return;
 
@@ -172,6 +182,17 @@ class ReferenceBooksCache {
 
       // Swap אטומי — רק אם הדור עדיין שלנו.
       if (myGen != _generation) return;
+
+      // קאש ריק לחלוטין פירושו שה-DB עוד לא עלה, לא שהספרייה ריקה. סימון
+      // כ-loaded היה נועל את האיתור על "לא נמצא ספר" עד restart, כי ה-warmUp
+      // הבא יוצא מוקדם על isLoaded בלי לנסות שוב.
+      if (localNormalizedTitles.isEmpty && localFsPdfBooks.isEmpty) {
+        debugPrint(
+          '[ReferenceBooksCache] aborting warmUp — no books loaded; '
+          'next warmUp() will retry',
+        );
+        return;
+      }
       _normalizedTitles
         ..clear()
         ..addAll(localNormalizedTitles);
@@ -233,10 +254,13 @@ class ReferenceBooksCache {
       );
     } catch (e) {
       debugPrint('[ReferenceBooksCache] Warmup failed: $e');
+      // לא מסמנים loaded: כשל זמני (למשל DB נעול ביציאה ממצב שינה) יאופשר
+      // retry ב-warmUp הבא, במקום קאש ריק שמחזיר "לא נמצא ספר" לכל ה-session.
       if (myGen == _generation) {
         _normalizedTitles.clear();
         _fsPdfBooks.clear();
-        _isLoaded = true;
+        _categoryPaths.clear();
+        _isLoaded = false;
       }
     }
   }

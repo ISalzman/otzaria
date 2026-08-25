@@ -50,6 +50,9 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
       // המיושנות.
       if (emit.isDone) return;
       emit(FindRefSuccess(refs, query: event.refText));
+    } on ReferenceLibraryNotReadyException {
+      if (emit.isDone) return;
+      emit(const FindRefNotReady());
     } catch (e) {
       if (emit.isDone) return;
       emit(FindRefError(e.toString()));

@@ -13,6 +13,16 @@ import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
+/// נזרקת כשמטמון הספרים של האיתור לא הצליח להיטען, ולכן אין במה לחפש.
+/// בלעדיה חיפוש על מטמון ריק מחזיר רשימה ריקה — שאינה ניתנת להבחנה מ"הספר
+/// לא קיים", והמשתמש מקבל "לא נמצא ספר" בזמן שהספרייה רק עוד לא נטענה.
+class ReferenceLibraryNotReadyException implements Exception {
+  const ReferenceLibraryNotReadyException();
+
+  @override
+  String toString() => 'ReferenceLibraryNotReadyException';
+}
+
 /// רשומת ספר אישי מתומצתת (user_books.db) כפי שמשמשת את חיפוש הספרים האישיים.
 typedef _UserBookRecord = ({
   int id,
@@ -394,8 +404,10 @@ class FindRefRepository {
     final SeforimRepository? repository =
         SqliteDataProvider.instance.repository;
     if (repository == null && getTocEntriesForReference == null) {
+      // רשימה ריקה כאן הוצגה כ"לא נמצא ספר", בעוד שה-DB פשוט עוד לא עלה —
+      // המצב הרגיל בשניות הראשונות אחרי הפעלה או יציאה ממצב שינה.
       debugPrint('[FindRef] Database not initialized');
-      return const [];
+      throw const ReferenceLibraryNotReadyException();
     }
 
     Future<List<Map<String, dynamic>>> fetchTocEntries(
@@ -431,12 +443,15 @@ class FindRefRepository {
           Future.value(const []);
     }
 
-    final cacheLoaded =
+    bool cacheLoaded() =>
         isReferenceBooksCacheLoaded?.call() ??
         ReferenceBooksCache.instance.isLoaded;
-    if (!cacheLoaded) {
+    if (!cacheLoaded()) {
       await (warmUpReferenceBooksCache?.call() ??
           ReferenceBooksCache.instance.warmUp());
+      // ה-warmUp חוזר בלי לזרוק גם כשהוא נכשל (DB נעול, יציאה ממצב שינה).
+      // בלי הבדיקה השנייה נחפש על מטמון ריק ונדווח "לא נמצא ספר".
+      if (!cacheLoaded()) throw const ReferenceLibraryNotReadyException();
     }
 
     // מצב "דור + נושא": "ראשונים סנהדרין" / "סנהדרין ראשונים" → כל הראשונים על

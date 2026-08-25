@@ -26,6 +26,13 @@ class FindRefSuccess extends FindRefState {
   List<Object> get props => [refs, query];
 }
 
+/// מטמון הספרים של האיתור לא נטען, ולכן לא היה במה לחפש. נבדל מ-
+/// [FindRefSuccess] ריק כדי שהמסך לא יציג "לא נמצא ספר" על ספרייה שרק
+/// עוד לא מוכנה.
+class FindRefNotReady extends FindRefState {
+  const FindRefNotReady();
+}
+
 class FindRefError extends FindRefState {
   final String message;
   const FindRefError(this.message);
