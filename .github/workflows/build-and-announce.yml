@@ -524,13 +524,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [deb, rpm, raw, full]
-        arch: [x86_64]
-        # ל-aarch64 נבנות בשלב זה רק deb + raw (rpm/full — לפי ביקוש).
-        include:
-          - target: deb
-            arch: aarch64
-          - target: raw
-            arch: aarch64
+        arch: [x86_64, aarch64]
     # רץ בקונטיינר debian:bookworm — רצפת התאימות של ההפצה: glibc 2.36. רקע:
     # noble (Ubuntu 24.04) הסירה את wpewebkit מהארכיון, וה-WPE החבילתי (גם ב-trixie)
     # נבנה בלי DEVELOPER_MODE ולכן מתעלם מ-WEBKIT_EXEC_PATH — לא ניתן ל-self-contained.
@@ -1029,6 +1023,11 @@ jobs:
           # 3. תקן את הקובץ: מחק את שורת ה-Requires הריקה
           sed -i '/^Requires:\s*$/d' "$SPEC_FILE"
 
+          # make_config של ה-rpm מקבע build_arch: x86_64 — מיישרים לארכיטקטורת המארח.
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            sed -i 's/^BuildArch:.*/BuildArch: aarch64/' "$SPEC_FILE"
+          fi
+
           echo "--- Spec file AFTER fix ---"
           cat "$SPEC_FILE"
 
@@ -1128,7 +1127,7 @@ jobs:
         if: matrix.target == 'rpm' && steps.find_packages.outputs.rpm_file != ''
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: otzaria-linux-rpm
+          name: otzaria-linux-rpm${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: ${{ steps.find_packages.outputs.rpm_file }}
        
       - name: Upload linux build (raw)
@@ -1182,6 +1181,11 @@ jobs:
           Start the app using ./run-otzaria.sh so the app can detect the bundled library folder.
           EOF
 
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            tar -czf otzaria-linux-full-arm64.tar.gz -C full_installer otzaria-linux-full
+            # הספרייה המאונדקסת חוצת-פלטפורמות — עותק אחד נבנה ב-x86_64 בלבד.
+            exit 0
+          fi
           tar -czf otzaria-linux-full.tar.gz -C full_installer otzaria-linux-full
 
           # חבילת ספרייה נוספת עם אינדקס טקסט מוכן מאותו מנוע של האפליקציה.
@@ -1236,8 +1240,8 @@ jobs:
         if: matrix.target == 'full'
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: otzaria-linux-full
-          path: otzaria-linux-full.tar.gz
+          name: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
+          path: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}.tar.gz
 
       - name: Upload indexed FULL library parts
         if: true
@@ -1958,6 +1962,16 @@ jobs:
             cd artifacts/otzaria-linux-raw-arm64
             zip -r ../../release-files/otzaria-linux-raw-arm64.zip *
             cd ../..
+          fi
+
+          # Linux RPM (arm64)
+          if [ -d "artifacts/otzaria-linux-rpm-arm64" ]; then
+            cp artifacts/otzaria-linux-rpm-arm64/*.rpm release-files/ || true
+          fi
+
+          # Linux FULL bundle (arm64)
+          if [ -d "artifacts/otzaria-linux-full-arm64" ]; then
+            cp artifacts/otzaria-linux-full-arm64/*.tar.gz release-files/ || true
           fi
 
           # Linux FULL bundle
