@@ -605,6 +605,9 @@ jobs:
           set -euo pipefail
           git clone --depth 1 --branch 3.44.0 https://github.com/flutter/flutter.git /opt/flutter
           echo "/opt/flutter/bin" >> "$GITHUB_PATH"
+          # flutter-action מוסיף את bin של מטמון pub ל-PATH; במסלול ה-git זה עלינו —
+          # בלעדיו flutter_distributor מותקן אך לא נמצא בהרצה.
+          echo "${PUB_CACHE:-$HOME/.pub-cache}/bin" >> "$GITHUB_PATH"
           /opt/flutter/bin/flutter --version
 
       - name: Create Google Calendar Credentials
