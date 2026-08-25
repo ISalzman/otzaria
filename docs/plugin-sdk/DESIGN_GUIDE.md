@@ -72,18 +72,21 @@ applyTheme(theme);
     surfaceTint:             "#...", // גוון העלאה (elevation tint)
   },
   typography: {
-    fontFamily:             "Frank Ruhl Libre", // גופן ראשי (טקסטים עבריים)
+    fontFamily:             "FrankRuhlCLM",     // גופן הקריאה — לטקסט הספר בלבד
     fontSize:               25,                 // גודל גופן בסיסי (px) — לפי הגדרת המשתמש
     lineHeight:             1.5,                // גובה שורה
-    commentatorsFontFamily: "Shofar",           // גופן מפרשים
+    commentatorsFontFamily: "NotoRashiHebrew",  // גופן מפרשים
     commentatorsFontSize:   22,                 // גודל גופן מפרשים (px)
+    uiFontFamily:           "Rubik",            // גופן הממשק — כפתורים, תפריטים, שדות
   }
 }
 ```
 
 > **שים לב:** `fontSize` שונה ממשתמש למשתמש (טווח רגיל: 16–36). עצב את הפריסה כך שתעבוד בכל גודל.
 
-> **הגופנים זמינים אוטומטית ב-WebView:** הגופנים המובנים של אוצריא (`FrankRuhlCLM`, `TaameyDavidCLM`, `Shofar`, `NotoRashiHebrew`, `KeterYG`, `NotoSerifHebrew`, `Tinos`, `Rubik`, `TaameyAshkenaz`) מוזרקים כ-`@font-face` ל-WebView עוד לפני ה-`plugin.boot`, עבור הגופן הראשי וגופן המפרשים שנבחרו בהגדרות. אין צורך לארוז קבצי גופן בתוסף — מספיק להגדיר `font-family: 'FrankRuhlCLM', 'David', serif;` ב-CSS, ולעדכן בזמן אמת מתוך `theme.typography.fontFamily`. גופני מערכת שהמשתמש בחר ידנית (מתוך גופני ההפעלה) אינם מוזרקים — במצב כזה ה-WebView ייפול חזרה ל-fallback שמוגדר ב-CSS, כך שכדאי לשמור `'David', serif` בסוף השרשרת.
+> **גופן ממשק ≠ גופן קריאה — אל תערבב:** `fontFamily` הוא הגופן שהמשתמש בחר ל**קריאת ספרים** — גופן עם תגיות, מצויר ל-25px. החלתו על כפתור או תפריט בן 11-12px מולידה טקסט מטושטש ומרוח. לממשק יש `uiFontFamily` — sans שנשאר חד בקטן. שני משתנים נפרדים, ולא אחד: `--font-ui` לכפתורים/תפריטים/שדות, ו-`--font-main` רק לטקסט הספר עצמו.
+
+> **הגופנים זמינים אוטומטית ב-WebView:** כל הגופנים המובנים של אוצריא (`FrankRuhlCLM`, `TaameyDavidCLM`, `Shofar`, `NotoRashiHebrew`, `KeterYG`, `NotoSerifHebrew`, `Tinos`, `Rubik`, `TaameyAshkenaz`) מוזרקים כ-`@font-face` עוד לפני ה-`plugin.boot`, ואיתם גם גופן מערכת שהמשתמש בחר בהגדרות. אין צורך לארוז קבצי גופן בתוסף — מספיק `font-family: 'FrankRuhlCLM', 'David', serif;` ב-CSS. כל משפחה נשלחת עם ה-face הבולד האמיתי שלה (או עם טווח משקלים בגופן משתנה), כך ש-`font-weight: bold` מקבל ציור אות אמיתי ולא עיבוי מלאכותי.
 
 ---
 
@@ -114,7 +117,8 @@ applyTheme(theme);
   --color-secondary-subtle: rgba(98, 91, 113, 0.12);  /* secondary בשקיפות */
 
   /* --- Typography --- */
-  --font-main:     'Frank Ruhl Libre', 'David', serif;
+  --font-ui:       'Rubik', system-ui, sans-serif;  /* ממשק */
+  --font-main:     'FrankRuhlCLM', 'David', serif;  /* טקסט קריאה */
   --font-size-base: 18px;
   --line-height:    1.5;
 
@@ -160,6 +164,10 @@ function applyTheme(theme) {
 
   if (theme.typography) {
     const t = theme.typography;
+    // מארח ישן אינו שולח uiFontFamily — אז הברירת מחדל שב-CSS נשמרת.
+    if (t.uiFontFamily) {
+      root.style.setProperty('--font-ui', `'${t.uiFontFamily}', system-ui, sans-serif`);
+    }
     root.style.setProperty('--font-main', `'${t.fontFamily}', 'David', serif`);
     root.style.setProperty('--font-size-base', `${t.fontSize}px`);
     root.style.setProperty('--line-height', String(t.lineHeight));
@@ -302,7 +310,7 @@ body.dark-mode .card {
   border: none;
   border-radius: var(--radius-sm);
   padding: 9px 20px;
-  font-family: var(--font-main);
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -322,7 +330,7 @@ body.dark-mode .card {
   border: 1px solid var(--color-outline);
   border-radius: var(--radius-sm);
   padding: 9px 20px;
-  font-family: var(--font-main);
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -341,7 +349,7 @@ body.dark-mode .card {
   padding: 9px 12px;
   border: 1.5px solid var(--color-outline);
   border-radius: var(--radius-sm);
-  font-family: var(--font-main);
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   color: var(--color-on-surface);
   background: var(--color-surface);
@@ -386,7 +394,7 @@ searchInput.focus();
 
 ```css
 body {
-  font-family: var(--font-main);
+  font-family: var(--font-ui);
   font-size: var(--font-size-base);
   line-height: var(--line-height);
   direction: rtl;
@@ -561,7 +569,8 @@ body { overflow: hidden; }   /* הגלילה קורית בתוכן, לא בעמ�
       --color-outline: #79747E;
       --color-primary-subtle: rgba(103,80,164,0.12);
       --color-secondary-subtle: rgba(98,91,113,0.12);
-      --font-main: 'Frank Ruhl Libre', 'David', serif;
+      --font-ui: 'Rubik', system-ui, sans-serif;
+      --font-main: 'FrankRuhlCLM', 'David', serif;
       --font-size-base: 18px;
       --line-height: 1.5;
       --radius-sm: 8px; --radius-md: 12px;
@@ -571,7 +580,7 @@ body { overflow: hidden; }   /* הגלילה קורית בתוכן, לא בעמ�
     html, body { height: 100%; }
 
     body {
-      font-family: var(--font-main);
+      font-family: var(--font-ui);
       font-size: var(--font-size-base);
       line-height: var(--line-height);
       background: var(--color-surface);
@@ -631,6 +640,9 @@ body { overflow: hidden; }   /* הגלילה קורית בתוכן, לא בעמ�
       r.style.setProperty('--color-outline',  cs.outline);
       document.body.classList.toggle('dark-mode', theme.mode === 'dark');
       if (theme.typography) {
+        if (theme.typography.uiFontFamily) {
+          r.style.setProperty('--font-ui', `'${theme.typography.uiFontFamily}', system-ui, sans-serif`);
+        }
         r.style.setProperty('--font-main', `'${theme.typography.fontFamily}', 'David', serif`);
         r.style.setProperty('--font-size-base', `${theme.typography.fontSize}px`);
         r.style.setProperty('--line-height', String(theme.typography.lineHeight));

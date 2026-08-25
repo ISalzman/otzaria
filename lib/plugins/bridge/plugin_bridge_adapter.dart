@@ -109,6 +109,11 @@ import 'package:otzaria/plugins/services/text_source_map_service.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 
+/// גופן הממשק שאוצריא מוסרת לתוספים: sans מובנה שנשאר חד ב-11-12px.
+/// גופן הקריאה (`fontFamily`) אינו תחליף לו — הוא מצויר ל-25px,
+/// והתגיות שלו נמרחות בכפתור או בתפריט.
+const String kPluginUiFont = 'Rubik';
+
 // ===================================================================
 // Helper: build the main colorScheme roles + typography from Flutter theme
 // ===================================================================
@@ -133,10 +138,10 @@ Map<String, dynamic> buildThemePayloadFromScheme(
 
   final fontFamily =
       Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
-      'Frank Ruhl Libre';
+      AppFonts.defaultFont;
   final commentatorsFontFamily =
       Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
-      'Shofar';
+      AppFonts.defaultCommentatorsFont;
   final fontSize =
       Settings.getValue<double>(SettingsRepository.keyFontSize) ?? 25.0;
   final commentatorsFontSize =
@@ -183,6 +188,7 @@ Map<String, dynamic> buildThemePayloadFromScheme(
     },
     'typography': {
       'fontFamily': fontFamily,
+      'uiFontFamily': kPluginUiFont,
       'fontSize': fontSize,
       'lineHeight': lineHeight,
       'commentatorsFontFamily': commentatorsFontFamily,
@@ -200,34 +206,84 @@ Map<String, dynamic> buildThemePayloadFromScheme(
 // ===================================================================
 final Map<String, String> _fontFaceCache = {};
 
+/// \u05db\u05dc\u05dc `@font-face` \u05d9\u05d7\u05d9\u05d3. [weight] \u05d4\u05d5\u05d0 \u05d3\u05e1\u05e7\u05e8\u05d9\u05e4\u05d8\u05d5\u05e8 \u05d4-CSS: \u05de\u05e9\u05e7\u05dc \u05d1\u05d5\u05d3\u05d3
+/// ("700") \u05d0\u05d5 \u05d8\u05d5\u05d5\u05d7 \u05dc\u05d2\u05d5\u05e4\u05df \u05de\u05e9\u05ea\u05e0\u05d4 ("100 900").
+String _fontFaceRule(String family, Uint8List bytes, String weight) {
+  final b64 = base64Encode(bytes);
+  return "@font-face{font-family:'$family';font-style:normal;"
+      "font-weight:$weight;"
+      "src:url(data:font/ttf;base64,$b64) format('truetype');"
+      'font-display:block;}';
+}
+
+/// \u05d4-faces \u05e9\u05dc \u05d2\u05d5\u05e4\u05df \u05de\u05d5\u05d1\u05e0\u05d4: \u05d4-regular, \u05d5\u05d1\u05de\u05e9\u05e4\u05d7\u05d4 \u05e2\u05dd \u05e7\u05d5\u05d1\u05e5 \u05d1\u05d5\u05dc\u05d3 \u05e0\u05e4\u05e8\u05d3 \u05d2\u05dd \u05d4\u05d5\u05d0.
+/// \u05d2\u05d5\u05e4\u05df \u05de\u05e9\u05ea\u05e0\u05d4 \u05de\u05e7\u05d1\u05dc \u05d8\u05d5\u05d5\u05d7 \u05de\u05e9\u05e7\u05dc\u05d9\u05dd \u2014 \u05d1\u05dc\u05e2\u05d3\u05d9\u05d5 \u05d4-WebView \u05e0\u05e2\u05d5\u05dc \u05e2\u05dc \u05de\u05d5\u05e4\u05e2
+/// \u05d1\u05e8\u05d9\u05e8\u05ea \u05d4\u05de\u05d7\u05d3\u05dc \u05d5\u05de\u05e1\u05e0\u05ea\u05d6 \u05d1\u05d5\u05dc\u05d3 \u05de\u05dc\u05d0\u05db\u05d5\u05ea\u05d9 \u05d5\u05de\u05e8\u05d5\u05d7 \u05d1\u05de\u05e7\u05d5\u05dd \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05e6\u05d9\u05e8 \u05d4-wght.
+Future<String> _bundledFontFaceCss(String family) async {
+  final assetPath = AppFonts.fontPaths[family];
+  if (assetPath == null) return '';
+  final isVariable = AppFonts.variableWeightFonts.contains(family);
+  final regular = await rootBundle.load(assetPath);
+  final parts = <String>[
+    _fontFaceRule(
+      family,
+      regular.buffer.asUint8List(),
+      isVariable ? '100 900' : '400',
+    ),
+  ];
+  final boldPath = AppFonts.boldFontPaths[family];
+  if (boldPath != null) {
+    final bold = await rootBundle.load(boldPath);
+    parts.add(_fontFaceRule(family, bold.buffer.asUint8List(), '700'));
+  }
+  return parts.join('\n');
+}
+
+/// \u05d4-faces \u05e9\u05dc \u05d2\u05d5\u05e4\u05df \u05de\u05e2\u05e8\u05db\u05ea \u05e9\u05e0\u05d1\u05d7\u05e8 \u05d1\u05d4\u05d2\u05d3\u05e8\u05d5\u05ea. \u05d0\u05d9\u05e0\u05d5 \u05de\u05d5\u05d1\u05e0\u05d4, \u05d5\u05dc\u05db\u05df \u05d4-WebView
+/// \u05d0\u05d9\u05e0\u05d5 \u05d9\u05db\u05d5\u05dc \u05dc\u05e4\u05ea\u05d5\u05e8 \u05d0\u05ea \u05e9\u05de\u05d5 \u05d0\u05dc\u05d0 \u05d0\u05dd \u05d4\u05d1\u05d9\u05d9\u05d8\u05d9\u05dd \u05e9\u05dc\u05d5 \u05e0\u05e9\u05dc\u05d7\u05d9\u05dd \u05d0\u05d9\u05ea\u05d5.
+Future<String> _systemFontFaceCss(String family) async {
+  await AppFonts.warmUpSystemFontsCache();
+  final faces = AppFonts.systemFamilyFaces(family);
+  if (faces == null) return '';
+  final regular = AppFonts.readFontBytes(faces.regularPath);
+  if (regular == null) return '';
+  final parts = <String>[
+    _fontFaceRule(family, regular, faces.hasWeightAxis ? '100 900' : '400'),
+  ];
+  final boldPath = faces.boldPath;
+  if (boldPath != null) {
+    final bold = AppFonts.readFontBytes(boldPath);
+    if (bold != null) parts.add(_fontFaceRule(family, bold, '700'));
+  }
+  return parts.join('\n');
+}
+
 Future<String> _loadFontFaceCss(String fontFamily) async {
   if (fontFamily.isEmpty) return '';
   final cached = _fontFaceCache[fontFamily];
   if (cached != null) return cached;
-  final assetPath = AppFonts.fontPaths[fontFamily];
-  if (assetPath == null) return '';
   try {
-    final bytes = await rootBundle.load(assetPath);
-    final b64 = base64Encode(bytes.buffer.asUint8List());
-    final css =
-        "@font-face{font-family:'$fontFamily';src:url(data:font/ttf;base64,$b64) format('truetype');font-display:block;}";
-    _fontFaceCache[fontFamily] = css;
+    final css = AppFonts.fontPaths.containsKey(fontFamily)
+        ? await _bundledFontFaceCss(fontFamily)
+        : await _systemFontFaceCss(fontFamily);
+    if (css.isNotEmpty) _fontFaceCache[fontFamily] = css;
     return css;
   } catch (_) {
     return '';
   }
 }
 
-/// בונה בלוק CSS עם `@font-face` עבור הגופנים המובנים שנבחרו בהגדרות,
-/// כך שתוספים שמשתמשים בשמות הגופנים שמגיעים ב-theme יוכלו להציגם.
+/// \u05d1\u05d5\u05e0\u05d4 \u05d1\u05dc\u05d5\u05e7 CSS \u05e2\u05dd `@font-face` \u05dc\u05db\u05dc \u05d4\u05d2\u05d5\u05e4\u05e0\u05d9\u05dd \u05e9\u05ea\u05d5\u05e1\u05e3 \u05d9\u05db\u05d5\u05dc \u05dc\u05e0\u05e7\u05d5\u05d1 \u05d1\u05e9\u05de\u05dd:
+/// \u05d4\u05de\u05d5\u05d1\u05e0\u05d9\u05dd \u05e9\u05dc \u05d0\u05d5\u05e6\u05e8\u05d9\u05d0, \u05d5\u05d1\u05e0\u05d5\u05e1\u05e3 \u05d2\u05d5\u05e4\u05df \u05de\u05e2\u05e8\u05db\u05ea \u05e9\u05e0\u05d1\u05d7\u05e8 \u05d1\u05d4\u05d2\u05d3\u05e8\u05d5\u05ea. \u05de\u05e9\u05e4\u05d7\u05d4
+/// \u05e9\u05d0\u05d9\u05e0\u05d4 \u05e0\u05e9\u05dc\u05d7\u05ea \u05e0\u05d5\u05e4\u05dc\u05ea \u05d1-WebView \u05dc-fallback \u05e9\u05dc \u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05d5\u05de\u05d5\u05e6\u05d2\u05ea \u05d1\u05d2\u05d5\u05e4\u05df \u05d0\u05d7\u05e8.
 Future<String> buildPluginFontFaceCss() async {
-  final fontFamily =
-      Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
-      AppFonts.defaultFont;
-  final commentatorsFontFamily =
-      Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
-      AppFonts.defaultCommentatorsFont;
-  final families = <String>{fontFamily, commentatorsFontFamily};
+  final families = <String>{
+    ...AppFonts.fontPaths.keys,
+    Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
+        AppFonts.defaultFont,
+    Settings.getValue<String>(SettingsRepository.keyCommentatorsFontFamily) ??
+        AppFonts.defaultCommentatorsFont,
+  };
   final parts = <String>[];
   for (final family in families) {
     final css = await _loadFontFaceCss(family);
@@ -3051,7 +3107,9 @@ class PluginBridgeAdapter {
     // שהגשר כבר אכף.
     final access = args['access'] as String? ?? 'read';
     if (access != 'read' && access != 'readwrite') {
-      throw Exception("error.invalid_params: access must be 'read' or 'readwrite'");
+      throw Exception(
+        "error.invalid_params: access must be 'read' or 'readwrite'",
+      );
     }
     final writable = access == 'readwrite';
     if (writable && !await _hasWritePermission()) {
@@ -3177,7 +3235,8 @@ class PluginBridgeAdapter {
       // נתיב, ולקבוע לאן הוא ייפתח — בניגוד לכלל שאין דרך להזין נתיב מה-JS.
       final rawExtension = (args['extension'] as String?)?.toLowerCase().trim();
       final extension =
-          rawExtension != null && RegExp(r'^\.?[a-z0-9]{1,10}$').hasMatch(rawExtension)
+          rawExtension != null &&
+              RegExp(r'^\.?[a-z0-9]{1,10}$').hasMatch(rawExtension)
           ? rawExtension.replaceAll('.', '')
           : null;
       final suggested = _suggestedSaveName(
@@ -3309,9 +3368,10 @@ class PluginBridgeAdapter {
   /// suffix אקראי ולא חתימת זמן: שתי שמירות באותה מיקרו-שנייה היו מתנגשות.
   String _randomSuffix() {
     final random = math.Random.secure();
-    return List<int>.generate(8, (_) => random.nextInt(256))
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
+    return List<int>.generate(
+      8,
+      (_) => random.nextInt(256),
+    ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   /// מוחק קובצי staging נטושים בתיקיית היעד.

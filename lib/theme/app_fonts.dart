@@ -563,6 +563,20 @@ class AppFonts {
     'Rubik': 'fonts/Rubik-VariableFont_wght.ttf',
   };
 
+  /// קובץ ה-face הבולד של גופן מובנה, למשפחות שנרשמו ב-pubspec עם קובץ נפרד.
+  /// צרכן חיצוני שמקבל רק את ה-regular (WebView של תוסף) מסנתז בולד מרוח.
+  static const Map<String, String> boldFontPaths = {
+    'FrankRuhlCLM': 'fonts/FrankRuehlCLM-Bold.ttf',
+  };
+
+  /// ה-faces של גופן מערכת שאותר בסריקה, או null כשאינו מוכר.
+  /// דורש שהקאש יהיה חם — ראו [warmUpSystemFontsCache].
+  static SystemFontFamilyFaces? systemFamilyFaces(String fontFamily) =>
+      _systemFamiliesCache?[fontFamily];
+
+  /// בייטים של קובץ גופן מהדיסק, או null כשאינו קריא.
+  static Uint8List? readFontBytes(String path) => _readFontBytesSync(path);
+
   /// מיפוי גופנים לשמות בעברית (לשימוש בהדפסה)
   /// מחושב אוטומטית מ-availableFonts, רק עבור גופנים עם קבצים
   static Map<String, String> get fontLabels => {
