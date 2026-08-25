@@ -1076,14 +1076,15 @@ jobs:
             echo "$label: WPE runtime תקין ($libdir)"
           }
 
-          DEB_FILE=$(find dist -name '*.deb' -print -quit)
+          # ב-raw/full אין תיקיית dist — find נכשל תחת bash -e בלי ההגנה הזו.
+          DEB_FILE=$(find dist -name '*.deb' -print -quit 2>/dev/null || true)
           if [ -n "$DEB_FILE" ]; then
             rm -rf /tmp/verify-deb && mkdir -p /tmp/verify-deb
             dpkg-deb -x "$DEB_FILE" /tmp/verify-deb
             verify_tree "deb" /tmp/verify-deb
           fi
 
-          RPM_FILE=$(find dist -name '*.rpm' -print -quit)
+          RPM_FILE=$(find dist -name '*.rpm' -print -quit 2>/dev/null || true)
           if [ -n "$RPM_FILE" ]; then
             rm -rf /tmp/verify-rpm && mkdir -p /tmp/verify-rpm
             (cd /tmp/verify-rpm && rpm2cpio "$GITHUB_WORKSPACE/$RPM_FILE" | cpio -idm --quiet)
