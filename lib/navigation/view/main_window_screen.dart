@@ -10,6 +10,7 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
@@ -2563,6 +2564,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     LibraryMessages.indexingCompletedWithFailures(
                       state.failureCount,
                     ),
+                    onTap: _openErrorLogFile,
                   );
                 }
               }
@@ -3463,6 +3465,18 @@ class MainWindowScreenState extends State<MainWindowScreen>
   void _openIndexingSettings() {
     _settingsScreenController.openTab(SettingsTab.library);
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.settings));
+  }
+
+  void _openErrorLogFile() {
+    ErrorLogFile.ensureExists();
+    final path = ErrorLogFile.resolvePath();
+    if (Platform.isWindows) {
+      unawaited(Process.run('explorer', [path]));
+    } else if (Platform.isMacOS) {
+      unawaited(Process.run('open', [path]));
+    } else if (Platform.isLinux) {
+      unawaited(Process.run('xdg-open', [path]));
+    }
   }
 
   int? _pageIndexForScreen(Screen screen) {
