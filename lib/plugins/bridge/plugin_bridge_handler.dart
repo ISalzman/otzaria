@@ -112,8 +112,10 @@ class PluginBridgeHandler {
   /// ההרשאה שה-runtime אוכף בפועל עבור `domain.action`, לבדיקת התאמה מול
   /// המפה שהאריזה מסתמכת עליה. `null` = הקריאה אינה מגודרת במניפסט.
   @visibleForTesting
-  String? requiredPermissionForTesting(String domain, String action) =>
-      _getRequiredPermission(domain, action);
+  String? requiredPermissionForTesting(String domain, String action) {
+    final entry = methodPermissions['$domain.$action'];
+    return entry == noManifestPermission ? null : entry;
+  }
 
   /// קובע אם קריאת RPC מוחרגת ממגביל הקצב.
   ///

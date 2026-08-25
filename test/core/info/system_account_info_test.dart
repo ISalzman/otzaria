@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/info/system_account_info.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   ProcessRunner whoamiReturning(String stdout, {int exitCode = 0}) {
@@ -11,7 +12,7 @@ void main() {
 
   ProcessRunner idReturning({required String uid, required String groups}) {
     return (executable, arguments) async {
-      if (executable != 'id') return ProcessResult(0, 1, '', '');
+      if (p.basename(executable) != 'id') return ProcessResult(0, 1, '', '');
       return ProcessResult(0, 0, arguments.contains('-u') ? uid : groups, '');
     };
   }

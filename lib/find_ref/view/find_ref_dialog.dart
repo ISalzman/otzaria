@@ -70,21 +70,52 @@ class _CommentatorEntry {
   });
 }
 
-/// מאתר את ה-`Book` הנכון בעץ הספרייה לפי [bookId] אם נמסר, ולפי [title]
-/// אם לא. הסיבה: שני ספרים יכולים לחלוק כותרת זהה (למשל גרסאות שונות של
-/// פירוש), וה-link שייצא משאילתת המפרשים יודע בדיוק לאיזה ספר ללכת —
-/// פתרון רק לפי title היה פותח את הראשון שנמצא בעץ.
-Book? _resolveCommentatorBook(
-  Category library,
-  String title, {
-  required int? bookId,
-}) {
-  if (bookId != null && bookId > 0) {
-    final byId = findOfficialTextBookById(library, bookId);
-    if (byId != null) return byId;
+/// מפתח את עץ הספרייה במעבר אחד, כדי שפתרון ספרי המפרשים לא יסרוק את כל
+/// העץ מחדש לכל מפרש. קטע בספר יסוד מגיע לעשרות מפרשים, וכל שורה נראית
+/// מבקשת את שלה.
+///
+/// המפות נבנות בסדר ה-DFS של [findOfficialTextBookById] ושל
+/// [_findBookInLibraryByTitle], עם `putIfAbsent`, ולכן כשכמה ספרים חולקים
+/// מזהה או כותרת נבחר אותו ספר שהסריקות היו בוחרות.
+@visibleForTesting
+class LibraryBookIndex {
+  LibraryBookIndex(this.library) {
+    _collect(library);
   }
-  // fallback ל-title (תאימות לאחור עם DB שלא מחזיר targetBookId).
-  return _findBookInLibraryByTitle(library, title, preferTextBook: true);
+
+  final Category library;
+  final Map<int, TextBook> _officialTextBookById = {};
+  final Map<String, TextBook> _textBookByTitle = {};
+  final Map<String, Book> _bookByTitle = {};
+
+  void _collect(Category category) {
+    for (final book in category.books) {
+      final id = book.id;
+      if (book is TextBook) {
+        if (!book.isUserBook && id != null) {
+          _officialTextBookById.putIfAbsent(id, () => book);
+        }
+        _textBookByTitle.putIfAbsent(book.title, () => book);
+      }
+      _bookByTitle.putIfAbsent(book.title, () => book);
+    }
+    for (final subCategory in category.subCategories) {
+      _collect(subCategory);
+    }
+  }
+
+  /// מאתר את ה-`Book` הנכון לפי [bookId] אם נמסר, ולפי [title] אם לא. הסיבה:
+  /// שני ספרים יכולים לחלוק כותרת זהה (למשל גרסאות שונות של פירוש), וה-link
+  /// משאילתת המפרשים יודע בדיוק לאיזה ספר ללכת — פתרון רק לפי title היה
+  /// פותח את הראשון שנמצא בעץ.
+  Book? resolveCommentatorBook(String title, {required int? bookId}) {
+    if (bookId != null && bookId > 0) {
+      final byId = _officialTextBookById[bookId];
+      if (byId != null) return byId;
+    }
+    // fallback ל-title (תאימות לאחור עם DB שלא מחזיר targetBookId).
+    return _textBookByTitle[title] ?? _bookByTitle[title];
+  }
 }
 
 /// מאתר ספר טקסט רשמי לפי [bookId] מה-DB הראשי.
@@ -176,6 +207,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
   // value=[] → אין מפרשים זמינים (לא יוצג כפתור).
   // value=[...] → רשומות מוכנות לפתיחה ישירה (כולל targetSegment ו-Book).
   final Map<String, List<_CommentatorEntry>?> _commentatorsByRef = {};
+
+  /// תקף כל עוד רענון ספרייה יוצר מופע `Category` חדש (`DataRepository.library`).
+  LibraryBookIndex? _bookIndex;
   final ScrollController _resultsScrollController = ScrollController();
   // `true` כשיש תוצאות מתחת לאזור הנראה. מעודכן משני מקורות:
   //   1. listener על ה-ScrollController — מטפל בגלילה ע"י המשתמש.
@@ -290,15 +324,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
         // `library` מוחזק בקאש ב-DataRepository.
         final library = await DataRepository.instance.library;
         if (!mounted) return;
+        final index = _indexFor(library);
         final entries = <_CommentatorEntry>[
           for (final e in dbEntries)
             _CommentatorEntry(
               title: e.title,
               targetSegment: e.targetSegment,
-              // פתרון לפי `bookId` כשזמין כדי שלא ייפתח ספר בעל אותה כותרת
-              // אך מזהה אחר; ה-fallback ל-title שומר על תאימות.
               book:
-                  _resolveCommentatorBook(library, e.title, bookId: e.bookId) ??
+                  index.resolveCommentatorBook(e.title, bookId: e.bookId) ??
                   TextBook(title: e.title),
             ),
         ];
@@ -313,6 +346,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
         });
       }
     }();
+  }
+
+  LibraryBookIndex _indexFor(Category library) {
+    final existing = _bookIndex;
+    if (existing != null && identical(existing.library, library)) {
+      return existing;
+    }
+    return _bookIndex = LibraryBookIndex(library);
   }
 
   void _scrollToSelected() {
