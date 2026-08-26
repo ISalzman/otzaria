@@ -135,8 +135,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         alternativeWords: normalizedParameters.alternativeWords,
         searchOptions: normalizedParameters.searchOptions,
         negativeCustomSpacing: normalizedNegativeParameters.customSpacing,
-        negativeAlternativeWords:
-            normalizedNegativeParameters.alternativeWords,
+        negativeAlternativeWords: normalizedNegativeParameters.alternativeWords,
         negativeSearchOptions: normalizedNegativeParameters.searchOptions,
       ),
     );
@@ -332,11 +331,15 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
               // חיווי סינון קטגוריות
               if (_shouldShowFacetFilterBanner(state))
                 _buildFacetFilterBanner(context, state),
-              // הצעת תיקון להקלדה עברית במצב מקלדת אנגלי (issue #975)
-              LayoutFixSuggestionBanner(
-                query: state.searchQuery,
-                onAccept: _acceptLayoutFixSuggestion,
-              ),
+              // הצעת תיקון להקלדה עברית במצב מקלדת אנגלי (issue #975).
+              // הטקסט הגולמי מהשדה ולא state.searchQuery — הנרמול מוחק
+              // פסיק/נקודה שהם המקשים של ת/ץ, וההצעה הייתה יוצאת חסרה.
+              if (state.searchQuery.isNotEmpty)
+                LayoutFixSuggestionBanner(
+                  query: widget.tab.queryController.text,
+                  hint: 'לחיצה תריץ את החיפוש המוצע',
+                  onAccept: _acceptLayoutFixSuggestion,
+                ),
               Expanded(
                 child: Stack(
                   children: [
@@ -396,11 +399,14 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   ),
                   if (_shouldShowFacetFilterBanner(state))
                     _buildFacetFilterBanner(context, state),
-                  // הצעת תיקון להקלדה עברית במצב מקלדת אנגלי (issue #975)
-                  LayoutFixSuggestionBanner(
-                    query: state.searchQuery,
-                    onAccept: _acceptLayoutFixSuggestion,
-                  ),
+                  // הצעת תיקון להקלדה עברית במצב מקלדת אנגלי (975#).
+                  // הטקסט הגולמי מהשדה — ראו הערה בפריסה הצרה.
+                  if (state.searchQuery.isNotEmpty)
+                    LayoutFixSuggestionBanner(
+                      query: widget.tab.queryController.text,
+                      hint: 'לחיצה תריץ את החיפוש המוצע',
+                      onAccept: _acceptLayoutFixSuggestion,
+                    ),
                   Expanded(
                     child: ValueListenableBuilder<bool>(
                       valueListenable: widget.tab.isLeftPaneOpen,

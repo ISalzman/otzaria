@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/theme/app_tokens.dart';
@@ -10,6 +9,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_bloc.dart';
+import 'package:otzaria/search/view/layout_fix_suggestion_banner.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_event.dart';
 import 'package:otzaria/find_ref/bloc/find_ref_state.dart';
 import 'package:otzaria/find_ref/find_ref_recent_store.dart';
@@ -808,6 +808,19 @@ class _FindRefDialogState extends State<FindRefDialog> {
             const SizedBox(height: 8),
           ],
           _buildQueryField(refs),
+          TypingLayoutFixSuggestion(
+            controller: context.read<FocusRepository>().findRefSearchController,
+            hint: 'לחיצה תחליף את הטקסט שהוקלד',
+            onApplied: (suggestion) {
+              setState(() => _selectedIndex = 0);
+              context.read<FindRefBloc>().add(
+                SearchRefRequested(
+                  suggestion,
+                  includePersonalBooks: _includePersonalBooks,
+                ),
+              );
+            },
+          ),
           SizedBox(height: isShort ? 8 : 10),
           // Wrap ולא Row: ה-Switch אינו מתכווץ (Transform.scale משפיע על
           // הציור בלבד), ולכן בגופן מוגדל השורה הייתה גולשת. כאן הספירה
