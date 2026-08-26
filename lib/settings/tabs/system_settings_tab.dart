@@ -587,11 +587,15 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
     if (!mounted) return;
     if (result.isSent) {
-      await ErrorReportHelper.showDirectReportDetailsDialog(
-        context,
-        title: ReportMessages.sentSuccessTitle,
-        report: report,
-      );
+      if (result.isDuplicate) {
+        UiSnack.show(result.message);
+      } else {
+        await ErrorReportHelper.showDirectReportDetailsDialog(
+          context,
+          title: ReportMessages.sentSuccessTitle,
+          report: report,
+        );
+      }
       if (!mounted) return;
       setState(() {});
     } else if (result.isQueued) {
