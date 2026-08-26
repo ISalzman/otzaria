@@ -568,6 +568,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       requireLongPressToDrag: !isDesktop,
       onReorder: (tab, newIndex) =>
           context.read<TabsBloc>().add(MoveTab(tab, newIndex)),
+      // חלונית של טאב מפוצל שנגררת לרצועה חוזרת לכרטיסייה עצמאית.
+      acceptsExternal: (tab) => context.read<TabsBloc>().state.tabs.any(
+        (t) => t is CombinedTab && t.sibling(tab) != null,
+      ),
+      onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
+        DetachPane(tab, insertIndex: insertIndex),
+      ),
       // גרירה אינה בוחרת כרטיסיה: התצוגה נשארת על הספר שהמשתמש קורא, ומשתנה
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
       onDragStarted: () => _pendingTabSelection = null,
