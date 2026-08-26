@@ -810,6 +810,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
           _buildQueryField(refs),
           TypingLayoutFixSuggestion(
             controller: context.read<FocusRepository>().findRefSearchController,
+            fieldFocusNode: context
+                .read<FocusRepository>()
+                .findRefSearchFocusNode,
             hint: 'לחיצה תחליף את הטקסט שהוקלד',
             onApplied: (suggestion) {
               setState(() => _selectedIndex = 0);

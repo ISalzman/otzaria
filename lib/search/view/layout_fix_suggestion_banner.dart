@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:otzaria/search/utils/hebrew_layout_suggestion.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 
@@ -20,11 +21,16 @@ class LayoutFixSuggestionBanner extends StatelessWidget {
   /// הסבר קצר על תוצאת הלחיצה, מוצג בקצה השורה (אופציונלי).
   final String? hint;
 
+  /// צומת פוקוס ל-InkWell — מאפשר למארח להקפיץ את הפוקוס להצעה (Tab
+  /// מהשדה) ולהפעיל אותה ב-Enter/רווח.
+  final FocusNode? focusNode;
+
   const LayoutFixSuggestionBanner({
     super.key,
     required this.query,
     required this.onAccept,
     this.hint,
+    this.focusNode,
   });
 
   @override
@@ -36,6 +42,7 @@ class LayoutFixSuggestionBanner extends StatelessWidget {
     return Material(
       color: cs.tertiaryContainer.withValues(alpha: 0.35),
       child: InkWell(
+        focusNode: focusNode,
         onTap: () => onAccept(suggestion),
         child: Container(
           width: double.infinity,
@@ -92,7 +99,12 @@ class LayoutFixSuggestionBanner extends StatelessWidget {
 /// הבאנר כשהטקסט הנוכחי נראה כהקלדה עברית במצב אנגלי. לחיצה מחליפה את
 /// תוכן השדה בהצעה (הסמן בסופה) וקוראת ל-[onApplied] — שם המסך המארח
 /// מרענן את החיפוש החי שלו. ההחלפה נעשית רק בלחיצה, לעולם לא אוטומטית.
-class TypingLayoutFixSuggestion extends StatelessWidget {
+///
+/// נגישות מקלדת (בסגנון הצעות האיות של Gmail): כשמסופק [fieldFocusNode],
+/// Tab בתוך השדה — בזמן שההצעה מוצגת — מעביר את הפוקוס להצעה, ו-Enter
+/// (או רווח) מחיל אותה ומחזיר את הפוקוס לשדה. כשאין הצעה, Tab מתנהג
+/// כרגיל.
+class TypingLayoutFixSuggestion extends StatefulWidget {
   final TextEditingController controller;
 
   /// נקרא אחרי שההצעה כבר הוחלה על השדה, עם הטקסט המומר.
@@ -100,26 +112,102 @@ class TypingLayoutFixSuggestion extends StatelessWidget {
 
   final String? hint;
 
+  /// צומת הפוקוס של שדה הטקסט המלווה — ליירוט Tab ולהחזרת הפוקוס אחרי
+  /// ההחלה. אופציונלי: בלעדיו ההצעה עדיין נגישה בסדר המעבר הרגיל.
+  final FocusNode? fieldFocusNode;
+
   const TypingLayoutFixSuggestion({
     super.key,
     required this.controller,
     this.onApplied,
     this.hint,
+    this.fieldFocusNode,
   });
+
+  @override
+  State<TypingLayoutFixSuggestion> createState() =>
+      _TypingLayoutFixSuggestionState();
+}
+
+class _TypingLayoutFixSuggestionState extends State<TypingLayoutFixSuggestion> {
+  final FocusNode _suggestionFocus = FocusNode(
+    debugLabel: 'layout-fix-suggestion',
+  );
+
+  /// ה-handler שהיה על צומת השדה לפנינו — משוחזר ב-dispose, כדי לא לדרוס
+  /// התנהגות של מארח אחר.
+  FocusOnKeyEventCallback? _previousFieldHandler;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachToField(widget.fieldFocusNode);
+  }
+
+  @override
+  void didUpdateWidget(TypingLayoutFixSuggestion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fieldFocusNode != widget.fieldFocusNode) {
+      _detachFromField(oldWidget.fieldFocusNode);
+      _attachToField(widget.fieldFocusNode);
+    }
+  }
+
+  @override
+  void dispose() {
+    _detachFromField(widget.fieldFocusNode);
+    _suggestionFocus.dispose();
+    super.dispose();
+  }
+
+  void _attachToField(FocusNode? node) {
+    if (node == null) return;
+    _previousFieldHandler = node.onKeyEvent;
+    node.onKeyEvent = _handleFieldKey;
+  }
+
+  void _detachFromField(FocusNode? node) {
+    if (node == null) return;
+    if (node.onKeyEvent == _handleFieldKey) {
+      node.onKeyEvent = _previousFieldHandler;
+    }
+    _previousFieldHandler = null;
+  }
+
+  KeyEventResult _handleFieldKey(FocusNode node, KeyEvent event) {
+    // Tab נקי בלבד: Ctrl+Tab (מעבר טאבים), Shift+Tab (מעבר אחורה) וכל
+    // צירוף מודיפייר אחר ממשיכים למטפלים הקיימים — לא נוגעים בהם.
+    final keyboard = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.tab &&
+        !keyboard.isShiftPressed &&
+        !keyboard.isControlPressed &&
+        !keyboard.isAltPressed &&
+        !keyboard.isMetaPressed &&
+        suggestHebrewKeyboardFix(widget.controller.text) != null &&
+        _suggestionFocus.canRequestFocus) {
+      _suggestionFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return _previousFieldHandler?.call(node, event) ?? KeyEventResult.ignored;
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: controller,
+      listenable: widget.controller,
       builder: (context, _) => LayoutFixSuggestionBanner(
-        query: controller.text,
-        hint: hint,
+        query: widget.controller.text,
+        hint: widget.hint,
+        focusNode: _suggestionFocus,
         onAccept: (suggestion) {
-          controller.value = TextEditingValue(
+          widget.controller.value = TextEditingValue(
             text: suggestion,
             selection: TextSelection.collapsed(offset: suggestion.length),
           );
-          onApplied?.call(suggestion);
+          widget.onApplied?.call(suggestion);
+          // החלה מהמקלדת משאירה את הפוקוס על באנר שנעלם — חוזרים לשדה.
+          widget.fieldFocusNode?.requestFocus();
         },
       ),
     );

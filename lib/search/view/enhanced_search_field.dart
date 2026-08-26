@@ -628,6 +628,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                   // ולחיצה מחליפה את תוכן השדה בלבד — החיפוש לא רץ מעצמו.
                   TypingLayoutFixSuggestion(
                     controller: widget.tab.queryController,
+                    fieldFocusNode: widget.tab.searchFieldFocusNode,
                     hint: 'לחיצה תחליף את הטקסט שהוקלד',
                   ),
                 ],

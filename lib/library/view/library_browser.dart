@@ -974,6 +974,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     controller: context
                         .read<FocusRepository>()
                         .librarySearchController,
+                    fieldFocusNode: context
+                        .read<FocusRepository>()
+                        .librarySearchFocusNode,
                     hint: 'לחיצה תחליף את הטקסט שהוקלד',
                     onApplied: _applyLibraryLayoutFix,
                   ),
