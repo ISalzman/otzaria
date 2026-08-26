@@ -60,14 +60,10 @@ class HtmlLinkHandler {
       // מציאת הספר על פי הנתיב
       final bookTitle = _getTitleFromPath(path);
       final library = await DataRepository.instance.library;
-      final foundBook = library.findBookByTitle(bookTitle, TextBook);
+      final foundBook = resolveBookLinkTarget(library, bookTitle);
 
       if (foundBook == null) {
         throw Exception('לא נמצא ספר בשם: $bookTitle');
-      }
-
-      if (foundBook is! TextBook) {
-        throw Exception('הספר $bookTitle אינו ספר טקסט');
       }
 
       // פתיחת הספר באינדקס הנכון (המרה ל-0-based)
@@ -185,7 +181,6 @@ class HtmlLinkHandler {
   /// אותו דרך אותה לשונית בדיוק, בעטיפת `toTextBook()` (ראו
   /// `OpenedTab.fromBook`). בלי ההשלמה כאן כל קישור `book://` אל ספר כזה
   /// מת, ובקובצי HTML זו הדרך המתועדת לקשר בין ספרים.
-  @visibleForTesting
   static TextBook? resolveBookLinkTarget(Library library, String title) {
     final direct = library.findBookByTitle(title, TextBook);
     if (direct is TextBook) return direct;

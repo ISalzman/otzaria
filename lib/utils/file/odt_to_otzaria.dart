@@ -25,7 +25,7 @@ import 'package:xml/xml.dart' as xml;
 /// המקדימה של החבילה (`Thumbnails/`) אינה נספרת בתקרת ההטמעה.
 /// v6: חבילה בלי `office:text` זורקת חריגה, `draw:frame` ברמת הבלוק אינו
 /// נמחק, `text:list-header` אינו ממוספר, צבעים מסוננים וכותרת עוברת trim.
-const int kOdtConverterVersion = 6;
+const int kOdtConverterVersion = 7;
 
 /// רווח קשיח. `text:s` ו-`text:tab` מייצגים רווחים שהמסמך דורש שיישמרו,
 /// ורווח רגיל היה נבלע ברינדור ה-HTML.
@@ -94,7 +94,9 @@ String odtToText(Uint8List bytes, String title, {bool embedImages = true}) {
     );
   }
 
-  final output = <String>['<h1>${escapeHtmlText(title)}</h1>'];
+  final output = <String>[
+    otzariaInlineText('<h1>${escapeHtmlText(title)}</h1>'),
+  ];
 
   final ctx = _OdtContext(
     styles: _extractStyles(document, archive),

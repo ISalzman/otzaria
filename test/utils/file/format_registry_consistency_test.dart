@@ -31,6 +31,7 @@ void main() {
         'ספר.doc',
         'ספר.html',
         'ספר.htm',
+        'ספר.xhtml',
         'ספר.xyz',
         'ספר',
         'ספר.DOCX',
@@ -116,6 +117,7 @@ void main() {
       'docm',
       'html',
       'htm',
+      'xhtml',
     ]) {
       test('$fileType שומר את כל שדות הזהות', () {
         final book =
@@ -173,7 +175,15 @@ void main() {
     });
 
     test('DocumentBook עובר round-trip ושומר fileType', () {
-      for (final fileType in ['odt', 'rtf', 'docm', 'dotx', 'html', 'htm']) {
+      for (final fileType in [
+        'odt',
+        'rtf',
+        'docm',
+        'dotx',
+        'html',
+        'htm',
+        'xhtml',
+      ]) {
         final original = DocumentBook(
           id: 5,
           title: 'ספר',

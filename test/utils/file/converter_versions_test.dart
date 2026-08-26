@@ -28,14 +28,14 @@ import 'package:otzaria/utils/text/inline_style.dart';
 /// ‎`ooxml`‎ ו-‎`word-xml`‎ חולקים טביעה — Flat OPC מגיע לאותו מנוע ומייצר פלט
 /// זהה בייט-בבייט. אי-שוויון ביניהם הוא סימן שהמנוע הותקף מכיוון אחד בלבד.
 const Map<String, ({int version, String fingerprint})> _pinned = {
-  'ooxml': (version: 13, fingerprint: 'f6749e468f69bdcc'),
-  'word-xml': (version: 1013, fingerprint: 'f6749e468f69bdcc'),
-  'odt': (version: 6, fingerprint: 'e7114c864beedc1d'),
-  'rtf': (version: 5, fingerprint: 'cfa322a43935a572'),
-  'legacy-word': (version: 8, fingerprint: 'f7aa849f4d28e297'),
-  'epub': (version: 15, fingerprint: 'a999c6001cd8c4f4'),
-  'markdown': (version: 7, fingerprint: 'e0ac8348b37de4b8'),
-  'html': (version: 1, fingerprint: '022fd0030315b79f'),
+  'ooxml': (version: 14, fingerprint: 'f6749e468f69bdcc'),
+  'word-xml': (version: 1014, fingerprint: 'f6749e468f69bdcc'),
+  'odt': (version: 7, fingerprint: 'e7114c864beedc1d'),
+  'rtf': (version: 6, fingerprint: 'cfa322a43935a572'),
+  'legacy-word': (version: 9, fingerprint: 'e39829bc7e2dd94f'),
+  'epub': (version: 16, fingerprint: 'a999c6001cd8c4f4'),
+  'markdown': (version: 8, fingerprint: 'e0ac8348b37de4b8'),
+  'html': (version: 2, fingerprint: '022fd0030315b79f'),
 };
 
 /// `sha256` ולא `hashCode` — הטביעה חייבת להיות זהה בין הרצות ובין גרסאות

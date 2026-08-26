@@ -61,7 +61,7 @@ UnderlineKind underlineKindFromName(String? value) {
   if (style != null) css.write(' $style');
   css.write(';');
   if (hasColor) css.write(' text-decoration-color: $color;');
-  if (thick) css.write(' text-decoration-thickness: 2px;');
+  if (thick) css.write(' text-decoration-thickness: 200%;');
   return (open: '<span style="$css">', close: '</span>');
 }
 

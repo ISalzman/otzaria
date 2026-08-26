@@ -82,6 +82,7 @@ String? safeLinkTarget(String href, {bool allowBookLinks = false}) {
   final trimmed = href.trim();
   if (trimmed.isEmpty) return null;
   if (trimmed.startsWith('#')) return trimmed; // עוגן פנימי
+  if (trimmed.startsWith('//')) return null;
   final colon = trimmed.indexOf(':');
   if (colon < 0) return trimmed; // נתיב יחסי
   final scheme = trimmed.substring(0, colon).toLowerCase();

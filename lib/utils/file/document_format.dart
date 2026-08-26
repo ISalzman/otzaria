@@ -40,6 +40,7 @@ enum DocumentFormat {
   /// נבדל, מאותה סיבה כמו `md`/`markdown`.
   html,
   htm,
+  xhtml,
 }
 
 /// תכונות סמנטיות של פורמט. כל predicate מתאר מציאות *אחת* — אין כאן
@@ -92,7 +93,9 @@ extension DocumentFormatProperties on DocumentFormat {
 
   /// מסמך HTML עצמאי — ‎.html‎ ו-‎.htm‎ עוברים את אותו מנוע המרה.
   bool get isHtmlDocument =>
-      this == DocumentFormat.html || this == DocumentFormat.htm;
+      this == DocumentFormat.html ||
+      this == DocumentFormat.htm ||
+      this == DocumentFormat.xhtml;
 
   /// האם המסמך הוא חבילת ZIP — קובע את מגבלות ה-decompression (ראו
   /// `zip_limits.dart`) ואת אופן זיהוי התוכן.
@@ -150,7 +153,9 @@ extension DocumentFormatProperties on DocumentFormat {
           DocumentFormat.md || DocumentFormat.markdown => 'Markdown',
           DocumentFormat.rtf => 'RTF',
           DocumentFormat.odt => 'ODT',
-          DocumentFormat.html || DocumentFormat.htm => 'HTML',
+          DocumentFormat.html ||
+          DocumentFormat.htm ||
+          DocumentFormat.xhtml => 'HTML',
           _ => 'טקסט',
         };
 }
@@ -190,6 +195,7 @@ const Set<DocumentFormat> kProductionBookFormats = {
   // שתי סיומות ה-HTML, אותו מנוע.
   DocumentFormat.html,
   DocumentFormat.htm,
+  DocumentFormat.xhtml,
 };
 
 /// סיומות הספרים הנתמכות (ללא נקודה), נגזרות מ-[kProductionBookFormats].

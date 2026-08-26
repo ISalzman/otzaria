@@ -19,7 +19,7 @@ import 'package:otzaria/utils/text/otzaria_markup.dart';
 
 /// גרסת ממיר ה-HTML — **חובה להעלות בכל שינוי שמשפיע על הפלט**: הגרסה היא
 /// חלק ממפתח-התוקף של מטמון ההמרות, והעלאתה פוסלת רשומות ישנות.
-const int kHtmlConverterVersion = 1;
+const int kHtmlConverterVersion = 2;
 
 /// מגבלות משאבים על מסמך HTML.
 ///
@@ -409,15 +409,25 @@ class _HtmlImageResolver {
     } catch (_) {}
 
     final resolved = p.normalize(p.join(base, relative));
+    final String realBase;
+    final String realResolved;
+    try {
+      realBase = Directory(base).resolveSymbolicLinksSync();
+      realResolved = File(resolved).resolveSymbolicLinksSync();
+    } catch (_) {
+      return const _ResolvedImage.missing();
+    }
     // מסמך זדוני יכול לבקש `../../` — התמונה נקראת רק מתוך תיקיית הספר.
-    if (!p.isWithin(base, resolved)) return const _ResolvedImage.missing();
+    if (!p.isWithin(realBase, realResolved)) {
+      return const _ResolvedImage.missing();
+    }
 
-    final mime = imageMimeForPath(resolved);
+    final mime = imageMimeForPath(realResolved);
     if (mime == null || !_embeddableImageMimes.contains(mime)) {
       return const _ResolvedImage.missing();
     }
 
-    final file = File(resolved);
+    final file = File(realResolved);
     final FileStat stat;
     try {
       stat = file.statSync();

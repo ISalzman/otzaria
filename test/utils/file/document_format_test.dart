@@ -38,6 +38,7 @@ void main() {
         'a.wbk': DocumentFormat.wbk,
         'a.rtf': DocumentFormat.rtf,
         'a.odt': DocumentFormat.odt,
+        'a.xhtml': DocumentFormat.xhtml,
       };
       cases.forEach((path, expected) {
         expect(documentFormatFromExtension(path), expected, reason: path);
