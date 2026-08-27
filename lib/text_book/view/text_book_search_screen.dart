@@ -400,10 +400,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
       final effectiveResults = widget.simpleSearchRunner != null
           ? await widget.simpleSearchRunner!(content, query)
-          : await searchInContent(
-              content: content,
-              query: query,
-            );
+          : await searchInContent(content: content, query: query);
 
       if (mounted && requestId == _activeSearchRequestId) {
         _applySearchResults(effectiveResults);
@@ -1068,11 +1065,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         (_selectedSearchResultIndex ?? 0) >= searchResults.length - 1;
 
     return Padding(
-      padding: const EdgeInsetsDirectional.only(
-        start: 12,
-        end: 12,
-        bottom: 2,
-      ),
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 2),
       child: Align(
         alignment: AlignmentDirectional.centerEnd,
         child: Row(
@@ -1125,7 +1118,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             icon,
             size: 16,
             color: isEnabled
-                ? colorScheme.primary
+                ? colorScheme.onPrimaryContainer
                 : colorScheme.onSurfaceVariant,
           ),
         ),
