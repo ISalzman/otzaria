@@ -62,18 +62,17 @@ void main() {
     }
   });
 
-  test('נקראים רק הבייטים הדרושים — לא הקובץ כולו', () {
+  test('buffer המטא-דאטה אינו בגודל הקבצים השלמים', () {
     var fullBytes = 0;
-    var readBytes = 0;
+    var metadataBytes = 0;
     for (final file in _bundledFontFiles()) {
       final partial = SfntMetadataReader.readSync(file.path);
       if (partial == null) continue;
       fullBytes += file.lengthSync();
-      // ה-buffer דליל: אורכו כאורך ההיסט הגבוה, אך רק טווחי הטבלאות מלאים.
-      readBytes += partial.where((b) => b != 0).length;
+      metadataBytes += partial.length;
     }
     expect(fullBytes, greaterThan(0));
-    expect(readBytes, lessThan(fullBytes ~/ 2));
+    expect(metadataBytes, lessThan(fullBytes ~/ 2));
   });
 
   group('קלט פגום — כשל שקט, בלי חריגה', () {
@@ -119,6 +118,24 @@ void main() {
       final partial = SfntMetadataReader.readSync(f.path);
       expect(partial, isNotNull);
       expect(AppFonts.debugSfntSupportsHebrew(partial!), isFalse);
+    });
+
+    test('טבלה רחוקה נארזת בלי להקצות את המרווח שלפניה', () {
+      final d = ByteData(1050)
+        ..setUint32(0, 0x00010000)
+        ..setUint16(4, 1)
+        ..setUint8(12, 0x6E) // 'n'
+        ..setUint8(13, 0x61) // 'a'
+        ..setUint8(14, 0x6D) // 'm'
+        ..setUint8(15, 0x65) // 'e'
+        ..setUint32(20, 1024)
+        ..setUint32(24, 26);
+      final f = write('far-name.ttf', d.buffer.asUint8List());
+
+      final metadata = SfntMetadataReader.readSync(f.path);
+
+      expect(metadata, isNotNull);
+      expect(metadata!.length, lessThan(100));
     });
   });
 }

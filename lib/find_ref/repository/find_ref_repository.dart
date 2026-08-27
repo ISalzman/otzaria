@@ -78,7 +78,7 @@ class FindRefRepository {
 
   /// מזהי הספרים בעלי מבנה AltToc — מאפשר לדלג על שאילתת AltToc פר-ספר
   /// עבור ~95% מהספרים. כשהוא `null` — אין דילוג (התנהגות קודמת).
-  final Future<List<int>> Function()? getAltStructureBookIds;
+  final Future<List<int>?> Function()? getAltStructureBookIds;
 
   /// Injection for testing: returns the category path string for a given bookId.
   /// In production this calls [ReferenceBooksCache.instance.getCategoryPathForBook].
@@ -264,7 +264,9 @@ class FindRefRepository {
     final cached = _altBookIdsCache;
     if (cached != null) return cached;
     try {
-      return _altBookIdsCache = (await fn()).toSet();
+      final ids = await fn();
+      if (ids == null) return null;
+      return _altBookIdsCache = ids.toSet();
     } catch (e) {
       debugPrint('[FindRef] alt book ids fetch failed: $e');
       return null;

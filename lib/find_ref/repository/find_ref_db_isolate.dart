@@ -170,8 +170,9 @@ class FindRefDbIsolate {
 
   /// מזהי הספרים שיש להם מבנה AltToc — מאפשר לדלג על שאילתות AltToc
   /// עבור ~95% מהספרים שאין להם כזה.
-  Future<List<int>> getAltStructureBookIds() async {
+  Future<List<int>?> getAltStructureBookIds() async {
     final res = await _request('altBookIds', const {});
+    if (res == null) return null;
     return (res as List).cast<int>();
   }
 
@@ -418,7 +419,7 @@ void _workerMain(_Bootstrap bootstrap) {
         return null;
       case 'altBookIds':
         final repo = await ensureRepo();
-        if (repo == null) return const <int>[];
+        if (repo == null) return null;
         return repo.getAltStructureBookIds();
       case 'commentators':
         final repo = await ensureRepo();

@@ -1244,18 +1244,21 @@ jobs:
           path: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}.tar.gz
 
       - name: Upload indexed FULL library parts
-        if: true
+        if: matrix.target == 'full' && matrix.arch == 'x86_64'
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-library-full-indexed
           path: indexed-release-parts/*
           compression-level: 0
+          if-no-files-found: error
 
       - name: Upload indexed FULL manifest for installer build
+        if: matrix.target == 'full' && matrix.arch == 'x86_64'
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-library-full-indexed-manifest
           path: indexed-release-parts/*.manifest.json
+          if-no-files-found: error
 
   build_android:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_android)

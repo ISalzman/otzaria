@@ -4236,6 +4236,38 @@ void main() {
       },
     );
 
+    test('כשל פתיחה זמני אינו נשמר כרשימת AltToc ריקה', () async {
+      final altCalls = <int>[];
+      var idsFetches = 0;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) => query == 'שער'
+            ? [
+                _hit(bookId: 1, title: 'שער הכוונות', orderIndex: 1.0),
+                _hit(bookId: 2, title: 'שער הגלגולים', orderIndex: 2.0),
+              ]
+            : const <ReferenceBookHit>[],
+        getTocEntriesForReference: (_, _, {queryTokens}) async => const [],
+        getAltTocEntriesForReference: (bookId, _, {queryTokens}) async {
+          altCalls.add(bookId);
+          return const [];
+        },
+        getAllAltTocFlatEntries: () async => const [],
+        getAltStructureBookIds: () async {
+          idsFetches++;
+          return idsFetches == 1 ? null : [2];
+        },
+      );
+
+      await repo.findRefs('שער הקדמה');
+      await repo.findRefs('שער הקדמה שניה');
+
+      expect(idsFetches, equals(2));
+      expect(altCalls, equals([1, 2, 2]));
+    });
+
     test('כשה-hook חסר — אין דילוג (התנהגות קודמת)', () async {
       final altCalls = <int>[];
       final repo = FindRefRepository(
