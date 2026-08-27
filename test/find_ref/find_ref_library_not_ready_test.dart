@@ -1,12 +1,3 @@
-// issue #990 — "איתור איטי": אחרי יציאה ממצב שינה החיפוש הראשון דיווח
-// "לא נמצא ספר" עד להפעלה מחדש.
-//
-// שני שורשים, ובדיקה לכל אחד:
-//   1. `ReferenceBooksCache.warmUp` סימן קאש **ריק** כ-loaded, ולכן ה-warmUp
-//      הבא יצא מוקדם ולא ניסה שוב.
-//   2. חיפוש על קאש ריק החזיר רשימה ריקה — שאינה ניתנת להבחנה מ"הספר לא
-//      קיים", ולכן המסך הציג "לא הצלחנו לאתר את הספר".
-
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -59,9 +50,8 @@ void main() {
     ReferenceBooksCache.instance.categoriesProviderOverride = null;
   });
 
-  group('ReferenceBooksCache — קאש ריק אינו "מוכן"', () {
-    test('אין ספרים כלל → isLoaded נשאר false', () async {
-      // המצב אחרי יציאה משינה: ה-DB עוד לא עלה, BooksCache חוזר ריק בשקט.
+  group('ReferenceBooksCache — זמינות הספרייה', () {
+    test('מטמון הספרים לא נטען → isLoaded נשאר false', () async {
       final cache = ReferenceBooksCache.instance;
 
       await cache.warmUp();
@@ -69,8 +59,17 @@ void main() {
       expect(
         cache.isLoaded,
         isFalse,
-        reason: 'קאש בלי ספרים אסור שיסומן מוכן — הוא נועל את האיתור',
+        reason: 'כשל זמני אינו נשמר כטעינה מוצלחת',
       );
+    });
+
+    test('ספרייה תקינה וריקה מסומנת כטעונה', () async {
+      final cache = ReferenceBooksCache.instance;
+      BooksCache.instance.setBooksForTesting(const []);
+
+      await cache.warmUp();
+
+      expect(cache.isLoaded, isTrue);
     });
 
     test('ה-DB עולה מאוחר יותר → ה-warmUp הבא מצליח', () async {
