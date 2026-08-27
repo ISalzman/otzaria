@@ -318,7 +318,7 @@ class PluginBridgeDependencies {
   final Future<List<AltTocEntryRow>> Function(int structureId)?
   altTocEntriesProvider;
 
-  /// מקור הקישורים והמפרשים ל-`library.getLinks` / `library.getCommentators`.
+  /// מקור הנתונים של קריאות הקישורים והמפרשים ב-`library.*`.
   /// אופציונלי — ברירת המחדל היא [TextBookRepository] מעל מערכת הקבצים.
   final TextBookRepository? textBookRepository;
 
@@ -384,6 +384,11 @@ class PluginBridgeDependencies {
 /// חלון השורות המרבי לקריאת `library.getLinks` אחת, ותקרת הרשומות בתשובה.
 const int _pluginLinksMaxWindowLines = 200;
 const int _pluginLinksMaxRecords = 2000;
+
+/// כנ"ל ל-`library.getRawLinks`. גבוה יותר כי מקרה השימוש הוא ייצוא ולא חלון
+/// גלילה — אך חסום, כי מסכת עמוסת-מפרשים מממשת עשרות אלפי קישורים בזיכרון.
+const int _pluginRawLinksMaxWindowLines = 1000;
+const int _pluginRawLinksMaxRecords = 10000;
 
 /// מספר הפריטים המרבי בקריאת `library.getLinkContent` אחת.
 const int _pluginLinkContentMaxItems = 25;
@@ -934,6 +939,8 @@ class PluginBridgeAdapter {
         return await _getCommentators(library, args);
       case 'getLinks':
         return await _getLinks(library, args);
+      case 'getRawLinks':
+        return await _getRawLinks(library, args);
       case 'getLinkTargetsSummary':
         return await _getLinkTargetsSummary(library, args);
       case 'getLinkContent':
@@ -1095,6 +1102,108 @@ class PluginBridgeAdapter {
       targetBookTitles: targetTitles,
     );
 
+    final filtered = _filterLinkRecords(
+      links,
+      targetTitles: targetTitles,
+      connectionTypes: connectionTypes,
+      maxRecords: _pluginLinksMaxRecords,
+      // index1/index2 הם 1-based במודל; ה-wire של getLinks 0-based — זו
+      // נקודת ההמרה. getRawLinks נשאר 1-based, כמוסכמת links.json.
+      toRecord: (link, targetTitle) => {
+        'sourceLine': link.index1 - 1,
+        'targetTitle': targetTitle,
+        'targetLine': link.index2 - 1,
+        'targetLineEnd': link.index2End == null ? null : link.index2End! - 1,
+        'targetHeRef': link.heRef,
+        'connectionType': link.connectionType,
+        'isCommentary': LinkTypes.isDependentTextLink(link.connectionType),
+        'targetIsUserBook': link.targetIsUserBook,
+        'targetCategoryId': link.targetCategoryId,
+        if (includeAnchors) ...?_linkAnchorJson(link),
+      },
+    );
+    return {'links': filtered.records, 'truncated': filtered.truncated};
+  }
+
+  /// `library.getRawLinks` — אותם קישורים של [_getLinks], בחמשת המפתחות של
+  /// פורמט `links.json` ובחלון שורות רחב יותר, לייצוא בכמויות.
+  Future<dynamic> _getRawLinks(
+    Library library,
+    Map<String, dynamic> args,
+  ) async {
+    final rawStart = args['startLine'];
+    final rawEnd = args['endLine'];
+    // "שניהם או אף אחד", כמו ב-getCommentators. גבול בודד היה מחזיר בשקט חלון
+    // שלא ביקשו: endLine לבדו נקרא כ-0..endLine ונחתך לתקרת החלון.
+    if ((rawStart == null) != (rawEnd == null)) {
+      throw Exception(
+        'error.invalid_params: startLine and endLine must be given together',
+      );
+    }
+
+    final int startLine;
+    final int endLine;
+    if (rawStart == null) {
+      startLine = 0;
+      endLine = _pluginRawLinksMaxWindowLines - 1;
+    } else {
+      startLine = _requireWireLine(rawStart, 'startLine');
+      endLine = _requireWireLine(rawEnd, 'endLine');
+      if (endLine < startLine) {
+        throw Exception('error.invalid_params: endLine must be >= startLine');
+      }
+      if (endLine - startLine + 1 > _pluginRawLinksMaxWindowLines) {
+        throw Exception(
+          'error.invalid_params: line window must not exceed '
+          '$_pluginRawLinksMaxWindowLines lines',
+        );
+      }
+    }
+
+    final targetTitles = _optionalStringList(
+      args['targetTitles'],
+      'targetTitles',
+    );
+    final connectionTypes = _optionalStringList(
+      args['connectionTypes'],
+      'connectionTypes',
+    );
+
+    final book = _findLinksTextBook(library, args);
+    if (book == null) throw Exception('error.not_found: book not found');
+
+    final links = await _linksRepository.getBookLinksInRange(
+      book,
+      startIndex: startLine,
+      endIndex: endLine,
+      targetBookTitles: targetTitles,
+    );
+
+    final filtered = _filterLinkRecords(
+      links,
+      targetTitles: targetTitles,
+      connectionTypes: connectionTypes,
+      maxRecords: _pluginRawLinksMaxRecords,
+      toRecord: (link, _) => link.toJson(),
+    );
+    return {
+      'links': filtered.records,
+      'truncated': filtered.truncated,
+      'startLine': startLine,
+      'endLine': endLine,
+    };
+  }
+
+  /// הסינון המשותף ל-`getLinks` ול-`getRawLinks`, כדי ששתיהן יחזירו בדיוק את
+  /// אותה קבוצת קישורים ויישארו כאלה. כל קישור שעבר מומר דרך [toRecord].
+  ({List<Map<String, dynamic>> records, bool truncated}) _filterLinkRecords(
+    List<Link> links, {
+    required List<String>? targetTitles,
+    required List<String>? connectionTypes,
+    required int maxRecords,
+    required Map<String, dynamic> Function(Link link, String targetTitle)
+    toRecord,
+  }) {
     final titlesFilter = targetTitles?.toSet();
     final typesFilter = connectionTypes?.map(LinkTypes.normalize).toSet();
     final records = <Map<String, dynamic>>[];
@@ -1107,25 +1216,13 @@ class PluginBridgeAdapter {
           !typesFilter.contains(LinkTypes.canonicalType(link.connectionType))) {
         continue;
       }
-      if (records.length >= _pluginLinksMaxRecords) {
+      if (records.length >= maxRecords) {
         truncated = true;
         break;
       }
-      // index1/index2 הם 1-based במודל; ה-wire כולו 0-based — זו נקודת ההמרה.
-      records.add({
-        'sourceLine': link.index1 - 1,
-        'targetTitle': targetTitle,
-        'targetLine': link.index2 - 1,
-        'targetLineEnd': link.index2End == null ? null : link.index2End! - 1,
-        'targetHeRef': link.heRef,
-        'connectionType': link.connectionType,
-        'isCommentary': LinkTypes.isDependentTextLink(link.connectionType),
-        'targetIsUserBook': link.targetIsUserBook,
-        'targetCategoryId': link.targetCategoryId,
-        if (includeAnchors) ...?_linkAnchorJson(link),
-      });
+      records.add(toRecord(link, targetTitle));
     }
-    return {'links': records, 'truncated': truncated};
+    return (records: records, truncated: truncated);
   }
 
   Map<String, dynamic>? _linkAnchorJson(Link link) {

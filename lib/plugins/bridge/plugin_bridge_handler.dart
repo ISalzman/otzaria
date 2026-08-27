@@ -109,6 +109,14 @@ class PluginBridgeHandler {
     return _handleRpc(stamped, eventSink: eventSink);
   }
 
+  /// ההרשאה שה-runtime אוכף בפועל עבור `domain.action`, לבדיקת התאמה מול
+  /// המפה שהאריזה מסתמכת עליה. `null` = הקריאה אינה מגודרת במניפסט.
+  @visibleForTesting
+  String? requiredPermissionForTesting(String domain, String action) {
+    final entry = methodPermissions['$domain.$action'];
+    return entry == noManifestPermission ? null : entry;
+  }
+
   /// קובע אם קריאת RPC מוחרגת ממגביל הקצב.
   ///
   /// `library.getBookContent` מחולקת מראש ל-chunks של 5000 תווים, כך שטעינת
@@ -328,6 +336,7 @@ class PluginBridgeHandler {
     'library.getLinkContent': 'library.content.read',
     'library.getCommentators': pluginLinksReadPermission,
     'library.getLinks': pluginLinksReadPermission,
+    'library.getRawLinks': pluginLinksReadPermission,
     'library.getLinkTargetsSummary': pluginLinksReadPermission,
     'search.fullText': 'search.fulltext.read',
     'search.query': 'search.fulltext.read',

@@ -432,6 +432,37 @@ export interface GetLinksResult {
   truncated: boolean;
 }
 
+/**
+ * קישור יחיד בחמשת המפתחות של פורמט `links.json`, כפי שמוחזר מ-
+ * `library.getRawLinks`.
+ *
+ * ⚠️ בניגוד לשאר ה-SDK, `line_index_1`/`line_index_2` הם **1-based** — זו
+ * מוסכמת הפורמט. גם שגיאת הכתיב ב-`Conection Type` היא חלק ממנו.
+ *
+ * `start`/`end` מופיעים רק בספרים שהקישורים שלהם נקראים מקובץ ולא מהמסד.
+ */
+export interface RawBookLink {
+  heRef_2: string;
+  line_index_1: number;
+  path_2: string;
+  line_index_2: number;
+  'Conection Type': string;
+  start?: number;
+  end?: number;
+}
+
+export interface GetRawLinksResult {
+  links: RawBookLink[];
+  /** `true` כשהתשובה נחתכה בתקרת 10,000 הרשומות. */
+  truncated: boolean;
+  /**
+   * הטווח שנסרק בפועל (0-based, כולל). `endLine` הוא נקודת המשך תקפה רק
+   * כש-`truncated` הוא `false`.
+   */
+  startLine: number;
+  endLine: number;
+}
+
 export interface LinkTargetSummary {
   targetTitle: string;
   connectionType: string;
@@ -952,7 +983,7 @@ export interface ContextMenuColor {
   /** Safe CSS color: #RRGGBB or #RRGGBBAA. */
   color: string;
   label: string;
-  /** Optional FluentUI icon rendered instead of the color swatch. */
+  /** Optional icon rendered instead of the color swatch. See ICONS.md. */
   icon?: string;
   selected?: boolean;
 }
@@ -968,6 +999,7 @@ export interface ContextMenuItem {
   /** `label` is accepted as a legacy alias. */
   title?: string;
   label?: string;
+  /** Icon name (see ICONS.md). */
   icon?: string;
   /** One or more reader contexts. Children inherit this when omitted; an
    * explicit child value must be a subset of its parent's contexts. */
@@ -1035,7 +1067,7 @@ export interface ToolbarItem {
   type?: 'button' | 'menu' | 'split';
   /** Tooltip on the visible button and label in the overflow menu. */
   title: string;
-  /** FluentUI icon name. Required on top-level items, optional on children. */
+  /** Icon name (see ICONS.md). Required on top-level items, optional on children. */
   icon?: string;
   /** One or more reader contexts. Children inherit this when omitted; an
    * explicit child value must be a subset of its parent's contexts. */
@@ -1482,6 +1514,7 @@ export type OtzariaMethod =
   | 'library.getBookAltToc'
   | 'library.getCommentators'
   | 'library.getLinks'
+  | 'library.getRawLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
   | 'library.getTree'

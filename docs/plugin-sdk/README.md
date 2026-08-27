@@ -162,7 +162,7 @@ my-plugin/
 | `contributes.toolTab.order` | `900` | סדר הופעה בטאבים (מספר נמוך = קודם) |
 | `contributes.toolTab.allowOrderBeforeBuiltIns` | `false` | חריג מפורש שמאפשר לתוסף להתחרות מול הכלים המובנים ולהופיע לפניהם במסך "כלים" |
 | `contributes.toolTab.defaultPinned` | `true` | האם להצמיד אוטומטית בהתקנה |
-| `contributes.toolTab.iconName` | `null` | שם אייקון FluentUI 24px שיוצג בטאב, למשל `"book_24_regular"` |
+| `contributes.toolTab.iconName` | `null` | שם אייקון 24px שיוצג בטאב, מספריית אוצריא או מ-FluentUI, למשל `"book_24_regular"`. ראה [ICONS.md](ICONS.md) |
 | `contributes.publishedDataTypes` | `[]` | סוגי נתונים שהתוסף מפרסם |
 | `contributes.background.entrypoint` | `null` | נתיב יחסי לקובץ HTML קליל (ללא UI) שייטען ברקע במקום ה-`entrypoint` המלא. רלוונטי רק לתוסף עם `app.run_on_startup`. ראה §ריצת רקע. |
 | `contributes.startup` | `null` | פקדים, פריטי תפריט ונתונים שאוצריא טוענת ישירות מהמניפסט בלי להפעיל WebView. |
@@ -174,9 +174,11 @@ my-plugin/
 
 `homepage` הוא שדה אופציונלי, אבל מומלץ מאוד כשמעלים תוסף לחנות. זה המקום לשים קישור לעמוד ה־GitHub של התוסף, לתיעוד, לאתר הפרויקט, או לכל דף רשמי אחר שמסביר על התוסף ונותן למשתמש מקום לקבל מידע נוסף.
 
-`iconName` חייב להיות שם תקני של אייקון FluentUI בגודל 24px, המסתיים ב-`_24_regular` או `_24_filled`. השם נפתר באוצריא ל-`IconData` קבוע באמצעות מפה סטטית, מה שמאפשר ל-Flutter לבצע tree-shaking של פונט האייקונים ב-Release. שמות שאינם נמצאים במפה יוצגו כאייקון פאזל ברירת מחדל.
+`iconName` חייב להיות שם תקני של אייקון בגודל 24px, המסתיים ב-`_24_regular` או `_24_filled`, משתי הספריות שאוצריא מציגה: [ספריית אוצריא](https://github.com/Otzaria/otzaria_icons) (135 אייקונים לעולם התוכן היהודי) ו-[FluentUI System Icons](https://github.com/microsoft/fluentui-system-icons). השם נפתר ל-`IconData` קבוע באמצעות מפות סטטיות — כך ש-Flutter רואה כל אייקון אפשרי כקבוע בזמן בנייה ואינו זקוק ל-codepoint דינמי. שמות שאינם נמצאים באף אחת מהספריות יוצגו כאייקון פאזל ברירת מחדל.
 
-דוגמאות תקפות: `"calendar_24_regular"`, `"calendar_24_filled"`, `"book_24_regular"`, `"settings_24_filled"`.
+שם שקיים בשתי הספריות נפתר לגרסת אוצריא; תחילית `fluent:` או `otzaria:` כופה ספרייה אחת. הרשימה המלאה וכלל ההכרעה: **[ICONS.md](ICONS.md)**.
+
+דוגמאות תקפות: `"calendar_24_regular"`, `"calendar_24_filled"`, `"book_open_tzurat_hadaf_24_regular"`, `"settings_24_filled"`, `"fluent:book_24_regular"`.
 
 `allowOrderBeforeBuiltIns` אינו שדה הרשאות ואינו קשור לאבטחה. זהו דגל מיקום תצוגתי בלבד: כברירת מחדל תוספים מופיעים אחרי הכלים המובנים, גם אם ה-`order` שלהם נמוך יותר. רק אם תוסף מצהיר במפורש על `allowOrderBeforeBuiltIns: true`, המערכת תאפשר לו להופיע לפני כלים מובנים בהתאם ל-`order`.
 
@@ -315,6 +317,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `library.getBookAltToc` | `library.content.read` | `{ bookId, structureKey? }` | `TocEntry[]` |
 | `library.getCommentators` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, grouped? }` | `{ commentators }` או `{ groups }` |
 | `library.getLinks` | `library.links.read` | `{ bookId, categoryId?, startLine, endLine, connectionTypes?, targetTitles?, includeAnchors? }` (חלון עד 200 שורות) | `{ links, truncated }` |
+| `library.getRawLinks` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, connectionTypes?, targetTitles? }` (הטווח חובה יחד; חלון עד 1000 שורות) | `{ links, truncated, startLine, endLine }` — אותם קישורים של `getLinks`, בחמשת המפתחות של `links.json` |
 | `library.getLinkTargetsSummary` | `library.links.read` | `{ bookId, categoryId? }` | `{ targets, maxSourceLine }` |
 | `library.getLinkContent` | `library.content.read` | `{ links }` (עד 25) | `{ items }` |
 
@@ -1284,6 +1287,7 @@ otzaria://open/plugin/<plugin-id>
 | [`API_REFERENCE.md`](API_REFERENCE.md) | תיעוד מלא של כל ה-API — כל method עם פרמטרים, ערכי החזרה ודוגמאות |
 | [`DESIGN_GUIDE.md`](DESIGN_GUIDE.md) | מדריך עיצוב מלא — Color Roles, צורות, טיפוגרפיה, כפתורים, כרטיסים ואנימציות |
 | [`COOKBOOK.md`](COOKBOOK.md) | מתכוני קוד מעשיים — גופן מותאם אישית, אייקונים מאוצריא, וחלונית הגדרות בסגנון "לוח שנה" |
+| [`ICONS.md`](ICONS.md) | ספריות האייקונים הזמינות לתוסף — 135 אייקוני אוצריא, כלל ההכרעה מול פלואנט, והתחיליות `otzaria:` / `fluent:` |
 | [`otzaria_plugin.d.ts`](otzaria_plugin.d.ts) | הגדרות TypeScript עבור האובייקט הגלובלי `Otzaria`. ניתן לכלול בפרויקטי TypeScript של תוספים לקבלת השלמה אוטומטית (autocomplete) ב-IDE. אינו נטען בריצה — האובייקט עצמו מוזרק על-ידי ה-host. |
 
 ---

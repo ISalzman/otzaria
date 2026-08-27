@@ -172,8 +172,9 @@ class PluginManifestValidator {
     if (iconName != null &&
         !PluginManifest.toolTabIconNamePattern.hasMatch(iconName)) {
       errors.add(
-        'toolTab.iconName חייב להיות שם אייקון FluentUI 24px תקין '
-        '(למשל "book_24_regular" או "calendar_24_filled")',
+        'toolTab.iconName חייב להיות שם אייקון FluentUI או אוצריא בגודל 24px '
+        '(למשל "book_24_regular", "calendar_24_filled" או '
+        '"fluent:book_24_regular")',
       );
     }
 

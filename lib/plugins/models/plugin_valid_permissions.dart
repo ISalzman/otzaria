@@ -19,6 +19,7 @@ const Map<String, String> apiCallToPermissionHint = {
   'library.getLinkContent': 'library.content.read',
   'library.getCommentators': pluginLinksReadPermission,
   'library.getLinks': pluginLinksReadPermission,
+  'library.getRawLinks': pluginLinksReadPermission,
   'library.getLinkTargetsSummary': pluginLinksReadPermission,
 
   // app.*

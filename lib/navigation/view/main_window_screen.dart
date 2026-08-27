@@ -94,7 +94,7 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart'
     show buildThemePayloadFromScheme;
 import 'package:otzaria/theme/app_theme_data.dart' show AppThemeData;
@@ -102,6 +102,9 @@ import 'package:otzaria/core/sequential_dialog_queue.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/external_activation_channel.dart';
 import 'package:otzaria/core/external_uri_router.dart';
+import 'package:otzaria/core/info/app_info_service.dart';
+import 'package:otzaria/core/info/view/app_info_dialog.dart';
+import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/plugins/services/reader_location_tracker.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
@@ -170,7 +173,7 @@ class _PinnedToolNavItem {
       toolId: plugin.pluginId,
       label: plugin.manifest.toolTabTitle,
       icon:
-          fluentIconFromName(plugin.manifest.toolTabIconName) ??
+          pluginIconFromName(plugin.manifest.toolTabIconName) ??
           FluentIcons.puzzle_piece_24_regular,
       isPlugin: true,
       plugin: plugin,
@@ -353,6 +356,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   bool _hasInitializedPageController = false;
   bool _isProcessingExternalActivations = false;
+
+  /// מונע הערמת פופאפים כשמגיעים כמה קישורי `info` בזה אחר זה.
+  bool _isShowingInfoReport = false;
   StreamSubscription<FileSystemEvent>? _externalActivationWatchSub;
   StreamSubscription<String>? _externalActivationChannelSub;
   final WindowsJumpListService _jumpListService = WindowsJumpListService();
@@ -1287,6 +1293,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case OpenBookmarksAction():
         showDialog(context: context, builder: (_) => const BookmarksDialog());
         return true;
+      case ShowInfoAction():
+        return await _showInfoReport(action);
       case OpenSettingsTabAction(:final tab):
         context.read<NavigationBloc>().add(
           const NavigateToScreen(Screen.settings),
@@ -1299,6 +1307,43 @@ class MainWindowScreenState extends State<MainWindowScreen>
         }
         return true;
     }
+  }
+
+  /// אוסף את דוח המידע ומציג אותו בפופאפ. אינו מנווט לשום מקום — קישור `info`
+  /// הוא שאילתה, לא יעד.
+  ///
+  /// הדיאלוג נדחה לפוסט-פריים ואינו מומתן: המתנה לסגירתו הייתה חוסמת את
+  /// `_processPendingExternalActivations` (שמתנקז רק בעקבות אירוע קובץ), וכן
+  /// גורמת ל-`Navigator.pop` של הקורא — דיאלוג איתור מקורות — לסגור את
+  /// הפופאפ הזה במקום את עצמו.
+  Future<bool> _showInfoReport(ShowInfoAction action) async {
+    if (_isShowingInfoReport) return true;
+    _isShowingInfoReport = true;
+
+    final pluginState = context.read<PluginSystemBloc>().state;
+    final report = await AppInfoService.collect(
+      action.topic,
+      // מצב שאינו Loaded אינו "אין תוספים" — קוראים מהמרשם, אותו מקור שה-CLI
+      // משתמש בו, כדי ששני הערוצים לא ידווחו מספרים שונים.
+      pluginsLoader: () async => pluginState is PluginSystemLoaded
+          ? pluginState.plugins
+          : await PluginRegistryRepository().getAllPlugins(),
+      errorLimit: action.errorLimit,
+    );
+    if (!mounted) {
+      _isShowingInfoReport = false;
+      return false;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (mounted) await showAppInfoDialog(context, report);
+      } finally {
+        _isShowingInfoReport = false;
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+    return true;
   }
 
   void _runExternalSearch(String query, {SearchMode? mode}) {
@@ -1918,7 +1963,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     focusRepository.findRefSearchController.selection =
         const TextSelection.collapsed(offset: 'בראשית'.length);
     context.read<FindRefBloc>().add(const SearchRefRequested('בראשית'));
-    _handleFindRefOpen(context, closeIfOpen: false);
+    _handleFindRefOpen(
+      context,
+      closeIfOpen: false,
+      transparentBarrier: true,
+    );
     _scheduleBringTourOverlayToFront(remainingFrames: 6);
   }
 
@@ -2002,7 +2051,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       case 'advanced_search':
         return _rectForGlobalKey(tourSearchDialogTargetKey);
       case 'find_ref':
-        return _findRefDialogTourRect();
+        return _rectForGlobalKey(tourFindRefDialogTargetKey);
       case 'reading':
         return _rectForGlobalKey(tourReadingScreenTargetKey);
       case 'tabs':
@@ -2040,7 +2089,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     }
 
     if (step.id == 'find_ref') {
-      final dialogRect = _findRefDialogTourRect();
+      final dialogRect = _rectForGlobalKey(tourFindRefDialogTargetKey);
       final navFindRefRect = _navItemTourRectForScreen(Screen.find);
       return [?dialogRect, ?navFindRefRect];
     }
@@ -2194,22 +2243,6 @@ class MainWindowScreenState extends State<MainWindowScreen>
       rect.top - 4,
       rect.right,
       rect.bottom + 4,
-    );
-  }
-
-  Rect? _findRefDialogTourRect() {
-    final contentRect = _rectForGlobalKey(
-      tourFindRefDialogTargetKey,
-      inflate: 0,
-    );
-    if (contentRect == null) {
-      return null;
-    }
-    return Rect.fromLTRB(
-      contentRect.left - 24,
-      contentRect.top - 80,
-      contentRect.right + 24,
-      contentRect.bottom + 88,
     );
   }
 
@@ -3484,7 +3517,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
-  void _handleFindRefOpen(BuildContext context, {bool closeIfOpen = true}) {
+  /// [transparentBarrier] לסיור המודרך בלבד: הצעד מזרקר גם את פריט הניווט
+  /// שמאחורי הדיאלוג, וההאפלה של הדיאלוג הייתה מכהה אותו.
+  void _handleFindRefOpen(
+    BuildContext context, {
+    bool closeIfOpen = true,
+    bool transparentBarrier = false,
+  }) {
     if (_isFindRefOpen) {
       if (closeIfOpen) {
         Navigator.of(context).pop();
@@ -3499,7 +3538,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     showDialog(
       context: context,
       useRootNavigator: true,
-      barrierColor: Colors.transparent,
+      barrierColor: transparentBarrier ? Colors.transparent : null,
       builder: (context) => FindRefDialog(),
     ).then((_) {
       if (!mounted) return;

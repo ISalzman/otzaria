@@ -7,7 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -525,7 +525,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             args: {'plugin': plugin.name},
           ),
           icon:
-              fluentIconFromName(plugin.manifest.toolTabIconName) ??
+              pluginIconFromName(plugin.manifest.toolTabIconName) ??
               FluentIcons.puzzle_piece_24_regular,
           allShortcuts: _shortcutsList,
         ),
