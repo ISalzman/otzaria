@@ -74,7 +74,7 @@ import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
+import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/plugins/models/plugin_context_menu_item.dart';
 import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_when_condition.dart';
@@ -4918,10 +4918,8 @@ class PluginBridgeAdapter {
                 'version': p.version,
                 'enabled': p.enabled,
                 'showInTools': p.showInTools,
-                // אותה לוגיקת resolution שבה plugin_side_panel משתמש:
-                // fluentIconFromName בודק שהשם קיים במפה. אם לא — fallback לפאזל.
                 'toolTabIconName':
-                    fluentIconFromName(p.manifest.toolTabIconName) != null
+                    pluginIconFromName(p.manifest.toolTabIconName) != null
                     ? p.manifest.toolTabIconName
                     : 'puzzle_piece_24_regular',
               },
