@@ -530,7 +530,7 @@ jobs:
     # נבנה בלי DEVELOPER_MODE ולכן מתעלם מ-WEBKIT_EXEC_PATH — לא ניתן ל-self-contained.
     # לכן מורידים SDK של WPE 2.48.7 שנבנה מהמקור (Otzaria/otzaria-wpe-runtime על
     # bookworm, DEVELOPER_MODE=ON) ל-/opt/wpe-sdk ובונים מולו.
-    if: github.event_name != 'release' && (github.event_name != 'workflow_dispatch' || inputs.build_linux) && (github.event_name != 'pull_request' || (matrix.target == 'rpm' && matrix.arch == 'aarch64'))
+    if: github.event_name != 'release' && (github.event_name != 'workflow_dispatch' || inputs.build_linux)
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
       image: debian:bookworm-slim
