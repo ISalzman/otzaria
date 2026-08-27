@@ -146,15 +146,15 @@ void main() {
         ..setUint8(3, 0x66) // 'f'
         ..setUint32(4, 0x00010000)
         ..setUint32(8, 1)
-        ..setUint32(12, 16)
-        ..setUint32(16, 0x00010000)
-        ..setUint16(20, 1)
-        ..setUint8(28, 0x6E) // 'n'
-        ..setUint8(29, 0x61) // 'a'
-        ..setUint8(30, 0x6D) // 'm'
-        ..setUint8(31, 0x65) // 'e'
-        ..setUint32(36, 100)
-        ..setUint32(40, 26);
+        ..setUint32(12, 32)
+        ..setUint32(32, 0x00010000)
+        ..setUint16(36, 1)
+        ..setUint8(44, 0x6E) // 'n'
+        ..setUint8(45, 0x61) // 'a'
+        ..setUint8(46, 0x6D) // 'm'
+        ..setUint8(47, 0x65) // 'e'
+        ..setUint32(52, 100)
+        ..setUint32(56, 26);
       final f = write('compact.ttc', d.buffer.asUint8List());
 
       final metadata = SfntMetadataReader.readSync(f.path);

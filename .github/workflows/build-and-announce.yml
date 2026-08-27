@@ -530,7 +530,7 @@ jobs:
     # נבנה בלי DEVELOPER_MODE ולכן מתעלם מ-WEBKIT_EXEC_PATH — לא ניתן ל-self-contained.
     # לכן מורידים SDK של WPE 2.48.7 שנבנה מהמקור (Otzaria/otzaria-wpe-runtime על
     # bookworm, DEVELOPER_MODE=ON) ל-/opt/wpe-sdk ובונים מולו.
-    if: github.event_name != 'release' && (github.event_name != 'workflow_dispatch' || inputs.build_linux)
+    if: github.event_name != 'release' && (github.event_name != 'workflow_dispatch' || inputs.build_linux) && (github.event_name != 'pull_request' || (matrix.target == 'rpm' && matrix.arch == 'aarch64'))
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
       image: debian:bookworm-slim
@@ -1124,7 +1124,7 @@ jobs:
           path: ${{ steps.find_packages.outputs.deb_file }}
           
       - name: Upload Linux RPM package
-        if: matrix.target == 'rpm' && steps.find_packages.outputs.rpm_file != ''
+        if: github.event_name != 'pull_request' && matrix.target == 'rpm' && steps.find_packages.outputs.rpm_file != ''
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-linux-rpm${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
