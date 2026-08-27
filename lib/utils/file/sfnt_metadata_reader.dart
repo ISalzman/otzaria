@@ -9,7 +9,7 @@ import 'sfnt_metadata_reader_stub.dart'
 class SfntMetadataReader {
   SfntMetadataReader._();
 
-  /// מחזיר buffer שבו ההיסטים זהים לקובץ המקורי, אך רק טווחי הטבלאות
-  /// הדרושות מלאים בנתונים (השאר אפסים). `null` כשהקובץ אינו קריא או פגום.
+  /// מחזיר קובץ SFNT קומפקטי עם טבלאות הזיהוי בלבד והיסטים שנכתבו מחדש.
+  /// מחזיר `null` כשהקובץ אינו קריא או פגום.
   static Uint8List? readSync(String path) => impl.readMetadataSync(path);
 }
