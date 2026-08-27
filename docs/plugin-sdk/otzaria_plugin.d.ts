@@ -97,11 +97,15 @@ export interface ColorScheme {
 }
 
 export interface Typography {
+  /** גופן הקריאה — לטקסט הספר/המסמך בלבד. אסור להחיל על הממשק. */
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
   commentatorsFontFamily: string;
   commentatorsFontSize: number;
+  /** גופן הממשק — כפתורים, תפריטים, שדות. נשאר חד בגדלים קטנים.
+   *  קיים מ-0.9.97; במארח ישן חסר — שמרו fallback ב-CSS. */
+  uiFontFamily?: string;
 }
 
 export interface ThemePayload {

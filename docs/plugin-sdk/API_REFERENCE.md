@@ -294,11 +294,12 @@ const { data } = await Otzaria.call('app.getTheme');
 //     ... (תפקידי הצבע העיקריים — ראה otzaria_plugin.d.ts → ColorScheme)
 //   },
 //   typography: {
-//     fontFamily:             "Frank Ruhl Libre",
+//     fontFamily:             "FrankRuhlCLM",   // גופן הקריאה — לטקסט הספר בלבד
 //     fontSize:               25,    // לפי הגדרת המשתמש — אל תניח ערך קבוע!
 //     lineHeight:             1.5,
-//     commentatorsFontFamily: "Shofar",
+//     commentatorsFontFamily: "NotoRashiHebrew",
 //     commentatorsFontSize:   22,
+//     uiFontFamily:           "Rubik",           // גופן הממשק — כפתורים ותפריטים
 //   }
 // }
 ```
@@ -308,7 +309,7 @@ const { data } = await Otzaria.call('app.getTheme');
 
 > **`surfaceContainerHigh` — רקע פס הכותרת שלך.** התוסף נפתח כטאב קריאה ואוצריא אינה מציירת כותרת מעל ה-WebView; שם התוסף חייב להופיע בפס עליון קבוע בצבע הזה, כדי שיתיישר עם הסרגל העליון של מסכי הספרים. ראה [DESIGN\_GUIDE.md § סרגל כותרת התוסף](DESIGN_GUIDE.md#סרגל-כותרת-התוסף-top-bar).
 
-> **גופנים מוטמעים אוטומטית:** השמות שמגיעים ב-`typography.fontFamily` ו-`typography.commentatorsFontFamily` (כגון `FrankRuhlCLM`, `Shofar`, `NotoRashiHebrew`) נטענים אוטומטית ב-WebView של התוסף כ-`@font-face` עוד לפני ה-`plugin.boot`. אין צורך לארוז את קבצי הגופן בתוסף — מספיק להפנות לשם שהתקבל ב-CSS: `font-family: 'FrankRuhlCLM', serif;`. אם המשתמש בחר גופן מערכת (לא מובנה), ההזרקה האוטומטית מדלגת עליו וה-WebView ייפול חזרה ל-fallback של מערכת ההפעלה.
+> **גופנים מוטמעים אוטומטית:** כל הגופנים המובנים של אוצריא (`FrankRuhlCLM`, `TaameyDavidCLM`, `Shofar`, `NotoRashiHebrew`, `KeterYG`, `NotoSerifHebrew`, `Tinos`, `Rubik`, `TaameyAshkenaz`) נטענים ב-WebView של התוסף כ-`@font-face` עוד לפני ה-`plugin.boot`, ואיתם גם גופן מערכת שהמשתמש בחר בהגדרות. אין צורך לארוז קבצי גופן — מספיק `font-family: 'FrankRuhlCLM', serif;`. כל משפחה נשלחת עם ה-face הבולד האמיתי שלה (או עם טווח משקלים בגופן משתנה), כך ש-`font-weight: bold` מקבל ציור אות אמיתי ולא עיבוי מלאכותי. לממשק עצמו השתמש ב-`uiFontFamily` ולא בגופן הקריאה — גופן ספרים בכפתור בן 12px נראה מטושטש.
 
 ### `app.getLocale`
 מחזיר את שפת הממשק שבחר המשתמש (או שפת המערכת, בזיהוי אוטומטי) ואת כיוון
