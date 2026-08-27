@@ -1248,6 +1248,14 @@ void main() {
       expect(output, contains('<a id="יעד"></a>היעד'));
     });
 
+    test('עוגן inline כפול נפלט פעם אחת', () {
+      final output = _joined(
+        '<p><a href="#יעד">קפוץ</a><span id="יעד">א</span></p>'
+        '<p id="יעד">ב</p>',
+      );
+      expect('<a id="יעד"></a>'.allMatches(output), hasLength(1));
+    });
+
     test('id שאיש אינו מפנה אליו אינו מנפח את הפלט', () {
       expect(_convert('<p id="עיצובי">טקסט</p>'), ['טקסט']);
     });

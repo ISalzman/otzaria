@@ -271,7 +271,7 @@ class _HtmlContext {
     _pendingAnchors.clear();
     return anchors
         .where(emittedAnchors.add)
-        .map((a) => '<a id="$a"></a>')
+        .map((a) => '<a id="${escapeHtmlAttribute(a)}"></a>')
         .join();
   }
 }
@@ -1464,7 +1464,9 @@ void _renderInlineNode(
   if (_emitFootnote(node, tag, ctx, buffer, depth: depth)) return;
 
   final anchor = _anchorFor(node, ctx);
-  if (anchor != null) buffer.write('<a id="$anchor"></a>');
+  if (anchor != null && ctx.emittedAnchors.add(anchor)) {
+    buffer.write('<a id="${escapeHtmlAttribute(anchor)}"></a>');
+  }
 
   final formatting = _inlineFormatting(node, tag, declarations);
   buffer.write(formatting.open);
@@ -1802,7 +1804,7 @@ String? _anchorFor(dom.Element e, _HtmlContext ctx) {
     // בלי שורות, תמונה שנפסלה) — ואז העוגן היה "נגנב" ואף אלמנט אחר עם
     // אותו `id` לא היה מקבל אותו. התוצאה: קישור פנימי מת.
     if (ctx.emittedAnchors.contains(raw)) return null;
-    return escapeHtmlAttribute(raw);
+    return raw;
   }
   return null;
 }
