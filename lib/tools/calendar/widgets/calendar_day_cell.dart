@@ -214,9 +214,7 @@ class DayExtras extends StatelessWidget {
   final bool compact;
   final List<String> additionalInfoLines;
 
-  /// האם התא נבחר — אז הוא צבוע ב-primaryContainer, וכל שורות הטקסט בתוכו
-  /// חייבות לעבור ל-onPrimaryContainer (בערכות monochrome כמו "לבן" הרקע
-  /// כהה במיוחד וכתב onSurface היה נעלם עליו).
+  /// האם התא נבחר, ולכן התוכן משתמש ב-onPrimaryContainer.
   final bool isSelected;
 
   const DayExtras({
@@ -257,12 +255,15 @@ class DayExtras extends StatelessWidget {
       );
     }
 
-    final brightness = Theme.of(context).brightness;
     var remainingSlots = maxVisibleItems - visibleItems.length;
     for (final e in events.take(remainingSlots.clamp(0, maxVisibleItems))) {
-      final dotColor =
-          CalendarEventColors.colorForIndex(e.displayColorIndex, brightness) ??
-          cs.onSurfaceVariant;
+      final dotColor = isSelected
+          ? cs.onPrimaryContainer
+          : CalendarEventColors.colorForIndex(
+                  e.displayColorIndex,
+                  Theme.of(context).brightness,
+                ) ??
+                cs.onSurfaceVariant;
       visibleItems.add(
         Text.rich(
           TextSpan(
@@ -278,9 +279,7 @@ class DayExtras extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: compact ? 9 : 10,
-            color: isSelected
-                ? cs.onPrimaryContainer.withValues(alpha: 0.85)
-                : cs.onSurfaceVariant,
+            color: isSelected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
           ),
         ),
       );

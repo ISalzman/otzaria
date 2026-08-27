@@ -319,10 +319,7 @@ class RaisedMarkerOverlay extends SingleChildRenderObjectWidget {
   /// רקע הציור של אות מפרש פעילה ([RaisedMarker.active]).
   final Color? activeBackground;
 
-  /// צבע הכתב של אות מפרש פעילה — מנוגד ל-[activeBackground] (בד"כ
-  /// onPrimaryContainer). בערכות monochrome (כמו "לבן") primaryContainer עלול
-  /// להיות כהה, ולכן הכתב חייב להיגזר ממנו ולא מצבע הקישור. null — נופל
-  /// לצבע הקישור.
+  /// צבע האות הפעילה; ברירת המחדל היא onPrimaryContainer.
   final Color? activeForeground;
 
   const RaisedMarkerOverlay({
@@ -533,8 +530,6 @@ class RenderRaisedMarkerOverlay extends RenderProxyBox {
           fontWeight: FontWeight.bold,
           fontVariations: AppFonts.boldFontVariations(style.fontFamily),
           backgroundColor: _activeBackground,
-          // אות פעילה על רקע כהה חייבת כתב בהיר (onPrimaryContainer),
-          // אחרת היא נבלעת ברקע בערכות monochrome כמו "לבן".
           color: _activeForeground ?? style.color,
         );
       } else if (marker.active) {
@@ -585,10 +580,9 @@ class RenderRaisedMarkerOverlay extends RenderProxyBox {
     super.paint(context, offset);
     if (child == null || _markers.isEmpty) return;
     for (final placement in _resolvePlacements()) {
-      _painterFor(placement.marker).paint(
-        context.canvas,
-        offset + placement.paintRect.topLeft,
-      );
+      _painterFor(
+        placement.marker,
+      ).paint(context.canvas, offset + placement.paintRect.topLeft);
     }
   }
 
