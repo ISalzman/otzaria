@@ -318,7 +318,6 @@ void main() {
       // plugin.backgroundDone הוא ניהול-עצמי של מופע הרקע — נטול הרשאה בכוונה.
       // feedback.report מגודר בדיאלוג האישור של המשתמש, לא ע"י manifest.
       // פעולות המרחב הפרטי מגודרות בשורש הפרטי של התוסף, לא ע"י manifest.
-      // plugin.listInstalled זמין לכל תוסף ללא הרשאה — מידע ציבורי.
       const noManifestPermission = {
         'fs.extractZip',
         'fs.deleteFile',
@@ -331,7 +330,6 @@ void main() {
         'plugin.backgroundDone',
         'feedback.report',
         'feedback.hasReporterEmail',
-        'plugin.listInstalled',
       };
       final missing = PluginExtendedValidator.knownApiMethods
           .where((m) => !noManifestPermission.contains(m))

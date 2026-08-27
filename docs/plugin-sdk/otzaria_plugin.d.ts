@@ -1584,8 +1584,6 @@ export type OtzariaMethod =
   | 'plugin.openOther'
   /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
   | 'plugin.requestInstall'
-  /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
-  | 'plugin.listInstalled'
   | 'plugin.backgroundDone'
   | 'plugin.listInstalled'
   | 'reader.addContextMenuItem'

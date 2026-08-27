@@ -179,8 +179,8 @@ const Set<String> _knownApiMethods = {
   'shortcut.create',
 };
 
-/// APIs קיימות בתוספים אך אינן מתועדות פומבית — לא נאזהיר עליהן.
-/// שתיהן מיועדות לתוסף חנות התוספים בלבד; ב-d.ts הן מסומנות `@internal`.
+/// API פנימי שקיים בתוספים אך אינו מתועד פומבית, ולכן לא נאזהיר עליו.
+/// השיטה מיועדת לחנות התוספים וב-d.ts מסומנת `@internal`.
 const Set<String> _knownUndocumentedMethods = {
   'plugin.requestInstall',
 };
@@ -273,6 +273,7 @@ const Map<String, String> _methodRequiredPermission = {
   'navigation.goTo': 'navigation.write',
   'plugin.openSelf': 'navigation.write',
   'plugin.openOther': pluginOpenOtherPermission,
+  'plugin.listInstalled': 'app.info.read',
   'notes.list': 'notes.read',
   'notes.getBookNotesSummary': 'notes.read',
   'notes.add': 'notes.write',
