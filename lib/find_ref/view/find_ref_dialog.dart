@@ -686,6 +686,13 @@ class _FindRefDialogState extends State<FindRefDialog> {
     focusRepository.findRefSearchFocusNode.requestFocus();
   }
 
+  void _retrySearch() {
+    final query = context.read<FocusRepository>().findRefSearchController.text;
+    context.read<FindRefBloc>().add(
+      SearchRefRequested(query, includePersonalBooks: _includePersonalBooks),
+    );
+  }
+
   /// שומר כאיתור אחרון את השאילתה שהניבה את התוצאות שנפתחו — ולא את מה
   /// שמוקלד בשדה, שעשוי כבר להיות טקסט חדש שטרם רץ.
   void _rememberCurrentQuery() {
@@ -992,6 +999,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
         if (state is FindRefLoading) {
           return const _DelayedLoader();
         }
+        if (state is FindRefNotReady) {
+          return _buildNotReadyState();
+        }
         if (state is FindRefError) {
           return _buildErrorState(state.message);
         }
@@ -1247,6 +1257,21 @@ class _FindRefDialogState extends State<FindRefDialog> {
               onPressed: () => _openTextSearch(query),
               icon: FluentIcons.search_24_regular,
             ),
+    );
+  }
+
+  Widget _buildNotReadyState() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildCenteredState(
+      icon: FluentIcons.library_24_regular,
+      iconColor: colorScheme.onSurfaceVariant,
+      title: 'הספרייה עדיין נטענת',
+      message: 'האיתור יהיה זמין בעוד רגע',
+      action: ActionButton.recommended(
+        text: 'נסה שוב',
+        onPressed: _retrySearch,
+        icon: FluentIcons.arrow_clockwise_24_regular,
+      ),
     );
   }
 
