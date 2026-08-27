@@ -137,5 +137,33 @@ void main() {
       expect(metadata, isNotNull);
       expect(metadata!.length, lessThan(100));
     });
+
+    test('TTC קומפקטי משכתב היסטים לכותרת ול-directory', () {
+      final d = ByteData(126)
+        ..setUint8(0, 0x74) // 't'
+        ..setUint8(1, 0x74) // 't'
+        ..setUint8(2, 0x63) // 'c'
+        ..setUint8(3, 0x66) // 'f'
+        ..setUint32(4, 0x00010000)
+        ..setUint32(8, 1)
+        ..setUint32(12, 16)
+        ..setUint32(16, 0x00010000)
+        ..setUint16(20, 1)
+        ..setUint8(28, 0x6E) // 'n'
+        ..setUint8(29, 0x61) // 'a'
+        ..setUint8(30, 0x6D) // 'm'
+        ..setUint8(31, 0x65) // 'e'
+        ..setUint32(36, 100)
+        ..setUint32(40, 26);
+      final f = write('compact.ttc', d.buffer.asUint8List());
+
+      final metadata = SfntMetadataReader.readSync(f.path);
+
+      expect(metadata, isNotNull);
+      final view = ByteData.sublistView(metadata!);
+      expect(metadata.length, 70);
+      expect(view.getUint32(12), 16);
+      expect(view.getUint32(36), 44);
+    });
   });
 }
