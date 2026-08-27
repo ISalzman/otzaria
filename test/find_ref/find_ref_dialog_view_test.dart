@@ -38,6 +38,9 @@ class _FakeRepository implements FindRefRepository {
   ) async => const [];
 
   @override
+  Future<void> prewarmGlobalAltToc() async {}
+
+  @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
