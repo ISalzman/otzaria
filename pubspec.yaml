@@ -119,6 +119,16 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_inappwebview
       ref: master
       path: flutter_inappwebview_platform_interface
+  flutter_inappwebview_ios:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_ios
+  flutter_inappwebview_macos:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_macos
 
 flutter_launcher_icons:
   android: true
