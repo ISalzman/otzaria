@@ -141,6 +141,18 @@ const pluginNetworkAccessPermission = 'network.access';
 /// שנבחרת היא גבול ההסכמה של פעולות הקבצים (fs.extractZip / fs.deleteFile).
 const pluginFolderAccessPermission = 'fs.folder_access';
 
+/// קריאת לוח ההעתקה של מערכת ההפעלה מתוך ה-WebView של התוסף
+/// (`navigator.clipboard.read` / `readText`).
+///
+/// אינה הרשאת RPC אלא הרשאת **דפדפן**: היא נשאלת ב-`onPermissionRequest` של
+/// ה-WebView ולא דרך גשר התוסף, ולכן אין לה רשומה ב-[apiCallToPermissionHint]
+/// ולא ב-`methodPermissions` — אין קריאת `clipboard.*` לגשר.
+///
+/// כבויה כברירת מחדל: הלוח הוא נתון של המשתמש **מכל התוכנות שפתוחות אצלו**,
+/// ולא של התוסף. הכתיבה ללוח אינה כלולה כאן — Chromium מתיר אותה תחת מחווה של
+/// המשתמש בלי לבקש הרשאה.
+const pluginClipboardReadPermission = 'clipboard.read';
+
 /// הרשאות בסיס — מוענקות לכל תוסף אוטומטית, בלי הצהרה במניפסט ובלי הצגה
 /// למשתמש. הצהרה קיימת נסבלת לתאימות לאחור (הוולידטור רק ממליץ להסירה).
 const pluginBaselinePermissions = <String>{
@@ -254,6 +266,10 @@ const pluginValidPermissions = <String>[
 
   /// יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל
   'ui.create_shortcut',
+
+  // ===== לוח העתקה =====
+  /// קריאת תוכן לוח ההעתקה של מערכת ההפעלה מתוך דף התוסף
+  pluginClipboardReadPermission,
 
   // ===== קבצים אישיים =====
   /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').

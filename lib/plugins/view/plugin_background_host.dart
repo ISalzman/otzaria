@@ -29,6 +29,7 @@ import 'package:otzaria/plugins/plugin_constants.dart';
 import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
+import 'package:otzaria/plugins/services/plugin_webview_permission_gate.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
@@ -788,6 +789,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         buildPluginDropGuardScript(),
       ]),
       onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
+      // אותו שער שבטאב: מופע רקע אינו פחות מוגבל מדף שהמשתמש רואה.
+      onPermissionRequest: (controller, request) =>
+          PluginWebViewPermissionGate.respond(
+            plugin: widget.plugin,
+            request: request,
+            registry: _pluginRegistryRepository,
+          ),
       onWebViewCreated: (controller) {
         try {
           _controller = controller;

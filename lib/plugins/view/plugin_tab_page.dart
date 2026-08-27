@@ -46,6 +46,7 @@ import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
+import 'package:otzaria/plugins/services/plugin_webview_permission_gate.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 
@@ -644,6 +645,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
         }
       },
       onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
+      // בלי ה-callback הזה המימוש ב-Windows דוחה כל בקשת הרשאה בשקט. ההסבר
+      // המלא — PluginWebViewPermissionGate.
+      onPermissionRequest: (controller, request) =>
+          PluginWebViewPermissionGate.respond(
+            plugin: widget.plugin,
+            request: request,
+            registry: _pluginRegistryRepository,
+          ),
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         try {
           final uri = navigationAction.request.url;
