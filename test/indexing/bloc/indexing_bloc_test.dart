@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
@@ -365,6 +367,34 @@ void main() {
     );
 
     blocTest<IndexingBloc, IndexingState>(
+      'כשל בהחלפת המנוע אינו משנה את המצב המוצג',
+      seed: () => inProgress,
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()..economyError = StateError('engine failed'),
+      ),
+      act: (bloc) => bloc.add(const SetEconomyIndexing(true)),
+      expect: () => <IndexingState>[],
+      verify: (bloc) => expect(repositoryOf(bloc).economyValues, [true]),
+    );
+
+    test('בקשות מצב חסכוני ממתינות לקודמת להן', () async {
+      final gate = Completer<void>();
+      final repository = _FakeIndexingRepository()..economyGate = gate;
+      final bloc = _FakeIndexingBloc(repository);
+
+      bloc
+        ..add(const SetEconomyIndexing(true))
+        ..add(const SetEconomyIndexing(false));
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.economyValues, [true]);
+
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.economyValues, [true, false]);
+      await bloc.close();
+    });
+
+    blocTest<IndexingBloc, IndexingState>(
       'המצב החסכוני מחוץ לריצה נשמר ומשתקף בריצה הבאה',
       build: _FakeIndexingBloc.new,
       act: (bloc) async {
@@ -442,6 +472,8 @@ class _FakeIndexingRepository extends IndexingRepository {
   int pauseCalls = 0;
   int resumeCalls = 0;
   final economyValues = <bool>[];
+  Object? economyError;
+  Completer<void>? economyGate;
   int clearCalls = 0;
   int awaitReadyCalls = 0;
 
@@ -534,6 +566,9 @@ class _FakeIndexingRepository extends IndexingRepository {
   @override
   Future<void> setEconomyIndexing(bool enabled) async {
     economyValues.add(enabled);
+    await economyGate?.future;
+    final error = economyError;
+    if (error != null) throw error;
   }
 
   @override

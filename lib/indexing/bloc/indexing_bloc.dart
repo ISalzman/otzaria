@@ -28,7 +28,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     on<CancelIndexing>(_onCancelIndexing);
     on<PauseIndexing>(_onPauseIndexing);
     on<ResumeIndexing>(_onResumeIndexing);
-    on<SetEconomyIndexing>(_onSetEconomyIndexing);
+    on<SetEconomyIndexing>(_onSetEconomyIndexing, transformer: sequential());
     on<ActualIndexingStarted>(_onActualIndexingStarted);
     on<UpdateIndexingProgress>(_onUpdateProgress);
     on<ClearIndex>(_onEraseIndex);
@@ -382,10 +382,10 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     Emitter<IndexingState> emit,
   ) async {
     if (_isEconomy == event.enabled) return;
-    _isEconomy = event.enabled;
-    _reemitProgressFlags(emit);
     try {
       await _repository.setEconomyIndexing(event.enabled);
+      _isEconomy = event.enabled;
+      _reemitProgressFlags(emit);
     } catch (e) {
       debugPrint('⚠️ החלפת מצב אינדוקס חסכוני נכשלה: $e');
     }

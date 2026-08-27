@@ -67,9 +67,9 @@ class IndexingRepository {
   /// מצב חסכוני: תקציב writer מוקטן במנוע — פחות threads ופחות זיכרון.
   /// חל מיד גם על אינדוקס שרץ כעת, ונשמר לריצות הבאות באותה הפעלה.
   Future<void> setEconomyIndexing(bool enabled) async {
-    _economyIndexing = enabled;
     final engine = await _tantivyDataProvider.engine;
     await engine.setEconomyIndexing(enabled: enabled);
+    _economyIndexing = enabled;
   }
 
   Future<void> _waitWhilePaused() async {

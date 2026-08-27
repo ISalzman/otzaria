@@ -78,6 +78,19 @@ void main() {
       expect(repository.isEconomyIndexing, isFalse);
       expect(provider.engineInstance.economyCalls, [true, false]);
     });
+
+    test('כשל במנוע אינו משנה את המצב שנשמר', () async {
+      final provider = _PauseProbeProvider()
+        ..engineInstance.economyError = StateError('engine failed');
+      final repository = IndexingRepository(provider);
+
+      await expectLater(
+        repository.setEconomyIndexing(true),
+        throwsStateError,
+      );
+
+      expect(repository.isEconomyIndexing, isFalse);
+    });
   });
 }
 
@@ -101,10 +114,13 @@ class _PauseProbeProvider implements TantivyDataProvider {
 
 class _EconomyRecordingEngine implements SearchEngine {
   final economyCalls = <bool>[];
+  Object? economyError;
 
   @override
   Future<void> setEconomyIndexing({required bool enabled}) async {
     economyCalls.add(enabled);
+    final error = economyError;
+    if (error != null) throw error;
   }
 
   @override
