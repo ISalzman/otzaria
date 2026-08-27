@@ -83,13 +83,21 @@ void main() {
 
     test('הטבלה תואמת את מפת ההרשאות של הוולידטור', () {
       final validator = PluginExtendedValidator.methodRequiredPermissions;
-      final mismatched = <String>[];
+      final mismatched = <String>{};
       for (final entry in validator.entries) {
         // network.* נאכפת באדפטר לפי היעד, ולכן היא noManifestPermission בגשר.
         if (entry.key.startsWith('network.')) continue;
         if (table[entry.key] != entry.value) mismatched.add(entry.key);
       }
-      expect(mismatched, isEmpty);
+      for (final entry in table.entries) {
+        if (entry.value == PluginBridgeHandler.noManifestPermission ||
+            entry.key == 'plugin.requestInstall' ||
+            entry.key.startsWith('network.')) {
+          continue;
+        }
+        if (validator[entry.key] != entry.value) mismatched.add(entry.key);
+      }
+      expect(mismatched.toList()..sort(), isEmpty);
     });
 
     test('כל ערך בטבלה הוא הרשאה מוכרת או הסמן המפורש', () {

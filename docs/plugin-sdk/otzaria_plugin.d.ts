@@ -1333,6 +1333,15 @@ export interface DatabaseBatchQueryResult {
   results: DatabaseQueryResult[];
 }
 
+export interface InstalledPlugin {
+  pluginId: string;
+  name: string;
+  version: string;
+  enabled: boolean;
+  showInTools: boolean;
+  toolTabIconName: string;
+}
+
 /** Where a `shortcut.create` deep-link shortcut is placed. `startMenu` is Windows-only. */
 export type ShortcutLocation = 'desktop' | 'startMenu';
 
@@ -1575,9 +1584,8 @@ export type OtzariaMethod =
   | 'plugin.openOther'
   /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
   | 'plugin.requestInstall'
-  /** @internal חנות התוספים בלבד — לא מתועד ב-API_REFERENCE ואינו חוזה יציב. */
-  | 'plugin.listInstalled'
   | 'plugin.backgroundDone'
+  | 'plugin.listInstalled'
   | 'reader.addContextMenuItem'
   | 'reader.removeContextMenuItem'
   | 'reader.updateContextMenuItem'
@@ -1613,6 +1621,12 @@ export interface OtzariaGlobal {
     method: 'reader.openSearchTab',
     payload: OpenSearchTabArgs
   ): Promise<OtzariaResponse<boolean>>;
+
+  /** מחזיר רשימה של כל התוספים המותקנים. */
+  call(
+    method: 'plugin.listInstalled',
+    payload?: Record<string, unknown>
+  ): Promise<OtzariaResponse<InstalledPlugin[]>>;
 
   /**
    * Call a Host API method.

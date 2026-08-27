@@ -182,6 +182,7 @@ if (response.success) {
 | `plugin.openSelf` | 0.9.96 |
 | `plugin.openOther` | 0.9.97 |
 | `plugin.backgroundDone` | 0.9.97 |
+| `plugin.listInstalled` | 0.9.97 |
 | `notes.list` | 0.9.89 |
 | `notes.getBookNotesSummary` | 0.9.89 |
 | `notes.add` | 0.9.89 |
@@ -1616,6 +1617,59 @@ Otzaria.on('plugin.boot', async (payload) => {
   לשעון הרגיל במקום לקטוע אותה.
 - אין צורך לקרוא לזה אחרי טיפול באירוע רגיל — שעון חוסר-הפעילות מטפל בזה;
   זה קיצור לעבודות חד-פעמיות שמסיימות מהר.
+
+---
+
+### `plugin.listInstalled`
+**הרשאה:** `app.info.read` (הרשאת בסיס; אין צורך להצהיר עליה במניפסט) · **מגרסה:** 0.9.97
+
+מחזיר רשימה של כל התוספים המותקנים כרגע באוצריא.
+
+```javascript
+const { data } = await Otzaria.call('plugin.listInstalled');
+for (const plugin of data) {
+  console.log(plugin.name, plugin.version);
+}
+```
+
+**תוצאה לדוגמה:**
+
+```json
+[
+  {
+    "pluginId": "example-plugin",
+    "name": "Example Plugin",
+    "version": "1.0.0",
+    "enabled": true,
+    "showInTools": true,
+    "toolTabIconName": "book_24_regular"
+  }
+]
+```
+
+**שדות התוצאה:**
+
+| שדה | סוג | תיאור |
+|-----|-----|--------|
+| `pluginId` | `string` | המזהה הייחודי של התוסף. |
+| `name` | `string` | שם התוסף. |
+| `version` | `string` | גרסת התוסף. |
+| `enabled` | `boolean` | האם התוסף מופעל. |
+| `showInTools` | `boolean` | האם התוסף מוגדר להצגה באזור הכלים של אוצריא. זהו ערך ההגדרה של התוסף ואינו מציין האם התוסף פתוח כרגע. |
+| `toolTabIconName` | `string` | שם אייקון ה-Fluent שבו התוסף משתמש באזור הכלים. אם שם האייקון שהוגדר בתוסף אינו אייקון Fluent מוכר (או שלא הוגדר), מוחזר `puzzle_piece_24_regular`. |
+
+**Fallback של האייקון:**
+
+- אייקון מוכר → מוחזר שם האייקון המקורי.
+- אייקון לא מוכר או לא מוגדר → מוחזר `puzzle_piece_24_regular`.
+
+**סדר הרשימה:**
+
+הרשימה ממוינת לפי שלושה קריטריונים, כולם עולים ודטרמיניסטיים:
+
+1. **סדר התצוגה** — תוסף שהמשתמש סידר ידנית (גרירה) מקבל ערך ≥ 1000; תוסף שלא סודר ידנית מקבל את הערך שהוצהר ב-`toolTab.order` במניפסט (ברירת מחדל: 900). ערך נמוך יותר = מוקדם יותר.
+2. **תאריך התקנה** (tie-breaker) — כשלשניים אותו ערך סדר, הישן מגיע ראשון.
+3. **`pluginId`** (tie-breaker אחרון) — סדר לקסיקוגרפי; מבטיח תוצאה זהה בכל הרצה.
 
 ---
 

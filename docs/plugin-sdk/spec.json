@@ -140,6 +140,7 @@
     "notifications.sendSystem",
     "notifications.showInApp",
     "plugin.backgroundDone",
+    "plugin.listInstalled",
     "plugin.openOther",
     "plugin.openSelf",
     "publishedData.listOwn",
@@ -193,7 +194,6 @@
     "ui.showWarning"
   ],
   "undocumentedApiMethods": [
-    "plugin.listInstalled",
     "plugin.requestInstall"
   ],
   "methodPermissions": {
@@ -387,6 +387,7 @@
     "notifications.sendSystem": "0.9.89",
     "notifications.showInApp": "0.9.89",
     "plugin.backgroundDone": "0.9.97",
+    "plugin.listInstalled": "0.9.97",
     "plugin.openOther": "0.9.97",
     "plugin.openSelf": "0.9.96",
     "publishedData.listOwn": "0.9.89",
