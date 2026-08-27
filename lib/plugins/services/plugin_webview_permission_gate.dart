@@ -122,11 +122,13 @@ class PluginWebViewPermissionGate {
     if (resources.isEmpty) return const _Decision.denied(null);
 
     for (final resource in resources) {
-      final required = requiredPermissionFor(resource);
-      if (required == null) return _Decision.denied(resource.toValue());
-      if (!declaresPermission(plugin, required)) return _Decision.denied(required);
-      if (await registry.getPermission(plugin.pluginId, required) != true) {
-        return _Decision.denied(required);
+      final permission = requiredPermissionFor(resource);
+      if (permission == null) return _Decision.denied(resource.toValue());
+      if (!declaresPermission(plugin, permission)) {
+        return _Decision.denied(permission);
+      }
+      if (await registry.getPermission(plugin.pluginId, permission) != true) {
+        return _Decision.denied(permission);
       }
     }
     return const _Decision.granted();
