@@ -142,6 +142,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
       keywords: ['סימניה', 'הוסף סימניה', 'ctrl+b', 'מקלדת'],
     ),
     SettingsSearchEntry(
+      id: 'shortcuts.book.group_bookmark',
+      title: 'קיצור לשמירת סימניה מרוכזת',
+      subtitle: 'שמירת סימניה אחת לכל הספרים הפתוחים',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['סימניה מרוכזת', 'סימניות', 'ספרים פתוחים', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
       id: 'shortcuts.book.note',
       title: 'קיצור להוספת הערה',
       subtitle: 'הוספת הערה אישית',
@@ -679,6 +687,12 @@ class ShortcutsSettingsTab extends StatelessWidget {
               settingKey: 'key-shortcut-add-bookmark',
               label: context.settingsText('הוסף סימניה'),
               icon: FluentIcons.bookmark_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: 'key-shortcut-save-group-bookmark',
+              label: context.settingsText('שמור סימניה לכל הספרים הפתוחים'),
+              icon: FluentIcons.bookmark_multiple_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(

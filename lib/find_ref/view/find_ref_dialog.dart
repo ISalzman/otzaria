@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
@@ -229,6 +231,12 @@ class _FindRefDialogState extends State<FindRefDialog> {
     _suggestions = _suggestionsAreRecent
         ? recent.take(_suggestionCount).toList()
         : _rotatedExamples();
+
+    // חימום מוקדם של קאש ה-AltToc הגלובלי בתוך ה-worker — כדי שהחיפוש
+    // הראשון שנופל ל-fallback לא ימתין לבנייתו (~1-2 שניות).
+    unawaited(
+      context.read<FindRefBloc>().findRefRepository.prewarmGlobalAltToc(),
+    );
 
     // בחירת הטקסט הקיים כאשר חוזרים למסך
     // מבוצע מיד ולא ב-postFrameCallback כדי למנוע אובדן פוקוס באנדרואיד

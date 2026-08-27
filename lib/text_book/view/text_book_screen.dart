@@ -37,6 +37,8 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/library/services/parallel_editions_service.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -252,6 +254,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   late final ValueNotifier<double> _sidebarWidth;
   late final StreamSubscription<SettingsState> _settingsSub;
+  StreamSubscription<LibraryState>? _libraryReloadSub;
   int? _sidebarTabIndex; // אינדקס הכרטיסייה בסרגל הצדי
   // עוקב אחרי מצב הפאנל הצדדי כדי לבקש פוקוס לשדה החיפוש רק ברגע שהפאנל
   // נפתח (false→true) ולא בכל rebuild - אחרת היה גונב פוקוס מתוכן הספר.
@@ -772,6 +775,26 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // ה-PDF (_hasPdfBook), לא על התוכן — לכן נדחה ל-_resolveCompanionPdf
     // שנקרא ברגע שהספר נטען (ראו ה-listener של ה-BlocConsumer).
 
+    // רענון ספרייה (למשל אחרי התקנת קבצי התלמוד) עשוי להוסיף מהדורות
+    // מקבילות — מאתרים מחדש כדי שהכפתור יופיע בלי לפתוח את הטאב מחדש.
+    // עץ בלי LibraryBloc (בדיקות widget) פשוט מוותר על הרענון.
+    try {
+      final libraryBloc = context.read<LibraryBloc>();
+      var previousLibraryState = libraryBloc.state;
+      _libraryReloadSub = libraryBloc.stream.listen((libState) {
+        final completed = LibraryState.reloadCompleted(
+          previousLibraryState,
+          libState,
+        );
+        previousLibraryState = libState;
+        if (!completed || !mounted) return;
+        _hasResolvedCompanionPdf = false;
+        _resolveCompanionPdf();
+      });
+    } on ProviderNotFoundException {
+      // בדיקות widget בונות את המסך בלי LibraryBloc.
+    }
+
     final pendingSidebarTab = Settings.getValue<int>(
       'key-sidebar-tab-index-pending',
     );
@@ -1056,6 +1079,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     _pageShapeSidebarTabNotifier.dispose();
     _pageShapeOpenSettingsNotifier.dispose();
     _settingsSub.cancel();
+    _libraryReloadSub?.cancel();
     super.dispose();
   }
 

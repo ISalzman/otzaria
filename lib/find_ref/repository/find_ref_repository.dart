@@ -63,6 +63,23 @@ class FindRefRepository {
   /// `reference` (נתיב מלא יחסי לספר), `segment`, `level`, `dbLineId`.
   final Future<List<Map<String, dynamic>>> Function()? getAllAltTocFlatEntries;
 
+  /// מסלול הייצור של ה-fallback הגלובלי: סינון קאש ה-AltToc השטוח בתוך
+  /// ה-worker isolate, שמחזיר רק את ההתאמות. כשהוא `null` (בדיקות / אין
+  /// isolate) — נופלים למסלול המקומי דרך [getAllAltTocFlatEntries].
+  final Future<List<Map<String, dynamic>>> Function(
+    List<String> queryTokens, {
+    int? maxRefTokens,
+  })?
+  searchAltTocFlatEntries;
+
+  /// בנייה מוקדמת של קאש ה-AltToc בתוך ה-worker (ראה
+  /// [FindRefDbIsolate.prewarmAltTocFlat]); נקרא ברקע בפתיחת הדיאלוג.
+  final Future<void> Function()? prewarmAltTocFlatEntries;
+
+  /// מזהי הספרים בעלי מבנה AltToc — מאפשר לדלג על שאילתת AltToc פר-ספר
+  /// עבור ~95% מהספרים. כשהוא `null` — אין דילוג (התנהגות קודמת).
+  final Future<List<int>?> Function()? getAltStructureBookIds;
+
   /// Injection for testing: returns the category path string for a given bookId.
   /// In production this calls [ReferenceBooksCache.instance.getCategoryPathForBook].
   final Future<String> Function(int bookId)? getCategoryPath;
@@ -157,6 +174,9 @@ class FindRefRepository {
   /// השדה נשמר ברמת ה-instance של [FindRefRepository] (singleton באפליקציה).
   List<AltTocFlatEntry>? _altTocFlatCache;
 
+  /// קאש מזהי הספרים בעלי מבנה AltToc (ראה [getAltStructureBookIds]).
+  Set<int>? _altBookIdsCache;
+
   /// קאש בזיכרון של רשימת הספרים האישיים (user_books.db). נטענת פעם אחת
   /// בחיפוש הראשון עם `includePersonalBooks`, ומשרתת חיפושים הבאים בלי
   /// שאילתת DB לכל הקלדה. מתאפסת ב-[clearCaches] (רענון/החלפת ספרייה או
@@ -171,6 +191,9 @@ class FindRefRepository {
     this.getTocEntriesForReference,
     this.getAltTocEntriesForReference,
     this.getAllAltTocFlatEntries,
+    this.searchAltTocFlatEntries,
+    this.prewarmAltTocFlatEntries,
+    this.getAltStructureBookIds,
     this.getCategoryPath,
     this.getPdfOutlineEntries,
     this.getAllUserBooks,
@@ -215,7 +238,39 @@ class FindRefRepository {
   void clearCaches() {
     _commentatorsCache.clear();
     _altTocFlatCache = null;
+    _altBookIdsCache = null;
     _userBooksCache = null;
+  }
+
+  /// חימום מוקדם (best-effort) של קאש ה-AltToc הגלובלי, כדי שהחיפוש הראשון
+  /// שנופל ל-fallback לא ישלם את מחיר הבנייה. נקרא ברקע בפתיחת הדיאלוג.
+  Future<void> prewarmGlobalAltToc() async {
+    try {
+      final fn = prewarmAltTocFlatEntries;
+      if (fn != null) {
+        await fn();
+      } else if (searchAltTocFlatEntries == null) {
+        await _getAltTocFlatCache();
+      }
+    } catch (e) {
+      debugPrint('[FindRef] AltToc prewarm failed: $e');
+    }
+  }
+
+  /// מזהי הספרים בעלי AltToc, מהקאש; `null` = אין מידע (אין לדלג על כלום).
+  Future<Set<int>?> _getAltBookIds() async {
+    final fn = getAltStructureBookIds;
+    if (fn == null) return null;
+    final cached = _altBookIdsCache;
+    if (cached != null) return cached;
+    try {
+      final ids = await fn();
+      if (ids == null) return null;
+      return _altBookIdsCache = ids.toSet();
+    } catch (e) {
+      debugPrint('[FindRef] alt book ids fetch failed: $e');
+      return null;
+    }
   }
 
   /// מחזיר את רשימת הספרים האישיים מהקאש, וטוען אותה פעם אחת אם עוד לא נטענה.
@@ -293,6 +348,75 @@ class FindRefRepository {
       // (rebuild של DB, lock רגעי), שאילתה הבאה תקבל ניסיון חוזר.
       // אם הכשל קבוע, ההשהיה ב-await יחזור ולא מקסים נזק.
       return const [];
+    }
+  }
+
+  /// מוסיף ל-[results] ערכי AltToc מהקאש הגלובלי שכל טוקני השאילתה מופיעים
+  /// בהם. [maxRefTokens] מגביל את אורך הערך — במילה אחת רק כותרות קצרות
+  /// ("נח", "פרשת נח") נכללות, כדי לא להציף בצאצאים ("נח עליה ב").
+  Future<void> _addGlobalAltTocMatches(
+    List<DbReferenceResult> results,
+    List<String> queryTokens, {
+    int? maxRefTokens,
+  }) async {
+    try {
+      // מסלול הייצור: הסינון רץ בתוך ה-worker isolate ומחזיר רק התאמות —
+      // 61k+ הערכים והנרמול שלהם לא חוצים את גבול ה-isolate ולא חוסמים UI.
+      final searchFn = searchAltTocFlatEntries;
+      if (searchFn != null) {
+        final rows = await searchFn(queryTokens, maxRefTokens: maxRefTokens);
+        for (final r in rows) {
+          final bookTitle = r['bookTitle'] as String;
+          results.add(
+            DbReferenceResult(
+              title: bookTitle,
+              reference: _qualifyAltTocReference(
+                bookTitle,
+                r['reference'] as String,
+              ),
+              segment: r['segment'] as int? ?? 0,
+              orderIndex: (r['bookOrderIndex'] as num?)?.toDouble() ?? 999.0,
+              tocLevel: r['level'] as int? ?? 0,
+              isAltToc: true,
+              bookId: r['bookId'] as int,
+              sourceLineId: r['dbLineId'] as int? ?? 0,
+            ),
+          );
+        }
+        return;
+      }
+
+      final flat = await _getAltTocFlatCache();
+      for (final entry in flat) {
+        // Require that ALL query tokens appear in the matched reference.
+        // Prevents partial matches from unrelated books (e.g., "הפטרת נח"
+        // matching only "נח" when the query is "נח עליה ב").
+        if (!altTocFlatMatches(
+          entry.refTokens,
+          queryTokens,
+          maxRefTokens: maxRefTokens,
+        )) {
+          continue;
+        }
+
+        results.add(
+          DbReferenceResult(
+            title: entry.bookTitle,
+            reference: _qualifyAltTocReference(
+              entry.bookTitle,
+              entry.reference,
+            ),
+            segment: entry.segment,
+            orderIndex: entry.bookOrderIndex,
+            tocLevel: entry.level,
+            isAltToc: true,
+            bookId: entry.bookId,
+            sourceLineId: entry.dbLineId,
+          ),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[FindRef] Global AltToc fallback failed: $e\n$st');
     }
   }
 
@@ -560,7 +684,8 @@ class FindRefRepository {
 
     final results = <DbReferenceResult>[];
 
-    // Single-word query: do NOT search TOC at all.
+    // Single-word query: skip per-book TOC search, but still match short
+    // AltToc headings globally ("נח" / "פרשת האזינו") — issue #983.
     if (queryTokens.length == 1) {
       for (final hit in bookHits) {
         final isPdf = hit.fileType == 'pdf';
@@ -576,6 +701,10 @@ class FindRefRepository {
             bookId: hit.bookId,
           ),
         );
+      }
+
+      if (queryTokens.first.length >= 2) {
+        await _addGlobalAltTocMatches(results, queryTokens, maxRefTokens: 2);
       }
 
       if (includePersonalBooks) {
@@ -611,6 +740,10 @@ class FindRefRepository {
     // בלי אקרוניום → הרא"ש על ב"ב במקום ~138). ממיינים כך שספרים שכותרתם
     // מכסה יותר מטוקני-השאילתה (מעבר לאותיות-מיקום בודדות) ייבדקו קודם.
     bookHits = _prioritizeByTitleCoverage(bookHits, queryTokens, maxTocLookups);
+
+    // רק ~5% מהספרים הם בעלי מבנה AltToc — הסט מאפשר לדלג על שאילתת AltToc
+    // עבור כל השאר (חוסך עד ~50 קריאות isolate בכל הקלדה).
+    final altBookIds = await _getAltBookIds();
 
     for (final hit in bookHits) {
       final bookId = hit.bookId;
@@ -763,11 +896,14 @@ class FindRefRepository {
         // הספר ב-prefix כדי שהתצוגה תזהה לאיזה ספר התוצאה שייכת — תוצאת
         // AltToc "הלכות בבא קמא" בתוך "הלכות גדולות" הוצגה לבדה ללא רמז
         // לזהות הספר. ה-prefix מתבצע רק אם אין כפילות — defensive guard.
-        final altTocEntries = await fetchAltTocEntries(
-          bookId,
-          title,
-          queryTokens: remainingTokens,
-        );
+        final altTocEntries =
+            (altBookIds != null && !altBookIds.contains(bookId))
+            ? const <Map<String, dynamic>>[]
+            : await fetchAltTocEntries(
+                bookId,
+                title,
+                queryTokens: remainingTokens,
+              );
         for (final entry in altTocEntries) {
           final ref = entry['reference'] as String;
           // Require that all remaining tokens appear in the reference.
@@ -818,35 +954,7 @@ class FindRefRepository {
       (r) => r.isAltToc || r.tocLevel >= 2,
     );
     if (!perBookHasSpecificMatch && queryTokens.length >= 2) {
-      try {
-        final flat = await _getAltTocFlatCache();
-        for (final entry in flat) {
-          // Require that ALL query tokens appear in the matched reference.
-          // Prevents partial matches from unrelated books (e.g., "הפטרת נח"
-          // matching only "נח" when the query is "נח עליה ב").
-          if (!queryTokens.every((qt) => entry.refTokens.contains(qt))) {
-            continue;
-          }
-
-          results.add(
-            DbReferenceResult(
-              title: entry.bookTitle,
-              reference: _qualifyAltTocReference(
-                entry.bookTitle,
-                entry.reference,
-              ),
-              segment: entry.segment,
-              orderIndex: entry.bookOrderIndex,
-              tocLevel: entry.level,
-              isAltToc: true,
-              bookId: entry.bookId,
-              sourceLineId: entry.dbLineId,
-            ),
-          );
-        }
-      } catch (e, st) {
-        debugPrint('[FindRef] Global AltToc fallback failed: $e\n$st');
-      }
+      await _addGlobalAltTocMatches(results, queryTokens);
     }
 
     if (includePersonalBooks) {

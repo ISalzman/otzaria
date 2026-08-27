@@ -114,6 +114,21 @@ dependency_overrides:
       url: https://github.com/Otzaria/flutter_inappwebview
       ref: master
       path: flutter_inappwebview_windows
+  flutter_inappwebview_platform_interface:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_platform_interface
+  flutter_inappwebview_ios:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_ios
+  flutter_inappwebview_macos:
+    git:
+      url: https://github.com/Otzaria/flutter_inappwebview
+      ref: master
+      path: flutter_inappwebview_macos
 
 flutter_launcher_icons:
   android: true
@@ -141,6 +156,7 @@ dev_dependencies:
   analyzer: ^12.1.0
   # לטעינת ספריית המנוע הנייטיבית בטסטים (ExternalLibrary).
   flutter_rust_bridge: ^2.12.0
+  fake_async: ^1.3.3
   flutter_test:
     sdk: flutter
   integration_test:
