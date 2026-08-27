@@ -639,7 +639,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           InstallRemotePluginRequested(
             downloadUrl,
             reportContext: reportContext,
-                      storeOnly: true,
+            storeOnly: true,
           ),
         );
       },
@@ -789,7 +789,6 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         buildPluginDropGuardScript(),
       ]),
       onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
-      // אותו שער שבטאב: מופע רקע אינו פחות מוגבל מדף שהמשתמש רואה.
       onPermissionRequest: (controller, request) =>
           PluginWebViewPermissionGate.respond(
             plugin: widget.plugin,

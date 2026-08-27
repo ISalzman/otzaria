@@ -288,7 +288,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           InstallRemotePluginRequested(
             downloadUrl,
             reportContext: reportContext,
-                      storeOnly: true,
+            storeOnly: true,
           ),
         );
       },
@@ -645,8 +645,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
         }
       },
       onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
-      // בלי ה-callback הזה המימוש ב-Windows דוחה כל בקשת הרשאה בשקט. ההסבר
-      // המלא — PluginWebViewPermissionGate.
       onPermissionRequest: (controller, request) =>
           PluginWebViewPermissionGate.respond(
             plugin: widget.plugin,
