@@ -141,6 +141,9 @@ const pluginNetworkAccessPermission = 'network.access';
 /// שנבחרת היא גבול ההסכמה של פעולות הקבצים (fs.extractZip / fs.deleteFile).
 const pluginFolderAccessPermission = 'fs.folder_access';
 
+/// הרשאת דפדפן לקריאת לוח ההעתקה מתוך WebView של התוסף; כבויה כברירת מחדל.
+const pluginClipboardReadPermission = 'clipboard.read';
+
 /// הרשאות בסיס — מוענקות לכל תוסף אוטומטית, בלי הצהרה במניפסט ובלי הצגה
 /// למשתמש. הצהרה קיימת נסבלת לתאימות לאחור (הוולידטור רק ממליץ להסירה).
 const pluginBaselinePermissions = <String>{
@@ -254,6 +257,10 @@ const pluginValidPermissions = <String>[
 
   /// יצירת קיצור דרך (deep-link) בשולחן העבודה / תפריט ההתחל
   'ui.create_shortcut',
+
+  // ===== לוח העתקה =====
+  /// קריאת תוכן לוח ההעתקה של מערכת ההפעלה מתוך דף התוסף
+  pluginClipboardReadPermission,
 
   // ===== קבצים אישיים =====
   /// בחירה וקריאה של קבצים אישיים שהמשתמש בוחר במפורש (PDF/טקסט וכו').

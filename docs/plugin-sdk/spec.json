@@ -12,6 +12,7 @@
     "bookmarks.read",
     "bookmarks.write",
     "calendar.read",
+    "clipboard.read",
     "database.read",
     "events.subscribe:calendar.city_changed",
     "events.subscribe:calendar.date_changed",
