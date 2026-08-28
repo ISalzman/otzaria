@@ -4,6 +4,7 @@ import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_handler.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
 import 'package:otzaria/plugins/models/plugin_manifest.dart';
+import 'package:otzaria/plugins/models/plugin_valid_permissions.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/plugins/services/plugin_extended_validator.dart';
 
@@ -99,6 +100,21 @@ void main() {
       }
       expect(mismatched.toList()..sort(), isEmpty);
     });
+
+    test(
+      'apiCallsWithoutPermission תואמת בדיוק את רישומי noManifestPermission',
+      () {
+        final fromTable =
+            table.entries
+                .where(
+                  (e) => e.value == PluginBridgeHandler.noManifestPermission,
+                )
+                .map((e) => e.key)
+                .toList()
+              ..sort();
+        expect(apiCallsWithoutPermission.toList()..sort(), fromTable);
+      },
+    );
 
     test('כל ערך בטבלה הוא הרשאה מוכרת או הסמן המפורש', () {
       for (final entry in table.entries) {

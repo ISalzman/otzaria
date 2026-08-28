@@ -96,6 +96,31 @@ const Map<String, String> apiCallToPermissionHint = {
   'reader.setActiveCommentators': 'reader.open',
   'reader.scrollToSection': 'reader.open',
   'reader.getHighlightCapabilities': 'reader.open',
+
+  // network.* — הגישה נבדקת באדפטר לפי היעד; יעד localhost בלבד דורש
+  // `network.localhost` במקום `network.access`.
+  'network.fetch': 'network.access',
+  'network.fetchStream': 'network.access',
+  'network.download': 'network.access',
+};
+
+/// קריאות API שאינן דורשות הרשאת manifest — הגבול נאכף במקום אחר. הצהרה
+/// עליהן ב-`permissions` שוברת התקנה, ולכן מקבלת הודעת שגיאה משלה.
+const Set<String> apiCallsWithoutPermission = {
+  'feedback.report',
+  'feedback.hasReporterEmail',
+  'network.fetch',
+  'network.fetchStream',
+  'network.download',
+  'fs.extractZip',
+  'fs.deleteFile',
+  'fs.writeFile',
+  'fs.readFile',
+  'fs.listDir',
+  'fs.makeDir',
+  'fs.deleteEntry',
+  'fs.stat',
+  'plugin.backgroundDone',
 };
 
 /// קריאת רשימת הסימניות של המשתמש. נפרדת מהכתיבה, בעקבות התקדים של

@@ -122,6 +122,11 @@ class PluginManifestValidator {
         final hint = apiCallToPermissionHint[perm];
         if (hint != null) {
           errors.add('הרשאה לא חוקית: "$perm". האם התכוונת ל-"$hint"?');
+        } else if (apiCallsWithoutPermission.contains(perm)) {
+          errors.add(
+            '"$perm" היא קריאת API ולא שם של הרשאה, והיא אינה דורשת הרשאה '
+            'במניפסט. הסירו אותה מ-permissions — הקריאה עצמה תמשיך לעבוד',
+          );
         } else {
           errors.add('הרשאה לא חוקית שנדרשת על ידי התוסף: $perm');
         }
