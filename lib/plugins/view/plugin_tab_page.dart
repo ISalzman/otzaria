@@ -118,6 +118,24 @@ const String _sdkStub = r'''
 
 /// הגדרות ה-WebView של טאב תוסף.
 @visibleForTesting
+/// האם אירוע כשל היצירה שייך לטאב הזה.
+///
+/// ה-stream של הפלאגין גלובלי, וכמה WebViewים נוצרים במקביל (מארח הרקע
+/// וטאבים) — בלי התאמה לפי [failureUrl] כשל של מופע אחד היה מחליף במסך
+/// שגיאה טאב שיצירתו עדיין עשויה להצליח. אירוע בלי URL (מקור לא ידוע)
+/// עדיין מטופל, כדי לא לאבד את החיווי שבגללו נוסף המנגנון.
+@visibleForTesting
+bool shouldHandleCreationFailure({
+  required String? failureUrl,
+  required String expectedUrl,
+  required bool isCreated,
+  required bool alreadyFailed,
+}) {
+  if (isCreated || alreadyFailed) return false;
+  if (failureUrl == null || failureUrl.isEmpty) return true;
+  return failureUrl == expectedUrl;
+}
+
 InAppWebViewSettings buildPluginTabWebViewSettings({
   required bool isDevelopment,
 }) {
@@ -428,10 +446,14 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
   }
 
-  /// האירוע גלובלי ולא נושא מזהה תוסף — רק טאב שעדיין ממתין ליצירה מגיב לו,
-  /// כדי שכשל בטאב אחד לא יחליף תוסף שכבר רץ במסך שגיאה.
   void _onCreationFailure(WindowsWebViewCreationFailure failure) {
-    if (!mounted || webViewController != null || _creationFailure != null) {
+    if (!mounted ||
+        !shouldHandleCreationFailure(
+          failureUrl: failure.requestedUrl,
+          expectedUrl: _expectedCreationUrl(),
+          isCreated: webViewController != null,
+          alreadyFailed: _creationFailure != null,
+        )) {
       return;
     }
     _creationWatchdog?.cancel();
@@ -447,6 +469,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
     );
     setState(() => _creationFailure = failure.error.toString());
   }
+
+  /// ה-URL שהטאב הזה ביקש ליצור — מפתח ההתאמה מול אירוע כשל.
+  String _expectedCreationUrl() => widget.plugin.isLocalhostDev
+      ? WebUri(localHtmlPath).toString()
+      : WebUri.uri(Uri.file(localHtmlPath)).toString();
 
   Future<void> _ensurePackageInfo() async {
     _cachedPackageInfo ??= await PackageInfo.fromPlatform();
