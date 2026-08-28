@@ -34,6 +34,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/misc/middle_click_autoscroll.dart';
 import 'package:otzaria/plugins/view/plugin_dev_error_view.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
@@ -1149,7 +1150,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
       },
     );
 
-    return webView;
+    // ה-WebView מגיב ללחצן האמצעי בעצמו (Chromium מפעיל שם גלילה אוטומטית
+    // משלו), ובלי החסימה היו נפתחים שני עוגנים במקביל.
+    return AutoScrollBarrier(child: webView);
   }
 
   static bool get _needsWebViewPrerequisites {

@@ -486,6 +486,25 @@ NavPanelTabHeader(                 // tabs only — the pin is NOT here
 - Adding a per-panel list `padding` for the tree — the inset lives in `NavTreeGroupCard` / `NavTreeHeader` (`kNavTreeSideInset`), and lists use `kNavTreeListPadding`
 - A per-panel search field built from `RtlTextField` + `InputDecoration` — every field inside a nav panel is `OtzariaSearchField`
 
+### 11. Middle-click autoscroll — already global, never re-implement
+
+`MiddleClickAutoScroll` wraps the whole app once in `lib/app.dart`, so **every** scrollable area already supports middle-click autoscroll: lists, reading screens, the library, settings, dialogs, and the PDF viewer. It works by dispatching synthetic wheel events down the hit-test path captured on click, so anything that reacts to the mouse wheel reacts to it too — no per-screen wiring.
+
+**Never:**
+- Add a per-screen middle-click scroll handler, an anchor overlay, or an autoscroll timer — the global widget already covers it
+- Wrap a screen in a second `MiddleClickAutoScroll`
+
+**Do** wrap a region in `AutoScrollBarrier` when middle-click there is reserved for something else (a tab that closes on middle-click):
+```dart
+import 'package:otzaria/widgets/misc/middle_click_autoscroll.dart';
+
+Listener(
+  onPointerDown: (e) { if (e.buttons == kMiddleMouseButton) closeTab(tab); },
+  child: AutoScrollBarrier(child: tabContent),
+)
+```
+A barrier anywhere in the hit-test path suppresses autoscroll for that click.
+
 ## Code Guidelines
 
 ### RTL Support (Critical!)
@@ -778,6 +797,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | רוחב עמודת הטקסט (בסיס אזור הקריאה, יציב בפתיחת חלונית) | `test/widgets/layout/reading_area_width_test.dart` |
 | Scrollable list scrollbar | `test/widgets/scrollable_positioned_list_scrollbar_test.dart` |
 | Smooth mouse-wheel scrolling | `test/widgets/smooth_wheel_scroll_test.dart` |
+| גלילה אוטומטית בלחיצת גלגל העכבר | `test/widgets/middle_click_autoscroll_test.dart` |
 | Smart text render settings | `test/widgets/smart_text/render_settings_test.dart` |
 | Smart text ↔ plugin section sync gate | `test/widgets/smart_text/smart_text_section_sync_gate_test.dart` |
 | קיבוע מדויק של גובה השורה (סימוני הערות, `<big>`) בשלושת מסלולי הרינדור | `test/widgets/smart_text/exact_line_height_test.dart` |
