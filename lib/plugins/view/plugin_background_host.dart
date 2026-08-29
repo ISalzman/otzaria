@@ -835,6 +835,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           generation: widget.activationGeneration,
         );
       },
+      // מופע רקע אינו מציג ממשק ואין בו לחיצת משתמש — otzaria:// לעולם אינו
+      // מגיע למטפל הפרוטוקול של המערכת.
+      onLaunchingExternalUriScheme: (controller, request) async =>
+          LaunchingExternalUriSchemeResponse(cancel: true),
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         // רשת דפדפנית ישירה (fetch רגיל) אינה עוברת ב-Bridge — נספרת
         // כפעילות כאן, כדי שהכיבוי העצל לא יקטע בקשה ארוכה.

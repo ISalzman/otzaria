@@ -54,6 +54,10 @@ class PluginManifest {
   /// מקורות מסד נתונים שהתוסף מצהיר עליהם (מהשדה contributes.databaseSources)
   final List<Map<String, dynamic>> databaseSources;
 
+  /// contributes.autoLinkify — הפיכת כתובות `otzaria://` שנכתבו כטקסט רגיל
+  /// בדף התוסף לקישורים לחיצים, כולל תוכן שנוסף אחרי הטעינה.
+  final bool autoLinkify;
+
   /// תרומות עלייה דקלרטיביות (contributes.startup) — מופעלות ע"י Flutter
   /// בעליית התוכנה בלי מנוע JS. דורשות הרשאת `app.startup_contributions`.
   final PluginStartupContributions? startup;
@@ -84,6 +88,7 @@ class PluginManifest {
     required this.publishedDataTypes,
     this.databaseSources = const [],
     this.startup,
+    this.autoLinkify = false,
   });
 
   factory PluginManifest.fromJson(Map<String, dynamic> json) {
@@ -142,6 +147,7 @@ class PluginManifest {
       startup: startup == null
           ? null
           : PluginStartupContributions.fromJson(startup),
+      autoLinkify: contributes['autoLinkify'] as bool? ?? false,
     );
   }
 
@@ -178,6 +184,7 @@ class PluginManifest {
         if (backgroundEntrypoint != null)
           'background': {'entrypoint': backgroundEntrypoint},
         if (startup != null) 'startup': startup!.toJson(),
+        if (autoLinkify) 'autoLinkify': true,
       },
     };
   }
