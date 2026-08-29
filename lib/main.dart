@@ -68,6 +68,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
@@ -662,6 +663,7 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredAutoBackup());
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
+  unawaited(_runDeferredDataRootWritabilityWarning());
 
   // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
@@ -733,6 +735,19 @@ Future<void> _runDeferredAutoBackup() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Automatic backup', error, stackTrace);
   }
+}
+
+/// אזהרה על שורש נתונים חסום-לכתיבה. ממתינה לחשיפת החלון — דיאלוג לפניה
+/// אינו מוצג כי עדיין אין Navigator.
+Future<void> _runDeferredDataRootWritabilityWarning() async {
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(
+      const Duration(seconds: 15),
+    );
+  } on TimeoutException {
+    // ממשיכים בכל זאת — אם ה-Navigator עדיין חסר, ההצגה תדולג בשקט.
+  }
+  await DataRootWritabilityWarning.showIfNeeded();
 }
 
 Future<void> _runDeferredProtocolRegistration() async {
