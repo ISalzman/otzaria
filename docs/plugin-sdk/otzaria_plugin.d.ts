@@ -1554,6 +1554,8 @@ export type OtzariaMethod =
   | 'ui.showConfirm'
   | 'ui.showWarning'
   | 'ui.pickFolder'
+  | 'ui.print'
+  | 'ui.exportPdf'
   | 'fs.extractZip'
   | 'fs.deleteFile'
   | 'fs.pickUserFile'

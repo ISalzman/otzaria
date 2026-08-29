@@ -133,6 +133,13 @@ class PluginRuntimeDispatcher {
   InAppWebViewController? _backgroundControllerOf(String pluginId) =>
       _instances[_keyOf(pluginId, PluginInstanceIds.background)]?.controller;
 
+  /// ה-WebView של מופע ריצה מסוים, או `null` אם אינו חי. משמש קריאות RPC
+  /// שפועלות על התוכן המוצג עצמו (כמו `ui.print`).
+  InAppWebViewController? controllerOf(
+    String pluginId, {
+    PluginInstanceId instanceId = PluginInstanceIds.defaultForeground,
+  }) => _instances[_keyOf(pluginId, instanceId)]?.controller;
+
   /// המופע הקדמי ה"ראשי" של [pluginId]: הגלוי כרגע, ואם אין גלוי —
   /// האחרון שנרשם (סדר ההכנסה באינדקס).
   PluginInstanceKey? _primaryForegroundKey(String pluginId) {

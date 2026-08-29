@@ -140,6 +140,9 @@ class PluginBridgeHandler {
       // error.timeout בזמן שהמשתמש בוחר תיקייה, והתוסף היה חושב שהשמירה נכשלה
       // אחרי שהקובץ כבר נכתב.
       method == 'fs.commitUserFileWrite' ||
+      // דיאלוג ההדפסה של המערכת ממתין לבחירת מדפסת ללא הגבלת זמן.
+      method == 'ui.print' ||
+      method == 'ui.exportPdf' ||
       method == 'feedback.report';
 
   Future<dynamic> _handleRpc(
@@ -382,6 +385,10 @@ class PluginBridgeHandler {
     'ui.showWarning': 'ui.feedback',
     // בחירת תיקייה היא גבול ההסכמה של פעולות ה-fs — הרשאה נפרדת.
     'ui.pickFolder': pluginFolderAccessPermission,
+    // דיאלוג ההדפסה של המערכת הוא שער ההסכמה, והתוכן הוא דף התוסף עצמו.
+    'ui.print': noManifestPermission,
+    // דיאלוג „שמור בשם” הוא שער ההסכמה; הנתיב אינו מגיע מה-JS.
+    'ui.exportPdf': noManifestPermission,
     'storage.get': 'plugin.storage.read',
     'storage.list': 'plugin.storage.read',
     'storage.set': 'plugin.storage.write',

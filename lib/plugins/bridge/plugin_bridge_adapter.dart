@@ -81,6 +81,8 @@ import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:otzaria/plugins/services/plugin_print_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/models/plugin_network_allowlist.dart';
 import 'package:otzaria/plugins/services/plugin_network_access_resolver.dart';
@@ -408,6 +410,25 @@ class PluginBridgeDependencies {
   })?
   dispatchEventToPlugin;
 
+  /// מדפיס את הדף של מופע התוסף (`ui.print`). אופציונלי — ברירת המחדל היא
+  /// [PluginPrintService] מעל ה-WebView הרשום; קיים להזרקה בבדיקות.
+  final Future<bool> Function(
+    String pluginId,
+    String instanceId, {
+    required String jobName,
+  })?
+  printPluginPage;
+
+  /// מייצר PDF מהדף של מופע התוסף (`ui.exportPdf`). אופציונלי — ברירת המחדל
+  /// היא [PluginPrintService] מעל ה-WebView הרשום; קיים להזרקה בבדיקות.
+  final Future<Uint8List> Function(String pluginId, String instanceId)?
+  capturePluginPagePdf;
+
+  /// האם ל-WebView של המופע יש כרגע הפעלת-משתמש חולפת (`navigator
+  /// .userActivation`). אופציונלי — ברירת המחדל קוראת מה-WebView הרשום.
+  final Future<bool> Function(String pluginId, String instanceId)?
+  hasUserActivation;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -434,6 +455,9 @@ class PluginBridgeDependencies {
     this.bookmarkBloc,
     this.onBackgroundInstanceDone,
     this.dispatchEventToPlugin,
+    this.printPluginPage,
+    this.capturePluginPagePdf,
+    this.hasUserActivation,
   });
 }
 
@@ -2813,6 +2837,46 @@ class PluginBridgeAdapter {
         }
         _grantedFolders.add(p.normalize(p.absolute(path)));
         return {'path': path};
+      case 'print':
+        final printer = _dependencies.printPluginPage ?? _defaultPrintPage;
+        final jobName = (args['jobName'] as String?)?.trim();
+        return await _runUserGatedDialog(() async {
+          final printed = await printer(
+            plugin.pluginId,
+            instanceId,
+            jobName: jobName == null || jobName.isEmpty
+                ? plugin.manifest.toolTabTitle
+                : jobName,
+          );
+          return {'printed': printed};
+        });
+      case 'exportPdf':
+        final capture =
+            _dependencies.capturePluginPagePdf ?? _defaultCapturePagePdf;
+        final saver =
+            _dependencies.pickSaveLocation ?? _defaultPickSaveLocation;
+        final suggested = _suggestedSaveName(
+          args['fileName'] as String?,
+          'pdf',
+        );
+        return await _runUserGatedDialog(() async {
+          final pdf = await capture(plugin.pluginId, instanceId);
+          final chosen = await saver(
+            suggestedName: suggested,
+            allowedExtensions: const ['pdf'],
+            title: args['title'] as String?,
+          );
+          if (chosen == null || chosen.isEmpty) {
+            return {'saved': false, 'name': null};
+          }
+          // file_picker בווינדוס אינו משלים את הסיומת שנבחרה בדיאלוג.
+          final target = chosen.toLowerCase().endsWith('.pdf')
+              ? chosen
+              : '$chosen.pdf';
+          await File(target).writeAsBytes(pdf, flush: true);
+          // הנתיב עצמו אינו מוחזר — התוסף אינו מקבל גישה למה שנשמר.
+          return {'saved': true, 'name': p.basename(target)};
+        });
       default:
         throw Exception("error.unknown_method: Unknown action in ui: $action");
     }
@@ -2855,6 +2919,83 @@ class PluginBridgeAdapter {
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
   Future<String?> _defaultPickFolder({String? title}) =>
       FilePicker.getDirectoryPath(lockParentWindow: true, dialogTitle: title);
+
+  /// דיאלוג הדפסה/שמירה פתוח כרגע עבור המופע הזה. שער חד-בו-זמנית: בלעדיו
+  /// לולאה בתוסף מערימה דיאלוגים מודאליים עד שהחלון אינו שמיש.
+  bool _userDialogOpen = false;
+
+  /// מריץ פעולה שפותחת דיאלוג מערכת — רק בתוך חלון הפעולה של המשתמש, ורק
+  /// אחת בכל רגע. מונע מתוסף לפתוח דיאלוגים או לכתוב קבצים מיוזמתו.
+  Future<Map<String, dynamic>> _runUserGatedDialog(
+    Future<Map<String, dynamic>> Function() action,
+  ) async {
+    if (_userDialogOpen) {
+      throw Exception('error.forbidden: A system dialog is already open');
+    }
+    // הדגל נקבע לפני ה-await הראשון: שתי קריאות רצופות היו שתיהן עוברות את
+    // הבדיקה לפני שהראשונה סימנה.
+    _userDialogOpen = true;
+    try {
+      final check =
+          _dependencies.hasUserActivation ?? _defaultHasUserActivation;
+      if (!await check(plugin.pluginId, instanceId)) {
+        throw Exception(
+          'error.forbidden: Requires a user gesture — call it directly from a '
+          'click handler',
+        );
+      }
+      return await action();
+    } finally {
+      _userDialogOpen = false;
+    }
+  }
+
+  /// ה-WebView של המופע, או חריגה אם אינו חי (טאב שנסגר באמצע).
+  InAppWebViewController _requireController(
+    String pluginId,
+    String instanceId,
+  ) {
+    final controller = PluginRuntimeDispatcher.instance.controllerOf(
+      pluginId,
+      instanceId: instanceId,
+    );
+    if (controller == null) {
+      throw Exception('error.forbidden: Plugin view is not available');
+    }
+    return controller;
+  }
+
+  /// נקרא ישירות על ה-WebView ולא מקבל את התשובה מה-JS של התוסף — הערך הזה
+  /// הוא מצב דפדפן לקריאה בלבד ולכן אינו ניתן לזיוף מתוך התוסף.
+  Future<bool> _defaultHasUserActivation(
+    String pluginId,
+    String instanceId,
+  ) async {
+    final result = await _requireController(pluginId, instanceId)
+        .evaluateJavascript(
+          source:
+              "(navigator.userActivation === undefined) ? 'unsupported' : "
+              "(navigator.userActivation.isActive ? 'active' : 'inactive')",
+        );
+    // WKWebView אינו מממש את navigator.userActivation; שם אין מה לאכוף.
+    return result != 'inactive';
+  }
+
+  Future<bool> _defaultPrintPage(
+    String pluginId,
+    String instanceId, {
+    required String jobName,
+  }) => const PluginPrintService().printWebView(
+    _requireController(pluginId, instanceId),
+    jobName: jobName,
+  );
+
+  Future<Uint8List> _defaultCapturePagePdf(
+    String pluginId,
+    String instanceId,
+  ) => const PluginPrintService().createPdf(
+    _requireController(pluginId, instanceId),
+  );
 
   /// בודקת אם [targetPath] נמצא בתוך תיקייה שהמשתמש אישר דרך `ui.pickFolder`.
   ///
