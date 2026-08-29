@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/view/layout_fix_suggestion_banner.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 
-/// issue #975 — הבאנר מציע בלבד ואינו משנה דבר בעצמו: הוא מוצג רק כשיש
-/// המרה עברית תקפה, והלחיצה מוסרת לקורא את הטקסט המומר.
-Widget _host(String query, ValueChanged<String> onAccept) {
+Widget _host(
+  String query,
+  ValueChanged<String> onAccept, {
+  SettingsLanguage language = SettingsLanguage.hebrew,
+}) {
   return MaterialApp(
     home: Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        body: LayoutFixSuggestionBanner(query: query, onAccept: onAccept),
+      child: SettingsTextScope(
+        language: language,
+        child: Scaffold(
+          body: LayoutFixSuggestionBanner(query: query, onAccept: onAccept),
+        ),
       ),
     ),
   );
@@ -46,6 +52,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_host('qw', (_) {}));
+    expect(find.textContaining('האם התכוונת'), findsNothing);
+  });
+
+  testWidgets('בממשק אנגלי אין הצעת תיקון', (tester) async {
+    await tester.pumpWidget(
+      _host('akuo', (_) {}, language: SettingsLanguage.english),
+    );
     expect(find.textContaining('האם התכוונת'), findsNothing);
   });
 }

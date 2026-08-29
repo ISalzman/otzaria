@@ -2,6 +2,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/search/utils/hebrew_layout_suggestion.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 
 /// באנר "האם התכוונת ל..." לטקסט שהוקלד בעברית במצב מקלדת אנגלי
@@ -35,12 +36,15 @@ class LayoutFixSuggestionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SettingsTextScope.languageOf(context) != SettingsLanguage.hebrew) {
+      return const SizedBox.shrink();
+    }
     final suggestion = suggestHebrewKeyboardFix(query);
     if (suggestion == null) return const SizedBox.shrink();
 
     final cs = Theme.of(context).colorScheme;
     return Material(
-      color: cs.tertiaryContainer.withValues(alpha: 0.35),
+      color: cs.tertiaryContainer,
       child: InkWell(
         focusNode: focusNode,
         onTap: () => onAccept(suggestion),
@@ -67,7 +71,7 @@ class LayoutFixSuggestionBanner extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: cs.primary,
                           decoration: TextDecoration.underline,
-                          decorationColor: cs.primary.withValues(alpha: 0.5),
+                          decorationColor: cs.primary,
                         ),
                       ),
                       const TextSpan(text: '?'),
@@ -180,6 +184,8 @@ class _TypingLayoutFixSuggestionState extends State<TypingLayoutFixSuggestion> {
     final keyboard = HardwareKeyboard.instance;
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.tab &&
+        SettingsTextScope.languageOfStatic(context) ==
+            SettingsLanguage.hebrew &&
         !keyboard.isShiftPressed &&
         !keyboard.isControlPressed &&
         !keyboard.isAltPressed &&
