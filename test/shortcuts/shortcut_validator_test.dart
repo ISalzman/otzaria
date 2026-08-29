@@ -1,6 +1,7 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/external_uri_router.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 
@@ -366,6 +367,26 @@ void main() {
       final conflictingKey = ShortcutValidator.pluginShortcutKey(
         pluginId,
         'uppercase-conflict',
+      );
+      ShortcutValidator.registerPluginShortcuts({conflictingKey: conflicting});
+
+      expect(ShortcutValidator.getShortcutValue(conflictingKey), isNull);
+    });
+
+    test('ב-macOS meta מתנגש סמנטית עם קיצור ctrl קיים', () {
+      ShortcutHelper.isMacForTesting = true;
+      addTearDown(() => ShortcutHelper.isMacForTesting = null);
+      const conflicting = (
+        pluginId: pluginId,
+        shortcutId: 'mac-conflict',
+        label: 'מתנגש',
+        defaultKey: 'meta+l',
+        command: 'x',
+        contextMenuItemId: null,
+      );
+      final conflictingKey = ShortcutValidator.pluginShortcutKey(
+        pluginId,
+        'mac-conflict',
       );
       ShortcutValidator.registerPluginShortcuts({conflictingKey: conflicting});
 

@@ -170,6 +170,11 @@ void main() {
       );
     });
 
+    test('normalizeShortcut מאחד ctrl ו-meta ל-Cmd יחיד', () {
+      expect(ShortcutHelper.normalizeShortcut('meta+l'), 'ctrl+l');
+      expect(ShortcutHelper.normalizeShortcut('ctrl+meta+l'), 'ctrl+l');
+    });
+
     test('formatKeysToShortcut: לחיצת Meta נשמרת בפורמט הקנוני "ctrl+X"', () {
       final shortcut = ShortcutHelper.formatKeysToShortcut({
         LogicalKeyboardKey.meta,

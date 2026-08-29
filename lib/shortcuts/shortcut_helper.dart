@@ -155,12 +155,26 @@ class ShortcutHelper {
     final parts = value.toLowerCase().split('+');
     if (parts.any((part) => part.isEmpty)) return null;
 
+    final ctrlLikeCount = parts
+        .where((part) => part == 'ctrl' || part == 'control')
+        .length;
+    final metaCount = parts.where((part) => part == 'meta').length;
+    if (ctrlLikeCount > 1 || metaCount > 1) return null;
+
     String? mainKey;
     final modifiers = <String>{};
     for (final part in parts) {
-      final modifier = part == 'control' ? 'ctrl' : part;
+      final modifier = part == 'control' || (_treatCtrlAsMeta && part == 'meta')
+          ? 'ctrl'
+          : part;
       if (_modifiers.contains(part)) {
-        if (!modifiers.add(modifier)) return null;
+        if (!modifiers.add(modifier) &&
+            !(_treatCtrlAsMeta &&
+                modifier == 'ctrl' &&
+                ctrlLikeCount == 1 &&
+                metaCount == 1)) {
+          return null;
+        }
       } else if (mainKey == null) {
         mainKey = part;
       } else {
