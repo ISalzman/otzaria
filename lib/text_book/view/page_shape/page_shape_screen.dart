@@ -113,6 +113,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
   String? _bottomRightCommentator;
   bool _isLoadingConfig = true;
   int _loadConfigurationGeneration = 0;
+  bool _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
   bool _isLeftSidebarOpen = false;
   int _leftSidebarTabIndex = 0;
   String? _notesBookIdOverride;
@@ -432,6 +433,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
         _rightCommentator = commentators['right'];
         _bottomCommentator = commentators['bottom'];
         _bottomRightCommentator = commentators['bottomRight'];
+        _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
         _isLoadingConfig = false;
       });
       _refreshLinksForCurrentConfiguration('page-shape configuration loaded');
@@ -1617,6 +1619,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                                     ),
                                   ],
                                 );
+                                if (!_applyTextMaxWidth) return page;
                                 final pageMaxWidth = textColumnMaxWidthOf(
                                   context,
                                   setting: context.select<SettingsBloc, double>(

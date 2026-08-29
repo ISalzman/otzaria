@@ -17,6 +17,7 @@ class PageShapeSettingsManager {
   static const String _globalVisibilityPrefix = 'page_shape_global_visibility_';
   static const String _commentaryFontSizeKey =
       'page_shape_commentary_font_size';
+  static const String _applyTextMaxWidthKey = 'page_shape_apply_text_max_width';
 
   // מפתחות פר-ספר
   static const String _bookConfigPrefix = 'page_shape_book_';
@@ -109,6 +110,19 @@ class PageShapeSettingsManager {
   static double getCommentaryFontSize() {
     return Settings.getValue<double>(_commentaryFontSizeKey) ??
         defaultCommentaryFontSize;
+  }
+
+  // ==================== החלת רוחב הטקסט (גלובלי) ====================
+
+  /// שמירת הבחירה אם הגדרת "רוחב הטקסט" תחול גם בצורת הדף
+  static Future<void> saveApplyTextMaxWidth(bool value) async {
+    await Settings.setValue<bool>(_applyTextMaxWidthKey, value);
+  }
+
+  /// ברירת המחדל כבויה: בצורת הדף כל תיבה צרה ממילא,
+  /// והצרה נוספת מבטלת את התצוגה במסכים קטנים (issue #1005).
+  static bool getApplyTextMaxWidth() {
+    return Settings.getValue<bool>(_applyTextMaxWidthKey) ?? false;
   }
 
   // ==================== בדיקה אם יש הגדרות פר-ספר ====================

@@ -72,6 +72,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
   String _bottomFontFamily = AppFonts.defaultFont;
   double _commentaryFontSize =
       PageShapeSettingsManager.defaultCommentaryFontSize;
+  bool _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
   List<CommentatorGroup> _groups = [];
   bool _isLoadingGroups = true;
   bool _highlightRelatedCommentators = false;
@@ -150,6 +151,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
           ) ??
           AppFonts.defaultFont;
       _commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
+      _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(
             widget.bookTitle,
@@ -269,6 +271,15 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
       _commentaryFontSize = value;
     });
     PageShapeSettingsManager.saveCommentaryFontSize(
+      value,
+    ).then((_) => widget.onSettingsChanged?.call());
+  }
+
+  void _onApplyTextMaxWidthChanged(bool value) {
+    setState(() {
+      _applyTextMaxWidth = value;
+    });
+    PageShapeSettingsManager.saveApplyTextMaxWidth(
       value,
     ).then((_) => widget.onSettingsChanged?.call());
   }
@@ -622,6 +633,14 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
             });
             _saveSettings();
           },
+        ),
+        SwitchListTile(
+          title: const Text('החל את הגדרת רוחב הטקסט'),
+          subtitle: const Text(
+            'הגבלת רוחב הטקסט שבהגדרות תחול גם על הדף כולו',
+          ),
+          value: _applyTextMaxWidth,
+          onChanged: _onApplyTextMaxWidthChanged,
         ),
         const Divider(),
         const SizedBox(height: 8),
