@@ -7,6 +7,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/search/view/layout_fix_suggestion_banner.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -965,7 +966,23 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         );
         final mainContent = isLibraryEmpty
             ? LibrarySetupView(onLibraryLoaded: _handleLibraryLoaded)
-            : _buildContent(state);
+            : Column(
+                children: [
+                  // הצעת תיקון-מקלדת חיה לשדה האיתור (issue #975): לחיצה
+                  // מחליפה את הטקסט בשדה ומריצה את החיפוש החי מחדש.
+                  TypingLayoutFixSuggestion(
+                    controller: context
+                        .read<FocusRepository>()
+                        .librarySearchController,
+                    fieldFocusNode: context
+                        .read<FocusRepository>()
+                        .librarySearchFocusNode,
+                    hint: 'לחיצה תחליף את הטקסט שהוקלד',
+                    onApplied: _applyLibraryLayoutFix,
+                  ),
+                  Expanded(child: _buildContent(state)),
+                ],
+              );
 
         return AdaptiveSidePane(
           // אין ספרייה — התצוגה המקדימה סגורה כפויה (אין ספרים להציג).
@@ -2365,6 +2382,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       if (!mounted) return;
       _searchWithSettings(context, s);
     });
+  }
+
+  /// המשתמש קיבל את הצעת תיקון-המקלדת: הטקסט בשדה כבר הוחלף (בווידג'ט),
+  /// וכאן מריצים את אותו מסלול שהקלדה ידנית מפעילה — עדכון שאילתה, איפוס
+  /// נושאים וחיפוש מיידי (בלי debounce: זו פעולה מפורשת, לא הקלדה).
+  void _applyLibraryLayoutFix(String suggestion) {
+    context.read<LibraryBloc>().add(UpdateSearchQuery(suggestion));
+    context.read<LibraryBloc>().add(const SelectTopics([]));
+    _searchWithSettings(context, context.read<SettingsBloc>().state);
+    _refocusSearchBar();
   }
 
   void _searchWithSettings(BuildContext context, SettingsState s) {
