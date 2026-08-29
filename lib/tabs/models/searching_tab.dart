@@ -18,7 +18,12 @@ class SearchingTab extends OpenedTab {
   final negativeQueryController = TextEditingController();
   final searchFieldFocusNode = FocusNode();
   late final ValueNotifier<String> titleNotifier;
-  final ValueNotifier<bool> isLeftPaneOpen = ValueNotifier(true);
+
+  /// מצב עץ סינון התוצאות. נפתח לפי ההעדפה הגלובלית האחרונה של המשתמש,
+  /// כך שהסתרה ידנית נשמרת גם לטאבים אחרים ולהפעלה הבאה.
+  final ValueNotifier<bool> isLeftPaneOpen = ValueNotifier(
+    SearchDefaults.initialResultsTreeOpenForNewSearch(),
+  );
 
   /// סיכום סיווג התוצאות של ספק החיפוש החיצוני (תוסף), כשפעיל — מזין את
   /// ספירות הקטגוריות בעץ הסינון. נכתב ע"י מדור התוצאות החיצוני.

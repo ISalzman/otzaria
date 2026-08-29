@@ -17,6 +17,7 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
 import 'package:otzaria/search/view/tantivy_search_results.dart';
@@ -434,8 +435,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                               ),
                               paneWidth: paneWidth,
                               minMainContentWidth: 300,
-                              onClose: () =>
-                                  widget.tab.isLeftPaneOpen.value = false,
+                              onClose: () => _setLeftPaneOpen(false),
                               isResizable: true,
                               minPaneWidth: 220,
                               maxPaneWidth: 600,
@@ -660,6 +660,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     );
   }
 
+  /// שינוי מצב עץ התוצאות ביוזמת המשתמש — נשמר גם כברירת מחדל גלובלית.
+  /// סגירות אוטומטיות (מסך צר, הרצת חיפוש) אינן עוברות כאן בכוונה.
+  void _setLeftPaneOpen(bool isOpen) {
+    widget.tab.isLeftPaneOpen.value = isOpen;
+    SearchDefaults.saveResultsTreeOpenDefault(isOpen);
+  }
+
   /// הסרגל העליון של מסך החיפוש — זהה בכל רוחבי המסך.
   /// [collapseMenus] מכווץ את בוררי המיון והאיחוד לכפתורי אייקון.
   /// [showPaneSearchBar] — רק בפריסה הרחבה, שבה חלונית הסינון היא
@@ -697,7 +704,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
             valueListenable: widget.tab.isLeftPaneOpen,
             builder: (context, isOpen, _) => NavPanelToggleButton(
               isOpen: isOpen,
-              onToggle: () => widget.tab.isLeftPaneOpen.value = !isOpen,
+              onToggle: () => _setLeftPaneOpen(!isOpen),
             ),
           ),
         ),
