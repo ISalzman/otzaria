@@ -181,6 +181,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'הגדרת מיקום': 'Set the Location',
     'הגדרת סיסמה': 'Set a Password',
     'הגדרת ספריה': 'Set Up Library',
+    'הגופן אינו תומך בטעמי המקרא; בטקסט עם טעמים יוצג גופן ברירת המחדל': 'This font has no cantillation marks; text with te\'amim is shown in the default font',
     'הגיבוי מתבצע כל {unit}, ומעודכן לשינויים האחרונים.': 'A backup runs every {unit}, and it is up to date.',
     'הגיבוי מתבצע כל יום.': 'Otzaria backs up daily.',
     'הדגשת הגופן (בולד)': 'Bold the font',

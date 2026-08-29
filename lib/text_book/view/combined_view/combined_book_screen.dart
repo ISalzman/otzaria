@@ -2709,7 +2709,7 @@ class _CombinedViewState extends State<CombinedView> {
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(rendering.html).trim(),
           htmlText: rendering.html,
-          style: style,
+          style: AppFonts.taamimSafeStyle(style, rendering.html),
           frameRanges: rendering.ranges,
         ),
       );

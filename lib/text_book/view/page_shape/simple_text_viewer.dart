@@ -1945,9 +1945,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         }
       }
     } else {
-      // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
-      final commentaryBookId =
-          widget.reportBook?.id ?? widget.reportBook?.categoryId;
+      // רק book_id של המפרש; categoryId אינו תחליף — הוא היה פותח ספר אחר.
+      final commentaryBookId = widget.reportBook?.id;
       if (commentaryBookId != null) {
         entries.add(const AppContextMenuEntry.divider());
         entries.add(
@@ -3129,7 +3128,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(rendering.html).trim(),
           htmlText: rendering.html,
-          style: style,
+          style: AppFonts.taamimSafeStyle(style, rendering.html),
           frameRanges: rendering.ranges,
         ),
       );

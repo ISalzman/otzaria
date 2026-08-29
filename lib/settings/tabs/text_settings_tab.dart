@@ -792,10 +792,13 @@ class _FontDropdown extends StatelessWidget {
             icon: _fontCategoryIcon(font.category),
             reserveTrailingGap: true,
             trailingReservedWidth: 72,
-            labelWidget: _FontPreviewText(
-              fontFamily: font.value,
-              name: font.label,
-              isBundled: AppFonts.fontPaths.containsKey(font.value),
+            labelWidget: _FontEntryLabel(
+              preview: _FontPreviewText(
+                fontFamily: font.value,
+                name: font.label,
+                isBundled: AppFonts.fontPaths.containsKey(font.value),
+              ),
+              supportsTaamim: font.supportsTaamim,
             ),
             trailing: SizedBox(
               width: 72,
@@ -866,10 +869,13 @@ class _FontDropdown extends StatelessWidget {
                 orElse: () => FontInfo(value: v, label: v),
               );
               // בשדה הסגור מציגים את שם הגופן (מרונדר בגופן עצמו לזיהוי).
-              return _FontPreviewText(
-                fontFamily: v,
-                name: matchingFont.label,
-                isBundled: AppFonts.fontPaths.containsKey(v),
+              return _FontEntryLabel(
+                preview: _FontPreviewText(
+                  fontFamily: v,
+                  name: matchingFont.label,
+                  isBundled: AppFonts.fontPaths.containsKey(v),
+                ),
+                supportsTaamim: AppFonts.familySupportsTaamim(v),
               );
             },
             onSelected: onChanged,
@@ -884,6 +890,36 @@ class _FontDropdown extends StatelessWidget {
           onPressed: () => onBoldChanged(!bold),
           icon: const Icon(FluentIcons.text_bold_24_regular),
           selectedIcon: const Icon(FluentIcons.text_bold_24_filled),
+        ),
+      ],
+    );
+  }
+}
+
+/// שם הגופן, ולצידו סימן אזהרה כשהגופן אינו ממפה את טעמי המקרא.
+class _FontEntryLabel extends StatelessWidget {
+  final Widget preview;
+  final bool supportsTaamim;
+
+  const _FontEntryLabel({required this.preview, required this.supportsTaamim});
+
+  @override
+  Widget build(BuildContext context) {
+    if (supportsTaamim) return preview;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: preview),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: context.settingsText(
+            'הגופן אינו תומך בטעמי המקרא; בטקסט עם טעמים יוצג גופן ברירת המחדל',
+          ),
+          child: Icon(
+            FluentIcons.warning_24_regular,
+            size: 16,
+            color: Theme.of(context).colorScheme.error,
+          ),
         ),
       ],
     );
