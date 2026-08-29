@@ -222,7 +222,7 @@ class _PhysicalExtendSelectionAction
     // --- שדה קלט (EditableText/Quill) ---
     // ברמת תו Flutter כבר מהפך נכון לפי כיווניות → כיוון לוגי מקורי. ברמת
     // מילה Flutter אינו מהפך (באג) → מהפכים.
-    if (_isTextInputContext(focusContext)) {
+    if (isTextInputContext(focusContext)) {
       final forward = intent.word ? intent.physicalLeft : !intent.physicalLeft;
       _dispatch(
         focusContext,
@@ -344,7 +344,9 @@ class _PhysicalExtendSelectionAction
   }
 }
 
-bool _isTextInputContext(BuildContext context) {
+/// האם ה-context הנתון נמצא בתוך שדה קלט טקסטואלי (כולל עורכי Quill,
+/// שאינם `EditableText` רגיל).
+bool isTextInputContext(BuildContext context) {
   if (context.widget is EditableText) return true;
   var found = false;
   context.visitAncestorElements((element) {

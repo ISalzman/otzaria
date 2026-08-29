@@ -36,6 +36,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
@@ -2503,13 +2504,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               return null;
                             },
                           ),
-                          CopySelectionTextIntent:
-                              CallbackAction<CopySelectionTextIntent>(
-                                onInvoke: (_) {
-                                  _copyFormattedText();
-                                  return null;
-                                },
-                              ),
+                          CopySelectionTextIntent: FormattedCopyAction(
+                            _copyFormattedText,
+                          ),
                         },
                         child: Shortcuts(
                           shortcuts: {
