@@ -252,6 +252,32 @@ void main() {
       );
     });
 
+    test('indexedPdfFilePath מסכים עם buildIndexedBookFilePath', () {
+      final withExternalId = PdfBook(
+        id: 42,
+        title: 'ברכות',
+        path: r'C:\otzaria\תלמוד בבלי\ברכות.pdf',
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          'ברכות',
+        ),
+      );
+      final pathKeyed = PdfBook(
+        title: 'ספר סרוק',
+        path: r'C:\otzaria\אישי\ספר סרוק.pdf',
+      );
+
+      for (final book in [withExternalId, pathKeyed]) {
+        expect(
+          IndexingRepository.indexedPdfFilePath(
+            externalLibraryId: book.externalLibraryId,
+            filePath: book.path,
+          ),
+          IndexingRepository.buildIndexedBookFilePath(book),
+          reason: 'שני המפתחות מפצלים את הספר לשתי זהויות אם הם נפרדים',
+        );
+      }
+    });
+
     test('ספר DOCX עם מזהה חיצוני מאונדקס לפי המזהה', () {
       expect(
         IndexingRepository.buildIndexedBookFilePath(
