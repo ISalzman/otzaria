@@ -17,6 +17,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/commentary_sync_helper.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_workspace_scope.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_settings_panel.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
@@ -54,7 +55,6 @@ import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
-import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
@@ -149,13 +149,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     'bottomRight': true,
   };
 
-  String? get _activeWorkspaceId {
-    try {
-      return context.read<WorkspaceBloc>().state.activeWorkspaceId;
-    } catch (_) {
-      return null;
-    }
-  }
+  String? get _activeWorkspaceId => activePageShapeWorkspaceId(context);
 
   @override
   void didChangeDependencies() {
@@ -401,6 +395,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: _activeWorkspaceId,
     );
 
     _columnVisibility = PageShapeSettingsManager.getColumnVisibility(
@@ -527,11 +522,19 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       'bottomRight': _bottomRightCommentator,
     };
 
+    // כששולחן העבודה מחזיק בחירה משלו לספר, שינוי חי חייב להיכתב אליה -
+    // אחרת הוא נשמר לספר/לקטגוריה ונדרס מיד בטעינה הבאה.
+    final workspaceToSave = PageShapeSettingsManager.commentatorWorkspaceTarget(
+      _activeWorkspaceId,
+      state.book.title,
+    );
+
     final hasActualBookConfig =
         PageShapeSettingsManager.loadConfiguration(state.book.title) != null;
 
     final categoryToSave =
-        !hasActualBookConfig &&
+        workspaceToSave == null &&
+            !hasActualBookConfig &&
             state.book.heCategories != null &&
             state.book.heCategories!.isNotEmpty
         ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
@@ -544,6 +547,7 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       state.book.title,
       updatedConfig,
       saveToCategory: categoryToSave,
+      saveToWorkspaceId: workspaceToSave,
     );
 
     if (!mounted) {

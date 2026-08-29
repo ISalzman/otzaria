@@ -9,9 +9,8 @@ enum PageShapeDisplaySettingsScope {
 }
 
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים
-/// תומך בהגדרות גלובליות, הגדרות פר-קטגוריה, והגדרות פר-ספר (override)
 ///
-/// סדר עדיפות בטעינה: ספר ספציפי → קטגוריה → ברירת מחדל (JSON)
+/// סדר עדיפות בטעינה: ספר בשולחן העבודה → ספר → קטגוריה → ברירת מחדל (JSON)
 class PageShapeSettingsManager {
   // מפתחות גלובליים (להגדרות תצוגה בלבד - לא למפרשים!)
   static const String _globalHighlightKey = 'page_shape_global_highlight';
@@ -27,6 +26,7 @@ class PageShapeSettingsManager {
   static const String _bookViewModePrefix = 'page_shape_view_mode_';
 
   // מפתחות פר-שולחן עבודה
+  static const String _workspaceConfigPrefix = 'page_shape_ws_config_';
   static const String _workspaceHighlightPrefix =
       'page_shape_workspace_highlight_';
   static const String _workspaceVisibilityPrefix =
@@ -166,12 +166,24 @@ class PageShapeSettingsManager {
 
   // ==================== הגדרות מפרשים ====================
 
-  /// טעינת הגדרות מפרשים - קודם ספר, אחר כך קטגוריה
-  /// סדר עדיפות: ספר ספציפי → קטגוריה → null (יטען מ-JSON)
+  /// מפתח בחירת המפרשים של ספר בשולחן עבודה מסוים.
+  static String _workspaceConfigKey(String workspaceId, String bookTitle) {
+    return '$_workspaceConfigPrefix${workspaceId}_$bookTitle';
+  }
+
+  /// טעינת הגדרות מפרשים - קודם שולחן העבודה, אחר כך ספר, אחר כך קטגוריה
+  /// סדר עדיפות: שולחן עבודה + ספר → ספר → קטגוריה → null (יטען מ-JSON)
   static Map<String, String?>? loadConfiguration(
     String bookTitle, {
     String? heCategories,
+    String? workspaceId,
   }) {
+    // 0. הגדרה לספר בשולחן העבודה הזה גוברת - היא הספציפית ביותר
+    final workspaceConfig = loadWorkspaceConfiguration(workspaceId, bookTitle);
+    if (workspaceConfig != null) {
+      return workspaceConfig;
+    }
+
     // 1. קודם בודקים אם יש הגדרות לספר הספציפי
     final bookConfig = _loadBookConfiguration(bookTitle);
     if (bookConfig != null) {
@@ -196,6 +208,36 @@ class PageShapeSettingsManager {
       '$_bookConfigPrefix$bookTitle',
     );
     return _parseConfiguration(savedConfig);
+  }
+
+  /// טעינת בחירת המפרשים של ספר בשולחן עבודה מסוים (null אם אין).
+  static Map<String, String?>? loadWorkspaceConfiguration(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    if (workspaceId == null || workspaceId.isEmpty) return null;
+    return _parseConfiguration(
+      Settings.getValue<String>(_workspaceConfigKey(workspaceId, bookTitle)),
+    );
+  }
+
+  /// האם לשולחן העבודה יש בחירת מפרשים משלו לספר זה.
+  static bool hasWorkspaceCommentatorConfig(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    return loadWorkspaceConfiguration(workspaceId, bookTitle) != null;
+  }
+
+  /// שולחן העבודה שאליו יש לשמור שינוי מפרשים, או null אם השמירה אינה
+  /// פר-שולחן. משמש למסלולי השמירה שאינם עוברים בפאנל ההגדרות.
+  static String? commentatorWorkspaceTarget(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    return hasWorkspaceCommentatorConfig(workspaceId, bookTitle)
+        ? workspaceId
+        : null;
   }
 
   /// טעינת הגדרות פר-קטגוריה
@@ -261,13 +303,19 @@ class PageShapeSettingsManager {
     return config;
   }
 
-  /// שמירת הגדרות מפרשים - לספר או לקטגוריה
+  /// שמירת הגדרות מפרשים - לספר, לשולחן עבודה או לקטגוריה
   static Future<void> saveConfiguration(
     String bookTitle,
     Map<String, String?> config, {
     String? saveToCategory, // אם מוגדר - שומר לקטגוריה במקום לספר
+    String? saveToWorkspaceId, // אם מוגדר - שומר לספר בשולחן עבודה זה
   }) async {
-    if (saveToCategory != null) {
+    if (saveToWorkspaceId != null && saveToWorkspaceId.isNotEmpty) {
+      await Settings.setValue<String>(
+        _workspaceConfigKey(saveToWorkspaceId, bookTitle),
+        _serializeConfiguration(config),
+      );
+    } else if (saveToCategory != null) {
       // שמירה לקטגוריה - שומרים רק את השמות הבסיסיים של המפרשים
       final baseConfig = config.map((key, value) {
         if (isPageShapeRemainingCommentatorsValue(value) ||
@@ -575,6 +623,18 @@ class PageShapeSettingsManager {
   /// איפוס הגדרות מפרשים פר-ספר בלבד
   static Future<void> resetBookCommentatorConfig(String bookTitle) async {
     await Settings.setValue<String?>('$_bookConfigPrefix$bookTitle', null);
+  }
+
+  /// איפוס בחירת המפרשים של ספר בשולחן עבודה מסוים.
+  static Future<void> resetWorkspaceCommentatorConfig(
+    String? workspaceId,
+    String bookTitle,
+  ) async {
+    if (workspaceId == null || workspaceId.isEmpty) return;
+    await Settings.setValue<String?>(
+      _workspaceConfigKey(workspaceId, bookTitle),
+      null,
+    );
   }
 
   /// איפוס הגדרות תצוגה פר-ספר בלבד (הדגשה ונראות טורים)

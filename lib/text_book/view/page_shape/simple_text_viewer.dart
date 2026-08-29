@@ -19,6 +19,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_workspace_scope.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -3314,9 +3315,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     // צריך למצוא באיזה טור המפרש הנוכחי מוצג ולהחליף אותו
+    final workspaceId = activePageShapeWorkspaceId(context);
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: workspaceId,
     );
 
     if (config == null) return;
@@ -3384,6 +3387,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       updatedConfig[columnToUpdate] = newCommentator;
     }
 
+    // כששולחן העבודה מחזיק בחירה משלו לספר, ההחלפה נשמרת אליה - אחרת היא
+    // נכתבת לספר/לקטגוריה ונדרסת מיד בטעינה הבאה.
+    final workspaceToSave = PageShapeSettingsManager.commentatorWorkspaceTarget(
+      workspaceId,
+      state.book.title,
+    );
+
     // בדיקה אם יש הגדרה ספציפית לספר (לא רק הדגל, אלא הגדרה ממשית)
     final hasActualBookConfig =
         PageShapeSettingsManager.loadConfiguration(state.book.title) != null;
@@ -3391,7 +3401,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // אם יש הגדרה ספציפית לספר - שומרים לספר
     // אחרת - שומרים לקטגוריה (אם יש)
     final categoryToSave =
-        !hasActualBookConfig &&
+        workspaceToSave == null &&
+            !hasActualBookConfig &&
             state.book.heCategories != null &&
             state.book.heCategories!.isNotEmpty
         ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
@@ -3404,6 +3415,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       state.book.title,
       updatedConfig,
       saveToCategory: categoryToSave,
+      saveToWorkspaceId: workspaceToSave,
     );
 
     // קריאה ל-callback לרענון המסך
