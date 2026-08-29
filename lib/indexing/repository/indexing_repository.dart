@@ -1244,6 +1244,10 @@ class IndexingRepository {
     return (BigInt.from(catalogueOrder + 1) << 32) + BigInt.from(ordinal + 1);
   }
 
+  /// האם לספר מזהה חיצוני יציב, שאינו תלוי ב-DB ואינו נשען על נתיב הקובץ.
+  static bool _hasExternalIdentity(Book book) =>
+      book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty;
+
   static String catalogueOrderKey(Book book) => catalogueOrderKeyFromParts(
     title: book.title,
     externalLibraryId: book.externalLibraryId,
@@ -1285,7 +1289,10 @@ class IndexingRepository {
   static String officialBookKey(int id) => 'id:$id';
 
   static String buildIndexedBookFilePath(Book book) {
-    if (book is PdfBook) {
+    // ‏PDF בלי מזהה חיצוני: ה-id שלו עשוי להיות שאול מספר הטקסט המקביל
+    // (תלמוד בבלי) ולהתנגש בו, או להיעדר (סריקת תיקייה) — ולכן הנתיב הוא
+    // הזהות היחידה שיש לו.
+    if (book is PdfBook && !_hasExternalIdentity(book)) {
       return book.path;
     }
     return catalogueOrderKey(book);
@@ -1336,13 +1343,13 @@ class IndexingRepository {
   }
 
   /// האם רשומת הספר באינדקס מאוחסנת לפי נתיב מוחלט (ולכן תישבר בהעברת
-  /// הספרייה ותדרוש ניקוי). PDF תמיד; שאר ספרי הקובץ רק כשאין להם
-  /// id/externalLibraryId יציב — אחרת הם מאונדקסים לפי מפתח id ושורדים העברה.
+  /// הספרייה ותדרוש ניקוי). ‏PDF כשאין לו מזהה חיצוני; שאר ספרי הקובץ רק
+  /// כשאין להם id/externalLibraryId יציב — אחרת הם מאונדקסים לפי מפתח
+  /// זהות ושורדים העברה.
   static bool hasPathKeyedIndexEntry(Book book) {
-    if (book is PdfBook) return true;
+    if (book is PdfBook) return !_hasExternalIdentity(book);
     if (book is! FileBook) return false;
-    return book.id == null &&
-        (book.externalLibraryId == null || book.externalLibraryId!.isEmpty);
+    return book.id == null && !_hasExternalIdentity(book);
   }
 
   /// Indexes a specific list of books (e.g. newly added personal books).
