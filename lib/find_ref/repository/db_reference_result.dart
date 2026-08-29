@@ -46,6 +46,10 @@ class DbReferenceResult {
   /// ה-DB הראשי — אסור להריץ עליהם שאילתות `link` או `commentators`.
   final bool isUserBook;
 
+  /// true = תוצאה שנפתרה לשורת מקור מדויקת (פסוק/הלכה) דרך אינדקס
+  /// `line_ref`, ולא לכותרת TOC. המפרשים לתוצאה כזו נטענים על השורה עצמה.
+  final bool isSourceLine;
+
   const DbReferenceResult({
     required this.title,
     required this.reference,
@@ -59,6 +63,7 @@ class DbReferenceResult {
     this.bookPath = '',
     this.sourceLineId = 0,
     this.isUserBook = false,
+    this.isSourceLine = false,
   });
 
   @override

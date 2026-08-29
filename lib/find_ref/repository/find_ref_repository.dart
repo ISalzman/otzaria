@@ -11,6 +11,7 @@ import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/utils/text/ref_key.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// נזרקת כשמטמון הספרים של האיתור לא הצליח להיטען, ולכן אין במה לחפש.
@@ -124,6 +125,16 @@ class FindRefRepository {
   final Future<List<Map<String, dynamic>>> Function(DbReferenceResult ref)?
   fetchCommentatorRows;
 
+  /// Injection for testing: פותר מפתח הפניה קנוני מול אינדקס `line_ref`
+  /// עבור כל הספרים המועמדים בשאילתה מאוגדת אחת (מפתח התוצאה = bookId).
+  /// In production calls [FindRefDbIsolate.resolveLineRefs]; כשהאינדקס חסר
+  /// במסד ישן מוחזר map ריק והתוצאה נשארת ברמת ה-TOC.
+  final Future<Map<int, ({int lineIndex, int lineId, String? heRef})>> Function(
+    List<int> bookIds,
+    String refKey,
+  )?
+  resolveLineRefs;
+
   /// Injection for testing: מחזירה את הדור של מפרש לפי שם.
   /// In production calls [CommentaryService.getBookEra].
   final Future<CommentaryEra> Function(String bookTitle)? getBookEra;
@@ -199,6 +210,7 @@ class FindRefRepository {
     this.getAllUserBooks,
     this.getUserBookTocEntries,
     this.fetchCommentatorRows,
+    this.resolveLineRefs,
     this.getBookEra,
     this.getCategoryPathSync,
     this.searchByEraAndTopic,
@@ -456,6 +468,7 @@ class FindRefRepository {
                 startLineIndex: r.segment.toInt(),
                 level: r.tocLevel,
                 isAltToc: r.isAltToc,
+                isSourceLine: r.isSourceLine,
               ));
 
     if (fetchFn == null) return const [];
@@ -745,6 +758,23 @@ class FindRefRepository {
     // עבור כל השאר (חוסך עד ~50 קריאות isolate בכל הקלדה).
     final altBookIds = await _getAltBookIds();
 
+    final remainingByHit = {
+      for (final hit in bookHits)
+        hit: _getRemainingTokens(
+          queryTokens,
+          _tokenize(hit.normalizedTitle),
+          stripLeadingTokensCount: hit.matchRank >= 3 ? bookQueryTokenCount : 0,
+          prefixMatchTokensCount: hit.matchRank >= 3
+              ? 0
+              : (secondaryPhraseTokenCount[hit] ?? bookQueryTokenCount),
+        ),
+    };
+    final exactLines = await _resolveExactLines(
+      bookHits,
+      remainingByHit,
+      tokensAfterRange: _tokensAfterRange(ref, queryTokens),
+    );
+
     for (final hit in bookHits) {
       final bookId = hit.bookId;
       final title = hit.title;
@@ -752,15 +782,7 @@ class FindRefRepository {
 
       // הכותרת המנורמלת כבר זמינה מהקאש — אין צורך לנרמל מחדש.
       final titleTokens = _tokenize(hit.normalizedTitle);
-      final matchedByAcronym = hit.matchRank >= 3;
-      final remainingTokens = _getRemainingTokens(
-        queryTokens,
-        titleTokens,
-        stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
-        prefixMatchTokensCount: matchedByAcronym
-            ? 0
-            : (secondaryPhraseTokenCount[hit] ?? bookQueryTokenCount),
-      );
+      final remainingTokens = remainingByHit[hit]!;
 
       // ראש-תיבות שזנבו אינו מילת-כותרת ("טור יורה דעה" / "טור יו"ד" מול
       // הכותרת "טור") מציין חלק *בתוך* הספר — ראה [_acronymSectionTokens].
@@ -839,6 +861,23 @@ class FindRefRepository {
         }
         // FS PDFs have no DB category path — bookPath stays ''.
         continue;
+      }
+
+      final exact = exactLines[bookId];
+      if (exact != null) {
+        results.add(
+          DbReferenceResult(
+            title: title,
+            reference: exact.heRef ?? '$title ${remainingTokens.join(' ')}',
+            segment: exact.lineIndex,
+            filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
+            tocLevel: 3,
+            bookId: bookId,
+            sourceLineId: exact.lineId,
+            isSourceLine: true,
+          ),
+        );
       }
 
       if (remainingTokens.isEmpty) {
@@ -1329,6 +1368,59 @@ class FindRefRepository {
     return termTokens.sublist(start);
   }
 
+  /// מיפוי bookId → השורה המדויקת שאליה מצביעה ההפניה, דרך אינדקס `line_ref`.
+  ///
+  /// שאילתה מאוגדת אחת לכל מפתח קנוני — לא פנייה לכל ספר מועמד. ריק כשאין
+  /// הזרקה (בדיקות) או כשהמסד נבנה לפני האינדקס, ואז נשאר מסלול ה-TOC.
+  Future<Map<int, ({int lineIndex, int lineId, String? heRef})>>
+  _resolveExactLines(
+    List<ReferenceBookHit> bookHits,
+    Map<ReferenceBookHit, List<String>> remainingByHit, {
+    int tokensAfterRange = 0,
+  }) async {
+    final resolve = resolveLineRefs;
+    if (resolve == null) return const {};
+
+    final bookIdsByKey = <String, List<int>>{};
+    for (final hit in bookHits) {
+      if (hit.bookId <= 0 || hit.fileType == 'pdf') continue;
+      // רכיב יחיד ("ישעיהו לב") הוא ברמת TOC — אין מה לחפש ברמת שורה.
+      var remaining = remainingByHit[hit] ?? const <String>[];
+      // טווח ("לב יא-יג") נפתח בתחילתו; המקף כבר נבלע בנרמול השאילתה.
+      if (tokensAfterRange > 0 && remaining.length > tokensAfterRange) {
+        remaining = remaining.sublist(0, remaining.length - tokensAfterRange);
+      }
+      if (remaining.length < 2) continue;
+      final key = buildRefKey(remaining.join(' '));
+      if (key == null) continue;
+      (bookIdsByKey[key] ??= []).add(hit.bookId);
+    }
+
+    final resolved = <int, ({int lineIndex, int lineId, String? heRef})>{};
+    for (final entry in bookIdsByKey.entries) {
+      resolved.addAll(await resolve(entry.value, entry.key));
+    }
+    return resolved;
+  }
+
+  /// מספר הטוקנים שאחרי סימן הטווח בשאילתה הגולמית — הנרמול הופך את המקף
+  /// לרווח, ובלי הספירה הזו "לב יא-יג" היה נראה כהפניה תלת-רכיבית.
+  int _tokensAfterRange(String rawQuery, List<String> queryTokens) {
+    final dash = rawQuery.indexOf(RegExp('[-–־]'));
+    if (dash <= 0) return 0;
+    final head = _tokenize(_normalizeForMatch(rawQuery.substring(0, dash)));
+    final after = queryTokens.length - head.length;
+    return after > 0 ? after : 0;
+  }
+
+  /// סדר הספציפיות בתוך אותו ספר: שורת מקור מדויקת < TOC L1 < TOC L2 <
+  /// AltToc < TOC L3+.
+  static int _specificityRank(DbReferenceResult r) {
+    if (r.isSourceLine) return 0;
+    if (r.isAltToc) return 4;
+    return r.tocLevel <= 2 ? r.tocLevel + 1 : r.tocLevel + 2;
+  }
+
   List<String> _getRemainingTokens(
     List<String> queryTokens,
     List<String> titleTokens, {
@@ -1513,16 +1605,8 @@ class FindRefRepository {
 
       // 8. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
       // AltToc (כותרות-משנה) מופיע אחרי הכותרות הבסיסיות (רמה 2) אך לפני הכותרות הפנימיות (רמה 3+).
-      final aRank = a.result.isAltToc
-          ? 3
-          : (a.result.tocLevel <= 2
-                ? a.result.tocLevel
-                : a.result.tocLevel + 1);
-      final bRank = b.result.isAltToc
-          ? 3
-          : (b.result.tocLevel <= 2
-                ? b.result.tocLevel
-                : b.result.tocLevel + 1);
+      final aRank = _specificityRank(a.result);
+      final bRank = _specificityRank(b.result);
       if (aRank != bRank) return aRank.compareTo(bRank);
 
       return 0;
