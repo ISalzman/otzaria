@@ -18,6 +18,7 @@ import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
 import 'package:otzaria/navigation/view/tab_search_menu.dart';
 import 'package:otzaria/navigation/view/tab_visuals.dart';
+import 'package:otzaria/widgets/misc/middle_click_autoscroll.dart';
 import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -1269,7 +1270,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
           _pendingTabSelection = tab;
         }
       },
-      child: child,
+      child: AutoScrollBarrier(child: child),
     );
   }
 

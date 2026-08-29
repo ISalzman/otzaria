@@ -13,6 +13,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/middle_click_autoscroll.dart';
 
 /// גובה שורת כרטיסיה בעמודה האנכית.
 const double kVerticalTabHeight = 38;
@@ -201,7 +202,7 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
             bloc.add(SetCurrentTab(target));
           }
         },
-        child: child,
+        child: AutoScrollBarrier(child: child),
       ),
     );
   }
