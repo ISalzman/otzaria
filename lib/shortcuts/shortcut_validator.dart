@@ -61,6 +61,11 @@ class ShortcutValidator {
     copyTextMarkLinkKey,
   ];
 
+  /// קיצורי הזום — משותפים לספר טקסט (גודל הגופן) ול-PDF (זום התצוגה).
+  static const String zoomInKey = 'key-shortcut-zoom-in';
+  static const String zoomOutKey = 'key-shortcut-zoom-out';
+  static const String zoomResetKey = 'key-shortcut-zoom-reset';
+
   static const String _openPluginKeyPrefix = 'key-shortcut-open-plugin-';
 
   /// מפתח הגדרת הקיצור לפתיחת תוסף לפי מזההו (deep-link
@@ -167,6 +172,9 @@ class ShortcutValidator {
     'key-shortcut-switch-workspace',
     'key-shortcut-print',
     'key-shortcut-toggle-pdf-view',
+    zoomInKey,
+    zoomOutKey,
+    zoomResetKey,
     'key-shortcut-calendar-toggle-times',
     'key-shortcut-calendar-toggle-events',
     'key-shortcut-calendar-today',
@@ -217,6 +225,9 @@ class ShortcutValidator {
     'key-shortcut-switch-workspace': 'ctrl+k',
     'key-shortcut-print': 'ctrl+p',
     'key-shortcut-toggle-pdf-view': 'ctrl+shift+p',
+    zoomInKey: 'ctrl+equal',
+    zoomOutKey: 'ctrl+minus',
+    zoomResetKey: 'ctrl+0',
     'key-shortcut-calendar-toggle-times': 'ctrl+t',
     'key-shortcut-calendar-toggle-events': 'ctrl+e',
     'key-shortcut-calendar-today': 'ctrl+d',
@@ -271,6 +282,9 @@ class ShortcutValidator {
     'key-shortcut-switch-workspace': 'החלף שולחן עבודה',
     'key-shortcut-print': 'הדפסה',
     'key-shortcut-toggle-pdf-view': 'החלף מצב תצוגה (PDF/טקסט)',
+    zoomInKey: 'הגדלת הטקסט / התצוגה',
+    zoomOutKey: 'הקטנת הטקסט / התצוגה',
+    zoomResetKey: 'איפוס גודל הטקסט / התצוגה',
     'key-shortcut-calendar-toggle-times': 'לוח שנה: פתיחה/סגירה זמני היום',
     'key-shortcut-calendar-toggle-events': 'לוח שנה: פתיחה/סגירה אירועים',
     'key-shortcut-calendar-today': 'לוח שנה: מעבר להיום',

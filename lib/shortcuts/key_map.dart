@@ -40,6 +40,27 @@ class KeyMap {
     'minus': LogicalKeyboardKey.minus,
     'equal': LogicalKeyboardKey.equal,
     'backquote': LogicalKeyboardKey.backquote,
+    // מקש '+' כתו לוגי. נשמר בשם ולא בתו עצמו, כי '+' הוא המפריד בפורמט
+    // הקיצורים ולכן 'ctrl++' אינו ניתן לניתוח חד-משמעי.
+    'plus': LogicalKeyboardKey.add,
+
+    // ─── לוח הספרות (numpad) ────────────────────────────────────────────────────
+    'numpad0': LogicalKeyboardKey.numpad0,
+    'numpad1': LogicalKeyboardKey.numpad1,
+    'numpad2': LogicalKeyboardKey.numpad2,
+    'numpad3': LogicalKeyboardKey.numpad3,
+    'numpad4': LogicalKeyboardKey.numpad4,
+    'numpad5': LogicalKeyboardKey.numpad5,
+    'numpad6': LogicalKeyboardKey.numpad6,
+    'numpad7': LogicalKeyboardKey.numpad7,
+    'numpad8': LogicalKeyboardKey.numpad8,
+    'numpad9': LogicalKeyboardKey.numpad9,
+    'numpadadd': LogicalKeyboardKey.numpadAdd,
+    'numpadsubtract': LogicalKeyboardKey.numpadSubtract,
+    'numpadmultiply': LogicalKeyboardKey.numpadMultiply,
+    'numpaddivide': LogicalKeyboardKey.numpadDivide,
+    'numpaddecimal': LogicalKeyboardKey.numpadDecimal,
+    'numpadenter': LogicalKeyboardKey.numpadEnter,
 
     // ─── מקשים מיוחדים ──────────────────────────────────────────────────────────
     'space': LogicalKeyboardKey.space,
@@ -88,4 +109,32 @@ class KeyMap {
   /// או `null` אם השם אינו מוכר.
   static LogicalKeyboardKey? keyFor(String name) =>
       nameToKey[name.toLowerCase()];
+
+  /// המקשים המקבילים למקש בשורה הראשית — לוח הספרות, ומקש '+' הלוגי
+  /// שחלק מהפריסות מדווחות עליו במקום `equal`.
+  ///
+  /// המיפוי חד-כיווני בכוונה: קיצור שהוגדר על השורה הראשית נתפס גם מהמקשים
+  /// המקבילים, אבל קיצור שהוקלט במפורש על לוח הספרות נשאר ייחודי לו.
+  static const Map<String, List<LogicalKeyboardKey>> _equivalentKeys = {
+    '0': [LogicalKeyboardKey.numpad0],
+    '1': [LogicalKeyboardKey.numpad1],
+    '2': [LogicalKeyboardKey.numpad2],
+    '3': [LogicalKeyboardKey.numpad3],
+    '4': [LogicalKeyboardKey.numpad4],
+    '5': [LogicalKeyboardKey.numpad5],
+    '6': [LogicalKeyboardKey.numpad6],
+    '7': [LogicalKeyboardKey.numpad7],
+    '8': [LogicalKeyboardKey.numpad8],
+    '9': [LogicalKeyboardKey.numpad9],
+    'plus': [LogicalKeyboardKey.numpadAdd],
+    'equal': [LogicalKeyboardKey.numpadAdd, LogicalKeyboardKey.add],
+    'minus': [LogicalKeyboardKey.numpadSubtract],
+    'period': [LogicalKeyboardKey.numpadDecimal],
+    'slash': [LogicalKeyboardKey.numpadDivide],
+    'enter': [LogicalKeyboardKey.numpadEnter],
+  };
+
+  /// מחזיר את המקשים המקבילים ל-[name] (ריק אם אין כאלה).
+  static List<LogicalKeyboardKey> equivalentKeysFor(String name) =>
+      _equivalentKeys[name.toLowerCase()] ?? const [];
 }

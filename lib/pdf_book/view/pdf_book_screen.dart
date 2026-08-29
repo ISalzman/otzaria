@@ -3946,6 +3946,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Widget _buildContent(BuildContext context) {
     final wideScreen = MediaQuery.of(context).size.width >= 600;
+    // מאזין לקיצורים כדי שהזום יתעדכן מיד עם שינוי ההגדרה, בלי לפתוח מחדש את הטאב.
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
+      builder: (context, _) => _buildShortcutScope(context, wideScreen),
+    );
+  }
+
+  Widget _buildShortcutScope(BuildContext context, bool wideScreen) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         // ב-Mac המוסכמה היא Cmd (Meta); בשאר הפלטפורמות Ctrl. שתי הגרסאות
@@ -3954,29 +3962,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _ensureSearchTabIsActive,
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
             _ensureSearchTabIsActive,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add): _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
-            _zoomOut,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
-            _zoomOut,
-        LogicalKeySet(
-          LogicalKeyboardKey.control,
-          LogicalKeyboardKey.numpadSubtract,
-        ): _zoomOut,
-        LogicalKeySet(
-          LogicalKeyboardKey.meta,
-          LogicalKeyboardKey.numpadSubtract,
-        ): _zoomOut,
+        ..._zoomBindings(),
       },
       child: Scaffold(
         body: Column(
@@ -4555,6 +4541,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       },
       openFilterNotifier: _openPdfFilterNotifier,
     );
+  }
+
+  /// קיצורי הזום לפי ההגדרות, כולל המקביל בלוח הספרות לאותו צירוף.
+  Map<ShortcutActivator, VoidCallback> _zoomBindings() {
+    final bindings = <ShortcutActivator, VoidCallback>{};
+    void bind(String settingKey, VoidCallback action) {
+      final shortcut = ShortcutValidator.getShortcutValue(settingKey) ?? '';
+      if (shortcut.isEmpty) return;
+      for (final activator in ShortcutHelper.activatorsFromShortcut(shortcut)) {
+        bindings[activator] = action;
+      }
+    }
+
+    bind(ShortcutValidator.zoomInKey, _zoomIn);
+    bind(ShortcutValidator.zoomOutKey, _zoomOut);
+    bind(ShortcutValidator.zoomResetKey, _resetZoom);
+    return bindings;
   }
 
   void _zoomIn() {

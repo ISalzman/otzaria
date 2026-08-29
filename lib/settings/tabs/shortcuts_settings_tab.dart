@@ -361,6 +361,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
       keywords: ['קישור', 'העתק', 'ספר', 'deep link', 'מקלדת'],
     ),
     SettingsSearchEntry(
+      id: 'shortcuts.zoom',
+      title: 'קיצורים להגדלה והקטנה של הטקסט',
+      subtitle: 'בספר טקסט — גודל הגופן; ב-PDF — זום התצוגה',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['זום', 'הגדלה', 'הקטנה', 'גופן', 'pdf', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
       id: 'shortcuts.copy_link.section',
       title: 'קיצור להעתקת קישור למקטע / לעמוד',
       subtitle: 'בטקסט — קישור למקטע הנוכחי; ב-PDF — קישור לעמוד הנוכחי',
@@ -429,6 +437,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
       'ctrl+8',
       'ctrl+9',
       'ctrl+comma',
+      'ctrl+equal',
+      'ctrl+minus',
       'ctrl+shift+b',
       'ctrl+shift+c',
       'ctrl+shift+e',
@@ -755,6 +765,24 @@ class ShortcutsSettingsTab extends StatelessWidget {
               settingKey: 'key-shortcut-toggle-pdf-view',
               label: context.settingsText('החלף מצב תצוגה (PDF/טקסט)'),
               icon: OtzariaIcons.book_pdf_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: ShortcutValidator.zoomInKey,
+              label: context.settingsText('הגדלת הטקסט / התצוגה'),
+              icon: FluentIcons.zoom_in_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: ShortcutValidator.zoomOutKey,
+              label: context.settingsText('הקטנת הטקסט / התצוגה'),
+              icon: FluentIcons.zoom_out_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: ShortcutValidator.zoomResetKey,
+              label: context.settingsText('איפוס גודל הטקסט / התצוגה'),
+              icon: FluentIcons.arrow_reset_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
