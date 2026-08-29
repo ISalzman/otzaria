@@ -599,6 +599,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -867,6 +868,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -3140,6 +3142,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
@@ -3214,6 +3217,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,

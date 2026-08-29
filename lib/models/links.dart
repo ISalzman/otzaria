@@ -66,6 +66,10 @@ class Link {
   /// The category ID of the target book when known.
   final int? targetCategoryId;
 
+  /// מזהה ספר היעד במסד (עמודת `book.id`) כשידוע. זה המזהה שקישור
+  /// `otzaria://open/book/<id>` מצפה לו — `targetCategoryId` אינו תחליף לו.
+  final int? targetBookId;
+
   /// The file type of the target book when known.
   final String? targetFileType;
 
@@ -119,6 +123,7 @@ class Link {
     required this.index2,
     required this.connectionType,
     this.targetCategoryId,
+    this.targetBookId,
     this.targetFileType,
     this.targetIsUserBook = false,
     this.start,
@@ -317,6 +322,7 @@ class Link {
       targetCategoryId = json['category_id_2'] != null
           ? int.tryParse(json['category_id_2'].toString())
           : null,
+      targetBookId = null,
       targetFileType = json['file_type_2']?.toString(),
       targetIsUserBook = false,
       start = json['start'] != null
