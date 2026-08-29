@@ -121,6 +121,8 @@ const Set<String> apiCallsWithoutPermission = {
   'fs.deleteEntry',
   'fs.stat',
   'plugin.backgroundDone',
+  'ui.print',
+  'ui.exportPdf',
 };
 
 /// קריאת רשימת הסימניות של המשתמש. נפרדת מהכתיבה, בעקבות התקדים של

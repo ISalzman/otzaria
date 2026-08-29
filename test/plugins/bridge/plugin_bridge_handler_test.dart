@@ -207,6 +207,9 @@ void main() {
       expect(PluginBridgeHandler.hasOwnTimeout('fs.extractZip'), isTrue);
       // ממתין לדיאלוג אישור — timeout גנרי היה מדווח כשל אחרי שליחה בפועל.
       expect(PluginBridgeHandler.hasOwnTimeout('feedback.report'), isTrue);
+      // דיאלוג ההדפסה של המערכת ממתין לבחירת מדפסת ללא הגבלת זמן.
+      expect(PluginBridgeHandler.hasOwnTimeout('ui.print'), isTrue);
+      expect(PluginBridgeHandler.hasOwnTimeout('ui.exportPdf'), isTrue);
     });
 
     test('שאר הקריאות נשארות תחת timeout ברירת המחדל', () {
@@ -855,7 +858,10 @@ void main() {
     test('commitUserFileWrite אינו כפוף ל-timeout הגנרי', () {
       // הוא ממתין לדיאלוג „שמור בשם”; timeout גנרי היה מחזיר error.timeout
       // בזמן שהמשתמש בוחר תיקייה, אחרי שהבייטים כבר עלו.
-      expect(PluginBridgeHandler.hasOwnTimeout('fs.commitUserFileWrite'), isTrue);
+      expect(
+        PluginBridgeHandler.hasOwnTimeout('fs.commitUserFileWrite'),
+        isTrue,
+      );
       expect(PluginBridgeHandler.hasOwnTimeout('fs.beginBinaryWrite'), isFalse);
     });
 
