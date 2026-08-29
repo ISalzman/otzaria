@@ -471,6 +471,8 @@
   "פתיחת {plugin}": "Open {plugin}",
   "העתקת קישורים": "Copying Links",
   "קיצורים להעתקת קישור ישיר לספר, למקטע/לעמוד ולהדגשות": "Shortcuts for copying a direct link to a sefer, to a section or page, and to highlights",
+  "קיצורי תוספים": "Plugin shortcuts",
+  "קיצורי מקלדת שתוספים הוסיפו: פקודות שלהם או פעולות תפריט הלחיצה הימנית על טקסט": "Keyboard shortcuts added by plugins: their commands or right-click text menu actions",
   "העתק קישור ישיר לספר": "Copy a hyperlink to the sefer",
   "העתק קישור למקטע / לעמוד": "Copy a link to the section / page",
   "בטקסט — מקטע; ב-PDF — עמוד": "In text — a section; in PDF — a page",

@@ -109,16 +109,12 @@ List<String> pluginBackgroundActivationReasons(PluginManifest manifest) {
 
 bool _toolbarItemActivatesBackground(Map<String, dynamic> item) =>
     PluginStartupContributions(
-      toolbarItems: [
-        item,
-      ],
+      toolbarItems: [item],
     ).hasBackgroundActivationTrigger;
 
 bool _contextMenuItemActivatesBackground(Map<String, dynamic> item) =>
     PluginStartupContributions(
-      contextMenuItems: [
-        item,
-      ],
+      contextMenuItems: [item],
     ).hasBackgroundActivationTrigger;
 
 /// האם הרשאה מתחילה מאושרת במסך ההתקנה.
@@ -198,6 +194,13 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     description:
         'מאפשר לתוסף להוסיף פקדים, פריטי תפריט ונתונים שמנוהלים בידי אוצריא. '
         'פעולות מובנות עשויות להתבצע בלי לפתוח את דף התוסף.',
+  ),
+  'app.shortcuts': PluginPermissionInfo(
+    label: 'קיצורי מקלדת',
+    icon: FluentIcons.keyboard_24_regular,
+    description:
+        'רישום קיצורי מקלדת שהתוסף מציע: הפעלת פקודות שלו או פעולות '
+        'תפריט הלחיצה הימנית. הקיצורים נשלטים במסך הגדרות קיצורי המקשים.',
   ),
 
   // ===== ספרייה =====

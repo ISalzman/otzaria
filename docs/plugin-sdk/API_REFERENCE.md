@@ -130,6 +130,9 @@ if (response.success) {
 | `app.getGrantedPermissions` | 0.9.89 |
 | `app.openUrl` | 0.9.95 |
 | `app.getConnectivity` | 0.9.96 |
+| `app.registerShortcut` | 0.9.97 |
+| `app.unregisterShortcut` | 0.9.97 |
+| `app.updateShortcut` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
@@ -440,6 +443,65 @@ await Otzaria.call('app.openUrl', { url: 'https://example.com' });
 ```
 
 מותרות אך ורק כתובות `http`/`https`. סכמות אחרות (`file://`, `javascript:`, פרוטוקולים מותאמים) נדחות עם `error.forbidden`.
+
+### `app.registerShortcut` / `app.unregisterShortcut` / `app.updateShortcut`
+**הרשאה נדרשת:** `app.shortcuts`
+
+רישום קיצור מקלדת שהתוסף מציע. לחיצה על הקיצור במסך העיון מפעילה:
+
+- **פקודה חופשית** — נשלח לתוסף אירוע `app.command` עם `{ command, shortcutId }`;
+  התוסף מאזין עם `Otzaria.on('app.command', ...)` ומבצע.
+- **פעולת תפריט הקשר** — `contextMenuItemId` מפנה לפריט שהוסף עם
+  `reader.addContextMenuItem`; הקיצור מפעיל אותו בדיוק כמו לחיצה ימנית עליו
+  (דורש טקסט מסומן בספר).
+
+הקיצור מופיע במסך **הגדרות → קיצורי מקשים** תחת "קיצורי תוספים", והמשתמש
+יכול לשנות אותו או לבטלו. הקיצור פעיל כשמסך העיון פתוח.
+
+```javascript
+// פקודה חופשית — התוסף מאזין ל-app.command ומבצע
+await Otzaria.call('app.registerShortcut', {
+  id: 'toggle-night-mode',
+  label: 'מצב לילה',
+  key: 'ctrl+alt+n',
+  command: 'toggleNightMode',
+});
+
+Otzaria.on('app.command', (payload) => {
+  if (payload.command === 'toggleNightMode') { /* ... */ }
+});
+
+// קיצור לפעולה שכבר נוספה לתפריט הלחיצה הימנית
+await Otzaria.call('app.registerShortcut', {
+  id: 'highlight-selection',
+  label: 'הדגש את הסימון',
+  key: 'ctrl+alt+h',
+  contextMenuItemId: 'highlight-action',
+});
+
+// עדכון הקיצור (נכון לעכשיו רק key נתמך)
+await Otzaria.call('app.updateShortcut', {
+  id: 'toggle-night-mode',
+  patch: { key: 'ctrl+alt+m' },
+});
+
+// הסרה
+await Otzaria.call('app.unregisterShortcut', { id: 'toggle-night-mode' });
+```
+
+| שדה | טיפוס | חובה | תיאור |
+|-----|-------|------|-------|
+| `id` | string | כן | מזהה ייחודי לקיצור בתוך התוסף |
+| `label` | string | כן | תווית תצוגה במסך קיצורי המקשים |
+| `key` | string | לא | קיצור ברירת מחדל בפורמט קנוני (`ctrl+alt+x`); ריק = המשתמש מקצה |
+| `command` | string | לא* | שם פקודה שנשלחת באירוע `app.command` |
+| `contextMenuItemId` | string | לא* | מזהה פריט תפריט הקשר שהקיצור מפעיל |
+
+\* נדרש לפחות אחד מ-`command` או `contextMenuItemId` — קיצור בלי יעד נדחה
+עם `error.invalid_params`.
+
+ניתן להצהיר על קיצורים גם **במניפסט** בלי להריץ קוד — ראו §
+[contributes.startup.shortcuts](#contributesstartup---תרומות-עלייה-דקלרטיביות).
 
 ---
 
@@ -1315,6 +1377,7 @@ window.addEventListener('search.external.requested', async (event) => {
 await Otzaria.call('reader.openSearchTab', {
   query: 'ברכת המזון',
   selectItems: ['include-hebrewbooks'],
+  autoSearch: false,
 });
 // true
 
@@ -3510,6 +3573,7 @@ async function scheduleReminder(title, body, dateTime) {
 {
   "permissions": [
     "app.startup_contributions",
+    "app.shortcuts",
     "app.run_on_startup",
     "reader.toolbar",
     "reader.context_menu",
@@ -3531,6 +3595,14 @@ async function scheduleReminder(title, body, dateTime) {
           "id": "lookup",
           "title": "חפש במילון",
           "showWhen": { "selectionContainsAny": ["רש\"י", "תוס'"] }
+        }
+      ],
+      "shortcuts": [
+        {
+          "id": "lookup-shortcut",
+          "label": "חפש במילון",
+          "key": "ctrl+alt+l",
+          "contextMenuItemId": "lookup"
         }
       ],
       "publishedData": [
@@ -3558,12 +3630,25 @@ async function scheduleReminder(title, body, dateTime) {
 |---|---|---|
 | `toolbarItems` | זהה ל-`reader.addToolbarItem` | `reader.toolbar` |
 | `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
+| `shortcuts` | זהה ל-`app.registerShortcut` | `app.shortcuts` |
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
 | `externalEditions` | קונפיגורציית מהדורות מקבילות חיצוניות (טבלת מיפוי במקור DB מוכרז) | `database.read` וגם `library.books.read` |
 | `activationEvents` | שמות אירועים או `app.startup`; אפשר גם `{topic, when}` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
+
+### קיצורי מקלדת (shortcuts)
+
+`startup.shortcuts` מאפשר לתוסף להצהיר על קיצורי מקלדת בלי להריץ קוד —
+אותה סכימה של `app.registerShortcut` (ראו § app.registerShortcut). כל קיצור
+דורש `command` או `contextMenuItemId`, ויכול לצרף קיצור ברירת מחדל (`key`).
+הקיצורים מופיעים במסך **הגדרות → קיצורי מקשים** תחת "קיצורי תוספים",
+והמשתמש יכול לשנות או לבטל כל אחד מהם.
+
+קיצור עם `command` מפעיל את מנוע התוסף ושולח לו אירוע `app.command`;
+קיצור עם `contextMenuItemId` מפעיל את פעולת תפריט ההקשר בדיוק כמו לחיצה
+ימנית עליה (דורש טקסט מסומן בספר).
 
 ### תכניות Host ללא WebView
 

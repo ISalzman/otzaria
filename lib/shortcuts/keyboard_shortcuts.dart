@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
@@ -30,6 +32,7 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
 class KeyboardShortcuts extends StatefulWidget {
   final Widget child;
@@ -197,6 +200,28 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     final isReadingScreen =
         !hasOpenOverlayRoute &&
         (currentScreen == Screen.reading || currentScreen == Screen.search);
+
+    if (isReadingScreen &&
+        context.read<TabsBloc>().state.currentTab is PdfBookTab) {
+      for (final entry in ShortcutValidator.pluginShortcuts.entries) {
+        final target = entry.value;
+        final shortcut = ShortcutValidator.getShortcutValue(entry.key) ?? '';
+        if (target.contextMenuItemId == null &&
+            target.command != null &&
+            shortcut.isNotEmpty &&
+            ShortcutHelper.matchesShortcut(event, shortcut)) {
+          unawaited(
+            PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+              target.pluginId,
+              'app.command',
+              {'command': target.command, 'shortcutId': target.shortcutId},
+              preferBackground: true,
+            ),
+          );
+          return KeyEventResult.handled;
+        }
+      }
+    }
 
     // פתח/סגור חלונית ניווט. אם הטאב הפעיל אינו ספר — מחזירים `ignored`
     // כדי לא לבלוע את הקיצור (כך מנוע ה-shortcut יכול להמשיך הלאה במקום
