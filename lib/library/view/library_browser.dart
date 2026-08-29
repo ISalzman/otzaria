@@ -81,7 +81,7 @@ String libraryUpdateButtonTooltip(LibraryUpdateState state) =>
       LibraryUpdateStatus.completed =>
         state.hasUpdate ? 'העדכון הושלם' : 'הספרייה מעודכנת',
       LibraryUpdateStatus.error => 'שגיאה בעדכון - לחץ לנסות שוב',
-      LibraryUpdateStatus.disconnected => 'אין חיבור לאינטרנט - לחץ לנסות שוב',
+      LibraryUpdateStatus.disconnected => '${state.message} - לחץ לנסות שוב',
       LibraryUpdateStatus.needsFullConfirmation => state.message,
       LibraryUpdateStatus.blocked => state.message,
       _ when state.isBusy => state.message,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
@@ -300,6 +301,7 @@ LibraryUpdateBloc _bloc(
   CompanionAssetsService? companionAssets,
   // ברירת המחדל "מחובר" מונעת גישת רשת אמיתית בבדיקות מסלולי הכשל.
   bool hasInternet = true,
+  bool? sourceReachable,
   DateTime Function()? now,
 }) => LibraryUpdateBloc(
   repository: service,
@@ -308,6 +310,7 @@ LibraryUpdateBloc _bloc(
   allowPrerelease: () => prerelease,
   companionAssets: companionAssets,
   hasInternet: () async => hasInternet,
+  isSourceReachable: () async => sourceReachable ?? hasInternet,
   now: now,
 );
 
@@ -494,7 +497,37 @@ void main() {
         ),
         isA<LibraryUpdateState>()
             .having((s) => s.status, 'status', LibraryUpdateStatus.disconnected)
-            .having((s) => s.message, 'message', 'אין חיבור לאינטרנט')
+            .having(
+              (s) => s.message,
+              'message',
+              LibraryMessages.noInternetConnection,
+            )
+            .having((s) => s.errorMessage, 'errorMessage', isNull),
+      ],
+    );
+
+    // רשת מסוננת: יש אינטרנט אך GitHub חסום — שגיאה בכל עלייה היא רעש
+    // שאין למשתמש מה לעשות איתו (issue #1027).
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל בבדיקה כששרת העדכונים חסום → מנותק ולא שגיאה',
+      build: () => _bloc(
+        _FakeService(nonePlan, throwOnCheck: true),
+        sourceReachable: false,
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.disconnected)
+            .having(
+              (s) => s.message,
+              'message',
+              LibraryMessages.updateSourceUnreachable,
+            )
             .having((s) => s.errorMessage, 'errorMessage', isNull),
       ],
     );
@@ -620,6 +653,10 @@ void main() {
           probes++;
           return true;
         },
+        isSourceReachable: () async {
+          probes++;
+          return true;
+        },
       );
       bloc.add(const StartLibraryUpdate());
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -637,6 +674,7 @@ void main() {
         areUpdatesEnabled: () => true,
         allowPrerelease: () => false,
         hasInternet: () => probeGate.future,
+        isSourceReachable: () => probeGate.future,
       );
       bloc.add(const StartLibraryUpdate());
       await Future<void>.delayed(const Duration(milliseconds: 20));

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
-import 'package:otzaria/core/internet_connectivity.dart';
+import 'package:otzaria/core/update_source_reachability.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -484,13 +484,14 @@ bool updateCheckBlocked({
 }) => isOfflineMode || !updatesEnabled;
 
 /// הודעת הכשל להצגה אחרי בדיקת עדכון שנכשלה, או `null` כשאין להציג דבר:
-/// בלי אינטרנט זו אינה תקלה של אוצריא ואין למשתמש מה לעשות איתה.
+/// כששרת העדכונים אינו נגיש (אין רשת, או שהרשת מסננת אותו) זו אינה תקלה של
+/// אוצריא ואין למשתמש מה לעשות איתה.
 @visibleForTesting
 String? updateCheckFailureMessage({
   required bool isNetworkError,
-  required bool hasInternet,
+  required bool isSourceReachable,
 }) {
-  if (!hasInternet) return null;
+  if (!isSourceReachable) return null;
   return isNetworkError
       ? LibraryMessages.updateCheckNetworkError
       : LibraryMessages.updateCheckError;
@@ -762,11 +763,11 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
           e is SocketException ||
           e is TimeoutException ||
           e is http.ClientException;
-      // גם כשל שאינו רשת נבדק: captive portal מחזיר HTML תקין שנופל ב-parsing,
-      // ובלי הבדיקה הוא היה מוצג כתקלה למי שאין לו אינטרנט בכלל.
+      // נבדקת נגישות GitHub עצמו ולא "יש אינטרנט": ברשת מסוננת החיבור הכללי
+      // עובד, אך העדכון נכשל בכל עלייה — והשגיאה היא רעש שאין לו מענה.
       final message = updateCheckFailureMessage(
         isNetworkError: isNetwork,
-        hasInternet: await hasInternetConnection(),
+        isSourceReachable: await isUpdateSourceReachable(),
       );
       if (!mounted) return;
       if (message == null) {

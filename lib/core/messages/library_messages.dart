@@ -62,6 +62,11 @@ abstract class LibraryMessages {
 
   static const String updateCheckError = 'שגיאה בבדיקת עדכונים';
 
+  static const String noInternetConnection = 'אין חיבור לאינטרנט';
+
+  static const String updateSourceUnreachable =
+      'שרת העדכונים אינו זמין ברשת זו';
+
   static const String updateDownloadError = 'שגיאה בהורדת העדכון';
 
   static const String updateInstallerLaunchError = 'שגיאה בהפעלת מתקין העדכון';

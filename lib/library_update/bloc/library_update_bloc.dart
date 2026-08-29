@@ -3,6 +3,8 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/core/internet_connectivity.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
+import 'package:otzaria/core/update_source_reachability.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 
@@ -31,6 +33,9 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
   /// בדיקת חיבור אמיתי לאינטרנט — ניתנת להזרקה לבדיקות.
   final Future<bool> Function() hasInternet;
 
+  /// בדיקת נגישות שרת העדכונים — ניתנת להזרקה לבדיקות.
+  final Future<bool> Function() isSourceReachable;
+
   /// שעון — ניתן להזרקה לבדיקות ויסות ההתקדמות.
   final DateTime Function() _now;
 
@@ -55,6 +60,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     required this.allowPrerelease,
     this.companionAssets,
     this.hasInternet = hasInternetConnection,
+    this.isSourceReachable = isUpdateSourceReachable,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now,
        super(const LibraryUpdateState()) {
@@ -190,18 +196,22 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       // אם בוטל/הוחלף במהלך הבדיקה — לא לדרוס state של ריצה חדשה בשגיאה.
       if (_isStale(opId)) return;
       _logUpdateError('checkForUpdate', e, st);
-      final failure = await _checkFailureState('שגיאה בבדיקת עדכונים', e);
+      final failure = await _checkFailureState(
+        LibraryMessages.updateCheckError,
+        e,
+      );
       if (isClosed || _isStale(opId)) return;
       emit(failure);
     }
   }
 
-  /// בכשל בבדיקת הזמינות בלבד, היעדר רשת אינו שגיאה למשתמש.
+  /// בכשל בבדיקת הזמינות בלבד, רשת שאינה מגיעה לשרת העדכונים אינה שגיאה
+  /// למשתמש: ברשת מסוננת הבדיקה תיכשל בכל עלייה ואין לו מה לתקן.
   Future<LibraryUpdateState> _checkFailureState(
     String message,
     Object error,
   ) async {
-    if (await hasInternet()) {
+    if (await isSourceReachable()) {
       return LibraryUpdateState(
         status: LibraryUpdateStatus.error,
         message: message,
@@ -209,9 +219,11 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
         isCheckFailure: true,
       );
     }
-    return const LibraryUpdateState(
+    return LibraryUpdateState(
       status: LibraryUpdateStatus.disconnected,
-      message: 'אין חיבור לאינטרנט',
+      message: await hasInternet()
+          ? LibraryMessages.updateSourceUnreachable
+          : LibraryMessages.noInternetConnection,
     );
   }
 
