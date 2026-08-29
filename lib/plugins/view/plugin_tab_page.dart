@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_inappwebview_windows/flutter_inappwebview_windows.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -43,6 +44,8 @@ import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
+import 'package:otzaria/plugins/view/plugin_webview_failed_view.dart';
+import 'package:otzaria/plugins/services/windows_arch_info.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
@@ -113,8 +116,22 @@ const String _sdkStub = r'''
 })();
 ''';
 
-/// הגדרות ה-WebView של טאב תוסף.
+/// האם אירוע כשל היצירה שייך לטאב הזה.
 @visibleForTesting
+bool shouldHandleCreationFailure({
+  required Key? failureKey,
+  required Key expectedKey,
+  required String? failureUrl,
+  required String expectedUrl,
+  required bool isCreated,
+  required bool alreadyFailed,
+}) {
+  if (isCreated || alreadyFailed) return false;
+  if (failureKey != null) return failureKey == expectedKey;
+  if (failureUrl == null || failureUrl.isEmpty) return true;
+  return failureUrl == expectedUrl;
+}
+
 InAppWebViewSettings buildPluginTabWebViewSettings({
   required bool isDevelopment,
 }) {
@@ -191,6 +208,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
   // כשל יצירה native לא מפעיל אף callback ב-Dart — נשאר רק מסך ריק.
   // השעון נדרך בבניית ה-WebView ומבוטל ב-onWebViewCreated, כדי לרשום ללוג.
   Timer? _creationWatchdog;
+
+  // כשל היצירה מגיע מהפלאגין כאירוע גלובלי (אין callback על ה-widget).
+  StreamSubscription<WindowsWebViewCreationFailure>? _creationFailureSub;
+  String? _creationFailure;
 
   // Cache PackageInfo so the async gap in onLoadStop never crosses a dispose
   static PackageInfo? _cachedPackageInfo;
@@ -421,6 +442,37 @@ class _PluginTabPageState extends State<PluginTabPage> {
     }
   }
 
+  void _onCreationFailure(WindowsWebViewCreationFailure failure) {
+    if (!mounted ||
+        !shouldHandleCreationFailure(
+          failureKey: failure.creationKey,
+          expectedKey: _webViewKey,
+          failureUrl: failure.requestedUrl,
+          expectedUrl: _expectedCreationUrl(),
+          isCreated: webViewController != null,
+          alreadyFailed: _creationFailure != null,
+        )) {
+      return;
+    }
+    _creationWatchdog?.cancel();
+    _creationWatchdog = null;
+    logPluginWebViewFailure(
+      'Plugin WebView creation failed',
+      failure.error,
+      stackTrace: failure.stackTrace,
+      details: {
+        'Plugin': widget.plugin.pluginId,
+        'EmulatedOnArm': WindowsArchInfo.isEmulatedOnArm ? 'true' : 'false',
+      },
+    );
+    setState(() => _creationFailure = failure.error.toString());
+  }
+
+  /// ה-URL שהטאב הזה ביקש ליצור — מפתח ההתאמה מול אירוע כשל.
+  String _expectedCreationUrl() => widget.plugin.isLocalhostDev
+      ? WebUri(localHtmlPath).toString()
+      : WebUri.uri(Uri.file(localHtmlPath)).toString();
+
   Future<void> _ensurePackageInfo() async {
     _cachedPackageInfo ??= await PackageInfo.fromPlatform();
   }
@@ -435,6 +487,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       owner: widget.instanceId,
     );
     _creationWatchdog?.cancel();
+    unawaited(_creationFailureSub?.cancel());
     final pluginId = widget.plugin.pluginId;
     final instanceId = widget.instanceId;
     final controller = webViewController;
@@ -568,6 +621,18 @@ class _PluginTabPageState extends State<PluginTabPage> {
   );
 
   Widget _buildWebView() {
+    if (_creationFailure != null) {
+      return PluginWebViewFailedView(
+        pluginName: widget.plugin.name,
+        errorDetails: _creationFailure,
+        isEmulatedOnArm: WindowsArchInfo.isEmulatedOnArm,
+        onRetry: () {
+          if (!mounted) return;
+          setState(() => _creationFailure = null);
+        },
+      );
+    }
+
     if (_creationWatchdog == null && webViewController == null) {
       _creationWatchdog = Timer(const Duration(seconds: 20), () {
         logPluginWebViewFailure(
@@ -576,6 +641,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
           details: {'Plugin': widget.plugin.pluginId},
         );
       });
+      _creationFailureSub ??= WindowsWebViewCreationFailures.stream.listen(
+        _onCreationFailure,
+      );
     }
     final initialUrl = widget.plugin.isLocalhostDev
         ? WebUri(localHtmlPath)
@@ -598,6 +666,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
       ]),
       onWebViewCreated: (controller) {
         _creationWatchdog?.cancel();
+        unawaited(_creationFailureSub?.cancel());
+        _creationFailureSub = null;
         // מסמנים שמתחיל ניסיון טעינה. שימוש בגרסה הסינכרונית מבטיח שהקובץ
         // מתעדכן מיד (לפני שיש הזדמנות ל-dispose לרוץ ולנקות ריק) — אחרת
         // קיים race שבו סגירה מהירה של הטאב לפני שה-Future של ה-async
