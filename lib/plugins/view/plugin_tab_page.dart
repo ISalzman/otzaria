@@ -44,6 +44,7 @@ import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
+import 'package:otzaria/plugins/view/plugin_data_folder_unwritable_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview_failed_view.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
@@ -178,6 +179,10 @@ enum _WebViewPrereqStatus {
 
   /// WebView2 Runtime אינו מותקן (Windows) — יש להציג מסך הכוונה להתקנה.
   runtimeMissing,
+
+  /// תיקיית הנתונים של WebView2 חסומה לכתיבה — יש להציג הסבר במקום לתת
+  /// ל-WebView2 להעלות דיאלוג מערכת של Edge.
+  dataFolderNotWritable,
 }
 
 class _PluginTabPageState extends State<PluginTabPage> {
@@ -575,6 +580,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
               child: Text(
                 'שגיאה באתחול סביבת הדפדפן: ${snapshot.error}',
               ),
+            );
+          }
+          if (snapshot.data == _WebViewPrereqStatus.dataFolderNotWritable) {
+            return PluginDataFolderUnwritableView(
+              folderPath: WebViewEnvironmentHolder.unwritableDataFolder ?? '',
+              onRetry: () {
+                if (!mounted) return;
+                setState(() => _prereqFuture = null);
+              },
             );
           }
           if (snapshot.data == _WebViewPrereqStatus.runtimeMissing) {
@@ -1179,6 +1193,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (Platform.isWindows) {
       if (!await WebViewEnvironmentHolder.isRuntimeAvailable()) {
         return _WebViewPrereqStatus.runtimeMissing;
+      }
+      if (await WebViewEnvironmentHolder.checkDataFolderWritable() != null) {
+        return _WebViewPrereqStatus.dataFolderNotWritable;
       }
       await WebViewEnvironmentHolder.initialize();
     }
