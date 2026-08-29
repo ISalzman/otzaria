@@ -180,6 +180,27 @@ void main() {
       expect(registry.findItem('other', 'top-action'), isNull);
     });
 
+    test('findItem מוצא גם פריט בעומק שני', () {
+      registry.registerPayload('marker', {
+        'id': 'root',
+        'type': 'submenu',
+        'title': 'Root',
+        'children': [
+          {
+            'id': 'nested',
+            'type': 'submenu',
+            'title': 'Nested',
+            'children': [
+              {'id': 'target', 'title': 'Target'},
+            ],
+          },
+        ],
+      });
+
+      expect(registry.findItem('marker', 'target')?.label, 'Target');
+      expect(registry.isItemVisible('marker', 'target'), isTrue);
+    });
+
     test('keeps plugin ownership isolated', () {
       const item = PluginContextMenuItem(id: 'same-id', label: 'Item');
       registry.register('first', item);

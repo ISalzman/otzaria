@@ -3422,6 +3422,7 @@ Future<void> _dispatchContextMenuShortcut({
   // נקרא לפני ה-await כדי לא להחזיק BuildContext מעבר לגבול אסינכרוני.
   final textBookBloc = context.read<TextBookBloc>();
   final settingsState = context.read<SettingsBloc>().state;
+  final selectionActionDispatcher = pluginSelectionActionDispatcherOf(context);
 
   final text = selectedText ?? '';
   final sectionIndex = selectedLineIndex;
@@ -3434,6 +3435,13 @@ Future<void> _dispatchContextMenuShortcut({
       ? 'reader-page-shape-selection'
       : 'reader-selection';
   if (!item.contexts.contains(contextName)) {
+    UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
+    return;
+  }
+  if (!ContextMenuRegistry.instance.isItemVisible(
+    target.pluginId,
+    item.id,
+  )) {
     UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
     return;
   }
@@ -3495,6 +3503,7 @@ Future<void> _dispatchContextMenuShortcut({
     pluginId: target.pluginId,
     item: item,
     selection: selection,
+    selectionActionDispatcher: selectionActionDispatcher,
   );
 }
 
