@@ -92,6 +92,14 @@ class PreviewRenderer {
     if (headingWeight != null) {
       styles['font-weight'] = headingWeight;
     }
+    // ה-switch למטה קובע גודל ל-h1-h3; הרמות שמתחתיהן נשענות על הכלל המשותף.
+    final headingSize = AppFonts.headingFontSizeOverride(
+      element.localName,
+      baseStyle.fontFamily,
+    );
+    if (headingSize != null) {
+      styles['font-size'] = headingSize;
+    }
 
     switch (element.localName) {
       case 'code':

@@ -90,6 +90,54 @@ void main() {
     });
   });
 
+  group('AppFonts.headingFontSizeOverride', () {
+    test('h3 ו-h4 מוגדלות בגופן עם face בולד נפרד', () {
+      expect(AppFonts.headingFontSizeOverride('h3', 'FrankRuhlCLM'), '1.25em');
+      expect(AppFonts.headingFontSizeOverride('h4', 'FrankRuhlCLM'), '1.1em');
+    });
+
+    // h1/h2 גדולות דיין בברירת המחדל של fwfh (2em/1.5em), ו-h5/h6 קטנות
+    // מהגוף (0.83em/0.67em) — כולן נבדלות ממנו גם בלי ההדגשה.
+    test('שאר רמות הכותרת אינן משתנות', () {
+      for (final tag in const ['h1', 'h2', 'h5', 'h6']) {
+        expect(
+          AppFonts.headingFontSizeOverride(tag, 'FrankRuhlCLM'),
+          isNull,
+          reason: tag,
+        );
+      }
+    });
+
+    test('גופן שההדגשה בו נשמרת אינו מקבל הגדלה', () {
+      for (final font in _sameFaceFonts) {
+        expect(
+          AppFonts.headingFontSizeOverride('h3', font),
+          isNull,
+          reason: font,
+        );
+      }
+    });
+
+    test('תגים שאינם כותרת, תג null וגופן null מחזירים null', () {
+      for (final tag in const ['p', 'div', 'b', 'span']) {
+        expect(
+          AppFonts.headingFontSizeOverride(tag, 'FrankRuhlCLM'),
+          isNull,
+          reason: tag,
+        );
+      }
+      expect(AppFonts.headingFontSizeOverride(null, 'FrankRuhlCLM'), isNull);
+      expect(AppFonts.headingFontSizeOverride('h3', null), isNull);
+    });
+
+    test('גופן מערכת שנטען לו bold אחי מקבל הגדלה', () {
+      addTearDown(AppFonts.debugResetSystemFontsCache);
+      expect(AppFonts.headingFontSizeOverride('h4', 'Guttman Rashi'), isNull);
+      AppFonts.debugMarkSeparateBoldSystemFont('Guttman Rashi');
+      expect(AppFonts.headingFontSizeOverride('h4', 'Guttman Rashi'), '1.1em');
+    });
+  });
+
   group('SmartTextWidget — כותרות בכל רמות התגים', () {
     testWidgets('h1-h6 בפרנק-רוהל אינן מודגשות', (tester) async {
       for (final tag in AppFonts.headingTags) {
@@ -149,6 +197,49 @@ void main() {
       final style = _findHeading(tester, 'דף ה.').text.style;
       expect(style?.fontWeight, FontWeight.w400);
       expect(style?.fontSize, greaterThan(20));
+    });
+
+    // issue #900: בלי ההדגשה h4 יצאה בגודל הגוף בדיוק ו-h3 גדולה ב-17% בלבד.
+    testWidgets('h3 ו-h4 בפרנק-רוהל גדולות מהטקסט', (tester) async {
+      for (final entry in const {'h3': 1.25, 'h4': 1.1}.entries) {
+        await tester.pumpWidget(
+          _wrap(
+            SmartTextWidget(
+              text: '<${entry.key}>דף ה.</${entry.key}>',
+              settings: const RenderSettings(
+                fontSize: 20,
+                fontFamily: 'FrankRuhlCLM',
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final style = _findHeading(tester, 'דף ה.').text.style;
+        expect(style?.fontWeight, FontWeight.w400, reason: entry.key);
+        expect(
+          style?.fontSize,
+          closeTo(20 * entry.value, 0.01),
+          reason: entry.key,
+        );
+      }
+    });
+
+    testWidgets('h3 בגופן שההדגשה בו נשמרת אינה מוגדלת', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          const SmartTextWidget(
+            text: '<h3>דף ה.</h3>',
+            settings: RenderSettings(
+              fontSize: 20,
+              fontFamily: 'TaameyDavidCLM',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final style = _findHeading(tester, 'דף ה.').text.style;
+      expect(style?.fontWeight, FontWeight.bold);
+      expect(style?.fontSize, closeTo(20 * 1.17, 0.01));
     });
 
     testWidgets('טקסט רגיל (ללא כותרת) אינו מושפע', (tester) async {

@@ -282,6 +282,15 @@ class SmartTextWidget extends StatelessWidget {
               element.localName,
               settings.fontFamily,
             );
+            // כותרת שאיבדה את ההדגשה מקבלת גודל שמבדיל אותה מהטקסט.
+            final headingSize = AppFonts.headingFontSizeOverride(
+              element.localName,
+              settings.fontFamily,
+            );
+            final headingCss = <String, String>{
+              'font-weight': ?headingWeight,
+              'font-size': ?headingSize,
+            };
             if (element.localName == 'span' &&
                 element.classes.contains('subscript-text')) {
               return {'font-size': 'smaller'};
@@ -358,9 +367,7 @@ class SmartTextWidget extends StatelessWidget {
               };
             }
             if (!hasMarkdownBlock) {
-              return headingWeight == null
-                  ? null
-                  : {'font-weight': headingWeight};
+              return headingCss.isEmpty ? null : headingCss;
             }
             final markdownCss = _markdownElementCss(
               element,
@@ -368,8 +375,8 @@ class SmartTextWidget extends StatelessWidget {
               surfaceCss: markdownSurfaceCss,
               borderCss: markdownBorderCss,
             );
-            if (headingWeight != null) {
-              return {'font-weight': headingWeight, ...?markdownCss};
+            if (headingCss.isNotEmpty) {
+              return {...headingCss, ...?markdownCss};
             }
             return markdownCss;
           },

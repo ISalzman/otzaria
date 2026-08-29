@@ -89,6 +89,25 @@ class AppFonts {
     return hasSeparateBoldFace(fontFamily) ? '400' : null;
   }
 
+  /// ברירת המחדל של fwfh נותנת ל-`<h4>` את גודל הגוף בדיוק ול-`<h3>` גדול
+  /// ב-17% בלבד — משהוסרה מהן ההדגשה הן מתמזגות בטקסט. הסולם לקוח מכותרות
+  /// המרקדאון שכבר בשימוש ב-SmartTextWidget.
+  static const Map<String, String> _boldlessHeadingFontSize = {
+    'h3': '1.25em',
+    'h4': '1.1em',
+  };
+
+  /// גודל הכותרת ל-`customStylesBuilder` של fwfh, או null כשאין מה לשנות.
+  /// חל רק במשפחות שבהן [headingFontWeightOverride] מנטרל את ההדגשה, ורק
+  /// ברמות שבלעדיה אינן נבדלות מהטקסט.
+  static String? headingFontSizeOverride(
+    String? elementTag,
+    String? fontFamily,
+  ) {
+    if (elementTag == null || !hasSeparateBoldFace(fontFamily)) return null;
+    return _boldlessHeadingFontSize[elementTag];
+  }
+
   static bool get _supportsSystemFonts {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.windows ||
