@@ -528,6 +528,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       _removeDeclarative(event.pluginId);
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       PluginToolbarRegistry.instance.removeAll(event.pluginId);
+      PluginShortcutRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
       PluginFileServer.instance.revokeAllForPlugin(event.pluginId);
       _removeSearchProviders(event.pluginId);
@@ -562,6 +563,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       _removeDeclarative(event.pluginId);
       ContextMenuRegistry.instance.removeAll(event.pluginId);
       PluginToolbarRegistry.instance.removeAll(event.pluginId);
+      PluginShortcutRegistry.instance.removeAll(event.pluginId);
       PluginHighlightRegistry.instance.removePlugin(event.pluginId);
       PluginFileServer.instance.revokeAllForPlugin(event.pluginId);
       _removeSearchProviders(event.pluginId);
@@ -602,6 +604,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         }
         if (event.permission == 'reader.context_menu') {
           ContextMenuRegistry.instance.removeAll(event.pluginId);
+        }
+        if (event.permission == 'app.shortcuts') {
+          PluginShortcutRegistry.instance.removeAll(event.pluginId);
         }
         if (event.permission == pluginRunOnStartupPermission ||
             event.permission == pluginStartupContributionsPermission) {

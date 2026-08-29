@@ -1,4 +1,5 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 /// יעד הפעולה של קיצור מקלדת שתוסף הצהיר עליו: התוסף, מזהה הקיצור, תווית
 /// התצוגה, קיצור ברירת המחדל שהתוסף מציע, ומה הקיצור מפעיל (פקודה חופשית
@@ -104,10 +105,18 @@ class ShortcutValidator {
       ..sort((a, b) => a.key.compareTo(b.key));
     for (final entry in entries) {
       final target = entry.value;
-      final defaultKey = target.defaultKey;
+      final defaultKey =
+          ShortcutHelper.normalizeShortcut(target.defaultKey) ?? '';
       if (defaultKey.isEmpty || !takenDefaults.contains(defaultKey)) {
         if (defaultKey.isNotEmpty) takenDefaults.add(defaultKey);
-        resolved[entry.key] = target;
+        resolved[entry.key] = (
+          pluginId: target.pluginId,
+          shortcutId: target.shortcutId,
+          label: target.label,
+          defaultKey: defaultKey,
+          command: target.command,
+          contextMenuItemId: target.contextMenuItemId,
+        );
       } else {
         resolved[entry.key] = (
           pluginId: target.pluginId,
@@ -295,7 +304,7 @@ class ShortcutValidator {
     final Map<String, List<String>> shortcutToKeys = {};
 
     for (final key in shortcutKeys) {
-      final value = getShortcutValue(key) ?? '';
+      final value = _normalizedShortcutValue(getShortcutValue(key));
       if (value.isNotEmpty) {
         shortcutToKeys.putIfAbsent(value, () => []).add(key);
       }
@@ -339,12 +348,12 @@ class ShortcutValidator {
 
   /// Check if a specific shortcut has conflicts
   static bool hasConflict(String settingKey) {
-    final value = getShortcutValue(settingKey);
-    if (value == null || value.isEmpty) return false;
+    final value = _normalizedShortcutValue(getShortcutValue(settingKey));
+    if (value.isEmpty) return false;
 
     final matchingKeys = <String>{};
     for (final key in shortcutKeys) {
-      final keyValue = getShortcutValue(key) ?? '';
+      final keyValue = _normalizedShortcutValue(getShortcutValue(key));
       if (keyValue == value) {
         matchingKeys.add(key);
       }
@@ -362,7 +371,7 @@ class ShortcutValidator {
     final directValue = Settings.getValue<String>(normalizedKey);
     final declared = _pluginShortcuts[normalizedKey];
     if (directValue != null && directValue.isNotEmpty) {
-      return directValue;
+      return _normalizedShortcutValue(directValue);
     }
 
     // קיצור תוסף שהוגדר לו במפורש ערך ריק (ביטול) — נשאר לא-מוגדר כדי
@@ -374,7 +383,7 @@ class ShortcutValidator {
     for (final legacyKey in legacyShortcutAliases[normalizedKey] ?? const []) {
       final legacyValue = Settings.getValue<String>(legacyKey);
       if (legacyValue != null && legacyValue.isNotEmpty) {
-        return legacyValue;
+        return _normalizedShortcutValue(legacyValue);
       }
     }
 
@@ -383,29 +392,34 @@ class ShortcutValidator {
       if (_pluginDefaultKeyTaken(normalizedKey, declared.defaultKey)) {
         return null;
       }
-      return declared.defaultKey;
+      return _normalizedShortcutValue(declared.defaultKey);
     }
 
-    return defaultShortcuts[normalizedKey];
+    return _normalizedShortcutValue(defaultShortcuts[normalizedKey]);
   }
 
   /// האם קיצור ברירת המחדל של תוסף תפוס כבר על ידי קיצור קיים (בנוי, פתיחת
   /// תוסף או העתקת קישור). קיצורי תוספים אחרים נפתרים ברישום, ולכן מדלגים
   /// עליהם כאן כדי להימנע מרקורסיה.
   static bool _pluginDefaultKeyTaken(String settingKey, String defaultKey) {
+    final normalizedDefaultKey = _normalizedShortcutValue(defaultKey);
+    if (normalizedDefaultKey.isEmpty) return false;
     for (final key in shortcutKeys) {
       if (key == settingKey) continue;
       if (_pluginShortcuts.containsKey(key)) {
         final userValue = Settings.getValue<String>(key);
         if (userValue != null &&
             userValue.isNotEmpty &&
-            userValue == defaultKey) {
+            _normalizedShortcutValue(userValue) == normalizedDefaultKey) {
           return true;
         }
         continue;
       }
       final value = getShortcutValue(key) ?? '';
-      if (value.isNotEmpty && value == defaultKey) return true;
+      if (value.isNotEmpty &&
+          _normalizedShortcutValue(value) == normalizedDefaultKey) {
+        return true;
+      }
     }
     return false;
   }
@@ -434,6 +448,9 @@ class ShortcutValidator {
     }
     return settingKey;
   }
+
+  static String _normalizedShortcutValue(String? value) =>
+      ShortcutHelper.normalizeShortcut(value ?? '') ?? '';
 
   static Set<String> legacyKeysFor(String settingKey) {
     final normalizedKey = canonicalSettingKey(settingKey);

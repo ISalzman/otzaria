@@ -328,6 +328,20 @@ void main() {
       expect(ShortcutHelper.isRecognized('ctrl+shift+'), isFalse);
     });
 
+    test('קיצור עם modifier כפול או יותר ממקש ראשי אינו מוכר', () {
+      for (final shortcut in ['ctrl+ctrl+l', 'ctrl+l+x', 'ctrl+control+l']) {
+        expect(ShortcutHelper.isRecognized(shortcut), isFalse);
+      }
+    });
+
+    test('normalizeShortcut מאחד אותיות גדולות וסדר modifiers', () {
+      expect(
+        ShortcutHelper.normalizeShortcut('SHIFT+CTRL+L'),
+        'ctrl+shift+l',
+      );
+      expect(ShortcutHelper.normalizeShortcut('CONTROL+L'), 'ctrl+l');
+    });
+
     test('קיצור עם שם מקש שאינו ב-KeyMap אינו מוכר', () {
       expect(ShortcutHelper.isRecognized('ctrl+capslock'), isFalse);
       expect(ShortcutHelper.isRecognized('f13'), isFalse);

@@ -321,6 +321,14 @@ void main() {
       expect(ShortcutValidator.hasConflict(key), isTrue);
     });
 
+    test('זיהוי התנגשות מנרמל אותיות גדולות של קיצור תוסף', () async {
+      ShortcutValidator.registerPluginShortcuts({key: target});
+      await Settings.setValue<String>(key, 'CTRL+L');
+
+      expect(ShortcutValidator.getShortcutValue(key), 'ctrl+l');
+      expect(ShortcutValidator.hasConflict(key), isTrue);
+    });
+
     test(
       'ברירת מחדל שמתנגשת עם קיצור מובנה משאירה את קיצור התוסף לא-מוגדר',
       () {
@@ -345,6 +353,24 @@ void main() {
         expect(ShortcutValidator.shortcutKeys, contains(conflictingKey));
       },
     );
+
+    test('ברירת מחדל באותיות גדולות מתנגשת עם קיצור מובנה', () {
+      const conflicting = (
+        pluginId: pluginId,
+        shortcutId: 'uppercase-conflict',
+        label: 'מתנגש',
+        defaultKey: 'CTRL+L',
+        command: 'x',
+        contextMenuItemId: null,
+      );
+      final conflictingKey = ShortcutValidator.pluginShortcutKey(
+        pluginId,
+        'uppercase-conflict',
+      );
+      ShortcutValidator.registerPluginShortcuts({conflictingKey: conflicting});
+
+      expect(ShortcutValidator.getShortcutValue(conflictingKey), isNull);
+    });
 
     test('ביטול מפורש (ערך ריק) משאיר קיצור תוסף לא-מוגדר', () async {
       ShortcutValidator.registerPluginShortcuts({key: target});

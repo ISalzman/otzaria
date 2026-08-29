@@ -103,6 +103,29 @@ void main() {
       );
     });
 
+    test('stores a canonical key and rejects ambiguous key syntax', () {
+      final shortcut = registry.registerPayload('plugin-a', {
+        'id': 'canonical',
+        'label': 'קנוני',
+        'key': 'SHIFT+CTRL+L',
+        'command': 'run',
+      });
+
+      expect(shortcut.key, 'ctrl+shift+l');
+      expect(registry.find('plugin-a', 'canonical')?.key, 'ctrl+shift+l');
+      for (final key in ['ctrl+ctrl+l', 'ctrl+l+x']) {
+        expect(
+          () => registry.registerPayload('plugin-a', {
+            'id': key,
+            'label': 'לא תקין',
+            'key': key,
+            'command': 'run',
+          }),
+          throwsA(isA<PluginShortcutException>()),
+        );
+      }
+    });
+
     test('remove deletes the shortcut and notifies', () {
       var notified = 0;
       registry.addListener(() => notified++);

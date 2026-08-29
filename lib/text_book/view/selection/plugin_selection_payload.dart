@@ -4,9 +4,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_restore.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 
-/// בונה payload של בחירה לתוסף, בדיוק כמו תפריט הלחיצה הימנית על טקסט:
-/// מרונדר את השורה, מאתר בה את הבחירה ובונה את ה-map המלא שמועבר לפלאגין.
-/// משותף לתפריט ההקשר ולקיצורי המקלדת של פעולות תפריט ההקשר.
+/// בונה payload של בחירה בפסקה יחידה לתוסף, בדיוק כמו תפריט הלחיצה הימנית.
 Map<String, dynamic> buildPluginSelectionPayload({
   required TextBookLoaded state,
   required String rawText,
@@ -34,6 +32,41 @@ Map<String, dynamic> buildPluginSelectionPayload({
     selectedText: selectedText,
     renderedStartUtf16: localRange?.start,
     renderedEndUtf16: localRange?.end,
+    currentRef: state.currentTitle,
+    bookDbId: state.book.id,
+    bookType: PluginBookIdentity.typeOf(state.book),
+    bookSource: PluginBookIdentity.sourceOf(state.book),
+  );
+}
+
+/// בונה payload לבחירה חוצת-פסקאות, עם עוגן וטווח עבור כל פסקה.
+Map<String, dynamic> buildPluginMultiSectionSelectionPayload({
+  required TextBookLoaded state,
+  required List<String> rawTexts,
+  required String selectedText,
+  required int firstSectionIndex,
+  required int? startHint,
+  required RenderSettings settings,
+}) {
+  const selectionService = ReaderSelectionService();
+  final renderedLines = [
+    for (final rawText in rawTexts)
+      renderSelectionLine(rawText: rawText, settings: settings),
+  ];
+  return selectionService.buildMultiSectionPayload(
+    bookId: state.book.title,
+    bookTitle: state.book.title,
+    firstSectionIndex: firstSectionIndex,
+    rawTexts: rawTexts,
+    lineRanges:
+        locateSelectionRangesPerLine(
+          selectedText: selectedText,
+          visibleLines: renderedLines,
+          startColumnHint: startHint,
+        ) ??
+        const [],
+    settings: settings,
+    selectedText: selectedText,
     currentRef: state.currentTitle,
     bookDbId: state.book.id,
     bookType: PluginBookIdentity.typeOf(state.book),

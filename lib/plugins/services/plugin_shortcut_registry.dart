@@ -25,16 +25,16 @@ class PluginShortcutRegistry extends ChangeNotifier {
   /// זורק [PluginShortcutException] אם לקיצור אין גם [command] וגם
   /// [contextMenuItemId] — קיצור כזה לא היה מפעיל דבר.
   void register(String pluginId, PluginShortcut shortcut) {
-    _validate(pluginId, shortcut);
+    final normalized = _validate(pluginId, shortcut);
     final shortcuts = _byPlugin.putIfAbsent(pluginId, () => {});
-    if (!shortcuts.containsKey(shortcut.id) &&
+    if (!shortcuts.containsKey(normalized.id) &&
         shortcuts.length >= maxShortcutsPerPlugin) {
       throw const PluginShortcutException(
         'error.invalid_params',
         'a plugin can register at most 32 keyboard shortcuts',
       );
     }
-    shortcuts[shortcut.id] = shortcut;
+    shortcuts[normalized.id] = normalized;
     notifyListeners();
   }
 
@@ -45,7 +45,7 @@ class PluginShortcutRegistry extends ChangeNotifier {
   ) {
     final shortcut = PluginShortcut.fromJson(payload);
     register(pluginId, shortcut);
-    return shortcut;
+    return _byPlugin[pluginId]![shortcut.id]!;
   }
 
   /// מעדכן את [id] של קיצור לפי [patch] (נכון לעכשיו רק `key` נתמך).
@@ -68,8 +68,7 @@ class PluginShortcutRegistry extends ChangeNotifier {
         'patch must contain only a string key',
       );
     }
-    final updated = current.copyWith(key: key);
-    _validate(pluginId, updated);
+    final updated = _validate(pluginId, current.copyWith(key: key));
     _byPlugin[pluginId]![id] = updated;
     notifyListeners();
     return updated;
@@ -95,7 +94,7 @@ class PluginShortcutRegistry extends ChangeNotifier {
 
   PluginShortcut? find(String pluginId, String id) => _byPlugin[pluginId]?[id];
 
-  void _validate(String pluginId, PluginShortcut shortcut) {
+  PluginShortcut _validate(String pluginId, PluginShortcut shortcut) {
     if (shortcut.id.isEmpty || shortcut.label.isEmpty) {
       throw const PluginShortcutException(
         'error.invalid_params',
@@ -108,12 +107,14 @@ class PluginShortcutRegistry extends ChangeNotifier {
         'shortcut requires command or contextMenuItemId',
       );
     }
-    if (!ShortcutHelper.isRecognized(shortcut.key)) {
+    final normalizedKey = ShortcutHelper.normalizeShortcut(shortcut.key);
+    if (normalizedKey == null) {
       throw const PluginShortcutException(
         'error.invalid_params',
         'shortcut key is not recognized',
       );
     }
+    return shortcut.copyWith(key: normalizedKey);
   }
 }
 

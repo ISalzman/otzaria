@@ -3446,17 +3446,27 @@ Future<void> _dispatchContextMenuShortcut({
     return;
   }
 
+  final selectedLineCount = text.split('\n').length;
+  List<String>? fullContentLines;
+  if (selectedLineCount > 1) {
+    final fullContent = await textBookBloc.repository.getBookContent(
+      state.book,
+    );
+    fullContentLines = await splitContentLines(fullContent);
+  }
+
   // השורה המסומנת נטענה בהכרח, אבל ברשימה חלקית (חימום/שחרור) עשויים
   // להיות placeholders ריקים — נופלים אז לקריאת התוכן המלא מה-repository.
   var rawText = sectionIndex < state.content.length
       ? state.content[sectionIndex]
       : '';
   if (rawText.isEmpty) {
-    final fullContent = await textBookBloc.repository.getBookContent(
-      state.book,
+    fullContentLines ??= await splitContentLines(
+      await textBookBloc.repository.getBookContent(state.book),
     );
-    final lines = await splitContentLines(fullContent);
-    if (sectionIndex < lines.length) rawText = lines[sectionIndex];
+    if (sectionIndex < fullContentLines.length) {
+      rawText = fullContentLines[sectionIndex];
+    }
   }
   if (rawText.isEmpty) {
     UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
@@ -3482,14 +3492,30 @@ Future<void> _dispatchContextMenuShortcut({
     lineHeight: settingsState.lineHeight,
   );
 
-  final selection = buildPluginSelectionPayload(
-    state: state,
-    rawText: rawText,
-    selectedText: text,
-    sectionIndex: sectionIndex,
-    startHint: selectedColumn,
-    settings: renderSettings,
-  );
+  final Map<String, dynamic> selection;
+  if (selectedLineCount > 1 && fullContentLines != null) {
+    final endIndex = min(
+      sectionIndex + selectedLineCount,
+      fullContentLines.length,
+    );
+    selection = buildPluginMultiSectionSelectionPayload(
+      state: state,
+      rawTexts: fullContentLines.sublist(sectionIndex, endIndex),
+      selectedText: text,
+      firstSectionIndex: sectionIndex,
+      startHint: selectedColumn,
+      settings: renderSettings,
+    );
+  } else {
+    selection = buildPluginSelectionPayload(
+      state: state,
+      rawText: rawText,
+      selectedText: text,
+      sectionIndex: sectionIndex,
+      startHint: selectedColumn,
+      settings: renderSettings,
+    );
+  }
 
   final renderedSelectedText =
       (selection['renderedSelectedText'] ?? selection['text'] ?? '').toString();

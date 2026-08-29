@@ -3318,7 +3318,8 @@ Future<void> main() async {
       expect(targetLines, [
         'Future<void> _atomicWrite(File source, String targetPath) async {',
         'final target = File(targetPath);',
-        "p.join(target.parent.path, '.\${p.basename(targetPath)}.\$suffix\$_stagingExt'),",
+        'target.parent.path,',
+        "'.\${p.basename(targetPath)}.\$suffix\$_stagingExt',",
         'await _sweepStagingLeftovers(target.parent);',
         'await staging.rename(targetPath);',
       ]);
