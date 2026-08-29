@@ -1,6 +1,9 @@
+import 'dart:ffi' as ffi;
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:win32/win32.dart';
 
 /// זיהוי ארכיטקטורת Windows on ARM — הן ריצה נייטיבית והן אמולציית x64.
 ///
@@ -8,6 +11,8 @@ import 'package:flutter/foundation.dart';
 /// משתמשים, וכל תוסף עולה ריק. הזיהוי מאפשר להסביר זאת למשתמש, ומשמש גם
 /// את מנגנון העדכון לבחירת המתקין המתאים למעבד.
 class WindowsArchInfo {
+  static const _imageFileMachineArm64 = 0xaa64;
+
   /// overrides לבדיקות בלבד. העבר `null` לאיפוס.
   static bool? _emulatedOverride;
   static bool? _onArmOverride;
@@ -24,12 +29,15 @@ class WindowsArchInfo {
 
   /// `true` כשהתהליך הנוכחי הוא x64 אך המעבד עצמו ARM64.
   ///
-  /// תחת אמולציה Windows מותיר ב-PROCESSOR_ARCHITECTURE את הארכיטקטורה של
-  /// התהליך (AMD64) ומוסיף ב-PROCESSOR_ARCHITEW6432 את זו של המעבד (ARM64).
+  /// בתהליך x64 מאומלץ משתני הסביבה מתארים את המעבד המדומה, לכן מקור האמת
+  /// הוא [IsWow64Process2] שמחזיר את ארכיטקטורת המארח.
   static bool get isEmulatedOnArm {
     if (_emulatedOverride != null) return _emulatedOverride!;
     if (!Platform.isWindows) return false;
-    return resolveEmulatedOnArm(Platform.environment);
+    return resolveEmulatedOnArm(
+      Platform.environment,
+      nativeMachine: _nativeMachine(),
+    );
   }
 
   /// `true` על כל מחשב ARM — בין אם התהליך נייטיבי ובין אם מאומל.
@@ -37,23 +45,54 @@ class WindowsArchInfo {
   static bool get isWindowsOnArm {
     if (_onArmOverride != null) return _onArmOverride!;
     if (!Platform.isWindows) return false;
-    return resolveWindowsOnArm(Platform.environment);
+    return resolveWindowsOnArm(
+      Platform.environment,
+      nativeMachine: _nativeMachine(),
+    );
   }
 
   @visibleForTesting
-  static bool resolveEmulatedOnArm(Map<String, String> environment) {
+  static bool resolveEmulatedOnArm(
+    Map<String, String> environment, {
+    int? nativeMachine,
+  }) {
+    final process = environment['PROCESSOR_ARCHITECTURE']?.toUpperCase();
+    if (nativeMachine == _imageFileMachineArm64) {
+      return process != null && !process.startsWith('ARM');
+    }
     final native = environment['PROCESSOR_ARCHITEW6432']?.toUpperCase();
     if (native == null || native.isEmpty) return false;
-    final process = environment['PROCESSOR_ARCHITECTURE']?.toUpperCase();
     return native.startsWith('ARM') &&
         process != null &&
         !process.startsWith('ARM');
   }
 
   @visibleForTesting
-  static bool resolveWindowsOnArm(Map<String, String> environment) {
+  static bool resolveWindowsOnArm(
+    Map<String, String> environment, {
+    int? nativeMachine,
+  }) {
+    if (nativeMachine == _imageFileMachineArm64) return true;
     final process = environment['PROCESSOR_ARCHITECTURE']?.toUpperCase();
     if (process != null && process.startsWith('ARM')) return true;
     return resolveEmulatedOnArm(environment);
+  }
+
+  static int? _nativeMachine() {
+    final processMachine = calloc<ffi.Uint16>();
+    final nativeMachine = calloc<ffi.Uint16>();
+    try {
+      final result = IsWow64Process2(
+        GetCurrentProcess(),
+        processMachine,
+        nativeMachine,
+      );
+      return result.value ? nativeMachine.value : null;
+    } catch (_) {
+      return null;
+    } finally {
+      calloc.free(processMachine);
+      calloc.free(nativeMachine);
+    }
   }
 }

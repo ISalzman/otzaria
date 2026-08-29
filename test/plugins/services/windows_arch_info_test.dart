@@ -73,6 +73,16 @@ void main() {
       );
     });
 
+    test('x64 emulation is detected from the native machine API', () {
+      expect(
+        WindowsArchInfo.resolveWindowsOnArm(
+          {'PROCESSOR_ARCHITECTURE': 'AMD64'},
+          nativeMachine: 0xaa64,
+        ),
+        isTrue,
+      );
+    });
+
     test('native x64 machine is not on ARM', () {
       expect(
         WindowsArchInfo.resolveWindowsOnArm({
