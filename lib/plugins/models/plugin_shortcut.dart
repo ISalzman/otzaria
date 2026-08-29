@@ -46,8 +46,8 @@ class PluginShortcut {
       label: json['label'] as String? ?? '',
       key: key is String ? key : '',
       command: command is String && command.isNotEmpty ? command : null,
-      contextMenuItemId: contextMenuItemId is String &&
-              contextMenuItemId.isNotEmpty
+      contextMenuItemId:
+          contextMenuItemId is String && contextMenuItemId.isNotEmpty
           ? contextMenuItemId
           : null,
     );

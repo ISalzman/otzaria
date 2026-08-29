@@ -73,8 +73,7 @@ class PluginShortcutRegistry extends ChangeNotifier {
   List<(String pluginId, PluginShortcut shortcut)> getAll() {
     return List.unmodifiable([
       for (final entry in _byPlugin.entries)
-        for (final shortcut in entry.value.values)
-          (entry.key, shortcut),
+        for (final shortcut in entry.value.values) (entry.key, shortcut),
     ]);
   }
 

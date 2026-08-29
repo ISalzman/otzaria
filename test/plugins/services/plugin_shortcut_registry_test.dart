@@ -34,16 +34,18 @@ void main() {
       expect(shortcut.contextMenuItemId, 'menu-item-1');
     });
 
-    test('registering a shortcut without command and contextMenuItemId throws',
-        () {
-      expect(
-        () => registry.registerPayload('plugin-a', {
-          'id': 'empty',
-          'label': 'ריק',
-        }),
-        throwsA(isA<PluginShortcutException>()),
-      );
-    });
+    test(
+      'registering a shortcut without command and contextMenuItemId throws',
+      () {
+        expect(
+          () => registry.registerPayload('plugin-a', {
+            'id': 'empty',
+            'label': 'ריק',
+          }),
+          throwsA(isA<PluginShortcutException>()),
+        );
+      },
+    );
 
     test('registering the same id replaces the existing shortcut', () {
       registry.registerPayload('plugin-a', {

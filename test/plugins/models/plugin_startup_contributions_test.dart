@@ -87,11 +87,7 @@ void main() {
             {'id': 'b1', 'title': 'כפתור', 'icon': 'apps_24_regular'},
           ],
           'shortcuts': [
-            {
-              'id': 's1',
-              'label': 'קיצור',
-              'contextMenuItemId': 'm1',
-            },
+            {'id': 's1', 'label': 'קיצור', 'contextMenuItemId': 'm1'},
           ],
           'activationEvents': ['app.startup'],
           'keepAlive': true,

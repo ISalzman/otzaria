@@ -210,10 +210,8 @@ class PluginStartupContributionsService {
           plugin.pluginId,
           startup.externalEditions,
           applied: _appliedExternalEditions,
-          register: (_, item) => _externalEditions.registerPayload(
-            plugin,
-            item,
-          ),
+          register: (_, item) =>
+              _externalEditions.registerPayload(plugin, item),
           removeItem: _externalEditions.remove,
         );
       } else {

@@ -122,17 +122,11 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.title,
-                        style: kSettingsTitleStyle,
-                      ),
+                      Text(widget.title, style: kSettingsTitleStyle),
                       if (widget.subtitle != null &&
                           widget.subtitle!.trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(
-                          widget.subtitle!,
-                          style: kSettingsSubtitleStyle,
-                        ),
+                        Text(widget.subtitle!, style: kSettingsSubtitleStyle),
                       ],
                     ],
                   ),
@@ -158,10 +152,7 @@ class _ShortcutDropDownTileState extends State<ShortcutDropDownTile> {
               titleSection,
               const SizedBox(width: 16),
               Flexible(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: field,
-                ),
+                child: Align(alignment: Alignment.centerLeft, child: field),
               ),
             ],
           );

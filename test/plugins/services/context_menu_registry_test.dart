@@ -172,10 +172,7 @@ void main() {
           {'id': 'child-action', 'title': 'Child'},
         ],
       });
-      registry.registerPayload('marker', {
-        'id': 'top-action',
-        'title': 'Top',
-      });
+      registry.registerPayload('marker', {'id': 'top-action', 'title': 'Top'});
 
       expect(registry.findItem('marker', 'top-action')?.label, 'Top');
       expect(registry.findItem('marker', 'child-action')?.label, 'Child');
@@ -283,10 +280,9 @@ void main() {
         ],
       });
 
-      expect(
-        registry.getAll().single.$2.contexts,
-        ['reader-page-shape-selection'],
-      );
+      expect(registry.getAll().single.$2.contexts, [
+        'reader-page-shape-selection',
+      ]);
     });
 
     test('accepts multiple contexts and makes children inherit them', () {
@@ -294,10 +290,7 @@ void main() {
         'id': 'marker-menu',
         'type': 'submenu',
         'title': 'Marker',
-        'contexts': [
-          'reader-selection',
-          'reader-page-shape-selection',
-        ],
+        'contexts': ['reader-selection', 'reader-page-shape-selection'],
         'children': [
           {'id': 'inherited', 'title': 'Inherited'},
           {
@@ -311,10 +304,7 @@ void main() {
       final item = registry.getAll().single.$2;
       expect(item.contexts, hasLength(2));
       expect(item.children.first.contexts, item.contexts);
-      expect(
-        item.children.last.contexts,
-        ['reader-page-shape-selection'],
-      );
+      expect(item.children.last.contexts, ['reader-page-shape-selection']);
     });
 
     test('rejects empty or duplicate contexts', () {
@@ -370,12 +360,9 @@ void main() {
       expect(item.showWhenContainsAny, ['רש"י', 'תוספות']);
       expect(item.isVisibleForSelection('דברי רש"י כאן'), isTrue);
       expect(item.isVisibleForSelection('טקסט אחר'), isFalse);
-      expect(
-        item.toJson()['showWhen'],
-        {
-          'selectionContainsAny': ['רש"י', 'תוספות'],
-        },
-      );
+      expect(item.toJson()['showWhen'], {
+        'selectionContainsAny': ['רש"י', 'תוספות'],
+      });
     });
 
     test('rejects invalid showWhen payloads', () {
@@ -407,9 +394,7 @@ void main() {
         () => registry.registerPayload('dict', {
           'id': 'bad3',
           'title': 'Bad',
-          'showWhen': {
-            'selectionContainsAny': List.filled(51, 'מ'),
-          },
+          'showWhen': {'selectionContainsAny': List.filled(51, 'מ')},
         }),
         throwsInvalidParams(),
       );

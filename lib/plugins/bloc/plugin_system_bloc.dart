@@ -232,25 +232,17 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     final pane = state.readingPane;
     if (pane is TextBookTab) {
       unawaited(
-        declarativeHost?.readerBookChanged(
-          pane.book,
-          context: 'reader-text',
-        ),
+        declarativeHost?.readerBookChanged(pane.book, context: 'reader-text'),
       );
       return;
     }
     if (pane is PdfBookTab) {
       unawaited(
-        declarativeHost?.readerBookChanged(
-          pane.book,
-          context: 'reader-pdf',
-        ),
+        declarativeHost?.readerBookChanged(pane.book, context: 'reader-pdf'),
       );
       return;
     }
-    unawaited(
-      declarativeHost?.readerBookChanged(null, context: 'reader-text'),
-    );
+    unawaited(declarativeHost?.readerBookChanged(null, context: 'reader-text'));
   }
 
   Future<void> _onPinPluginRequested(

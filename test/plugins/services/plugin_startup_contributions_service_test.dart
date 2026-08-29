@@ -241,16 +241,18 @@ void main() {
     );
   });
 
-  test('shortcuts are not registered without the app.shortcuts permission',
-      () async {
-    repo.grantedByPlugin['p1'] = {..._allPermissions}
-      ..remove('app.shortcuts');
+  test(
+    'shortcuts are not registered without the app.shortcuts permission',
+    () async {
+      repo.grantedByPlugin['p1'] = {..._allPermissions}
+        ..remove('app.shortcuts');
 
-    await service.sync([_plugin(startup: _fullStartup())], repo);
+      await service.sync([_plugin(startup: _fullStartup())], repo);
 
-    expect(shortcuts.getAll(), isEmpty);
-    expect(contextMenu.getAll().single.$2.id, 'm1');
-  });
+      expect(shortcuts.getAll(), isEmpty);
+      expect(contextMenu.getAll().single.$2.id, 'm1');
+    },
+  );
 
   group('externalEditions', () {
     InstalledPlugin editionsPlugin({List<String> permissions = const []}) {
@@ -446,10 +448,10 @@ void main() {
     await service.sync([_plugin(startup: pair('a1', 'a2'))], repo);
     await service.sync([_plugin(startup: pair('b1', 'b2'))], repo);
 
-    expect(
-      toolbar.getAll().map((record) => record.$2.id).toSet(),
-      {'b1', 'b2'},
-    );
+    expect(toolbar.getAll().map((record) => record.$2.id).toSet(), {
+      'b1',
+      'b2',
+    });
   });
 
   test('an unchanged publishedData seed is not rewritten', () async {
@@ -581,17 +583,14 @@ void main() {
         'app.startup_contributions',
         'app.run_on_startup',
       };
-      await service.sync(
-        [
-          _plugin(
-            id: 'p2',
-            startup: {
-              'activationEvents': ['app.startup'],
-            },
-          ),
-        ],
-        repo,
-      );
+      await service.sync([
+        _plugin(
+          id: 'p2',
+          startup: {
+            'activationEvents': ['app.startup'],
+          },
+        ),
+      ], repo);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(startupScheduled, isTrue);
     },
@@ -621,10 +620,7 @@ void main() {
               'id': 'host-only',
               'title': 'Host',
               'icon': 'book_24_regular',
-              'binding': {
-                'program': 'links',
-                'visibleOutput': 'book',
-              },
+              'binding': {'program': 'links', 'visibleOutput': 'book'},
               'action': {
                 'type': 'reader.openBook',
                 'args': {
@@ -775,9 +771,7 @@ void main() {
         conditionEvaluator: evaluator,
       );
       conditionalService = PluginStartupContributionsService.forTesting(
-        toolbarRegistry: PluginToolbarRegistry.forTesting(
-          evaluator: evaluator,
-        ),
+        toolbarRegistry: PluginToolbarRegistry.forTesting(evaluator: evaluator),
         contextMenuRegistry: ContextMenuRegistry.forTesting(
           evaluator: evaluator,
         ),

@@ -99,9 +99,7 @@ class PluginStartupContributions {
     return item['openPlugin'] != true;
   }
 
-  static bool _contextMenuItemActivatesBackground(
-    Map<String, dynamic> item,
-  ) {
+  static bool _contextMenuItemActivatesBackground(Map<String, dynamic> item) {
     switch (item['type']) {
       case 'separator':
         return false;

@@ -109,16 +109,12 @@ List<String> pluginBackgroundActivationReasons(PluginManifest manifest) {
 
 bool _toolbarItemActivatesBackground(Map<String, dynamic> item) =>
     PluginStartupContributions(
-      toolbarItems: [
-        item,
-      ],
+      toolbarItems: [item],
     ).hasBackgroundActivationTrigger;
 
 bool _contextMenuItemActivatesBackground(Map<String, dynamic> item) =>
     PluginStartupContributions(
-      contextMenuItems: [
-        item,
-      ],
+      contextMenuItems: [item],
     ).hasBackgroundActivationTrigger;
 
 /// האם הרשאה מתחילה מאושרת במסך ההתקנה.

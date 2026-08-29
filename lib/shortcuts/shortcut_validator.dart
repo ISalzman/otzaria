@@ -21,10 +21,7 @@ class ShortcutValidator {
       'key-shortcut-open-advanced-search';
 
   static const Set<Set<String>> _compatibleShortcutGroups = {
-    {
-      'key-shortcut-add-note',
-      'key-shortcut-calendar-toggle-events',
-    },
+    {'key-shortcut-add-note', 'key-shortcut-calendar-toggle-events'},
     {
       'key-shortcut-calendar-toggle-times',
       'key-shortcut-shamor-zachor-cycle-filter',
@@ -241,8 +238,7 @@ class ShortcutValidator {
   static Map<String, String> get shortcutNames => {
     ..._baseShortcutNames,
     ..._pluginShortcutNames,
-    for (final entry in _pluginShortcuts.entries)
-      entry.key: entry.value.label,
+    for (final entry in _pluginShortcuts.entries) entry.key: entry.value.label,
   };
 
   static const Map<String, String> _baseShortcutNames = {

@@ -22,10 +22,7 @@ PluginManifest _manifest(String id) {
   });
 }
 
-InstalledPlugin _plugin({
-  required String id,
-  bool showInTools = true,
-}) {
+InstalledPlugin _plugin({required String id, bool showInTools = true}) {
   return InstalledPlugin(
     pluginId: id,
     name: id,
@@ -109,10 +106,7 @@ void main() {
       addTearDown(bloc.close);
 
       bloc.add(
-        const SetPluginShowInToolsRequested(
-          pluginId: 'p1',
-          showInTools: true,
-        ),
+        const SetPluginShowInToolsRequested(pluginId: 'p1', showInTools: true),
       );
 
       await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));

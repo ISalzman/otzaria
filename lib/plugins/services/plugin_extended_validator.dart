@@ -187,9 +187,7 @@ const Set<String> _knownApiMethods = {
 
 /// API פנימי שקיים בתוספים אך אינו מתועד פומבית, ולכן לא נאזהיר עליו.
 /// השיטה מיועדת לחנות התוספים וב-d.ts מסומנת `@internal`.
-const Set<String> _knownUndocumentedMethods = {
-  'plugin.requestInstall',
-};
+const Set<String> _knownUndocumentedMethods = {'plugin.requestInstall'};
 
 /// אירועי lifecycle ו-events נתמכים.
 const Set<String> _knownEvents = {

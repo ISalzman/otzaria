@@ -475,10 +475,7 @@ const int _pluginRawLinksMaxRecords = 10000;
 const int _pluginLinkContentMaxItems = 25;
 
 typedef PluginRpcEventSink =
-    Future<void> Function(
-      String topic,
-      Map<String, dynamic> payload,
-    );
+    Future<void> Function(String topic, Map<String, dynamic> payload);
 
 class _PluginNetworkRequest {
   final Uri uri;
@@ -806,9 +803,7 @@ class PluginBridgeAdapter {
         final id = args['id'];
         final patch = args['patch'];
         if (id is! String || patch is! Map) {
-          throw Exception(
-            'error.invalid_params: id and patch are required',
-          );
+          throw Exception('error.invalid_params: id and patch are required');
         }
         PluginShortcutRegistry.instance.update(
           plugin.pluginId,
@@ -1887,9 +1882,7 @@ class PluginBridgeAdapter {
           final autoSearch = args['autoSearch'] as bool? ?? true;
           final selectItems = (args['selectItems'] as List? ?? const [])
               .whereType<String>()
-              .where(
-                (id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id),
-              )
+              .where((id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id))
               .take(4)
               .toList();
           final settings = PluginOpenSearchTabSettings.parse(
@@ -2144,10 +2137,7 @@ class PluginBridgeAdapter {
           }
           return PluginReaderScrollService(
             _dependencies.tabsBloc,
-          ).scrollToSection(
-            sectionIndex,
-            highlight: args['highlight'] == true,
-          );
+          ).scrollToSection(sectionIndex, highlight: args['highlight'] == true);
         }
       case 'getSelection':
         final currentPane = _dependencies.tabsBloc.state.readingPane;
@@ -2312,16 +2302,13 @@ class PluginBridgeAdapter {
         }
         final allBooks = (await DataRepository.instance.library).getAllBooks();
         final highlightUid = highlight.bookUid as String?;
-        final book = allBooks.cast<dynamic>().firstWhere(
-          (item) {
-            if (item == null) return false;
-            if (highlightUid != null && highlightUid.isNotEmpty) {
-              return PluginBookIdentity.uidOf(item as Book) == highlightUid;
-            }
-            return item.title == highlight.bookId;
-          },
-          orElse: () => null,
-        );
+        final book = allBooks.cast<dynamic>().firstWhere((item) {
+          if (item == null) return false;
+          if (highlightUid != null && highlightUid.isNotEmpty) {
+            return PluginBookIdentity.uidOf(item as Book) == highlightUid;
+          }
+          return item.title == highlight.bookId;
+        }, orElse: () => null);
         if (book == null) return false;
         _dependencies.bookOpenCoordinator.openBook(
           book,
@@ -3496,7 +3483,10 @@ class PluginBridgeAdapter {
     final target = File(targetPath);
     final suffix = _randomSuffix();
     final staging = File(
-      p.join(target.parent.path, '.${p.basename(targetPath)}.$suffix$_stagingExt'),
+      p.join(
+        target.parent.path,
+        '.${p.basename(targetPath)}.$suffix$_stagingExt',
+      ),
     );
 
     // שאריות מכתיבה שנקטעה (קריסה בין ה-copy ל-rename) — אין להן שום מנגנון
@@ -3637,10 +3627,7 @@ class PluginBridgeAdapter {
     required bool writable,
   }) async {
     final grants = await _readUserFileGrants();
-    grants[token] = {
-      'path': path,
-      'access': writable ? 'readwrite' : 'read',
-    };
+    grants[token] = {'path': path, 'access': writable ? 'readwrite' : 'read'};
     await _pluginRepo.setKV(
       plugin.pluginId,
       '_internal',
@@ -4387,10 +4374,7 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // tools.*
   // ----------------------------------------------------------------
-  Future<dynamic> _handleTools(
-    String action,
-    Map<String, dynamic> args,
-  ) async {
+  Future<dynamic> _handleTools(String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'gematria':
         {
@@ -5421,11 +5405,7 @@ class PluginBridgeAdapter {
           if (cancelled) break;
           await eventSink(_networkFetchStreamEvent, {
             'streamId': streamId,
-            'chunk': {
-              'sequence': sequence++,
-              'type': 'data',
-              'body': fragment,
-            },
+            'chunk': {'sequence': sequence++, 'type': 'data', 'body': fragment},
           });
         }
       }
@@ -5464,10 +5444,7 @@ class PluginBridgeAdapter {
   Iterable<String> _splitNetworkFetchChunk(String value) sync* {
     var start = 0;
     while (start < value.length) {
-      var end = math.min(
-        start + _maxNetworkFetchChunkCodeUnits,
-        value.length,
-      );
+      var end = math.min(start + _maxNetworkFetchChunkCodeUnits, value.length);
       if (end < value.length &&
           _isHighSurrogate(value.codeUnitAt(end - 1)) &&
           _isLowSurrogate(value.codeUnitAt(end))) {

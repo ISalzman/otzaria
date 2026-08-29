@@ -3398,10 +3398,7 @@ Future<void> _dispatchPluginShortcut({
   await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
     target.pluginId,
     'app.command',
-    {
-      'command': target.command,
-      'shortcutId': target.shortcutId,
-    },
+    {'command': target.command, 'shortcutId': target.shortcutId},
     preferBackground: true,
   );
 }
@@ -3494,6 +3491,7 @@ Future<void> _dispatchContextMenuShortcut({
   }
 
   await dispatchPluginContextMenuItemClick(
+    dispatcher: PluginRuntimeDispatcher.instance,
     pluginId: target.pluginId,
     item: item,
     selection: selection,
