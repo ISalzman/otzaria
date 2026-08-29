@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 
@@ -6,13 +7,17 @@ import 'package:otzaria/plugins/view/plugin_tab_page.dart';
 void main() {
   const tabUrl = 'file:///plugins/a/index.html';
   const otherUrl = 'file:///plugins/b/index.html';
+  const tabKey = ValueKey<String>('tab-a');
+  const otherKey = ValueKey<String>('tab-b');
 
   group('shouldHandleCreationFailure', () {
-    test('שתי יצירות מקבילות — רק בעל ה-URL התואם מגיב', () {
+    test('שתי יצירות מקבילות עם אותו URL — רק בעל המפתח התואם מגיב', () {
       // הטאב של תוסף A ממתין; הכשל שייך למופע של תוסף B.
       expect(
         shouldHandleCreationFailure(
-          failureUrl: otherUrl,
+          failureKey: otherKey,
+          expectedKey: tabKey,
+          failureUrl: tabUrl,
           expectedUrl: tabUrl,
           isCreated: false,
           alreadyFailed: false,
@@ -22,6 +27,8 @@ void main() {
 
       expect(
         shouldHandleCreationFailure(
+          failureKey: tabKey,
+          expectedKey: tabKey,
           failureUrl: tabUrl,
           expectedUrl: tabUrl,
           isCreated: false,
@@ -34,6 +41,8 @@ void main() {
     test('טאב שה-WebView שלו כבר נוצר אינו מוחלף במסך שגיאה', () {
       expect(
         shouldHandleCreationFailure(
+          failureKey: tabKey,
+          expectedKey: tabKey,
           failureUrl: tabUrl,
           expectedUrl: tabUrl,
           isCreated: true,
@@ -46,6 +55,8 @@ void main() {
     test('כשל שכבר הוצג אינו מטופל שוב', () {
       expect(
         shouldHandleCreationFailure(
+          failureKey: tabKey,
+          expectedKey: tabKey,
           failureUrl: tabUrl,
           expectedUrl: tabUrl,
           isCreated: false,
@@ -55,10 +66,12 @@ void main() {
       );
     });
 
-    test('אירוע בלי URL עדיין מטופל — אחרת החיווי היה נעלם', () {
+    test('אירוע ישן בלי מפתח נופל חזרה להתאמת URL', () {
       for (final unknown in <String?>[null, '']) {
         expect(
           shouldHandleCreationFailure(
+            failureKey: null,
+            expectedKey: tabKey,
             failureUrl: unknown,
             expectedUrl: tabUrl,
             isCreated: false,
@@ -68,6 +81,20 @@ void main() {
           reason: 'URL לא ידוע ($unknown) חייב להמשיך להציג את השגיאה',
         );
       }
+    });
+
+    test('אירוע ישן עם URL של טאב אחר אינו מטופל', () {
+      expect(
+        shouldHandleCreationFailure(
+          failureKey: null,
+          expectedKey: tabKey,
+          failureUrl: otherUrl,
+          expectedUrl: tabUrl,
+          isCreated: false,
+          alreadyFailed: false,
+        ),
+        isFalse,
+      );
     });
   });
 }

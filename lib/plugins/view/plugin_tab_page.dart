@@ -116,22 +116,18 @@ const String _sdkStub = r'''
 })();
 ''';
 
-/// הגדרות ה-WebView של טאב תוסף.
-@visibleForTesting
 /// האם אירוע כשל היצירה שייך לטאב הזה.
-///
-/// ה-stream של הפלאגין גלובלי, וכמה WebViewים נוצרים במקביל (מארח הרקע
-/// וטאבים) — בלי התאמה לפי [failureUrl] כשל של מופע אחד היה מחליף במסך
-/// שגיאה טאב שיצירתו עדיין עשויה להצליח. אירוע בלי URL (מקור לא ידוע)
-/// עדיין מטופל, כדי לא לאבד את החיווי שבגללו נוסף המנגנון.
 @visibleForTesting
 bool shouldHandleCreationFailure({
+  required Key? failureKey,
+  required Key expectedKey,
   required String? failureUrl,
   required String expectedUrl,
   required bool isCreated,
   required bool alreadyFailed,
 }) {
   if (isCreated || alreadyFailed) return false;
+  if (failureKey != null) return failureKey == expectedKey;
   if (failureUrl == null || failureUrl.isEmpty) return true;
   return failureUrl == expectedUrl;
 }
@@ -449,6 +445,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
   void _onCreationFailure(WindowsWebViewCreationFailure failure) {
     if (!mounted ||
         !shouldHandleCreationFailure(
+          failureKey: failure.creationKey,
+          expectedKey: _webViewKey,
           failureUrl: failure.requestedUrl,
           expectedUrl: _expectedCreationUrl(),
           isCreated: webViewController != null,
