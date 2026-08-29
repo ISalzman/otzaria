@@ -213,6 +213,7 @@ const Set<String> _knownEvents = {
   'workspace.changed',
   'settings.changed',
   'plugin.permissions_changed',
+  'app.command',
   'search.requested',
   // אירוע ממוקד מ-PluginExternalSearchService: בקשת חיפוש חיצוני ממסך
   // החיפוש המובנה. תוסף-ספק מצהיר עליו ב-activationEvents כדי שהבקשה

@@ -395,7 +395,15 @@ class ShortcutValidator {
   static bool _pluginDefaultKeyTaken(String settingKey, String defaultKey) {
     for (final key in shortcutKeys) {
       if (key == settingKey) continue;
-      if (_pluginShortcuts.containsKey(key)) continue;
+      if (_pluginShortcuts.containsKey(key)) {
+        final userValue = Settings.getValue<String>(key);
+        if (userValue != null &&
+            userValue.isNotEmpty &&
+            userValue == defaultKey) {
+          return true;
+        }
+        continue;
+      }
       final value = getShortcutValue(key) ?? '';
       if (value.isNotEmpty && value == defaultKey) return true;
     }

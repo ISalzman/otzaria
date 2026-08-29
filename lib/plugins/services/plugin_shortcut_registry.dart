@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/plugins/models/plugin_shortcut.dart';
+import 'package:otzaria/shortcuts/shortcut_helper.dart';
 
 /// רישום קיצורי המקלדת שתוספים מצהירים עליהם — מהמניפסט
 /// (`contributes.startup.shortcuts`) או בזמן ריצה (`app.registerShortcut`).
@@ -11,6 +12,7 @@ import 'package:otzaria/plugins/models/plugin_shortcut.dart';
 /// הרשמה ל-ChangeNotifier מאפשרת למסך הגדרות קיצורי המקשים ולמטפל המקלדת
 /// להישאר מעודכנים כשקיצור נוסף/מוסר/מתעדכן בזמן ריצה.
 class PluginShortcutRegistry extends ChangeNotifier {
+  static const int maxShortcutsPerPlugin = 32;
   static final PluginShortcutRegistry instance = PluginShortcutRegistry._();
   PluginShortcutRegistry._();
 
@@ -24,7 +26,15 @@ class PluginShortcutRegistry extends ChangeNotifier {
   /// [contextMenuItemId] — קיצור כזה לא היה מפעיל דבר.
   void register(String pluginId, PluginShortcut shortcut) {
     _validate(pluginId, shortcut);
-    (_byPlugin.putIfAbsent(pluginId, () => {}))[shortcut.id] = shortcut;
+    final shortcuts = _byPlugin.putIfAbsent(pluginId, () => {});
+    if (!shortcuts.containsKey(shortcut.id) &&
+        shortcuts.length >= maxShortcutsPerPlugin) {
+      throw const PluginShortcutException(
+        'error.invalid_params',
+        'a plugin can register at most 32 keyboard shortcuts',
+      );
+    }
+    shortcuts[shortcut.id] = shortcut;
     notifyListeners();
   }
 
@@ -52,7 +62,13 @@ class PluginShortcutRegistry extends ChangeNotifier {
       );
     }
     final key = patch['key'];
-    final updated = current.copyWith(key: key is String ? key : current.key);
+    if (patch.length != 1 || key is! String) {
+      throw const PluginShortcutException(
+        'error.invalid_params',
+        'patch must contain only a string key',
+      );
+    }
+    final updated = current.copyWith(key: key);
     _validate(pluginId, updated);
     _byPlugin[pluginId]![id] = updated;
     notifyListeners();
@@ -90,6 +106,12 @@ class PluginShortcutRegistry extends ChangeNotifier {
       throw const PluginShortcutException(
         'error.invalid_params',
         'shortcut requires command or contextMenuItemId',
+      );
+    }
+    if (!ShortcutHelper.isRecognized(shortcut.key)) {
+      throw const PluginShortcutException(
+        'error.invalid_params',
+        'shortcut key is not recognized',
       );
     }
   }

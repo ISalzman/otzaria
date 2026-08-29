@@ -380,6 +380,27 @@ void main() {
       expect(ShortcutValidator.getShortcutValue(secondKey), isNull);
       expect(ShortcutValidator.pluginShortcuts[secondKey]?.defaultKey, isEmpty);
     });
+
+    test(
+      'ברירת מחדל של תוסף לא מתנגשת עם קיצור שהמשתמש הקצה לתוסף אחר',
+      () async {
+        const other = (
+          pluginId: 'com.b',
+          shortcutId: 'other',
+          label: 'אחר',
+          defaultKey: '',
+          command: 'other',
+          contextMenuItemId: null,
+        );
+        final otherKey = ShortcutValidator.pluginShortcutKey('com.b', 'other');
+        await Settings.setValue<String>(otherKey, 'ctrl+alt+h');
+        ShortcutValidator.registerPluginShortcuts({
+          key: target,
+          otherKey: other,
+        });
+        expect(ShortcutValidator.getShortcutValue(key), isNull);
+      },
+    );
   });
 
   group('canShareShortcut', () {

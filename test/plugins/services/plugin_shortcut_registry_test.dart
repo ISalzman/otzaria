@@ -82,6 +82,27 @@ void main() {
       );
     });
 
+    test('rejects an unrecognized key and an unsupported update patch', () {
+      expect(
+        () => registry.registerPayload('plugin-a', {
+          'id': 'bad',
+          'label': 'לא תקין',
+          'key': 'ctrl+unknown',
+          'command': 'run',
+        }),
+        throwsA(isA<PluginShortcutException>()),
+      );
+      registry.registerPayload('plugin-a', {
+        'id': 'ok',
+        'label': 'תקין',
+        'command': 'run',
+      });
+      expect(
+        () => registry.update('plugin-a', 'ok', {'label': 'לא נתמך'}),
+        throwsA(isA<PluginShortcutException>()),
+      );
+    });
+
     test('remove deletes the shortcut and notifies', () {
       var notified = 0;
       registry.addListener(() => notified++);
