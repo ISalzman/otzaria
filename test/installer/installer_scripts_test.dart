@@ -140,6 +140,54 @@ void main() {
     }
   });
 
+  group('מצב נייד נחסם ליעד מוגן (issue #1031)', () {
+    for (final name in _scripts) {
+      test('$name: הבדיקה חוסמת את "הבא" בעמוד בחירת התיקייה', () {
+        final body = _routine(_script(name), 'function NextButtonClick(');
+        final guardAt = body.indexOf('CurPageID = wpSelectDir');
+
+        expect(
+          guardAt,
+          greaterThan(0),
+          reason: 'החסימה נעלמה מ-NextButtonClick',
+        );
+        expect(
+          guardAt,
+          greaterThan(body.indexOf('WizardSilent')),
+          reason:
+              'בהתקנה שקטה אסור לגעת בכלום — /DIR שהועבר במפורש '
+              'חייב להישמר',
+        );
+
+        final guard = body.substring(guardAt);
+        expect(guard, contains('PortableMode'));
+        expect(guard, contains('IsProtectedInstallDir'));
+        expect(
+          guard,
+          contains('Result := False'),
+          reason: 'בלי זה האשף ממשיך ליעד החסום למרות האזהרה',
+        );
+      });
+
+      test('$name: היעדים המוגנים מכסים את תיקיות המערכת', () {
+        final fn = _routine(_script(name), 'function IsProtectedInstallDir(');
+
+        for (final root in const [
+          '{commonpf}',
+          '{commonpf32}',
+          '{win}',
+          '{commonappdata}',
+        ]) {
+          expect(
+            fn,
+            contains(root),
+            reason: '$root אינו נבדק — התקנה ניידת תוכל לנחות שם',
+          );
+        }
+      });
+    }
+  });
+
   group('GetDataDir — מקור האמת למיקום הנתונים', () {
     for (final name in _scripts) {
       test('$name: מנהל → commonappdata, אחרת userappdata', () {

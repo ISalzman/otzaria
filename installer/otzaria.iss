@@ -635,6 +635,33 @@ begin
   Result := (PreviousVersion <> '') and VersionAtLeast(PreviousVersion, '0.9.88');
 end;
 
+function IsPathUnder(Target: String; Root: String): Boolean;
+begin
+  Result := (Root <> '') and (Pos(Lowercase(AddBackslash(Root)), Target) = 1);
+end;
+
+// תיקיות מערכת שאינן כתיבות למשתמש רגיל. במצב נייד כל הנתונים נשמרים
+// בתיקיית התוכנה, ושם הם נחסמים — כולל תיקיית ה-WebView2 של התוספים
+// (issue #1031).
+function IsProtectedInstallDir(Path: String): Boolean;
+var
+  Target: String;
+begin
+  Target := Lowercase(AddBackslash(RemoveBackslash(Path)));
+  Result := IsPathUnder(Target, ExpandConstant('{commonpf}')) or
+            IsPathUnder(Target, ExpandConstant('{commonpf32}')) or
+            IsPathUnder(Target, ExpandConstant('{win}')) or
+            IsPathUnder(Target, ExpandConstant('{commonappdata}'));
+end;
+
+procedure WarnPortableProtectedDir();
+begin
+  MsgBox('התקנה ניידת שומרת את כל הנתונים בתיקיית התוכנה, ולתיקייה ' +
+         'שנבחרה אין הרשאת כתיבה למשתמש רגיל.' + #13#10 +
+         'בחר תיקייה אחרת — למשל בתיקיית המסמכים או בכונן נייד — ' +
+         'או חזור ובחר התקנה רגילה.', mbError, MB_OK);
+end;
+
 // בעזיבת עמוד סוג ההתקנה: קיבוע המצב, התאמת ברירת המחדל של תיקיית היעד,
 // ובמעבר בין משתמש-נוכחי לכל-המשתמשים — שיגור-מחדש במצב ההתקנה המתאים
 // (מצב ההתקנה של Inno נקבע בעליית התהליך ולא ניתן להחלפה תוך כדי ריצה).
@@ -648,6 +675,15 @@ begin
   Result := True;
   if WizardSilent then
     exit;
+
+  if (CurPageID = wpSelectDir) and PortableMode and
+     IsProtectedInstallDir(WizardForm.DirEdit.Text) then
+  begin
+    WarnPortableProtectedDir();
+    Result := False;
+    exit;
+  end;
+
   if (ModePage = nil) or (CurPageID <> ModePage.ID) then
     exit;
 
