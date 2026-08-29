@@ -84,6 +84,9 @@ Type: filesandordirs; Name: "{app}\default.isar";
 ; המסמן נכתב רק בהתקנת מנהל (ראה [INI]) והאפליקציה גוזרת ממנו את מיקום
 ; ברירת המחדל של הספרייה — מסמן ששרד מעבר להתקנת משתמש מפנה אותה ל-ProgramData.
 Type: files; Name: "{app}\system_install.marker"; Check: (not IsAdminInstallMode) or IsPortableInstall
+; המסמן מפעיל את המצב הנייד ומפנה את כל הנתונים ל-otzaria_data ליד ה-EXE — מסמן ששרד
+; מעבר להתקנה רגילה משאיר את הנתונים תחת Program Files, שאינה כתיבה (issue #1031).
+Type: files; Name: "{app}\portable.marker"; Check: not IsPortableInstall
 
 [Dirs]
 ; במצב נייד הנתונים יושבים ב-otzaria_data ליד ה-EXE — האפליקציה יוצרת אותה בעצמה.
@@ -121,7 +124,7 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 ; הסיום שלא מוצג ב-VERYSILENT ולכן לא תרוץ שם לעולם. runasoriginaluser מונע
 ; הרצת אוצריא מורמת אחרי עדכון עם UAC. /NOLAUNCH=1 (מנגנון העדכון הפנימי,
 ; בעת התקנה בסגירת התוכנה) מדלג על ההשקה כדי שאוצריא לא תיפתח מחדש.
-Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: ShouldLaunchAppAfterSilentInstall
 
 [Languages]

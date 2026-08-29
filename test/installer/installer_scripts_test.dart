@@ -97,6 +97,49 @@ void main() {
     }
   });
 
+  group('portable.marker — התקנה רגילה מנקה מצב נייד קודם (issue #1031)', () {
+    for (final name in _scripts) {
+      test('$name: המסמן נמחק בכל התקנה שאינה ניידת', () {
+        final installDelete = _section(_script(name), 'InstallDelete');
+        final match = RegExp(
+          r'^Type:\s*files;\s*Name:\s*"\{app\}\\portable\.marker";\s*'
+          r'Check:\s*(.+)$',
+          multiLine: true,
+        ).firstMatch(installDelete);
+
+        expect(
+          match,
+          isNotNull,
+          reason:
+              'בלי מחיקה, מסמן ממצב נייד קודם שורד להתקנה רגילה ו-AppPaths '
+              'מפנה את כל הנתונים ל-otzaria_data תחת Program Files',
+        );
+        expect(
+          _squeeze(match!.group(1)!),
+          'not IsPortableInstall',
+          reason: 'תנאי המחיקה חייב להיות ההיפוך המדויק של תנאי הכתיבה',
+        );
+      });
+
+      test('$name: ההשקה מדף הסיום רצה כמשתמש המקורי', () {
+        final run = _section(_script(name), 'Run');
+        final match = RegExp(
+          r'^Filename:\s*"\{app\}\\\{#MyAppExeName\}".*postinstall.*$',
+          multiLine: true,
+        ).firstMatch(run);
+
+        expect(match, isNotNull, reason: 'רשומת ההשקה מדף הסיום נעלמה');
+        expect(
+          match!.group(0),
+          contains('runasoriginaluser'),
+          reason:
+              'השקה מורמת יוצרת את תיקיות הנתונים עם ACL של מנהל — '
+              'WebView2 של התוספים נכשל אז בכתיבה',
+        );
+      });
+    }
+  });
+
   group('GetDataDir — מקור האמת למיקום הנתונים', () {
     for (final name in _scripts) {
       test('$name: מנהל → commonappdata, אחרת userappdata', () {

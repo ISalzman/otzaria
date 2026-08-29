@@ -80,6 +80,9 @@ Type: filesandordirs; Name: "{app}\default.isar";
 ; המסמן נכתב רק בהתקנת מנהל (ראה [INI]) והאפליקציה גוזרת ממנו את מיקום
 ; ברירת המחדל של הספרייה — מסמן ששרד מעבר להתקנת משתמש מפנה אותה ל-ProgramData.
 Type: files; Name: "{app}\system_install.marker"; Check: (not IsAdminInstallMode) or IsPortableInstall
+; המסמן מפעיל את המצב הנייד ומפנה את כל הנתונים ל-otzaria_data ליד ה-EXE — מסמן ששרד
+; מעבר להתקנה רגילה משאיר את הנתונים תחת Program Files, שאינה כתיבה (issue #1031).
+Type: files; Name: "{app}\portable.marker"; Check: not IsPortableInstall
 ; אין כאן מחיקה של תיקיית הספרים: בשני מצבי הבנייה הספרייה מוחלפת רק אחרי
 ; חילוץ מלא ומוצלח ל-staging — מחיקה מוקדמת השאירה משדרגים בלי ספרייה (issue #867).
 
@@ -2266,7 +2269,9 @@ end;
 ; שתקועים עם MSVCP140.dll 14.36.32532.0 הפגום, בלי הרצת installer נוסף.
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
 ; בהתקנה שקטה ההשקה מתבצעת בקוד בסוף ssPostInstall (ראה CurStepChanged).
-Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; runasoriginaluser: בלעדיו ההשקה מדף הסיום רצה מורמת ויוצרת את תיקיות הנתונים
+; עם ACL של מנהל — WebView2 של התוספים נכשל אז בכתיבה (issue #1031).
+Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "Otzaria.Otzaria"; Check: not IsPortableInstall
