@@ -2033,7 +2033,6 @@ class _CombinedViewState extends State<CombinedView> {
           itemScrollController: widget.tab.scrollController,
           itemPositionsListener: widget.tab.positionsListener,
           scrollOffsetController: widget.tab.mainOffsetController,
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
           itemCount: itemCount,
           itemBuilder: (context, index) => RepaintBoundary(
             child: buildExpansiomTile(
@@ -2322,11 +2321,15 @@ class _CombinedViewState extends State<CombinedView> {
                     builder: (context, constraints) {
                       return BlocBuilder<SettingsBloc, SettingsState>(
                         builder: (context, settingsState) {
-                          final textMaxWidth = textColumnMaxWidthOf(
-                            context,
-                            setting: settingsState.textMaxWidth,
-                            availableWidth: constraints.maxWidth,
-                          );
+                          // בתצוגה מקדימה הרוחב הזמין הוא של החלונית, לא של
+                          // אזור קריאה — הגבלת רוחב הטקסט הייתה מצרה אותו שוב.
+                          final textMaxWidth = widget.isPreviewMode
+                              ? 0.0
+                              : textColumnMaxWidthOf(
+                                  context,
+                                  setting: settingsState.textMaxWidth,
+                                  availableWidth: constraints.maxWidth,
+                                );
 
                           // במצב רציף — פסקה מכמה שורות מקור.
                           if (isContinuousParagraph) {
@@ -2391,13 +2394,7 @@ class _CombinedViewState extends State<CombinedView> {
                                     ),
                                   )
                                 : segmentText;
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(width: 16),
-                                Expanded(child: constrainedText),
-                              ],
-                            );
+                            return constrainedText;
                           }
 
                           String data = widget.data[primaryLineIndex];
@@ -2517,13 +2514,7 @@ class _CombinedViewState extends State<CombinedView> {
                                 )
                               : textWidget;
 
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(width: 16),
-                              Expanded(child: constrainedText),
-                            ],
-                          );
+                          return constrainedText;
                         },
                       );
                     },

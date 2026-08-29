@@ -196,7 +196,7 @@ void main() {
     );
   });
 
-  testWidgets('פס הגלילה מוסתר כשכל התוכן נראה במסך', (tester) async {
+  testWidgets('המסילה מוסתרת כשכל התוכן נראה, אך המרווח נשמר', (tester) async {
     final listener = ItemPositionsListener.create();
     final controller = ItemScrollController();
     const contentKey = Key('scroll-content');
@@ -214,7 +214,8 @@ void main() {
       ),
     );
 
-    // כל הפריטים גלויים בתוך המסך — אין מה לגלול, ולכן ה-12px צריכים להיעלם.
+    // אין מה לגלול — האגודל נעלם, אך מקום המסילה נשמר משני הצדדים כדי שהופעתו
+    // לא תזיז את הטקסט.
     (listener.itemPositions as ValueNotifier<Iterable<ItemPosition>>).value =
         const [
           ItemPosition(index: 0, itemLeadingEdge: 0, itemTrailingEdge: 0.4),
@@ -222,7 +223,13 @@ void main() {
         ];
     await tester.pump();
 
-    expect(tester.getTopLeft(find.byKey(contentKey)).dx, 0.0);
+    expect(
+      find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+      findsNothing,
+    );
+    final content = tester.getRect(find.byKey(contentKey));
+    expect(content.left, 12.0);
+    expect(tester.getSize(find.byType(Scaffold)).width - content.right, 12.0);
   });
 
   testWidgets('תוכן נמוך מהמסילה נשאר בראש ולא מתמרכז לגובה', (tester) async {
