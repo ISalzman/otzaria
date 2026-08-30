@@ -293,15 +293,16 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
 }) {
   final hasSuppressedSide = _hasLinkSuppressedSideTable(db);
   final dependentTypes = LinkTypes.dependentTextTypes.toList();
-  // קישורי הפניה מצטרפים רק כשיש מידע דיכוי — ראו [_hasLinkSuppressedSideTable].
+  // קישורי הפניה דו-כיווניים רק בסכמה שמספקת verdict נפרד לכל צד.
   final types = LinkTypes.inverseQueryTypes(bidirectional: hasSuppressedSide);
   final typePlaceholders = List.filled(types.length, '?').join(', ');
   final connectionTypeExpr = inverseConnectionTypeExpr(dependentTypes);
   final hasRange = startLineIndex != null && endLineIndex != null;
   // בשאילתה ההפוכה השורה המוצגת היא צד היעד של הקישור השמור.
-  final suppressedFilter =
-      suppressedSideFilter(hasSuppressedSide, displayedSide: 1);
-  final scopeFilter = inverseScopeFilter(hasSuppressedSide, dependentTypes);
+  final suppressedFilter = suppressedSideFilter(
+    hasSuppressedSide,
+    displayedSide: 1,
+  );
   final hasLinkAnchor = _hasLinkAnchorTable(db);
   final hasLinkRanges = _hasLinkRangeTables(db);
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
@@ -364,7 +365,6 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         $anchorJoin
         WHERE ct.name IN ($typePlaceholders)
           AND l.sourceBookId != l.targetBookId
-          $scopeFilter
           $suppressedFilter
         ORDER BY tl.lineIndex
       ''', params).toMapList();
@@ -408,7 +408,6 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
       $anchorJoin
       WHERE ct.name IN ($typePlaceholders)
         AND l.sourceBookId != l.targetBookId
-        $scopeFilter
         $suppressedFilter
       ORDER BY tl.lineIndex
     ''', params).toMapList();
@@ -418,16 +417,11 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
 /// אין מידע נראות, ולכן גם אין דו-כיווניות: אחרת קישורי הפניה היו עולים משני
 /// הצדדים בלי סינון, רגרסיה גרועה מהמצב הקיים.
 bool _hasLinkSuppressedSideTable(sqlite3.Database db) {
-  final exists = db
+  return db
       .select(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_suppressed_side' LIMIT 1",
       )
       .isNotEmpty;
-  // הטבלה נוצרת ללא תנאי אך מאוכלסת רק כשהייצוא נשא את עמודות ה-mask. טבלה
-  // ריקה שקולה תוצאתית לחסרה (הצמצום לעולם אינו מתקיים), ולכן זו אופטימיזציה
-  // — 17 פרמטרים פחות לשאילתה — ולא שומר-נכונות.
-  if (!exists) return false;
-  return db.select('SELECT 1 FROM link_suppressed_side LIMIT 1').isNotEmpty;
 }
 
 /// עוגני-מילה (link_anchor) — קיים רק במסדים חדשים; במסד ישן השאילתות חוזרות
@@ -570,8 +564,10 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
     final hasLinkAnchor = _hasLinkAnchorTable(db);
     final hasLinkRanges = _hasLinkRangeTables(db);
     // בשאילתה הקדמית השורה המוצגת היא צד המקור השמור.
-    final suppressedFilter =
-        suppressedSideFilter(_hasLinkSuppressedSideTable(db), displayedSide: 0);
+    final suppressedFilter = suppressedSideFilter(
+      _hasLinkSuppressedSideTable(db),
+      displayedSide: 0,
+    );
 
     // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0), כך
     // שקישור שהמקור שלו משתרע על כמה שורות מופיע בכל שורה שהוא מכסה.
@@ -645,8 +641,10 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
     final bookId = bookResults.first['id'] as int;
     final hasLinkRanges = _hasLinkRangeTables(db);
     final hasSuppressedSide = _hasLinkSuppressedSideTable(db);
-    final forwardSuppressed =
-        suppressedSideFilter(hasSuppressedSide, displayedSide: 0);
+    final forwardSuppressed = suppressedSideFilter(
+      hasSuppressedSide,
+      displayedSide: 0,
+    );
 
     // קישור-טווח נספר פעם לכל שורה מכוסה — כמו בטעינת הקישורים המלאה, כדי
     // שסיווג "מפרש נדיר" לפי הספירה יישאר שקול.
@@ -684,13 +682,15 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
     // (aggregateLinkTargetsFromSummary) סופר רק תלויי-טקסט, ושורות הפוכות
     // אינן כאלה — הן נכנסות ל-nonCommentaryTitles שבו הספירה נזרקת.
     final depTypes = LinkTypes.dependentTextTypes.toList();
-    final inverseTypes =
-        LinkTypes.inverseQueryTypes(bidirectional: hasSuppressedSide);
+    final inverseTypes = LinkTypes.inverseQueryTypes(
+      bidirectional: hasSuppressedSide,
+    );
     final typePlaceholders = List.filled(inverseTypes.length, '?').join(', ');
     final inverseTypeExpr = inverseConnectionTypeExpr(depTypes);
-    final inverseSuppressed =
-        suppressedSideFilter(hasSuppressedSide, displayedSide: 1);
-    final inverseScope = inverseScopeFilter(hasSuppressedSide, depTypes);
+    final inverseSuppressed = suppressedSideFilter(
+      hasSuppressedSide,
+      displayedSide: 1,
+    );
     final inverseRows = db
         .select(
           '''
@@ -703,7 +703,6 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
         WHERE l.targetBookId = ?
           AND ct.name IN ($typePlaceholders)
           AND l.sourceBookId != l.targetBookId
-          $inverseScope
           $inverseSuppressed
         GROUP BY sb.title, connectionTypeName
       ''',
@@ -771,8 +770,10 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     final bookId = bookResults.first['id'] as int;
     final hasLinkAnchor = _hasLinkAnchorTable(db);
     final hasLinkRanges = _hasLinkRangeTables(db);
-    final suppressedFilter =
-        suppressedSideFilter(_hasLinkSuppressedSideTable(db), displayedSide: 0);
+    final suppressedFilter = suppressedSideFilter(
+      _hasLinkSuppressedSideTable(db),
+      displayedSide: 0,
+    );
 
     final parameters = <Object?>[
       bookId,

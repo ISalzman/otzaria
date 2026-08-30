@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/link_visibility_sql.dart';
-import 'package:otzaria/models/link_types.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// נראות פר-צד (סכמה 3), נבדקת דרך **שאילתות הייצור עצמן** — הוקי
@@ -12,10 +11,12 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 void main() {
   late Directory tmp;
 
-  /// מסד בצורת הסכמה האמיתית: ‏A (בסיס, 2 שורות) ↔ B (מצטג).
+  /// מסד בצורת הסכמה האמיתית: ‏A (בסיס) ↔ B (מצטט).
   /// link 1: A→B ‏OTHER, צד 0 יידוכא — ציטוט "פרק שלם", כולל שורת coverage
   /// link 2: A→B ‏OTHER, גלוי
   /// link 3: A→B ‏COMMENTARY — תלוי-טקסט, עולה הפוך תמיד
+  /// link 4: A→B ‏OTHER, צד 1 מדוכא
+  /// link 5: A→B ‏OTHER, שני הצדדים מדוכאים
   String buildDb({required bool withTable, bool populate = true}) {
     final path = '${tmp.path}/links_${withTable}_$populate.db';
     final db = sqlite3.sqlite3.open(path);
@@ -43,12 +44,15 @@ void main() {
 
       INSERT INTO category VALUES (1,NULL,'cat',0,1,NULL,NULL);
       INSERT INTO source VALUES (1,'Sefaria');
-      INSERT INTO book VALUES (1,1,1,'A','A',NULL,NULL,1,1,2,0,0,0,NULL,NULL,NULL),
-                             (2,1,1,'B','B',NULL,NULL,2,0,1,0,0,0,NULL,NULL,NULL);
+      INSERT INTO book VALUES (1,1,1,'A','A',NULL,NULL,1,1,3,0,0,0,NULL,NULL,NULL),
+                             (2,1,1,'B','B',NULL,NULL,2,0,3,0,0,0,NULL,NULL,NULL);
       INSERT INTO line VALUES (1,1,0,'a1','A 1',NULL,2),(2,1,1,'a2','A 2',NULL,2),
-                              (3,2,0,'b1','B 1',NULL,2);
+                              (3,1,2,'a3','A 3',NULL,2),(4,2,0,'b1','B 1',NULL,2),
+                              (5,2,1,'b2','B 2',NULL,2),(6,2,2,'b3','B 3',NULL,2);
       INSERT INTO connection_type VALUES (1,'OTHER'),(2,'COMMENTARY');
-      INSERT INTO link VALUES (1,1,2,1,3,0,2,1,0),(2,1,2,1,3,0,2,1,0),(3,1,2,1,3,0,2,2,0);
+      INSERT INTO link VALUES (1,1,2,1,4,0,2,1,0),(2,1,2,1,5,1,2,1,0),
+                              (3,1,2,1,4,0,2,2,0),(4,1,2,3,6,2,2,1,0),
+                              (5,1,2,2,6,2,2,1,0);
       -- link 1 משתרע על שתי שורות של A: השורה השנייה מגיעה דרך coverage
       INSERT INTO link_range VALUES (1,0,2,1);
       INSERT INTO link_coverage VALUES (2,1,0);
@@ -60,15 +64,17 @@ void main() {
         'PRIMARY KEY (linkId, side))',
       );
       if (populate) {
-        db.execute('INSERT INTO link_suppressed_side VALUES (1,0,4)');
+        db.execute(
+          'INSERT INTO link_suppressed_side VALUES '
+          '(1,0,4),(4,1,1),(5,0,1),(5,1,2)',
+        );
       }
     }
     db.close();
     return path;
   }
 
-  /// מזהי הקישורים שהשאילתה הקדמית מחזירה עבור ספר הבסיס A.
-  Set<int> forwardTargets(String path) =>
+  Set<String> forwardSignatures(String path) =>
       DatabaseLibraryProvider.loadBookLinksRowsForTesting(
             dbPath: path,
             title: 'A',
@@ -76,7 +82,11 @@ void main() {
             fileType: 'text',
           )
           .where((r) => r['connectionTypeName'] != 'SOURCE')
-          .map((r) => r['sourceLineIndex'] as int)
+          .map(
+            (r) =>
+                '${r['sourceLineIndex']}:${r['targetLineIndex']}:'
+                '${r['connectionTypeName']}',
+          )
           .toSet();
 
   /// שורות שהספר המצטג B מקבל — כלומר הזרוע ההפוכה.
@@ -98,27 +108,35 @@ void main() {
     });
 
     test('הקדמית מחזירה את כל שלושת הקישורים, כולל שורת ה-coverage', () {
-      // שתי שורות של A: 0 (העוגן) ו-1 (מכוסה) עבור link 1.
-      expect(forwardTargets(buildDb(withTable: false)), {0, 1});
+      expect(forwardSignatures(buildDb(withTable: false)), {
+        '0:0:OTHER',
+        '1:0:OTHER',
+        '0:1:OTHER',
+        '0:0:COMMENTARY',
+        '2:2:OTHER',
+        '1:2:OTHER',
+      });
     });
   });
 
-  group('טבלה ריקה — שקולה תוצאתית לחסרה', () {
-    test('אותן שורות בדיוק כמו מסד ישן', () {
-      final empty = inverseRows(buildDb(withTable: true, populate: false));
-      final missing = inverseRows(buildDb(withTable: false));
-      expect(empty.length, missing.length);
+  group('טבלת סכמה 3 ריקה — כל הצדדים גלויים', () {
+    test('עצם קיום הטבלה מפעיל דו-כיווניות מלאה', () {
+      final rows = inverseRows(buildDb(withTable: true, populate: false));
       expect(
-        empty.map((r) => r['connectionTypeName']).toSet(),
-        missing.map((r) => r['connectionTypeName']).toSet(),
+        rows.where((r) => r['connectionTypeName'] == 'OTHER').length,
+        4,
       );
+      expect(rows.where((r) => r['connectionTypeName'] == 'SOURCE').length, 1);
     });
   });
 
   group('סכמה 3 — הקישור עובר צד', () {
     test('נעלם מספר הבסיס, כולל שורת ה-coverage שלו', () {
-      // link 1 דוכא בצד 0 → גם העוגן וגם השורה המכוסה נעלמים; link 2/3 נשארים.
-      expect(forwardTargets(buildDb(withTable: true)), {0});
+      expect(forwardSignatures(buildDb(withTable: true)), {
+        '0:1:OTHER',
+        '0:0:COMMENTARY',
+        '2:2:OTHER',
+      });
     });
 
     test('מופיע בספר המצטג, ומתויג בסוגו האמיתי ולא כ-SOURCE', () {
@@ -129,8 +147,8 @@ void main() {
         containsAll(['OTHER', 'SOURCE']),
         reason: 'המועבר שומר OTHER; תלוי-הטקסט נשאר SOURCE',
       );
-      // link 2 גלוי מהצד הקדמי ולכן אינו מוכפל לכאן.
-      expect(types.where((t) => t == 'OTHER').length, 1);
+      // link 2 גלוי בשני הצדדים ולכן מופיע בשניהם; link 4/5 מדוכאים בצד 1.
+      expect(types.where((t) => t == 'OTHER').length, 2);
     });
 
     test('טווח הפרק נשמר על הקישור המועבר', () {
@@ -144,10 +162,6 @@ void main() {
   group('שברי ה-SQL', () {
     test('ריקים כשאין תמיכה — לא נפלט SQL', () {
       expect(suppressedSideFilter(false, displayedSide: 0), '');
-      expect(
-        inverseScopeFilter(false, LinkTypes.dependentTextTypes.toList()),
-        '',
-      );
     });
   });
 }
