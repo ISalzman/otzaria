@@ -601,6 +601,10 @@ Future<void> _initializeProcessSingletons() async {
   // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
   await PortablePaths.migrateIfMoved();
 
+  // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
+  // ב-Hive בינארי שאינו נגיש לו (issue #1020).
+  unawaited(AppPaths.recordLibraryPathForUninstaller());
+
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
   // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.

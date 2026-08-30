@@ -117,6 +117,8 @@ const
   UninstallRegKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
   SystemEnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
   UserEnvironmentKey = 'Environment';
+  // האפליקציה רושמת כאן את נתיב הספרייה הפעיל (lib/core/app_paths.dart).
+  LibraryPathRecordFileName = 'library_path.txt';
 
 var
   CompPage: TWizardPage;
@@ -631,12 +633,40 @@ end;
 // כפי שנשמר ב-shared_preferences.json תחת המפתח flutter.key-library-path.
 // משתמש בעוזרי ה-JSON הקיימים (LoadTextFile, FindJsonStringEnd) ובפענוח
 // escapes ה-JSON בסיסי שתואם ל-EscapeJsonString.
+// קורא את נתיב הספרייה שהאפליקציה רשמה תחת [DataRoot]. ההגדרות עצמן
+// יושבות ב-Hive בינארי שהמתקין אינו יכול לקרוא, ולכן זה המקור
+// לנתיב שהמשתמש שינה מתוך התוכנה (issue #1020).
+function ReadLibraryPathRecord(const DataRoot: String): String;
+var
+  RecordFile: String;
+begin
+  Result := '';
+  if DataRoot = '' then
+    exit;
+  RecordFile := AddBackslash(DataRoot) + LibraryPathRecordFileName;
+  if not FileExists(RecordFile) then
+    exit;
+  Result := Trim(LoadTextFile(RecordFile));
+  if (Result <> '') and (Result[1] = #$FEFF) then
+    Delete(Result, 1, 1);
+end;
+
+// שורש פרופילי המשתמשים, נגזר מ-{userappdata} (…\<User>\AppData\Roaming).
+function GetUserProfilesRoot(): String;
+begin
+  Result := ExtractFileDir(ExtractFileDir(ExtractFileDir(
+    ExpandConstant('{userappdata}'))));
+end;
+
 function GetCustomLibraryPath(): String;
 var
   PrefsFile, JsonContent, KeyStr, Value: String;
   KeyPos, ValueStart, ValueEnd: Integer;
 begin
-  Result := '';
+  Result := ReadLibraryPathRecord(ExpandConstant('{userappdata}\otzaria'));
+  if Result <> '' then
+    exit;
+
   PrefsFile := ExpandConstant('{userappdata}\otzaria\shared_preferences.json');
   if not FileExists(PrefsFile) then
     exit;
@@ -2017,6 +2047,49 @@ end;
 // (רק אם היא מזוהה כתיקיית אוצריא — ראה IsOtzariaBooksFolder), כל תיקיות
 // הנתונים הסטנדרטיות וגם נתיבי legacy. קוראים את הנתיב המותאם מה-prefs
 // לפני שמוחקים את ה-prefs עצמו.
+// בהסרת התקנת מנהל ה-uninstaller רץ תחת החשבון שאישר את ה-UAC, ולכן
+// {userappdata} אינו בהכרח של המשתמש שהתקין — עוברים על כל הפרופילים.
+procedure DeleteUserDataInAllProfiles();
+var
+  FindRec: TFindRec;
+  ProfilesRoot, ProfileDir, DataRoot, LibraryPath: String;
+begin
+  ProfilesRoot := GetUserProfilesRoot();
+  if (ProfilesRoot = '') or (not DirExists(ProfilesRoot)) then
+    exit;
+
+  if not FindFirst(AddBackslash(ProfilesRoot) + '*', FindRec) then
+    exit;
+  try
+    repeat
+      if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and
+         (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+      begin
+        ProfileDir := AddBackslash(ProfilesRoot) + FindRec.Name;
+
+        DataRoot := ProfileDir + '\AppData\Roaming\otzaria';
+        if DirExists(DataRoot) then
+        begin
+          LibraryPath := ReadLibraryPathRecord(DataRoot);
+          if IsOtzariaBooksFolder(LibraryPath) then
+            DelTree(LibraryPath, True, True, True);
+          DelTree(DataRoot, True, True, True);
+        end;
+
+        DataRoot := ProfileDir + '\AppData\Local\otzaria';
+        if DirExists(DataRoot) then
+          DelTree(DataRoot, True, True, True);
+
+        DataRoot := ProfileDir + '\AppData\Roaming\com.example\otzaria';
+        if DirExists(DataRoot) then
+          DelTree(DataRoot, True, True, True);
+      end;
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
 procedure DeleteAllUserData();
 var
   Path: String;
@@ -2049,6 +2122,9 @@ begin
 
   // הערה: C:\אוצריא לא נמחק כאן כי זה היה נתיב התקנה legacy (לא נתונים).
   // אם נשארה שם התקנה ישנה — היא תוסר על ידי ה-uninstaller שלה.
+
+  if IsAdminInstallMode then
+    DeleteUserDataInAllProfiles();
 end;
 
 // שאלה בתחילת ההסרה: האם למחוק גם את הנתונים והספרים?
@@ -2108,10 +2184,20 @@ end;
 // מסיר התקנת אוצריא שנותרה רשומה בהיקף אחר (issue #886): רשומה בנתיב אחר
 // מוסרת דרך ה-uninstaller שלה (מוחק גם קבצים וקיצורים שאחרת ימשיכו להריץ
 // בינארי ישן); רשומה שמצביעה על {app} נמחקת מהרישום בלבד — הקבצים שלנו.
-procedure RemoveStaleScopeRegistration(RootKey: Integer);
+// /CROSSSCOPE מסמן ל-uninstaller שהוא הופעל מהיקף אחר — בלעדיו שני
+// ה-uninstallers היו מנקים זה את רשומת זה ונתקעים זה על זה.
+function IsCrossScopeUninstall(): Boolean;
+begin
+  Result := ExpandConstant('{param:CROSSSCOPE|0}') <> '0';
+end;
+
+// [Elevate] נדרש כשהרשומה שייכת להתקנת מנהל ואנחנו רצים כמשתמש רגיל —
+// ה-uninstaller שלה דורש הגבהה, ו-Exec רגיל עליו נכשל.
+procedure RemoveStaleScopeRegistration(RootKey: Integer; Elevate: Boolean);
 var
-  StaleDir, UninstallExe: String;
+  StaleDir, UninstallExe, Args: String;
   ResultCode: Integer;
+  Started: Boolean;
 begin
   if not RegKeyExists(RootKey, UninstallRegKey) then
     exit;
@@ -2122,12 +2208,20 @@ begin
      RegQueryStringValue(RootKey, UninstallRegKey, 'UninstallString', UninstallExe) then
   begin
     UninstallExe := RemoveQuotes(Trim(UninstallExe));
-    if FileExists(UninstallExe) and
-       Exec(UninstallExe, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
-         SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Args := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CROSSSCOPE=1';
+    if FileExists(UninstallExe) then
     begin
-      Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
-      exit;
+      if Elevate then
+        Started := ShellExec('runas', UninstallExe, Args, '',
+          SW_HIDE, ewWaitUntilTerminated, ResultCode)
+      else
+        Started := Exec(UninstallExe, Args, '',
+          SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      if Started then
+      begin
+        Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
+        exit;
+      end;
     end;
   end;
 
@@ -2140,10 +2234,20 @@ end;
 // הנגדי אינו מנוקה בהתקנת משתמש — מחיקה ב-HKLM דורשת הרשאות מנהל.
 procedure RemoveOtherScopeInstalls();
 begin
-  if PortableMode or (not IsAdminInstallMode) then
+  if PortableMode then
     exit;
-  RemoveStaleScopeRegistration(HKCU);
-  RemoveStaleScopeRegistration(HKLM32);
+  if IsAdminInstallMode then
+  begin
+    RemoveStaleScopeRegistration(HKCU, False);
+    RemoveStaleScopeRegistration(HKLM32, False);
+  end
+  else
+  begin
+    // הכיוון ההפוך (issue #1020): התקנת משתמש מעל התקנת מנהל השאירה עד
+    // כה שתי רשומות מקבילות, והתוכנה הופיעה פעמיים.
+    RemoveStaleScopeRegistration(HKLM64, True);
+    RemoveStaleScopeRegistration(HKLM32, True);
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -2157,8 +2261,17 @@ begin
       RemoveAppFromPathValue(HKLM, SystemEnvironmentKey, ExpandConstant('{app}'));
     if DeleteUserDataOnUninstall then
       DeleteAllUserData();
+    // הסרה בהיקף אחד מסירה גם התקנה שנשארה בהיקף הנגדי (issue #1020).
+    if not IsCrossScopeUninstall() then
+    begin
+      if IsAdminInstallMode then
+        RemoveStaleScopeRegistration(HKCU, False)
+      else
+        RemoveStaleScopeRegistration(HKLM64, True);
+    end;
   end;
 end;
+
 
 // איפוס הרסני לא רץ בשדרוג שקט מבחירה שנשמרה ברישום (issue #941) —
 // בריצה שקטה הוא דורש /TASKS או /MERGETASKS מפורש בשורת הפקודה.

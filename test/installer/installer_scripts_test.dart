@@ -578,6 +578,78 @@ void main() {
     }
   });
 
+  group('נתיב הספרייה נקרא מהקובץ שהאפליקציה רושמת (issue #1020)', () {
+    for (final name in _scripts) {
+      test('$name: הקובץ נקרא לפני ה-prefs הנטוש', () {
+        final script = _script(name);
+        final body = _routine(script, 'function GetCustomLibraryPath(');
+
+        final recordCall = body.indexOf('ReadLibraryPathRecord(');
+        final prefsRead = body.indexOf('shared_preferences.json');
+        expect(
+          recordCall,
+          greaterThanOrEqualTo(0),
+          reason:
+              'ההגדרות יושבות ב-Hive; בלי הקובץ הזה ספרייה שהועברה מתוך '
+              'התוכנה שורדת את ההסרה',
+        );
+        expect(
+          recordCall,
+          lessThan(prefsRead),
+          reason: 'ה-prefs הוא מקור נסיגה בלבד — הקובץ הוא מקור האמת',
+        );
+      });
+
+      test('$name: שם הקובץ זהה לשם שהאפליקציה כותבת', () {
+        expect(
+          _script(name),
+          contains(
+            "LibraryPathRecordFileName = '"
+            '${AppPaths.libraryPathRecordFileName}'
+            "'",
+          ),
+          reason: 'שינוי השם ב-Dart מחייב עדכון המתקין',
+        );
+      });
+
+      test('$name: הסרת התקנת מנהל עוברת על כל פרופילי המשתמשים', () {
+        final script = _script(name);
+        final body = _routine(script, 'procedure DeleteAllUserData(');
+        expect(
+          _squeeze(body.replaceAll('\n', ' ')),
+          contains('if IsAdminInstallMode then DeleteUserDataInAllProfiles();'),
+          reason:
+              'ה-uninstaller המוגבה רץ תחת החשבון שאישר UAC, ולכן '
+              '{userappdata} אינו של המשתמש שהתקין',
+        );
+
+        final scan = _routine(script, 'procedure DeleteUserDataInAllProfiles(');
+        expect(scan, contains('ReadLibraryPathRecord(DataRoot)'));
+        expect(
+          scan,
+          contains('IsOtzariaBooksFolder(LibraryPath)'),
+          reason: 'בלי הזיהוי, נתיב שגוי ב-prefs היה מוחק תיקייה אישית',
+        );
+      });
+    }
+
+    for (final name in _scripts) {
+      test('$name: הסרה בהיקף אחד מנקה את ההיקף הנגדי', () {
+        final body = _routine(
+          _script(name),
+          'procedure CurUninstallStepChanged(',
+        );
+        expect(body, contains('RemoveStaleScopeRegistration(HKCU, False)'));
+        expect(body, contains('RemoveStaleScopeRegistration(HKLM64, True)'));
+        expect(
+          body,
+          contains('if not IsCrossScopeUninstall() then'),
+          reason: 'בלי החסם, שני ה-uninstallers מפעילים זה את זה',
+        );
+      });
+    }
+  });
+
   group('ניקוי התקנה מקבילה בהיקף השני (issue #886)', () {
     for (final name in _scripts) {
       test('$name: התקנת מנהל מנקה את HKCU ואת WOW6432Node אחרי ההתקנה', () {
@@ -589,13 +661,21 @@ void main() {
 
         expect(
           cleanup,
-          contains('if PortableMode or (not IsAdminInstallMode) then'),
-          reason:
-              'התקנת משתמש אינה יכולה למחוק ב-HKLM, והתקנה ניידת לא נוגעת '
-              'ברישום כלל',
+          contains('if PortableMode then'),
+          reason: 'התקנה ניידת לא נוגעת ברישום כלל',
         );
-        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU)'));
-        expect(cleanup, contains('RemoveStaleScopeRegistration(HKLM32)'));
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU, False)'));
+        expect(
+          cleanup,
+          contains('RemoveStaleScopeRegistration(HKLM32, False)'),
+        );
+        expect(
+          cleanup,
+          contains('RemoveStaleScopeRegistration(HKLM64, True)'),
+          reason:
+              'הכיוון ההפוך (issue #1020): התקנת משתמש מעל התקנת מנהל '
+              'השאירה שתי רשומות מקבילות',
+        );
 
         final postInstall = _routine(script, 'procedure CurStepChanged(');
         expect(
@@ -615,10 +695,18 @@ void main() {
 
         expect(
           body,
-          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'"),
+          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CROSSSCOPE=1'"),
           reason:
               'בלי דגלי השקט ה-uninstaller שואל על מחיקת נתונים; '
-              'ברירת המחדל השקטה שלו משמרת אותם',
+              'ברירת המחדל השקטה שלו משמרת אותם. /CROSSSCOPE עוצר רקורסיה '
+              'הדדית בין שני ה-uninstallers',
+        );
+        expect(
+          body,
+          contains("ShellExec('runas'"),
+          reason:
+              'ה-uninstaller של התקנת מנהל דורש הגבהה — Exec רגיל עליו '
+              'נכשל כשרצים כמשתמש',
         );
         expect(body, contains('ewWaitUntilTerminated'));
         expect(
