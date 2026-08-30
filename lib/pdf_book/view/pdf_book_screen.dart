@@ -251,6 +251,16 @@ bool shouldRecomputeLineRangeOnLayoutModeChange(
   return previous != null && previous != current;
 }
 
+/// האם דפדוף חדש מבטל את הדפדופים הממתינים בתור: לחיצה בכיוון ההפוך
+/// לממתינים מרוקנת אותם, כך שהאנימציה שבאוויר מסיימת והבאה הפוכה ממנה.
+@visibleForTesting
+bool shouldDropPendingPageTurns<T>({
+  required Iterable<T> pendingDirections,
+  required T incomingDirection,
+}) {
+  return pendingDirections.any((d) => d != incomingDirection);
+}
+
 /// מחזירה את מספר העמוד הנוכחי של ה-controller רק אם הוא מחובר ומוכן.
 ///
 /// [isReady] - האם ה-controller מחובר ל-PdfViewer (`controller.isReady`).
@@ -2743,6 +2753,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
+  /// לחיצה בכיוון ההפוך מרוקנת את תור הדפדופים הממתינים (כמו שחרור מקש
+  /// מוחזק): הכוונה חוזרת ליעד האנימציה שבאוויר, והיעד ההפוך מחושב ממנו.
+  void _dropOppositePendingTurns(_BookPageTurnDirection direction) {
+    if (!shouldDropPendingPageTurns(
+      pendingDirections: _pendingPageTurns.map((t) => t.direction),
+      incomingDirection: direction,
+    )) {
+      return;
+    }
+    _pendingPageTurns.clear();
+    _lastInitiatedTargetPage = _inFlightAnimationTarget;
+  }
+
   // ============================================================
   // Interactive edge-drag page turn
   // ============================================================
@@ -3307,6 +3330,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return;
     }
 
+    if (_isBookViewModeActive() &&
+        (_pageTurnController.isAnimating || _isPageTurnInProgress)) {
+      // Animation in flight: queue FIFO. Must run BEFORE the same-page check —
+      // controller.pageNumber lags mid-flight and would swallow a reverse turn.
+      _pendingPageTurns.add(
+        _PendingBookPageTurn(targetPage: targetPage, direction: direction),
+      );
+      return;
+    }
+
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     if (targetPage == currentPage) {
       return;
@@ -3314,15 +3347,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!_isBookViewModeActive()) {
       await _goToPageWithSpreadLock(targetPage);
-      return;
-    }
-
-    if (_pageTurnController.isAnimating || _isPageTurnInProgress) {
-      // Animation already in flight: queue this turn FIFO so it plays after
-      // the current one finishes. Each click gets its own curl, in order.
-      _pendingPageTurns.add(
-        _PendingBookPageTurn(targetPage: targetPage, direction: direction),
-      );
       return;
     }
 
@@ -4692,6 +4716,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!widget.tab.pdfViewerController.isReady) return;
 
     final isBookViewMode = _isBookViewModeActive();
+    if (isBookViewMode) {
+      _dropOppositePendingTurns(_BookPageTurnDirection.next);
+    }
     final basePage = _effectiveCurrentPageForNavigation();
     final totalPages = widget.tab.pdfViewerController.pageCount;
     final int nextPage;
@@ -4727,6 +4754,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!widget.tab.pdfViewerController.isReady) return;
 
     final isBookViewMode = _isBookViewModeActive();
+    if (isBookViewMode) {
+      _dropOppositePendingTurns(_BookPageTurnDirection.previous);
+    }
     final basePage = _effectiveCurrentPageForNavigation();
     final int prevPage;
     if (isBookViewMode) {
