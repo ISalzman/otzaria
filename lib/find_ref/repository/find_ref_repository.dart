@@ -171,6 +171,10 @@ class FindRefRepository {
   /// (למשל נושא רחב במצב era). הסט הלגיטימי הגדול בפועל קטן בהרבה.
   static const int _maxResultCap = 100;
 
+  /// issue #839: מכסת התאמות תת-מחרוזת המובטחת בזנב תוצאות של שאילתת
+  /// מילה-אחת — בלעדיה ה-cap מחק אותן כליל ("מא" לא הציג את יומא).
+  static const int _substringTailQuota = 10;
+
   /// מילות-דור של טוקן יחיד שמפעילות את מצב "דור + נושא".
   static const Map<String, CommentaryEra> _singleTokenEras = {
     'ראשונים': CommentaryEra.rishonim,
@@ -1698,7 +1702,28 @@ class FindRefRepository {
       );
       end = _maxResultCap;
     }
-    return [for (var i = 0; i < end; i++) decorated[i].result];
+
+    final capped = [for (var i = 0; i < end; i++) decorated[i]];
+
+    // issue #839: התאמות תת-מחרוזת מדורגות אחרי כל התאמות-התחילית, וחיתוך
+    // שגבולו בתוכן מחק אותן כליל — מובטחת להן מכסה בזנב, בלי לשנות דירוג.
+    if (queryTokens.length == 1 && end < decorated.length) {
+      bool isSubstringMatch(_RankKey d) =>
+          !d.startsWithMatch && d.normTitle.contains(query);
+      var quota = _substringTailQuota - capped.where(isSubstringMatch).length;
+      for (
+        var i = end;
+        i < decorated.length && quota > 0 && capped.length < _maxResultCap;
+        i++
+      ) {
+        if (isSubstringMatch(decorated[i])) {
+          capped.add(decorated[i]);
+          quota--;
+        }
+      }
+    }
+
+    return [for (final d in capped) d.result];
   }
 
   /// מחזיר true כשהשאילתה נראית כציון בסגנון גמרא (דף + עמוד).

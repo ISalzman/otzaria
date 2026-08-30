@@ -660,7 +660,19 @@ class ReferenceBooksCache {
     contains.sort(cmp);
 
     final merged = <ReferenceBookHit>[...starts, ...contains];
-    return merged.length > limit ? merged.take(limit).toList() : merged;
+    if (merged.length <= limit) return merged;
+
+    // issue #839: כשהתאמות-התחילית לבדן ממלאות את ה-limit, התאמות ה"מכיל"
+    // נחתכות כליל ("מא" לא החזיר את יומא) — שמורה להן מכסה בזנב, starts ראשונות.
+    const containsReserve = 10;
+    if (starts.length >= limit && contains.isNotEmpty) {
+      var reserve = containsReserve < contains.length
+          ? containsReserve
+          : contains.length;
+      if (reserve >= limit) reserve = limit - 1;
+      return [...starts.take(limit - reserve), ...contains.take(reserve)];
+    }
+    return merged.take(limit).toList();
   }
 
   /// מצב "דור + נושא" של איתור מקורות: מחזיר את כל הספרים שדורם (לפי נתיב
