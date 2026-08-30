@@ -174,6 +174,64 @@ void main() {
       expect(seenLimit, greaterThanOrEqualTo(200));
     });
 
+    test('זנב התת-מחרוזת מדורג: מסכתות-יסוד לפני מפרשים', () async {
+      // תרחיש "מא" האמיתי: יומא (בבלי) ומשנה יומא הם ספרי-יסוד וחייבים
+      // להיבחר למכסה לפני המאור/רמב"ם-על-המשנה, גם כשסדר-הספרייה שלהם מאוחר.
+      final paths = <int, String>{
+        1: 'תלמוד בבלי, סדר מועד',
+        2: 'משנה, סדר מועד',
+        3: 'תלמוד בבלי, ראשונים, רי"ף, מפרשים, בעל המאור',
+        4: 'משנה, ראשונים, רמב"ם, סדר זרעים',
+      };
+      final repo = FindRefRepository(
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) => [
+          for (var i = 0; i < 25; i++)
+            _hit(
+              bookId: i + 10,
+              title: 'מאירי על מסכת $i',
+              matchRank: 1,
+              orderIndex: 100.0 + i,
+            ),
+          // סדר-ספרייה מכשיל בכוונה: המפרשים לפני המסכתות.
+          _hit(
+            bookId: 3,
+            title: 'המאור הקטן על ברכות',
+            matchRank: 2,
+            orderIndex: 1.0,
+          ),
+          _hit(
+            bookId: 4,
+            title: 'רמב"ם על משנה דמאי',
+            matchRank: 2,
+            orderIndex: 2.0,
+          ),
+          _hit(bookId: 1, title: 'יומא', matchRank: 2, orderIndex: 6.0),
+          _hit(bookId: 2, title: 'משנה יומא', matchRank: 2, orderIndex: 16.0),
+        ],
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
+            const [],
+        getAllAltTocFlatEntries: () async => const [],
+        getCategoryPathSync: (id) => paths[id],
+      );
+
+      final results = await repo.findRefs('מא');
+      final titles = results.map((r) => r.title).toList();
+
+      expect(titles, contains('יומא'));
+      expect(titles, contains('משנה יומא'));
+      expect(
+        titles.indexOf('משנה יומא'),
+        lessThan(titles.indexOf('המאור הקטן על ברכות')),
+        reason: 'ספר-יסוד גובר על מפרש בתוך זנב התת-מחרוזת',
+      );
+      expect(
+        titles.indexOf('יומא'),
+        lessThan(titles.indexOf('רמב"ם על משנה דמאי')),
+      );
+    });
+
     test('בלי גלישה מעל ה-cap — הסדר הקיים לא משתנה', () async {
       final repo = buildRepo([
         for (var i = 0; i < 3; i++)
