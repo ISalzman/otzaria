@@ -2197,23 +2197,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   Widget _withTalmudFormatMenu(Book book, int index, Widget child) {
     if (!_offersTalmudFormatChoice(book)) return child;
     return AppContextMenuRegion(
-      menuBuilder: (_, _) {
-        final opensInPdf = talmudBavliOpensInPdf();
-        return [
-          AppContextMenuEntry(
-            label: 'פתיחה כטקסט',
-            icon: OtzariaIcons.book_alef_24_regular,
-            isSelected: !opensInPdf,
-            onTap: () => _openBookInReader(book, index, forcePdf: false),
-          ),
-          AppContextMenuEntry(
-            label: 'פתיחה כ-PDF',
-            icon: OtzariaIcons.book_pdf_24_regular,
-            isSelected: opensInPdf,
-            onTap: () => _openBookInReader(book, index, forcePdf: true),
-          ),
-        ];
-      },
+      // בלי isSelected: אייקון מוביל יחד עם סימון-נבחר מאפס את תקציב הרוחב
+      // של הלייבל, וה-Spacer שבשורת הפריט נופל על רוחב לא-חסום.
+      menuBuilder: (_, _) => [
+        AppContextMenuEntry(
+          label: 'פתיחה כטקסט',
+          icon: OtzariaIcons.book_alef_24_regular,
+          onTap: () => _openBookInReader(book, index, forcePdf: false),
+        ),
+        AppContextMenuEntry(
+          label: 'פתיחה כ-PDF',
+          icon: OtzariaIcons.book_pdf_24_regular,
+          onTap: () => _openBookInReader(book, index, forcePdf: true),
+        ),
+      ],
       child: child,
     );
   }
