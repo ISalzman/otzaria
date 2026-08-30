@@ -51,6 +51,29 @@ void main() {
     );
 
     blocTest<IndexingBloc, IndexingState>(
+      'שלב האיחוד נפלט כמצב נפרד לפני ההשלמה',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..finalizeGate = Completer<void>();
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) async {
+        bloc.add(StartIndexing(libraryWithBooks(2)));
+        await Future.delayed(Duration.zero);
+        repositoryOf(bloc).finalizeGate!.complete();
+      },
+      expect: () => [
+        const IndexingInProgress(booksProcessed: 0, totalBooks: 2),
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 2,
+          isFinalizing: true,
+        ),
+        const IndexingComplete(),
+      ],
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
       'ריצה עם כשל שומרת את הפרטים ב-state ומעבירה אותם לדיווח',
       build: () {
         final repository = _FakeIndexingRepository()
@@ -474,6 +497,9 @@ class _FakeIndexingRepository extends IndexingRepository {
   final economyValues = <bool>[];
   Object? economyError;
   Completer<void>? economyGate;
+
+  /// כשהוא מסופק — הריצה מדווחת על שלב האיחוד ונעצרת בו עד לשחרור.
+  Completer<void>? finalizeGate;
   int clearCalls = 0;
   int awaitReadyCalls = 0;
 
@@ -491,9 +517,16 @@ class _FakeIndexingRepository extends IndexingRepository {
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
+    void Function()? onFinalizing,
     bool includePdfBooks = true,
-  }) {
+  }) async {
     indexAllCalls++;
+    final gate = finalizeGate;
+    if (gate != null) {
+      onFinalizing?.call();
+      await gate.future;
+      return result;
+    }
     return _finish(onProgress);
   }
 

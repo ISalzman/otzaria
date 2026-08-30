@@ -236,11 +236,14 @@ class IndexingRepository {
   ///
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
+  /// [onFinalizing] נקרא כשכל הספרים אונדקסו והמנוע ניגש לאחד את קבצי
+  /// האינדקס — שלב ארוך וללא התקדמות מדידה.
   /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
   Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
+    void Function()? onFinalizing,
     bool includePdfBooks = true,
   }) async {
     if (await _blockIndexingOnTempFallback()) {
@@ -536,6 +539,7 @@ class IndexingRepository {
       }
 
       if (!cancelled) {
+        onFinalizing?.call();
         debugPrint('✅ אינדוקס הושלם!');
         debugPrint('   📊 סה"כ: $totalBooks ספרים');
         debugPrint('   ✅ מאונדקסים: $actuallyIndexed');

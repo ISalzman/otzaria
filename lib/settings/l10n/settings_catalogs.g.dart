@@ -563,6 +563,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'מנותק מהרשת': 'No Network',
     'מנצפ"ך בערכים שונים': 'Mnatzpa"ch get their own values',
     'מסד הנתונים של הספרייה יתעדכן אוטומטית בטעינת הספרייה': 'The library database updates automatically when the library loads',
+    'מסיים ומאחד את קבצי האינדקס': 'Finishing up and merging the index files',
     'מסך הקריאה': 'Reading View',
     'מסכתות הבבלי ייפתחו במהדורת ה-PDF בדף המתאים, גם בפתיחה מהספרייה ובתצוגה המקדימה': 'Gemaros in PDF will open at the right daf, including from the library and the preview pane',
     'מסכתות הבבלי ייפתחו במהדורת הטקסט (מהספרייה, מתוצאות חיפוש, מאיתור מקורות ומקישורים)': 'Gemaros will open in text format',

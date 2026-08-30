@@ -17,6 +17,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   int? _activeWorkId;
   bool _isPaused = false;
   bool _isEconomy = false;
+  bool _isFinalizing = false;
 
   IndexingBloc(
     this._repository, {
@@ -30,6 +31,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     on<ResumeIndexing>(_onResumeIndexing);
     on<SetEconomyIndexing>(_onSetEconomyIndexing, transformer: sequential());
     on<ActualIndexingStarted>(_onActualIndexingStarted);
+    on<IndexingFinalizing>(_onFinalizing);
     on<UpdateIndexingProgress>(_onUpdateProgress);
     on<ClearIndex>(_onEraseIndex);
   }
@@ -53,12 +55,14 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     isCreatingIndex: isCreatingIndex,
     isPaused: _isPaused,
     isEconomy: _isEconomy,
+    isFinalizing: _isFinalizing,
   );
 
   Future<void> _onIndexingWork(
     IndexingWorkEvent event,
     Emitter<IndexingState> emit,
   ) async {
+    _isFinalizing = false;
     // ריצה חדשה מתחילה ללא השהיה; המצב החסכוני נשמר בין ריצות.
     if (_isPaused) {
       _isPaused = false;
@@ -195,6 +199,9 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         onActualIndexingStarted: () {
           add(ActualIndexingStarted(workId));
         },
+        onFinalizing: () {
+          add(IndexingFinalizing(workId));
+        },
         onProgress: (processed, total) {
           // Update progress through event
           add(
@@ -249,6 +256,20 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         booksProcessed: currentState.booksProcessed,
         totalBooks: currentState.totalBooks,
         isCreatingIndex: true,
+      ),
+    );
+  }
+
+  void _onFinalizing(IndexingFinalizing event, Emitter<IndexingState> emit) {
+    if (_activeWorkId != event.workId) return;
+    final currentState = state;
+    if (currentState is! IndexingInProgress) return;
+    _isFinalizing = true;
+    emit(
+      _inProgress(
+        booksProcessed: currentState.booksProcessed,
+        totalBooks: currentState.totalBooks,
+        isCreatingIndex: currentState.isCreatingIndex,
       ),
     );
   }

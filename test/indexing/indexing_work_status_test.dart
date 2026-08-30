@@ -71,6 +71,24 @@ void main() {
       expect(economyTaps, 1);
     });
 
+    test('שלב האיחוד: הודעה נפרדת, בלי מונה ובלי לחצנים', () {
+      final item = indexingWorkStatusItem(
+        const IndexingInProgress(
+          booksProcessed: 100,
+          totalBooks: 100,
+          isCreatingIndex: true,
+          isFinalizing: true,
+        ),
+        onTogglePause: () {},
+        onToggleEconomy: () {},
+      );
+
+      expect(item.message, 'מסיים ומאחד את קבצי האינדקס');
+      expect(item.detail, isNot(contains('100/100')));
+      expect(item.progress, isNull);
+      expect(item.actions, isEmpty);
+    });
+
     test('סה"כ אפס: אין progress דטרמיניסטי', () {
       final item = indexingWorkStatusItem(
         const IndexingInProgress(isCreatingIndex: true),

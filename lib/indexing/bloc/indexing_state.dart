@@ -25,6 +25,7 @@ class IndexingInProgress extends IndexingState {
     super.isCreatingIndex,
     this.isPaused = false,
     this.isEconomy = false,
+    this.isFinalizing = false,
   });
 
   /// האינדוקס מושהה — הלולאה ממתינה לפני הספר הבא.
@@ -33,8 +34,17 @@ class IndexingInProgress extends IndexingState {
   /// מצב חסכוני פעיל — המנוע רץ עם תקציב writer מוקטן.
   final bool isEconomy;
 
+  /// כל הספרים אונדקסו והמנוע מאחד את קבצי האינדקס (commit ו-optimize).
+  /// אין לשלב זה התקדמות מדידה, ולכן המונה מוחלף בהודעה נפרדת.
+  final bool isFinalizing;
+
   @override
-  List<Object?> get props => [...super.props, isPaused, isEconomy];
+  List<Object?> get props => [
+    ...super.props,
+    isPaused,
+    isEconomy,
+    isFinalizing,
+  ];
 }
 
 class IndexingComplete extends IndexingState {
