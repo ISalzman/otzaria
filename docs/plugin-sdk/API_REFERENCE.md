@@ -133,6 +133,7 @@ if (response.success) {
 | `app.registerShortcut` | 0.9.97 |
 | `app.unregisterShortcut` | 0.9.97 |
 | `app.updateShortcut` | 0.9.97 |
+| `fonts.resolveFamilies` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
@@ -503,6 +504,47 @@ await Otzaria.call('app.unregisterShortcut', { id: 'toggle-night-mode' });
 
 ניתן להצהיר על קיצורים גם **במניפסט** בלי להריץ קוד — ראו §
 [contributes.startup.shortcuts](#contributesstartup---תרומות-עלייה-דקלרטיביות).
+
+---
+
+## fonts.* - גופנים למסמכים
+
+### `fonts.resolveFamilies`
+
+מחזיר כללי `@font-face` מוכנים להזרקה, שהבייטים שלהם מגיעים מהגופנים הארוזים של אוצריא או מגופני המערכת — **תחת שם שאתם מבקשים**.
+
+למה זה קיים: `src: local()` בתוך WebView של תוסף פותר רק גופנים **מותקנים במערכת**, ולעולם לא את ה-faces שאוצריא מזריקה בעצמה. תוסף שמציג מסמך שמבקש גופן שאיש לא התקין אינו יכול להגיע לגופנים הארוזים בלי הבייטים.
+
+זה משנה יותר ממראה: ב-DOCX, `w:lineRule="auto"` גוזר את גובה השורה ממדדי הגופן **שנבחר בפועל**, ולכן גופן חסר משנה את פריסת המסמך כולו.
+
+לכל משפחה מבוקשת מציינים רשימת תחליפים לפי סדר עדיפות. מוחזר ה-`@font-face` של הראשון שאוצריא מצליחה להרכיב, כשהוא נושא את השם שביקשתם.
+
+```javascript
+const { data } = await Otzaria.call('fonts.resolveFamilies', {
+  families: [
+    { name: 'FrankRuehl DP', substitutes: ['FrankRuehl', 'FrankRuhlCLM', 'David'] }
+  ]
+});
+
+const style = document.createElement('style');
+style.textContent = data.css;
+document.head.appendChild(style);
+```
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `families` | array | עד 24 פריטים. כל פריט: `name` (השם שהמסמך מבקש) ו-`substitutes` (עד 12 שמות, לפי סדר). |
+
+מוחזר:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `css` | string | כללי `@font-face`, מופרדים בשורות. ריק כשלא נמצאה אף התאמה. |
+| `resolved` | string[] | השמות המבוקשים שקיבלו face. |
+
+המדיניות — אילו תחליפים ובאיזה סדר — נשארת אצלכם: אתם יודעים מה המסמך מבקש, ואוצריא נותנת רק את מה שרק היא יכולה לתת.
+
+הרשאה: `app.info.read` (baseline — אין דיאלוג נוסף).
 
 ---
 
