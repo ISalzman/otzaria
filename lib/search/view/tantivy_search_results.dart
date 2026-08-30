@@ -487,6 +487,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                 onOpenInReader: (_) {
                   final openTarget = widget.tab.previewTarget.value;
                   if (openTarget == null) return;
+                  final external = openTarget.openInReader;
+                  if (external != null) {
+                    external();
+                    return;
+                  }
                   _openResultLocation(
                     title: openTarget.title,
                     reference: openTarget.reference,
@@ -611,6 +616,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             final externalSliver = ExternalSearchResultsSection(
               key: const ValueKey('external-results-sliver'),
               tab: widget.tab,
+              showPreviewPane: widget.showPreviewPane,
             );
             final engineSlivers = _buildEngineSlivers(
               state,
