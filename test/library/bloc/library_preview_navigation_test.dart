@@ -85,6 +85,14 @@ void main() {
         reason: 'רק מעבר תיקייה מנקה — לא כל עדכון state',
       );
     });
+
+    test('clearPreviewBook מנקה את הספר המוצג', () {
+      final withPreview = const LibraryState().copyWith(
+        previewBook: firstChasidutBook,
+      );
+
+      expect(withPreview.copyWith(clearPreviewBook: true).previewBook, isNull);
+    });
   });
 
   group('LibraryBloc — מעבר תיקייה מנקה את התצוגה המקדימה', () {
@@ -107,26 +115,29 @@ void main() {
     });
 
     test('"בית" (NavigateToCategory לשורש) מנקה את הספר מהתיקייה הקודמת',
-        () async {
-      // הרצף שמסך הספרייה שולח ב-_handleNavigateHome.
-      bloc.add(NavigateToCategory(library));
-      bloc.add(const UpdateSearchQuery(''));
-      bloc.add(const SearchBooks());
-      await Future<void>.delayed(Duration.zero);
+      () async {
+        // הרצף שמסך הספרייה שולח ב-_handleNavigateHome.
+        bloc.add(NavigateToCategory(library));
+        bloc.add(const UpdateSearchQuery(''));
+        bloc.add(const SearchBooks());
+        await Future<void>.delayed(Duration.zero);
 
-      expect(bloc.state.currentCategory, library);
-      expect(
-        bloc.state.previewBook,
-        isNull,
-        reason: 'הספר שנבחר בחסידות אינו מוצג בשורש הספרייה',
-      );
+        expect(bloc.state.currentCategory, library);
+        expect(
+          bloc.state.previewBook,
+          isNull,
+          reason: 'הספר שנבחר בחסידות אינו מוצג בשורש הספרייה',
+        );
     });
 
     test('"חזור" (NavigateUp) מנקה את הספר מהתיקייה הקודמת', () async {
       // הרצף שמסך הספרייה שולח ב-_handleNavigateUp.
+      final searchCleared = bloc.stream.firstWhere(
+        (state) => state.searchQuery == null,
+      );
       bloc.add(NavigateUp());
       bloc.add(const SearchBooks());
-      await Future<void>.delayed(Duration.zero);
+      await searchCleared;
 
       expect(bloc.state.currentCategory, library);
       expect(bloc.state.previewBook, isNull);
@@ -148,7 +159,28 @@ void main() {
       expect(bloc.state.previewBook, halachaBook);
     });
 
-    test('NavigateUp מהשורש אינו משנה דבר — גם לא את התצוגה המקדימה', () async {
+    test('NavigateUp מהשורש אינו משנה דבר', () async {
+      bloc.emit(
+        bloc.state.copyWith(
+          currentCategory: library,
+          previewBook: firstChasidutBook,
+          searchQuery: 'תניא',
+        ),
+      );
+
+      bloc.add(NavigateUp());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(bloc.state.currentCategory, library);
+      expect(bloc.state.searchQuery, 'תניא');
+      expect(
+        bloc.state.previewBook,
+        firstChasidutBook,
+        reason: 'אין מעבר תיקייה ולכן הספר המוצג נשאר נבחר',
+      );
+    });
+
+    test('NavigateToCategory לקטגוריה הפתוחה שומר את התצוגה המקדימה', () async {
       bloc.emit(
         bloc.state.copyWith(
           currentCategory: library,
@@ -156,14 +188,11 @@ void main() {
         ),
       );
 
-      bloc.add(NavigateUp());
+      bloc.add(NavigateToCategory(library));
       await Future<void>.delayed(Duration.zero);
 
-      expect(
-        bloc.state.previewBook,
-        firstChasidutBook,
-        reason: 'אין תיקיית אב — לא בוצע מעבר, ולכן אין מה לנקות',
-      );
+      expect(bloc.state.currentCategory, library);
+      expect(bloc.state.previewBook, firstChasidutBook);
     });
   });
 }

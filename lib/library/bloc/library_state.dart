@@ -225,9 +225,7 @@ class LibraryState extends Equatable {
     );
   }
 
-  /// [clearPreviewBook] מאפס את התצוגה המקדימה ל-null. נדרש דגל מפורש כי
-  /// copyWith כותב `previewBook ?? this.previewBook` — העברת null נבלעת,
-  /// ובלעדיו אין דרך לנקות את הפאנל במעבר תיקייה (issue #957).
+  /// [clearPreviewBook] מאפס את התצוגה המקדימה; בלי הדגל null נשמר ב-copyWith.
   LibraryState copyWith({
     Library? library,
     bool? isLoading,
