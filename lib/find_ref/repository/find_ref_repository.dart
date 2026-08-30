@@ -31,6 +31,7 @@ typedef _UserBookRecord = ({
   String? filePath,
   String fileType,
   double orderIndex,
+  List<String> folderTitles,
 });
 
 class FindRefRepository {
@@ -101,6 +102,7 @@ class FindRefRepository {
         String? filePath,
         String fileType,
         double orderIndex,
+        List<String> folderTitles,
       })
     >
   >
@@ -299,6 +301,22 @@ class FindRefRepository {
     } else {
       final userRepo = await UserBooksDatabaseHolder.instance.repository;
       final raw = await userRepo.database.bookDao.getAllLocalBooks();
+      // שרשרת התיקיות של כל ספר — בספרים אישיים שם הספר יושב לרוב על
+      // התיקייה ('חלק א' בתוך 'שות פלוני'), והיא חלק מהתאמת הכותרת.
+      final categories = await userRepo.database.categoryDao.getAllCategories();
+      final byId = {for (final c in categories) c.id: c};
+      List<String> chainOf(int categoryId) {
+        final titles = <String>[];
+        for (
+          var c = byId[categoryId];
+          c != null && titles.length < 12;
+          c = c.parentId == null ? null : byId[c.parentId]
+        ) {
+          titles.insert(0, c.title);
+        }
+        return titles;
+      }
+
       list = raw
           .map(
             (b) => (
@@ -307,6 +325,7 @@ class FindRefRepository {
               filePath: b.filePath,
               fileType: b.fileType ?? 'txt',
               orderIndex: b.order,
+              folderTitles: chainOf(b.categoryId),
             ),
           )
           .toList();
@@ -1166,25 +1185,50 @@ class FindRefRepository {
       const personalBookPath = 'ספרים אישיים';
       final maxN = queryTokens.length >= 3 ? 3 : queryTokens.length;
 
-      for (final book in allBooks) {
-        final normalizedTitle = _normalizeForMatch(book.title);
-        final titleTokens = _tokenize(normalizedTitle);
-
-        // Find the longest leading phrase that matches position-by-position
-        int? matchedN;
-        for (var n = maxN; n >= 1; n--) {
-          final phrase = queryTokens.take(n).toList();
-          if (phrase.length > titleTokens.length) continue;
+      // Find the longest leading phrase that matches position-by-position
+      int? leadingPhraseMatch(List<String> nameTokens, int cap) {
+        for (var n = cap; n >= 1; n--) {
+          if (n > nameTokens.length) continue;
           var ok = true;
-          for (var i = 0; i < phrase.length; i++) {
-            if (!titleTokens[i].startsWith(phrase[i])) {
+          for (var i = 0; i < n; i++) {
+            if (!nameTokens[i].startsWith(queryTokens[i])) {
               ok = false;
               break;
             }
           }
-          if (ok) {
-            matchedN = n;
-            break;
+          if (ok) return n;
+        }
+        return null;
+      }
+
+      for (final book in allBooks) {
+        final normalizedTitle = _normalizeForMatch(book.title);
+        final titleTokens = _tokenize(normalizedTitle);
+
+        var nameTokens = titleTokens;
+        var matchedN = leadingPhraseMatch(titleTokens, maxN);
+
+        // הכותרת לא התאימה — ניסיון מול שם תיקייה + כותרת, לכל סיומת של
+        // שרשרת התיקיות ('שות פלוני חלק א'). כך שאילתת שם התיקייה מוצאת את
+        // הקבצים שבתוכה. התקרה כאן לפי אורך השם המורחב, לא ה-3 של כותרת.
+        if (matchedN == null) {
+          for (var i = book.folderTitles.length - 1; i >= 0; i--) {
+            final candidate = _tokenize(
+              _normalizeForMatch(
+                '${book.folderTitles.sublist(i).join(' ')} ${book.title}',
+              ),
+            );
+            final n = leadingPhraseMatch(
+              candidate,
+              queryTokens.length.clamp(0, candidate.length),
+            );
+            // דרישת מינימום: ההתאמה חייבת לכסות את כל מילות התיקייה שבשם —
+            // אחרת 'שות' לבדה הייתה גוררת את כל תוכן התיקייה.
+            if (n != null && n >= candidate.length - titleTokens.length) {
+              nameTokens = candidate;
+              matchedN = n;
+              break;
+            }
           }
         }
         if (matchedN == null) continue;
@@ -1192,7 +1236,7 @@ class FindRefRepository {
         final isPdf = book.fileType == 'pdf';
         final remainingTokens = _getRemainingTokens(
           queryTokens,
-          titleTokens,
+          nameTokens,
           prefixMatchTokensCount: matchedN,
         );
 
@@ -1207,7 +1251,9 @@ class FindRefRepository {
               filePath: book.filePath ?? '',
               orderIndex: book.orderIndex,
               bookId: book.id,
-              bookPath: personalBookPath,
+              bookPath: book.folderTitles.isEmpty
+                  ? personalBookPath
+                  : book.folderTitles.join(', '),
               isUserBook: true,
             ),
           );
@@ -1223,7 +1269,9 @@ class FindRefRepository {
               filePath: book.filePath ?? '',
               orderIndex: book.orderIndex,
               bookId: book.id,
-              bookPath: personalBookPath,
+              bookPath: book.folderTitles.isEmpty
+                  ? personalBookPath
+                  : book.folderTitles.join(', '),
               isUserBook: true,
             ),
           );
@@ -1245,7 +1293,9 @@ class FindRefRepository {
                 orderIndex: book.orderIndex,
                 tocLevel: entry['level'] as int,
                 bookId: book.id,
-                bookPath: personalBookPath,
+                bookPath: book.folderTitles.isEmpty
+                    ? personalBookPath
+                    : book.folderTitles.join(', '),
                 sourceLineId: entry['dbLineId'] as int? ?? 0,
                 isUserBook: true,
               ),
