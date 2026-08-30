@@ -15,6 +15,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
+import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -146,6 +147,13 @@ void main() {
     return (start: list.right - line.right, end: line.left - list.left);
   }
 
+  /// השוליים של השורה הראשונה משני צדי אזור הקריאה כולו — כולל המסילה.
+  ({double start, double end}) viewportInsets(WidgetTester tester) {
+    final area = tester.getRect(find.byType(CombinedView));
+    final line = tester.getRect(find.byType(SmartTextWidget).first);
+    return (start: area.right - line.right, end: line.left - area.left);
+  }
+
   group('שולי עמודת הטקסט בתצוגה המשולבת', () {
     testWidgets('ללא הגבלת רוחב — הטקסט ממלא את הרשימה בשני הצדדים', (
       tester,
@@ -160,6 +168,19 @@ void main() {
       await pumpView(tester, isPreviewMode: false, textMaxWidth: -1);
       final insets = lineInsets(tester);
       expect(insets.start, greaterThan(0));
+      expect(insets.start, closeTo(insets.end, 0.5));
+    });
+
+    testWidgets('הטקסט ממורכז בין דפנות אזור הקריאה, לא רק בתוך הרשימה', (
+      tester,
+    ) async {
+      await pumpView(tester, isPreviewMode: false, textMaxWidth: 0);
+      expect(
+        find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+        findsOneWidget,
+        reason: 'בלי מסילה מוצגת אין מה למדוד',
+      );
+      final insets = viewportInsets(tester);
       expect(insets.start, closeTo(insets.end, 0.5));
     });
 

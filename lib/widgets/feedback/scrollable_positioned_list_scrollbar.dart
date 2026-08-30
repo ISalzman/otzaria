@@ -13,6 +13,11 @@ class ScrollablePositionedListScrollbar extends StatefulWidget {
   static const Key trackKey = Key('positioned-list-scrollbar-track');
   static const Key thumbKey = Key('positioned-list-scrollbar-thumb');
 
+  /// הרוחב שהמסילה תופסת בקצה ההתחלה כשיש מה לגלול. חשוף כדי שמסך שרוצה
+  /// עמודת טקסט ממורכזת יוכל לשמור מרווח זהה בקצה הנגדי.
+  static const double trackWidth =
+      _ScrollablePositionedListScrollbarState._trackWidth;
+
   final ItemScrollController scrollController;
   final ItemPositionsListener itemPositionsListener;
   final int itemCount;
@@ -442,113 +447,110 @@ class _ScrollablePositionedListScrollbarState
       // מתמרכז אנכית תחת ברירת המחדל center.
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // רוחב המסילה נשמר תמיד, וגם מרווח תואם בקצה הנגדי: כך עמודת הטקסט
-        // ממורכזת בין שתי הדפנות והופעת פס הגלילה לא מזיזה אותה.
-        SizedBox(
-          width: _trackWidth,
-          child: widget.itemCount > 0 && _canScroll
-              ? LayoutBuilder(
-                  builder: (context, constraints) {
-                    final trackHeight = constraints.maxHeight;
-                    // המסילה והרשימה חולקות שורה, ולכן זהו גם גובה ה-viewport.
-                    _viewportHeight = trackHeight;
-                    final thumbPixelHeight = trackHeight * _thumbHeight;
-                    final thumbPixelTop = trackHeight * _thumbPosition;
-                    final colorScheme = Theme.of(context).colorScheme;
+        if (widget.itemCount > 0 && _canScroll)
+          SizedBox(
+            width: _trackWidth,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final trackHeight = constraints.maxHeight;
+                // המסילה והרשימה חולקות שורה, ולכן זהו גם גובה ה-viewport.
+                _viewportHeight = trackHeight;
+                final thumbPixelHeight = trackHeight * _thumbHeight;
+                final thumbPixelTop = trackHeight * _thumbPosition;
+                final colorScheme = Theme.of(context).colorScheme;
 
-                    return MouseRegion(
-                      // ריחוף סתמי מעל המסילה — תצוגה מקדימה של יעד הקפיצה. מחושב
-                      // רק כשהעכבר זז, וה-show מחשב כתובת רק כשהאינדקס משתנה.
-                      onHover: _labelEnabled
-                          ? (event) {
-                              final index = _indexFromTrackDy(
-                                event.localPosition.dy,
-                                trackHeight,
-                              );
-                              _showLabelForIndex(index, event.position);
-                            }
-                          : null,
-                      onExit: (_) {
-                        // בזמן גרירה העכבר עלול לצאת מרוחב המסילה — אסור להסתיר אז.
-                        if (_isDragging) return;
-                        _hideLabel();
-                      },
-                      child: GestureDetector(
-                        key: ScrollablePositionedListScrollbar.trackKey,
-                        // opaque: מבטיח שהגרירה והלחיצה יתקבלו בכל שטח ה-track,
-                        // לא רק מעל ה-thumb עצמו — ללא צורך ברקע צבעוני.
-                        behavior: HitTestBehavior.opaque,
-                        // down ולא start: מבטיח ש-onVerticalDragStart מקבל את נקודת
-                        // המגע המקורית, כך שההבחנה בין גרירת אגודל לגרירת מסילה
-                        // והקפיצה אליה מדויקות.
-                        dragStartBehavior: DragStartBehavior.down,
-                        onVerticalDragStart: (details) {
-                          final dy = details.localPosition.dy;
-                          setState(() {
-                            _isDragging = true;
-                          });
-                          // גרירה שמתחילה מחוץ לאגודל (על המסילה) — קפיצה מיידית
-                          // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
-                          // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
-                          // יחסית (onVerticalDragUpdate) כמקודם.
-                          if (_isOutsideThumb(dy, trackHeight)) {
-                            _jumpToTrackPosition(
-                              dy,
-                              trackHeight,
-                              details.globalPosition,
-                            );
-                          }
-                        },
-                        onVerticalDragUpdate: (details) {
-                          _onDragUpdate(
-                            details.delta.dy / trackHeight,
+                return MouseRegion(
+                  // ריחוף סתמי מעל המסילה — תצוגה מקדימה של יעד הקפיצה. מחושב
+                  // רק כשהעכבר זז, וה-show מחשב כתובת רק כשהאינדקס משתנה.
+                  onHover: _labelEnabled
+                      ? (event) {
+                          final index = _indexFromTrackDy(
+                            event.localPosition.dy,
                             trackHeight,
-                            details.globalPosition,
                           );
-                        },
-                        onVerticalDragEnd: (_) => _onDragEnd(),
-                        // גרירה שנקטעה (הרשימה ניצחה ב-gesture arena וגללה את
-                        // התוכן) חייבת להסתיר את התווית — אחרת היא נשארת תקועה.
-                        onVerticalDragCancel: () => _onDragEnd(canceled: true),
-                        // קפיצה רק כשהלחיצה על המסילה. לחיצה על האגודל עצמו נורית גם
-                        // כשהמחווה הופכת מיד לגרירה — קפיצה כאן הייתה ממקמת אותו מחדש
-                        // סביב הסמן ומקפיצה את הרשימה לפני שהגרירה התחילה.
-                        onTapDown: (details) {
-                          final dy = details.localPosition.dy;
-                          // לחיצה בודדת קופצת אך לא מציגה תווית: במסך מגע אין
-                          // onExit שיסתיר אותה, והיא הייתה נשארת תקועה.
-                          if (_isOutsideThumb(dy, trackHeight)) {
-                            _jumpToTrackPosition(dy, trackHeight);
-                          }
-                        },
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // ה"אגודל" (Thumb) עצמו
-                            PositionedDirectional(
-                              top: thumbPixelTop,
-                              start: _edgeGap,
-                              end: _contentGap,
-                              height: thumbPixelHeight,
-                              child: Container(
-                                key: ScrollablePositionedListScrollbar.thumbKey,
-                                decoration: BoxDecoration(
-                                  color: AppSurfaces.scrollbarThumb(
-                                    colorScheme,
-                                    isDragging: _isDragging,
-                                  ),
-                                  borderRadius: AppTokens.borderRadiusAll,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                          _showLabelForIndex(index, event.position);
+                        }
+                      : null,
+                  onExit: (_) {
+                    // בזמן גרירה העכבר עלול לצאת מרוחב המסילה — אסור להסתיר אז.
+                    if (_isDragging) return;
+                    _hideLabel();
                   },
-                )
-              : null,
-        ),
+                  child: GestureDetector(
+                    key: ScrollablePositionedListScrollbar.trackKey,
+                    // opaque: מבטיח שהגרירה והלחיצה יתקבלו בכל שטח ה-track,
+                    // לא רק מעל ה-thumb עצמו — ללא צורך ברקע צבעוני.
+                    behavior: HitTestBehavior.opaque,
+                    // down ולא start: מבטיח ש-onVerticalDragStart מקבל את נקודת
+                    // המגע המקורית, כך שההבחנה בין גרירת אגודל לגרירת מסילה
+                    // והקפיצה אליה מדויקות.
+                    dragStartBehavior: DragStartBehavior.down,
+                    onVerticalDragStart: (details) {
+                      final dy = details.localPosition.dy;
+                      setState(() {
+                        _isDragging = true;
+                      });
+                      // גרירה שמתחילה מחוץ לאגודל (על המסילה) — קפיצה מיידית
+                      // ליעד הנלחץ. כך גם לחיצה שזוהתה כגרירה זעירה מגיעה ליעד
+                      // במקום רק להזיז את האגודל מעט. גרירת האגודל עצמו נשארת
+                      // יחסית (onVerticalDragUpdate) כמקודם.
+                      if (_isOutsideThumb(dy, trackHeight)) {
+                        _jumpToTrackPosition(
+                          dy,
+                          trackHeight,
+                          details.globalPosition,
+                        );
+                      }
+                    },
+                    onVerticalDragUpdate: (details) {
+                      _onDragUpdate(
+                        details.delta.dy / trackHeight,
+                        trackHeight,
+                        details.globalPosition,
+                      );
+                    },
+                    onVerticalDragEnd: (_) => _onDragEnd(),
+                    // גרירה שנקטעה (הרשימה ניצחה ב-gesture arena וגללה את
+                    // התוכן) חייבת להסתיר את התווית — אחרת היא נשארת תקועה.
+                    onVerticalDragCancel: () => _onDragEnd(canceled: true),
+                    // קפיצה רק כשהלחיצה על המסילה. לחיצה על האגודל עצמו נורית גם
+                    // כשהמחווה הופכת מיד לגרירה — קפיצה כאן הייתה ממקמת אותו מחדש
+                    // סביב הסמן ומקפיצה את הרשימה לפני שהגרירה התחילה.
+                    onTapDown: (details) {
+                      final dy = details.localPosition.dy;
+                      // לחיצה בודדת קופצת אך לא מציגה תווית: במסך מגע אין
+                      // onExit שיסתיר אותה, והיא הייתה נשארת תקועה.
+                      if (_isOutsideThumb(dy, trackHeight)) {
+                        _jumpToTrackPosition(dy, trackHeight);
+                      }
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // ה"אגודל" (Thumb) עצמו
+                        PositionedDirectional(
+                          top: thumbPixelTop,
+                          start: _edgeGap,
+                          end: _contentGap,
+                          height: thumbPixelHeight,
+                          child: Container(
+                            key: ScrollablePositionedListScrollbar.thumbKey,
+                            decoration: BoxDecoration(
+                              color: AppSurfaces.scrollbarThumb(
+                                colorScheme,
+                                isDragging: _isDragging,
+                              ),
+                              borderRadius: AppTokens.borderRadiusAll,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         Expanded(
           child: NotificationListener<ScrollMetricsNotification>(
             onNotification: _onScrollMetrics,
@@ -560,7 +562,6 @@ class _ScrollablePositionedListScrollbarState
             ),
           ),
         ),
-        const SizedBox(width: _trackWidth),
       ],
     );
   }
