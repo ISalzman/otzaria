@@ -98,6 +98,33 @@ void main() {
         fileType: 'text',
       ).toList();
 
+  Set<String> rangeSignatures(String path, String title) =>
+      DatabaseLibraryProvider.loadBookLinksRowsInRangeForTesting(
+            dbPath: path,
+            title: title,
+            categoryId: 1,
+            fileType: 'text',
+            startLineIndex: 0,
+            endLineIndex: 2,
+          )
+          .map(
+            (r) =>
+                '${r['sourceLineIndex']}:${r['targetLineIndex']}:'
+                '${r['connectionTypeName']}',
+          )
+          .toSet();
+
+  Map<String, int> summaryCounts(String path, String title) => {
+    for (final row
+        in DatabaseLibraryProvider.loadBookLinkTargetsSummaryRowsForTesting(
+          dbPath: path,
+          title: title,
+          categoryId: 1,
+        ).rows)
+      '${row['targetBookTitle']}:${row['connectionTypeName']}':
+          row['linkCount'] as int,
+  };
+
   setUp(() => tmp = Directory.systemTemp.createTempSync('linkvis'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
@@ -116,6 +143,16 @@ void main() {
         '2:2:OTHER',
         '1:2:OTHER',
       });
+    });
+
+    test('מסלולי range ו-summary שומרים את התנהגות סכמה 2', () {
+      final path = buildDb(withTable: false);
+      expect(rangeSignatures(path, 'B'), {'0:0:SOURCE'});
+      expect(summaryCounts(path, 'A'), {
+        'B:OTHER': 5,
+        'B:COMMENTARY': 1,
+      });
+      expect(summaryCounts(path, 'B'), {'A:SOURCE': 1});
     });
   });
 
@@ -156,6 +193,32 @@ void main() {
         buildDb(withTable: true),
       ).firstWhere((r) => r['connectionTypeName'] == 'OTHER');
       expect(moved['targetRangeEndLineIndex'], 1);
+    });
+
+    test('מסלול range מסנן את שני הצדדים לפי ה-verdict שלהם', () {
+      final path = buildDb(withTable: true);
+      expect(rangeSignatures(path, 'A'), {
+        '0:1:OTHER',
+        '0:0:COMMENTARY',
+        '2:2:OTHER',
+      });
+      expect(rangeSignatures(path, 'B'), {
+        '0:0:OTHER',
+        '1:0:OTHER',
+        '0:0:SOURCE',
+      });
+    });
+
+    test('מסלול summary מסנן side 0 ו-side 1 בנפרד', () {
+      final path = buildDb(withTable: true);
+      expect(summaryCounts(path, 'A'), {
+        'B:OTHER': 2,
+        'B:COMMENTARY': 1,
+      });
+      expect(summaryCounts(path, 'B'), {
+        'A:OTHER': 2,
+        'A:SOURCE': 1,
+      });
     });
   });
 
