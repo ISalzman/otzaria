@@ -157,14 +157,34 @@ class DataRepository {
     bool includeOtzar = false,
     bool includeHebrewBooks = false,
     bool sortByRatio = true,
+  }) async => (await findBooksAndCategories(
+    query,
+    category,
+    topics: topics,
+    includeOtzar: includeOtzar,
+    includeHebrewBooks: includeHebrewBooks,
+    sortByRatio: sortByRatio,
+  )).books;
+
+  /// כמו [findBooks], ובנוסף מחזיר את הקטגוריות שכותרתן תואמת לשאילתה —
+  /// לתצוגת קבוצת "תיקיות" אחרי הספרים בתוצאות האיתור (issue #956).
+  Future<({List<Book> books, List<Category> categories})>
+  findBooksAndCategories(
+    String query,
+    Category? category, {
+    List<String>? topics,
+    bool includeOtzar = false,
+    bool includeHebrewBooks = false,
+    bool sortByRatio = true,
   }) async {
+    const empty = (books: <Book>[], categories: <Category>[]);
     final normalizedQuery = _normalizeForSearch(query);
     final queryWords = normalizedQuery
         .split(RegExp(r'\s+'))
         .where((w) => w.isNotEmpty)
         .toList();
     if (queryWords.isEmpty) {
-      return [];
+      return empty;
     }
 
     final allBooks = <Book>[
@@ -196,6 +216,20 @@ class DataRepository {
         ),
     ];
 
+    // הקטגוריות מצטרפות לאותה ריצת isolate; מזוהות באינדקסים שמעל הספרים.
+    final allCategories =
+        category?.getAllCategories() ?? (await library).getAllCategories();
+    for (var i = 0; i < allCategories.length; i++) {
+      searchEntries.add(
+        BookSearchEntry(
+          index: allBooks.length + i,
+          title: allCategories[i].title,
+          author: '',
+          topics: '',
+        ),
+      );
+    }
+
     final matchingIndices = await Isolate.run(
       () => filterBookSearchEntries(
         entries: searchEntries,
@@ -206,9 +240,22 @@ class DataRepository {
       ),
     );
 
-    return [
-      for (final index in matchingIndices) allBooks[index],
-    ];
+    final books = <Book>[];
+    final categories = <Category>[];
+    for (final index in matchingIndices) {
+      if (index < allBooks.length) {
+        books.add(allBooks[index]);
+      } else {
+        categories.add(allCategories[index - allBooks.length]);
+      }
+    }
+    // סינון נושאים פעיל מסתיר את קבוצת התיקיות — לקטגוריה אין נושאים.
+    return (
+      books: books,
+      categories: (topics?.isNotEmpty ?? false)
+          ? const <Category>[]
+          : categories,
+    );
   }
 
   String _normalizeForSearch(String input) => _normalizeBookSearchText(input);
@@ -235,6 +282,7 @@ BookSearchEntry buildBookSearchEntry(
         : acronymsForId(id) ?? const [],
     eraOrder: eraOrderForId(id, book.isUserBook),
     isUserBook: book.isUserBook,
+    categoryPath: book.categoryPath ?? '',
   );
 }
 
@@ -254,6 +302,10 @@ class BookSearchEntry {
   /// ספר אישי של המשתמש — תמיד אחרון בתוך תת-המיון של הדורות.
   final bool isUserBook;
 
+  /// נתיב הקטגוריות של הספר. בספרים אישיים שם הספר מופיע לעיתים רק על
+  /// התיקייה ('חלק א' בתוך תיקייה בשם הספר), ולכן הוא חלק ממרחב החיפוש.
+  final String categoryPath;
+
   const BookSearchEntry({
     required this.index,
     required this.title,
@@ -262,6 +314,7 @@ class BookSearchEntry {
     this.acronyms = const [],
     this.eraOrder = 5,
     this.isUserBook = false,
+    this.categoryPath = '',
   });
 }
 
@@ -276,6 +329,9 @@ List<int> filterBookSearchEntries({
   // סינון הנושאים כמעט תמיד כבוי, ואז אף אחד לא קורא את קבוצת הנושאים של
   // הרשומה — פיצול ובניית Set לכל ספר בכל הקלדה יהיו עבודה לאשפה.
   final filtersByTopic = topics.isNotEmpty;
+
+  // כל הספרים בקטגוריה חולקים נתיב — נרמול פר-ספר הוסיף ~25ms לחיפוש.
+  final categoryWordsByPath = <String, Set<String>>{};
 
   final preparedEntries = entries.map((entry) {
     final normalizedTitle = _normalizeBookSearchText(entry.title);
@@ -295,10 +351,20 @@ List<int> filterBookSearchEntries({
       for (final acronym in entry.acronyms) ...acronym.split(' '),
     }..remove('');
 
+    final categoryWords = entry.categoryPath.isEmpty
+        ? const <String>{}
+        : categoryWordsByPath.putIfAbsent(
+            entry.categoryPath,
+            () => <String>{
+              ..._normalizeBookSearchText(entry.categoryPath).split(' '),
+            }..remove(''),
+          );
+
     return _PreparedBookSearchEntry(
       index: entry.index,
       normalizedTitle: normalizedTitle,
       searchWords: searchWords,
+      categoryWords: categoryWords,
       topics: entryTopics,
       acronyms: entry.acronyms,
       eraOrder: entry.eraOrder,
@@ -321,25 +387,49 @@ List<int> filterBookSearchEntries({
     return false;
   }
 
-  final filtered = preparedEntries.where((entry) {
-    final matchesQuery = queryWords.every(
-      (word) => wordMatchesEntry(word, entry.searchWords),
-    );
-    final matchesTopics =
-        topics.isEmpty || topics.every((topic) => entry.topics.contains(topic));
-
-    return matchesQuery && matchesTopics;
-  }).toList();
+  // התאמה שהושגה רק דרך נתיב התיקיות מסומנת — היא מדורגת מתחת לכל התאמה
+  // בכותרת/מחבר/כינוי, כדי ששאילתת 'הלכה' לא תקבור ספר בשם הזה תחת כל
+  // הספרים שיושבים בתיקייה בשם הזה.
+  final filtered = <({_PreparedBookSearchEntry entry, bool viaCategoryOnly})>[];
+  for (final entry in preparedEntries) {
+    if (topics.isNotEmpty &&
+        !topics.every((topic) => entry.topics.contains(topic))) {
+      continue;
+    }
+    // מעבר יחיד: מילות הספר קודם, ומילות הנתיב רק למילה שנכשלה בהן. בדיקה
+    // בשני מעברים נפרדים הכפילה את זמן החיפוש (~+30%).
+    var matches = true;
+    var viaCategoryOnly = false;
+    for (final word in queryWords) {
+      if (wordMatchesEntry(word, entry.searchWords)) {
+        continue;
+      }
+      if (entry.categoryWords.isNotEmpty &&
+          wordMatchesEntry(word, entry.categoryWords)) {
+        viaCategoryOnly = true;
+        continue;
+      }
+      matches = false;
+      break;
+    }
+    if (matches) {
+      filtered.add((entry: entry, viaCategoryOnly: viaCategoryOnly));
+    }
+  }
 
   if (sortByRatio) {
     final scored =
         [
-          for (final entry in filtered)
+          for (final (entry: entry, viaCategoryOnly: viaCategoryOnly)
+              in filtered)
             _ScoredBookSearchEntry(
               index: entry.index,
               // שכבות עדיפות (כותרת מדויקת > מכילה ברצף > מילותיה לפי הסדר > כינוי
-              // > fuzzy); בתוך כל שכבה: דור ואז ratio, כך ספר יסוד לא נקבר תחת פירושים.
-              tier: entry.normalizedTitle == normalizedQuery
+              // > fuzzy > נתיב התיקיות); בתוך כל שכבה: דור ואז ratio, כך ספר יסוד
+              // לא נקבר תחת פירושים.
+              tier: viaCategoryOnly
+                  ? -1
+                  : entry.normalizedTitle == normalizedQuery
                   ? 4
                   : entry.normalizedTitle.contains(normalizedQuery)
                   ? 3
@@ -370,7 +460,7 @@ List<int> filterBookSearchEntries({
   }
 
   return [
-    for (final entry in filtered) entry.index,
+    for (final match in filtered) match.entry.index,
   ];
 }
 
@@ -394,6 +484,9 @@ class _PreparedBookSearchEntry {
 
   /// כל המילים המנורמלות של הכותרת, המחבר והכינויים — מאוחדות לבדיקה אחת.
   final Set<String> searchWords;
+
+  /// מילות נתיב התיקיות שאינן מופיעות כבר ב-[searchWords].
+  final Set<String> categoryWords;
   final Set<String> topics;
   final List<String> acronyms;
   final int eraOrder;
@@ -403,6 +496,7 @@ class _PreparedBookSearchEntry {
     required this.index,
     required this.normalizedTitle,
     required this.searchWords,
+    required this.categoryWords,
     required this.topics,
     required this.acronyms,
     required this.eraOrder,

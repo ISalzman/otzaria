@@ -476,6 +476,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 p.library != c.library ||
                 p.currentCategory != c.currentCategory ||
                 p.searchResults != c.searchResults ||
+                p.searchCategoryResults != c.searchCategoryResults ||
                 p.searchQuery != c.searchQuery ||
                 p.selectedTopics != c.selectedTopics,
             builder: (context, state) {
@@ -1378,7 +1379,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         if (settingsState.libraryViewMode == 'grid') {
           if (state.searchResults != null) {
             final books = _visibleBooks(state.searchResults!);
-            if (books.isEmpty) {
+            final categories = state.searchCategoryResults ?? const [];
+            if (books.isEmpty && categories.isEmpty) {
               final repo = context.read<FocusRepository>();
               return _buildEmptyState(context, state, settingsState, repo);
             }
@@ -1393,7 +1395,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: Column(
                 children: [
                   ?topicsHeader,
-                  _buildSearchResultsGrid(displayBooks, displayLimit),
+                  if (displayBooks.isNotEmpty)
+                    _buildSearchResultsGrid(displayBooks, displayLimit),
+                  if (categories.isNotEmpty)
+                    _buildSearchCategoriesGrid(
+                      categories,
+                      firstFocus: displayBooks.isEmpty,
+                    ),
                 ],
               ),
             );
@@ -1410,13 +1418,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         }
         if (state.searchResults != null) {
           final visibleResults = _visibleBooks(state.searchResults!);
-          if (visibleResults.isEmpty) {
+          final categories = state.searchCategoryResults ?? const <Category>[];
+          if (visibleResults.isEmpty && categories.isEmpty) {
             final repo = context.read<FocusRepository>();
             return _buildEmptyState(context, state, settingsState, repo);
           }
           return _buildSearchListView(
             _filterBooksByTopics(visibleResults, state.selectedTopics),
             _buildTopicsSelection(context, state),
+            categories: categories,
           );
         }
         return _buildListView(state.currentCategory!);
@@ -1547,12 +1557,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _showBookPreview(Book book) =>
       context.read<LibraryBloc>().add(SelectBookForPreview(book));
 
-  Widget _buildSearchListView(List<Book> books, Widget? header) {
+  Widget _buildSearchListView(
+    List<Book> books,
+    Widget? header, {
+    List<Category> categories = const [],
+  }) {
     return _LibraryBrowserList(
       header: header,
-      itemCount: books.length,
+      itemCount: books.length + categories.length,
       forPanel: false,
       itemBuilder: (context, index) {
+        if (index >= books.length) {
+          return _buildSearchCategoryListItem(
+            categories[index - books.length],
+            focusNode: index == 0 ? _firstGridItemFocusNode : null,
+          );
+        }
         return _buildListBookItem(
           books[index],
           0,
@@ -1560,6 +1580,68 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           focusNode: index == 0 ? _firstGridItemFocusNode : null,
         );
       },
+    );
+  }
+
+  /// שורת תיקייה בתוצאות האיתור — לחיצה מנווטת לקטגוריה.
+  Widget _buildSearchCategoryListItem(
+    Category category, {
+    FocusNode? focusNode,
+  }) {
+    const double iconBoxSize = 26.0;
+    const double iconSize = 14.0;
+    final cs = Theme.of(context).colorScheme;
+
+    return _buildLibraryListRowBase(
+      context: context,
+      leadingWidget: Container(
+        width: iconBoxSize,
+        height: iconBoxSize,
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer,
+          borderRadius: AppTokens.borderRadiusAll,
+        ),
+        child: Center(
+          child: Icon(
+            FluentIcons.folder_24_regular,
+            color: cs.onSecondaryContainer,
+            size: iconSize,
+          ),
+        ),
+      ),
+      title: category.title,
+      subtitle: null,
+      pathLine: _categoryParentPath(category),
+      level: 0,
+      itemStyle: _LibraryListItemStyle.search,
+      isSelected: false,
+      onTap: () => _openCategory(category),
+      focusNode: focusNode,
+    );
+  }
+
+  /// נתיב האב של קטגוריה לתצוגה בתוצאות ('תנך, ראשונים'); ריק לקטגוריית שורש.
+  String _categoryParentPath(Category category) {
+    final parts = <String>[];
+    for (var c = category.parent; c != null && c.parent != null; c = c.parent) {
+      parts.insert(0, c.title);
+    }
+    return parts.join(', ');
+  }
+
+  Widget _buildSearchCategoriesGrid(
+    List<Category> categories, {
+    required bool firstFocus,
+  }) {
+    return MyGridView(
+      items: [
+        for (final (i, category) in categories.indexed)
+          CategoryGridItem(
+            category: category,
+            onCategoryClickCallback: () => _openCategory(category),
+            focusNode: firstFocus && i == 0 ? _firstGridItemFocusNode : null,
+          ),
+      ],
     );
   }
 
@@ -1882,6 +1964,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     required _LibraryListItemStyle itemStyle,
     required bool isSelected,
     required VoidCallback onTap,
+    String? pathLine,
     VoidCallback? onDoubleTap,
     FocusNode? focusNode,
   }) {
@@ -1943,6 +2026,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                         textAlign: TextAlign.right,
                         style: subtitleStyle,
                       ),
+                    if (pathLine != null && pathLine.isNotEmpty)
+                      LibraryOverflowTooltipText(
+                        text: pathLine,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        style: subtitleStyle?.copyWith(color: cs.secondary),
+                      ),
                   ],
                 ),
               ),
@@ -1988,11 +2078,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
     );
 
+    // בתוצאות חיפוש בלבד: נתיב הקטגוריות, שמסביר למה הספר הותאם ומזהה ספר
+    // אישי ששמו יושב על התיקייה ולא על הקובץ.
+    final pathLine = itemStyle == _LibraryListItemStyle.search
+        ? ((book.categoryPath ?? '').trim().isNotEmpty
+              ? book.categoryPath!.trim()
+              : book.topics.trim())
+        : null;
+
     return _buildLibraryListRowBase(
       context: context,
       leadingWidget: leadingWidget,
       title: book.title,
       subtitle: book.author,
+      pathLine: pathLine,
       level: level,
       itemStyle: itemStyle,
       isSelected: isSelected,

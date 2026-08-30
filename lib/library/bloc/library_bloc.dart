@@ -564,6 +564,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       state.copyWith(
         searchQuery: event.query,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }
@@ -593,16 +594,18 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         state.copyWith(
           isSearching: true,
           searchResults: state.searchResults,
+          searchCategoryResults: state.searchCategoryResults,
         ),
       );
 
       // החיפוש מחזיר את כל ההתאמות; סינון הקטגוריות נעשה מקומית בתצוגה בלבד.
-      final results = await _repository.findBooks(
+      final found = await _repository.findBooksAndCategories(
         query,
         category,
         includeOtzar: includeOtzar,
         includeHebrewBooks: includeHebrewBooks,
       );
+      final results = found.books;
 
       if (searchGeneration != _searchGeneration ||
           state.searchQuery != query ||
@@ -614,6 +617,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
             state.copyWith(
               isSearching: false,
               searchResults: state.searchResults,
+              searchCategoryResults: state.searchCategoryResults,
             ),
           );
         }
@@ -633,6 +637,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       emit(
         state.copyWith(
           searchResults: results,
+          searchCategoryResults: found.categories,
           previewBook: firstBook,
           isSearching: false,
         ),
@@ -679,6 +684,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         selectedTopics: event.topics,
         previewBook: firstBook,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }
@@ -691,6 +697,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       state.copyWith(
         previewBook: event.book,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }
