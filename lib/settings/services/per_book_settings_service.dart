@@ -588,23 +588,39 @@ class PdfBookPerBookSettings {
     );
   }
 
+  /// גרסת קנה המידה שבו נמדד [zoom]. קובץ בלי השדה נכתב כשפריסת תצוגת
+  /// הספר עבדה בחצי גודל, ולכן הזום שבו שווה לכפליים הזום של היום.
+  static const int _zoomLayoutVersion = 2;
+  static const double _legacyBookViewZoomFactor = 0.5;
+
   Map<String, dynamic> toJson() => {
     if (zoom != null) 'zoom': zoom,
+    if (zoom != null) 'zoomLayoutVersion': _zoomLayoutVersion,
     if (activeCommentators != null) 'activeCommentators': activeCommentators,
     if (layoutMode != null) 'layoutMode': layoutMode!.name,
   };
 
   factory PdfBookPerBookSettings.fromJson(Map<String, dynamic> json) {
+    final layoutMode = json['layoutMode'] != null
+        ? PdfLayoutMode.values.firstWhere(
+            (e) => e.name == json['layoutMode'],
+            orElse: () => PdfLayoutMode.regularView,
+          )
+        : null;
+    final rawZoom = (json['zoom'] as num?)?.toDouble();
+    // בלי layoutMode שמור אי אפשר לדעת באיזו תצוגה נמדד הזום — לא ממירים,
+    // כי המרה מיותרת מורגשת יותר מהמרה שהוחמצה.
+    final needsLayoutMigration =
+        (json['zoomLayoutVersion'] as int? ?? 1) < _zoomLayoutVersion &&
+        (layoutMode?.isBookView ?? false);
+
     return PdfBookPerBookSettings(
-      zoom: json['zoom'] as double?,
+      zoom: rawZoom != null && needsLayoutMigration
+          ? rawZoom * _legacyBookViewZoomFactor
+          : rawZoom,
       activeCommentators: (json['activeCommentators'] as List<dynamic>?)
           ?.cast<String>(),
-      layoutMode: json['layoutMode'] != null
-          ? PdfLayoutMode.values.firstWhere(
-              (e) => e.name == json['layoutMode'],
-              orElse: () => PdfLayoutMode.regularView,
-            )
-          : null,
+      layoutMode: layoutMode,
     );
   }
 

@@ -367,11 +367,70 @@ List<AppContextMenuEntry> buildGroupedCommentatorEntries({
   return items;
 }
 
+/// מרווח השדרה בין שני עמודי הכפולה, ביחידות נקודות העמוד.
+const double kBookViewSpineGap = 6.0;
+
+/// פריסת הכפולות בתצוגת ספר, ביחידות נקודות העמוד.
+///
+/// קנה המידה הוא 1 במכוון: מלבן עמוד קטן מגודלו בנקודות גורם ל-pdfrx לרנדר
+/// את הגזיר החד בקנה המידה בריבוע, והתוצאה מטושטשת (issue #1011).
+@visibleForTesting
+PdfPageLayout buildBookViewPageLayout({
+  required List<Size> pageSizes,
+  required bool hasCover,
+  required double verticalMargin,
+}) {
+  final pageLayouts = <Rect>[];
+  const gap = kBookViewSpineGap;
+  double maxWidth = 0;
+  double totalHeight = 0;
+
+  if (pageSizes.isNotEmpty) {
+    maxWidth = pageSizes[0].width * 2 + gap;
+  }
+
+  for (int i = 0; i < pageSizes.length; i++) {
+    final current = pageSizes[i];
+
+    if (hasCover && i == 0) {
+      pageLayouts.add(
+        Rect.fromLTWH(0, totalHeight, current.width, current.height),
+      );
+      totalHeight += current.height + verticalMargin;
+      continue;
+    }
+
+    final pageIndex = hasCover ? i - 1 : i;
+    if (pageIndex % 2 != 0) continue;
+
+    final next = i + 1 < pageSizes.length ? pageSizes[i + 1] : null;
+    pageLayouts.add(
+      Rect.fromLTWH(
+        current.width + gap,
+        totalHeight,
+        current.width,
+        current.height,
+      ),
+    );
+
+    if (next != null) {
+      pageLayouts.add(Rect.fromLTWH(0, totalHeight, next.width, next.height));
+      totalHeight += max(current.height, next.height) + verticalMargin;
+      i++;
+    } else {
+      totalHeight += current.height + verticalMargin;
+    }
+  }
+
+  return PdfPageLayout(
+    pageLayouts: pageLayouts,
+    documentSize: Size(maxWidth, totalHeight),
+  );
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
-  static const double _bookViewGap = 3.0;
-  static const double _bookViewScale = 0.5;
 
   /// צל העמוד — מוגדר במפורש (ולא נשען על ברירת המחדל של pdfrx) כי הצילום
   /// המורכב מראש חייב לצייר בדיוק את אותו צל, אחרת הוא צץ בסיום האנימציה.
@@ -1427,72 +1486,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     return PdfViewerParams(
       layoutPages: layoutMode.isBookView
-          ? (pages, params) {
-              final hasCover = layoutMode.hasCoverPage;
-              final pageLayouts = <Rect>[];
-              const gap = _bookViewGap;
-              const scale = _bookViewScale;
-              double maxWidth = 0;
-              double totalHeight = 0;
-
-              if (pages.isNotEmpty) {
-                maxWidth = pages[0].width * scale * 2 + gap;
-              }
-
-              for (int i = 0; i < pages.length; i++) {
-                final currentPage = pages[i];
-                final scaledWidth = currentPage.width * scale;
-                final scaledHeight = currentPage.height * scale;
-
-                if (hasCover && i == 0) {
-                  // עמוד 0 (שער) - לבדו
-                  pageLayouts.add(
-                    Rect.fromLTWH(0, totalHeight, scaledWidth, scaledHeight),
-                  );
-                  totalHeight += scaledHeight + params.margin;
-                } else {
-                  final pageIndex = hasCover ? i - 1 : i;
-                  final isRightPage = pageIndex % 2 == 0;
-
-                  if (isRightPage) {
-                    final nextPage = i + 1 < pages.length ? pages[i + 1] : null;
-
-                    pageLayouts.add(
-                      Rect.fromLTWH(
-                        scaledWidth + gap,
-                        totalHeight,
-                        scaledWidth,
-                        scaledHeight,
-                      ),
-                    );
-
-                    if (nextPage != null) {
-                      final nextScaledWidth = nextPage.width * scale;
-                      final nextScaledHeight = nextPage.height * scale;
-
-                      pageLayouts.add(
-                        Rect.fromLTWH(
-                          0,
-                          totalHeight,
-                          nextScaledWidth,
-                          nextScaledHeight,
-                        ),
-                      );
-                      totalHeight +=
-                          max(scaledHeight, nextScaledHeight) + params.margin;
-                      i++;
-                    } else {
-                      totalHeight += scaledHeight + params.margin;
-                    }
-                  }
-                }
-              }
-
-              return PdfPageLayout(
-                pageLayouts: pageLayouts,
-                documentSize: Size(maxWidth, totalHeight),
-              );
-            }
+          ? (pages, params) => buildBookViewPageLayout(
+              pageSizes: [
+                for (final page in pages) Size(page.width, page.height),
+              ],
+              hasCover: layoutMode.hasCoverPage,
+              // המרווח הוכפל יחד עם הפריסה, לשמירת אותה פרופורציה בין כפולות.
+              verticalMargin: params.margin * 2,
+            )
           : null,
       calculateCurrentPageNumber: layoutMode.isBookView
           ? null
