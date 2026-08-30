@@ -58,6 +58,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -430,6 +431,12 @@ class PluginBridgeDependencies {
   final Future<bool> Function(String pluginId, String instanceId)?
   hasUserActivation;
 
+  /// ה-BLoC של התיקיות האישיות — היעד של `library.refreshUserBooks`. אותה
+  /// סריקה שהלחצן „סרוק מחדש תיקיות אישיות” מפעיל, ולכן דרכה ולא בקוד סריקה
+  /// משלנו. אופציונלי: כשאינו מסופק (בדיקות), הקריאה מחזירה
+  /// `error.unavailable`.
+  final CustomFoldersBloc? customFoldersBloc;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -459,6 +466,7 @@ class PluginBridgeDependencies {
     this.printPluginPage,
     this.capturePluginPagePdf,
     this.hasUserActivation,
+    this.customFoldersBloc,
   });
 }
 
@@ -819,12 +827,64 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // library.*
   // ----------------------------------------------------------------
+  /// מזהה בקשת הרענון הבא. סטטי בכוונה: כמה מופעי adapter (טאב + רקע, או
+  /// תוספים שונים) יכולים להמתין לאותו BLoC בו-זמנית, והמזהה חייב להיות
+  /// ייחודי ביניהם כדי שכל אחד יזהה את התוצאה של הבקשה שלו.
+  static int _nextUserBooksRefreshRequestId = 1;
+
+  /// חסם עליון לסריקת התיקיות האישיות. לסריקה עצמה אין timeout טבעי — משכה
+  /// תלוי בכמות הקבצים אצל המשתמש — ובלעדיו תוסף שממתין לתשובה נתקע לנצח.
+  static const Duration _userBooksRefreshTimeout = Duration(minutes: 15);
+
+  /// `library.refreshUserBooks` — סורק מחדש את התיקיות האישיות של המשתמש
+  /// ומרענן בעקבותיה את קטלוג הספרייה. זה המסלול שתוסף שמוריד ספרים למשתמש
+  /// משתמש בו כדי שהספרים שהוריד יופיעו בספרייה בלי הפעלה מחדש.
+  ///
+  /// אילו תיקיות ייסרקו נקבע מהגדרות המשתמש בלבד — התוסף אינו מעביר נתיב,
+  /// ולכן אינו יכול לגרום לסריקה של תיקייה שהמשתמש לא הגדיר.
+  Future<Map<String, dynamic>> _refreshUserBooks() async {
+    final bloc = _dependencies.customFoldersBloc;
+    if (bloc == null) {
+      throw Exception(
+        'error.unavailable: personal books refresh is not available',
+      );
+    }
+
+    final requestId = _nextUserBooksRefreshRequestId++;
+    // ההרשמה נעשית לפני ה-add: סריקה שמסתיימת מהר הייתה מספיקה לפלוט את
+    // התוצאה לפני שהמאזין נרשם, והקריאה הייתה תקועה עד ה-timeout.
+    final completed = bloc.stream
+        .firstWhere((state) => state.completedScan?.requestId == requestId)
+        .timeout(_userBooksRefreshTimeout);
+    bloc.add(
+      RescanCustomFolders(showNoChangesMessage: false, requestId: requestId),
+    );
+
+    final CustomFoldersScanOutcome outcome;
+    try {
+      outcome = (await completed).completedScan!;
+    } on TimeoutException {
+      throw Exception('error.timeout: personal books refresh timed out');
+    }
+    if (!outcome.isSuccess) {
+      throw Exception('error.internal: ${outcome.failureMessage}');
+    }
+    return {
+      'addedBooks': outcome.addedBooks,
+      'updatedBooks': outcome.updatedBooks,
+      // כשלים חלקיים: קבצים בודדים שלא נסרקו. הסריקה עצמה הצליחה.
+      'errors': outcome.errors,
+    };
+  }
+
   Future<dynamic> _handleLibrary(
     String action,
     Map<String, dynamic> args,
   ) async {
     final library = await DataRepository.instance.library;
     switch (action) {
+      case 'refreshUserBooks':
+        return await _refreshUserBooks();
       case 'findBooks':
         final query = args['query']?.toString() ?? '';
         final limit = args['limit'] as int? ?? 20;

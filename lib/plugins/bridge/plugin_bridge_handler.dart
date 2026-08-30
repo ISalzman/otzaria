@@ -136,6 +136,9 @@ class PluginBridgeHandler {
       method == 'network.fetchStream' ||
       method == 'network.download' ||
       method == 'fs.extractZip' ||
+      // סריקת התיקיות האישיות היא I/O על הדיסק שתלוי בכמות הקבצים אצל
+      // המשתמש; היא מנהלת חסם זמן משלה באדפטר.
+      method == 'library.refreshUserBooks' ||
       // „שמור בשם” מחכה לדיאלוג של המערכת. timeout גנרי היה מחזיר
       // error.timeout בזמן שהמשתמש בוחר תיקייה, והתוסף היה חושב שהשמירה נכשלה
       // אחרי שהקובץ כבר נכתב.
@@ -344,6 +347,7 @@ class PluginBridgeHandler {
     'library.getLinks': pluginLinksReadPermission,
     'library.getRawLinks': pluginLinksReadPermission,
     'library.getLinkTargetsSummary': pluginLinksReadPermission,
+    'library.refreshUserBooks': pluginLibraryRefreshPermission,
     'search.fullText': 'search.fulltext.read',
     'search.query': 'search.fulltext.read',
     'search.getOptions': 'search.fulltext.read',

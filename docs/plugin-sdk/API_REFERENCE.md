@@ -148,6 +148,7 @@ if (response.success) {
 | `library.getRawLinks` | 0.9.97 |
 | `library.getLinkTargetsSummary` | 0.9.97 |
 | `library.getLinkContent` | 0.9.97 |
+| `library.refreshUserBooks` | 0.9.97 |
 | `network.fetch` | 0.9.93 |
 | `network.fetchStream` | 0.9.97 |
 | `network.download` | 0.9.93 |
@@ -672,6 +673,39 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 });
 // [{ text: "בראשית", index: 0, level: 1 }, ...]
 ```
+
+### `library.refreshUserBooks`
+**הרשאה:** `library.refresh` · **מ-0.9.97**
+
+סורק מחדש את התיקיות האישיות שהמשתמש הגדיר, מעדכן את `user_books.db`
+לפי מה שנמצא בהן, ומרענן בעקבות זאת את קטלוג הספרייה. זו בדיוק הפעולה
+שמבצע הלחצן „סרוק מחדש תיקיות אישיות” בהגדרות.
+
+**מתי להשתמש:** תוסף שמוריד למשתמש ספרים וכותב אותם לתיקייה אישית
+(`network.download` / `fs.*` אל תוך תיקייה שהמשתמש אישר) — קורא לו בסיום, והספרים
+מופיעים בספרייה בלי שהמשתמש יפעיל מחדש את אוצריא.
+
+**אין פרמטרים.** אילו תיקיות ייסרקו נקבע מהגדרות המשתמש בלבד — התוסף אינו
+מעביר נתיב, ולכן אינו יכול לגרום לסריקה של תיקייה שלא הוגדרה.
+
+```javascript
+const { data } = await Otzaria.call('library.refreshUserBooks');
+// { addedBooks: 3, updatedBooks: 0, errors: [] }
+```
+
+| שדה | משמעות |
+|------|---------|
+| `addedBooks` | מספר הספרים החדשים שנוספו בסריקה. |
+| `updatedBooks` | מספר הספרים שתוכנם השתנה ועודכן. |
+| `errors` | כשלים חלקיים — קבצים בודדים שלא נסרקו. מערך ריק = הכל עבר בהצלחה. |
+
+הקריאה ממתינה לסיום הסריקה, שמשכה תלוי בכמות הקבצים אצל המשתמש, ולכן אינה
+כפופה ל-timeout הגנרי של 30 שניות. אחרי 15 דקות היא מוחזרת עם `error.timeout`.
+רענון הקטלוג עצמו נשלח לפני החזרת התשובה, אך מושלם ברקע; אינדוקס החיפוש מתעדכן
+לפי הגדרת „עדכון אינדקס אוטומטי” של המשתמש.
+
+**שגיאות:** `error.unavailable` — רענון אינו זמין בהקשר הנוכחי;
+`error.timeout` — הסריקה לא הסתיימה בזמן; `error.internal` — הסריקה נכשלה.
 
 ---
 
@@ -4311,6 +4345,7 @@ Otzaria.on('plugin.boot', async (payload) => {
     "library.books.read",
     "library.content.read",
     "library.links.read",
+    "library.refresh",
     "search.fulltext.read",
     "reader.open",
     "navigation.write",

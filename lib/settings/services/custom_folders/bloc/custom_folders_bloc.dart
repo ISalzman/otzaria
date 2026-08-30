@@ -261,6 +261,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         isSyncing: true,
         message: null,
         error: null,
+        completedScan: null,
       ),
     );
     try {
@@ -275,7 +276,8 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
           : event.showNoChangesMessage
           ? 'הסריקה הושלמה. לא נמצאו ספרים חדשים.'
           : null;
-      emit(state.copyWith(isSyncing: false, message: message));
+      // הרענון נשלח לפני דיווח התוצאה, כדי שקורא שמחכה ל-completedScan לא
+      // יראה "הסתיים" לפני ש-RefreshLibrary בכלל נכנס לתור.
       _refreshLibraryAfterScan(
         {
           for (final id in result.updatedBookIds)
@@ -284,11 +286,31 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         // כשל חלקי לא מסומן כהשלמה — סנכרון הרקע יקבל הזדמנות לנסות שוב.
         coversAllFolders: event.onlyFolderPath == null && result.errors.isEmpty,
       );
+      emit(
+        state.copyWith(
+          isSyncing: false,
+          message: message,
+          completedScan: event.requestId == null
+              ? null
+              : CustomFoldersScanOutcome(
+                  requestId: event.requestId!,
+                  addedBooks: result.addedBooks,
+                  updatedBooks: result.updatedBooks,
+                  errors: result.errors,
+                ),
+        ),
+      );
     } catch (e) {
       emit(
         state.copyWith(
           isSyncing: false,
           error: 'שגיאה בסריקת תיקיות אישיות: $e',
+          completedScan: event.requestId == null
+              ? null
+              : CustomFoldersScanOutcome(
+                  requestId: event.requestId!,
+                  failureMessage: '$e',
+                ),
         ),
       );
     }

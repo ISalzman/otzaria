@@ -1,4 +1,5 @@
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -242,6 +243,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
     final bookmarkBloc = context.read<BookmarkBloc>();
+    final customFoldersBloc = context.read<CustomFoldersBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
@@ -254,6 +256,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
       bookmarkBloc: bookmarkBloc,
+      customFoldersBloc: customFoldersBloc,
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(

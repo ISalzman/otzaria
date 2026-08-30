@@ -1561,6 +1561,7 @@ export type OtzariaMethod =
   | 'library.getRawLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
+  | 'library.refreshUserBooks'
   | 'library.getTree'
   | 'library.resolveCategoryPaths'
   | 'search.fullText'

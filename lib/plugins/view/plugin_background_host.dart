@@ -1,4 +1,5 @@
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -559,6 +560,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
     final bookmarkBloc = context.read<BookmarkBloc>();
+    final customFoldersBloc = context.read<CustomFoldersBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
@@ -571,6 +573,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
       bookmarkBloc: bookmarkBloc,
+      customFoldersBloc: customFoldersBloc,
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(
