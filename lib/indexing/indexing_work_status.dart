@@ -27,6 +27,17 @@ WorkStatusItem indexingWorkStatusItem(
       onTap: onTap,
     );
   }
+  // שלב הסריקה אינו מציית להשהיה/מצב חסכוני, ולכן מוצג בלי לחצנים.
+  if (state.isScanning) {
+    return WorkStatusItem(
+      id: kIndexingWorkStatusId,
+      title: 'אינדוקס ספרים',
+      message: 'בודק אילו ספרים דורשים עדכון באינדקס',
+      detail: 'התקדמות: $processed/$total',
+      progress: total > 0 ? (processed / total).clamp(0.0, 1.0) : null,
+      onTap: onTap,
+    );
+  }
   return WorkStatusItem(
     id: kIndexingWorkStatusId,
     title: 'אינדוקס ספרים',

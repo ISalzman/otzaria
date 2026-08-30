@@ -225,6 +225,7 @@ void main() {
           booksProcessed: 0,
           totalBooks: 1,
           isCreatingIndex: false,
+          isScanning: true,
         ),
         const IndexingComplete(failures: [failure]),
       ],
@@ -232,6 +233,32 @@ void main() {
         expect(repositoryOf(bloc).reconcileCalls, 1);
         expect(repositoryOf(bloc).reportedResults, hasLength(1));
       },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'שלב הסריקה של ReconcileIndex נפלט עם isScanning להצגה בחיווי',
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()..scanProgressReports = [(1, 2), (2, 2)],
+      ),
+      act: (bloc) => bloc.add(ReconcileIndex(libraryWithBooks(2))),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingInProgress(
+          booksProcessed: 1,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingInProgress(
+          booksProcessed: 2,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingComplete(),
+      ],
     );
 
     blocTest<IndexingBloc, IndexingState>(
@@ -500,6 +527,9 @@ class _FakeIndexingRepository extends IndexingRepository {
 
   /// כשהוא מסופק — הריצה מדווחת על שלב האיחוד ונעצרת בו עד לשחרור.
   Completer<void>? finalizeGate;
+
+  /// דיווחי onScanProgress שהסריקה ב-reconcile תפלוט לפני הסיום.
+  List<(int, int)> scanProgressReports = const [];
   int clearCalls = 0;
   int awaitReadyCalls = 0;
 
@@ -562,6 +592,9 @@ class _FakeIndexingRepository extends IndexingRepository {
     Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
   }) {
     reconcileCalls++;
+    for (final (processed, total) in scanProgressReports) {
+      onScanProgress?.call(processed, total);
+    }
     return _finish(onProgress);
   }
 

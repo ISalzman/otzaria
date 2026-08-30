@@ -51,10 +51,12 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     int? booksProcessed,
     int? totalBooks,
     bool isCreatingIndex = false,
+    bool isScanning = false,
   }) => IndexingInProgress(
     booksProcessed: booksProcessed,
     totalBooks: totalBooks,
     isCreatingIndex: isCreatingIndex,
+    isScanning: isScanning,
     isPaused: _isPaused,
     isEconomy: _isEconomy,
     isFinalizing: _isFinalizing,
@@ -120,7 +122,11 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     }
 
     emit(
-      _inProgress(booksProcessed: 0, totalBooks: totalCandidates),
+      _inProgress(
+        booksProcessed: 0,
+        totalBooks: totalCandidates,
+        isScanning: true,
+      ),
     );
 
     try {
@@ -136,6 +142,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
               booksProcessed: processed,
               totalBooks: total,
               isCreatingIndex: state.isCreatingIndex,
+              isScanning: true,
             ),
           );
         },
@@ -423,6 +430,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         booksProcessed: currentState.booksProcessed,
         totalBooks: currentState.totalBooks,
         isCreatingIndex: currentState.isCreatingIndex,
+        isScanning: currentState.isScanning,
       ),
     );
   }

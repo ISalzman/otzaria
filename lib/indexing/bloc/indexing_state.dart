@@ -23,10 +23,15 @@ class IndexingInProgress extends IndexingState {
     super.booksProcessed,
     super.totalBooks,
     super.isCreatingIndex,
+    this.isScanning = false,
     this.isPaused = false,
     this.isEconomy = false,
     this.isFinalizing = false,
   });
+
+  /// שלב הסריקה של ReconcileIndex — השוואת טביעות-אצבע לפני אינדוקס-מחדש.
+  /// שלב ארוך שרץ רק בבקשת עדכון מפורשת, ולכן מוצג בחיווי (issue #1056).
+  final bool isScanning;
 
   /// האינדוקס מושהה — הלולאה ממתינה לפני הספר הבא.
   final bool isPaused;
@@ -41,6 +46,7 @@ class IndexingInProgress extends IndexingState {
   @override
   List<Object?> get props => [
     ...super.props,
+    isScanning,
     isPaused,
     isEconomy,
     isFinalizing,

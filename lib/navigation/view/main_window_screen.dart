@@ -2573,7 +2573,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<IndexingBloc, IndexingState>(
             listener: (context, state) {
               final cubit = context.read<WorkStatusCubit>();
-              if (state is IndexingInProgress && state.isCreatingIndex) {
+              if (state is IndexingInProgress &&
+                  (state.isCreatingIndex || state.isScanning)) {
                 final indexingBloc = context.read<IndexingBloc>();
                 cubit.upsert(
                   indexingWorkStatusItem(
