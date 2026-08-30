@@ -204,4 +204,162 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });
+
+  Future<PdfDocument> openMultiPageDocument(WidgetTester tester) async {
+    final document = await tester.runAsync(() async {
+      final source = pw.Document();
+      for (var i = 0; i < 8; i++) {
+        source.addPage(pw.Page(build: (context) => pw.SizedBox()));
+      }
+      final bytes = await source.save();
+      return PdfDocument.openData(
+        bytes,
+        sourceName: 'pdf-viewer-anchor-test.pdf',
+        useProgressiveLoading: false,
+      );
+    });
+    return document!;
+  }
+
+  test('top anchor keeps the document line at the head of the view', () {
+    // מרכז שמציב את 500 בראש תצוגה בגובה 800 בזום 2 → 500 + 400/2 = 700.
+    expect(
+      pdfTopAnchoredCenter(
+        anchorDocTop: 500,
+        currentCenter: const Offset(120, 999),
+        viewSize: const Size(600, 800),
+        zoom: 2,
+      ),
+      const Offset(120, 700),
+    );
+    // האופק נשאר כפי שחישבה מדיניות שינוי-הגודל.
+    expect(
+      pdfTopAnchoredCenter(
+        anchorDocTop: 0,
+        currentCenter: const Offset(75, 10),
+        viewSize: const Size(600, 800),
+        zoom: 1,
+      ),
+      const Offset(75, 400),
+    );
+  });
+
+  testWidgets('closing a wide side pane keeps the reading position', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final document = await openMultiPageDocument(tester);
+    addTearDown(document.dispose);
+    final controller = PdfViewerController();
+    var showRightPane = true;
+    late ValueChanged<bool> setShowRightPane;
+
+    double? anchorDocTop;
+    Size? anchorViewSize;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          setShowRightPane = (value) {
+            anchorDocTop = controller.visibleRect.top;
+            anchorViewSize = controller.viewSize;
+            setState(() => showRightPane = value);
+          };
+          return MaterialApp(
+            home: Directionality(
+              textDirection: TextDirection.rtl,
+              child: SizedBox(
+                width: 1400,
+                height: 800,
+                child: AdaptiveSidePane(
+                  isOpen: showRightPane,
+                  alignment: AlignmentDirectional.centerStart,
+                  paneContent: const SizedBox.shrink(),
+                  paneWidth: 300,
+                  minPaneWidth: 180,
+                  onClose: () => setShowRightPane(false),
+                  minMainContentWidth: 500,
+                  mainContent: PdfViewer(
+                    PdfDocumentRefDirect(document),
+                    controller: controller,
+                    params: PdfViewerParams(
+                      sizeDelegateProvider:
+                          const PdfViewerSizeDelegateProviderSmart(
+                            maxScale: 20,
+                            smartMaxScale: 20,
+                            maxPagesVisible: 1,
+                          ),
+                      behaviorControlParams:
+                          const PdfViewerBehaviorControlParams(
+                            trailingPageLoadingDelay: Duration.zero,
+                          ),
+                      // אותה חוליה שבמסך ה-PDF (issue #1023).
+                      onViewSizeChanged: (viewSize, oldViewSize, c) {
+                        final top = anchorDocTop;
+                        final size = anchorViewSize;
+                        anchorDocTop = null;
+                        anchorViewSize = null;
+                        if (top == null ||
+                            oldViewSize != size ||
+                            oldViewSize!.width == c.viewSize.width) {
+                          return;
+                        }
+                        Future.microtask(() {
+                          if (!c.isReady) return;
+                          c.goTo(
+                            c.calcMatrixFor(
+                              pdfTopAnchoredCenter(
+                                anchorDocTop: top,
+                                currentCenter: c.centerPosition,
+                                viewSize: c.viewSize,
+                                zoom: c.currentZoom,
+                              ),
+                            ),
+                            duration: Duration.zero,
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    await waitForViewer(tester, controller);
+
+    // גלילה לאמצע המסמך, כמו ניווט לתוצאת חיפוש.
+    final target = controller.layout.pageLayouts[3].top;
+    await tester.runAsync(
+      () => controller.goTo(
+        controller.calcMatrixFor(
+          pdfTopAnchoredCenter(
+            anchorDocTop: target,
+            currentCenter: controller.centerPosition,
+            viewSize: controller.viewSize,
+            zoom: controller.currentZoom,
+          ),
+        ),
+        duration: Duration.zero,
+      ),
+    );
+    await tester.pump();
+
+    final topBefore = controller.visibleRect.top;
+    final widthBefore = controller.viewSize.width;
+
+    setShowRightPane(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(controller.viewSize.width, greaterThan(widthBefore));
+    expect(controller.visibleRect.top, closeTo(topBefore, 1.0));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
 }

@@ -169,6 +169,16 @@ Rect? pdfSpreadVisibleViewportRect(
   return clippedRect;
 }
 
+/// מרכז התצוגה שמציב את [anchorDocTop] בראשה, בזום ובגובה הנתונים.
+/// האופק נשאר כפי שחישבה מדיניות שינוי-הגודל של pdfrx.
+@visibleForTesting
+Offset pdfTopAnchoredCenter({
+  required double anchorDocTop,
+  required Offset currentCenter,
+  required Size viewSize,
+  required double zoom,
+}) => Offset(currentCenter.dx, anchorDocTop + viewSize.height / 2 / zoom);
+
 /// מחזיר את מדיניות שינוי גודל ה-PDF לפי מצב התצוגה.
 @visibleForTesting
 PdfViewerSizeDelegateProvider pdfSizeDelegateProviderForLayoutMode(
@@ -431,6 +441,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _readerFocusAndHideQueued = false;
   bool _bookHasCommentaryLinks = false;
 
+  /// נקודת המסמך שהייתה בראש התצוגה רגע לפני שרוחב הקורא השתנה
+  /// (פתיחת/סגירת חלונית הצד), לשחזור אחריו.
+  double? _paneToggleAnchorDocTop;
+
+  /// גודל התצוגה שבו נלקח העוגן — מונע החלת עוגן ישן
+  /// על שינוי גודל אחר (במסך צר החלונית overlay והרוחב לא משתנה).
+  Size? _paneToggleAnchorViewSize;
+
   /// מצב יד — גרירת עכבר גוללת את הדף במקום לסמן טקסט (issue #916).
   bool _isHandMode = false;
 
@@ -581,7 +599,56 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (current is PdfBookLoaded && current.showLeftPane == show) {
       return;
     }
+    _captureViewportTopAnchor();
     _bloc.add(pdf_events.ToggleLeftPane(show));
+  }
+
+  /// שומר את קו הראש של התצוגה לפני שינוי רוחב הקורא. מדיניות השינוי-גודל
+  /// של pdfrx מעגנת את המרכז, ובזום שגדל התוצאה שנוּוט אליה נדחקת מהמסך.
+  void _captureViewportTopAnchor() {
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady || controller.layout.pageLayouts.isEmpty) {
+      _paneToggleAnchorDocTop = null;
+      _paneToggleAnchorViewSize = null;
+      return;
+    }
+    _paneToggleAnchorDocTop = controller.visibleRect.top;
+    _paneToggleAnchorViewSize = controller.viewSize;
+  }
+
+  /// מחזיר את קו הראש שנשמר ב-[_captureViewportTopAnchor], בזום שכבר נקבע
+  /// על ידי מדיניות שינוי-הגודל (issue #1023).
+  void _restoreViewportTopAnchor(
+    PdfViewerController controller,
+    Size? oldViewSize,
+  ) {
+    final anchorDocTop = _paneToggleAnchorDocTop;
+    final anchorViewSize = _paneToggleAnchorViewSize;
+    _paneToggleAnchorDocTop = null;
+    _paneToggleAnchorViewSize = null;
+    // בתצוגת ספר העמוד ממורכז ומנורמל על ידי normalizeMatrix — אין שם
+    // גלילה חופשית לשמר.
+    if (anchorDocTop == null ||
+        oldViewSize != anchorViewSize ||
+        _isBookViewModeActive() ||
+        oldViewSize!.width == controller.viewSize.width) {
+      return;
+    }
+    // pdfrx מזהיר לא לשנות את המטריצה בתוך ה-callback — הוא נקרא תוך כדי build.
+    Future.microtask(() {
+      if (!mounted || !controller.isReady) return;
+      controller.goTo(
+        controller.calcMatrixFor(
+          pdfTopAnchoredCenter(
+            anchorDocTop: anchorDocTop,
+            currentCenter: controller.centerPosition,
+            viewSize: controller.viewSize,
+            zoom: controller.currentZoom,
+          ),
+        ),
+        duration: Duration.zero,
+      );
+    });
   }
 
   /// מחוות pan של לוח מגע מדויק (מ-TrackpadPanRecognizer): מעבירים את
@@ -1440,6 +1507,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             }
           : null,
+      onViewSizeChanged: (viewSize, oldViewSize, controller) {
+        _restoreViewportTopAnchor(controller, oldViewSize);
+      },
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: _kScrollByMouseWheel,
