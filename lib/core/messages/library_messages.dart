@@ -11,6 +11,9 @@ abstract class LibraryMessages {
 
   static const String libraryLoadError = 'שגיאה בטעינת הספרייה. נסה שוב.';
 
+  static String talmudPdfEditionMissing(String title) =>
+      'לא נמצאה מהדורת PDF ל"$title" — המסכת נפתחה כטקסט';
+
   static String zipExtractedSuccessfully(String fileName) =>
       'הקובץ "$fileName" חולץ בהצלחה!';
 

@@ -104,7 +104,12 @@ void main() {
     navigationBloc = _RecordingNavigationBloc();
   });
 
-  Future<bool> run(WidgetTester tester, Book book, int index) async {
+  Future<bool> run(
+    WidgetTester tester,
+    Book book,
+    int index, {
+    bool? forcePdf,
+  }) async {
     late BuildContext capturedContext;
     await tester.pumpWidget(
       MultiBlocProvider(
@@ -121,7 +126,12 @@ void main() {
         ),
       ),
     );
-    return openLibraryBookPerTalmudBavliFormat(capturedContext, book, index);
+    return openLibraryBookPerTalmudBavliFormat(
+      capturedContext,
+      book,
+      index,
+      forcePdf: forcePdf,
+    );
   }
 
   group('openLibraryBookPerTalmudBavliFormat', () {
@@ -197,6 +207,46 @@ void main() {
       DataRepository.instance.library = Future.value(built.library);
 
       final handled = await run(tester, built.text, 0);
+
+      expect(handled, isFalse);
+      expect(tabsBloc.added, isEmpty);
+    });
+
+    testWidgets('forcePdf גובר על הגדרת הטקסט — המסכת נפתחת כ-PDF', (
+      tester,
+    ) async {
+      final built = _buildLibrary();
+      DataRepository.instance.library = Future.value(built.library);
+
+      final handled = await run(tester, built.text, 0, forcePdf: true);
+
+      expect(handled, isTrue);
+      final tab = (tabsBloc.added.single as OpenOrFocusTab).tab as PdfBookTab;
+      expect(tab.book.title, 'ברכות');
+      expect(tab.pageNumber, 1);
+    });
+
+    testWidgets('forcePdf=false גובר על הגדרת ה-PDF — הפתיחה לא מטופלת', (
+      tester,
+    ) async {
+      await Settings.setValue(
+        SettingsRepository.keyTalmudBavliOpenFormat,
+        'pdf',
+      );
+      final built = _buildLibrary();
+      DataRepository.instance.library = Future.value(built.library);
+
+      final handled = await run(tester, built.text, 0, forcePdf: false);
+
+      expect(handled, isFalse);
+      expect(tabsBloc.added, isEmpty);
+    });
+
+    testWidgets('forcePdf בלי מהדורת PDF: הפתיחה לא מטופלת', (tester) async {
+      final built = _buildLibrary(withPdf: false);
+      DataRepository.instance.library = Future.value(built.library);
+
+      final handled = await run(tester, built.text, 0, forcePdf: true);
 
       expect(handled, isFalse);
       expect(tabsBloc.added, isEmpty);

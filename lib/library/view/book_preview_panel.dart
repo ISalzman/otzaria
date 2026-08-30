@@ -7,6 +7,8 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/messages/messages_exports.dart';
+import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
@@ -27,7 +29,10 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 /// מציג את תוכן הספר בלי כרטיסיות, בדומה לחלון העיון
 class BookPreviewPanel extends StatefulWidget {
   final Book? book;
-  final Function(int index)? onOpenInReader; // מקבל את המיקום הנוכחי
+
+  /// נקרא בפתיחת הספר בעיון: המיקום הנוכחי, ובמסכת בבלי גם פורמט הפתיחה
+  /// שנבחר נקודתית בתצוגה המקדימה (null = לפי ההגדרה).
+  final void Function(int index, {bool? forcePdf})? onOpenInReader;
 
   /// מיקום פתיחה בספר טקסט (אינדקס סעיף) — לתצוגה מקדימה של תוצאת חיפוש.
   /// כשמסופק, גם מסכת בבלי מוצגת כטקסט (ולא במהדורת ה-PDF הנלווית), כדי
@@ -56,6 +61,9 @@ class BookPreviewPanel extends StatefulWidget {
 class _BookPreviewPanelState extends State<BookPreviewPanel> {
   TextBookTab? _currentTextTab;
   PdfBook? _companionPdfBook;
+
+  /// פורמט פתיחה שנבחר נקודתית למסכת המוצגת, גובר על ההגדרה (null = ההגדרה).
+  bool? _formatOverride;
   PdfViewerController? _pdfController;
   bool _isPdfViewerReady = false;
   bool _pdfFileExists = true;
@@ -72,6 +80,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
     // ספר אחר — נצור tab חדש
     if (widget.book != oldWidget.book) {
+      _formatOverride = null;
       _disposeCurrentTab();
       if (widget.book != null) {
         _createNewTab();
@@ -169,7 +178,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       // מהדורת ה-PDF הנלווית, בהתאם לאופן שבו הספר ייפתח בעיון.
       if (widget.initialTextIndex == null &&
           !textBook.isUserBook &&
-          talmudBavliOpensInPdf() &&
+          (_formatOverride ?? talmudBavliOpensInPdf()) &&
           isTalmudBavliBook(textBook)) {
         setState(() => _isPdfViewerReady = false);
         _resolveTalmudCompanionPdf(textBook);
@@ -203,9 +212,18 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
 
   Future<void> _resolveTalmudCompanionPdf(TextBook textBook) async {
     final requested = widget.book;
-    final target = await resolveTalmudBavliPdfBook(textBook);
+    final target = await resolveTalmudBavliPdfBook(
+      textBook,
+      forcePdf: _formatOverride,
+    );
     if (!mounted || !identical(widget.book, requested)) return;
     if (target == null) {
+      if (_formatOverride == true) {
+        _formatOverride = null;
+        UiSnack.showError(
+          LibraryMessages.talmudPdfEditionMissing(textBook.title),
+        );
+      }
       _createTextTab(textBook);
       return;
     }
@@ -215,6 +233,22 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       _companionPdfBook = target.pdfBook;
       _pdfController = PdfViewerController();
     });
+  }
+
+  /// האם התצוגה המקדימה מציעה בחירת פורמט — מסכת בבלי רשמית שמוצגת
+  /// במלואה (תצוגה מקדימה של תוצאת חיפוש מוצמדת לקטע שנמצא, ואינה מתחלפת).
+  bool get _offersFormatChoice {
+    final book = widget.book;
+    return widget.initialTextIndex == null &&
+        book is TextBook &&
+        !book.isUserBook &&
+        isTalmudBavliBook(book);
+  }
+
+  void _toggleTalmudPreviewFormat() {
+    _formatOverride = _companionPdfBook == null;
+    _disposeCurrentTab();
+    _createNewTab();
   }
 
   Future<void> _openCurrentPreviewInReader() async {
@@ -228,7 +262,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
       if (_companionPdfBook != null) {
         final textIndex = await pdfToTextPage(pdfBook, const [], currentPage);
         if (!mounted) return;
-        widget.onOpenInReader?.call(textIndex ?? 0);
+        widget.onOpenInReader?.call(textIndex ?? 0, forcePdf: _formatOverride);
         return;
       }
       widget.onOpenInReader?.call(currentPage);
@@ -239,11 +273,14 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
     // קיים גם עבורו. בלי הבדיקה הזו לחיצה כפולה על ה-preview הייתה נופלת
     // ל-fallback של 0 ומאבדת את מיקום הגלילה הנוכחי.
     if (_currentTextTab != null) {
-      widget.onOpenInReader?.call(_currentTextTab!.index);
+      widget.onOpenInReader?.call(
+        _currentTextTab!.index,
+        forcePdf: _formatOverride,
+      );
       return;
     }
 
-    widget.onOpenInReader?.call(0);
+    widget.onOpenInReader?.call(0, forcePdf: _formatOverride);
   }
 
   bool _isPointerInsideWidget(GlobalKey key, Offset globalPosition) {
@@ -386,6 +423,10 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                   onZoomIn: () => _pdfController?.zoomUp(),
                   onZoomOut: () => _pdfController?.zoomDown(),
                   onOpen: _openCurrentPreviewInReader,
+                  showingPdf: true,
+                  onToggleFormat: _companionPdfBook != null
+                      ? _toggleTalmudPreviewFormat
+                      : null,
                 ),
               ),
             ],
@@ -471,8 +512,13 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                   });
                   _currentTextTab!.bloc.add(UpdateFontSize(_fontSize));
                 },
-                onOpen: () =>
-                    widget.onOpenInReader?.call(_currentTextTab?.index ?? 0),
+                onOpen: () => widget.onOpenInReader?.call(
+                  _currentTextTab?.index ?? 0,
+                  forcePdf: _formatOverride,
+                ),
+                onToggleFormat: _offersFormatChoice
+                    ? _toggleTalmudPreviewFormat
+                    : null,
               ),
             ),
           ],
@@ -640,12 +686,18 @@ class _PreviewToolbar extends StatelessWidget {
   final VoidCallback onOpen;
   final bool compact;
 
+  /// החלפת פורמט התצוגה של מסכת בבלי (טקסט/PDF); null = אין בחירה כזו.
+  final VoidCallback? onToggleFormat;
+  final bool showingPdf;
+
   const _PreviewToolbar({
     super.key,
     required this.onZoomIn,
     required this.onZoomOut,
     required this.onOpen,
     this.compact = false,
+    this.onToggleFormat,
+    this.showingPdf = false,
   });
 
   @override
@@ -670,6 +722,15 @@ class _PreviewToolbar extends StatelessWidget {
             icon: FluentIcons.zoom_out_24_regular,
             onPressed: onZoomOut,
           ),
+          if (onToggleFormat != null)
+            SquareIconButton.toolbar(
+              slim: compact,
+              tooltip: showingPdf ? 'הצג כטקסט' : 'הצג כ-PDF',
+              icon: showingPdf
+                  ? OtzariaIcons.book_alef_24_regular
+                  : OtzariaIcons.book_pdf_24_regular,
+              onPressed: onToggleFormat,
+            ),
           SquareIconButton.toolbar(
             slim: compact,
             tooltip: 'פתח בעיון (או לחץ פעמיים על הספר)',

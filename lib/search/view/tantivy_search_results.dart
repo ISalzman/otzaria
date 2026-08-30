@@ -484,7 +484,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     ? target.segment + 1
                     : null,
                 searchText: widget.tab.searchBloc.state.searchQuery,
-                onOpenInReader: (_) {
+                onOpenInReader: (_, {bool? forcePdf}) {
                   final openTarget = widget.tab.previewTarget.value;
                   if (openTarget == null) return;
                   final external = openTarget.openInReader;
