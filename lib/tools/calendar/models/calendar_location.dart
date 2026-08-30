@@ -387,6 +387,18 @@ const Map<String, Map<String, Map<String, dynamic>>> cityCoordinates = {
       'elevation': 71.0,
       'timezone': 'America/Los_Angeles',
     },
+    'מאנסי': {
+      'lat': 41.1120,
+      'lng': -74.0685,
+      'elevation': 130.0,
+      'timezone': 'America/New_York',
+    },
+    'מאנראו': {
+      'lat': 41.3401,
+      'lng': -74.1868,
+      'elevation': 150.0,
+      'timezone': 'America/New_York',
+    },
     'מיאמי': {
       'lat': 25.7617,
       'lng': -80.1918,
@@ -900,9 +912,24 @@ const Map<String, int> candleLightingMinutesByCity = {
   'תפרח': 20,
 };
 
+/// ברירת המחדל לדקות הדלקת הנרות במדינה, כשלעיר עצמה לא הוגדר מנהג.
+const Map<String, int> candleLightingMinutesByCountry = {
+  'ארצות הברית': 18,
+};
+
 /// מחזיר את מספר דקות הדלקת הנרות לפני השקיעה לעיר נתונה.
 int getCandleLightingMinutes(String cityName) =>
-    candleLightingMinutesByCity[cityName] ?? 30;
+    candleLightingMinutesByCity[cityName] ??
+    candleLightingMinutesByCountry[getCityCountry(cityName)] ??
+    30;
+
+/// מחזיר את שם המדינה שבה נמצאת העיר, או null אם אינה ברשימה.
+String? getCityCountry(String cityName) {
+  for (final entry in cityCoordinates.entries) {
+    if (entry.value.containsKey(cityName)) return entry.key;
+  }
+  return null;
+}
 
 /// מחזיר את כל שמות הערים המוגדרות בלוח, ממוינים לפי א-ב.
 List<String> getCalendarCityNames() =>
