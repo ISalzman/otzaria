@@ -151,6 +151,29 @@ void main() {
       );
     });
 
+    test('שאילתת מילה-אחת מבקשת מהמטמון לפחות 200 ספרים', () async {
+      // limit של 50 גרם לחיתוך לפי סדר-הספרייה עוד לפני הדירוג: עשרת מקומות
+      // המכסה התמלאו בדמאי/תרגומא ויומא נשאר בחוץ.
+      int? seenLimit;
+      final repo = FindRefRepository(
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (query, {int limit = 50}) {
+          seenLimit = limit;
+          return const [];
+        },
+        getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async =>
+            const [],
+        getAllAltTocFlatEntries: () async => const [],
+        getCategoryPathSync: (_) => null,
+      );
+
+      await repo.findRefs('מא');
+
+      expect(seenLimit, isNotNull);
+      expect(seenLimit, greaterThanOrEqualTo(200));
+    });
+
     test('בלי גלישה מעל ה-cap — הסדר הקיים לא משתנה', () async {
       final repo = buildRepo([
         for (var i = 0; i < 3; i++)

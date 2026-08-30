@@ -639,7 +639,9 @@ class FindRefRepository {
     // וכותרות פנימיות), ולכן אסור לחתוך מוקדם: ספר רלוונטי כמו "פסקי הרא"ש על
     // ברכות" נדחק ע"י עשרות התאמות "ראש" קצרות יותר ונזרק לפני הסינון. ה-cap
     // הגבוה הוא רשת ביטחון נגד ספריות ענק; החיתוך הפונקציונלי הוא 15 הסופיות.
-    final bookSearchLimit = queryTokens.length >= 2 ? 1000 : 50;
+    // מילה-אחת: 200 ולא 50 — אחרת התאמות "מכיל" נחתכות לפי סדר-הספרייה עוד
+    // לפני הדירוג, ויומא לא שורד את 56 ספרי "מא..." (issue #839).
+    final bookSearchLimit = queryTokens.length >= 2 ? 1000 : 200;
     var bookQueryTokenCount = 1;
     List<ReferenceBookHit> bookHits = const <ReferenceBookHit>[];
 
