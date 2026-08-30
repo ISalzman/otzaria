@@ -222,6 +222,58 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('שדה החיפוש בפאנל הכלים מקבל פוקוס גם כשהמסך כבר ממוקד', (
+    tester,
+  ) async {
+    final key = GlobalKey<_ToolsLauncherOverlayHarnessState>();
+    final backgroundFocusNode = FocusNode();
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final pluginSystemBloc = _TestPluginSystemBloc(PluginSystemInitial());
+    final tabsBloc = _TestTabsBloc(TabsState.initial());
+    addTearDown(() async {
+      backgroundFocusNode.dispose();
+      await settingsBloc.close();
+      await pluginSystemBloc.close();
+      await tabsBloc.close();
+    });
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          BlocProvider<PluginSystemBloc>.value(value: pluginSystemBloc),
+          BlocProvider<TabsBloc>.value(value: tabsBloc),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: _ToolsLauncherOverlayHarness(
+              key: key,
+              backgroundFocusNode: backgroundFocusNode,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    backgroundFocusNode.requestFocus();
+    await tester.pump();
+    expect(backgroundFocusNode.hasFocus, isTrue);
+
+    key.currentState!.open();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    final searchField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byType(ToolsLauncherPanel),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(searchField.focusNode!.hasFocus, isTrue);
+    expect(backgroundFocusNode.hasFocus, isFalse);
+  });
+
   testWidgets('חצים ו-Enter פותחים את השורה המסומנת משדה החיפוש', (
     tester,
   ) async {
@@ -1926,7 +1978,10 @@ void main() {
 }
 
 class _ToolsLauncherOverlayHarness extends StatefulWidget {
-  const _ToolsLauncherOverlayHarness({super.key});
+  const _ToolsLauncherOverlayHarness({super.key, this.backgroundFocusNode});
+
+  /// שדה רקע שממוקד לפני פתיחת הפאנל — מדמה מסך קריאה שמחזיק את הפוקוס.
+  final FocusNode? backgroundFocusNode;
 
   @override
   State<_ToolsLauncherOverlayHarness> createState() =>
@@ -1943,7 +1998,11 @@ class _ToolsLauncherOverlayHarnessState
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        const SizedBox.expand(),
+        SizedBox.expand(
+          child: widget.backgroundFocusNode == null
+              ? null
+              : TextField(focusNode: widget.backgroundFocusNode),
+        ),
         ContextOverlayPanel(
           isOpen: _isOpen,
           onClose: () => setState(() => _isOpen = false),
