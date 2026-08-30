@@ -2290,6 +2290,8 @@ jobs:
                 -e 's/\]/\\]/g')
 
           cat > release-body.md <<EOF
+          <div dir="rtl">
+
           # ${RELEASE_TITLE}
 
           > **מה להוריד?**
@@ -2405,6 +2407,8 @@ jobs:
           - ענף: ${{ github.ref_name }}
 
           </details>
+
+          </div>
           EOF
 
           echo "Generated release notes:"
