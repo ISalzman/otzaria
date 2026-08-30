@@ -957,9 +957,22 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
-      - name: Install flutter_distributor
+      - name: Install flutter_distributor (with retry)
         if: matrix.target == 'deb' || matrix.target == 'rpm'
-        run: dart pub global activate flutter_distributor
+        shell: bash
+        run: |
+          # pub.dev מחזיר לעיתים 401/403 חולף על חבילה ציבורית — retry פותר את זה
+          set -e
+          tries=0
+          until dart pub global activate flutter_distributor; do
+            tries=$((tries+1))
+            if [ $tries -ge 3 ]; then
+              echo "dart pub global activate failed after 3 attempts"
+              exit 1
+            fi
+            echo "pub activate failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
 
       - name: Prepare Flutter dependencies for Linux release
         shell: bash
