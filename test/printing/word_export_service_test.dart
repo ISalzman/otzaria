@@ -149,6 +149,19 @@ void main() {
       expect(xml, contains('<w:pStyle w:val="Heading1"/>'));
     });
 
+    test('כותרת בלי jc — בפסקת bidi ברירת המחדל (start) היא ימין', () {
+      // jc="right" בפסקת bidi מוצג בוורד דווקא משמאל (left/right מתהפכים).
+      final archive = _buildArchive(const [
+        PrintBlock(
+          kind: PrintBlockKind.heading,
+          text: 'ברכות',
+          headingLevel: 1,
+        ),
+      ]);
+      final xml = _readArchiveFile(archive, 'word/document.xml');
+      expect(xml, isNot(contains('<w:jc w:val="right"/>')));
+    });
+
     test('headingLevel=2 → Heading2', () {
       final archive = _buildArchive(const [
         PrintBlock(kind: PrintBlockKind.heading, text: 'סעיף', headingLevel: 2),
@@ -616,6 +629,14 @@ void main() {
       ]);
       final xml = _readArchiveFile(archive, 'word/document.xml');
       expect(xml, contains('<w:u w:val="single"/>'));
+    });
+
+    test('<s> → קו חוצה', () {
+      final archive = _buildArchive(const [
+        PrintBlock(kind: PrintBlockKind.text, text: '<s>מחוק</s>'),
+      ]);
+      final xml = _readArchiveFile(archive, 'word/document.xml');
+      expect(xml, contains('<w:strike/>'));
     });
 
     test('<small> מקטין ו-<big> מגדיל יחסית לגודל הבסיס', () {
