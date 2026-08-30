@@ -488,6 +488,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // דפדוף אינטראקטיבי בגרירה מקצה הדף. בזמן גרירה ערך ה-controller הוא
   // ה-progress עצמו (ליניארי, צמוד לאצבע) — בלי עקומת ההאטה של קליק.
   bool _isInteractivePageTurn = false;
+  _BookPageTurnDirection? _hoveredTurnEdge;
 
   /// עדכון כותרת/מטא-דאטה שנדחה כי הגיע בזמן אנימציית דפדוף.
   bool _pageTurnDeferredMetadataUpdate = false;
@@ -2188,7 +2189,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         totalPages;
     final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
     final horizontalPadding = min(28.0, viewportSize.width * 0.018);
-    final colorScheme = Theme.of(context).colorScheme;
     final spreadRect = _visibleSpreadViewportRect(
       widget.tab.pdfViewerController,
       widget.tab.pdfViewerController.viewSize,
@@ -2215,38 +2215,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               child: _buildPageTurnDragZone(_BookPageTurnDirection.previous),
             ),
           if (canGoPrevious)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: EdgeInsets.only(right: horizontalPadding),
-                child: _BookViewTurnButton(
-                  icon: FluentIcons.chevron_left_24_regular,
-                  tooltip: 'הזוג הקודם',
-                  size: buttonSize,
-                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
-                  iconColor: colorScheme.onSurface,
-                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
-                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
-                  onPressed: _goPreviousPage,
-                ),
-              ),
+            _buildBookViewTurnButtonSlot(
+              context: context,
+              direction: _BookPageTurnDirection.previous,
+              gutter: viewportSize.width - (spreadRect?.right ?? 0),
+              isLeftSide: false,
+              buttonSize: buttonSize,
+              edgePadding: horizontalPadding,
+              dragZoneWidth: dragZoneWidth,
+              icon: FluentIcons.chevron_left_24_regular,
+              tooltip: 'הזוג הקודם',
+              onPressed: _goPreviousPage,
             ),
           if (canGoNext)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.only(left: horizontalPadding),
-                child: _BookViewTurnButton(
-                  icon: FluentIcons.chevron_right_24_regular,
-                  tooltip: 'הזוג הבא',
-                  size: buttonSize,
-                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
-                  iconColor: colorScheme.onSurface,
-                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
-                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
-                  onPressed: _goNextPage,
-                ),
-              ),
+            _buildBookViewTurnButtonSlot(
+              context: context,
+              direction: _BookPageTurnDirection.next,
+              gutter: spreadRect?.left ?? 0,
+              isLeftSide: true,
+              buttonSize: buttonSize,
+              edgePadding: horizontalPadding,
+              dragZoneWidth: dragZoneWidth,
+              icon: FluentIcons.chevron_right_24_regular,
+              tooltip: 'הזוג הבא',
+              onPressed: _goNextPage,
             ),
           // בזמן גרירה המצביע יוצא מרצועת האחיזה — שכבה על כל השטח שומרת
           // את סמן הגרירה עד לשחרור.
@@ -2255,6 +2247,82 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               child: MouseRegion(cursor: AppCursors.grabbing, opaque: false),
             ),
         ],
+      ),
+    );
+  }
+
+  void _setHoveredTurnEdge(_BookPageTurnDirection? edge) {
+    if (_hoveredTurnEdge == edge || !mounted) return;
+    setState(() => _hoveredTurnEdge = edge);
+  }
+
+  /// חץ דפדוף אחד. כשיש רווח בין הכפולה לקצה התצוגה הוא יושב שם וגלוי תמיד;
+  /// כשהכפולה ממלאה את הרוחב הוא נסוג אל מעל העמוד ומופיע רק בריחוף.
+  Widget _buildBookViewTurnButtonSlot({
+    required BuildContext context,
+    required _BookPageTurnDirection direction,
+    required double gutter,
+    required bool isLeftSide,
+    required double buttonSize,
+    required double edgePadding,
+    required double dragZoneWidth,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final placement = bookViewTurnButtonPlacement(
+      gutter: gutter,
+      buttonSize: buttonSize,
+      edgePadding: edgePadding,
+      dragZoneWidth: dragZoneWidth,
+    );
+    // במגע אין ריחוף — שם הלחצן נשאר גלוי גם כשהוא מעל העמוד.
+    final hoverGated =
+        !placement.fitsBesideSpread && !Platform.isAndroid && !Platform.isIOS;
+    final isVisible = !hoverGated || _hoveredTurnEdge == direction;
+    final inset = placement.inset;
+    final button = IgnorePointer(
+      ignoring: !isVisible,
+      child: AnimatedOpacity(
+        opacity: isVisible ? 1.0 : 0.0,
+        duration: AppTokens.animFast,
+        child: _BookViewTurnButton(
+          icon: icon,
+          tooltip: tooltip,
+          size: buttonSize,
+          backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
+          iconColor: colorScheme.onSurface,
+          borderColor: colorScheme.outline.withValues(alpha: 0.22),
+          shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
+          onPressed: onPressed,
+        ),
+      ),
+    );
+
+    if (!hoverGated) {
+      return Positioned(
+        top: 0,
+        bottom: 0,
+        left: isLeftSide ? inset : null,
+        right: isLeftSide ? null : inset,
+        child: Center(child: button),
+      );
+    }
+
+    // הלחצן יושב על העמוד — רק רצועת הקצה שסביבו חושפת אותו,
+    // כדי שריחוף באמצע הספר לא יקפיץ אותו בזמן קריאה.
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      left: isLeftSide ? 0 : null,
+      right: isLeftSide ? null : 0,
+      width: inset * 2 + buttonSize,
+      child: MouseRegion(
+        opaque: false,
+        onEnter: (_) => _setHoveredTurnEdge(direction),
+        onExit: (_) => _setHoveredTurnEdge(null),
+        child: Center(child: button),
       ),
     );
   }
@@ -4425,76 +4493,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             },
           ),
-          BlocBuilder<PdfBookBloc, PdfBookState>(
-            buildWhen: (prev, curr) {
-              (PdfLayoutMode, bool)? keyOf(PdfBookState s) => switch (s) {
-                PdfBookLoaded v => (v.layoutMode, v.showZoomBar),
-                _ => null,
-              };
-              return keyOf(prev) != keyOf(curr);
-            },
-            builder: (context, state) {
-              // מוסתר בזמן שסרגל הזום מוצג — שניהם ממורכזים מתחת לסרגל העליון.
-              if (state is! PdfBookLoaded ||
-                  !state.layoutMode.isBookView ||
-                  state.showZoomBar) {
-                return const SizedBox.shrink();
-              }
-              return Positioned(
-                top: 4,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _buildBookViewDirectionToggle(
-                    context,
-                    state.layoutMode,
-                  ),
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
-  }
-
-  /// לחצן צף (מתחת לסרגל העליון) להיפוך כיוון הזוגות בתצוגת ספר:
-  /// עמוד ראשון בודד משמאל, או מזווג ומתחיל מימין (ללא עמוד ריק).
-  Widget _buildBookViewDirectionToggle(
-    BuildContext context,
-    PdfLayoutMode layoutMode,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      elevation: 2,
-      borderRadius: AppTokens.borderRadiusAll,
-      color: colorScheme.surface,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: AppTokens.borderRadiusAll,
-          border: Border.all(color: colorScheme.outlineVariant, width: 1),
-        ),
-        child: IconButton(
-          icon: const Icon(FluentIcons.arrow_swap_24_regular, size: 16),
-          tooltip: layoutMode.hasCoverPage
-              ? 'היפוך כיוון: התחלת הספר מימין (ללא עמוד ריק)'
-              : 'היפוך כיוון: התחלת הספר משמאל (עם עמוד ריק)',
-          onPressed: _toggleBookViewDirection,
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-        ),
-      ),
-    );
-  }
-
-  void _toggleBookViewDirection() {
-    final state = _bloc.state;
-    if (state is! PdfBookLoaded || !state.layoutMode.isBookView) return;
-    _lockedSpreadStartPage = null;
-    final target = state.layoutMode == PdfLayoutMode.bookView
-        ? PdfLayoutMode.bookViewNoCover
-        : PdfLayoutMode.bookView;
-    _bloc.add(pdf_events.SetLayoutMode(target));
   }
 
   Widget _buildLeftPaneContent(bool showLeftPane) {
@@ -5546,14 +5547,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       iconData: iconData,
       icon: Icon(iconData),
       position: PopupMenuPosition.under,
-      onSelected: (selectedMode) {
-        // בחירת "תצוגת ספר" כשכבר בתצוגת ספר משמרת את כיוון הזוגות
-        // שנבחר בלחצן ההיפוך.
-        final layoutMode =
-            selectedMode == PdfLayoutMode.bookView &&
-                state.layoutMode.isBookView
-            ? state.layoutMode
-            : selectedMode;
+      onSelected: (layoutMode) {
+        if (layoutMode == state.layoutMode) return;
         _lockedSpreadStartPage = null;
 
         final settingsBloc = context.read<SettingsBloc>();
@@ -5601,11 +5596,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             isSelected: !isBookViewMode,
           ),
           buildItem(
-            value: PdfLayoutMode.bookView,
+            // בחירה חוזרת בתצוגת ספר משמרת את כיוון הזוגות שנבחר.
+            value: isBookViewMode ? state.layoutMode : PdfLayoutMode.bookView,
             text: 'תצוגת ספר',
             icon: OtzariaIcons.book_open_small_24_regular,
             isSelected: isBookViewMode,
           ),
+          if (isBookViewMode)
+            buildItem(
+              value: state.layoutMode.hasCoverPage
+                  ? PdfLayoutMode.bookViewNoCover
+                  : PdfLayoutMode.bookView,
+              text: state.layoutMode.hasCoverPage
+                  ? 'היפוך כיוון: התחלת הספר מימין (ללא עמוד ריק)'
+                  : 'היפוך כיוון: התחלת הספר משמאל (עם עמוד ריק)',
+              icon: FluentIcons.arrow_swap_24_regular,
+              isSelected: false,
+            ),
         ];
       },
     );
