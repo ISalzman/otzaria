@@ -944,6 +944,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             ? null
             : (_lastSelectedLink ?? link),
       ),
+      onCopySelectedWithoutNikud: () => ContextMenuUtils.copyFormattedText(
+        context: menuCtx,
+        savedSelectedText: _restoreLineBreaks(_savedSelectedText),
+        fontSize: widget.fontSize,
+        link: _selectionSpansMultipleItems()
+            ? null
+            : (_lastSelectedLink ?? link),
+        removeNikud: true,
+      ),
     );
   }
 
