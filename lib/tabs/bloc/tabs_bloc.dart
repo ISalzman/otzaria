@@ -102,11 +102,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     return _repository.saveCurrentTabIndex(tabs, index);
   }
 
-  /// ממתין לכתיבת הטאבים שטרם הסתיימה, לפני סגירת התוכנה. ה-timeout מונע
-  /// היתקעות ביציאה כשכתיבת Hive נחסמת (כמו ב-[remapBookPathsAwaitable]).
-  Future<void> _flushPendingSaves() =>
-      _saveDrain?.timeout(const Duration(seconds: 5), onTimeout: () {}) ??
-      Future<void>.value();
+  /// שומר את מצב הטאבים הנוכחי וממתין לכתיבה, לפני סגירת התוכנה. בלי
+  /// [_scheduleSave] אין מה לנקז: קריאה בתוך טאב אינה מפעילה SaveTabs.
+  Future<void> _flushPendingSaves() {
+    _scheduleSave(state.tabs, state.currentTabIndex);
+    return _saveDrain?.timeout(const Duration(seconds: 5), onTimeout: () {}) ??
+        Future<void>.value();
+  }
 
   void _disposeTabLater(OpenedTab tab) {
     unawaited(
