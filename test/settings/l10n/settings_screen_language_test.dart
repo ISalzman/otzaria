@@ -4,6 +4,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -17,6 +20,9 @@ import '../../test_helpers/memory_cache_provider.dart';
 
 class MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
     implements SettingsBloc {}
+
+class MockNavigationBloc extends MockBloc<NavigationEvent, NavigationState>
+    implements NavigationBloc {}
 
 class _FakeSettingsRepository extends Fake implements SettingsRepository {
   @override
@@ -32,11 +38,18 @@ void main() {
 
   group('MySettingsScreen — שפת ההגדרות', () {
     late MockSettingsBloc settingsBloc;
+    late MockNavigationBloc navigationBloc;
     late _FakeSettingsRepository settingsRepository;
 
     setUp(() {
       settingsBloc = MockSettingsBloc();
+      navigationBloc = MockNavigationBloc();
       settingsRepository = _FakeSettingsRepository();
+      whenListen(
+        navigationBloc,
+        const Stream<NavigationState>.empty(),
+        initialState: const NavigationState(currentScreen: Screen.settings),
+      );
     });
 
     void givenLanguageCode(String code) {
@@ -63,8 +76,11 @@ void main() {
         textDirection: TextDirection.rtl,
         child: RepositoryProvider<SettingsRepository>.value(
           value: settingsRepository,
-          child: BlocProvider<SettingsBloc>.value(
-            value: settingsBloc,
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<SettingsBloc>.value(value: settingsBloc),
+              BlocProvider<NavigationBloc>.value(value: navigationBloc),
+            ],
             child: const MySettingsScreen(),
           ),
         ),
