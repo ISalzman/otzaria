@@ -1535,6 +1535,34 @@ export interface PluginCommandPayload {
   /** The shortcut id that triggered the command. */
   shortcutId: string;
 }
+/**
+ * One entry of `fonts.resolveFamilies`: a family the document asks for, and the
+ * fonts that may stand in for it, best first.
+ */
+export interface FontFamilyRequest {
+  /** The family name as the document writes it. The returned face carries it. */
+  name: string;
+  /** Stand-ins to try in order; the first one the host can supply wins. */
+  substitutes: string[];
+}
+
+/**
+ * Result of `fonts.resolveFamilies`: ready-to-inject `@font-face` rules whose
+ * bytes come from Otzaria's bundled or system fonts, each declared under the
+ * requested `name`.
+ *
+ * Needed because `src: local()` inside a plugin WebView resolves only fonts
+ * installed on the machine — never the faces Otzaria injects itself. A plugin
+ * that renders a document asking for a font nobody installed cannot reach the
+ * bundled fonts without the bytes.
+ */
+export interface ResolveFontFamiliesResult {
+  /** The `@font-face` rules, newline-separated. Empty when nothing matched. */
+  css: string;
+  /** The requested names that got a face. */
+  resolved: string[];
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1543,6 +1571,7 @@ export type OtzariaMethod =
   | 'app.getGrantedPermissions'
   | 'app.getConnectivity'
   | 'app.openUrl'
+  | 'fonts.resolveFamilies'
   | 'app.registerShortcut'
   | 'app.unregisterShortcut'
   | 'app.updateShortcut'
