@@ -793,6 +793,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
 
     try {
+      // מסלול ה-DB קורא שורה אחת; טעינת עץ הכותרות נשארת רק כשאין מיפוי.
+      final fromDb = await refFromDbLine(
+        tab.book,
+        tab.index,
+      ).timeout(locationTitleResolveTimeout);
+      if (fromDb != null && fromDb.trim().isNotEmpty) return fromDb;
+
       final ref = await refFromIndex(
         tab.index,
         tab.book.tableOfContents,

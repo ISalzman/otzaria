@@ -1257,6 +1257,35 @@ class SeforimRepository {
     });
   }
 
+  /// נתיב הכותרות של שורה [lineIndex] בספר [bookId] — "פרק לב", "סימן ד, סעיף ב" —
+  /// זהה לפלט של `refFromTocList`, אבל בשאילתה אחת במקום טעינת כל עץ ה-TOC.
+  ///
+  /// נשען על `line_toc` (שורה → הכותרת שמכילה אותה) ומטפס ב-`parentId`; רמה 0
+  /// אינה חלק מהכתובת, כמו במסלול העץ. `null` כשאין מיפוי לשורה.
+  Future<String?> getLineBreadcrumb(int bookId, int lineIndex) async {
+    final db = await _database.database;
+    final rows = db.select(
+      'WITH RECURSIVE chain(id, parentId, textId, level) AS ('
+      '  SELECT te.id, te.parentId, te.textId, te.level '
+      '  FROM line l '
+      '  JOIN line_toc lt ON lt.lineId = l.id '
+      '  JOIN tocEntry te ON te.id = lt.tocEntryId '
+      '  WHERE l.bookId = ? AND l.lineIndex = ? '
+      '  UNION ALL '
+      '  SELECT te.id, te.parentId, te.textId, te.level '
+      '  FROM tocEntry te JOIN chain c ON te.id = c.parentId'
+      ') '
+      'SELECT t.text FROM chain c JOIN tocText t ON t.id = c.textId '
+      'WHERE c.level > 0 ORDER BY c.level',
+      [bookId, lineIndex],
+    );
+    final texts = rows
+        .map((row) => (row.values.first as String?)?.trim() ?? '')
+        .where((text) => text.isNotEmpty);
+    final breadcrumb = texts.join(', ');
+    return breadcrumb.isEmpty ? null : breadcrumb;
+  }
+
   /// בונה את האינדקס לספרים שיש להם שורות עם heRef אך אין להם שורות
   /// באינדקס — ספרים אישיים שנוצרו לפני שהאינדקס נוסף.
   Future<void> backfillMissingLineRefIndexes() async {
