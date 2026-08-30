@@ -26,6 +26,7 @@ import 'package:otzaria/core/messages/notes_messages.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/dialogs/input_dialog.dart';
 
 class BookmarksDialog extends StatelessWidget {
@@ -345,6 +346,35 @@ class _BookmarkViewState extends State<BookmarkView> {
     bloc.updateBookmarkLabel(originalIndex, result);
   }
 
+  /// מחיקה גורפת של סימניות. פעולה בלתי הפיכה ולכן מאושרת בדיאלוג אזהרה.
+  Future<void> _clearAll(BuildContext context, Book? bookFilter) async {
+    final bloc = context.read<BookmarkBloc>();
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: bookFilter == null
+          ? 'למחוק את כל הסימניות?'
+          : 'למחוק את סימניות הספר?',
+      content: bookFilter == null
+          ? 'כל הסימניות השמורות יימחקו.'
+          : 'כל הסימניות בספר "${bookFilter.title}" יימחקו.',
+      subtitle: 'לא ניתן לשחזר סימניות שנמחקו.',
+      confirmText: 'מחק',
+    );
+    if (confirmed != true) return;
+
+    if (bookFilter == null) {
+      bloc.clearBookmarks();
+      UiSnack.show(NotesMessages.allBookmarksDeleted);
+      return;
+    }
+    // הודעת ההצלחה תוצג רק אם באמת נמחקה סימניה - בלי זה היה
+    // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
+    // (לחיצת כפתור בעת מצב ריק).
+    if (bloc.clearBookmarksForBook(bookFilter)) {
+      UiSnack.show(NotesMessages.bookBookmarksDeleted);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookFilter = widget.bookFilter;
@@ -392,29 +422,13 @@ class _BookmarkViewState extends State<BookmarkView> {
             item,
             targetTitle: item.ref,
           ),
-          actionsInContextMenu: true,
           onEdit: (ctx, item, originalIndex) =>
               _editBookmarkLabel(ctx, item as Bookmark, originalIndex),
           onDelete: (ctx, originalIndex) {
             ctx.read<BookmarkBloc>().removeBookmark(originalIndex);
             UiSnack.show(NotesMessages.bookmarkDeleted);
           },
-          onClearAll: (ctx) {
-            if (bookFilter == null) {
-              ctx.read<BookmarkBloc>().clearBookmarks();
-              UiSnack.show(NotesMessages.allBookmarksDeleted);
-            } else {
-              // הודעת ההצלחה תוצג רק אם באמת נמחקה סימניה - בלי זה היה
-              // ייתכן שתוצג "סימניות הספר נמחקו" גם כשלא היו לספר סימניות
-              // (לחיצת כפתור בעת מצב ריק).
-              final removed = ctx.read<BookmarkBloc>().clearBookmarksForBook(
-                bookFilter,
-              );
-              if (removed) {
-                UiSnack.show(NotesMessages.bookBookmarksDeleted);
-              }
-            }
-          },
+          onClearAll: (ctx) => _clearAll(ctx, bookFilter),
           hintText: 'חפש בסימניות...',
           searchIcon: OtzariaIcons.search_in_titles_24_regular,
           emptyText: bookFilter == null ? 'אין סימניות' : 'אין סימניות בספר זה',
