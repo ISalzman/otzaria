@@ -477,6 +477,7 @@ class TextBookPerBookSettings {
     bool? removePunctuation,
     bool? continuousReadingMode,
     List<String>? activeCommentators,
+    bool clearActiveCommentators = false,
     double? pageShapeLeftWidth,
     double? pageShapeRightWidth,
     double? pageShapeBottomHeight,
@@ -490,7 +491,9 @@ class TextBookPerBookSettings {
       isTanach: isTanach,
       continuousReadingMode:
           continuousReadingMode ?? this.continuousReadingMode,
-      activeCommentators: activeCommentators ?? this.activeCommentators,
+      activeCommentators: clearActiveCommentators
+          ? null
+          : activeCommentators ?? this.activeCommentators,
       pageShapeLeftWidth: pageShapeLeftWidth ?? this.pageShapeLeftWidth,
       pageShapeRightWidth: pageShapeRightWidth ?? this.pageShapeRightWidth,
       pageShapeBottomHeight:
@@ -528,6 +531,13 @@ class TextBookPerBookSettings {
       }
     });
   }
+
+  /// ניקוי בחירת המפרשים הפר-ספרית בלבד (שאר ההגדרות נשמרות). משמש אחרי
+  /// קביעת מפרשים לקטגוריה, כדי שהקביעה תחול גם על הספר הנוכחי.
+  static Future<void> clearActiveCommentators(Book book) => mutate(
+    book,
+    (existing) => existing?.copyWith(clearActiveCommentators: true),
+  );
 
   /// טעינת הגדרות
   static Future<TextBookPerBookSettings?> load(Book book) async {
@@ -642,6 +652,28 @@ class PdfBookPerBookSettings {
           this;
 
       await PerBookSettings.saveSettings(key, settingsToSave.toJson());
+    });
+  }
+
+  /// ניקוי בחירת המפרשים הפר-ספרית בלבד (זום ופריסה נשמרים). משמש אחרי
+  /// קביעת מפרשים לקטגוריה, כדי שהקביעה תחול גם על הספר הנוכחי.
+  static Future<void> clearActiveCommentators(Book book) async {
+    final key = PerBookSettings.bookKey(book);
+    await PerBookSettings.runLockedForKey(key, () async {
+      await PerBookSettings._migrateLegacyFile(key, book.title);
+      final json = await PerBookSettings.loadSettings(key);
+      if (json == null) return;
+      final existing = PdfBookPerBookSettings.fromJson(json);
+      if (existing.activeCommentators == null) return;
+      final updated = PdfBookPerBookSettings(
+        zoom: existing.zoom,
+        layoutMode: existing.layoutMode,
+      );
+      if (updated.toJson().isEmpty) {
+        await PerBookSettings._clearOrTombstone(key, book.title);
+      } else {
+        await PerBookSettings.saveSettings(key, updated.toJson());
+      }
     });
   }
 

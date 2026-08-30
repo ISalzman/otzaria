@@ -1,4 +1,6 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart'
+    as category_utils;
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 
 /// תחום השמירה של הגדרות התצוגה בצורת הדף.
@@ -40,51 +42,17 @@ class PageShapeSettingsManager {
 
   static const double defaultCommentaryFontSize = 16.0;
 
-  // קטגוריות כלליות מדי שלא כדאי לשמור עליהן הגדרות
-  static const List<String> _tooGeneralCategories = [
-    'אוצריא',
-    'הלכה',
-    'מדרש',
-    'תנ"ך',
-    'תלמוד',
-    'קבלה',
-    'מוסר',
-    'מחשבה',
-    'שו"ת',
-  ];
-
   // ==================== עזר לקטגוריות ====================
+  // הלוגיקה המשותפת (פירוק heCategories, סינון קטגוריות כלליות) יושבת
+  // ב-category_settings_utils.dart ומשותפת גם למפרשים הקבועים לקטגוריה.
 
-  /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי)
-  /// למשל: "הלכה, משנה תורה, ספר מדע" → ["משנה תורה", "ספר מדע"]
-  /// אם אין קטגוריות אחרי הסינון, מחזיר את כל הקטגוריות (כולל הכלליות)
-  static List<String> parseCategories(String? heCategories) {
-    if (heCategories == null || heCategories.isEmpty) {
-      return [];
-    }
-    final allCategories = heCategories
-        .split(',')
-        .map((c) => c.trim())
-        .where((c) => c.isNotEmpty)
-        .toList();
-
-    final filtered = allCategories
-        .where((c) => !_tooGeneralCategories.contains(c))
-        .toList();
-
-    // אם הסינון הסיר הכל, החזר את הקטגוריות המקוריות
-    return filtered.isNotEmpty ? filtered : allCategories;
-  }
+  /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי).
+  static List<String> parseCategories(String? heCategories) =>
+      category_utils.parseBookCategories(heCategories);
 
   /// קבלת קטגוריית האב הראשית (למשל "משנה תורה" מתוך "הלכה, משנה תורה, ספר מדע")
-  static String? getParentCategory(String? heCategories) {
-    final categories = parseCategories(heCategories);
-    // מחזיר את הקטגוריה הראשונה (אחרי סינון הכלליות)
-    if (categories.isNotEmpty) {
-      return categories[0]; // למשל "משנה תורה"
-    }
-    return null;
-  }
+  static String? getParentCategory(String? heCategories) =>
+      category_utils.parentBookCategory(heCategories);
 
   /// חילוץ שם בסיסי של מפרש (בלי שם הספר המפורש)
   /// למשל: "רמב"ן על ברכות" → "רמב"ן"
@@ -283,18 +251,8 @@ class PageShapeSettingsManager {
   }
 
   /// קבלת הקטגוריה שממנה נטענו ההגדרות (אם יש)
-  static String? getActiveCategory(String? heCategories) {
-    if (heCategories == null) return null;
-
-    final categories = parseCategories(heCategories);
-    for (int i = categories.length - 1; i >= 0; i--) {
-      final category = categories[i];
-      if (hasCategorySettings(category)) {
-        return category;
-      }
-    }
-    return null;
-  }
+  static String? getActiveCategory(String? heCategories) =>
+      category_utils.findActiveCategory(heCategories, hasCategorySettings);
 
   /// פענוח מחרוזת הגדרות
   static Map<String, String?>? _parseConfiguration(String? savedConfig) {

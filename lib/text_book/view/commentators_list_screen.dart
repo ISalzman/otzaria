@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
@@ -51,6 +53,9 @@ class CommentatorsListViewState extends State<CommentatorsListView> {
             state.links,
           ),
           onTypeChipsChanged: widget.onTypeChipsChanged,
+          heCategories: bookCategoriesSource(state.book),
+          onCategoryDefaultsSaved: () =>
+              TextBookPerBookSettings.clearActiveCommentators(state.book),
         );
       },
     );

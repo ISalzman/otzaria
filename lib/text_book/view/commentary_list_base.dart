@@ -26,6 +26,7 @@ import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 // מיוצא כאן כדי שצרכני כרטיסיית הטקסט יייבאו אותו מנקודה אחת.
 export 'package:otzaria/text_book/utils/commentary_search_utils.dart'
     show CommentarySearchSnippet;
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
@@ -35,6 +36,7 @@ import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/misc/smooth_wheel_scroll.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
@@ -1995,6 +1997,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       commentatorsByType:
                           CommentaryTypeFilter.commentatorsByType(state.links),
                       onTypeChipsChanged: _setSelectedCommentaryTypes,
+                      heCategories: bookCategoriesSource(state.book),
+                      onCategoryDefaultsSaved: () =>
+                          TextBookPerBookSettings.clearActiveCommentators(
+                            state.book,
+                          ),
                     )
                   : CommentatorsListView(
                       onCommentatorSelected: _closeCommentatorsFilter,
