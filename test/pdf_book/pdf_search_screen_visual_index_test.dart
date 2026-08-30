@@ -160,6 +160,7 @@ Widget _buildTile({
   required String text,
   required String query,
   required bool isSimpleSearch,
+  bool wholeWord = true,
 }) {
   return MaterialApp(
     home: BlocProvider<SettingsBloc>.value(
@@ -181,6 +182,7 @@ Widget _buildTile({
           height: 50,
           query: query,
           isSimpleSearch: isSimpleSearch,
+          wholeWord: wholeWord,
         ),
       ),
     ),

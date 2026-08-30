@@ -7,7 +7,9 @@ import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/in_book_search_preferences.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -27,6 +29,70 @@ Future<void> main() async {
 
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
+  });
+
+  testWidgets('מתג "מילים שלמות" מריץ את החיפוש מחדש ומעדכן את ההדגשה', (
+    tester,
+  ) async {
+    await InBookSearchPreferences.saveWholeWord(false);
+    addTearDown(() => InBookSearchPreferences.saveWholeWord(false));
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final focusNode = FocusNode();
+
+    addTearDown(textBookBloc.close);
+    addTearDown(settingsBloc.close);
+    addTearDown(focusNode.dispose);
+    addTearDown(resetSectionSearchWorkerForTesting);
+
+    var searchRuns = 0;
+    Future<List<TextSearchResult>> simpleSearchRunner(
+      List<String> content,
+      String query,
+    ) async {
+      searchRuns++;
+      return const [];
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: TextBookSearchView(
+              contentLoader: () async => ['את השמים ואת הארץ'],
+              scrollControler: ItemScrollController(),
+              focusNode: focusNode,
+              closeLeftPaneCallback: () {},
+              initialQuery: 'שמים',
+              simpleSearchRunner: simpleSearchRunner,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // ההעדפה כבויה — המתג מתחיל במצב "חצאי מילים".
+    expect(
+      find.byIcon(FluentIcons.text_whole_word_20_regular),
+      findsOneWidget,
+    );
+    final runsBeforeToggle = searchRuns;
+
+    await tester.tap(find.byIcon(FluentIcons.text_whole_word_20_regular));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(FluentIcons.text_whole_word_20_filled), findsOneWidget);
+    expect(searchRuns, greaterThan(runsBeforeToggle));
+    expect(InBookSearchPreferences.loadWholeWord(), isTrue);
+
+    final lastUpdate = textBookBloc.events.whereType<UpdateSearchText>().last;
+    expect(lastUpdate.searchWholeWord, isTrue);
   });
 
   testWidgets('איפוס initialQuery חיצוני מנקה תוצאות חיפוש קיימות', (
@@ -940,8 +1006,10 @@ TextBookLoaded _loadedState({List<int> visibleIndices = const [0]}) {
 
 class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
     implements TextBookBloc {
+  final List<TextBookEvent> events = [];
+
   _TestTextBookBloc(super.initialState) {
-    on<TextBookEvent>((event, emit) {});
+    on<TextBookEvent>((event, emit) => events.add(event));
   }
 
   @override

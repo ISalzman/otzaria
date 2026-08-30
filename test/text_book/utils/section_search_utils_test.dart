@@ -8,6 +8,48 @@ void main() {
     await resetSectionSearchWorkerForTesting();
   });
 
+  group('searchInContent - התאמה חלקית (issue #1046)', () {
+    test('"שמים" נמצא בתוך "השמים"', () async {
+      final results = await searchInContent(
+        content: ['בראשית ברא אלהים את השמים ואת הארץ'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.length, 1);
+      expect(results.first.snippet, contains('השמים'));
+    });
+
+    test('אותו חיפוש במצב מילים שלמות אינו מוצא', () async {
+      final results = await searchInContent(
+        content: ['בראשית ברא אלהים את השמים ואת הארץ'],
+        query: 'שמים',
+        patternSource: literalPatternSource('שמים'),
+      );
+      expect(results, isEmpty);
+    });
+
+    test('תוצאה לכל הופעה — שלמה וחלקית באותה שורה', () async {
+      final results = await searchInContent(
+        content: ['שמים ושמים והשמים'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.length, 3);
+    });
+
+    test('היסט ההתאמה מצביע על הופעה בתוך המילה', () async {
+      final results = await searchInContent(
+        content: ['את השמים'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.single.matchOffset, 4);
+    });
+  });
+
   group('searchInContent - whole word matching', () {
     test('finds exact whole-word match', () async {
       final results = await searchInContent(
@@ -538,6 +580,18 @@ void main() {
           pattern: literalPattern('די'),
         ),
         isFalse,
+      );
+    });
+
+    test('במצב התאמה חלקית ההערה כן נספרת', () {
+      expect(
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'די',
+          wholeWord: false,
+          pattern: literalPattern('די', wholeWord: false),
+        ),
+        isTrue,
       );
     });
 

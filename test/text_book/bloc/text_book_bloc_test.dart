@@ -5,6 +5,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
+import 'package:otzaria/search/in_book_search_preferences.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchScope, WordMatchMode;
@@ -26,6 +27,61 @@ void main() {
   group('TextBookBloc', () {
     setUp(() async {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    group('searchWholeWord נזרע מההעדפה', () {
+      tearDown(() => InBookSearchPreferences.saveWholeWord(false));
+
+      Future<TextBookLoaded> loadState({
+        required SearchMatchPolicy matchPolicy,
+      }) async {
+        final bloc = _createBloc(
+          repository: _FakeTextBookRepository(),
+          showPageShapeView: false,
+          matchPolicy: matchPolicy,
+        );
+        bloc.add(
+          const LoadContent(
+            fontSize: 20,
+            showSplitView: false,
+            removeNikud: false,
+            loadCommentators: false,
+          ),
+        );
+        await _waitFor(
+          () => bloc.state is TextBookLoaded,
+          description: 'TextBookLoaded',
+        );
+        final state = bloc.state as TextBookLoaded;
+        await bloc.close();
+        return state;
+      }
+
+      test('העדפה כבויה — הדגשה חלקית כבר בטעינה', () async {
+        await InBookSearchPreferences.saveWholeWord(false);
+        final state = await loadState(
+          matchPolicy: SearchMatchPolicy.standard,
+        );
+        expect(state.searchWholeWord, isFalse);
+      });
+
+      test('העדפה דלוקה — מילים שלמות', () async {
+        await InBookSearchPreferences.saveWholeWord(true);
+        final state = await loadState(
+          matchPolicy: SearchMatchPolicy.standard,
+        );
+        expect(state.searchWholeWord, isTrue);
+      });
+
+      test('מסלול המנוע מתעלם מההעדפה', () async {
+        await InBookSearchPreferences.saveWholeWord(false);
+        final state = await loadState(
+          matchPolicy: const SearchMatchPolicy(
+            wordMatchMode: WordMatchMode.anyWord,
+          ),
+        );
+        expect(state.searchWholeWord, isTrue);
+      });
     });
 
     test('במפרשים למטה טוען קישורים מיד עבור הטווח הגלוי', () async {

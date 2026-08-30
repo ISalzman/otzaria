@@ -770,7 +770,11 @@ class _CombinedViewState extends State<CombinedView> {
         final isFromSearch =
             state.searchText.isNotEmpty && initialIndex < state.content.length;
         final intraLineFraction = isFromSearch
-            ? matchFractionInLine(state.content[initialIndex], state.searchText)
+            ? matchFractionInLine(
+                state.content[initialIndex],
+                state.searchText,
+                wholeWord: state.searchWholeWord,
+              )
             : 0.0;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && widget.tab.scrollController.isAttached) {
@@ -1764,6 +1768,7 @@ class _CombinedViewState extends State<CombinedView> {
       searchMode: state.searchMode,
       searchDistance: state.searchDistance,
       matchPolicy: state.matchPolicy,
+      partialWordHighlight: !state.searchWholeWord,
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,
       fontWeight: settingsState.fontBold ? FontWeight.bold : null,
@@ -2547,6 +2552,7 @@ class _CombinedViewState extends State<CombinedView> {
                               searchMode: state.searchMode,
                               searchDistance: state.searchDistance,
                               matchPolicy: state.matchPolicy,
+                              partialWordHighlight: !state.searchWholeWord,
                               // לפי שורת התוכן המוצגת — index הוא אינדקס
                               // מקטע במצב קריאה רציפה, לא אינדקס שורה.
                               isSearchResultLine: state
@@ -2857,6 +2863,7 @@ class _CombinedViewState extends State<CombinedView> {
       searchMode: effectiveSearchMode,
       searchDistance: effectiveSearchDistance,
       matchPolicy: effectiveMatchPolicy,
+      partialWordHighlight: !hasPinpoint && !state.searchWholeWord,
       isSearchResultLine: state.lineParticipatesInSearchHighlight(lineIndex),
       fontSize: widget.textSize,
       fontFamily: settingsState.fontFamily,

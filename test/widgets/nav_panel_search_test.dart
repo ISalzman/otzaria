@@ -160,6 +160,75 @@ Widget wrap(Widget child) => MaterialApp(
   ),
 );
 
+/// חלונית מדומה מינימלית עם פעולה שמחליפה אייקון — בלי לשנות את אורך
+/// רשימת הפעולות. משמשת לרגרסיה של רענון הסרגל המורם.
+class _TogglingActionHost extends StatefulWidget {
+  const _TogglingActionHost();
+
+  @override
+  State<_TogglingActionHost> createState() => _TogglingActionHostState();
+}
+
+class _TogglingActionHostState extends State<_TogglingActionHost> {
+  final host = NavPanelSearchHost();
+  final controller = TextEditingController();
+  final focus = FocusNode();
+  bool on = false;
+
+  @override
+  void dispose() {
+    host.dispose();
+    controller.dispose();
+    focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 56,
+          child: NavPanelSearchBar(
+            host: host,
+            isOpen: true,
+            paneWidth: 300,
+            isPinned: false,
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => on = !on),
+          child: const Text('החלף'),
+        ),
+        Expanded(
+          child: NavPanelSearchScope(
+            host: host,
+            child: NavPanelSearchSlot(
+              index: 0,
+              child: NavPanelSearchPublisher(
+                delegate: NavPanelSearchDelegate(
+                  controller: controller,
+                  focusNode: focus,
+                  hintText: 'חיפוש בספר...',
+                  actionsKey: on,
+                  trailingActions: [
+                    Icon(
+                      on
+                          ? FluentIcons.text_whole_word_20_filled
+                          : FluentIcons.text_whole_word_20_regular,
+                    ),
+                  ],
+                ),
+                child: const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -185,6 +254,25 @@ void main() {
     expect(find.byType(OtzariaSearchField), findsOneWidget);
     expect(find.text('חיפוש בספר...'), findsOneWidget);
     expect(find.text('איתור כותרת...'), findsNothing);
+  });
+
+  // רגרסיה: פעולה שהחליפה אייקון בלי לשנות את אורך הרשימה נבלעה בהשוואת
+  // המטרה, והסרגל המורם נשאר מצויר עם האייקון הישן. actionsKey הוא מה
+  // שמבחין ביניהן.
+  testWidgets('פעולה שהחליפה אייקון מתעדכנת בסרגל המורם', (tester) async {
+    await tester.pumpWidget(wrap(const _TogglingActionHost()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byIcon(FluentIcons.text_whole_word_20_regular),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('החלף'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(FluentIcons.text_whole_word_20_filled), findsOneWidget);
+    expect(find.byIcon(FluentIcons.text_whole_word_20_regular), findsNothing);
   });
 
   testWidgets('חלונית סגורה — הסרגל מכווץ לרוחב 0', (tester) async {

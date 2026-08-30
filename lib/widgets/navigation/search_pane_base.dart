@@ -4,6 +4,10 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 
+/// השהיה לפני שהקלדה מפעילה חיפוש. סריקה על כל תו מקפיאה את ההקלדה
+/// בספרים גדולים; אותו ערך שבו משתמש [FindRefBloc].
+const Duration kSearchFieldDebounce = Duration(milliseconds: 250);
+
 class SearchPaneBase extends StatefulWidget {
   const SearchPaneBase({
     required this.searchController,
@@ -18,7 +22,8 @@ class SearchPaneBase extends StatefulWidget {
     required this.resetSearchCallback,
     this.hintText,
     this.onAdvancedSearch,
-    this.additionalActions,
+    this.searchFieldActions,
+    this.searchFieldActionsKey,
     this.collapsibleOnScroll = false,
     this.onSubmitted,
     this.onArrowDown,
@@ -42,7 +47,15 @@ class SearchPaneBase extends StatefulWidget {
   final VoidCallback resetSearchCallback;
   final String? hintText;
   final VoidCallback? onAdvancedSearch;
-  final List<Widget>? additionalActions;
+
+  /// פעולות שנוספות בתוך שדה החיפוש עצמו, לפני כפתור ההגדרות. נכנסות גם
+  /// לשדה המקומי וגם לשדה המורם שבסרגל חלונית הניווט — שם השדה המקומי אינו
+  /// מצויר כלל, ולכן פעולה שמוזרקת רק אליו לא תיראה.
+  final List<Widget>? searchFieldActions;
+
+  /// מזהה המצב החזותי של [searchFieldActions] — ראה
+  /// [NavPanelSearchDelegate.actionsKey]. חובה כשפעולה מחליפה אייקון או צבע.
+  final Object? searchFieldActionsKey;
   final bool collapsibleOnScroll;
   final VoidCallback? onSubmitted;
 
@@ -60,7 +73,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
 
   void _debounce(VoidCallback action) {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+    _debounceTimer = Timer(kSearchFieldDebounce, () {
       action();
       _debounceTimer = null;
     });
@@ -116,9 +129,11 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
       widget.focusNode.requestFocus();
     },
     trailingActions: [
+      ...?widget.searchFieldActions,
       if (widget.onAdvancedSearch != null)
         OtzariaSearchAction.settings(onPressed: widget.onAdvancedSearch!),
     ],
+    actionsKey: widget.searchFieldActionsKey,
     onArrowDown: widget.onArrowDown,
     onArrowUp: widget.onArrowUp,
   );
@@ -131,54 +146,36 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
     final searchField = Padding(
       key: const ValueKey('searchField'),
       padding: const EdgeInsets.all(8.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Focus(
-            canRequestFocus: false,
-            onKeyEvent: (node, event) => delegate.handleArrowKey(event),
-            child: OtzariaSearchField(
-              controller: widget.searchController,
-              focusNode: widget.focusNode,
-              autofocus: true,
-              hintText: widget.hintText ?? '',
-              onChanged: (value) =>
-                  _debounce(() => widget.onSearchTextChanged?.call(value)),
-              onSubmitted: (_) {
-                widget.onSubmitted?.call();
-                widget.focusNode.requestFocus();
-              },
-              onClear: () {
-                widget.onSearchTextChanged?.call('');
-                widget.resetSearchCallback();
-                widget.focusNode.requestFocus();
-              },
-              isCompact: _isCompact,
-              onExpand: () => setState(() => _isCompact = false),
-              leading: const Icon(OtzariaIcons.search_24_regular),
-              trailingActions: [
-                if (widget.onAdvancedSearch != null)
-                  OtzariaSearchAction.settings(
-                    onPressed: widget.onAdvancedSearch!,
-                  ),
-              ],
-            ),
-          ),
-          if (!_isCompact &&
-              widget.additionalActions != null &&
-              widget.additionalActions!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(
-                right: 8.0,
-                left: 8.0,
-                bottom: 4.0,
+      child: Focus(
+        canRequestFocus: false,
+        onKeyEvent: (node, event) => delegate.handleArrowKey(event),
+        child: OtzariaSearchField(
+          controller: widget.searchController,
+          focusNode: widget.focusNode,
+          autofocus: true,
+          hintText: widget.hintText ?? '',
+          onChanged: (value) =>
+              _debounce(() => widget.onSearchTextChanged?.call(value)),
+          onSubmitted: (_) {
+            widget.onSubmitted?.call();
+            widget.focusNode.requestFocus();
+          },
+          onClear: () {
+            widget.onSearchTextChanged?.call('');
+            widget.resetSearchCallback();
+            widget.focusNode.requestFocus();
+          },
+          isCompact: _isCompact,
+          onExpand: () => setState(() => _isCompact = false),
+          leading: const Icon(OtzariaIcons.search_24_regular),
+          trailingActions: [
+            ...?widget.searchFieldActions,
+            if (widget.onAdvancedSearch != null)
+              OtzariaSearchAction.settings(
+                onPressed: widget.onAdvancedSearch!,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: widget.additionalActions!,
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 
