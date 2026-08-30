@@ -6,6 +6,7 @@ import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/services/indexing_failure_reporter.dart';
+import 'package:otzaria/indexing/services/indexing_wakelock.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -38,6 +39,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
 
   /// Factory constructor that creates an IndexingBloc with a default repository
   factory IndexingBloc.create() {
+    IndexingWakelock.instance.attach(TantivyDataProvider.instance.isIndexing);
     return IndexingBloc(
       IndexingRepository(TantivyDataProvider.instance),
     );
