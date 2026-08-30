@@ -494,16 +494,28 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
           );
           return collapsed ? Tooltip(message: engineLine, child: text) : text;
         }
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'אוצריא: ${collapsed ? compactEngineLine : engineLine}',
-              style: muted.copyWith(fontSize: 12),
-            ),
-            _buildExternalCountLine(context, status, muted),
-          ],
+        // הבלוק כולו תחום ברוחב — הסרגל אינו יכול להתרחב בשבילו, ובלי
+        // הגבלה שתי השורות חופפות את שאר פריטי הסרגל (issue #1051).
+        return ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _externalCountLineMaxWidth,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Tooltip(
+                message: 'אוצריא: $engineLine',
+                child: Text(
+                  'אוצריא: ${collapsed ? compactEngineLine : engineLine}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: muted.copyWith(fontSize: 12),
+                ),
+              ),
+              _buildExternalCountLine(context, status, muted),
+            ],
+          ),
         );
       },
     );
@@ -525,32 +537,30 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         : status.isPending
         ? '${status.sourceTitle}: מחפש…'
         : '${status.sourceTitle}: $books$filteredNote, $hits';
-    return ConstrainedBox(
-      // כותרת המקור מגיעה מתוסף; הסרגל העליון אינו יכול להתרחב בשבילה.
-      constraints: const BoxConstraints(maxWidth: _externalCountLineMaxWidth),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              line,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: style,
+    // הרוחב תחום אצל הקורא — הבלוק כולו עטוף ב-ConstrainedBox.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            line,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+        if (status.loading) ...[
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: style.color,
             ),
           ),
-          if (status.loading) ...[
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: style.color,
-              ),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 
