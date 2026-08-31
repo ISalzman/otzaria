@@ -126,7 +126,7 @@ class KeyMap {
     '7': [LogicalKeyboardKey.numpad7],
     '8': [LogicalKeyboardKey.numpad8],
     '9': [LogicalKeyboardKey.numpad9],
-    'plus': [LogicalKeyboardKey.numpadAdd],
+    'plus': [LogicalKeyboardKey.numpadAdd, LogicalKeyboardKey.equal],
     'equal': [LogicalKeyboardKey.numpadAdd, LogicalKeyboardKey.add],
     'minus': [LogicalKeyboardKey.numpadSubtract],
     'period': [LogicalKeyboardKey.numpadDecimal],

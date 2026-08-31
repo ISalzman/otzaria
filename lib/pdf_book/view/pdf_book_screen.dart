@@ -392,12 +392,7 @@ PdfPageLayout buildBookViewPageLayout({
 }) {
   final pageLayouts = <Rect>[];
   const gap = kBookViewSpineGap;
-  double maxWidth = 0;
   double totalHeight = 0;
-
-  if (pageSizes.isNotEmpty) {
-    maxWidth = pageSizes[0].width * 2 + gap;
-  }
 
   for (int i = 0; i < pageSizes.length; i++) {
     final current = pageSizes[i];
@@ -434,7 +429,10 @@ PdfPageLayout buildBookViewPageLayout({
 
   return PdfPageLayout(
     pageLayouts: pageLayouts,
-    documentSize: Size(maxWidth, totalHeight),
+    documentSize: Size(
+      pageLayouts.fold(0, (width, page) => max(width, page.right)),
+      totalHeight,
+    ),
   );
 }
 

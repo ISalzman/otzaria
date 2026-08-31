@@ -103,6 +103,30 @@ void main() {
       );
     });
 
+    test('ctrl+equal נתפס מ-Ctrl++ במקלדת הראשית', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          _keyDown(LogicalKeyboardKey.equal, PhysicalKeyboardKey.equal),
+          'ctrl+equal',
+          isControlPressed: true,
+          isShiftPressed: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('ctrl++ שנשמר נתפס מ-Ctrl++ במקלדת הראשית', () {
+      expect(
+        ShortcutHelper.matchesShortcut(
+          _keyDown(LogicalKeyboardKey.equal, PhysicalKeyboardKey.equal),
+          'ctrl++',
+          isControlPressed: true,
+          isShiftPressed: true,
+        ),
+        isTrue,
+      );
+    });
+
     test('activatorsFromShortcut מוסיף מפעיל למקבילים', () {
       expect(ShortcutHelper.activatorsFromShortcut('ctrl+equal'), hasLength(3));
       expect(ShortcutHelper.activatorsFromShortcut('ctrl+f'), hasLength(1));

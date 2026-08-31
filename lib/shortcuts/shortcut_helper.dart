@@ -84,6 +84,8 @@ class ShortcutHelper {
     final hasMetaToken = parts.contains('meta');
     final requiresShift = parts.contains('shift');
     final requiresAlt = parts.contains('alt');
+    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
+    if (mainKey == null) return false;
 
     // ב-Mac גם `ctrl` וגם `meta` בקיצור שמור משויכים לפעולת Command. מצב
     // מקש Control הפיזי לא נבדק כלל — מאחד את הסמנטיקה ומונע אי-עקביות
@@ -109,15 +111,16 @@ class ShortcutHelper {
     if (requiresCtrl != null && requiresCtrl != effectiveControlPressed) {
       return false;
     }
-    if (requiresShift != shiftPressed) {
+    // '+' בשורה הראשית נשלח כ-Shift+Equal; קיצור שמור של + או = מקבל אותו.
+    final isShiftedPrimaryPlus =
+        shiftPressed &&
+        event.physicalKey == PhysicalKeyboardKey.equal &&
+        (mainKey == 'equal' || mainKey == 'plus');
+    if (requiresShift != shiftPressed && !isShiftedPrimaryPlus) {
       return false;
     }
     if (requiresAlt != effectiveAltPressed) return false;
     if (requiresMeta != metaPressed) return false;
-
-    // מציאת המקש הראשי (לא modifier)
-    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
-    if (mainKey == null) return false;
 
     // אות יחידה (a–z) — בודקים לפי physicalKey כדי לתמוך
     // בפריסות מקלדת לא-לטיניות (כגון עברית) שבהן logicalKey שונה.

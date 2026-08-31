@@ -51,6 +51,21 @@ void main() {
       expect(layout.pageLayouts[1].top, pageSize.height + 8);
       expect(layout.pageLayouts[2].top, layout.pageLayouts[1].top);
     });
+
+    test('רוחב המסמך כולל כפולה רחבה שאינה הראשונה', () {
+      final layout = buildBookViewPageLayout(
+        pageSizes: const [
+          Size(300, 600),
+          Size(300, 600),
+          Size(700, 600),
+          Size(200, 600),
+        ],
+        hasCover: false,
+        verticalMargin: 8,
+      );
+
+      expect(layout.documentSize.width, 700 + kBookViewSpineGap + 700);
+    });
   });
 
   group('מיגרציית הזום השמור פר-ספר', () {
