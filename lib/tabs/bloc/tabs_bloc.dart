@@ -121,7 +121,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   TabsBloc({
     required this._repository,
   }) : super(TabsState.initial()) {
-    on<LoadTabs>(_onLoadTabs);
+    on<LoadTabs>(_onLoadTabs, transformer: sequential());
     on<RemapBookPaths>(_onRemapBookPaths, transformer: sequential());
     on<ReplaceAllTabs>(_onReplaceAllTabs, transformer: sequential());
     on<AddTab>(_onAddTab, transformer: sequential());
@@ -135,14 +135,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<SetCurrentTab>(_onSetCurrentTab, transformer: sequential());
     on<CloseAllTabs>(_onCloseAllTabs, transformer: sequential());
     on<CloseOtherTabs>(_onCloseOtherTabs, transformer: sequential());
-    on<CloneTab>(_onCloneTab);
+    on<CloneTab>(_onCloneTab, transformer: sequential());
     on<MoveTab>(_onMoveTab, transformer: sequential());
     on<NavigateToNextTab>(_onNavigateToNextTab, transformer: sequential());
     on<NavigateToPreviousTab>(
       _onNavigateToPreviousTab,
       transformer: sequential(),
     );
-    on<CloseCurrentTab>(_onCloseCurrentTab);
+    on<CloseCurrentTab>(_onCloseCurrentTab, transformer: sequential());
     on<RestoreLastClosedTab>(
       _onRestoreLastClosedTab,
       transformer: sequential(),
@@ -166,7 +166,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<SwapSideBySideTabs>(_onSwapSideBySideTabs, transformer: sequential());
     on<ClosePane>(_onClosePane, transformer: sequential());
     on<DetachPane>(_onDetachPane, transformer: sequential());
-    on<SetActivePane>(_onSetActivePane);
+    on<SetActivePane>(_onSetActivePane, transformer: sequential());
 
     _preCloseCallback = _flushPendingSaves;
     PreCloseRegistry.register(_preCloseCallback);
