@@ -919,6 +919,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       vsync: this,
       initialIndex: _currentLeftPaneTabIndex,
     );
+    // ה-listener נורה רק על שינוי — פתיחה ישירה ללשונית החיפוש (ספר שנפתח
+    // מתוצאת חיפוש) חייבת סנכרון מיידי, אחרת סרגל החיפוש מושבת (issue #1063).
+    _searchHost.activeTab = _leftPaneTabController!.index;
 
     // טעינת headings וlinks
     _loadPdfHeadingsAndLinks();

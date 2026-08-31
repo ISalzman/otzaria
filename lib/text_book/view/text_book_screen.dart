@@ -832,6 +832,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialIndex: initialIndex,
     );
     tabController.addListener(_handleTabChange);
+    // ה-listener נורה רק על שינוי — פתיחה ישירה ללשונית החיפוש (ספר שנפתח
+    // מתוצאת חיפוש) חייבת סנכרון מיידי, אחרת סרגל החיפוש מושבת (issue #1063).
+    _searchHost.activeTab = tabController.index;
 
     // בדיקה האם יש כותרות חלופיות
     _checkAltTitles();
@@ -932,6 +935,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             initialIndex: newIndex,
           );
           tabController.addListener(_handleTabChange);
+          _searchHost.activeTab = tabController.index;
         });
       }
     } catch (e) {
