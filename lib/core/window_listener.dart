@@ -88,6 +88,10 @@ class AppWindowListener extends WindowListener {
     onWindowStateChanged?.call();
   }
 
+  /// היום יש חלון יחיד, ולכן סגירתו היא תמיד סגירת התהליך.
+  /// T-G1.5 יחליף את זה בבדיקה מול ה-registry של החלונות.
+  bool _isLastWindowClosing() => true;
+
   @override
   void onWindowClose() async {
     if (_isClosing) {
@@ -100,6 +104,22 @@ class AppWindowListener extends WindowListener {
     }
     _isClosing = true;
 
+    // ⚠️ הפיצול הוא לפי *בעלות* — מה פר-חלון ומה פר-תהליך — ולא לפי סדר.
+    // הצעד הפר-חלוני היחיד הוא ה-flush, והוא יושב באמצע רצף פר-תהליכי:
+    // אחרי סגירת ה-DB ולפני הדיווח והריגת התהליך. לכן החלק הפר-תהליכי
+    // מפוצל לשניים סביבו. **הסדר בין שלושת החלקים זהה לסדר המקורי של
+    // הצעדים, ואסור לשנותו** — הרצת ה-flush ראשון תקדים אותו לסגירת ה-DB.
+    if (_isLastWindowClosing()) {
+      await _shutdownProcessUpToFlush();
+    }
+    final flushFailure = await _closeWindowScoped();
+    if (_isLastWindowClosing()) {
+      await _shutdownProcessAfterFlush(flushFailure);
+    }
+  }
+
+  /// הצעדים שקודמים ל-flush — כולם פר-תהליך.
+  Future<void> _shutdownProcessUpToFlush() async {
     // סגירה יזומה אינה קריסה — לנקות canaries של טעינות תוספים שבטיסה
     // לפני שה-WebViews נהרסים (dispose של הטאבים לא רץ במסלול היציאה).
     PluginCrashGuard.markCleanShutdownSync();
@@ -144,19 +164,35 @@ class AppWindowListener extends WindowListener {
     } catch (e) {
       if (kDebugMode) print('Non-critical cleanup error: $e');
     }
+  }
 
-    // Step 2: Flush pending in-memory writes to Hive.
-    // A flush failure must NOT prevent Hive.close() — closing Hive without
-    // flushing first is safe, but skipping Hive.close() would corrupt the DB.
-    Object? flushFailure;
+  /// Step 2: Flush pending in-memory writes to Hive.
+  ///
+  /// זהו הצעד הפר-חלוני היחיד ברצף: [PreCloseRegistry] הוא סינגלטון
+  /// פר-isolate, ולכן הוא שוטף את הכתיבות התלויות של החלון הזה בלבד.
+  ///
+  /// A flush failure must NOT prevent Hive.close() — closing Hive without
+  /// flushing first is safe, but skipping Hive.close() would corrupt the DB.
+  /// הכשל **מוחזר** לקורא ואינו נבלע כאן: [_shutdownProcessAfterFlush] הוא
+  /// שמדווח עליו ל-Sentry, ובלי ההחזרה היה נעלם האות היחיד לכך שה-flush
+  /// נכשל.
+  Future<Object?> _closeWindowScoped() async {
     try {
       await PreCloseRegistry.runAll();
+      return null;
     } on PreCloseFlushFailure catch (e) {
-      flushFailure = e;
       if (kDebugMode) print('Flush failed at exit: $e');
+      return e;
     }
+  }
 
-    // Step 3: Error reporting and window destruction.
+  /// מסלול הסגירה המלא מסתיים ב-`exit(0)` ואינו ניתן לבדיקה, אבל דווקא
+  /// הצעד הפר-חלוני הוא זה שחייב להחזיר את הכשל ולא לבלוע אותו.
+  @visibleForTesting
+  Future<Object?> closeWindowScopedForTest() => _closeWindowScoped();
+
+  /// Step 3: Error reporting and window destruction — כולם פר-תהליך.
+  Future<void> _shutdownProcessAfterFlush(Object? flushFailure) async {
     //
     // הוסרו במכוון:
     //   - `WindowPersistence.saveNow()` — `Settings.setValue` כותב ל-Hive
