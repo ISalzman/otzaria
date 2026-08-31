@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -642,7 +643,17 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
           isSearching: false,
         ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // בלי רישום ליומן, כשל בחיפוש הספרייה (issue #1012) אינו משאיר
+      // עקבות לאבחון — errors.txt נשאר ריק.
+      try {
+        ErrorLogFile.append(
+          title: 'כשל חיפוש בספרייה',
+          error: e,
+          stackTrace: stackTrace,
+          details: {'query': state.searchQuery},
+        );
+      } catch (_) {}
       emit(
         state.copyWith(
           error: e.toString(),
