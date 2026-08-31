@@ -69,6 +69,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
   void _refreshLibraryAfterScan(
     Set<String> changedBookKeys, {
     bool coversAllFolders = false,
+    Set<int> requestIds = const {},
   }) {
     if (coversAllFolders) {
       BackgroundSyncInitializer.markCustomFoldersSyncedThisSession();
@@ -77,6 +78,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
       RefreshLibrary(
         changedBookKeys: changedBookKeys,
         source: RefreshSource.customFoldersScan,
+        requestIds: requestIds,
       ),
     );
   }
@@ -285,6 +287,7 @@ class CustomFoldersBloc extends Bloc<CustomFoldersEvent, CustomFoldersState> {
         },
         // כשל חלקי לא מסומן כהשלמה — סנכרון הרקע יקבל הזדמנות לנסות שוב.
         coversAllFolders: event.onlyFolderPath == null && result.errors.isEmpty,
+        requestIds: event.requestId == null ? const {} : {event.requestId!},
       );
       emit(
         state.copyWith(

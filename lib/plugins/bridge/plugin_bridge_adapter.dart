@@ -437,6 +437,11 @@ class PluginBridgeDependencies {
   /// `error.unavailable`.
   final CustomFoldersBloc? customFoldersBloc;
 
+  /// ממתין לרענון הקטלוג שנוצר בעקבות `library.refreshUserBooks`. ההרשמה
+  /// נעשית לפני תחילת הסריקה, כדי שתוצאת API מוצלחת תבטיח שהספרים החדשים
+  /// כבר נראים לקריאה הבאה של התוסף.
+  final Future<void> Function(int requestId)? waitForLibraryRefresh;
+
   const PluginBridgeDependencies({
     required this.historyBloc,
     required this.tabsBloc,
@@ -467,6 +472,7 @@ class PluginBridgeDependencies {
     this.capturePluginPagePdf,
     this.hasUserActivation,
     this.customFoldersBloc,
+    this.waitForLibraryRefresh,
   });
 }
 
@@ -856,6 +862,10 @@ class PluginBridgeAdapter {
     final completed = bloc.stream
         .firstWhere((state) => state.completedScan?.requestId == requestId)
         .timeout(_userBooksRefreshTimeout);
+    final waitForRefresh = _dependencies.waitForLibraryRefresh;
+    final libraryRefreshCompleted = waitForRefresh == null
+        ? null
+        : waitForRefresh(requestId).timeout(_userBooksRefreshTimeout);
     bloc.add(
       RescanCustomFolders(showNoChangesMessage: false, requestId: requestId),
     );
@@ -863,6 +873,9 @@ class PluginBridgeAdapter {
     final CustomFoldersScanOutcome outcome;
     try {
       outcome = (await completed).completedScan!;
+      if (libraryRefreshCompleted != null) {
+        await libraryRefreshCompleted;
+      }
     } on TimeoutException {
       throw Exception('error.timeout: personal books refresh timed out');
     }

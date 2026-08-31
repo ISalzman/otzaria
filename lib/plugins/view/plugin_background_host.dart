@@ -16,6 +16,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -563,6 +564,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final workspaceBloc = context.read<WorkspaceBloc>();
     final bookmarkBloc = context.read<BookmarkBloc>();
     final customFoldersBloc = context.read<CustomFoldersBloc>();
+    final libraryBloc = context.read<LibraryBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
@@ -577,6 +579,16 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       workspaceBloc: workspaceBloc,
       bookmarkBloc: bookmarkBloc,
       customFoldersBloc: customFoldersBloc,
+      waitForLibraryRefresh: (requestId) async {
+        final state = await libraryBloc.stream.firstWhere(
+          (state) =>
+              state.completedRefreshRequestIds?.contains(requestId) == true ||
+              (!state.isLoading && state.error != null),
+        );
+        if (state.completedRefreshRequestIds?.contains(requestId) != true) {
+          throw StateError(state.error!);
+        }
+      },
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(

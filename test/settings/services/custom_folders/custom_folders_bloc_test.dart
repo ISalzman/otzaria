@@ -215,7 +215,9 @@ void main() {
       expect(outcome.updatedBooks, 1);
       expect(outcome.errors, ['ספר.txt נכשל']);
       // הרענון נשלח לפני הדיווח, כדי שמי שממתין לתוצאה לא יקדים אותו.
-      expect(recordedEvents.whereType<RefreshLibrary>(), hasLength(1));
+      final refreshEvents = recordedEvents.whereType<RefreshLibrary>().toList();
+      expect(refreshEvents, hasLength(1));
+      expect(refreshEvents.single.requestIds, {7});
 
       await bloc.close();
     });
