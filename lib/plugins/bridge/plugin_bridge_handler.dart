@@ -358,6 +358,8 @@ class PluginBridgeHandler {
     'reader.openSearchTab': 'reader.open',
     'reader.getCurrentState': 'reader.open',
     'reader.getCurrentRef': 'reader.open',
+    'reader.closeTab': 'reader.open',
+    'reader.activateTab': 'reader.open',
     'reader.getSelection': 'reader.open',
     'reader.getActiveCommentators': 'reader.open',
     'reader.setActiveCommentators': 'reader.open',

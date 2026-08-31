@@ -573,6 +573,16 @@ export interface BookmarkEntry extends BookIdentity {
   createdAt: string | null;
 }
 
+/**
+ * ארגומנטים ל-`reader.closeTab` ול-`reader.activateTab`.
+ *
+ * ה-index הוא המקום ב-`ReaderState.openTabs` — לא מקומה של הכרטיסייה בשורת
+ * הכרטיסיות. אינדקס מחוץ לתחום מוחזר כ-`error.invalid_params`.
+ */
+export interface ReaderTabIndexArgs {
+  index: number;
+}
+
 /** ארגומנטים ל-`bookmarks.add`. הספר מזוהה ב-`id` או ב-`bookId`. */
 export interface BookmarkAddArgs extends BookIdentity {
   index?: number;
@@ -1679,6 +1689,8 @@ export type OtzariaMethod =
   | 'reader.respondExternalSearch'
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
+  | 'reader.closeTab'
+  | 'reader.activateTab'
   | 'reader.getSelection'
   | 'reader.getActiveCommentators'
   | 'reader.setActiveCommentators'

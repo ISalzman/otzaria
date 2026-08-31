@@ -162,6 +162,8 @@ if (response.success) {
 | `reader.openSearchTab` | 0.9.89 |
 | `reader.getCurrentState` | 0.9.89 |
 | `reader.getCurrentRef` | 0.9.89 |
+| `reader.closeTab` | 0.9.97 |
+| `reader.activateTab` | 0.9.97 |
 | `reader.getSelection` | 0.9.89 |
 | `reader.getActiveCommentators` | 0.9.97 |
 | `reader.setActiveCommentators` | 0.9.97 |
@@ -1608,6 +1610,35 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 //     }
 //   ]
 // }
+```
+
+### `reader.closeTab`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+סוגר את הכרטיסייה שבמקום `index` **ברשימה ש-`reader.getCurrentState`
+מחזיר** (`openTabs`). זו אינה בהכרח מקומה של הכרטיסייה בשורת הכרטיסיות:
+כרטיסיות של כלים ותוספים אינן נכללות ב-`openTabs`, ולכן יש לקחת את האינדקס
+מאותה קריאה ולא ממקום אחר.
+
+אינדקס חסר או מחוץ לתחום מוחזר כ-`error.invalid_params`. הכרטיסייה נכנסת
+לרשימת "נסגרו לאחרונה" ולכן המשתמש יכול לשחזר אותה, בדיוק כמו סגירה ידנית.
+
+```javascript
+const { data: state } = await Otzaria.call('reader.getCurrentState');
+const i = state.openTabs.findIndex((tab) => tab.bookUid === bookUid);
+if (i !== -1) await Otzaria.call('reader.closeTab', { index: i });
+// true
+```
+
+### `reader.activateTab`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+הופך את הכרטיסייה שבמקום `index` (באותה רשימת `openTabs`) לכרטיסייה הפעילה.
+אותם כללי אינדקס ואותה שגיאה כמו ב-`reader.closeTab`.
+
+```javascript
+await Otzaria.call('reader.activateTab', { index: 0 });
+// true
 ```
 
 ### `reader.getCurrentRef`

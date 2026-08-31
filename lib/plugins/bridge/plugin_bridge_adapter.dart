@@ -45,6 +45,7 @@ import 'package:otzaria/utils/file/text_encoding.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
@@ -2323,6 +2324,22 @@ class PluginBridgeAdapter {
           'currentRef': currentSnapshot?.currentRef,
           'openTabs': openTabs,
         };
+      case 'closeTab':
+        // spec: closeTab({ index }) — האינדקס הוא ברשימה ש-getCurrentState
+        // מחזיר, לא ב-TabsBloc. הטאב עצמו נמסר לאירוע, ולכן אין המרת אינדקס.
+        _dependencies.tabsBloc.add(RemoveTab(_pluginVisibleTabAt(args)));
+        return true;
+      case 'activateTab':
+        // spec: activateTab({ index }) — כאן דרוש דווקא האינדקס הגולמי, ולכן
+        // הוא נגזר מזהות הטאב ולא מהאינדקס שהתוסף מסר.
+        {
+          final tabsBloc = _dependencies.tabsBloc;
+          final rawIndex = tabsBloc.state.tabs.indexOf(
+            _pluginVisibleTabAt(args),
+          );
+          tabsBloc.add(SetCurrentTab(rawIndex));
+          return true;
+        }
       case 'getCurrentRef':
         final snapshot = await resolveReaderLocation(
           _dependencies.tabsBloc.state.readingPane,
@@ -5421,6 +5438,23 @@ class PluginBridgeAdapter {
   /// שהתוסף מסר חייבת לעבור דרך כאן — אינדקס גולמי יפגע בטאב הלא נכון.
   List<OpenedTab> _pluginVisibleTabs() =>
       _dependencies.tabsBloc.state.tabs.where(_isPluginVisibleTab).toList();
+
+  /// הטאב שבאינדקס `index` **ברשימה שהתוסף רואה** ([_pluginVisibleTabs]).
+  /// אינדקס חסר או מחוץ לתחום נדחה כשגיאת ארגומנטים ולא כחריגה.
+  OpenedTab _pluginVisibleTabAt(Map<String, dynamic> args) {
+    final index = (args['index'] as num?)?.toInt();
+    if (index == null) {
+      throw Exception('error.invalid_params: index required');
+    }
+    final tabs = _pluginVisibleTabs();
+    if (index < 0 || index >= tabs.length) {
+      throw Exception(
+        'error.invalid_params: index $index out of range '
+        '(${tabs.length} open tabs)',
+      );
+    }
+    return tabs[index];
+  }
 
   OpenedTab _paneForPlugins(OpenedTab tab) {
     if (tab is! CombinedTab) return tab;

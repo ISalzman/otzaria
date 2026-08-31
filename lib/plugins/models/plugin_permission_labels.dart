@@ -242,9 +242,11 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
 
   // ===== קורא =====
   'reader.open': PluginPermissionInfo(
-    label: 'פתיחת ספרים',
+    label: 'פתיחת ספרים וניהול כרטיסיות',
     icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
-    description: 'פתיחת ספרים בקורא האפליקציה',
+    description:
+        'פתיחת ספרים בקורא האפליקציה, מעבר בין הכרטיסיות הפתוחות וסגירתן. '
+        'אינה משנה את תוכן הספרים',
   ),
 
   'reader.context_menu': PluginPermissionInfo(
