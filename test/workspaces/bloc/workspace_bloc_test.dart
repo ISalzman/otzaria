@@ -29,7 +29,7 @@ void main() {
       List<OpenedTab>? callbackTabs;
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (tabs, _) {
+        onWorkspaceTabsChanged: (tabs, _, _) {
           callbackTabs = tabs;
         },
       )..add(LoadWorkspaces());
@@ -75,7 +75,7 @@ void main() {
       List<OpenedTab>? callbackTabs;
       final bloc = WorkspaceBloc(
         repository: repository,
-        onWorkspaceTabsChanged: (tabs, _) {
+        onWorkspaceTabsChanged: (tabs, _, _) {
           callbackTabs = tabs;
         },
       )..add(LoadWorkspaces());

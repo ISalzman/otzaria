@@ -1187,13 +1187,23 @@ class _AppBootstrapState extends State<AppBootstrap> {
               return WorkspaceBloc(
                 repository: WorkspaceRepository(),
                 onWorkspaceTabsChanged:
-                    (List<OpenedTab> tabs, int activeIndex) async {
+                    (
+                      List<OpenedTab> tabs,
+                      int activeIndex,
+                      String? activePane,
+                    ) async {
                       final replaced = tabsBloc.stream.firstWhere(
                         (state) =>
                             identical(state.tabs, tabs) &&
                             state.currentTabIndex == activeIndex,
                       );
-                      tabsBloc.add(ReplaceAllTabs(tabs, activeIndex));
+                      tabsBloc.add(
+                        ReplaceAllTabs(
+                          tabs,
+                          activeIndex,
+                          activePane: activePane,
+                        ),
+                      );
                       await replaced;
                     },
               )..add(LoadWorkspaces());

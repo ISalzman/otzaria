@@ -209,6 +209,9 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
                   targetWorkspaceId: workspace.id,
                   currentTabsToSave: tabsState.tabs,
                   currentTabIndexToSave: tabsState.currentTabIndex,
+                  // החלונית הפעילה נשמרת כצד: שולחן עבודה משכפל את
+                  // הטאבים, וזהות האובייקט אובדת ממילא.
+                  currentActivePaneToSave: tabsState.activePaneSide,
                 ),
               );
               // כמו בעליית התוכנה: שולחן עם ספרים נפתח בעיון, ריק — בספרייה.

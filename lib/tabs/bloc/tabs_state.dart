@@ -152,6 +152,17 @@ class TabsState extends Equatable {
     return lastReadingPane;
   }
 
+  /// צד החלונית הפעילה בטאב הנוכחי, לשמירה בשולחן עבודה.
+  /// `null` כשהטאב הנוכחי אינו מפוצל — ואז אין מה לשמר.
+  ///
+  /// נשמר כצד ולא כאובייקט משום ששולחן עבודה משכפל את הטאבים בשמירה
+  /// (`WorkspaceBloc._cloneTabs`), וזהות האובייקט אובדת ממילא.
+  String? get activePaneSide {
+    final tab = currentTab;
+    if (tab == null) return null;
+    return activePaneSideOf(tab, activePane);
+  }
+
   /// קבוצת הכרטיסיות שהסגירה הנוכחית חלה עליה.
   List<OpenedTab> get currentCloseGroup {
     final current = currentTab;

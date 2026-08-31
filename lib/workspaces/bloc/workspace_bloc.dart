@@ -24,7 +24,14 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
 
   /// Callback function to notify when workspace tabs should be loaded.
   /// The UI should provide this to coordinate with TabsBloc.
-  final FutureOr<void> Function(List<OpenedTab> tabs, int activeIndex)?
+  ///
+  /// [activePane] הוא צד החלונית הפעילה בטאב שב-[activeIndex]
+  /// (`'right'`/`'left'`), או `null` כשהטאב אינו מפוצל.
+  final FutureOr<void> Function(
+    List<OpenedTab> tabs,
+    int activeIndex,
+    String? activePane,
+  )?
   onWorkspaceTabsChanged;
 
   List<OpenedTab> _cloneTabs(List<OpenedTab> tabs) {
@@ -103,6 +110,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         name: event.name,
         tabs: _cloneTabs(event.tabs),
         activeTabIndex: event.currentTabIndex,
+        activePane: event.activePane,
       );
 
       final updatedWorkspaces = [...state.workspaces, newWorkspace];
@@ -153,9 +161,10 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final currentId = state.activeWorkspaceId;
       List<Workspace> updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == currentId) {
-          return w.copyWith(
+          return w.withTabs(
             tabs: _cloneTabs(event.currentTabsToSave),
             activeTabIndex: event.currentTabIndexToSave,
+            activePane: event.currentActivePaneToSave,
           );
         }
         return w;
@@ -178,6 +187,11 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         await onWorkspaceTabsChanged!(
           _cloneTabs(targetWorkspace.tabs),
           newCurrentTab,
+          // הצד תקף רק כשהאינדקס שנשמר הוא זה שנפתח בפועל; אחרת הוא
+          // מתייחס לטאב אחר לגמרי.
+          newCurrentTab == targetWorkspace.activeTabIndex
+              ? targetWorkspace.activePane
+              : null,
         );
       }
 
@@ -231,6 +245,7 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
         name: "ברירת מחדל",
         tabs: _cloneTabs(event.currentTabs),
         activeTabIndex: event.currentTabIndex,
+        activePane: event.activePane,
       );
 
       await _repository.saveWorkspaces([defaultWorkspace], defaultWorkspace.id);
@@ -256,9 +271,10 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
 
       final updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == currentId) {
-          return w.copyWith(
+          return w.withTabs(
             tabs: _cloneTabs(event.tabs),
             activeTabIndex: event.activeTabIndex,
+            activePane: event.activePane,
           );
         }
         return w;
@@ -285,9 +301,10 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
       final updatedWorkspaces = state.workspaces.map((w) {
         if (w.id == currentId) {
           // מסיר את הטאב משולחן העבודה הנוכחי
-          return w.copyWith(
+          return w.withTabs(
             tabs: _cloneTabs(event.currentTabs),
             activeTabIndex: event.currentTabIndex,
+            activePane: event.currentActivePane,
           );
         } else if (w.id == event.targetWorkspaceId) {
           // מוסיף את הטאב לשולחן העבודה היעד

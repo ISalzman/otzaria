@@ -188,6 +188,36 @@ class _RestoredCombinedTab extends OpenedTab {
   };
 }
 
+/// שמות הצדדים כפי שהם נשמרים לדיסק.
+///
+/// ⚠️ [CombinedTab.rightTab] הוא ה**ראשון** בסדר התצוגה — החלונית הימנית
+/// ב-RTL. סריאליזציה של "left"/"right" שהופכת אותם תחליף בשקט בין החלוניות.
+const String kRightPaneSide = 'right';
+const String kLeftPaneSide = 'left';
+
+/// הצד שבו יושבת [pane] בתוך [tab], או `null` כש-[tab] אינו מפוצל או
+/// ש-[pane] אינה אחת משתי חלוניותיו.
+///
+/// ההשוואה היא [identical] ולא `==`, בדיוק כמו [CombinedTab.sibling]: שני
+/// עותקים של אותו ספר הם שתי חלוניות שונות.
+String? activePaneSideOf(OpenedTab tab, OpenedTab? pane) {
+  if (tab is! CombinedTab || pane == null) return null;
+  if (identical(pane, tab.rightTab)) return kRightPaneSide;
+  if (identical(pane, tab.leftTab)) return kLeftPaneSide;
+  return null;
+}
+
+/// החלונית שבצד [side] של [tab], או `null` כשהטאב אינו מפוצל או שהערך
+/// השמור פגום. `null` מוביל את [TabsState] ליפול ל-`panes.first`.
+OpenedTab? paneForSide(OpenedTab tab, String? side) {
+  if (tab is! CombinedTab) return null;
+  return switch (side) {
+    kRightPaneSide => tab.rightTab,
+    kLeftPaneSide => tab.leftTab,
+    _ => null,
+  };
+}
+
 /// חלוניות התוכן של טאב: שתיים בטאב מפוצל, אחת בכל שאר הטאבים.
 List<OpenedTab> leafPanes(OpenedTab tab) =>
     tab is CombinedTab ? [tab.rightTab, tab.leftTab] : [tab];

@@ -75,10 +75,14 @@ class ReplaceAllTabs extends TabsEvent {
   final List<OpenedTab> tabs;
   final int currentTabIndex;
 
-  const ReplaceAllTabs(this.tabs, this.currentTabIndex);
+  /// צד החלונית הפעילה בטאב שב-[currentTabIndex] (`'right'`/`'left'`),
+  /// או `null` כשאין — ואז החלונית הפעילה נופלת ל-`panes.first`.
+  final String? activePane;
+
+  const ReplaceAllTabs(this.tabs, this.currentTabIndex, {this.activePane});
 
   @override
-  List<Object?> get props => [tabs, currentTabIndex];
+  List<Object?> get props => [tabs, currentTabIndex, activePane];
 }
 
 class SaveTabs extends TabsEvent {

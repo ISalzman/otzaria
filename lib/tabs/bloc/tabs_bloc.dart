@@ -255,11 +255,23 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
     final tabsToDispose = List<OpenedTab>.from(state.tabs);
 
+    // החלונית הפעילה מגיעה כצד ולא כאובייקט: הטאבים שוכפלו בדרך לכאן,
+    // וזהות האובייקט של החלונית הישנה חסרת משמעות ברשימה החדשה.
+    final restoredPane =
+        event.currentTabIndex >= 0 && event.currentTabIndex < event.tabs.length
+        ? paneForSide(event.tabs[event.currentTabIndex], event.activePane)
+        : null;
+
     emit(
       state.copyWith(
         tabs: event.tabs,
         currentTabIndex: event.currentTabIndex,
         selectedTabs: const <OpenedTab>[],
+        // clear ולא unchanged: הרשימה הישנה מפונה, וחלונית פעילה ששייכת
+        // לטאב שנסגר אינה יכולה להישאר.
+        activePane: restoredPane == null
+            ? const ActivePaneUpdate.clear()
+            : ActivePaneUpdate.set(restoredPane),
       ),
     );
     _scheduleSave(event.tabs, event.currentTabIndex);

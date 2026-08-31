@@ -18,14 +18,18 @@ class AddWorkspace extends WorkspaceEvent {
   final List<OpenedTab> tabs;
   final int currentTabIndex;
 
+  /// צד החלונית הפעילה בטאב שב-[currentTabIndex] — ראו [Workspace.activePane].
+  final String? activePane;
+
   const AddWorkspace({
     required this.name,
     required this.tabs,
     required this.currentTabIndex,
+    this.activePane,
   });
 
   @override
-  List<Object?> get props => [name, tabs, currentTabIndex];
+  List<Object?> get props => [name, tabs, currentTabIndex, activePane];
 }
 
 /// Event to remove a workspace by its ID.
@@ -52,10 +56,14 @@ class SwitchToWorkspace extends WorkspaceEvent {
   /// Current tab index to save
   final int currentTabIndexToSave;
 
+  /// צד החלונית הפעילה לשמירה — ראו [Workspace.activePane].
+  final String? currentActivePaneToSave;
+
   const SwitchToWorkspace({
     required this.targetWorkspaceId,
     required this.currentTabsToSave,
     required this.currentTabIndexToSave,
+    this.currentActivePaneToSave,
   });
 
   @override
@@ -63,6 +71,7 @@ class SwitchToWorkspace extends WorkspaceEvent {
     targetWorkspaceId,
     currentTabsToSave,
     currentTabIndexToSave,
+    currentActivePaneToSave,
   ];
 }
 
@@ -84,13 +93,17 @@ class ClearWorkspaces extends WorkspaceEvent {
   final List<OpenedTab> currentTabs;
   final int currentTabIndex;
 
+  /// צד החלונית הפעילה — ראו [Workspace.activePane].
+  final String? activePane;
+
   const ClearWorkspaces({
     required this.currentTabs,
     required this.currentTabIndex,
+    this.activePane,
   });
 
   @override
-  List<Object?> get props => [currentTabs, currentTabIndex];
+  List<Object?> get props => [currentTabs, currentTabIndex, activePane];
 }
 
 /// Event to update the current workspace with new tab data.
@@ -100,13 +113,17 @@ class UpdateCurrentWorkspaceTabs extends WorkspaceEvent {
   final List<OpenedTab> tabs;
   final int activeTabIndex;
 
+  /// צד החלונית הפעילה — ראו [Workspace.activePane].
+  final String? activePane;
+
   const UpdateCurrentWorkspaceTabs({
     required this.tabs,
     required this.activeTabIndex,
+    this.activePane,
   });
 
   @override
-  List<Object?> get props => [tabs, activeTabIndex];
+  List<Object?> get props => [tabs, activeTabIndex, activePane];
 }
 
 /// Event to move a tab from current workspace to another workspace.
@@ -116,11 +133,15 @@ class MoveTabToWorkspace extends WorkspaceEvent {
   final List<OpenedTab> currentTabs;
   final int currentTabIndex;
 
+  /// צד החלונית הפעילה בשולחן העבודה שממנו הטאב יוצא.
+  final String? currentActivePane;
+
   const MoveTabToWorkspace({
     required this.tab,
     required this.targetWorkspaceId,
     required this.currentTabs,
     required this.currentTabIndex,
+    this.currentActivePane,
   });
 
   @override
@@ -129,5 +150,6 @@ class MoveTabToWorkspace extends WorkspaceEvent {
     targetWorkspaceId,
     currentTabs,
     currentTabIndex,
+    currentActivePane,
   ];
 }

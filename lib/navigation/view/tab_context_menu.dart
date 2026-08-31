@@ -306,12 +306,20 @@ Future<void> _moveTabToWorkspace(
       ? 0
       : tabsState.currentTabIndex.clamp(0, currentTabs.length - 1);
 
+  // הסרת הטאב מזיזה את האינדקס, ולכן צד החלונית הפעילה תקף רק אם הטאב
+  // הפעיל אחרי ההסרה הוא אותו טאב עצמו. אחרת הוא מתייחס לטאב אחר.
+  final newActiveTab = currentTabs.isEmpty ? null : currentTabs[newActiveIndex];
+  final activePaneToKeep = identical(newActiveTab, tabsState.currentTab)
+      ? tabsState.activePaneSide
+      : null;
+
   workspaceBloc.add(
     MoveTabToWorkspace(
       tab: tab,
       targetWorkspaceId: targetWorkspaceId,
       currentTabs: currentTabs,
       currentTabIndex: newActiveIndex,
+      currentActivePane: activePaneToKeep,
     ),
   );
 
