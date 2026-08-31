@@ -6,6 +6,8 @@ import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
+import 'package:otzaria/core/windowing/app_window_id.dart';
+import 'package:otzaria/core/windowing/last_active_window.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
@@ -19,6 +21,8 @@ typedef FullscreenCallback = void Function(bool isFullscreen);
 
 /// Window listener that handles window events properly to prevent crashes
 class AppWindowListener extends WindowListener {
+  AppWindowListener({this.windowId = AppWindowId.primary});
+
   static const MethodChannel _processControlChannel = MethodChannel(
     'otzaria/process_control',
   );
@@ -325,6 +329,9 @@ class AppWindowListener extends WindowListener {
     }
   }
 
+  /// מזהה החלון שה-listener הזה משרת. היום יש חלון אחד.
+  final AppWindowId windowId;
+
   @override
   void onWindowFocus() {
     // מקש שהוחזק במעבר חלון ושוחרר בחוץ נשאר "תקוע" (אין KeyUpEvent) וגורם
@@ -343,6 +350,7 @@ class AppWindowListener extends WindowListener {
         ),
       );
     }
+    LastActiveWindow.markActive(windowId);
   }
 
   @override

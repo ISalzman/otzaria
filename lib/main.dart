@@ -80,6 +80,8 @@ import 'package:otzaria/core/external_activation_queue.dart';
 import 'package:otzaria/core/portable_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/settings/services/backup_service.dart';
@@ -477,10 +479,18 @@ Future<void> _runAppBootstrap() async {
     // שם הוא נחשף ישר בגבולותיו הסופיים — לכן אין כאן waitUntilReadyToShow.
   }
 
+  // ה-scope עוטף את כל העץ כדי שכל widget יוכל להגיע לחלון שהוא יושב בו
+  // בלי לפנות ל-singleton גלובלי. היום יש חלון אחד, ולכן הבקר הוא של
+  // החלון הראשי; ריבוי חלונות יזריק כאן בקר אחר לכל עץ.
+  const appWindow = WindowManagerAppWindowController();
   runApp(
-    SentryWidget(
-      child: RestartWidget(
-        child: const AppBootstrap(),
+    AppWindowScope(
+      controller: appWindow,
+      geometry: appWindow,
+      child: SentryWidget(
+        child: RestartWidget(
+          child: const AppBootstrap(),
+        ),
       ),
     ),
   );
