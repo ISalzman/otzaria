@@ -143,7 +143,8 @@ class _SearchWorkerHost {
   Future<void>? _startFuture;
   Completer<void>? _startCompleter;
   int _nextRequestId = 0;
-  final Map<int, Completer<List<TextSearchResult>>> _pending = {};
+  final Map<int, Completer<({List<TextSearchResult> results, bool truncated})>>
+  _pending = {};
 
   // מעקב אחר התוכן האחרון שנשלח ל-worker. כל עוד מדובר באותו אובייקט תוכן
   // (אותו ספר פתוח) שולחים רק את השאילתה — לא את הספר כולו — וה-worker
@@ -151,7 +152,7 @@ class _SearchWorkerHost {
   List<String>? _lastSentContent;
   int _lastContentId = 0;
 
-  Future<List<TextSearchResult>> search({
+  Future<({List<TextSearchResult> results, bool truncated})> search({
     required List<String> content,
     required String query,
     required String patternSource,
@@ -159,7 +160,8 @@ class _SearchWorkerHost {
     await _ensureStarted();
 
     final requestId = ++_nextRequestId;
-    final completer = Completer<List<TextSearchResult>>();
+    final completer =
+        Completer<({List<TextSearchResult> results, bool truncated})>();
     _pending[requestId] = completer;
 
     final bool contentChanged = !identical(content, _lastSentContent);
@@ -251,8 +253,8 @@ class _SearchWorkerHost {
     switch (type) {
       case 'result':
         final rawResults = message['results'] as List<dynamic>? ?? const [];
-        completer.complete(
-          rawResults
+        completer.complete((
+          results: rawResults
               .cast<Map<dynamic, dynamic>>()
               .map(
                 (raw) => TextSearchResult(
@@ -265,10 +267,14 @@ class _SearchWorkerHost {
                 ),
               )
               .toList(growable: false),
-        );
+          truncated: message['truncated'] as bool? ?? false,
+        ));
         break;
       case 'canceled':
-        completer.complete(const []);
+        completer.complete((
+          results: const <TextSearchResult>[],
+          truncated: false,
+        ));
         break;
       case 'error':
         completer.completeError(
@@ -282,7 +288,10 @@ class _SearchWorkerHost {
   Future<void> resetForTesting() async {
     for (final completer in _pending.values) {
       if (!completer.isCompleted) {
-        completer.complete(const []);
+        completer.complete((
+          results: const <TextSearchResult>[],
+          truncated: false,
+        ));
       }
     }
     _pending.clear();
@@ -383,6 +392,9 @@ class SectionSearchWorkerRuntime {
           final results = <Map<String, dynamic>>[];
           final address = <String>[];
           bool canceled = false;
+          // issue #1053: החיפוש נעצר בתקרה באמצע הספר — בלי הדגל המשתמש
+          // מניח שאלו כל ההופעות, והרשימה מכסה רק את תחילת הספר.
+          bool truncated = false;
 
           for (int i = 0; i < cleanLines.length; i++) {
             final rawLine = sourceLines[i];
@@ -424,10 +436,13 @@ class SectionSearchWorkerRuntime {
                 'lineLength': cleanLines[i].length,
               });
               if (results.length >= _maxSearchResults) {
+                // ההתאמה העודפת (גבול ה-snippet) מעידה שנותרו הופעות בשורה.
+                truncated = m < lineMatches.length - 1;
                 break;
               }
             }
             if (results.length >= _maxSearchResults) {
+              truncated = truncated || i < cleanLines.length - 1;
               break;
             }
 
@@ -452,6 +467,7 @@ class SectionSearchWorkerRuntime {
             'type': 'result',
             'requestId': requestId,
             'results': results,
+            'truncated': truncated,
           });
         } catch (error) {
           _mainSendPort.send({
@@ -493,11 +509,15 @@ class SectionSearchWorkerRuntime {
 
 /// [patternSource] מוזרק בבדיקות בלבד (הן אינן יכולות לקרוא למנוע);
 /// בייצור התבנית נבנית מהמנוע ב-isolate הראשי ונשלחת ל-worker.
+///
+/// [onTruncated] נקרא עם `true` כשהחיפוש נעצר בתקרת התוצאות לפני סוף הספר
+/// (issue #1053) — כך המסך יכול לחוות שמוצגות רק ההופעות הראשונות.
 Future<List<TextSearchResult>> searchInContent({
   required List<String> content,
   required String query,
   bool wholeWord = true,
   @visibleForTesting String? patternSource,
+  ValueChanged<bool>? onTruncated,
 }) async {
   if (content.isEmpty) return [];
 
@@ -505,11 +525,13 @@ Future<List<TextSearchResult>> searchInContent({
       patternSource ?? buildLiteralPattern(query, wholeWord: wholeWord)?.source;
   if (source == null) return [];
 
-  return _SearchWorkerHost.instance.search(
+  final outcome = await _SearchWorkerHost.instance.search(
     content: content,
     query: query,
     patternSource: source,
   );
+  onTruncated?.call(outcome.truncated);
+  return outcome.results;
 }
 
 @visibleForTesting
