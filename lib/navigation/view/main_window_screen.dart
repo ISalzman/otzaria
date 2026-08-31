@@ -952,6 +952,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final requiresManualReindex = await _indexingRepository
         .requiresManualReindex(library);
+    // בדיקה זולה שמונעת ריצת אינדוקס מלאה בכל עלייה כשאין עבודה אמיתית.
+    final hasUnindexedBooks = await _indexingRepository.hasUnindexedBooks(
+      library,
+    );
     if (!mounted || !context.mounted) {
       return;
     }
@@ -959,6 +963,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final decision = decideStartupIndexing(
       requiresManualReindex: requiresManualReindex,
       autoUpdateIndex: autoUpdateIndex,
+      hasUnindexedBooks: hasUnindexedBooks,
     );
 
     switch (decision) {
