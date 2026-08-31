@@ -3,6 +3,38 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 
+/// עדכון החלונית הפעילה ב-[TabsState.copyWith].
+///
+/// פרמטר `OpenedTab? rawActivePane` עם `?? this.rawActivePane` לא ידע להבחין
+/// בין "אל תיגע" לבין "נקה": `null` תמיד נקרא כ"אל תיגע". לכן מעבר לטאב שבו
+/// אין חלונית מתאימה השאיר את החלונית הפעילה של טאב **אחר**.
+sealed class ActivePaneUpdate {
+  const ActivePaneUpdate();
+
+  /// השאר את החלונית הפעילה כפי שהיא.
+  const factory ActivePaneUpdate.unchanged() = _ActivePaneUnchanged;
+
+  /// אין חלונית פעילה מפורשת — [TabsState.activePane] ייפול ל-`panes.first`.
+  const factory ActivePaneUpdate.clear() = _ActivePaneClear;
+
+  /// קבע את [pane] כחלונית הפעילה.
+  const factory ActivePaneUpdate.set(OpenedTab pane) = _ActivePaneSet;
+}
+
+final class _ActivePaneUnchanged extends ActivePaneUpdate {
+  const _ActivePaneUnchanged();
+}
+
+final class _ActivePaneClear extends ActivePaneUpdate {
+  const _ActivePaneClear();
+}
+
+final class _ActivePaneSet extends ActivePaneUpdate {
+  const _ActivePaneSet(this.pane);
+
+  final OpenedTab pane;
+}
+
 class TabsState extends Equatable {
   final List<OpenedTab> tabs;
   final int currentTabIndex;
@@ -35,11 +67,15 @@ class TabsState extends Equatable {
     int? currentTabIndex,
     bool forceUpdate = false,
     List<OpenedTab>? selectedTabs,
-    OpenedTab? rawActivePane,
+    ActivePaneUpdate activePane = const ActivePaneUpdate.unchanged(),
   }) {
     final nextTabs = tabs ?? this.tabs;
     final nextIndex = currentTabIndex ?? this.currentTabIndex;
-    final nextRawActivePane = rawActivePane ?? this.rawActivePane;
+    final nextRawActivePane = switch (activePane) {
+      _ActivePaneUnchanged() => rawActivePane,
+      _ActivePaneClear() => null,
+      _ActivePaneSet(:final pane) => pane,
+    };
     return TabsState(
       tabs: nextTabs,
       currentTabIndex: nextIndex,
@@ -92,6 +128,10 @@ class TabsState extends Equatable {
     // משתמשים בהקשר הקודם רק אם הוא עדיין פתוח.
     if (previous == null) return null;
     for (final tab in tabs) {
+      // identity by design: [OpenedTab] אינו דורס `operator ==`, ולכן
+      // `contains` משווה זהות אובייקט — בדיוק כמו [_resolveActivePane].
+      // מי שיוסיף `==` מבוסס-מזהה חייב להחליף כאן ל-`identical`, אחרת שני
+      // עותקים של אותו ספר ייחשבו לאותה חלונית.
       if (leafPanes(tab).contains(previous)) return previous;
     }
     return null;

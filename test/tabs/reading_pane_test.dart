@@ -18,10 +18,17 @@ TabsState _state({
   required List<OpenedTab> tabs,
   int index = 0,
   OpenedTab? activePane,
-}) => TabsState(
-  tabs: const [],
-  currentTabIndex: 0,
-).copyWith(tabs: tabs, currentTabIndex: index, rawActivePane: activePane);
+}) =>
+    TabsState(
+      tabs: const [],
+      currentTabIndex: 0,
+    ).copyWith(
+      tabs: tabs,
+      currentTabIndex: index,
+      activePane: activePane == null
+          ? const ActivePaneUpdate.unchanged()
+          : ActivePaneUpdate.set(activePane),
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +72,10 @@ void main() {
       expect(state.readingPane, same(bookA));
 
       // עוברים לטאב המפוצל והחלונית הפעילה היא הכלי.
-      state = state.copyWith(currentTabIndex: 1, rawActivePane: tool);
+      state = state.copyWith(
+        currentTabIndex: 1,
+        activePane: ActivePaneUpdate.set(tool),
+      );
       expect(state.activePane, same(tool));
       expect(
         state.readingPane,
