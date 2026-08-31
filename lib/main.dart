@@ -71,6 +71,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
 import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
@@ -1196,6 +1197,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
+              onCheckSucceeded: () => recordSuccessfulUpdateCheck(
+                SettingsRepository.keyLastLibraryUpdateCheck,
+              ),
             ),
           ),
           BlocProvider<PluginUpdatesCubit>(

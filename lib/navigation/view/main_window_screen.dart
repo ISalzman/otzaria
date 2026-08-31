@@ -73,6 +73,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/library_update_work_status.dart';
@@ -834,6 +835,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
       canUseSoftwareAndBookUpdates: () =>
           context.read<SettingsBloc>().state.canUseSoftwareAndBookUpdates,
+      isLibraryUpdateCheckDue: () =>
+          isAutoUpdateCheckDue(SettingsRepository.keyLastLibraryUpdateCheck),
       libraryUpdateBloc: context.read<LibraryUpdateBloc>,
     );
   }
