@@ -258,6 +258,18 @@ calculateLibraryPreviewPaneWidths({
 /// הפעולה שמקש Backspace מבצע בספרייה.
 enum LibraryBackspaceAction { none, navigateUp, clearSearch }
 
+/// האם הפוקוס הראשי יושב בשדה טקסט. צומת הפוקוס של TextField נקשר
+/// לווידג'ט Focus פנימי — בדיקת `context.widget` לבדה מחזירה false גם
+/// כשמקלידים בשדה, ואז Backspace מחק את כל החיפוש (issue #1061).
+@visibleForTesting
+bool isEditableTextFocusTarget() {
+  final focusContext = FocusManager.instance.primaryFocus?.context;
+  if (focusContext == null) return false;
+  final focusedWidget = focusContext.widget;
+  if (focusedWidget is EditableText || focusedWidget is TextField) return true;
+  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
+}
+
 /// מכריע מה Backspace עושה לפי מצב הפוקוס והחיפוש: בשדה טקסט המקש נשאר
 /// מחיקת תו, למעט שדה החיפוש של הספרייה כשהוא ריק — אז עולים תיקייה.
 @visibleForTesting
@@ -1242,9 +1254,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     final repo = context.read<FocusRepository>();
-    final focusedWidget = FocusManager.instance.primaryFocus?.context?.widget;
-    final isEditableTextFocused =
-        focusedWidget is EditableText || focusedWidget is TextField;
+    final isEditableTextFocused = isEditableTextFocusTarget();
 
     if (_arrowKeys.contains(event.logicalKey)) {
       if (isEditableTextFocused) return KeyEventResult.ignored;
