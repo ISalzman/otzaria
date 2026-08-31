@@ -103,6 +103,7 @@ dependencies:
   # נדרש ישירות עבור WindowsFileDropManager (גרירת קבצים אל החלון).
   flutter_inappwebview_windows: any
   custom_mouse_cursor: ^1.1.3
+  wakelock_plus: ^1.2.10
 
 dependency_overrides:
   matcher: ^0.12.20
@@ -182,6 +183,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/bio/
     - assets/logos/
     - assets/ca/
     - assets/icon/שמור וזכור מקור.png

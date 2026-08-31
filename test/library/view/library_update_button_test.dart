@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 
@@ -62,6 +63,20 @@ void main() {
       expect(
         libraryUpdateButtonTooltip(state),
         'אין חיבור לאינטרנט - לחץ לנסות שוב',
+      );
+    });
+
+    // ברשת מסוננת יש אינטרנט אך שרת העדכונים חסום — התיאור חייב לשקף זאת
+    // ולא לטעון שאין חיבור (issue #1027).
+    test('שרת עדכונים חסום — התיאור מציג את הסיבה שנקבעה ב-state', () {
+      const state = LibraryUpdateState(
+        status: LibraryUpdateStatus.disconnected,
+        message: LibraryMessages.updateSourceUnreachable,
+      );
+
+      expect(
+        libraryUpdateButtonTooltip(state),
+        '${LibraryMessages.updateSourceUnreachable} - לחץ לנסות שוב',
       );
     });
 

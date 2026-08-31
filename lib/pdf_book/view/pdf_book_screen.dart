@@ -169,6 +169,16 @@ Rect? pdfSpreadVisibleViewportRect(
   return clippedRect;
 }
 
+/// מרכז התצוגה שמציב את [anchorDocTop] בראשה, בזום ובגובה הנתונים.
+/// האופק נשאר כפי שחישבה מדיניות שינוי-הגודל של pdfrx.
+@visibleForTesting
+Offset pdfTopAnchoredCenter({
+  required double anchorDocTop,
+  required Offset currentCenter,
+  required Size viewSize,
+  required double zoom,
+}) => Offset(currentCenter.dx, anchorDocTop + viewSize.height / 2 / zoom);
+
 /// מחזיר את מדיניות שינוי גודל ה-PDF לפי מצב התצוגה.
 @visibleForTesting
 PdfViewerSizeDelegateProvider pdfSizeDelegateProviderForLayoutMode(
@@ -239,6 +249,16 @@ bool shouldRecomputeLineRangeOnLayoutModeChange(
   PdfLayoutMode current,
 ) {
   return previous != null && previous != current;
+}
+
+/// האם דפדוף חדש מבטל את הדפדופים הממתינים בתור: לחיצה בכיוון ההפוך
+/// לממתינים מרוקנת אותם, כך שהאנימציה שבאוויר מסיימת והבאה הפוכה ממנה.
+@visibleForTesting
+bool shouldDropPendingPageTurns<T>({
+  required Iterable<T> pendingDirections,
+  required T incomingDirection,
+}) {
+  return pendingDirections.any((d) => d != incomingDirection);
 }
 
 /// מחזירה את מספר העמוד הנוכחי של ה-controller רק אם הוא מחובר ומוכן.
@@ -357,11 +377,68 @@ List<AppContextMenuEntry> buildGroupedCommentatorEntries({
   return items;
 }
 
+/// מרווח השדרה בין שני עמודי הכפולה, ביחידות נקודות העמוד.
+const double kBookViewSpineGap = 6.0;
+
+/// פריסת הכפולות בתצוגת ספר, ביחידות נקודות העמוד.
+///
+/// קנה המידה הוא 1 במכוון: מלבן עמוד קטן מגודלו בנקודות גורם ל-pdfrx לרנדר
+/// את הגזיר החד בקנה המידה בריבוע, והתוצאה מטושטשת (issue #1011).
+@visibleForTesting
+PdfPageLayout buildBookViewPageLayout({
+  required List<Size> pageSizes,
+  required bool hasCover,
+  required double verticalMargin,
+}) {
+  final pageLayouts = <Rect>[];
+  const gap = kBookViewSpineGap;
+  double totalHeight = 0;
+
+  for (int i = 0; i < pageSizes.length; i++) {
+    final current = pageSizes[i];
+
+    if (hasCover && i == 0) {
+      pageLayouts.add(
+        Rect.fromLTWH(0, totalHeight, current.width, current.height),
+      );
+      totalHeight += current.height + verticalMargin;
+      continue;
+    }
+
+    final pageIndex = hasCover ? i - 1 : i;
+    if (pageIndex % 2 != 0) continue;
+
+    final next = i + 1 < pageSizes.length ? pageSizes[i + 1] : null;
+    pageLayouts.add(
+      Rect.fromLTWH(
+        current.width + gap,
+        totalHeight,
+        current.width,
+        current.height,
+      ),
+    );
+
+    if (next != null) {
+      pageLayouts.add(Rect.fromLTWH(0, totalHeight, next.width, next.height));
+      totalHeight += max(current.height, next.height) + verticalMargin;
+      i++;
+    } else {
+      totalHeight += current.height + verticalMargin;
+    }
+  }
+
+  return PdfPageLayout(
+    pageLayouts: pageLayouts,
+    documentSize: Size(
+      pageLayouts.fold(0, (width, page) => max(width, page.right)),
+      totalHeight,
+    ),
+  );
+}
+
 class _PdfBookScreenState extends State<PdfBookScreen>
     with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   static const int _defaultPdfLineRange = 50;
-  static const double _bookViewGap = 3.0;
-  static const double _bookViewScale = 0.5;
 
   /// צל העמוד — מוגדר במפורש (ולא נשען על ברירת המחדל של pdfrx) כי הצילום
   /// המורכב מראש חייב לצייר בדיוק את אותו צל, אחרת הוא צץ בסיום האנימציה.
@@ -419,6 +496,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   // דפדוף אינטראקטיבי בגרירה מקצה הדף. בזמן גרירה ערך ה-controller הוא
   // ה-progress עצמו (ליניארי, צמוד לאצבע) — בלי עקומת ההאטה של קליק.
   bool _isInteractivePageTurn = false;
+  _BookPageTurnDirection? _hoveredTurnEdge;
 
   /// עדכון כותרת/מטא-דאטה שנדחה כי הגיע בזמן אנימציית דפדוף.
   bool _pageTurnDeferredMetadataUpdate = false;
@@ -430,6 +508,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   bool _pdfViewerSuspended = false;
   bool _readerFocusAndHideQueued = false;
   bool _bookHasCommentaryLinks = false;
+
+  /// נקודת המסמך שהייתה בראש התצוגה רגע לפני שרוחב הקורא השתנה
+  /// (פתיחת/סגירת חלונית הצד), לשחזור אחריו.
+  double? _paneToggleAnchorDocTop;
+
+  /// גודל התצוגה שבו נלקח העוגן — מונע החלת עוגן ישן
+  /// על שינוי גודל אחר (במסך צר החלונית overlay והרוחב לא משתנה).
+  Size? _paneToggleAnchorViewSize;
 
   /// מצב יד — גרירת עכבר גוללת את הדף במקום לסמן טקסט (issue #916).
   bool _isHandMode = false;
@@ -449,6 +535,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// שה-layout התייצב, ה-controller באמת נמצא בעמוד זה (ולא נדחף
   /// משם בגלל ממדי עמודי רקע שהתעדכנו).
   int? _stableLayoutTargetPage;
+
+  /// האם הבדיקה המיידית שרצה עם טעינת העמודים שלפני היעד כבר בוצעה.
+  /// מתאפס בכל נסיון תיקון, כדי שהעדכון שאחריו יסגור את ה-overlay מיד.
+  bool _stableLayoutPrefixChecked = false;
 
   /// מתי התחיל ה-tracking הנוכחי — בסיס לתקרת [_kStableLayoutMaxWait].
   DateTime? _stableLayoutStartedAt;
@@ -581,7 +671,56 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (current is PdfBookLoaded && current.showLeftPane == show) {
       return;
     }
+    _captureViewportTopAnchor();
     _bloc.add(pdf_events.ToggleLeftPane(show));
+  }
+
+  /// שומר את קו הראש של התצוגה לפני שינוי רוחב הקורא. מדיניות השינוי-גודל
+  /// של pdfrx מעגנת את המרכז, ובזום שגדל התוצאה שנוּוט אליה נדחקת מהמסך.
+  void _captureViewportTopAnchor() {
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady || controller.layout.pageLayouts.isEmpty) {
+      _paneToggleAnchorDocTop = null;
+      _paneToggleAnchorViewSize = null;
+      return;
+    }
+    _paneToggleAnchorDocTop = controller.visibleRect.top;
+    _paneToggleAnchorViewSize = controller.viewSize;
+  }
+
+  /// מחזיר את קו הראש שנשמר ב-[_captureViewportTopAnchor], בזום שכבר נקבע
+  /// על ידי מדיניות שינוי-הגודל (issue #1023).
+  void _restoreViewportTopAnchor(
+    PdfViewerController controller,
+    Size? oldViewSize,
+  ) {
+    final anchorDocTop = _paneToggleAnchorDocTop;
+    final anchorViewSize = _paneToggleAnchorViewSize;
+    _paneToggleAnchorDocTop = null;
+    _paneToggleAnchorViewSize = null;
+    // בתצוגת ספר העמוד ממורכז ומנורמל על ידי normalizeMatrix — אין שם
+    // גלילה חופשית לשמר.
+    if (anchorDocTop == null ||
+        oldViewSize != anchorViewSize ||
+        _isBookViewModeActive() ||
+        oldViewSize!.width == controller.viewSize.width) {
+      return;
+    }
+    // pdfrx מזהיר לא לשנות את המטריצה בתוך ה-callback — הוא נקרא תוך כדי build.
+    Future.microtask(() {
+      if (!mounted || !controller.isReady) return;
+      controller.goTo(
+        controller.calcMatrixFor(
+          pdfTopAnchoredCenter(
+            anchorDocTop: anchorDocTop,
+            currentCenter: controller.centerPosition,
+            viewSize: controller.viewSize,
+            zoom: controller.currentZoom,
+          ),
+        ),
+        duration: Duration.zero,
+      );
+    });
   }
 
   /// מחוות pan של לוח מגע מדויק (מ-TrackpadPanRecognizer): מעבירים את
@@ -1356,72 +1495,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     return PdfViewerParams(
       layoutPages: layoutMode.isBookView
-          ? (pages, params) {
-              final hasCover = layoutMode.hasCoverPage;
-              final pageLayouts = <Rect>[];
-              const gap = _bookViewGap;
-              const scale = _bookViewScale;
-              double maxWidth = 0;
-              double totalHeight = 0;
-
-              if (pages.isNotEmpty) {
-                maxWidth = pages[0].width * scale * 2 + gap;
-              }
-
-              for (int i = 0; i < pages.length; i++) {
-                final currentPage = pages[i];
-                final scaledWidth = currentPage.width * scale;
-                final scaledHeight = currentPage.height * scale;
-
-                if (hasCover && i == 0) {
-                  // עמוד 0 (שער) - לבדו
-                  pageLayouts.add(
-                    Rect.fromLTWH(0, totalHeight, scaledWidth, scaledHeight),
-                  );
-                  totalHeight += scaledHeight + params.margin;
-                } else {
-                  final pageIndex = hasCover ? i - 1 : i;
-                  final isRightPage = pageIndex % 2 == 0;
-
-                  if (isRightPage) {
-                    final nextPage = i + 1 < pages.length ? pages[i + 1] : null;
-
-                    pageLayouts.add(
-                      Rect.fromLTWH(
-                        scaledWidth + gap,
-                        totalHeight,
-                        scaledWidth,
-                        scaledHeight,
-                      ),
-                    );
-
-                    if (nextPage != null) {
-                      final nextScaledWidth = nextPage.width * scale;
-                      final nextScaledHeight = nextPage.height * scale;
-
-                      pageLayouts.add(
-                        Rect.fromLTWH(
-                          0,
-                          totalHeight,
-                          nextScaledWidth,
-                          nextScaledHeight,
-                        ),
-                      );
-                      totalHeight +=
-                          max(scaledHeight, nextScaledHeight) + params.margin;
-                      i++;
-                    } else {
-                      totalHeight += scaledHeight + params.margin;
-                    }
-                  }
-                }
-              }
-
-              return PdfPageLayout(
-                pageLayouts: pageLayouts,
-                documentSize: Size(maxWidth, totalHeight),
-              );
-            }
+          ? (pages, params) => buildBookViewPageLayout(
+              pageSizes: [
+                for (final page in pages) Size(page.width, page.height),
+              ],
+              hasCover: layoutMode.hasCoverPage,
+              // המרווח הוכפל יחד עם הפריסה, לשמירת אותה פרופורציה בין כפולות.
+              verticalMargin: params.margin * 2,
+            )
           : null,
       calculateCurrentPageNumber: layoutMode.isBookView
           ? null
@@ -1440,6 +1521,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             }
           : null,
+      onViewSizeChanged: (viewSize, oldViewSize, controller) {
+        _restoreViewportTopAnchor(controller, oldViewSize);
+      },
       enableKeyboardNavigation: false,
       scrollByArrowKey: 25.0,
       scrollByMouseWheel: _kScrollByMouseWheel,
@@ -1625,9 +1709,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           ),
         );
 
-        // פתיחה ל"עמוד יעד" — progressive loading עלול לדחוף את עמוד היעד
-        // כשממדי עמודים מתעדכנים ברקע; ה-tracking מתקן בחזרה. overlay מוצג
-        // רק כשהקורא ביקש requiresStableLayout (ראה isLoading ב-bloc).
+        // פתיחה ל"עמוד יעד" — progressive loading דוחף את עמוד היעד כשממדי
+        // עמודי הרקע מתעדכנים, וה-tracking מתקן בחזרה; בלי overlay התיקונים
+        // נראים כריצוד (issue #1026).
         if (widget.tab.requiresStableLayout || initialTargetPage > 1) {
           _beginStableLayoutTracking(initialTargetPage);
         }
@@ -2113,7 +2197,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         totalPages;
     final buttonSize = min(72.0, max(48.0, viewportSize.shortestSide * 0.10));
     final horizontalPadding = min(28.0, viewportSize.width * 0.018);
-    final colorScheme = Theme.of(context).colorScheme;
     final spreadRect = _visibleSpreadViewportRect(
       widget.tab.pdfViewerController,
       widget.tab.pdfViewerController.viewSize,
@@ -2140,38 +2223,30 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               child: _buildPageTurnDragZone(_BookPageTurnDirection.previous),
             ),
           if (canGoPrevious)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: EdgeInsets.only(right: horizontalPadding),
-                child: _BookViewTurnButton(
-                  icon: FluentIcons.chevron_left_24_regular,
-                  tooltip: 'הזוג הקודם',
-                  size: buttonSize,
-                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
-                  iconColor: colorScheme.onSurface,
-                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
-                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
-                  onPressed: _goPreviousPage,
-                ),
-              ),
+            _buildBookViewTurnButtonSlot(
+              context: context,
+              direction: _BookPageTurnDirection.previous,
+              gutter: viewportSize.width - (spreadRect?.right ?? 0),
+              isLeftSide: false,
+              buttonSize: buttonSize,
+              edgePadding: horizontalPadding,
+              dragZoneWidth: dragZoneWidth,
+              icon: FluentIcons.chevron_left_24_regular,
+              tooltip: 'הזוג הקודם',
+              onPressed: _goPreviousPage,
             ),
           if (canGoNext)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: EdgeInsets.only(left: horizontalPadding),
-                child: _BookViewTurnButton(
-                  icon: FluentIcons.chevron_right_24_regular,
-                  tooltip: 'הזוג הבא',
-                  size: buttonSize,
-                  backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
-                  iconColor: colorScheme.onSurface,
-                  borderColor: colorScheme.outline.withValues(alpha: 0.22),
-                  shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
-                  onPressed: _goNextPage,
-                ),
-              ),
+            _buildBookViewTurnButtonSlot(
+              context: context,
+              direction: _BookPageTurnDirection.next,
+              gutter: spreadRect?.left ?? 0,
+              isLeftSide: true,
+              buttonSize: buttonSize,
+              edgePadding: horizontalPadding,
+              dragZoneWidth: dragZoneWidth,
+              icon: FluentIcons.chevron_right_24_regular,
+              tooltip: 'הזוג הבא',
+              onPressed: _goNextPage,
             ),
           // בזמן גרירה המצביע יוצא מרצועת האחיזה — שכבה על כל השטח שומרת
           // את סמן הגרירה עד לשחרור.
@@ -2180,6 +2255,82 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               child: MouseRegion(cursor: AppCursors.grabbing, opaque: false),
             ),
         ],
+      ),
+    );
+  }
+
+  void _setHoveredTurnEdge(_BookPageTurnDirection? edge) {
+    if (_hoveredTurnEdge == edge || !mounted) return;
+    setState(() => _hoveredTurnEdge = edge);
+  }
+
+  /// חץ דפדוף אחד. כשיש רווח בין הכפולה לקצה התצוגה הוא יושב שם וגלוי תמיד;
+  /// כשהכפולה ממלאה את הרוחב הוא נסוג אל מעל העמוד ומופיע רק בריחוף.
+  Widget _buildBookViewTurnButtonSlot({
+    required BuildContext context,
+    required _BookPageTurnDirection direction,
+    required double gutter,
+    required bool isLeftSide,
+    required double buttonSize,
+    required double edgePadding,
+    required double dragZoneWidth,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final placement = bookViewTurnButtonPlacement(
+      gutter: gutter,
+      buttonSize: buttonSize,
+      edgePadding: edgePadding,
+      dragZoneWidth: dragZoneWidth,
+    );
+    // במגע אין ריחוף — שם הלחצן נשאר גלוי גם כשהוא מעל העמוד.
+    final hoverGated =
+        !placement.fitsBesideSpread && !Platform.isAndroid && !Platform.isIOS;
+    final isVisible = !hoverGated || _hoveredTurnEdge == direction;
+    final inset = placement.inset;
+    final button = IgnorePointer(
+      ignoring: !isVisible,
+      child: AnimatedOpacity(
+        opacity: isVisible ? 1.0 : 0.0,
+        duration: AppTokens.animFast,
+        child: _BookViewTurnButton(
+          icon: icon,
+          tooltip: tooltip,
+          size: buttonSize,
+          backgroundColor: colorScheme.surface.withValues(alpha: 0.78),
+          iconColor: colorScheme.onSurface,
+          borderColor: colorScheme.outline.withValues(alpha: 0.22),
+          shadowColor: colorScheme.shadow.withValues(alpha: 0.16),
+          onPressed: onPressed,
+        ),
+      ),
+    );
+
+    if (!hoverGated) {
+      return Positioned(
+        top: 0,
+        bottom: 0,
+        left: isLeftSide ? inset : null,
+        right: isLeftSide ? null : inset,
+        child: Center(child: button),
+      );
+    }
+
+    // הלחצן יושב על העמוד — רק רצועת הקצה שסביבו חושפת אותו,
+    // כדי שריחוף באמצע הספר לא יקפיץ אותו בזמן קריאה.
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      left: isLeftSide ? 0 : null,
+      right: isLeftSide ? null : 0,
+      width: inset * 2 + buttonSize,
+      child: MouseRegion(
+        opaque: false,
+        onEnter: (_) => _setHoveredTurnEdge(direction),
+        onExit: (_) => _setHoveredTurnEdge(null),
+        child: Center(child: button),
       ),
     );
   }
@@ -2598,6 +2749,19 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       targetPage: pending.targetPage,
       direction: pending.direction,
     );
+  }
+
+  /// לחיצה בכיוון ההפוך מרוקנת את תור הדפדופים הממתינים (כמו שחרור מקש
+  /// מוחזק): הכוונה חוזרת ליעד האנימציה שבאוויר, והיעד ההפוך מחושב ממנו.
+  void _dropOppositePendingTurns(_BookPageTurnDirection direction) {
+    if (!shouldDropPendingPageTurns(
+      pendingDirections: _pendingPageTurns.map((t) => t.direction),
+      incomingDirection: direction,
+    )) {
+      return;
+    }
+    _pendingPageTurns.clear();
+    _lastInitiatedTargetPage = _inFlightAnimationTarget;
   }
 
   // ============================================================
@@ -3164,6 +3328,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       return;
     }
 
+    if (_isBookViewModeActive() &&
+        (_pageTurnController.isAnimating || _isPageTurnInProgress)) {
+      // Animation in flight: queue FIFO. Must run BEFORE the same-page check —
+      // controller.pageNumber lags mid-flight and would swallow a reverse turn.
+      _pendingPageTurns.add(
+        _PendingBookPageTurn(targetPage: targetPage, direction: direction),
+      );
+      return;
+    }
+
     final currentPage = widget.tab.pdfViewerController.pageNumber ?? 1;
     if (targetPage == currentPage) {
       return;
@@ -3171,15 +3345,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
     if (!_isBookViewModeActive()) {
       await _goToPageWithSpreadLock(targetPage);
-      return;
-    }
-
-    if (_pageTurnController.isAnimating || _isPageTurnInProgress) {
-      // Animation already in flight: queue this turn FIFO so it plays after
-      // the current one finishes. Each click gets its own curl, in order.
-      _pendingPageTurns.add(
-        _PendingBookPageTurn(targetPage: targetPage, direction: direction),
-      );
       return;
     }
 
@@ -3463,14 +3628,36 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   static const Duration _kStableLayoutDebounce = Duration(milliseconds: 800);
   static const int _kStableLayoutMaxRetries = 3;
 
-  // תקרת המתנה ל-onDocumentLoadFinished: במסמכים גדולים הוא עלול להתעכב
-  // דקה — קפיצת עמוד נדירה עדיפה על overlay תקוע (issue #824).
+  // רשת ביטחון בלבד: אם אפילו העמודים שלפני היעד לא נטענו בזמן הזה,
+  // קפיצה נדירה עדיפה על overlay תקוע (issue #824).
   static const Duration _kStableLayoutMaxWait = Duration(seconds: 2);
+
+  /// האם ממדי כל העמודים עד עמוד היעד ידועים כבר.
+  ///
+  /// ה-layout הוא ערימה אנכית, ולכן רק עמודים שלפני היעד מזיזים אותו:
+  /// משנטענו, מיקומו סופי גם בעוד שאר המסמך נטען (issue #1026). ב-progressive
+  /// loading עמוד שטרם נטען מקבל גודל מנוחש, וכל תיקון שלו מזיז את התצוגה.
+  bool _isTargetPagePrefixLoaded() {
+    if (_documentFullyLoaded) return true;
+    final target = _stableLayoutTargetPage;
+    if (target == null) return true;
+    final controller = widget.tab.pdfViewerController;
+    if (!controller.isReady) return false;
+    final pages = controller.pages;
+    // +1: במצב ספר עמוד היעד עשוי להיות הראשון בכפולה, ובן זוגו קובע את
+    // גובה השורה שלה.
+    final end = (target + 1).clamp(1, pages.length);
+    for (var i = 0; i < end; i++) {
+      if (!pages[i].isLoaded) return false;
+    }
+    return true;
+  }
 
   void _beginStableLayoutTracking(int targetPage) {
     if (!mounted) return;
     _stableLayoutTargetPage = targetPage;
     _stableLayoutRetryCount = 0;
+    _stableLayoutPrefixChecked = false;
     _stableLayoutStartedAt = DateTime.now();
     // לא מאפסים _documentFullyLoaded כאן — race: onDocumentLoadFinished
     // יכול לירות לפני onViewerReady, ואיפוס היה מאבד את הסימון. הוא
@@ -3495,13 +3682,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       _restartStableLayoutDebounce();
       return;
     }
-    // בלי onDocumentLoadFinished עמודי רקע עוד עלולים לדחוף את עמוד היעד,
-    // אבל ממתינים לו רק עד _kStableLayoutMaxWait — לא לנצח (issue #824).
     final startedAt = _stableLayoutStartedAt;
     final maxWaitReached =
         startedAt != null &&
         DateTime.now().difference(startedAt) >= _kStableLayoutMaxWait;
-    if (!_documentFullyLoaded && !maxWaitReached) {
+    if (!_isTargetPagePrefixLoaded() && !maxWaitReached) {
       _restartStableLayoutDebounce();
       return;
     }
@@ -3531,6 +3716,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           return;
         }
         _stableLayoutRetryCount++;
+        _stableLayoutPrefixChecked = false;
         controller.goToPage(pageNumber: target, duration: Duration.zero);
         _restartStableLayoutDebounce();
         return;
@@ -3561,6 +3747,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _stableLayoutTargetPage = null;
     _stableLayoutStartedAt = null;
     _stableLayoutRetryCount = 0;
+    _stableLayoutPrefixChecked = false;
     _waitingForStableLayout = false;
     // לא מאפסים _documentFullyLoaded כאן — ראה הסבר ב-_beginStableLayoutTracking.
   }
@@ -3779,6 +3966,12 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // נפסקים למשך _kStableLayoutDebounce, נחשב הציר כיציב.
     if (_waitingForStableLayout) {
       _restartStableLayoutDebounce();
+      // progressive loading מעדכן כל ~250ms, ולכן ה-debounce לא היה נפתח עד
+      // סוף טעינת המסמך; ברגע שהעמודים שלפני היעד נטענו אין למה להמתין.
+      if (!_stableLayoutPrefixChecked && _isTargetPagePrefixLoaded()) {
+        _stableLayoutPrefixChecked = true;
+        _onLayoutMaybeStable();
+      }
     }
 
     // Keep adjacent-spread pre-renders warm so page-turn animations can
@@ -3946,6 +4139,14 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   Widget _buildContent(BuildContext context) {
     final wideScreen = MediaQuery.of(context).size.width >= 600;
+    // מאזין לקיצורים כדי שהזום יתעדכן מיד עם שינוי ההגדרה, בלי לפתוח מחדש את הטאב.
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      buildWhen: (previous, current) => previous.shortcuts != current.shortcuts,
+      builder: (context, _) => _buildShortcutScope(context, wideScreen),
+    );
+  }
+
+  Widget _buildShortcutScope(BuildContext context, bool wideScreen) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         // ב-Mac המוסכמה היא Cmd (Meta); בשאר הפלטפורמות Ctrl. שתי הגרסאות
@@ -3954,29 +4155,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             _ensureSearchTabIsActive,
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
             _ensureSearchTabIsActive,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.add):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.add): _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
-            _zoomIn,
-        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
-            _zoomOut,
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
-            _zoomOut,
-        LogicalKeySet(
-          LogicalKeyboardKey.control,
-          LogicalKeyboardKey.numpadSubtract,
-        ): _zoomOut,
-        LogicalKeySet(
-          LogicalKeyboardKey.meta,
-          LogicalKeyboardKey.numpadSubtract,
-        ): _zoomOut,
+        ..._zoomBindings(),
       },
       child: Scaffold(
         body: Column(
@@ -4336,76 +4515,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
               );
             },
           ),
-          BlocBuilder<PdfBookBloc, PdfBookState>(
-            buildWhen: (prev, curr) {
-              (PdfLayoutMode, bool)? keyOf(PdfBookState s) => switch (s) {
-                PdfBookLoaded v => (v.layoutMode, v.showZoomBar),
-                _ => null,
-              };
-              return keyOf(prev) != keyOf(curr);
-            },
-            builder: (context, state) {
-              // מוסתר בזמן שסרגל הזום מוצג — שניהם ממורכזים מתחת לסרגל העליון.
-              if (state is! PdfBookLoaded ||
-                  !state.layoutMode.isBookView ||
-                  state.showZoomBar) {
-                return const SizedBox.shrink();
-              }
-              return Positioned(
-                top: 4,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _buildBookViewDirectionToggle(
-                    context,
-                    state.layoutMode,
-                  ),
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
-  }
-
-  /// לחצן צף (מתחת לסרגל העליון) להיפוך כיוון הזוגות בתצוגת ספר:
-  /// עמוד ראשון בודד משמאל, או מזווג ומתחיל מימין (ללא עמוד ריק).
-  Widget _buildBookViewDirectionToggle(
-    BuildContext context,
-    PdfLayoutMode layoutMode,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      elevation: 2,
-      borderRadius: AppTokens.borderRadiusAll,
-      color: colorScheme.surface,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: AppTokens.borderRadiusAll,
-          border: Border.all(color: colorScheme.outlineVariant, width: 1),
-        ),
-        child: IconButton(
-          icon: const Icon(FluentIcons.arrow_swap_24_regular, size: 16),
-          tooltip: layoutMode.hasCoverPage
-              ? 'היפוך כיוון: התחלת הספר מימין (ללא עמוד ריק)'
-              : 'היפוך כיוון: התחלת הספר משמאל (עם עמוד ריק)',
-          onPressed: _toggleBookViewDirection,
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-        ),
-      ),
-    );
-  }
-
-  void _toggleBookViewDirection() {
-    final state = _bloc.state;
-    if (state is! PdfBookLoaded || !state.layoutMode.isBookView) return;
-    _lockedSpreadStartPage = null;
-    final target = state.layoutMode == PdfLayoutMode.bookView
-        ? PdfLayoutMode.bookViewNoCover
-        : PdfLayoutMode.bookView;
-    _bloc.add(pdf_events.SetLayoutMode(target));
   }
 
   Widget _buildLeftPaneContent(bool showLeftPane) {
@@ -4557,6 +4669,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     );
   }
 
+  /// קיצורי הזום לפי ההגדרות, כולל המקביל בלוח הספרות לאותו צירוף.
+  Map<ShortcutActivator, VoidCallback> _zoomBindings() {
+    final bindings = <ShortcutActivator, VoidCallback>{};
+    void bind(String settingKey, VoidCallback action) {
+      final shortcut = ShortcutValidator.getShortcutValue(settingKey) ?? '';
+      if (shortcut.isEmpty) return;
+      for (final activator in ShortcutHelper.activatorsFromShortcut(shortcut)) {
+        bindings[activator] = action;
+      }
+    }
+
+    bind(ShortcutValidator.zoomInKey, _zoomIn);
+    bind(ShortcutValidator.zoomOutKey, _zoomOut);
+    bind(ShortcutValidator.zoomResetKey, _resetZoom);
+    return bindings;
+  }
+
   void _zoomIn() {
     _bloc.add(const pdf_events.ZoomIn());
   }
@@ -4585,6 +4714,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!widget.tab.pdfViewerController.isReady) return;
 
     final isBookViewMode = _isBookViewModeActive();
+    if (isBookViewMode) {
+      _dropOppositePendingTurns(_BookPageTurnDirection.next);
+    }
     final basePage = _effectiveCurrentPageForNavigation();
     final totalPages = widget.tab.pdfViewerController.pageCount;
     final int nextPage;
@@ -4620,6 +4752,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     if (!widget.tab.pdfViewerController.isReady) return;
 
     final isBookViewMode = _isBookViewModeActive();
+    if (isBookViewMode) {
+      _dropOppositePendingTurns(_BookPageTurnDirection.previous);
+    }
     final basePage = _effectiveCurrentPageForNavigation();
     final int prevPage;
     if (isBookViewMode) {
@@ -5440,14 +5575,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       iconData: iconData,
       icon: Icon(iconData),
       position: PopupMenuPosition.under,
-      onSelected: (selectedMode) {
-        // בחירת "תצוגת ספר" כשכבר בתצוגת ספר משמרת את כיוון הזוגות
-        // שנבחר בלחצן ההיפוך.
-        final layoutMode =
-            selectedMode == PdfLayoutMode.bookView &&
-                state.layoutMode.isBookView
-            ? state.layoutMode
-            : selectedMode;
+      onSelected: (layoutMode) {
+        if (layoutMode == state.layoutMode) return;
         _lockedSpreadStartPage = null;
 
         final settingsBloc = context.read<SettingsBloc>();
@@ -5495,11 +5624,23 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             isSelected: !isBookViewMode,
           ),
           buildItem(
-            value: PdfLayoutMode.bookView,
+            // בחירה חוזרת בתצוגת ספר משמרת את כיוון הזוגות שנבחר.
+            value: isBookViewMode ? state.layoutMode : PdfLayoutMode.bookView,
             text: 'תצוגת ספר',
             icon: OtzariaIcons.book_open_small_24_regular,
             isSelected: isBookViewMode,
           ),
+          if (isBookViewMode)
+            buildItem(
+              value: state.layoutMode.hasCoverPage
+                  ? PdfLayoutMode.bookViewNoCover
+                  : PdfLayoutMode.bookView,
+              text: state.layoutMode.hasCoverPage
+                  ? 'היפוך כיוון: התחלת הספר מימין (ללא עמוד ריק)'
+                  : 'היפוך כיוון: התחלת הספר משמאל (עם עמוד ריק)',
+              icon: FluentIcons.arrow_swap_24_regular,
+              isSelected: false,
+            ),
         ];
       },
     );

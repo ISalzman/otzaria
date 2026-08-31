@@ -13,6 +13,11 @@ class ScrollablePositionedListScrollbar extends StatefulWidget {
   static const Key trackKey = Key('positioned-list-scrollbar-track');
   static const Key thumbKey = Key('positioned-list-scrollbar-thumb');
 
+  /// הרוחב שהמסילה תופסת בקצה ההתחלה כשיש מה לגלול. חשוף כדי שמסך שרוצה
+  /// עמודת טקסט ממורכזת יוכל לשמור מרווח זהה בקצה הנגדי.
+  static const double trackWidth =
+      _ScrollablePositionedListScrollbarState._trackWidth;
+
   final ItemScrollController scrollController;
   final ItemPositionsListener itemPositionsListener;
   final int itemCount;

@@ -21,6 +21,7 @@ const Map<String, String> apiCallToPermissionHint = {
   'library.getLinks': pluginLinksReadPermission,
   'library.getRawLinks': pluginLinksReadPermission,
   'library.getLinkTargetsSummary': pluginLinksReadPermission,
+  'library.refreshUserBooks': pluginLibraryRefreshPermission,
 
   // app.*
   'app.getUserEmail': 'app.user_email.read',
@@ -143,6 +144,12 @@ const pluginToolsReadPermission = 'tools.read';
 /// וסיכום היעדים. נפרדת מ-`library.content.read` כי היא חושפת מבנה בלבד.
 const pluginLinksReadPermission = 'library.links.read';
 
+/// הרשאה לרענון הספרים האישיים (`library.refreshUserBooks`): סריקה מחדש של
+/// התיקיות האישיות של המשתמש ורענון קטלוג הספרייה בעקבותיה. נפרדת מהרשאות
+/// הקריאה כי היא כותבת ל-`user_books.db` ומריצה סריקת דיסק — הפעולה שתוסף
+/// שמוריד ספרים צריך כדי שהספרים שהוריד יופיעו בספרייה.
+const pluginLibraryRefreshPermission = 'library.refresh';
+
 /// הרשאה לפתיחת דף של תוסף **אחר** (`plugin.openOther`). נפרדת מ-navigation.write
 /// כי היא מפעילה את ה-WebView של תוסף שלישי, ולא רק מזיזה את המשתמש בין מסכים.
 const pluginOpenOtherPermission = 'plugin.open_other';
@@ -242,6 +249,9 @@ const pluginValidPermissions = <String>[
 
   /// קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן)
   pluginLinksReadPermission,
+
+  /// רענון הספרים האישיים — סריקת התיקיות האישיות ורענון הקטלוג
+  pluginLibraryRefreshPermission,
 
   // ===== חיפוש =====
   /// ביצוע חיפוש טקסט מלא

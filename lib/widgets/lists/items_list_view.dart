@@ -41,10 +41,6 @@ class ItemsListView extends StatefulWidget {
 
   /// כשמסופק, מתווסף לתפריט ההקשר פריט "ערוך תיאור".
   final Function(BuildContext, dynamic item, int originalIndex)? onEdit;
-
-  /// כשtrue — פעולות המחיקה/עריכה עוברות לתפריט הקשר (קליק ימני / לחיצה ארוכה)
-  /// במקום כפתור מחיקה גלוי בשורה.
-  final bool actionsInContextMenu;
   final String hintText;
   final String emptyText;
   final String notFoundText;
@@ -92,7 +88,6 @@ class ItemsListView extends StatefulWidget {
     required this.onDelete,
     required this.onClearAll,
     this.onEdit,
-    this.actionsInContextMenu = false,
     required this.hintText,
     required this.emptyText,
     required this.notFoundText,
@@ -268,12 +263,11 @@ class _ItemsListViewState extends State<ItemsListView> {
                 ],
               ),
             ),
-            if (!widget.actionsInContextMenu)
-              IconButton(
-                icon: const Icon(FluentIcons.delete_24_regular),
-                tooltip: 'מחק',
-                onPressed: () => widget.onDelete(context, originalIndex),
-              ),
+            IconButton(
+              icon: const Icon(FluentIcons.delete_24_regular),
+              tooltip: 'מחק',
+              onPressed: () => widget.onDelete(context, originalIndex),
+            ),
           ],
         ),
       ),
@@ -286,18 +280,18 @@ class _ItemsListViewState extends State<ItemsListView> {
       );
     }
 
-    if (!widget.actionsInContextMenu) {
+    final onEdit = widget.onEdit;
+    if (onEdit == null) {
       return content;
     }
 
     return AppContextMenuRegion(
       menuBuilder: (menuContext, _) => [
-        if (widget.onEdit != null)
-          AppContextMenuEntry(
-            label: 'ערוך תיאור',
-            icon: FluentIcons.edit_24_regular,
-            onTap: () => widget.onEdit!(menuContext, item, originalIndex),
-          ),
+        AppContextMenuEntry(
+          label: 'ערוך תיאור',
+          icon: FluentIcons.edit_24_regular,
+          onTap: () => onEdit(menuContext, item, originalIndex),
+        ),
         AppContextMenuEntry(
           label: 'מחק',
           icon: FluentIcons.delete_24_regular,

@@ -70,6 +70,14 @@ abstract class TextBookMessages {
   static const String columnHiddenGlobally =
       'הטור הוסתר בכל הספרים. ניתן לשנות בהגדרות צורת הדף.';
 
+  // ── מפרשים קבועים לקטגוריה ──────────────────────────────────────────────
+
+  static String categoryCommentatorsSaved(String category) =>
+      'המפרשים הנבחרים ייפתחו אוטומטית בספרי "$category"';
+
+  static String categoryCommentatorsCleared(String category) =>
+      'קביעת המפרשים לקטגוריה "$category" הוסרה';
+
   // ── עריכת טקסט (עורך הקטעים) ────────────────────────────────────────────
 
   static const String localEditsWarning =

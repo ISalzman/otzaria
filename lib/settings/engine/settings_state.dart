@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/theme/app_seed_colors.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 class SettingsState extends Equatable {
   final bool isDarkMode;
@@ -29,6 +30,9 @@ class SettingsState extends Equatable {
   final bool showExternalBooks;
   final bool showTeamim;
   final bool replaceHolyNames;
+
+  /// סגנון החלפת שם הקודש כשההחלפה פעילה — ראה [HolyNameStyle].
+  final HolyNameStyle holyNameStyle;
   final bool autoUpdateIndex;
   final bool defaultRemoveNikud;
   final bool removeNikudFromTanach;
@@ -109,6 +113,7 @@ class SettingsState extends Equatable {
     required this.showExternalBooks,
     required this.showTeamim,
     required this.replaceHolyNames,
+    this.holyNameStyle = HolyNameStyle.kufKuf,
     required this.autoUpdateIndex,
     required this.defaultRemoveNikud,
     required this.removeNikudFromTanach,
@@ -216,6 +221,7 @@ class SettingsState extends Equatable {
     bool? showExternalBooks,
     bool? showTeamim,
     bool? replaceHolyNames,
+    HolyNameStyle? holyNameStyle,
     bool? autoUpdateIndex,
     bool? defaultRemoveNikud,
     bool? removeNikudFromTanach,
@@ -273,6 +279,7 @@ class SettingsState extends Equatable {
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
       showTeamim: showTeamim ?? this.showTeamim,
       replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
+      holyNameStyle: holyNameStyle ?? this.holyNameStyle,
       autoUpdateIndex: autoUpdateIndex ?? this.autoUpdateIndex,
       defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
       removeNikudFromTanach:
@@ -356,6 +363,7 @@ class SettingsState extends Equatable {
     showExternalBooks,
     showTeamim,
     replaceHolyNames,
+    holyNameStyle,
     autoUpdateIndex,
     defaultRemoveNikud,
     removeNikudFromTanach,

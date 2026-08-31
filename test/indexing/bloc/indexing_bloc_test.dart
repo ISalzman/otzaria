@@ -51,6 +51,29 @@ void main() {
     );
 
     blocTest<IndexingBloc, IndexingState>(
+      'שלב האיחוד נפלט כמצב נפרד לפני ההשלמה',
+      build: () {
+        final repository = _FakeIndexingRepository()
+          ..finalizeGate = Completer<void>();
+        return _FakeIndexingBloc(repository);
+      },
+      act: (bloc) async {
+        bloc.add(StartIndexing(libraryWithBooks(2)));
+        await Future.delayed(Duration.zero);
+        repositoryOf(bloc).finalizeGate!.complete();
+      },
+      expect: () => [
+        const IndexingInProgress(booksProcessed: 0, totalBooks: 2),
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 2,
+          isFinalizing: true,
+        ),
+        const IndexingComplete(),
+      ],
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
       'ריצה עם כשל שומרת את הפרטים ב-state ומעבירה אותם לדיווח',
       build: () {
         final repository = _FakeIndexingRepository()
@@ -202,6 +225,7 @@ void main() {
           booksProcessed: 0,
           totalBooks: 1,
           isCreatingIndex: false,
+          isScanning: true,
         ),
         const IndexingComplete(failures: [failure]),
       ],
@@ -209,6 +233,32 @@ void main() {
         expect(repositoryOf(bloc).reconcileCalls, 1);
         expect(repositoryOf(bloc).reportedResults, hasLength(1));
       },
+    );
+
+    blocTest<IndexingBloc, IndexingState>(
+      'שלב הסריקה של ReconcileIndex נפלט עם isScanning להצגה בחיווי',
+      build: () => _FakeIndexingBloc(
+        _FakeIndexingRepository()..scanProgressReports = [(1, 2), (2, 2)],
+      ),
+      act: (bloc) => bloc.add(ReconcileIndex(libraryWithBooks(2))),
+      expect: () => [
+        const IndexingInProgress(
+          booksProcessed: 0,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingInProgress(
+          booksProcessed: 1,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingInProgress(
+          booksProcessed: 2,
+          totalBooks: 2,
+          isScanning: true,
+        ),
+        const IndexingComplete(),
+      ],
     );
 
     blocTest<IndexingBloc, IndexingState>(
@@ -474,6 +524,12 @@ class _FakeIndexingRepository extends IndexingRepository {
   final economyValues = <bool>[];
   Object? economyError;
   Completer<void>? economyGate;
+
+  /// כשהוא מסופק — הריצה מדווחת על שלב האיחוד ונעצרת בו עד לשחרור.
+  Completer<void>? finalizeGate;
+
+  /// דיווחי onScanProgress שהסריקה ב-reconcile תפלוט לפני הסיום.
+  List<(int, int)> scanProgressReports = const [];
   int clearCalls = 0;
   int awaitReadyCalls = 0;
 
@@ -491,9 +547,16 @@ class _FakeIndexingRepository extends IndexingRepository {
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
+    void Function()? onFinalizing,
     bool includePdfBooks = true,
-  }) {
+  }) async {
     indexAllCalls++;
+    final gate = finalizeGate;
+    if (gate != null) {
+      onFinalizing?.call();
+      await gate.future;
+      return result;
+    }
     return _finish(onProgress);
   }
 
@@ -529,6 +592,9 @@ class _FakeIndexingRepository extends IndexingRepository {
     Future<BigInt> Function(TextBook book, String text)? fingerprintOf,
   }) {
     reconcileCalls++;
+    for (final (processed, total) in scanProgressReports) {
+      onScanProgress?.call(processed, total);
+    }
     return _finish(onProgress);
   }
 

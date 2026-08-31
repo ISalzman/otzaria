@@ -227,11 +227,20 @@ class BookVersionTile extends StatelessWidget {
                     notes!,
                     textStyle: theme.textTheme.bodySmall,
                     customStylesBuilder: (element) {
+                      final font = theme.textTheme.bodySmall?.fontFamily;
                       final weight = AppFonts.headingFontWeightOverride(
                         element.localName,
-                        theme.textTheme.bodySmall?.fontFamily,
+                        font,
                       );
-                      return weight == null ? null : {'font-weight': weight};
+                      final size = AppFonts.headingFontSizeOverride(
+                        element.localName,
+                        font,
+                      );
+                      final css = <String, String>{
+                        'font-weight': ?weight,
+                        'font-size': ?size,
+                      };
+                      return css.isEmpty ? null : css;
                     },
                     onTapUrl: _openNoteUrl,
                   ),

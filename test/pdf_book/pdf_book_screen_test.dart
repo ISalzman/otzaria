@@ -96,6 +96,48 @@ void main() {
     });
   });
 
+  group('shouldDropPendingPageTurns', () {
+    test('מחזירה true כשהתור מכיל דפדוף בכיוון ההפוך', () {
+      expect(
+        shouldDropPendingPageTurns(
+          pendingDirections: ['next', 'next'],
+          incomingDirection: 'previous',
+        ),
+        isTrue,
+      );
+    });
+
+    test('מחזירה false כשכל הממתינים באותו כיוון', () {
+      expect(
+        shouldDropPendingPageTurns(
+          pendingDirections: ['next', 'next'],
+          incomingDirection: 'next',
+        ),
+        isFalse,
+      );
+    });
+
+    test('מחזירה false על תור ריק', () {
+      expect(
+        shouldDropPendingPageTurns(
+          pendingDirections: <String>[],
+          incomingDirection: 'previous',
+        ),
+        isFalse,
+      );
+    });
+
+    test('תור מעורב — מספיק ממתין הפוך אחד כדי לרוקן', () {
+      expect(
+        shouldDropPendingPageTurns(
+          pendingDirections: ['previous', 'next'],
+          incomingDirection: 'next',
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('shouldShowSelectPdfCommentatorsEntry', () {
     test('מחזירה true כשטאב המפרשים אינו פעיל', () {
       expect(

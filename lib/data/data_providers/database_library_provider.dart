@@ -599,6 +599,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -867,6 +868,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -940,6 +942,73 @@ Future<List<Map<String, dynamic>>> _runAlternativeStructuresInIsolate({
 }) {
   return Isolate.run(
     () => _loadAlternativeStructuresRowsInIsolate(
+      dbPath: dbPath,
+      bookTitle: bookTitle,
+    ),
+  );
+}
+
+/// סמני חלוקה בגוף הטקסט של ספר, ממופתחים לפי `lineIndex` — עלי מבני
+/// alt-TOC של סמנים: `Simanim` (אותיות פסקה במדרש רבה וחבריו, תווית "א")
+/// ו-`Seifim` (סעיפים בנושאי-כלים על השולחן ערוך, תווית "סעיף ג";
+/// מסונתז בגנרטור של SeforimLibrary וקיים מגרסת ספרייה 24 ואילך).
+Map<int, String> _loadInlineSectionMarkersInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? LIMIT 1',
+      [bookTitle],
+    ).toMapList();
+
+    if (bookResults.isEmpty) {
+      return const {};
+    }
+
+    final bookId = bookResults.first['id'] as int;
+
+    // hasChildren = 0 — רק העלים. רשומות הביניים של המבנה משכפלות
+    // כותרות פרשה/פרק/סימן שכבר גלויות בטקסט (ובקוהלת רבה המבנה
+    // תלת-רמתי: פרשה → פרק → סימן).
+    final markerRows = db.select(
+      '''
+      SELECT l.lineIndex AS lineIndex, t.text AS label
+      FROM alt_toc_structure s
+      JOIN alt_toc_entry e ON e.structureId = s.id
+      JOIN tocText t ON t.id = e.textId
+      JOIN line l ON l.id = e.lineId
+      WHERE s.bookId = ? AND s.key IN ('Simanim', 'Seifim')
+        AND e.hasChildren = 0
+      ''',
+      [bookId],
+    ).toMapList();
+
+    final markers = <int, String>{};
+    for (final row in markerRows) {
+      final lineIndex = row['lineIndex'];
+      final label = row['label'];
+      if (lineIndex is int && label is String && label.isNotEmpty) {
+        markers[lineIndex] = label;
+      }
+    }
+    return markers;
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור טעינת סמני החלוקה ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<Map<int, String>> _runInlineSectionMarkersInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  return Isolate.run(
+    () => _loadInlineSectionMarkersInIsolate(
       dbPath: dbPath,
       bookTitle: bookTitle,
     ),
@@ -3140,6 +3209,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
@@ -3214,6 +3284,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
@@ -3470,6 +3541,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
         '⚠️ Error in getAlternativeStructuresForBook "$bookTitle": $e',
       );
       return [];
+    }
+  }
+
+  /// סמני חלוקה בגוף הטקסט של ספר, ממופתחים לפי `lineIndex` של שורת התוכן:
+  /// אותיות פסקה במדרש רבה וחבריו (מבנה `Simanim`), ו"סעיף X" בנושאי-כלים
+  /// על השולחן ערוך (מבנה `Seifim`, מגרסת ספרייה 24). לכל ספר אחר מוחזרת
+  /// מפה ריקה. משמש להצגת הסמן בגוף הטקסט (issue #773).
+  Future<Map<int, String>> getInlineSectionMarkersByLineIndex(
+    String bookTitle,
+  ) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return const {};
+    }
+
+    final dbPath = _sqliteProvider.dbPath;
+
+    try {
+      return await _runInlineSectionMarkersInIsolate(
+        dbPath: dbPath,
+        bookTitle: bookTitle,
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ Error in getInlineSectionMarkersByLineIndex "$bookTitle": $e',
+      );
+      return const {};
     }
   }
 

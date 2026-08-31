@@ -679,6 +679,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       _removeNikud,
       _removeTaamim,
       holyNames,
+      _holyNameStyle.storageKey,
       startLine,
       endLine,
       _includeCommentaries,
@@ -926,6 +927,10 @@ class _PrintingScreenState extends State<PrintingScreen> {
     );
   }
 
+  HolyNameStyle get _holyNameStyle => HolyNameStyle.fromStorage(
+    Settings.getValue<String>('key-holy-name-style'),
+  );
+
   /// מסיר ניקוד/טעמים ומחליף שמות קודש לפי בחירת המשתמש.
   String _applyTextTransforms(String input, bool shouldReplaceHolyNames) {
     var text = input;
@@ -941,7 +946,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       text = removeTeamim(text);
     }
     if (shouldReplaceHolyNames) {
-      text = replaceHolyNames(text);
+      text = replaceHolyNames(text, style: _holyNameStyle);
     }
     return text;
   }
@@ -1355,7 +1360,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                 ? note.contentPlain
                 : _normalizeLegacyNoteText(note.content);
             if (shouldReplaceHolyNames) {
-              noteText = replaceHolyNames(noteText);
+              noteText = replaceHolyNames(noteText, style: _holyNameStyle);
             }
             blocks.add({'kind': 'note', 'text': noteText});
           }

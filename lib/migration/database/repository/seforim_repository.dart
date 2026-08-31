@@ -4,12 +4,14 @@ import 'dart:typed_data';
 import 'package:logging/logging.dart';
 import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3;
 
+import '../../../utils/text/ref_key.dart';
 import '../../../utils/text/text_manipulation.dart';
 import '../../models/author.dart';
 import '../../models/book.dart';
 import '../../models/category.dart';
 import '../../models/docx_text_cache_entry.dart';
 import '../../models/line.dart';
+import '../daos/line_ref_dao.dart';
 import '../../models/link.dart';
 import '../../models/pdf_anchor_cache_entry.dart';
 import '../../models/pdf_outline_cache_entry.dart';
@@ -1201,10 +1203,116 @@ class SeforimRepository {
     return await _database.lineDao.selectContentBytesByBookId(bookId);
   }
 
-  /// זוגות (lineIndex, heRef) של כל שורות הספר בעלות heRef — לרזולוציית
-  /// הפניה לרמת שורה (פסוק/סעיף) בלי לטעון content.
-  Future<List<({int lineIndex, String heRef})>> getLineRefs(int bookId) async {
-    return await _database.lineDao.selectRefsByBookId(bookId);
+  /// האם המסד מכיל את אינדקס ההפניות `line_ref`. כשאין — הקוראים נופלים
+  /// חזרה למסלול ה-TOC.
+  Future<bool> hasLineRefIndex() => _database.lineRefDao.isAvailable();
+
+  /// השורה שמפתחה [refKey] בכל אחד מ-[bookIds], בשאילתה מאוגדת אחת.
+  ///
+  /// כל מועמד מאומת מול ה-heRef שלו — טוקני המפתח חייבים להיות סיומת של
+  /// טוקני ה-heRef — כך שהתנגשות hash אינה יכולה לנווט למקום שגוי.
+  Future<Map<int, LineRefCandidate>> resolveRefKeyInBooks(
+    List<int> bookIds,
+    String refKey,
+  ) async {
+    final candidates = await _database.lineRefDao.candidatesForBooks(
+      bookIds,
+      refKeyHash(refKey),
+    );
+    final keyTokens = refKeyTokens(refKey);
+    final resolved = <int, LineRefCandidate>{};
+    for (final candidate in candidates) {
+      if (resolved.containsKey(candidate.bookId)) continue;
+      final heRef = candidate.heRef;
+      if (heRef == null || !_endsWithTokens(refKeyTokens(heRef), keyTokens)) {
+        continue;
+      }
+      resolved[candidate.bookId] = candidate;
+    }
+    return resolved;
+  }
+
+  /// בונה מחדש את שורות [bookId] באינדקס ההפניות — נקרא בסיום ייצור ספר
+  /// אישי, כדי שאותה רזולוציה לרמת שורה תעבוד גם ב-user_books.db.
+  Future<void> rebuildLineRefIndex(int bookId) async {
+    final bookTitle =
+        (await _database.bookDao.getBookById(bookId))?.title ?? '';
+    final refs = await _database.lineDao.selectRefsByBookId(bookId);
+    final db = await _database.database;
+    final entries = <(int, int)>[];
+    for (final ref in refs) {
+      final key = buildLineRefKey(ref.heRef, [bookTitle]);
+      if (key == null) continue;
+      entries.add((refKeyHash(key), ref.lineIndex));
+    }
+    await runInTransaction(() {
+      db.execute('DELETE FROM line_ref WHERE bookId = ?', [bookId]);
+      for (final (hash, lineIndex) in entries) {
+        db.execute(
+          'INSERT OR IGNORE INTO line_ref (bookId, refKeyHash, lineIndex) '
+          'VALUES (?, ?, ?)',
+          [bookId, hash, lineIndex],
+        );
+      }
+    });
+  }
+
+  /// נתיב הכותרות של שורה [lineIndex] בספר [bookId] — "פרק לב", "סימן ד, סעיף ב" —
+  /// זהה לפלט של `refFromTocList`, אבל בשאילתה אחת במקום טעינת כל עץ ה-TOC.
+  ///
+  /// נשען על `line_toc` (שורה → הכותרת שמכילה אותה) ומטפס ב-`parentId`; רמה 0
+  /// אינה חלק מהכתובת, כמו במסלול העץ. `null` כשאין מיפוי לשורה.
+  Future<String?> getLineBreadcrumb(int bookId, int lineIndex) async {
+    final db = await _database.database;
+    final rows = db.select(
+      'WITH RECURSIVE chain(id, parentId, textId, level) AS ('
+      '  SELECT te.id, te.parentId, te.textId, te.level '
+      '  FROM line l '
+      '  JOIN line_toc lt ON lt.lineId = l.id '
+      '  JOIN tocEntry te ON te.id = lt.tocEntryId '
+      '  WHERE l.bookId = ? AND l.lineIndex = ? '
+      '  UNION ALL '
+      '  SELECT te.id, te.parentId, te.textId, te.level '
+      '  FROM tocEntry te JOIN chain c ON te.id = c.parentId'
+      ') '
+      'SELECT t.text FROM chain c JOIN tocText t ON t.id = c.textId '
+      'WHERE c.level > 0 ORDER BY c.level',
+      [bookId, lineIndex],
+    );
+    final texts = rows
+        .map((row) => (row.values.first as String?)?.trim() ?? '')
+        .where((text) => text.isNotEmpty);
+    final breadcrumb = texts.join(', ');
+    return breadcrumb.isEmpty ? null : breadcrumb;
+  }
+
+  /// בונה את האינדקס לספרים שיש להם שורות עם heRef אך אין להם שורות
+  /// באינדקס — ספרים אישיים שנוצרו לפני שהאינדקס נוסף.
+  Future<void> backfillMissingLineRefIndexes() async {
+    final db = await _database.database;
+    final rows = db.select(
+      "SELECT DISTINCT l.bookId FROM line l "
+      "WHERE l.heRef IS NOT NULL AND l.heRef <> '' "
+      "AND NOT EXISTS (SELECT 1 FROM line_ref lr WHERE lr.bookId = l.bookId)",
+    );
+    for (final row in rows) {
+      await rebuildLineRefIndex(row['bookId'] as int);
+    }
+  }
+
+  /// גרסת ספר יחיד של [resolveRefKeyInBooks].
+  Future<LineRefCandidate?> resolveRefKeyInBook(
+    int bookId,
+    String refKey,
+  ) async => (await resolveRefKeyInBooks([bookId], refKey))[bookId];
+
+  static bool _endsWithTokens(List<String> tokens, List<String> suffix) {
+    if (suffix.isEmpty || suffix.length > tokens.length) return false;
+    final offset = tokens.length - suffix.length;
+    for (var i = 0; i < suffix.length; i++) {
+      if (tokens[offset + i] != suffix[i]) return false;
+    }
+    return true;
   }
 
   /// Gets only IDs and indices for all lines in a book.
@@ -2882,13 +2990,18 @@ extension BookAcronymRepository on SeforimRepository {
     required int startLineIndex,
     required int level,
     bool isAltToc = false,
+    bool isSourceLine = false,
   }) async {
     // גבול עליון "אינסופי" לטווח — אף ספר לא מתקרב ל-2 מיליון שורות.
     const maxLineIndex = 0x7fffffff;
     final int startIdx;
     final int endIdx;
 
-    if (sourceLineId > 0) {
+    if (isSourceLine) {
+      // שורת מקור מדויקת (פסוק/הלכה): רק המפרשים עליה, ולא עד הכותרת הבאה.
+      startIdx = startLineIndex;
+      endIdx = startLineIndex + 1;
+    } else if (sourceLineId > 0) {
       // קטע ספציפי: מהכותרת ועד הכותרת הבאה ברמה <= level.
       final cache = isAltToc
           ? await _buildAltTocCacheForBook(bookId, bookTitle)

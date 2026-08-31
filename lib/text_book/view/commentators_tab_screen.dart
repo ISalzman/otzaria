@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/models/link_types.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/toc_unit_label.dart';
@@ -1334,6 +1336,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
           typeChipLabelBuilder: LinkTypes.hebrewLabel,
           commentatorsByType: commentatorsByType,
           onTypeChipsChanged: (types) => _typeSelection.value = types,
+          heCategories: bookCategoriesSource(state.book),
+          onCategoryDefaultsSaved: () =>
+              TextBookPerBookSettings.clearActiveCommentators(state.book),
         );
       },
     );

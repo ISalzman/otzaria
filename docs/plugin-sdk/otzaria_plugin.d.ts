@@ -1561,6 +1561,7 @@ export type OtzariaMethod =
   | 'library.getRawLinks'
   | 'library.getLinkTargetsSummary'
   | 'library.getLinkContent'
+  | 'library.refreshUserBooks'
   | 'library.getTree'
   | 'library.resolveCategoryPaths'
   | 'search.fullText'
@@ -1731,6 +1732,16 @@ export interface OtzariaGlobal {
     callback: (detail: OtzariaEventMap[K]) => void
   ): void;
   off(event: string, callback: (detail: unknown) => void): void;
+
+  /**
+   * Turns bare `otzaria://` URLs inside `root` (default: `document.body`) into
+   * clickable anchors. Returns the number of text nodes replaced.
+   *
+   * Skips `<a>`, `<code>`, `<pre>`, `<textarea>`, `<input>`, `<script>`,
+   * contenteditable subtrees and anything under `[data-otzaria-no-linkify]`.
+   * Set `contributes.autoLinkify` in the manifest to run it automatically.
+   */
+  linkify(root?: Element | Document): number;
 }
 
 // ---------------------------------------------------------------------------

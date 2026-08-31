@@ -176,6 +176,24 @@ class FindRefDbIsolate {
     return (res as List).cast<int>();
   }
 
+  /// פותר מפתח הפניה קנוני מול אינדקס `line_ref` עבור כל הספרים המועמדים
+  /// בשאילתה מאוגדת אחת. מפתח התוצאה הוא ה-bookId.
+  Future<Map<int, ({int lineIndex, int lineId, String? heRef})>>
+  resolveLineRefs(List<int> bookIds, String refKey) async {
+    final res = await _request('lineRefs', {
+      'bookIds': bookIds,
+      'refKey': refKey,
+    });
+    return {
+      for (final row in _castRows(res))
+        row['bookId'] as int: (
+          lineIndex: row['lineIndex'] as int,
+          lineId: row['lineId'] as int,
+          heRef: row['heRef'] as String?,
+        ),
+    };
+  }
+
   Future<List<Map<String, dynamic>>> getCommentatorRows({
     required int bookId,
     required String bookTitle,
@@ -183,6 +201,7 @@ class FindRefDbIsolate {
     required int startLineIndex,
     required int level,
     required bool isAltToc,
+    required bool isSourceLine,
   }) async {
     final res = await _request('commentators', {
       'bookId': bookId,
@@ -191,6 +210,7 @@ class FindRefDbIsolate {
       'startLineIndex': startLineIndex,
       'level': level,
       'isAltToc': isAltToc,
+      'isSourceLine': isSourceLine,
     });
     return _castRows(res);
   }
@@ -421,6 +441,22 @@ void _workerMain(_Bootstrap bootstrap) {
         final repo = await ensureRepo();
         if (repo == null) return null;
         return repo.getAltStructureBookIds();
+      case 'lineRefs':
+        final repo = await ensureRepo();
+        if (repo == null) return const <Map<String, dynamic>>[];
+        final resolved = await repo.resolveRefKeyInBooks(
+          (args['bookIds'] as List).cast<int>(),
+          args['refKey'] as String,
+        );
+        return [
+          for (final entry in resolved.entries)
+            {
+              'bookId': entry.key,
+              'lineIndex': entry.value.lineIndex,
+              'lineId': entry.value.lineId,
+              'heRef': entry.value.heRef,
+            },
+        ];
       case 'commentators':
         final repo = await ensureRepo();
         if (repo == null) return const <Map<String, dynamic>>[];
@@ -431,6 +467,7 @@ void _workerMain(_Bootstrap bootstrap) {
           startLineIndex: args['startLineIndex'] as int,
           level: args['level'] as int,
           isAltToc: args['isAltToc'] as bool,
+          isSourceLine: args['isSourceLine'] as bool? ?? false,
         );
       case 'era':
         final repo = await ensureRepo();

@@ -61,6 +61,7 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
@@ -123,6 +124,7 @@ class _WordExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
   final String? fontFamily;
   final double fontSize;
 
@@ -132,6 +134,7 @@ class _WordExportRequest {
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
     required this.fontFamily,
     required this.fontSize,
   });
@@ -142,12 +145,14 @@ class _TextExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
 
   const _TextExportRequest({
     required this.rawContent,
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
   });
 }
 
@@ -162,6 +167,7 @@ Uint8List _createTextBookWordExport(_WordExportRequest request) {
             removeNikud: request.removeNikud,
             removeTaamim: request.removeTaamim,
             shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+            holyNameStyle: request.holyNameStyle,
             stripHtml: false,
           ),
         ),
@@ -192,6 +198,7 @@ String _createTextBookTextExport(_TextExportRequest request) {
           removeNikud: request.removeNikud,
           removeTaamim: request.removeTaamim,
           shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+          holyNameStyle: request.holyNameStyle,
           stripHtml: true,
         ),
       )
@@ -683,6 +690,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
             fontFamily: settingsState.fontFamily,
             fontSize: state.fontSize,
           ),
@@ -696,6 +704,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
           ),
         );
         bytes = Uint8List.fromList(utf8.encode(text));
@@ -3293,34 +3302,42 @@ bool _handleGlobalKeyEvent(
     }
   }
 
+  // גודל הגופן — קיצורים הניתנים להתאמה אישית (ברירת מחדל Ctrl+= / Ctrl+- / Ctrl+0).
+  final zoomInShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomInKey,
+  );
+  if (zoomInShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomInShortcut)) {
+    final newSize = min(50.0, state.fontSize + 3);
+    context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+    savePerBookDisplaySettings(context, state, fontSize: newSize);
+    return true;
+  }
+
+  final zoomOutShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomOutKey,
+  );
+  if (zoomOutShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomOutShortcut)) {
+    final newSize = max(15.0, state.fontSize - 3);
+    context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+    savePerBookDisplaySettings(context, state, fontSize: newSize);
+    return true;
+  }
+
+  final zoomResetShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomResetKey,
+  );
+  if (zoomResetShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomResetShortcut)) {
+    context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
+    savePerBookDisplaySettings(context, state, fontSize: 25.0);
+    return true;
+  }
+
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
   // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
   final isCtrlOrCmd = ShortcutHelper.isPlainCtrlOrCmdPressed;
-
-  if (event is KeyDownEvent && isCtrlOrCmd) {
-    switch (event.logicalKey) {
-      // הגדל את גודל הטקסט (Ctrl++ או Ctrl+=)
-      case LogicalKeyboardKey.equal:
-      case LogicalKeyboardKey.add:
-        final newSize = min(50.0, state.fontSize + 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
-        return true;
-
-      // הקטן את גודל הטקסט (Ctrl+-)
-      case LogicalKeyboardKey.minus:
-        final newSize = max(15.0, state.fontSize - 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
-        return true;
-
-      // איפוס גודל טקסט (Ctrl+0)
-      case LogicalKeyboardKey.digit0:
-        context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
-        savePerBookDisplaySettings(context, state, fontSize: 25.0);
-        return true;
-    }
-  }
 
   // ניווט עם Ctrl+Home ו-Ctrl+End
   if (event is KeyDownEvent && isCtrlOrCmd) {
@@ -3478,6 +3495,7 @@ Future<void> _dispatchContextMenuShortcut({
     removePunctuation: state.removePunctuation,
     removeTeamim: !settingsState.showTeamim,
     replaceHolyNames: settingsState.replaceHolyNames,
+    holyNameStyle: settingsState.holyNameStyle,
     searchText: state.searchText,
     searchOptions: state.searchOptions,
     alternativeWords: state.alternativeWords,

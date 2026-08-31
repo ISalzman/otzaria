@@ -3093,6 +3093,7 @@ void main() {
             filePath: 'c:/books/personal.txt',
             fileType: 'txt',
             orderIndex: 1.0,
+            folderTitles: const <String>[],
           ),
         ],
         getCategoryPathSync: (bookId) {
@@ -3728,6 +3729,7 @@ void main() {
     filePath: null,
     fileType: 'txt',
     orderIndex: 1.0,
+    folderTitles: const <String>[],
   );
 
   FindRefRepository buildPersonalRepo({
@@ -3741,6 +3743,96 @@ void main() {
     getAllUserBooks: () async => [personalBook],
     getUserBookTocEntries: (_, _, {queryTokens}) async => userToc,
   );
+
+  group('FindRef — התאמת שם התיקייה בספרים אישיים (issue #956)', () {
+    // 'חלק א' בתוך התיקייה 'שות פלוני' — שם הספר יושב על התיקייה.
+    final folderBook = (
+      id: 7,
+      title: 'חלק א',
+      filePath: null,
+      fileType: 'txt',
+      orderIndex: 1.0,
+      folderTitles: const ['ספרים אישיים', 'שות פלוני'],
+    );
+
+    FindRefRepository buildRepo({
+      List<Map<String, dynamic>> userToc = const [],
+    }) => FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (_, {limit = 50}) => const [],
+      getTocEntriesForReference: (_, _, {queryTokens}) async => const [],
+      getAllUserBooks: () async => [folderBook],
+      getUserBookTocEntries: (_, _, {queryTokens}) async => userToc,
+    );
+
+    test('שאילתת שם התיקייה מוצאת את הקובץ שבתוכה', () async {
+      final results = await buildRepo().findRefs(
+        'שות פלוני',
+        includePersonalBooks: true,
+      );
+      expect(results.map((r) => r.title), contains('חלק א'));
+    });
+
+    test('bookPath של תוצאה מציג את נתיב התיקיות בפועל', () async {
+      final results = await buildRepo().findRefs(
+        'שות פלוני',
+        includePersonalBooks: true,
+      );
+      final hit = results.firstWhere((r) => r.title == 'חלק א');
+      expect(hit.bookPath, 'ספרים אישיים, שות פלוני');
+    });
+
+    test('תיקייה + מיקום ממשיכים ל-TOC עם הטוקנים הנותרים', () async {
+      List<String>? received;
+      final repo = FindRefRepository(
+        dataRepository: MockDataRepository(),
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {limit = 50}) => const [],
+        getTocEntriesForReference: (_, _, {queryTokens}) async => const [],
+        getAllUserBooks: () async => [folderBook],
+        getUserBookTocEntries: (_, _, {queryTokens}) async {
+          received = queryTokens;
+          return [
+            {'reference': 'חלק א, דף ד', 'segment': 3, 'level': 2},
+          ];
+        },
+      );
+
+      final results = await repo.findRefs(
+        'שות פלוני חלק א ד',
+        includePersonalBooks: true,
+      );
+      expect(received, equals(['ד']));
+      expect(results.map((r) => r.reference), contains('חלק א, דף ד'));
+    });
+
+    test('מילה אחת מהתיקייה לבדה אינה גוררת את כל תוכן התיקייה', () async {
+      final results = await buildRepo().findRefs(
+        'שות',
+        includePersonalBooks: true,
+      );
+      expect(results.where((r) => r.title == 'חלק א'), isEmpty);
+    });
+
+    test('כתיב חלקי של שם התיקייה עדיין מתאים', () async {
+      final results = await buildRepo().findRefs(
+        'שות פלו',
+        includePersonalBooks: true,
+      );
+      expect(results.map((r) => r.title), contains('חלק א'));
+    });
+
+    test('התאמת כותרת ישירה אינה נפגעת מהתיקייה', () async {
+      final results = await buildRepo().findRefs(
+        'חלק א',
+        includePersonalBooks: true,
+      );
+      expect(results.map((r) => r.title), contains('חלק א'));
+    });
+  });
 
   group('FindRef — ספרים אישיים (includePersonalBooks)', () {
     test('כשהסוויצ כבוי — ספרים אישיים לא מוחזרים', () async {
@@ -3823,6 +3915,7 @@ void main() {
             filePath: null,
             fileType: 'txt',
             orderIndex: 1.0,
+            folderTitles: const <String>[],
           ),
         ],
         getUserBookTocEntries: (_, _, {queryTokens}) async => const [],

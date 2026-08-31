@@ -1,5 +1,39 @@
 part of 'custom_folders_bloc.dart';
 
+/// תוצאת סריקה שהתבקשה עם [RescanCustomFolders.requestId], לדיווח חזרה לקורא
+/// שיזם אותה. הודעות ה-UI (`message`/`error`) הן טקסט לתצוגה; זה המבנה שקורא
+/// תוכנתי — `library.refreshUserBooks` של תוסף — מקבל.
+class CustomFoldersScanOutcome extends Equatable {
+  const CustomFoldersScanOutcome({
+    required this.requestId,
+    this.addedBooks = 0,
+    this.updatedBooks = 0,
+    this.errors = const [],
+    this.failureMessage,
+  });
+
+  final int requestId;
+  final int addedBooks;
+  final int updatedBooks;
+
+  /// כשלים חלקיים — קבצים בודדים שלא נסרקו. הסריקה עצמה הצליחה.
+  final List<String> errors;
+
+  /// כשהסריקה כולה נכשלה. `null` = הצליחה.
+  final String? failureMessage;
+
+  bool get isSuccess => failureMessage == null;
+
+  @override
+  List<Object?> get props => [
+    requestId,
+    addedBooks,
+    updatedBooks,
+    errors,
+    failureMessage,
+  ];
+}
+
 class CustomFoldersState extends Equatable {
   const CustomFoldersState({
     this.folders = const [],
@@ -7,10 +41,15 @@ class CustomFoldersState extends Equatable {
     this.activePath,
     this.message,
     this.error,
+    this.completedScan,
   });
 
   final List<CustomFolder> folders;
   final bool isSyncing;
+
+  /// תוצאת הסריקה האחרונה שהתבקשה עם `requestId`. מתאפסת בתחילת כל סריקה
+  /// חדשה, כדי שתוצאה ישנה לא תיקלט כתשובה לבקשה אחרת.
+  final CustomFoldersScanOutcome? completedScan;
 
   /// נתיב התיקייה היחידה שמתבצעת עליה כעת פעולה (הוספה / החלפת מצב אחסון).
   /// כשהוא null — הפעולה גלובלית (כגון סריקה מחדש של כל התיקיות) ומוצגת על
@@ -26,9 +65,13 @@ class CustomFoldersState extends Equatable {
     Object? activePath = _sentinel,
     Object? message = _sentinel,
     Object? error = _sentinel,
+    Object? completedScan = _sentinel,
   }) {
     final newSyncing = isSyncing ?? this.isSyncing;
     return CustomFoldersState(
+      completedScan: identical(completedScan, _sentinel)
+          ? this.completedScan
+          : completedScan as CustomFoldersScanOutcome?,
       folders: folders ?? this.folders,
       isSyncing: newSyncing,
       // כשהסנכרון מסתיים אין תיקייה פעילה — מאפסים כדי שהספינר ייעלם מכולן.
@@ -45,7 +88,14 @@ class CustomFoldersState extends Equatable {
   }
 
   @override
-  List<Object?> get props => [folders, isSyncing, activePath, message, error];
+  List<Object?> get props => [
+    folders,
+    isSyncing,
+    activePath,
+    message,
+    error,
+    completedScan,
+  ];
 }
 
 const Object _sentinel = Object();

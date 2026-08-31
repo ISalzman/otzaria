@@ -78,29 +78,41 @@ void main() {
   });
 
   group('updateCheckFailureMessage', () {
-    // בלי אינטרנט אין תקלה לדווח עליה — הודעה כזו בפתיחת התוכנה היא רעש
-    // שהמשתמש אינו יכול לעשות איתו דבר.
-    test('בלי אינטרנט אין הודעה כלל — גם לכשל רשת וגם לכשל אחר', () {
+    // שרת עדכונים לא נגיש (אין רשת, או רשת מסוננת שחוסמת אותו) אינו תקלה
+    // לדווח עליה — הודעה כזו בפתיחת התוכנה היא רעש שאין לו מענה (issue #1027).
+    test('שרת לא נגיש — אין הודעה כלל, גם לכשל רשת וגם לכשל אחר', () {
       expect(
-        updateCheckFailureMessage(isNetworkError: true, hasInternet: false),
+        updateCheckFailureMessage(
+          isNetworkError: true,
+          isSourceReachable: false,
+        ),
         isNull,
       );
       expect(
-        updateCheckFailureMessage(isNetworkError: false, hasInternet: false),
+        updateCheckFailureMessage(
+          isNetworkError: false,
+          isSourceReachable: false,
+        ),
         isNull,
       );
     });
 
-    test('עם אינטרנט — כשל רשת מקבל את הודעת הרשת', () {
+    test('שרת נגיש — כשל רשת מקבל את הודעת הרשת', () {
       expect(
-        updateCheckFailureMessage(isNetworkError: true, hasInternet: true),
+        updateCheckFailureMessage(
+          isNetworkError: true,
+          isSourceReachable: true,
+        ),
         LibraryMessages.updateCheckNetworkError,
       );
     });
 
-    test('עם אינטרנט — כשל שאינו רשת מקבל את ההודעה הכללית', () {
+    test('שרת נגיש — כשל שאינו רשת מקבל את ההודעה הכללית', () {
       expect(
-        updateCheckFailureMessage(isNetworkError: false, hasInternet: true),
+        updateCheckFailureMessage(
+          isNetworkError: false,
+          isSourceReachable: true,
+        ),
         LibraryMessages.updateCheckError,
       );
     });

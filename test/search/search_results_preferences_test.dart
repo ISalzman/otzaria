@@ -264,6 +264,37 @@ Future<void> main() async {
     });
   });
 
+  group('הסתרת עץ התוצאות נשמרת גלובלית', () {
+    const treeKey = 'key-search-results-tree-open';
+
+    test('בלי העדפה שמורה העץ פתוח', () {
+      expect(SearchDefaults.initialResultsTreeOpenForNewSearch(), isTrue);
+    });
+
+    test('הסתרה נשמרת ונטענת', () {
+      SearchDefaults.saveResultsTreeOpenDefault(false);
+
+      expect(Settings.getValue<bool>(treeKey), isFalse);
+      expect(SearchDefaults.initialResultsTreeOpenForNewSearch(), isFalse);
+    });
+
+    test('חזרה להצגה נשמרת אף היא', () {
+      SearchDefaults.saveResultsTreeOpenDefault(false);
+      SearchDefaults.saveResultsTreeOpenDefault(true);
+
+      expect(SearchDefaults.initialResultsTreeOpenForNewSearch(), isTrue);
+    });
+
+    test('טאב חדש נפתח לפי ההעדפה השמורה', () {
+      SearchDefaults.saveResultsTreeOpenDefault(false);
+
+      final tab = SearchingTab('חיפוש', null);
+      addTearDown(tab.dispose);
+
+      expect(tab.isLeftPaneOpen.value, isFalse);
+    });
+  });
+
   group('טאב חיפוש חדש נפתח עם ההעדפה', () {
     test('טאב בלי configuration מקבל את המיון והאיחוד השמורים', () {
       SearchDefaults.saveSortOrderDefault(ResultsOrder.relevance);

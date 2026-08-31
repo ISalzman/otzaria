@@ -248,6 +248,7 @@ class InlineBookNotePreviewContent extends StatelessWidget {
               removePunctuation: removePunctuation,
               removeTeamim: !settings.showTeamim,
               replaceHolyNames: settings.replaceHolyNames,
+              holyNameStyle: settings.holyNameStyle,
               fontSize: settings.commentatorsFontSize,
               fontFamily: settings.commentatorsFontFamily,
               fontWeight: settings.commentatorsFontBold

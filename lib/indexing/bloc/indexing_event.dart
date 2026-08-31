@@ -101,6 +101,16 @@ class ActualIndexingStarted extends IndexingEvent {
   List<Object?> get props => [workId];
 }
 
+/// כל הספרים אונדקסו; המנוע מאחד כעת את קבצי האינדקס.
+class IndexingFinalizing extends IndexingEvent {
+  final int workId;
+
+  const IndexingFinalizing(this.workId);
+
+  @override
+  List<Object?> get props => [workId];
+}
+
 class UpdateIndexingProgress extends IndexingEvent {
   final int workId;
   final int processed;

@@ -23,12 +23,14 @@ typedef SelectionWindow = ({int baseIndex, List<String> lines});
 
 /// השורות הנראות + שוליים: הבחירה נמשכת גם מעבר למסך (גלילה תוך כדי סימון),
 /// ובלעדיהם ההתאמה המדויקת נכשלת וההעתקה יוצאת שטוחה.
+///
+/// מכסת התווים ([selectionLength] לכל כיוון) היא החסם היחיד — היא מבטיחה
+/// כיסוי של כל הבחירה, וחסם נוסף לפי מספר שורות היה חותך בחירות ארוכות.
 SelectionWindow buildSelectionWindow({
   required List<int> visibleIndices,
   required int totalLines,
   required int selectionLength,
   required String Function(int index) renderLine,
-  int maxPadding = 100,
 }) {
   if (visibleIndices.isEmpty || totalLines <= 0) {
     return (baseIndex: 0, lines: const <String>[]);
@@ -38,11 +40,7 @@ SelectionWindow buildSelectionWindow({
 
   final leading = <String>[];
   var budget = selectionLength;
-  for (
-    var i = first - 1;
-    i >= 0 && budget > 0 && leading.length < maxPadding;
-    i--
-  ) {
+  for (var i = first - 1; i >= 0 && budget > 0; i--) {
     final line = renderLine(i);
     leading.add(line);
     budget -= line.length;
@@ -54,16 +52,10 @@ SelectionWindow buildSelectionWindow({
   }
 
   budget = selectionLength;
-  var trailing = 0;
-  for (
-    var i = last + 1;
-    i < totalLines && budget > 0 && trailing < maxPadding;
-    i++
-  ) {
+  for (var i = last + 1; i < totalLines && budget > 0; i++) {
     final line = renderLine(i);
     lines.add(line);
     budget -= line.length;
-    trailing++;
   }
 
   return (baseIndex: first - leading.length, lines: lines);

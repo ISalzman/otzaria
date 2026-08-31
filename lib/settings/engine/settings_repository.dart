@@ -27,6 +27,7 @@ class SettingsRepository {
   static const String keyShowExternalBooks = 'key-show-external-books';
   static const String keyShowTeamim = 'key-show-teamim';
   static const String keyReplaceHolyNames = 'key-replace-holy-names';
+  static const String keyHolyNameStyle = 'key-holy-name-style';
   static const String keyAutoUpdateIndex = 'key-auto-index-update';
   static const String keyDefaultNikud = 'key-default-nikud';
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
@@ -182,6 +183,7 @@ class SettingsRepository {
     keyShowExternalBooks,
     keyShowTeamim,
     keyReplaceHolyNames,
+    keyHolyNameStyle,
     keyAutoUpdateIndex,
     keyDefaultNikud,
     keyRemoveNikudFromTanach,
@@ -329,6 +331,10 @@ class SettingsRepository {
       'replaceHolyNames': _settings.getValue<bool>(
         keyReplaceHolyNames,
         defaultValue: true,
+      ),
+      'holyNameStyle': _settings.getValue<String>(
+        keyHolyNameStyle,
+        defaultValue: 'kuf',
       ),
       'autoUpdateIndex': _settings.getValue<bool>(
         keyAutoUpdateIndex,
@@ -630,6 +636,10 @@ class SettingsRepository {
 
   Future<void> updateReplaceHolyNames(bool value) async {
     await _settings.setValue(keyReplaceHolyNames, value);
+  }
+
+  Future<void> updateHolyNameStyle(String value) async {
+    await _settings.setValue(keyHolyNameStyle, value);
   }
 
   Future<void> updateAutoUpdateIndex(bool value) async {

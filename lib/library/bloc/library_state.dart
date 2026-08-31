@@ -8,6 +8,9 @@ class LibraryState extends Equatable {
   final String? error;
   final Category? currentCategory;
   final List<Book>? searchResults;
+
+  /// קטגוריות שכותרתן תואמת לשאילתה — קבוצת "תיקיות" אחרי הספרים בתוצאות.
+  final List<Category>? searchCategoryResults;
   final String? searchQuery;
   final List<String>? selectedTopics;
   final Book? previewBook;
@@ -34,6 +37,7 @@ class LibraryState extends Equatable {
     this.error,
     this.currentCategory,
     this.searchResults,
+    this.searchCategoryResults,
     this.searchQuery,
     this.selectedTopics,
     this.previewBook,
@@ -232,6 +236,7 @@ class LibraryState extends Equatable {
     String? error,
     Category? currentCategory,
     List<Book>? searchResults,
+    List<Category>? searchCategoryResults,
     String? searchQuery,
     List<String>? selectedTopics,
     Book? previewBook,
@@ -248,6 +253,7 @@ class LibraryState extends Equatable {
       error: error ?? this.error,
       currentCategory: currentCategory ?? this.currentCategory,
       searchResults: searchResults,
+      searchCategoryResults: searchCategoryResults,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedTopics: selectedTopics ?? this.selectedTopics,
       previewBook: clearPreviewBook ? null : (previewBook ?? this.previewBook),
@@ -266,6 +272,7 @@ class LibraryState extends Equatable {
     error,
     currentCategory,
     searchResults,
+    searchCategoryResults,
     searchQuery,
     selectedTopics,
     previewBook,

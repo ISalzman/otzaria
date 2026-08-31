@@ -97,6 +97,97 @@ void main() {
     }
   });
 
+  group('portable.marker — התקנה רגילה מנקה מצב נייד קודם (issue #1031)', () {
+    for (final name in _scripts) {
+      test('$name: המסמן נמחק בכל התקנה שאינה ניידת', () {
+        final installDelete = _section(_script(name), 'InstallDelete');
+        final match = RegExp(
+          r'^Type:\s*files;\s*Name:\s*"\{app\}\\portable\.marker";\s*'
+          r'Check:\s*(.+)$',
+          multiLine: true,
+        ).firstMatch(installDelete);
+
+        expect(
+          match,
+          isNotNull,
+          reason:
+              'בלי מחיקה, מסמן ממצב נייד קודם שורד להתקנה רגילה ו-AppPaths '
+              'מפנה את כל הנתונים ל-otzaria_data תחת Program Files',
+        );
+        expect(
+          _squeeze(match!.group(1)!),
+          'not IsPortableInstall',
+          reason: 'תנאי המחיקה חייב להיות ההיפוך המדויק של תנאי הכתיבה',
+        );
+      });
+
+      test('$name: ההשקה מדף הסיום רצה כמשתמש המקורי', () {
+        final run = _section(_script(name), 'Run');
+        final match = RegExp(
+          r'^Filename:\s*"\{app\}\\\{#MyAppExeName\}".*postinstall.*$',
+          multiLine: true,
+        ).firstMatch(run);
+
+        expect(match, isNotNull, reason: 'רשומת ההשקה מדף הסיום נעלמה');
+        expect(
+          match!.group(0),
+          contains('runasoriginaluser'),
+          reason:
+              'השקה מורמת יוצרת את תיקיות הנתונים עם ACL של מנהל — '
+              'WebView2 של התוספים נכשל אז בכתיבה',
+        );
+      });
+    }
+  });
+
+  group('מצב נייד נחסם ליעד מוגן (issue #1031)', () {
+    for (final name in _scripts) {
+      test('$name: הבדיקה חוסמת את "הבא" בעמוד בחירת התיקייה', () {
+        final body = _routine(_script(name), 'function NextButtonClick(');
+        final guardAt = body.indexOf('CurPageID = wpSelectDir');
+
+        expect(
+          guardAt,
+          greaterThan(0),
+          reason: 'החסימה נעלמה מ-NextButtonClick',
+        );
+        expect(
+          guardAt,
+          greaterThan(body.indexOf('WizardSilent')),
+          reason:
+              'בהתקנה שקטה אסור לגעת בכלום — /DIR שהועבר במפורש '
+              'חייב להישמר',
+        );
+
+        final guard = body.substring(guardAt);
+        expect(guard, contains('PortableMode'));
+        expect(guard, contains('IsProtectedInstallDir'));
+        expect(
+          guard,
+          contains('Result := False'),
+          reason: 'בלי זה האשף ממשיך ליעד החסום למרות האזהרה',
+        );
+      });
+
+      test('$name: היעדים המוגנים מכסים את תיקיות המערכת', () {
+        final fn = _routine(_script(name), 'function IsProtectedInstallDir(');
+
+        for (final root in const [
+          '{commonpf}',
+          '{commonpf32}',
+          '{win}',
+          '{commonappdata}',
+        ]) {
+          expect(
+            fn,
+            contains(root),
+            reason: '$root אינו נבדק — התקנה ניידת תוכל לנחות שם',
+          );
+        }
+      });
+    }
+  });
+
   group('GetDataDir — מקור האמת למיקום הנתונים', () {
     for (final name in _scripts) {
       test('$name: מנהל → commonappdata, אחרת userappdata', () {
@@ -487,6 +578,73 @@ void main() {
     }
   });
 
+  group('נתיב הספרייה נקרא מהקובץ שהאפליקציה רושמת (issue #1020)', () {
+    for (final name in _scripts) {
+      test('$name: הקובץ נקרא לפני ה-prefs הנטוש', () {
+        final script = _script(name);
+        final body = _routine(script, 'function GetCustomLibraryPath(');
+
+        final recordCall = body.indexOf('ReadLibraryPathRecord(');
+        final prefsRead = body.indexOf('shared_preferences.json');
+        expect(
+          recordCall,
+          greaterThanOrEqualTo(0),
+          reason:
+              'ההגדרות יושבות ב-Hive; בלי הקובץ הזה ספרייה שהועברה מתוך '
+              'התוכנה שורדת את ההסרה',
+        );
+        expect(
+          recordCall,
+          lessThan(prefsRead),
+          reason: 'ה-prefs הוא מקור נסיגה בלבד — הקובץ הוא מקור האמת',
+        );
+      });
+
+      test('$name: שם הקובץ זהה לשם שהאפליקציה כותבת', () {
+        expect(
+          _script(name),
+          contains(
+            "LibraryPathRecordFileName = '"
+            '${AppPaths.libraryPathRecordFileName}'
+            "'",
+          ),
+          reason: 'שינוי השם ב-Dart מחייב עדכון המתקין',
+        );
+      });
+
+      test('$name: הסרת התקנת מנהל אינה מוחקת נתונים של פרופילים אחרים', () {
+        final script = _script(name);
+        final body = _routine(script, 'procedure DeleteAllUserData(');
+        expect(
+          body,
+          isNot(contains('DeleteUserDataInAllProfiles')),
+          reason: 'אישור מחיקה בהסרה אינו הסכמה למחוק נתונים של משתמשים אחרים',
+        );
+        expect(
+          script,
+          isNot(contains('procedure DeleteUserDataInAllProfiles(')),
+        );
+        expect(script, isNot(contains('function GetUserProfilesRoot(')));
+      });
+    }
+
+    for (final name in _scripts) {
+      test('$name: הסרה בהיקף אחד מנקה את ההיקף הנגדי', () {
+        final body = _routine(
+          _script(name),
+          'procedure CurUninstallStepChanged(',
+        );
+        expect(body, contains('RemoveStaleScopeRegistration(HKCU, False)'));
+        expect(body, contains('RemoveStaleScopeRegistration(HKLM64, True)'));
+        expect(
+          body,
+          contains('if not IsCrossScopeUninstall() then'),
+          reason: 'בלי החסם, שני ה-uninstallers מפעילים זה את זה',
+        );
+      });
+    }
+  });
+
   group('ניקוי התקנה מקבילה בהיקף השני (issue #886)', () {
     for (final name in _scripts) {
       test('$name: התקנת מנהל מנקה את HKCU ואת WOW6432Node אחרי ההתקנה', () {
@@ -498,13 +656,21 @@ void main() {
 
         expect(
           cleanup,
-          contains('if PortableMode or (not IsAdminInstallMode) then'),
-          reason:
-              'התקנת משתמש אינה יכולה למחוק ב-HKLM, והתקנה ניידת לא נוגעת '
-              'ברישום כלל',
+          contains('if PortableMode then'),
+          reason: 'התקנה ניידת לא נוגעת ברישום כלל',
         );
-        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU)'));
-        expect(cleanup, contains('RemoveStaleScopeRegistration(HKLM32)'));
+        expect(cleanup, contains('RemoveStaleScopeRegistration(HKCU, False)'));
+        expect(
+          cleanup,
+          contains('RemoveStaleScopeRegistration(HKLM32, False)'),
+        );
+        expect(
+          cleanup,
+          contains('RemoveStaleScopeRegistration(HKLM64, True)'),
+          reason:
+              'הכיוון ההפוך (issue #1020): התקנת משתמש מעל התקנת מנהל '
+              'השאירה שתי רשומות מקבילות',
+        );
 
         final postInstall = _routine(script, 'procedure CurStepChanged(');
         expect(
@@ -524,10 +690,18 @@ void main() {
 
         expect(
           body,
-          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'"),
+          contains("'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CROSSSCOPE=1'"),
           reason:
               'בלי דגלי השקט ה-uninstaller שואל על מחיקת נתונים; '
-              'ברירת המחדל השקטה שלו משמרת אותם',
+              'ברירת המחדל השקטה שלו משמרת אותם. /CROSSSCOPE עוצר רקורסיה '
+              'הדדית בין שני ה-uninstallers',
+        );
+        expect(
+          body,
+          contains("ShellExec('runas'"),
+          reason:
+              'ה-uninstaller של התקנת מנהל דורש הגבהה — Exec רגיל עליו '
+              'נכשל כשרצים כמשתמש',
         );
         expect(body, contains('ewWaitUntilTerminated'));
         expect(

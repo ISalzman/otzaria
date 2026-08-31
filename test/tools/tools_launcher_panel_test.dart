@@ -122,6 +122,7 @@ Widget _launcherHost({
   required TabsBloc tabsBloc,
   required ValueChanged<ToolCatalogEntry> onToolSelected,
   double width = 520,
+  double height = 600,
 }) => MaterialApp(
   theme: ThemeData(colorSchemeSeed: Colors.blue),
   home: Directionality(
@@ -129,7 +130,7 @@ Widget _launcherHost({
     child: Scaffold(
       body: SizedBox(
         width: width,
-        height: 600,
+        height: height,
         child: MultiBlocProvider(
           providers: [
             BlocProvider<SettingsBloc>.value(value: settingsBloc),
@@ -220,6 +221,58 @@ void main() {
 
     expect(find.text('כלים ותוספים'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('שדה החיפוש בפאנל הכלים מקבל פוקוס גם כשהמסך כבר ממוקד', (
+    tester,
+  ) async {
+    final key = GlobalKey<_ToolsLauncherOverlayHarnessState>();
+    final backgroundFocusNode = FocusNode();
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final pluginSystemBloc = _TestPluginSystemBloc(PluginSystemInitial());
+    final tabsBloc = _TestTabsBloc(TabsState.initial());
+    addTearDown(() async {
+      backgroundFocusNode.dispose();
+      await settingsBloc.close();
+      await pluginSystemBloc.close();
+      await tabsBloc.close();
+    });
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          BlocProvider<PluginSystemBloc>.value(value: pluginSystemBloc),
+          BlocProvider<TabsBloc>.value(value: tabsBloc),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: _ToolsLauncherOverlayHarness(
+              key: key,
+              backgroundFocusNode: backgroundFocusNode,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    backgroundFocusNode.requestFocus();
+    await tester.pump();
+    expect(backgroundFocusNode.hasFocus, isTrue);
+
+    key.currentState!.open();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    final searchField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byType(ToolsLauncherPanel),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(searchField.focusNode!.hasFocus, isTrue);
+    expect(backgroundFocusNode.hasFocus, isFalse);
   });
 
   testWidgets('חצים ו-Enter פותחים את השורה המסומנת משדה החיפוש', (
@@ -928,6 +981,7 @@ void main() {
       SettingsState? settings,
       PluginSystemState? pluginState,
       double width = 520,
+      double height = 600,
     }) async {
       settingsBloc = _RecordingSettingsBloc(
         settings ?? SettingsState.initial(),
@@ -950,6 +1004,7 @@ void main() {
           tabsBloc: tabsBloc,
           onToolSelected: selected.add,
           width: width,
+          height: height,
         ),
       );
       await tester.pump();
@@ -1197,7 +1252,7 @@ void main() {
 
     testWidgets('בסוף הקבוצה "הזז למטה" אינו עושה דבר', (tester) async {
       await pumpPanel(tester);
-      await openMoveSubmenu(tester, 'ראשי תיבות');
+      await openMoveSubmenu(tester, 'ביוגרפיות');
       await tapMenuItem(tester, 'הזז למטה');
 
       expect(
@@ -1455,11 +1510,13 @@ void main() {
 
     testWidgets('גרירה למרחק גדול מגיעה למקום בפעולה אחת', (tester) async {
       await _asDesktop(() async {
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
         await pumpPanel(tester);
         await dragTileTo(
           tester,
           'לוח שנה',
-          'ראשי תיבות',
+          'ביוגרפיות',
           beforeTarget: false,
         );
 
@@ -1473,7 +1530,9 @@ void main() {
 
     testWidgets('גרירת תוסף על תוסף מסדרת את התוספים', (tester) async {
       await _asDesktop(() async {
-        await pumpPanel(tester);
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await pumpPanel(tester, height: 900);
         await dragTileTo(tester, 'תוסף א', 'תוסף ב', beforeTarget: false);
 
         expect(
@@ -1525,7 +1584,9 @@ void main() {
       tester,
     ) async {
       await _asDesktop(() async {
-        await pumpPanel(tester);
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await pumpPanel(tester, height: 900);
         final gesture = await dragTileToEmptySpace(tester, 'תוסף א');
 
         // קו ההוספה מוצג על סוף קבוצת התוספים — חיווי שהשחרור יתקבל.
@@ -1556,7 +1617,9 @@ void main() {
       tester,
     ) async {
       await _asDesktop(() async {
-        await pumpPanel(tester);
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await pumpPanel(tester, height: 900);
         final gesture = await dragTileToEmptySpace(tester, 'לוח שנה');
         await gesture.up();
         await tester.pumpAndSettle();
@@ -1926,7 +1989,10 @@ void main() {
 }
 
 class _ToolsLauncherOverlayHarness extends StatefulWidget {
-  const _ToolsLauncherOverlayHarness({super.key});
+  const _ToolsLauncherOverlayHarness({super.key, this.backgroundFocusNode});
+
+  /// שדה רקע שממוקד לפני פתיחת הפאנל — מדמה מסך קריאה שמחזיק את הפוקוס.
+  final FocusNode? backgroundFocusNode;
 
   @override
   State<_ToolsLauncherOverlayHarness> createState() =>
@@ -1943,7 +2009,11 @@ class _ToolsLauncherOverlayHarnessState
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        const SizedBox.expand(),
+        SizedBox.expand(
+          child: widget.backgroundFocusNode == null
+              ? null
+              : TextField(focusNode: widget.backgroundFocusNode),
+        ),
         ContextOverlayPanel(
           isOpen: _isOpen,
           onClose: () => setState(() => _isOpen = false),

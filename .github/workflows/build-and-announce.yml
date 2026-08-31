@@ -154,6 +154,9 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Prepare Flutter dependencies for Windows release
         shell: pwsh
         run: |
@@ -260,7 +263,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release --verbose
+          flutter build windows --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
 
       - name: Zip Windows build
         shell: pwsh
@@ -594,6 +597,9 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Prepare Flutter dependencies for Windows release
         shell: pwsh
         run: |
@@ -639,7 +645,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release --verbose
+          flutter build windows --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
           if (-not (Test-Path 'build\windows\arm64\runner\Release\otzaria.exe')) {
             throw 'Expected an arm64 build output — the tool built a different architecture'
           }
@@ -957,9 +963,25 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
-      - name: Install flutter_distributor
+      - name: Install flutter_distributor (with retry)
         if: matrix.target == 'deb' || matrix.target == 'rpm'
-        run: dart pub global activate flutter_distributor
+        shell: bash
+        run: |
+          # pub.dev מחזיר לעיתים 401/403 חולף על חבילה ציבורית — retry פותר את זה
+          set -e
+          tries=0
+          until dart pub global activate flutter_distributor; do
+            tries=$((tries+1))
+            if [ $tries -ge 3 ]; then
+              echo "dart pub global activate failed after 3 attempts"
+              exit 1
+            fi
+            echo "pub activate failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
 
       - name: Prepare Flutter dependencies for Linux release
         shell: bash
@@ -1011,7 +1033,7 @@ jobs:
           : > "$GITHUB_WORKSPACE/build_linux.log"
           until [ $tries -ge 3 ]
           do
-            if flutter build linux --verbose 2>&1 | tee -a "$GITHUB_WORKSPACE/build_linux.log"; then
+            if flutter build linux --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }} 2>&1 | tee -a "$GITHUB_WORKSPACE/build_linux.log"; then
               break
             fi
             tries=$((tries+1))
@@ -1618,6 +1640,9 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Build Android APK
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore/otzaria-keystore.jks
@@ -1629,7 +1654,7 @@ jobs:
           # Generate the settings .g.dart files: search index + translation catalog.
           dart run tool/generate_search_index.dart
           dart run tool/generate_settings_l10n.dart
-          flutter build apk --verbose
+          flutter build apk --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
           # ניקוי מיידי של קבצים מיותרים מהבנייה (לא ה-APK הסופי)
           rm -rf build/app/intermediates || true
           rm -rf build/app/.transforms || true
@@ -1753,6 +1778,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Prepare Flutter dependencies for macOS release
         run: |
           flutter pub get
@@ -1769,7 +1797,7 @@ jobs:
           tries=0
           until [ $tries -ge 3 ]
           do
-            if flutter build macos --release --verbose; then
+            if flutter build macos --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}; then
               break
             fi
             tries=$((tries+1))

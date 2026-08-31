@@ -80,10 +80,13 @@ TextBook? findTextBookByExactCategory(
 /// ה-PDF הנלווית, **ללא** מיפוי העמודים הכבד (פתיחת קובץ ה-PDF).
 ///
 /// מחזיר null כשהיעד אינו מסכת בבלי, ההגדרה אינה PDF, או שאין מהדורת PDF.
+/// [forcePdf] גובר על ההגדרה — בחירה נקודתית של פורמט הפתיחה.
 Future<({TextBook textBook, PdfBook pdfBook})?> resolveTalmudBavliPdfBook(
-  TextBook textBook,
-) async {
-  if (textBook.isUserBook || !talmudBavliOpensInPdf()) return null;
+  TextBook textBook, {
+  bool? forcePdf,
+}) async {
+  if (textBook.isUserBook) return null;
+  if (!(forcePdf ?? talmudBavliOpensInPdf())) return null;
   try {
     final library = await DataRepository.instance.library;
     // אימות שספר היעד עצמו מסכת בבלי (ולא ספר אחר בעל שם זהה): לפי הנתיב
@@ -208,19 +211,21 @@ bool isTalmudBavliPdfLibraryDuplicate(Book book, Set<String> textTitles) =>
     isTalmudBavliBook(book);
 
 /// פתיחת ספר ממסך הספרייה בהתאם להגדרת פורמט הבבלי: מסכת טקסט נפתחת
-/// במהדורת ה-PDF כשההגדרה היא PDF. מחזיר true אם הפתיחה טופלה כאן.
+/// במהדורת ה-PDF כשההגדרה היא PDF. [forcePdf] גובר על ההגדרה.
+/// מחזיר true אם הפתיחה טופלה כאן.
 Future<bool> openLibraryBookPerTalmudBavliFormat(
   BuildContext context,
   Book book,
-  int index,
-) async {
+  int index, {
+  bool? forcePdf,
+}) async {
   if (book is! TextBook) return false;
   final coordinator = BookOpenCoordinator(
     tabsBloc: context.read<TabsBloc>(),
     historyBloc: context.read<HistoryBloc>(),
     navigationBloc: context.read<NavigationBloc>(),
   );
-  final target = await resolveTalmudBavliPdfBook(book);
+  final target = await resolveTalmudBavliPdfBook(book, forcePdf: forcePdf);
   if (target == null) return false;
   if (index <= 0) {
     // אין מיקום מפורש — פתיחה רגילה של ה-PDF, כולל שחזור מיקום מההיסטוריה.

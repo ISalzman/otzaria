@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
@@ -2033,6 +2034,35 @@ void main() {
       expect(titles, hasLength(10));
       expect(titles.first, 'ספר 11');
       expect(titles.contains('ספר 0'), isFalse);
+
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+  });
+
+  group('TabsBloc שמירה ביציאה', () {
+    setUp(() async {
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+    });
+
+    test('סגירת התוכנה שומרת מיקום קריאה שהשתנה בתוך הטאב', () async {
+      final repository = _FakeTabsRepository();
+      final bloc = TabsBloc(repository: repository);
+      final pdf = PdfBookTab(
+        book: PdfBook(title: 'שבת', path: p.join('/lib', 'שבת.pdf')),
+        pageNumber: 1,
+      );
+
+      bloc.add(AddTab(pdf));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository._tabsJson.single['pageNumber'], 1);
+
+      // דפדוף בתוך הטאב אינו מפעיל SaveTabs — זה המצב שאיבד את המיקום.
+      pdf.pageNumber = 214;
+
+      await PreCloseRegistry.runAll();
+
+      expect(repository._tabsJson.single['pageNumber'], 214);
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });

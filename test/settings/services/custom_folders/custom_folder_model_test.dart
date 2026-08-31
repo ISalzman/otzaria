@@ -243,7 +243,11 @@ void main() {
       final name = CustomFolderSource.nameForFolder('/books/mine');
 
       expect(name, startsWith(CustomFolderSource.prefix));
-      expect(name, '${CustomFolderSource.prefix}/books/mine');
+      expect(
+        name,
+        '${CustomFolderSource.prefix}'
+        '${CustomFolderSource.normalizePath('/books/mine')}',
+      );
     });
 
     test('normalizePath מקפל רכיבי נתיב מיותרים', () {

@@ -31,6 +31,7 @@ import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dar
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
@@ -1067,6 +1068,11 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
             );
             await settings.save(widget.tab.sourceTab.book);
           },
+          heCategories: bookCategoriesSource(widget.tab.sourceTab.book),
+          onCategoryDefaultsSaved: () =>
+              PdfBookPerBookSettings.clearActiveCommentators(
+                widget.tab.sourceTab.book,
+              ),
         );
       },
     );

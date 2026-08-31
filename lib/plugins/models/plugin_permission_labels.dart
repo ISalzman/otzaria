@@ -220,6 +220,13 @@ const Map<String, PluginPermissionInfo> _permissionLabels = {
     description:
         'צפייה ברשימת המפרשים של ספר ובקישורים בין הספרים, בלי תוכן הספרים',
   ),
+  'library.refresh': PluginPermissionInfo(
+    label: 'רענון הספרים האישיים',
+    icon: FluentIcons.arrow_clockwise_24_regular,
+    description:
+        'סריקה מחדש של התיקיות האישיות שלך ורענון הספרייה, כדי שספרים '
+        'שהתוסף הוסיף יופיעו. התוסף אינו בוחר אילו תיקיות ייסרקו',
+  ),
 
   // ===== חיפוש =====
   'search.fulltext.read': PluginPermissionInfo(

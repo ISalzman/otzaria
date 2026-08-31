@@ -1,4 +1,5 @@
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -15,6 +16,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -43,6 +45,7 @@ import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
@@ -528,6 +531,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
   late final PluginBridgeAdapter _adapter;
   late final PluginRegistryRepository _pluginRegistryRepository;
   late final PluginSystemBloc _pluginSystemBloc;
+  late final FindRefRepository _findRefRepository;
   late String _localHtmlPath;
 
   /// נתיב שרת הקבצים הוא `/f/<pluginId>/<token>` — תוסף רקע מורשה רק בשלו.
@@ -559,10 +563,13 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
     final bookmarkBloc = context.read<BookmarkBloc>();
+    final customFoldersBloc = context.read<CustomFoldersBloc>();
+    final libraryBloc = context.read<LibraryBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
-    final findRefRepository = buildFindRefRepository();
+    _findRefRepository = buildFindRefRepository();
+    final findRefRepository = _findRefRepository;
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -571,6 +578,17 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
       bookmarkBloc: bookmarkBloc,
+      customFoldersBloc: customFoldersBloc,
+      waitForLibraryRefresh: (requestId) async {
+        final state = await libraryBloc.stream.firstWhere(
+          (state) =>
+              state.completedRefreshRequestIds?.contains(requestId) == true ||
+              (!state.isLoading && state.error != null),
+        );
+        if (state.completedRefreshRequestIds?.contains(requestId) != true) {
+          throw StateError(state.error!);
+        }
+      },
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(
@@ -722,6 +740,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
 
   @override
   void dispose() {
+    _findRefRepository.dispose();
     final pluginId = widget.plugin.pluginId;
     final generation = widget.activationGeneration;
     final controller = _controller;
@@ -835,6 +854,10 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           generation: widget.activationGeneration,
         );
       },
+      // מופע רקע אינו מציג ממשק ואין בו לחיצת משתמש — otzaria:// לעולם אינו
+      // מגיע למטפל הפרוטוקול של המערכת.
+      onLaunchingExternalUriScheme: (controller, request) async =>
+          LaunchingExternalUriSchemeResponse(cancel: true),
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         // רשת דפדפנית ישירה (fetch רגיל) אינה עוברת ב-Bridge — נספרת
         // כפעילות כאן, כדי שהכיבוי העצל לא יקטע בקשה ארוכה.

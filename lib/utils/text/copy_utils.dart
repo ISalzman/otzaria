@@ -12,12 +12,13 @@ class CopyUtils {
   static String applyCopyPreferences({
     required String text,
     required bool replaceHolyNames,
+    text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
   }) {
     if (text.isEmpty || !replaceHolyNames) {
       return text;
     }
 
-    return text_utils.replaceHolyNames(text);
+    return text_utils.replaceHolyNames(text, style: holyNameStyle);
   }
 
   /// מחיל העדפות העתקה על plain text ועל HTML יחד,
@@ -27,10 +28,12 @@ class CopyUtils {
     required String plainText,
     required String htmlText,
     required bool replaceHolyNames,
+    text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
   }) {
     final processedPlainText = applyCopyPreferences(
       text: plainText,
       replaceHolyNames: replaceHolyNames,
+      holyNameStyle: holyNameStyle,
     );
 
     if (!replaceHolyNames || htmlText.isEmpty) {
@@ -40,6 +43,7 @@ class CopyUtils {
     final processedHtmlText = _applyCopyPreferencesToHtml(
       htmlText: htmlText,
       replaceHolyNames: replaceHolyNames,
+      holyNameStyle: holyNameStyle,
     );
 
     final normalizedPlainText = _normalizeCopiedText(processedPlainText);
@@ -330,13 +334,18 @@ class CopyUtils {
   static String _applyCopyPreferencesToHtml({
     required String htmlText,
     required bool replaceHolyNames,
+    required text_utils.HolyNameStyle holyNameStyle,
   }) {
     if (htmlText.isEmpty || !replaceHolyNames) {
       return htmlText;
     }
 
     final fragment = html_parser.parseFragment(htmlText);
-    _replaceHolyNamesInTextNodes(fragment.nodes, replaceHolyNames);
+    _replaceHolyNamesInTextNodes(
+      fragment.nodes,
+      replaceHolyNames,
+      holyNameStyle,
+    );
     final container = html_dom.Element.tag('div')..nodes.addAll(fragment.nodes);
     return container.innerHtml;
   }
@@ -344,6 +353,7 @@ class CopyUtils {
   static void _replaceHolyNamesInTextNodes(
     List<html_dom.Node> nodes,
     bool replaceHolyNames,
+    text_utils.HolyNameStyle holyNameStyle,
   ) {
     for (final node in nodes) {
       if (node.nodeType == html_dom.Node.TEXT_NODE) {
@@ -352,12 +362,13 @@ class CopyUtils {
           node.text = applyCopyPreferences(
             text: currentText,
             replaceHolyNames: replaceHolyNames,
+            holyNameStyle: holyNameStyle,
           );
         }
         continue;
       }
 
-      _replaceHolyNamesInTextNodes(node.nodes, replaceHolyNames);
+      _replaceHolyNamesInTextNodes(node.nodes, replaceHolyNames, holyNameStyle);
     }
   }
 

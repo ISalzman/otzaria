@@ -895,6 +895,41 @@ Future<void> main() async {
     test('מילה חילונית דומה נוספת אינה מוחלפת', () {
       expect(replaceHolyNames('מגביהוהי'), equals('מגביהוהי'));
     });
+
+    group("סגנון ה'", () {
+      test('שם הקודש בתוך פסוק מוחלף בה\'', () {
+        expect(
+          replaceHolyNames(
+            'ויאמר יהוה אל משה',
+            style: HolyNameStyle.hehApostrophe,
+          ),
+          equals("ויאמר ה' אל משה"),
+        );
+      });
+
+      test('הניקוד והטעמים של השם מושמטים, אות השימוש נשמרת', () {
+        expect(
+          replaceHolyNames('לַֽיהֹוָֽה', style: HolyNameStyle.hehApostrophe),
+          equals("לַֽה'"),
+        );
+      });
+
+      test('מילה חילונית אינה מוחלפת גם בסגנון ה\'', () {
+        expect(
+          replaceHolyNames('ויגביהוהו', style: HolyNameStyle.hehApostrophe),
+          equals('ויגביהוהו'),
+        );
+      });
+    });
+
+    group('HolyNameStyle.fromStorage', () {
+      test('ממפה מפתחות שמורים ומחזיר יקוק כברירת מחדל', () {
+        expect(HolyNameStyle.fromStorage('heh'), HolyNameStyle.hehApostrophe);
+        expect(HolyNameStyle.fromStorage('kuf'), HolyNameStyle.kufKuf);
+        expect(HolyNameStyle.fromStorage(null), HolyNameStyle.kufKuf);
+        expect(HolyNameStyle.fromStorage('אחר'), HolyNameStyle.kufKuf);
+      });
+    });
   });
 
   group(

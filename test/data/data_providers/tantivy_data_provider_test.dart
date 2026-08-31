@@ -282,4 +282,49 @@ void main() {
       expect(corrupted.existsSync(), isFalse);
     });
   });
+
+  group('RetryableInit', () {
+    test('ensure מחזיר את אותו ניסיון כל עוד הוא לא נכשל', () async {
+      var calls = 0;
+      final slot = RetryableInit<int>();
+      Future<int> create() async {
+        calls++;
+        return 7;
+      }
+
+      final first = slot.ensure(create);
+      final second = slot.ensure(create);
+
+      expect(identical(first, second), isTrue);
+      expect(await first, 7);
+      expect(calls, 1);
+    });
+
+    test('ניסיון שנכשל אינו נשמר — הגישה הבאה פותחת מחדש ומצליחה', () async {
+      var calls = 0;
+      final slot = RetryableInit<int>();
+      Future<int> create() async {
+        calls++;
+        if (calls == 1) throw StateError('index locked');
+        return 42;
+      }
+
+      await expectLater(slot.ensure(create), throwsStateError);
+      // הניקוי קורה במיקרו-טסק שאחרי הכשל
+      await Future<void>.delayed(Duration.zero);
+
+      expect(slot.current, isNull);
+      expect(await slot.ensure(create), 42);
+      expect(calls, 2);
+    });
+
+    test('כשל שאיש אינו ממתין לו אינו מדווח כשגיאה לא-מטופלת', () async {
+      final slot = RetryableInit<int>();
+      slot.start(() async => throw StateError('boom'));
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(slot.current, isNull);
+    });
+  });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/directory_writability.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 
 /// מחזיק את ה-WebViewEnvironment הסינגלטוני עם userDataFolder הניתן לכתיבה.
@@ -71,6 +72,55 @@ class WebViewEnvironmentHolder {
     }
   }
 
+  /// override לבדיקות בלבד: כשמוגדר, [checkDataFolderWritable] מחזיר את ערכו
+  /// במקום לגעת בדיסק.
+  static String? _unwritableDataFolderOverride;
+  static bool _hasUnwritableDataFolderOverride = false;
+
+  /// מגדיר ערך קבוע ל-[checkDataFolderWritable]. העבר `null` לנתיב חסום
+  /// מדומה; קרא ל-[debugClearUnwritableDataFolder] לאיפוס.
+  @visibleForTesting
+  static void debugOverrideUnwritableDataFolder(String? path) {
+    _unwritableDataFolderOverride = path;
+    _hasUnwritableDataFolderOverride = true;
+    _unwritableDataFolder = path;
+  }
+
+  @visibleForTesting
+  static void debugClearUnwritableDataFolder() {
+    _hasUnwritableDataFolderOverride = false;
+    _unwritableDataFolderOverride = null;
+    _unwritableDataFolder = null;
+  }
+
+  static String? _unwritableDataFolder;
+
+  /// הנתיב שנמצא חסום-לכתיבה בבדיקה האחרונה, או `null` כשהכל תקין.
+  static String? get unwritableDataFolder => _unwritableDataFolder;
+
+  /// בודק שתיקיית הנתונים של WebView2 ניתנת לכתיבה, ומחזיר את הנתיב החסום
+  /// (או `null` כשהכל תקין). תת-תיקיית EBWebView נבדקת בנפרד — ACL של מנהל
+  /// עליה חוסם רק אותה.
+  ///
+  /// בלי הבדיקה הכשל מתגלה רק בתוך WebView2, שמציג דיאלוג מערכת של Edge
+  /// במקום הסבר (issue #1031).
+  static Future<String?> checkDataFolderWritable() async {
+    if (_hasUnwritableDataFolderOverride) return _unwritableDataFolderOverride;
+    if (!Platform.isWindows) return _unwritableDataFolder = null;
+
+    final root = p.join(await AppPaths.getDataRootPath(), 'webview2');
+    if (!await isDirectoryWritable(root)) return _unwritableDataFolder = root;
+
+    // EBWebView נוצרת ע"י WebView2 עצמו — כשאינה קיימת היא תירש את הרשאות
+    // תיקיית האם, שכבר נבדקו.
+    final profile = p.join(root, 'EBWebView');
+    if (await FileSystemEntity.type(profile) != FileSystemEntityType.notFound &&
+        !await isDirectoryWritable(profile)) {
+      return _unwritableDataFolder = profile;
+    }
+    return _unwritableDataFolder = null;
+  }
+
   /// מאתחל את סביבת WebView2 עם תיקיית נתונים הניתנת לכתיבה.
   /// חייב להיקרא לפני יצירת כל InAppWebView.
   ///
@@ -90,6 +140,15 @@ class WebViewEnvironmentHolder {
       final dataRoot = await AppPaths.getDataRootPath();
       webviewDataFolder = p.join(dataRoot, 'webview2');
       await Directory(webviewDataFolder).create(recursive: true);
+      final blocked = await checkDataFolderWritable();
+      if (blocked != null) {
+        // WebView2 היה מגיב לזה בדיאלוג מערכת של Edge; עצירה כאן משאירה
+        // את ההסבר בידי PluginDataFolderUnwritableView.
+        throw FileSystemException(
+          'WebView2 data folder is not writable',
+          blocked,
+        );
+      }
       // הערה: אין להוסיף כאן --disable-smooth-scrolling או ארגומנטים אחרים
       // שמשנים התנהגות גלילה. גלילת טאצ'פד מוזרקת ב-fork של
       // flutter_inappwebview_windows כזרם אירועי wheel (מיידי, עם צבירת

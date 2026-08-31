@@ -6,6 +6,7 @@ import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/services/indexing_failure_reporter.dart';
+import 'package:otzaria/indexing/services/indexing_wakelock.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -17,6 +18,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   int? _activeWorkId;
   bool _isPaused = false;
   bool _isEconomy = false;
+  bool _isFinalizing = false;
 
   IndexingBloc(
     this._repository, {
@@ -30,12 +32,14 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     on<ResumeIndexing>(_onResumeIndexing);
     on<SetEconomyIndexing>(_onSetEconomyIndexing, transformer: sequential());
     on<ActualIndexingStarted>(_onActualIndexingStarted);
+    on<IndexingFinalizing>(_onFinalizing);
     on<UpdateIndexingProgress>(_onUpdateProgress);
     on<ClearIndex>(_onEraseIndex);
   }
 
   /// Factory constructor that creates an IndexingBloc with a default repository
   factory IndexingBloc.create() {
+    IndexingWakelock.instance.attach(TantivyDataProvider.instance.isIndexing);
     return IndexingBloc(
       IndexingRepository(TantivyDataProvider.instance),
     );
@@ -47,18 +51,22 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     int? booksProcessed,
     int? totalBooks,
     bool isCreatingIndex = false,
+    bool isScanning = false,
   }) => IndexingInProgress(
     booksProcessed: booksProcessed,
     totalBooks: totalBooks,
     isCreatingIndex: isCreatingIndex,
+    isScanning: isScanning,
     isPaused: _isPaused,
     isEconomy: _isEconomy,
+    isFinalizing: _isFinalizing,
   );
 
   Future<void> _onIndexingWork(
     IndexingWorkEvent event,
     Emitter<IndexingState> emit,
   ) async {
+    _isFinalizing = false;
     // ריצה חדשה מתחילה ללא השהיה; המצב החסכוני נשמר בין ריצות.
     if (_isPaused) {
       _isPaused = false;
@@ -114,7 +122,11 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     }
 
     emit(
-      _inProgress(booksProcessed: 0, totalBooks: totalCandidates),
+      _inProgress(
+        booksProcessed: 0,
+        totalBooks: totalCandidates,
+        isScanning: true,
+      ),
     );
 
     try {
@@ -130,6 +142,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
               booksProcessed: processed,
               totalBooks: total,
               isCreatingIndex: state.isCreatingIndex,
+              isScanning: true,
             ),
           );
         },
@@ -195,6 +208,9 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         onActualIndexingStarted: () {
           add(ActualIndexingStarted(workId));
         },
+        onFinalizing: () {
+          add(IndexingFinalizing(workId));
+        },
         onProgress: (processed, total) {
           // Update progress through event
           add(
@@ -249,6 +265,20 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         booksProcessed: currentState.booksProcessed,
         totalBooks: currentState.totalBooks,
         isCreatingIndex: true,
+      ),
+    );
+  }
+
+  void _onFinalizing(IndexingFinalizing event, Emitter<IndexingState> emit) {
+    if (_activeWorkId != event.workId) return;
+    final currentState = state;
+    if (currentState is! IndexingInProgress) return;
+    _isFinalizing = true;
+    emit(
+      _inProgress(
+        booksProcessed: currentState.booksProcessed,
+        totalBooks: currentState.totalBooks,
+        isCreatingIndex: currentState.isCreatingIndex,
       ),
     );
   }
@@ -400,6 +430,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         booksProcessed: currentState.booksProcessed,
         totalBooks: currentState.totalBooks,
         isCreatingIndex: currentState.isCreatingIndex,
+        isScanning: currentState.isScanning,
       ),
     );
   }

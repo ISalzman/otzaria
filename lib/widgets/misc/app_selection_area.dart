@@ -6,6 +6,7 @@ import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/text_book/view/selection/selection_hit_test.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 
 /// אזור בחירת טקסט שמציג בלחיצה ימנית את תפריט ההקשר של אוצריא
 /// (במקום תפריט ברירת המחדל של Flutter). לתוכן קריא כללי —
@@ -36,43 +37,46 @@ class _AppSelectionAreaState extends State<AppSelectionArea> {
     final platform = Theme.of(context).platform;
     final useNativeTouchMenu =
         platform == TargetPlatform.android || platform == TargetPlatform.iOS;
-    return RtlSelectionShortcuts(
-      child: SelectionArea(
-        contextMenuBuilder: useNativeTouchMenu
-            ? (context, state) => AdaptiveTextSelectionToolbar.selectableRegion(
-                selectableRegionState: state,
-              )
-            : (context, _) => const SizedBox.shrink(),
-        onSelectionChanged: (selection) {
-          trackRtlSelection(selection?.plainText);
-          // שינוי בחירה זמני בזמן priming (קיצורי RTL) — לא לעבד.
-          if (rtlSelectionPriming) return;
-          _selectedText = selection?.plainText;
-        },
-        child: AppContextMenuRegion(
-          openOnLongPress: !useNativeTouchMenu,
-          // לחיצה ימנית על הטקסט המסומן לא תשחרר את הבחירה (ברירת המחדל של
-          // SelectableRegion ב-Windows); לחיצה מחוץ לבחירה מבטלת כרגיל.
-          shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
-            if (!_hasSelection) return false;
-            final root = context.findRenderObject();
-            if (root == null) return true;
-            return clickIsOnSelectionWithinArea(
-                  root: root,
-                  globalPosition: globalPosition,
-                  selectedText: _selectedText!,
-                ) ??
-                true;
+    return SelectionCutFallthrough(
+      child: RtlSelectionShortcuts(
+        child: SelectionArea(
+          contextMenuBuilder: useNativeTouchMenu
+              ? (context, state) =>
+                    AdaptiveTextSelectionToolbar.selectableRegion(
+                      selectableRegionState: state,
+                    )
+              : (context, _) => const SizedBox.shrink(),
+          onSelectionChanged: (selection) {
+            trackRtlSelection(selection?.plainText);
+            // שינוי בחירה זמני בזמן priming (קיצורי RTL) — לא לעבד.
+            if (rtlSelectionPriming) return;
+            _selectedText = selection?.plainText;
           },
-          menuBuilder: (menuContext, _) => [
-            AppContextMenuEntry(
-              label: 'העתק',
-              icon: FluentIcons.copy_24_regular,
-              enabled: _hasSelection,
-              onTap: _copySelection,
-            ),
-          ],
-          child: widget.child,
+          child: AppContextMenuRegion(
+            openOnLongPress: !useNativeTouchMenu,
+            // לחיצה ימנית על הטקסט המסומן לא תשחרר את הבחירה (ברירת המחדל של
+            // SelectableRegion ב-Windows); לחיצה מחוץ לבחירה מבטלת כרגיל.
+            shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+              if (!_hasSelection) return false;
+              final root = context.findRenderObject();
+              if (root == null) return true;
+              return clickIsOnSelectionWithinArea(
+                    root: root,
+                    globalPosition: globalPosition,
+                    selectedText: _selectedText!,
+                  ) ??
+                  true;
+            },
+            menuBuilder: (menuContext, _) => [
+              AppContextMenuEntry(
+                label: 'העתק',
+                icon: FluentIcons.copy_24_regular,
+                enabled: _hasSelection,
+                onTap: _copySelection,
+              ),
+            ],
+            child: widget.child,
+          ),
         ),
       ),
     );

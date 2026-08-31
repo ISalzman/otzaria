@@ -19,6 +19,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_workspace_scope.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -35,6 +36,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
@@ -1220,6 +1222,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: widget.isMainText ? state.searchText : '',
       searchOptions: widget.isMainText ? state.searchOptions : const {},
       alternativeWords: widget.isMainText ? state.alternativeWords : const {},
@@ -1945,9 +1948,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         }
       }
     } else {
-      // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
-      final commentaryBookId =
-          widget.reportBook?.id ?? widget.reportBook?.categoryId;
+      // רק book_id של המפרש; categoryId אינו תחליף — הוא היה פותח ספר אחר.
+      final commentaryBookId = widget.reportBook?.id;
       if (commentaryBookId != null) {
         entries.add(const AppContextMenuEntry.divider());
         entries.add(
@@ -2333,6 +2335,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       plainText: finalText,
       htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
     );
 
     final item = DataWriterItem();
@@ -2503,13 +2506,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               return null;
                             },
                           ),
-                          CopySelectionTextIntent:
-                              CallbackAction<CopySelectionTextIntent>(
-                                onInvoke: (_) {
-                                  _copyFormattedText();
-                                  return null;
-                                },
-                              ),
+                          CopySelectionTextIntent: FormattedCopyAction(
+                            _copyFormattedText,
+                          ),
                         },
                         child: Shortcuts(
                           shortcuts: {
@@ -2905,6 +2904,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     removePunctuation: _removePunctuation(state),
                     removeTeamim: !settingsState.showTeamim,
                     replaceHolyNames: settingsState.replaceHolyNames,
+                    holyNameStyle: settingsState.holyNameStyle,
                     searchText: searchText,
                     highlightYellowBackground:
                         widget.isMainText &&
@@ -3129,7 +3129,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(rendering.html).trim(),
           htmlText: rendering.html,
-          style: style,
+          style: AppFonts.taamimSafeStyle(style, rendering.html),
           frameRanges: rendering.ranges,
         ),
       );
@@ -3187,6 +3187,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: searchText,
       searchOptions: useStateSearchSettings ? state.searchOptions : const {},
       alternativeWords: useStateSearchSettings
@@ -3315,9 +3316,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     // צריך למצוא באיזה טור המפרש הנוכחי מוצג ולהחליף אותו
+    final workspaceId = activePageShapeWorkspaceId(context);
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: workspaceId,
     );
 
     if (config == null) return;
@@ -3385,6 +3388,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       updatedConfig[columnToUpdate] = newCommentator;
     }
 
+    // כששולחן העבודה מחזיק בחירה משלו לספר, ההחלפה נשמרת אליה - אחרת היא
+    // נכתבת לספר/לקטגוריה ונדרסת מיד בטעינה הבאה.
+    final workspaceToSave = PageShapeSettingsManager.commentatorWorkspaceTarget(
+      workspaceId,
+      state.book.title,
+    );
+
     // בדיקה אם יש הגדרה ספציפית לספר (לא רק הדגל, אלא הגדרה ממשית)
     final hasActualBookConfig =
         PageShapeSettingsManager.loadConfiguration(state.book.title) != null;
@@ -3392,7 +3402,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // אם יש הגדרה ספציפית לספר - שומרים לספר
     // אחרת - שומרים לקטגוריה (אם יש)
     final categoryToSave =
-        !hasActualBookConfig &&
+        workspaceToSave == null &&
+            !hasActualBookConfig &&
             state.book.heCategories != null &&
             state.book.heCategories!.isNotEmpty
         ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
@@ -3405,6 +3416,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       state.book.title,
       updatedConfig,
       saveToCategory: categoryToSave,
+      saveToWorkspaceId: workspaceToSave,
     );
 
     // קריאה ל-callback לרענון המסך

@@ -25,6 +25,12 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
     on<OpenBookRequested>(_onOpenBookRequested);
   }
 
+  @override
+  Future<void> close() {
+    findRefRepository.dispose();
+    return super.close();
+  }
+
   Future<void> _onSearchRefRequested(
     SearchRefRequested event,
     Emitter<FindRefState> emit,

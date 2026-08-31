@@ -77,6 +77,7 @@ const Set<String> _knownApiMethods = {
   'library.getRawLinks',
   'library.getLinkTargetsSummary',
   'library.getLinkContent',
+  'library.refreshUserBooks',
   'search.fullText',
   'search.query',
   'search.getOptions',
@@ -248,6 +249,7 @@ const Map<String, String> _methodRequiredPermission = {
   'library.getLinks': pluginLinksReadPermission,
   'library.getRawLinks': pluginLinksReadPermission,
   'library.getLinkTargetsSummary': pluginLinksReadPermission,
+  'library.refreshUserBooks': pluginLibraryRefreshPermission,
   'search.fullText': 'search.fulltext.read',
   'search.query': 'search.fulltext.read',
   'search.getOptions': 'search.fulltext.read',
@@ -494,6 +496,7 @@ const Map<String, String> _methodMinVersion = {
   'app.registerShortcut': '0.9.97',
   'app.unregisterShortcut': '0.9.97',
   'app.updateShortcut': '0.9.97',
+  'library.refreshUserBooks': '0.9.97',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).

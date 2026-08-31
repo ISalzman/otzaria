@@ -325,6 +325,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `library.getRawLinks` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, connectionTypes?, targetTitles? }` (הטווח חובה יחד; חלון עד 1000 שורות) | `{ links, truncated, startLine, endLine }` — אותם קישורים של `getLinks`, בחמשת המפתחות של `links.json` |
 | `library.getLinkTargetsSummary` | `library.links.read` | `{ bookId, categoryId? }` | `{ targets, maxSourceLine }` |
 | `library.getLinkContent` | `library.content.read` | `{ links }` (עד 25) | `{ items }` |
+| `library.refreshUserBooks` | `library.refresh` | — | `{ addedBooks, updatedBooks, errors }` |
 
 ### network.*
 
@@ -581,6 +582,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `library.books.read` | חיפוש וקריאת metadata של ספרים |
 | `library.content.read` | קריאת תוכן ספרים (TOC + טקסט) |
 | `library.links.read` | קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן) |
+| `library.refresh` | סריקה מחדש של התיקיות האישיות ורענון הקטלוג (`library.refreshUserBooks`) |
 | `search.fulltext.read` | חיפוש טקסט מלא |
 | `reader.open` | פתיחת ספרים + קריאת מצב הקורא |
 | `navigation.write` | ניווט בין מסכים |

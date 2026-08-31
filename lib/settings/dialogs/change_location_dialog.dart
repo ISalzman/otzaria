@@ -445,6 +445,7 @@ Future<void> performLibraryMove({
       );
     }
     settingsUpdated = true;
+    await AppPaths.recordLibraryPathForUninstaller();
     // 4. מיפוי נתיבי הספרים הפתוחים *בזיכרון* (לא רק ב-Hive), אחרת שמירת
     //    הטאבים בעת הרענון תדרוס את המיפוי וה-PDF ייפתח מהנתיב הישן.
     //    awaited בכוונה: חובה שהמיפוי יושלם לפני ה-reset/restart, אחרת יש race.
@@ -487,6 +488,7 @@ Future<void> performLibraryMove({
         databasesPath: previousDatabasesPath,
         androidLibraryRoot: previousAndroidLibraryRoot,
       );
+      await AppPaths.recordLibraryPathForUninstaller();
     }
     await _cleanupCreatedMoveTargets(
       stagingRoot: stagingRoot,

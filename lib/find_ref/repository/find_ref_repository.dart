@@ -11,6 +11,7 @@ import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/search/utils/foundational_book_classifier.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/utils/text/ref_key.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 
 /// נזרקת כשמטמון הספרים של האיתור לא הצליח להיטען, ולכן אין במה לחפש.
@@ -30,6 +31,7 @@ typedef _UserBookRecord = ({
   String? filePath,
   String fileType,
   double orderIndex,
+  List<String> folderTitles,
 });
 
 class FindRefRepository {
@@ -100,6 +102,7 @@ class FindRefRepository {
         String? filePath,
         String fileType,
         double orderIndex,
+        List<String> folderTitles,
       })
     >
   >
@@ -123,6 +126,16 @@ class FindRefRepository {
   /// הבאה / כל הספר כשאין כותרות פנימיות) מתבצע ב-repository ה-DB.
   final Future<List<Map<String, dynamic>>> Function(DbReferenceResult ref)?
   fetchCommentatorRows;
+
+  /// Injection for testing: פותר מפתח הפניה קנוני מול אינדקס `line_ref`
+  /// עבור כל הספרים המועמדים בשאילתה מאוגדת אחת (מפתח התוצאה = bookId).
+  /// In production calls [FindRefDbIsolate.resolveLineRefs]; כשהאינדקס חסר
+  /// במסד ישן מוחזר map ריק והתוצאה נשארת ברמת ה-TOC.
+  final Future<Map<int, ({int lineIndex, int lineId, String? heRef})>> Function(
+    List<int> bookIds,
+    String refKey,
+  )?
+  resolveLineRefs;
 
   /// Injection for testing: מחזירה את הדור של מפרש לפי שם.
   /// In production calls [CommentaryService.getBookEra].
@@ -199,6 +212,7 @@ class FindRefRepository {
     this.getAllUserBooks,
     this.getUserBookTocEntries,
     this.fetchCommentatorRows,
+    this.resolveLineRefs,
     this.getBookEra,
     this.getCategoryPathSync,
     this.searchByEraAndTopic,
@@ -222,12 +236,17 @@ class FindRefRepository {
     FindRefDbIsolate.resetIfRunning();
   }
 
-  /// בדיקות בלבד: מבטל את ההרשמה של ה-instance מ-[_liveInstances]. שימושי
-  /// בטסטים שיוצרים הרבה repositories מבלי לשמור שיורי state בין מבחנים.
-  @visibleForTesting
-  void disposeForTesting() {
+  /// מסיר את ה-instance מרשימת ה-repositories הפעילים.
+  void dispose() {
     _liveInstances.remove(this);
   }
+
+  /// בדיקות בלבד: שם תאימות למחיקת הרישום.
+  @visibleForTesting
+  void disposeForTesting() => dispose();
+
+  @visibleForTesting
+  static int get debugLiveInstanceCount => _liveInstances.length;
 
   /// מנקה את ה-caches הפנימיים של ה-repository (מפרשים ו-AltToc שטוח).
   ///
@@ -287,6 +306,22 @@ class FindRefRepository {
     } else {
       final userRepo = await UserBooksDatabaseHolder.instance.repository;
       final raw = await userRepo.database.bookDao.getAllLocalBooks();
+      // שרשרת התיקיות של כל ספר — בספרים אישיים שם הספר יושב לרוב על
+      // התיקייה ('חלק א' בתוך 'שות פלוני'), והיא חלק מהתאמת הכותרת.
+      final categories = await userRepo.database.categoryDao.getAllCategories();
+      final byId = {for (final c in categories) c.id: c};
+      List<String> chainOf(int categoryId) {
+        final titles = <String>[];
+        for (
+          var c = byId[categoryId];
+          c != null && titles.length < 12;
+          c = c.parentId == null ? null : byId[c.parentId]
+        ) {
+          titles.insert(0, c.title);
+        }
+        return titles;
+      }
+
       list = raw
           .map(
             (b) => (
@@ -295,6 +330,7 @@ class FindRefRepository {
               filePath: b.filePath,
               fileType: b.fileType ?? 'txt',
               orderIndex: b.order,
+              folderTitles: chainOf(b.categoryId),
             ),
           )
           .toList();
@@ -456,6 +492,7 @@ class FindRefRepository {
                 startLineIndex: r.segment.toInt(),
                 level: r.tocLevel,
                 isAltToc: r.isAltToc,
+                isSourceLine: r.isSourceLine,
               ));
 
     if (fetchFn == null) return const [];
@@ -745,6 +782,23 @@ class FindRefRepository {
     // עבור כל השאר (חוסך עד ~50 קריאות isolate בכל הקלדה).
     final altBookIds = await _getAltBookIds();
 
+    final remainingByHit = {
+      for (final hit in bookHits)
+        hit: _getRemainingTokens(
+          queryTokens,
+          _tokenize(hit.normalizedTitle),
+          stripLeadingTokensCount: hit.matchRank >= 3 ? bookQueryTokenCount : 0,
+          prefixMatchTokensCount: hit.matchRank >= 3
+              ? 0
+              : (secondaryPhraseTokenCount[hit] ?? bookQueryTokenCount),
+        ),
+    };
+    final exactLines = await _resolveExactLines(
+      bookHits,
+      remainingByHit,
+      tokensAfterRange: _tokensAfterRange(ref, queryTokens),
+    );
+
     for (final hit in bookHits) {
       final bookId = hit.bookId;
       final title = hit.title;
@@ -752,15 +806,7 @@ class FindRefRepository {
 
       // הכותרת המנורמלת כבר זמינה מהקאש — אין צורך לנרמל מחדש.
       final titleTokens = _tokenize(hit.normalizedTitle);
-      final matchedByAcronym = hit.matchRank >= 3;
-      final remainingTokens = _getRemainingTokens(
-        queryTokens,
-        titleTokens,
-        stripLeadingTokensCount: matchedByAcronym ? bookQueryTokenCount : 0,
-        prefixMatchTokensCount: matchedByAcronym
-            ? 0
-            : (secondaryPhraseTokenCount[hit] ?? bookQueryTokenCount),
-      );
+      final remainingTokens = remainingByHit[hit]!;
 
       // ראש-תיבות שזנבו אינו מילת-כותרת ("טור יורה דעה" / "טור יו"ד" מול
       // הכותרת "טור") מציין חלק *בתוך* הספר — ראה [_acronymSectionTokens].
@@ -839,6 +885,23 @@ class FindRefRepository {
         }
         // FS PDFs have no DB category path — bookPath stays ''.
         continue;
+      }
+
+      final exact = exactLines[bookId];
+      if (exact != null) {
+        results.add(
+          DbReferenceResult(
+            title: title,
+            reference: exact.heRef ?? '$title ${remainingTokens.join(' ')}',
+            segment: exact.lineIndex,
+            filePath: hit.filePath,
+            orderIndex: hit.orderIndex,
+            tocLevel: 3,
+            bookId: bookId,
+            sourceLineId: exact.lineId,
+            isSourceLine: true,
+          ),
+        );
       }
 
       if (remainingTokens.isEmpty) {
@@ -1127,25 +1190,50 @@ class FindRefRepository {
       const personalBookPath = 'ספרים אישיים';
       final maxN = queryTokens.length >= 3 ? 3 : queryTokens.length;
 
-      for (final book in allBooks) {
-        final normalizedTitle = _normalizeForMatch(book.title);
-        final titleTokens = _tokenize(normalizedTitle);
-
-        // Find the longest leading phrase that matches position-by-position
-        int? matchedN;
-        for (var n = maxN; n >= 1; n--) {
-          final phrase = queryTokens.take(n).toList();
-          if (phrase.length > titleTokens.length) continue;
+      // Find the longest leading phrase that matches position-by-position
+      int? leadingPhraseMatch(List<String> nameTokens, int cap) {
+        for (var n = cap; n >= 1; n--) {
+          if (n > nameTokens.length) continue;
           var ok = true;
-          for (var i = 0; i < phrase.length; i++) {
-            if (!titleTokens[i].startsWith(phrase[i])) {
+          for (var i = 0; i < n; i++) {
+            if (!nameTokens[i].startsWith(queryTokens[i])) {
               ok = false;
               break;
             }
           }
-          if (ok) {
-            matchedN = n;
-            break;
+          if (ok) return n;
+        }
+        return null;
+      }
+
+      for (final book in allBooks) {
+        final normalizedTitle = _normalizeForMatch(book.title);
+        final titleTokens = _tokenize(normalizedTitle);
+
+        var nameTokens = titleTokens;
+        var matchedN = leadingPhraseMatch(titleTokens, maxN);
+
+        // הכותרת לא התאימה — ניסיון מול שם תיקייה + כותרת, לכל סיומת של
+        // שרשרת התיקיות ('שות פלוני חלק א'). כך שאילתת שם התיקייה מוצאת את
+        // הקבצים שבתוכה. התקרה כאן לפי אורך השם המורחב, לא ה-3 של כותרת.
+        if (matchedN == null) {
+          for (var i = book.folderTitles.length - 1; i >= 0; i--) {
+            final candidate = _tokenize(
+              _normalizeForMatch(
+                '${book.folderTitles.sublist(i).join(' ')} ${book.title}',
+              ),
+            );
+            final n = leadingPhraseMatch(
+              candidate,
+              queryTokens.length.clamp(0, candidate.length),
+            );
+            // דרישת מינימום: ההתאמה חייבת לכסות את כל מילות התיקייה שבשם —
+            // אחרת 'שות' לבדה הייתה גוררת את כל תוכן התיקייה.
+            if (n != null && n >= candidate.length - titleTokens.length) {
+              nameTokens = candidate;
+              matchedN = n;
+              break;
+            }
           }
         }
         if (matchedN == null) continue;
@@ -1153,7 +1241,7 @@ class FindRefRepository {
         final isPdf = book.fileType == 'pdf';
         final remainingTokens = _getRemainingTokens(
           queryTokens,
-          titleTokens,
+          nameTokens,
           prefixMatchTokensCount: matchedN,
         );
 
@@ -1168,7 +1256,9 @@ class FindRefRepository {
               filePath: book.filePath ?? '',
               orderIndex: book.orderIndex,
               bookId: book.id,
-              bookPath: personalBookPath,
+              bookPath: book.folderTitles.isEmpty
+                  ? personalBookPath
+                  : book.folderTitles.join(', '),
               isUserBook: true,
             ),
           );
@@ -1184,7 +1274,9 @@ class FindRefRepository {
               filePath: book.filePath ?? '',
               orderIndex: book.orderIndex,
               bookId: book.id,
-              bookPath: personalBookPath,
+              bookPath: book.folderTitles.isEmpty
+                  ? personalBookPath
+                  : book.folderTitles.join(', '),
               isUserBook: true,
             ),
           );
@@ -1206,7 +1298,9 @@ class FindRefRepository {
                 orderIndex: book.orderIndex,
                 tocLevel: entry['level'] as int,
                 bookId: book.id,
-                bookPath: personalBookPath,
+                bookPath: book.folderTitles.isEmpty
+                    ? personalBookPath
+                    : book.folderTitles.join(', '),
                 sourceLineId: entry['dbLineId'] as int? ?? 0,
                 isUserBook: true,
               ),
@@ -1327,6 +1421,59 @@ class FindRefRepository {
     }
     if (start == 0) return const [];
     return termTokens.sublist(start);
+  }
+
+  /// מיפוי bookId → השורה המדויקת שאליה מצביעה ההפניה, דרך אינדקס `line_ref`.
+  ///
+  /// שאילתה מאוגדת אחת לכל מפתח קנוני — לא פנייה לכל ספר מועמד. ריק כשאין
+  /// הזרקה (בדיקות) או כשהמסד נבנה לפני האינדקס, ואז נשאר מסלול ה-TOC.
+  Future<Map<int, ({int lineIndex, int lineId, String? heRef})>>
+  _resolveExactLines(
+    List<ReferenceBookHit> bookHits,
+    Map<ReferenceBookHit, List<String>> remainingByHit, {
+    int tokensAfterRange = 0,
+  }) async {
+    final resolve = resolveLineRefs;
+    if (resolve == null) return const {};
+
+    final bookIdsByKey = <String, List<int>>{};
+    for (final hit in bookHits) {
+      if (hit.bookId <= 0 || hit.fileType == 'pdf') continue;
+      // רכיב יחיד ("ישעיהו לב") הוא ברמת TOC — אין מה לחפש ברמת שורה.
+      var remaining = remainingByHit[hit] ?? const <String>[];
+      // טווח ("לב יא-יג") נפתח בתחילתו; המקף כבר נבלע בנרמול השאילתה.
+      if (tokensAfterRange > 0 && remaining.length > tokensAfterRange) {
+        remaining = remaining.sublist(0, remaining.length - tokensAfterRange);
+      }
+      if (remaining.length < 2) continue;
+      final key = buildRefKey(remaining.join(' '));
+      if (key == null) continue;
+      (bookIdsByKey[key] ??= []).add(hit.bookId);
+    }
+
+    final resolved = <int, ({int lineIndex, int lineId, String? heRef})>{};
+    for (final entry in bookIdsByKey.entries) {
+      resolved.addAll(await resolve(entry.value, entry.key));
+    }
+    return resolved;
+  }
+
+  /// מספר הטוקנים שאחרי סימן הטווח בשאילתה הגולמית — הנרמול הופך את המקף
+  /// לרווח, ובלי הספירה הזו "לב יא-יג" היה נראה כהפניה תלת-רכיבית.
+  int _tokensAfterRange(String rawQuery, List<String> queryTokens) {
+    final dash = rawQuery.indexOf(RegExp('[-–־]'));
+    if (dash <= 0) return 0;
+    final head = _tokenize(_normalizeForMatch(rawQuery.substring(0, dash)));
+    final after = queryTokens.length - head.length;
+    return after > 0 ? after : 0;
+  }
+
+  /// סדר הספציפיות בתוך אותו ספר: שורת מקור מדויקת < TOC L1 < TOC L2 <
+  /// AltToc < TOC L3+.
+  static int _specificityRank(DbReferenceResult r) {
+    if (r.isSourceLine) return 0;
+    if (r.isAltToc) return 4;
+    return r.tocLevel <= 2 ? r.tocLevel + 1 : r.tocLevel + 2;
   }
 
   List<String> _getRemainingTokens(
@@ -1513,16 +1660,8 @@ class FindRefRepository {
 
       // 8. סדר: TOC L1 < TOC L2 < AltToc < TOC L3+
       // AltToc (כותרות-משנה) מופיע אחרי הכותרות הבסיסיות (רמה 2) אך לפני הכותרות הפנימיות (רמה 3+).
-      final aRank = a.result.isAltToc
-          ? 3
-          : (a.result.tocLevel <= 2
-                ? a.result.tocLevel
-                : a.result.tocLevel + 1);
-      final bRank = b.result.isAltToc
-          ? 3
-          : (b.result.tocLevel <= 2
-                ? b.result.tocLevel
-                : b.result.tocLevel + 1);
+      final aRank = _specificityRank(a.result);
+      final bRank = _specificityRank(b.result);
       if (aRank != bRank) return aRank.compareTo(bRank);
 
       return 0;

@@ -10,6 +10,7 @@ abstract class NotesMessages {
   static const String libraryNotLoadedYet = 'הספרייה לא נטענה עדיין';
   static const String backupCompleted = 'הגיבוי הושלם בהצלחה';
   static const String textExportCompleted = 'הייצוא לטקסט הושלם בהצלחה';
+  static const String wordExportCompleted = 'הייצוא לוורד הושלם בהצלחה';
 
   static String notesListLoadError(Object error) =>
       'שגיאה בטעינת רשימת ההערות: $error';

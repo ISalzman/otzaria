@@ -9,6 +9,7 @@ import 'connection_type_dao.dart';
 import 'docx_text_cache_dao.dart';
 import 'generation_dao.dart';
 import 'line_dao.dart';
+import 'line_ref_dao.dart';
 import 'link_dao.dart';
 import 'pdf_anchor_cache_dao.dart';
 import 'pdf_outline_cache_dao.dart';
@@ -51,6 +52,7 @@ class MyDatabase {
   DocxTextCacheDao? _docxTextCacheDao;
   GenerationDao? _generationDao;
   LineDao? _lineDao;
+  LineRefDao? _lineRefDao;
   LinkDao? _linkDao;
   PdfAnchorCacheDao? _pdfAnchorCacheDao;
   PdfOutlineCacheDao? _pdfOutlineCacheDao;
@@ -104,6 +106,11 @@ class MyDatabase {
   LineDao get lineDao {
     _ensureDaosInitialized();
     return _lineDao!;
+  }
+
+  LineRefDao get lineRefDao {
+    _ensureDaosInitialized();
+    return _lineRefDao!;
   }
 
   LinkDao get linkDao {
@@ -303,6 +310,7 @@ class MyDatabase {
     _docxTextCacheDao = DocxTextCacheDao(this);
     _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
+    _lineRefDao = LineRefDao(this);
     _linkDao = LinkDao(this);
     _pdfAnchorCacheDao = PdfAnchorCacheDao(this);
     _pdfOutlineCacheDao = PdfOutlineCacheDao(this);
@@ -513,6 +521,17 @@ class MyDatabase {
       'CREATE INDEX IF NOT EXISTS idx_line_book_index ON line(bookId, lineIndex);',
       'CREATE INDEX IF NOT EXISTS idx_line_toc ON line(tocEntryId);',
       'CREATE INDEX IF NOT EXISTS idx_line_heref ON line(heRef);',
+
+      // אינדקס ההפניות הקנוני — (bookId, refKeyHash) → lineIndex.
+      // WITHOUT ROWID: עץ המפתח הוא הטבלה עצמה.
+      '''
+      CREATE TABLE IF NOT EXISTS line_ref (
+          bookId INTEGER NOT NULL,
+          refKeyHash INTEGER NOT NULL,
+          lineIndex INTEGER NOT NULL,
+          PRIMARY KEY (bookId, refKeyHash, lineIndex)
+      ) WITHOUT ROWID;
+      ''',
 
       // TOC texts table
       '''

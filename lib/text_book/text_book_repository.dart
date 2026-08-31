@@ -562,6 +562,7 @@ class TextBookRepository {
         index2End: index2End,
         connectionType: row['connectionType'] as String? ?? 'commentary',
         targetCategoryId: row['targetCategoryId'] as int?,
+        targetBookId: row['targetBookId'] as int?,
         targetFileType: row['targetFileType'] as String?,
       );
     }).toList();

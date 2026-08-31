@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+import 'package:otzaria/widgets/dialogs/category_commentators_dialog.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
@@ -45,6 +48,13 @@ class CommentatorsSelectionPanel extends StatefulWidget {
   /// המפרשים לאלה בלבד, בדיוק כפי שצ׳יפ דור מצמצם אותה. ריק = אין צמצום.
   final Map<String, Set<String>> commentatorsByType;
 
+  /// שרשרת הקטגוריות של הספר. כשיש קטגוריות, מוצג כפתור "קבע כמפרשים
+  /// קבועים לקטגוריה" בכותרת הרשימה (issue #866).
+  final String? heCategories;
+
+  /// נקרא אחרי קביעת מפרשים לקטגוריה — לניקוי הבחירה הפר-ספרית הנוכחית.
+  final VoidCallback? onCategoryDefaultsSaved;
+
   const CommentatorsSelectionPanel({
     super.key,
     required this.groups,
@@ -60,6 +70,8 @@ class CommentatorsSelectionPanel extends StatefulWidget {
     this.onTypeChipsChanged,
     this.typeChipLabelBuilder,
     this.commentatorsByType = const {},
+    this.heCategories,
+    this.onCategoryDefaultsSaved,
   });
 
   @override
@@ -498,6 +510,25 @@ class _CommentatorsSelectionPanelState
     );
   }
 
+  /// כפתור "קבע כמפרשים קבועים לקטגוריה" — מוצג רק כשלספר יש קטגוריות.
+  Widget? _buildCategoryDefaultsButton(BuildContext context) {
+    if (parseBookCategories(widget.heCategories).isEmpty) return null;
+    return IconButton(
+      tooltip: 'קבע כמפרשים קבועים לקטגוריה',
+      icon: const Icon(FluentIcons.save_24_regular, size: 18),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () => showCategoryCommentatorsDialog(
+        context: context,
+        bookTitle: widget.bookTitle,
+        heCategories: widget.heCategories,
+        selectedCommentators: widget.selectedCommentators,
+        onSaved: widget.onCategoryDefaultsSaved,
+      ),
+    );
+  }
+
   /// מזהה שורת "הצג את כל ..." ומחזיר את התווית והקבוצה שלה.
   ({String label, List<String> commentators})? _groupForButtonToken(
     String item,
@@ -560,6 +591,7 @@ class _CommentatorsSelectionPanelState
                         if (listIndex == 0) {
                           return NavTreeHeader(
                             title: 'מפרשים על ${widget.bookTitle}',
+                            trailing: _buildCategoryDefaultsButton(context),
                           );
                         }
                         if (hasVisibleCommentators && listIndex == 1) {

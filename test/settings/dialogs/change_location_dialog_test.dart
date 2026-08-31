@@ -251,6 +251,21 @@ void main() {
     });
   });
 
+  test('העברת ספרייה מעדכנת מיד את הרשומה עבור ה-uninstaller', () {
+    final source = File(
+      'lib/settings/dialogs/change_location_dialog.dart',
+    ).readAsStringSync();
+    final saveLibraryPath = source.indexOf(
+      'SettingsRepository.keyLibraryPath,\n      newLibrary,',
+    );
+    final recordLibraryPath = source.indexOf(
+      'await AppPaths.recordLibraryPathForUninstaller();',
+    );
+
+    expect(saveLibraryPath, greaterThanOrEqualTo(0));
+    expect(recordLibraryPath, greaterThan(saveLibraryPath));
+  });
+
   group('remapMovedFileBookPaths', () {
     test('מדלג על PDF רשמי כי seforim.db לא מחזיק עמודות נתיב', () async {
       final tempDir = await Directory.systemTemp.createTemp(

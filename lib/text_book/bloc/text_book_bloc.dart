@@ -1630,6 +1630,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final storedConfiguration = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: workspaceId,
     );
     final columnVisibility = PageShapeSettingsManager.getColumnVisibility(
       state.book.title,

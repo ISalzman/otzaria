@@ -195,12 +195,16 @@ class SmartTextWidget extends StatelessWidget {
     // מה-HTML הסופי. ה-HTML לא משתנה — הגליפים נשארים בשורה (שקופים, בסדר
     // הנכון), ושכבת הציור מציירת אותם מורמים מעל מקומם האמיתי.
     final raisedMarkers = RaisedMarkers.extract(processedHtml);
+    final fontFamily = AppFonts.taamimSafeFontFamily(
+      settings.fontFamily,
+      processedHtml,
+    );
     final textStyle = TextStyle(
       fontSize: settings.fontSize,
-      fontFamily: settings.fontFamily,
+      fontFamily: fontFamily,
       fontWeight: settings.fontWeight,
       fontVariations: AppFonts.boldFontVariations(
-        settings.fontFamily,
+        fontFamily,
         settings.fontWeight ?? FontWeight.normal,
       ),
       height: settings.lineHeight,
@@ -280,8 +284,17 @@ class SmartTextWidget extends StatelessWidget {
           customStylesBuilder: (dom.Element element) {
             final headingWeight = AppFonts.headingFontWeightOverride(
               element.localName,
-              settings.fontFamily,
+              fontFamily,
             );
+            // כותרת שאיבדה את ההדגשה מקבלת גודל שמבדיל אותה מהטקסט.
+            final headingSize = AppFonts.headingFontSizeOverride(
+              element.localName,
+              fontFamily,
+            );
+            final headingCss = <String, String>{
+              'font-weight': ?headingWeight,
+              'font-size': ?headingSize,
+            };
             if (element.localName == 'span' &&
                 element.classes.contains('subscript-text')) {
               return {'font-size': 'smaller'};
@@ -358,9 +371,7 @@ class SmartTextWidget extends StatelessWidget {
               };
             }
             if (!hasMarkdownBlock) {
-              return headingWeight == null
-                  ? null
-                  : {'font-weight': headingWeight};
+              return headingCss.isEmpty ? null : headingCss;
             }
             final markdownCss = _markdownElementCss(
               element,
@@ -368,8 +379,8 @@ class SmartTextWidget extends StatelessWidget {
               surfaceCss: markdownSurfaceCss,
               borderCss: markdownBorderCss,
             );
-            if (headingWeight != null) {
-              return {'font-weight': headingWeight, ...?markdownCss};
+            if (headingCss.isNotEmpty) {
+              return {...headingCss, ...?markdownCss};
             }
             return markdownCss;
           },
@@ -706,6 +717,7 @@ class SimpleSmartText extends StatelessWidget {
   final bool removeNikud;
   final bool removeTeamim;
   final bool replaceHolyNames;
+  final utils.HolyNameStyle holyNameStyle;
   final String searchText;
   final Function(OpenedTab)? onOpenBook;
   final Key? widgetKey;
@@ -718,6 +730,7 @@ class SimpleSmartText extends StatelessWidget {
     this.removeNikud = false,
     this.removeTeamim = true,
     this.replaceHolyNames = false,
+    this.holyNameStyle = utils.HolyNameStyle.kufKuf,
     this.searchText = '',
     this.onOpenBook,
     this.widgetKey,
@@ -733,6 +746,7 @@ class SimpleSmartText extends StatelessWidget {
         removeNikud: removeNikud,
         removeTeamim: removeTeamim,
         replaceHolyNames: replaceHolyNames,
+        holyNameStyle: holyNameStyle,
         searchText: searchText,
       ),
       onOpenBook: onOpenBook,

@@ -780,4 +780,90 @@ void main() {
       expect(AppFonts.boldFontVariations('Rubik', FontWeight.normal), isNull);
     });
   });
+
+  group('תמיכת טעמים בגופן', () {
+    // הדגל ברשימה המובנית מוקשח; אם יוחלף קובץ גופן, הבדיקה נופלת במקום
+    // שהמשתמש יגלה את הפער רק בתנ"ך.
+    test('הדגל של כל גופן מובנה תואם ל-cmap של הקובץ עצמו', () {
+      for (final font in AppFonts.availableFonts) {
+        final path = AppFonts.fontPaths[font.value];
+        expect(path, isNotNull, reason: '${font.value} אינו ב-fontPaths');
+        final bytes = _bundledFont(path!.split('/').last);
+        expect(
+          AppFonts.debugSfntSupportsTaamim(bytes),
+          font.supportsTaamim,
+          reason: font.value,
+        );
+      }
+    });
+
+    test('רוביק הוא הגופן המובנה היחיד ללא טעמים', () {
+      final without = AppFonts.availableFonts
+          .where((font) => !font.supportsTaamim)
+          .map((font) => font.value);
+      expect(without, ['Rubik']);
+    });
+
+    test('familySupportsTaamim: גופן לא מוכר או ריק נחשב תומך', () {
+      expect(AppFonts.familySupportsTaamim('Rubik'), isFalse);
+      expect(AppFonts.familySupportsTaamim('FrankRuhlCLM'), isTrue);
+      expect(AppFonts.familySupportsTaamim('גופן שלא נסרק'), isTrue);
+      expect(AppFonts.familySupportsTaamim(''), isTrue);
+      expect(AppFonts.familySupportsTaamim(null), isTrue);
+    });
+
+    test('סריקת גופני מערכת מסמנת את הדגל לפי ה-cmap', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\rubik.ttf',
+          _bundledFont('Rubik-VariableFont_wght.ttf'),
+        ),
+        MapEntry(
+          r'C:\fonts\frank.ttf',
+          _bundledFont('FrankRuehlCLM-Medium.ttf'),
+        ),
+      ]);
+
+      expect(
+        {for (final font in scan.fonts) font.value: font.supportsTaamim},
+        {'Rubik': false, 'Frank Ruehl CLM': true},
+      );
+    });
+  });
+
+  group('AppFonts.taamimSafeFontFamily', () {
+    const withTaamim = 'בְּרֵאשִׁ֖ית בָּרָ֣א';
+    const nikudOnly = 'בְּרֵאשִׁית בָּרָא';
+
+    test('גופן ללא טעמים מוחלף רק בטקסט שיש בו טעמים', () {
+      expect(
+        AppFonts.taamimSafeFontFamily('Rubik', withTaamim),
+        AppFonts.defaultFont,
+      );
+      expect(AppFonts.taamimSafeFontFamily('Rubik', nikudOnly), 'Rubik');
+      expect(AppFonts.taamimSafeFontFamily('Rubik', 'טקסט רגיל'), 'Rubik');
+    });
+
+    test('גופן תומך נשאר גם בטקסט עם טעמים', () {
+      expect(
+        AppFonts.taamimSafeFontFamily('FrankRuhlCLM', withTaamim),
+        'FrankRuhlCLM',
+      );
+      expect(AppFonts.taamimSafeFontFamily(null, withTaamim), isNull);
+    });
+
+    test(
+      'taamimSafeStyle מחליף רק את הגופן, ומחזיר את אותו style כשאין צורך',
+      () {
+        const style = TextStyle(fontFamily: 'Rubik', fontSize: 22);
+        final swapped = AppFonts.taamimSafeStyle(style, withTaamim);
+        expect(swapped.fontFamily, AppFonts.defaultFont);
+        expect(swapped.fontSize, 22);
+        expect(
+          identical(AppFonts.taamimSafeStyle(style, nikudOnly), style),
+          isTrue,
+        );
+      },
+    );
+  });
 }

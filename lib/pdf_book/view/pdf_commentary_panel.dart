@@ -33,6 +33,7 @@ import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/services/target_line_links_service.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -1089,6 +1090,9 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
           );
           await settings.save(widget.tab.book);
         },
+        heCategories: bookCategoriesSource(widget.tab.book),
+        onCategoryDefaultsSaved: () =>
+            PdfBookPerBookSettings.clearActiveCommentators(widget.tab.book),
       ),
     );
   }
@@ -2040,7 +2044,10 @@ class _CollapsibleCommentaryGroupState
                 Expanded(
                   child: Text(
                     widget.settingsState.replaceHolyNames
-                        ? utils.replaceHolyNames(widget.group.bookTitle)
+                        ? utils.replaceHolyNames(
+                            widget.group.bookTitle,
+                            style: widget.settingsState.holyNameStyle,
+                          )
                         : widget.group.bookTitle,
                     style: TextStyle(
                       fontSize: widget.settingsState.commentatorsFontSize - 2,
@@ -2090,7 +2097,10 @@ class _CollapsibleCommentaryGroupState
                           }
                         }
                         if (widget.settingsState.replaceHolyNames) {
-                          displayTitle = utils.replaceHolyNames(displayTitle);
+                          displayTitle = utils.replaceHolyNames(
+                            displayTitle,
+                            style: widget.settingsState.holyNameStyle,
+                          );
                         }
                         final reportedTitle = displayTitle;
                         WidgetsBinding.instance.addPostFrameCallback((_) {

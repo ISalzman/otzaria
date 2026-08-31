@@ -24,6 +24,23 @@ bool shouldCommitPageTurn({
       (velocity > -flingVelocity && progress >= 0.5);
 }
 
+/// מיקום חץ הדפדוף: ברווח שבין הכפולה לקצה התצוגה כשהוא
+/// מספיק, אחרת מעל העמוד. רצועת האחיזה חוצה את קצה הכפולה,
+/// והלחצן נשאר מחוצה לה כדי לא לבלוע את מחוות הגרירה.
+({double inset, bool fitsBesideSpread}) bookViewTurnButtonPlacement({
+  required double gutter,
+  required double buttonSize,
+  required double edgePadding,
+  required double dragZoneWidth,
+}) {
+  final freeWidth = gutter - dragZoneWidth / 2;
+  final fits = freeWidth >= buttonSize + edgePadding;
+  return (
+    inset: fits ? (freeWidth - buttonSize) / 2 : edgePadding,
+    fitsBesideSpread: fits,
+  );
+}
+
 /// עוצמת הקישוט הזמני של הדפדוף (צללים, קו קצה, סיבי נייר).
 ///
 /// חייבת להתאפס בשני הקצוות: קישוט שנשאר בעוצמה מלאה בפריים האחרון "נופל"

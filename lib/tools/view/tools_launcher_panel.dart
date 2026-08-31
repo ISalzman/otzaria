@@ -200,6 +200,16 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   String? _endDropIndicatorId;
 
   @override
+  void initState() {
+    super.initState();
+    // autofocus אינו עובד כאן: הפאנל נפתח בתוך FocusScope שכבר יש בו
+    // focusedChild (מסך הקריאה), ואז בקשת ה-autofocus נזנחת.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  @override
   void dispose() {
     _autoScrollTimer?.cancel();
     _searchController.dispose();
@@ -663,7 +673,6 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
     final field = OtzariaSearchField(
       controller: _searchController,
       focusNode: _searchFocusNode,
-      autofocus: true,
       icon: OtzariaIcons.search_24_regular,
       hintText: 'חיפוש כלי או תוסף',
       onChanged: _onQueryChanged,

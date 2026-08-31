@@ -1,10 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
+import 'package:otzaria/utils/text/ref_key.dart';
+
+/// זוג (lineIndex, heRef) כפי שהוא נשמר ב-DB.
+typedef LineRefEntry = ({int lineIndex, String heRef});
 
 void main() {
+  /// מדמה את אינדקס `line_ref`: המפתח הקנוני של כל heRef, כפי שהבונה מחשב.
   PluginRefLineResolver buildResolver(List<LineRefEntry> entries) =>
-      PluginRefLineResolver(fetchLineRefs: (_) async => entries);
+      PluginRefLineResolver(
+        lookup: (book, refKey) async {
+          for (final entry in entries) {
+            if (buildLineRefKey(entry.heRef, [book.title]) == refKey) {
+              return entry.lineIndex;
+            }
+          }
+          return null;
+        },
+      );
 
   group('PluginRefLineResolver — תנ"ך (פרק:פסוק)', () {
     final bamidbar = TextBook(title: 'במדבר', categoryId: 1);

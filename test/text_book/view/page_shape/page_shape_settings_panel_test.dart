@@ -84,6 +84,50 @@ void main() {
     expect(find.text('גלובלי'), findsOneWidget);
   });
 
+  testWidgets('בורר שמירת המפרשים מציע שולחן עבודה כשיש שולחן פעיל', (
+    tester,
+  ) async {
+    await pumpPanel(tester, currentWorkspaceId: 'workspace-1');
+
+    expect(find.text('שמירת בחירת מפרשים'), findsOneWidget);
+    expect(find.text('שולחן עבודה'), findsOneWidget);
+  });
+
+  testWidgets('בלי שולחן פעיל, בורר שמירת המפרשים אינו מוצג', (tester) async {
+    await pumpPanel(tester);
+
+    expect(find.text('שולחן עבודה'), findsNothing);
+  });
+
+  testWidgets('שמירה בתחום שולחן עבודה אינה דורסת את הגדרת הספר', (
+    tester,
+  ) async {
+    await PageShapeSettingsManager.saveConfiguration('בראשית', {
+      'left': 'רש"י על בראשית',
+    });
+
+    await pumpPanel(
+      tester,
+      currentWorkspaceId: 'workspace-1',
+      availableCommentators: const ['רש"י על בראשית', 'רמב"ן על בראשית'],
+    );
+
+    await tester.tap(find.text('שולחן עבודה'));
+    await tester.pumpAndSettle();
+
+    expect(
+      PageShapeSettingsManager.loadConfiguration(
+        'בראשית',
+        workspaceId: 'workspace-1',
+      ),
+      isNotNull,
+    );
+    expect(
+      PageShapeSettingsManager.loadConfiguration('בראשית')?['left'],
+      'רש"י על בראשית',
+    );
+  });
+
   testWidgets('בחירת שולחן עבודה שומרת הגדרות תצוגה ל-workspace', (
     tester,
   ) async {

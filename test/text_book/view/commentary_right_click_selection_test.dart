@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -149,6 +150,7 @@ void main() {
       index2: 1,
       connectionType: 'commentary',
       targetCategoryId: 42,
+      targetBookId: 907,
     );
 
     testWidgets(
@@ -291,6 +293,92 @@ void main() {
           'העתק קישור עם הדגשת המקטע',
           'העתק קישור עם הדגשת הטקסט',
         ]),
+      );
+    });
+
+    testWidgets('הקישור נבנה לפי targetBookId ולא לפי targetCategoryId', (
+      tester,
+    ) async {
+      late List<AppContextMenuEntry> entries;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              entries = ContextMenuUtils.buildCommentaryContextMenu(
+                context: context,
+                link: makeLink(),
+                openBookCallback: (_) {},
+                fontSize: 18,
+                removeNikud: false,
+                removePunctuation: false,
+                savedSelectedText: null,
+                onCopySelected: () {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      final directLinkEntry = entries.firstWhere(
+        (entry) => entry.label == 'העתק קישור ישיר',
+      );
+      directLinkEntry.childrenBuilder!().first.onTap!();
+      await tester.pump();
+
+      expect(copied, 'otzaria://open/book/907?index=0');
+    });
+
+    testWidgets('בלי targetBookId אין פריט "העתק קישור ישיר"', (tester) async {
+      late List<AppContextMenuEntry> entries;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              entries = ContextMenuUtils.buildCommentaryContextMenu(
+                context: context,
+                link: Link(
+                  heRef: 'הערה אישית',
+                  index1: 1,
+                  path2: 'ספר אישי.txt',
+                  index2: 1,
+                  connectionType: 'commentary',
+                  targetCategoryId: 42,
+                  targetIsUserBook: true,
+                ),
+                openBookCallback: (_) {},
+                fontSize: 18,
+                removeNikud: false,
+                removePunctuation: false,
+                savedSelectedText: null,
+                onCopySelected: () {},
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(
+        entries.map((entry) => entry.label),
+        isNot(contains('העתק קישור ישיר')),
       );
     });
   });

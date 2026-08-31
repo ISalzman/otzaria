@@ -7,6 +7,10 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/messages/messages_exports.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/widgets/misc/app_context_menu.dart';
+import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/search/view/layout_fix_suggestion_banner.dart';
 import 'package:otzaria/empty_library/empty_library_screen.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
@@ -81,7 +85,7 @@ String libraryUpdateButtonTooltip(LibraryUpdateState state) =>
       LibraryUpdateStatus.completed =>
         state.hasUpdate ? 'העדכון הושלם' : 'הספרייה מעודכנת',
       LibraryUpdateStatus.error => 'שגיאה בעדכון - לחץ לנסות שוב',
-      LibraryUpdateStatus.disconnected => 'אין חיבור לאינטרנט - לחץ לנסות שוב',
+      LibraryUpdateStatus.disconnected => '${state.message} - לחץ לנסות שוב',
       LibraryUpdateStatus.needsFullConfirmation => state.message,
       LibraryUpdateStatus.blocked => state.message,
       _ when state.isBusy => state.message,
@@ -472,6 +476,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 p.library != c.library ||
                 p.currentCategory != c.currentCategory ||
                 p.searchResults != c.searchResults ||
+                p.searchCategoryResults != c.searchCategoryResults ||
                 p.searchQuery != c.searchQuery ||
                 p.selectedTopics != c.selectedTopics,
             builder: (context, state) {
@@ -1374,7 +1379,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         if (settingsState.libraryViewMode == 'grid') {
           if (state.searchResults != null) {
             final books = _visibleBooks(state.searchResults!);
-            if (books.isEmpty) {
+            final categories = state.searchCategoryResults ?? const [];
+            if (books.isEmpty && categories.isEmpty) {
               final repo = context.read<FocusRepository>();
               return _buildEmptyState(context, state, settingsState, repo);
             }
@@ -1389,7 +1395,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               child: Column(
                 children: [
                   ?topicsHeader,
-                  _buildSearchResultsGrid(displayBooks, displayLimit),
+                  if (displayBooks.isNotEmpty)
+                    _buildSearchResultsGrid(displayBooks, displayLimit),
+                  if (categories.isNotEmpty)
+                    _buildSearchCategoriesGrid(
+                      categories,
+                      firstFocus: displayBooks.isEmpty,
+                    ),
                 ],
               ),
             );
@@ -1406,13 +1418,15 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         }
         if (state.searchResults != null) {
           final visibleResults = _visibleBooks(state.searchResults!);
-          if (visibleResults.isEmpty) {
+          final categories = state.searchCategoryResults ?? const <Category>[];
+          if (visibleResults.isEmpty && categories.isEmpty) {
             final repo = context.read<FocusRepository>();
             return _buildEmptyState(context, state, settingsState, repo);
           }
           return _buildSearchListView(
             _filterBooksByTopics(visibleResults, state.selectedTopics),
             _buildTopicsSelection(context, state),
+            categories: categories,
           );
         }
         return _buildListView(state.currentCategory!);
@@ -1508,26 +1522,30 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             final isSelected =
                 settingsState.libraryShowPreview &&
                 libState.previewBook == book;
-            return GestureDetector(
-              onDoubleTap: () =>
-                  _openBookInReader(book, book is PdfBook ? 1 : 0),
-              child: BookGridItem(
-                book: book,
-                showTopics: showTopics,
-                isSelected: isSelected,
-                focusNode: focusNode,
-                onBookClickCallback: () {
-                  if (settingsState.libraryShowPreview) {
-                    _showBookPreview(book);
-                  } else {
-                    _openBookInReader(book, book is PdfBook ? 1 : 0);
-                  }
-                },
-                onBookDeleted: () {
-                  if (ctx.mounted) {
-                    ctx.read<LibraryBloc>().add(RefreshLibrary());
-                  }
-                },
+            return _withTalmudFormatMenu(
+              book,
+              book is PdfBook ? 1 : 0,
+              GestureDetector(
+                onDoubleTap: () =>
+                    _openBookInReader(book, book is PdfBook ? 1 : 0),
+                child: BookGridItem(
+                  book: book,
+                  showTopics: showTopics,
+                  isSelected: isSelected,
+                  focusNode: focusNode,
+                  onBookClickCallback: () {
+                    if (settingsState.libraryShowPreview) {
+                      _showBookPreview(book);
+                    } else {
+                      _openBookInReader(book, book is PdfBook ? 1 : 0);
+                    }
+                  },
+                  onBookDeleted: () {
+                    if (ctx.mounted) {
+                      ctx.read<LibraryBloc>().add(RefreshLibrary());
+                    }
+                  },
+                ),
               ),
             );
           },
@@ -1539,12 +1557,22 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _showBookPreview(Book book) =>
       context.read<LibraryBloc>().add(SelectBookForPreview(book));
 
-  Widget _buildSearchListView(List<Book> books, Widget? header) {
+  Widget _buildSearchListView(
+    List<Book> books,
+    Widget? header, {
+    List<Category> categories = const [],
+  }) {
     return _LibraryBrowserList(
       header: header,
-      itemCount: books.length,
+      itemCount: books.length + categories.length,
       forPanel: false,
       itemBuilder: (context, index) {
+        if (index >= books.length) {
+          return _buildSearchCategoryListItem(
+            categories[index - books.length],
+            focusNode: index == 0 ? _firstGridItemFocusNode : null,
+          );
+        }
         return _buildListBookItem(
           books[index],
           0,
@@ -1552,6 +1580,68 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           focusNode: index == 0 ? _firstGridItemFocusNode : null,
         );
       },
+    );
+  }
+
+  /// שורת תיקייה בתוצאות האיתור — לחיצה מנווטת לקטגוריה.
+  Widget _buildSearchCategoryListItem(
+    Category category, {
+    FocusNode? focusNode,
+  }) {
+    const double iconBoxSize = 26.0;
+    const double iconSize = 14.0;
+    final cs = Theme.of(context).colorScheme;
+
+    return _buildLibraryListRowBase(
+      context: context,
+      leadingWidget: Container(
+        width: iconBoxSize,
+        height: iconBoxSize,
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer,
+          borderRadius: AppTokens.borderRadiusAll,
+        ),
+        child: Center(
+          child: Icon(
+            FluentIcons.folder_24_regular,
+            color: cs.onSecondaryContainer,
+            size: iconSize,
+          ),
+        ),
+      ),
+      title: category.title,
+      subtitle: null,
+      pathLine: _categoryParentPath(category),
+      level: 0,
+      itemStyle: _LibraryListItemStyle.search,
+      isSelected: false,
+      onTap: () => _openCategory(category),
+      focusNode: focusNode,
+    );
+  }
+
+  /// נתיב האב של קטגוריה לתצוגה בתוצאות ('תנך, ראשונים'); ריק לקטגוריית שורש.
+  String _categoryParentPath(Category category) {
+    final parts = <String>[];
+    for (var c = category.parent; c != null && c.parent != null; c = c.parent) {
+      parts.insert(0, c.title);
+    }
+    return parts.join(', ');
+  }
+
+  Widget _buildSearchCategoriesGrid(
+    List<Category> categories, {
+    required bool firstFocus,
+  }) {
+    return MyGridView(
+      items: [
+        for (final (i, category) in categories.indexed)
+          CategoryGridItem(
+            category: category,
+            onCategoryClickCallback: () => _openCategory(category),
+            focusNode: firstFocus && i == 0 ? _firstGridItemFocusNode : null,
+          ),
+      ],
     );
   }
 
@@ -1874,6 +1964,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     required _LibraryListItemStyle itemStyle,
     required bool isSelected,
     required VoidCallback onTap,
+    String? pathLine,
     VoidCallback? onDoubleTap,
     FocusNode? focusNode,
   }) {
@@ -1935,6 +2026,13 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                         textAlign: TextAlign.right,
                         style: subtitleStyle,
                       ),
+                    if (pathLine != null && pathLine.isNotEmpty)
+                      LibraryOverflowTooltipText(
+                        text: pathLine,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        style: subtitleStyle?.copyWith(color: cs.secondary),
+                      ),
                   ],
                 ),
               ),
@@ -1980,11 +2078,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
     );
 
+    // בתוצאות חיפוש בלבד: נתיב הקטגוריות, שמסביר למה הספר הותאם ומזהה ספר
+    // אישי ששמו יושב על התיקייה ולא על הקובץ.
+    final pathLine = itemStyle == _LibraryListItemStyle.search
+        ? ((book.categoryPath ?? '').trim().isNotEmpty
+              ? book.categoryPath!.trim()
+              : book.topics.trim())
+        : null;
+
     return _buildLibraryListRowBase(
       context: context,
       leadingWidget: leadingWidget,
       title: book.title,
       subtitle: book.author,
+      pathLine: pathLine,
       level: level,
       itemStyle: itemStyle,
       isSelected: isSelected,
@@ -2094,22 +2201,26 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             final isSelected =
                 settingsState.libraryShowPreview &&
                 libState.previewBook == book;
-            return _buildBookListRow(
-              context: ctx,
-              book: book,
-              level: level,
-              itemStyle: itemStyle,
-              isSelected: isSelected,
-              focusNode: focusNode,
-              onTap: () {
-                if (settingsState.libraryShowPreview) {
-                  _showBookPreview(book);
-                } else {
-                  _openBookInReader(book, book is PdfBook ? 1 : 0);
-                }
-              },
-              onDoubleTap: () =>
-                  _openBookInReader(book, book is PdfBook ? 1 : 0),
+            return _withTalmudFormatMenu(
+              book,
+              book is PdfBook ? 1 : 0,
+              _buildBookListRow(
+                context: ctx,
+                book: book,
+                level: level,
+                itemStyle: itemStyle,
+                isSelected: isSelected,
+                focusNode: focusNode,
+                onTap: () {
+                  if (settingsState.libraryShowPreview) {
+                    _showBookPreview(book);
+                  } else {
+                    _openBookInReader(book, book is PdfBook ? 1 : 0);
+                  }
+                },
+                onDoubleTap: () =>
+                    _openBookInReader(book, book is PdfBook ? 1 : 0),
+              ),
             );
           },
         );
@@ -2157,14 +2268,50 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         .toList();
   }
 
-  Future<void> _openBookInReader(Book book, int index) async {
+  Future<void> _openBookInReader(
+    Book book,
+    int index, {
+    bool? forcePdf,
+  }) async {
     final handled = await openLibraryBookPerTalmudBavliFormat(
       context,
       book,
       index,
+      forcePdf: forcePdf,
     );
     if (handled || !mounted) return;
+    // בקשה מפורשת ל-PDF שלא נענתה = אין מהדורת PDF למסכת; נפתח הטקסט.
+    if (forcePdf == true) {
+      UiSnack.showError(LibraryMessages.talmudPdfEditionMissing(book.title));
+    }
     openBook(context, book, index, '');
+  }
+
+  /// האם ל-[book] רלוונטית בחירת פורמט פתיחה — מסכת בבלי רשמית, שקיימת לה
+  /// גם מהדורת טקסט וגם מהדורת PDF שמוזגו לרשומה אחת בספרייה.
+  bool _offersTalmudFormatChoice(Book book) =>
+      book is TextBook && !book.isUserBook && isTalmudBavliBook(book);
+
+  /// עוטף פריט ספר בתפריט הקשר לבחירת פורמט הפתיחה של מסכת בבלי.
+  Widget _withTalmudFormatMenu(Book book, int index, Widget child) {
+    if (!_offersTalmudFormatChoice(book)) return child;
+    return AppContextMenuRegion(
+      // בלי isSelected: אייקון מוביל יחד עם סימון-נבחר מאפס את תקציב הרוחב
+      // של הלייבל, וה-Spacer שבשורת הפריט נופל על רוחב לא-חסום.
+      menuBuilder: (_, _) => [
+        AppContextMenuEntry(
+          label: 'פתיחה כטקסט',
+          icon: OtzariaIcons.book_alef_24_regular,
+          onTap: () => _openBookInReader(book, index, forcePdf: false),
+        ),
+        AppContextMenuEntry(
+          label: 'פתיחה כ-PDF',
+          icon: OtzariaIcons.book_pdf_24_regular,
+          onTap: () => _openBookInReader(book, index, forcePdf: true),
+        ),
+      ],
+      child: child,
+    );
   }
 
   /// מחזיר את הספר הראשון שיוצג בפועל בקטגוריה, לפי אותו סדר תצוגה כמו _buildCategoryContent
@@ -2486,9 +2633,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       buildWhen: (p, c) => p.previewBook != c.previewBook,
       builder: (ctx, previewState) => BookPreviewPanel(
         book: previewState.previewBook,
-        onOpenInReader: (i) {
+        onOpenInReader: (i, {bool? forcePdf}) {
           if (previewState.previewBook != null) {
-            _openBookInReader(previewState.previewBook!, i);
+            _openBookInReader(previewState.previewBook!, i, forcePdf: forcePdf);
           }
         },
       ),

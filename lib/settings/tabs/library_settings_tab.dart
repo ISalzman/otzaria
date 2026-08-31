@@ -663,6 +663,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             subtitleText = context.settingsText(
               'נדרש איפוס ואינדוקס מחדש באישור המשתמש',
             );
+          } else if (isActive && indexingState.isFinalizing) {
+            subtitleText = context.settingsText(
+              'מסיים ומאחד את קבצי האינדקס',
+            );
           } else if (isActive) {
             subtitleText = context.settingsText(
               'התקדמות האינדקס: {processed}/{total}',

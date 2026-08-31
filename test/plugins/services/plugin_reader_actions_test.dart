@@ -114,9 +114,7 @@ void main() {
       final scroller = PluginDeclarativeReaderScroller(
         tabsBloc: tabsBloc,
         refResolver: PluginRefLineResolver(
-          fetchLineRefs: (book) async => [
-            (lineIndex: 3, heRef: '${book.title} לג ה'),
-          ],
+          lookup: (_, refKey) async => refKey == 'לג ה' ? 3 : null,
         ),
       );
 
@@ -132,9 +130,7 @@ void main() {
       );
       final scroller = PluginDeclarativeReaderScroller(
         tabsBloc: tabsBloc,
-        refResolver: PluginRefLineResolver(
-          fetchLineRefs: (_) async => const [],
-        ),
+        refResolver: PluginRefLineResolver(lookup: (_, _) async => null),
       );
 
       expect(await scroller.scrollToRef('לג:ה', highlight: true), isFalse);
@@ -144,9 +140,7 @@ void main() {
     test('הפניה ריקה וללא ספר פתוח — false', () async {
       final scroller = PluginDeclarativeReaderScroller(
         tabsBloc: _CapturingTabsBloc(),
-        refResolver: PluginRefLineResolver(
-          fetchLineRefs: (_) async => const [],
-        ),
+        refResolver: PluginRefLineResolver(lookup: (_, _) async => null),
       );
       expect(await scroller.scrollToRef('   '), isFalse);
       expect(await scroller.scrollToRef('לג:ה'), isFalse);

@@ -54,6 +54,97 @@ void main() {
     });
   });
 
+  group('רשומות קטגוריה בתוצאות (issue #956)', () {
+    // קטגוריות מצטרפות למרחב החיפוש כרשומות רגילות באינדקסים שמעל הספרים.
+    const entries = [
+      BookSearchEntry(
+        index: 0,
+        title: 'הלכות שבת',
+        author: '',
+        topics: 'הלכה',
+      ),
+      // "קטגוריה" — eraOrder ברירת מחדל, בלי מחבר ונושאים.
+      BookSearchEntry(index: 1, title: 'שבת', author: '', topics: ''),
+    ];
+
+    List<int> search(String query, {List<String> topics = const []}) =>
+        filterBookSearchEntries(
+          entries: entries,
+          queryWords: query.split(' '),
+          topics: topics,
+          sortByRatio: true,
+          normalizedQuery: query,
+        );
+
+    test('קטגוריה שכותרתה תואמת נכללת בתוצאות', () {
+      expect(search('שבת'), containsAll([0, 1]));
+    });
+
+    test('סינון נושאים משמיט רשומה בלי נושאים', () {
+      expect(search('שבת', topics: ['הלכה']), equals([0]));
+    });
+  });
+
+  group('filterBookSearchEntries - התאמה דרך נתיב הקטגוריות', () {
+    // ספר אישי ששמו יושב על התיקייה בלבד, כמו בתיקייה 'שות פלוני/חלק א'.
+    const entries = [
+      BookSearchEntry(
+        index: 0,
+        title: 'חלק א',
+        author: '',
+        topics: '',
+        categoryPath: 'ספרים אישיים, שות פלוני',
+        isUserBook: true,
+      ),
+      BookSearchEntry(
+        index: 1,
+        title: 'שות פלוני השלם',
+        author: '',
+        topics: '',
+      ),
+      BookSearchEntry(
+        index: 2,
+        title: 'מסילת ישרים',
+        author: '',
+        topics: '',
+        categoryPath: 'ספרי מוסר',
+      ),
+    ];
+
+    List<int> search(String query) => filterBookSearchEntries(
+      entries: entries,
+      queryWords: query.split(' '),
+      topics: const [],
+      sortByRatio: true,
+      normalizedQuery: query,
+    );
+
+    test('שאילתה בשם התיקייה מוצאת את הקובץ שבתוכה', () {
+      expect(search('שות פלוני'), contains(0));
+    });
+
+    test('התאמה בכותרת מדורגת לפני התאמה דרך הנתיב', () {
+      final results = search('שות פלוני');
+      expect(results.indexOf(1), lessThan(results.indexOf(0)));
+    });
+
+    test('שאילתה שאינה בנתיב ואינה בכותרת אינה מותאמת', () {
+      expect(search('שות אלמוני'), isEmpty);
+    });
+
+    test('נתיב שאינו תואם אינו מוסיף את הספר', () {
+      expect(search('מוסר'), equals([2]));
+    });
+
+    test('התאמה סלחנית עובדת גם על מילות הנתיב', () {
+      expect(search('שות פלני'), contains(0));
+    });
+
+    test('ספר בלי נתיב אינו נפגע', () {
+      expect(search('שות פלוני השלם'), contains(1));
+    });
+  });
+
   group('filterBookSearchEntries - התאמה דרך כינויים', () {
     const entries = [
       BookSearchEntry(

@@ -15,6 +15,7 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 /// טאב הגדרות תצוגת ספרים
 /// ניתן להשתמש בו גם כתוכן בתוך דיאלוג וגם כטאב במסך הגדרות
@@ -137,8 +138,9 @@ class TextSettingsTab extends StatelessWidget {
         'קדושה',
         'יוצג',
         'לא יוצג',
-        'מופעל',
-        'לא מופעל',
+        'יקוק',
+        "ה'",
+        'הוי"ה',
       ],
     ),
     SettingsSearchEntry(
@@ -470,17 +472,42 @@ class TextSettingsTab extends StatelessWidget {
             );
           },
         ),
-        SettingsActionTile.switchTile(
+        SettingsActionTile.segmentedTile<String>(
           icon: FluentIcons.shield_keyhole_24_regular,
           title: context.settingsText('הצגת שם הקודש'),
-          subtitle: context.settingsText(
-            !state.replaceHolyNames
-                ? 'השם הקדוש יוצג'
-                : 'השם הקדוש לא יוצג מפני קדושתו',
-          ),
-          value: !state.replaceHolyNames,
+          options: [
+            SegmentOption(
+              value: 'show',
+              label: context.settingsText('הצג ככתבו'),
+              subtitle: context.settingsText('שם הוי"ה יוצג ככתבו'),
+            ),
+            SegmentOption(
+              value: 'kuf',
+              label: context.settingsText('יקוק'),
+              subtitle: context.settingsText('שם הוי"ה יוחלף ביקוק'),
+            ),
+            SegmentOption(
+              value: 'heh',
+              label: context.settingsText("ה'"),
+              subtitle: context.settingsText("שם הוי\"ה יוחלף בה'"),
+            ),
+          ],
+          currentValue: !state.replaceHolyNames
+              ? 'show'
+              : state.holyNameStyle.storageKey,
           onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
+            if (value == 'show') {
+              context.read<SettingsBloc>().add(
+                const UpdateReplaceHolyNames(false),
+              );
+              return;
+            }
+            context.read<SettingsBloc>().add(
+              const UpdateReplaceHolyNames(true),
+            );
+            context.read<SettingsBloc>().add(
+              UpdateHolyNameStyle(HolyNameStyle.fromStorage(value)),
+            );
           },
         ),
         SettingsActionTile.switchTile(
@@ -792,10 +819,13 @@ class _FontDropdown extends StatelessWidget {
             icon: _fontCategoryIcon(font.category),
             reserveTrailingGap: true,
             trailingReservedWidth: 72,
-            labelWidget: _FontPreviewText(
-              fontFamily: font.value,
-              name: font.label,
-              isBundled: AppFonts.fontPaths.containsKey(font.value),
+            labelWidget: _FontEntryLabel(
+              preview: _FontPreviewText(
+                fontFamily: font.value,
+                name: font.label,
+                isBundled: AppFonts.fontPaths.containsKey(font.value),
+              ),
+              supportsTaamim: font.supportsTaamim,
             ),
             trailing: SizedBox(
               width: 72,
@@ -866,10 +896,13 @@ class _FontDropdown extends StatelessWidget {
                 orElse: () => FontInfo(value: v, label: v),
               );
               // בשדה הסגור מציגים את שם הגופן (מרונדר בגופן עצמו לזיהוי).
-              return _FontPreviewText(
-                fontFamily: v,
-                name: matchingFont.label,
-                isBundled: AppFonts.fontPaths.containsKey(v),
+              return _FontEntryLabel(
+                preview: _FontPreviewText(
+                  fontFamily: v,
+                  name: matchingFont.label,
+                  isBundled: AppFonts.fontPaths.containsKey(v),
+                ),
+                supportsTaamim: AppFonts.familySupportsTaamim(v),
               );
             },
             onSelected: onChanged,
@@ -884,6 +917,36 @@ class _FontDropdown extends StatelessWidget {
           onPressed: () => onBoldChanged(!bold),
           icon: const Icon(FluentIcons.text_bold_24_regular),
           selectedIcon: const Icon(FluentIcons.text_bold_24_filled),
+        ),
+      ],
+    );
+  }
+}
+
+/// שם הגופן, ולצידו סימן אזהרה כשהגופן אינו ממפה את טעמי המקרא.
+class _FontEntryLabel extends StatelessWidget {
+  final Widget preview;
+  final bool supportsTaamim;
+
+  const _FontEntryLabel({required this.preview, required this.supportsTaamim});
+
+  @override
+  Widget build(BuildContext context) {
+    if (supportsTaamim) return preview;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: preview),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: context.settingsText(
+            'הגופן אינו תומך בטעמי המקרא; בטקסט עם טעמים יוצג גופן ברירת המחדל',
+          ),
+          child: Icon(
+            FluentIcons.warning_24_regular,
+            size: 16,
+            color: Theme.of(context).colorScheme.error,
+          ),
         ),
       ],
     );
