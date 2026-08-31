@@ -809,64 +809,50 @@ String highLight(
 
   if (matches.isEmpty) return data;
 
-  // אם לא צוין אינדקס נוכחי, נדגיש את כל התוצאות
-  if (currentIndex == -1) {
-    String result = data;
-    int offset = 0;
+  // מעבר אחד עם buffer: שרשור substring לכל התאמה מעתיק את כל השורה בכל פעם,
+  // ושורה ארוכה עם התאמות רבות חורגת מתקציב הפריים.
+  final buffer = StringBuffer();
+  var position = 0;
 
-    final style = yellowBackground
-        ? 'background-color: yellow; color: black'
-        : 'color: red';
+  for (int i = 0; i < matches.length; i++) {
+    final highlightMatch = matches[i];
+    final match = highlightMatch.match;
+    final matchedText = data.substring(match.start, match.end);
 
-    for (final highlightMatch in matches) {
-      final match = highlightMatch.match;
-      final matchedText = data.substring(match.start, match.end);
+    final String replacement;
+    if (currentIndex == -1) {
+      final style = yellowBackground
+          ? 'background-color: yellow; color: black'
+          : 'color: red';
       // הדגשת קטע מקושר (רקע צהוב) צריכה להיות רציפה כמו מרקר,
       // בניגוד להדגשת חיפוש שמסמנת רק את מילות החיפוש עצמן.
-      final replacement = yellowBackground
+      replacement = yellowBackground
           ? _highlightContinuousMatch(matchedText, highlightMatch.ranges, style)
           : _highlightMatchedSearchWords(
               matchedText,
               highlightMatch.ranges,
               style,
             );
-
-      final start = match.start + offset;
-      final end = match.end + offset;
-
-      result = result.substring(0, start) + replacement + result.substring(end);
-      offset += replacement.length - matchedText.length;
+    } else {
+      // התוצאה הנוכחית בכחול, השאר באדום.
+      final color = i == currentIndex ? 'blue' : 'red';
+      final backgroundColor = i == currentIndex
+          ? 'background-color: yellow;'
+          : '';
+      replacement = _highlightMatchedSearchWords(
+        matchedText,
+        highlightMatch.ranges,
+        'color: $color; $backgroundColor',
+      );
     }
 
-    return result;
+    buffer.write(data.substring(position, match.start));
+    buffer.write(replacement);
+    position = match.end;
   }
 
-  // נדגיש את התוצאה הנוכחית בכחול ואת השאר באדום
-  String result = data;
-  int offset = 0;
-
-  for (int i = 0; i < matches.length; i++) {
-    final highlightMatch = matches[i];
-    final match = highlightMatch.match;
-    final matchedText = data.substring(match.start, match.end);
-    final color = i == currentIndex ? 'blue' : 'red';
-    final backgroundColor = i == currentIndex
-        ? 'background-color: yellow;'
-        : '';
-    final replacement = _highlightMatchedSearchWords(
-      matchedText,
-      highlightMatch.ranges,
-      'color: $color; $backgroundColor',
-    );
-
-    final start = match.start + offset;
-    final end = match.end + offset;
-
-    result = result.substring(0, start) + replacement + result.substring(end);
-    offset += replacement.length - matchedText.length;
-  }
-
-  return result;
+  buffer.write(data.substring(position));
+  return buffer.toString();
 }
 
 /// מחזיר את טווחי ההדגשה (offsets גולמיים) של מילות החיפוש ב-[data], באותה
