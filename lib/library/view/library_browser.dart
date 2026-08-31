@@ -1191,7 +1191,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         settingsState.libraryViewMode == 'list' &&
         _expandedCategories.isNotEmpty) {
       setState(() => _expandedCategories.remove(_expandedCategories.last));
-    } else if (state.currentCategory?.parent != null) {
+    } else if (state.currentCategory case final category?
+        when category.parent != null && !identical(category.parent, category)) {
       // הניווט משמר את שאילתת החיפוש ב-state, לכן החיפוש רץ מחדש בתיקיית
       // האב עם אותו טקסט — עם דגלי הספרים החיצוניים שבהגדרות.
       context.read<LibraryBloc>().add(NavigateUp());

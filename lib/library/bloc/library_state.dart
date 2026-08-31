@@ -225,6 +225,7 @@ class LibraryState extends Equatable {
     );
   }
 
+  /// [clearPreviewBook] מאפס את התצוגה המקדימה; בלי הדגל null נשמר ב-copyWith.
   LibraryState copyWith({
     Library? library,
     bool? isLoading,
@@ -234,6 +235,7 @@ class LibraryState extends Equatable {
     String? searchQuery,
     List<String>? selectedTopics,
     Book? previewBook,
+    bool clearPreviewBook = false,
     List<Book>? newBooksToIndex,
     List<Book>? changedBooksToIndex,
     Set<int>? completedRefreshRequestIds,
@@ -248,7 +250,7 @@ class LibraryState extends Equatable {
       searchResults: searchResults,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedTopics: selectedTopics ?? this.selectedTopics,
-      previewBook: previewBook ?? this.previewBook,
+      previewBook: clearPreviewBook ? null : (previewBook ?? this.previewBook),
       newBooksToIndex: newBooksToIndex, // null = אין ספרים לאינדוקס
       changedBooksToIndex: changedBooksToIndex, // null = אין ספרים שהשתנו
       completedRefreshRequestIds: completedRefreshRequestIds,

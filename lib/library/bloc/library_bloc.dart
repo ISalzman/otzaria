@@ -525,12 +525,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateToCategory event,
     Emitter<LibraryState> emit,
   ) {
+    final isCategoryChange = !identical(event.category, state.currentCategory);
     emit(
       state.copyWith(
         currentCategory: event.category,
         searchQuery: null,
         searchResults: null,
         selectedTopics: null,
+        clearPreviewBook: isCategoryChange,
       ),
     );
   }
@@ -539,16 +541,19 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateUp event,
     Emitter<LibraryState> emit,
   ) {
-    if (state.currentCategory?.parent != null) {
-      emit(
-        state.copyWith(
-          currentCategory: state.currentCategory!.parent!,
-          searchQuery: null,
-          searchResults: null,
-          selectedTopics: null,
-        ),
-      );
-    }
+    final currentCategory = state.currentCategory;
+    final parent = currentCategory?.parent;
+    if (parent == null || identical(parent, currentCategory)) return;
+
+    emit(
+      state.copyWith(
+        currentCategory: parent,
+        searchQuery: null,
+        searchResults: null,
+        selectedTopics: null,
+        clearPreviewBook: true,
+      ),
+    );
   }
 
   void _onUpdateSearchQuery(
