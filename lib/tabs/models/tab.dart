@@ -21,10 +21,12 @@ abstract class OpenedTab {
   void dispose() {}
 
   /// Returns a fresh independent copy of this tab.
-  /// Subclasses that manage their own state (e.g. BLoC, controllers) must
-  /// override this so that [OpenedTab.from] produces a real clone and not
-  /// a shared-object alias.
-  OpenedTab clone() => this;
+  ///
+  /// מופשטת בכוונה: ברירת מחדל `=> this` החזירה alias במקום עותק, ותת-מחלקה
+  /// חדשה קיבלה אותה בשקט. כך שיכפול טאב או מעבר בין שולחנות עבודה יצרו שני
+  /// ערכים ברשימה שמצביעים על אותו אובייקט — ו-`dispose` של האחד סגר את
+  /// ה-BLoC והבקרים של השני.
+  OpenedTab clone();
 
   factory OpenedTab.from(OpenedTab tab) {
     if (tab is TextBookTab) {

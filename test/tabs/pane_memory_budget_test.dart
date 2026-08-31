@@ -6,6 +6,10 @@ import 'package:otzaria/tabs/models/tab.dart';
 class _LeafTab extends OpenedTab {
   _LeafTab(super.title);
 
+  /// stub חסר state — אין מה לשכפל.
+  @override
+  OpenedTab clone() => this;
+
   @override
   Map<String, dynamic> toJson() => {'type': '_LeafTab', 'title': title};
 }

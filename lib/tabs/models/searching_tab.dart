@@ -122,6 +122,11 @@ class SearchingTab extends OpenedTab {
   /// האם להריץ אוטומטית שאילתה ממתינה בפתיחה הראשונה של הטאב.
   final bool autoRunInitialSearch;
 
+  /// מפנה לקונסטרוקטור [SearchingTab.clone], שהוא המקום היחיד שיודע אילו
+  /// שדות חיפוש להעתיק. `OpenedTab.from` קורא לקונסטרוקטור ישירות.
+  @override
+  OpenedTab clone() => SearchingTab.clone(this);
+
   factory SearchingTab.clone(SearchingTab other) {
     // ה-configuration מועברת ל-Bloc בעת בנייתו, ולא דרך events אחר-כך,
     // כדי למנוע race condition עם UpdateSearchQuery ש-UI שולח ב-initState

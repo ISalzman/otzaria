@@ -143,6 +143,16 @@ class PdfBookTab extends OpenedTab {
     pinLeftPane.value = Settings.getValue<bool>('key-pin-sidebar') ?? false;
   }
 
+  /// `OpenedTab.from` מטפל ב-[PdfBookTab] בענף ייעודי ואינו מגיע לכאן;
+  /// המימוש קיים כדי שהחוזה המופשט של [OpenedTab.clone] יתקיים.
+  ///
+  /// שים לב: הענף שם מעביר פרמטרי קונסטרוקטור בלבד. [activeCommentators],
+  /// [pdfHeadings], [currentTextLineNumber] ו-[currentTextLineNumberEnd]
+  /// נקבעים אחרי הבנייה, ומי שצריך אותם משכפל אותם בעצמו — ראו
+  /// `PdfCommentatorsTab.clone`.
+  @override
+  OpenedTab clone() => OpenedTab.from(this);
+
   /// מחיל תצורת חיפוש חיצונית בלי לחשוף שאילתה לתצורה הישנה.
   void applyIncomingSearchConfiguration(ReadingTabSearchState configuration) {
     searchText = configuration.searchText;

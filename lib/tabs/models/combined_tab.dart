@@ -62,6 +62,17 @@ class CombinedTab extends OpenedTab {
     );
   }
 
+  /// שתי החלוניות משוכפלות אף הן — בלי זה שני הטאבים היו חולקים את אותם
+  /// אובייקטי חלונית, ו-[dispose] של האחד היה סוגר את ה-BLoC של השני.
+  /// [title] אינו מועבר: הוא נגזר מהחלוניות וה-setter זורק.
+  @override
+  OpenedTab clone() => CombinedTab(
+    rightTab: OpenedTab.from(rightTab),
+    leftTab: OpenedTab.from(leftTab),
+    splitRatio: splitRatio,
+    isPinned: isPinned,
+  );
+
   /// משחררת את הטאב ואת שתי החלוניות שבו.
   @override
   void dispose() {

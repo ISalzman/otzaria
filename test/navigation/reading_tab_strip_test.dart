@@ -8,6 +8,10 @@ import 'package:otzaria/tabs/view/pane_drop_target.dart';
 class _StubTab extends OpenedTab {
   _StubTab(super.title);
 
+  /// stub חסר state — אין מה לשכפל.
+  @override
+  OpenedTab clone() => this;
+
   @override
   Map<String, dynamic> toJson() => {'type': '_StubTab', 'title': title};
 }

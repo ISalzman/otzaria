@@ -233,6 +233,12 @@ class TextBookTab extends OpenedTab {
     });
   }
 
+  /// `OpenedTab.from` מטפל ב-[TextBookTab] בענף ייעודי ואינו מגיע לכאן;
+  /// המימוש קיים כדי שהחוזה המופשט של [OpenedTab.clone] יתקיים, ומפנה
+  /// לאותו מקום אחד שבו יודעים אילו שדות לשמר.
+  @override
+  OpenedTab clone() => OpenedTab.from(this);
+
   /// Cleanup when the tab is disposed
   @override
   void dispose() {
