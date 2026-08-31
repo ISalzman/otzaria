@@ -341,6 +341,7 @@ class ContextMenuUtils {
         plainText: finalText,
         htmlText: finalHtmlText,
         replaceHolyNames: settingsState.replaceHolyNames,
+        holyNameStyle: settingsState.holyNameStyle,
       );
 
       final htmlText = CopyUtils.buildStyledHtml(
@@ -412,6 +413,7 @@ class ContextMenuUtils {
         final finalPlainText = CopyUtils.applyCopyPreferences(
           text: plainText,
           replaceHolyNames: settingsState.replaceHolyNames,
+          holyNameStyle: settingsState.holyNameStyle,
         );
 
         final htmlText = CopyUtils.buildStyledHtml(

@@ -1594,6 +1594,7 @@ class _CombinedViewState extends State<CombinedView> {
       plainText: finalText,
       htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
     );
 
     final item = DataWriterItem();
@@ -1735,6 +1736,7 @@ class _CombinedViewState extends State<CombinedView> {
       removePunctuation: state.removePunctuation,
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: state.searchText,
       searchOptions: state.searchOptions,
       alternativeWords: state.alternativeWords,
@@ -2509,6 +2511,7 @@ class _CombinedViewState extends State<CombinedView> {
                               removePunctuation: state.removePunctuation,
                               removeTeamim: !settingsState.showTeamim,
                               replaceHolyNames: settingsState.replaceHolyNames,
+                              holyNameStyle: settingsState.holyNameStyle,
                               searchText:
                                   (state.highlightText.isNotEmpty &&
                                       state.permanentHighlightLine == index)
@@ -2826,6 +2829,7 @@ class _CombinedViewState extends State<CombinedView> {
       removePunctuation: state.removePunctuation,
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: effectiveSearchText,
       searchOptions: effectiveSearchOptions,
       alternativeWords: effectiveAlternativeWords,

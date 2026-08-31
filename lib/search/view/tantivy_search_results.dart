@@ -949,8 +949,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               String rawHtml = result.text;
               // Debug info removed for production
               if (settingsState.replaceHolyNames) {
-                titleText = utils.replaceHolyNames(titleText);
-                rawHtml = utils.replaceHolyNames(rawHtml);
+                titleText = utils.replaceHolyNames(
+                  titleText,
+                  style: settingsState.holyNameStyle,
+                );
+                rawHtml = utils.replaceHolyNames(
+                  rawHtml,
+                  style: settingsState.holyNameStyle,
+                );
               }
 
               final wrappedTitleText = _formatTitleForWrapping(titleText);
@@ -1149,7 +1155,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                       // titleText כבר עבר החלפת שמות קודש.
                                       final bookName =
                                           settingsState.replaceHolyNames
-                                          ? utils.replaceHolyNames(result.title)
+                                          ? utils.replaceHolyNames(
+                                              result.title,
+                                              style:
+                                                  settingsState.holyNameStyle,
+                                            )
                                           : result.title;
                                       final textToCopy =
                                           CopyUtils.formatTextWithHeaders(

@@ -2251,7 +2251,10 @@ class _CommentaryGroupHeader extends StatelessWidget {
                 builder: (context, settingsState) {
                   String displayTitle = bookTitle;
                   if (settingsState.replaceHolyNames) {
-                    displayTitle = utils.replaceHolyNames(displayTitle);
+                    displayTitle = utils.replaceHolyNames(
+                      displayTitle,
+                      style: settingsState.holyNameStyle,
+                    );
                   }
                   return Text(
                     displayTitle,
@@ -2390,6 +2393,7 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                     if (settingsState.replaceHolyNames) {
                       displayTitle = utils.replaceHolyNames(
                         displayTitle,
+                        style: settingsState.holyNameStyle,
                       );
                     }
                     final reportedTitle = displayTitle;
@@ -2691,6 +2695,7 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                               removePunctuation: false,
                               removeTeamim: false,
                               replaceHolyNames: settingsState.replaceHolyNames,
+                              holyNameStyle: settingsState.holyNameStyle,
                               searchText: '',
                               currentSearchIndex: -1,
                               fontSize: widget.fontSize * 0.85,

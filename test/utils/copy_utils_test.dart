@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 void main() {
   group('CopyUtils.applyCopyPreferences', () {
@@ -11,6 +12,16 @@ void main() {
 
       expect(result, contains('יקוק'));
       expect(result, isNot(contains('יהוה')));
+    });
+
+    test("מחליף שם הוי\"ה בה' בסגנון hehApostrophe", () {
+      final result = CopyUtils.applyCopyPreferences(
+        text: 'ויאמר יהוה אל משה',
+        replaceHolyNames: true,
+        holyNameStyle: HolyNameStyle.hehApostrophe,
+      );
+
+      expect(result, "ויאמר ה' אל משה");
     });
 
     test('משאיר טקסט ללא שינוי כשההגדרה כבויה', () {
@@ -55,6 +66,18 @@ void main() {
 
       expect(result.plainText, 'ויאמר יקוק\nאל משה');
       expect(result.htmlText, 'ויאמר יקוק<br><b>אל משה</b>');
+    });
+
+    test("סגנון ה' נשמר עקבי בין ה-plain text ל-HTML", () {
+      final result = CopyUtils.applyCopyPreferencesForClipboard(
+        plainText: 'ויאמר יהוה',
+        htmlText: '<b>ויאמר יהוה</b>',
+        replaceHolyNames: true,
+        holyNameStyle: HolyNameStyle.hehApostrophe,
+      );
+
+      expect(result.plainText, "ויאמר ה'");
+      expect(result.htmlText, "<b>ויאמר ה'</b>");
     });
   });
 

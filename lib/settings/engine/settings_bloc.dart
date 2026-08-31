@@ -7,6 +7,7 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
@@ -30,6 +31,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateShowExternalBooks>(_onUpdateShowExternalBooks);
     on<UpdateShowTeamim>(_onUpdateShowTeamim);
     on<UpdateReplaceHolyNames>(_onUpdateReplaceHolyNames);
+    on<UpdateHolyNameStyle>(_onUpdateHolyNameStyle);
     on<UpdateAutoUpdateIndex>(_onUpdateAutoUpdateIndex);
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
@@ -117,6 +119,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         showExternalBooks: settings['showExternalBooks'],
         showTeamim: settings['showTeamim'],
         replaceHolyNames: settings['replaceHolyNames'],
+        holyNameStyle: HolyNameStyle.fromStorage(settings['holyNameStyle']),
         autoUpdateIndex: settings['autoUpdateIndex'],
         defaultRemoveNikud: settings['defaultRemoveNikud'],
         removeNikudFromTanach: settings['removeNikudFromTanach'],
@@ -490,6 +493,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateReplaceHolyNames(event.replaceHolyNames);
     emit(state.copyWith(replaceHolyNames: event.replaceHolyNames));
+  }
+
+  Future<void> _onUpdateHolyNameStyle(
+    UpdateHolyNameStyle event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateHolyNameStyle(event.holyNameStyle.storageKey);
+    emit(state.copyWith(holyNameStyle: event.holyNameStyle));
   }
 
   Future<void> _onUpdateAutoUpdateIndex(

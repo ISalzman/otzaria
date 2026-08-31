@@ -1222,6 +1222,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: widget.isMainText ? state.searchText : '',
       searchOptions: widget.isMainText ? state.searchOptions : const {},
       alternativeWords: widget.isMainText ? state.alternativeWords : const {},
@@ -2334,6 +2335,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       plainText: finalText,
       htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
     );
 
     final item = DataWriterItem();
@@ -2902,6 +2904,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     removePunctuation: _removePunctuation(state),
                     removeTeamim: !settingsState.showTeamim,
                     replaceHolyNames: settingsState.replaceHolyNames,
+                    holyNameStyle: settingsState.holyNameStyle,
                     searchText: searchText,
                     highlightYellowBackground:
                         widget.isMainText &&
@@ -3184,6 +3187,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: searchText,
       searchOptions: useStateSearchSettings ? state.searchOptions : const {},
       alternativeWords: useStateSearchSettings

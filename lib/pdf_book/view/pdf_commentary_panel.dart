@@ -2044,7 +2044,10 @@ class _CollapsibleCommentaryGroupState
                 Expanded(
                   child: Text(
                     widget.settingsState.replaceHolyNames
-                        ? utils.replaceHolyNames(widget.group.bookTitle)
+                        ? utils.replaceHolyNames(
+                            widget.group.bookTitle,
+                            style: widget.settingsState.holyNameStyle,
+                          )
                         : widget.group.bookTitle,
                     style: TextStyle(
                       fontSize: widget.settingsState.commentatorsFontSize - 2,
@@ -2094,7 +2097,10 @@ class _CollapsibleCommentaryGroupState
                           }
                         }
                         if (widget.settingsState.replaceHolyNames) {
-                          displayTitle = utils.replaceHolyNames(displayTitle);
+                          displayTitle = utils.replaceHolyNames(
+                            displayTitle,
+                            style: widget.settingsState.holyNameStyle,
+                          );
                         }
                         final reportedTitle = displayTitle;
                         WidgetsBinding.instance.addPostFrameCallback((_) {

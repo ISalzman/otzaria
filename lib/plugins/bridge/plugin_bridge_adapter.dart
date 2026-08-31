@@ -2586,6 +2586,9 @@ class PluginBridgeAdapter {
           replaceHolyNames:
               Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
               false,
+          holyNameStyle: HolyNameStyle.fromStorage(
+            Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+          ),
         ),
         currentRef: snapshot?.currentRef,
       );
@@ -2626,6 +2629,9 @@ class PluginBridgeAdapter {
         replaceHolyNames:
             Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
             false,
+        holyNameStyle: HolyNameStyle.fromStorage(
+          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+        ),
       ),
       currentRef: null,
     );
@@ -5062,6 +5068,9 @@ class PluginBridgeAdapter {
         replaceHolyNames:
             Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
             false,
+        holyNameStyle: HolyNameStyle.fromStorage(
+          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+        ),
       ),
       renderedStartUtf16: start,
       renderedEndUtf16: end,

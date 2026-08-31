@@ -15,6 +15,7 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 /// טאב הגדרות תצוגת ספרים
 /// ניתן להשתמש בו גם כתוכן בתוך דיאלוג וגם כטאב במסך הגדרות
@@ -137,8 +138,9 @@ class TextSettingsTab extends StatelessWidget {
         'קדושה',
         'יוצג',
         'לא יוצג',
-        'מופעל',
-        'לא מופעל',
+        'יקוק',
+        "ה'",
+        'הוי"ה',
       ],
     ),
     SettingsSearchEntry(
@@ -470,17 +472,42 @@ class TextSettingsTab extends StatelessWidget {
             );
           },
         ),
-        SettingsActionTile.switchTile(
+        SettingsActionTile.segmentedTile<String>(
           icon: FluentIcons.shield_keyhole_24_regular,
           title: context.settingsText('הצגת שם הקודש'),
-          subtitle: context.settingsText(
-            !state.replaceHolyNames
-                ? 'השם הקדוש יוצג'
-                : 'השם הקדוש לא יוצג מפני קדושתו',
-          ),
-          value: !state.replaceHolyNames,
+          options: [
+            SegmentOption(
+              value: 'show',
+              label: context.settingsText('הצג ככתבו'),
+              subtitle: context.settingsText('שם הוי"ה יוצג ככתבו'),
+            ),
+            SegmentOption(
+              value: 'kuf',
+              label: context.settingsText('יקוק'),
+              subtitle: context.settingsText('שם הוי"ה יוחלף ביקוק'),
+            ),
+            SegmentOption(
+              value: 'heh',
+              label: context.settingsText("ה'"),
+              subtitle: context.settingsText("שם הוי\"ה יוחלף בה'"),
+            ),
+          ],
+          currentValue: !state.replaceHolyNames
+              ? 'show'
+              : state.holyNameStyle.storageKey,
           onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateReplaceHolyNames(!value));
+            if (value == 'show') {
+              context.read<SettingsBloc>().add(
+                const UpdateReplaceHolyNames(false),
+              );
+              return;
+            }
+            context.read<SettingsBloc>().add(
+              const UpdateReplaceHolyNames(true),
+            );
+            context.read<SettingsBloc>().add(
+              UpdateHolyNameStyle(HolyNameStyle.fromStorage(value)),
+            );
           },
         ),
         SettingsActionTile.switchTile(

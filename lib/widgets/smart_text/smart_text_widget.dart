@@ -717,6 +717,7 @@ class SimpleSmartText extends StatelessWidget {
   final bool removeNikud;
   final bool removeTeamim;
   final bool replaceHolyNames;
+  final utils.HolyNameStyle holyNameStyle;
   final String searchText;
   final Function(OpenedTab)? onOpenBook;
   final Key? widgetKey;
@@ -729,6 +730,7 @@ class SimpleSmartText extends StatelessWidget {
     this.removeNikud = false,
     this.removeTeamim = true,
     this.replaceHolyNames = false,
+    this.holyNameStyle = utils.HolyNameStyle.kufKuf,
     this.searchText = '',
     this.onOpenBook,
     this.widgetKey,
@@ -744,6 +746,7 @@ class SimpleSmartText extends StatelessWidget {
         removeNikud: removeNikud,
         removeTeamim: removeTeamim,
         replaceHolyNames: replaceHolyNames,
+        holyNameStyle: holyNameStyle,
         searchText: searchText,
       ),
       onOpenBook: onOpenBook,

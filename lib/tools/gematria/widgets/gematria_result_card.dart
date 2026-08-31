@@ -62,18 +62,30 @@ class GematriaResultCard extends StatelessWidget {
                   ? result.internalPath
                   : result.bookTitle;
               if (state.replaceHolyNames) {
-                displayPath = utils.replaceHolyNames(displayPath);
+                displayPath = utils.replaceHolyNames(
+                  displayPath,
+                  style: state.holyNameStyle,
+                );
               }
               String displayText = result.preview;
               if (state.replaceHolyNames) {
-                displayText = utils.replaceHolyNames(displayText);
+                displayText = utils.replaceHolyNames(
+                  displayText,
+                  style: state.holyNameStyle,
+                );
               }
 
               String before = result.data.contextBefore;
               String after = result.data.contextAfter;
               if (state.replaceHolyNames) {
-                before = utils.replaceHolyNames(before);
-                after = utils.replaceHolyNames(after);
+                before = utils.replaceHolyNames(
+                  before,
+                  style: state.holyNameStyle,
+                );
+                after = utils.replaceHolyNames(
+                  after,
+                  style: state.holyNameStyle,
+                );
               }
 
               return ConstrainedBox(

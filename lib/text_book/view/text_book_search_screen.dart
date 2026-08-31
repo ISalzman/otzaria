@@ -822,7 +822,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                   builder: (context, settingsState) {
                     String text = item.header!;
                     if (settingsState.replaceHolyNames) {
-                      text = utils.replaceHolyNames(text);
+                      text = utils.replaceHolyNames(
+                        text,
+                        style: settingsState.holyNameStyle,
+                      );
                     }
                     return NavTreeHeader(title: text);
                   },
@@ -836,7 +839,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 builder: (context, settingsState) {
                   String snippet = result.snippet;
                   if (settingsState.replaceHolyNames) {
-                    snippet = utils.replaceHolyNames(snippet);
+                    snippet = utils.replaceHolyNames(
+                      snippet,
+                      style: settingsState.holyNameStyle,
+                    );
                   }
 
                   final defaultStyle = TextStyle(

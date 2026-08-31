@@ -1180,7 +1180,27 @@ int _htmlTagEnd(String text, int start) {
   return -1;
 }
 
-String replaceHolyNames(String s) {
+/// סגנון החלפת שם הקודש בתצוגה.
+enum HolyNameStyle {
+  /// החלפת ה' ב-ק' (יקוק) תוך שמירת הניקוד.
+  kufKuf('kuf'),
+
+  /// החלפה ב"ה'" — הניקוד והטעמים של השם עצמו מושמטים.
+  hehApostrophe('heh');
+
+  final String storageKey;
+  const HolyNameStyle(this.storageKey);
+
+  static HolyNameStyle fromStorage(String? key) =>
+      key == HolyNameStyle.hehApostrophe.storageKey
+      ? HolyNameStyle.hehApostrophe
+      : HolyNameStyle.kufKuf;
+}
+
+String replaceHolyNames(
+  String s, {
+  HolyNameStyle style = HolyNameStyle.kufKuf,
+}) {
   return s.replaceAllMapped(
     _holyName,
     (match) {
@@ -1188,7 +1208,9 @@ String replaceHolyNames(String s) {
         return match.group(0)!;
       }
 
-      return 'י${match[1]}ק${match[2]}ו${match[3]}ק${match[4]}';
+      return style == HolyNameStyle.hehApostrophe
+          ? "ה'"
+          : 'י${match[1]}ק${match[2]}ו${match[3]}ק${match[4]}';
     },
   );
 }

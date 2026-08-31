@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchScope;
@@ -60,6 +61,19 @@ void main() {
 
       expect(sameParagraph, isNot(equals(wordDistance)));
       expect(sameParagraph.hashCode, isNot(wordDistance.hashCode));
+    });
+
+    test('changes when holy name style changes', () {
+      // בלי הסגנון בשוויון, מעבר בין יקוק ל-ה' לא היה מרענן טקסט מרונדר.
+      const heh = RenderSettings(
+        replaceHolyNames: true,
+        holyNameStyle: HolyNameStyle.hehApostrophe,
+      );
+      const kuf = RenderSettings(replaceHolyNames: true);
+
+      expect(heh, isNot(equals(kuf)));
+      expect(heh.hashCode, isNot(equals(kuf.hashCode)));
+      expect(kuf.copyWith(holyNameStyle: HolyNameStyle.hehApostrophe), heh);
     });
 
     test('changes when font weight changes', () {

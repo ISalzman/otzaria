@@ -61,6 +61,7 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
@@ -123,6 +124,7 @@ class _WordExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
   final String? fontFamily;
   final double fontSize;
 
@@ -132,6 +134,7 @@ class _WordExportRequest {
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
     required this.fontFamily,
     required this.fontSize,
   });
@@ -142,12 +145,14 @@ class _TextExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
 
   const _TextExportRequest({
     required this.rawContent,
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
   });
 }
 
@@ -162,6 +167,7 @@ Uint8List _createTextBookWordExport(_WordExportRequest request) {
             removeNikud: request.removeNikud,
             removeTaamim: request.removeTaamim,
             shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+            holyNameStyle: request.holyNameStyle,
             stripHtml: false,
           ),
         ),
@@ -192,6 +198,7 @@ String _createTextBookTextExport(_TextExportRequest request) {
           removeNikud: request.removeNikud,
           removeTaamim: request.removeTaamim,
           shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+          holyNameStyle: request.holyNameStyle,
           stripHtml: true,
         ),
       )
@@ -683,6 +690,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
             fontFamily: settingsState.fontFamily,
             fontSize: state.fontSize,
           ),
@@ -696,6 +704,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
           ),
         );
         bytes = Uint8List.fromList(utf8.encode(text));
@@ -3486,6 +3495,7 @@ Future<void> _dispatchContextMenuShortcut({
     removePunctuation: state.removePunctuation,
     removeTeamim: !settingsState.showTeamim,
     replaceHolyNames: settingsState.replaceHolyNames,
+    holyNameStyle: settingsState.holyNameStyle,
     searchText: state.searchText,
     searchOptions: state.searchOptions,
     alternativeWords: state.alternativeWords,

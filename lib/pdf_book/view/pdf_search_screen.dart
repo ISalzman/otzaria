@@ -636,7 +636,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
                       : 'עמוד $item';
 
                   if (settingsState.replaceHolyNames) {
-                    text = utils.replaceHolyNames(text);
+                    text = utils.replaceHolyNames(
+                      text,
+                      style: settingsState.holyNameStyle,
+                    );
                   }
 
                   return NavTreeHeader(title: text);
@@ -815,7 +818,7 @@ class SearchResultTile extends StatelessWidget {
 
     var html = text;
     if (settingsState.replaceHolyNames) {
-      html = utils.replaceHolyNames(html);
+      html = utils.replaceHolyNames(html, style: settingsState.holyNameStyle);
     }
 
     if (query.isEmpty) {

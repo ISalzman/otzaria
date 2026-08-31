@@ -2648,6 +2648,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   previous.removeNikudFromTanach !=
                       current.removeNikudFromTanach ||
                   previous.replaceHolyNames != current.replaceHolyNames ||
+                  previous.holyNameStyle != current.holyNameStyle ||
                   previous.libraryViewMode != current.libraryViewMode ||
                   previous.copyWithHeaders != current.copyWithHeaders ||
                   previous.copyHeaderFormat != current.copyHeaderFormat ||
@@ -2738,6 +2739,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 dispatch(
                   SettingsRepository.keyReplaceHolyNames,
                   current.replaceHolyNames,
+                );
+              }
+              if (previous.holyNameStyle != current.holyNameStyle) {
+                dispatch(
+                  SettingsRepository.keyHolyNameStyle,
+                  current.holyNameStyle.storageKey,
                 );
               }
               if (previous.libraryViewMode != current.libraryViewMode) {
