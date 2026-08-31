@@ -46,6 +46,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/utils/ui/book_format_icon.dart';
+import 'package:otzaria/utils/ui/editable_focus.dart';
 
 // ── קבועים ────────────────────────────────────────────────────────────────────
 
@@ -257,18 +258,6 @@ calculateLibraryPreviewPaneWidths({
 
 /// הפעולה שמקש Backspace מבצע בספרייה.
 enum LibraryBackspaceAction { none, navigateUp, clearSearch }
-
-/// האם הפוקוס הראשי יושב בשדה טקסט. צומת הפוקוס של TextField נקשר
-/// לווידג'ט Focus פנימי — בדיקת `context.widget` לבדה מחזירה false גם
-/// כשמקלידים בשדה, ואז Backspace מחק את כל החיפוש (issue #1061).
-@visibleForTesting
-bool isEditableTextFocusTarget() {
-  final focusContext = FocusManager.instance.primaryFocus?.context;
-  if (focusContext == null) return false;
-  final focusedWidget = focusContext.widget;
-  if (focusedWidget is EditableText || focusedWidget is TextField) return true;
-  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
-}
 
 /// מכריע מה Backspace עושה לפי מצב הפוקוס והחיפוש: בשדה טקסט המקש נשאר
 /// מחיקת תו, למעט שדה החיפוש של הספרייה כשהוא ריק — אז עולים תיקייה.
