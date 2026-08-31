@@ -77,6 +77,9 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
+import 'package:otzaria/workspaces/bloc/workspace_event.dart';
+import 'package:otzaria/workspaces/bloc/workspace_state.dart';
+import 'package:otzaria/workspaces/workspace.dart';
 import 'package:otzaria/plugins/database/plugin_database_service.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
@@ -661,6 +664,12 @@ class PluginBridgeAdapter {
   final Map<PluginBookIdentityKey, String> _bookContentCache = {};
   static const int _bookContentCacheMaxEntries = 4;
 
+  /// אורך מקסימלי לשם שולחן עבודה שתוסף יוצר — השם מוצג בממשק המשתמש.
+  static const int _workspaceNameMaxLength = 100;
+
+  /// חסם ההמתנה לפעולת שולחן עבודה שעוברת דרך ה-WorkspaceBloc.
+  static const Duration _workspaceActionTimeout = Duration(seconds: 5);
+
   Library? _bookIndexLibrary;
   Map<int, List<Book>> _booksById = const {};
   Map<String, List<Book>> _booksByTitle = const {};
@@ -775,6 +784,8 @@ class PluginBridgeAdapter {
         return await _handleSearch(action, args, eventSink: eventSink);
       case 'reader':
         return await _handleReader(action, args);
+      case 'workspace':
+        return await _handleWorkspace(action, args);
       case 'navigation':
         return await _handleNavigation(action, args);
       case 'notes':
@@ -2248,7 +2259,7 @@ class PluginBridgeAdapter {
         }
       case 'getCurrentState':
         final tabsState = _dependencies.tabsBloc.state;
-        final tabs = tabsState.tabs.where((tab) => tab is! ToolTab).toList();
+        final tabs = _pluginVisibleTabs();
         final panes = tabs.map(_paneForPlugins).toList();
         // Use the same resolver as getCurrentRef for consistent currentRef values
         final snapshots = await Future.wait(panes.map(resolveReaderLocation));
@@ -2894,6 +2905,145 @@ class PluginBridgeAdapter {
           ? const {}
           : Map<String, dynamic>.from(overrides as Map),
     );
+  }
+
+  // ----------------------------------------------------------------
+  // workspace.*
+  // ----------------------------------------------------------------
+  Future<dynamic> _handleWorkspace(
+    String action,
+    Map<String, dynamic> args,
+  ) async {
+    final bloc = _dependencies.workspaceBloc;
+    switch (action) {
+      case 'list':
+        final activeId = bloc.state.activeWorkspaceId;
+        return bloc.state.workspaces
+            .map(
+              (workspace) => {
+                'id': workspace.id,
+                'name': workspace.name,
+                'isActive': workspace.id == activeId,
+                // בשולחן הפעיל הטאבים חיים ב-TabsBloc ונשמרים אליו רק במעבר,
+                // ולכן הספירה שלו חייבת לבוא משם ולא מהעותק השמור.
+                'tabCount': workspace.id == activeId
+                    ? _pluginVisibleTabs().length
+                    : workspace.tabs.where(_isPluginVisibleTab).length,
+              },
+            )
+            .toList();
+      case 'getActive':
+        final active = bloc.state.activeWorkspace;
+        return {'id': active?.id, 'name': active?.name};
+      case 'create':
+        final name = (args['name'] as String?)?.trim() ?? '';
+        if (name.isEmpty) {
+          throw Exception('error.invalid_params: name required');
+        }
+        if (name.length > _workspaceNameMaxLength) {
+          throw Exception(
+            'error.invalid_params: name exceeds '
+            '$_workspaceNameMaxLength characters',
+          );
+        }
+        final switchTo = args['switchTo'] as bool? ?? false;
+        final reuseExisting = args['reuseExisting'] as bool? ?? false;
+        if (reuseExisting) {
+          for (final workspace in bloc.state.workspaces) {
+            if (workspace.name.trim() != name) continue;
+            if (switchTo && !await _switchWorkspace(workspace.id)) {
+              throw Exception('error.internal: failed to switch workspace');
+            }
+            return {'id': workspace.id, 'created': false};
+          }
+        }
+        final created = await _createWorkspace(name);
+        if (created == null) {
+          throw Exception('error.internal: failed to create workspace');
+        }
+        if (switchTo && !await _switchWorkspace(created.id)) {
+          throw Exception('error.internal: failed to switch workspace');
+        }
+        return {'id': created.id, 'created': true};
+      case 'switch':
+        final id = (args['id'] as String?)?.trim() ?? '';
+        if (id.isEmpty) {
+          throw Exception('error.invalid_params: id required');
+        }
+        // שולחן שאינו קיים אינו שגיאת ארגומנט: תוסף שמסנכרן בין מחשבים מקבל
+        // מזהה מהצד השני ונופל בחזרה ל-create לפי השם.
+        if (!bloc.state.workspaces.any((workspace) => workspace.id == id)) {
+          return false;
+        }
+        return await _switchWorkspace(id);
+      default:
+        throw Exception(
+          'error.unknown_method: Unknown workspace action: $action',
+        );
+    }
+  }
+
+  /// יוצר שולחן עבודה חדש ומחזיר אותו. ה-`AddWorkspace` אינו מחזיר את המזהה
+  /// שנוצר, ולכן מאתרים אותו במצב הראשון שבו נוסף שולחן שלא היה קודם.
+  Future<Workspace?> _createWorkspace(String name) async {
+    final bloc = _dependencies.workspaceBloc;
+    final knownIds = bloc.state.workspaces
+        .map((workspace) => workspace.id)
+        .toSet();
+    bool hasNew(WorkspaceState state) =>
+        state.workspaces.any((workspace) => !knownIds.contains(workspace.id));
+    final state = await _awaitWorkspaceState(
+      hasNew,
+      () => bloc.add(
+        AddWorkspace(name: name, tabs: const [], currentTabIndex: 0),
+      ),
+    );
+    if (state == null) return null;
+    return state.workspaces.lastWhere(
+      (workspace) => !knownIds.contains(workspace.id),
+    );
+  }
+
+  /// מעבר לשולחן [id] באותו רצף שהדיאלוג מבצע
+  /// (`lib/workspaces/view/workspace_switcher_dialog.dart`): הטאבים הנוכחיים
+  /// נמסרים לאירוע כי ה-UI הוא מקור האמת עליהם — בלעדיהם המעבר מוחק אותם.
+  /// נמסרת רשימת הטאבים **המלאה**, כולל `ToolTab`, ולא הרשימה שהתוסף רואה.
+  Future<bool> _switchWorkspace(String id) async {
+    final bloc = _dependencies.workspaceBloc;
+    if (bloc.state.activeWorkspaceId == id) return true;
+    final tabsState = _dependencies.tabsBloc.state;
+    final state = await _awaitWorkspaceState(
+      (workspaceState) => workspaceState.activeWorkspaceId == id,
+      () => bloc.add(
+        SwitchToWorkspace(
+          targetWorkspaceId: id,
+          currentTabsToSave: tabsState.tabs,
+          currentTabIndexToSave: tabsState.currentTabIndex,
+        ),
+      ),
+    );
+    return state != null;
+  }
+
+  /// מפעיל [trigger] וממתין למצב הראשון שמקיים [test]. פעולות שולחן עבודה
+  /// עוברות דרך אירוע ואינן מחזירות ערך, ולכן ה-API ממתין למצב במקום להניח
+  /// שהאירוע כבר טופל. מחזיר `null` על שגיאה מהבלוק או על פסק זמן.
+  Future<WorkspaceState?> _awaitWorkspaceState(
+    bool Function(WorkspaceState state) test,
+    void Function() trigger,
+  ) async {
+    final bloc = _dependencies.workspaceBloc;
+    final settled = bloc.stream.firstWhere(
+      (state) => test(state) || state.error != null,
+      orElse: () => bloc.state,
+    );
+    trigger();
+    try {
+      final state = await settled.timeout(_workspaceActionTimeout);
+      return test(state) ? state : null;
+    } on TimeoutException {
+      return null;
+    }
   }
 
   // ----------------------------------------------------------------
@@ -5262,6 +5412,15 @@ class PluginBridgeAdapter {
       'contextMenu': const <String>[],
     };
   }
+
+  /// טאב שה-API חושף לתוסף. טאבי הכלים (ToolTab) מסוננים, ולכן אינדקס
+  /// ברשימה שהתוסף רואה **אינו** האינדקס ב-tabsBloc.state.tabs.
+  static bool _isPluginVisibleTab(OpenedTab tab) => tab is! ToolTab;
+
+  /// הטאבים שה-API חושף, בסדר שבו התוסף מקבל אותם. כל פעולה לפי אינדקס
+  /// שהתוסף מסר חייבת לעבור דרך כאן — אינדקס גולמי יפגע בטאב הלא נכון.
+  List<OpenedTab> _pluginVisibleTabs() =>
+      _dependencies.tabsBloc.state.tabs.where(_isPluginVisibleTab).toList();
 
   OpenedTab _paneForPlugins(OpenedTab tab) {
     if (tab is! CombinedTab) return tab;

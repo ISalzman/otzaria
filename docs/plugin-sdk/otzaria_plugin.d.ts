@@ -525,6 +525,42 @@ export interface HighlightCapabilities {
   contextMenu: string[];
 }
 
+/**
+ * שולחן עבודה — אוסף הכרטיסיות הפתוחות (`workspace.list`).
+ */
+export interface WorkspaceEntry {
+  id: string;
+  name: string;
+  isActive: boolean;
+  /**
+   * מספר הכרטיסיות שה-API חושף — אותן כרטיסיות שב-`ReaderState.openTabs`.
+   * כרטיסיות של כלים ותוספים אינן נמנות. בשולחן הפעיל זו הספירה החיה.
+   */
+  tabCount: number;
+}
+
+/** השולחן הפעיל (`workspace.getActive`). `null` כשעדיין לא נטען שולחן. */
+export interface ActiveWorkspace {
+  id: string | null;
+  name: string | null;
+}
+
+/** ארגומנטים ל-`workspace.create`. */
+export interface WorkspaceCreateArgs {
+  /** עד 100 תווים; שם ריק נדחה ב-`error.invalid_params`. */
+  name: string;
+  /** מעבר לשולחן מיד לאחר היצירה. ברירת מחדל `false`. */
+  switchTo?: boolean;
+  /** החזרת שולחן קיים באותו שם במקום יצירת כפילות. ברירת מחדל `false`. */
+  reuseExisting?: boolean;
+}
+
+/** תוצאת `workspace.create`. `created: false` = הוחזר שולחן קיים. */
+export interface WorkspaceCreateResult {
+  id: string;
+  created: boolean;
+}
+
 /** סימנייה (`bookmarks.list`). */
 export interface BookmarkEntry extends BookIdentity {
   title: string;
@@ -1650,6 +1686,10 @@ export type OtzariaMethod =
   | 'reader.getHighlightCapabilities'
   | 'reader.findTextOccurrences'
   | 'reader.getSectionTextMap'
+  | 'workspace.list'
+  | 'workspace.getActive'
+  | 'workspace.create'
+  | 'workspace.switch'
   | 'navigation.goTo'
   | 'notes.list'
   | 'notes.getBookNotesSummary'

@@ -111,6 +111,10 @@ const Set<String> _knownApiMethods = {
   'reader.revealHighlight',
   'reader.clearHighlight',
   'reader.clearAllHighlights',
+  'workspace.list',
+  'workspace.getActive',
+  'workspace.create',
+  'workspace.switch',
   'navigation.goTo',
   'plugin.openSelf',
   'plugin.openOther',
@@ -285,6 +289,10 @@ const Map<String, String> _methodRequiredPermission = {
   'reader.revealHighlight': 'reader.highlight',
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
+  'workspace.list': pluginWorkspaceReadPermission,
+  'workspace.getActive': pluginWorkspaceReadPermission,
+  'workspace.create': pluginWorkspaceManagePermission,
+  'workspace.switch': pluginWorkspaceManagePermission,
   'navigation.goTo': 'navigation.write',
   'plugin.openSelf': 'navigation.write',
   'plugin.openOther': pluginOpenOtherPermission,
@@ -503,6 +511,10 @@ const Map<String, String> _methodMinVersion = {
   'app.unregisterShortcut': '0.9.97',
   'app.updateShortcut': '0.9.97',
   'library.refreshUserBooks': '0.9.97',
+  'workspace.list': '0.9.97',
+  'workspace.getActive': '0.9.97',
+  'workspace.create': '0.9.97',
+  'workspace.switch': '0.9.97',
 };
 
 /// שדות שמורים שאינם API methods (כדי שלא ייתפסו ב-shorthand scanner).

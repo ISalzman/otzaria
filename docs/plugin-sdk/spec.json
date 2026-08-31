@@ -56,7 +56,9 @@
     "settings.read",
     "tools.read",
     "ui.create_shortcut",
-    "ui.feedback"
+    "ui.feedback",
+    "workspace.manage",
+    "workspace.read"
   ],
   "baselinePermissions": [
     "app.info.read",
@@ -203,7 +205,11 @@
     "ui.showError",
     "ui.showMessage",
     "ui.showSuccess",
-    "ui.showWarning"
+    "ui.showWarning",
+    "workspace.create",
+    "workspace.getActive",
+    "workspace.list",
+    "workspace.switch"
   ],
   "undocumentedApiMethods": [
     "plugin.requestInstall"
@@ -330,7 +336,11 @@
     "ui.showError": "ui.feedback",
     "ui.showMessage": "ui.feedback",
     "ui.showSuccess": "ui.feedback",
-    "ui.showWarning": "ui.feedback"
+    "ui.showWarning": "ui.feedback",
+    "workspace.create": "workspace.manage",
+    "workspace.getActive": "workspace.read",
+    "workspace.list": "workspace.read",
+    "workspace.switch": "workspace.manage"
   },
   "methodMinVersions": {
     "app.getConnectivity": "0.9.96",
@@ -466,7 +476,11 @@
     "ui.showError": "0.9.89",
     "ui.showMessage": "0.9.89",
     "ui.showSuccess": "0.9.89",
-    "ui.showWarning": "0.9.89"
+    "ui.showWarning": "0.9.89",
+    "workspace.create": "0.9.97",
+    "workspace.getActive": "0.9.97",
+    "workspace.list": "0.9.97",
+    "workspace.switch": "0.9.97"
   },
   "events": [
     "app.command",
