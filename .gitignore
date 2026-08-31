@@ -96,12 +96,10 @@ installer/otzaria-0.9.96-windows.exe
 installer/otzaria-0.9.96-windows-full.exe
 # End generated Windows installers
 
-pubspec.lock
 flutter/
 
 seforim.db
 LOG.txt
-pubspec.lock
 macos/Podfile.lock
 macos/Flutter/GeneratedPluginRegistrant.swift
 isolate.pdf

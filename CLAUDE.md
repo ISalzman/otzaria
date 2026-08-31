@@ -923,6 +923,22 @@ dart fix --apply            # Auto-fix common issues
 flutter clean && flutter pub get  # Nuclear option for build issues
 ```
 
+### Dependencies are pinned — reproducible builds
+`pubspec.lock` is **tracked in git**, and every `git:` dependency in
+`pubspec.yaml` is pinned to a full 40-character SHA. A `ref:` that names a
+branch (or is missing entirely) makes `pub get` pull whatever the fork's HEAD
+happens to be, so two machines can build different code from the same commit.
+CI enforces this in `flutter_tests.yml`.
+
+To bump a pinned dependency, edit its `ref:` to the new SHA — `flutter pub
+upgrade <package>` will not move a pinned ref:
+
+```bash
+git ls-remote https://github.com/Otzaria/<repo> refs/heads/master  # get the SHA
+# edit the ref: in pubspec.yaml, then:
+flutter pub get && git add pubspec.yaml pubspec.lock
+```
+
 ## Platform Support
 **Supported:** Windows, Linux, Android, iOS, macOS
 
