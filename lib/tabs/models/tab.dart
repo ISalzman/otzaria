@@ -45,6 +45,13 @@ abstract class OpenedTab {
       var searchMode = tab.searchMode;
       var searchDistance = tab.searchDistance;
       var matchPolicy = tab.matchPolicy;
+      // שלושת שדות ההדגשה קשורי-המקור: `?mark` deep link (highlightText,
+      // permanentHighlightLine) ושורות התוצאה שהחיפוש הגלובלי מצא. בלעדיהם
+      // שכפול טאב ומעבר בין שולחנות עבודה מחזירים ספר בלי ההדגשה שהמשתמש
+      // רואה — ובלי סימון שורות התוצאה שהמנוע החזיר.
+      String highlightText = tab.highlightText;
+      int? permanentHighlightLine = tab.permanentHighlightLine;
+      Set<int>? searchResultLines = tab.initialSearchResultLines;
       final state = tab.bloc.state;
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
@@ -59,6 +66,15 @@ abstract class OpenedTab {
         searchMode = state.searchMode;
         searchDistance = state.searchDistance;
         matchPolicy = state.matchPolicy;
+        // `_onLoadContent` זורע את שלושת השדות ל-Loaded מכל מסלול (מ-Initial
+        // או משימור Loaded קודם), ולכן ה-state סמכותי — קריאה ללא נפילה חזרה
+        // לשדות הטאב. נפילה כזו הייתה מחזירה שורות תוצאה שנוקו במפורש
+        // (`clearSearchResultLines`) עם חיפוש ידני חדש בתוך הספר.
+        highlightText = state.highlightText;
+        permanentHighlightLine = state.permanentHighlightLine;
+        // ב-Loaded השדה נקרא searchResultLines; ב-Initial אותו נתון עצמו
+        // נקרא initialSearchResultLines.
+        searchResultLines = state.searchResultLines;
       } else if (state is TextBookInitial) {
         // טאב ששמור בשולחן עבודה לא-פעיל מעולם לא נטען — בלי הענף הזה
         // צורת הדף והתצוגה המפוצלת מתאפסות בכל החלפת שולחן עבודה.
@@ -82,6 +98,13 @@ abstract class OpenedTab {
         searchMode: searchMode,
         searchDistance: searchDistance,
         matchPolicy: matchPolicy,
+        highlightText: highlightText,
+        permanentHighlightLine: permanentHighlightLine,
+        // עותק של ה-Set: בלעדיו המקור והשכפול מצביעים על אותו אוסף,
+        // ושינוי באחד היה משנה את השני.
+        initialSearchResultLines: searchResultLines == null
+            ? null
+            : Set<int>.of(searchResultLines),
         commentators: commentators,
         openLeftPane: state.showLeftPane,
         splitedView: splitedView,
