@@ -951,10 +951,14 @@ const List<String> _eraCategories = [
 ];
 const String _defaultCategory = 'מפרשים נוספים';
 
-/// סופר את הופעות השאילתה בטקסט — באותה התאמה בדיוק כמו [highLight]
-/// (תבנית מהמנוע, סובלנות ניקוד ובדיקת גבולות מילה), כך שהמונה המוצג
-/// לעולם לא סוטה ממספר ההדגשות בפועל.
-int countMatches(String text, String searchQuery) {
+/// סופר את הופעות השאילתה בטקסט — באותה התאמה בדיוק כמו [highLight]:
+/// תבנית מהמנוע, סובלנות ניקוד, וגבולות מילה לפי [partialWordMatch] —
+/// שחייב לקבל את אותו ערך שמגיע להדגשה, אחרת המונה סוטה מהצביעה בפועל.
+int countMatches(
+  String text,
+  String searchQuery, {
+  bool partialWordMatch = false,
+}) {
   if (searchQuery.isEmpty) return 0;
   final compiled = _resolveHighlightPattern(
     searchQuery,
@@ -965,11 +969,11 @@ int countMatches(String text, String searchQuery) {
     false,
   );
   if (compiled == null) return 0;
-  return _findHighlightMatches(
-    text,
-    compiled,
-    compiled.boundaryEligible,
-  ).length;
+  final requireTokenBoundaries = [
+    for (final eligible in compiled.boundaryEligible)
+      eligible && !partialWordMatch,
+  ];
+  return _findHighlightMatches(text, compiled, requireTokenBoundaries).length;
 }
 
 Future<bool> hasTopic(String title, String topic) async {

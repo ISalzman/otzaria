@@ -154,6 +154,9 @@ class _CommentaryContentState extends State<CommentaryContent> {
                   content: data,
                   query: widget.searchQuery,
                   removePunctuation: widget.removePunctuation,
+                  // כמו partialWordHighlight של הרינדור למטה — המונה חייב
+                  // לספור את מה שנצבע (issue #1055).
+                  partialWordMatch: true,
                 );
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   widget.onSearchResultsCountChanged?.call(searchCount);
