@@ -183,6 +183,7 @@ class SettingsRepository {
     keyShowExternalBooks,
     keyShowTeamim,
     keyReplaceHolyNames,
+    keyHolyNameStyle,
     keyAutoUpdateIndex,
     keyDefaultNikud,
     keyRemoveNikudFromTanach,
