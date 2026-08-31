@@ -1981,6 +1981,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   ) {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
+      // ⚠️ חלונית החיפוש מסנכרנת את ה-bloc גם ב-`initState` שלה, עם
+      // `initialQuery: state.searchText` — כלומר עם אותו טקסט בדיוק. עצם
+      // בניית החלונית אינה "חיפוש ידני חדש", ולכן ניקוי הדגשת ה-`?mark`
+      // מותנה בשינוי אמיתי בשאילתה; בלי התנאי, פתיחת החלונית הייתה מוחקת
+      // הדגשת deep link לפני שהמשתמש הקליד תו.
+      final queryChanged = event.text != currentState.searchText;
       // חיפוש ידני חדש מנקה הדגשה ממוקדת קודמת מ‑deep link, אחרת ההדגשה
       // הממוקדת הייתה ממשיכה לחסום את החיפוש החדש בשאר הסעיפים.
       emit(
@@ -1997,6 +2003,14 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           clearPinpointHighlight: true,
           // שאילתה חדשה — תוצאות החיפוש הקודם אינן תקפות יותר.
           clearSearchResultLines: true,
+          // הדגשת ה-`?mark` מ-deep link נמחקת גם היא. שני הדגלים חייבים
+          // לנקות יחד: [TextBookLoaded.isPermanentHighlight] מוגדר
+          // `permanentHighlightLine == index && highlightText.isEmpty`, ולכן
+          // ניקוי הטקסט לבדו היה הופך את ההדגשה הצהובה לרקע קבוע במקום
+          // להעלים אותה. מאז שההדגשה נשמרת לדיסק, בלי הניקוי היא הייתה
+          // שורדת לנצח.
+          clearHighlightText: queryChanged,
+          clearPermanentHighlight: queryChanged,
         ),
       );
     }

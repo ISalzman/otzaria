@@ -278,9 +278,32 @@ class TextBookTab extends OpenedTab {
     // המחרוזת הרצופה, וחלונית החיפוש הציגה "אין תוצאות" על חיפוש מורכב.
     final searchState = ReadingTabSearchState.fromJson(json);
 
+    // חמשת שדות ההדגשה. קובץ קיים מגרסה שלא שמרה אותם, או ערך פגום, חייבים
+    // ליפול לברירת מחדל ולא לזרוק — כישלון כאן מפיל טאב שלם מהשחזור.
+    final rawResultLines = json['initialSearchResultLines'];
+    final Set<int>? restoredResultLines = rawResultLines is List
+        // רשימה ריקה נשמרת כריקה: "רץ חיפוש ולא נמצאו תוצאות" אינו זהה
+        // ל-null שמשמעותו "לא רץ חיפוש מנוע".
+        ? rawResultLines.whereType<int>().toSet()
+        : null;
+
     return TextBookTab(
       index: json['initalIndex'],
       book: restoredBook,
+      highlightText: json['highlightText'] is String
+          ? json['highlightText'] as String
+          : '',
+      permanentHighlightLine: json['permanentHighlightLine'] is int
+          ? json['permanentHighlightLine'] as int
+          : null,
+      initialSearchResultLines: restoredResultLines,
+      pinpointHighlight: json['pinpointHighlight'] is String
+          ? json['pinpointHighlight'] as String
+          : null,
+      pinpointHighlightSectionIndex:
+          json['pinpointHighlightSectionIndex'] is int
+          ? json['pinpointHighlightSectionIndex'] as int
+          : null,
       commentators: List<String>.from(json['commentators']),
       splitedView: splitedView,
       showPageShapeView: json['showPageShapeView'] ?? false,
@@ -310,6 +333,14 @@ class TextBookTab extends OpenedTab {
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
     // ספר ה-state כולל העשרה שנעשתה ברקע (id/מחבר/קטגוריות) — עדיף לשמירה.
     TextBook bookToSave = book;
+    // חמשת שדות ההדגשה. בלעדיהם הפעלה מחדש החזירה את הספר בלי ההדגשה
+    // שהמשתמש רואה ובלי סימון שורות התוצאה. שמות המפתחות הם שמות השדות של
+    // [TextBookTab] — ב-state שלושה מהם נקראים אחרת.
+    String highlightText = this.highlightText;
+    int? permanentHighlightLine = this.permanentHighlightLine;
+    Set<int>? searchResultLines = initialSearchResultLines;
+    String? pinpointHighlight = this.pinpointHighlight;
+    int? pinpointHighlightSectionIndex = this.pinpointHighlightSectionIndex;
 
     var searchState = ReadingTabSearchState(
       searchText: searchText,
@@ -336,6 +367,11 @@ class TextBookTab extends OpenedTab {
       commentators = loadedState.activeCommentators;
       splitedView = loadedState.showSplitView;
       showPageShapeView = loadedState.showPageShapeView;
+      highlightText = loadedState.highlightText;
+      permanentHighlightLine = loadedState.permanentHighlightLine;
+      searchResultLines = loadedState.searchResultLines;
+      pinpointHighlight = loadedState.pinpointHighlightText;
+      pinpointHighlightSectionIndex = loadedState.pinpointHighlightIndex;
       // עדכון האינדקס מה-state הנטען - תמיד לוקחים את האינדקס האחרון שנראה
       if (loadedState.visibleIndices.isNotEmpty) {
         currentIndex = loadedState.visibleIndices.first;
@@ -354,6 +390,17 @@ class TextBookTab extends OpenedTab {
       'showLeftPane': bloc.state.showLeftPane,
       'isPinned': isPinned,
       'type': 'TextBookTab',
+      // ערכי ברירת מחדל אינם נכתבים, כדי לא לנפח את הקובץ ולא להבדיל בין
+      // "לא נשמר" ל"נשמר ריק" — בדיוק כמו [ReadingTabSearchState.toJson].
+      if (highlightText.isNotEmpty) 'highlightText': highlightText,
+      'permanentHighlightLine': ?permanentHighlightLine,
+      // null = "לא רץ חיפוש מנוע"; רשימה ריקה = "רץ ולא מצא". הבחנה
+      // משמעותית, ולכן null אינו נכתב כרשימה ריקה.
+      if (searchResultLines != null)
+        'initialSearchResultLines': searchResultLines.toList(),
+      if (pinpointHighlight != null && pinpointHighlight.isNotEmpty)
+        'pinpointHighlight': pinpointHighlight,
+      'pinpointHighlightSectionIndex': ?pinpointHighlightSectionIndex,
       ...searchState.toJson(),
     };
   }
