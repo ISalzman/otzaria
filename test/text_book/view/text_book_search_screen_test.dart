@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -29,6 +30,70 @@ Future<void> main() async {
 
   setUpAll(() async {
     await Settings.init(cacheProvider: MemoryCacheProvider());
+  });
+
+  testWidgets('תו בודד אינו מריץ חיפוש בהתאמה חלקית', (tester) async {
+    await InBookSearchPreferences.saveWholeWord(false);
+    addTearDown(() => InBookSearchPreferences.saveWholeWord(false));
+
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    final focusNode = FocusNode();
+
+    addTearDown(textBookBloc.close);
+    addTearDown(settingsBloc.close);
+    addTearDown(focusNode.dispose);
+    addTearDown(resetSectionSearchWorkerForTesting);
+
+    final queries = <String>[];
+    Future<List<TextSearchResult>> simpleSearchRunner(
+      List<String> content,
+      String query,
+    ) async {
+      queries.add(query);
+      return const [];
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: TextBookSearchView(
+              contentLoader: () async => ['את השמים ואת הארץ'],
+              scrollControler: ItemScrollController(),
+              focusNode: focusNode,
+              closeLeftPaneCallback: () {},
+              initialQuery: '',
+              simpleSearchRunner: simpleSearchRunner,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'ש');
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(queries, isEmpty);
+    // אין "אין תוצאות" על שאילתה שלא רצה בכלל.
+    expect(find.text('אין תוצאות'), findsNothing);
+    // הספר אינו מודגש על תו בודד.
+    expect(
+      textBookBloc.events.whereType<UpdateSearchText>().last.text,
+      isEmpty,
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'שמ');
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(queries, ['שמ']);
   });
 
   testWidgets('מתג "מילים שלמות" מריץ את החיפוש מחדש ומעדכן את ההדגשה', (
@@ -207,7 +272,7 @@ Future<void> main() async {
 
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'אב');
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text(TextBookMessages.searchContentLoadFailed), findsWidgets);
@@ -279,7 +344,9 @@ Future<void> main() async {
       // הקלדה אמיתית → onSearchTextChanged מריץ חיפוש פעם אחת.
       // ההמתנה ארוכה מ-debounce שדה החיפוש (200ms).
       await tester.enterText(find.byType(TextField), 'אב');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       final callsAfterTyping = runnerCalls;
       expect(callsAfterTyping, greaterThan(0));
 
@@ -287,7 +354,9 @@ Future<void> main() async {
       // ההקלדה דרך ה-bloc. שינוי שכבר משוקף ב-controller אסור שיריץ חיפוש נוסף.
       outerSetState(() => queryProp = 'אב');
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       expect(
         runnerCalls,
         callsAfterTyping,
@@ -297,7 +366,9 @@ Future<void> main() async {
       // שינוי חיצוני אמיתי: ה-query שונה מתוכן ה-controller → חיפוש כן רץ.
       outerSetState(() => queryProp = 'אברהם');
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       expect(
         runnerCalls,
         callsAfterTyping + 1,
@@ -364,10 +435,10 @@ Future<void> main() async {
     final textField = find.byType(TextField);
 
     await tester.enterText(textField, 'אב');
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
 
     await tester.enterText(textField, 'אברהם');
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('חדש'), findsOneWidget);
@@ -425,8 +496,8 @@ Future<void> main() async {
     );
 
     await tester.pump();
-    await tester.enterText(find.byType(TextField), 'x');
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.enterText(find.byType(TextField), 'xa');
+    await tester.pump(kSearchFieldDebounce + const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 100));
   }
 
@@ -443,14 +514,19 @@ Future<void> main() async {
           TextSearchResult(
             snippet: 'מוקדם',
             index: 0,
-            query: 'x',
+            query: 'xa',
             address: 'א',
           ),
-          TextSearchResult(snippet: 'אמצע', index: 5, query: 'x', address: 'ב'),
+          TextSearchResult(
+            snippet: 'אמצע',
+            index: 5,
+            query: 'xa',
+            address: 'ב',
+          ),
           TextSearchResult(
             snippet: 'מאוחר',
             index: 10,
-            query: 'x',
+            query: 'xa',
             address: 'ג',
           ),
         ],
@@ -494,9 +570,9 @@ Future<void> main() async {
         tester: tester,
         visibleIndices: const [6],
         results: [
-          TextSearchResult(snippet: 'a', index: 0, query: 'x', address: 'א'),
-          TextSearchResult(snippet: 'b', index: 5, query: 'x', address: 'ב'),
-          TextSearchResult(snippet: 'c', index: 10, query: 'x', address: 'ג'),
+          TextSearchResult(snippet: 'a', index: 0, query: 'xa', address: 'א'),
+          TextSearchResult(snippet: 'b', index: 5, query: 'xa', address: 'ב'),
+          TextSearchResult(snippet: 'c', index: 10, query: 'xa', address: 'ג'),
         ],
       );
 
@@ -536,15 +612,25 @@ Future<void> main() async {
         List<String> content,
         String query,
       ) async {
-        if (query == 'x') {
+        if (query == 'xa') {
           // 3 תוצאות, line=50 באינדקס 1.
           return [
-            TextSearchResult(snippet: 'a', index: 10, query: 'x', address: 'א'),
-            TextSearchResult(snippet: 'b', index: 50, query: 'x', address: 'ב'),
+            TextSearchResult(
+              snippet: 'a',
+              index: 10,
+              query: 'xa',
+              address: 'א',
+            ),
+            TextSearchResult(
+              snippet: 'b',
+              index: 50,
+              query: 'xa',
+              address: 'ב',
+            ),
             TextSearchResult(
               snippet: 'c',
               index: 100,
-              query: 'x',
+              query: 'xa',
               address: 'ג',
             ),
           ];
@@ -591,8 +677,10 @@ Future<void> main() async {
       );
 
       await tester.pump();
-      await tester.enterText(find.byType(TextField), 'x');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.enterText(find.byType(TextField), 'xa');
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // ניווט לתוצאה האמצעית (index 1, line=50) דרך כפתור החץ למטה.
@@ -604,7 +692,9 @@ Future<void> main() async {
 
       // עידכון השאילתה ל-'xy' — תוצאות חדשות שבהן line=50 נמצא ב-index 0.
       await tester.enterText(find.byType(TextField), 'xy');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // התוצאה הנבחרת היא הראשונה (line=50 שנשמרה). כפתור "הקודם" מנוטרל,
@@ -636,7 +726,7 @@ Future<void> main() async {
         (i) => TextSearchResult(
           snippet: 'snippet $i',
           index: i,
-          query: 'x',
+          query: 'xa',
           address: 'קטע_$i',
         ),
       );
@@ -683,7 +773,7 @@ Future<void> main() async {
         (i) => TextSearchResult(
           snippet: 'snippet $i',
           index: i,
-          query: 'x',
+          query: 'xa',
           address: 'כתובת_$i',
         ),
       );
@@ -725,9 +815,9 @@ Future<void> main() async {
         tester: tester,
         visibleIndices: const [0],
         results: [
-          TextSearchResult(snippet: 'a', index: 0, query: 'x', address: 'א'),
-          TextSearchResult(snippet: 'b', index: 5, query: 'x', address: 'ב'),
-          TextSearchResult(snippet: 'c', index: 10, query: 'x', address: 'ג'),
+          TextSearchResult(snippet: 'a', index: 0, query: 'xa', address: 'א'),
+          TextSearchResult(snippet: 'b', index: 5, query: 'xa', address: 'ב'),
+          TextSearchResult(snippet: 'c', index: 10, query: 'xa', address: 'ג'),
         ],
       );
 
@@ -784,21 +874,26 @@ Future<void> main() async {
         List<String> content,
         String query,
       ) async {
-        if (query == 'x') {
+        if (query == 'xa') {
           // שתי הופעות באותה שורה (50) והופעה נוספת לפניהן.
           return [
-            TextSearchResult(snippet: 'a', index: 10, query: 'x', address: 'א'),
+            TextSearchResult(
+              snippet: 'a',
+              index: 10,
+              query: 'xa',
+              address: 'א',
+            ),
             TextSearchResult(
               snippet: 'b1',
               index: 50,
-              query: 'x',
+              query: 'xa',
               address: 'ב',
               matchOffset: 0,
             ),
             TextSearchResult(
               snippet: 'b2',
               index: 50,
-              query: 'x',
+              query: 'xa',
               address: 'ב',
               matchOffset: 30,
             ),
@@ -848,8 +943,10 @@ Future<void> main() async {
       );
 
       await tester.pump();
-      await tester.enterText(find.byType(TextField), 'x');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.enterText(find.byType(TextField), 'xa');
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // ניווט להופעה השנייה בשורה 50 (אינדקס 2).
@@ -862,7 +959,9 @@ Future<void> main() async {
       tester.takeException();
 
       await tester.enterText(find.byType(TextField), 'xy');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // הבחירה נשמרה על ההופעה עם offset 30 — האחרונה — ולכן "הבא" מנוטרל.
@@ -901,10 +1000,20 @@ Future<void> main() async {
         List<String> content,
         String query,
       ) async {
-        if (query == 'x') {
+        if (query == 'xa') {
           return [
-            TextSearchResult(snippet: 'a', index: 10, query: 'x', address: 'א'),
-            TextSearchResult(snippet: 'b', index: 50, query: 'x', address: 'ב'),
+            TextSearchResult(
+              snippet: 'a',
+              index: 10,
+              query: 'xa',
+              address: 'א',
+            ),
+            TextSearchResult(
+              snippet: 'b',
+              index: 50,
+              query: 'xa',
+              address: 'ב',
+            ),
           ];
         }
         if (query == 'xy') {
@@ -949,8 +1058,10 @@ Future<void> main() async {
       );
 
       await tester.pump();
-      await tester.enterText(find.byType(TextField), 'x');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.enterText(find.byType(TextField), 'xa');
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // ניווט ל-line=50 (אינדקס 1).
@@ -959,7 +1070,9 @@ Future<void> main() async {
       tester.takeException();
 
       await tester.enterText(find.byType(TextField), 'xy');
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       // line=50 לא קיים בתוצאות xy. visibleIndices=[1000] → fallback

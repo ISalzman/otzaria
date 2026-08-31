@@ -377,10 +377,24 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _contentFuture = null;
   }
 
+  /// השאילתה שתרוץ בפועל, מנורמלת, או `null` כשאין מה לחפש עליה.
+  String? _searchableQuery(String raw) {
+    var query = raw.trim();
+    if (utils.hasNikud(query)) {
+      query = utils.removeVolwels(query);
+    }
+    return InBookSearchRouting.isSearchableQuery(
+          query,
+          wholeWord: _wholeWord,
+        )
+        ? query
+        : null;
+  }
+
   Future<void> _searchTextUpdated() async {
     final requestId = ++_activeSearchRequestId;
-    String query = searchTextController.text.trim();
-    if (query.isEmpty) {
+    final searchable = _searchableQuery(searchTextController.text);
+    if (searchable == null) {
       setState(() {
         searchResults = [];
         _isSearching = false;
@@ -389,9 +403,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       return;
     }
 
-    if (utils.hasNikud(query)) {
-      query = utils.removeVolwels(query);
-    }
+    final query = searchable;
 
     setState(() {
       _isSearching = true;
@@ -961,14 +973,14 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       ),
       isNoResults:
           searchResults.isEmpty &&
-          searchTextController.text.isNotEmpty &&
+          _searchableQuery(searchTextController.text) != null &&
           !_isSearching,
       errorMessage: _searchErrorMessage,
       onSearchTextChanged: (value) {
         final activeParameters = _activeSearchParameters;
         context.read<TextBookBloc>().add(
           UpdateSearchText(
-            value,
+            _searchableQuery(value) ?? '',
             searchOptions: activeParameters.searchOptions,
             alternativeWords: activeParameters.alternativeWords,
             spacingValues: activeParameters.customSpacing,

@@ -471,13 +471,27 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     _searchTextUpdated();
   }
 
+  /// השאילתה שתרוץ בפועל, מנורמלת, או `null` כשאין מה לחפש עליה.
+  String? _searchableQuery(String raw) {
+    var query = raw.trim();
+    if (utils.hasNikud(query)) {
+      query = utils.removeVolwels(query);
+    }
+    return InBookSearchRouting.isSearchableQuery(
+          query,
+          wholeWord: _wholeWord,
+        )
+        ? query
+        : null;
+  }
+
   Future<void> _searchTextUpdated() async {
     // כל שינוי בשאילתה/במצב החיפוש מבטל תוצאות אסינכרוניות ישנות. בלי מזהה
     // דור, חיפוש איטי קודם יכול להסתיים אחרי החדש ולדרוס תוצאות והדגשות.
     final generation = ++_searchGeneration;
-    String query = widget.searchController.text.trim();
+    final searchable = _searchableQuery(widget.searchController.text);
 
-    if (query.isEmpty || (!_isSimpleSearch && _bookPath == null)) {
+    if (searchable == null || (!_isSimpleSearch && _bookPath == null)) {
       // איפוס גלילה ממתינה כדי שתוצאות מיושנות לא יגרמו לקפיצה אחרי
       // ניקוי השדה.
       _pendingSimpleSearchScrollFor = null;
@@ -497,9 +511,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       return;
     }
 
-    if (utils.hasNikud(query)) {
-      query = utils.removeVolwels(query);
-    }
+    final query = searchable;
 
     // איפוס השגיאה לפני פיצול המסלול — במסלול הפשוט התוצאות מגיעות
     // אסינכרונית, ובלי האיפוס כאן שגיאת מנוע קודמת נשארת מוצגת.
@@ -702,7 +714,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
         ),
       ),
       isNoResults:
-          widget.searchController.text.isNotEmpty &&
+          _searchableQuery(widget.searchController.text) != null &&
           _searchResults.isEmpty &&
           !_isSearching,
       errorMessage: _searchErrorMessage,
