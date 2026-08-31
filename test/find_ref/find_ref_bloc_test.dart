@@ -30,6 +30,9 @@ class _FakeRepository implements FindRefRepository {
   }
 
   @override
+  void dispose() {}
+
+  @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 

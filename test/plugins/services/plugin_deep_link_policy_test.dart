@@ -2,9 +2,13 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/plugins/services/plugin_deep_link_policy.dart';
 
-NavigationAction _action({NavigationType? type, bool? hasGesture}) {
+NavigationAction _action({
+  NavigationType? type,
+  bool? hasGesture,
+  String uri = 'otzaria://open/book/5',
+}) {
   return NavigationAction(
-    request: URLRequest(url: WebUri('otzaria://open/book/5')),
+    request: URLRequest(url: WebUri(uri)),
     isForMainFrame: true,
     navigationType: type,
     hasGesture: hasGesture,
@@ -84,6 +88,31 @@ void main() {
           Uri.parse('otzaria://nonsense/x'),
         ),
         isNull,
+      );
+    });
+  });
+
+  group('dispatchUriForUserNavigation', () {
+    const installUri =
+        'otzaria://plugin/install?url=https%3A%2F%2Fexample.com%2Fplugin.otzplugin';
+
+    test('התקנת תוסף מרחוק מחייבת מחוות משתמש', () {
+      expect(
+        PluginDeepLinkPolicy.dispatchUriForUserNavigation(
+          Uri.parse(installUri),
+          _action(type: NavigationType.OTHER, hasGesture: false),
+        ),
+        isNull,
+      );
+    });
+
+    test('התקנת תוסף מרחוק מותרת לאחר לחיצה', () {
+      expect(
+        PluginDeepLinkPolicy.dispatchUriForUserNavigation(
+          Uri.parse(installUri),
+          _action(type: NavigationType.LINK_ACTIVATED),
+        ),
+        Uri.parse(installUri),
       );
     });
   });

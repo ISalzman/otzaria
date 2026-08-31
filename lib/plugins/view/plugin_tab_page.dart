@@ -32,6 +32,7 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
@@ -43,7 +44,6 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_deep_link_policy.dart';
-import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
@@ -212,6 +212,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
   late final PluginBridgeAdapter _adapter;
   late final PluginRegistryRepository _pluginRegistryRepository;
   late final PluginSystemBloc _pluginSystemBloc;
+  late final FindRefRepository _findRefRepository;
   bool _hasError = false;
   String? _devErrorMessage;
 
@@ -247,7 +248,8 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
-    final findRefRepository = buildFindRefRepository();
+    _findRefRepository = buildFindRefRepository();
+    final findRefRepository = _findRefRepository;
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -491,6 +493,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   @override
   void dispose() {
+    _findRefRepository.dispose();
     // dispose = unmount רגיל (סגירת טאב) בזמן שהתהליך חי — לא קריסה, מנקים
     // את ה-canary. סגירת האפליקציה לא מריצה dispose; אותה מכסה
     // PluginCrashGuard.markCleanShutdownSync ב-onWindowClose.
@@ -639,8 +642,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
     Uri uri,
     NavigationAction navigationAction,
   ) async {
-    if (!PluginDeepLinkPolicy.isUserActivated(navigationAction)) return;
-    final target = PluginDeepLinkPolicy.resolveDispatchUri(uri);
+    final target = PluginDeepLinkPolicy.dispatchUriForUserNavigation(
+      uri,
+      navigationAction,
+    );
     if (target == null) return;
     await mainWindowScreenKey.currentState?.handleInternalDeepLink(
       target.toString(),
@@ -767,17 +772,6 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (uri == null) return NavigationActionPolicy.CANCEL;
 
           if (uri.scheme == 'otzaria') {
-            final request = PluginStoreLinkParser.parseUri(uri);
-            if (request != null) {
-              _pluginSystemBloc.add(
-                InstallRemotePluginRequested(
-                  request.downloadUri.toString(),
-                  forceOverwrite: request.forceOverwrite,
-                  reportContext: request.reportContext,
-                ),
-              );
-              return NavigationActionPolicy.CANCEL;
-            }
             await _dispatchPluginDeepLink(uri, navigationAction);
             return NavigationActionPolicy.CANCEL;
           }

@@ -236,12 +236,17 @@ class FindRefRepository {
     FindRefDbIsolate.resetIfRunning();
   }
 
-  /// בדיקות בלבד: מבטל את ההרשמה של ה-instance מ-[_liveInstances]. שימושי
-  /// בטסטים שיוצרים הרבה repositories מבלי לשמור שיורי state בין מבחנים.
-  @visibleForTesting
-  void disposeForTesting() {
+  /// מסיר את ה-instance מרשימת ה-repositories הפעילים.
+  void dispose() {
     _liveInstances.remove(this);
   }
+
+  /// בדיקות בלבד: שם תאימות למחיקת הרישום.
+  @visibleForTesting
+  void disposeForTesting() => dispose();
+
+  @visibleForTesting
+  static int get debugLiveInstanceCount => _liveInstances.length;
 
   /// מנקה את ה-caches הפנימיים של ה-repository (מפרשים ו-AltToc שטוח).
   ///

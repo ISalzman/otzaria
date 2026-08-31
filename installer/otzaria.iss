@@ -1018,13 +1018,6 @@ begin
     Delete(Result, 1, 1);
 end;
 
-// שורש פרופילי המשתמשים, נגזר מ-{userappdata} (…\<User>\AppData\Roaming).
-function GetUserProfilesRoot(): String;
-begin
-  Result := ExtractFileDir(ExtractFileDir(ExtractFileDir(
-    ExpandConstant('{userappdata}'))));
-end;
-
 function GetCustomLibraryPath(): String;
 var
   PrefsFile, JsonContent, KeyStr, Value: String;
@@ -1099,49 +1092,6 @@ end;
 // (רק אם היא מזוהה כתיקיית אוצריא — ראה IsOtzariaBooksFolder), כל תיקיות
 // הנתונים הסטנדרטיות וגם נתיבי legacy. קוראים את הנתיב המותאם מה-prefs
 // לפני שמוחקים את ה-prefs עצמו.
-// בהסרת התקנת מנהל ה-uninstaller רץ תחת החשבון שאישר את ה-UAC, ולכן
-// {userappdata} אינו בהכרח של המשתמש שהתקין — עוברים על כל הפרופילים.
-procedure DeleteUserDataInAllProfiles();
-var
-  FindRec: TFindRec;
-  ProfilesRoot, ProfileDir, DataRoot, LibraryPath: String;
-begin
-  ProfilesRoot := GetUserProfilesRoot();
-  if (ProfilesRoot = '') or (not DirExists(ProfilesRoot)) then
-    exit;
-
-  if not FindFirst(AddBackslash(ProfilesRoot) + '*', FindRec) then
-    exit;
-  try
-    repeat
-      if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and
-         (FindRec.Name <> '.') and (FindRec.Name <> '..') then
-      begin
-        ProfileDir := AddBackslash(ProfilesRoot) + FindRec.Name;
-
-        DataRoot := ProfileDir + '\AppData\Roaming\otzaria';
-        if DirExists(DataRoot) then
-        begin
-          LibraryPath := ReadLibraryPathRecord(DataRoot);
-          if IsOtzariaBooksFolder(LibraryPath) then
-            DelTree(LibraryPath, True, True, True);
-          DelTree(DataRoot, True, True, True);
-        end;
-
-        DataRoot := ProfileDir + '\AppData\Local\otzaria';
-        if DirExists(DataRoot) then
-          DelTree(DataRoot, True, True, True);
-
-        DataRoot := ProfileDir + '\AppData\Roaming\com.example\otzaria';
-        if DirExists(DataRoot) then
-          DelTree(DataRoot, True, True, True);
-      end;
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
-  end;
-end;
-
 procedure DeleteAllUserData();
 var
   Path: String;
@@ -1175,8 +1125,6 @@ begin
   // הערה: C:\אוצריא לא נמחק כאן כי זה היה נתיב התקנה legacy (לא נתונים).
   // אם נשארה שם התקנה ישנה — היא תוסר על ידי ה-uninstaller שלה.
 
-  if IsAdminInstallMode then
-    DeleteUserDataInAllProfiles();
 end;
 
 // שאלה בתחילת ההסרה: האם למחוק גם את הנתונים והספרים?

@@ -612,24 +612,19 @@ void main() {
         );
       });
 
-      test('$name: הסרת התקנת מנהל עוברת על כל פרופילי המשתמשים', () {
+      test('$name: הסרת התקנת מנהל אינה מוחקת נתונים של פרופילים אחרים', () {
         final script = _script(name);
         final body = _routine(script, 'procedure DeleteAllUserData(');
         expect(
-          _squeeze(body.replaceAll('\n', ' ')),
-          contains('if IsAdminInstallMode then DeleteUserDataInAllProfiles();'),
-          reason:
-              'ה-uninstaller המוגבה רץ תחת החשבון שאישר UAC, ולכן '
-              '{userappdata} אינו של המשתמש שהתקין',
+          body,
+          isNot(contains('DeleteUserDataInAllProfiles')),
+          reason: 'אישור מחיקה בהסרה אינו הסכמה למחוק נתונים של משתמשים אחרים',
         );
-
-        final scan = _routine(script, 'procedure DeleteUserDataInAllProfiles(');
-        expect(scan, contains('ReadLibraryPathRecord(DataRoot)'));
         expect(
-          scan,
-          contains('IsOtzariaBooksFolder(LibraryPath)'),
-          reason: 'בלי הזיהוי, נתיב שגוי ב-prefs היה מוחק תיקייה אישית',
+          script,
+          isNot(contains('procedure DeleteUserDataInAllProfiles(')),
         );
+        expect(script, isNot(contains('function GetUserProfilesRoot(')));
       });
     }
 

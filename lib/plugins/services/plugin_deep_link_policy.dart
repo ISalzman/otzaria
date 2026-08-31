@@ -22,6 +22,15 @@ class PluginDeepLinkPolicy {
       navigationAction.navigationType == NavigationType.LINK_ACTIVATED ||
       navigationAction.hasGesture == true;
 
+  /// הכתובת שמותר לשגר בעקבות ניווט, או `null` אם לא הייתה מחוות משתמש.
+  static Uri? dispatchUriForUserNavigation(
+    Uri uri,
+    NavigationAction navigationAction,
+  ) {
+    if (!isUserActivated(navigationAction)) return null;
+    return resolveDispatchUri(uri);
+  }
+
   /// הכתובת המנורמלת שיש לשגר, או `null` אם הקישור אינו מוכר או חסום.
   static Uri? resolveDispatchUri(Uri uri) {
     final normalized = ExternalUriRouter.normalizeUri(uri) ?? uri;
