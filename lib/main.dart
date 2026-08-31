@@ -319,9 +319,9 @@ void main(List<String> args) async {
     }
 
     // Skip HardwareKeyboard assertion error - happens when window loses focus while
-    // a key is held down; fixed by clearState() in onWindowFocus but filter as fallback
+    // a key is held down; onWindowFocus releases stuck keys but filter as fallback
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
-      return; // Silently ignore - handled by HardwareKeyboard.instance.clearState() on focus
+      return; // Silently ignore - stuck keys are released on window focus
     }
 
     // Log all other errors normally
@@ -346,7 +346,7 @@ void main(List<String> args) async {
       return true; // Silently ignore these errors
     }
 
-    // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
+    // Skip HardwareKeyboard assertion error - stuck keys are released on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
     }
