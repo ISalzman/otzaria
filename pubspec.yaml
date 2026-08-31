@@ -183,6 +183,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/bio/
     - assets/logos/
     - assets/ca/
     - assets/icon/שמור וזכור מקור.png
