@@ -939,6 +939,36 @@ git ls-remote https://github.com/Otzaria/<repo> refs/heads/master  # get the SHA
 flutter pub get && git add pubspec.yaml pubspec.lock
 ```
 
+### Windows build fails in `search_engine_cargokit`
+
+```
+error MSB8066: Custom build for '...search_engine_cargokit.rule' exited with code -1
+```
+
+`flutter run` swallows the real cause; it appears only in a verbose build
+(`flutter build windows --debug -v`):
+
+```
+SEVERE: PathExistsException: Cannot copy file to
+  build\windows\x64\plugins\otzaria_search_engine\Debug\search_engine.dll
+  (OS Error: Cannot create a file when that file already exists, errno = 183)
+```
+
+This is **not** a Rust or toolchain problem. cargokit fetches a precompiled
+`search_engine.dll` and copies it into place with a copy that is not
+overwrite-safe, so it fails when a stale copy from an earlier build is already
+there. Anything that invalidates the cargokit stamp — `flutter pub get`, a
+plugin re-resolve — triggers a re-fetch and hits the stale file.
+
+Fix by deleting just the stale destination, not the whole build tree:
+
+```bash
+rm build/windows/x64/plugins/otzaria_search_engine/Debug/search_engine.dll
+flutter build windows --debug
+```
+
+`flutter clean` also works but re-downloads and rebuilds everything.
+
 ## Platform Support
 **Supported:** Windows, Linux, Android, iOS, macOS
 
