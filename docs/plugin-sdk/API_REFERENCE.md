@@ -134,6 +134,7 @@ if (response.success) {
 | `app.unregisterShortcut` | 0.9.97 |
 | `app.updateShortcut` | 0.9.97 |
 | `fonts.resolveFamilies` | 0.9.97 |
+| `fonts.listInstalled` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
@@ -543,6 +544,45 @@ document.head.appendChild(style);
 | `resolved` | string[] | השמות המבוקשים שקיבלו face. |
 
 המדיניות — אילו תחליפים ובאיזה סדר — נשארת אצלכם: אתם יודעים מה המסמך מבקש, ואוצריא נותנת רק את מה שרק היא יכולה לתת.
+
+הרשאה: `app.info.read` (baseline — אין דיאלוג נוסף).
+
+---
+
+### `fonts.listInstalled`
+
+מחזיר את משפחות הגופנים **המותקנות במכונה**. בלי ארגומנטים.
+
+למה זה קיים: `fonts.resolveFamilies` נותן בייטים, אבל כדי לבחור תחליף נכון צריך קודם לדעת מה בכלל קיים כאן. בלי הרשימה נותר רק לנחש, או לבקש בייטים של משפחה אחר משפחה רק כדי לגלות מי מהן נפתרת — יקר בהרבה מרשימת שמות.
+
+```javascript
+const { data } = await Otzaria.call('fonts.listInstalled');
+
+const installed = new Set(data.families.map(f => f.name));
+const hebrew = data.families.filter(f => f.scripts.includes('hebrew'));
+```
+
+מוחזר:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `families` | array | המשפחות המותקנות, ממוינות לפי שם. כל שם מופיע פעם אחת. |
+| `platform` | string | הפלטפורמה, למשל `windows`. |
+
+כל פריט ב-`families`:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `name` | string | השם **בדיוק כפי ש-CSS `font-family` מקבל אותו** — לא שם קובץ, ולא `David Bold`. |
+| `scripts` | string[] | מתוך `latin` `hebrew` `arabic` `cyrillic` `greek` `cjk` `thai` `symbol`. משפחה מרובת-שפות נושאת כמה. |
+| `monospace` | boolean | `true` לגופן ברוחב קבוע, למשל `Consolas`. |
+
+פלטפורמה שאין בה מימוש מחזירה `families: []` — זו אינה שגיאה, ועליכם ליפול חזרה למדיניות התחליפים שלכם.
+
+שתי מגבלות ב-Windows, שנובעות מ-GDI עצמו:
+
+- גופני raster ישנים (`.fon` — `Terminal`, `Fixedsys`, `MS Sans Serif` וכדומה) **אינם ברשימה**, משום ש-WebView אינו מרנדר אותם ולכן שמם אינו שם שאפשר למסור ל-CSS.
+- שם משפחה נקטע ב-31 תווים. `Bahnschrift SemiBold SemiCondensed`, למשל, חוזר כ-`Bahnschrift SemiBold SemiConden`. אין דרך לקבל אותו שלם דרך GDI.
 
 הרשאה: `app.info.read` (baseline — אין דיאלוג נוסף).
 

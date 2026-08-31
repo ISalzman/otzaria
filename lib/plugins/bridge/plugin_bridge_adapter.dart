@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/services/installed_fonts.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -812,6 +813,8 @@ class PluginBridgeAdapter {
           throw Exception('error.invalid_params: families must be an array');
         }
         return await _resolveFontFamilies(families);
+      case 'listInstalled':
+        return InstalledFonts.list();
       default:
         throw Exception('error.not_supported: fonts.$action');
     }

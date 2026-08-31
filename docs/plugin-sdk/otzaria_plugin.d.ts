@@ -1563,6 +1563,43 @@ export interface ResolveFontFamiliesResult {
   resolved: string[];
 }
 
+/**
+ * One installed font family, from `fonts.listInstalled`.
+ */
+export interface InstalledFontFamily {
+  /**
+   * Exactly what CSS `font-family` accepts — not a file name, not "David Bold".
+   *
+   * On Windows GDI truncates a family name at 31 characters, so
+   * `Bahnschrift SemiBold SemiCondensed` arrives as
+   * `Bahnschrift SemiBold SemiConden`.
+   */
+  name: string;
+  /** Which writing systems the family covers. */
+  scripts: Array<
+    'latin' | 'hebrew' | 'arabic' | 'cyrillic' | 'greek' | 'cjk' | 'thai' | 'symbol'
+  >;
+  /** `true` for a fixed-pitch family such as Consolas. */
+  monospace: boolean;
+}
+
+/**
+ * Result of `fonts.listInstalled`: the font families present on this machine.
+ *
+ * Lets a plugin see what actually exists before it picks a substitute, instead
+ * of guessing or probing `fonts.resolveFamilies` family by family. A platform
+ * with no implementation returns an empty `families` — that is not an error.
+ *
+ * Legacy Windows raster fonts (`.fon`) are excluded: a WebView cannot render
+ * them, so their names would not be usable in CSS.
+ */
+export interface ListInstalledFontsResult {
+  /** The installed families, sorted by name, each name appearing once. */
+  families: InstalledFontFamily[];
+  /** The host platform, e.g. `'windows'`. */
+  platform: string;
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -1572,6 +1609,7 @@ export type OtzariaMethod =
   | 'app.getConnectivity'
   | 'app.openUrl'
   | 'fonts.resolveFamilies'
+  | 'fonts.listInstalled'
   | 'app.registerShortcut'
   | 'app.unregisterShortcut'
   | 'app.updateShortcut'
