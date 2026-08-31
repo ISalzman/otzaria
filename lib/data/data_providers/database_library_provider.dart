@@ -291,7 +291,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   int? startLineIndex,
   int? endLineIndex,
 }) {
-  final hasSuppressedSide = _hasLinkSuppressedSideTable(db);
+  final hasSuppressedSide = hasLinkSuppressedSideTable(db);
   final dependentTypes = LinkTypes.dependentTextTypes.toList();
   // קישורי הפניה דו-כיווניים רק בסכמה שמספקת verdict נפרד לכל צד.
   final types = LinkTypes.inverseQueryTypes(bidirectional: hasSuppressedSide);
@@ -305,6 +305,23 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   );
   final hasLinkAnchor = _hasLinkAnchorTable(db);
   final hasLinkRanges = _hasLinkRangeTables(db);
+  final referenceTypes = LinkTypes.referenceTypes
+      .map((type) => "'$type'")
+      .join(', ');
+  final inverseBookFilter = hasSuppressedSide
+      ? '''
+        AND (l.sourceBookId != l.targetBookId OR (
+          ct.name IN ($referenceTypes)
+          AND (
+            EXISTS (SELECT 1 FROM link_suppressed_side sourceSuppressed
+                    WHERE sourceSuppressed.linkId = l.id AND sourceSuppressed.side = 0)
+            OR (
+              a.anchorLineId != l.sourceLineId
+              ${hasLinkRanges ? 'AND NOT EXISTS (SELECT 1 FROM link_coverage sourceCoverage WHERE sourceCoverage.linkId = l.id AND sourceCoverage.side = 0 AND sourceCoverage.lineId = a.anchorLineId)' : ''}
+            )
+          )
+        ))'''
+      : 'AND l.sourceBookId != l.targetBookId';
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
   final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
   final provenanceSelect = _hasLinkBaseProvenanceColumn(db)
@@ -364,7 +381,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         $rangeEndJoin
         $anchorJoin
         WHERE ct.name IN ($typePlaceholders)
-          AND l.sourceBookId != l.targetBookId
+          $inverseBookFilter
           $suppressedFilter
         ORDER BY tl.lineIndex
       ''', params).toMapList();
@@ -407,21 +424,10 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
       $rangeEndJoin
       $anchorJoin
       WHERE ct.name IN ($typePlaceholders)
-        AND l.sourceBookId != l.targetBookId
+        $inverseBookFilter
         $suppressedFilter
       ORDER BY tl.lineIndex
     ''', params).toMapList();
-}
-
-/// דיכוי פר-צד (link_suppressed_side, סכמה 3) — קיים רק במסדים חדשים. במסד ישן
-/// אין מידע נראות, ולכן גם אין דו-כיווניות: אחרת קישורי הפניה היו עולים משני
-/// הצדדים בלי סינון, רגרסיה גרועה מהמצב הקיים.
-bool _hasLinkSuppressedSideTable(sqlite3.Database db) {
-  return db
-      .select(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_suppressed_side' LIMIT 1",
-      )
-      .isNotEmpty;
 }
 
 /// עוגני-מילה (link_anchor) — קיים רק במסדים חדשים; במסד ישן השאילתות חוזרות
@@ -565,7 +571,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
     final hasLinkRanges = _hasLinkRangeTables(db);
     // בשאילתה הקדמית השורה המוצגת היא צד המקור השמור.
     final suppressedFilter = suppressedSideFilter(
-      _hasLinkSuppressedSideTable(db),
+      hasLinkSuppressedSideTable(db),
       displayedSide: 0,
     );
 
@@ -640,7 +646,7 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
 
     final bookId = bookResults.first['id'] as int;
     final hasLinkRanges = _hasLinkRangeTables(db);
-    final hasSuppressedSide = _hasLinkSuppressedSideTable(db);
+    final hasSuppressedSide = hasLinkSuppressedSideTable(db);
     final forwardSuppressed = suppressedSideFilter(
       hasSuppressedSide,
       displayedSide: 0,
@@ -691,6 +697,38 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
       hasSuppressedSide,
       displayedSide: 1,
     );
+    final referenceTypes = LinkTypes.referenceTypes
+        .map((type) => "'$type'")
+        .join(', ');
+    final hasNonOverlappingSameBookTarget = hasLinkRanges
+        ? '''
+          EXISTS (
+            SELECT 1 FROM (
+              SELECT l.targetLineId AS lineId
+              UNION
+              SELECT targetCoverage.lineId FROM link_coverage targetCoverage
+              WHERE targetCoverage.linkId = l.id AND targetCoverage.side = 1
+            ) targetAnchor
+            WHERE targetAnchor.lineId != l.sourceLineId
+              AND NOT EXISTS (
+                SELECT 1 FROM link_coverage sourceCoverage
+                WHERE sourceCoverage.linkId = l.id
+                  AND sourceCoverage.side = 0
+                  AND sourceCoverage.lineId = targetAnchor.lineId
+              )
+          )'''
+        : 'l.targetLineId != l.sourceLineId';
+    final inverseBookFilter = hasSuppressedSide
+        ? '''
+          AND (l.sourceBookId != l.targetBookId OR (
+            ct.name IN ($referenceTypes)
+            AND (
+              EXISTS (SELECT 1 FROM link_suppressed_side sourceSuppressed
+                      WHERE sourceSuppressed.linkId = l.id AND sourceSuppressed.side = 0)
+              OR $hasNonOverlappingSameBookTarget
+            )
+          ))'''
+        : 'AND l.sourceBookId != l.targetBookId';
     final inverseRows = db
         .select(
           '''
@@ -702,7 +740,7 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
         JOIN connection_type ct ON l.connectionTypeId = ct.id
         WHERE l.targetBookId = ?
           AND ct.name IN ($typePlaceholders)
-          AND l.sourceBookId != l.targetBookId
+          $inverseBookFilter
           $inverseSuppressed
         GROUP BY sb.title, connectionTypeName
       ''',
@@ -771,7 +809,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     final hasLinkAnchor = _hasLinkAnchorTable(db);
     final hasLinkRanges = _hasLinkRangeTables(db);
     final suppressedFilter = suppressedSideFilter(
-      _hasLinkSuppressedSideTable(db),
+      hasLinkSuppressedSideTable(db),
       displayedSide: 0,
     );
 

@@ -74,6 +74,27 @@ void main() {
     return path;
   }
 
+  String buildSameBookDb({required bool withTable}) {
+    final path = buildDb(withTable: withTable, populate: false);
+    final db = sqlite3.sqlite3.open(path);
+    db.execute('''
+      INSERT INTO link VALUES (6,1,1,1,3,2,1,1,0),
+                              (7,1,1,1,2,1,1,1,0),
+                              (8,1,1,2,3,2,1,1,0),
+                              (9,1,1,2,3,2,1,2,0),
+                              (10,1,1,1,2,1,1,1,1);
+      INSERT INTO link_range VALUES (7,0,2,1), (10,0,2,1);
+      INSERT INTO link_coverage VALUES (2,7,0), (2,10,0);
+    ''');
+    if (withTable) {
+      db.execute(
+        'INSERT INTO link_suppressed_side VALUES (6,0,4),(8,1,1),(10,0,4)',
+      );
+    }
+    db.close();
+    return path;
+  }
+
   Set<String> forwardSignatures(String path) =>
       DatabaseLibraryProvider.loadBookLinksRowsForTesting(
             dbPath: path,
@@ -124,6 +145,14 @@ void main() {
       '${row['targetBookTitle']}:${row['connectionTypeName']}':
           row['linkCount'] as int,
   };
+
+  List<Map<String, dynamic>> sameBookRows(String path) =>
+      DatabaseLibraryProvider.loadBookLinksRowsForTesting(
+        dbPath: path,
+        title: 'A',
+        categoryId: 1,
+        fileType: 'text',
+      ).where((row) => row['targetBookTitle'] == 'A').toList();
 
   setUp(() => tmp = Directory.systemTemp.createTempSync('linkvis'));
   tearDown(() => tmp.deleteSync(recursive: true));
@@ -219,6 +248,122 @@ void main() {
         'A:OTHER': 2,
         'A:SOURCE': 1,
       });
+    });
+  });
+
+  group('קישורי הפניה בתוך אותו ספר', () {
+    test('בסכמה 2 נשמרת ההתנהגות הישנה ללא זרוע הפוכה', () {
+      final signatures =
+          sameBookRows(
+            buildSameBookDb(withTable: false),
+          ).map(
+            (row) =>
+                '${row['sourceLineIndex']}:${row['targetLineIndex']}:'
+                '${row['connectionTypeName']}',
+          );
+
+      expect(signatures, isNot(contains('2:0:OTHER')));
+      expect(signatures, isNot(contains('2:1:SOURCE')));
+    });
+
+    test('צד 0 מדוכא עובר לעוגן צד 1 שאינו חופף', () {
+      final path = buildSameBookDb(withTable: true);
+      final fullRows = sameBookRows(path);
+      final rangedRows = rangeSignatures(path, 'A');
+
+      expect(
+        fullRows
+            .where(
+              (row) =>
+                  row['sourceLineIndex'] == 2 &&
+                  row['targetLineIndex'] == 0 &&
+                  row['connectionTypeName'] == 'OTHER',
+            )
+            .length,
+        1,
+      );
+      expect(rangedRows, contains('2:0:OTHER'));
+    });
+
+    test('עוגן חופף נשאר בצד 0 ואינו מוכפל מהצד ההפוך', () {
+      final rows = sameBookRows(buildSameBookDb(withTable: true));
+
+      expect(
+        rows.where(
+          (row) =>
+              row['sourceLineIndex'] == 1 &&
+              row['targetLineIndex'] == 0 &&
+              row['connectionTypeName'] == 'OTHER' &&
+              row['baseProvenance'] == 0,
+        ),
+        isEmpty,
+      );
+      expect(
+        rows.where(
+          (row) =>
+              row['sourceLineIndex'] == 1 &&
+              row['targetLineIndex'] == 1 &&
+              row['connectionTypeName'] == 'OTHER',
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('עוגן חופף עובר לצד 1 כשצד 0 מדוכא', () {
+      final path = buildSameBookDb(withTable: true);
+      final fullRows = sameBookRows(path);
+      final rangedRows = rangeSignatures(path, 'A');
+
+      expect(
+        fullRows.where(
+          (row) =>
+              row['sourceLineIndex'] == 1 &&
+              row['targetLineIndex'] == 0 &&
+              row['connectionTypeName'] == 'OTHER' &&
+              row['baseProvenance'] == 1,
+        ),
+        hasLength(1),
+      );
+      expect(rangedRows, contains('1:0:OTHER'));
+    });
+
+    test('דיכוי צד 1 וקישור תלוי אינם פותחים זרוע הפוכה', () {
+      final rows = sameBookRows(buildSameBookDb(withTable: true));
+
+      expect(
+        rows.where(
+          (row) =>
+              row['sourceLineIndex'] == 2 &&
+              row['targetLineIndex'] == 1 &&
+              row['connectionTypeName'] == 'OTHER',
+        ),
+        isEmpty,
+      );
+      expect(
+        rows.where((row) => row['connectionTypeName'] == 'SOURCE'),
+        isEmpty,
+      );
+    });
+
+    test('summary מוסיף רק צד יעד שיש לו עוגן לא חופף', () {
+      final rows =
+          DatabaseLibraryProvider.loadBookLinkTargetsSummaryRowsForTesting(
+            dbPath: buildSameBookDb(withTable: true),
+            title: 'A',
+            categoryId: 1,
+          ).rows;
+      final counts =
+          rows
+              .where(
+                (row) =>
+                    row['targetBookTitle'] == 'A' &&
+                    row['connectionTypeName'] == 'OTHER',
+              )
+              .map((row) => row['linkCount'] as int)
+              .toList()
+            ..sort();
+
+      expect(counts, [2, 3]);
     });
   });
 
