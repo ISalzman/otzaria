@@ -49,6 +49,14 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
   // ביטול בשלב הזה פולט אותו — אחרת hasUpdate אובד והריענון/אינדוקס לא רצים.
   LibraryUpdateState? _pendingCompleted;
 
+  // מרגע שצעד הדלתא הראשון נכנס ל-applying, ייתכן שכבר נכתב DB גם אם צעד
+  // מאוחר חזר ל-downloading. הביטול נשאר חסום עד סיום כל מסלול הדלתא.
+  bool _deltaWriteStarted = false;
+
+  // נקודת האל-חזור של הורדה מלאה מדווחת סינכרונית מיד אחרי החלפת הקובץ,
+  // לפני await של פתיחת ה-DB מחדש. כך Cancel/Reset לא יכולים לנצח את ה-state.
+  bool _fullDownloadDbReplaced = false;
+
   // שינוי נלווים שריצה מבוטלת לא יכלה לדווח כי ריצה חדשה כבר busy —
   // הריצה החדשה תדווח אותו, אחרת הריענון/אינדוקס אובדים.
   bool _unreportedAssetsChange = false;
@@ -232,11 +240,17 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     Emitter<LibraryUpdateState> emit,
     int opId,
   ) async {
+    _deltaWriteStarted = false;
     try {
-      final changedBookIds = await repository.applyDeltaPlan(
+      final deltaResult = await repository.applyDeltaPlan(
         plan,
         isCancelled: () => _isStale(opId),
-        onProgress: (progress) => _reportProgress(progress, opId),
+        onProgress: (progress) {
+          if (progress.phase == LibraryUpdatePhase.applying) {
+            _deltaWriteStarted = true;
+          }
+          _reportProgress(progress, opId);
+        },
       );
       // הגענו לכאן ⇒ ה-apply וה-ריענון הצליחו וה-DB עודכן. אם בוטל/הוחלף
       // בינתיים — לא נדרוס את ה-state של הריצה החדשה (ה-DB כבר רוענן ממילא).
@@ -246,7 +260,8 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
         status: LibraryUpdateStatus.completed,
         message: 'הספרייה עודכנה לגרסה ${plan.targetVersion}',
         hasUpdate: true,
-        changedBookIds: changedBookIds,
+        changedBookIds: deltaResult.changedBookIds,
+        requiresFullIndexRefresh: deltaResult.requiresFullIndexRefresh,
       );
       await _runCompanionAssets(emit, opId);
       final completed = _pendingCompleted;
@@ -258,18 +273,25 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     } catch (e, st) {
       if (_isStale(opId)) return;
       _logUpdateError('applyDeltaPlan', e, st);
+      final partial = e is PartiallyAppliedLibraryDeltaException
+          ? e.appliedResult
+          : null;
+      final applyError = e is PartiallyAppliedLibraryDeltaException
+          ? e.cause
+          : e;
       // כל כשל apply (אי-התאמת hash, גרסה/סכמה לא תואמת, patch פגום) הופך
       // את מסלול הדלתא ללא בטוח; הורדה מלאה עוקפת אותו. בלי זה, כשל שאינו
       // אי-התאמת תוכן — למשל patch בסכמה חדשה מהנתמכת — משאיר את המשתמש
       // בלולאת שגיאה ללא מוצא עד עדכון אפליקציה.
-      if (e is PatchApplyException) {
+      if (applyError is PatchApplyException) {
         final String mismatchReason;
-        if (!e.isContentMismatch) {
-          mismatchReason = 'החלת עדכון הדלתא נכשלה';
-        } else if (e.hashMismatchStage == PatchHashMismatchStage.toContentHash) {
-          mismatchReason = 'תוצאת עדכון הדלתא אינה תואמת לגרסה הצפויה';
+        if (!applyError.isContentMismatch) {
+          mismatchReason = LibraryMessages.deltaApplyFailed;
+        } else if (applyError.hashMismatchStage ==
+            PatchHashMismatchStage.toContentHash) {
+          mismatchReason = LibraryMessages.deltaResultMismatch;
         } else {
-          mismatchReason = 'תוכן הספרייה המקומית שונה מהצפוי';
+          mismatchReason = LibraryMessages.localLibraryContentMismatch;
         }
         final fallback = plan.toFullDownloadFallback(
           reason: mismatchReason,
@@ -278,10 +300,15 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
           emit(
             LibraryUpdateState(
               status: LibraryUpdateStatus.needsFullConfirmation,
-              message:
-                  '$mismatchReason — נדרשת הורדה מלאה '
-                  '(${_formatSize(fallback.totalDownloadSize)})',
+              message: LibraryMessages.fullLibraryDownloadRequired(
+                mismatchReason,
+                _formatSize(fallback.totalDownloadSize),
+              ),
               plan: fallback,
+              hasUpdate: partial?.hasDatabaseChanges ?? false,
+              changedBookIds: partial?.changedBookIds ?? const {},
+              requiresFullIndexRefresh:
+                  partial?.requiresFullIndexRefresh ?? false,
             ),
           );
           return;
@@ -291,9 +318,14 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
         LibraryUpdateState(
           status: LibraryUpdateStatus.error,
           message: 'שגיאה בהחלת העדכון',
-          errorMessage: e.toString(),
+          hasUpdate: partial?.hasDatabaseChanges ?? false,
+          changedBookIds: partial?.changedBookIds ?? const {},
+          requiresFullIndexRefresh: partial?.requiresFullIndexRefresh ?? false,
+          errorMessage: applyError.toString(),
         ),
       );
+    } finally {
+      _deltaWriteStarted = false;
     }
   }
 
@@ -308,6 +340,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       return;
     }
     final opId = ++_operationId;
+    _fullDownloadDbReplaced = false;
     _resetProgressThrottle();
     emit(
       state.copyWith(
@@ -319,6 +352,7 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       await repository.applyFullDownload(
         plan,
         isCancelled: () => _isStale(opId),
+        onDbReplaced: () => _fullDownloadDbReplaced = true,
         onProgress: (progress) => _reportProgress(progress, opId),
       );
       if (_isStale(opId)) return;
@@ -337,13 +371,24 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     } catch (e, st) {
       if (_isStale(opId)) return;
       _logUpdateError('applyFullDownload', e, st);
+      final dbReplaced = _fullDownloadDbReplaced;
       emit(
         LibraryUpdateState(
           status: LibraryUpdateStatus.error,
           message: 'שגיאה בהורדה המלאה',
+          // fallback אחרי דלתא חלקית: ההורדה המלאה נכשלה, אבל הצעדים שכבר
+          // נכתבו ל-DB עדיין דורשים ריענון ספרייה ואינדקס.
+          hasUpdate: dbReplaced || state.hasUpdate,
+          changedBookIds: state.changedBookIds,
+          // אחרי החלפת DB מלאה אין רשימת מזהים אמינה; נדרש reconcile מלא.
+          requiresFullIndexRefresh:
+              dbReplaced || state.requiresFullIndexRefresh,
+          plan: dbReplaced ? plan : null,
           errorMessage: e.toString(),
         ),
       );
+    } finally {
+      _fullDownloadDbReplaced = false;
     }
   }
 
@@ -398,12 +443,16 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
     DeclineFullDownload event,
     Emitter<LibraryUpdateState> emit,
   ) {
-    // המשתמש בחר להישאר עם הגרסה הנוכחית — לא מורידים כלום.
+    // המשתמש בחר להישאר עם הגרסה הנוכחית — לא מורידים כלום. אם fallback
+    // הוצע אחרי כשל בצעד מאוחר, שומרים את שינויי הצעדים שכבר הושלמו כדי
+    // שהספרייה והאינדקס יתרעננו לגרסת הביניים התקינה.
     emit(
-      const LibraryUpdateState(
+      LibraryUpdateState(
         status: LibraryUpdateStatus.completed,
         message: 'ממשיך עם הגרסה הנוכחית',
-        hasUpdate: false,
+        hasUpdate: state.hasUpdate,
+        changedBookIds: state.changedBookIds,
+        requiresFullIndexRefresh: state.requiresFullIndexRefresh,
       ),
     );
   }
@@ -421,13 +470,29 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
       emit(pending);
       return;
     }
+    // ביטול הורדה מלאה שהוצעה אחרי כשל בצעד דלתא מאוחר אינו מבטל את
+    // הצעדים שכבר נכתבו. פולטים completed כדי שה-listener ירענן אותם.
+    if (state.hasUpdate) {
+      emit(
+        LibraryUpdateState(
+          status: LibraryUpdateStatus.completed,
+          message: 'ממשיך עם הגרסה הנוכחית',
+          hasUpdate: true,
+          changedBookIds: state.changedBookIds,
+          requiresFullIndexRefresh: state.requiresFullIndexRefresh,
+        ),
+      );
+      return;
+    }
     emit(const LibraryUpdateState(message: 'העדכון בוטל'));
   }
 
   /// ביטול אפשרי עד שמתחילים לכתוב ל-DB. בדלתא נקודת האל-חזור היא שלב ה-applying
-  /// (החלת ה-patch); בהורדה מלאה רק שלב ה-refreshing — שם ה-applying הוא חילוץ
-  /// הארכיב, שעדיין ניתן לבטל לפני ההחלפה האטומית.
+  /// (החלת ה-patch); בהורדה מלאה שלב ה-applying הוא רק חילוץ, והחסימה מתחילה
+  /// בהתראת onDbReplaced הסינכרונית או כשה-state כבר הגיע ל-refreshing.
   bool _canCancel(LibraryUpdateState state) {
+    if (_deltaWriteStarted && _pendingCompleted == null) return false;
+    if (_fullDownloadDbReplaced && _pendingCompleted == null) return false;
     switch (state.status) {
       case LibraryUpdateStatus.refreshing:
         return false;
@@ -439,6 +504,8 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
   }
 
   void _onReset(ResetLibraryUpdate event, Emitter<LibraryUpdateState> emit) {
+    if (_deltaWriteStarted && _pendingCompleted == null) return;
+    if (_fullDownloadDbReplaced && _pendingCompleted == null) return;
     _operationId++;
     _pendingCompleted = null;
     emit(const LibraryUpdateState());

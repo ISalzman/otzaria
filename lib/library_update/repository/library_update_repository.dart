@@ -52,6 +52,10 @@ class LibraryUpdateProgress {
 typedef LibraryUpdateProgressCallback =
     void Function(LibraryUpdateProgress progress);
 
+/// נורה סינכרונית ברגע שבו ה-DB המלא החדש כבר החליף את הישן ואין עוד נקודת
+/// ביטול בטוחה. המאזין חייב לבצע עבודה סינכרונית וקלה בלבד.
+typedef FullDbReplacedCallback = void Function();
+
 typedef FullDbExtractor =
     Future<void> Function(String archivePath, String outputPath);
 
@@ -64,13 +68,61 @@ class LibraryUpdateDiskSpaceException implements Exception {
   String toString() => message;
 }
 
+/// תוצאת מסלול דלתא ברמת האפליקציה.
+///
+/// מעבר למזהי הספרים, נשמר גם האם השתנו טבלאות שלא ניתן למפות לספרים
+/// מסוימים. במקרה כזה נדרש reconcile מלא של אינדקס החיפוש.
+class LibraryDeltaApplyResult {
+  final Set<int> changedBookIds;
+  final bool requiresFullIndexRefresh;
+  final int appliedSteps;
+
+  const LibraryDeltaApplyResult({
+    this.changedBookIds = const {},
+    this.requiresFullIndexRefresh = false,
+    this.appliedSteps = 0,
+  });
+
+  bool get hasDatabaseChanges => appliedSteps > 0;
+
+  LibraryDeltaApplyResult addStep(PatchApplyResult step) =>
+      LibraryDeltaApplyResult(
+        changedBookIds: {...changedBookIds, ...step.booksTouched},
+        requiresFullIndexRefresh:
+            requiresFullIndexRefresh || step.hasChangesOutsideBooksTouched,
+        appliedSteps: appliedSteps + 1,
+      );
+}
+
+/// כשל אחרי שלפחות צעד דלתא אחד כבר הושלם ונכתב ל-DB.
+///
+/// הצעד שנכשל עצמו אטומי ולא נכתב, אך הצעדים שקדמו לו נשארים תקינים ויש
+/// לדווח עליהם ל-BLoC כדי שלא יאבד ריענון הספרייה/האינדקס.
+class PartiallyAppliedLibraryDeltaException implements Exception {
+  final Object cause;
+  final LibraryDeltaApplyResult appliedResult;
+  final Object? refreshError;
+
+  const PartiallyAppliedLibraryDeltaException({
+    required this.cause,
+    required this.appliedResult,
+    this.refreshError,
+  });
+
+  @override
+  String toString() =>
+      'PartiallyAppliedLibraryDeltaException('
+      '${appliedResult.appliedSteps} steps): $cause'
+      '${refreshError == null ? '' : '; refresh failed: $refreshError'}';
+}
+
 /// ממשק שירות עדכון הספרייה — מאפשר ל-BLoC להיבדק מול מימוש מזויף.
 abstract interface class LibraryUpdateService {
   Future<RecoveryResult> recoverIfNeeded();
   Future<LibraryUpdatePlan> checkForUpdate({required bool allowPrerelease});
 
-  /// מחזיר את מזהי הספרים שתוכנם השתנה בעדכון — לרענון אינדקס החיפוש שלהם.
-  Future<Set<int>> applyDeltaPlan(
+  /// מחזיר את השינויים שהוחלו — לריענון הספרייה ואינדקס החיפוש.
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -78,6 +130,7 @@ abstract interface class LibraryUpdateService {
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   });
 }
@@ -138,6 +191,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     final result = await discovery.discover(allowPrerelease: allowPrerelease);
     return planner.plan(
       localVersion: local.dbVersion,
+      localSchemaVersion: local.schemaVersion,
       hasLocalVersionMeta: local.hasVersionMeta,
       latestVersion: result.latestVersion,
       edges: result.edges,
@@ -151,7 +205,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
   /// כל apply רץ ב-Isolate (חוסם ~דקה עם חישוב hash) בתוך operationQueue, עם
   /// סגירת ה-DO לכתיבה חיצונית וגיבוי/שחזור.
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -167,51 +221,51 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     var verifyTotalHint = _readIntQuietly(hintFile);
     var lastVerifyDone = 0;
 
-    final booksTouched = <int>{};
+    var result = const LibraryDeltaApplyResult();
     final steps = plan.deltaSteps;
-    for (var i = 0; i < steps.length; i++) {
-      final step = steps[i];
-      final patchFile = step.manifest.patchFiles.first;
-      final url = step.patchFileUrls[patchFile.file];
-      if (url == null) {
-        throw StateError('חסר URL להורדת ${patchFile.file}');
-      }
+    try {
+      for (var i = 0; i < steps.length; i++) {
+        final step = steps[i];
+        final patchFile = step.manifest.patchFiles.first;
+        final url = step.patchFileUrls[patchFile.file];
+        if (url == null) {
+          throw StateError('חסר URL להורדת ${patchFile.file}');
+        }
 
-      onProgress?.call(
-        LibraryUpdateProgress(
-          phase: LibraryUpdatePhase.downloading,
-          stepIndex: i,
-          totalSteps: steps.length,
-        ),
-      );
-      final patchPath = await downloader.downloadAndExtract(
-        patchFile: patchFile,
-        downloadUrl: url,
-        destDir: cacheDir,
-        isCancelled: isCancelled,
-        onProgress: (downloaded, total) => onProgress?.call(
+        onProgress?.call(
           LibraryUpdateProgress(
             phase: LibraryUpdatePhase.downloading,
             stepIndex: i,
             totalSteps: steps.length,
-            bytesDownloaded: downloaded,
-            bytesTotal: total,
-          ),
-        ),
-      );
-
-      try {
-        // ביטול בדיוק אחרי החילוץ ולפני ההחלה — עוצרים לפני שנוגעים ב-DB.
-        _throwIfCancelled(isCancelled);
-        onProgress?.call(
-          LibraryUpdateProgress(
-            phase: LibraryUpdatePhase.applying,
-            stepIndex: i,
-            totalSteps: steps.length,
           ),
         );
-        booksTouched.addAll(
-          await _applyStepInQueue(
+        final patchPath = await downloader.downloadAndExtract(
+          patchFile: patchFile,
+          downloadUrl: url,
+          destDir: cacheDir,
+          isCancelled: isCancelled,
+          onProgress: (downloaded, total) => onProgress?.call(
+            LibraryUpdateProgress(
+              phase: LibraryUpdatePhase.downloading,
+              stepIndex: i,
+              totalSteps: steps.length,
+              bytesDownloaded: downloaded,
+              bytesTotal: total,
+            ),
+          ),
+        );
+
+        try {
+          // ביטול בדיוק אחרי החילוץ ולפני ההחלה — עוצרים לפני שנוגעים ב-DB.
+          _throwIfCancelled(isCancelled);
+          onProgress?.call(
+            LibraryUpdateProgress(
+              phase: LibraryUpdatePhase.applying,
+              stepIndex: i,
+              totalSteps: steps.length,
+            ),
+          );
+          final stepResult = await _applyStepInQueue(
             dbPath: dbPath,
             patchPath: patchPath,
             step: step,
@@ -238,16 +292,41 @@ class LibraryUpdateRepository implements LibraryUpdateService {
                 ),
               );
             },
-          ),
-        );
-        // הדיווח האחרון מ-compute הוא הסך המדויק — total לריצות הבאות.
-        if (lastVerifyDone > 0) {
-          verifyTotalHint = lastVerifyDone;
-          _writeIntQuietly(hintFile, lastVerifyDone);
+          );
+          result = result.addStep(stepResult);
+          // הדיווח האחרון מ-compute הוא הסך המדויק — total לריצות הבאות.
+          if (lastVerifyDone > 0) {
+            verifyTotalHint = lastVerifyDone;
+            _writeIntQuietly(hintFile, lastVerifyDone);
+          }
+        } finally {
+          _deleteQuietly(patchPath); // מנקה גם בכשל apply, לא רק בהצלחה.
         }
-      } finally {
-        _deleteQuietly(patchPath); // מנקה גם בכשל apply, לא רק בהצלחה.
       }
+    } catch (error, stackTrace) {
+      if (!result.hasDatabaseChanges) rethrow;
+      // הצעדים שכבר הושלמו נשארים ב-DB גם אם צעד מאוחר נכשל. מרעננים את
+      // ה-runtime לפני שמחזירים שליטה ל-BLoC, ושומרים את פרטי השינוי כדי
+      // שסירוב ל-fallback לא ישאיר קטלוג ואינדקס ישנים.
+      onProgress?.call(
+        const LibraryUpdateProgress(phase: LibraryUpdatePhase.refreshing),
+      );
+      Object? refreshError;
+      try {
+        await refreshService.refreshAfterDbUpdate();
+      } catch (error) {
+        // אסור שכשל ריענון יסתיר את העובדה שכבר נכתבו צעדים או את סיבת
+        // הכשל המקורית; ה-BLoC עדיין יוכל להציע fallback ולרענן אחרי ההחלטה.
+        refreshError = error;
+      }
+      Error.throwWithStackTrace(
+        PartiallyAppliedLibraryDeltaException(
+          cause: error,
+          appliedResult: result,
+          refreshError: refreshError,
+        ),
+        stackTrace,
+      );
     }
 
     onProgress?.call(
@@ -258,7 +337,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     onProgress?.call(
       const LibraryUpdateProgress(phase: LibraryUpdatePhase.done),
     );
-    return booksTouched;
+    return result;
   }
 
   /// מבצע הורדה מלאה: מוריד את `seforim.db.zst`, מחלץ בזרימה ליד ה-DB,
@@ -269,6 +348,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {
     final asset = plan.fullDbAsset;
@@ -339,8 +419,13 @@ class LibraryUpdateRepository implements LibraryUpdateService {
       await _verifyFullDbInIsolate(newDbPath, plan.targetVersion);
       _throwIfCancelled(isCancelled);
 
-      // מכאן ואילך אין ביטול — ה-DB מוחלף אטומית.
-      await _replaceDbInQueue(dbPath: dbPath, newDbPath: newDbPath, plan: plan);
+      await _replaceDbInQueue(
+        dbPath: dbPath,
+        newDbPath: newDbPath,
+        plan: plan,
+        isCancelled: isCancelled,
+        onDbReplaced: onDbReplaced,
+      );
 
       onProgress?.call(
         const LibraryUpdateProgress(phase: LibraryUpdatePhase.refreshing),
@@ -454,23 +539,47 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     required String dbPath,
     required String newDbPath,
     required LibraryUpdatePlan plan,
+    bool Function()? isCancelled,
+    FullDbReplacedCallback? onDbReplaced,
   }) {
     return DatabaseLibraryProvider.operationQueue.enqueue(() async {
+      // ייתכן שהפעולה המתינה זמן רב מאחורי כתיבה אחרת. ביטול שהגיע בזמן
+      // ההמתנה חייב לעצור לפני סגירת ה-runtime ולפני יצירת גיבוי כבד.
+      _throwIfCancelled(isCancelled);
       await SqliteDataProvider.instance.closeForExternalWrite();
+      var recoveryStarted = false;
       try {
+        _throwIfCancelled(isCancelled);
+        recoveryStarted = true;
         await recovery.beginApply(
           dbPath: dbPath,
           fromVersion: plan.localVersion,
           toVersion: plan.targetVersion ?? 0,
           timestamp: nowTimestamp(),
         );
+        // beginApply מעתיק DB של כמה GB ועשוי להימשך דקות. זו בדיקת הביטול
+        // האחרונה; מכאן עד ה-rename אין await ולכן אין חלון race נוסף.
+        _throwIfCancelled(isCancelled);
         _deleteDbWithSidecarsQuietly(dbPath);
         File(newDbPath).renameSync(dbPath);
         _deleteQuietly('$newDbPath-wal');
         _deleteQuietly('$newDbPath-shm');
         recovery.finishSuccess(dbPath);
+        // מסמנים את נקודת האל-חזור לפני ה-await של reopen. כך ה-BLoC חוסם
+        // Cancel/Reset גם אם הפתיחה מחדש או ריענון ה-runtime נמשכים/נכשלים.
+        try {
+          onDbReplaced?.call();
+        } catch (error, stackTrace) {
+          // callback הוא התראה בלבד; אסור שכשל במאזין יגלגל לאחור DB תקין
+          // אחרי שגיבוי ההתאוששות כבר נוקה.
+          debugPrint(
+            'Full DB replacement callback failed: $error\n$stackTrace',
+          );
+        }
       } catch (_) {
-        await recovery.rollback(dbPath);
+        // לפני beginApply אין לפעולה הזו artifacts משלה; rollback בשלב הזה
+        // עלול לגעת בטעות בגיבוי ישן שאינו שייך לריצה הנוכחית.
+        if (recoveryStarted) await recovery.rollback(dbPath);
         rethrow;
       } finally {
         await SqliteDataProvider.instance.reopenAfterExternalWrite();
@@ -478,7 +587,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     });
   }
 
-  Future<Set<int>> _applyStepInQueue({
+  Future<PatchApplyResult> _applyStepInQueue({
     required String dbPath,
     required String patchPath,
     required PatchEdge step,
@@ -557,7 +666,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
 
   // מאזין לתת-שלבי ה-apply דרך ReceivePort ומעביר ל-onStage (רץ ב-main isolate).
   // ה-onStage עצמו אסור שייכנס ל-scope של ה-Isolate.run (ראה [_runApplyIsolate]).
-  static Future<Set<int>> _applyPatchInIsolate({
+  static Future<PatchApplyResult> _applyPatchInIsolate({
     required String dbPath,
     required String patchPath,
     required DeltaManifest manifest,
@@ -591,7 +700,7 @@ class LibraryUpdateRepository implements LibraryUpdateService {
   // ה-Isolate.run מבודד כאן: closure לוכד את כל ה-scope של המתודה (גם פרמטרים
   // שאינם בשימוש), לכן המתודה מקבלת *רק* ערכים sendable. onStage/onProgress
   // נשארים ב-caller — אחרת הם גוררים את ה-bloc הלא-sendable ל-spawn.
-  static Future<Set<int>> _runApplyIsolate({
+  static Future<PatchApplyResult> _runApplyIsolate({
     required String dbPath,
     required String patchPath,
     required DeltaManifest manifest,
@@ -599,23 +708,21 @@ class LibraryUpdateRepository implements LibraryUpdateService {
     int? verifyTotalBytesHint,
   }) {
     return Isolate.run(
-      () => const PatchApplier()
-          .apply(
-            dbPath: dbPath,
-            patchPath: patchPath,
-            manifest: manifest,
-            verifyTotalBytesHint: verifyTotalBytesHint,
-            // verifyFromHash=false: verifyToHash אחרי ה-apply הוא הערובה האמיתית —
-            // אם המקור שונה, ה-toHash ייכשל וה-transaction יתגלגל אחורה. הבדיקה
-            // המקדימה רק כפילה קריאה של כל ה-DB (5.5GB) לחינם.
-            verifyFromHash: false,
-            // checkForeignKeys=false: verifyToHash מאמת את כל 28 הטבלאות (וכל ה-FK
-            // שביניהן) מול ה-DB התקין, אז התאמת hash כבר שוללת הפרות FK — חוסך ~60ש.
-            checkForeignKeys: false,
-            onStage: (stage) => sendPort.send(stage),
-            onVerifyProgress: (done, total) => sendPort.send((done, total)),
-          )
-          .booksTouched,
+      () => const PatchApplier().apply(
+        dbPath: dbPath,
+        patchPath: patchPath,
+        manifest: manifest,
+        verifyTotalBytesHint: verifyTotalBytesHint,
+        // verifyFromHash=false: verifyToHash אחרי ה-apply הוא הערובה האמיתית —
+        // אם המקור שונה, ה-toHash ייכשל וה-transaction יתגלגל אחורה. הבדיקה
+        // המקדימה רק כפילה קריאה של כל ה-DB (5.5GB) לחינם.
+        verifyFromHash: false,
+        // checkForeignKeys=false: verifyToHash מאמת את כל 28 הטבלאות (וכל ה-FK
+        // שביניהן) מול ה-DB התקין, אז התאמת hash כבר שוללת הפרות FK — חוסך ~60ש.
+        checkForeignKeys: false,
+        onStage: (stage) => sendPort.send(stage),
+        onVerifyProgress: (done, total) => sendPort.send((done, total)),
+      ),
     );
   }
 

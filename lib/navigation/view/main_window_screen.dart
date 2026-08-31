@@ -2444,10 +2444,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
             listenWhen: LibraryUpdateState.hasRefreshRelevantChange,
             listener: (context, state) {
-              if (state.status == LibraryUpdateStatus.completed &&
+              if ((state.status == LibraryUpdateStatus.completed ||
+                      state.status == LibraryUpdateStatus.error) &&
                   state.hasUpdate) {
                 _indexAfterLibraryReload = true;
-                _reconcileAfterLibraryReload = state.isFullDownloadPlan;
+                _reconcileAfterLibraryReload =
+                    state.isFullDownloadPlan || state.requiresFullIndexRefresh;
                 context.read<LibraryBloc>().add(
                   RefreshLibrary(
                     changedBookKeys: {

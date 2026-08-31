@@ -73,4 +73,15 @@ abstract class LibraryMessages {
   static const String updateDownloadError = 'שגיאה בהורדת העדכון';
 
   static const String updateInstallerLaunchError = 'שגיאה בהפעלת מתקין העדכון';
+
+  static const String deltaApplyFailed = 'החלת עדכון הדלתא נכשלה';
+
+  static const String deltaResultMismatch =
+      'תוצאת עדכון הדלתא אינה תואמת לגרסה הצפויה';
+
+  static const String localLibraryContentMismatch =
+      'תוכן הספרייה המקומית שונה מהצפוי';
+
+  static String fullLibraryDownloadRequired(String reason, String size) =>
+      '$reason — נדרשת הורדה מלאה ($size)';
 }
