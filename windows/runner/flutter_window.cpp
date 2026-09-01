@@ -15,6 +15,31 @@
 
 namespace {
 
+// ── ספייק T-0.9: האם הודעות סיום הסשן מגיעות אלינו בכלל? ──────────────────
+//
+// כיבוי/יציאת משתמש הורגים את אוצריא בלי ש-`PreCloseRegistry.runAll()` ירוץ,
+// כי `WM_QUERYENDSESSION` אינו מטופל ו-`DefWindowProc` מחזיר TRUE. לפני
+// שבונים על זה מנגנון flush חוסם — שהוא 🔴 בפני עצמו בגלל ה-message pump
+// שהוא מחייב — צריך לענות על שאלה מקדימה אחת: ההודעה בכלל מגיעה ל-case
+// שלנו, או ש-`flutter_controller_->HandleTopLevelWindowProc` בולע אותה
+// קודם? (`window_manager` מתקין שם top-level proc משלו.)
+//
+// המדידה כאן היא **קריאה בלבד ואינה משנה התנהגות**: היא רק כותבת ל-
+// OutputDebugStringW בשלוש נקודות ומחזירה את הזרימה כלשונה. הרצה: פותחים
+// DebugView כמנהל, מריצים `shutdown /s /t 60`, קוראים את הפלט ומבטלים
+// ב-`shutdown /a`.
+void LogSessionEndProbe(const wchar_t* stage, UINT message, WPARAM wparam,
+                        LPARAM lparam) {
+  wchar_t buffer[200];
+  _snwprintf_s(buffer, _TRUNCATE,
+               L"Otzaria[T-0.9] %ls msg=%ls wparam=%llu lparam=0x%llX\n", stage,
+               message == WM_QUERYENDSESSION ? L"WM_QUERYENDSESSION"
+                                             : L"WM_ENDSESSION",
+               static_cast<unsigned long long>(wparam),
+               static_cast<unsigned long long>(lparam));
+  OutputDebugStringW(buffer);
+}
+
 // מפעיל/מבטל DWM cloaking: החלון נשאר "מוצג" מבחינת המערכת (WS_VISIBLE,
 // מיקסום, פוקוס והצגת פריימים עובדים כרגיל) אבל ה-DWM לא מצייר אותו כלל.
 // ביטול ה-cloak הוא אטומי — פריים קומפוזיציה אחד עם התוכן העדכני.
@@ -325,12 +350,23 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // ספייק T-0.9 — ראו ההערה מעל LogSessionEndProbe. שלוש הנקודות נדרשות
+  // כדי להבחין בין "ההודעה לא הגיעה כלל" לבין "הגיעה ונבלעה בדרך".
+  const bool is_session_end_probe =
+      message == WM_QUERYENDSESSION || message == WM_ENDSESSION;
+  if (is_session_end_probe) {
+    LogSessionEndProbe(L"arrived", message, wparam, lparam);
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
                                                       lparam);
     if (result) {
+      if (is_session_end_probe) {
+        LogSessionEndProbe(L"swallowed-by-flutter", message, wparam, lparam);
+      }
       return *result;
     }
   }
@@ -341,6 +377,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         flutter_controller_->engine()->ReloadSystemFonts();
       }
       break;
+  }
+
+  if (is_session_end_probe) {
+    LogSessionEndProbe(L"reached-our-case", message, wparam, lparam);
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
