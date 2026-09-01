@@ -185,12 +185,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> early_args = GetCommandLineArguments();
   const bool is_cli_invocation = IsCliInvocation(early_args);
 
+  // ── ספייק P-0 בלבד. אינו מיועד ל-main. ────────────────────────────────
+  //
+  // `--window-role=secondary` עוקף את בדיקת המופע היחיד, כדי שאפשר יהיה
+  // להריץ שני תהליכי אוצריא במקביל ולמדוד מה קורה. זו השאלה שכל מפת
+  // הדרכים תלויה בה: האם מודל ריבוי-תהליכים בכלל אפשרי.
+  //
+  // ⚠️ הרצת שני מופעים על **אותה ספרייה** היא הרסנית: סנטינל האינדקס של
+  // Tantivy מוחק את האינדקס אחרי כשלי פתיחה רצופים, ו-`journal_mode=DELETE`
+  // אינו מגן על כתיבות מקבילות. להדגמה בטוחה משגרים את המופע השני עם
+  // `APPDATA` מופנה לתיקייה זמנית — ואז ההגדרות, ה-Hive והספרייה שלו
+  // נפרדים לחלוטין (ראו `app_paths.dart:112`).
+  const bool is_secondary_window_role = [&early_args]() {
+    for (const auto& arg : early_args) {
+      if (EqualsIgnoreCase(arg, "--window-role=secondary")) return true;
+    }
+    return false;
+  }();
+
   // Single-instance check: must happen before the Flutter engine starts so
   // that the second instance never acquires any shared resources (DB, etc.).
   // bInitialOwner = FALSE: we don't need ownership, just existence of the object.
   // If CreateMutexW fails (returns NULL), treat as first instance so the app
   // can still start rather than being permanently blocked.
-  HANDLE mutex = is_cli_invocation
+  HANDLE mutex = (is_cli_invocation || is_secondary_window_role)
                      ? nullptr
                      : CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   bool is_second_instance =
