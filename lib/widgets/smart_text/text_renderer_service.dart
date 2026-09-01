@@ -325,10 +325,20 @@ class TextRendererService {
   ///
   /// [text] - הטקסט לחיפוש בו
   /// [searchQuery] - מחרוזת החיפוש
+  /// [partialWordMatch] - חייב לשקף את `RenderSettings.partialWordHighlight`
+  /// של אותו תוכן, אחרת המונה סוטה ממספר ההדגשות בפועל.
   ///
   /// מחזיר את מספר ההתאמות שנמצאו
-  static int countSearchMatches(String text, String searchQuery) {
-    return utils.countMatches(text, searchQuery);
+  static int countSearchMatches(
+    String text,
+    String searchQuery, {
+    bool partialWordMatch = false,
+  }) {
+    return utils.countMatches(
+      text,
+      searchQuery,
+      partialWordMatch: partialWordMatch,
+    );
   }
 
   /// הסרת תגי HTML מטקסט

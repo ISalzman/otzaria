@@ -1237,6 +1237,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         content: data,
         query: query,
         removePunctuation: removePunctuation,
+        // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
+        partialWordMatch: true,
       );
       _updateSearchResultsCount(link, count);
       if (wantSnippets && count > 0) {

@@ -762,6 +762,8 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
         content: data,
         query: query,
         removePunctuation: widget.removePunctuation,
+        // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
+        partialWordMatch: true,
       );
       // גזירה באותו מעבר שכבר טען את התוכן — כך הרשימה שלמה גם לפריטים
       // שהרשימה הווירטואלית לא בנתה.
