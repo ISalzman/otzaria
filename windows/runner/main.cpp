@@ -1,3 +1,4 @@
+#include <flutter/flutter_engine.h>
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <initguid.h>
@@ -203,12 +204,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return false;
   }();
 
+  // `--role=broker` — ספייק P-0 שלב 2. גם הוא עוקף את המופע היחיד: broker
+  // אמור לרוץ לצד חלון UI, לא במקומו.
+  const bool is_broker_role = [&early_args]() {
+    for (const auto& arg : early_args) {
+      if (EqualsIgnoreCase(arg, "--role=broker")) return true;
+    }
+    return false;
+  }();
+
   // Single-instance check: must happen before the Flutter engine starts so
   // that the second instance never acquires any shared resources (DB, etc.).
   // bInitialOwner = FALSE: we don't need ownership, just existence of the object.
   // If CreateMutexW fails (returns NULL), treat as first instance so the app
   // can still start rather than being permanently blocked.
-  HANDLE mutex = (is_cli_invocation || is_secondary_window_role)
+  HANDLE mutex = (is_cli_invocation || is_secondary_window_role || is_broker_role)
                      ? nullptr
                      : CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName);
   bool is_second_instance =
@@ -258,6 +268,33 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       GetCommandLineArguments();
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
+
+  // ── ספייק P-0 שלב 2. אינו מיועד ל-main. ───────────────────────────────
+  //
+  // מודל C1 מניח תהליך broker שמחזיק את הנתונים ואינו מציג דבר. השאלה
+  // שנמדדת כאן: האם `FlutterEngine` **בלי** `FlutterViewController` מריץ
+  // Dart בכלל — טיימרים, microtasks, I/O ו-rootBundle — או שהמנוע מצפה
+  // ל-view כדי להתקדם.
+  //
+  // ⚠️ `headless` הקיים אינו זה: הוא יוצר view מלא ורק מדלג על ההצגה.
+  // כאן אין view כלל, כמו ב-`examples/multiple_windows` של Flutter.
+  if (is_broker_role) {
+    project.set_dart_entrypoint("brokerMain");
+    flutter::FlutterEngine engine(project);
+    if (!engine.Run("brokerMain")) {
+      OutputDebugStringW(L"Otzaria[broker] engine.Run failed\n");
+      return EXIT_FAILURE;
+    }
+    // אין חלון ולכן אין WM_QUIT. ה-Dart מסיים את התהליך ב-exit() כשהמדידה
+    // מסתיימת; הלולאה כאן רק מזינה את תור המשימות של המנוע.
+    ::MSG broker_msg;
+    while (::GetMessage(&broker_msg, nullptr, 0, 0)) {
+      ::TranslateMessage(&broker_msg);
+      ::DispatchMessage(&broker_msg);
+    }
+    ::CoUninitialize();
+    return EXIT_SUCCESS;
+  }
 
   FlutterWindow window(project, /*headless=*/is_cli_invocation);
   Win32Window::Point origin(10, 10);

@@ -48,6 +48,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
@@ -1354,3 +1355,115 @@ void cleanup() {
 }
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse
+
+// ═══════════════════════════════════════════════════════════════════════
+// ספייק P-0 שלב 2 — אינו מיועד ל-main.
+//
+// נקודת כניסה לתהליך broker: מנוע Flutter **בלי `FlutterViewController`**.
+// השאלה הנמדדת: האם Dart רץ בכלל במנוע חסר-view — טיימרים, microtasks,
+// I/O ו-`rootBundle` — או שהמנוע מצפה ל-view כדי להתקדם.
+//
+// זו הליבה של מודל C1, וגם של ה-host במודל A (T-G2.0). המדידה כותבת
+// שורות ל-`%TEMP%\otzaria_broker_probe.log` ויוצאת; אין UI ואין ערוצים.
+// ═══════════════════════════════════════════════════════════════════════
+@pragma('vm:entry-point')
+void brokerMain(List<String> args) async {
+  final log = StringBuffer();
+  void record(String step, Object? outcome) {
+    final line = '[broker] $step = $outcome';
+    log.writeln(line);
+    debugPrint(line);
+  }
+
+  void flush() {
+    try {
+      final temp = Platform.environment['TEMP'] ?? r'C:\Users\Public';
+      File('$temp\otzaria_broker_probe.log')
+          .writeAsStringSync(log.toString(), mode: FileMode.append);
+    } catch (_) {}
+  }
+
+  try {
+    record('engine-alive', 'yes');
+
+    // 1. האם לולאת האירועים רצה בכלל בלי view.
+    final timerDone = Completer<void>();
+    Timer(const Duration(milliseconds: 50), () => timerDone.complete());
+    await timerDone.future.timeout(const Duration(seconds: 5));
+    record('timer', 'fired');
+
+    await Future<void>.microtask(() {});
+    record('microtask', 'ran');
+
+    // 2. I/O — האם קריאת קובץ מסתיימת.
+    final self = File(Platform.resolvedExecutable);
+    record('file-io', '${await self.length()} bytes');
+
+    // 3. rootBundle — ההכרעה בין C1 ל-C2. `tantivy_data_provider` תלוי בו,
+    //    והוא זמין רק בתוך מנוע Flutter.
+    WidgetsFlutterBinding.ensureInitialized();
+    // שני נכסים: מניפסט בינארי שקיים בכל חבילה, ונכס אמיתי של האפליקציה.
+    // שם נכס שגוי נכשל בדיוק כמו bundle שבור — ולכן בודקים שניים.
+    try {
+      final bin = await rootBundle.load('AssetManifest.bin');
+      record('rootBundle:AssetManifest.bin', 'ok (${bin.lengthInBytes} bytes)');
+    } catch (e) {
+      record('rootBundle:AssetManifest.bin', 'FAILED: $e');
+    }
+    try {
+      final changelog = await rootBundle.loadString('assets/יומן שינויים.md');
+      record('rootBundle:app-asset', 'ok (${changelog.length} chars)');
+    } catch (e) {
+      record('rootBundle:app-asset', 'FAILED: $e');
+    }
+
+    // 4. מאגרי הנתונים — מה שה-broker אמור להחזיק בפועל.
+    try {
+      await Settings.init(cacheProvider: HiveCache());
+      record('settings-init', 'ok');
+    } catch (e) {
+      record('settings-init', 'FAILED: $e');
+    }
+    try {
+      await initHive();
+      record('hive', 'ok');
+    } catch (e) {
+      record('hive', 'FAILED: $e');
+    }
+    try {
+      await SqliteDataProvider.instance.initialize();
+      record('sqlite', 'ok');
+    } catch (e) {
+      record('sqlite', 'FAILED: $e');
+    }
+    // מנוע החיפוש מגיע דרך FFI ודורש אתחול מפורש — `main()` עושה זאת
+    // ב-`RustLib.init()`. בלעדיו הגישה לאינדקס נכשלת בהודעה שנראית כמו
+    // כשל של המנוע חסר-view, ואינה כזו.
+    try {
+      await RustLib.init();
+      record('rustlib-init', 'ok');
+    } catch (e) {
+      record('rustlib-init', 'FAILED: $e');
+    }
+    // אינדקס Tantivy — הרכיב האחרון שה-broker אמור להחזיק. הקונסטרוקטור
+    // של TantivyDataProvider פותח את המנוע, ולכן עצם הגישה ל-`instance`
+    // היא המדידה.
+    try {
+      final provider = TantivyDataProvider.instance;
+      await provider.engine;
+      final hits = await provider.countTexts('בראשית', const [], const []);
+      record('tantivy', 'ok (engine open, $hits hits)');
+    } catch (e) {
+      record('tantivy', 'FAILED: $e');
+    }
+    record(
+      'rss-mb',
+      (ProcessInfo.currentRss / (1024 * 1024)).toStringAsFixed(0),
+    );
+  } catch (e, st) {
+    record('fatal', '$e\n$st');
+  } finally {
+    flush();
+    exit(0);
+  }
+}
