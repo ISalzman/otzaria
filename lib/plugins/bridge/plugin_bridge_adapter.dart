@@ -251,7 +251,7 @@ Future<String> _bundledFontFaceCss(String family, {String? asFamily}) async {
 /// \u05d0\u05d9\u05e0\u05d5 \u05d9\u05db\u05d5\u05dc \u05dc\u05e4\u05ea\u05d5\u05e8 \u05d0\u05ea \u05e9\u05de\u05d5 \u05d0\u05dc\u05d0 \u05d0\u05dd \u05d4\u05d1\u05d9\u05d9\u05d8\u05d9\u05dd \u05e9\u05dc\u05d5 \u05e0\u05e9\u05dc\u05d7\u05d9\u05dd \u05d0\u05d9\u05ea\u05d5.
 Future<String> _systemFontFaceCss(String family, {String? asFamily}) async {
   await AppFonts.warmUpSystemFontsCache();
-  final faces = AppFonts.systemFamilyFaces(family);
+  final faces = AppFonts.pluginSystemFamilyFaces(family);
   if (faces == null) return '';
   final regular = AppFonts.readFontBytes(faces.regularPath);
   if (regular == null) return '';
@@ -269,16 +269,17 @@ Future<String> _systemFontFaceCss(String family, {String? asFamily}) async {
 
 Future<String> _loadFontFaceCss(String fontFamily, {String? asFamily}) async {
   if (fontFamily.isEmpty) return '';
-  // המפתח נושא את שני השמות: אותם בייטים מוגשים תחת שמות שונים לבקשות שונות,
-  // ומטמון לפי המקור בלבד היה מחזיר את ה-CSS עם השם הלא נכון.
-  final cacheKey = asFamily == null ? fontFamily : '$asFamily $fontFamily';
-  final cached = _fontFaceCache[cacheKey];
-  if (cached != null) return cached;
+  if (asFamily == null) {
+    final cached = _fontFaceCache[fontFamily];
+    if (cached != null) return cached;
+  }
   try {
     final css = AppFonts.fontPaths.containsKey(fontFamily)
         ? await _bundledFontFaceCss(fontFamily, asFamily: asFamily)
         : await _systemFontFaceCss(fontFamily, asFamily: asFamily);
-    if (css.isNotEmpty) _fontFaceCache[cacheKey] = css;
+    if (css.isNotEmpty && asFamily == null) {
+      _fontFaceCache[fontFamily] = css;
+    }
     return css;
   } catch (_) {
     return '';
@@ -326,6 +327,17 @@ Future<Map<String, dynamic>> _resolveFontFamilies(
 
   return {'css': css.join('\n'), 'resolved': resolved};
 }
+
+@visibleForTesting
+Future<Map<String, dynamic>> debugResolveFontFamilies(
+  List<dynamic> requested,
+) => _resolveFontFamilies(requested);
+
+@visibleForTesting
+void debugClearFontFaceCssCache() => _fontFaceCache.clear();
+
+@visibleForTesting
+int get debugFontFaceCssCacheSize => _fontFaceCache.length;
 
 /// \u05d1\u05d5\u05e0\u05d4 \u05d1\u05dc\u05d5\u05e7 CSS \u05e2\u05dd `@font-face` \u05dc\u05db\u05dc \u05d4\u05d2\u05d5\u05e4\u05e0\u05d9\u05dd \u05e9\u05ea\u05d5\u05e1\u05e3 \u05d9\u05db\u05d5\u05dc \u05dc\u05e0\u05e7\u05d5\u05d1 \u05d1\u05e9\u05de\u05dd:
 /// \u05d4\u05de\u05d5\u05d1\u05e0\u05d9\u05dd \u05e9\u05dc \u05d0\u05d5\u05e6\u05e8\u05d9\u05d0, \u05d5\u05d1\u05e0\u05d5\u05e1\u05e3 \u05d2\u05d5\u05e4\u05df \u05de\u05e2\u05e8\u05db\u05ea \u05e9\u05e0\u05d1\u05d7\u05e8 \u05d1\u05d4\u05d2\u05d3\u05e8\u05d5\u05ea. \u05de\u05e9\u05e4\u05d7\u05d4
