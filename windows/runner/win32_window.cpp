@@ -1,5 +1,6 @@
 #include "win32_window.h"
 
+#include <atomic>
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -27,7 +28,11 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
 // The number of Win32Window objects that currently exist.
-static int g_active_window_count = 0;
+// ⚠️ מודל A יוצר חלון לכל thread (ראו docs/P-0-stage3-result.md), ולכן
+// המונה הזה נקרא ונכתב משני threads. כ-`int` רגיל זה מרוץ נתונים: שני
+// חלונות שנסגרים במקביל עלולים שניהם לראות 0 ולבטל את רישום המחלקה
+// פעמיים, או לפספס את האפס ולא לבטל כלל. בחלון יחיד זה לא הופיע.
+static std::atomic<int> g_active_window_count{0};
 
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
@@ -61,11 +66,13 @@ class WindowClassRegistrar {
   ~WindowClassRegistrar() = default;
 
   // Returns the singleton registrar instance.
+  //
+  // ⚠️ אתחול עצל ב-`if (!instance_)` אינו בטוח כששני threads יוצרים
+  // חלונות במקביל — שניהם עלולים לראות null ולהקצות. סינגלטון מקומי-סטטי
+  // מובטח על ידי התקן כבטוח ל-threads מאז C++11.
   static WindowClassRegistrar* GetInstance() {
-    if (!instance_) {
-      instance_ = new WindowClassRegistrar();
-    }
-    return instance_;
+    static WindowClassRegistrar instance;
+    return &instance;
   }
 
   // Returns the name of the window class, registering the class if it hasn't
@@ -79,12 +86,8 @@ class WindowClassRegistrar {
  private:
   WindowClassRegistrar() = default;
 
-  static WindowClassRegistrar* instance_;
-
   bool class_registered_ = false;
 };
-
-WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {

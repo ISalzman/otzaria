@@ -306,9 +306,58 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     // שלו הוא thread אחר.
     bool two_engines = false;
     bool two_engines_same_thread = false;
+    bool two_windows_ui = false;
     for (const auto& arg : early_args) {
       if (arg == "--engines=2") two_engines = true;
       if (arg == "--engines=2same") two_engines_same_thread = true;
+      if (arg == "--engines=2ui") two_windows_ui = true;
+    }
+
+    // ── ספייק P-2: שני חלונות **אמיתיים** עם view ──
+    // המדידות הקודמות היו חסרות-view. כאן שני `FlutterViewController`
+    // מלאים, כל אחד על thread ייעודי עם לולאת הודעות משלו — הצורה שבה
+    // מודל A ייראה בפועל. בודק את מה שמנוע חסר-view לא יכול: רינדור
+    // מקבילי, `EGLDisplay` משותף (§3.3 סעיף 4), RTL ופעולות חלון.
+    if (two_windows_ui) {
+      // `--no-plugins` מבודד את בדיקה 1: אם שני חלונות עובדים בלעדיו
+      // ונופלים איתו, מקור הכשל הוא התוספים ולא ה-views על שני threads.
+      bool skip_plugins = false;
+      for (const auto& arg : early_args) {
+        if (arg == "--no-plugins") skip_plugins = true;
+      }
+      auto run_window = [skip_plugins](const flutter::DartProject& base,
+                                       const char* entrypoint,
+                                       const wchar_t* title, int x) {
+        flutter::DartProject p(base);
+        p.set_dart_entrypoint(entrypoint);
+        FlutterWindow window(p, /*headless=*/false, skip_plugins);
+        Win32Window::Point origin(x, 80);
+        Win32Window::Size size(560, 640);
+        if (!window.Create(title, origin, size)) return;
+        // החלון נוצר מוסתר ומתגלה בדרך כלל על ידי Dart דרך window_manager.
+        // בספייק אין את הרצף הזה, ולכן מציגים מפורשות.
+        ::ShowWindow(window.GetHandle(), SW_SHOW);
+        window.SetQuitOnClose(true);
+        ::MSG msg;
+        while (::GetMessage(&msg, nullptr, 0, 0)) {
+          ::TranslateMessage(&msg);
+          ::DispatchMessage(&msg);
+        }
+      };
+
+      std::thread window_b([&]() {
+        printf("[B] window thread = %lu\n", ::GetCurrentThreadId());
+        fflush(stdout);
+        run_window(project, "windowBTest", L"אוצריא — חלון ב'", 640);
+      });
+
+      printf("[A] window thread = %lu\n", ::GetCurrentThreadId());
+      fflush(stdout);
+      run_window(project, "windowATest", L"אוצריא — חלון א'", 40);
+
+      window_b.join();
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
     }
 
     // בקרה. שני מנועים על **אותו** thread. קיימת רק כדי להוכיח שהמדידה

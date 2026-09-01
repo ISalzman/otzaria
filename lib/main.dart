@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1427,6 +1428,135 @@ Future<void> _probeOpenStack(String tag) async {
 // על thread אחר מתקתק טיימר כל 100ms. הפער המרבי בין תקתוקים הוא
 // התשובה — ~100ms פירושו threads עצמאיים, ~2000ms פירושו תחרות.
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// ספייק P-2 — שני חלונות אמיתיים עם view, כל אחד על thread משלו.
+//
+// המדידות הקודמות היו חסרות-view והוכיחו שאין תחרות בין ה-isolates
+// (102ms מול 2092ms בבקרה). כאן אותו דבר, אבל **גלוי לעין**: כפתור
+// "הקפא" בחלון אחד חוסם את ה-isolate שלו לשלוש שניות, והשעון בחלון
+// השני ממשיך לרוץ. זו ההכרעה של מודל A על המסך.
+// ═══════════════════════════════════════════════════════════════════════
+@pragma('vm:entry-point')
+void windowATest(List<String> args) => _runSpikeWindow('א', Colors.indigo);
+
+@pragma('vm:entry-point')
+void windowBTest(List<String> args) => _runSpikeWindow('ב', Colors.teal);
+
+void _runSpikeWindow(String label, MaterialColor color) {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(_SpikeWindowApp(label: label, color: color));
+}
+
+class _SpikeWindowApp extends StatelessWidget {
+  const _SpikeWindowApp({required this.label, required this.color});
+
+  final String label;
+  final MaterialColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: color, useMaterial3: true),
+      // בדיקה 6 של P-2: RTL אינו nice-to-have.
+      locale: const Locale('he'),
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: const [Locale('he'), Locale('en')],
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: _SpikeWindowBody(label: label),
+      ),
+    );
+  }
+}
+
+class _SpikeWindowBody extends StatefulWidget {
+  const _SpikeWindowBody({required this.label});
+
+  final String label;
+
+  @override
+  State<_SpikeWindowBody> createState() => _SpikeWindowBodyState();
+}
+
+class _SpikeWindowBodyState extends State<_SpikeWindowBody> {
+  late final Timer _clock;
+  int _tenths = 0;
+  bool _frozen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // שעון עשיריות שנייה. אם ה-isolate של החלון הזה נחסם — הוא ייעצר,
+    // וזה בדיוק מה שאמורים לראות בחלון האחר.
+    _clock = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (mounted) setState(() => _tenths++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock.cancel();
+    super.dispose();
+  }
+
+  void _freeze() {
+    setState(() => _frozen = true);
+    // חסימה סינכרונית מכוונת של ה-UI isolate של החלון הזה בלבד.
+    final end = DateTime.now().add(const Duration(seconds: 3));
+    while (DateTime.now().isBefore(end)) {}
+    if (mounted) setState(() => _frozen = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('חלון ${widget.label}'),
+        backgroundColor: theme.colorScheme.primaryContainer,
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              (_tenths / 10).toStringAsFixed(1),
+              style: theme.textTheme.displayLarge?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('שניות מאז פתיחת החלון', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 32),
+            Text(
+              'thread ${_probeThreadId()}',
+              style: theme.textTheme.labelLarge,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: _frozen ? null : _freeze,
+              icon: const Icon(Icons.ac_unit),
+              label: const Text('הקפא חלון זה ל-3 שניות'),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 320,
+              child: Text(
+                'לחיצה תחסום את ה-isolate של החלון הזה בלבד. השעון כאן '
+                'ייעצר — והשעון בחלון השני ימשיך לרוץ. זו ההוכחה '
+                'שמנוע לכל thread מבטל את תחרות §3.3.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 @pragma('vm:entry-point')
 void engineATest(List<String> args) async {
   _probeLog('A', 'dart-thread-id', _probeThreadId());

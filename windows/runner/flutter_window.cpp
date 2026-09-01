@@ -9,6 +9,23 @@
 #include <string>
 #include <thread>
 
+#include <cstdlib>
+
+// ספייק P-2 בלבד — נדרשים ל-`RegisterPluginsMasked`. בקוד היצור רק
+// `generated_plugin_registrant.h` נכלל.
+#include <file_selector_windows/file_selector_windows.h>
+#include <flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h>
+#include <irondash_engine_context/irondash_engine_context_plugin_c_api.h>
+#include <printing/printing_plugin.h>
+#include <screen_retriever_windows/screen_retriever_windows_plugin_c_api.h>
+// ⚠️ `sentry_flutter_plugin.h` מגדיר את ה-registrar inline, ולכן הכללתו
+// כאן **וגם** ב-generated_plugin_registrant.cc יוצרת LNK2005. הוא ממילא
+// stub ריק ב-Windows (כפי שהמסמך קובע), ולכן הוא מדולג במסכה.
+#include <super_native_extensions/super_native_extensions_plugin_c_api.h>
+#include <url_launcher_windows/url_launcher_windows.h>
+#include <window_manager/window_manager_plugin.h>
+#include <zstandard_windows/zstandard_windows_plugin_c_api.h>
+
 #include "flutter/generated_plugin_registrant.h"
 #include "jump_list_manager.h"
 #include "splash_window.h"
@@ -110,8 +127,9 @@ void SetWindowCloaked(HWND hwnd, bool cloaked) {
 
 }  // namespace
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless)
-    : project_(project), headless_(headless) {
+FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless,
+                             bool skip_plugins)
+    : project_(project), headless_(headless), skip_plugins_(skip_plugins) {
   // Create a Job Object early — before any child processes can spawn. We
   // assign our own process to it with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
   // so that *any* child process created from this point onward (WebView2's
@@ -185,6 +203,45 @@ FlutterWindow::~FlutterWindow() {
   }
 }
 
+namespace {
+
+// ספייק P-2 בלבד. רושם תת-קבוצה של התוספים לפי מסכת ביטים, בסדר של
+// `generated_plugin_registrant.cc`. משמש לחיפוש בינארי אחר התוסף ששובר
+// שני חלונות על שני threads.
+void RegisterPluginsMasked(flutter::PluginRegistry* registry,
+                           unsigned long mask) {
+  struct Entry {
+    const char* name;
+    void (*fn)(FlutterDesktopPluginRegistrarRef);
+  };
+  static const Entry kEntries[] = {
+      {"FileSelectorWindows", FileSelectorWindowsRegisterWithRegistrar},
+      {"FlutterInappwebviewWindowsPluginCApi",
+       FlutterInappwebviewWindowsPluginCApiRegisterWithRegistrar},
+      {"IrondashEngineContextPluginCApi",
+       IrondashEngineContextPluginCApiRegisterWithRegistrar},
+      {"PrintingPlugin", PrintingPluginRegisterWithRegistrar},
+      {"ScreenRetrieverWindowsPluginCApi",
+       ScreenRetrieverWindowsPluginCApiRegisterWithRegistrar},
+      {"SentryFlutterPlugin", nullptr},  // stub ריק — ראו ההערה בהכללות
+      {"SuperNativeExtensionsPluginCApi",
+       SuperNativeExtensionsPluginCApiRegisterWithRegistrar},
+      {"UrlLauncherWindows", UrlLauncherWindowsRegisterWithRegistrar},
+      {"WindowManagerPlugin", WindowManagerPluginRegisterWithRegistrar},
+      {"ZstandardWindowsPluginCApi",
+       ZstandardWindowsPluginCApiRegisterWithRegistrar},
+  };
+  for (size_t i = 0; i < sizeof(kEntries) / sizeof(kEntries[0]); ++i) {
+    if ((mask & (1UL << i)) && kEntries[i].fn != nullptr) {
+      kEntries[i].fn(registry->GetRegistrarForPlugin(kEntries[i].name));
+      printf("[plugin] registered %s\n", kEntries[i].name);
+    }
+  }
+  fflush(stdout);
+}
+
+}  // namespace
+
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
@@ -200,7 +257,22 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
-  RegisterPlugins(flutter_controller_->engine());
+  // ספייק P-2 בדיקה 1: בלי תוספים ובלי ערוצי runner, כדי לבודד את מקור
+  // הכשל בשני חלונות. ראו docs/P-2-two-windows.md.
+  if (skip_plugins_) {
+    return true;
+  }
+  // ספייק P-2: `OTZARIA_SPIKE_PLUGIN_MASK` רושם תת-קבוצה של התוספים,
+  // ביט לכל אחד לפי הסדר ב-generated_plugin_registrant.cc. קיים כדי
+  // לאתר בחיפוש בינארי איזה תוסף שובר שני חלונות.
+  char mask_env[32] = {};
+  if (::GetEnvironmentVariableA("OTZARIA_SPIKE_PLUGIN_MASK", mask_env,
+                                sizeof(mask_env)) > 0) {
+    RegisterPluginsMasked(flutter_controller_->engine(),
+                          std::strtoul(mask_env, nullptr, 0));
+  } else {
+    RegisterPlugins(flutter_controller_->engine());
+  }
   process_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
