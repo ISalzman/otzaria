@@ -755,7 +755,11 @@ class FindRefRepository {
       }
 
       final unique = _dedupeRefs(results);
-      final ranked = _rankResults(unique, queryTokens);
+      final ranked = _rankResults(
+        unique,
+        queryTokens,
+        preserveSubstringTail: queryTokens.length == 1,
+      );
       return await _enrichWithPaths(ranked);
     }
 
@@ -1558,8 +1562,9 @@ class FindRefRepository {
 
   List<DbReferenceResult> _rankResults(
     List<DbReferenceResult> results,
-    List<String> queryTokens,
-  ) {
+    List<String> queryTokens, {
+    bool preserveSubstringTail = false,
+  }) {
     if (results.length < 2) return results;
 
     final query = queryTokens.join(' ');
@@ -1709,7 +1714,7 @@ class FindRefRepository {
 
     // issue #839: התאמות תת-מחרוזת מדורגות אחרי כל התאמות-התחילית, וחיתוך
     // שגבולו בתוכן מחק אותן כליל — מובטחת להן מכסה בזנב, בלי לשנות דירוג.
-    if (queryTokens.length == 1 && end < decorated.length) {
+    if (preserveSubstringTail && end < decorated.length) {
       bool isSubstringMatch(_RankKey d) =>
           !d.startsWithMatch && d.normTitle.contains(query);
       var quota = _substringTailQuota - capped.where(isSubstringMatch).length;

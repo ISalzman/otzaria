@@ -109,6 +109,24 @@ void main() {
       expect(hits.length, 6);
       expect(hits.last.title, 'יומא', reason: 'contains אחרי כל ה-starts');
     });
+
+    test('limit אפס מחזיר רשימה ריקה', () {
+      const book = BookCacheEntry(
+        id: 1,
+        title: 'יומא',
+        filePath: null,
+        fileType: 'txt',
+        categoryId: 1,
+        orderIndex: 1,
+      );
+      BooksCache.instance.setBooksForTesting([book]);
+      cache.seedForTesting(
+        normalizedTitles: {book.id: book.title},
+        categoryPaths: {book.id: ''},
+      );
+
+      expect(cache.search('מא', limit: 0), isEmpty);
+    });
   });
 
   group('findRefs — ה-cap של הדירוג לא מוחק התאמות תת-מחרוזת', () {
@@ -249,6 +267,30 @@ void main() {
 
       expect(titles.length, 4);
       expect(titles.last, 'יומא');
+    });
+
+    test('מצב era אינו מקבל את מכסת תת-המחרוזת', () async {
+      final repo = FindRefRepository(
+        isReferenceBooksCacheLoaded: () => true,
+        warmUpReferenceBooksCache: () async {},
+        searchReferenceBooks: (_, {int limit = 50}) => const [],
+        searchByEraAndTopic: (_, topicTokens, {int limit = 200}) => [
+          for (var i = 0; i < 30; i++)
+            _hit(
+              bookId: i + 1,
+              title: 'חידושים על סנהדרין $i',
+              orderIndex: i.toDouble(),
+            ),
+        ],
+        getTocEntriesForReference: (_, unusedBookTitle, {queryTokens}) async =>
+            const [],
+        getAllAltTocFlatEntries: () async => const [],
+        getCategoryPathSync: (_) => null,
+      );
+
+      final results = await repo.findRefs('ראשונים סנהדרין');
+
+      expect(results, hasLength(20));
     });
   });
 }

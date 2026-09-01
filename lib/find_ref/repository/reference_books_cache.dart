@@ -538,6 +538,8 @@ class ReferenceBooksCache {
   /// Input must already be normalized similarly to [_normalizeForMatch], but we
   /// normalize again defensively.
   List<ReferenceBookHit> search(String query, {int limit = 50}) {
+    if (limit <= 0) return const <ReferenceBookHit>[];
+
     final q = _normalizeForMatch(query);
     if (q.isEmpty) return const <ReferenceBookHit>[];
 
