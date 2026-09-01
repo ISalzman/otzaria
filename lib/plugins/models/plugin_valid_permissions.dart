@@ -31,6 +31,8 @@ const Map<String, String> apiCallToPermissionHint = {
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
   'app.getConnectivity': 'app.info.read',
+  'fonts.resolveFamilies': 'app.info.read',
+  'fonts.listInstalled': 'app.info.read',
   'app.registerShortcut': 'app.shortcuts',
   'app.unregisterShortcut': 'app.shortcuts',
   'app.updateShortcut': 'app.shortcuts',

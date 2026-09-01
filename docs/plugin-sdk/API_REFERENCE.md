@@ -133,6 +133,8 @@ if (response.success) {
 | `app.registerShortcut` | 0.9.97 |
 | `app.unregisterShortcut` | 0.9.97 |
 | `app.updateShortcut` | 0.9.97 |
+| `fonts.resolveFamilies` | 0.9.97 |
+| `fonts.listInstalled` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
@@ -503,6 +505,86 @@ await Otzaria.call('app.unregisterShortcut', { id: 'toggle-night-mode' });
 
 ניתן להצהיר על קיצורים גם **במניפסט** בלי להריץ קוד — ראו §
 [contributes.startup.shortcuts](#contributesstartup---תרומות-עלייה-דקלרטיביות).
+
+---
+
+## fonts.* - גופנים למסמכים
+
+### `fonts.resolveFamilies`
+
+מחזיר כללי `@font-face` מוכנים להזרקה, שהבייטים שלהם מגיעים מהגופנים הארוזים של אוצריא או מגופני המערכת — **תחת שם שאתם מבקשים**.
+
+למה זה קיים: `src: local()` בתוך WebView של תוסף פותר רק גופנים **מותקנים במערכת**, ולעולם לא את ה-faces שאוצריא מזריקה בעצמה. תוסף שמציג מסמך שמבקש גופן שאיש לא התקין אינו יכול להגיע לגופנים הארוזים בלי הבייטים.
+
+זה משנה יותר ממראה: ב-DOCX, `w:lineRule="auto"` גוזר את גובה השורה ממדדי הגופן **שנבחר בפועל**, ולכן גופן חסר משנה את פריסת המסמך כולו.
+
+לכל משפחה מבוקשת מציינים רשימת תחליפים לפי סדר עדיפות. מוחזר ה-`@font-face` של הראשון שאוצריא מצליחה להרכיב, כשהוא נושא את השם שביקשתם.
+
+```javascript
+const { data } = await Otzaria.call('fonts.resolveFamilies', {
+  families: [
+    { name: 'FrankRuehl DP', substitutes: ['FrankRuehl', 'FrankRuhlCLM', 'David'] }
+  ]
+});
+
+const style = document.createElement('style');
+style.textContent = data.css;
+document.head.appendChild(style);
+```
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `families` | array | עד 24 פריטים. כל פריט: `name` (השם שהמסמך מבקש) ו-`substitutes` (עד 12 שמות, לפי סדר). |
+
+מוחזר:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `css` | string | כללי `@font-face`, מופרדים בשורות. ריק כשלא נמצאה אף התאמה. |
+| `resolved` | string[] | השמות המבוקשים שקיבלו face. |
+
+המדיניות — אילו תחליפים ובאיזה סדר — נשארת אצלכם: אתם יודעים מה המסמך מבקש, ואוצריא נותנת רק את מה שרק היא יכולה לתת.
+
+הרשאה: `app.info.read` (baseline — אין דיאלוג נוסף).
+
+---
+
+### `fonts.listInstalled`
+
+מחזיר את משפחות הגופנים **המותקנות במכונה**. בלי ארגומנטים.
+
+למה זה קיים: `fonts.resolveFamilies` נותן בייטים, אבל כדי לבחור תחליף נכון צריך קודם לדעת מה בכלל קיים כאן. בלי הרשימה נותר רק לנחש, או לבקש בייטים של משפחה אחר משפחה רק כדי לגלות מי מהן נפתרת — יקר בהרבה מרשימת שמות.
+
+```javascript
+const { data } = await Otzaria.call('fonts.listInstalled');
+
+const installed = new Set(data.families.map(f => f.name));
+const hebrew = data.families.filter(f => f.scripts.includes('hebrew'));
+```
+
+מוחזר:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `families` | array | המשפחות המותקנות, ממוינות לפי שם. כל שם מופיע פעם אחת. |
+| `platform` | string | הפלטפורמה, למשל `windows`. |
+
+כל פריט ב-`families`:
+
+| שדה | טיפוס | הסבר |
+|---|---|---|
+| `name` | string | השם **בדיוק כפי ש-CSS `font-family` מקבל אותו** — לא שם קובץ, ולא `David Bold`. |
+| `scripts` | string[] | מתוך `latin` `hebrew` `arabic` `cyrillic` `greek` `cjk` `thai` `symbol`. משפחה מרובת-שפות נושאת כמה. |
+| `monospace` | boolean | `true` לגופן ברוחב קבוע, למשל `Consolas`. |
+
+פלטפורמה שאין בה מימוש מחזירה `families: []` — זו אינה שגיאה, ועליכם ליפול חזרה למדיניות התחליפים שלכם.
+
+שתי מגבלות ב-Windows, שנובעות מ-GDI עצמו:
+
+- גופני raster ישנים (`.fon` — `Terminal`, `Fixedsys`, `MS Sans Serif` וכדומה) **אינם ברשימה**, משום ש-WebView אינו מרנדר אותם ולכן שמם אינו שם שאפשר למסור ל-CSS.
+- שם משפחה נקטע ב-31 תווים. `Bahnschrift SemiBold SemiCondensed`, למשל, חוזר כ-`Bahnschrift SemiBold SemiConden`. אין דרך לקבל אותו שלם דרך GDI.
+
+הרשאה: `app.info.read` (baseline — אין דיאלוג נוסף).
 
 ---
 

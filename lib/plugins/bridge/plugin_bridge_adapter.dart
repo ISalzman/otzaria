@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/services/installed_fonts.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -223,14 +224,17 @@ String _fontFaceRule(String family, Uint8List bytes, String weight) {
 /// \u05d4-faces \u05e9\u05dc \u05d2\u05d5\u05e4\u05df \u05de\u05d5\u05d1\u05e0\u05d4: \u05d4-regular, \u05d5\u05d1\u05de\u05e9\u05e4\u05d7\u05d4 \u05e2\u05dd \u05e7\u05d5\u05d1\u05e5 \u05d1\u05d5\u05dc\u05d3 \u05e0\u05e4\u05e8\u05d3 \u05d2\u05dd \u05d4\u05d5\u05d0.
 /// \u05d2\u05d5\u05e4\u05df \u05de\u05e9\u05ea\u05e0\u05d4 \u05de\u05e7\u05d1\u05dc \u05d8\u05d5\u05d5\u05d7 \u05de\u05e9\u05e7\u05dc\u05d9\u05dd \u2014 \u05d1\u05dc\u05e2\u05d3\u05d9\u05d5 \u05d4-WebView \u05e0\u05e2\u05d5\u05dc \u05e2\u05dc \u05de\u05d5\u05e4\u05e2
 /// \u05d1\u05e8\u05d9\u05e8\u05ea \u05d4\u05de\u05d7\u05d3\u05dc \u05d5\u05de\u05e1\u05e0\u05ea\u05d6 \u05d1\u05d5\u05dc\u05d3 \u05de\u05dc\u05d0\u05db\u05d5\u05ea\u05d9 \u05d5\u05de\u05e8\u05d5\u05d7 \u05d1\u05de\u05e7\u05d5\u05dd \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05e6\u05d9\u05e8 \u05d4-wght.
-Future<String> _bundledFontFaceCss(String family) async {
+/// [asFamily] מגיש את הבייטים תחת שם אחר. כך `fonts.resolveFamilies` עונה על
+/// בקשה לגופן שאינו במכונה: הבייטים של תחליף, בשם שהמסמך מבקש.
+Future<String> _bundledFontFaceCss(String family, {String? asFamily}) async {
   final assetPath = AppFonts.fontPaths[family];
   if (assetPath == null) return '';
+  final name = asFamily ?? family;
   final isVariable = AppFonts.variableWeightFonts.contains(family);
   final regular = await rootBundle.load(assetPath);
   final parts = <String>[
     _fontFaceRule(
-      family,
+      name,
       regular.buffer.asUint8List(),
       isVariable ? '100 900' : '400',
     ),
@@ -238,44 +242,102 @@ Future<String> _bundledFontFaceCss(String family) async {
   final boldPath = AppFonts.boldFontPaths[family];
   if (boldPath != null) {
     final bold = await rootBundle.load(boldPath);
-    parts.add(_fontFaceRule(family, bold.buffer.asUint8List(), '700'));
+    parts.add(_fontFaceRule(name, bold.buffer.asUint8List(), '700'));
   }
   return parts.join('\n');
 }
 
 /// \u05d4-faces \u05e9\u05dc \u05d2\u05d5\u05e4\u05df \u05de\u05e2\u05e8\u05db\u05ea \u05e9\u05e0\u05d1\u05d7\u05e8 \u05d1\u05d4\u05d2\u05d3\u05e8\u05d5\u05ea. \u05d0\u05d9\u05e0\u05d5 \u05de\u05d5\u05d1\u05e0\u05d4, \u05d5\u05dc\u05db\u05df \u05d4-WebView
 /// \u05d0\u05d9\u05e0\u05d5 \u05d9\u05db\u05d5\u05dc \u05dc\u05e4\u05ea\u05d5\u05e8 \u05d0\u05ea \u05e9\u05de\u05d5 \u05d0\u05dc\u05d0 \u05d0\u05dd \u05d4\u05d1\u05d9\u05d9\u05d8\u05d9\u05dd \u05e9\u05dc\u05d5 \u05e0\u05e9\u05dc\u05d7\u05d9\u05dd \u05d0\u05d9\u05ea\u05d5.
-Future<String> _systemFontFaceCss(String family) async {
+Future<String> _systemFontFaceCss(String family, {String? asFamily}) async {
   await AppFonts.warmUpSystemFontsCache();
-  final faces = AppFonts.systemFamilyFaces(family);
+  final faces = AppFonts.pluginSystemFamilyFaces(family);
   if (faces == null) return '';
   final regular = AppFonts.readFontBytes(faces.regularPath);
   if (regular == null) return '';
+  final name = asFamily ?? family;
   final parts = <String>[
-    _fontFaceRule(family, regular, faces.hasWeightAxis ? '100 900' : '400'),
+    _fontFaceRule(name, regular, faces.hasWeightAxis ? '100 900' : '400'),
   ];
   final boldPath = faces.boldPath;
   if (boldPath != null) {
     final bold = AppFonts.readFontBytes(boldPath);
-    if (bold != null) parts.add(_fontFaceRule(family, bold, '700'));
+    if (bold != null) parts.add(_fontFaceRule(name, bold, '700'));
   }
   return parts.join('\n');
 }
 
-Future<String> _loadFontFaceCss(String fontFamily) async {
+Future<String> _loadFontFaceCss(String fontFamily, {String? asFamily}) async {
   if (fontFamily.isEmpty) return '';
-  final cached = _fontFaceCache[fontFamily];
-  if (cached != null) return cached;
+  if (asFamily == null) {
+    final cached = _fontFaceCache[fontFamily];
+    if (cached != null) return cached;
+  }
   try {
     final css = AppFonts.fontPaths.containsKey(fontFamily)
-        ? await _bundledFontFaceCss(fontFamily)
-        : await _systemFontFaceCss(fontFamily);
-    if (css.isNotEmpty) _fontFaceCache[fontFamily] = css;
+        ? await _bundledFontFaceCss(fontFamily, asFamily: asFamily)
+        : await _systemFontFaceCss(fontFamily, asFamily: asFamily);
+    if (css.isNotEmpty && asFamily == null) {
+      _fontFaceCache[fontFamily] = css;
+    }
     return css;
   } catch (_) {
     return '';
   }
 }
+
+/// כמה משפחות ותחליפים בקשה אחת יכולה לבקש. גבול, לא מדיניות: כל גופן שמוגש
+/// הוא מאות קילובייטים ב-base64, ובקשה בלי תקרה היא דרך לנפח את ה-WebView.
+const int _maxResolveFamilies = 24;
+const int _maxResolveSubstitutes = 12;
+
+/// עונה על `fonts.resolveFamilies`: לכל משפחה מבוקשת, ה-`@font-face` הראשון
+/// שאפשר להרכיב מרשימת התחליפים שלה — **בשם שהמסמך מבקש**.
+///
+/// למה בכלל: `src: local()` ב-WebView רואה רק גופנים מותקנים במערכת, ולא את
+/// אלה שאוצריא מזריקה כ-`@font-face`. תוסף שפותח מסמך המבקש גופן שאינו מותקן
+/// אינו יכול להגיע לגופנים הארוזים כאן בלי הבייטים עצמם — וזה מה שמוחזר.
+///
+/// המדיניות — אילו תחליפים ובאיזה סדר — נשארת אצל הקורא: הוא זה שקרא את
+/// `word/fontTable.xml` ויודע מה המסמך באמת מבקש.
+Future<Map<String, dynamic>> _resolveFontFamilies(
+  List<dynamic> requested,
+) async {
+  final css = <String>[];
+  final resolved = <String>[];
+
+  for (final entry in requested.take(_maxResolveFamilies)) {
+    if (entry is! Map) continue;
+    final name = entry['name'];
+    if (name is! String || name.isEmpty) continue;
+
+    final substitutes = entry['substitutes'];
+    final candidates = substitutes is List
+        ? substitutes.whereType<String>().take(_maxResolveSubstitutes)
+        : const <String>[];
+
+    for (final candidate in candidates) {
+      final rule = await _loadFontFaceCss(candidate, asFamily: name);
+      if (rule.isEmpty) continue;
+      css.add(rule);
+      resolved.add(name);
+      break;
+    }
+  }
+
+  return {'css': css.join('\n'), 'resolved': resolved};
+}
+
+@visibleForTesting
+Future<Map<String, dynamic>> debugResolveFontFamilies(
+  List<dynamic> requested,
+) => _resolveFontFamilies(requested);
+
+@visibleForTesting
+void debugClearFontFaceCssCache() => _fontFaceCache.clear();
+
+@visibleForTesting
+int get debugFontFaceCssCacheSize => _fontFaceCache.length;
 
 /// \u05d1\u05d5\u05e0\u05d4 \u05d1\u05dc\u05d5\u05e7 CSS \u05e2\u05dd `@font-face` \u05dc\u05db\u05dc \u05d4\u05d2\u05d5\u05e4\u05e0\u05d9\u05dd \u05e9\u05ea\u05d5\u05e1\u05e3 \u05d9\u05db\u05d5\u05dc \u05dc\u05e0\u05e7\u05d5\u05d1 \u05d1\u05e9\u05de\u05dd:
 /// \u05d4\u05de\u05d5\u05d1\u05e0\u05d9\u05dd \u05e9\u05dc \u05d0\u05d5\u05e6\u05e8\u05d9\u05d0, \u05d5\u05d1\u05e0\u05d5\u05e1\u05e3 \u05d2\u05d5\u05e4\u05df \u05de\u05e2\u05e8\u05db\u05ea \u05e9\u05e0\u05d1\u05d7\u05e8 \u05d1\u05d4\u05d2\u05d3\u05e8\u05d5\u05ea. \u05de\u05e9\u05e4\u05d7\u05d4
@@ -702,6 +764,8 @@ class PluginBridgeAdapter {
     switch (domain) {
       case 'app':
         return await _handleApp(action, args);
+      case 'fonts':
+        return await _handleFonts(action, args);
       case 'library':
         return await _handleLibrary(action, args);
       case 'search':
@@ -750,6 +814,24 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // app.*
   // ----------------------------------------------------------------
+  Future<dynamic> _handleFonts(
+    String action,
+    Map<String, dynamic> args,
+  ) async {
+    switch (action) {
+      case 'resolveFamilies':
+        final families = args['families'];
+        if (families is! List) {
+          throw Exception('error.invalid_params: families must be an array');
+        }
+        return await _resolveFontFamilies(families);
+      case 'listInstalled':
+        return InstalledFonts.list();
+      default:
+        throw Exception('error.not_supported: fonts.$action');
+    }
+  }
+
   Future<dynamic> _handleApp(String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'getInfo':

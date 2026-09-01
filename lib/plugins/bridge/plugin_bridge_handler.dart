@@ -327,6 +327,8 @@ class PluginBridgeHandler {
     'app.getLocale': 'app.info.read',
     'app.getGrantedPermissions': 'app.info.read',
     'app.getConnectivity': 'app.info.read',
+    'fonts.resolveFamilies': 'app.info.read',
+    'fonts.listInstalled': 'app.info.read',
     'app.getUserEmail': 'app.user_email.read',
     'app.openUrl': 'app.open_url',
     'app.registerShortcut': 'app.shortcuts',
