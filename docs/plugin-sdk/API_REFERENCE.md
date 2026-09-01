@@ -162,6 +162,8 @@ if (response.success) {
 | `reader.openSearchTab` | 0.9.89 |
 | `reader.getCurrentState` | 0.9.89 |
 | `reader.getCurrentRef` | 0.9.89 |
+| `reader.closeTab` | 0.9.97 |
+| `reader.activateTab` | 0.9.97 |
 | `reader.getSelection` | 0.9.89 |
 | `reader.getActiveCommentators` | 0.9.97 |
 | `reader.setActiveCommentators` | 0.9.97 |
@@ -185,6 +187,10 @@ if (response.success) {
 | `reader.revealHighlight` | 0.9.96 |
 | `reader.clearHighlight` | 0.9.89 |
 | `reader.clearAllHighlights` | 0.9.89 |
+| `workspace.list` | 0.9.97 |
+| `workspace.getActive` | 0.9.97 |
+| `workspace.create` | 0.9.97 |
+| `workspace.switch` | 0.9.97 |
 | `navigation.goTo` | 0.9.89 |
 | `plugin.openSelf` | 0.9.96 |
 | `plugin.openOther` | 0.9.97 |
@@ -1606,6 +1612,35 @@ const { data } = await Otzaria.call('reader.getCurrentState');
 // }
 ```
 
+### `reader.closeTab`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+סוגר את הכרטיסייה שבמקום `index` **ברשימה ש-`reader.getCurrentState`
+מחזיר** (`openTabs`). זו אינה בהכרח מקומה של הכרטיסייה בשורת הכרטיסיות:
+כרטיסיות של כלים ותוספים אינן נכללות ב-`openTabs`, ולכן יש לקחת את האינדקס
+מאותה קריאה ולא ממקום אחר.
+
+אינדקס חסר או מחוץ לתחום מוחזר כ-`error.invalid_params`. הכרטיסייה נכנסת
+לרשימת "נסגרו לאחרונה" ולכן המשתמש יכול לשחזר אותה, בדיוק כמו סגירה ידנית.
+
+```javascript
+const { data: state } = await Otzaria.call('reader.getCurrentState');
+const i = state.openTabs.findIndex((tab) => tab.bookUid === bookUid);
+if (i !== -1) await Otzaria.call('reader.closeTab', { index: i });
+// true
+```
+
+### `reader.activateTab`
+**הרשאה:** `reader.open` · **מגרסה:** 0.9.97
+
+הופך את הכרטיסייה שבמקום `index` (באותה רשימת `openTabs`) לכרטיסייה הפעילה.
+אותם כללי אינדקס ואותה שגיאה כמו ב-`reader.closeTab`.
+
+```javascript
+await Otzaria.call('reader.activateTab', { index: 0 });
+// true
+```
+
 ### `reader.getCurrentRef`
 **הרשאה:** `reader.open`
 
@@ -1798,6 +1833,83 @@ const { data } = await Otzaria.call('reader.getSectionTextMap', {
 > **`includeDomRects` שמור לעתיד ואינו נתמך.** הפרמטר מתקבל ומאומת כבוליאני,
 > אך `true` נדחה תמיד ב-`error.unsupported_context`. השאירו אותו `false`
 > או השמיטו אותו.
+
+---
+
+## workspace.* - שולחנות עבודה
+
+שולחן עבודה הוא אוסף הכרטיסיות הפתוחות. מעבר בין שולחנות מחליף את כל
+הכרטיסיות — אלה שהיו פתוחות נשמרות בשולחן שממנו יצאתם, ואלה של שולחן היעד
+נפתחות במקומן.
+
+הקריאה והניהול הם שתי הרשאות נפרדות: **שם** שולחן עבודה הוא תוכן אישי
+שיכול להסגיר מה המשתמש לומד, ולכן חשיפתו דורשת `workspace.read` בנפרד
+מ-`workspace.manage` שרק יוצר ומחליף. מאותו טעם `key-workspaces` ו-
+`key-current-workspace-id` חסומים ל-`settings.get`.
+
+מעבר שולחן מפעיל את האירוע [`workspace.changed`](#אירועים-events), גם כשהוא
+נעשה דרך ה-API.
+
+> `workspace.*` אינו כולל מחיקת שולחן או שינוי שמו — פעולות הרסניות שנשארות
+> בידי המשתמש.
+
+### `workspace.list`
+**הרשאה:** `workspace.read` · **מגרסה:** 0.9.97
+
+```javascript
+const { data } = await Otzaria.call('workspace.list');
+// [{ id: '1756612800000000-0', name: 'שולחן עבודה 1',
+//    isActive: true, tabCount: 3 }]
+```
+
+`tabCount` מונה את הכרטיסיות שה-API חושף — אותן כרטיסיות שמופיעות ב-
+`reader.getCurrentState().openTabs`. כרטיסיות של כלים ותוספים אינן נמנות.
+בשולחן הפעיל הספירה היא של המצב החי, ולא של העותק השמור בדיסק.
+
+### `workspace.getActive`
+**הרשאה:** `workspace.read` · **מגרסה:** 0.9.97
+
+```javascript
+const { data } = await Otzaria.call('workspace.getActive');
+// { id: '1756612800000000-0', name: 'שולחן עבודה 1' }
+// { id: null, name: null } — כשעדיין לא נטען שולחן
+```
+
+### `workspace.create`
+**הרשאה:** `workspace.manage` · **מגרסה:** 0.9.97
+
+יוצר שולחן עבודה **ריק** בשם `name` (עד 100 תווים; שם ריק →
+`error.invalid_params`). `switchTo: true` עובר אליו מיד, ו-`reuseExisting:
+true` מחזיר שולחן קיים באותו שם במקום ליצור כפילות — כך שהתוסף יכול לקרוא
+לאותה קריאה בכל התחברות בלי לצבור שולחנות.
+
+```javascript
+const { data } = await Otzaria.call('workspace.create', {
+  name: 'חברותא — יוסי',
+  switchTo: true,
+  reuseExisting: true
+});
+// { id: '1756612800000000-4', created: true }   // created: false = שולחן קיים
+```
+
+### `workspace.switch`
+**הרשאה:** `workspace.manage` · **מגרסה:** 0.9.97
+
+עובר לשולחן `id`. **הכרטיסיות הפתוחות כרגע נשמרות** בשולחן הנוכחי לפני
+המעבר, בדיוק כמו מעבר מהממשק.
+
+מחזיר `false` כשאין שולחן עם המזהה הזה — תוסף שמסנכרן בין מחשבים מקבל מזהה
+מהצד השני ויכול ליפול בחזרה ל-`workspace.create` לפי השם. `id` חסר או ריק
+מחזיר `error.invalid_params`. מעבר לשולחן שהוא כבר הפעיל מחזיר `true` ואינו
+עושה דבר.
+
+```javascript
+const { data } = await Otzaria.call('workspace.switch', { id: workspaceId });
+// true / false
+```
+
+> המעבר אינו מנווט את המשתמש למסך העיון. תוסף שרוצה גם להעביר מסך יקרא
+> ל-`navigation.goTo` בנוסף, תחת ההרשאה `navigation.write` שלו.
 
 ---
 

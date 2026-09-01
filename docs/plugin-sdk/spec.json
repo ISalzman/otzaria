@@ -56,7 +56,9 @@
     "settings.read",
     "tools.read",
     "ui.create_shortcut",
-    "ui.feedback"
+    "ui.feedback",
+    "workspace.manage",
+    "workspace.read"
   ],
   "baselinePermissions": [
     "app.info.read",
@@ -156,10 +158,12 @@
     "publishedData.listOwn",
     "publishedData.remove",
     "publishedData.upsert",
+    "reader.activateTab",
     "reader.addContextMenuItem",
     "reader.addToolbarItem",
     "reader.clearAllHighlights",
     "reader.clearHighlight",
+    "reader.closeTab",
     "reader.findTextOccurrences",
     "reader.getActiveCommentators",
     "reader.getCurrentRef",
@@ -203,7 +207,11 @@
     "ui.showError",
     "ui.showMessage",
     "ui.showSuccess",
-    "ui.showWarning"
+    "ui.showWarning",
+    "workspace.create",
+    "workspace.getActive",
+    "workspace.list",
+    "workspace.switch"
   ],
   "undocumentedApiMethods": [
     "plugin.requestInstall"
@@ -285,10 +293,12 @@
     "publishedData.listOwn": "published_data.write",
     "publishedData.remove": "published_data.write",
     "publishedData.upsert": "published_data.write",
+    "reader.activateTab": "reader.open",
     "reader.addContextMenuItem": "reader.context_menu",
     "reader.addToolbarItem": "reader.toolbar",
     "reader.clearAllHighlights": "reader.highlight",
     "reader.clearHighlight": "reader.highlight",
+    "reader.closeTab": "reader.open",
     "reader.findTextOccurrences": "reader.open",
     "reader.getActiveCommentators": "reader.open",
     "reader.getCurrentRef": "reader.open",
@@ -330,7 +340,11 @@
     "ui.showError": "ui.feedback",
     "ui.showMessage": "ui.feedback",
     "ui.showSuccess": "ui.feedback",
-    "ui.showWarning": "ui.feedback"
+    "ui.showWarning": "ui.feedback",
+    "workspace.create": "workspace.manage",
+    "workspace.getActive": "workspace.read",
+    "workspace.list": "workspace.read",
+    "workspace.switch": "workspace.manage"
   },
   "methodMinVersions": {
     "app.getConnectivity": "0.9.96",
@@ -419,10 +433,12 @@
     "publishedData.listOwn": "0.9.89",
     "publishedData.remove": "0.9.89",
     "publishedData.upsert": "0.9.89",
+    "reader.activateTab": "0.9.97",
     "reader.addContextMenuItem": "0.9.89",
     "reader.addToolbarItem": "0.9.97",
     "reader.clearAllHighlights": "0.9.89",
     "reader.clearHighlight": "0.9.89",
+    "reader.closeTab": "0.9.97",
     "reader.findTextOccurrences": "0.9.95",
     "reader.getActiveCommentators": "0.9.97",
     "reader.getCurrentRef": "0.9.89",
@@ -466,7 +482,11 @@
     "ui.showError": "0.9.89",
     "ui.showMessage": "0.9.89",
     "ui.showSuccess": "0.9.89",
-    "ui.showWarning": "0.9.89"
+    "ui.showWarning": "0.9.89",
+    "workspace.create": "0.9.97",
+    "workspace.getActive": "0.9.97",
+    "workspace.list": "0.9.97",
+    "workspace.switch": "0.9.97"
   },
   "events": [
     "app.command",

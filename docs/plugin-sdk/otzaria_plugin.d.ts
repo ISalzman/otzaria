@@ -525,6 +525,42 @@ export interface HighlightCapabilities {
   contextMenu: string[];
 }
 
+/**
+ * שולחן עבודה — אוסף הכרטיסיות הפתוחות (`workspace.list`).
+ */
+export interface WorkspaceListEntry {
+  id: string;
+  name: string;
+  isActive: boolean;
+  /**
+   * מספר הכרטיסיות שה-API חושף — אותן כרטיסיות שב-`ReaderState.openTabs`.
+   * כרטיסיות של כלים ותוספים אינן נמנות. בשולחן הפעיל זו הספירה החיה.
+   */
+  tabCount: number;
+}
+
+/** השולחן הפעיל (`workspace.getActive`). `null` כשעדיין לא נטען שולחן. */
+export interface ActiveWorkspace {
+  id: string | null;
+  name: string | null;
+}
+
+/** ארגומנטים ל-`workspace.create`. */
+export interface WorkspaceCreateArgs {
+  /** עד 100 תווים; שם ריק נדחה ב-`error.invalid_params`. */
+  name: string;
+  /** מעבר לשולחן מיד לאחר היצירה. ברירת מחדל `false`. */
+  switchTo?: boolean;
+  /** החזרת שולחן קיים באותו שם במקום יצירת כפילות. ברירת מחדל `false`. */
+  reuseExisting?: boolean;
+}
+
+/** תוצאת `workspace.create`. `created: false` = הוחזר שולחן קיים. */
+export interface WorkspaceCreateResult {
+  id: string;
+  created: boolean;
+}
+
 /** סימנייה (`bookmarks.list`). */
 export interface BookmarkEntry extends BookIdentity {
   title: string;
@@ -535,6 +571,16 @@ export interface BookmarkEntry extends BookIdentity {
   targetKind: 'book' | 'commentators';
   /** ISO 8601; null בסימניות מגרסאות קודמות. */
   createdAt: string | null;
+}
+
+/**
+ * ארגומנטים ל-`reader.closeTab` ול-`reader.activateTab`.
+ *
+ * ה-index הוא המקום ב-`ReaderState.openTabs` — לא מקומה של הכרטיסייה בשורת
+ * הכרטיסיות. אינדקס מחוץ לתחום מוחזר כ-`error.invalid_params`.
+ */
+export interface ReaderTabIndexArgs {
+  index: number;
 }
 
 /** ארגומנטים ל-`bookmarks.add`. הספר מזוהה ב-`id` או ב-`bookId`. */
@@ -1643,6 +1689,8 @@ export type OtzariaMethod =
   | 'reader.respondExternalSearch'
   | 'reader.getCurrentState'
   | 'reader.getCurrentRef'
+  | 'reader.closeTab'
+  | 'reader.activateTab'
   | 'reader.getSelection'
   | 'reader.getActiveCommentators'
   | 'reader.setActiveCommentators'
@@ -1650,6 +1698,10 @@ export type OtzariaMethod =
   | 'reader.getHighlightCapabilities'
   | 'reader.findTextOccurrences'
   | 'reader.getSectionTextMap'
+  | 'workspace.list'
+  | 'workspace.getActive'
+  | 'workspace.create'
+  | 'workspace.switch'
   | 'navigation.goTo'
   | 'notes.list'
   | 'notes.getBookNotesSummary'
