@@ -1177,12 +1177,28 @@ class PluginBridgeAdapter {
     return values;
   }
 
+  /// רשימת-ההיתר של כותרות: כותרת עוברת אם היא ברשימה המפורשת או פותחת
+  /// באחת התחיליות. בלי שני הפילטרים — הכל עובר.
+  static bool _titleAllowed(
+    String title,
+    Set<String>? titles,
+    List<String>? prefixes,
+  ) {
+    if (titles == null && prefixes == null) return true;
+    if (titles != null && titles.contains(title)) return true;
+    return prefixes?.any(title.startsWith) ?? false;
+  }
+
   Future<dynamic> _getCommentators(
     Library library,
     Map<String, dynamic> args,
   ) async {
     final rawStart = args['startLine'];
     final rawEnd = args['endLine'];
+    final titlePrefixes = _optionalStringList(
+      args['titlePrefixes'],
+      'titlePrefixes',
+    );
     if ((rawStart == null) != (rawEnd == null)) {
       throw Exception(
         'error.invalid_params: startLine and endLine must be given together',
@@ -1191,7 +1207,7 @@ class PluginBridgeAdapter {
     final book = _findLinksTextBook(library, args);
     if (book == null) throw Exception('error.not_found: book not found');
 
-    final List<CommentatorInfo> commentators;
+    List<CommentatorInfo> commentators;
     Set<String> rare = const {};
     if (rawStart != null) {
       final startLine = _requireWireLine(rawStart, 'startLine');
@@ -1208,6 +1224,12 @@ class PluginBridgeAdapter {
       final detailed = await _linksRepository.getCommentatorsDetailed(book);
       commentators = detailed.commentators;
       rare = detailed.rare;
+    }
+    if (titlePrefixes != null) {
+      commentators = [
+        for (final c in commentators)
+          if (titlePrefixes.any(c.title.startsWith)) c,
+      ];
     }
 
     if (args['grouped'] as bool? ?? false) {
@@ -1257,6 +1279,10 @@ class PluginBridgeAdapter {
       args['targetTitles'],
       'targetTitles',
     );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final connectionTypes = _optionalStringList(
       args['connectionTypes'],
       'connectionTypes',
@@ -1270,12 +1296,15 @@ class PluginBridgeAdapter {
       book,
       startIndex: startLine,
       endIndex: endLine,
-      targetBookTitles: targetTitles,
+      // צמצום ב-SQL רק כשאין תחיליות — SQL מכיר רק כותרות מלאות, וצמצום
+      // לפי targetTitles לבדו היה מפיל את התאמות התחילית.
+      targetBookTitles: targetTitlePrefixes == null ? targetTitles : null,
     );
 
     final filtered = _filterLinkRecords(
       links,
       targetTitles: targetTitles,
+      targetTitlePrefixes: targetTitlePrefixes,
       connectionTypes: connectionTypes,
       maxRecords: _pluginLinksMaxRecords,
       // index1/index2 הם 1-based במודל; ה-wire של getLinks 0-based — זו
@@ -1335,6 +1364,10 @@ class PluginBridgeAdapter {
       args['targetTitles'],
       'targetTitles',
     );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final connectionTypes = _optionalStringList(
       args['connectionTypes'],
       'connectionTypes',
@@ -1347,12 +1380,13 @@ class PluginBridgeAdapter {
       book,
       startIndex: startLine,
       endIndex: endLine,
-      targetBookTitles: targetTitles,
+      targetBookTitles: targetTitlePrefixes == null ? targetTitles : null,
     );
 
     final filtered = _filterLinkRecords(
       links,
       targetTitles: targetTitles,
+      targetTitlePrefixes: targetTitlePrefixes,
       connectionTypes: connectionTypes,
       maxRecords: _pluginRawLinksMaxRecords,
       toRecord: (link, _) => link.toJson(),
@@ -1370,6 +1404,7 @@ class PluginBridgeAdapter {
   ({List<Map<String, dynamic>> records, bool truncated}) _filterLinkRecords(
     List<Link> links, {
     required List<String>? targetTitles,
+    required List<String>? targetTitlePrefixes,
     required List<String>? connectionTypes,
     required int maxRecords,
     required Map<String, dynamic> Function(Link link, String targetTitle)
@@ -1381,7 +1416,9 @@ class PluginBridgeAdapter {
     var truncated = false;
     for (final link in links) {
       final targetTitle = getTitleFromPath(link.path2);
-      if (titlesFilter != null && !titlesFilter.contains(targetTitle)) continue;
+      if (!_titleAllowed(targetTitle, titlesFilter, targetTitlePrefixes)) {
+        continue;
+      }
       if (typesFilter != null &&
           !typesFilter.contains(LinkTypes.normalize(link.connectionType)) &&
           !typesFilter.contains(LinkTypes.canonicalType(link.connectionType))) {
@@ -1413,6 +1450,14 @@ class PluginBridgeAdapter {
     Library library,
     Map<String, dynamic> args,
   ) async {
+    final targetTitles = _optionalStringList(
+      args['targetTitles'],
+      'targetTitles',
+    );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final book = _findLinksTextBook(library, args);
     if (book?.categoryId == null) {
       throw Exception('error.not_found: book not found');
@@ -1424,14 +1469,20 @@ class PluginBridgeAdapter {
     if (summary == null) {
       throw Exception('error.internal: link targets summary unavailable');
     }
+    final titlesFilter = targetTitles?.toSet();
     return {
       'targets': [
         for (final target in summary.targets)
-          {
-            'targetTitle': target.targetTitle,
-            'connectionType': target.connectionType,
-            'linkCount': target.linkCount,
-          },
+          if (_titleAllowed(
+            target.targetTitle,
+            titlesFilter,
+            targetTitlePrefixes,
+          ))
+            {
+              'targetTitle': target.targetTitle,
+              'connectionType': target.connectionType,
+              'linkCount': target.linkCount,
+            },
       ],
       // maxSourceLine מגיע 1-based מהמסד; ‎-1‎ = לספר אין קישורים כלל.
       'maxSourceLine': summary.maxSourceLine - 1,
