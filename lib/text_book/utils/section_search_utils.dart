@@ -79,6 +79,7 @@ double matchFractionInLine(
   String rawLine,
   String query, {
   int? matchOffset,
+  bool wholeWord = true,
   @visibleForTesting RegExp? pattern,
 }) {
   final clean = cleanLineForSearch(rawLine);
@@ -87,7 +88,8 @@ double matchFractionInLine(
   if (matchOffset != null) {
     offset = matchOffset;
   } else {
-    final regExp = pattern ?? buildLiteralPattern(query)?.regExp;
+    final regExp =
+        pattern ?? buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
     if (regExp == null) return 0;
     offset = regExp.firstMatch(clean)?.start ?? -1;
   }
@@ -110,10 +112,12 @@ double matchFractionFromLineLength({int? matchOffset, int? lineLength}) {
 bool queryMatchesInlineNoteOnly(
   String rawLine,
   String query, {
+  bool wholeWord = true,
   @visibleForTesting RegExp? pattern,
 }) {
   if (!rawLine.contains('footnote')) return false;
-  final regExp = pattern ?? buildLiteralPattern(query)?.regExp;
+  final regExp =
+      pattern ?? buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
   if (regExp == null) return false;
 
   final noteBody = notes.notesForLines([rawLine], const [0]).join(' ');
@@ -492,11 +496,13 @@ class SectionSearchWorkerRuntime {
 Future<List<TextSearchResult>> searchInContent({
   required List<String> content,
   required String query,
+  bool wholeWord = true,
   @visibleForTesting String? patternSource,
 }) async {
   if (content.isEmpty) return [];
 
-  final source = patternSource ?? buildLiteralPattern(query)?.source;
+  final source =
+      patternSource ?? buildLiteralPattern(query, wholeWord: wholeWord)?.source;
   if (source == null) return [];
 
   return _SearchWorkerHost.instance.search(

@@ -307,7 +307,13 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (query.isEmpty) return;
     final idx = state.selectedIndex ?? widget.tab.index;
     if (idx < 0 || idx >= state.content.length) return;
-    if (!queryMatchesInlineNoteOnly(state.content[idx], query)) return;
+    if (!queryMatchesInlineNoteOnly(
+      state.content[idx],
+      query,
+      wholeWord: state.searchWholeWord,
+    )) {
+      return;
+    }
 
     _didOpenNotesForSearch = true;
     if (!state.activeCommentators.contains(kNotesCommentatorTitle)) {

@@ -17,6 +17,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
+import 'package:otzaria/search/in_book_search_preferences.dart';
+import 'package:otzaria/search/view/whole_word_search_action.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
@@ -109,6 +111,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   SearchMode _searchMode = SearchMode.exact;
   int _searchDistance = 0;
   SearchMatchPolicy _matchPolicy = SearchMatchPolicy.standard;
+  bool _wholeWord = InBookSearchPreferences.loadWholeWord();
   int? _selectedSearchResultIndex;
   // מספר השורה בספר של התוצאה הנבחרת — משמש לשמירת הבחירה לפי זהות בין
   // חיפושים. אינדקס סידורי לבדו אינו אמין כי תוכן הרשימה משתנה כשהשאילתה
@@ -122,6 +125,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
   bool get _isSimpleSearch =>
       !_forceSearchEngine && _searchMode == SearchMode.exact;
+
+  /// המתג חל רק על הסריקה הליטרלית. במסלול המנוע ההדגשה נגזרת מהתבנית
+  /// שהמנוע בנה, ולכן הוא מדווח "מילים שלמות" ללא תלות במתג.
+  bool get _effectiveWholeWord => _isSimpleSearch ? _wholeWord : true;
 
   static const int _maxResultSnippetChars = 220;
 
@@ -180,6 +187,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
   }
 
   void _syncSearchConfigurationFromWidget() {
+    // ההעדפה גלובלית ונקראת מחדש: החלפת המתג בטאב אחר משאירה כאן ערך ישן,
+    // וההדגשה בגוף הספר הייתה סותרת את רשימת התוצאות.
+    _wholeWord = InBookSearchPreferences.loadWholeWord();
     _searchOptions = widget.initialSearchOptions;
     _alternativeWords = widget.initialAlternativeWords;
     _spacingValues = widget.initialSpacingValues;
@@ -200,8 +210,18 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         searchMode: _searchMode,
         searchDistance: _searchDistance,
         matchPolicy: _matchPolicy,
+        searchWholeWord: _effectiveWholeWord,
       ),
     );
+  }
+
+  /// החלפת מצב ההתאמה: מעדכן את ההדגשה בגוף הספר ומריץ את החיפוש מחדש,
+  /// אחרת הרשימה נשארת עם תוצאות המצב הקודם.
+  void _toggleWholeWord() {
+    setState(() => _wholeWord = !_wholeWord);
+    unawaited(InBookSearchPreferences.saveWholeWord(_wholeWord));
+    _syncBlocSearchTextState();
+    _searchTextUpdated();
   }
 
   @override
@@ -357,10 +377,24 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     _contentFuture = null;
   }
 
+  /// השאילתה שתרוץ בפועל, מנורמלת, או `null` כשאין מה לחפש עליה.
+  String? _searchableQuery(String raw) {
+    var query = raw.trim();
+    if (utils.hasNikud(query)) {
+      query = utils.removeVolwels(query);
+    }
+    return InBookSearchRouting.isSearchableQuery(
+          query,
+          wholeWord: _effectiveWholeWord,
+        )
+        ? query
+        : null;
+  }
+
   Future<void> _searchTextUpdated() async {
     final requestId = ++_activeSearchRequestId;
-    String query = searchTextController.text.trim();
-    if (query.isEmpty) {
+    final searchable = _searchableQuery(searchTextController.text);
+    if (searchable == null) {
       setState(() {
         searchResults = [];
         _isSearching = false;
@@ -369,9 +403,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       return;
     }
 
-    if (utils.hasNikud(query)) {
-      query = utils.removeVolwels(query);
-    }
+    final query = searchable;
 
     setState(() {
       _isSearching = true;
@@ -400,7 +432,11 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
       final effectiveResults = widget.simpleSearchRunner != null
           ? await widget.simpleSearchRunner!(content, query)
-          : await searchInContent(content: content, query: query);
+          : await searchInContent(
+              content: content,
+              query: query,
+              wholeWord: _wholeWord,
+            );
 
       if (mounted && requestId == _activeSearchRequestId) {
         _applySearchResults(effectiveResults);
@@ -668,6 +704,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             lineText,
             result.query,
             matchOffset: result.matchOffset,
+            wholeWord: _effectiveWholeWord,
           );
     final navigation = scrollToSourceLine(
       scrollController: widget.scrollControler,
@@ -866,12 +903,14 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                       fullText: snippet,
                       query: result.query,
                       maxChars: _maxResultSnippetChars,
+                      wholeWord: _wholeWord,
                     );
                     highlightedSnippet = SnippetBuilder.highlightLiteral(
                       plainText: excerpt,
                       query: result.query,
                       defaultStyle: defaultStyle,
                       highlightStyle: highlightStyle,
+                      wholeWord: _wholeWord,
                     );
                   } else {
                     // המנוע מדגיש את הטוקן השלם; מדגישים מחדש בצד האפליקציה את
@@ -934,20 +973,21 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       ),
       isNoResults:
           searchResults.isEmpty &&
-          searchTextController.text.isNotEmpty &&
+          _searchableQuery(searchTextController.text) != null &&
           !_isSearching,
       errorMessage: _searchErrorMessage,
       onSearchTextChanged: (value) {
         final activeParameters = _activeSearchParameters;
         context.read<TextBookBloc>().add(
           UpdateSearchText(
-            value,
+            _searchableQuery(value) ?? '',
             searchOptions: activeParameters.searchOptions,
             alternativeWords: activeParameters.alternativeWords,
             spacingValues: activeParameters.customSpacing,
             searchMode: _searchMode,
             searchDistance: _searchDistance,
             matchPolicy: _matchPolicy,
+            searchWholeWord: _effectiveWholeWord,
           ),
         );
         _searchTextUpdated();
@@ -968,18 +1008,27 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           _matchPolicy = SearchMatchPolicy.standard;
         });
         context.read<TextBookBloc>().add(
-          const UpdateSearchText(
+          UpdateSearchText(
             '',
-            searchOptions: {},
-            alternativeWords: {},
-            spacingValues: {},
+            searchOptions: const {},
+            alternativeWords: const {},
+            spacingValues: const {},
             searchMode: SearchMode.exact,
             searchDistance: 0,
             matchPolicy: SearchMatchPolicy.standard,
+            searchWholeWord: _wholeWord,
           ),
         );
       },
-      additionalActions: const [],
+      searchFieldActions: [
+        if (_isSimpleSearch)
+          wholeWordSearchAction(
+            context: context,
+            wholeWord: _wholeWord,
+            onToggle: _toggleWholeWord,
+          ),
+      ],
+      searchFieldActionsKey: (_isSimpleSearch, _wholeWord),
       hintText: 'חפש כאן...',
       onSubmitted: () => _moveBetweenResults(1),
       onArrowDown: () => _moveBetweenResults(1),
@@ -1034,6 +1083,16 @@ class TextBookSearchViewState extends State<TextBookSearchView>
               alternativeWords: result.alternativeWords,
               searchOptions: result.searchOptions,
             );
+        // הניתוב החדש נקבע לפני ה-setState, כדי שההדגשה שנשלחת ל-bloc תתאים
+        // למסלול שירוץ בפועל ולא למסלול הקודם.
+        final willRunSimpleSearch = InBookSearchRouting.canRunAsSimpleSearch(
+          searchMode: result.searchMode,
+          distance: result.distance,
+          searchOptions: normalizedParameters.searchOptions,
+          alternativeWords: normalizedParameters.alternativeWords,
+          spacingValues: normalizedParameters.customSpacing,
+          matchPolicy: result.matchPolicy,
+        );
         applyInBookSearchQuery(
           controller: searchTextController,
           query: result.query,
@@ -1047,6 +1106,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
                 searchMode: result.searchMode,
                 searchDistance: result.distance,
                 matchPolicy: result.matchPolicy,
+                searchWholeWord: willRunSimpleSearch ? _wholeWord : true,
               ),
             );
           },

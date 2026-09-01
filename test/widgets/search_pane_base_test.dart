@@ -1,8 +1,97 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 
 void main() {
+  // הפעולות בשדה חייבות להופיע גם בחלונית ניווט: שם השדה המקומי אינו
+  // מצויר כלל, והשדה שבסרגל שמעליה הוא היחיד שנראה.
+  testWidgets('searchFieldActions מוצגות גם כשהשדה מורם לסרגל החלונית', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    final host = NavPanelSearchHost();
+
+    addTearDown(() {
+      controller.dispose();
+      focusNode.dispose();
+      host.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              SizedBox(
+                height: 56,
+                child: NavPanelSearchBar(
+                  host: host,
+                  isOpen: true,
+                  paneWidth: 300,
+                  isPinned: false,
+                ),
+              ),
+              Expanded(
+                child: NavPanelSearchScope(
+                  host: host,
+                  child: NavPanelSearchSlot(
+                    index: 0,
+                    child: SearchPaneBase(
+                      searchController: controller,
+                      focusNode: focusNode,
+                      resultsWidget: const SizedBox.shrink(),
+                      isNoResults: false,
+                      resetSearchCallback: () {},
+                      searchFieldActions: const [
+                        Icon(Icons.abc, key: ValueKey('wholeWordToggle')),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('wholeWordToggle')), findsOneWidget);
+  });
+
+  testWidgets('searchFieldActions מוצגות גם בשדה המקומי (מחוץ לחלונית)', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+
+    addTearDown(() {
+      controller.dispose();
+      focusNode.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchPaneBase(
+            searchController: controller,
+            focusNode: focusNode,
+            resultsWidget: const SizedBox.shrink(),
+            isNoResults: false,
+            resetSearchCallback: () {},
+            searchFieldActions: const [
+              Icon(Icons.abc, key: ValueKey('wholeWordToggle')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('wholeWordToggle')), findsOneWidget);
+  });
+
   testWidgets('מציג toolbar של תוצאות באותה שורה מול מונה התוצאות', (
     tester,
   ) async {

@@ -230,6 +230,11 @@ class TextBookLoaded extends TextBookState {
   final int searchDistance;
   final SearchMatchPolicy matchPolicy;
 
+  /// האם ההתאמה הפעילה בספר דורשת מילים שלמות. `false` מדגיש גם בתוך מילה
+  /// ("שמים" בתוך "השמים") — חלונית החיפוש שולחת אותו רק במסלול הפשוט, כך
+  /// שהדגשת תוצאות המנוע נשארת כשהייתה.
+  final bool searchWholeWord;
+
   /// שורות הספר שחיפוש המנוע החזיר בפועל (0-based), או null כשלא רץ חיפוש
   /// מנוע. ההדגשה במדיניות התאמה שאינה ברירת המחדל מוגבלת לשורות האלה, כדי
   /// שהאפליקציה לא תשחזר בעצמה את החלטת המנוע (טווח פסקה/כותרת, סף מילים).
@@ -310,6 +315,7 @@ class TextBookLoaded extends TextBookState {
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.searchWholeWord = true,
     this.searchResultLines,
     required this.scrollController,
     required this.positionsListener,
@@ -437,6 +443,7 @@ class TextBookLoaded extends TextBookState {
     SearchMode? searchMode,
     int? searchDistance,
     SearchMatchPolicy? matchPolicy,
+    bool? searchWholeWord,
     Set<int>? searchResultLines,
     ItemScrollController? scrollController,
     ItemPositionsListener? positionsListener,
@@ -519,6 +526,7 @@ class TextBookLoaded extends TextBookState {
       searchMode: searchMode ?? this.searchMode,
       searchDistance: searchDistance ?? this.searchDistance,
       matchPolicy: matchPolicy ?? this.matchPolicy,
+      searchWholeWord: searchWholeWord ?? this.searchWholeWord,
       searchResultLines: clearSearchResultLines
           ? null
           : (searchResultLines ?? this.searchResultLines),
@@ -626,6 +634,7 @@ class TextBookLoaded extends TextBookState {
     searchMode,
     searchDistance,
     matchPolicy,
+    searchWholeWord,
     searchResultLines,
     currentTitle,
     selectedTextForNote,

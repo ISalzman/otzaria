@@ -35,9 +35,14 @@ class NavPanelSearchDelegate {
     this.onSubmitted,
     this.onClear,
     this.trailingActions = const [],
+    this.actionsKey,
     this.onArrowDown,
     this.onArrowUp,
   });
+
+  /// מזהה המצב החזותי של [trailingActions]. פעולה שמחליפה אייקון או צבע
+  /// שומרת על אורך הרשימה, ולכן בלעדיו הסרגל המורם נשאר על התצוגה הישנה.
+  final Object? actionsKey;
 
   /// מטפל בחיצי מעלה/מטה עבור שדה חיפוש שמחובר לפעולה זו. מוחזר
   /// [KeyEventResult.ignored] כשאין callback מתאים — ואז חל המנגנון הרגיל.
@@ -64,6 +69,7 @@ class NavPanelSearchDelegate {
       controller == other.controller &&
       focusNode == other.focusNode &&
       hintText == other.hintText &&
+      actionsKey == other.actionsKey &&
       trailingActions.length == other.trailingActions.length;
 }
 

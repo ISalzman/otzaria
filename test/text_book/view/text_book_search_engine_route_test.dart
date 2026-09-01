@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -384,7 +385,9 @@ class _Harness {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
       );
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(
+        kSearchFieldDebounce + const Duration(milliseconds: 50),
+      );
     }
   }
 }

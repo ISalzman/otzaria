@@ -168,15 +168,17 @@ class SnippetBuilder {
 
   /// מדגיש הופעות ליטרליות של [query] בטקסט מקומי [plainText].
   ///
-  /// ההתאמה סובלנית לניקוד/טעמים ולחילופי גרשיים עבריים/לועזיים, ומכבדת
-  /// גבולות מילה — בהתאם לסמנטיקת החיפוש המקומי (`_containsWholeWord`).
+  /// ההתאמה סובלנית לניקוד/טעמים ולחילופי גרשיים עבריים/לועזיים.
+  /// [wholeWord] חייב להיות זהה לזה שאיתו נמצאו התוצאות, אחרת תוצאה תוצג
+  /// בלי הדגשה.
   static List<InlineSpan> highlightLiteral({
     required String plainText,
     required String query,
     required TextStyle defaultStyle,
     required TextStyle highlightStyle,
+    bool wholeWord = true,
   }) {
-    final pattern = buildLiteralPattern(query)?.regExp;
+    final pattern = buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
     if (plainText.isEmpty || pattern == null) {
       return [TextSpan(text: plainText, style: defaultStyle)];
     }
@@ -225,6 +227,7 @@ class SnippetBuilder {
     required String fullText,
     required String query,
     required int maxChars,
+    bool wholeWord = true,
   }) {
     final text = fullText.replaceAll(_whitespace, ' ').trim();
     if (text.length <= maxChars) return text;
@@ -241,7 +244,7 @@ class SnippetBuilder {
       return lastSpace != -1 ? lastSpace + 1 : 0;
     }
 
-    final pattern = buildLiteralPattern(query)?.regExp;
+    final pattern = buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
     final anchor = pattern?.firstMatch(text);
     if (anchor == null) {
       final end = findWordEnd(maxChars);
