@@ -423,7 +423,11 @@ class PluginBridgeDependencies {
 
   /// מייצר PDF מהדף של מופע התוסף (`ui.exportPdf`). אופציונלי — ברירת המחדל
   /// היא [PluginPrintService] מעל ה-WebView הרשום; קיים להזרקה בבדיקות.
-  final Future<Uint8List> Function(String pluginId, String instanceId)?
+  final Future<Uint8List> Function(
+    String pluginId,
+    String instanceId, {
+    PluginPdfLayout? layout,
+  })?
   capturePluginPagePdf;
 
   /// האם ל-WebView של המופע יש כרגע הפעלת-משתמש חולפת (`navigator
@@ -2999,8 +3003,13 @@ class PluginBridgeAdapter {
           args['fileName'] as String?,
           'pdf',
         );
+        final layout = _parsePdfLayout(args);
         return await _runUserGatedDialog(() async {
-          final pdf = await capture(plugin.pluginId, instanceId);
+          final pdf = await capture(
+            plugin.pluginId,
+            instanceId,
+            layout: layout,
+          );
           final chosen = await saver(
             suggestedName: suggested,
             allowedExtensions: const ['pdf'],
@@ -3132,10 +3141,93 @@ class PluginBridgeAdapter {
 
   Future<Uint8List> _defaultCapturePagePdf(
     String pluginId,
-    String instanceId,
-  ) => const PluginPrintService().createPdf(
+    String instanceId, {
+    PluginPdfLayout? layout,
+  }) => const PluginPrintService().createPdf(
     _requireController(pluginId, instanceId),
+    layout: layout,
   );
+
+  /// גדלי דף נתמכים ב-`ui.exportPdf`, במילימטרים (רוחב, גובה) לאורך.
+  static const _pdfPageSizesMm = <String, (double, double)>{
+    'a4': (210, 297),
+    'a5': (148, 210),
+    'letter': (215.9, 279.4),
+    'legal': (215.9, 355.6),
+  };
+
+  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize`, `orientation`,
+  /// `marginMm` (מספר או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
+  PluginPdfLayout? _parsePdfLayout(Map<String, dynamic> args) {
+    final sizeName = (args['pageSize'] as String?)?.trim().toLowerCase();
+    final orientation = (args['orientation'] as String?)?.trim().toLowerCase();
+    final margin = args['marginMm'];
+    final backgrounds = args['printBackgrounds'];
+    if (sizeName == null &&
+        orientation == null &&
+        margin == null &&
+        backgrounds == null) {
+      return null;
+    }
+
+    (double, double)? size;
+    if (sizeName != null) {
+      size = _pdfPageSizesMm[sizeName];
+      if (size == null) {
+        throw Exception(
+          'error.invalid_params: unknown pageSize (supported: '
+          '${_pdfPageSizesMm.keys.join(', ')})',
+        );
+      }
+    }
+
+    bool? landscape;
+    if (orientation != null) {
+      if (orientation != 'portrait' && orientation != 'landscape') {
+        throw Exception(
+          "error.invalid_params: orientation must be 'portrait' or 'landscape'",
+        );
+      }
+      landscape = orientation == 'landscape';
+    }
+
+    double sideMm(Object? v, String name) {
+      if (v is! num || v.isNaN || v < 0 || v > 100) {
+        throw Exception('error.invalid_params: $name must be 0-100 (mm)');
+      }
+      return v.toDouble();
+    }
+
+    EdgeInsets? marginsMm;
+    if (margin != null) {
+      if (margin is num) {
+        marginsMm = EdgeInsets.all(sideMm(margin, 'marginMm'));
+      } else if (margin is Map) {
+        marginsMm = EdgeInsets.fromLTRB(
+          sideMm(margin['left'] ?? 0, 'marginMm.left'),
+          sideMm(margin['top'] ?? 0, 'marginMm.top'),
+          sideMm(margin['right'] ?? 0, 'marginMm.right'),
+          sideMm(margin['bottom'] ?? 0, 'marginMm.bottom'),
+        );
+      } else {
+        throw Exception(
+          'error.invalid_params: marginMm must be a number or a per-side map',
+        );
+      }
+    }
+
+    if (backgrounds != null && backgrounds is! bool) {
+      throw Exception('error.invalid_params: printBackgrounds must be a bool');
+    }
+
+    return PluginPdfLayout(
+      pageWidthMm: size?.$1,
+      pageHeightMm: size?.$2,
+      marginsMm: marginsMm,
+      landscape: landscape,
+      printBackgrounds: backgrounds as bool?,
+    );
+  }
 
   /// בודקת אם [targetPath] נמצא בתוך תיקייה שהמשתמש אישר דרך `ui.pickFolder`.
   ///
