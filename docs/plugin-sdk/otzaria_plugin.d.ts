@@ -528,7 +528,7 @@ export interface HighlightCapabilities {
 /**
  * שולחן עבודה — אוסף הכרטיסיות הפתוחות (`workspace.list`).
  */
-export interface WorkspaceEntry {
+export interface WorkspaceListEntry {
   id: string;
   name: string;
   isActive: boolean;

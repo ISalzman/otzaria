@@ -671,6 +671,8 @@ class PluginBridgeAdapter {
   /// חסם ההמתנה לפעולת שולחן עבודה שעוברת דרך ה-WorkspaceBloc.
   static const Duration _workspaceActionTimeout = Duration(seconds: 5);
 
+  static Future<void> _workspaceActionQueue = Future.value();
+
   Library? _bookIndexLibrary;
   Map<int, List<Book>> _booksById = const {};
   Map<String, List<Book>> _booksByTitle = const {};
@@ -2928,6 +2930,27 @@ class PluginBridgeAdapter {
   // workspace.*
   // ----------------------------------------------------------------
   Future<dynamic> _handleWorkspace(
+    String action,
+    Map<String, dynamic> args,
+  ) {
+    if (action == 'create' || action == 'switch') {
+      return _enqueueWorkspaceAction(
+        () => _handleWorkspaceAction(action, args),
+      );
+    }
+    return _handleWorkspaceAction(action, args);
+  }
+
+  Future<T> _enqueueWorkspaceAction<T>(Future<T> Function() action) {
+    final result = _workspaceActionQueue.then((_) => action());
+    _workspaceActionQueue = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<dynamic> _handleWorkspaceAction(
     String action,
     Map<String, dynamic> args,
   ) async {
@@ -5442,10 +5465,13 @@ class PluginBridgeAdapter {
   /// הטאב שבאינדקס `index` **ברשימה שהתוסף רואה** ([_pluginVisibleTabs]).
   /// אינדקס חסר או מחוץ לתחום נדחה כשגיאת ארגומנטים ולא כחריגה.
   OpenedTab _pluginVisibleTabAt(Map<String, dynamic> args) {
-    final index = (args['index'] as num?)?.toInt();
-    if (index == null) {
-      throw Exception('error.invalid_params: index required');
+    final rawIndex = args['index'];
+    if (rawIndex is! num ||
+        !rawIndex.isFinite ||
+        rawIndex != rawIndex.truncateToDouble()) {
+      throw Exception('error.invalid_params: index must be an integer');
     }
+    final index = rawIndex.toInt();
     final tabs = _pluginVisibleTabs();
     if (index < 0 || index >= tabs.length) {
       throw Exception(

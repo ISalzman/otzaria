@@ -284,6 +284,25 @@ void main() {
       expect(workspaceBloc.state.workspaces, hasLength(2));
     });
 
+    test('יצירות מקבילות מחזירות את המזהה של השולחן המתאים', () async {
+      await loadWorkspaces([Workspace(name: 'א', tabs: const [])]);
+
+      final results = await Future.wait([
+        buildAdapter().execute('workspace', 'create', {'name': 'ב'}),
+        buildAdapter().execute('workspace', 'create', {'name': 'ג'}),
+      ]);
+      final ids = results
+          .cast<Map<String, dynamic>>()
+          .map((result) => result['id'])
+          .toSet();
+
+      expect(ids, hasLength(2));
+      expect(
+        workspaceBloc.state.workspaces.map((workspace) => workspace.name),
+        containsAll(['א', 'ב', 'ג']),
+      );
+    });
+
     test('switchTo עובר לשולחן החדש ושומר את הכרטיסיות הנוכחיות', () async {
       final first = Workspace(name: 'א', tabs: const []);
       await loadWorkspaces([first]);
@@ -370,6 +389,29 @@ void main() {
         (workspace) => workspace.id == source.id,
       );
       expect(saved.tabs, hasLength(2));
+    });
+
+    test('מעברים מקבילים אינם דורסים את טאבי היעד', () async {
+      final source = Workspace(name: 'מקור', tabs: const []);
+      final middle = Workspace(name: 'אמצע', tabs: [textTab('שבת')]);
+      final target = Workspace(name: 'יעד', tabs: [textTab('עירובין')]);
+      await loadWorkspaces([source, middle, target], activeId: source.id);
+      tabsBloc.currentState = TabsState(
+        tabs: [textTab('ברכות')],
+        currentTabIndex: 0,
+      );
+
+      await Future.wait([
+        buildAdapter().execute('workspace', 'switch', {'id': middle.id}),
+        buildAdapter().execute('workspace', 'switch', {'id': target.id}),
+      ]);
+
+      final savedMiddle = workspaceBloc.state.workspaces.singleWhere(
+        (workspace) => workspace.id == middle.id,
+      );
+      expect(savedMiddle.tabs.map((tab) => tab.title), ['שבת']);
+      expect(workspaceBloc.state.activeWorkspaceId, target.id);
+      expect(loadedTabs.map((tab) => tab.title), ['עירובין']);
     });
 
     test('מזהה שאינו קיים מחזיר false ואינו מחליף שולחן', () async {

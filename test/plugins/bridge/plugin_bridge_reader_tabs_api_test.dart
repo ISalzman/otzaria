@@ -210,6 +210,16 @@ void main() {
       );
     });
 
+    test('אינדקס שאינו שלם מוחזר כשגיאת ארגומנטים', () async {
+      await openTabs([textTab('ברכות'), textTab('שבת')]);
+
+      expect(
+        () => buildAdapter().execute('reader', 'closeTab', {'index': 1.5}),
+        _codedError('error.invalid_params'),
+      );
+      expect(titles(), ['ברכות', 'שבת']);
+    });
+
     test('הכרטיסייה שנסגרה נכנסת לרשימת הנסגרות לאחרונה', () async {
       await openTabs([textTab('ברכות'), textTab('שבת')]);
 
@@ -255,6 +265,16 @@ void main() {
 
       expect(
         () => buildAdapter().execute('reader', 'activateTab', {'index': 5}),
+        _codedError('error.invalid_params'),
+      );
+      expect(tabsBloc.state.currentTabIndex, 0);
+    });
+
+    test('אינדקס שאינו שלם מוחזר כשגיאת ארגומנטים', () async {
+      await openTabs([textTab('ברכות'), textTab('שבת')]);
+
+      expect(
+        () => buildAdapter().execute('reader', 'activateTab', {'index': 1.5}),
         _codedError('error.invalid_params'),
       );
       expect(tabsBloc.state.currentTabIndex, 0);
