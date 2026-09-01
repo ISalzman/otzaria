@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -236,12 +237,13 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   Future<void> _installPlugin() async {
     final verified = await verifySaferModePassword(context);
     if (!verified || !mounted) return;
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['otzplugin'],
-      lockParentWindow: true,
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
     );
-    final path = result?.files.single.path;
+    final path = result?.path;
     if (path == null || !mounted) return;
     context.read<PluginSystemBloc>().add(InstallPluginRequested(path));
   }
@@ -249,7 +251,10 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   Future<void> _loadDevPlugin() async {
     final verified = await verifySaferModePassword(context);
     if (!verified || !mounted) return;
-    final rootPath = await FilePicker.getDirectoryPath(lockParentWindow: true);
+    final rootPath = await FilePicker.getDirectoryPath(
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
+    );
     if (rootPath == null || !mounted) return;
     context.read<PluginSystemBloc>().add(
       LoadDevelopmentPluginRequested(rootPath),

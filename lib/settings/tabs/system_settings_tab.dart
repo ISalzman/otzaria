@@ -2102,11 +2102,11 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   /// שחזור מקובץ גיבוי שהמשתמש בוחר — הדרך היחידה לשחזר אחרי התקנה מחדש
   /// במובייל, שבו תיקיית הגיבוי הפנימית נמחקת עם האפליקציה.
   Future<void> _restoreFromPickedFile() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
-    final filePath = result?.files.single.path;
+    final filePath = result?.path;
     if (filePath == null || !mounted) return;
 
     final confirmed = await showWarningDialog(

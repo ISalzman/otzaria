@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'dart:io' hide Link;
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
+import 'package:otzaria/widgets/dialogs/input_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
@@ -36,6 +38,7 @@ import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/plugins/bridge/plugin_search_api.dart';
+import 'package:otzaria/plugins/bridge/plugin_save_target.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show SearchStreamUpdate;
 import 'package:otzaria/utils/file/text_encoding.dart';
@@ -3081,7 +3084,7 @@ class PluginBridgeAdapter {
             _dependencies.capturePluginPagePdf ?? _defaultCapturePagePdf;
         final saver =
             _dependencies.pickSaveLocation ?? _defaultPickSaveLocation;
-        final suggested = _suggestedSaveName(
+        final suggested = pluginSaveFileName(
           args['fileName'] as String?,
           'pdf',
         );
@@ -3100,7 +3103,7 @@ class PluginBridgeAdapter {
           if (chosen == null || chosen.isEmpty) {
             return {'saved': false, 'name': null};
           }
-          // file_picker בווינדוס אינו משלים את הסיומת שנבחרה בדיאלוג.
+          // בורר המיקום ניתן להזרקה, וחוזהו אינו מבטיח שהסיומת תושלם.
           final target = chosen.toLowerCase().endsWith('.pdf')
               ? chosen
               : '$chosen.pdf';
@@ -3149,7 +3152,11 @@ class PluginBridgeAdapter {
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
   Future<String?> _defaultPickFolder({String? title}) =>
-      FilePicker.getDirectoryPath(lockParentWindow: true, dialogTitle: title);
+      FilePicker.getDirectoryPath(
+        windowsOptions: kModalWindowsOptions,
+        linuxOptions: kModalLinuxOptions,
+        dialogTitle: title,
+      );
 
   /// דיאלוג הדפסה/שמירה פתוח כרגע עבור המופע הזה. שער חד-בו-זמנית: בלעדיו
   /// לולאה בתוסף מערימה דיאלוגים מודאליים עד שהחלון אינו שמיש.
@@ -3536,13 +3543,14 @@ class PluginBridgeAdapter {
   }) async {
     final hasExtensions =
         allowedExtensions != null && allowedExtensions.isNotEmpty;
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       dialogTitle: title,
-      lockParentWindow: true,
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
       type: hasExtensions ? FileType.custom : FileType.any,
       allowedExtensions: hasExtensions ? allowedExtensions : null,
     );
-    return result?.files.single.path;
+    return result?.path;
   }
 
   /// `fs.pickUserFile` — פותח דיאלוג בחירת קובץ, רושם אותו כקובץ מאושר ומחזיר
@@ -3694,7 +3702,7 @@ class PluginBridgeAdapter {
               RegExp(r'^\.?[a-z0-9]{1,10}$').hasMatch(rawExtension)
           ? rawExtension.replaceAll('.', '')
           : null;
-      final suggested = _suggestedSaveName(
+      final suggested = pluginSaveFileName(
         args['suggestedName'] as String?,
         extension,
       );
@@ -3735,37 +3743,49 @@ class PluginBridgeAdapter {
     }
   }
 
-  /// שם ברירת מחדל לדיאלוג. תווים שאינם חוקיים בשם קובץ מוסרים כאן ולא
-  /// נסמכים על הדיאלוג, שמתנהג שונה בכל פלטפורמה.
-  String _suggestedSaveName(String? requested, String? extension) {
-    final cleaned = (requested ?? '')
-        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
-        .trim();
-    final base = cleaned.isEmpty ? 'מסמך' : cleaned;
-    if (extension == null || extension.isEmpty) return base;
-    return base.toLowerCase().endsWith('.$extension')
-        ? base
-        : '$base.$extension';
-  }
-
+  /// „שמור בשם” בשני שלבים: בחירת תיקייה דרך דיאלוג המערכת, ואז שם הקובץ
+  /// בדיאלוג של התוכנה. **אינו נוגע ביעד** — הכתיבה כולה ב-[_atomicWrite].
+  ///
+  /// `FilePicker.saveFile` אינו משמש כאן: מאז 12.0 הוא כותב תמיד את הבייטים
+  /// שקיבל, ולכן בחירת קובץ קיים הייתה מרוקנת אותו עוד לפני הכתיבה האמיתית.
+  /// כשיתווסף אפסטרים בורר-מיקום שאינו כותב, המימוש הזה מתקפל בחזרה אליו:
+  /// https://github.com/vicajilau/flutter_file_picker/issues/2156
   Future<String?> _defaultPickSaveLocation({
     required String suggestedName,
     List<String>? allowedExtensions,
     String? title,
-  }) {
-    final hasExtensions =
-        allowedExtensions != null && allowedExtensions.isNotEmpty;
-    // bytes ריק בכוונה: הדיאלוג משמש כאן כבורר נתיב בלבד. file_picker מדלג על
-    // הכתיבה כשהמערך ריק, והכתיבה עצמה נעשית ב-_atomicWrite. אם גרסה עתידית
-    // תכתוב בכל זאת, ה-rename שאחריה עדיין מביא את היעד למצב הנכון.
-    return FilePicker.saveFile(
-      dialogTitle: title,
-      fileName: suggestedName,
-      lockParentWindow: true,
-      type: hasExtensions ? FileType.custom : FileType.any,
-      allowedExtensions: hasExtensions ? allowedExtensions : null,
-      bytes: Uint8List(0),
+  }) async {
+    final folder = await FilePicker.getDirectoryPath(
+      dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
     );
+    if (folder == null) return null;
+
+    final context = navigatorKey.currentContext;
+    if (context == null || !context.mounted) return null;
+    final typed = await showInputDialog(
+      context: context,
+      title: title ?? 'שמירת קובץ',
+      labelText: 'שם הקובץ',
+      initialValue: suggestedName,
+      confirmText: 'שמור',
+    );
+    if (typed == null) return null;
+
+    final fileName = pluginSaveFileName(typed, allowedExtensions?.firstOrNull);
+    final target = pluginSaveTargetPath(folder: folder, fileName: fileName);
+    if (target == null) return null;
+
+    if (File(target).existsSync()) {
+      final replace = await _dependencies.showWarningDialog(
+        title: 'הקובץ כבר קיים',
+        content: 'הקובץ „$fileName” כבר קיים בתיקייה שנבחרה.',
+        subtitle: 'התוכן הקיים יוחלף.',
+      );
+      if (!replace) return null;
+    }
+    return target;
   }
 
   /// מעתיק את ההעלאה ליעד: staging באותה תיקייה, ואז rename.
