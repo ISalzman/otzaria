@@ -479,7 +479,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     }
     return InBookSearchRouting.isSearchableQuery(
           query,
-          wholeWord: _wholeWord,
+          wholeWord: _isSimpleSearch ? _wholeWord : true,
         )
         ? query
         : null;

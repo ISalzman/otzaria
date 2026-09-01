@@ -385,7 +385,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
     return InBookSearchRouting.isSearchableQuery(
           query,
-          wholeWord: _wholeWord,
+          wholeWord: _effectiveWholeWord,
         )
         ? query
         : null;
