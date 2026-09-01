@@ -816,7 +816,12 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // תוספים — השרת אינו יכול לזהות מי הפונה.
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            return PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId)
+            // גם נתיבי קבצים (/f/) וגם נתיב ההעלאה (/w/) של התוסף הזה.
+            return PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
+                    PluginFileServer.instance.isUploadUriForPlugin(
+                      uri,
+                      widget.plugin.pluginId,
+                    )
                 ? NavigationActionPolicy.ALLOW
                 : NavigationActionPolicy.CANCEL;
           }
@@ -860,7 +865,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
           // תוספים — השרת אינו יכול לזהות מי הפונה.
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
-            if (PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId)) {
+            // גם נתיבי קבצים (/f/) וגם נתיב ההעלאה (/w/) של התוסף הזה: בלי
+            // ההחרגה השנייה ה-PUT של fs.beginBinaryWrite נחסם כאן, וכל
+            // שמירה בינארית נופלת ב-"Failed to fetch" (נמדד בווינדוס, שבו
+            // ה-fork של אוצריא כן מפעיל shouldInterceptRequest).
+            if (PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
+                PluginFileServer.instance.isUploadUriForPlugin(
+                  uri,
+                  widget.plugin.pluginId,
+                )) {
               return null;
             }
             return WebResourceResponse(
