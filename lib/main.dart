@@ -6,6 +6,7 @@
 library;
 
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1366,6 +1367,82 @@ void cleanup() {
 // זו הליבה של מודל C1, וגם של ה-host במודל A (T-G2.0). המדידה כותבת
 // שורות ל-`%TEMP%\otzaria_broker_probe.log` ויוצאת; אין UI ואין ערוצים.
 // ═══════════════════════════════════════════════════════════════════════
+int _probeThreadId() {
+  try {
+    return DynamicLibrary.open('kernel32.dll')
+        .lookupFunction<Uint32 Function(), int Function()>(
+          'GetCurrentThreadId',
+        )();
+  } catch (_) {
+    return -1;
+  }
+}
+
+void _probeLog(String tag, String step, Object? outcome) {
+  debugPrint('[$tag] $step = $outcome');
+}
+
+int _probeRssMb() => (ProcessInfo.currentRss / (1024 * 1024)).round();
+
+// ═══════════════════════════════════════════════════════════════════════
+// ספייק P-0 שלב 3 — האם מודל A נפגע מתחרות thread?
+//
+// נמדד קודם ש-`Default` **כן** ממזג platform ו-UI thread (בניגוד למה
+// שה-header של Flutter מרמז), ושהדגל `RunOnSeparateThread` עובד אך
+// המנוע מכריז שיוסר. השאלה שנשארה: אפשר להימנע מהתחרות **בלי** הדגל,
+// פשוט ביצירת כל מנוע על thread ייעודי משלו עם לולאת הודעות משלו?
+//
+// המדידה: מנוע A על ה-thread הראשי שורף CPU 2 שניות ברצף, בזמן שמנוע B
+// על thread אחר מתקתק טיימר כל 100ms. הפער המרבי בין תקתוקים הוא
+// התשובה — ~100ms פירושו threads עצמאיים, ~2000ms פירושו תחרות.
+// ═══════════════════════════════════════════════════════════════════════
+@pragma('vm:entry-point')
+void engineATest(List<String> args) async {
+  _probeLog('A', 'dart-thread-id', _probeThreadId());
+  _probeLog('A', 'rss-mb-one-engine', _probeRssMb());
+
+  // נותנים למנוע B להיטען לפני שמתחילים לשרוף.
+  await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+  _probeLog('A', 'burn', 'start (2000ms sync)');
+  final end = DateTime.now().add(const Duration(milliseconds: 2000));
+  while (DateTime.now().isBefore(end)) {
+    // חסימה סינכרונית מכוונת של ה-UI isolate.
+  }
+  _probeLog('A', 'burn', 'done');
+}
+
+@pragma('vm:entry-point')
+void engineBTest(List<String> args) async {
+  _probeLog('B', 'dart-thread-id', _probeThreadId());
+  _probeLog('B', 'rss-mb-two-engines', _probeRssMb());
+
+  var ticks = 0;
+  var maxGapMs = 0;
+  var last = DateTime.now();
+  final done = Completer<void>();
+
+  Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    final now = DateTime.now();
+    final gap = now.difference(last).inMilliseconds;
+    if (gap > maxGapMs) maxGapMs = gap;
+    last = now;
+    ticks++;
+    if (ticks >= 45) {
+      timer.cancel();
+      done.complete();
+    }
+  });
+
+  await done.future;
+  _probeLog('B', 'ticks', ticks);
+  // ⚠️ המספר המכריע. ~100-150ms ⇒ ה-threads עצמאיים ומודל A שריד בלי
+  // הדגל המיושן. ~2000ms ⇒ מנוע A חסם את מנוע B והתחרות אמיתית.
+  _probeLog('B', 'max-gap-ms', maxGapMs);
+  _probeLog('B', 'rss-mb-final', _probeRssMb());
+  exit(0);
+}
+
 @pragma('vm:entry-point')
 void brokerMain(List<String> args) async {
   final log = StringBuffer();
@@ -1378,13 +1455,37 @@ void brokerMain(List<String> args) async {
   void flush() {
     try {
       final temp = Platform.environment['TEMP'] ?? r'C:\Users\Public';
-      File('$temp\otzaria_broker_probe.log')
+      File('$temp\\otzaria_broker_probe.log')
           .writeAsStringSync(log.toString(), mode: FileMode.append);
     } catch (_) {}
   }
 
   try {
     record('engine-alive', 'yes');
+
+    // ⚠️ המדידה החשובה ביותר כאן. §3.3 של מפת הדרכים — הטיעון המרכזי נגד
+    // מודל A — מבוסס על כך שב-3.44 ה-platform thread וה-UI thread ממוזגים,
+    // ולכן N מנועים בתהליך אחד מתחרים על thread יחיד. ה-header של 3.47
+    // אומר שברירת המחדל היא כבר thread נפרד. במקום להאמין לאחד מהם,
+    // שואלים את מערכת ההפעלה: אם מזהה ה-thread של ה-Dart שונה מזה של
+    // ה-thread שיצר את המנוע — הם אינם ממוזגים.
+    try {
+      final getCurrentThreadId = DynamicLibrary.open('kernel32.dll')
+          .lookupFunction<Uint32 Function(), int Function()>(
+            'GetCurrentThreadId',
+          );
+      record('dart-thread-id', getCurrentThreadId());
+    } catch (e) {
+      record('dart-thread-id', 'FAILED: $e');
+    }
+
+    // עלות המנוע לבדו, לפני שנפתח ולו מאגר אחד. ההפרש מול `rss-mb` בסוף
+    // הוא עלות הנתונים. שני המספרים האלה הם מה שמכריע בין A ל-C1: ב-A
+    // כל חלון נוסף עולה "מנוע", וב-C1 כל חלון נוסף עולה "תהליך".
+    record(
+      'rss-mb-engine-only',
+      (ProcessInfo.currentRss / (1024 * 1024)).toStringAsFixed(0),
+    );
 
     // 1. האם לולאת האירועים רצה בכלל בלי view.
     final timerDone = Completer<void>();

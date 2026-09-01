@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "flutter_window.h"
@@ -279,6 +280,103 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // ⚠️ `headless` הקיים אינו זה: הוא יוצר view מלא ורק מדלג על ההצגה.
   // כאן אין view כלל, כמו ב-`examples/multiple_windows` של Flutter.
   if (is_broker_role) {
+    // §3.3 של מפת הדרכים — הטיעון המרכזי נגד מודל A — נשען על כך שברירת
+    // המחדל ממזגת את ה-platform thread עם ה-UI thread, ולכן N מנועים
+    // בתהליך אחד מתחרים על thread יחיד. נמדד כאן ישירות: רושמים את מזהה
+    // ה-thread שיצר את המנוע, וה-Dart רושם את שלו. שונים ⇒ אינם ממוזגים.
+    //
+    // `--ui-thread=platform` מאלץ את המדיניות הממוזגת. הוא קיים כדי להוכיח
+    // שהמדידה מבחינה: אם שני המצבים מדווחים אותה תוצאה, המדידה חסרת ערך.
+    for (const auto& arg : early_args) {
+      if (arg == "--ui-thread=platform") {
+        project.set_ui_thread_policy(
+            flutter::UIThreadPolicy::RunOnPlatformThread);
+      } else if (arg == "--ui-thread=separate") {
+        project.set_ui_thread_policy(
+            flutter::UIThreadPolicy::RunOnSeparateThread);
+      }
+    }
+    printf("[broker] platform-thread-id = %lu\n", ::GetCurrentThreadId());
+    fflush(stdout);
+
+    // ── ספייק P-0 שלב 3: שני מנועים, שני threads, תהליך אחד ──
+    // בודק אם מודל A יכול להימנע מתחרות ה-thread של §3.3 מבלי להישען על
+    // `RunOnSeparateThread` שהמנוע מכריז שיוסר. כל מנוע נוצר על thread
+    // ייעודי עם לולאת `GetMessage` משלו, ולכן ה-platform thread הממוזג
+    // שלו הוא thread אחר.
+    bool two_engines = false;
+    bool two_engines_same_thread = false;
+    for (const auto& arg : early_args) {
+      if (arg == "--engines=2") two_engines = true;
+      if (arg == "--engines=2same") two_engines_same_thread = true;
+    }
+
+    // בקרה. שני מנועים על **אותו** thread. קיימת רק כדי להוכיח שהמדידה
+    // מבחינה: אם גם כאן הפער המרבי ~100ms, אז המדידה אינה מודדת תחרות
+    // כלל והמסקנה מ-`--engines=2` חסרת ערך.
+    if (two_engines_same_thread) {
+      printf("[A] platform-thread-id = %lu\n", ::GetCurrentThreadId());
+      printf("[B] platform-thread-id = %lu\n", ::GetCurrentThreadId());
+      fflush(stdout);
+      flutter::DartProject project_a(project);
+      project_a.set_dart_entrypoint("engineATest");
+      flutter::FlutterEngine engine_a(project_a);
+      flutter::DartProject project_b(project);
+      project_b.set_dart_entrypoint("engineBTest");
+      flutter::FlutterEngine engine_b(project_b);
+      if (!engine_a.Run("engineATest") || !engine_b.Run("engineBTest")) {
+        printf("[control] engine.Run FAILED\n");
+        fflush(stdout);
+        return EXIT_FAILURE;
+      }
+      ::MSG msg;
+      while (::GetMessage(&msg, nullptr, 0, 0)) {
+        ::TranslateMessage(&msg);
+        ::DispatchMessage(&msg);
+      }
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
+    }
+
+    if (two_engines) {
+      std::thread engine_b_thread([&project]() {
+        printf("[B] platform-thread-id = %lu\n", ::GetCurrentThreadId());
+        fflush(stdout);
+        flutter::DartProject project_b(project);
+        project_b.set_dart_entrypoint("engineBTest");
+        flutter::FlutterEngine engine_b(project_b);
+        if (!engine_b.Run("engineBTest")) {
+          printf("[B] engine.Run FAILED\n");
+          fflush(stdout);
+          return;
+        }
+        ::MSG msg_b;
+        while (::GetMessage(&msg_b, nullptr, 0, 0)) {
+          ::TranslateMessage(&msg_b);
+          ::DispatchMessage(&msg_b);
+        }
+      });
+
+      printf("[A] platform-thread-id = %lu\n", ::GetCurrentThreadId());
+      fflush(stdout);
+      flutter::DartProject project_a(project);
+      project_a.set_dart_entrypoint("engineATest");
+      flutter::FlutterEngine engine_a(project_a);
+      if (!engine_a.Run("engineATest")) {
+        printf("[A] engine.Run FAILED\n");
+        fflush(stdout);
+        return EXIT_FAILURE;
+      }
+      ::MSG msg_a;
+      while (::GetMessage(&msg_a, nullptr, 0, 0)) {
+        ::TranslateMessage(&msg_a);
+        ::DispatchMessage(&msg_a);
+      }
+      engine_b_thread.join();
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
+    }
+
     project.set_dart_entrypoint("brokerMain");
     flutter::FlutterEngine engine(project);
     if (!engine.Run("brokerMain")) {
