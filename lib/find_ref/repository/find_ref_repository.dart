@@ -171,6 +171,10 @@ class FindRefRepository {
   /// (למשל נושא רחב במצב era). הסט הלגיטימי הגדול בפועל קטן בהרבה.
   static const int _maxResultCap = 100;
 
+  /// issue #839: מכסת התאמות תת-מחרוזת המובטחת בזנב תוצאות של שאילתת
+  /// מילה-אחת — בלעדיה ה-cap מחק אותן כליל ("מא" לא הציג את יומא).
+  static const int _substringTailQuota = 10;
+
   /// מילות-דור של טוקן יחיד שמפעילות את מצב "דור + נושא".
   static const Map<String, CommentaryEra> _singleTokenEras = {
     'ראשונים': CommentaryEra.rishonim,
@@ -635,7 +639,9 @@ class FindRefRepository {
     // וכותרות פנימיות), ולכן אסור לחתוך מוקדם: ספר רלוונטי כמו "פסקי הרא"ש על
     // ברכות" נדחק ע"י עשרות התאמות "ראש" קצרות יותר ונזרק לפני הסינון. ה-cap
     // הגבוה הוא רשת ביטחון נגד ספריות ענק; החיתוך הפונקציונלי הוא 15 הסופיות.
-    final bookSearchLimit = queryTokens.length >= 2 ? 1000 : 50;
+    // מילה-אחת: 200 ולא 50 — אחרת התאמות "מכיל" נחתכות לפי סדר-הספרייה עוד
+    // לפני הדירוג, ויומא לא שורד את 56 ספרי "מא..." (issue #839).
+    final bookSearchLimit = queryTokens.length >= 2 ? 1000 : 200;
     var bookQueryTokenCount = 1;
     List<ReferenceBookHit> bookHits = const <ReferenceBookHit>[];
 
@@ -749,7 +755,11 @@ class FindRefRepository {
       }
 
       final unique = _dedupeRefs(results);
-      final ranked = _rankResults(unique, queryTokens);
+      final ranked = _rankResults(
+        unique,
+        queryTokens,
+        preserveSubstringTail: queryTokens.length == 1,
+      );
       return await _enrichWithPaths(ranked);
     }
 
@@ -1552,8 +1562,9 @@ class FindRefRepository {
 
   List<DbReferenceResult> _rankResults(
     List<DbReferenceResult> results,
-    List<String> queryTokens,
-  ) {
+    List<String> queryTokens, {
+    bool preserveSubstringTail = false,
+  }) {
     if (results.length < 2) return results;
 
     final query = queryTokens.join(' ');
@@ -1698,7 +1709,28 @@ class FindRefRepository {
       );
       end = _maxResultCap;
     }
-    return [for (var i = 0; i < end; i++) decorated[i].result];
+
+    final capped = [for (var i = 0; i < end; i++) decorated[i]];
+
+    // issue #839: התאמות תת-מחרוזת מדורגות אחרי כל התאמות-התחילית, וחיתוך
+    // שגבולו בתוכן מחק אותן כליל — מובטחת להן מכסה בזנב, בלי לשנות דירוג.
+    if (preserveSubstringTail && end < decorated.length) {
+      bool isSubstringMatch(_RankKey d) =>
+          !d.startsWithMatch && d.normTitle.contains(query);
+      var quota = _substringTailQuota - capped.where(isSubstringMatch).length;
+      for (
+        var i = end;
+        i < decorated.length && quota > 0 && capped.length < _maxResultCap;
+        i++
+      ) {
+        if (isSubstringMatch(decorated[i])) {
+          capped.add(decorated[i]);
+          quota--;
+        }
+      }
+    }
+
+    return [for (final d in capped) d.result];
   }
 
   /// מחזיר true כשהשאילתה נראית כציון בסגנון גמרא (דף + עמוד).
