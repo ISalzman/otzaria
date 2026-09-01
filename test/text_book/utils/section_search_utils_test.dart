@@ -440,6 +440,18 @@ void main() {
       expect(truncated, isFalse);
     });
 
+    test('בדיוק על התקרה ואחריה שורות בלי התאמות — לא מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: [...List.filled(1000, 'שמע ישראל'), 'שורה ללא התאמה'],
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isFalse);
+    });
+
     test('הופעות עודפות באותה שורה אחרונה — מסומן כחתוך', () async {
       bool? truncated;
       final results = await searchInContent(

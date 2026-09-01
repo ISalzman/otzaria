@@ -392,11 +392,26 @@ class SectionSearchWorkerRuntime {
           final results = <Map<String, dynamic>>[];
           final address = <String>[];
           bool canceled = false;
-          // issue #1053: החיפוש נעצר בתקרה באמצע הספר — בלי הדגל המשתמש
-          // מניח שאלו כל ההופעות, והרשימה מכסה רק את תחילת הספר.
           bool truncated = false;
 
           for (int i = 0; i < cleanLines.length; i++) {
+            if (results.length >= _maxSearchResults) {
+              if (pattern
+                  .allMatches(cleanLines[i])
+                  .any((match) => match.end > match.start)) {
+                truncated = true;
+                break;
+              }
+              if ((i + 1) % _searchChunkSize == 0) {
+                await Future<void>.delayed(Duration.zero);
+                if (_queuedRequest != null) {
+                  canceled = true;
+                  break;
+                }
+              }
+              continue;
+            }
+
             final rawLine = sourceLines[i];
 
             if (rawLine.contains('<h') && !rawLine.startsWith('<h1')) {
@@ -436,14 +451,13 @@ class SectionSearchWorkerRuntime {
                 'lineLength': cleanLines[i].length,
               });
               if (results.length >= _maxSearchResults) {
-                // ההתאמה העודפת (גבול ה-snippet) מעידה שנותרו הופעות בשורה.
                 truncated = m < lineMatches.length - 1;
                 break;
               }
             }
             if (results.length >= _maxSearchResults) {
-              truncated = truncated || i < cleanLines.length - 1;
-              break;
+              if (truncated) break;
+              continue;
             }
 
             if ((i + 1) % _searchChunkSize == 0) {
@@ -510,8 +524,7 @@ class SectionSearchWorkerRuntime {
 /// [patternSource] מוזרק בבדיקות בלבד (הן אינן יכולות לקרוא למנוע);
 /// בייצור התבנית נבנית מהמנוע ב-isolate הראשי ונשלחת ל-worker.
 ///
-/// [onTruncated] נקרא עם `true` כשהחיפוש נעצר בתקרת התוצאות לפני סוף הספר
-/// (issue #1053) — כך המסך יכול לחוות שמוצגות רק ההופעות הראשונות.
+/// [onTruncated] נקרא עם `true` כשנמצאו התאמות נוספות אחרי תקרת התוצאות.
 Future<List<TextSearchResult>> searchInContent({
   required List<String> content,
   required String query,

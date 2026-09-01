@@ -94,9 +94,6 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     with AutomaticKeepAliveClientMixin<TextBookSearchView> {
   TextEditingController searchTextController = TextEditingController();
   List<TextSearchResult> searchResults = [];
-
-  /// issue #1053: החיפוש נעצר בתקרת התוצאות לפני סוף הספר — הכיתוב משתנה
-  /// ל"מוצגות N התוצאות הראשונות" כדי שהמשתמש לא יניח שאלו כל ההופעות.
   bool _resultsTruncated = false;
   late ItemScrollController scrollControler;
   bool _isSearching = false;
