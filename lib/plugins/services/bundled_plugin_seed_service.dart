@@ -10,8 +10,8 @@ import 'package:otzaria/plugins/services/plugin_installer_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:path/path.dart' as p;
 
-/// רושמת את התוספים שהמתקין ארז ליד ה-executable, כדי שיהיו מותקנים כבר
-/// בפתיחה הראשונה. ראה docs/bundled_plugins.md.
+/// רושמת את התוספים שחבילת ההתקנה ארזה ליד ה-executable, כדי שיהיו מותקנים
+/// כבר בפתיחה הראשונה. ראה docs/bundled_plugins.md.
 class BundledPluginSeedService {
   final PluginRegistryRepository _repository;
   final PluginInstallerService _installerService;

@@ -1,7 +1,9 @@
-# תוספים מצורפים למתקין
+# תוספים מצורפים לחבילות ההתקנה
 
-מנגנון שמאפשר למתקיני Windows (רגיל, FULL, indexed-FULL, ARM64) להגיע עם
-תוספים מהחנות הרשמית מותקנים מראש.
+מנגנון שמאפשר לחבילות הדסקטופ — מתקיני Windows (רגיל, FULL, indexed-FULL,
+ARM64), חבילות לינוקס (deb, rpm, raw, FULL) וחבילות מק (DMG, zip עדכון,
+FULL) — להגיע עם תוספים מהחנות הרשמית מותקנים מראש. במובייל אין מנגנון כזה
+(`AppPaths.getBundledPluginsPath` מחזיר שם `null`).
 
 ## איך מוסיפים תוסף
 
@@ -24,15 +26,25 @@ const bundledPlugins = <String, String>{
 
 ## איך זה עובד
 
-1. **בזמן ה-build בגיטהאב** — `installer/download_bundled_plugins.ps1` קורא את
-   הרשימה, מוריד כל תוסף מהחנות (`otzaria.org/api/plugins/<מזהה-חנות>/download`
-   עם `appVersion` כדי לקבל גרסה תואמת), מאמת שהקובץ הוא ZIP ושמזהה המניפסט
-   שבארכיון תואם לרשומה, ומניח אותו
-   ב-`installer/bundled_plugins/<מזהה-מניפסט>.otzplugin`. רשימה ריקה — השלב
-   לא עושה דבר.
-2. **המתקין** מעתיק את התיקייה ל-`{app}\bundled_plugins` (עם
-   `skipifsourcedoesntexist`, כך שבנייה מקומית בלי התוספים עובדת כרגיל).
-   שדרוג מוחק קודם את התיקייה הישנה (`[InstallDelete]`).
+1. **בזמן ה-build בגיטהאב** — סקריפט ההורדה קורא את הרשימה, מוריד כל תוסף
+   מהחנות (`otzaria.org/api/plugins/<מזהה-חנות>/download` עם `appVersion`
+   כדי לקבל גרסה תואמת), מאמת שהקובץ הוא ZIP ושמזהה המניפסט שבארכיון תואם
+   לרשומה, ומניח אותו ב-`installer/bundled_plugins/<מזהה-מניפסט>.otzplugin`.
+   רשימה ריקה — השלב לא עושה דבר. ב-Windows זה
+   `installer/download_bundled_plugins.ps1`; בלינוקס ובמק —
+   `installer/download_bundled_plugins.sh` (אותה לוגיקה; בקונטיינר הלינוקס
+   אין pwsh). שינוי בפורמט הרשימה או בכתובת ההורדה מחייב עדכון **שניהם**.
+2. **האריזה** מניחה את התיקייה ליד ה-executable, הנתיב
+   ש-`AppPaths.getBundledPluginsPath` מחפש:
+   - **Windows** — המתקין מעתיק ל-`{app}\bundled_plugins` (עם
+     `skipifsourcedoesntexist`, כך שבנייה מקומית בלי התוספים עובדת כרגיל).
+     שדרוג מוחק קודם את התיקייה הישנה (`[InstallDelete]`).
+   - **לינוקס** — ה-workflow מעתיק אל שורש ה-bundle (ליד הבינארי) בכל ארבע
+     החבילות: לעץ ה-deb וה-rpm לפני ה-repack, ול-bundle הראשי שממנו נגזרות
+     raw ו-FULL.
+   - **מק** — ה-workflow מעתיק אל `Contents/MacOS/bundled_plugins` בתוך
+     ה-`.app` לפני יצירת ה-DMG, ולכן זה מגיע גם ל-zip העדכון ולחבילת
+     ה-FULL שמעתיקים את אותו bundle.
 3. **בעליית אוצריא** — `BundledPluginSeedService` (דרך אירוע
    `SeedBundledPlugins` ב-`PluginSystemBloc`) סורק את התיקייה ומתקין דרך
    מסלול ההתקנה הרגיל (`prepareInstall`/`finalizeInstall`, כולל ולידציית

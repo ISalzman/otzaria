@@ -962,6 +962,79 @@ void main() {
     }
   });
 
+  group('תוספים מצורפים — שני סקריפטי ההורדה וכל החבילות מיושרים', () {
+    // הרשימה נקראת ע"י שני סקריפטים (pwsh ל-Windows, bash ללינוקס/מק) —
+    // סטייה ביניהם מפילה תוסף בשקט רק בחלק מהפלטפורמות.
+    const scripts = [
+      'download_bundled_plugins.ps1',
+      'download_bundled_plugins.sh',
+    ];
+
+    for (final name in scripts) {
+      test('$name: אותה רשימה, אותו endpoint, אותה תיקיית פלט', () {
+        final script = File(
+          'installer/$name',
+        ).readAsStringSync().replaceAll('\r\n', '\n');
+
+        expect(script, contains('bundled_plugin_ids.dart'));
+        expect(script, contains('https://otzaria.org'));
+        expect(script, contains('/download?appVersion='));
+        expect(script, contains(AppPaths.bundledPluginsFolderName));
+        expect(
+          RegExp(r"\(\[\^'\]\+\)").allMatches(script).length,
+          2,
+          reason: 'תבנית פענוח הזוגות חייבת ללכוד מזהה-חנות ומזהה-מניפסט',
+        );
+        expect(
+          script,
+          contains('manifest.json'),
+          reason: 'בלי אימות מזהה המניפסט, ארכיון שגוי נכשל בשקט אצל המשתמש',
+        );
+      });
+    }
+
+    test('לינוקס: ההורדה רצה וכל ארבע החבילות מקבלות את התיקייה', () {
+      expect(
+        _workflowStep('Download bundled plugins for Linux packages'),
+        contains('download_bundled_plugins.sh'),
+      );
+      for (final step in const [
+        'Build and Patch Linux DEB package',
+        'Build and Patch Linux RPM package',
+        'Bundle WPE runtime into main bundle (raw + FULL)',
+      ]) {
+        expect(
+          _workflowStep(step),
+          contains('installer/bundled_plugins'),
+          reason: '$step אינו אורז את התוספים — החבילה תגיע בלעדיהם',
+        );
+      }
+    });
+
+    test('מק: ההורדה רצה וההזרקה ל-.app קודמת ליצירת ה-DMG', () {
+      expect(
+        _workflowStep('Download bundled plugins for macOS bundles'),
+        contains('download_bundled_plugins.sh'),
+      );
+      expect(
+        _workflowStep('Bundle plugins into the app bundle'),
+        contains(
+          'Contents/MacOS/${AppPaths.bundledPluginsFolderName}',
+        ),
+        reason: 'התיקייה חייבת לשבת ליד ה-executable בתוך ה-bundle',
+      );
+
+      final workflow = File(
+        '.github/workflows/build-and-announce.yml',
+      ).readAsStringSync().replaceAll('\r\n', '\n');
+      expect(
+        workflow.indexOf('- name: Bundle plugins into the app bundle'),
+        lessThan(workflow.indexOf('- name: Create DMG installer')),
+        reason: 'הזרקה אחרי ה-DMG משאירה את המתקין של מק בלי התוספים',
+      );
+    });
+  });
+
   group('התקנה ניידת — שאלה לפני שכפול ספרייה קיימת (issue #861)', () {
     test('$_full: השאלה נשאלת בלחיצת "התקן" ומזהה ספרייה קיימת בלבד', () {
       final script = _script(_full);

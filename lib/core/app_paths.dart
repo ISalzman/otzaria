@@ -270,8 +270,8 @@ class AppPaths {
   static Future<String> getPersonalBooksImportPath() async =>
       p.join(await getDataRootPath(), 'הספרים שלי');
 
-  /// תיקיית ארכיוני התוספים שהמתקין ארז, ליד ה-executable. `null` במובייל,
-  /// שאין בו מתקין. התיקייה עצמה אינה קיימת כשהמתקין נבנה בלי תוספים.
+  /// תיקיית ארכיוני התוספים שחבילת ההתקנה ארזה, ליד ה-executable. `null`
+  /// במובייל, שאין בו חבילה כזו. התיקייה אינה קיימת כשהחבילה נבנתה בלי תוספים.
   static String? getBundledPluginsPath() {
     if (Platform.isAndroid || Platform.isIOS) return null;
     return p.join(p.dirname(_resolvedExecutable), bundledPluginsFolderName);

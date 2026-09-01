@@ -972,7 +972,13 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
-      
+
+      # תוספים מצורפים לחבילות — הרשימה ב-lib/plugins/services/bundled_plugin_ids.dart
+      # (רשימה ריקה = השלב לא עושה דבר). ראה docs/bundled_plugins.md.
+      - name: Download bundled plugins for Linux packages
+        shell: bash
+        run: bash installer/download_bundled_plugins.sh
+
       - name: Install flutter_distributor (with retry)
         if: matrix.target == 'deb' || matrix.target == 'rpm'
         shell: bash
@@ -1165,6 +1171,11 @@ jobs:
           [ -n "$DEB_LIB_SO" ] || { echo "::error::libWPEWebKit-2.0 לא נמצא בעץ ה-deb"; exit 1; }
           bash /tmp/bundle_wpe.sh "$(dirname "$DEB_LIB_SO")"
 
+          # ארכיוני התוספים המצורפים — ליד ה-executable (ההורה של lib ב-bundle).
+          if [ -d installer/bundled_plugins ]; then
+            cp -r installer/bundled_plugins "$(dirname "$DEB_LIB_SO")/../bundled_plugins"
+          fi
+
           # AppStream metainfo — בלעדיו GNOME Software מציג גלגל-שיניים גנרי
           # במסך ההתקנה. (ל-rpm זה מגיע נטיבית דרך make_config.yaml.)
           mkdir -p "$DEB_DIR/usr/share/metainfo"
@@ -1230,6 +1241,11 @@ jobs:
           [ -n "$RPM_LIB_SO" ] || { echo "::error::libWPEWebKit-2.0 לא נמצא בעץ ה-rpm (BUILD)"; exit 1; }
           bash /tmp/bundle_wpe.sh "$(dirname "$RPM_LIB_SO")"
 
+          # ארכיוני התוספים המצורפים — ליד ה-executable (ההורה של lib ב-bundle).
+          if [ -d installer/bundled_plugins ]; then
+            cp -r installer/bundled_plugins "$(dirname "$RPM_LIB_SO")/../bundled_plugins"
+          fi
+
           echo "Re-packaging using absolute top directory: $RPM_TOP_DIR_ABS"
           rpmbuild --define "_topdir $RPM_TOP_DIR_ABS" -bb "$SPEC_FILE"
 
@@ -1243,6 +1259,11 @@ jobs:
           # ולכן דורסות הזרקה מוקדמת) כדי שחבילות ה-raw וה-FULL, המועתקות מ-bundle
           # זה בשלב הבא, יהיו self-contained.
           bash /tmp/bundle_wpe.sh "${FLUTTER_BUILD_DIR}/bundle/lib"
+
+          # ארכיוני התוספים המצורפים — ליד ה-executable (docs/bundled_plugins.md).
+          if [ -d installer/bundled_plugins ]; then
+            cp -r installer/bundled_plugins "${FLUTTER_BUILD_DIR}/bundle/bundled_plugins"
+          fi
 
       - name: Verify WPE runtime in packaged artifacts
         shell: bash
@@ -1849,6 +1870,27 @@ jobs:
             echo "Warning: No .app bundle found in build/macos/Build/Products/Release"
             find build/macos/Build/Products/Release -maxdepth 2 | head -20
           fi
+
+      # תוספים מצורפים — הרשימה ב-lib/plugins/services/bundled_plugin_ids.dart
+      # (רשימה ריקה = השלב לא עושה דבר). ראה docs/bundled_plugins.md.
+      - name: Download bundled plugins for macOS bundles
+        shell: bash
+        run: bash installer/download_bundled_plugins.sh
+
+      # רץ לפני יצירת ה-DMG — כך הארכיונים מגיעים גם ל-zip העדכון ולחבילת
+      # ה-FULL, שמעתיקים את אותו .app. התיקייה יושבת ליד ה-executable
+      # (Contents/MacOS), הנתיב ש-AppPaths.getBundledPluginsPath מחפש.
+      - name: Bundle plugins into the app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d installer/bundled_plugins ]; then
+            echo "No bundled plugins - skipping."
+            exit 0
+          fi
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          [ -n "$APP_PATH" ] || { echo "::error::No .app bundle found for plugin bundling"; exit 1; }
+          cp -R installer/bundled_plugins "$APP_PATH/Contents/MacOS/bundled_plugins"
 
       - name: Create DMG installer
         run: |
