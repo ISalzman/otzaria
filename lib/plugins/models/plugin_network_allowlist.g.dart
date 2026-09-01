@@ -42,5 +42,4 @@ const List<String> pluginNetworkAllowlist = <String>[
   'https://script.google.com/macros/s/AKfycbxzlCAZzhaEM68jRqqekW8InrtbSiZrtiiIjgCKOInUvyBG43wLY29MYY6PrbHijpO6/exec',
   'https://script.googleusercontent.com/macros/echo',
   'https://docs.google.com/forms/d/e/1FAIpQLSd7NiGDUahnwpaestosEcDxPJoAkYXzVRUa2yB5EiXkLPSWvQ/formResponse',
-  'https://he.wikipedia.org/api/rest_v1/page/summary',
 ];
