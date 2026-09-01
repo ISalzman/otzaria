@@ -1147,6 +1147,12 @@ class _CombinedViewState extends State<CombinedView> {
           enabled: selectedText != null && selectedText.trim().isNotEmpty,
           onTap: () => _copyFormattedText(selectedText),
         ),
+        if (showCopyWithoutNikud(selectedText))
+          AppContextMenuEntry(
+            label: 'העתק בלי ניקוד',
+            icon: FluentIcons.text_clear_formatting_24_regular,
+            onTap: () => _copyFormattedText(selectedText, true),
+          ),
       ];
     }
 
@@ -1268,6 +1274,14 @@ class _CombinedViewState extends State<CombinedView> {
             ),
           ),
       ]),
+      // "העתק בלי ניקוד" (issue #851) — מוצג רק כשהבחירה מנוקדת בפועל;
+      // מסיר ניקוד/טעמים מהעותק בלבד, בלי לשנות את התצוגה.
+      if (showCopyWithoutNikud(selectedText))
+        AppContextMenuEntry(
+          label: 'העתק בלי ניקוד',
+          icon: FluentIcons.text_clear_formatting_24_regular,
+          onTap: () => _copyFormattedText(selectedText, true),
+        ),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
         label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
@@ -1615,7 +1629,10 @@ class _CombinedViewState extends State<CombinedView> {
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
-  Future<void> _copyFormattedText([String? capturedText]) async {
+  Future<void> _copyFormattedText([
+    String? capturedText,
+    bool removeNikud = false,
+  ]) async {
     final plainText = capturedText ?? _savedSelectedText.value;
 
     debugPrint('_copyFormattedText called with: "$plainText"');
@@ -1634,6 +1651,7 @@ class _CombinedViewState extends State<CombinedView> {
           savedSelectedText: commentarySelection.text,
           fontSize: settingsState.commentatorsFontSize,
           link: commentarySelection.link,
+          removeNikud: removeNikud,
         );
         return;
       }
@@ -1654,6 +1672,7 @@ class _CombinedViewState extends State<CombinedView> {
         settingsState: settingsState,
         fontFamily: settingsState.fontFamily,
         fontSize: widget.textSize,
+        removeNikud: removeNikud,
       );
     } catch (e) {
       if (mounted) {

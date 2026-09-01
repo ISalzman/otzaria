@@ -964,6 +964,14 @@ class _LinksListViewState extends State<LinksListView> {
                     fontSize: widget.fontSize,
                     link: _savedSelectedLink,
                   ),
+                  onCopySelectedWithoutNikud: () =>
+                      ContextMenuUtils.copyFormattedText(
+                        context: menuCtx,
+                        savedSelectedText: _savedSelectedText,
+                        fontSize: widget.fontSize,
+                        link: _savedSelectedLink,
+                        removeNikud: true,
+                      ),
                 ),
             child: GestureDetector(
               onTap: () => _navigateToLink(link),

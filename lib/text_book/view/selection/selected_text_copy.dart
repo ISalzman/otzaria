@@ -40,6 +40,8 @@ String resolveHtmlTextForSelection({
 ///
 /// [textBookState] הוא null בהעתקה ממשטח ללא `TextBookBloc` (חלונית ה-PDF);
 /// אז [headerBookOverride] הוא מקור ספר הכותרת היחיד.
+/// [removeNikud] — פעולת "העתק בלי ניקוד" (issue #851): ניקוד וטעמים
+/// מוסרים מהעותק בלבד (כולל הכותרות וה-HTML), התצוגה לא משתנה.
 Future<void> copySelectedTextForBook({
   required String plainText,
   required int? selectedIndex,
@@ -50,6 +52,7 @@ Future<void> copySelectedTextForBook({
   required double fontSize,
   TextBook? headerBookOverride,
   List<String>? headerContentOverride,
+  bool removeNikud = false,
 }) async {
   var htmlContentToUse = resolveHtmlTextForSelection(
     plainText: plainText,
@@ -90,6 +93,7 @@ Future<void> copySelectedTextForBook({
     htmlText: htmlContentToUse,
     replaceHolyNames: settingsState.replaceHolyNames,
     holyNameStyle: settingsState.holyNameStyle,
+    removeNikud: removeNikud,
   );
 
   await CopyUtils.copyStyledToClipboard(

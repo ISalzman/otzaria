@@ -41,6 +41,8 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/utils/ui/context_menu_utils.dart'
+    show showCopyWithoutNikud;
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
@@ -1719,6 +1721,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             ),
         ]),
       );
+      // "העתק בלי ניקוד" (issue #851) — רק כשהבחירה מנוקדת; העותק בלבד
+      // מנוקה, התצוגה לא משתנה.
+      if (showCopyWithoutNikud(capturedText)) {
+        entries.add(
+          AppContextMenuEntry(
+            label: 'העתק בלי ניקוד',
+            icon: FluentIcons.text_clear_formatting_24_regular,
+            onTap: () => _copyFormattedText(capturedText, true),
+          ),
+        );
+      }
       entries.add(const AppContextMenuEntry.divider());
 
       entries.add(
@@ -1822,13 +1835,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           onTap: () => _openErrorReportDialog(capturedText ?? ''),
         ),
       const AppContextMenuEntry.divider(),
-      if (!widget.isMainText)
+      if (!widget.isMainText) ...[
         AppContextMenuEntry(
           label: 'העתק',
           icon: FluentIcons.copy_24_regular,
           enabled: capturedText != null && capturedText.trim().isNotEmpty,
           onTap: () => _copyFormattedText(capturedText),
         ),
+        if (showCopyWithoutNikud(capturedText))
+          AppContextMenuEntry(
+            label: 'העתק בלי ניקוד',
+            icon: FluentIcons.text_clear_formatting_24_regular,
+            onTap: () => _copyFormattedText(capturedText, true),
+          ),
+      ],
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
@@ -2356,7 +2376,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// העתקת טקסט מעוצב
-  Future<void> _copyFormattedText([String? capturedText]) async {
+  Future<void> _copyFormattedText([
+    String? capturedText,
+    bool removeNikud = false,
+  ]) async {
     // מפרש כבר טיפל בהעתקה - לא נדרוס
     if (widget.isMainText && _commentaryCopyHandled) return;
 
@@ -2384,6 +2407,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         headerContentOverride: widget.reportBook != null
             ? widget.content
             : null,
+        removeNikud: removeNikud,
       );
     } catch (e) {
       if (mounted) {

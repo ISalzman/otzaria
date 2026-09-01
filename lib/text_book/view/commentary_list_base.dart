@@ -2494,6 +2494,18 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                         // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
                         link: widget.lastSelectedLinkListenable.value ?? link,
                       ),
+                      onCopySelectedWithoutNikud: () =>
+                          ContextMenuUtils.copyFormattedText(
+                            context: menuCtx,
+                            savedSelectedText:
+                                (widget.restoreLineBreaks ?? (s) => s)(
+                                  savedTextAtBuild,
+                                ),
+                            fontSize: widget.fontSize,
+                            link:
+                                widget.lastSelectedLinkListenable.value ?? link,
+                            removeNikud: true,
+                          ),
                     );
                   },
                   child: CommentaryContent(
@@ -2641,6 +2653,17 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                       fontSize: widget.fontSize,
                     ),
                   ),
+                  if (showCopyWithoutNikud(_selectedText))
+                    AppContextMenuEntry(
+                      label: 'העתק בלי ניקוד',
+                      icon: FluentIcons.text_clear_formatting_24_regular,
+                      onTap: () => ContextMenuUtils.copyFormattedText(
+                        context: menuCtx,
+                        savedSelectedText: _selectedText,
+                        fontSize: widget.fontSize,
+                        removeNikud: true,
+                      ),
+                    ),
                   if (!widget.state.book.isUserBook) ...[
                     const AppContextMenuEntry.divider(),
                     AppContextMenuEntry(
