@@ -1576,6 +1576,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
           .firstOrNull;
       final pdfBook = PdfBook(
         id: matchingTextBook?.id,
+        externalLibraryId: DatabaseConstants.talmudBavliPdfExternalLibraryId(
+          title,
+        ),
         title: title,
         category: targetCategory,
         path: entity.path,
