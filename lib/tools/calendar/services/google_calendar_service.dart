@@ -22,8 +22,11 @@ class GoogleCalendarService {
     SettingsRepository? settingsRepository,
   }) : _settingsRepository = settingsRepository ?? SettingsRepository();
 
-  static const List<String> _scopes = <String>[
+  // calendarList.list דורש scope נפרד מ-calendar.events — בלעדיו בחירת
+  // היומנים מחזירה תמיד רשימה ריקה (403, issue #1075)
+  static const List<String> scopes = <String>[
     cal.CalendarApi.calendarEventsScope,
+    cal.CalendarApi.calendarCalendarlistReadonlyScope,
   ];
 
   final SettingsRepository _settingsRepository;
@@ -86,7 +89,7 @@ class GoogleCalendarService {
     try {
       final authClient = await auth_io.clientViaUserConsent(
         id,
-        _scopes,
+        scopes,
         (url) async {
           await launchUrl(
             Uri.parse(url),
