@@ -2763,7 +2763,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
             defaultValue: false,
           ) ??
           false;
-      final mergeOverridesByFolderName = _mergeOverridesByFolderName();
+      final mergeOverridesByFolderName = _mergeOverridesByFolderName(
+        mergeDefault,
+      );
 
       // ילדים ישירים של "ספרים אישיים" — אלו התיקיות שהמשתמש בחר בדיאלוג
       // הוספת תיקייה (למשל "מסמכים", "הורדות"). השם שלהן כשלעצמו אינו
@@ -2943,18 +2945,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
     }
   }
 
-  /// חריגות המיזוג שהמשתמש קבע, לפי שם התיקייה — זה השם שבו נוצרת
-  /// הקטגוריה תחת "ספרים אישיים", ולכן שתי תיקיות בעלות אותו שם חולקות
-  /// קטגוריה אחת. כשהן חלוקות בהגדרה, ההכרעה חוזרת לברירת המחדל.
-  Map<String, bool> _mergeOverridesByFolderName() {
+  /// מצב המיזוג לפי קטגוריית-השורש. תיקיות בעלות אותו שם חולקות קטגוריה,
+  /// ולכן כשמצביהן האפקטיביים חלוקים חוזרים לברירת המחדל הגלובלית.
+  Map<String, bool> _mergeOverridesByFolderName(bool mergeDefault) {
     final folders = CustomFoldersManager.loadFolders(
       Settings.getValue<String>(SettingsRepository.keyCustomFolders),
     );
     final result = <String, bool>{};
     final conflicting = <String>{};
     for (final folder in folders) {
-      final value = folder.mergeIntoLibrary;
-      if (value == null) continue;
+      final value = folder.resolveMergeIntoLibrary(mergeDefault);
       if (result.containsKey(folder.name) && result[folder.name] != value) {
         conflicting.add(folder.name);
       }

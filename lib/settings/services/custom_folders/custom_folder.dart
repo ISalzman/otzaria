@@ -160,15 +160,20 @@ class CustomFoldersManager {
     return folders.where((f) => f.path != path).toList();
   }
 
-  /// קביעת חריגת מיזוג לתיקייה. [mergeIntoLibrary] `null` מחזיר אותה
-  /// לברירת המחדל הגלובלית.
+  /// קביעת חריגת המיזוג לכל התיקיות שחולקות קטגוריית-שורש.
   static List<CustomFolder> updateFolderMergeSetting(
     List<CustomFolder> folders,
     String path,
     bool? mergeIntoLibrary,
   ) {
+    final folderName = folders
+        .where((folder) => folder.path == path)
+        .firstOrNull
+        ?.name;
+    if (folderName == null) return folders;
+
     return folders.map((f) {
-      if (f.path != path) return f;
+      if (f.name != folderName) return f;
       return f.copyWith(
         mergeIntoLibrary: mergeIntoLibrary,
         clearMergeIntoLibrary: mergeIntoLibrary == null,

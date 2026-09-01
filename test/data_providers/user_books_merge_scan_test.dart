@@ -330,4 +330,101 @@ void main() {
       );
     },
   );
+
+  test(
+    'תיקיות בעלות אותו שם עם מצבי מיזוג חלוקים חוזרות לברירת המחדל',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria_user_books_merge_same_name',
+      );
+      final libraryPath = path.join(tempDir.path, 'library');
+      final dataRootPath = path.join(tempDir.path, 'data_root');
+      final dbPath = path.join(libraryPath, DatabaseConstants.databaseFileName);
+      final database = MyDatabase.withPath(dbPath);
+      final repository = SeforimRepository(database);
+      final provider = DatabaseLibraryProvider.instance;
+      final previousDataRootPath = AppPaths.cachedDataRootPath;
+
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => database.close());
+      addTearDown(() => provider.clearCache());
+      addTearDown(() => provider.sqliteProvider.dispose());
+      addTearDown(
+        () => AppPaths.debugOverrideDataRootPath(previousDataRootPath),
+      );
+      addTearDown(() => UserBooksDatabaseHolder.instance.close());
+      addTearDown(() async {
+        await Settings.setValue<bool>(
+          SettingsRepository.keyMergeUserBooksIntoLibrary,
+          false,
+        );
+      });
+
+      await Directory(libraryPath).create(recursive: true);
+      await provider.sqliteProvider.dispose();
+      provider.clearCache();
+      await UserBooksDatabaseHolder.instance.close();
+      AppPaths.debugOverrideDataRootPath(dataRootPath);
+      await repository.ensureInitialized();
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryPath,
+        libraryPath,
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyLibraryFolderName,
+        '',
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyDbEffectivePath,
+        '',
+      );
+      await Settings.setValue<bool>(
+        SettingsRepository.keyMergeUserBooksIntoLibrary,
+        true,
+      );
+
+      final pickedFolder = Directory(
+        path.join(tempDir.path, 'alpha', 'shared'),
+      );
+      final unmatchedDir = Directory(path.join(pickedFolder.path, 'שיעורים'));
+      await unmatchedDir.create(recursive: true);
+      await File(
+        path.join(unmatchedDir.path, 'שיעור שבועי.txt'),
+      ).writeAsString('שורה ראשונה\nשורה שניה\n');
+
+      await Settings.setValue<String>(
+        SettingsRepository.keyCustomFolders,
+        CustomFoldersManager.saveFolders([
+          CustomFolder(
+            path: pickedFolder.path,
+            mergeIntoLibrary: false,
+            addedAt: DateTime(2026, 1, 1),
+          ),
+          CustomFolder(
+            path: path.join(tempDir.path, 'beta', 'shared'),
+            addedAt: DateTime(2026, 1, 2),
+          ),
+        ]),
+      );
+
+      final userBooksRepository =
+          await UserBooksDatabaseHolder.instance.repository;
+      final scanResult = await provider.scanAndAddExternalBooksFromFolder(
+        pickedFolder.path,
+        'shared',
+        userBooksRepository,
+      );
+      expect(scanResult.fatalError, isNull);
+
+      await provider.initialize();
+      final library = await provider.buildLibraryCatalog({}, libraryPath);
+
+      expect(library.subCategories.map((c) => c.title), contains('שיעורים'));
+      expect(
+        library.subCategories.where((c) => c.title == 'ספרים אישיים'),
+        isEmpty,
+      );
+    },
+  );
 }

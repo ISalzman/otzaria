@@ -352,5 +352,31 @@ void main() {
       expect(updated.first.mergeIntoLibrary, isNull);
       expect(updated.last.mergeIntoLibrary, isTrue);
     });
+
+    test('updateFolderMergeSetting מעדכן תיקיות בעלות אותו שם-בסיס יחד', () {
+      final folders = [
+        CustomFolder(
+          path: '/alpha/shared',
+          mergeIntoLibrary: true,
+          addedAt: DateTime(2026),
+        ),
+        CustomFolder(path: '/beta/shared', addedAt: DateTime(2026)),
+        CustomFolder(
+          path: '/gamma/other',
+          mergeIntoLibrary: true,
+          addedAt: DateTime(2026),
+        ),
+      ];
+
+      final updated = CustomFoldersManager.updateFolderMergeSetting(
+        folders,
+        '/alpha/shared',
+        false,
+      );
+
+      expect(updated[0].mergeIntoLibrary, isFalse);
+      expect(updated[1].mergeIntoLibrary, isFalse);
+      expect(updated[2].mergeIntoLibrary, isTrue);
+    });
   });
 }
