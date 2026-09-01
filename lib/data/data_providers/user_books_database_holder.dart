@@ -48,6 +48,8 @@ class UserBooksDatabaseHolder {
     final db = MyDatabase.withPath(dbPath);
     final repo = SeforimRepository(db);
     await repo.ensureInitialized();
+    // ספרים אישיים שנוצרו לפני אינדקס ההפניות — בנייה חד-פעמית.
+    await repo.backfillMissingLineRefIndexes();
     _database = db;
     _repository = repo;
     return repo;

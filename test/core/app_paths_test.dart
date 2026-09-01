@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -21,6 +22,38 @@ void main() {
     AppPaths.debugOverrideResolvedExecutable(null);
     AppPaths.debugOverrideDocumentsRootPath(null);
     Settings.clearCache();
+  });
+
+  group('רישום נתיב הספרייה עבור ה-uninstaller (issue #1020)', () {
+    test(
+      'הנתיב הפעיל נכתב לקובץ, עם BOM שמאפשר קריאת עברית ב-Inno',
+      () async {
+        final dataRoot = await Directory.systemTemp.createTemp('otzaria_rec_');
+        addTearDown(() async {
+          if (await dataRoot.exists()) await dataRoot.delete(recursive: true);
+        });
+        AppPaths.debugOverrideDataRootPath(dataRoot.path);
+
+        final library = p.join(dataRoot.path, 'ספרים');
+        await Directory(library).create(recursive: true);
+        await Settings.setValue(SettingsRepository.keyLibraryPath, library);
+
+        await AppPaths.recordLibraryPathForUninstaller();
+
+        final record = File(
+          p.join(dataRoot.path, AppPaths.libraryPathRecordFileName),
+        );
+        expect(await record.exists(), isTrue);
+        final bytes = await record.readAsBytes();
+        expect(
+          bytes.take(3),
+          [0xEF, 0xBB, 0xBF],
+          reason: 'בלי BOM, LoadStringsFromFile קורא ANSI ושובר נתיב בעברית',
+        );
+        expect(utf8.decode(bytes.skip(3).toList()), library);
+      },
+      skip: !Platform.isWindows,
+    );
   });
 
   group('AppPaths backup paths', () {

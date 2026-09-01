@@ -27,8 +27,8 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../test_helpers/memory_cache_provider.dart';
 
-/// הגדרת "רוחב הטקסט" חלה בצורת הדף על כל תוכן הדף (טקסט + מפרשים),
-/// כך שנשארים שוליים בצדדים והדף ממורכז (issue #889).
+/// הגדרת "רוחב הטקסט" חלה בצורת הדף רק כשהמתג בהגדרות צורת הדף דלוק —
+/// ואז על כל תוכן הדף, ממורכז עם שוליים (issue #889, מתג מ-issue #1005).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -73,7 +73,12 @@ void main() {
   Future<void> pumpScreen(
     WidgetTester tester, {
     required double textMaxWidth,
+    bool applyTextMaxWidth = true,
   }) async {
+    await Settings.setValue<bool>(
+      'page_shape_apply_text_max_width',
+      applyTextMaxWidth,
+    );
     tester.view.physicalSize = const Size(screenWidth, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -141,6 +146,15 @@ void main() {
     expect(rect.width, lessThanOrEqualTo(screenWidth * 0.45 + 1));
     // ממורכז: שוליים דומים משני הצדדים.
     expect((rect.left - (screenWidth - rect.right)).abs(), lessThan(40));
+  });
+
+  testWidgets('המתג כבוי (ברירת המחדל) — ההגדרה אינה חלה על הדף', (
+    tester,
+  ) async {
+    await pumpScreen(tester, textMaxWidth: -11, applyTextMaxWidth: false);
+
+    final size = tester.getSize(find.byType(SimpleTextViewer));
+    expect(size.width, greaterThan(screenWidth * 0.9));
   });
 }
 

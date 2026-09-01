@@ -90,7 +90,7 @@ void main() {
     ),
   );
 
-  Future<void> insertCommentaryLink({
+  Future<int> insertCommentaryLink({
     required int sourceBookId,
     required int sourceLineId,
     required int targetBookId,
@@ -104,7 +104,7 @@ void main() {
     final connectionTypeId = await repository.getOrCreateConnectionType(
       connectionTypeName,
     );
-    await database.linkDao.insertLink(
+    return database.linkDao.insertLink(
       Link(
         id: 0,
         sourceBookId: sourceBookId,
@@ -114,6 +114,26 @@ void main() {
         connectionType: ConnectionType.commentary,
       ),
       connectionTypeId,
+    );
+  }
+
+  Future<void> enableSideVisibility() async {
+    final db = await database.database;
+    db.execute('''
+      CREATE TABLE link_suppressed_side (
+        linkId INTEGER NOT NULL,
+        side INTEGER NOT NULL,
+        reasonMask INTEGER NOT NULL,
+        PRIMARY KEY (linkId, side)
+      )
+    ''');
+  }
+
+  Future<void> suppressSourceSide(int linkId) async {
+    final db = await database.database;
+    db.execute(
+      'INSERT INTO link_suppressed_side VALUES (?, 0, 1)',
+      [linkId],
     );
   }
 
@@ -391,6 +411,75 @@ void main() {
       expect(rows, hasLength(1), reason: 'ספר ללא TOC פנימי מציג את כל מפרשיו');
       expect(rows.first['targetBookTitle'], 'רש"י על ברכות');
       expect(rows.first['targetLineIndex'], 1);
+    });
+  });
+
+  group('נראות מפרשים בסכמה 3', () {
+    test('שלוש שאילתות המפרשים מתעלמות מצד מקור מדוכא', () async {
+      final source = await buildSourceBook();
+      final rashi = await buildRashiBook();
+      await enableSideVisibility();
+
+      final suppressedLinkId = await insertCommentaryLink(
+        sourceBookId: source.bookId,
+        sourceLineId: source.lineIds[0],
+        targetBookId: rashi.bookId,
+        targetLineId: rashi.lineIds[0],
+      );
+      final visibleLinkId = await insertCommentaryLink(
+        sourceBookId: source.bookId,
+        sourceLineId: source.lineIds[1],
+        targetBookId: rashi.bookId,
+        targetLineId: rashi.lineIds[2],
+      );
+      await suppressSourceSide(suppressedLinkId);
+
+      final byBook = await database.linkDao.selectCommentatorsByBook(
+        source.bookId,
+      );
+      final byRange = await database.linkDao.selectCommentatorsByLineRange(
+        source.bookId,
+        0,
+        4,
+      );
+      final links = await database.linkDao.selectCommentaryLinksByLineRange(
+        source.bookId,
+        0,
+        4,
+        -1,
+        0,
+      );
+
+      expect(byBook.single['linkCount'], 1);
+      expect(byRange.single['linkCount'], 1);
+      expect(byRange.single['targetLineIndex'], 2);
+      expect(links.single['minTargetLineIndex'], 2);
+      expect(links.single['maxTargetLineIndex'], 2);
+      expect(links.single['exactTargetLineIndex'], isNull);
+
+      await suppressSourceSide(visibleLinkId);
+      expect(
+        await database.linkDao.selectCommentatorsByBook(source.bookId),
+        isEmpty,
+      );
+      expect(
+        await database.linkDao.selectCommentatorsByLineRange(
+          source.bookId,
+          0,
+          4,
+        ),
+        isEmpty,
+      );
+      expect(
+        await database.linkDao.selectCommentaryLinksByLineRange(
+          source.bookId,
+          0,
+          4,
+          -1,
+          0,
+        ),
+        isEmpty,
+      );
     });
   });
 }

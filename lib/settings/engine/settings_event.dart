@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 abstract class SettingsEvent extends Equatable {
   const SettingsEvent();
@@ -161,6 +162,15 @@ class UpdateReplaceHolyNames extends SettingsEvent {
 
   @override
   List<Object?> get props => [replaceHolyNames];
+}
+
+class UpdateHolyNameStyle extends SettingsEvent {
+  final HolyNameStyle holyNameStyle;
+
+  const UpdateHolyNameStyle(this.holyNameStyle);
+
+  @override
+  List<Object?> get props => [holyNameStyle];
 }
 
 class UpdateAutoUpdateIndex extends SettingsEvent {

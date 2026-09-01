@@ -80,6 +80,9 @@ Type: filesandordirs; Name: "{app}\default.isar";
 ; המסמן נכתב רק בהתקנת מנהל (ראה [INI]) והאפליקציה גוזרת ממנו את מיקום
 ; ברירת המחדל של הספרייה — מסמן ששרד מעבר להתקנת משתמש מפנה אותה ל-ProgramData.
 Type: files; Name: "{app}\system_install.marker"; Check: (not IsAdminInstallMode) or IsPortableInstall
+; המסמן מפעיל את המצב הנייד ומפנה את כל הנתונים ל-otzaria_data ליד ה-EXE — מסמן ששרד
+; מעבר להתקנה רגילה משאיר את הנתונים תחת Program Files, שאינה כתיבה (issue #1031).
+Type: files; Name: "{app}\portable.marker"; Check: not IsPortableInstall
 ; אין כאן מחיקה של תיקיית הספרים: בשני מצבי הבנייה הספרייה מוחלפת רק אחרי
 ; חילוץ מלא ומוצלח ל-staging — מחיקה מוקדמת השאירה משדרגים בלי ספרייה (issue #867).
 
@@ -114,6 +117,8 @@ const
   UninstallRegKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
   SystemEnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
   UserEnvironmentKey = 'Environment';
+  // האפליקציה רושמת כאן את נתיב הספרייה הפעיל (lib/core/app_paths.dart).
+  LibraryPathRecordFileName = 'library_path.txt';
 
 var
   CompPage: TWizardPage;
@@ -628,12 +633,33 @@ end;
 // כפי שנשמר ב-shared_preferences.json תחת המפתח flutter.key-library-path.
 // משתמש בעוזרי ה-JSON הקיימים (LoadTextFile, FindJsonStringEnd) ובפענוח
 // escapes ה-JSON בסיסי שתואם ל-EscapeJsonString.
+// קורא את נתיב הספרייה שהאפליקציה רשמה תחת [DataRoot]. ההגדרות עצמן
+// יושבות ב-Hive בינארי שהמתקין אינו יכול לקרוא, ולכן זה המקור
+// לנתיב שהמשתמש שינה מתוך התוכנה (issue #1020).
+function ReadLibraryPathRecord(const DataRoot: String): String;
+var
+  RecordFile: String;
+begin
+  Result := '';
+  if DataRoot = '' then
+    exit;
+  RecordFile := AddBackslash(DataRoot) + LibraryPathRecordFileName;
+  if not FileExists(RecordFile) then
+    exit;
+  Result := Trim(LoadTextFile(RecordFile));
+  if (Result <> '') and (Result[1] = #$FEFF) then
+    Delete(Result, 1, 1);
+end;
+
 function GetCustomLibraryPath(): String;
 var
   PrefsFile, JsonContent, KeyStr, Value: String;
   KeyPos, ValueStart, ValueEnd: Integer;
 begin
-  Result := '';
+  Result := ReadLibraryPathRecord(ExpandConstant('{userappdata}\otzaria'));
+  if Result <> '' then
+    exit;
+
   PrefsFile := ExpandConstant('{userappdata}\otzaria\shared_preferences.json');
   if not FileExists(PrefsFile) then
     exit;
@@ -1280,6 +1306,33 @@ end;
 function PrepareIndexedLibrary(): Boolean; forward;
 #endif
 
+function IsPathUnder(Target: String; Root: String): Boolean;
+begin
+  Result := (Root <> '') and (Pos(Lowercase(AddBackslash(Root)), Target) = 1);
+end;
+
+// תיקיות מערכת שאינן כתיבות למשתמש רגיל. במצב נייד כל הנתונים נשמרים
+// בתיקיית התוכנה, ושם הם נחסמים — כולל תיקיית ה-WebView2 של התוספים
+// (issue #1031).
+function IsProtectedInstallDir(Path: String): Boolean;
+var
+  Target: String;
+begin
+  Target := Lowercase(AddBackslash(RemoveBackslash(Path)));
+  Result := IsPathUnder(Target, ExpandConstant('{commonpf}')) or
+            IsPathUnder(Target, ExpandConstant('{commonpf32}')) or
+            IsPathUnder(Target, ExpandConstant('{win}')) or
+            IsPathUnder(Target, ExpandConstant('{commonappdata}'));
+end;
+
+procedure WarnPortableProtectedDir();
+begin
+  MsgBox('התקנה ניידת שומרת את כל הנתונים בתיקיית התוכנה, ולתיקייה ' +
+         'שנבחרה אין הרשאת כתיבה למשתמש רגיל.' + #13#10 +
+         'בחר תיקייה אחרת — למשל בתיקיית המסמכים או בכונן נייד — ' +
+         'או חזור ובחר התקנה רגילה.', mbError, MB_OK);
+end;
+
 // שמירת בחירות בלחיצת "הבא". בעמוד סוג ההתקנה: קיבוע המצב, התאמת ברירת
 // המחדל של תיקיית היעד, ובמעבר בין משתמש-נוכחי לכל-המשתמשים — שיגור-מחדש
 // במצב ההתקנה המתאים (מצב ההתקנה של Inno נקבע בעליית התהליך).
@@ -1297,6 +1350,14 @@ begin
     if CurPageID = wpReady then
       Result := PrepareIndexedLibrary();
 #endif
+    exit;
+  end;
+
+  if (CurPageID = wpSelectDir) and PortableMode and
+     IsProtectedInstallDir(WizardForm.DirEdit.Text) then
+  begin
+    WarnPortableProtectedDir();
+    Result := False;
     exit;
   end;
 
@@ -2011,6 +2072,7 @@ begin
 
   // הערה: C:\אוצריא לא נמחק כאן כי זה היה נתיב התקנה legacy (לא נתונים).
   // אם נשארה שם התקנה ישנה — היא תוסר על ידי ה-uninstaller שלה.
+
 end;
 
 // שאלה בתחילת ההסרה: האם למחוק גם את הנתונים והספרים?
@@ -2070,10 +2132,20 @@ end;
 // מסיר התקנת אוצריא שנותרה רשומה בהיקף אחר (issue #886): רשומה בנתיב אחר
 // מוסרת דרך ה-uninstaller שלה (מוחק גם קבצים וקיצורים שאחרת ימשיכו להריץ
 // בינארי ישן); רשומה שמצביעה על {app} נמחקת מהרישום בלבד — הקבצים שלנו.
-procedure RemoveStaleScopeRegistration(RootKey: Integer);
+// /CROSSSCOPE מסמן ל-uninstaller שהוא הופעל מהיקף אחר — בלעדיו שני
+// ה-uninstallers היו מנקים זה את רשומת זה ונתקעים זה על זה.
+function IsCrossScopeUninstall(): Boolean;
+begin
+  Result := ExpandConstant('{param:CROSSSCOPE|0}') <> '0';
+end;
+
+// [Elevate] נדרש כשהרשומה שייכת להתקנת מנהל ואנחנו רצים כמשתמש רגיל —
+// ה-uninstaller שלה דורש הגבהה, ו-Exec רגיל עליו נכשל.
+procedure RemoveStaleScopeRegistration(RootKey: Integer; Elevate: Boolean);
 var
-  StaleDir, UninstallExe: String;
+  StaleDir, UninstallExe, Args: String;
   ResultCode: Integer;
+  Started: Boolean;
 begin
   if not RegKeyExists(RootKey, UninstallRegKey) then
     exit;
@@ -2084,12 +2156,20 @@ begin
      RegQueryStringValue(RootKey, UninstallRegKey, 'UninstallString', UninstallExe) then
   begin
     UninstallExe := RemoveQuotes(Trim(UninstallExe));
-    if FileExists(UninstallExe) and
-       Exec(UninstallExe, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
-         SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Args := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CROSSSCOPE=1';
+    if FileExists(UninstallExe) then
     begin
-      Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
-      exit;
+      if Elevate then
+        Started := ShellExec('runas', UninstallExe, Args, '',
+          SW_HIDE, ewWaitUntilTerminated, ResultCode)
+      else
+        Started := Exec(UninstallExe, Args, '',
+          SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      if Started then
+      begin
+        Log(Format('Removed stale install at %s (exit code %d)', [StaleDir, ResultCode]));
+        exit;
+      end;
     end;
   end;
 
@@ -2102,10 +2182,20 @@ end;
 // הנגדי אינו מנוקה בהתקנת משתמש — מחיקה ב-HKLM דורשת הרשאות מנהל.
 procedure RemoveOtherScopeInstalls();
 begin
-  if PortableMode or (not IsAdminInstallMode) then
+  if PortableMode then
     exit;
-  RemoveStaleScopeRegistration(HKCU);
-  RemoveStaleScopeRegistration(HKLM32);
+  if IsAdminInstallMode then
+  begin
+    RemoveStaleScopeRegistration(HKCU, False);
+    RemoveStaleScopeRegistration(HKLM32, False);
+  end
+  else
+  begin
+    // הכיוון ההפוך (issue #1020): התקנת משתמש מעל התקנת מנהל השאירה עד
+    // כה שתי רשומות מקבילות, והתוכנה הופיעה פעמיים.
+    RemoveStaleScopeRegistration(HKLM64, True);
+    RemoveStaleScopeRegistration(HKLM32, True);
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -2119,8 +2209,17 @@ begin
       RemoveAppFromPathValue(HKLM, SystemEnvironmentKey, ExpandConstant('{app}'));
     if DeleteUserDataOnUninstall then
       DeleteAllUserData();
+    // הסרה בהיקף אחד מסירה גם התקנה שנשארה בהיקף הנגדי (issue #1020).
+    if not IsCrossScopeUninstall() then
+    begin
+      if IsAdminInstallMode then
+        RemoveStaleScopeRegistration(HKCU, False)
+      else
+        RemoveStaleScopeRegistration(HKLM64, True);
+    end;
   end;
 end;
+
 
 // איפוס הרסני לא רץ בשדרוג שקט מבחירה שנשמרה ברישום (issue #941) —
 // בריצה שקטה הוא דורש /TASKS או /MERGETASKS מפורש בשורת הפקודה.
@@ -2266,7 +2365,9 @@ end;
 ; שתקועים עם MSVCP140.dll 14.36.32532.0 הפגום, בלי הרצת installer נוסף.
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "מתקין Microsoft WebView2 Runtime..."; Flags: waituntilterminated; Check: ShouldInstallWV2
 ; בהתקנה שקטה ההשקה מתבצעת בקוד בסוף ssPostInstall (ראה CurStepChanged).
-Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; runasoriginaluser: בלעדיו ההשקה מדף הסיום רצה מורמת ויוצרת את תיקיות הנתונים
+; עם ACL של מנהל — WebView2 של התוספים נכשל אז בכתיבה (issue #1031).
+Filename: "{app}\{#MyAppExeName}"; Description: "הפעל את {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "Otzaria.Otzaria"; Check: not IsPortableInstall

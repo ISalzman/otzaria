@@ -77,11 +77,15 @@ class ShortcutHelper {
   }) {
     if (event is! KeyDownEvent) return false;
 
-    final parts = shortcutSetting.toLowerCase().split('+');
+    final normalized = normalizeShortcut(shortcutSetting);
+    if (normalized == null || normalized.isEmpty) return false;
+    final parts = normalized.split('+');
     final hasCtrlToken = parts.contains('ctrl') || parts.contains('control');
     final hasMetaToken = parts.contains('meta');
     final requiresShift = parts.contains('shift');
     final requiresAlt = parts.contains('alt');
+    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
+    if (mainKey == null) return false;
 
     // ב-Mac גם `ctrl` וגם `meta` בקיצור שמור משויכים לפעולת Command. מצב
     // מקש Control הפיזי לא נבדק כלל — מאחד את הסמנטיקה ומונע אי-עקביות
@@ -107,15 +111,16 @@ class ShortcutHelper {
     if (requiresCtrl != null && requiresCtrl != effectiveControlPressed) {
       return false;
     }
-    if (requiresShift != shiftPressed) {
+    // '+' בשורה הראשית נשלח כ-Shift+Equal; קיצור שמור של + או = מקבל אותו.
+    final isShiftedPrimaryPlus =
+        shiftPressed &&
+        event.physicalKey == PhysicalKeyboardKey.equal &&
+        (mainKey == 'equal' || mainKey == 'plus');
+    if (requiresShift != shiftPressed && !isShiftedPrimaryPlus) {
       return false;
     }
     if (requiresAlt != effectiveAltPressed) return false;
     if (requiresMeta != metaPressed) return false;
-
-    // מציאת המקש הראשי (לא modifier)
-    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
-    if (mainKey == null) return false;
 
     // אות יחידה (a–z) — בודקים לפי physicalKey כדי לתמוך
     // בפריסות מקלדת לא-לטיניות (כגון עברית) שבהן logicalKey שונה.
@@ -131,7 +136,10 @@ class ShortcutHelper {
 
     // חיפוש ב-KeyMap (ספרות, מקשים מיוחדים, חצים, F-keys וכו׳)
     final expectedKey = KeyMap.keyFor(mainKey);
-    return expectedKey != null && event.logicalKey == expectedKey;
+    if (expectedKey == null) return false;
+    if (event.logicalKey == expectedKey) return true;
+
+    return KeyMap.equivalentKeysFor(mainKey).contains(event.logicalKey);
   }
 
   /// האם [shortcut] ניתן לזיהוי בפועל — כלומר המקש הראשי שבו מוכר ל-
@@ -139,19 +147,71 @@ class ShortcutHelper {
   ///
   /// קיצור שהוקלט בפריסה לא-לטינית לפני שההקלטה נורמלה נשמר עם התו המקומי
   /// (`ctrl+shift+כ`) ולכן לעולם אינו נתפס — כזה מוחזר כאן כלא-מוכר.
-  static bool isRecognized(String shortcut) {
-    if (shortcut.isEmpty) return true;
+  static bool isRecognized(String shortcut) =>
+      normalizeShortcut(shortcut) != null;
 
-    final parts = shortcut.toLowerCase().split('+');
-    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
-    if (mainKey == null) return false;
+  /// מנרמל קיצור לפורמט הקנוני או מחזיר `null` כשהתחביר אינו חד-משמעי.
+  ///
+  /// בדיוק מקש ראשי אחד מותר, וכל modifier מופיע לכל היותר פעם אחת. כך
+  /// קיצור שמאוחסן/מושווה תמיד מתאר בדיוק את אותו אירוע מקלדת שהוא תופס.
+  static String? normalizeShortcut(String shortcut) {
+    final value = _plusKeyToToken(shortcut.trim());
+    if (value.isEmpty) return '';
 
+    final parts = value.toLowerCase().split('+');
+    if (parts.any((part) => part.isEmpty)) return null;
+
+    final ctrlLikeCount = parts
+        .where((part) => part == 'ctrl' || part == 'control')
+        .length;
+    final metaCount = parts.where((part) => part == 'meta').length;
+    if (ctrlLikeCount > 1 || metaCount > 1) return null;
+
+    String? mainKey;
+    final modifiers = <String>{};
+    for (final part in parts) {
+      final modifier = part == 'control' || (_treatCtrlAsMeta && part == 'meta')
+          ? 'ctrl'
+          : part;
+      if (_modifiers.contains(part)) {
+        if (!modifiers.add(modifier) &&
+            !(_treatCtrlAsMeta &&
+                modifier == 'ctrl' &&
+                ctrlLikeCount == 1 &&
+                metaCount == 1)) {
+          return null;
+        }
+      } else if (mainKey == null) {
+        mainKey = part;
+      } else {
+        return null;
+      }
+    }
+    if (mainKey == null || !_isKnownMainKey(mainKey)) return null;
+
+    return [
+      for (final modifier in const ['ctrl', 'shift', 'alt', 'meta'])
+        if (modifiers.contains(modifier)) modifier,
+      mainKey,
+    ].join('+');
+  }
+
+  /// ממיר מקש '+' שנכתב כתו גולמי ל-token `plus`, כדי שלא יתנגש במפריד
+  /// של פורמט הקיצורים (`ctrl++` → `ctrl+plus`).
+  static String _plusKeyToToken(String value) {
+    if (value == '+') return 'plus';
+    if (value.endsWith('++')) {
+      return '${value.substring(0, value.length - 2)}+plus';
+    }
+    return value;
+  }
+
+  static bool _isKnownMainKey(String mainKey) {
     if (mainKey.length == 1 &&
         mainKey.codeUnitAt(0) >= 97 &&
         mainKey.codeUnitAt(0) <= 122) {
       return true;
     }
-
     return KeyMap.keyFor(mainKey) != null;
   }
 
@@ -280,6 +340,19 @@ class ShortcutHelper {
       .replaceAll('ARROWRIGHT', '→')
       .replaceAll('PAGEUP', 'Page Up')
       .replaceAll('PAGEDOWN', 'Page Down')
+      .replaceAll('NUMPADADD', 'Numpad +')
+      .replaceAll('NUMPADSUBTRACT', 'Numpad -')
+      .replaceAll('NUMPADMULTIPLY', 'Numpad *')
+      .replaceAll('NUMPADDIVIDE', 'Numpad /')
+      .replaceAll('NUMPADDECIMAL', 'Numpad .')
+      .replaceAll('NUMPADENTER', 'Numpad Enter')
+      .replaceAllMapped(
+        RegExp(r'NUMPAD(\d)'),
+        (match) => 'Numpad ${match[1]}',
+      )
+      .replaceAll('PLUS', '+')
+      .replaceAll('MINUS', '-')
+      .replaceAll('EQUAL', '=')
       .replaceAll('COMMA', ',')
       .replaceAll('ENTER', 'Enter');
 
@@ -290,11 +363,40 @@ class ShortcutHelper {
   ///
   /// ב-Mac ה-token `ctrl` ממופה ל-`meta: true` כדי שמתפעלי קיצור (Flutter
   /// `Shortcuts` widget) יזהו לחיצת Command, אלא אם [mapCtrlToMeta] הוא false.
+  /// כל המפעילים שיש לרשום עבור [shortcut]: הצירוף עצמו, ובנוסף המקשים
+  /// המקבילים (לוח הספרות) — בסימטריה ל-[matchesShortcut].
+  static List<ShortcutActivator> activatorsFromShortcut(
+    String shortcut, {
+    bool mapCtrlToMeta = true,
+  }) {
+    final primary = activatorFromShortcut(
+      shortcut,
+      mapCtrlToMeta: mapCtrlToMeta,
+    );
+    if (primary == null) return const [];
+
+    final parts = normalizeShortcut(shortcut)!.split('+');
+    final mainKey = parts.where((p) => !_modifiers.contains(p)).firstOrNull;
+    if (mainKey == null) return [primary];
+
+    final modifiers = parts.where(_modifiers.contains);
+    return [
+      primary,
+      for (final equivalent in KeyMap.equivalentKeysFor(mainKey))
+        ?activatorFromShortcut(
+          [...modifiers, ?KeyMap.labelFor(equivalent)].join('+'),
+          mapCtrlToMeta: mapCtrlToMeta,
+        ),
+    ];
+  }
+
   static ShortcutActivator? activatorFromShortcut(
     String shortcut, {
     bool mapCtrlToMeta = true,
   }) {
-    final parts = shortcut.toLowerCase().split('+');
+    final normalized = normalizeShortcut(shortcut);
+    if (normalized == null || normalized.isEmpty) return null;
+    final parts = normalized.split('+');
     final hasCtrlToken = parts.contains('ctrl') || parts.contains('control');
     final hasMetaToken = parts.contains('meta');
     final hasShift = parts.contains('shift');

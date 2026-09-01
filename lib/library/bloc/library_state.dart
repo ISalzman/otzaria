@@ -8,6 +8,9 @@ class LibraryState extends Equatable {
   final String? error;
   final Category? currentCategory;
   final List<Book>? searchResults;
+
+  /// קטגוריות שכותרתן תואמת לשאילתה — קבוצת "תיקיות" אחרי הספרים בתוצאות.
+  final List<Category>? searchCategoryResults;
   final String? searchQuery;
   final List<String>? selectedTopics;
   final Book? previewBook;
@@ -34,6 +37,7 @@ class LibraryState extends Equatable {
     this.error,
     this.currentCategory,
     this.searchResults,
+    this.searchCategoryResults,
     this.searchQuery,
     this.selectedTopics,
     this.previewBook,
@@ -225,15 +229,18 @@ class LibraryState extends Equatable {
     );
   }
 
+  /// [clearPreviewBook] מאפס את התצוגה המקדימה; בלי הדגל null נשמר ב-copyWith.
   LibraryState copyWith({
     Library? library,
     bool? isLoading,
     String? error,
     Category? currentCategory,
     List<Book>? searchResults,
+    List<Category>? searchCategoryResults,
     String? searchQuery,
     List<String>? selectedTopics,
     Book? previewBook,
+    bool clearPreviewBook = false,
     List<Book>? newBooksToIndex,
     List<Book>? changedBooksToIndex,
     Set<int>? completedRefreshRequestIds,
@@ -246,9 +253,10 @@ class LibraryState extends Equatable {
       error: error ?? this.error,
       currentCategory: currentCategory ?? this.currentCategory,
       searchResults: searchResults,
+      searchCategoryResults: searchCategoryResults,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedTopics: selectedTopics ?? this.selectedTopics,
-      previewBook: previewBook ?? this.previewBook,
+      previewBook: clearPreviewBook ? null : (previewBook ?? this.previewBook),
       newBooksToIndex: newBooksToIndex, // null = אין ספרים לאינדוקס
       changedBooksToIndex: changedBooksToIndex, // null = אין ספרים שהשתנו
       completedRefreshRequestIds: completedRefreshRequestIds,
@@ -264,6 +272,7 @@ class LibraryState extends Equatable {
     error,
     currentCategory,
     searchResults,
+    searchCategoryResults,
     searchQuery,
     selectedTopics,
     previewBook,

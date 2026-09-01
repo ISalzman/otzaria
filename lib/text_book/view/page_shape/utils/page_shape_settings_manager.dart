@@ -1,4 +1,6 @@
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart'
+    as category_utils;
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 
 /// תחום השמירה של הגדרות התצוגה בצורת הדף.
@@ -9,15 +11,15 @@ enum PageShapeDisplaySettingsScope {
 }
 
 /// מנהל הגדרות צורת הדף - שומר ומטעין את בחירת המפרשים
-/// תומך בהגדרות גלובליות, הגדרות פר-קטגוריה, והגדרות פר-ספר (override)
 ///
-/// סדר עדיפות בטעינה: ספר ספציפי → קטגוריה → ברירת מחדל (JSON)
+/// סדר עדיפות בטעינה: ספר בשולחן העבודה → ספר → קטגוריה → ברירת מחדל (JSON)
 class PageShapeSettingsManager {
   // מפתחות גלובליים (להגדרות תצוגה בלבד - לא למפרשים!)
   static const String _globalHighlightKey = 'page_shape_global_highlight';
   static const String _globalVisibilityPrefix = 'page_shape_global_visibility_';
   static const String _commentaryFontSizeKey =
       'page_shape_commentary_font_size';
+  static const String _applyTextMaxWidthKey = 'page_shape_apply_text_max_width';
 
   // מפתחות פר-ספר
   static const String _bookConfigPrefix = 'page_shape_book_';
@@ -27,6 +29,7 @@ class PageShapeSettingsManager {
   static const String _bookViewModePrefix = 'page_shape_view_mode_';
 
   // מפתחות פר-שולחן עבודה
+  static const String _workspaceConfigPrefix = 'page_shape_ws_config_';
   static const String _workspaceHighlightPrefix =
       'page_shape_workspace_highlight_';
   static const String _workspaceVisibilityPrefix =
@@ -39,51 +42,17 @@ class PageShapeSettingsManager {
 
   static const double defaultCommentaryFontSize = 16.0;
 
-  // קטגוריות כלליות מדי שלא כדאי לשמור עליהן הגדרות
-  static const List<String> _tooGeneralCategories = [
-    'אוצריא',
-    'הלכה',
-    'מדרש',
-    'תנ"ך',
-    'תלמוד',
-    'קבלה',
-    'מוסר',
-    'מחשבה',
-    'שו"ת',
-  ];
-
   // ==================== עזר לקטגוריות ====================
+  // הלוגיקה המשותפת (פירוק heCategories, סינון קטגוריות כלליות) יושבת
+  // ב-category_settings_utils.dart ומשותפת גם למפרשים הקבועים לקטגוריה.
 
-  /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי)
-  /// למשל: "הלכה, משנה תורה, ספר מדע" → ["משנה תורה", "ספר מדע"]
-  /// אם אין קטגוריות אחרי הסינון, מחזיר את כל הקטגוריות (כולל הכלליות)
-  static List<String> parseCategories(String? heCategories) {
-    if (heCategories == null || heCategories.isEmpty) {
-      return [];
-    }
-    final allCategories = heCategories
-        .split(',')
-        .map((c) => c.trim())
-        .where((c) => c.isNotEmpty)
-        .toList();
-
-    final filtered = allCategories
-        .where((c) => !_tooGeneralCategories.contains(c))
-        .toList();
-
-    // אם הסינון הסיר הכל, החזר את הקטגוריות המקוריות
-    return filtered.isNotEmpty ? filtered : allCategories;
-  }
+  /// חילוץ רשימת קטגוריות מ-heCategories (מסנן קטגוריות כלליות מדי).
+  static List<String> parseCategories(String? heCategories) =>
+      category_utils.parseBookCategories(heCategories);
 
   /// קבלת קטגוריית האב הראשית (למשל "משנה תורה" מתוך "הלכה, משנה תורה, ספר מדע")
-  static String? getParentCategory(String? heCategories) {
-    final categories = parseCategories(heCategories);
-    // מחזיר את הקטגוריה הראשונה (אחרי סינון הכלליות)
-    if (categories.isNotEmpty) {
-      return categories[0]; // למשל "משנה תורה"
-    }
-    return null;
-  }
+  static String? getParentCategory(String? heCategories) =>
+      category_utils.parentBookCategory(heCategories);
 
   /// חילוץ שם בסיסי של מפרש (בלי שם הספר המפורש)
   /// למשל: "רמב"ן על ברכות" → "רמב"ן"
@@ -109,6 +78,19 @@ class PageShapeSettingsManager {
   static double getCommentaryFontSize() {
     return Settings.getValue<double>(_commentaryFontSizeKey) ??
         defaultCommentaryFontSize;
+  }
+
+  // ==================== החלת רוחב הטקסט (גלובלי) ====================
+
+  /// שמירת הבחירה אם הגדרת "רוחב הטקסט" תחול גם בצורת הדף
+  static Future<void> saveApplyTextMaxWidth(bool value) async {
+    await Settings.setValue<bool>(_applyTextMaxWidthKey, value);
+  }
+
+  /// ברירת המחדל כבויה: בצורת הדף כל תיבה צרה ממילא,
+  /// והצרה נוספת מבטלת את התצוגה במסכים קטנים (issue #1005).
+  static bool getApplyTextMaxWidth() {
+    return Settings.getValue<bool>(_applyTextMaxWidthKey) ?? false;
   }
 
   // ==================== בדיקה אם יש הגדרות פר-ספר ====================
@@ -166,12 +148,24 @@ class PageShapeSettingsManager {
 
   // ==================== הגדרות מפרשים ====================
 
-  /// טעינת הגדרות מפרשים - קודם ספר, אחר כך קטגוריה
-  /// סדר עדיפות: ספר ספציפי → קטגוריה → null (יטען מ-JSON)
+  /// מפתח בחירת המפרשים של ספר בשולחן עבודה מסוים.
+  static String _workspaceConfigKey(String workspaceId, String bookTitle) {
+    return '$_workspaceConfigPrefix${workspaceId}_$bookTitle';
+  }
+
+  /// טעינת הגדרות מפרשים - קודם שולחן העבודה, אחר כך ספר, אחר כך קטגוריה
+  /// סדר עדיפות: שולחן עבודה + ספר → ספר → קטגוריה → null (יטען מ-JSON)
   static Map<String, String?>? loadConfiguration(
     String bookTitle, {
     String? heCategories,
+    String? workspaceId,
   }) {
+    // 0. הגדרה לספר בשולחן העבודה הזה גוברת - היא הספציפית ביותר
+    final workspaceConfig = loadWorkspaceConfiguration(workspaceId, bookTitle);
+    if (workspaceConfig != null) {
+      return workspaceConfig;
+    }
+
     // 1. קודם בודקים אם יש הגדרות לספר הספציפי
     final bookConfig = _loadBookConfiguration(bookTitle);
     if (bookConfig != null) {
@@ -196,6 +190,36 @@ class PageShapeSettingsManager {
       '$_bookConfigPrefix$bookTitle',
     );
     return _parseConfiguration(savedConfig);
+  }
+
+  /// טעינת בחירת המפרשים של ספר בשולחן עבודה מסוים (null אם אין).
+  static Map<String, String?>? loadWorkspaceConfiguration(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    if (workspaceId == null || workspaceId.isEmpty) return null;
+    return _parseConfiguration(
+      Settings.getValue<String>(_workspaceConfigKey(workspaceId, bookTitle)),
+    );
+  }
+
+  /// האם לשולחן העבודה יש בחירת מפרשים משלו לספר זה.
+  static bool hasWorkspaceCommentatorConfig(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    return loadWorkspaceConfiguration(workspaceId, bookTitle) != null;
+  }
+
+  /// שולחן העבודה שאליו יש לשמור שינוי מפרשים, או null אם השמירה אינה
+  /// פר-שולחן. משמש למסלולי השמירה שאינם עוברים בפאנל ההגדרות.
+  static String? commentatorWorkspaceTarget(
+    String? workspaceId,
+    String bookTitle,
+  ) {
+    return hasWorkspaceCommentatorConfig(workspaceId, bookTitle)
+        ? workspaceId
+        : null;
   }
 
   /// טעינת הגדרות פר-קטגוריה
@@ -227,18 +251,8 @@ class PageShapeSettingsManager {
   }
 
   /// קבלת הקטגוריה שממנה נטענו ההגדרות (אם יש)
-  static String? getActiveCategory(String? heCategories) {
-    if (heCategories == null) return null;
-
-    final categories = parseCategories(heCategories);
-    for (int i = categories.length - 1; i >= 0; i--) {
-      final category = categories[i];
-      if (hasCategorySettings(category)) {
-        return category;
-      }
-    }
-    return null;
-  }
+  static String? getActiveCategory(String? heCategories) =>
+      category_utils.findActiveCategory(heCategories, hasCategorySettings);
 
   /// פענוח מחרוזת הגדרות
   static Map<String, String?>? _parseConfiguration(String? savedConfig) {
@@ -261,13 +275,19 @@ class PageShapeSettingsManager {
     return config;
   }
 
-  /// שמירת הגדרות מפרשים - לספר או לקטגוריה
+  /// שמירת הגדרות מפרשים - לספר, לשולחן עבודה או לקטגוריה
   static Future<void> saveConfiguration(
     String bookTitle,
     Map<String, String?> config, {
     String? saveToCategory, // אם מוגדר - שומר לקטגוריה במקום לספר
+    String? saveToWorkspaceId, // אם מוגדר - שומר לספר בשולחן עבודה זה
   }) async {
-    if (saveToCategory != null) {
+    if (saveToWorkspaceId != null && saveToWorkspaceId.isNotEmpty) {
+      await Settings.setValue<String>(
+        _workspaceConfigKey(saveToWorkspaceId, bookTitle),
+        _serializeConfiguration(config),
+      );
+    } else if (saveToCategory != null) {
       // שמירה לקטגוריה - שומרים רק את השמות הבסיסיים של המפרשים
       final baseConfig = config.map((key, value) {
         if (isPageShapeRemainingCommentatorsValue(value) ||
@@ -575,6 +595,18 @@ class PageShapeSettingsManager {
   /// איפוס הגדרות מפרשים פר-ספר בלבד
   static Future<void> resetBookCommentatorConfig(String bookTitle) async {
     await Settings.setValue<String?>('$_bookConfigPrefix$bookTitle', null);
+  }
+
+  /// איפוס בחירת המפרשים של ספר בשולחן עבודה מסוים.
+  static Future<void> resetWorkspaceCommentatorConfig(
+    String? workspaceId,
+    String bookTitle,
+  ) async {
+    if (workspaceId == null || workspaceId.isEmpty) return;
+    await Settings.setValue<String?>(
+      _workspaceConfigKey(workspaceId, bookTitle),
+      null,
+    );
   }
 
   /// איפוס הגדרות תצוגה פר-ספר בלבד (הדגשה ונראות טורים)

@@ -8,6 +8,48 @@ void main() {
     await resetSectionSearchWorkerForTesting();
   });
 
+  group('searchInContent - התאמה חלקית (issue #1046)', () {
+    test('"שמים" נמצא בתוך "השמים"', () async {
+      final results = await searchInContent(
+        content: ['בראשית ברא אלהים את השמים ואת הארץ'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.length, 1);
+      expect(results.first.snippet, contains('השמים'));
+    });
+
+    test('אותו חיפוש במצב מילים שלמות אינו מוצא', () async {
+      final results = await searchInContent(
+        content: ['בראשית ברא אלהים את השמים ואת הארץ'],
+        query: 'שמים',
+        patternSource: literalPatternSource('שמים'),
+      );
+      expect(results, isEmpty);
+    });
+
+    test('תוצאה לכל הופעה — שלמה וחלקית באותה שורה', () async {
+      final results = await searchInContent(
+        content: ['שמים ושמים והשמים'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.length, 3);
+    });
+
+    test('היסט ההתאמה מצביע על הופעה בתוך המילה', () async {
+      final results = await searchInContent(
+        content: ['את השמים'],
+        query: 'שמים',
+        wholeWord: false,
+        patternSource: literalPatternSource('שמים', wholeWord: false),
+      );
+      expect(results.single.matchOffset, 4);
+    });
+  });
+
   group('searchInContent - whole word matching', () {
     test('finds exact whole-word match', () async {
       final results = await searchInContent(
@@ -357,6 +399,75 @@ void main() {
     });
   });
 
+  group('searchInContent - תקרת התוצאות (issue #1053)', () {
+    test('מעל התקרה — מוחזרות 1000 ו-onTruncated מדווח true', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(1005, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(
+        truncated,
+        isTrue,
+        reason: 'החיפוש נעצר לפני סוף הספר — המסך חייב לדעת',
+      );
+    });
+
+    test('מתחת לתקרה — onTruncated מדווח false', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(5, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 5);
+      expect(truncated, isFalse);
+    });
+
+    test('בדיוק על התקרה — כל ההופעות נמצאו, לא מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(1000, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isFalse);
+    });
+
+    test('בדיוק על התקרה ואחריה שורות בלי התאמות — לא מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: [...List.filled(1000, 'שמע ישראל'), 'שורה ללא התאמה'],
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isFalse);
+    });
+
+    test('הופעות עודפות באותה שורה אחרונה — מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: [
+          ...List.filled(999, 'שמע ישראל'),
+          'שמע ואחר כך שמע ושוב שמע',
+        ],
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isTrue);
+    });
+  });
+
   group('matchFractionInLine', () {
     test('מילה בתחילת השורה — שבר 0', () {
       expect(
@@ -538,6 +649,18 @@ void main() {
           pattern: literalPattern('די'),
         ),
         isFalse,
+      );
+    });
+
+    test('במצב התאמה חלקית ההערה כן נספרת', () {
+      expect(
+        queryMatchesInlineNoteOnly(
+          noteLine,
+          'די',
+          wholeWord: false,
+          pattern: literalPattern('די', wholeWord: false),
+        ),
+        isTrue,
       );
     });
 

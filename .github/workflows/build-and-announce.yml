@@ -47,7 +47,7 @@ jobs:
     outputs:
       is_version: ${{ steps.check.outputs.is_version }}
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7.0.1
       - name: Check if commit message is a version tag
         id: check
         run: |
@@ -82,7 +82,7 @@ jobs:
     #   CARGO_HOME:  ${{ github.workspace }}\.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -112,7 +112,7 @@ jobs:
       #   uses: dtolnay/rust-toolchain@stable
 
       # - name: Cache cargo registry and git
-      #   uses: actions/cache@v4.2.3
+      #   uses: actions/cache@v6.1.0
       #   with:
       #     path: |
       #       ${{ env.CARGO_HOME }}\registry
@@ -153,6 +153,9 @@ jobs:
           if (-not $iscc) { throw "ISCC.exe not found after installation" }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
+
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
 
       - name: Prepare Flutter dependencies for Windows release
         shell: pwsh
@@ -260,7 +263,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release --verbose
+          flutter build windows --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
 
       - name: Zip Windows build
         shell: pwsh
@@ -499,25 +502,25 @@ jobs:
           }
 
       - name: Upload Windows installer (regular)
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-installer
           path: installer/otzaria-*-windows.exe
 
       - name: Upload Windows installer (full)
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-installer-full
           path: installer/otzaria-*-windows-full.exe
 
       - name: Upload Windows indexed installer tools
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-indexed-installer-tools
           path: indexed-installer-tools/*
 
       - name: Upload Windows ZIP
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-zip
           path: otzaria-windows.zip
@@ -532,7 +535,7 @@ jobs:
     runs-on: windows-11-arm
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       # אין חבילת SDK רשמית של Flutter ל-Windows-ARM במניפסט של flutter-action —
       # מתקינים מ-git באותו תג, כמו בלינוקס-ARM. ה-bootstrap מוריד Dart SDK
@@ -594,6 +597,9 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Prepare Flutter dependencies for Windows release
         shell: pwsh
         run: |
@@ -639,7 +645,7 @@ jobs:
           EnforceProcessCountAcrossBuilds: 'true'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: |
-          flutter build windows --release --verbose
+          flutter build windows --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
           if (-not (Test-Path 'build\windows\arm64\runner\Release\otzaria.exe')) {
             throw 'Expected an arm64 build output — the tool built a different architecture'
           }
@@ -662,13 +668,13 @@ jobs:
           }
 
       - name: Upload Windows ARM64 installer
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-arm64-installer
           path: installer/otzaria-*-windows-arm64.exe
 
       - name: Upload Windows ARM64 ZIP
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-arm64-zip
           path: otzaria-windows-arm64.zip
@@ -703,7 +709,7 @@ jobs:
       # הפלאגין jni דורש כותרות JDK בזמן CMake (ב-runner הרגיל JDK מותקן מראש)
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
     steps:
-      # חובה לפני actions/checkout: הקונטיינר מינימלי וחסרים בו git/curl/unzip/zstd.
+      # חובה לפני actions/checkout.0.1: הקונטיינר מינימלי וחסרים בו git/curl/unzip/zstd.
       # בלי git ה-checkout מוריד tarball בלי היסטוריה ושלב בדיקת הגרסה (git log) נשבר;
       # zstd נדרש ל-cache של actions וגם לחילוץ ה-SDK (tar.zst).
       - name: Prepare container base tools
@@ -717,7 +723,7 @@ jobs:
           # בלי wildcard כל פקודת git (כולל flutter עצמו) נופלת על dubious ownership.
           git config --global --add safe.directory '*'
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -787,7 +793,7 @@ jobs:
           rustup show
 
       - name: Cache cargo registry and git
-        uses: actions/cache@v4.2.3
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -957,9 +963,25 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
-      - name: Install flutter_distributor
+      - name: Install flutter_distributor (with retry)
         if: matrix.target == 'deb' || matrix.target == 'rpm'
-        run: dart pub global activate flutter_distributor
+        shell: bash
+        run: |
+          # pub.dev מחזיר לעיתים 401/403 חולף על חבילה ציבורית — retry פותר את זה
+          set -e
+          tries=0
+          until dart pub global activate flutter_distributor; do
+            tries=$((tries+1))
+            if [ $tries -ge 3 ]; then
+              echo "dart pub global activate failed after 3 attempts"
+              exit 1
+            fi
+            echo "pub activate failed. retry $tries/3 after short sleep..."
+            sleep 15
+          done
+
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
 
       - name: Prepare Flutter dependencies for Linux release
         shell: bash
@@ -1011,7 +1033,7 @@ jobs:
           : > "$GITHUB_WORKSPACE/build_linux.log"
           until [ $tries -ge 3 ]
           do
-            if flutter build linux --verbose 2>&1 | tee -a "$GITHUB_WORKSPACE/build_linux.log"; then
+            if flutter build linux --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }} 2>&1 | tee -a "$GITHUB_WORKSPACE/build_linux.log"; then
               break
             fi
             tries=$((tries+1))
@@ -1273,21 +1295,21 @@ jobs:
       
       - name: Upload Linux DEB package
         if: matrix.target == 'deb' && steps.find_packages.outputs.deb_file != ''
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-linux-deb${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: ${{ steps.find_packages.outputs.deb_file }}
           
       - name: Upload Linux RPM package
         if: github.event_name != 'pull_request' && matrix.target == 'rpm' && steps.find_packages.outputs.rpm_file != ''
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-linux-rpm${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: ${{ steps.find_packages.outputs.rpm_file }}
        
       - name: Upload linux build (raw)
         if: matrix.target == 'raw'
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-linux-raw${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: linux-build/*
@@ -1393,14 +1415,14 @@ jobs:
 
       - name: Upload Linux FULL bundle
         if: matrix.target == 'full'
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
           path: otzaria-linux-full${{ matrix.arch == 'aarch64' && '-arm64' || '' }}.tar.gz
 
       - name: Upload indexed FULL library parts
         if: matrix.target == 'full' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-library-full-indexed
           path: indexed-release-parts/*
@@ -1409,7 +1431,7 @@ jobs:
 
       - name: Upload indexed FULL manifest for installer build
         if: matrix.target == 'full' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-library-full-indexed-manifest
           path: indexed-release-parts/*.manifest.json
@@ -1423,7 +1445,7 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -1473,7 +1495,7 @@ jobs:
           rustup show
 
       - name: Cache Rust
-        uses: actions/cache@v4.2.3
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -1524,7 +1546,7 @@ jobs:
           echo "All Android Rust targets installed successfully"
 
       - name: Cache Gradle
-        uses: actions/cache@v4.2.3
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.gradle/caches
@@ -1534,7 +1556,7 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Cache Pub
-        uses: actions/cache@v4.2.3
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.pub-cache
@@ -1618,6 +1640,9 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
       
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
+
       - name: Build Android APK
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore/otzaria-keystore.jks
@@ -1629,7 +1654,7 @@ jobs:
           # Generate the settings .g.dart files: search index + translation catalog.
           dart run tool/generate_search_index.dart
           dart run tool/generate_settings_l10n.dart
-          flutter build apk --verbose
+          flutter build apk --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
           # ניקוי מיידי של קבצים מיותרים מהבנייה (לא ה-APK הסופי)
           rm -rf build/app/intermediates || true
           rm -rf build/app/.transforms || true
@@ -1637,7 +1662,7 @@ jobs:
           df -h
       
       - name: Upload apk
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-android.apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -1664,7 +1689,7 @@ jobs:
 
       - name: Upload Android FULL bundle
         if: true
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-android-full
           path: otzaria-android-full.zip
@@ -1686,7 +1711,7 @@ jobs:
       CARGO_HOME:  ${{ github.workspace }}/.cargo
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Check if commit message is a version tag
         id: check_version
@@ -1744,7 +1769,7 @@ jobs:
 
       # (רשות אבל מומלץ) קאשינג לספריות cargo כדי לזרז בניות
       - name: Cache cargo registry and git
-        uses: actions/cache@v4.2.3
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry
@@ -1752,6 +1777,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+
+      - name: Fetch biographies data
+        uses: ./.github/actions/fetch-biographies
 
       - name: Prepare Flutter dependencies for macOS release
         run: |
@@ -1769,7 +1797,7 @@ jobs:
           tries=0
           until [ $tries -ge 3 ]
           do
-            if flutter build macos --release --verbose; then
+            if flutter build macos --release --verbose --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}; then
               break
             fi
             tries=$((tries+1))
@@ -1910,21 +1938,21 @@ jobs:
 
       - name: Upload macOS DMG
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-macos.dmg
           path: otzaria-macos.dmg
 
       - name: Upload macOS update zip
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-macos-update
           path: otzaria-macos.zip
 
       - name: Upload macOS FULL bundle
         if: true
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-macos-full
           path: otzaria-macos-full.zip
@@ -1936,22 +1964,22 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Download Windows app bundle
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v8.0.1
         with:
           name: otzaria-windows-zip
           path: indexed-inputs/windows
 
       - name: Download indexed installer tools
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v8.0.1
         with:
           name: otzaria-windows-indexed-installer-tools
           path: indexed-inputs/tools
 
       - name: Download indexed library manifest
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v8.0.1
         with:
           name: otzaria-library-full-indexed-manifest
           path: indexed-inputs/library
@@ -2004,7 +2032,7 @@ jobs:
           }
 
       - name: Upload Windows indexed FULL bootstrap installer
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: otzaria-windows-installer-full-indexed
           path: installer/otzaria-*-windows-full-indexed.exe
@@ -2032,10 +2060,10 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
       
       - name: Download all artifacts
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v8.0.1
         with:
           path: artifacts
       
@@ -2290,6 +2318,8 @@ jobs:
                 -e 's/\]/\\]/g')
 
           cat > release-body.md <<EOF
+          <div dir="rtl">
+
           # ${RELEASE_TITLE}
 
           > **מה להוריד?**
@@ -2405,6 +2435,8 @@ jobs:
           - ענף: ${{ github.ref_name }}
 
           </details>
+
+          </div>
           EOF
 
           echo "Generated release notes:"
@@ -2412,7 +2444,7 @@ jobs:
       
       - name: Create Release
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ steps.version.outputs.tag }}
@@ -2440,10 +2472,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.13'
 

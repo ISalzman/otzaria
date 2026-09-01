@@ -681,6 +681,9 @@ class DatabaseGenerator {
       await repository.insertLinesBatch(linesBatch);
     }
 
+    // אינדקס ההפניות של הספר — כך רזולוציה לרמת שורה עובדת גם בספרים אישיים.
+    await repository.rebuildLineRefIndex(bookId);
+
     // ── PASS 2: Insert TOC entries in one transaction to get real DB IDs ──────
     // parentId/id are local indices; the repository resolves each child's parent
     // to its parent's real DB ID and returns the local→DB id mapping.

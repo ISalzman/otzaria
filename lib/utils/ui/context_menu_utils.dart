@@ -22,6 +22,13 @@ import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 
 /// פונקציות עזר לתפריטי הקשר במפרשים
+/// האם להציג את "העתק בלי ניקוד" עבור הבחירה — רק כשיש בה בפועל ניקוד
+/// או טעמים (issue #851). טקסט לא-מנוקד (גמרא, פוסקים) לא מקבל פריט סרק.
+bool showCopyWithoutNikud(String? selectedText) =>
+    selectedText != null &&
+    selectedText.trim().isNotEmpty &&
+    utils.hasNikud(selectedText);
+
 class ContextMenuUtils {
   static TextBook _targetBookFromLink(Link link) {
     return TextBook(
@@ -66,6 +73,7 @@ class ContextMenuUtils {
     required bool removePunctuation,
     String? savedSelectedText,
     required VoidCallback onCopySelected,
+    VoidCallback? onCopySelectedWithoutNikud,
     void Function(Link link)? onNavigateToLink,
     VoidCallback? onNoteSaved,
   }) {
@@ -100,6 +108,13 @@ class ContextMenuUtils {
             savedSelectedText != null && savedSelectedText.trim().isNotEmpty,
         onTap: onCopySelected,
       ),
+      if (onCopySelectedWithoutNikud != null &&
+          showCopyWithoutNikud(savedSelectedText))
+        AppContextMenuEntry(
+          label: 'העתק בלי ניקוד',
+          icon: FluentIcons.text_clear_formatting_24_regular,
+          onTap: onCopySelectedWithoutNikud,
+        ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
@@ -145,14 +160,17 @@ class ContextMenuUtils {
       ),
     ];
 
-    if (link.targetCategoryId != null) {
+    // רק מזהה הספר במסד מתאים ל-otzaria://open/book/<id>; בלעדיו (למשל
+    // קישור-משתמש, שמזהיו במסד נפרד) אין קישור ישיר תקף להציע.
+    final targetBookId = link.targetBookId;
+    if (targetBookId != null) {
       entries.add(const AppContextMenuEntry.divider());
       entries.add(
         AppContextMenuEntry(
           label: 'העתק קישור ישיר',
           icon: FluentIcons.link_24_regular,
           childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: link.targetCategoryId!,
+            bookId: targetBookId,
             index: link.index2 - 1,
             selectedText: savedSelectedText,
           ),
@@ -338,6 +356,7 @@ class ContextMenuUtils {
         plainText: finalText,
         htmlText: finalHtmlText,
         replaceHolyNames: settingsState.replaceHolyNames,
+        holyNameStyle: settingsState.holyNameStyle,
       );
 
       final htmlText = CopyUtils.buildStyledHtml(
@@ -373,11 +392,14 @@ class ContextMenuUtils {
   }
 
   /// העתקת טקסט מעוצב (HTML) ללוח
+  /// [removeNikud] — "העתק בלי ניקוד" (issue #851): מסיר ניקוד וטעמים
+  /// מהעותק בלבד, בלי לגעת בתצוגה.
   static Future<void> copyFormattedText({
     required BuildContext context,
     required String? savedSelectedText,
     required double fontSize,
     Link? link,
+    bool removeNikud = false,
   }) async {
     final plainText = savedSelectedText;
 
@@ -402,6 +424,7 @@ class ContextMenuUtils {
             fontFamily: settingsState.commentatorsFontFamily,
             fontSize: fontSize,
             headerBookOverride: _targetBookFromLink(link),
+            removeNikud: removeNikud,
           );
           return;
         }
@@ -409,6 +432,8 @@ class ContextMenuUtils {
         final finalPlainText = CopyUtils.applyCopyPreferences(
           text: plainText,
           replaceHolyNames: settingsState.replaceHolyNames,
+          holyNameStyle: settingsState.holyNameStyle,
+          removeNikud: removeNikud,
         );
 
         final htmlText = CopyUtils.buildStyledHtml(

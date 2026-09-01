@@ -19,6 +19,7 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 /// סוג שמירת הגדרות מפרשים
 enum CommentatorSaveScope {
   book, // לספר הנוכחי בלבד
+  workspace, // לספר הנוכחי בשולחן העבודה הנוכחי בלבד
   category, // לכל הספרים בקטגוריה
 }
 
@@ -71,6 +72,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
   String _bottomFontFamily = AppFonts.defaultFont;
   double _commentaryFontSize =
       PageShapeSettingsManager.defaultCommentaryFontSize;
+  bool _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
   List<CommentatorGroup> _groups = [];
   bool _isLoadingGroups = true;
   bool _highlightRelatedCommentators = false;
@@ -119,14 +121,18 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
     final activeCategory = PageShapeSettingsManager.getActiveCategory(
       widget.heCategories,
     );
-    if (activeCategory != null) {
+    _selectedCategory =
+        activeCategory ??
+        (_availableCategories.isNotEmpty ? _availableCategories.first : null);
+    if (PageShapeSettingsManager.hasWorkspaceCommentatorConfig(
+      widget.currentWorkspaceId,
+      widget.bookTitle,
+    )) {
+      _commentatorSaveScope = CommentatorSaveScope.workspace;
+    } else if (activeCategory != null) {
       _commentatorSaveScope = CommentatorSaveScope.category;
-      _selectedCategory = activeCategory;
     } else {
       _commentatorSaveScope = CommentatorSaveScope.book;
-      _selectedCategory = _availableCategories.isNotEmpty
-          ? _availableCategories.first
-          : null;
     }
 
     setState(() {
@@ -145,6 +151,7 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
           ) ??
           AppFonts.defaultFont;
       _commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
+      _applyTextMaxWidth = PageShapeSettingsManager.getApplyTextMaxWidth();
       _highlightRelatedCommentators =
           PageShapeSettingsManager.getHighlightSetting(
             widget.bookTitle,
@@ -178,7 +185,16 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
       'bottomRight': _bottomRightCommentator,
     };
 
-    if (_commentatorSaveScope == CommentatorSaveScope.category &&
+    if (_commentatorSaveScope == CommentatorSaveScope.workspace &&
+        _hasWorkspace) {
+      // שמירה לספר בשולחן העבודה הנוכחי - בלי לגעת בהגדרת הספר, כדי
+      // ששולחנות עבודה אחרים ימשיכו לראות את הבחירה שלהם.
+      await PageShapeSettingsManager.saveConfiguration(
+        widget.bookTitle,
+        config,
+        saveToWorkspaceId: widget.currentWorkspaceId,
+      );
+    } else if (_commentatorSaveScope == CommentatorSaveScope.category &&
         _selectedCategory != null) {
       // שמירה לקטגוריה
       await PageShapeSettingsManager.saveConfiguration(
@@ -255,6 +271,15 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
       _commentaryFontSize = value;
     });
     PageShapeSettingsManager.saveCommentaryFontSize(
+      value,
+    ).then((_) => widget.onSettingsChanged?.call());
+  }
+
+  void _onApplyTextMaxWidthChanged(bool value) {
+    setState(() {
+      _applyTextMaxWidth = value;
+    });
+    PageShapeSettingsManager.saveApplyTextMaxWidth(
       value,
     ).then((_) => widget.onSettingsChanged?.call());
   }
@@ -367,12 +392,54 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
     );
   }
 
+  List<SegmentOption<CommentatorSaveScope>> get _commentatorSaveScopeOptions {
+    return [
+      const SegmentOption(value: CommentatorSaveScope.book, label: 'ספר'),
+      if (_hasWorkspace)
+        const SegmentOption(
+          value: CommentatorSaveScope.workspace,
+          label: 'שולחן עבודה',
+        ),
+      if (_availableCategories.isNotEmpty)
+        const SegmentOption(
+          value: CommentatorSaveScope.category,
+          label: 'קטגוריה',
+        ),
+    ];
+  }
+
+  bool get _hasWorkspace =>
+      widget.currentWorkspaceId != null &&
+      widget.currentWorkspaceId!.isNotEmpty;
+
   String get _commentatorSaveScopeSubtitle {
+    if (_commentatorSaveScope == CommentatorSaveScope.workspace) {
+      return 'המפרשים יחולו על "${widget.bookTitle}" בשולחן העבודה הנוכחי בלבד';
+    }
     if (_commentatorSaveScope == CommentatorSaveScope.category &&
         _selectedCategory != null) {
       return 'המפרשים יחולו על כל ספרי "$_selectedCategory"';
     }
-    return 'המפרשים יחולו רק על "${widget.bookTitle}"';
+    return 'המפרשים יחולו על "${widget.bookTitle}" בכל שולחנות העבודה';
+  }
+
+  Future<void> _onCommentatorScopeChanged(CommentatorSaveScope scope) async {
+    if (scope == _commentatorSaveScope) return;
+
+    // יציאה מתחום שולחן העבודה מחייבת מחיקת ההגדרה שלו, אחרת היא ממשיכה
+    // לגבור על מה שנשמר עכשיו לספר או לקטגוריה.
+    if (_commentatorSaveScope == CommentatorSaveScope.workspace) {
+      await PageShapeSettingsManager.resetWorkspaceCommentatorConfig(
+        widget.currentWorkspaceId,
+        widget.bookTitle,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _commentatorSaveScope = scope;
+    });
+    await _saveSettings();
   }
 
   Future<void> _resetCommentators() async {
@@ -389,6 +456,15 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
     if (confirm != true) return;
 
     await PageShapeSettingsManager.resetBookCommentatorConfig(widget.bookTitle);
+    await PageShapeSettingsManager.resetWorkspaceCommentatorConfig(
+      widget.currentWorkspaceId,
+      widget.bookTitle,
+    );
+    if (mounted) {
+      setState(() {
+        _commentatorSaveScope = CommentatorSaveScope.book;
+      });
+    }
     widget.onReset?.call();
   }
 
@@ -489,25 +565,11 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (_availableCategories.isNotEmpty) ...[
+              if (_commentatorSaveScopeOptions.length > 1) ...[
                 AppSegmentedControl<CommentatorSaveScope>(
-                  options: const [
-                    SegmentOption(
-                      value: CommentatorSaveScope.book,
-                      label: 'ספר זה',
-                    ),
-                    SegmentOption(
-                      value: CommentatorSaveScope.category,
-                      label: 'קטגוריה',
-                    ),
-                  ],
+                  options: _commentatorSaveScopeOptions,
                   currentValue: _commentatorSaveScope,
-                  onChanged: (value) {
-                    setState(() {
-                      _commentatorSaveScope = value;
-                    });
-                    _saveSettings();
-                  },
+                  onChanged: _onCommentatorScopeChanged,
                   expandToFillWidth: true,
                   showSelectedIcon: false,
                   height: 40,
@@ -571,6 +633,14 @@ class _PageShapeSettingsPanelState extends State<PageShapeSettingsPanel> {
             });
             _saveSettings();
           },
+        ),
+        SwitchListTile(
+          title: const Text('החל את הגדרת רוחב הטקסט'),
+          subtitle: const Text(
+            'הגבלת רוחב הטקסט שבהגדרות תחול גם על הדף כולו',
+          ),
+          value: _applyTextMaxWidth,
+          onChanged: _onApplyTextMaxWidthChanged,
         ),
         const Divider(),
         const SizedBox(height: 8),

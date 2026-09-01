@@ -39,7 +39,10 @@ FindRefRepository buildFindRefRepository() {
           startLineIndex: ref.segment.toInt(),
           level: ref.tocLevel,
           isAltToc: ref.isAltToc,
+          isSourceLine: ref.isSourceLine,
         ),
+    resolveLineRefs: (bookIds, refKey) async =>
+        (await FindRefDbIsolate.instance()).resolveLineRefs(bookIds, refKey),
     getBookEra: (bookTitle) async =>
         (await FindRefDbIsolate.instance()).getBookEra(bookTitle),
   );

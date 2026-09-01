@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -35,7 +35,7 @@ jobs:
 
       - name: Cache search engine library
         id: engine-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: ~/.pub-cache/hosted/pub.dev/otzaria_search_engine-*/rust/target/release/libsearch_engine.so
           key: ${{ runner.os }}-search-engine-lib-${{ hashFiles('pubspec.lock') }}

@@ -8,6 +8,7 @@ String applyTextBookExportTextTransforms(
   required bool removeNikud,
   required bool removeTaamim,
   required bool shouldReplaceHolyNames,
+  HolyNameStyle holyNameStyle = HolyNameStyle.kufKuf,
   required bool stripHtml,
 }) {
   var text = input;
@@ -23,7 +24,7 @@ String applyTextBookExportTextTransforms(
     text = removeTeamim(text);
   }
   if (shouldReplaceHolyNames) {
-    text = replaceHolyNames(text);
+    text = replaceHolyNames(text, style: holyNameStyle);
   }
   return stripHtml ? stripHtmlIfNeeded(text) : text;
 }

@@ -19,6 +19,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_workspace_scope.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -35,10 +36,13 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/core/focus_repository.dart';
 import 'package:otzaria/widgets/text/rtl_selection_shortcuts.dart';
+import 'package:otzaria/widgets/text/selection_copy_shortcuts.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
+import 'package:otzaria/utils/ui/context_menu_utils.dart'
+    show showCopyWithoutNikud;
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
@@ -365,6 +369,11 @@ class SimpleTextViewer extends StatefulWidget {
   /// פתיחת לשונית המפרשים עם חלונית בחירת המפרשים פרושה.
   final VoidCallback? onOpenCommentatorsPaneWithFilter;
 
+  /// קישורי עוגן של ספר המפרש עצמו אל מפרשי-העל שלו (מפתח: מספר שורה
+  /// 1-based) — סמני אותיות שער הציון וכד' בעמודת מפרש בצורת הדף.
+  /// בטקסט הראשי נשאר null: העוגנים שם נקראים מ-state.linksByLine.
+  final Map<int, List<Link>>? anchorLinksByLine;
+
   const SimpleTextViewer({
     super.key,
     required this.content,
@@ -392,6 +401,7 @@ class SimpleTextViewer extends StatefulWidget {
     this.isCommentatorsTabActive = false,
     this.onOpenCommentatorsPane,
     this.onOpenCommentatorsPaneWithFilter,
+    this.anchorLinksByLine,
   });
 
   /// האם חלונית מפרש זה עתה טיפלה בקיצור "הוסף הערה".
@@ -494,6 +504,41 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return _anchorStyleCache;
   }
 
+  Map<int, List<Link>>? _ownAnchorStyleSource;
+  Map<String, int> _ownAnchorStyleCache = const {};
+
+  Map<String, int> _ownAnchorStyles() {
+    final source = widget.anchorLinksByLine;
+    if (source == null) return const {};
+    if (!identical(_ownAnchorStyleSource, source)) {
+      _ownAnchorStyleSource = source;
+      _ownAnchorStyleCache = anchorStyleIndexByCommentator(
+        source.values.expand((links) => links),
+      );
+    }
+    return _ownAnchorStyleCache;
+  }
+
+  List<Link> _ownAnchorLinksAt(int lineIndex) {
+    final links = widget.anchorLinksByLine?[lineIndex + 1];
+    if (links == null || links.isEmpty) return const [];
+    return links.where((link) => link.anchorStart != null).toList();
+  }
+
+  /// סמני עוגן של מפרש-על (שער הציון וכד') בעמודת מפרש — מקור הקישורים הוא
+  /// המפה שסופקה לחלונית, לא ה-state של הספר הראשי.
+  String _injectOwnAnchorMarkers(String rawLine, int lineIndex) {
+    final anchorLinks = _ownAnchorLinksAt(lineIndex);
+    if (anchorLinks.isEmpty) return rawLine;
+    return injectLinkAnchorMarkers(
+      rawLine: rawLine,
+      anchorLinks: anchorLinks,
+      styleIndexByCommentator: _ownAnchorStyles(),
+      lineIndex: lineIndex,
+      activeIndex: lineIndex == _activeAnchorLine ? _activeAnchorIndex : null,
+    );
+  }
+
   String _injectPreviewMarkers(
     String rawLine,
     int lineIndex,
@@ -533,9 +578,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final line = int.tryParse(parts[0]);
     final index = int.tryParse(parts[1]);
     if (line == null || index == null) return null;
-    final anchorLinks = (state.linksByLine[line + 1] ?? const <Link>[])
-        .where((link) => link.anchorStart != null)
-        .toList();
+    final anchorLinks = widget.anchorLinksByLine != null
+        ? _ownAnchorLinksAt(line)
+        : (state.linksByLine[line + 1] ?? const <Link>[])
+              .where((link) => link.anchorStart != null)
+              .toList();
     if (index < 0 || index >= anchorLinks.length) return null;
     return (link: anchorLinks[index], line: line, index: index);
   }
@@ -1220,6 +1267,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: widget.isMainText ? state.searchText : '',
       searchOptions: widget.isMainText ? state.searchOptions : const {},
       alternativeWords: widget.isMainText ? state.alternativeWords : const {},
@@ -1230,6 +1278,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       matchPolicy: widget.isMainText
           ? state.matchPolicy
           : SearchMatchPolicy.standard,
+      partialWordHighlight: widget.isMainText && !state.searchWholeWord,
       fontSize: widget.fontSize,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       fontWeight:
@@ -1716,6 +1765,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             ),
         ]),
       );
+      // "העתק בלי ניקוד" (issue #851) — רק כשהבחירה מנוקדת; העותק בלבד
+      // מנוקה, התצוגה לא משתנה.
+      if (showCopyWithoutNikud(capturedText)) {
+        entries.add(
+          AppContextMenuEntry(
+            label: 'העתק בלי ניקוד',
+            icon: FluentIcons.text_clear_formatting_24_regular,
+            onTap: () => _copyFormattedText(capturedText, true),
+          ),
+        );
+      }
       entries.add(const AppContextMenuEntry.divider());
 
       entries.add(
@@ -1819,13 +1879,20 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           onTap: () => _openErrorReportDialog(capturedText ?? ''),
         ),
       const AppContextMenuEntry.divider(),
-      if (!widget.isMainText)
+      if (!widget.isMainText) ...[
         AppContextMenuEntry(
           label: 'העתק',
           icon: FluentIcons.copy_24_regular,
           enabled: capturedText != null && capturedText.trim().isNotEmpty,
           onTap: () => _copyFormattedText(capturedText),
         ),
+        if (showCopyWithoutNikud(capturedText))
+          AppContextMenuEntry(
+            label: 'העתק בלי ניקוד',
+            icon: FluentIcons.text_clear_formatting_24_regular,
+            onTap: () => _copyFormattedText(capturedText, true),
+          ),
+      ],
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
@@ -1945,9 +2012,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         }
       }
     } else {
-      // העתק קישור ישיר למפרש — id מועדף, fallback ל-categoryId
-      final commentaryBookId =
-          widget.reportBook?.id ?? widget.reportBook?.categoryId;
+      // רק book_id של המפרש; categoryId אינו תחליף — הוא היה פותח ספר אחר.
+      final commentaryBookId = widget.reportBook?.id;
       if (commentaryBookId != null) {
         entries.add(const AppContextMenuEntry.divider());
         entries.add(
@@ -2333,6 +2399,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       plainText: finalText,
       htmlText: finalHtmlText,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
     );
 
     final item = DataWriterItem();
@@ -2353,7 +2420,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   }
 
   /// העתקת טקסט מעוצב
-  Future<void> _copyFormattedText([String? capturedText]) async {
+  Future<void> _copyFormattedText([
+    String? capturedText,
+    bool removeNikud = false,
+  ]) async {
     // מפרש כבר טיפל בהעתקה - לא נדרוס
     if (widget.isMainText && _commentaryCopyHandled) return;
 
@@ -2381,6 +2451,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         headerContentOverride: widget.reportBook != null
             ? widget.content
             : null,
+        removeNikud: removeNikud,
       );
     } catch (e) {
       if (mounted) {
@@ -2503,13 +2574,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                               return null;
                             },
                           ),
-                          CopySelectionTextIntent:
-                              CallbackAction<CopySelectionTextIntent>(
-                                onInvoke: (_) {
-                                  _copyFormattedText();
-                                  return null;
-                                },
-                              ),
+                          CopySelectionTextIntent: FormattedCopyAction(
+                            _copyFormattedText,
+                          ),
                         },
                         child: Shortcuts(
                           shortcuts: {
@@ -2844,9 +2911,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   );
                 }
 
+                final hasOwnAnchors = widget.anchorLinksByLine != null;
                 var data = widget.content[primaryLineIndex];
                 if (widget.isMainText) {
                   data = _injectPreviewMarkers(data, primaryLineIndex, state);
+                } else if (hasOwnAnchors) {
+                  data = _injectOwnAnchorMarkers(data, primaryLineIndex);
                 }
 
                 // הדגשת טקסט ממוקד: highlightText מופעל רק בשורה permanentHighlightLine
@@ -2905,6 +2975,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     removePunctuation: _removePunctuation(state),
                     removeTeamim: !settingsState.showTeamim,
                     replaceHolyNames: settingsState.replaceHolyNames,
+                    holyNameStyle: settingsState.holyNameStyle,
                     searchText: searchText,
                     highlightYellowBackground:
                         widget.isMainText &&
@@ -2931,6 +3002,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                     matchPolicy: widget.isMainText
                         ? state.matchPolicy
                         : SearchMatchPolicy.standard,
+                    partialWordHighlight:
+                        widget.isMainText && !state.searchWholeWord,
                     isSearchResultLine:
                         widget.isMainText &&
                         state.lineParticipatesInSearchHighlight(
@@ -2968,9 +3041,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                             );
                           }
                         },
-                  onAnchorTap: widget.isMainText ? _handlePreviewTap : null,
-                  onAnchorHover: widget.isMainText ? _handlePreviewHover : null,
-                  onAnchorHoverExit: widget.isMainText
+                  onAnchorTap: widget.isMainText || hasOwnAnchors
+                      ? _handlePreviewTap
+                      : null,
+                  onAnchorHover: widget.isMainText || hasOwnAnchors
+                      ? _handlePreviewHover
+                      : null,
+                  onAnchorHoverExit: widget.isMainText || hasOwnAnchors
                       ? _handlePreviewHoverExit
                       : null,
                 );
@@ -3129,7 +3206,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           lineIndex: lineIndex,
           text: utils.stripHtmlIfNeeded(rendering.html).trim(),
           htmlText: rendering.html,
-          style: style,
+          style: AppFonts.taamimSafeStyle(style, rendering.html),
           frameRanges: rendering.ranges,
         ),
       );
@@ -3187,6 +3264,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       removePunctuation: _removePunctuation(state),
       removeTeamim: !settingsState.showTeamim,
       replaceHolyNames: settingsState.replaceHolyNames,
+      holyNameStyle: settingsState.holyNameStyle,
       searchText: searchText,
       searchOptions: useStateSearchSettings ? state.searchOptions : const {},
       alternativeWords: useStateSearchSettings
@@ -3199,6 +3277,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       matchPolicy: useStateSearchSettings
           ? state.matchPolicy
           : SearchMatchPolicy.standard,
+      partialWordHighlight: useStateSearchSettings && !state.searchWholeWord,
       isSearchResultLine:
           useStateSearchSettings &&
           state.lineParticipatesInSearchHighlight(lineIndex),
@@ -3315,9 +3394,11 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     }
 
     // צריך למצוא באיזה טור המפרש הנוכחי מוצג ולהחליף אותו
+    final workspaceId = activePageShapeWorkspaceId(context);
     final config = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: workspaceId,
     );
 
     if (config == null) return;
@@ -3385,6 +3466,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       updatedConfig[columnToUpdate] = newCommentator;
     }
 
+    // כששולחן העבודה מחזיק בחירה משלו לספר, ההחלפה נשמרת אליה - אחרת היא
+    // נכתבת לספר/לקטגוריה ונדרסת מיד בטעינה הבאה.
+    final workspaceToSave = PageShapeSettingsManager.commentatorWorkspaceTarget(
+      workspaceId,
+      state.book.title,
+    );
+
     // בדיקה אם יש הגדרה ספציפית לספר (לא רק הדגל, אלא הגדרה ממשית)
     final hasActualBookConfig =
         PageShapeSettingsManager.loadConfiguration(state.book.title) != null;
@@ -3392,7 +3480,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     // אם יש הגדרה ספציפית לספר - שומרים לספר
     // אחרת - שומרים לקטגוריה (אם יש)
     final categoryToSave =
-        !hasActualBookConfig &&
+        workspaceToSave == null &&
+            !hasActualBookConfig &&
             state.book.heCategories != null &&
             state.book.heCategories!.isNotEmpty
         ? PageShapeSettingsManager.getActiveCategory(state.book.heCategories) ??
@@ -3405,6 +3494,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       state.book.title,
       updatedConfig,
       saveToCategory: categoryToSave,
+      saveToWorkspaceId: workspaceToSave,
     );
 
     // קריאה ל-callback לרענון המסך

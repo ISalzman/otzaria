@@ -21,6 +21,7 @@ const Map<String, String> apiCallToPermissionHint = {
   'library.getLinks': pluginLinksReadPermission,
   'library.getRawLinks': pluginLinksReadPermission,
   'library.getLinkTargetsSummary': pluginLinksReadPermission,
+  'library.refreshUserBooks': pluginLibraryRefreshPermission,
 
   // app.*
   'app.getUserEmail': 'app.user_email.read',
@@ -30,6 +31,9 @@ const Map<String, String> apiCallToPermissionHint = {
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
   'app.getConnectivity': 'app.info.read',
+  'app.registerShortcut': 'app.shortcuts',
+  'app.unregisterShortcut': 'app.shortcuts',
+  'app.updateShortcut': 'app.shortcuts',
 
   // feedback.*
   'feedback.sendEmail': 'feedback.send_email',
@@ -140,6 +144,12 @@ const pluginToolsReadPermission = 'tools.read';
 /// וסיכום היעדים. נפרדת מ-`library.content.read` כי היא חושפת מבנה בלבד.
 const pluginLinksReadPermission = 'library.links.read';
 
+/// הרשאה לרענון הספרים האישיים (`library.refreshUserBooks`): סריקה מחדש של
+/// התיקיות האישיות של המשתמש ורענון קטלוג הספרייה בעקבותיה. נפרדת מהרשאות
+/// הקריאה כי היא כותבת ל-`user_books.db` ומריצה סריקת דיסק — הפעולה שתוסף
+/// שמוריד ספרים צריך כדי שהספרים שהוריד יופיעו בספרייה.
+const pluginLibraryRefreshPermission = 'library.refresh';
+
 /// הרשאה לפתיחת דף של תוסף **אחר** (`plugin.openOther`). נפרדת מ-navigation.write
 /// כי היא מפעילה את ה-WebView של תוסף שלישי, ולא רק מזיזה את המשתמש בין מסכים.
 const pluginOpenOtherPermission = 'plugin.open_other';
@@ -226,6 +236,10 @@ const pluginValidPermissions = <String>[
   /// ונתונים שנקראים ע"י Flutter בעלייה, בלי להריץ קוד של התוסף.
   pluginStartupContributionsPermission,
 
+  /// רישום קיצורי מקלדת לתוסף — מהמניפסט (`contributes.startup.shortcuts`)
+  /// או בזמן ריצה (`app.registerShortcut`).
+  'app.shortcuts',
+
   // ===== ספרייה =====
   /// חיפוש וקריאת רשימת ספרים
   'library.books.read',
@@ -235,6 +249,9 @@ const pluginValidPermissions = <String>[
 
   /// קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן)
   pluginLinksReadPermission,
+
+  /// רענון הספרים האישיים — סריקת התיקיות האישיות ורענון הקטלוג
+  pluginLibraryRefreshPermission,
 
   // ===== חיפוש =====
   /// ביצוע חיפוש טקסט מלא

@@ -171,15 +171,32 @@ void main() {
     expect(tooltip.verticalOffset, 18);
   });
 
-  testWidgets('מציג tooltip כשהנתיב או הנושאים נחתכים גם אם הכותרת קצרה', (
+  testWidgets('בתוצאות חיפוש מוצג נתיב הקטגוריות, לא הנושאים', (
     tester,
   ) async {
+    const categoryPath = 'קטגוריה ראשית, קטגוריה משנית, נתיב מלא וארוך מאוד';
+    final book = PdfBook(
+      title: 'א',
+      path: r'C:\library\folder\book.pdf',
+      topics: 'נתיב ארוך מאוד מאוד שנחתך בתצוגת הספריה ומחייב tooltip',
+      categoryPath: categoryPath,
+    );
+
+    await tester.pumpWidget(
+      buildTestWidget(book: book, showTopics: true, width: 220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip(categoryPath), findsOneWidget);
+    expect(find.byTooltip('א'), findsNothing);
+  });
+
+  testWidgets('בלי נתיב קטגוריות מוצגים הנושאים', (tester) async {
     const topics = 'נתיב ארוך מאוד מאוד שנחתך בתצוגת הספריה ומחייב tooltip';
     final book = PdfBook(
       title: 'א',
       path: r'C:\library\folder\book.pdf',
       topics: topics,
-      categoryPath: 'קטגוריה ראשית, קטגוריה משנית, נתיב מלא ארוך',
     );
 
     await tester.pumpWidget(
@@ -188,7 +205,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip(topics), findsOneWidget);
-    expect(find.byTooltip('א'), findsNothing);
   });
 
   test('מקצר תיאור ספר ל-120 תווים כולל שלוש נקודות', () {

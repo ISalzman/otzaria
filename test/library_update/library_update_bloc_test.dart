@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
@@ -37,7 +38,7 @@ class _FakeService implements LibraryUpdateService {
   }
 
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -45,13 +46,14 @@ class _FakeService implements LibraryUpdateService {
     applyCalled = true;
     if (applyError != null) throw applyError!;
     if (throwOnApply) throw Exception('apply failed');
-    return {7, 12};
+    return const LibraryDeltaApplyResult(changedBookIds: {7, 12});
   }
 
   @override
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {
     fullCalled = true;
@@ -66,6 +68,7 @@ class _FullVerifyingService extends _FakeService {
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {
     fullCalled = true;
@@ -76,6 +79,69 @@ class _FullVerifyingService extends _FakeService {
   }
 }
 
+class _CancellableFullService extends _FakeService {
+  _CancellableFullService(super.plan, this.gate);
+
+  final Completer<void> gate;
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
+    bool Function()? isCancelled,
+  }) async {
+    fullCalled = true;
+    await gate.future;
+    if (isCancelled?.call() ?? false) {
+      throw const PatchDownloadCancelled();
+    }
+  }
+}
+
+class _FullRefreshFailingService extends _FakeService {
+  _FullRefreshFailingService(super.plan);
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
+    bool Function()? isCancelled,
+  }) async {
+    fullCalled = true;
+    onDbReplaced?.call();
+    onProgress?.call(
+      const LibraryUpdateProgress(phase: LibraryUpdatePhase.refreshing),
+    );
+    await Future<void>.delayed(Duration.zero);
+    throw Exception('runtime refresh failed after DB replacement');
+  }
+}
+
+class _GatedAfterFullReplacementService extends _FakeService {
+  _GatedAfterFullReplacementService(super.plan, this.gate);
+
+  final Completer<void> gate;
+
+  @override
+  Future<void> applyFullDownload(
+    LibraryUpdatePlan plan, {
+    LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
+    bool Function()? isCancelled,
+  }) async {
+    fullCalled = true;
+    // repository אמיתי מדווח commit מיד אחרי rename, ורק אחרי reopen מדווח
+    // refreshing. ה-gate מדמה את חלון ה-reopen שביניהם.
+    onDbReplaced?.call();
+    await gate.future;
+    onProgress?.call(
+      const LibraryUpdateProgress(phase: LibraryUpdatePhase.refreshing),
+    );
+  }
+}
+
 /// שירות שמדמה הורדה המדווחת התקדמות על כל chunk — לבדיקת ויסות ההצפה.
 class _ChunkFloodService extends _FakeService {
   final void Function(int chunk)? beforeChunk;
@@ -83,7 +149,7 @@ class _ChunkFloodService extends _FakeService {
   _ChunkFloodService(super.plan, {this.beforeChunk});
 
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -100,7 +166,7 @@ class _ChunkFloodService extends _FakeService {
       );
     }
     await Future<void>.delayed(const Duration(milliseconds: 10));
-    return const {};
+    return const LibraryDeltaApplyResult(appliedSteps: 1);
   }
 }
 
@@ -108,7 +174,12 @@ class _ChunkFloodService extends _FakeService {
 class _GatedAtApplyService implements LibraryUpdateService {
   final LibraryUpdatePlan plan;
   final Completer<void> gate;
-  _GatedAtApplyService(this.plan, this.gate);
+  final bool reportNextStepDownload;
+  _GatedAtApplyService(
+    this.plan,
+    this.gate, {
+    this.reportNextStepDownload = false,
+  });
 
   @override
   Future<RecoveryResult> recoverIfNeeded() async =>
@@ -120,7 +191,7 @@ class _GatedAtApplyService implements LibraryUpdateService {
   }) async => plan;
 
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -128,15 +199,25 @@ class _GatedAtApplyService implements LibraryUpdateService {
     onProgress?.call(
       const LibraryUpdateProgress(phase: LibraryUpdatePhase.applying),
     );
+    if (reportNextStepDownload) {
+      onProgress?.call(
+        const LibraryUpdateProgress(
+          phase: LibraryUpdatePhase.downloading,
+          stepIndex: 1,
+          totalSteps: 2,
+        ),
+      );
+    }
     await gate
         .future; // מדמה apply ארוך; אחריו ה-DB עודכן — מתעלמים מ-isCancelled
-    return const {};
+    return const LibraryDeltaApplyResult(appliedSteps: 1);
   }
 
   @override
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {}
 }
@@ -157,7 +238,7 @@ class _VerifyThenCommitService implements LibraryUpdateService {
   }) async => plan;
 
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
@@ -177,13 +258,14 @@ class _VerifyThenCommitService implements LibraryUpdateService {
       ),
     );
     await Future<void>.delayed(const Duration(milliseconds: 10));
-    return const {};
+    return const LibraryDeltaApplyResult(appliedSteps: 1);
   }
 
   @override
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {}
 }
@@ -204,19 +286,20 @@ class _GatedService implements LibraryUpdateService {
   }) async => plan;
 
   @override
-  Future<Set<int>> applyDeltaPlan(
+  Future<LibraryDeltaApplyResult> applyDeltaPlan(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
     bool Function()? isCancelled,
   }) async {
     await gate.future; // נחסם עד שהבדיקה משחררת
-    return const {};
+    return const LibraryDeltaApplyResult(appliedSteps: 1);
   }
 
   @override
   Future<void> applyFullDownload(
     LibraryUpdatePlan plan, {
     LibraryUpdateProgressCallback? onProgress,
+    FullDbReplacedCallback? onDbReplaced,
     bool Function()? isCancelled,
   }) async {}
 }
@@ -300,7 +383,9 @@ LibraryUpdateBloc _bloc(
   CompanionAssetsService? companionAssets,
   // ברירת המחדל "מחובר" מונעת גישת רשת אמיתית בבדיקות מסלולי הכשל.
   bool hasInternet = true,
+  bool? sourceReachable,
   DateTime Function()? now,
+  void Function()? onCheckSucceeded,
 }) => LibraryUpdateBloc(
   repository: service,
   isOfflineMode: () => offline,
@@ -308,8 +393,12 @@ LibraryUpdateBloc _bloc(
   allowPrerelease: () => prerelease,
   companionAssets: companionAssets,
   hasInternet: () async => hasInternet,
+  isSourceReachable: () async => sourceReachable ?? hasInternet,
+  onCheckSucceeded: onCheckSucceeded,
   now: now,
 );
+
+int _checkSucceededCalls = 0;
 
 void main() {
   final nonePlan = LibraryUpdatePlan.none(localVersion: 3, targetVersion: 3);
@@ -346,6 +435,29 @@ void main() {
   );
 
   group('LibraryUpdateBloc', () {
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'בדיקה שהצליחה (גם "אין עדכון") מדווחת ל-onCheckSucceeded',
+      build: () => _bloc(
+        _FakeService(nonePlan),
+        onCheckSucceeded: () => _checkSucceededCalls++,
+      ),
+      setUp: () => _checkSucceededCalls = 0,
+      act: (b) => b.add(const StartLibraryUpdate()),
+      verify: (_) => expect(_checkSucceededCalls, 1),
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'בדיקה שנכשלה אינה מדווחת ל-onCheckSucceeded - הניסיון הבא בעלייה הבאה',
+      build: () => _bloc(
+        _FakeService(nonePlan, throwOnCheck: true),
+        onCheckSucceeded: () => _checkSucceededCalls++,
+      ),
+      setUp: () => _checkSucceededCalls = 0,
+      act: (b) => b.add(const StartLibraryUpdate()),
+      wait: const Duration(milliseconds: 20),
+      verify: (_) => expect(_checkSucceededCalls, 0),
+    );
+
     blocTest<LibraryUpdateBloc, LibraryUpdateState>(
       'מצב לא מקוון → idle עם הודעה, לא בודק',
       build: () => _bloc(_FakeService(nonePlan), offline: true),
@@ -494,7 +606,37 @@ void main() {
         ),
         isA<LibraryUpdateState>()
             .having((s) => s.status, 'status', LibraryUpdateStatus.disconnected)
-            .having((s) => s.message, 'message', 'אין חיבור לאינטרנט')
+            .having(
+              (s) => s.message,
+              'message',
+              LibraryMessages.noInternetConnection,
+            )
+            .having((s) => s.errorMessage, 'errorMessage', isNull),
+      ],
+    );
+
+    // רשת מסוננת: יש אינטרנט אך GitHub חסום — שגיאה בכל עלייה היא רעש
+    // שאין למשתמש מה לעשות איתו (issue #1027).
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל בבדיקה כששרת העדכונים חסום → מנותק ולא שגיאה',
+      build: () => _bloc(
+        _FakeService(nonePlan, throwOnCheck: true),
+        sourceReachable: false,
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.disconnected)
+            .having(
+              (s) => s.message,
+              'message',
+              LibraryMessages.updateSourceUnreachable,
+            )
             .having((s) => s.errorMessage, 'errorMessage', isNull),
       ],
     );
@@ -620,6 +762,10 @@ void main() {
           probes++;
           return true;
         },
+        isSourceReachable: () async {
+          probes++;
+          return true;
+        },
       );
       bloc.add(const StartLibraryUpdate());
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -637,6 +783,7 @@ void main() {
         areUpdatesEnabled: () => true,
         allowPrerelease: () => false,
         hasInternet: () => probeGate.future,
+        isSourceReachable: () => probeGate.future,
       );
       bloc.add(const StartLibraryUpdate());
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -666,6 +813,189 @@ void main() {
         isA<LibraryUpdateState>()
             .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
             .having((s) => s.hasUpdate, 'hasUpdate', true),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל בהורדה מלאה אחרי דלתא חלקית שומר את השינויים לריענון',
+      build: () => _bloc(_FakeService(fullPlan, throwOnApply: true)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+        hasUpdate: true,
+        changedBookIds: const {7},
+        requiresFullIndexRefresh: true,
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.downloading,
+            )
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.error)
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having((s) => s.changedBookIds, 'changedBookIds', const {7})
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל refresh אחרי החלפת DB מלאה רגילה דורש ריענון ו-reconcile מלא',
+      build: () => _bloc(_FullRefreshFailingService(fullPlan)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.downloading,
+        ),
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.refreshing,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.error)
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
+            )
+            .having(
+              (s) => s.plan?.kind,
+              'plan.kind',
+              LibraryUpdatePlanKind.fullDownload,
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל refresh אחרי fallback חלקי משדרג ל-reconcile מלא של ה-DB שהוחלף',
+      build: () => _bloc(_FullRefreshFailingService(fullPlan)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+        hasUpdate: true,
+        changedBookIds: const {7},
+      ),
+      act: (b) => b.add(const ConfirmFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.downloading,
+            )
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.refreshing,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.error)
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having((s) => s.changedBookIds, 'changedBookIds', const {7})
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
+            )
+            .having(
+              (s) => s.plan?.kind,
+              'plan.kind',
+              LibraryUpdatePlanKind.fullDownload,
+            ),
+      ],
+    );
+
+    late Completer<void> fullReplacementGate;
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'cancel ו-reset חסומים סינכרונית אחרי החלפת DB מלאה',
+      setUp: () => fullReplacementGate = Completer<void>(),
+      build: () => _bloc(
+        _GatedAfterFullReplacementService(fullPlan, fullReplacementGate),
+      ),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+      ),
+      act: (b) async {
+        b.add(const ConfirmFullDownload());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        b.add(const ResetLibraryUpdate());
+        b.add(const CancelLibraryUpdate());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        fullReplacementGate.complete();
+      },
+      wait: const Duration(milliseconds: 20),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.downloading,
+        ),
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.refreshing,
+        ),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+      ],
+    );
+
+    late Completer<void> cancelFullGate;
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'ביטול הורדה מלאה אחרי דלתא חלקית שומר את השינויים לריענון',
+      setUp: () => cancelFullGate = Completer<void>(),
+      build: () => _bloc(_CancellableFullService(fullPlan, cancelFullGate)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+        hasUpdate: true,
+        changedBookIds: const {7},
+        requiresFullIndexRefresh: true,
+      ),
+      act: (b) async {
+        b.add(const ConfirmFullDownload());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        b.add(const CancelLibraryUpdate());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        cancelFullGate.complete();
+      },
+      wait: const Duration(milliseconds: 20),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.downloading,
+            )
+            .having((s) => s.hasUpdate, 'hasUpdate', true),
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having((s) => s.changedBookIds, 'changedBookIds', const {7})
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
+            ),
       ],
     );
 
@@ -734,6 +1064,47 @@ void main() {
           reason: 'ביטול שנחסם לא אמור להחזיר ל-idle',
         );
         await sub.cancel();
+        await bloc.close();
+      },
+    );
+
+    test(
+      'ביטול נשאר חסום בהורדת צעד מאוחר אחרי שצעד ראשון כבר נכתב',
+      () async {
+        final gate = Completer<void>();
+        final bloc = _bloc(
+          _GatedAtApplyService(
+            deltaPlan,
+            gate,
+            reportNextStepDownload: true,
+          ),
+        );
+
+        bloc.add(const StartLibraryUpdate());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(bloc.state.status, LibraryUpdateStatus.downloading);
+        expect(bloc.state.stepIndex, 1);
+
+        bloc.add(const ResetLibraryUpdate());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(
+          bloc.state.status,
+          LibraryUpdateStatus.downloading,
+          reason: 'אחרי כתיבת צעד ראשון גם reset אסור עד סוף המסלול',
+        );
+
+        bloc.add(const CancelLibraryUpdate());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(
+          bloc.state.status,
+          LibraryUpdateStatus.downloading,
+          reason: 'אחרי כתיבת צעד ראשון אסור לבטל גם בזמן הורדת הצעד הבא',
+        );
+
+        gate.complete();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(bloc.state.status, LibraryUpdateStatus.completed);
+        expect(bloc.state.hasUpdate, isTrue);
         await bloc.close();
       },
     );
@@ -1017,6 +1388,30 @@ void main() {
             .having((s) => s.hasUpdate, 'hasUpdate', false),
       ],
     );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'DeclineFullDownload שומר שינויי דלתא חלקיים לצורך ריענון',
+      build: () => _bloc(_FakeService(fullPlan)),
+      seed: () => LibraryUpdateState(
+        status: LibraryUpdateStatus.needsFullConfirmation,
+        plan: fullPlan,
+        hasUpdate: true,
+        changedBookIds: const {7},
+        requiresFullIndexRefresh: true,
+      ),
+      act: (b) => b.add(const DeclineFullDownload()),
+      expect: () => [
+        isA<LibraryUpdateState>()
+            .having((s) => s.status, 'status', LibraryUpdateStatus.completed)
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having((s) => s.changedBookIds, 'changedBookIds', const {7})
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
+            ),
+      ],
+    );
     blocTest<LibraryUpdateBloc, LibraryUpdateState>(
       'סטיית תוכן ב-apply עם fallback → needsFullConfirmation עם תוכנית מלאה',
       build: () => _bloc(
@@ -1087,6 +1482,84 @@ void main() {
               (s) => s.message,
               'message',
               isNot(contains('תוכן הספרייה המקומית')),
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל apply שאינו סטיית תוכן (למשל סכמה לא נתמכת) → fallback להורדה מלאה',
+      build: () => _bloc(
+        _FakeService(
+          deltaWithFallbackPlan,
+          applyError: const PatchApplyException(
+            'גרסת סכמת ה-patch (5) חדשה מהנתמך (4) — נדרש עדכון תוכנה',
+          ),
+        ),
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.needsFullConfirmation,
+            )
+            .having(
+              (s) => s.plan?.kind,
+              'plan.kind',
+              LibraryUpdatePlanKind.fullDownload,
+            )
+            .having(
+              (s) => s.message,
+              'message',
+              contains('החלת עדכון הדלתא נכשלה'),
+            ),
+      ],
+    );
+
+    blocTest<LibraryUpdateBloc, LibraryUpdateState>(
+      'כשל בצעד מאוחר שומר את שינויי הצעדים שהושלמו במסך ה-fallback',
+      build: () => _bloc(
+        _FakeService(
+          deltaWithFallbackPlan,
+          applyError: const PartiallyAppliedLibraryDeltaException(
+            cause: PatchApplyException('patch שני אינו נתמך'),
+            appliedResult: LibraryDeltaApplyResult(
+              changedBookIds: {7, 12},
+              requiresFullIndexRefresh: true,
+              appliedSteps: 1,
+            ),
+          ),
+        ),
+      ),
+      act: (b) => b.add(const StartLibraryUpdate()),
+      expect: () => [
+        isA<LibraryUpdateState>().having(
+          (s) => s.status,
+          'status',
+          LibraryUpdateStatus.checking,
+        ),
+        isA<LibraryUpdateState>()
+            .having(
+              (s) => s.status,
+              'status',
+              LibraryUpdateStatus.needsFullConfirmation,
+            )
+            .having((s) => s.hasUpdate, 'hasUpdate', true)
+            .having(
+              (s) => s.changedBookIds,
+              'changedBookIds',
+              const {7, 12},
+            )
+            .having(
+              (s) => s.requiresFullIndexRefresh,
+              'requiresFullIndexRefresh',
+              true,
             ),
       ],
     );

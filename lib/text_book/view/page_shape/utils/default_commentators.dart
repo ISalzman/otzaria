@@ -2,6 +2,9 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/settings/services/category_commentators_service.dart';
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
+import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 
 /// מחלקה לניהול מפרשי ברירת המחדל ("מפרשים בסיסיים") של ספר.
 ///
@@ -65,7 +68,8 @@ class DefaultCommentators {
   }
 
   /// מחזיר את בחירת המפרשים ההתחלתית לפאנל/כרטסיית המפרשים של [book]:
-  /// מפרשי ברירת המחדל המוגדרים (אם יש), אחרת כל המפרשים אם יש עד 4.
+  /// מפרשים קבועים שהמשתמש קבע לקטגוריה (אם יש), אחרת מפרשי ברירת המחדל
+  /// מה-DB, אחרת כל המפרשים אם יש עד 4.
   /// כשאין ברירת מחדל ויש יותר מ-4 מפרשים — מחזיר רשימה ריקה (בחירה ידנית).
   /// [availableCommentators] = המפרשים הזמינים בפועל לספר.
   static Future<List<String>> getInitialSelection(
@@ -74,6 +78,12 @@ class DefaultCommentators {
     List<String>? baseCommentators,
   }) async {
     if (availableCommentators.isEmpty) return const [];
+
+    final categorySelection = _resolveCategorySelection(
+      book,
+      availableCommentators,
+    );
+    if (categorySelection != null) return categorySelection;
 
     final base = baseCommentators ?? await getBaseCommentators(book);
     final resolved = <String>[];
@@ -89,6 +99,33 @@ class DefaultCommentators {
       return List<String>.from(availableCommentators);
     }
     return const [];
+  }
+
+  /// המפרשים הקבועים שהמשתמש קבע לקטגוריה של [book], כשמות מלאים מתוך
+  /// הזמינים. null כשאין קביעה או כשאף שם לא נפתר בספר הזה (ואז נופלים
+  /// לברירת המחדל מה-DB). רשימה ריקה שנקבעה במפורש מוחזרת כמות שהיא.
+  static List<String>? _resolveCategorySelection(
+    Book book,
+    List<String> availableCommentators,
+  ) {
+    final baseNames = CategoryCommentatorsService.loadBaseNames(
+      bookCategoriesSource(book),
+    );
+    if (baseNames == null) return null;
+    if (baseNames.isEmpty) return const [];
+
+    final resolved = <String>[];
+    for (final name in baseNames) {
+      final match = findMatchingPageShapeCommentator(
+        name,
+        availableCommentators,
+        commentedBookTitle: book.title,
+      );
+      if (match != null && !resolved.contains(match)) {
+        resolved.add(match);
+      }
+    }
+    return resolved.isEmpty ? null : resolved;
   }
 
   /// מחליט את בחירת המפרשים האוטומטית לפתיחה, בהתחשב בבחירה שמורה פר-ספר.

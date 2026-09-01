@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/library/bloc/library_event.dart';
@@ -525,12 +526,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateToCategory event,
     Emitter<LibraryState> emit,
   ) {
+    final isCategoryChange = !identical(event.category, state.currentCategory);
     emit(
       state.copyWith(
         currentCategory: event.category,
         searchQuery: null,
         searchResults: null,
         selectedTopics: null,
+        clearPreviewBook: isCategoryChange,
       ),
     );
   }
@@ -539,16 +542,19 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateUp event,
     Emitter<LibraryState> emit,
   ) {
-    if (state.currentCategory?.parent != null) {
-      emit(
-        state.copyWith(
-          currentCategory: state.currentCategory!.parent!,
-          searchQuery: null,
-          searchResults: null,
-          selectedTopics: null,
-        ),
-      );
-    }
+    final currentCategory = state.currentCategory;
+    final parent = currentCategory?.parent;
+    if (parent == null || identical(parent, currentCategory)) return;
+
+    emit(
+      state.copyWith(
+        currentCategory: parent,
+        searchQuery: null,
+        searchResults: null,
+        selectedTopics: null,
+        clearPreviewBook: true,
+      ),
+    );
   }
 
   void _onUpdateSearchQuery(
@@ -559,6 +565,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       state.copyWith(
         searchQuery: event.query,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }
@@ -588,16 +595,18 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         state.copyWith(
           isSearching: true,
           searchResults: state.searchResults,
+          searchCategoryResults: state.searchCategoryResults,
         ),
       );
 
       // החיפוש מחזיר את כל ההתאמות; סינון הקטגוריות נעשה מקומית בתצוגה בלבד.
-      final results = await _repository.findBooks(
+      final found = await _repository.findBooksAndCategories(
         query,
         category,
         includeOtzar: includeOtzar,
         includeHebrewBooks: includeHebrewBooks,
       );
+      final results = found.books;
 
       if (searchGeneration != _searchGeneration ||
           state.searchQuery != query ||
@@ -609,6 +618,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
             state.copyWith(
               isSearching: false,
               searchResults: state.searchResults,
+              searchCategoryResults: state.searchCategoryResults,
             ),
           );
         }
@@ -628,11 +638,22 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       emit(
         state.copyWith(
           searchResults: results,
+          searchCategoryResults: found.categories,
           previewBook: firstBook,
           isSearching: false,
         ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // בלי רישום ליומן, כשל בחיפוש הספרייה (issue #1012) אינו משאיר
+      // עקבות לאבחון — errors.txt נשאר ריק.
+      try {
+        ErrorLogFile.append(
+          title: 'כשל חיפוש בספרייה',
+          error: e,
+          stackTrace: stackTrace,
+          details: {'query': state.searchQuery},
+        );
+      } catch (_) {}
       emit(
         state.copyWith(
           error: e.toString(),
@@ -674,6 +695,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         selectedTopics: event.topics,
         previewBook: firstBook,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }
@@ -686,6 +708,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       state.copyWith(
         previewBook: event.book,
         searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
       ),
     );
   }

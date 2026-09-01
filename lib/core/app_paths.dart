@@ -39,6 +39,9 @@ class AppPaths {
   /// ליד ה-executable בחבילות Flutter ל-Windows ול-Linux (flutter_assets).
   static const String _portableDataFolderName = 'otzaria_data';
 
+  /// שם הקובץ שבו נרשם נתיב הספרייה הפעיל עבור ה-uninstaller.
+  static const String libraryPathRecordFileName = 'library_path.txt';
+
   static bool? _isPortableCache;
 
   static String? _documentsRootPathOverride;
@@ -358,6 +361,24 @@ class AppPaths {
     return adjacentPath;
   }
 
+  /// רושם את נתיב הספרייה הפעיל לקובץ טקסט עבור ה-uninstaller של Windows.
+  /// ההגדרות יושבות ב-Hive בינארי שהמתקין אינו יכול לקרוא, ובלעדיו
+  /// ספרייה שהועברה שורדת את ההסרה (issue #1020).
+  static Future<void> recordLibraryPathForUninstaller() async {
+    if (!Platform.isWindows) return;
+    try {
+      final path = await getLibraryPath();
+      if (path.isEmpty) return;
+      // BOM: בלעדיו LoadStringsFromFile של Inno קורא את הקובץ כ-ANSI ושובר
+      // נתיב בעברית.
+      await File(
+        p.join(await getDataRootPath(), libraryPathRecordFileName),
+      ).writeAsString('﻿$path');
+    } catch (e) {
+      debugPrint('Failed to record library path for uninstaller: $e');
+    }
+  }
+
   /// Gets the main library path from settings, or gracefully falls back to default paths.
   static Future<String> getLibraryPath() async {
     final currentPath = Settings.getValue<String>(
@@ -479,6 +500,12 @@ class AppPaths {
       DatabaseConstants.getDatabaseDirectoryPath(),
       DatabaseConstants.lexicalDatabaseFileName,
     );
+  }
+
+  /// נתיב העותק המעודכן של קובץ הביוגרפיות, שמערכת העדכונים מורידה בזמן
+  /// ריצה. גובר על הקובץ הארוז באפליקציה, שאינו בר-כתיבה.
+  static Future<String> getBiographiesPath() async {
+    return p.join(await getDataRootPath(), 'biographies.tsb');
   }
 
   /// מחזיר רשימת נתיבי ברירת מחדל לאינדקס שאינם הנתיב הפעיל כעת.

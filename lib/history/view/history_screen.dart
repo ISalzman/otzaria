@@ -25,6 +25,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
+import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/lists/items_list_view.dart';
 import 'package:otzaria/utils/ui/book_format_icon.dart';
 
@@ -210,6 +211,21 @@ class _HistoryViewState extends State<HistoryView> {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
+  }
+
+  /// מחיקת כל ההיסטוריה. פעולה בלתי הפיכה ולכן מאושרת בדיאלוג אזהרה.
+  Future<void> _clearAllHistory(BuildContext context) async {
+    final bloc = context.read<HistoryBloc>();
+    final confirmed = await showWarningDialog(
+      context: context,
+      title: 'למחוק את כל ההיסטוריה?',
+      content: 'כל רשומות ההיסטוריה יימחקו.',
+      subtitle: 'לא ניתן לשחזר היסטוריה שנמחקה.',
+      confirmText: 'מחק',
+    );
+    if (confirmed != true) return;
+    bloc.add(ClearHistory());
+    UiSnack.show(NotesMessages.allHistoryDeleted);
   }
 
   Widget? _getLeadingIcon(Book book, bool isSearch) {
@@ -412,10 +428,7 @@ class _HistoryViewState extends State<HistoryView> {
                   ctx.read<HistoryBloc>().add(RemoveHistory(originalIndex));
                   UiSnack.show(NotesMessages.historyEntryDeleted);
                 },
-                onClearAll: (ctx) {
-                  ctx.read<HistoryBloc>().add(ClearHistory());
-                  UiSnack.show(NotesMessages.allHistoryDeleted);
-                },
+                onClearAll: _clearAllHistory,
                 hintText: 'חפש בהיסטוריה...',
                 emptyText: 'אין היסטוריה',
                 notFoundText: 'לא נמצאו תוצאות',

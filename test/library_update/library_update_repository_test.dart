@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
 import 'package:otzaria/library_update/services/library_runtime_refresh_service.dart';
@@ -182,6 +183,108 @@ void main() {
       expect(File('$dbPath.new').existsSync(), isFalse);
     },
     timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  test(
+    'applyFullDownload: ביטול בזמן המתנה ל-operationQueue עוצר לפני החלפת DB',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+      final repository = _localFullDownloadRepository(
+        tmp: tmp,
+        dbPath: dbPath,
+      );
+      final plan = _localFullDownloadPlan();
+      final blockerStarted = Completer<void>();
+      final releaseBlocker = Completer<void>();
+      final blocker = DatabaseLibraryProvider.operationQueue.enqueue(() async {
+        blockerStarted.complete();
+        await releaseBlocker.future;
+      });
+      await blockerStarted.future;
+
+      var cancelled = false;
+      var replacementReported = false;
+      final update = repository.applyFullDownload(
+        plan,
+        isCancelled: () => cancelled,
+        onDbReplaced: () => replacementReported = true,
+      );
+      await _waitUntil(
+        () => DatabaseLibraryProvider.operationQueue.busyCount.value >= 2,
+      );
+      cancelled = true;
+      releaseBlocker.complete();
+      await blocker;
+
+      await expectLater(update, throwsA(isA<PatchDownloadCancelled>()));
+      expect(_readMarker(dbPath), 'old');
+      expect(replacementReported, isFalse);
+      expect(File('$dbPath.applying').existsSync(), isFalse);
+      expect(File('$dbPath.backup').existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'applyFullDownload: ביטול אחרי beginApply ולפני rename משחזר את ה-DB הישן',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+      final recovery = _GatedAfterBeginRecovery();
+      final repository = _localFullDownloadRepository(
+        tmp: tmp,
+        dbPath: dbPath,
+        recovery: recovery,
+      );
+      var cancelled = false;
+      var replacementReported = false;
+      final update = repository.applyFullDownload(
+        _localFullDownloadPlan(),
+        isCancelled: () => cancelled,
+        onDbReplaced: () => replacementReported = true,
+      );
+
+      await recovery.beginCompleted.future;
+      cancelled = true;
+      recovery.releaseBegin.complete();
+
+      await expectLater(update, throwsA(isA<PatchDownloadCancelled>()));
+      expect(_readMarker(dbPath), 'old');
+      expect(replacementReported, isFalse);
+      expect(File('$dbPath.applying').existsSync(), isFalse);
+      expect(File('$dbPath.backup').existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'applyFullDownload: commit מדווח לפני refresh גם אם refresh נכשל',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeDb(dbPath, version: 1, marker: 'old');
+      final refresh = _ThrowingRefreshService();
+      final repository = _localFullDownloadRepository(
+        tmp: tmp,
+        dbPath: dbPath,
+        refreshService: refresh,
+      );
+      var replacementReported = false;
+
+      await expectLater(
+        repository.applyFullDownload(
+          _localFullDownloadPlan(),
+          onDbReplaced: () {
+            replacementReported = true;
+            expect(_readMarker(dbPath), 'new');
+            expect(refresh.called, isFalse);
+          },
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(replacementReported, isTrue);
+      expect(refresh.called, isTrue);
+      expect(_readMarker(dbPath), 'new');
+    },
   );
 
   test(
@@ -404,6 +507,128 @@ void main() {
   );
 
   test(
+    'applyDeltaPlan מסמן reconcile מלא כשמשתנה תוכן שאינו ניתן למיפוי לספר',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeSchema4SourceDb(dbPath, version: 1, sourceName: 'old');
+      final expectedPath = p.join(tmp.path, 'expected.db');
+      _writeSchema4SourceDb(expectedPath, version: 2, sourceName: 'new');
+      final patchPath = p.join(tmp.path, 'patch-1-2.db');
+      _writeSourcePatch(
+        patchPath,
+        fromVersion: 1,
+        toVersion: 2,
+        sourceName: 'new',
+      );
+      final refresh = _NoopRefreshService();
+      final repository = LibraryUpdateRepository(
+        discovery: _unusedDiscovery(),
+        downloader: _PatchMapDownloader({'patch-1-2.db': patchPath}),
+        refreshService: refresh,
+        dbPathProvider: () => dbPath,
+        dataRootProvider: () async => tmp.path,
+        nowTimestamp: () => '2026-09-01T00:00:00Z',
+      );
+
+      final result = await repository.applyDeltaPlan(
+        _schema4DeltaPlan([
+          _schema4Edge(
+            fromVersion: 1,
+            toVersion: 2,
+            patchName: 'patch-1-2.db',
+            toHash: _logicalHash(expectedPath),
+          ),
+        ]),
+      );
+
+      expect(result.appliedSteps, 1);
+      expect(result.changedBookIds, isEmpty);
+      expect(result.requiresFullIndexRefresh, isTrue);
+      expect(refresh.called, isTrue);
+      expect(const LocalDbVersionReader().read(dbPath).dbVersion, 2);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  test(
+    'כשל בצעד דלתא מאוחר מדווח את הצעדים שכבר נכתבו ומרענן runtime',
+    () async {
+      final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
+      _writeSchema4SourceDb(dbPath, version: 1, sourceName: 'old');
+      final expectedPath = p.join(tmp.path, 'expected.db');
+      _writeSchema4SourceDb(expectedPath, version: 2, sourceName: 'new');
+      final firstPatch = p.join(tmp.path, 'patch-1-2.db');
+      final invalidPatch = p.join(tmp.path, 'patch-2-3.db');
+      _writeSourcePatch(
+        firstPatch,
+        fromVersion: 1,
+        toVersion: 2,
+        sourceName: 'new',
+      );
+      _writeSourcePatch(
+        invalidPatch,
+        fromVersion: 2,
+        toVersion: 3,
+        sourceName: 'newer',
+        patchFormatVersion: 99,
+      );
+      final refresh = _NoopRefreshService();
+      final repository = LibraryUpdateRepository(
+        discovery: _unusedDiscovery(),
+        downloader: _PatchMapDownloader({
+          'patch-1-2.db': firstPatch,
+          'patch-2-3.db': invalidPatch,
+        }),
+        refreshService: refresh,
+        dbPathProvider: () => dbPath,
+        dataRootProvider: () async => tmp.path,
+        nowTimestamp: () => '2026-09-01T00:00:00Z',
+      );
+      final plan = _schema4DeltaPlan([
+        _schema4Edge(
+          fromVersion: 1,
+          toVersion: 2,
+          patchName: 'patch-1-2.db',
+          toHash: _logicalHash(expectedPath),
+        ),
+        _schema4Edge(
+          fromVersion: 2,
+          toVersion: 3,
+          patchName: 'patch-2-3.db',
+          toHash: 'unused',
+        ),
+      ]);
+
+      await expectLater(
+        repository.applyDeltaPlan(plan),
+        throwsA(
+          isA<PartiallyAppliedLibraryDeltaException>()
+              .having(
+                (e) => e.cause,
+                'cause',
+                isA<PatchApplyException>(),
+              )
+              .having(
+                (e) => e.appliedResult.appliedSteps,
+                'appliedSteps',
+                1,
+              )
+              .having(
+                (e) => e.appliedResult.requiresFullIndexRefresh,
+                'requiresFullIndexRefresh',
+                isTrue,
+              ),
+        ),
+      );
+
+      expect(refresh.called, isTrue);
+      expect(const LocalDbVersionReader().read(dbPath).dbVersion, 2);
+      expect(_readSourceName(dbPath), 'new');
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  test(
     'קורא RO ממשיך לקרוא בזמן כתיבת WAL (הנחת היסוד של עדכון ללא חסימה)',
     () async {
       final dbPath = p.join(tmp.path, DatabaseConstants.databaseFileName);
@@ -516,6 +741,90 @@ String? _readMarker(String dbPath) {
   }
 }
 
+LibraryUpdatePlan _localFullDownloadPlan() => LibraryUpdatePlan.fullDownload(
+  localVersion: 1,
+  targetVersion: 2,
+  asset: const ReleaseAsset(
+    name: DatabaseConstants.databaseArchiveFileName,
+    downloadUrl: 'https://x/seforim.db.zst',
+    size: 1,
+  ),
+  releaseTag: 'v2',
+);
+
+LibraryUpdateRepository _localFullDownloadRepository({
+  required Directory tmp,
+  required String dbPath,
+  LibraryDbRecoveryService recovery = const LibraryDbRecoveryService(),
+  LibraryRuntimeRefreshService refreshService =
+      const LibraryRuntimeRefreshService(),
+}) => LibraryUpdateRepository(
+  discovery: _unusedDiscovery(),
+  downloader: PatchDownloader(
+    httpClient: MockClient.streaming(
+      (request, bodyStream) async => http.StreamedResponse(
+        Stream.value(const [1]),
+        200,
+        contentLength: 1,
+      ),
+    ),
+    decompress: (bytes) async => bytes,
+  ),
+  recovery: recovery,
+  refreshService: refreshService,
+  dbPathProvider: () => dbPath,
+  dataRootProvider: () async => tmp.path,
+  nowTimestamp: () => '2026-09-01T00:00:00Z',
+  diskSpaceProvider: (_) async => DiskSpaceInfo.unknown,
+  fullDbExtractor: (archivePath, outputPath) async {
+    _writeDb(outputPath, version: 2, marker: 'new');
+  },
+);
+
+Future<void> _waitUntil(bool Function() predicate) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!predicate()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timeout while waiting for asynchronous condition');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
+
+class _GatedAfterBeginRecovery extends LibraryDbRecoveryService {
+  final beginCompleted = Completer<void>();
+  final releaseBegin = Completer<void>();
+
+  @override
+  Future<void> beginApply({
+    required String dbPath,
+    required int fromVersion,
+    required int toVersion,
+    required String timestamp,
+    bool createBackup = true,
+  }) async {
+    await super.beginApply(
+      dbPath: dbPath,
+      fromVersion: fromVersion,
+      toVersion: toVersion,
+      timestamp: timestamp,
+      createBackup: createBackup,
+    );
+    beginCompleted.complete();
+    await releaseBegin.future;
+  }
+}
+
+class _ThrowingRefreshService extends LibraryRuntimeRefreshService {
+  bool called = false;
+
+  @override
+  Future<void> refreshAfterDbUpdate() async {
+    called = true;
+    throw StateError('refresh failed');
+  }
+}
+
 class _NoopRefreshService extends LibraryRuntimeRefreshService {
   bool called = false;
 
@@ -538,6 +847,134 @@ class _LocalPatchDownloader extends PatchDownloader {
     void Function(int downloaded, int? total)? onProgress,
     bool Function()? isCancelled,
   }) async => patchPath;
+}
+
+class _PatchMapDownloader extends PatchDownloader {
+  _PatchMapDownloader(this.patchPaths) : super(decompress: (b) async => b);
+
+  final Map<String, String> patchPaths;
+
+  @override
+  Future<String> downloadAndExtract({
+    required PatchFileEntry patchFile,
+    required String downloadUrl,
+    required Directory destDir,
+    void Function(int downloaded, int? total)? onProgress,
+    bool Function()? isCancelled,
+  }) async => patchPaths[patchFile.file]!;
+}
+
+String _logicalHash(String dbPath) {
+  final db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+  try {
+    return const LogicalContentHasher().compute(db);
+  } finally {
+    db.close();
+  }
+}
+
+void _writeSchema4SourceDb(
+  String dbPath, {
+  required int version,
+  required String sourceName,
+}) {
+  final db = sqlite3.sqlite3.open(dbPath);
+  try {
+    db.execute('CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT)');
+    db.execute(
+      "INSERT INTO schema_meta VALUES ('db_version', ?), "
+      "('db_schema_version', '4')",
+      [version.toString()],
+    );
+    db.execute('CREATE TABLE source (id INTEGER PRIMARY KEY, name TEXT)');
+    db.execute('INSERT INTO source VALUES (1, ?)', [sourceName]);
+    db.execute('PRAGMA journal_mode=DELETE');
+  } finally {
+    db.close();
+  }
+}
+
+void _writeSourcePatch(
+  String patchPath, {
+  required int fromVersion,
+  required int toVersion,
+  required String sourceName,
+  int patchFormatVersion = 4,
+}) {
+  final db = sqlite3.sqlite3.open(patchPath);
+  try {
+    db.execute('CREATE TABLE patch_meta (key TEXT PRIMARY KEY, value TEXT)');
+    db.execute(
+      "INSERT INTO patch_meta VALUES ('schema_version', ?), "
+      "('from_version', ?), ('to_version', ?)",
+      [patchFormatVersion, fromVersion, toVersion],
+    );
+    db.execute(
+      'CREATE TABLE migrations (version INTEGER PRIMARY KEY, sql TEXT)',
+    );
+    db.execute(
+      'CREATE TABLE upsert_schema_meta (key TEXT PRIMARY KEY, value TEXT)',
+    );
+    db.execute(
+      "INSERT INTO upsert_schema_meta VALUES ('db_version', ?)",
+      [toVersion.toString()],
+    );
+    db.execute(
+      'CREATE TABLE upsert_source (id INTEGER PRIMARY KEY, name TEXT)',
+    );
+    db.execute('INSERT INTO upsert_source VALUES (1, ?)', [sourceName]);
+  } finally {
+    db.close();
+  }
+}
+
+PatchEdge _schema4Edge({
+  required int fromVersion,
+  required int toVersion,
+  required String patchName,
+  required String toHash,
+}) {
+  final manifest = DeltaManifest.fromJson({
+    'fromVersion': fromVersion,
+    'toVersion': toVersion,
+    'fromSchemaVersion': 4,
+    'toSchemaVersion': 4,
+    'patchFormatVersion': 4,
+    'fromContentHash': 'unused',
+    'toContentHash': toHash,
+    'patchFiles': [
+      {
+        'file': patchName,
+        'compression': 'zstd',
+        'sha256': 'aa',
+        'size': 1,
+        'uncompressedSha256': 'bb',
+        'uncompressedSize': 1,
+      },
+    ],
+  });
+  return PatchEdge(
+    manifest: manifest,
+    patchFileUrls: {patchName: 'https://x/$patchName'},
+    manifestUrl: 'https://x/$patchName.manifest.json',
+  );
+}
+
+LibraryUpdatePlan _schema4DeltaPlan(List<PatchEdge> steps) =>
+    LibraryUpdatePlan.delta(
+      localVersion: steps.first.fromVersion,
+      targetVersion: steps.last.toVersion,
+      steps: steps,
+    );
+
+String? _readSourceName(String dbPath) {
+  final db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+  try {
+    return db.select('SELECT name FROM source WHERE id = 1').first['name']
+        as String?;
+  } finally {
+    db.close();
+  }
 }
 
 LibraryUpdatePlan _deltaPlan() {

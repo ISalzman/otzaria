@@ -61,6 +61,7 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
@@ -77,7 +78,14 @@ import 'package:otzaria/widgets/navigation/book_view_actions.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
+import 'package:otzaria/plugins/services/context_menu_registry.dart';
+import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/utils/plugin_context_menu_entries.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_book/view/selection/plugin_selection_payload.dart';
+import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria/core/messages/plugin_messages.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/models/book_model.dart';
@@ -116,6 +124,7 @@ class _WordExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
   final String? fontFamily;
   final double fontSize;
 
@@ -125,6 +134,7 @@ class _WordExportRequest {
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
     required this.fontFamily,
     required this.fontSize,
   });
@@ -135,12 +145,14 @@ class _TextExportRequest {
   final bool removeNikud;
   final bool removeTaamim;
   final bool shouldReplaceHolyNames;
+  final HolyNameStyle holyNameStyle;
 
   const _TextExportRequest({
     required this.rawContent,
     required this.removeNikud,
     required this.removeTaamim,
     required this.shouldReplaceHolyNames,
+    required this.holyNameStyle,
   });
 }
 
@@ -155,6 +167,7 @@ Uint8List _createTextBookWordExport(_WordExportRequest request) {
             removeNikud: request.removeNikud,
             removeTaamim: request.removeTaamim,
             shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+            holyNameStyle: request.holyNameStyle,
             stripHtml: false,
           ),
         ),
@@ -185,6 +198,7 @@ String _createTextBookTextExport(_TextExportRequest request) {
           removeNikud: request.removeNikud,
           removeTaamim: request.removeTaamim,
           shouldReplaceHolyNames: request.shouldReplaceHolyNames,
+          holyNameStyle: request.holyNameStyle,
           stripHtml: true,
         ),
       )
@@ -676,6 +690,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
             fontFamily: settingsState.fontFamily,
             fontSize: state.fontSize,
           ),
@@ -689,6 +704,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             removeNikud: state.removeNikud,
             removeTaamim: removeTaamim,
             shouldReplaceHolyNames: shouldReplaceHolyNames,
+            holyNameStyle: settingsState.holyNameStyle,
           ),
         );
         bytes = Uint8List.fromList(utf8.encode(text));
@@ -816,6 +832,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialIndex: initialIndex,
     );
     tabController.addListener(_handleTabChange);
+    // ה-listener נורה רק על שינוי — פתיחה ישירה ללשונית החיפוש (ספר שנפתח
+    // מתוצאת חיפוש) חייבת סנכרון מיידי, אחרת סרגל החיפוש מושבת (issue #1063).
+    _searchHost.activeTab = tabController.index;
 
     // בדיקה האם יש כותרות חלופיות
     _checkAltTitles();
@@ -916,6 +935,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             initialIndex: newIndex,
           );
           tabController.addListener(_handleTabChange);
+          _searchHost.activeTab = tabController.index;
         });
       }
     } catch (e) {
@@ -3264,34 +3284,64 @@ bool _handleGlobalKeyEvent(
     }
   }
 
+  // קיצורי מקלדת שתוספים הצהירו עליהם (מניפסט / app.registerShortcut) —
+  // פקודות שלהם או פעולות תפריט הלחיצה הימנית על טקסט.
+  if (ShortcutValidator.declaredPluginShortcutKeys.isNotEmpty) {
+    for (final entry in ShortcutValidator.pluginShortcuts.entries) {
+      final shortcut = ShortcutValidator.getShortcutValue(entry.key) ?? '';
+      if (shortcut.isNotEmpty &&
+          ShortcutHelper.matchesShortcut(event, shortcut)) {
+        unawaited(
+          _dispatchPluginShortcut(
+            context: context,
+            state: state,
+            target: entry.value,
+            selectedText: selectedTextForNote,
+            selectedLineIndex: selectedLineForNote,
+            selectedColumn: selectedColumnForNote,
+          ),
+        );
+        return true;
+      }
+    }
+  }
+
+  // גודל הגופן — קיצורים הניתנים להתאמה אישית (ברירת מחדל Ctrl+= / Ctrl+- / Ctrl+0).
+  final zoomInShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomInKey,
+  );
+  if (zoomInShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomInShortcut)) {
+    final newSize = min(50.0, state.fontSize + 3);
+    context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+    savePerBookDisplaySettings(context, state, fontSize: newSize);
+    return true;
+  }
+
+  final zoomOutShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomOutKey,
+  );
+  if (zoomOutShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomOutShortcut)) {
+    final newSize = max(15.0, state.fontSize - 3);
+    context.read<TextBookBloc>().add(UpdateFontSize(newSize));
+    savePerBookDisplaySettings(context, state, fontSize: newSize);
+    return true;
+  }
+
+  final zoomResetShortcut = ShortcutValidator.getShortcutValue(
+    ShortcutValidator.zoomResetKey,
+  );
+  if (zoomResetShortcut != null &&
+      ShortcutHelper.matchesShortcut(event, zoomResetShortcut)) {
+    context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
+    savePerBookDisplaySettings(context, state, fontSize: 25.0);
+    return true;
+  }
+
   // קיצורים קבועים (לא ניתנים להתאמה אישית).
   // ב-Mac מקבלים גם את Cmd (Meta) כי זו המוסכמה בפלטפורמה.
   final isCtrlOrCmd = ShortcutHelper.isPlainCtrlOrCmdPressed;
-
-  if (event is KeyDownEvent && isCtrlOrCmd) {
-    switch (event.logicalKey) {
-      // הגדל את גודל הטקסט (Ctrl++ או Ctrl+=)
-      case LogicalKeyboardKey.equal:
-      case LogicalKeyboardKey.add:
-        final newSize = min(50.0, state.fontSize + 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
-        return true;
-
-      // הקטן את גודל הטקסט (Ctrl+-)
-      case LogicalKeyboardKey.minus:
-        final newSize = max(15.0, state.fontSize - 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
-        return true;
-
-      // איפוס גודל טקסט (Ctrl+0)
-      case LogicalKeyboardKey.digit0:
-        context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
-        savePerBookDisplaySettings(context, state, fontSize: 25.0);
-        return true;
-    }
-  }
 
   // ניווט עם Ctrl+Home ו-Ctrl+End
   if (event is KeyDownEvent && isCtrlOrCmd) {
@@ -3341,6 +3391,168 @@ bool _handleGlobalKeyEvent(
   }
 
   return false;
+}
+
+/// מפעיל קיצור מקלדת שתוסף הצהיר עליו. קיצור שקשור לפעולת תפריט ההקשר
+/// (contextMenuItemId) מפעיל אותה בדיוק כמו לחיצה ימנית על הפריט; קיצור
+/// עם פקודה חופשית (command) שולח לתוסף אירוע `app.command`.
+Future<void> _dispatchPluginShortcut({
+  required BuildContext context,
+  required TextBookLoaded state,
+  required PluginShortcutTarget target,
+  required String? selectedText,
+  required int? selectedLineIndex,
+  required int? selectedColumn,
+}) async {
+  if (target.contextMenuItemId != null) {
+    await _dispatchContextMenuShortcut(
+      context: context,
+      state: state,
+      target: target,
+      selectedText: selectedText,
+      selectedLineIndex: selectedLineIndex,
+      selectedColumn: selectedColumn,
+    );
+    return;
+  }
+  if (target.command == null) return;
+  await PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
+    target.pluginId,
+    'app.command',
+    {'command': target.command, 'shortcutId': target.shortcutId},
+    preferBackground: true,
+  );
+}
+
+/// מפעיל פעולת תפריט הקשר של תוסף דרך קיצור מקלדת, בדיוק כמו לחיצה ימנית
+/// על הפריט. הפעולה דורשת טקסט מסומן בספר הפתוח.
+Future<void> _dispatchContextMenuShortcut({
+  required BuildContext context,
+  required TextBookLoaded state,
+  required PluginShortcutTarget target,
+  required String? selectedText,
+  required int? selectedLineIndex,
+  required int? selectedColumn,
+}) async {
+  final item = ContextMenuRegistry.instance.findItem(
+    target.pluginId,
+    target.contextMenuItemId ?? '',
+  );
+  if (item == null) return;
+
+  // נקרא לפני ה-await כדי לא להחזיק BuildContext מעבר לגבול אסינכרוני.
+  final textBookBloc = context.read<TextBookBloc>();
+  final settingsState = context.read<SettingsBloc>().state;
+  final selectionActionDispatcher = pluginSelectionActionDispatcherOf(context);
+
+  final text = selectedText ?? '';
+  final sectionIndex = selectedLineIndex;
+  if (text.trim().isEmpty || sectionIndex == null || sectionIndex < 0) {
+    UiSnack.showError(PluginMessages.selectTextForContextMenuAction);
+    return;
+  }
+
+  final contextName = state.showPageShapeView
+      ? 'reader-page-shape-selection'
+      : 'reader-selection';
+  if (!item.contexts.contains(contextName)) {
+    UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
+    return;
+  }
+  if (!ContextMenuRegistry.instance.isItemVisible(
+    target.pluginId,
+    item.id,
+  )) {
+    UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
+    return;
+  }
+
+  final selectedLineCount = text.split('\n').length;
+  List<String>? fullContentLines;
+  if (selectedLineCount > 1) {
+    final fullContent = await textBookBloc.repository.getBookContent(
+      state.book,
+    );
+    fullContentLines = await splitContentLines(fullContent);
+  }
+
+  // השורה המסומנת נטענה בהכרח, אבל ברשימה חלקית (חימום/שחרור) עשויים
+  // להיות placeholders ריקים — נופלים אז לקריאת התוכן המלא מה-repository.
+  var rawText = sectionIndex < state.content.length
+      ? state.content[sectionIndex]
+      : '';
+  if (rawText.isEmpty) {
+    fullContentLines ??= await splitContentLines(
+      await textBookBloc.repository.getBookContent(state.book),
+    );
+    if (sectionIndex < fullContentLines.length) {
+      rawText = fullContentLines[sectionIndex];
+    }
+  }
+  if (rawText.isEmpty) {
+    UiSnack.showError(PluginMessages.contextMenuActionUnavailableHere);
+    return;
+  }
+
+  final renderSettings = RenderSettings(
+    removeNikud: state.removeNikud,
+    removePunctuation: state.removePunctuation,
+    removeTeamim: !settingsState.showTeamim,
+    replaceHolyNames: settingsState.replaceHolyNames,
+    holyNameStyle: settingsState.holyNameStyle,
+    searchText: state.searchText,
+    searchOptions: state.searchOptions,
+    alternativeWords: state.alternativeWords,
+    spacingValues: state.spacingValues,
+    isFuzzySearch: state.searchMode == SearchMode.fuzzy,
+    searchMode: state.searchMode,
+    searchDistance: state.searchDistance,
+    matchPolicy: state.matchPolicy,
+    fontSize: state.fontSize,
+    fontFamily: settingsState.fontFamily,
+    fontWeight: settingsState.fontBold ? FontWeight.bold : null,
+    lineHeight: settingsState.lineHeight,
+  );
+
+  final Map<String, dynamic> selection;
+  if (selectedLineCount > 1 && fullContentLines != null) {
+    final endIndex = min(
+      sectionIndex + selectedLineCount,
+      fullContentLines.length,
+    );
+    selection = buildPluginMultiSectionSelectionPayload(
+      state: state,
+      rawTexts: fullContentLines.sublist(sectionIndex, endIndex),
+      selectedText: text,
+      firstSectionIndex: sectionIndex,
+      startHint: selectedColumn,
+      settings: renderSettings,
+    );
+  } else {
+    selection = buildPluginSelectionPayload(
+      state: state,
+      rawText: rawText,
+      selectedText: text,
+      sectionIndex: sectionIndex,
+      startHint: selectedColumn,
+      settings: renderSettings,
+    );
+  }
+
+  final renderedSelectedText =
+      (selection['renderedSelectedText'] ?? selection['text'] ?? '').toString();
+  if (!item.isVisibleForSelection(renderedSelectedText)) {
+    UiSnack.showError(PluginMessages.contextMenuActionUnavailableForSelection);
+    return;
+  }
+
+  await dispatchPluginContextMenuItemClick(
+    dispatcher: PluginRuntimeDispatcher.instance,
+    pluginId: target.pluginId,
+    item: item,
+    selection: selection,
+    selectionActionDispatcher: selectionActionDispatcher,
+  );
 }
 
 /// Helper function to add bookmark from keyboard shortcut

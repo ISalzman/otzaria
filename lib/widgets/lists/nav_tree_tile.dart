@@ -314,6 +314,9 @@ class NavTreeHeader extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onClearFilter;
 
+  /// פעולה קומפקטית בקצה הכותרת (מוצגת כשאין כפתור "נקה סינון").
+  final Widget? trailing;
+
   const NavTreeHeader({
     super.key,
     required this.title,
@@ -321,6 +324,7 @@ class NavTreeHeader extends StatelessWidget {
     this.isSelected = false,
     this.onTap,
     this.onClearFilter,
+    this.trailing,
   });
 
   @override
@@ -360,7 +364,9 @@ class NavTreeHeader extends StatelessWidget {
                 fontSize: AppTokens.fontMD,
                 color: cs.onSurfaceVariant,
               ),
-            ),
+            )
+          else
+            ?trailing,
         ],
       ),
     );

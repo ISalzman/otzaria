@@ -79,6 +79,7 @@ double matchFractionInLine(
   String rawLine,
   String query, {
   int? matchOffset,
+  bool wholeWord = true,
   @visibleForTesting RegExp? pattern,
 }) {
   final clean = cleanLineForSearch(rawLine);
@@ -87,7 +88,8 @@ double matchFractionInLine(
   if (matchOffset != null) {
     offset = matchOffset;
   } else {
-    final regExp = pattern ?? buildLiteralPattern(query)?.regExp;
+    final regExp =
+        pattern ?? buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
     if (regExp == null) return 0;
     offset = regExp.firstMatch(clean)?.start ?? -1;
   }
@@ -110,10 +112,12 @@ double matchFractionFromLineLength({int? matchOffset, int? lineLength}) {
 bool queryMatchesInlineNoteOnly(
   String rawLine,
   String query, {
+  bool wholeWord = true,
   @visibleForTesting RegExp? pattern,
 }) {
   if (!rawLine.contains('footnote')) return false;
-  final regExp = pattern ?? buildLiteralPattern(query)?.regExp;
+  final regExp =
+      pattern ?? buildLiteralPattern(query, wholeWord: wholeWord)?.regExp;
   if (regExp == null) return false;
 
   final noteBody = notes.notesForLines([rawLine], const [0]).join(' ');
@@ -139,7 +143,8 @@ class _SearchWorkerHost {
   Future<void>? _startFuture;
   Completer<void>? _startCompleter;
   int _nextRequestId = 0;
-  final Map<int, Completer<List<TextSearchResult>>> _pending = {};
+  final Map<int, Completer<({List<TextSearchResult> results, bool truncated})>>
+  _pending = {};
 
   // מעקב אחר התוכן האחרון שנשלח ל-worker. כל עוד מדובר באותו אובייקט תוכן
   // (אותו ספר פתוח) שולחים רק את השאילתה — לא את הספר כולו — וה-worker
@@ -147,7 +152,7 @@ class _SearchWorkerHost {
   List<String>? _lastSentContent;
   int _lastContentId = 0;
 
-  Future<List<TextSearchResult>> search({
+  Future<({List<TextSearchResult> results, bool truncated})> search({
     required List<String> content,
     required String query,
     required String patternSource,
@@ -155,7 +160,8 @@ class _SearchWorkerHost {
     await _ensureStarted();
 
     final requestId = ++_nextRequestId;
-    final completer = Completer<List<TextSearchResult>>();
+    final completer =
+        Completer<({List<TextSearchResult> results, bool truncated})>();
     _pending[requestId] = completer;
 
     final bool contentChanged = !identical(content, _lastSentContent);
@@ -247,8 +253,8 @@ class _SearchWorkerHost {
     switch (type) {
       case 'result':
         final rawResults = message['results'] as List<dynamic>? ?? const [];
-        completer.complete(
-          rawResults
+        completer.complete((
+          results: rawResults
               .cast<Map<dynamic, dynamic>>()
               .map(
                 (raw) => TextSearchResult(
@@ -261,10 +267,14 @@ class _SearchWorkerHost {
                 ),
               )
               .toList(growable: false),
-        );
+          truncated: message['truncated'] as bool? ?? false,
+        ));
         break;
       case 'canceled':
-        completer.complete(const []);
+        completer.complete((
+          results: const <TextSearchResult>[],
+          truncated: false,
+        ));
         break;
       case 'error':
         completer.completeError(
@@ -278,7 +288,10 @@ class _SearchWorkerHost {
   Future<void> resetForTesting() async {
     for (final completer in _pending.values) {
       if (!completer.isCompleted) {
-        completer.complete(const []);
+        completer.complete((
+          results: const <TextSearchResult>[],
+          truncated: false,
+        ));
       }
     }
     _pending.clear();
@@ -379,8 +392,26 @@ class SectionSearchWorkerRuntime {
           final results = <Map<String, dynamic>>[];
           final address = <String>[];
           bool canceled = false;
+          bool truncated = false;
 
           for (int i = 0; i < cleanLines.length; i++) {
+            if (results.length >= _maxSearchResults) {
+              if (pattern
+                  .allMatches(cleanLines[i])
+                  .any((match) => match.end > match.start)) {
+                truncated = true;
+                break;
+              }
+              if ((i + 1) % _searchChunkSize == 0) {
+                await Future<void>.delayed(Duration.zero);
+                if (_queuedRequest != null) {
+                  canceled = true;
+                  break;
+                }
+              }
+              continue;
+            }
+
             final rawLine = sourceLines[i];
 
             if (rawLine.contains('<h') && !rawLine.startsWith('<h1')) {
@@ -420,11 +451,13 @@ class SectionSearchWorkerRuntime {
                 'lineLength': cleanLines[i].length,
               });
               if (results.length >= _maxSearchResults) {
+                truncated = m < lineMatches.length - 1;
                 break;
               }
             }
             if (results.length >= _maxSearchResults) {
-              break;
+              if (truncated) break;
+              continue;
             }
 
             if ((i + 1) % _searchChunkSize == 0) {
@@ -448,6 +481,7 @@ class SectionSearchWorkerRuntime {
             'type': 'result',
             'requestId': requestId,
             'results': results,
+            'truncated': truncated,
           });
         } catch (error) {
           _mainSendPort.send({
@@ -489,21 +523,28 @@ class SectionSearchWorkerRuntime {
 
 /// [patternSource] מוזרק בבדיקות בלבד (הן אינן יכולות לקרוא למנוע);
 /// בייצור התבנית נבנית מהמנוע ב-isolate הראשי ונשלחת ל-worker.
+///
+/// [onTruncated] נקרא עם `true` כשנמצאו התאמות נוספות אחרי תקרת התוצאות.
 Future<List<TextSearchResult>> searchInContent({
   required List<String> content,
   required String query,
+  bool wholeWord = true,
   @visibleForTesting String? patternSource,
+  ValueChanged<bool>? onTruncated,
 }) async {
   if (content.isEmpty) return [];
 
-  final source = patternSource ?? buildLiteralPattern(query)?.source;
+  final source =
+      patternSource ?? buildLiteralPattern(query, wholeWord: wholeWord)?.source;
   if (source == null) return [];
 
-  return _SearchWorkerHost.instance.search(
+  final outcome = await _SearchWorkerHost.instance.search(
     content: content,
     query: query,
     patternSource: source,
   );
+  onTruncated?.call(outcome.truncated);
+  return outcome.results;
 }
 
 @visibleForTesting

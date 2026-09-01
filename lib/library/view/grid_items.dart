@@ -555,7 +555,12 @@ class _BookGridTextColumn extends StatelessWidget {
         //     : titleOverflow
         //     ? 2
         //     : 3;
-        final hasTopics = showTopics && book.topics.trim().isNotEmpty;
+        // בתוצאות חיפוש מוצג נתיב הקטגוריות — הוא שמסביר למשתמש למה הספר
+        // הותאם, ובספרים אישיים שם הספר יושב עליו ולא על הקובץ.
+        final pathText = (book.categoryPath ?? '').trim().isNotEmpty
+            ? book.categoryPath!.trim()
+            : book.topics.trim();
+        final hasTopics = showTopics && pathText.isNotEmpty;
         final topicsMaxLines = !hasTopics
             ? 0
             : constraints.maxHeight < 110
@@ -600,7 +605,7 @@ class _BookGridTextColumn extends StatelessWidget {
             if (hasTopics) ...[
               const Spacer(),
               LibraryOverflowTooltipText(
-                text: book.topics,
+                text: pathText,
                 maxLines: topicsMaxLines,
                 textAlign: TextAlign.right,
                 style: topicsStyle,

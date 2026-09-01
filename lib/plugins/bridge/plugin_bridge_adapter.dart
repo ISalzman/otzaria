@@ -58,6 +58,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/history/bloc/history_state.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -96,6 +97,7 @@ import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_condition_evaluator.dart';
 import 'package:otzaria/plugins/services/plugin_settings_access_policy.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/services/plugin_shortcut_service.dart';
 import 'package:otzaria/plugins/services/plugin_path_safety.dart';
 import 'package:otzaria/plugins/services/plugin_network_fetch_service.dart';
@@ -421,13 +423,28 @@ class PluginBridgeDependencies {
 
   /// מייצר PDF מהדף של מופע התוסף (`ui.exportPdf`). אופציונלי — ברירת המחדל
   /// היא [PluginPrintService] מעל ה-WebView הרשום; קיים להזרקה בבדיקות.
-  final Future<Uint8List> Function(String pluginId, String instanceId)?
+  final Future<Uint8List> Function(
+    String pluginId,
+    String instanceId, {
+    PluginPdfLayout? layout,
+  })?
   capturePluginPagePdf;
 
   /// האם ל-WebView של המופע יש כרגע הפעלת-משתמש חולפת (`navigator
   /// .userActivation`). אופציונלי — ברירת המחדל קוראת מה-WebView הרשום.
   final Future<bool> Function(String pluginId, String instanceId)?
   hasUserActivation;
+
+  /// ה-BLoC של התיקיות האישיות — היעד של `library.refreshUserBooks`. אותה
+  /// סריקה שהלחצן „סרוק מחדש תיקיות אישיות” מפעיל, ולכן דרכה ולא בקוד סריקה
+  /// משלנו. אופציונלי: כשאינו מסופק (בדיקות), הקריאה מחזירה
+  /// `error.unavailable`.
+  final CustomFoldersBloc? customFoldersBloc;
+
+  /// ממתין לרענון הקטלוג שנוצר בעקבות `library.refreshUserBooks`. ההרשמה
+  /// נעשית לפני תחילת הסריקה, כדי שתוצאת API מוצלחת תבטיח שהספרים החדשים
+  /// כבר נראים לקריאה הבאה של התוסף.
+  final Future<void> Function(int requestId)? waitForLibraryRefresh;
 
   const PluginBridgeDependencies({
     required this.historyBloc,
@@ -458,6 +475,8 @@ class PluginBridgeDependencies {
     this.printPluginPage,
     this.capturePluginPagePdf,
     this.hasUserActivation,
+    this.customFoldersBloc,
+    this.waitForLibraryRefresh,
   });
 }
 
@@ -474,10 +493,7 @@ const int _pluginRawLinksMaxRecords = 10000;
 const int _pluginLinkContentMaxItems = 25;
 
 typedef PluginRpcEventSink =
-    Future<void> Function(
-      String topic,
-      Map<String, dynamic> payload,
-    );
+    Future<void> Function(String topic, Map<String, dynamic> payload);
 
 class _PluginNetworkRequest {
   final Uri uri;
@@ -793,6 +809,26 @@ class PluginBridgeAdapter {
         )).toJson();
       case 'getGrantedPermissions':
         return {'permissions': await _getGrantedPermissions()};
+      case 'registerShortcut':
+        PluginShortcutRegistry.instance.registerPayload(plugin.pluginId, args);
+        return true;
+      case 'unregisterShortcut':
+        final id = args['id'] as String?;
+        if (id == null) throw Exception('error.invalid_params: id required');
+        PluginShortcutRegistry.instance.remove(plugin.pluginId, id);
+        return true;
+      case 'updateShortcut':
+        final id = args['id'];
+        final patch = args['patch'];
+        if (id is! String || patch is! Map) {
+          throw Exception('error.invalid_params: id and patch are required');
+        }
+        PluginShortcutRegistry.instance.update(
+          plugin.pluginId,
+          id,
+          Map<String, dynamic>.from(patch),
+        );
+        return true;
       default:
         throw Exception("error.unknown_method: Unknown action in app: $action");
     }
@@ -801,12 +837,71 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // library.*
   // ----------------------------------------------------------------
+  /// מזהה בקשת הרענון הבא. סטטי בכוונה: כמה מופעי adapter (טאב + רקע, או
+  /// תוספים שונים) יכולים להמתין לאותו BLoC בו-זמנית, והמזהה חייב להיות
+  /// ייחודי ביניהם כדי שכל אחד יזהה את התוצאה של הבקשה שלו.
+  static int _nextUserBooksRefreshRequestId = 1;
+
+  /// חסם עליון לסריקת התיקיות האישיות. לסריקה עצמה אין timeout טבעי — משכה
+  /// תלוי בכמות הקבצים אצל המשתמש — ובלעדיו תוסף שממתין לתשובה נתקע לנצח.
+  static const Duration _userBooksRefreshTimeout = Duration(minutes: 15);
+
+  /// `library.refreshUserBooks` — סורק מחדש את התיקיות האישיות של המשתמש
+  /// ומרענן בעקבותיה את קטלוג הספרייה. זה המסלול שתוסף שמוריד ספרים למשתמש
+  /// משתמש בו כדי שהספרים שהוריד יופיעו בספרייה בלי הפעלה מחדש.
+  ///
+  /// אילו תיקיות ייסרקו נקבע מהגדרות המשתמש בלבד — התוסף אינו מעביר נתיב,
+  /// ולכן אינו יכול לגרום לסריקה של תיקייה שהמשתמש לא הגדיר.
+  Future<Map<String, dynamic>> _refreshUserBooks() async {
+    final bloc = _dependencies.customFoldersBloc;
+    if (bloc == null) {
+      throw Exception(
+        'error.unavailable: personal books refresh is not available',
+      );
+    }
+
+    final requestId = _nextUserBooksRefreshRequestId++;
+    // ההרשמה נעשית לפני ה-add: סריקה שמסתיימת מהר הייתה מספיקה לפלוט את
+    // התוצאה לפני שהמאזין נרשם, והקריאה הייתה תקועה עד ה-timeout.
+    final completed = bloc.stream
+        .firstWhere((state) => state.completedScan?.requestId == requestId)
+        .timeout(_userBooksRefreshTimeout);
+    final waitForRefresh = _dependencies.waitForLibraryRefresh;
+    final libraryRefreshCompleted = waitForRefresh == null
+        ? null
+        : waitForRefresh(requestId).timeout(_userBooksRefreshTimeout);
+    bloc.add(
+      RescanCustomFolders(showNoChangesMessage: false, requestId: requestId),
+    );
+
+    final CustomFoldersScanOutcome outcome;
+    try {
+      outcome = (await completed).completedScan!;
+      if (libraryRefreshCompleted != null) {
+        await libraryRefreshCompleted;
+      }
+    } on TimeoutException {
+      throw Exception('error.timeout: personal books refresh timed out');
+    }
+    if (!outcome.isSuccess) {
+      throw Exception('error.internal: ${outcome.failureMessage}');
+    }
+    return {
+      'addedBooks': outcome.addedBooks,
+      'updatedBooks': outcome.updatedBooks,
+      // כשלים חלקיים: קבצים בודדים שלא נסרקו. הסריקה עצמה הצליחה.
+      'errors': outcome.errors,
+    };
+  }
+
   Future<dynamic> _handleLibrary(
     String action,
     Map<String, dynamic> args,
   ) async {
     final library = await DataRepository.instance.library;
     switch (action) {
+      case 'refreshUserBooks':
+        return await _refreshUserBooks();
       case 'findBooks':
         final query = args['query']?.toString() ?? '';
         final limit = args['limit'] as int? ?? 20;
@@ -1086,12 +1181,28 @@ class PluginBridgeAdapter {
     return values;
   }
 
+  /// רשימת-ההיתר של כותרות: כותרת עוברת אם היא ברשימה המפורשת או פותחת
+  /// באחת התחיליות. בלי שני הפילטרים — הכל עובר.
+  static bool _titleAllowed(
+    String title,
+    Set<String>? titles,
+    List<String>? prefixes,
+  ) {
+    if (titles == null && prefixes == null) return true;
+    if (titles != null && titles.contains(title)) return true;
+    return prefixes?.any(title.startsWith) ?? false;
+  }
+
   Future<dynamic> _getCommentators(
     Library library,
     Map<String, dynamic> args,
   ) async {
     final rawStart = args['startLine'];
     final rawEnd = args['endLine'];
+    final titlePrefixes = _optionalStringList(
+      args['titlePrefixes'],
+      'titlePrefixes',
+    );
     if ((rawStart == null) != (rawEnd == null)) {
       throw Exception(
         'error.invalid_params: startLine and endLine must be given together',
@@ -1100,7 +1211,7 @@ class PluginBridgeAdapter {
     final book = _findLinksTextBook(library, args);
     if (book == null) throw Exception('error.not_found: book not found');
 
-    final List<CommentatorInfo> commentators;
+    List<CommentatorInfo> commentators;
     Set<String> rare = const {};
     if (rawStart != null) {
       final startLine = _requireWireLine(rawStart, 'startLine');
@@ -1117,6 +1228,12 @@ class PluginBridgeAdapter {
       final detailed = await _linksRepository.getCommentatorsDetailed(book);
       commentators = detailed.commentators;
       rare = detailed.rare;
+    }
+    if (titlePrefixes != null) {
+      commentators = [
+        for (final c in commentators)
+          if (titlePrefixes.any(c.title.startsWith)) c,
+      ];
     }
 
     if (args['grouped'] as bool? ?? false) {
@@ -1166,6 +1283,10 @@ class PluginBridgeAdapter {
       args['targetTitles'],
       'targetTitles',
     );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final connectionTypes = _optionalStringList(
       args['connectionTypes'],
       'connectionTypes',
@@ -1179,12 +1300,15 @@ class PluginBridgeAdapter {
       book,
       startIndex: startLine,
       endIndex: endLine,
-      targetBookTitles: targetTitles,
+      // צמצום ב-SQL רק כשאין תחיליות — SQL מכיר רק כותרות מלאות, וצמצום
+      // לפי targetTitles לבדו היה מפיל את התאמות התחילית.
+      targetBookTitles: targetTitlePrefixes == null ? targetTitles : null,
     );
 
     final filtered = _filterLinkRecords(
       links,
       targetTitles: targetTitles,
+      targetTitlePrefixes: targetTitlePrefixes,
       connectionTypes: connectionTypes,
       maxRecords: _pluginLinksMaxRecords,
       // index1/index2 הם 1-based במודל; ה-wire של getLinks 0-based — זו
@@ -1244,6 +1368,10 @@ class PluginBridgeAdapter {
       args['targetTitles'],
       'targetTitles',
     );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final connectionTypes = _optionalStringList(
       args['connectionTypes'],
       'connectionTypes',
@@ -1256,12 +1384,13 @@ class PluginBridgeAdapter {
       book,
       startIndex: startLine,
       endIndex: endLine,
-      targetBookTitles: targetTitles,
+      targetBookTitles: targetTitlePrefixes == null ? targetTitles : null,
     );
 
     final filtered = _filterLinkRecords(
       links,
       targetTitles: targetTitles,
+      targetTitlePrefixes: targetTitlePrefixes,
       connectionTypes: connectionTypes,
       maxRecords: _pluginRawLinksMaxRecords,
       toRecord: (link, _) => link.toJson(),
@@ -1279,6 +1408,7 @@ class PluginBridgeAdapter {
   ({List<Map<String, dynamic>> records, bool truncated}) _filterLinkRecords(
     List<Link> links, {
     required List<String>? targetTitles,
+    required List<String>? targetTitlePrefixes,
     required List<String>? connectionTypes,
     required int maxRecords,
     required Map<String, dynamic> Function(Link link, String targetTitle)
@@ -1290,7 +1420,9 @@ class PluginBridgeAdapter {
     var truncated = false;
     for (final link in links) {
       final targetTitle = getTitleFromPath(link.path2);
-      if (titlesFilter != null && !titlesFilter.contains(targetTitle)) continue;
+      if (!_titleAllowed(targetTitle, titlesFilter, targetTitlePrefixes)) {
+        continue;
+      }
       if (typesFilter != null &&
           !typesFilter.contains(LinkTypes.normalize(link.connectionType)) &&
           !typesFilter.contains(LinkTypes.canonicalType(link.connectionType))) {
@@ -1322,6 +1454,14 @@ class PluginBridgeAdapter {
     Library library,
     Map<String, dynamic> args,
   ) async {
+    final targetTitles = _optionalStringList(
+      args['targetTitles'],
+      'targetTitles',
+    );
+    final targetTitlePrefixes = _optionalStringList(
+      args['targetTitlePrefixes'],
+      'targetTitlePrefixes',
+    );
     final book = _findLinksTextBook(library, args);
     if (book?.categoryId == null) {
       throw Exception('error.not_found: book not found');
@@ -1333,14 +1473,20 @@ class PluginBridgeAdapter {
     if (summary == null) {
       throw Exception('error.internal: link targets summary unavailable');
     }
+    final titlesFilter = targetTitles?.toSet();
     return {
       'targets': [
         for (final target in summary.targets)
-          {
-            'targetTitle': target.targetTitle,
-            'connectionType': target.connectionType,
-            'linkCount': target.linkCount,
-          },
+          if (_titleAllowed(
+            target.targetTitle,
+            titlesFilter,
+            targetTitlePrefixes,
+          ))
+            {
+              'targetTitle': target.targetTitle,
+              'connectionType': target.connectionType,
+              'linkCount': target.linkCount,
+            },
       ],
       // maxSourceLine מגיע 1-based מהמסד; ‎-1‎ = לספר אין קישורים כלל.
       'maxSourceLine': summary.maxSourceLine - 1,
@@ -1864,9 +2010,7 @@ class PluginBridgeAdapter {
           final autoSearch = args['autoSearch'] as bool? ?? true;
           final selectItems = (args['selectItems'] as List? ?? const [])
               .whereType<String>()
-              .where(
-                (id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id),
-              )
+              .where((id) => RegExp(r'^[A-Za-z0-9._-]{1,128}$').hasMatch(id))
               .take(4)
               .toList();
           final settings = PluginOpenSearchTabSettings.parse(
@@ -2121,10 +2265,7 @@ class PluginBridgeAdapter {
           }
           return PluginReaderScrollService(
             _dependencies.tabsBloc,
-          ).scrollToSection(
-            sectionIndex,
-            highlight: args['highlight'] == true,
-          );
+          ).scrollToSection(sectionIndex, highlight: args['highlight'] == true);
         }
       case 'getSelection':
         final currentPane = _dependencies.tabsBloc.state.readingPane;
@@ -2289,16 +2430,13 @@ class PluginBridgeAdapter {
         }
         final allBooks = (await DataRepository.instance.library).getAllBooks();
         final highlightUid = highlight.bookUid as String?;
-        final book = allBooks.cast<dynamic>().firstWhere(
-          (item) {
-            if (item == null) return false;
-            if (highlightUid != null && highlightUid.isNotEmpty) {
-              return PluginBookIdentity.uidOf(item as Book) == highlightUid;
-            }
-            return item.title == highlight.bookId;
-          },
-          orElse: () => null,
-        );
+        final book = allBooks.cast<dynamic>().firstWhere((item) {
+          if (item == null) return false;
+          if (highlightUid != null && highlightUid.isNotEmpty) {
+            return PluginBookIdentity.uidOf(item as Book) == highlightUid;
+          }
+          return item.title == highlight.bookId;
+        }, orElse: () => null);
         if (book == null) return false;
         _dependencies.bookOpenCoordinator.openBook(
           book,
@@ -2516,6 +2654,9 @@ class PluginBridgeAdapter {
           replaceHolyNames:
               Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
               false,
+          holyNameStyle: HolyNameStyle.fromStorage(
+            Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+          ),
         ),
         currentRef: snapshot?.currentRef,
       );
@@ -2556,6 +2697,9 @@ class PluginBridgeAdapter {
         replaceHolyNames:
             Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
             false,
+        holyNameStyle: HolyNameStyle.fromStorage(
+          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+        ),
       ),
       currentRef: null,
     );
@@ -2859,8 +3003,13 @@ class PluginBridgeAdapter {
           args['fileName'] as String?,
           'pdf',
         );
+        final layout = _parsePdfLayout(args);
         return await _runUserGatedDialog(() async {
-          final pdf = await capture(plugin.pluginId, instanceId);
+          final pdf = await capture(
+            plugin.pluginId,
+            instanceId,
+            layout: layout,
+          );
           final chosen = await saver(
             suggestedName: suggested,
             allowedExtensions: const ['pdf'],
@@ -2992,10 +3141,93 @@ class PluginBridgeAdapter {
 
   Future<Uint8List> _defaultCapturePagePdf(
     String pluginId,
-    String instanceId,
-  ) => const PluginPrintService().createPdf(
+    String instanceId, {
+    PluginPdfLayout? layout,
+  }) => const PluginPrintService().createPdf(
     _requireController(pluginId, instanceId),
+    layout: layout,
   );
+
+  /// גדלי דף נתמכים ב-`ui.exportPdf`, במילימטרים (רוחב, גובה) לאורך.
+  static const _pdfPageSizesMm = <String, (double, double)>{
+    'a4': (210, 297),
+    'a5': (148, 210),
+    'letter': (215.9, 279.4),
+    'legal': (215.9, 355.6),
+  };
+
+  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize`, `orientation`,
+  /// `marginMm` (מספר או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
+  PluginPdfLayout? _parsePdfLayout(Map<String, dynamic> args) {
+    final sizeName = (args['pageSize'] as String?)?.trim().toLowerCase();
+    final orientation = (args['orientation'] as String?)?.trim().toLowerCase();
+    final margin = args['marginMm'];
+    final backgrounds = args['printBackgrounds'];
+    if (sizeName == null &&
+        orientation == null &&
+        margin == null &&
+        backgrounds == null) {
+      return null;
+    }
+
+    (double, double)? size;
+    if (sizeName != null) {
+      size = _pdfPageSizesMm[sizeName];
+      if (size == null) {
+        throw Exception(
+          'error.invalid_params: unknown pageSize (supported: '
+          '${_pdfPageSizesMm.keys.join(', ')})',
+        );
+      }
+    }
+
+    bool? landscape;
+    if (orientation != null) {
+      if (orientation != 'portrait' && orientation != 'landscape') {
+        throw Exception(
+          "error.invalid_params: orientation must be 'portrait' or 'landscape'",
+        );
+      }
+      landscape = orientation == 'landscape';
+    }
+
+    double sideMm(Object? v, String name) {
+      if (v is! num || v.isNaN || v < 0 || v > 100) {
+        throw Exception('error.invalid_params: $name must be 0-100 (mm)');
+      }
+      return v.toDouble();
+    }
+
+    EdgeInsets? marginsMm;
+    if (margin != null) {
+      if (margin is num) {
+        marginsMm = EdgeInsets.all(sideMm(margin, 'marginMm'));
+      } else if (margin is Map) {
+        marginsMm = EdgeInsets.fromLTRB(
+          sideMm(margin['left'] ?? 0, 'marginMm.left'),
+          sideMm(margin['top'] ?? 0, 'marginMm.top'),
+          sideMm(margin['right'] ?? 0, 'marginMm.right'),
+          sideMm(margin['bottom'] ?? 0, 'marginMm.bottom'),
+        );
+      } else {
+        throw Exception(
+          'error.invalid_params: marginMm must be a number or a per-side map',
+        );
+      }
+    }
+
+    if (backgrounds != null && backgrounds is! bool) {
+      throw Exception('error.invalid_params: printBackgrounds must be a bool');
+    }
+
+    return PluginPdfLayout(
+      pageWidthMm: size?.$1,
+      pageHeightMm: size?.$2,
+      marginsMm: marginsMm,
+      landscape: landscape,
+      printBackgrounds: backgrounds as bool?,
+    );
+  }
 
   /// בודקת אם [targetPath] נמצא בתוך תיקייה שהמשתמש אישר דרך `ui.pickFolder`.
   ///
@@ -3473,7 +3705,10 @@ class PluginBridgeAdapter {
     final target = File(targetPath);
     final suffix = _randomSuffix();
     final staging = File(
-      p.join(target.parent.path, '.${p.basename(targetPath)}.$suffix$_stagingExt'),
+      p.join(
+        target.parent.path,
+        '.${p.basename(targetPath)}.$suffix$_stagingExt',
+      ),
     );
 
     // שאריות מכתיבה שנקטעה (קריסה בין ה-copy ל-rename) — אין להן שום מנגנון
@@ -3614,10 +3849,7 @@ class PluginBridgeAdapter {
     required bool writable,
   }) async {
     final grants = await _readUserFileGrants();
-    grants[token] = {
-      'path': path,
-      'access': writable ? 'readwrite' : 'read',
-    };
+    grants[token] = {'path': path, 'access': writable ? 'readwrite' : 'read'};
     await _pluginRepo.setKV(
       plugin.pluginId,
       '_internal',
@@ -4364,10 +4596,7 @@ class PluginBridgeAdapter {
   // ----------------------------------------------------------------
   // tools.*
   // ----------------------------------------------------------------
-  Future<dynamic> _handleTools(
-    String action,
-    Map<String, dynamic> args,
-  ) async {
+  Future<dynamic> _handleTools(String action, Map<String, dynamic> args) async {
     switch (action) {
       case 'gematria':
         {
@@ -4995,6 +5224,9 @@ class PluginBridgeAdapter {
         replaceHolyNames:
             Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
             false,
+        holyNameStyle: HolyNameStyle.fromStorage(
+          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+        ),
       ),
       renderedStartUtf16: start,
       renderedEndUtf16: end,
@@ -5398,11 +5630,7 @@ class PluginBridgeAdapter {
           if (cancelled) break;
           await eventSink(_networkFetchStreamEvent, {
             'streamId': streamId,
-            'chunk': {
-              'sequence': sequence++,
-              'type': 'data',
-              'body': fragment,
-            },
+            'chunk': {'sequence': sequence++, 'type': 'data', 'body': fragment},
           });
         }
       }
@@ -5441,10 +5669,7 @@ class PluginBridgeAdapter {
   Iterable<String> _splitNetworkFetchChunk(String value) sync* {
     var start = 0;
     while (start < value.length) {
-      var end = math.min(
-        start + _maxNetworkFetchChunkCodeUnits,
-        value.length,
-      );
+      var end = math.min(start + _maxNetworkFetchChunkCodeUnits, value.length);
       if (end < value.length &&
           _isHighSurrogate(value.codeUnitAt(end - 1)) &&
           _isLowSurrogate(value.codeUnitAt(end))) {

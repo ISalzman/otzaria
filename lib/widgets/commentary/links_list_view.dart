@@ -39,6 +39,7 @@ RenderSettings buildSelectedLinkRenderSettings({
     removePunctuation: removePunctuation,
     removeTeamim: !settingsState.showTeamim,
     replaceHolyNames: settingsState.replaceHolyNames,
+    holyNameStyle: settingsState.holyNameStyle,
     searchText: searchText,
     fontSize: settingsState.commentatorsFontSize,
     fontFamily: settingsState.commentatorsFontFamily,
@@ -761,7 +762,10 @@ class _LinksListViewState extends State<LinksListView> {
         builder: (context, settingsState) {
           String displayTitle = utils.getTitleFromPath(link.path2);
           if (settingsState.replaceHolyNames) {
-            displayTitle = utils.replaceHolyNames(displayTitle);
+            displayTitle = utils.replaceHolyNames(
+              displayTitle,
+              style: settingsState.holyNameStyle,
+            );
           }
           return Text(
             displayTitle,
@@ -785,7 +789,10 @@ class _LinksListViewState extends State<LinksListView> {
             if (markerLetter != null) markerPrefix = '($markerLetter) ';
           }
           final rawFallback = settingsState.replaceHolyNames
-              ? utils.replaceHolyNames(link.fallbackDisplayReference)
+              ? utils.replaceHolyNames(
+                  link.fallbackDisplayReference,
+                  style: settingsState.holyNameStyle,
+                )
               : link.fallbackDisplayReference;
 
           if (!isExpanded) {
@@ -807,7 +814,10 @@ class _LinksListViewState extends State<LinksListView> {
               String displaySubtitle =
                   markerPrefix + (snapshot.data ?? rawFallback);
               if (settingsState.replaceHolyNames) {
-                displaySubtitle = utils.replaceHolyNames(displaySubtitle);
+                displaySubtitle = utils.replaceHolyNames(
+                  displaySubtitle,
+                  style: settingsState.holyNameStyle,
+                );
               }
               return Text(
                 displaySubtitle,
@@ -954,6 +964,14 @@ class _LinksListViewState extends State<LinksListView> {
                     fontSize: widget.fontSize,
                     link: _savedSelectedLink,
                   ),
+                  onCopySelectedWithoutNikud: () =>
+                      ContextMenuUtils.copyFormattedText(
+                        context: menuCtx,
+                        savedSelectedText: _savedSelectedText,
+                        fontSize: widget.fontSize,
+                        link: _savedSelectedLink,
+                        removeNikud: true,
+                      ),
                 ),
             child: GestureDetector(
               onTap: () => _navigateToLink(link),

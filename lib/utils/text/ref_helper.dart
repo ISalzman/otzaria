@@ -1,3 +1,5 @@
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -6,6 +8,24 @@ Future<String> refFromIndex(
   Future<List<TocEntry>> tableOfContents,
 ) async {
   return refFromTocList(index, await tableOfContents);
+}
+
+/// הכתובת ההיררכית של שורה [index] ב-[book], בשאילתה אחת על ה-DB במקום
+/// טעינת עץ הכותרות כולו — ההפרש מורגש בספרים עם עשרות אלפי כותרות.
+///
+/// מחזירה `null` לספר שאינו ב-DB או לשורה שאין לה מיפוי כותרת, ואז על הקורא
+/// ליפול חזרה ל-[refFromIndex].
+Future<String?> refFromDbLine(TextBook book, int index) async {
+  final bookId = book.id;
+  if (bookId == null) return null;
+  try {
+    final repository = book.isUserBook
+        ? await UserBooksDatabaseHolder.instance.repository
+        : SqliteDataProvider.instance.repository;
+    return await repository?.getLineBreadcrumb(bookId, index);
+  } catch (_) {
+    return null;
+  }
 }
 
 /// הגרסה הסינכרונית של [refFromIndex]: מחשבת את הכתובת ההיררכית עבור שורה

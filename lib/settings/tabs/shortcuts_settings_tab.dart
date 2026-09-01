@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
+import 'package:otzaria/plugins/services/plugin_shortcut_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
@@ -360,6 +361,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
       keywords: ['קישור', 'העתק', 'ספר', 'deep link', 'מקלדת'],
     ),
     SettingsSearchEntry(
+      id: 'shortcuts.zoom',
+      title: 'קיצורים להגדלה והקטנה של הטקסט',
+      subtitle: 'בספר טקסט — גודל הגופן; ב-PDF — זום התצוגה',
+      tab: SettingsTab.shortcuts,
+      cardId: 'shortcuts.main',
+      keywords: ['זום', 'הגדלה', 'הקטנה', 'גופן', 'pdf', 'מקלדת'],
+    ),
+    SettingsSearchEntry(
       id: 'shortcuts.copy_link.section',
       title: 'קיצור להעתקת קישור למקטע / לעמוד',
       subtitle: 'בטקסט — קישור למקטע הנוכחי; ב-PDF — קישור לעמוד הנוכחי',
@@ -428,6 +437,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
       'ctrl+8',
       'ctrl+9',
       'ctrl+comma',
+      'ctrl+equal',
+      'ctrl+minus',
       'ctrl+shift+b',
       'ctrl+shift+c',
       'ctrl+shift+e',
@@ -457,10 +468,13 @@ class ShortcutsSettingsTab extends StatelessWidget {
       child: ToolPanelWrapper(
         // עוטף ב-BlocBuilder כדי לרענן את רשימת הטיילים והכרטיס "הוסף קיצור"
         // מיד עם שינוי הקיצורים (פעולה זמינה -> מוגדרת ולהיפך).
-        child: BlocBuilder<SettingsBloc, SettingsState>(
-          buildWhen: (previous, current) =>
-              previous.shortcuts != current.shortcuts,
-          builder: (context, _) => _buildContent(context),
+        child: ListenableBuilder(
+          listenable: PluginShortcutRegistry.instance,
+          builder: (context, _) => BlocBuilder<SettingsBloc, SettingsState>(
+            buildWhen: (previous, current) =>
+                previous.shortcuts != current.shortcuts,
+            builder: (context, _) => _buildContent(context),
+          ),
         ),
       ),
     );
@@ -535,6 +549,16 @@ class ShortcutsSettingsTab extends StatelessWidget {
           icon:
               pluginIconFromName(plugin.manifest.toolTabIconName) ??
               FluentIcons.puzzle_piece_24_regular,
+          allShortcuts: _shortcutsList,
+        ),
+    ]);
+
+    final pluginShortcutTiles = _onlyConfigured([
+      for (final entry in ShortcutValidator.pluginShortcuts.entries)
+        _ShortcutTile(
+          settingKey: entry.key,
+          label: entry.value.label,
+          icon: FluentIcons.keyboard_24_regular,
           allShortcuts: _shortcutsList,
         ),
     ]);
@@ -744,6 +768,24 @@ class ShortcutsSettingsTab extends StatelessWidget {
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
+              settingKey: ShortcutValidator.zoomInKey,
+              label: context.settingsText('הגדלת הטקסט / התצוגה'),
+              icon: FluentIcons.zoom_in_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: ShortcutValidator.zoomOutKey,
+              label: context.settingsText('הקטנת הטקסט / התצוגה'),
+              icon: FluentIcons.zoom_out_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
+              settingKey: ShortcutValidator.zoomResetKey,
+              label: context.settingsText('איפוס גודל הטקסט / התצוגה'),
+              icon: FluentIcons.arrow_reset_24_regular,
+              allShortcuts: _shortcutsList,
+            ),
+            _ShortcutTile(
               settingKey: 'key-shortcut-open-commentators-tab',
               label: context.settingsText('פתח כרטיסיית מפרשים'),
               icon: FluentIcons.open_24_regular,
@@ -854,6 +896,18 @@ class ShortcutsSettingsTab extends StatelessWidget {
               'קיצורים להעתקת קישור ישיר לספר, למקטע/לעמוד ולהדגשות',
             ),
             children: copyLinkTiles,
+          ),
+        ],
+
+        if (pluginShortcutTiles.isNotEmpty) ...[
+          kSettingsCardSpacing,
+          SettingsCard(
+            title: context.settingsText('קיצורי תוספים'),
+            subtitle: context.settingsText(
+              'קיצורי מקלדת שתוספים הוסיפו: פקודות שלהם או פעולות תפריט '
+              'הלחיצה הימנית על טקסט',
+            ),
+            children: pluginShortcutTiles,
           ),
         ],
 

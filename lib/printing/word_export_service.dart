@@ -246,6 +246,7 @@ class WordExportService {
           'b' || 'strong' => style.copyWith(bold: true),
           'i' || 'em' => style.copyWith(italic: true),
           'u' => style.copyWith(underline: true),
+          's' || 'strike' || 'del' => style.copyWith(strike: true),
           'sup' => style.copyWith(superscript: true),
           'sub' => style.copyWith(subscript: true),
           'small' => style.copyWith(small: true),
@@ -273,6 +274,7 @@ class WordExportService {
     if (style.bold) props.write('<w:b/><w:bCs/>');
     if (style.italic) props.write('<w:i/><w:iCs/>');
     if (style.underline) props.write('<w:u w:val="single"/>');
+    if (style.strike) props.write('<w:strike/>');
     if (style.superscript) {
       props.write('<w:vertAlign w:val="superscript"/>');
     } else if (style.subscript) {
@@ -287,10 +289,12 @@ class WordExportService {
   }
 
   static String _paragraphPropertiesXml(String styleId) {
+    // בפסקת bidi וורד מחליף בין left ל-right, לכן jc="right" מוצג בפועל
+    // משמאל. השמטת jc משאירה את ברירת המחדל (start) שהיא ימין ב-RTL.
     final jc = switch (styleId) {
       'Title' || 'Header' || 'Footer' => '<w:jc w:val="center"/>',
       'BodyRtl' || 'CommentaryBody' => '<w:jc w:val="both"/>',
-      _ => '<w:jc w:val="right"/>',
+      _ => '',
     };
 
     return '<w:bidi/>$jc<w:rPr><w:rtl/></w:rPr>';
@@ -598,6 +602,7 @@ class _RunStyle {
   final bool bold;
   final bool italic;
   final bool underline;
+  final bool strike;
   final bool superscript;
   final bool subscript;
   final bool small;
@@ -607,6 +612,7 @@ class _RunStyle {
     this.bold = false,
     this.italic = false,
     this.underline = false,
+    this.strike = false,
     this.superscript = false,
     this.subscript = false,
     this.small = false,
@@ -617,6 +623,7 @@ class _RunStyle {
     bool? bold,
     bool? italic,
     bool? underline,
+    bool? strike,
     bool? superscript,
     bool? subscript,
     bool? small,
@@ -626,6 +633,7 @@ class _RunStyle {
       bold: bold ?? this.bold,
       italic: italic ?? this.italic,
       underline: underline ?? this.underline,
+      strike: strike ?? this.strike,
       superscript: superscript ?? this.superscript,
       subscript: subscript ?? this.subscript,
       small: small ?? this.small,

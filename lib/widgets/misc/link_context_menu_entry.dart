@@ -108,7 +108,10 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
               builder: (context, snapshot) {
                 var title = snapshot.data ?? link.fallbackDisplayReference;
                 if (settingsState.replaceHolyNames) {
-                  title = utils.replaceHolyNames(title);
+                  title = utils.replaceHolyNames(
+                    title,
+                    style: settingsState.holyNameStyle,
+                  );
                 }
                 final titleText = Text(
                   title,
@@ -206,6 +209,7 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                         removePunctuation: removePunctuation,
                         removeTeamim: !settingsState.showTeamim,
                         replaceHolyNames: settingsState.replaceHolyNames,
+                        holyNameStyle: settingsState.holyNameStyle,
                         fontSize: settingsState.commentatorsFontSize,
                         fontFamily: settingsState.commentatorsFontFamily,
                         fontWeight: settingsState.commentatorsFontBold

@@ -226,22 +226,35 @@ void main() {
       expect(window.lines.length, 3);
     });
 
-    test('מוגבל ב-maxPadding כדי לא לרנדר את כל הספר', () {
+    test('מכסת התווים חוסמת רינדור של כל הספר', () {
       var rendered = 0;
       final window = buildSelectionWindow(
         visibleIndices: const [500],
         totalLines: 1000,
-        selectionLength: 100000,
+        selectionLength: 100,
         renderLine: (index) {
           rendered++;
           return lineAt(index);
         },
-        maxPadding: 10,
       );
 
-      expect(window.baseIndex, 490);
-      expect(window.lines.length, 21);
-      expect(rendered, 21);
+      expect(window.baseIndex, 487);
+      expect(window.lines.length, 27);
+      expect(rendered, 27);
+    });
+
+    test('שוליים ארוכים משורה 100 — הבחירה כולה נכללת בחלון', () {
+      final window = buildSelectionWindow(
+        visibleIndices: const [500],
+        totalLines: 1000,
+        selectionLength: 30000,
+        renderLine: lineAt,
+      );
+
+      // מכסת התווים מגיעה עד גבולות הספר; חסם השורות הישן (100) היה קוטע
+      // כאן את תחילת הבחירה וההעתקה הייתה יוצאת שטוחה.
+      expect(window.baseIndex, 0);
+      expect(window.lines.length, 1000);
     });
 
     test('החלון רציף גם כשהאינדקסים הנראים אינם רציפים', () {

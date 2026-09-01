@@ -1,0 +1,125 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
+import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
+import 'package:otzaria/utils/text/ref_key.dart';
+
+class MockDataRepository extends Mock implements DataRepository {}
+
+/// איתור ברמת שורה דרך `findRefs` — המסלול שהמשתמש מקליד בו, ולא רק
+/// פונקציית הנרמול במנותק.
+void main() {
+  /// שורות הספרים שמהן נבנה האינדקס המדומה.
+  const heRefsByBook = {
+    12: {648: 'ישעיהו לב, יא', 650: 'ישעיהו לב, יג'},
+    70: {5: 'ברכות ב., א'},
+  };
+
+  final titles = {12: 'ישעיהו', 70: 'ברכות'};
+
+  late List<({List<int> bookIds, String refKey})> lookups;
+
+  FindRefRepository buildRepo({bool withIndex = true}) {
+    lookups = [];
+    return FindRefRepository(
+      dataRepository: MockDataRepository(),
+      isReferenceBooksCacheLoaded: () => true,
+      warmUpReferenceBooksCache: () async {},
+      searchReferenceBooks: (query, {int limit = 50}) => [
+        for (final entry in titles.entries)
+          if (entry.value.startsWith(query))
+            ReferenceBookHit(
+              bookId: entry.key,
+              title: entry.value,
+              normalizedTitle: entry.value,
+              filePath: '',
+              fileType: 'txt',
+              matchRank: 0,
+              matchedTerm: query,
+              orderIndex: entry.key.toDouble(),
+            ),
+      ],
+      getTocEntriesForReference: (bookId, bookTitle, {queryTokens}) async => [
+        {
+          'reference': '$bookTitle לב',
+          'segment': 600,
+          'level': 2,
+          'dbLineId': 1,
+        },
+      ],
+      resolveLineRefs: !withIndex
+          ? null
+          : (bookIds, refKey) async {
+              lookups.add((bookIds: bookIds, refKey: refKey));
+              final resolved =
+                  <int, ({int lineIndex, int lineId, String? heRef})>{};
+              for (final bookId in bookIds) {
+                for (final line in (heRefsByBook[bookId] ?? {}).entries) {
+                  if (buildLineRefKey(line.value, [titles[bookId]!]) ==
+                      refKey) {
+                    resolved[bookId] = (
+                      lineIndex: line.key,
+                      lineId: 1000 + line.key,
+                      heRef: line.value,
+                    );
+                    break;
+                  }
+                }
+              }
+              return resolved;
+            },
+    );
+  }
+
+  test('"ישעיהו לב יא" מגיע לשורת הפסוק ומדורג ראשון', () async {
+    final results = await buildRepo().findRefs('ישעיהו לב יא');
+
+    expect(results.first.isSourceLine, isTrue);
+    expect(results.first.segment, 648);
+    expect(results.first.sourceLineId, 1648);
+    expect(results.first.reference, 'ישעיהו לב, יא');
+  });
+
+  test('מילות מיקום בשאילתה שקולות לצורה הקצרה', () async {
+    final withLocators = await buildRepo().findRefs('ישעיהו פרק לב פסוק יא');
+    final without = await buildRepo().findRefs('ישעיהו לב יא');
+
+    expect(withLocators.first.segment, without.first.segment);
+    expect(withLocators.first.isSourceLine, isTrue);
+  });
+
+  test('טווח נפתח בתחילתו', () async {
+    final results = await buildRepo().findRefs('ישעיהו לב יא-יג');
+    expect(results.first.segment, 648);
+  });
+
+  test('סימון דף בגמרא נפתר לשורה', () async {
+    final results = await buildRepo().findRefs('ברכות ב. א');
+    expect(results.first.isSourceLine, isTrue);
+    expect(results.first.segment, 5);
+  });
+
+  test('שאילתה מאוגדת אחת לכל מפתח — לא פנייה לכל ספר', () async {
+    final repo = buildRepo();
+    await repo.findRefs('ישעיהו לב יא');
+
+    expect(lookups, hasLength(1));
+    expect(lookups.single.refKey, 'לב יא');
+  });
+
+  test('רכיב יחיד ("ישעיהו לב") נשאר ברמת TOC', () async {
+    final repo = buildRepo();
+    final results = await repo.findRefs('ישעיהו לב');
+
+    expect(lookups, isEmpty);
+    expect(results.every((r) => !r.isSourceLine), isTrue);
+  });
+
+  test('מסד בלי אינדקס נופל למסלול ה-TOC', () async {
+    final results = await buildRepo(withIndex: false).findRefs('ישעיהו לב יא');
+
+    expect(results, isNotEmpty);
+    expect(results.every((r) => !r.isSourceLine), isTrue);
+  });
+}

@@ -73,6 +73,7 @@ import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
+import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/library_update_work_status.dart';
@@ -834,6 +835,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           Settings.getValue<bool>(SettingsRepository.keyAutoSync) ?? true,
       canUseSoftwareAndBookUpdates: () =>
           context.read<SettingsBloc>().state.canUseSoftwareAndBookUpdates,
+      isLibraryUpdateCheckDue: () =>
+          isAutoUpdateCheckDue(SettingsRepository.keyLastLibraryUpdateCheck),
       libraryUpdateBloc: context.read<LibraryUpdateBloc>,
     );
   }
@@ -952,6 +955,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
     final requiresManualReindex = await _indexingRepository
         .requiresManualReindex(library);
+    // בדיקה זולה שמונעת ריצת אינדוקס מלאה בכל עלייה כשאין עבודה אמיתית.
+    final hasUnindexedBooks = await _indexingRepository.hasUnindexedBooks(
+      library,
+    );
     if (!mounted || !context.mounted) {
       return;
     }
@@ -959,6 +966,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final decision = decideStartupIndexing(
       requiresManualReindex: requiresManualReindex,
       autoUpdateIndex: autoUpdateIndex,
+      hasUnindexedBooks: hasUnindexedBooks,
     );
 
     switch (decision) {
@@ -2444,10 +2452,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<LibraryUpdateBloc, LibraryUpdateState>(
             listenWhen: LibraryUpdateState.hasRefreshRelevantChange,
             listener: (context, state) {
-              if (state.status == LibraryUpdateStatus.completed &&
+              if ((state.status == LibraryUpdateStatus.completed ||
+                      state.status == LibraryUpdateStatus.error) &&
                   state.hasUpdate) {
                 _indexAfterLibraryReload = true;
-                _reconcileAfterLibraryReload = state.isFullDownloadPlan;
+                _reconcileAfterLibraryReload =
+                    state.isFullDownloadPlan || state.requiresFullIndexRefresh;
                 context.read<LibraryBloc>().add(
                   RefreshLibrary(
                     changedBookKeys: {
@@ -2573,7 +2583,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
           BlocListener<IndexingBloc, IndexingState>(
             listener: (context, state) {
               final cubit = context.read<WorkStatusCubit>();
-              if (state is IndexingInProgress && state.isCreatingIndex) {
+              if (state is IndexingInProgress &&
+                  (state.isCreatingIndex || state.isScanning)) {
                 final indexingBloc = context.read<IndexingBloc>();
                 cubit.upsert(
                   indexingWorkStatusItem(
@@ -2647,6 +2658,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                   previous.removeNikudFromTanach !=
                       current.removeNikudFromTanach ||
                   previous.replaceHolyNames != current.replaceHolyNames ||
+                  previous.holyNameStyle != current.holyNameStyle ||
                   previous.libraryViewMode != current.libraryViewMode ||
                   previous.copyWithHeaders != current.copyWithHeaders ||
                   previous.copyHeaderFormat != current.copyHeaderFormat ||
@@ -2737,6 +2749,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 dispatch(
                   SettingsRepository.keyReplaceHolyNames,
                   current.replaceHolyNames,
+                );
+              }
+              if (previous.holyNameStyle != current.holyNameStyle) {
+                dispatch(
+                  SettingsRepository.keyHolyNameStyle,
+                  current.holyNameStyle.storageKey,
                 );
               }
               if (previous.libraryViewMode != current.libraryViewMode) {
@@ -3120,8 +3138,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                           onClose: _closeToolsLauncher,
                                           alignment:
                                               AlignmentDirectional.centerStart,
-                                          // רחב מספיק שתוויות הכלים הארוכות
-                                          // ייכנסו בשורה בלי קיצור.
+                                          // רחב מספיק שארבע הקוביות שבשורה יהיו
+                                          // מרווחות, ועדיין לא חמש.
                                           width: 440,
                                           deferChildBuildOnOpen: true,
                                           child: ToolsLauncherPanel(

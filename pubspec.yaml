@@ -79,7 +79,7 @@ dependencies:
   seforim_library_updater:
     git:
       url: https://github.com/Otzaria/otzaria_library_updater
-      ref: 1c842aedbbb90af8a60632636399909e43521f10
+      ref: 14c03cbff90234d43dd815717ae8a0da83041a1d
   window_manager: ^0.5.2
   screen_retriever: ^0.2.2
   flutter_spinbox: ^0.13.1
@@ -103,6 +103,7 @@ dependencies:
   # נדרש ישירות עבור WindowsFileDropManager (גרירת קבצים אל החלון).
   flutter_inappwebview_windows: any
   custom_mouse_cursor: ^1.1.3
+  wakelock_plus: ^1.2.10
 
 dependency_overrides:
   matcher: ^0.12.20
@@ -182,6 +183,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/bio/
     - assets/logos/
     - assets/ca/
     - assets/icon/שמור וזכור מקור.png

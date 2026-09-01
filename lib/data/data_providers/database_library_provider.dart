@@ -32,6 +32,7 @@ import 'package:otzaria/utils/file/document_converter.dart';
 import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/file/file_book_path_resolver.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'link_visibility_sql.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:path/path.dart' as p;
@@ -290,12 +291,37 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   int? startLineIndex,
   int? endLineIndex,
 }) {
-  final types = LinkTypes.dependentTextTypes.toList();
+  final hasSuppressedSide = hasLinkSuppressedSideTable(db);
+  final dependentTypes = LinkTypes.dependentTextTypes.toList();
+  // קישורי הפניה דו-כיווניים רק בסכמה שמספקת verdict נפרד לכל צד.
+  final types = LinkTypes.inverseQueryTypes(bidirectional: hasSuppressedSide);
   final typePlaceholders = List.filled(types.length, '?').join(', ');
+  final connectionTypeExpr = inverseConnectionTypeExpr(dependentTypes);
   final hasRange = startLineIndex != null && endLineIndex != null;
   // בשאילתה ההפוכה השורה המוצגת היא צד היעד של הקישור השמור.
+  final suppressedFilter = suppressedSideFilter(
+    hasSuppressedSide,
+    displayedSide: 1,
+  );
   final hasLinkAnchor = _hasLinkAnchorTable(db);
   final hasLinkRanges = _hasLinkRangeTables(db);
+  final referenceTypes = LinkTypes.referenceTypes
+      .map((type) => "'$type'")
+      .join(', ');
+  final inverseBookFilter = hasSuppressedSide
+      ? '''
+        AND (l.sourceBookId != l.targetBookId OR (
+          ct.name IN ($referenceTypes)
+          AND (
+            EXISTS (SELECT 1 FROM link_suppressed_side sourceSuppressed
+                    WHERE sourceSuppressed.linkId = l.id AND sourceSuppressed.side = 0)
+            OR (
+              a.anchorLineId != l.sourceLineId
+              ${hasLinkRanges ? 'AND NOT EXISTS (SELECT 1 FROM link_coverage sourceCoverage WHERE sourceCoverage.linkId = l.id AND sourceCoverage.side = 0 AND sourceCoverage.lineId = a.anchorLineId)' : ''}
+            )
+          )
+        ))'''
+      : 'AND l.sourceBookId != l.targetBookId';
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
   final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
   final provenanceSelect = _hasLinkBaseProvenanceColumn(db)
@@ -345,7 +371,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
           $rangeEndSelect
           $anchorSelect
           $provenanceSelect
-          'SOURCE' as connectionTypeName
+          $connectionTypeExpr as connectionTypeName
         FROM anchors a
         JOIN link l ON l.id = a.linkId
         JOIN line tl ON tl.id = a.anchorLineId
@@ -355,7 +381,8 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         $rangeEndJoin
         $anchorJoin
         WHERE ct.name IN ($typePlaceholders)
-          AND l.sourceBookId != l.targetBookId
+          $inverseBookFilter
+          $suppressedFilter
         ORDER BY tl.lineIndex
       ''', params).toMapList();
   }
@@ -387,7 +414,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         $rangeEndSelect
         $anchorSelect
         $provenanceSelect
-        'SOURCE' as connectionTypeName
+        $connectionTypeExpr as connectionTypeName
       FROM anchors a
       JOIN link l ON l.id = a.linkId
       JOIN line tl ON tl.id = a.anchorLineId
@@ -397,7 +424,8 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
       $rangeEndJoin
       $anchorJoin
       WHERE ct.name IN ($typePlaceholders)
-        AND l.sourceBookId != l.targetBookId
+        $inverseBookFilter
+        $suppressedFilter
       ORDER BY tl.lineIndex
     ''', params).toMapList();
 }
@@ -541,6 +569,11 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
     final bookId = bookResults.first['id'] as int;
     final hasLinkAnchor = _hasLinkAnchorTable(db);
     final hasLinkRanges = _hasLinkRangeTables(db);
+    // בשאילתה הקדמית השורה המוצגת היא צד המקור השמור.
+    final suppressedFilter = suppressedSideFilter(
+      hasLinkSuppressedSideTable(db),
+      displayedSide: 0,
+    );
 
     // שורות ה-anchors כוללות גם שורות מכוסות של קישורי-טווח (side=0), כך
     // שקישור שהמקור שלו משתרע על כמה שורות מופיע בכל שורה שהוא מכסה.
@@ -566,6 +599,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -578,6 +612,8 @@ List<Map<String, dynamic>> _loadBookLinksRowsInIsolate({
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
         ${_rangeEndJoinClause(hasLinkRanges, panelSide: 1)}
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
+        WHERE 1=1
+          $suppressedFilter
         ORDER BY sl.lineIndex
       ''',
           [bookId, if (hasLinkRanges) bookId],
@@ -611,6 +647,11 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
 
     final bookId = bookResults.first['id'] as int;
     final hasLinkRanges = _hasLinkRangeTables(db);
+    final hasSuppressedSide = hasLinkSuppressedSideTable(db);
+    final forwardSuppressed = suppressedSideFilter(
+      hasSuppressedSide,
+      displayedSide: 0,
+    );
 
     // קישור-טווח נספר פעם לכל שורה מכוסה — כמו בטעינת הקישורים המלאה, כדי
     // שסיווג "מפרש נדיר" לפי הספירה יישאר שקול.
@@ -635,31 +676,76 @@ _loadBookLinkTargetsSummaryRowsInIsolate({
         JOIN link l ON l.id = a.linkId
         JOIN book tb ON l.targetBookId = tb.id
         LEFT JOIN connection_type ct ON l.connectionTypeId = ct.id
+        WHERE 1=1
+          $forwardSuppressed
         GROUP BY tb.title, ct.name
       ''',
           [bookId, if (hasLinkRanges) bookId],
         )
         .toMapList();
 
-    // הזרוע ההפוכה — מפרשים ששמורים כקישור מהם אל הספר הזה (מוצגים כ-SOURCE),
-    // כמו ב-_loadInverseSourceRows.
+    // הזרוע ההפוכה — סופרת שורות link בלבד, בלי זרוע ה-coverage שיש
+    // ל-_loadInverseSourceRows, ולכן היא נמוכה ממנה. הצרכן היחיד
+    // (aggregateLinkTargetsFromSummary) סופר רק תלויי-טקסט, ושורות הפוכות
+    // אינן כאלה — הן נכנסות ל-nonCommentaryTitles שבו הספירה נזרקת.
     final depTypes = LinkTypes.dependentTextTypes.toList();
-    final typePlaceholders = List.filled(depTypes.length, '?').join(', ');
+    final inverseTypes = LinkTypes.inverseQueryTypes(
+      bidirectional: hasSuppressedSide,
+    );
+    final typePlaceholders = List.filled(inverseTypes.length, '?').join(', ');
+    final inverseTypeExpr = inverseConnectionTypeExpr(depTypes);
+    final inverseSuppressed = suppressedSideFilter(
+      hasSuppressedSide,
+      displayedSide: 1,
+    );
+    final referenceTypes = LinkTypes.referenceTypes
+        .map((type) => "'$type'")
+        .join(', ');
+    final hasNonOverlappingSameBookTarget = hasLinkRanges
+        ? '''
+          EXISTS (
+            SELECT 1 FROM (
+              SELECT l.targetLineId AS lineId
+              UNION
+              SELECT targetCoverage.lineId FROM link_coverage targetCoverage
+              WHERE targetCoverage.linkId = l.id AND targetCoverage.side = 1
+            ) targetAnchor
+            WHERE targetAnchor.lineId != l.sourceLineId
+              AND NOT EXISTS (
+                SELECT 1 FROM link_coverage sourceCoverage
+                WHERE sourceCoverage.linkId = l.id
+                  AND sourceCoverage.side = 0
+                  AND sourceCoverage.lineId = targetAnchor.lineId
+              )
+          )'''
+        : 'l.targetLineId != l.sourceLineId';
+    final inverseBookFilter = hasSuppressedSide
+        ? '''
+          AND (l.sourceBookId != l.targetBookId OR (
+            ct.name IN ($referenceTypes)
+            AND (
+              EXISTS (SELECT 1 FROM link_suppressed_side sourceSuppressed
+                      WHERE sourceSuppressed.linkId = l.id AND sourceSuppressed.side = 0)
+              OR $hasNonOverlappingSameBookTarget
+            )
+          ))'''
+        : 'AND l.sourceBookId != l.targetBookId';
     final inverseRows = db
         .select(
           '''
         SELECT sb.title as targetBookTitle,
-               'SOURCE' as connectionTypeName,
+               $inverseTypeExpr as connectionTypeName,
                COUNT(*) as linkCount
         FROM link l
         JOIN book sb ON l.sourceBookId = sb.id
         JOIN connection_type ct ON l.connectionTypeId = ct.id
         WHERE l.targetBookId = ?
           AND ct.name IN ($typePlaceholders)
-          AND l.sourceBookId != l.targetBookId
-        GROUP BY sb.title
+          $inverseBookFilter
+          $inverseSuppressed
+        GROUP BY sb.title, connectionTypeName
       ''',
-          [bookId, ...depTypes],
+          [bookId, ...inverseTypes],
         )
         .toMapList();
 
@@ -723,6 +809,10 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
     final bookId = bookResults.first['id'] as int;
     final hasLinkAnchor = _hasLinkAnchorTable(db);
     final hasLinkRanges = _hasLinkRangeTables(db);
+    final suppressedFilter = suppressedSideFilter(
+      hasLinkSuppressedSideTable(db),
+      displayedSide: 0,
+    );
 
     final parameters = <Object?>[
       bookId,
@@ -778,6 +868,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
           tl.heRef as targetLineHeRef,
           tb.title as targetBookTitle,
           tb.categoryId as targetCategoryId,
+          tb.id as targetBookId,
           NULL as targetFileType,
           ${_rangeEndSelectColumns(hasLinkRanges)}
           ${_anchorSelectColumns(hasLinkAnchor)}
@@ -792,6 +883,7 @@ List<Map<String, dynamic>> _loadBookLinksRowsInRangeInIsolate({
         ${_anchorJoinClause(hasLinkAnchor, displayedSide: 0)}
         WHERE sl.lineIndex BETWEEN ? AND ?
           $commentaryFilterClause
+          $suppressedFilter
         ORDER BY sl.lineIndex, tb.orderIndex
       ''', parameters).toMapList();
     return [
@@ -850,6 +942,75 @@ Future<List<Map<String, dynamic>>> _runAlternativeStructuresInIsolate({
 }) {
   return Isolate.run(
     () => _loadAlternativeStructuresRowsInIsolate(
+      dbPath: dbPath,
+      bookTitle: bookTitle,
+    ),
+  );
+}
+
+/// סמני חלוקה בגוף הטקסט של ספר, ממופתחים לפי `lineIndex` — עלי מבני
+/// alt-TOC של סמנים: `Simanim` (אותיות פסקה במדרש רבה וחבריו, תווית "א")
+/// ו-`Seifim` (סעיפים בנושאי-כלים על השולחן ערוך, תווית "סעיף ג";
+/// מסונתז בגנרטור של SeforimLibrary וקיים מגרסת ספרייה 24 ואילך).
+Map<int, String> _loadInlineSectionMarkersInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  sqlite3.Database? db;
+  try {
+    db = sqlite3.sqlite3.open(dbPath, mode: sqlite3.OpenMode.readOnly);
+
+    final bookResults = db.select(
+      'SELECT id FROM book WHERE title = ? LIMIT 1',
+      [bookTitle],
+    ).toMapList();
+
+    if (bookResults.isEmpty) {
+      return const {};
+    }
+
+    final bookId = bookResults.first['id'] as int;
+
+    // hasChildren = 0 — רק העלים. רשומות הביניים של המבנה משכפלות
+    // כותרות פרשה/פרק/סימן שכבר גלויות בטקסט (ובקוהלת רבה המבנה
+    // תלת-רמתי: פרשה → פרק → סימן).
+    final markerRows = db
+        .select(
+          '''
+      SELECT l.lineIndex AS lineIndex, t.text AS label
+      FROM alt_toc_structure s
+      JOIN alt_toc_entry e ON e.structureId = s.id
+      JOIN tocText t ON t.id = e.textId
+      JOIN line l ON l.id = e.lineId
+      WHERE s.bookId = ? AND s.key IN ('Simanim', 'Seifim')
+        AND e.hasChildren = 0
+      ''',
+          [bookId],
+        )
+        .toMapList();
+
+    final markers = <int, String>{};
+    for (final row in markerRows) {
+      final lineIndex = row['lineIndex'];
+      final label = row['label'];
+      if (lineIndex is int && label is String && label.isNotEmpty) {
+        markers[lineIndex] = label;
+      }
+    }
+    return markers;
+  } finally {
+    db?.close();
+  }
+}
+
+/// Top-level wrapper עבור טעינת סמני החלוקה ב-isolate.
+/// ראה ההסבר ב-[_runAlternativeStructuresInIsolate].
+Future<Map<int, String>> _runInlineSectionMarkersInIsolate({
+  required String dbPath,
+  required String bookTitle,
+}) {
+  return Isolate.run(
+    () => _loadInlineSectionMarkersInIsolate(
       dbPath: dbPath,
       bookTitle: bookTitle,
     ),
@@ -2597,13 +2758,17 @@ class DatabaseLibraryProvider implements LibraryProvider {
       _userBooksCategoryIds.add(personalRootId);
 
       // הגדרה: האם למזג תיקיות מותאמות אישית ישירות לעץ הראשי לפי שם
-      // (במקום להציג אותן תחת קטגוריית "ספרים אישיים" נפרדת).
-      final mergeIntoLibraryRoot =
+      // (במקום להציג אותן תחת קטגוריית "ספרים אישיים" נפרדת). זו ברירת
+      // המחדל — תיקייה בודדת יכולה לדרוס אותה.
+      final mergeDefault =
           Settings.getValue<bool>(
             SettingsRepository.keyMergeUserBooksIntoLibrary,
             defaultValue: false,
           ) ??
           false;
+      final mergeOverridesByFolderName = _mergeOverridesByFolderName(
+        mergeDefault,
+      );
 
       // ילדים ישירים של "ספרים אישיים" — אלו התיקיות שהמשתמש בחר בדיאלוג
       // הוספת תיקייה (למשל "מסמכים", "הורדות"). השם שלהן כשלעצמו אינו
@@ -2621,157 +2786,152 @@ class DatabaseLibraryProvider implements LibraryProvider {
             return orderA.compareTo(orderB);
           });
 
-      if (mergeIntoLibraryRoot) {
+      // "ספרים אישיים" נוצרת רק אם יש לה תוכן: תיקייה שאינה ממוזגת, או
+      // ספרים בודדים שאין להם תת-תיקייה להתמזג אליה.
+      Category? personalCategoryInLibrary;
+      Category ensurePersonalCategory() {
+        return personalCategoryInLibrary ??=
+            library.subCategories
+                .where((c) => c.title == 'ספרים אישיים')
+                .firstOrNull ??
+            () {
+              final created = Category(
+                title: 'ספרים אישיים',
+                description: metadata['ספרים אישיים']?['heDesc'] ?? '',
+                shortDescription:
+                    metadata['ספרים אישיים']?['heShortDesc'] ?? '',
+                order: personalRootInUserDb.orderIndex,
+                subCategories: [],
+                books: [],
+                parent: library,
+              );
+              library.subCategories.add(created);
+              return created;
+            }();
+      }
+
+      // ספר בודד אינו קטגוריה שאפשר למזג לפי שם. גם במיזוג מלא הוא מקבל
+      // בית תחת "ספרים אישיים" ולא מתפזר בשורש הספרייה.
+      for (final dbBook in directBooksUnderRoot) {
+        final directBooksParent = ensurePersonalCategory();
+        final book = _convertMinimalBookMapToBook(
+          dbBook,
+          directBooksParent,
+          metadata,
+          authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
+          isUserBook: true,
+          idOverride: dbBook['id'] as int? ?? 0,
+          categoryIdOverride: personalRootId,
+        );
+        if (book == null) continue;
+        directBooksParent.books.add(book);
+        _userBooksCachedKeys.add(
+          BookCompositeKey.create(
+            title: book.title,
+            categoryId: personalRootId,
+            fileType: book.fileType,
+            isUserBook: true,
+          ),
+        );
+      }
+
+      for (final pickedFolder in pickedFolders) {
+        final merged =
+            mergeOverridesByFolderName[pickedFolder.title] ?? mergeDefault;
+
+        if (!merged) {
+          // התיקייה הנבחרת מוצגת כקטגוריה תחת "ספרים אישיים", עם שמה.
+          final personal = ensurePersonalCategory();
+          final existing = personal.subCategories
+              .where((c) => c.title == pickedFolder.title)
+              .firstOrNull;
+          if (existing == null) {
+            personal.subCategories.add(
+              _buildUserBooksCatalogCategoryRecursive(
+                pickedFolder,
+                booksByCategory,
+                categoriesByParent,
+                userAuthors,
+                personal,
+                metadata,
+              ),
+            );
+          } else {
+            existing.parent = personal;
+            _appendUserBooksContentToCategoryRecursive(
+              existing,
+              pickedFolder,
+              booksByCategory,
+              categoriesByParent,
+              userAuthors,
+              metadata,
+            );
+          }
+          continue;
+        }
+
         // במצב מיזוג: גם "ספרים אישיים" וגם שם התיקייה שהמשתמש בחר
         // (pickedFolder) לא יופיעו בעץ. הבנייה מתחילה מתת-התיקיות של
         // התיקייה הנבחרת, וקטגוריות מתמזגות בשורש הספרייה לפי שם.
-        // ספרים שיושבים ישירות תחת "ספרים אישיים" או תחת תיקייה נבחרת
-        // נכנסים לרשימת ספרי השורש של הספרייה (`library.books`).
-        for (final dbBook in directBooksUnderRoot) {
+        // הקטגוריה עצמה נדלגת ולכן ה-id שלה נרשם כאן ולא ע"י הבנייה
+        // הרקורסיבית.
+        _userBooksCategoryIds.add(pickedFolder.id);
+
+        // ספרים בתוך התיקייה הנבחרת עצמה — אין להם תת-תיקייה להתמזג
+        // אליה, ולכן הם מצטרפים ל"ספרים אישיים".
+        final booksInPickedFolder = (booksByCategory[pickedFolder.id] ?? [])
+          ..sort((a, b) {
+            final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
+            final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
+            return orderA.compareTo(orderB);
+          });
+        for (final dbBook in booksInPickedFolder) {
+          final looseBooksParent = ensurePersonalCategory();
           final book = _convertMinimalBookMapToBook(
             dbBook,
-            library,
+            looseBooksParent,
             metadata,
             authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
             isUserBook: true,
             idOverride: dbBook['id'] as int? ?? 0,
-            categoryIdOverride: personalRootId,
+            categoryIdOverride: pickedFolder.id,
           );
           if (book == null) continue;
-          library.books.add(book);
+          looseBooksParent.books.add(book);
           _userBooksCachedKeys.add(
             BookCompositeKey.create(
               title: book.title,
-              categoryId: personalRootId,
+              categoryId: pickedFolder.id,
               fileType: book.fileType,
               isUserBook: true,
             ),
           );
         }
 
-        for (final pickedFolder in pickedFolders) {
-          _userBooksCategoryIds.add(pickedFolder.id);
-
-          // ספרים בתוך התיקייה הנבחרת עצמה — לשורש הספרייה.
-          final booksInPickedFolder = (booksByCategory[pickedFolder.id] ?? [])
-            ..sort((a, b) {
-              final orderA = (a['orderIndex'] as num?)?.toDouble() ?? 999.0;
-              final orderB = (b['orderIndex'] as num?)?.toDouble() ?? 999.0;
-              return orderA.compareTo(orderB);
-            });
-          for (final dbBook in booksInPickedFolder) {
-            final book = _convertMinimalBookMapToBook(
-              dbBook,
-              library,
-              metadata,
-              authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
-              isUserBook: true,
-              idOverride: dbBook['id'] as int? ?? 0,
-              categoryIdOverride: pickedFolder.id,
-            );
-            if (book == null) continue;
-            library.books.add(book);
-            _userBooksCachedKeys.add(
-              BookCompositeKey.create(
-                title: book.title,
-                categoryId: pickedFolder.id,
-                fileType: book.fileType,
-                isUserBook: true,
-              ),
-            );
-          }
-
-          // תת-תיקיות של התיקייה הנבחרת — מתמזגות בשורש הספרייה לפי שם.
-          final grandchildren = [
-            ...?categoriesByParent[pickedFolder.id],
-          ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-          for (final grandchild in grandchildren) {
-            final existing = library.subCategories
-                .where((c) => c.title == grandchild.title)
-                .firstOrNull;
-            if (existing == null) {
-              final built = _buildUserBooksCatalogCategoryRecursive(
+        // תת-תיקיות של התיקייה הנבחרת — מתמזגות בשורש הספרייה לפי שם.
+        final grandchildren = [
+          ...?categoriesByParent[pickedFolder.id],
+        ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        for (final grandchild in grandchildren) {
+          final existing = library.subCategories
+              .where((c) => c.title == grandchild.title)
+              .firstOrNull;
+          if (existing == null) {
+            library.subCategories.add(
+              _buildUserBooksCatalogCategoryRecursive(
                 grandchild,
                 booksByCategory,
                 categoriesByParent,
                 userAuthors,
                 library,
                 metadata,
-              );
-              library.subCategories.add(built);
-            } else {
-              existing.parent = library;
-              _appendUserBooksContentToCategoryRecursive(
-                existing,
-                grandchild,
-                booksByCategory,
-                categoriesByParent,
-                userAuthors,
-                metadata,
-              );
-            }
-          }
-        }
-      } else {
-        // הזרימה הקיימת — עוטף את כל ספרי המשתמש תחת "ספרים אישיים".
-        Category? personalCategoryInLibrary = library.subCategories
-            .where((c) => c.title == 'ספרים אישיים')
-            .firstOrNull;
-        personalCategoryInLibrary ??= () {
-          final created = Category(
-            title: 'ספרים אישיים',
-            description: metadata['ספרים אישיים']?['heDesc'] ?? '',
-            shortDescription: metadata['ספרים אישיים']?['heShortDesc'] ?? '',
-            order: personalRootInUserDb.orderIndex,
-            subCategories: [],
-            books: [],
-            parent: library,
-          );
-          library.subCategories.add(created);
-          return created;
-        }();
-
-        for (final dbBook in directBooksUnderRoot) {
-          final book = _convertMinimalBookMapToBook(
-            dbBook,
-            personalCategoryInLibrary,
-            metadata,
-            authorFromDatabase: userAuthors[dbBook['id'] as int? ?? 0],
-            isUserBook: true,
-            idOverride: dbBook['id'] as int? ?? 0,
-            categoryIdOverride: personalRootId,
-          );
-          if (book == null) continue;
-          personalCategoryInLibrary.books.add(book);
-          _userBooksCachedKeys.add(
-            BookCompositeKey.create(
-              title: book.title,
-              categoryId: personalRootId,
-              fileType: book.fileType,
-              isUserBook: true,
-            ),
-          );
-        }
-
-        for (final child in pickedFolders) {
-          final existing = personalCategoryInLibrary.subCategories
-              .where((c) => c.title == child.title)
-              .firstOrNull;
-          if (existing == null) {
-            final builtSubCategory = _buildUserBooksCatalogCategoryRecursive(
-              child,
-              booksByCategory,
-              categoriesByParent,
-              userAuthors,
-              personalCategoryInLibrary,
-              metadata,
+              ),
             );
-            personalCategoryInLibrary.subCategories.add(builtSubCategory);
           } else {
-            existing.parent = personalCategoryInLibrary;
+            existing.parent = library;
             _appendUserBooksContentToCategoryRecursive(
               existing,
-              child,
+              grandchild,
               booksByCategory,
               categoriesByParent,
               userAuthors,
@@ -2786,6 +2946,27 @@ class DatabaseLibraryProvider implements LibraryProvider {
       // שבור או הרשאות חסרות.
       unawaited(Sentry.captureException(e, stackTrace: stackTrace));
     }
+  }
+
+  /// מצב המיזוג לפי קטגוריית-השורש. תיקיות בעלות אותו שם חולקות קטגוריה,
+  /// ולכן כשמצביהן האפקטיביים חלוקים חוזרים לברירת המחדל הגלובלית.
+  Map<String, bool> _mergeOverridesByFolderName(bool mergeDefault) {
+    final folders = CustomFoldersManager.loadFolders(
+      Settings.getValue<String>(SettingsRepository.keyCustomFolders),
+    );
+    final result = <String, bool>{};
+    final conflicting = <String>{};
+    for (final folder in folders) {
+      final value = folder.resolveMergeIntoLibrary(mergeDefault);
+      if (result.containsKey(folder.name) && result[folder.name] != value) {
+        conflicting.add(folder.name);
+      }
+      result[folder.name] = value;
+    }
+    for (final name in conflicting) {
+      result.remove(name);
+    }
+    return result;
   }
 
   @visibleForTesting
@@ -3053,6 +3234,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
@@ -3127,6 +3309,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2: (row['targetLineIndex'] as int) + 1,
           connectionType: connectionType,
           targetCategoryId: row['targetCategoryId'] as int?,
+          targetBookId: row['targetBookId'] as int?,
           targetFileType: row['targetFileType'] as String?,
           anchorStart: row['anchorCharStart'] as int?,
           anchorEnd: row['anchorCharEnd'] as int?,
@@ -3383,6 +3566,32 @@ class DatabaseLibraryProvider implements LibraryProvider {
         '⚠️ Error in getAlternativeStructuresForBook "$bookTitle": $e',
       );
       return [];
+    }
+  }
+
+  /// סמני חלוקה בגוף הטקסט של ספר, ממופתחים לפי `lineIndex` של שורת התוכן:
+  /// אותיות פסקה במדרש רבה וחבריו (מבנה `Simanim`), ו"סעיף X" בנושאי-כלים
+  /// על השולחן ערוך (מבנה `Seifim`, מגרסת ספרייה 24). לכל ספר אחר מוחזרת
+  /// מפה ריקה. משמש להצגת הסמן בגוף הטקסט (issue #773).
+  Future<Map<int, String>> getInlineSectionMarkersByLineIndex(
+    String bookTitle,
+  ) async {
+    if (!_sqliteProvider.isInitialized || _sqliteProvider.repository == null) {
+      return const {};
+    }
+
+    final dbPath = _sqliteProvider.dbPath;
+
+    try {
+      return await _runInlineSectionMarkersInIsolate(
+        dbPath: dbPath,
+        bookTitle: bookTitle,
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ Error in getInlineSectionMarkersByLineIndex "$bookTitle": $e',
+      );
+      return const {};
     }
   }
 

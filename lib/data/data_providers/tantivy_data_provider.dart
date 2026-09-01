@@ -28,7 +28,11 @@ class TantivyDataProvider {
   };
 
   /// Instance of the search engine pointing to the index directory
-  late Future<SearchEngine> engine;
+  Future<SearchEngine> get engine => _engineInit.ensure(_initAll);
+
+  set engine(Future<SearchEngine> value) => _engineInit.current = value;
+
+  final RetryableInit<SearchEngine> _engineInit = RetryableInit<SearchEngine>();
 
   /// Track if index is being reopened to prevent concurrent reopens
   final ReopenGate _reopenGate = ReopenGate();
@@ -82,8 +86,10 @@ class TantivyDataProvider {
   final Set<String> indexedFilePaths = {};
 
   TantivyDataProvider._internal() {
-    engine = _initAll();
+    _startEngineInit();
   }
+
+  Future<SearchEngine> _startEngineInit() => _engineInit.start(_initAll);
 
   /// בודק את תאימות האינדקס, פותח את המנוע, וקורא ממנו את רשימת
   /// הספרים המאונדקסים. בדיקת התאימות רצה לפני פתיחת המנוע, כי המנוע
@@ -493,12 +499,9 @@ class TantivyDataProvider {
     await dispose();
 
     // Reset engines (כולל קריאה מחדש של מצב האינדקס מהאינדקס עצמו)
-    engine = _initAll();
-
-    // await יחיד: כשל ב-_initAll מופץ לקורא. בלעדיו (engine.then נגזר
-    // שנזרק) הכשל היה מדווח כשגיאה אסינכרונית לא-מטופלת. ההמתנה גם מבטיחה
-    // ש-indexedFilePaths נקרא מחדש לפני דיווח ההצלחה.
-    final value = await engine;
+    // await יחיד: כשל ב-_initAll מופץ לקורא, וגם מאפס את השדה כדי שהחיפוש
+    // הבא ינסה לפתוח מחדש. ההמתנה מבטיחה ש-indexedFilePaths נקרא מחדש.
+    final value = await _startEngineInit();
     debugPrint('✅ Search index reopened successfully');
 
     // בדיקת שפיות של המנוע — try/catch יחיד. שגיאת סכימה מפעילה איפוס
@@ -876,8 +879,7 @@ class TantivyDataProvider {
     // פתיחה מחדש: getIndexPath יחזיר עכשיו את ברירת המחדל הנוכחית
     // (ליד הספרייה, אם אין הגדרה ידנית ב-keyIndexPath). ההמתנה מבטיחה
     // שתאימות האינדקס ורשימת הספרים נקראו מחדש לפני שממשיכים.
-    engine = _initAll();
-    await engine;
+    await _startEngineInit();
   }
 
   Future<void> _deleteAllKnownIndexDirectories() async {
@@ -1010,4 +1012,33 @@ class ReopenGate {
     await current;
     return true;
   }
+}
+
+/// מחזיק את ה-Future של אתחול יקר, ומשחרר אותו כשהוא נכשל.
+///
+/// בלי השחרור, פתיחת מנוע שנכשלה פעם אחת הייתה נענית מהשדה עם אותה שגיאה
+/// עד סגירת התוכנה — גם אחרי שהסיבה הזמנית חלפה.
+@visibleForTesting
+class RetryableInit<T> {
+  Future<T>? current;
+
+  /// פותח ניסיון חדש, גם אם קיים ניסיון שמור.
+  Future<T> start(Future<T> Function() create) {
+    final attempt = create();
+    current = attempt;
+    // then עם onError גם מסמן את הכשל כמטופל — בלעדיו ניסיון שאיש אינו
+    // ממתין לו היה מדווח כשגיאה אסינכרונית לא-מטופלת.
+    unawaited(
+      attempt.then<void>(
+        (_) {},
+        onError: (Object _) {
+          if (identical(current, attempt)) current = null;
+        },
+      ),
+    );
+    return attempt;
+  }
+
+  /// מחזיר את הניסיון השמור, או פותח חדש אם אין (או שהקודם נכשל).
+  Future<T> ensure(Future<T> Function() create) => current ?? start(create);
 }

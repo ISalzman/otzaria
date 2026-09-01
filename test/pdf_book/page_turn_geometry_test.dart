@@ -239,4 +239,62 @@ void main() {
       );
     });
   });
+
+  group('bookViewTurnButtonPlacement', () {
+    test('רווח רחב — הלחצן ממורכז בו ולא נוגע בכפולה', () {
+      final placement = bookViewTurnButtonPlacement(
+        gutter: 200,
+        buttonSize: 60,
+        edgePadding: 28,
+        dragZoneWidth: 48,
+      );
+
+      expect(placement.fitsBesideSpread, isTrue);
+      // הרווח הפנוי הוא 200-24=176, והלחצן במרכזו.
+      expect(placement.inset, closeTo((176 - 60) / 2, 1e-9));
+    });
+
+    test('רווח צר — הלחצן נסוג אל מעל העמוד', () {
+      final placement = bookViewTurnButtonPlacement(
+        gutter: 40,
+        buttonSize: 60,
+        edgePadding: 28,
+        dragZoneWidth: 48,
+      );
+
+      expect(placement.fitsBesideSpread, isFalse);
+      expect(placement.inset, 28);
+    });
+
+    test('כפולה שממלאה את הרוחב — אין רווח כלל', () {
+      final placement = bookViewTurnButtonPlacement(
+        gutter: 0,
+        buttonSize: 48,
+        edgePadding: 12,
+        dragZoneWidth: 48,
+      );
+
+      expect(placement.fitsBesideSpread, isFalse);
+      expect(placement.inset, 12);
+    });
+
+    test('הלחצן לעולם לא חופף את רצועת האחיזה שעל קצה הכפולה', () {
+      const gutter = 140.0;
+      const buttonSize = 60.0;
+      const dragZoneWidth = 48.0;
+      final placement = bookViewTurnButtonPlacement(
+        gutter: gutter,
+        buttonSize: buttonSize,
+        edgePadding: 28,
+        dragZoneWidth: dragZoneWidth,
+      );
+
+      expect(placement.fitsBesideSpread, isTrue);
+      // קצה הלחצן הפנימי נשאר לפני תחילת הרצועה.
+      expect(
+        placement.inset + buttonSize,
+        lessThanOrEqualTo(gutter - dragZoneWidth / 2),
+      );
+    });
+  });
 }

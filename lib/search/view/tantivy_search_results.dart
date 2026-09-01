@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -79,6 +80,15 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
 
   /// רוחב חי של חלונית התצוגה המקדימה בזמן גרירה (לא נשמר בין הפעלות).
   double? _previewPaneWidthOverride;
+
+  /// מוקד לניווט חיצים בין תוצאות כשהתצוגה המקדימה פתוחה.
+  final FocusNode _arrowNavFocusNode = FocusNode(
+    skipTraversal: true,
+    debugLabel: 'searchResultsArrowNav',
+  );
+
+  /// מפתחות לכרטיסי התוצאות — לגלילת התוצאה שנבחרה בחיצים אל תחום הנראה.
+  final Map<int, GlobalKey> _resultCardKeys = {};
 
   Widget _buildInformativeEmptyState({
     required IconData icon,
@@ -226,7 +236,102 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
   void dispose() {
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
+    _arrowNavFocusNode.dispose();
     super.dispose();
+  }
+
+  /// חיצים מעלה/מטה כשהתצוגה המקדימה פתוחה — מעבר לתוצאה השכנה ברשימה.
+  KeyEventResult _handleArrowNavKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final isDown = event.logicalKey == LogicalKeyboardKey.arrowDown;
+    if (!isDown && event.logicalKey != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    final target = widget.tab.previewTarget.value;
+    if (target == null ||
+        !widget.showPreviewPane ||
+        !context.read<SettingsBloc>().state.searchShowPreview) {
+      return KeyEventResult.ignored;
+    }
+    final results = widget.tab.searchBloc.state.results;
+    // תוצאה חיצונית (או sibling מאוחד) אינה ברשימה הראשית — אין ממנה ניווט.
+    final currentIndex = results.indexWhere(
+      (r) => target.matchesResult(
+        filePath: r.filePath,
+        segment: r.segment.toInt(),
+        isPdf: r.isPdf,
+      ),
+    );
+    if (currentIndex < 0) return KeyEventResult.ignored;
+    final nextIndex = currentIndex + (isDown ? 1 : -1);
+    if (nextIndex < 0) return KeyEventResult.handled;
+    if (nextIndex >= results.length) {
+      _maybeLoadMore();
+      return KeyEventResult.handled;
+    }
+    final next = results[nextIndex];
+    _togglePreview(
+      title: next.title,
+      reference: next.reference,
+      segment: next.segment.toInt(),
+      isPdf: next.isPdf,
+      filePath: next.filePath,
+    );
+    _ensureResultVisible(nextIndex, forward: isDown);
+    return KeyEventResult.handled;
+  }
+
+  /// גולל את הכרטיס שנבחר אל תחום הנראה: גלילה מינימלית, ובלבד שראש
+  /// הכרטיס (הכותרת) נראה גם כשהכרטיס גבוה מהחלון.
+  void _ensureResultVisible(
+    int index, {
+    required bool forward,
+    int retriesLeft = 3,
+  }) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final renderObject = _resultCardKeys[index]?.currentContext
+        ?.findRenderObject();
+    final viewport = renderObject == null
+        ? null
+        : RenderAbstractViewport.maybeOf(renderObject);
+    if (renderObject == null || viewport == null) {
+      if (retriesLeft <= 0) return;
+      // הכרטיס טרם נבנה (מחוץ ל-cacheExtent) — צעד גלילה לכיוונו בונה אותו.
+      final step = position.viewportDimension * 0.8;
+      final target = (position.pixels + (forward ? step : -step)).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if (target == position.pixels) return;
+      _scrollController.jumpTo(target);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _ensureResultVisible(
+            index,
+            forward: forward,
+            retriesLeft: retriesLeft - 1,
+          );
+        }
+      });
+      return;
+    }
+    final revealTop = viewport.getOffsetToReveal(renderObject, 0.0).offset;
+    final revealBottom = viewport.getOffsetToReveal(renderObject, 1.0).offset;
+    final double target;
+    if (revealBottom > revealTop || position.pixels > revealTop) {
+      // כרטיס גבוה מהחלון, או כרטיס שמעל החלון — מיישרים את ראשו לראש החלון.
+      target = revealTop;
+    } else if (position.pixels < revealBottom) {
+      target = revealBottom;
+    } else {
+      return;
+    }
+    _scrollController.animateTo(
+      target.clamp(position.minScrollExtent, position.maxScrollExtent),
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeInOut,
+    );
   }
 
   /// לחיצה אחת על תוצאה: כשהתצוגה המקדימה פעילה — טוגל שלה (לחיצה חוזרת
@@ -307,6 +412,8 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       isPdf: isPdf,
       filePath: filePath,
     );
+    // לחיצה אינה מעבירה פוקוס ב-Flutter — בלי זה החיצים לא מגיעים לאזור.
+    _arrowNavFocusNode.requestFocus();
   }
 
   /// פתיחת מיקום של תוצאה (או של תוצאה מאוחדת) בטאב קריאה — נתיב קוד
@@ -484,9 +591,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     ? target.segment + 1
                     : null,
                 searchText: widget.tab.searchBloc.state.searchQuery,
-                onOpenInReader: (_) {
+                onOpenInReader: (_, {bool? forcePdf}) {
                   final openTarget = widget.tab.previewTarget.value;
                   if (openTarget == null) return;
+                  final external = openTarget.openInReader;
+                  if (external != null) {
+                    external();
+                    return;
+                  }
                   _openResultLocation(
                     title: openTarget.title,
                     reference: openTarget.reference,
@@ -520,7 +632,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
       builder: (context, constrains) {
         final resultsArea = _buildListenerArea();
         if (!widget.showPreviewPane) return resultsArea;
-        return _wrapWithPreviewPane(resultsArea, constrains);
+        return Focus(
+          focusNode: _arrowNavFocusNode,
+          onKeyEvent: _handleArrowNavKey,
+          child: _wrapWithPreviewPane(resultsArea, constrains),
+        );
       },
     );
   }
@@ -611,6 +727,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
             final externalSliver = ExternalSearchResultsSection(
               key: const ValueKey('external-results-sliver'),
               tab: widget.tab,
+              showPreviewPane: widget.showPreviewPane,
             );
             final engineSlivers = _buildEngineSlivers(
               state,
@@ -832,8 +949,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               String rawHtml = result.text;
               // Debug info removed for production
               if (settingsState.replaceHolyNames) {
-                titleText = utils.replaceHolyNames(titleText);
-                rawHtml = utils.replaceHolyNames(rawHtml);
+                titleText = utils.replaceHolyNames(
+                  titleText,
+                  style: settingsState.holyNameStyle,
+                );
+                rawHtml = utils.replaceHolyNames(
+                  rawHtml,
+                  style: settingsState.holyNameStyle,
+                );
               }
 
               final wrappedTitleText = _formatTitleForWrapping(titleText);
@@ -888,6 +1011,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                         isPdf: result.isPdf,
                       );
                   return Container(
+                    key: _resultCardKeys.putIfAbsent(index, GlobalKey.new),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       border: Border.all(
@@ -1031,7 +1155,11 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                                       // titleText כבר עבר החלפת שמות קודש.
                                       final bookName =
                                           settingsState.replaceHolyNames
-                                          ? utils.replaceHolyNames(result.title)
+                                          ? utils.replaceHolyNames(
+                                              result.title,
+                                              style:
+                                                  settingsState.holyNameStyle,
+                                            )
                                           : result.title;
                                       final textToCopy =
                                           CopyUtils.formatTextWithHeaders(

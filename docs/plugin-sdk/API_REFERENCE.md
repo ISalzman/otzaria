@@ -130,6 +130,9 @@ if (response.success) {
 | `app.getGrantedPermissions` | 0.9.89 |
 | `app.openUrl` | 0.9.95 |
 | `app.getConnectivity` | 0.9.96 |
+| `app.registerShortcut` | 0.9.97 |
+| `app.unregisterShortcut` | 0.9.97 |
+| `app.updateShortcut` | 0.9.97 |
 | `library.findBooks` | 0.9.89 |
 | `library.getBookMetadata` | 0.9.89 |
 | `library.resolveBooks` | 0.9.97 |
@@ -145,6 +148,7 @@ if (response.success) {
 | `library.getRawLinks` | 0.9.97 |
 | `library.getLinkTargetsSummary` | 0.9.97 |
 | `library.getLinkContent` | 0.9.97 |
+| `library.refreshUserBooks` | 0.9.97 |
 | `network.fetch` | 0.9.93 |
 | `network.fetchStream` | 0.9.97 |
 | `network.download` | 0.9.93 |
@@ -441,6 +445,65 @@ await Otzaria.call('app.openUrl', { url: 'https://example.com' });
 
 מותרות אך ורק כתובות `http`/`https`. סכמות אחרות (`file://`, `javascript:`, פרוטוקולים מותאמים) נדחות עם `error.forbidden`.
 
+### `app.registerShortcut` / `app.unregisterShortcut` / `app.updateShortcut`
+**הרשאה נדרשת:** `app.shortcuts`
+
+רישום קיצור מקלדת שהתוסף מציע. לחיצה על הקיצור במסך העיון מפעילה:
+
+- **פקודה חופשית** — נשלח לתוסף אירוע `app.command` עם `{ command, shortcutId }`;
+  התוסף מאזין עם `Otzaria.on('app.command', ...)` ומבצע.
+- **פעולת תפריט הקשר** — `contextMenuItemId` מפנה לפריט שהוסף עם
+  `reader.addContextMenuItem`; הקיצור מפעיל אותו בדיוק כמו לחיצה ימנית עליו
+  (דורש טקסט מסומן בספר).
+
+הקיצור מופיע במסך **הגדרות → קיצורי מקשים** תחת "קיצורי תוספים", והמשתמש
+יכול לשנות אותו או לבטלו. הקיצור פעיל כשמסך העיון פתוח.
+
+```javascript
+// פקודה חופשית — התוסף מאזין ל-app.command ומבצע
+await Otzaria.call('app.registerShortcut', {
+  id: 'toggle-night-mode',
+  label: 'מצב לילה',
+  key: 'ctrl+alt+n',
+  command: 'toggleNightMode',
+});
+
+Otzaria.on('app.command', (payload) => {
+  if (payload.command === 'toggleNightMode') { /* ... */ }
+});
+
+// קיצור לפעולה שכבר נוספה לתפריט הלחיצה הימנית
+await Otzaria.call('app.registerShortcut', {
+  id: 'highlight-selection',
+  label: 'הדגש את הסימון',
+  key: 'ctrl+alt+h',
+  contextMenuItemId: 'highlight-action',
+});
+
+// עדכון הקיצור (נכון לעכשיו רק key נתמך)
+await Otzaria.call('app.updateShortcut', {
+  id: 'toggle-night-mode',
+  patch: { key: 'ctrl+alt+m' },
+});
+
+// הסרה
+await Otzaria.call('app.unregisterShortcut', { id: 'toggle-night-mode' });
+```
+
+| שדה | טיפוס | חובה | תיאור |
+|-----|-------|------|-------|
+| `id` | string | כן | מזהה ייחודי לקיצור בתוך התוסף |
+| `label` | string | כן | תווית תצוגה במסך קיצורי המקשים |
+| `key` | string | לא | קיצור ברירת מחדל בפורמט קנוני (`ctrl+alt+x`); ריק = המשתמש מקצה |
+| `command` | string | לא* | שם פקודה שנשלחת באירוע `app.command` |
+| `contextMenuItemId` | string | לא* | מזהה פריט תפריט הקשר שהקיצור מפעיל |
+
+\* נדרש לפחות אחד מ-`command` או `contextMenuItemId` — קיצור בלי יעד נדחה
+עם `error.invalid_params`.
+
+ניתן להצהיר על קיצורים גם **במניפסט** בלי להריץ קוד — ראו §
+[contributes.startup.shortcuts](#contributesstartup---תרומות-עלייה-דקלרטיביות).
+
 ---
 
 ## library.* - גישה לספרייה
@@ -611,6 +674,39 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 // [{ text: "בראשית", index: 0, level: 1 }, ...]
 ```
 
+### `library.refreshUserBooks`
+**הרשאה:** `library.refresh` · **מ-0.9.97**
+
+סורק מחדש את התיקיות האישיות שהמשתמש הגדיר, מעדכן את `user_books.db`
+לפי מה שנמצא בהן, ומרענן בעקבות זאת את קטלוג הספרייה. זו בדיוק הפעולה
+שמבצע הלחצן „סרוק מחדש תיקיות אישיות” בהגדרות.
+
+**מתי להשתמש:** תוסף שמוריד למשתמש ספרים וכותב אותם לתיקייה אישית
+(`network.download` / `fs.*` אל תוך תיקייה שהמשתמש אישר) — קורא לו בסיום, והספרים
+מופיעים בספרייה בלי שהמשתמש יפעיל מחדש את אוצריא.
+
+**אין פרמטרים.** אילו תיקיות ייסרקו נקבע מהגדרות המשתמש בלבד — התוסף אינו
+מעביר נתיב, ולכן אינו יכול לגרום לסריקה של תיקייה שלא הוגדרה.
+
+```javascript
+const { data } = await Otzaria.call('library.refreshUserBooks');
+// { addedBooks: 3, updatedBooks: 0, errors: [] }
+```
+
+| שדה | משמעות |
+|------|---------|
+| `addedBooks` | מספר הספרים החדשים שנוספו בסריקה. |
+| `updatedBooks` | מספר הספרים שתוכנם השתנה ועודכן. |
+| `errors` | כשלים חלקיים — קבצים בודדים שלא נסרקו. מערך ריק = הכל עבר בהצלחה. |
+
+הקריאה ממתינה לסיום הסריקה, שמשכה תלוי בכמות הקבצים אצל המשתמש, ולכן אינה
+כפופה ל-timeout הגנרי של 30 שניות. אחרי 15 דקות היא מוחזרת עם `error.timeout`.
+רענון הקטלוג עצמו נשלח לפני החזרת התשובה, אך מושלם ברקע; אינדוקס החיפוש מתעדכן
+לפי הגדרת „עדכון אינדקס אוטומטי” של המשתמש.
+
+**שגיאות:** `error.unavailable` — רענון אינו זמין בהקשר הנוכחי;
+`error.timeout` — הסריקה לא הסתיימה בזמן; `error.internal` — הסריקה נכשלה.
+
 ---
 
 ## מפרשים וקישורים
@@ -632,7 +728,8 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
 
 > 💡 **התחילו מ-`getLinkTargetsSummary`.** הוא מחזיר את כל ספרי היעד של הספר
 > בקריאה אחת וזולה, כולל `maxSourceLine` — ומאפשר לבחור אילו יעדים לבקש
-> ב-`getLinks`/`getRawLinks` (`targetTitles`) במקום לסרוק את כל הקישורים.
+> ב-`getLinks`/`getRawLinks` (`targetTitles`/`targetTitlePrefixes`) במקום
+> לסרוק את כל הקישורים.
 
 **`getLinks` או `getRawLinks`?** שתיהן בוחרות בדיוק את אותם קישורים ונבדלות
 רק בצורת הפלט. `getLinks` היא ברירת המחדל לכל שימוש תכנותי: 0-based כמו שאר
@@ -652,6 +749,9 @@ const { data } = await Otzaria.call('library.getBookAltToc', {
   טווח שורות. בקריאה זו `isRare` תמיד `false` — הנדירות מוגדרת ביחס לספר כולו.
 - `grouped: true` — במקום `commentators` מוחזר `groups`, המפרשים מקובצים לפי
   דורות באותו סדר שבו הממשק מציג אותם. קבוצות ריקות מושמטות.
+- `titlePrefixes` — סינון למפרשים ששמם פותח באחת התחיליות. שימושי לבחירת
+  ספרי הערות/הגהות בלבד (למשל `['הערות ', 'הגהות ', 'נוסחאות ']`) — במסד אין
+  סיווג "הערות" נפרד; ההבחנה היא לפי שם ספר היעד, והתוסף קובע את הרשימה.
 
 ```javascript
 const { data } = await Otzaria.call('library.getCommentators', {
@@ -683,6 +783,9 @@ const { data } = await Otzaria.call('library.getCommentators', {
 - `connectionTypes` — סינון לפי סוג חיבור (`"COMMENTARY"`, `"TARGUM"`,
   `"REFERENCE"` …). ההשוואה אינה תלוית רישיות.
 - `targetTitles` — סינון לספרי יעד מסוימים.
+- `targetTitlePrefixes` — סינון לספרי יעד ששמם פותח באחת התחיליות. כשהוא
+  ניתן יחד עם `targetTitles`, קישור עובר אם כותרת היעד מופיעה ברשימה **או**
+  פותחת באחת התחיליות (איחוד).
 - `includeAnchors` — כשהוא `true`, קישור בעל עוגן-מילה מקבל שדה `anchor`.
 
 ```javascript
@@ -692,6 +795,7 @@ const { data } = await Otzaria.call('library.getLinks', {
   endLine: 40,
   connectionTypes: ['COMMENTARY'],  // אופציונלי
   targetTitles: ['רש״י על בראשית'], // אופציונלי
+  targetTitlePrefixes: ['הערות '],  // אופציונלי — איחוד עם targetTitles
   includeAnchors: false             // אופציונלי, ברירת מחדל: false
 });
 // {
@@ -739,7 +843,8 @@ const { data } = await Otzaria.call('library.getLinks', {
 - `startLine`/`endLine` — אופציונליים, אך **חובה יחד** (0-based, כולל), כמו
   ב-`getCommentators`. בלעדיהם נסרקות 1000 השורות הראשונות. חלון גדול מ-**1000
   שורות** מוחזר כ-`error.invalid_params`. הטווח שנסרק בפועל חוזר בתשובה.
-- `targetTitles` / `connectionTypes` — סינון זהה לזה של `getLinks`.
+- `targetTitles` / `targetTitlePrefixes` / `connectionTypes` — סינון זהה לזה
+  של `getLinks`.
 - התשובה נחתכת אחרי **10,000** קישורים ומסומנת `truncated: true`.
 
 הפלט נושא בדיוק את המפתחות שהפורמט מגדיר. `targetCategoryId`, `isCommentary`,
@@ -807,9 +912,14 @@ while (line <= summary.maxSourceLine) {
 `maxSourceLine` הוא השורה הגבוהה ביותר שיש עליה קישור (0-based), או `-1`
 כשאין לספר קישורים כלל.
 
+- `targetTitles` / `targetTitlePrefixes` — סינון רשימת `targets` באותה
+  סמנטיקת איחוד של `getLinks`. `maxSourceLine` נשאר של הספר כולו, בלי קשר
+  לסינון.
+
 ```javascript
 const { data } = await Otzaria.call('library.getLinkTargetsSummary', {
-  bookId: 'בראשית'
+  bookId: 'בראשית',
+  targetTitlePrefixes: ['הערות ', 'הגהות ']  // אופציונלי
 });
 // {
 //   maxSourceLine: 1533,
@@ -1315,6 +1425,7 @@ window.addEventListener('search.external.requested', async (event) => {
 await Otzaria.call('reader.openSearchTab', {
   query: 'ברכת המזון',
   selectItems: ['include-hebrewbooks'],
+  autoSearch: false,
 });
 // true
 
@@ -1771,6 +1882,69 @@ for (const plugin of data) {
 1. **סדר התצוגה** — תוסף שהמשתמש סידר ידנית (גרירה) מקבל ערך ≥ 1000; תוסף שלא סודר ידנית מקבל את הערך שהוצהר ב-`toolTab.order` במניפסט (ברירת מחדל: 900). ערך נמוך יותר = מוקדם יותר.
 2. **תאריך התקנה** (tie-breaker) — כשלשניים אותו ערך סדר, הישן מגיע ראשון.
 3. **`pluginId`** (tie-breaker אחרון) — סדר לקסיקוגרפי; מבטיח תוצאה זהה בכל הרצה.
+
+---
+
+## קישורי otzaria:// בדף התוסף
+
+**הרשאה:** אין | **מגרסה:** 0.9.97
+
+קישור לאפליקציה שנכתב בדף התוסף עובד כמו כל קישור — המשתמש לוחץ, והאפליקציה
+פותחת את היעד:
+
+```html
+<a href="otzaria://open/book/1234?index=57">בבא קמא, דף ב</a>
+```
+
+אין צורך בהרשאה. הסיבה: לא פעם הקישור נכתב בידי המשתמש עצמו, בתוכן שהוא שומר
+בתוסף — ולא בידי מחבר התוסף. במקום לגדר את זה בהרשאה, הגבול הוא **לחיצה של
+המשתמש**.
+
+**רק לחיצה מפעילה קישור.** ניווט שהתוסף יזם בעצמו — `location.href`,
+‏`window.open`, ‏`<meta refresh>`, הפניה מהשרת או `iframe` — נחסם בשקט. תוסף שרוצה
+לפתוח ספר מיוזמתו משתמש ב-API הרגיל (`reader.openBook`,‏ `navigation.goTo`), שם
+ההרשאה נבדקת כרגיל.
+
+שלוש פעולות חסומות גם בלחיצה, כי אין להן שימוש בתוכן שמשתמש כותב:
+`otzaria://library/reindex`,‏ `otzaria://info/...` והתקנה מקובץ מקומי
+(`otzaria://plugin/install-local`).
+
+### הפיכת כתובות שנכתבו כטקסט לקישורים
+
+כתובת שמופיעה כטקסט רגיל אינה לחיצה — בדיוק כמו בדפדפן. שתי דרכים להפוך אותה
+לקישור:
+
+**יזום** — קריאה ל-`Otzaria.linkify(root)` אחרי שהתוכן נכנס ל-DOM. מחזירה את מספר
+צמתי הטקסט שהוחלפו:
+
+```javascript
+document.getElementById('note').textContent = userText;
+Otzaria.linkify(document.getElementById('note'));
+```
+
+**אוטומטי** — דגל במניפסט. סורק את הדף בטעינה, וממשיך לעקוב אחרי תוכן שנוסף
+מאוחר יותר:
+
+```json
+{
+  "contributes": {
+    "autoLinkify": true
+  }
+}
+```
+
+בשני המצבים הסריקה מדלגת על `<a>`,‏ `<code>`,‏ `<pre>`,‏ `<textarea>`,‏ `<input>`
+ו-`<script>`, ועל כל אלמנט עם `contenteditable`. לחסימה מקומית נוספת יש
+`data-otzaria-no-linkify`:
+
+```html
+<div data-otzaria-no-linkify>otzaria://open/book/1 יישאר טקסט</div>
+```
+
+> **שימו לב:** ההחלפה מנתקת את צומת הטקסט המקורי מה-DOM. אם התוסף בנוי על
+> ספריית רינדור שמחזיקה הפניות לצמתים (React,‏ Vue,‏ Svelte), עדכון מאוחר של אותו
+> טקסט עלול להיעלם. בתוסף כזה עדיפה קריאה יזומה על תוכן שכבר לא משתנה, על פני
+> `autoLinkify`.
 
 ---
 
@@ -3510,6 +3684,7 @@ async function scheduleReminder(title, body, dateTime) {
 {
   "permissions": [
     "app.startup_contributions",
+    "app.shortcuts",
     "app.run_on_startup",
     "reader.toolbar",
     "reader.context_menu",
@@ -3531,6 +3706,14 @@ async function scheduleReminder(title, body, dateTime) {
           "id": "lookup",
           "title": "חפש במילון",
           "showWhen": { "selectionContainsAny": ["רש\"י", "תוס'"] }
+        }
+      ],
+      "shortcuts": [
+        {
+          "id": "lookup-shortcut",
+          "label": "חפש במילון",
+          "key": "ctrl+alt+l",
+          "contextMenuItemId": "lookup"
         }
       ],
       "publishedData": [
@@ -3558,12 +3741,25 @@ async function scheduleReminder(title, body, dateTime) {
 |---|---|---|
 | `toolbarItems` | זהה ל-`reader.addToolbarItem` | `reader.toolbar` |
 | `contextMenuItems` | זהה ל-`reader.addContextMenuItem` | `reader.context_menu` |
+| `shortcuts` | זהה ל-`app.registerShortcut` | `app.shortcuts` |
 | `publishedData` | `{type, key, payload, scope?}` | `published_data.write` |
 | `programs` | תכניות חישוב Host מוולדות | הרשאות הפקודות שבתכנית |
 | `searchDialogItems` | שורות checkbox סטטיות בדיאלוג החיפוש | `search.dialog` |
 | `externalEditions` | קונפיגורציית מהדורות מקבילות חיצוניות (טבלת מיפוי במקור DB מוכרז) | `database.read` וגם `library.books.read` |
 | `activationEvents` | שמות אירועים או `app.startup`; אפשר גם `{topic, when}` | הרשאת ה-subscribe של כל נושא |
 | `keepAlive` | `boolean` (ברירת מחדל: `false`) | `app.background_keep_alive` וגם `app.run_on_startup` |
+
+### קיצורי מקלדת (shortcuts)
+
+`startup.shortcuts` מאפשר לתוסף להצהיר על קיצורי מקלדת בלי להריץ קוד —
+אותה סכימה של `app.registerShortcut` (ראו § app.registerShortcut). כל קיצור
+דורש `command` או `contextMenuItemId`, ויכול לצרף קיצור ברירת מחדל (`key`).
+הקיצורים מופיעים במסך **הגדרות → קיצורי מקשים** תחת "קיצורי תוספים",
+והמשתמש יכול לשנות או לבטל כל אחד מהם.
+
+קיצור עם `command` מפעיל את מנוע התוסף ושולח לו אירוע `app.command`;
+קיצור עם `contextMenuItemId` מפעיל את פעולת תפריט ההקשר בדיוק כמו לחיצה
+ימנית עליה (דורש טקסט מסומן בספר).
 
 ### תכניות Host ללא WebView
 
@@ -4163,6 +4359,7 @@ Otzaria.on('plugin.boot', async (payload) => {
     "library.books.read",
     "library.content.read",
     "library.links.read",
+    "library.refresh",
     "search.fulltext.read",
     "reader.open",
     "navigation.write",

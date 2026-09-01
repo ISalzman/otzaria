@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       # שימוש ב-channel stable + flutter-version קבוע, אחיד עם build-and-announce.yml.
       # הגרסה ננעלת מפני שדרוגים אוטומטיים של pub/CI אחרי שחרור גרסת flutter יציבה חדשה.
@@ -82,7 +82,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -99,7 +99,7 @@ jobs:
       # ה-cache מיוצר ב-warm_search_engine_cache.yml על ענף הבסיס.
       - name: Cache search engine library
         id: engine-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: ~/.pub-cache/hosted/pub.dev/otzaria_search_engine-*/rust/target/release/libsearch_engine.so
           # בלי restore-keys: .so מגרסה קודמת נכשל בבדיקת ה-content hash של FRB,

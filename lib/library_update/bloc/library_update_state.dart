@@ -54,6 +54,10 @@ class LibraryUpdateState extends Equatable {
   /// מזהי ספרים (seforim.db) שתוכנם השתנה בעדכון דלתא — לרענון אינדקס החיפוש.
   final Set<int> changedBookIds;
 
+  /// `true` אם השתנו טבלאות שלא ניתן למפות לספרים מסוימים, ולכן נדרש
+  /// reconcile מלא של אינדקס החיפוש במקום ריענון לפי [changedBookIds].
+  final bool requiresFullIndexRefresh;
+
   final String? errorMessage;
 
   /// `true` כשה-[LibraryUpdateStatus.error] נבע מכשל בשלב בדיקת הזמינות בלבד —
@@ -71,6 +75,7 @@ class LibraryUpdateState extends Equatable {
     this.applyProgress,
     this.plan,
     this.changedBookIds = const {},
+    this.requiresFullIndexRefresh = false,
     this.errorMessage,
     this.isCheckFailure = false,
   });
@@ -110,6 +115,7 @@ class LibraryUpdateState extends Equatable {
     Object? applyProgress = _sentinel,
     LibraryUpdatePlan? plan,
     Set<int>? changedBookIds,
+    bool? requiresFullIndexRefresh,
     String? errorMessage,
     bool? isCheckFailure,
   }) {
@@ -126,6 +132,8 @@ class LibraryUpdateState extends Equatable {
           : applyProgress as double?,
       plan: plan ?? this.plan,
       changedBookIds: changedBookIds ?? this.changedBookIds,
+      requiresFullIndexRefresh:
+          requiresFullIndexRefresh ?? this.requiresFullIndexRefresh,
       errorMessage: errorMessage ?? this.errorMessage,
       isCheckFailure: isCheckFailure ?? this.isCheckFailure,
     );
@@ -143,6 +151,7 @@ class LibraryUpdateState extends Equatable {
     applyProgress,
     plan,
     changedBookIds,
+    requiresFullIndexRefresh,
     errorMessage,
     isCheckFailure,
   ];

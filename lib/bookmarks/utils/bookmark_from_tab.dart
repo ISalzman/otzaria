@@ -1,4 +1,5 @@
 import 'package:otzaria/bookmarks/models/bookmark.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -13,6 +14,12 @@ import 'package:pdfrx/pdfrx.dart';
 /// מחזיר null לטאב שאינו ספר. [useStoredPositionFallback] — כשהטאב טרם נטען
 /// (רקע), ליפול למיקום השמור בטאב במקום להחזיר null; ההיסטוריה משאירה false
 /// כדי לא לרשום טאבים שלא נקראו בפועל.
+
+/// כתובת שורה כשאין מצב טעון: קריאת שורה אחת מה-DB, ורק בהיעדרה טעינת עץ
+/// הכותרות המלא.
+Future<String> _refForStoredPosition(TextBook book, int index) async =>
+    await refFromDbLine(book, index) ??
+    await refFromIndex(index, book.tableOfContents);
 Future<Bookmark?> bookmarkFromReadingTab(
   OpenedTab tab, {
   String? workspaceName,
@@ -38,7 +45,7 @@ Future<Bookmark?> bookmarkFromReadingTab(
     }
     if (!useStoredPositionFallback) return null;
     final source = tab.sourceTab;
-    String ref = await refFromIndex(source.index, source.book.tableOfContents);
+    String ref = await _refForStoredPosition(source.book, source.index);
     ref = addBookTitleToRef(ref, source.book.title);
     return Bookmark(
       ref: 'מפרשים | $ref',
@@ -69,7 +76,7 @@ Future<Bookmark?> bookmarkFromReadingTab(
       );
     }
     if (!useStoredPositionFallback) return null;
-    String ref = await refFromIndex(tab.index, tab.book.tableOfContents);
+    String ref = await _refForStoredPosition(tab.book, tab.index);
     ref = addBookTitleToRef(ref, tab.book.title);
     return Bookmark(
       ref: ref,

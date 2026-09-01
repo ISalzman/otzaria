@@ -196,7 +196,7 @@ void main() {
     );
   });
 
-  testWidgets('פס הגלילה מוסתר כשכל התוכן נראה במסך', (tester) async {
+  testWidgets('פס הגלילה מוסתר כשכל התוכן נראה', (tester) async {
     final listener = ItemPositionsListener.create();
     final controller = ItemScrollController();
     const contentKey = Key('scroll-content');
@@ -222,6 +222,10 @@ void main() {
         ];
     await tester.pump();
 
+    expect(
+      find.byKey(ScrollablePositionedListScrollbar.thumbKey),
+      findsNothing,
+    );
     expect(tester.getTopLeft(find.byKey(contentKey)).dx, 0.0);
   });
 

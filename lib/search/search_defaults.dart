@@ -177,6 +177,20 @@ class SearchDefaults {
   static void saveResultGroupingDefault(ResultGroupingMode grouping) =>
       _saveEnum(_groupingKey, grouping.name);
 
+  static const _treeOpenKey = 'key-search-results-tree-open';
+
+  /// האם עץ סינון התוצאות ייפתח פתוח בחיפוש חדש — בחירת המשתמש האחרונה.
+  static bool initialResultsTreeOpenForNewSearch() {
+    if (!Settings.isInitialized) return true;
+    return Settings.getValue<bool>(_treeOpenKey) ?? true;
+  }
+
+  /// שומר את הסתרת/הצגת עץ התוצאות כברירת מחדל לחיפושים הבאים.
+  static void saveResultsTreeOpenDefault(bool isOpen) {
+    if (!Settings.isInitialized) return;
+    Settings.setValue<bool>(_treeOpenKey, isOpen);
+  }
+
   /// [base] בתוספת ברירות המחדל השמורות לתצוגת התוצאות — מיון ואיחוד —
   /// הדורסות את מה שיש ב-[base]. מסלולי השחזור (JSON, שכפול, היסטוריה)
   /// אינם עוברים כאן, כדי שטאב משוחזר יישאר עם הערכים שנשמרו איתו.

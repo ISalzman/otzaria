@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
 
 /// תוצאת חיפוש שנבחרה לתצוגה מקדימה — הספר שפוענח מהאינדקס יחד עם נתוני
@@ -11,6 +12,10 @@ class SearchPreviewTarget {
   final bool isPdf;
   final String filePath;
 
+  /// פתיחה בעיון עבור תוצאה שאינה מהמנוע המובנה (מקור חיצוני של תוסף):
+  /// המסלול הרגיל מאמת את הנתיב מול האינדקס, ושם אין רשומה כזו.
+  final VoidCallback? openInReader;
+
   const SearchPreviewTarget({
     required this.book,
     required this.title,
@@ -18,6 +23,7 @@ class SearchPreviewTarget {
     required this.segment,
     required this.isPdf,
     required this.filePath,
+    this.openInReader,
   });
 
   /// זהות תוצאה: המפתח היציב של האינדקס + המקטע. משמשת ל"לחיצה חוזרת על

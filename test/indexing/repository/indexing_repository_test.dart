@@ -136,6 +136,67 @@ void main() {
     });
   });
 
+  group('IndexingRepository.hasUnindexedBooks', () {
+    test(
+      'מחזיר false כשכל הספרים מאונדקסים - מונע אינדוקס מלא בכל עלייה',
+      () async {
+        final provider = _RecordingTantivyDataProvider(
+          _RecordingSearchEngine(),
+        );
+        final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+        provider.indexedFilePaths.addAll(
+          library
+              .getAllBooks()
+              .where(IndexingRepository.isIndexableBook)
+              .map(IndexingRepository.buildIndexedBookFilePath),
+        );
+
+        expect(
+          await IndexingRepository(provider).hasUnindexedBooks(library),
+          isFalse,
+        );
+      },
+    );
+
+    test('מחזיר true כשספר אינדקסבילי חסר מהאינדקס', () async {
+      final provider = _RecordingTantivyDataProvider(_RecordingSearchEngine());
+      final library = _buildLibrary(bavliBooks: const [('שבת', 1)]);
+
+      expect(
+        await IndexingRepository(provider).hasUnindexedBooks(library),
+        isTrue,
+      );
+    });
+
+    test('מחזיר false בספרייה ריקה - אין עבודה להריץ', () async {
+      final provider = _RecordingTantivyDataProvider(_RecordingSearchEngine());
+
+      expect(
+        await IndexingRepository(
+          provider,
+        ).hasUnindexedBooks(Library(categories: [])),
+        isFalse,
+      );
+    });
+
+    test('ספר שאינו בר-אינדוקס אינו נספר כחסר', () async {
+      final provider = _RecordingTantivyDataProvider(_RecordingSearchEngine());
+      final library = Library(categories: []);
+      library.books.add(
+        ExternalLibraryBook(
+          title: 'ספר חיצוני',
+          id: 902,
+          link: 'https://example.com/ext',
+        ),
+      );
+
+      expect(
+        await IndexingRepository(provider).hasUnindexedBooks(library),
+        isFalse,
+      );
+    });
+  });
+
   group('IndexingRepository.hasPathKeyedIndexEntry', () {
     test('PdfBook בלי מזהה חיצוני מאונדקס לפי נתיב (גם עם id)', () {
       expect(

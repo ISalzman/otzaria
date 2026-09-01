@@ -33,18 +33,36 @@ class ToggleAddToDatabase extends CustomFoldersEvent {
   List<Object> get props => [folder, value];
 }
 
+/// קביעת חריגת מיזוג לתיקייה בודדת. [value] `null` מחזיר אותה לברירת
+/// המחדל הגלובלית.
+class SetFolderMergeMode extends CustomFoldersEvent {
+  const SetFolderMergeMode(this.folder, this.value);
+  final CustomFolder folder;
+  final bool? value;
+  @override
+  List<Object?> get props => [folder, value];
+}
+
 class RescanCustomFolders extends CustomFoldersEvent {
   const RescanCustomFolders({
     this.showNoChangesMessage = true,
     this.onlyFolderPath,
+    this.requestId,
   });
   final bool showNoChangesMessage;
 
   /// כשמסופק, נסרקת רק תיקייה זו — מייבוא ספרים אישיים, שם שאר התיקיות
   /// ממילא לא השתנו.
   final String? onlyFolderPath;
+
+  /// מזהה בקשה שידווח ב-[CustomFoldersState.completedScan] בסיום הסריקה,
+  /// בהצלחה או בכישלון. קיים כדי שקורא שאינו UI (כרגע
+  /// `library.refreshUserBooks` של תוסף) יוכל לחכות לתוצאה של הסריקה שהוא
+  /// עצמו ביקש. `null` = סריקה מהממשק, שתוצאתה מוצגת ב-message/error בלבד.
+  final int? requestId;
+
   @override
-  List<Object?> get props => [showNoChangesMessage, onlyFolderPath];
+  List<Object?> get props => [showNoChangesMessage, onlyFolderPath, requestId];
 }
 
 /// ייבוא ידני של קבצי דורות/קישורים שהמשתמש בחר (לצמיתות, בדריסה מצטברת).

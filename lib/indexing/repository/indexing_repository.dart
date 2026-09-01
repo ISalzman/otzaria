@@ -232,15 +232,28 @@ class IndexingRepository {
     return _tantivyDataProvider.requiresManualReindex;
   }
 
+  /// האם קיימים ספרים בני-אינדוקס שאינם באינדקס. השוואה בזיכרון מול
+  /// הרשימה שנקראה מהאינדקס עצמו - זולה מספיק לרוץ בכל עלייה.
+  Future<bool> hasUnindexedBooks(Library library) async {
+    await _tantivyDataProvider.engine;
+    return library
+        .getAllBooks()
+        .where(isIndexableBook)
+        .any((book) => !isBookIndexed(book));
+  }
+
   /// Indexes all books in the provided library.
   ///
   /// [library] The library containing books to index
   /// [onProgress] Callback function to report progress
+  /// [onFinalizing] נקרא כשכל הספרים אונדקסו והמנוע ניגש לאחד את קבצי
+  /// האינדקס — שלב ארוך וללא התקדמות מדידה.
   /// מבצע אינדוקס ומחזיר תוצאה מפורטת, כולל ביטול וכשלים פר-ספר.
   Future<IndexingRunResult> indexAllBooks(
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
+    void Function()? onFinalizing,
     bool includePdfBooks = true,
   }) async {
     if (await _blockIndexingOnTempFallback()) {
@@ -536,6 +549,7 @@ class IndexingRepository {
       }
 
       if (!cancelled) {
+        onFinalizing?.call();
         debugPrint('✅ אינדוקס הושלם!');
         debugPrint('   📊 סה"כ: $totalBooks ספרים');
         debugPrint('   ✅ מאונדקסים: $actuallyIndexed');

@@ -11,6 +11,9 @@ abstract class LibraryMessages {
 
   static const String libraryLoadError = 'שגיאה בטעינת הספרייה. נסה שוב.';
 
+  static String talmudPdfEditionMissing(String title) =>
+      'לא נמצאה מהדורת PDF ל"$title" — המסכת נפתחה כטקסט';
+
   static String zipExtractedSuccessfully(String fileName) =>
       'הקובץ "$fileName" חולץ בהצלחה!';
 
@@ -62,7 +65,23 @@ abstract class LibraryMessages {
 
   static const String updateCheckError = 'שגיאה בבדיקת עדכונים';
 
+  static const String noInternetConnection = 'אין חיבור לאינטרנט';
+
+  static const String updateSourceUnreachable =
+      'שרת העדכונים אינו זמין ברשת זו';
+
   static const String updateDownloadError = 'שגיאה בהורדת העדכון';
 
   static const String updateInstallerLaunchError = 'שגיאה בהפעלת מתקין העדכון';
+
+  static const String deltaApplyFailed = 'החלת עדכון הדלתא נכשלה';
+
+  static const String deltaResultMismatch =
+      'תוצאת עדכון הדלתא אינה תואמת לגרסה הצפויה';
+
+  static const String localLibraryContentMismatch =
+      'תוכן הספרייה המקומית שונה מהצפוי';
+
+  static String fullLibraryDownloadRequired(String reason, String size) =>
+      '$reason — נדרשת הורדה מלאה ($size)';
 }

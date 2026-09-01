@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/dialogs/safer_mode_password_dialog.dart';
@@ -102,91 +104,129 @@ class _SaferModeGuardState extends State<SaferModeGuard> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<SettingsBloc, SettingsState>(
-      listenWhen: (previous, current) =>
-          previous.protectedModeEnabled != current.protectedModeEnabled,
-      listener: (context, state) {
-        // אם המצב המוגן הופעל והמשתמש עדיין לא אומת
-        if (state.protectedModeEnabled && !_isVerified) {
-          final repository = context.read<SettingsRepository>();
-          if (repository.hasProtectedModePassword()) {
-            // נאפס את הסטטוס ונבקש אימות מחדש
-            setState(() {
-              _isVerified = false;
-              _isChecking = false;
-              _dialogShown = false;
-            });
-            // נציג את הדיאלוג
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_dialogShown) {
-                _dialogShown = true;
-                _showPasswordDialog();
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<SettingsBloc, SettingsState>(
+          listenWhen: (previous, current) =>
+              previous.protectedModeEnabled != current.protectedModeEnabled,
+          listener: (context, state) {
+            // אם המצב המוגן הופעל והמשתמש עדיין לא אומת
+            if (state.protectedModeEnabled && !_isVerified) {
+              final repository = context.read<SettingsRepository>();
+              if (repository.hasProtectedModePassword()) {
+                // נאפס את הסטטוס ונבקש אימות מחדש
+                setState(() {
+                  _isVerified = false;
+                  _isChecking = false;
+                  _dialogShown = false;
+                });
+                // נציג את הדיאלוג
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !_dialogShown) {
+                    _dialogShown = true;
+                    _showPasswordDialog();
+                  }
+                });
               }
-            });
-          }
-        }
-      },
+            }
+          },
+        ),
+        // מסך ההגדרות נשמר חי (KeepAlive) לכל אורך הסשן, ולכן אימות חד-פעמי
+        // ב-initState אינו מספיק: יציאה מהמסך נועלת מחדש, וחזרה מבקשת סיסמה.
+        BlocListener<NavigationBloc, NavigationState>(
+          listenWhen: (previous, current) =>
+              previous.currentScreen != current.currentScreen,
+          listener: (context, navState) {
+            if (!shouldRequireSaferModePassword(context)) return;
+            if (navState.currentScreen != Screen.settings) {
+              if (_isVerified) {
+                setState(() {
+                  _isVerified = false;
+                  _dialogShown = false;
+                });
+              }
+            } else if (!_isVerified && !_dialogShown) {
+              _dialogShown = true;
+              _showPasswordDialog();
+            }
+          },
+        ),
+      ],
       child: _buildContent(),
     );
   }
 
+  // המסך המוגן נשאר תמיד בעץ (Offstage בנעילה) כדי שה-State שלו לא ייהרס —
+  // הנעילה היא שכבת כיסוי בלבד, ופתיחה מחזירה את המסך כפי שנעזב.
   Widget _buildContent() {
-    if (_isChecking) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (!_isVerified) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'הגדרות',
-          ),
-          automaticallyImplyLeading: true,
-        ),
-        body: CenteredScrollableState(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                FluentIcons.lock_closed_24_regular,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'הנך במצב סייפר',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'נדרשת סיסמה כדי לגשת להגדרות',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _dialogShown = false;
-                  });
-                  _showPasswordDialog();
-                },
-                icon: const Icon(FluentIcons.key_24_regular),
-                label: const Text('הזן סיסמה'),
-              ),
-            ],
+    final locked = _isChecking || !_isVerified;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Offstage(
+          offstage: locked,
+          child: ExcludeFocus(
+            excluding: locked,
+            child: widget.child,
           ),
         ),
-      );
-    }
+        if (_isChecking)
+          const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (!_isVerified)
+          _buildLockScreen(),
+      ],
+    );
+  }
 
-    return widget.child;
+  Widget _buildLockScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'הגדרות',
+        ),
+        automaticallyImplyLeading: true,
+      ),
+      body: CenteredScrollableState(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              FluentIcons.lock_closed_24_regular,
+              size: 64,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'הנך במצב סייפר',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'נדרשת סיסמה כדי לגשת להגדרות',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: () {
+                setState(() {
+                  _dialogShown = false;
+                });
+                _showPasswordDialog();
+              },
+              icon: const Icon(FluentIcons.key_24_regular),
+              label: const Text('הזן סיסמה'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

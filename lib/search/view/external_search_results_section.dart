@@ -8,6 +8,7 @@ import 'package:otzaria/core/messages/plugin_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/plugins/declarative/services/declarative_library_book_access.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
@@ -17,6 +18,7 @@ import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
 import 'package:otzaria/search/models/external_search_status.dart';
 import 'package:otzaria/search/models/external_search_summary.dart';
+import 'package:otzaria/search/models/search_preview_target.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/utils/snippet_builder.dart';
@@ -39,7 +41,8 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 /// והתוסף נרשם כספק. השאילתה נשלחת לתוסף כאירוע ממוקד — אוצריא עצמה אינה
 /// פונה לשירות החיפוש החיצוני. לחיצה על תוצאה פותחת את הספר במציג המובנה
 /// (מקומית כשהקובץ קיים בתיקיית ההיברובוקס), עם עמודי ההתאמה כשהספק
-/// חיפוש-בתוך-ספר זמין.
+/// חיפוש-בתוך-ספר זמין; כשחלונית התצוגה המקדימה פעילה, לחיצה אחת מציגה
+/// אותה ולחיצה כפולה פותחת בעיון — כמו בתוצאות המנוע המובנה.
 ///
 /// לצד עמודי התוצאות, הספק מצרף אינדקס תמציתי של כלל התוצאות עם קטגוריה
 /// לכל ספר — הסיווג כולו (כולל עידון מול קטלוג השוואות, אם יש לספק כזה)
@@ -50,7 +53,15 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 class ExternalSearchResultsSection extends StatefulWidget {
   final SearchingTab tab;
 
-  const ExternalSearchResultsSection({super.key, required this.tab});
+  /// האם המסך מציג חלונית תצוגה מקדימה (פריסה רחבה בלבד) — כמו ב-
+  /// [TantivySearchResults], שהוא גם המקור לערך.
+  final bool showPreviewPane;
+
+  const ExternalSearchResultsSection({
+    super.key,
+    required this.tab,
+    this.showPreviewPane = false,
+  });
 
   @override
   State<ExternalSearchResultsSection> createState() =>
@@ -146,6 +157,10 @@ class _ExternalSearchResultsSectionState
   bool _loading = false;
   String? _error;
   Object? _openingId;
+
+  /// נתיב ה-PDF המקומי של תוצאה שכבר פוענחה — משמש לזיהוי "התוצאה הזו היא
+  /// המוצגת כרגע בתצוגה המקדימה", שנשמרת לפי נתיב ולא לפי מזהה חיצוני.
+  final Map<Object, String> _previewPaths = {};
 
   /// חתימת הבקשה האחרונה — מזהה מתי צריך חיפוש חדש ומסנן תשובות ישנות.
   String _fetchSignature = '';
@@ -512,51 +527,130 @@ class _ExternalSearchResultsSectionState
     unawaited(_fetch(state, active.$1, reset: false));
   }
 
+  /// זהות הספר של תוצאה חיצונית, כפי שמסלולי הפענוח הדקלרטיביים מצפים לה.
+  Map<String, dynamic> _identityOf(ExternalSearchResult result) => {
+    'external': {'provider': result.provider, 'id': result.externalId},
+  };
+
+  /// לוכדים את התלויות לפני נקודות ה-await — ה-context עלול להתפרק בינתיים.
+  DeclarativeLibraryBookAccess _bookAccess() =>
+      DeclarativeLibraryBookAccess.otzaria(
+        BookOpenCoordinator(
+          tabsBloc: context.read<TabsBloc>(),
+          historyBloc: context.read<HistoryBloc>(),
+          navigationBloc: context.read<NavigationBloc>(),
+        ),
+      );
+
+  /// לחיצה אחת: כשהתצוגה המקדימה פעילה — טוגל שלה, אחרת פתיחה בעיון.
+  /// אותה התנהגות כמו בכרטיס תוצאה של המנוע המובנה.
+  void _handleResultTap(
+    ExternalSearchResult result,
+    SearchState state,
+    bool previewEnabled,
+  ) {
+    unawaited(
+      previewEnabled
+          ? _togglePreview(result, state)
+          : _openResult(result, state),
+    );
+  }
+
+  /// עמוד ההתאמה כמקטע של [SearchPreviewTarget] — מבוסס-0 בספר PDF.
+  int _previewSegment(ExternalSearchResult result) =>
+      (result.firstPage ?? 1) - 1;
+
+  Future<void> _togglePreview(
+    ExternalSearchResult result,
+    SearchState state,
+  ) async {
+    final segment = _previewSegment(result);
+    final knownPath = _previewPaths[result.externalId];
+    final current = widget.tab.previewTarget.value;
+    if (knownPath != null &&
+        current != null &&
+        current.matchesResult(
+          filePath: knownPath,
+          segment: segment,
+          isPdf: true,
+        )) {
+      widget.tab.previewTarget.value = null;
+      return;
+    }
+    if (_openingId != null) return;
+    setState(() => _openingId = result.externalId);
+    final access = _bookAccess();
+    try {
+      final book = (await access.findUniqueBooks([_identityOf(result)])).single;
+      if (!mounted) return;
+      // ספר שלא הורד הוא קישור לאתר המקור בלבד — אין לו תוכן מקומי להצגה,
+      // ולכן לחיצה עליו נשארת פתיחה ישירה גם כשהתצוגה המקדימה פעילה.
+      if (book is! PdfBook) {
+        await _openViaAccess(result, state, access);
+        return;
+      }
+      _previewPaths[result.externalId] = book.path;
+      widget.tab.previewTarget.value = SearchPreviewTarget(
+        book: book,
+        title: result.title,
+        reference: result.title,
+        segment: segment,
+        isPdf: true,
+        filePath: book.path,
+        openInReader: () => unawaited(
+          _openResult(result, widget.tab.searchBloc.state),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _openingId = null);
+    }
+  }
+
   Future<void> _openResult(
     ExternalSearchResult result,
     SearchState state,
   ) async {
     if (_openingId != null) return;
     setState(() => _openingId = result.externalId);
-    final query = state.searchQuery.trim();
-    // לוכדים את התלויות לפני נקודות ה-await — ה-context עלול להתפרק בינתיים.
-    final access = DeclarativeLibraryBookAccess.otzaria(
-      BookOpenCoordinator(
-        tabsBloc: context.read<TabsBloc>(),
-        historyBloc: context.read<HistoryBloc>(),
-        navigationBloc: context.read<NavigationBloc>(),
-      ),
-    );
+    final access = _bookAccess();
     try {
-      // עמודי ההתאמה מגיעים מספק החיפוש-בתוך-ספר של התוסף; כישלון או
-      // איטיות אינם מונעים את פתיחת הספר — פותחים בלעדיהם.
-      ExternalBookMatches? matches;
-      if (PluginInBookSearchService.instance.hasProvider(result.provider)) {
-        try {
-          matches = await PluginInBookSearchService.instance
-              .search(
-                provider: result.provider,
-                externalId: result.externalId,
-                query: query,
-              )
-              .timeout(_inBookMatchesTimeout);
-        } catch (_) {
-          matches = null;
-        }
-      }
-      final opened = await access.openUnique(
-        {
-          'external': {'provider': result.provider, 'id': result.externalId},
-        },
-        index: result.firstPage ?? 1,
-        searchQuery: query,
-        externalMatches: matches,
-      );
-      if (!opened) {
-        UiSnack.show(PluginMessages.externalBookNotFound);
-      }
+      await _openViaAccess(result, state, access);
     } finally {
       if (mounted) setState(() => _openingId = null);
+    }
+  }
+
+  /// פתיחת הספר בפועל, בהנחה שחיווי הטעינה כבר הודלק על ידי הקורא.
+  Future<void> _openViaAccess(
+    ExternalSearchResult result,
+    SearchState state,
+    DeclarativeLibraryBookAccess access,
+  ) async {
+    final query = state.searchQuery.trim();
+    // עמודי ההתאמה מגיעים מספק החיפוש-בתוך-ספר של התוסף; כישלון או
+    // איטיות אינם מונעים את פתיחת הספר — פותחים בלעדיהם.
+    ExternalBookMatches? matches;
+    if (PluginInBookSearchService.instance.hasProvider(result.provider)) {
+      try {
+        matches = await PluginInBookSearchService.instance
+            .search(
+              provider: result.provider,
+              externalId: result.externalId,
+              query: query,
+            )
+            .timeout(_inBookMatchesTimeout);
+      } catch (_) {
+        matches = null;
+      }
+    }
+    final opened = await access.openUnique(
+      _identityOf(result),
+      index: result.firstPage ?? 1,
+      searchQuery: query,
+      externalMatches: matches,
+    );
+    if (!opened) {
+      UiSnack.show(PluginMessages.externalBookNotFound);
     }
   }
 
@@ -660,14 +754,41 @@ class _ExternalSearchResultsSectionState
     final cs = theme.colorScheme;
     final opening = _openingId == result.externalId;
     final enabled = _openingId == null || opening;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.outline.withValues(alpha: 0.3)),
-        borderRadius: AppTokens.borderRadiusAll,
-      ),
+    final previewEnabled = widget.showPreviewPane && settings.searchShowPreview;
+    return ValueListenableBuilder<SearchPreviewTarget?>(
+      valueListenable: widget.tab.previewTarget,
+      builder: (context, previewTarget, child) {
+        final previewedPath = _previewPaths[result.externalId];
+        final isPreviewed =
+            previewEnabled &&
+            previewedPath != null &&
+            previewTarget != null &&
+            previewTarget.matchesResult(
+              filePath: previewedPath,
+              segment: _previewSegment(result),
+              isPdf: true,
+            );
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isPreviewed
+                  ? cs.primary
+                  : cs.outline.withValues(alpha: 0.3),
+              width: isPreviewed ? 1.5 : 1,
+            ),
+            borderRadius: AppTokens.borderRadiusAll,
+          ),
+          child: child,
+        );
+      },
       child: InkWell(
-        onTap: enabled ? () => unawaited(_openResult(result, state)) : null,
+        onTap: enabled
+            ? () => _handleResultTap(result, state, previewEnabled)
+            : null,
+        onDoubleTap: enabled && previewEnabled
+            ? () => unawaited(_openResult(result, state))
+            : null,
         borderRadius: AppTokens.borderRadiusAll,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

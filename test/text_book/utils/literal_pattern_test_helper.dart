@@ -104,7 +104,10 @@ String _charwisePattern(String word, bool isLast) {
 }
 
 /// מקור מחרוזת התבנית הליטרלית לשאילתה [query] (מנורמלת קודם).
-String literalPatternSource(String query) {
+///
+/// [wholeWord] `false` מסיר את עטיפת הגבול דרך [stripWordBoundaryWrapper]
+/// עצמה — כך שהבדיקות מריצות את הפונקציה שבייצור ולא העתק שלה.
+String literalPatternSource(String query, {bool wholeWord = true}) {
   final normalized = normalizeLiteralQuery(query);
   final words = normalized.split(' ').where((w) => w.isNotEmpty).toList();
   final last = words.length - 1;
@@ -114,13 +117,16 @@ String literalPatternSource(String query) {
   ].join(_wordSeparator);
   // גבול תלוי-הקשר כמו במנוע: גרש/גרשיים בין אותיות (רש״י) אינו גבול,
   // וה-lookahead מדלג בעצמו על ניקוד שנותר מ-backtracking של [ניקוד]*.
-  return '(?<![$_hebrewLetterClass]$_attachedMarks'
+  final wrapped =
+      '(?<![$_hebrewLetterClass]$_attachedMarks'
       '$_quoteBoundaryFragment?$_attachedMarks)'
       '(?:$phrase)'
       '(?!$_attachedMarks$_quoteBoundaryFragment?$_attachedMarks'
       '[$_hebrewLetterClass])';
+  if (wholeWord) return wrapped;
+  return stripWordBoundaryWrapper(wrapped) ?? wrapped;
 }
 
 /// תבנית ליטרלית מקומפלת לשאילתה [query].
-RegExp literalPattern(String query) =>
-    compileLiteralPattern(literalPatternSource(query));
+RegExp literalPattern(String query, {bool wholeWord = true}) =>
+    compileLiteralPattern(literalPatternSource(query, wholeWord: wholeWord));

@@ -296,15 +296,15 @@ void main() {
       verify: (b) => expect((b.state as PdfBookLoaded).isLoading, isTrue),
     );
 
-    // עמוד עמוק (היסטוריה/סימנייה) בלי requiresStableLayout — מוצג מיד,
-    // בלי overlay; תיקוני סטייה רצים ברקע (issue #824).
+    // עמוד עמוק (היסטוריה/סימנייה) גם בלי requiresStableLayout מפורש —
+    // תיקוני הסטייה בלי overlay נראים כריצוד (issue #1026).
     blocTest<PdfBookBloc, PdfBookState>(
-      'עמוד>1 בלי requiresStableLayout → isLoading=false',
+      'עמוד>1 בלי requiresStableLayout → isLoading=true',
       build: () => _makeBloc(_tab(page: 10)),
       seed: () => PdfBookLoading(book: _book()),
       act: (b) =>
           b.add(DocumentReady(documentRef: _FakeDocumentRef(), totalPages: 50)),
-      verify: (b) => expect((b.state as PdfBookLoaded).isLoading, isFalse),
+      verify: (b) => expect((b.state as PdfBookLoaded).isLoading, isTrue),
     );
 
     // issue #869: בלי סנכרון ה-notifier בטעינה, כפתור הסגירה בסרגל חישב

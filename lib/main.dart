@@ -68,8 +68,10 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
 import 'package:otzaria/core/error_log_file.dart';
+import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
@@ -318,9 +320,9 @@ void main(List<String> args) async {
     }
 
     // Skip HardwareKeyboard assertion error - happens when window loses focus while
-    // a key is held down; fixed by clearState() in onWindowFocus but filter as fallback
+    // a key is held down; onWindowFocus releases stuck keys but filter as fallback
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
-      return; // Silently ignore - handled by HardwareKeyboard.instance.clearState() on focus
+      return; // Silently ignore - stuck keys are released on window focus
     }
 
     // Log all other errors normally
@@ -345,7 +347,7 @@ void main(List<String> args) async {
       return true; // Silently ignore these errors
     }
 
-    // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
+    // Skip HardwareKeyboard assertion error - stuck keys are released on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
     }
@@ -600,6 +602,10 @@ Future<void> _initializeProcessSingletons() async {
   // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
   await PortablePaths.migrateIfMoved();
 
+  // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
+  // ב-Hive בינארי שאינו נגיש לו (issue #1020).
+  unawaited(AppPaths.recordLibraryPathForUninstaller());
+
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
   // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
@@ -662,6 +668,7 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredAutoBackup());
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
+  unawaited(_runDeferredDataRootWritabilityWarning());
 
   // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
@@ -733,6 +740,19 @@ Future<void> _runDeferredAutoBackup() async {
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Automatic backup', error, stackTrace);
   }
+}
+
+/// אזהרה על שורש נתונים חסום-לכתיבה. ממתינה לחשיפת החלון — דיאלוג לפניה
+/// אינו מוצג כי עדיין אין Navigator.
+Future<void> _runDeferredDataRootWritabilityWarning() async {
+  try {
+    await _mainWindowRevealedCompleter.future.timeout(
+      const Duration(seconds: 15),
+    );
+  } on TimeoutException {
+    // ממשיכים בכל זאת — אם ה-Navigator עדיין חסר, ההצגה תדולג בשקט.
+  }
+  await DataRootWritabilityWarning.showIfNeeded();
 }
 
 Future<void> _runDeferredProtocolRegistration() async {
@@ -1177,6 +1197,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
+              onCheckSucceeded: () => recordSuccessfulUpdateCheck(
+                SettingsRepository.keyLastLibraryUpdateCheck,
+              ),
             ),
           ),
           BlocProvider<PluginUpdatesCubit>(

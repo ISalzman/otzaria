@@ -126,7 +126,7 @@ AppContextMenuEntry _buildEntry({
   return AppContextMenuEntry(
     label: item.label,
     icon: pluginIconFromName(item.icon),
-    onTap: () => _dispatchItemClick(
+    onTap: () => dispatchPluginContextMenuItemClick(
       dispatcher: dispatcher,
       pluginId: pluginId,
       item: item,
@@ -163,13 +163,18 @@ String? _targetInstanceId(
   ContextMenuRegistry.instance.instanceIdsForItem(pluginId, item.id),
 );
 
-Future<void> _dispatchItemClick({
+Future<void> dispatchPluginContextMenuItemClick({
   required PluginRuntimeDispatcher dispatcher,
   required String pluginId,
   required PluginContextMenuItem item,
   required Map<String, dynamic> selection,
+  PluginSelectionActionDispatcher? selectionActionDispatcher,
 }) async {
   final payload = _clickPayload(item: item, selection: selection);
+  if (item.action case final action?) {
+    await selectionActionDispatcher?.call(pluginId, action, payload);
+    return;
+  }
   if (item.openPlugin) {
     // אותם אירועים כמו במסלול הרגיל, בתור המסירה של דף התוסף.
     PluginPageLauncher.instance.open(

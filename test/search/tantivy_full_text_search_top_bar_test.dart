@@ -57,10 +57,12 @@ void main() {
   Future<void> pumpSearch(
     WidgetTester tester, {
     required double width,
+    SearchState state = const SearchState(
+      searchQuery: 'בדיקה',
+      totalResults: 12,
+    ),
   }) async {
-    final searchBloc = _SearchBloc(
-      const SearchState(searchQuery: 'בדיקה', totalResults: 12),
-    );
+    final searchBloc = _SearchBloc(state);
     final settingsBloc = _MockSettingsBloc();
     final tabsBloc = _MockTabsBloc();
     final navigationBloc = _MockNavigationBloc();
@@ -169,5 +171,30 @@ void main() {
       ),
     );
     expect(menu.tooltip, 'מיקום תוצאות היברובוקס');
+  });
+
+  testWidgets('בלוק המונים תחום ברוחב כשספק חיצוני פעיל (issue #1051)', (
+    tester,
+  ) async {
+    await pumpSearch(
+      tester,
+      width: 1200,
+      state: const SearchState(
+        searchQuery: 'בדיקה',
+        totalResults: 58,
+        totalGroups: 47,
+      ),
+    );
+
+    final engineText = find.textContaining('אוצריא: 0/47');
+    expect(engineText, findsOneWidget);
+    final textWidget = tester.widget<Text>(engineText);
+    expect(textWidget.maxLines, 1);
+    expect(textWidget.overflow, TextOverflow.ellipsis);
+    expect(tester.getSize(engineText).width, lessThanOrEqualTo(240));
+    expect(
+      tester.getSize(find.textContaining('היברובוקס: 3 ספרים')).width,
+      lessThanOrEqualTo(240),
+    );
   });
 }

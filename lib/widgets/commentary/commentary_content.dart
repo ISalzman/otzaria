@@ -154,6 +154,9 @@ class _CommentaryContentState extends State<CommentaryContent> {
                   content: data,
                   query: widget.searchQuery,
                   removePunctuation: widget.removePunctuation,
+                  // כמו partialWordHighlight של הרינדור למטה — המונה חייב
+                  // לספור את מה שנצבע (issue #1055).
+                  partialWordMatch: true,
                 );
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   widget.onSearchResultsCountChanged?.call(searchCount);
@@ -176,6 +179,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
                 removePunctuation: widget.removePunctuation,
                 removeTeamim: !settingsState.showTeamim,
                 replaceHolyNames: settingsState.replaceHolyNames,
+                holyNameStyle: settingsState.holyNameStyle,
                 searchText: widget.searchQuery,
                 currentSearchIndex: widget.currentSearchIndex,
                 fontSize: widget.fontSize,
@@ -255,7 +259,8 @@ class _CommentaryContentState extends State<CommentaryContent> {
     // הטקסט הפשוט אינו תלוי בחיפוש/הדגשה (אלה מוסרים ב-stripHtml).
     final key =
         '${settings.removeNikud}|${settings.removePunctuation}|'
-        '${settings.removeTeamim}|${settings.replaceHolyNames}|$data';
+        '${settings.removeTeamim}|${settings.replaceHolyNames}|'
+        '${settings.holyNameStyle.storageKey}|$data';
     if (key == _lastRenderKey) return;
     _lastRenderKey = key;
     final rendered = renderSelectionLine(rawText: data, settings: settings);

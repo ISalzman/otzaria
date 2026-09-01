@@ -82,7 +82,10 @@ class TextRendererService {
 
     // 3. החלפת שמות קדושים (אם נדרש)
     if (settings.replaceHolyNames) {
-      processed = utils.replaceHolyNames(processed);
+      processed = utils.replaceHolyNames(
+        processed,
+        style: settings.holyNameStyle,
+      );
     }
 
     // 4. הדגשת טקסט חיפוש (אם יש)
@@ -281,6 +284,7 @@ class TextRendererService {
       removePunctuation: settings.removePunctuation,
       removeTeamim: settings.removeTeamim,
       replaceHolyNames: settings.replaceHolyNames,
+      holyNameStyle: settings.holyNameStyle,
       searchText: settings.searchText,
       currentSearchIndex: settings.currentSearchIndex,
       searchOptions: settings.searchOptions,
@@ -321,10 +325,20 @@ class TextRendererService {
   ///
   /// [text] - הטקסט לחיפוש בו
   /// [searchQuery] - מחרוזת החיפוש
+  /// [partialWordMatch] - חייב לשקף את `RenderSettings.partialWordHighlight`
+  /// של אותו תוכן, אחרת המונה סוטה ממספר ההדגשות בפועל.
   ///
   /// מחזיר את מספר ההתאמות שנמצאו
-  static int countSearchMatches(String text, String searchQuery) {
-    return utils.countMatches(text, searchQuery);
+  static int countSearchMatches(
+    String text,
+    String searchQuery, {
+    bool partialWordMatch = false,
+  }) {
+    return utils.countMatches(
+      text,
+      searchQuery,
+      partialWordMatch: partialWordMatch,
+    );
   }
 
   /// הסרת תגי HTML מטקסט

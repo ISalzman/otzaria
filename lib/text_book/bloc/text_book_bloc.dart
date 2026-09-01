@@ -16,8 +16,10 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
+import 'package:otzaria/search/in_book_search_preferences.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_engine_gateway.dart';
+import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
@@ -1026,6 +1028,18 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         searchMode: searchMode,
         searchDistance: searchDistance,
         matchPolicy: matchPolicy,
+        // נזרע כאן ולא בחלונית: החלונית נבנית רק כשנפתחת, וההדגשה בספר
+        // חייבת להיות זהה לפניה ואחריה.
+        searchWholeWord: InBookSearchPreferences.resolveWholeWord(
+          isSimpleSearch: InBookSearchRouting.canRunAsSimpleSearch(
+            searchMode: searchMode,
+            distance: searchDistance,
+            searchOptions: searchOptions,
+            alternativeWords: alternativeWords,
+            spacingValues: spacingValues,
+            matchPolicy: matchPolicy,
+          ),
+        ),
         searchResultLines: searchResultLines,
         scrollController: scrollController,
         positionsListener: positionsListener,
@@ -1630,6 +1644,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final storedConfiguration = PageShapeSettingsManager.loadConfiguration(
       state.book.title,
       heCategories: state.book.heCategories,
+      workspaceId: workspaceId,
     );
     final columnVisibility = PageShapeSettingsManager.getColumnVisibility(
       state.book.title,
@@ -1990,6 +2005,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           searchMode: event.searchMode,
           searchDistance: event.searchDistance,
           matchPolicy: event.matchPolicy,
+          searchWholeWord: event.searchWholeWord,
           selectedIndex: currentState.selectedIndex,
           clearPinpointHighlight: true,
           // שאילתה חדשה — תוצאות החיפוש הקודם אינן תקפות יותר.

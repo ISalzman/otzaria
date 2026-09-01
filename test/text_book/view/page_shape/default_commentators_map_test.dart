@@ -1,6 +1,10 @@
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/settings/services/category_commentators_service.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
+
+import '../../../test_helpers/memory_cache_provider.dart';
 
 /// טסטים למיפוי מפרשי ברירת המחדל ל-4 מיקומי צורת הדף:
 /// position 0→ימין, 1→שמאל, 2→תחתון, 3→תחתון נוסף. position חסר → מיקום ריק.
@@ -173,6 +177,125 @@ void main() {
       );
 
       expect(result, ['רש"י על התורה']);
+    });
+  });
+
+  // מפרשים קבועים שהמשתמש קבע לקטגוריה (issue #866) גוברים על ברירת המחדל
+  // מה-DB, אך בחירה שמורה פר-ספר עדיין גוברת עליהם (resolveAutoSelection).
+  group('DefaultCommentators — מפרשים קבועים לקטגוריה', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    final book = TextBook(
+      title: 'ברכות',
+      heCategories: 'אוצריא, תלמוד, תלמוד בבלי, סדר זרעים',
+    );
+
+    setUp(() async {
+      await Settings.init(cacheProvider: MemoryCacheProvider());
+    });
+
+    test('קביעת קטגוריה גוברת על מפרשי ברירת המחדל מה-DB', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        ['מהרש"א על ברכות'],
+        bookTitle: 'ברכות',
+      );
+
+      final result = await DefaultCommentators.getInitialSelection(
+        book,
+        availableCommentators: const ['רש"י על ברכות', 'מהרש"א על ברכות'],
+        baseCommentators: const ['רש"י'],
+      );
+
+      expect(result, ['מהרש"א על ברכות']);
+    });
+
+    test('קביעה ריקה מפורשת → נפתח בלי מפרשים (גם כשיש עד 4 זמינים)', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        const [],
+        bookTitle: 'ברכות',
+      );
+
+      final result = await DefaultCommentators.getInitialSelection(
+        book,
+        availableCommentators: const ['רש"י על ברכות', 'תוספות על ברכות'],
+        baseCommentators: const ['רש"י'],
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('קביעה שאף שם בה לא נפתר בספר → נופלים לברירת המחדל מה-DB', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        ['מפרש שאינו קיים'],
+        bookTitle: 'ברכות',
+      );
+
+      final result = await DefaultCommentators.getInitialSelection(
+        book,
+        availableCommentators: const ['רש"י על ברכות', 'תוספות על ברכות'],
+        baseCommentators: const ['רש"י'],
+      );
+
+      expect(result, ['רש"י על ברכות']);
+    });
+
+    test('בחירה שמורה פר-ספר גוברת על קביעת הקטגוריה', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        ['מהרש"א על ברכות'],
+        bookTitle: 'ברכות',
+      );
+
+      final result = await DefaultCommentators.resolveAutoSelection(
+        book,
+        availableCommentators: const ['רש"י על ברכות', 'מהרש"א על ברכות'],
+        savedSelection: const ['רש"י על ברכות'],
+      );
+
+      expect(result, isNull);
+    });
+
+    test('ספר בלי heCategories (כמו PDF) נופל ל-categoryPath', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        ['מהרש"א על ברכות'],
+        bookTitle: 'ברכות',
+      );
+
+      final pdfLikeBook = TextBook(
+        title: 'ברכות',
+        categoryPath: 'אוצריא, תלמוד, תלמוד בבלי, סדר זרעים',
+      );
+      final result = await DefaultCommentators.getInitialSelection(
+        pdfLikeBook,
+        availableCommentators: const ['רש"י על ברכות', 'מהרש"א על ברכות'],
+        baseCommentators: const ['רש"י'],
+      );
+
+      expect(result, ['מהרש"א על ברכות']);
+    });
+
+    test('שם בסיסי שנשמר ממסכת אחת נפתר לשם המלא במסכת אחרת', () async {
+      await CategoryCommentatorsService.save(
+        'תלמוד בבלי',
+        ['רש"י על ברכות'],
+        bookTitle: 'ברכות',
+      );
+
+      final shabbat = TextBook(
+        title: 'שבת',
+        heCategories: 'אוצריא, תלמוד, תלמוד בבלי, סדר מועד',
+      );
+      final result = await DefaultCommentators.getInitialSelection(
+        shabbat,
+        availableCommentators: const ['רש"י על שבת', 'תוספות על שבת'],
+        baseCommentators: const [],
+      );
+
+      expect(result, ['רש"י על שבת']);
     });
   });
 

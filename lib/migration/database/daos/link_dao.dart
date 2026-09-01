@@ -1,4 +1,5 @@
 import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3;
+import 'package:otzaria/data/data_providers/link_visibility_sql.dart';
 import '../../models/link.dart';
 import '../sqlite3_utils.dart';
 import '../query_loader.dart';
@@ -13,6 +14,20 @@ class LinkDao {
   }
 
   Future<sqlite3.Database> get database => _db.database;
+
+  String _visibilityAwareQuery(sqlite3.Database db, String queryName) {
+    final query = _queries[queryName]!;
+    if (!query.contains(linkVisibilityFilterMarker)) {
+      throw StateError('Missing visibility marker in $queryName');
+    }
+    return query.replaceFirst(
+      linkVisibilityFilterMarker,
+      suppressedSideFilter(
+        hasLinkSuppressedSideTable(db),
+        displayedSide: 0,
+      ),
+    );
+  }
 
   Future<Link?> selectLinkById(int id) async {
     final db = await database;
@@ -49,7 +64,7 @@ class LinkDao {
     int bookId,
   ) async {
     final db = await database;
-    return db.select(_queries['selectCommentatorsByBook']!, [
+    return db.select(_visibilityAwareQuery(db, 'selectCommentatorsByBook'), [
       bookId,
     ]).toMapList();
   }
@@ -64,11 +79,14 @@ class LinkDao {
     int endLineIndex,
   ) async {
     final db = await database;
-    return db.select(_queries['selectCommentatorsByLineRange']!, [
-      bookId,
-      startLineIndex,
-      endLineIndex,
-    ]).toMapList();
+    return db.select(
+      _visibilityAwareQuery(db, 'selectCommentatorsByLineRange'),
+      [
+        bookId,
+        startLineIndex,
+        endLineIndex,
+      ],
+    ).toMapList();
   }
 
   /// מחזיר את הקישורים למפרשים על טווח שורות המקור [`startLineIndex`,
@@ -84,13 +102,16 @@ class LinkDao {
     int exactSourceLineIndex,
   ) async {
     final db = await database;
-    return db.select(_queries['selectCommentaryLinksByLineRange']!, [
-      exactSourceLineIndex,
-      bookId,
-      startLineIndex,
-      endLineIndex,
-      excludeBookId,
-    ]).toMapList();
+    return db.select(
+      _visibilityAwareQuery(db, 'selectCommentaryLinksByLineRange'),
+      [
+        exactSourceLineIndex,
+        bookId,
+        startLineIndex,
+        endLineIndex,
+        excludeBookId,
+      ],
+    ).toMapList();
   }
 
   /// מחזיר את מפרשי ברירת המחדל של הספר [bookId], ממוינים לפי `position`.

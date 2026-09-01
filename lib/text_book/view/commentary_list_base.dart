@@ -26,6 +26,7 @@ import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 // מיוצא כאן כדי שצרכני כרטיסיית הטקסט יייבאו אותו מנקודה אחת.
 export 'package:otzaria/text_book/utils/commentary_search_utils.dart'
     show CommentarySearchSnippet;
+import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
@@ -35,6 +36,7 @@ import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/misc/smooth_wheel_scroll.dart';
+import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
@@ -1235,6 +1237,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         content: data,
         query: query,
         removePunctuation: removePunctuation,
+        // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
+        partialWordMatch: true,
       );
       _updateSearchResultsCount(link, count);
       if (wantSnippets && count > 0) {
@@ -1995,6 +1999,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                       commentatorsByType:
                           CommentaryTypeFilter.commentatorsByType(state.links),
                       onTypeChipsChanged: _setSelectedCommentaryTypes,
+                      heCategories: bookCategoriesSource(state.book),
+                      onCategoryDefaultsSaved: () =>
+                          TextBookPerBookSettings.clearActiveCommentators(
+                            state.book,
+                          ),
                     )
                   : CommentatorsListView(
                       onCommentatorSelected: _closeCommentatorsFilter,
@@ -2244,7 +2253,10 @@ class _CommentaryGroupHeader extends StatelessWidget {
                 builder: (context, settingsState) {
                   String displayTitle = bookTitle;
                   if (settingsState.replaceHolyNames) {
-                    displayTitle = utils.replaceHolyNames(displayTitle);
+                    displayTitle = utils.replaceHolyNames(
+                      displayTitle,
+                      style: settingsState.holyNameStyle,
+                    );
                   }
                   return Text(
                     displayTitle,
@@ -2383,6 +2395,7 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                     if (settingsState.replaceHolyNames) {
                       displayTitle = utils.replaceHolyNames(
                         displayTitle,
+                        style: settingsState.holyNameStyle,
                       );
                     }
                     final reportedTitle = displayTitle;
@@ -2483,6 +2496,18 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                         // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
                         link: widget.lastSelectedLinkListenable.value ?? link,
                       ),
+                      onCopySelectedWithoutNikud: () =>
+                          ContextMenuUtils.copyFormattedText(
+                            context: menuCtx,
+                            savedSelectedText:
+                                (widget.restoreLineBreaks ?? (s) => s)(
+                                  savedTextAtBuild,
+                                ),
+                            fontSize: widget.fontSize,
+                            link:
+                                widget.lastSelectedLinkListenable.value ?? link,
+                            removeNikud: true,
+                          ),
                     );
                   },
                   child: CommentaryContent(
@@ -2595,112 +2620,127 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
         // SelectionArea משלו: הרשימה הזו מוחזרת *מחוץ* ל-SelectionArea של
         // רשימת המפרשים (שנבנה רק סביב ה-ListView), ולכן בלעדיו לא ניתן
         // לבחור טקסט בהערות כלל.
-        return RtlSelectionShortcuts(
-          child: SelectionArea(
-            // ביטול תפריט ברירת המחדל של Flutter — נשתמש ב-AppContextMenuRegion.
-            contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-            onSelectionChanged: (selection) =>
-                _onNotesSelectionChanged(selection?.plainText),
-            child: AppContextMenuRegion(
-              // לחיצה ימנית על טקסט מסומן לא תשחרר את הבחירה (ברירת המחדל של
-              // SelectableRegion ב-Windows); לחיצה מחוץ לבחירה מבטלת כרגיל.
-              shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
-                final selected = _selectedText;
-                if (selected == null || selected.isEmpty) return false;
-                final root = context.findRenderObject();
-                if (root == null) return true;
-                return clickIsOnSelectionWithinArea(
-                      root: root,
-                      globalPosition: globalPosition,
-                      selectedText: selected,
-                    ) ??
-                    true;
-              },
-              menuBuilder: (menuCtx, _) => [
-                AppContextMenuEntry(
-                  label: 'העתק',
-                  icon: FluentIcons.copy_24_regular,
-                  enabled:
-                      _selectedText != null && _selectedText!.trim().isNotEmpty,
-                  onTap: () => ContextMenuUtils.copyFormattedText(
-                    context: menuCtx,
-                    savedSelectedText: _selectedText,
-                    fontSize: widget.fontSize,
-                  ),
-                ),
-                if (!widget.state.book.isUserBook) ...[
-                  const AppContextMenuEntry.divider(),
+        return SelectionCutFallthrough(
+          child: RtlSelectionShortcuts(
+            child: SelectionArea(
+              // ביטול תפריט ברירת המחדל של Flutter — נשתמש ב-AppContextMenuRegion.
+              contextMenuBuilder: (context, _) => const SizedBox.shrink(),
+              onSelectionChanged: (selection) =>
+                  _onNotesSelectionChanged(selection?.plainText),
+              child: AppContextMenuRegion(
+                // לחיצה ימנית על טקסט מסומן לא תשחרר את הבחירה (ברירת המחדל של
+                // SelectableRegion ב-Windows); לחיצה מחוץ לבחירה מבטלת כרגיל.
+                shouldPreserveSelectionOnSecondaryTap: (globalPosition) {
+                  final selected = _selectedText;
+                  if (selected == null || selected.isEmpty) return false;
+                  final root = context.findRenderObject();
+                  if (root == null) return true;
+                  return clickIsOnSelectionWithinArea(
+                        root: root,
+                        globalPosition: globalPosition,
+                        selectedText: selected,
+                      ) ??
+                      true;
+                },
+                menuBuilder: (menuCtx, _) => [
                   AppContextMenuEntry(
-                    label: 'דווח על טעות בספר',
-                    icon: FluentIcons.error_circle_24_regular,
+                    label: 'העתק',
+                    icon: FluentIcons.copy_24_regular,
                     enabled:
                         _selectedText != null &&
                         _selectedText!.trim().isNotEmpty,
-                    onTap: () => ErrorReportHelper.showErrorReportDialog(
+                    onTap: () => ContextMenuUtils.copyFormattedText(
                       context: menuCtx,
-                      selectedText: _selectedText ?? '',
-                      state: widget.state,
+                      savedSelectedText: _selectedText,
                       fontSize: widget.fontSize,
-                      bookTitle: widget.state.book.title,
-                      savedSelectedIndex: widget.reportLineIndex,
                     ),
                   ),
-                ],
-              ],
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 12.0,
-                      ),
-                      child: Text(
-                        kNotesCommentatorTitle,
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.85,
-                          fontWeight: FontWeight.bold,
-                          fontVariations: AppFonts.boldFontVariations(
-                            settingsState.commentatorsFontFamily,
-                          ),
-                          fontFamily: settingsState.commentatorsFontFamily,
-                        ),
+                  if (showCopyWithoutNikud(_selectedText))
+                    AppContextMenuEntry(
+                      label: 'העתק בלי ניקוד',
+                      icon: FluentIcons.text_clear_formatting_24_regular,
+                      onTap: () => ContextMenuUtils.copyFormattedText(
+                        context: menuCtx,
+                        savedSelectedText: _selectedText,
+                        fontSize: widget.fontSize,
+                        removeNikud: true,
                       ),
                     ),
-                    ...widget.notes.map((note) {
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          right: 32.0,
-                          left: 16.0,
-                          bottom: 12.0,
-                        ),
-                        child: SmartTextWidget(
-                          text: note,
-                          settings: RenderSettings(
-                            removeNikud: widget.removeNikud,
-                            removePunctuation: false,
-                            removeTeamim: false,
-                            replaceHolyNames: settingsState.replaceHolyNames,
-                            searchText: '',
-                            currentSearchIndex: -1,
-                            fontSize: widget.fontSize * 0.85,
-                            fontFamily: settingsState.commentatorsFontFamily,
-                            fontWeight: settingsState.commentatorsFontBold
-                                ? FontWeight.bold
-                                : null,
-                            lineHeight: settingsState.lineHeight,
-                          ),
-                          onOpenBook: (tab) {
-                            if (tab is TextBookTab) {
-                              widget.openBookCallback(tab);
-                            }
-                          },
-                        ),
-                      );
-                    }),
-                    const Divider(height: 1),
+                  if (!widget.state.book.isUserBook) ...[
+                    const AppContextMenuEntry.divider(),
+                    AppContextMenuEntry(
+                      label: 'דווח על טעות בספר',
+                      icon: FluentIcons.error_circle_24_regular,
+                      enabled:
+                          _selectedText != null &&
+                          _selectedText!.trim().isNotEmpty,
+                      onTap: () => ErrorReportHelper.showErrorReportDialog(
+                        context: menuCtx,
+                        selectedText: _selectedText ?? '',
+                        state: widget.state,
+                        fontSize: widget.fontSize,
+                        bookTitle: widget.state.book.title,
+                        savedSelectedIndex: widget.reportLineIndex,
+                      ),
+                    ),
                   ],
+                ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        child: Text(
+                          kNotesCommentatorTitle,
+                          style: TextStyle(
+                            fontSize: widget.fontSize * 0.85,
+                            fontWeight: FontWeight.bold,
+                            fontVariations: AppFonts.boldFontVariations(
+                              settingsState.commentatorsFontFamily,
+                            ),
+                            fontFamily: settingsState.commentatorsFontFamily,
+                          ),
+                        ),
+                      ),
+                      ...widget.notes.map((note) {
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            right: 32.0,
+                            left: 16.0,
+                            bottom: 12.0,
+                          ),
+                          child: SmartTextWidget(
+                            text: note,
+                            settings: RenderSettings(
+                              removeNikud: widget.removeNikud,
+                              removePunctuation: false,
+                              removeTeamim: false,
+                              replaceHolyNames: settingsState.replaceHolyNames,
+                              holyNameStyle: settingsState.holyNameStyle,
+                              searchText: '',
+                              currentSearchIndex: -1,
+                              fontSize: widget.fontSize * 0.85,
+                              fontFamily: settingsState.commentatorsFontFamily,
+                              fontWeight: settingsState.commentatorsFontBold
+                                  ? FontWeight.bold
+                                  : null,
+                              lineHeight: settingsState.lineHeight,
+                            ),
+                            onOpenBook: (tab) {
+                              if (tab is TextBookTab) {
+                                widget.openBookCallback(tab);
+                              }
+                            },
+                          ),
+                        );
+                      }),
+                      const Divider(height: 1),
+                    ],
+                  ),
                 ),
               ),
             ),

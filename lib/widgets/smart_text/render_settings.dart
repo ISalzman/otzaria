@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 bool _searchOptionsEquals(
   Map<String, Map<String, bool>> first,
@@ -103,6 +104,9 @@ class RenderSettings {
   /// האם להחליף שמות קדושים
   final bool replaceHolyNames;
 
+  /// סגנון החלפת שמות קדושים (יקוק / ה')
+  final HolyNameStyle holyNameStyle;
+
   /// טקסט לחיפוש והדגשה
   final String searchText;
 
@@ -167,6 +171,7 @@ class RenderSettings {
     this.removePunctuation = false,
     this.removeTeamim = true,
     this.replaceHolyNames = false,
+    this.holyNameStyle = HolyNameStyle.kufKuf,
     this.searchText = '',
     this.currentSearchIndex = -1,
     this.searchOptions = const {},
@@ -198,6 +203,7 @@ class RenderSettings {
     removePunctuation: removePunctuation,
     removeTeamim: removeTeamim,
     replaceHolyNames: replaceHolyNames,
+    holyNameStyle: holyNameStyle,
     fontSize: fontSize,
     fontFamily: fontFamily,
     fontWeight: fontWeight,
@@ -213,6 +219,7 @@ class RenderSettings {
     bool? removePunctuation,
     bool? removeTeamim,
     bool? replaceHolyNames,
+    HolyNameStyle? holyNameStyle,
     String? searchText,
     int? currentSearchIndex,
     Map<String, Map<String, bool>>? searchOptions,
@@ -238,6 +245,7 @@ class RenderSettings {
       removePunctuation: removePunctuation ?? this.removePunctuation,
       removeTeamim: removeTeamim ?? this.removeTeamim,
       replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
+      holyNameStyle: holyNameStyle ?? this.holyNameStyle,
       searchText: searchText ?? this.searchText,
       currentSearchIndex: currentSearchIndex ?? this.currentSearchIndex,
       searchOptions: searchOptions ?? this.searchOptions,
@@ -269,6 +277,7 @@ class RenderSettings {
         removePunctuation == other.removePunctuation &&
         removeTeamim == other.removeTeamim &&
         replaceHolyNames == other.replaceHolyNames &&
+        holyNameStyle == other.holyNameStyle &&
         searchText == other.searchText &&
         currentSearchIndex == other.currentSearchIndex &&
         _searchOptionsEquals(searchOptions, other.searchOptions) &&
@@ -297,6 +306,7 @@ class RenderSettings {
       removePunctuation,
       removeTeamim,
       replaceHolyNames,
+      holyNameStyle,
       searchText,
       currentSearchIndex,
       _searchOptionsHash(searchOptions),

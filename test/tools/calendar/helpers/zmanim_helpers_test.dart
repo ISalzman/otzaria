@@ -44,6 +44,22 @@ void main() {
       expect(cityNames, contains('ברוקלין'));
     });
 
+    test('ערי ארצות הברית מקבלות 18 דק׳ כברירת מחדל', () {
+      expect(getCityCountry('ליקווד'), 'ארצות הברית');
+      expect(getCandleLightingMinutes('ליקווד'), 18);
+      expect(getCandleLightingMinutes('שיקגו'), 18);
+      expect(getCandleLightingMinutes('מאנסי'), 18);
+      expect(getCandleLightingMinutes('מאנראו'), 18);
+      // מחוץ לרשימת המדינות עם ברירת מחדל — נשאר 30
+      expect(getCandleLightingMinutes('עיר שאינה קיימת'), 30);
+    });
+
+    test('מאנסי ומאנראו קיימות ברשימת הערים', () {
+      expect(getCityData('מאנסי'), isNotNull);
+      expect(getCityData('מאנראו'), isNotNull);
+      expect(getCalendarCityNames(), containsAll(['מאנסי', 'מאנראו']));
+    });
+
     test('מפחית מהשקיעה את מספר הדקות של העיר', () {
       final context = buildZmanimCalendarContext(
         DateTime(2026, 7, 3),

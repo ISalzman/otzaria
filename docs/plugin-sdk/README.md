@@ -304,6 +304,9 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `app.getLocale` | `app.info.read` | locale, language ו-textDirection (מ-0.9.97 — לפי שפת הממשק שנבחרה) |
 | `app.openUrl` | `app.open_url` | פתיחת כתובת http/https בדפדפן המערכת |
 | `app.getConnectivity` | `app.info.read` | האם יש אינטרנט — להסתרת יכולות מקוונות |
+| `app.registerShortcut` | `app.shortcuts` | רישום קיצור מקלדת (פקודה / פעולת תפריט הקשר) |
+| `app.unregisterShortcut` | `app.shortcuts` | הסרת קיצור מקלדת |
+| `app.updateShortcut` | `app.shortcuts` | עדכון קיצור מקלדת (key) |
 
 ### library.*
 
@@ -322,6 +325,7 @@ Otzaria.on('plugin.suspended', stop);   // עצירת timers / polling / WebSock
 | `library.getRawLinks` | `library.links.read` | `{ bookId, categoryId?, startLine?, endLine?, connectionTypes?, targetTitles? }` (הטווח חובה יחד; חלון עד 1000 שורות) | `{ links, truncated, startLine, endLine }` — אותם קישורים של `getLinks`, בחמשת המפתחות של `links.json` |
 | `library.getLinkTargetsSummary` | `library.links.read` | `{ bookId, categoryId? }` | `{ targets, maxSourceLine }` |
 | `library.getLinkContent` | `library.content.read` | `{ links }` (עד 25) | `{ items }` |
+| `library.refreshUserBooks` | `library.refresh` | — | `{ addedBooks, updatedBooks, errors }` |
 
 ### network.*
 
@@ -578,6 +582,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `library.books.read` | חיפוש וקריאת metadata של ספרים |
 | `library.content.read` | קריאת תוכן ספרים (TOC + טקסט) |
 | `library.links.read` | קריאת מפרשים וקישורים של ספר (מבנה בלבד, ללא תוכן) |
+| `library.refresh` | סריקה מחדש של התיקיות האישיות ורענון הקטלוג (`library.refreshUserBooks`) |
 | `search.fulltext.read` | חיפוש טקסט מלא |
 | `reader.open` | פתיחת ספרים + קריאת מצב הקורא |
 | `navigation.write` | ניווט בין מסכים |
@@ -604,6 +609,7 @@ const { data: keys } = await Otzaria.call('storage.list');
 | `app.run_on_startup` | **הרשאה רגישה** — הפעלת WebView ברקע לפי אירוע שהוצהר ב-`contributes.startup`. ברירת מחדל: **כבויה**. בתוסף ישן ללא `contributes.startup`, מפעילה זמנית בעליית אוצריא עד 0.9.97. |
 | `app.background_keep_alive` | **הרשאה רגישה מאוד** — מניעת כיבוי אוטומטי של WebView רקע עצל. דורשת `startup.keepAlive: true`; כבויה כברירת מחדל ומוצגת באדום. |
 | `app.startup_contributions` | הזרקת פקדים ונתונים סטטיים מהמניפסט בלי להפעיל את התוסף. ברירת מחדל: **מופעלת**. |
+| `app.shortcuts` | רישום קיצורי מקלדת לתוסף (במניפסט `contributes.startup.shortcuts` או בזמן ריצה `app.registerShortcut`) — הפעלת פקודות שלו או פעולות תפריט הלחיצה הימנית. הקיצורים נשלטים במסך הגדרות קיצורי המקשים. |
 | `clipboard.read` | קריאת לוח ההעתקה של מערכת ההפעלה מתוך הדף (`navigator.clipboard.read` / `readText`). **הרשאת דפדפן, לא RPC** — ראו „קריאת לוח ההעתקה”. ברירת מחדל: **כבויה**. מ-0.9.97 |
 
 > **עיקרון מינימום הרשאות:** בקש רק את מה שאתה צריך בפועל.

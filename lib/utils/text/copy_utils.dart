@@ -9,15 +9,25 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
 
 class CopyUtils {
   /// מחיל העדפות תצוגה על טקסט שמיועד להעתקה.
+  ///
+  /// [removeNikud] מסיר ניקוד וטעמים מהעותק בלבד (פעולת "העתק בלי ניקוד",
+  /// issue #851) — התצוגה עצמה לא משתנה. ההסרה רצה לפני החלפת שמות הקודש
+  /// כדי שההחלפה תפעל על טקסט נקי.
   static String applyCopyPreferences({
     required String text,
     required bool replaceHolyNames,
+    text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
+    bool removeNikud = false,
   }) {
-    if (text.isEmpty || !replaceHolyNames) {
-      return text;
+    if (text.isEmpty) return text;
+    var result = text;
+    if (removeNikud) {
+      result = text_utils.removeVolwels(result);
     }
-
-    return text_utils.replaceHolyNames(text);
+    if (replaceHolyNames) {
+      result = text_utils.replaceHolyNames(result, style: holyNameStyle);
+    }
+    return result;
   }
 
   /// מחיל העדפות העתקה על plain text ועל HTML יחד,
@@ -27,19 +37,25 @@ class CopyUtils {
     required String plainText,
     required String htmlText,
     required bool replaceHolyNames,
+    text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
+    bool removeNikud = false,
   }) {
     final processedPlainText = applyCopyPreferences(
       text: plainText,
       replaceHolyNames: replaceHolyNames,
+      holyNameStyle: holyNameStyle,
+      removeNikud: removeNikud,
     );
 
-    if (!replaceHolyNames || htmlText.isEmpty) {
+    if ((!replaceHolyNames && !removeNikud) || htmlText.isEmpty) {
       return (plainText: processedPlainText, htmlText: htmlText);
     }
 
     final processedHtmlText = _applyCopyPreferencesToHtml(
       htmlText: htmlText,
       replaceHolyNames: replaceHolyNames,
+      holyNameStyle: holyNameStyle,
+      removeNikud: removeNikud,
     );
 
     final normalizedPlainText = _normalizeCopiedText(processedPlainText);
@@ -330,21 +346,30 @@ class CopyUtils {
   static String _applyCopyPreferencesToHtml({
     required String htmlText,
     required bool replaceHolyNames,
+    required text_utils.HolyNameStyle holyNameStyle,
+    bool removeNikud = false,
   }) {
-    if (htmlText.isEmpty || !replaceHolyNames) {
+    if (htmlText.isEmpty || (!replaceHolyNames && !removeNikud)) {
       return htmlText;
     }
 
     final fragment = html_parser.parseFragment(htmlText);
-    _replaceHolyNamesInTextNodes(fragment.nodes, replaceHolyNames);
+    _applyPreferencesToTextNodes(
+      fragment.nodes,
+      replaceHolyNames: replaceHolyNames,
+      removeNikud: removeNikud,
+      holyNameStyle: holyNameStyle,
+    );
     final container = html_dom.Element.tag('div')..nodes.addAll(fragment.nodes);
     return container.innerHtml;
   }
 
-  static void _replaceHolyNamesInTextNodes(
-    List<html_dom.Node> nodes,
-    bool replaceHolyNames,
-  ) {
+  static void _applyPreferencesToTextNodes(
+    List<html_dom.Node> nodes, {
+    required bool replaceHolyNames,
+    required bool removeNikud,
+    required text_utils.HolyNameStyle holyNameStyle,
+  }) {
     for (final node in nodes) {
       if (node.nodeType == html_dom.Node.TEXT_NODE) {
         final currentText = node.text;
@@ -352,12 +377,19 @@ class CopyUtils {
           node.text = applyCopyPreferences(
             text: currentText,
             replaceHolyNames: replaceHolyNames,
+            holyNameStyle: holyNameStyle,
+            removeNikud: removeNikud,
           );
         }
         continue;
       }
 
-      _replaceHolyNamesInTextNodes(node.nodes, replaceHolyNames);
+      _applyPreferencesToTextNodes(
+        node.nodes,
+        replaceHolyNames: replaceHolyNames,
+        removeNikud: removeNikud,
+        holyNameStyle: holyNameStyle,
+      );
     }
   }
 

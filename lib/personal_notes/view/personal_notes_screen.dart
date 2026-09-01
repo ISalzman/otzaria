@@ -15,7 +15,9 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
+import 'package:otzaria/printing/word_export_service.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
+import 'package:pdf/pdf.dart';
 import 'package:otzaria/personal_notes/services/personal_notes_import_export_service.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
@@ -421,6 +423,14 @@ class _PersonalNotesManagerScreenState
             AppTopBarItem(
               widget: BarButton.icon(
                 compact: isCompact,
+                tooltip: 'ייצוא לוורד',
+                icon: FluentIcons.document_arrow_down_24_regular,
+                onPressed: _exportNotesToWord,
+              ),
+            ),
+            AppTopBarItem(
+              widget: BarButton.icon(
+                compact: isCompact,
                 tooltip: 'ייבוא הערות',
                 icon: FluentIcons.arrow_upload_24_regular,
                 onPressed: _importNotes,
@@ -526,6 +536,66 @@ class _PersonalNotesManagerScreenState
 
     if (!mounted) return;
     UiSnack.show(NotesMessages.textExportCompleted);
+  }
+
+  Future<void> _exportNotesToWord() async {
+    if (!await verifySaferModePassword(context)) return;
+    if (!mounted) return;
+    final selection = await showDialog<NotesExportSelection>(
+      context: context,
+      builder: (context) => PersonalNotesExportDialog(
+        allNotes: _collectAllNotes(),
+        title: 'ייצוא לוורד',
+        confirmText: 'ייצא',
+      ),
+    );
+    if (!mounted) return;
+    if (selection == null || selection.notes.isEmpty) return;
+
+    final fontFamily = context.read<SettingsBloc>().state.fontFamily;
+
+    // כתובת המיקום (פרק/דף) לכל הערה נגזרת מתוכן העניינים של ספרה.
+    final notesByBook = <String, List<PersonalNote>>{};
+    for (final note in selection.notes) {
+      notesByBook.putIfAbsent(note.bookId, () => []).add(note);
+    }
+    final refByNoteId = <String, String?>{};
+    for (final entry in notesByBook.entries) {
+      final toc = await _tocFor(entry.key);
+      for (final note in entry.value) {
+        refByNoteId[note.id] = personalNoteLocationRef(
+          note,
+          isPdf: false,
+          bookTitle: entry.key,
+          tableOfContents: toc,
+          includeBookTitle: false,
+        );
+      }
+    }
+    if (!mounted) return;
+
+    final blocks = _importExportService.buildWordExportBlocks(
+      notes: selection.notes,
+      locationRef: (note) => refByNoteId[note.id],
+    );
+    final bytes = WordExportService.createWordDocument(
+      title: 'הערות אישיות',
+      blocks: blocks,
+      format: PdfPageFormat.a4,
+      isLandscape: false,
+      pageMargin: 20,
+      fontFamily: fontFamily,
+    );
+    final path = await saveFileWithExtension(
+      dialogTitle: 'בחר מיקום לשמירת קובץ הוורד',
+      fileName: 'otzaria_notes.docx',
+      extension: 'docx',
+      bytes: bytes,
+    );
+    if (!mounted) return;
+    if (path == null) return;
+
+    UiSnack.show(NotesMessages.wordExportCompleted);
   }
 
   Future<void> _importNotes() async {

@@ -1,4 +1,5 @@
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -26,10 +27,13 @@ import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
+import 'package:otzaria/navigation/view/main_window_screen.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
 import 'package:otzaria/find_ref/repository/find_ref_factory.dart';
+import 'package:otzaria/find_ref/repository/find_ref_repository.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
@@ -40,14 +44,16 @@ import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
-import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
+import 'package:otzaria/plugins/services/plugin_deep_link_policy.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/plugin_crashed_view.dart';
+import 'package:otzaria/plugins/view/plugin_data_folder_unwritable_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview2_missing_view.dart';
 import 'package:otzaria/plugins/view/plugin_webview_failed_view.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
+import 'package:otzaria/plugins/view/plugin_linkify_script.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
 import 'package:otzaria/plugins/services/plugin_download_handler.dart';
 import 'package:otzaria/plugins/services/plugin_webview_permission_gate.dart';
@@ -178,6 +184,10 @@ enum _WebViewPrereqStatus {
 
   /// WebView2 Runtime אינו מותקן (Windows) — יש להציג מסך הכוונה להתקנה.
   runtimeMissing,
+
+  /// תיקיית הנתונים של WebView2 חסומה לכתיבה — יש להציג הסבר במקום לתת
+  /// ל-WebView2 להעלות דיאלוג מערכת של Edge.
+  dataFolderNotWritable,
 }
 
 class _PluginTabPageState extends State<PluginTabPage> {
@@ -203,6 +213,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
   late final PluginBridgeAdapter _adapter;
   late final PluginRegistryRepository _pluginRegistryRepository;
   late final PluginSystemBloc _pluginSystemBloc;
+  late final FindRefRepository _findRefRepository;
   bool _hasError = false;
   String? _devErrorMessage;
 
@@ -234,10 +245,13 @@ class _PluginTabPageState extends State<PluginTabPage> {
     final calendarCubit = context.read<CalendarCubit>();
     final workspaceBloc = context.read<WorkspaceBloc>();
     final bookmarkBloc = context.read<BookmarkBloc>();
+    final customFoldersBloc = context.read<CustomFoldersBloc>();
+    final libraryBloc = context.read<LibraryBloc>();
     final searchRepository = SearchRepository();
     final personalNotesRepository = PersonalNotesRepository();
     final pluginRegistryRepository = PluginRegistryRepository();
-    final findRefRepository = buildFindRefRepository();
+    _findRefRepository = buildFindRefRepository();
+    final findRefRepository = _findRefRepository;
 
     final dependencies = PluginBridgeDependencies(
       historyBloc: historyBloc,
@@ -246,6 +260,17 @@ class _PluginTabPageState extends State<PluginTabPage> {
       calendarCubit: calendarCubit,
       workspaceBloc: workspaceBloc,
       bookmarkBloc: bookmarkBloc,
+      customFoldersBloc: customFoldersBloc,
+      waitForLibraryRefresh: (requestId) async {
+        final state = await libraryBloc.stream.firstWhere(
+          (state) =>
+              state.completedRefreshRequestIds?.contains(requestId) == true ||
+              (!state.isLoading && state.error != null),
+        );
+        if (state.completedRefreshRequestIds?.contains(requestId) != true) {
+          throw StateError(state.error!);
+        }
+      },
       searchRepository: searchRepository,
       personalNotesRepository: personalNotesRepository,
       bookOpenCoordinator: BookOpenCoordinator(
@@ -480,6 +505,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
 
   @override
   void dispose() {
+    _findRefRepository.dispose();
     // dispose = unmount רגיל (סגירת טאב) בזמן שהתהליך חי — לא קריסה, מנקים
     // את ה-canary. סגירת האפליקציה לא מריצה dispose; אותה מכסה
     // PluginCrashGuard.markCleanShutdownSync ב-onWindowClose.
@@ -577,6 +603,15 @@ class _PluginTabPageState extends State<PluginTabPage> {
               ),
             );
           }
+          if (snapshot.data == _WebViewPrereqStatus.dataFolderNotWritable) {
+            return PluginDataFolderUnwritableView(
+              folderPath: WebViewEnvironmentHolder.unwritableDataFolder ?? '',
+              onRetry: () {
+                if (!mounted) return;
+                setState(() => _prereqFuture = null);
+              },
+            );
+          }
           if (snapshot.data == _WebViewPrereqStatus.runtimeMissing) {
             return PluginWebView2MissingView(
               onRetry: () {
@@ -612,6 +647,21 @@ class _PluginTabPageState extends State<PluginTabPage> {
         : (devUri.scheme == 'https' ? 443 : 80);
     final reqPort = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
     return reqPort == devPort;
+  }
+
+  /// משגר קישור `otzaria://` שנלחץ בדף התוסף — רק בלחיצת משתמש אמיתית.
+  Future<void> _dispatchPluginDeepLink(
+    Uri uri,
+    NavigationAction navigationAction,
+  ) async {
+    final target = PluginDeepLinkPolicy.dispatchUriForUserNavigation(
+      uri,
+      navigationAction,
+    );
+    if (target == null) return;
+    await mainWindowScreenKey.currentState?.handleInternalDeepLink(
+      target.toString(),
+    );
   }
 
   Future<bool> _isNetworkUriAllowed(Uri uri) => isPluginNetworkAccessAllowed(
@@ -664,6 +714,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
         buildPluginDropGuardScript(),
+        buildPluginLinkifyScript(auto: widget.plugin.manifest.autoLinkify),
       ]),
       onWebViewCreated: (controller) {
         _creationWatchdog?.cancel();
@@ -722,22 +773,18 @@ class _PluginTabPageState extends State<PluginTabPage> {
             request: request,
             registry: _pluginRegistryRepository,
           ),
+      // WebView2 מריץ otzaria:// דרך מטפל הפרוטוקול של המערכת אם האירוע אינו
+      // מבוטל — עקיפה של המדיניות כאן. הביטול הוא רשת ביטחון בלבד: ההחלטה
+      // מתקבלת ב-shouldOverrideUrlLoading, שנורה לפניו.
+      onLaunchingExternalUriScheme: (controller, request) async =>
+          LaunchingExternalUriSchemeResponse(cancel: true),
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         try {
           final uri = navigationAction.request.url;
           if (uri == null) return NavigationActionPolicy.CANCEL;
 
           if (uri.scheme == 'otzaria') {
-            final request = PluginStoreLinkParser.parseUri(uri);
-            if (request != null) {
-              _pluginSystemBloc.add(
-                InstallRemotePluginRequested(
-                  request.downloadUri.toString(),
-                  forceOverwrite: request.forceOverwrite,
-                  reportContext: request.reportContext,
-                ),
-              );
-            }
+            await _dispatchPluginDeepLink(uri, navigationAction);
             return NavigationActionPolicy.CANCEL;
           }
 
@@ -1179,6 +1226,9 @@ class _PluginTabPageState extends State<PluginTabPage> {
     if (Platform.isWindows) {
       if (!await WebViewEnvironmentHolder.isRuntimeAvailable()) {
         return _WebViewPrereqStatus.runtimeMissing;
+      }
+      if (await WebViewEnvironmentHolder.checkDataFolderWritable() != null) {
+        return _WebViewPrereqStatus.dataFolderNotWritable;
       }
       await WebViewEnvironmentHolder.initialize();
     }

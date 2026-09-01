@@ -16,6 +16,28 @@ WorkStatusItem indexingWorkStatusItem(
 }) {
   final total = state.totalBooks ?? 0;
   final processed = state.booksProcessed ?? 0;
+  // שלב האיחוד ארוך וללא התקדמות מדידה; מונה קפוא על הספר האחרון נראה
+  // כתקיעה (issue #1021), ולכן הוא מוחלף בהודעה ובמד בלתי-מוגדר.
+  if (state.isFinalizing) {
+    return WorkStatusItem(
+      id: kIndexingWorkStatusId,
+      title: 'אינדוקס ספרים',
+      message: 'מסיים ומאחד את קבצי האינדקס',
+      detail: 'כל הספרים אונדקסו; הפעולה עשויה להימשך מספר דקות',
+      onTap: onTap,
+    );
+  }
+  // שלב הסריקה אינו מציית להשהיה/מצב חסכוני, ולכן מוצג בלי לחצנים.
+  if (state.isScanning) {
+    return WorkStatusItem(
+      id: kIndexingWorkStatusId,
+      title: 'אינדוקס ספרים',
+      message: 'בודק אילו ספרים דורשים עדכון באינדקס',
+      detail: 'התקדמות: $processed/$total',
+      progress: total > 0 ? (processed / total).clamp(0.0, 1.0) : null,
+      onTap: onTap,
+    );
+  }
   return WorkStatusItem(
     id: kIndexingWorkStatusId,
     title: 'אינדוקס ספרים',
