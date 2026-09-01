@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -36,7 +37,7 @@ class FakeRepository extends Mock implements PluginRegistryRepository {
   Future<int?> getNextUserOrderForNewPlugin() async => null;
 }
 
-void writePluginArchive(String path, String pluginId) {
+List<int> pluginArchiveBytes(String pluginId) {
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
@@ -51,7 +52,24 @@ void writePluginArchive(String path, String pluginId) {
       ),
     )
     ..addFile(ArchiveFile.string('index.html', '<html></html>'));
-  File(path).writeAsBytesSync(ZipEncoder().encode(archive));
+  return ZipEncoder().encode(archive);
+}
+
+void writePluginArchive(String path, String pluginId) {
+  File(path).writeAsBytesSync(pluginArchiveBytes(pluginId));
+}
+
+/// מדמה את ה-assets של APK — ארכיונים לפי מפתח, וזריקה על מפתח חסר
+/// כמו rootBundle.
+class FakeAssetBundle extends CachingAssetBundle {
+  final Map<String, List<int>> files = {};
+
+  @override
+  Future<ByteData> load(String key) async {
+    final bytes = files[key];
+    if (bytes == null) throw FlutterError('Unable to load asset: $key');
+    return ByteData.view(Uint8List.fromList(bytes).buffer);
+  }
 }
 
 void main() {
@@ -205,5 +223,65 @@ void main() {
       ),
       '',
     );
+  });
+
+  group('מובייל — ארכיונים מ-assets (אין תיקייה ליד ה-executable)', () {
+    BundledPluginSeedService buildAssetService(
+      Set<String> allowedIds,
+      FakeAssetBundle bundle,
+    ) {
+      return BundledPluginSeedService(
+        repository: repository,
+        allowedIds: allowedIds,
+        bundleDirPath: null,
+        assetBundle: bundle,
+      );
+    }
+
+    test('מתקין תוסף שארכיונו נארז כ-asset ומסמן אותו כמטופל', () async {
+      final bundle = FakeAssetBundle();
+      bundle.files['${BundledPluginSeedService.bundledPluginsAssetDir}/'
+          'test.bundled.otzplugin'] = pluginArchiveBytes(
+        'test.bundled',
+      );
+
+      final registered = await buildAssetService(
+        {'test.bundled'},
+        bundle,
+      ).seedPending();
+
+      expect(registered, isTrue);
+      expect(repository.savedIds, ['test.bundled']);
+      expect(
+        Settings.getValue<String>(
+          SettingsRepository.keySeededBundledPlugins,
+          defaultValue: '',
+        ),
+        'test.bundled',
+      );
+    });
+
+    test('asset חסר אינו מסומן כמטופל ואינו מפיל את השאר', () async {
+      final bundle = FakeAssetBundle();
+      bundle.files['${BundledPluginSeedService.bundledPluginsAssetDir}/'
+          'test.bundled.otzplugin'] = pluginArchiveBytes(
+        'test.bundled',
+      );
+
+      final registered = await buildAssetService({
+        'missing.plugin',
+        'test.bundled',
+      }, bundle).seedPending();
+
+      expect(registered, isTrue);
+      expect(repository.savedIds, ['test.bundled']);
+      expect(
+        Settings.getValue<String>(
+          SettingsRepository.keySeededBundledPlugins,
+          defaultValue: '',
+        ),
+        'test.bundled',
+      );
+    });
   });
 }

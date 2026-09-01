@@ -6,12 +6,16 @@
 #
 # רשימת ההיתר היא lib/plugins/services/bundled_plugin_ids.dart — אותו קובץ
 # שנקמפל אל תוך האפליקציה, כדי שלא תיווצר רשימה שנייה שיוצאת מסינכרון.
-# כל רשומה היא זוג 'מזהה-חנות': 'מזהה-מניפסט' — ההורדה לפי מזהה החנות,
-# והקובץ נשמר בשם מזהה המניפסט, שמולו האפליקציה מאמתת את הארכיון.
+# כל רשומה היא זוג 'מזהה-חנות': 'מזהה-מניפסט[@פלטפורמות]' — ההורדה לפי מזהה
+# החנות, והקובץ נשמר בשם מזהה המניפסט, שמולו האפליקציה מאמתת את הארכיון.
 # רשימה ריקה = לא נוצרת תיקייה, וההעתקה ליד ה-executable מדולגת.
+#
+# ארגומנט אופציונלי: שם הפלטפורמה הנבנית (linux/macos/android/...) — רשומה
+# עם סיומת @פלטפורמות שאינה כוללת אותו מדולגת. בלי ארגומנט אין סינון.
 
 set -euo pipefail
 
+platform="${1:-}"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(dirname "$script_dir")"
 allowlist_file="$repo_root/lib/plugins/services/bundled_plugin_ids.dart"
@@ -28,8 +32,17 @@ while IFS= read -r line; do
   trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   case "$trimmed" in //*) continue ;; esac
   if [[ "$trimmed" =~ $pair_re ]]; then
+    value="${BASH_REMATCH[2]}"
+    manifest_id="${value%%@*}"
+    if [ "$value" != "$manifest_id" ] && [ -n "$platform" ]; then
+      platforms="${value#*@}"
+      case ",$platforms," in
+        *",$platform,"*) ;;
+        *) echo "Skipping $manifest_id - not for $platform ($platforms)"; continue ;;
+      esac
+    fi
     store_ids+=("${BASH_REMATCH[1]}")
-    manifest_ids+=("${BASH_REMATCH[2]}")
+    manifest_ids+=("$manifest_id")
   fi
 done < "$allowlist_file"
 

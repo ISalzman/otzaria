@@ -307,7 +307,7 @@ jobs:
       # (רשימה ריקה = השלב לא עושה דבר). ראה docs/bundled_plugins.md.
       - name: Download bundled plugins for installers
         shell: pwsh
-        run: .\installer\download_bundled_plugins.ps1
+        run: .\installer\download_bundled_plugins.ps1 -Platform windows
 
       - name: Download library assets for full installer
         if: true
@@ -667,7 +667,7 @@ jobs:
 
       - name: Download bundled plugins for installer (ARM64)
         shell: pwsh
-        run: .\installer\download_bundled_plugins.ps1
+        run: .\installer\download_bundled_plugins.ps1 -Platform windows
 
       - name: Build Inno Setup installer (ARM64)
         shell: pwsh
@@ -977,7 +977,7 @@ jobs:
       # (רשימה ריקה = השלב לא עושה דבר). ראה docs/bundled_plugins.md.
       - name: Download bundled plugins for Linux packages
         shell: bash
-        run: bash installer/download_bundled_plugins.sh
+        run: bash installer/download_bundled_plugins.sh linux
 
       - name: Install flutter_distributor (with retry)
         if: matrix.target == 'deb' || matrix.target == 'rpm'
@@ -1670,7 +1670,18 @@ jobs:
           curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
           curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
           curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
-      
+
+      # תוספים מצורפים — במובייל אין "ליד ה-executable", לכן הארכיונים נארזים
+      # כ-assets בתוך ה-APK והאפליקציה רושמת אותם משם (docs/bundled_plugins.md).
+      - name: Download bundled plugins into Android assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash installer/download_bundled_plugins.sh android
+          if [ -d installer/bundled_plugins ]; then
+            cp installer/bundled_plugins/*.otzplugin assets/bundled_plugins/
+          fi
+
       - name: Fetch biographies data
         uses: ./.github/actions/fetch-biographies
 
@@ -1875,7 +1886,7 @@ jobs:
       # (רשימה ריקה = השלב לא עושה דבר). ראה docs/bundled_plugins.md.
       - name: Download bundled plugins for macOS bundles
         shell: bash
-        run: bash installer/download_bundled_plugins.sh
+        run: bash installer/download_bundled_plugins.sh macos
 
       # רץ לפני יצירת ה-DMG — כך הארכיונים מגיעים גם ל-zip העדכון ולחבילת
       # ה-FULL, שמעתיקים את אותו .app. התיקייה יושבת ליד ה-executable
@@ -2070,7 +2081,7 @@ jobs:
 
       - name: Download bundled plugins for installer (indexed FULL)
         shell: pwsh
-        run: .\installer\download_bundled_plugins.ps1
+        run: .\installer\download_bundled_plugins.ps1 -Platform windows
 
       - name: Build indexed FULL bootstrap installer
         shell: pwsh

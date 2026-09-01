@@ -1,9 +1,10 @@
 # תוספים מצורפים לחבילות ההתקנה
 
-מנגנון שמאפשר לחבילות הדסקטופ — מתקיני Windows (רגיל, FULL, indexed-FULL,
-ARM64), חבילות לינוקס (deb, rpm, raw, FULL) וחבילות מק (DMG, zip עדכון,
-FULL) — להגיע עם תוספים מהחנות הרשמית מותקנים מראש. במובייל אין מנגנון כזה
-(`AppPaths.getBundledPluginsPath` מחזיר שם `null`).
+מנגנון שמאפשר לחבילות ההתקנה — מתקיני Windows (רגיל, FULL, indexed-FULL,
+ARM64), חבילות לינוקס (deb, rpm, raw, FULL), חבילות מק (DMG, zip עדכון,
+FULL) וה-APK של אנדרואיד — להגיע עם תוספים מהחנות הרשמית מותקנים מראש.
+בדסקטופ הארכיונים יושבים ליד ה-executable; במובייל אין "ליד ה-executable"
+(`AppPaths.getBundledPluginsPath` מחזיר `null`) ולכן הם נארזים כ-assets.
 
 ## איך מוסיפים תוסף
 
@@ -16,6 +17,18 @@ const bundledPlugins = <String, String>{
   '6a1352f061e95da124c280a3': 'com.tikkun.koraim',
 };
 ```
+
+אפשר להגביל תוסף לפלטפורמות מסוימות עם `@` אחרי מזהה המניפסט, ואחריו
+שמות `Platform.operatingSystem` (`windows` / `linux` / `macos` / `android` /
+`ios`) מופרדים בפסיקים:
+
+```dart
+  '6a9342ce60ff32edf765ec31': 'com.otzaria_word_editor.superdoc@windows,linux,macos',
+```
+
+בלי `@` התוסף נארז בכל הפלטפורמות. הסינון נאכף פעמיים: סקריפט ההורדה מקבל
+את שם הפלטפורמה הנבנית ומדלג על רשומות לא רלוונטיות (הארכיון כלל לא נארז),
+ו-`bundledPluginIdsForPlatform` מסנן גם בצד האפליקציה.
 
 זה הכל. הרשימה הזו היא גם רשימת ההיתר שהאפליקציה אוכפת וגם המקור שממנו
 ה-workflow יודע מה להוריד — מקור אחד, בלי סנכרון ידני. שני המזהים נחוצים
@@ -45,11 +58,16 @@ const bundledPlugins = <String, String>{
    - **מק** — ה-workflow מעתיק אל `Contents/MacOS/bundled_plugins` בתוך
      ה-`.app` לפני יצירת ה-DMG, ולכן זה מגיע גם ל-zip העדכון ולחבילת
      ה-FULL שמעתיקים את אותו bundle.
+   - **אנדרואיד** — ה-workflow מעתיק אל `assets/bundled_plugins/` לפני
+     `flutter build apk`; התיקייה מוצהרת ב-pubspec.yaml (בריפו היא ריקה —
+     מאוכלסת רק ב-CI) והארכיונים נארזים כ-assets בתוך ה-APK.
 3. **בעליית אוצריא** — `BundledPluginSeedService` (דרך אירוע
-   `SeedBundledPlugins` ב-`PluginSystemBloc`) סורק את התיקייה ומתקין דרך
+   `SeedBundledPlugins` ב-`PluginSystemBloc`) סורק את התיקייה — ובמובייל,
+   שאין בו תיקייה כזו, טוען כל ארכיון מ-assets לקובץ זמני — ומתקין דרך
    מסלול ההתקנה הרגיל (`prepareInstall`/`finalizeInstall`, כולל ולידציית
    מניפסט מלאה) כל תוסף שעונה על כל התנאים:
-   - מזהה המניפסט נמצא ב-`bundledPlugins` המקומפל לתוך האפליקציה;
+   - מזהה המניפסט נמצא ב-`bundledPlugins` המקומפל לתוך האפליקציה,
+     בפלטפורמות שהרשומה שלו מתירה;
    - המזהה שהמניפסט מצהיר זהה לשם הקובץ;
    - התוסף לא נרשם בעבר מהמנגנון הזה (`key-seeded-bundled-plugins`)
      ואינו מותקן כבר.

@@ -3,9 +3,14 @@
 #
 # רשימת ההיתר היא lib/plugins/services/bundled_plugin_ids.dart — אותו קובץ
 # שנקמפל אל תוך האפליקציה, כדי שלא תיווצר רשימה שנייה שיוצאת מסינכרון.
-# כל רשומה היא זוג 'מזהה-חנות': 'מזהה-מניפסט' — ההורדה לפי מזהה החנות,
-# והקובץ נשמר בשם מזהה המניפסט, שמולו האפליקציה מאמתת את הארכיון.
+# כל רשומה היא זוג 'מזהה-חנות': 'מזהה-מניפסט[@פלטפורמות]' — ההורדה לפי מזהה
+# החנות, והקובץ נשמר בשם מזהה המניפסט, שמולו האפליקציה מאמתת את הארכיון.
 # רשימה ריקה = לא נוצרת תיקייה, וה-Source במתקין מדלג עליה.
+#
+# ‎-Platform אופציונלי: שם הפלטפורמה הנבנית — רשומה עם סיומת @פלטפורמות
+# שאינה כוללת אותו מדולגת. בלי הפרמטר אין סינון.
+
+param([string]$Platform = '')
 
 $ErrorActionPreference = 'Stop'
 
@@ -25,9 +30,18 @@ foreach ($line in Get-Content $allowlistFile) {
     if ($trimmed.StartsWith('//') -or $trimmed.StartsWith('///')) { continue }
     $match = [regex]::Match($trimmed, "^'([^']+)':\s*'([^']+)',?$")
     if ($match.Success) {
+        $valueParts = $match.Groups[2].Value.Split('@')
+        $manifestId = $valueParts[0]
+        if ($valueParts.Length -gt 1 -and $Platform) {
+            $platforms = $valueParts[1].Split(',')
+            if ($platforms -notcontains $Platform) {
+                Write-Host "Skipping $manifestId - not for $Platform ($($valueParts[1]))"
+                continue
+            }
+        }
         $plugins += [pscustomobject]@{
             StoreId    = $match.Groups[1].Value
-            ManifestId = $match.Groups[2].Value
+            ManifestId = $manifestId
         }
     }
 }
