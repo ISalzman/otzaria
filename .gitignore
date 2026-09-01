@@ -135,3 +135,7 @@ installer/bundled_plugins/
 # ארכיוני התוספים המצורפים למובייל — יורדים בזמן build (ראה docs/bundled_plugins.md)
 assets/bundled_plugins/*
 !assets/bundled_plugins/.gitkeep
+
+# פלט verbose של `flutter build -v` בשורש הפרויקט — נוצר בניפוי באגי בנייה
+# ומגיע לעשרות אלפי שורות. אינו אמור להיכנס לגיט.
+build_log.txt
