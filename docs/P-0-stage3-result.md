@@ -177,3 +177,82 @@ Flutter שסותר את ההתנהגות בפועל.**
 
 המסקנה אחת: **מדוד. אל תאמין לא לשגיאה ולא לתיעוד.** כאן שניהם הטעו,
 בכיוונים מנוגדים, ורק הבקרה הפרידה בין השניים.
+
+---
+
+## 7. נספח: P-2 בדיקה 3 ובדיקה 9 — נמדדו כאן
+
+ההכרעה ב-A הפכה את בדיקה 3 של P-2 לרלוונטית מיידית, ותשתית שני המנועים
+כבר הייתה בנויה. במודל A כל חלון הוא isolate נפרד **באותו תהליך**, ולכן
+לכל אחד סינגלטון `TantivyDataProvider` משלו — שתי פתיחות של אותו אינדקס.
+
+### 7.1 צעד אפס — מה `_initAll` באמת עושה
+
+המסמך דרש לקרוא את `otzaria_search_engine` לפני כל ספייק, כי גרסה 5
+הציגה כעובדה טענה שלא נבדקה: ש-"`index.writer(...)` נוטל מנעול כתיבה
+בלעדי". **הקוד אומר את ההפך במפורש**
+(`rust/src/api/search_engine.rs:1784-1797`):
+
+```rust
+let index_reader = index.reader_builder()
+    .reload_policy(ReloadPolicy::OnCommitWithDelay)
+    .try_into()
+    .expect("Failed to create index reader");
+// Best-effort: if another instance/process holds the writer lock right
+// now, start without a writer; ensure_writer() retries on first write.
+let index_writer = match index.writer(DEFAULT_WRITER_HEAP_SIZE) {
+    Ok(writer) => Some(writer),
+    Err(err) => { warn!("writer unavailable at startup ..."); None }
+};
+```
+
+ה-reader **תמיד** נוצר; ה-writer אופציונלי ונרכש בעצלתיים. החבילה נכתבה
+מלכתחילה כדי לסבול פותח שני. **הטענה שהמסמך סימן כלא-מאומתת — הופרכה.**
+
+### 7.2 המדידה
+
+```
+[A] settings = ok        [B] settings = FAILED  errno 33 app_preferences.lock
+[A] hive     = ok        [B] hive     = FAILED  errno 33 tabs.lock
+[A] sqlite   = ok        [B] sqlite   = ok
+[A] rustlib  = ok        [B] rustlib  = ok
+[A] tantivy  = ok 90047  [B] tantivy  = ok (90047 hits)
+[A] rss-mb-after-stack = 801   [B] rss-mb-after-stack = 841
+```
+
+**בדיקה 3 עוברת.** האינדקס נפתח פעמיים באותו תהליך, והשאילתה מחזירה את
+אותן 90,047 תוצאות משני ה-isolates. חיפוש — "לב התוכנה" לפי המסמך —
+עובד בחלון שני ללא RPC.
+
+### 7.3 מה נגזר לבדיקה 9 ולפרק 3
+
+| שירות | חלון שני | מסקנה לפרק 3 |
+|---|---|---|
+| `Settings.init` | ❌ errno 33 | **חייב RPC ל-host** |
+| `initHive` | ❌ errno 33 | **חייב RPC ל-host** |
+| `SqliteDataProvider` | ✅ | אפשר פר-חלון |
+| `RustLib.init` | ✅ | אפשר פר-חלון |
+| אינדקס Tantivy | ✅ | אפשר פר-חלון (קריאה) |
+
+Hive נכשל גם **בתוך אותו תהליך** — הנעילה היא פר-handle ולא פר-תהליך,
+בדיוק כפי שנכשל בין תהליכים בשלב 1. זו אינה הפתעה אלא אישוש: אינווריאנט
+I1 חל גם על מודל A.
+
+⚠️ **סייג לגבי Tantivy:** ה-reader עובד, אבל ה-writer נשאר אצל מי שתפס
+אותו. אינדוקס מחלון שני ייכשל ב-`ensure_writer()`. **יש לנתב כל פעולת
+כתיבה לאינדקס לבעלים יחיד** — הערת תכנון לפרק 3, לא חסם.
+
+### 7.4 משאבים — אישוש החישוב מסעיף 1
+
+שני מנועים **עם** כל המאגרים: **841MB**. הערכת C1 לאותו תרחיש:
+2×408 + 462 = 1278MB. **A חוסך ~437MB בשני חלונות**, בהתאמה לחישוב
+המוקדם.
+
+### 7.5 מה עדיין לא נבדק מ-P-2
+
+בדיקות 1, 2, 4-7 (`printing`, ביטול רישום מחלקת ה-WebView, סביבת
+WebView2, `file_selector`, `WS_EX_LAYOUTRTL`, פעולות חלון) דורשות
+**חלונות אמיתיים עם view**, ותשתית המדידה כאן חסרת-view. הן השלב הבא.
+
+בדיקה 8 (transport) משנה אופי במודל A: התקשורת היא בתוך התהליך, ולא
+named pipe עם ACL. זהו חלק מהחיסכון בהיקף שההכרעה ב-A מביאה.

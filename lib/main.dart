@@ -1384,6 +1384,37 @@ void _probeLog(String tag, String step, Object? outcome) {
 
 int _probeRssMb() => (ProcessInfo.currentRss / (1024 * 1024)).round();
 
+/// פותח את מחסנית הנתונים ומדווח על כל מאגר בנפרד.
+///
+/// זו **בדיקה 3 של P-2** ולב **בדיקה 9**. במודל A כל חלון הוא isolate נפרד
+/// באותו תהליך, ולכן לכל אחד סינגלטון `TantivyDataProvider` משלו — כלומר
+/// שתי פתיחות של אותו אינדקס. השאלה איזה מאגר סובל פתיחה שנייה ואיזה
+/// דורש RPC ל-host היא בדיוק מה שקובע את היקף פרק 3.
+Future<void> _probeOpenStack(String tag) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Future<void> step(String name, Future<void> Function() body) async {
+    try {
+      await body();
+      _probeLog(tag, name, 'ok');
+    } catch (e) {
+      _probeLog(tag, name, 'FAILED: $e');
+    }
+  }
+
+  await step('settings', () => Settings.init(cacheProvider: HiveCache()));
+  await step('hive', () => initHive());
+  await step('sqlite', () => SqliteDataProvider.instance.initialize());
+  await step('rustlib', () => RustLib.init());
+  try {
+    final provider = TantivyDataProvider.instance;
+    await provider.engine;
+    final hits = await provider.countTexts('בראשית', const [], const []);
+    _probeLog(tag, 'tantivy', 'ok ($hits hits)');
+  } catch (e) {
+    _probeLog(tag, 'tantivy', 'FAILED: $e');
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // ספייק P-0 שלב 3 — האם מודל A נפגע מתחרות thread?
 //
@@ -1401,6 +1432,10 @@ void engineATest(List<String> args) async {
   _probeLog('A', 'dart-thread-id', _probeThreadId());
   _probeLog('A', 'rss-mb-one-engine', _probeRssMb());
 
+  // מנוע A הוא "החלון הראשון": פותח את המאגרים ראשון ותופס מה שנתפס.
+  await _probeOpenStack('A');
+  _probeLog('A', 'rss-mb-after-stack', _probeRssMb());
+
   // נותנים למנוע B להיטען לפני שמתחילים לשרוף.
   await Future<void>.delayed(const Duration(milliseconds: 1500));
 
@@ -1416,6 +1451,15 @@ void engineATest(List<String> args) async {
 void engineBTest(List<String> args) async {
   _probeLog('B', 'dart-thread-id', _probeThreadId());
   _probeLog('B', 'rss-mb-two-engines', _probeRssMb());
+
+  // ⚠️ הלב של בדיקה 3. מנוע B הוא "החלון השני": מנסה לפתוח את אותם
+  // מאגרים בזמן שמנוע A כבר מחזיק אותם, באותו תהליך. כל FAILED כאן הוא
+  // מאגר שיחייב RPC ל-host בפרק 3, וכל ok הוא מאגר שאפשר לפתוח פר-חלון.
+  // ממתינים די והותר כדי שמנוע A יסיים לפתוח הכול. התרחיש הנבדק הוא
+  // "חלון ראשון עומד, המשתמש פותח שני" — לא מרוץ פתיחה מקבילי.
+  await Future<void>.delayed(const Duration(seconds: 10));
+  await _probeOpenStack('B');
+  _probeLog('B', 'rss-mb-after-stack', _probeRssMb());
 
   var ticks = 0;
   var maxGapMs = 0;
