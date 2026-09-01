@@ -788,7 +788,9 @@ class PluginBridgeAdapter {
       case 'reader':
         return await _handleReader(action, args);
       case 'workspace':
-        return await _handleWorkspace(action, args);
+        return await _enqueueWorkspaceAction(
+          () => _handleWorkspace(action, args),
+        );
       case 'navigation':
         return await _handleNavigation(action, args);
       case 'notes':
@@ -2932,27 +2934,6 @@ class PluginBridgeAdapter {
   Future<dynamic> _handleWorkspace(
     String action,
     Map<String, dynamic> args,
-  ) {
-    if (action == 'create' || action == 'switch') {
-      return _enqueueWorkspaceAction(
-        () => _handleWorkspaceAction(action, args),
-      );
-    }
-    return _handleWorkspaceAction(action, args);
-  }
-
-  Future<T> _enqueueWorkspaceAction<T>(Future<T> Function() action) {
-    final result = _workspaceActionQueue.then((_) => action());
-    _workspaceActionQueue = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
-    );
-    return result;
-  }
-
-  Future<dynamic> _handleWorkspaceAction(
-    String action,
-    Map<String, dynamic> args,
   ) async {
     final bloc = _dependencies.workspaceBloc;
     switch (action) {
@@ -3931,6 +3912,15 @@ class PluginBridgeAdapter {
         writeToken: writeToken,
       );
     }
+  }
+
+  Future<T> _enqueueWorkspaceAction<T>(Future<T> Function() action) {
+    final result = _workspaceActionQueue.then((_) => action());
+    _workspaceActionQueue = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 
   /// „שמור בשם” בשני שלבים: בחירת תיקייה דרך דיאלוג המערכת, ואז שם הקובץ
