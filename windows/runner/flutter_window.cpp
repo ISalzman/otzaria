@@ -66,6 +66,37 @@ void LogSessionEndProbe(const wchar_t* stage, UINT message, WPARAM wparam,
   CloseHandle(file);
 }
 
+// כמה זמן מחכים ל-Dart לפני שמוותרים ומאשרים את סיום הסשן. Windows נותן
+// לאפליקציה מספר שניות להשיב ל-WM_QUERYENDSESSION לפני שהיא מסומנת כלא-
+// מגיבה ומוצגת למשתמש כמעכבת כיבוי. שלוש שניות מספיקות לשטיפת Hive וקצרות
+// דיין שלא ייראו כתקיעה.
+constexpr DWORD kSessionEndFlushTimeoutMs = 3000;
+
+// חלון-ההודעות של תור המשימות של Flutter, אם הוא שייך ל-thread הזה.
+//
+// `TaskRunnerWindow` מפרסם `WM_NULL` ומשתמש ב-`SetTimer` כדי להריץ את תורי
+// המשימות של המנוע, ולכן שאיבה **ממנו בלבד** מריצה את ה-Dart בלי לגעת
+// בהודעות של חלונות אחרים. `HWND_MESSAGE` מחזיר חלונות של כל התהליכים,
+// ולכן חובה לאמת גם תהליך וגם thread.
+//
+// שם המחלקה הוא פרט פנימי של המנוע ועלול להשתנות בשדרוג. כשלא נמצא —
+// נופלים לשאיבה לפי **סוג הודעה** (posted/timer בלבד), שגם היא חוסמת קלט
+// ו-WM_PAINT מלהיכנס re-entrantly.
+HWND FindFlutterTaskRunnerWindow() {
+  const DWORD our_pid = GetCurrentProcessId();
+  const DWORD our_tid = GetCurrentThreadId();
+  HWND hwnd = nullptr;
+  while ((hwnd = FindWindowExW(HWND_MESSAGE, hwnd, L"FlutterTaskRunnerWindow",
+                               nullptr)) != nullptr) {
+    DWORD pid = 0;
+    const DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == our_pid && tid == our_tid) {
+      return hwnd;
+    }
+  }
+  return nullptr;
+}
+
 // מפעיל/מבטל DWM cloaking: החלון נשאר "מוצג" מבחינת המערכת (WS_VISIBLE,
 // מיקסום, פוקוס והצגת פריימים עובדים כרגיל) אבל ה-DWM לא מצייר אותו כלל.
 // ביטול ה-cloak הוא אטומי — פריים קומפוזיציה אחד עם התוכן העדכני.
@@ -215,6 +246,16 @@ bool FlutterWindow::OnCreate() {
           TerminateProcess(GetCurrentProcess(), 0);
           // Unreachable in practice.
           result->Success(flutter::EncodableValue(true));
+          return;
+        }
+        if (call.method_name() == "sessionEndFlushDone") {
+          // ה-Dart סיים לשטוף. משחררים את ההמתנה ב-FlushBeforeSessionEnd,
+          // שרצה כרגע על ה-thread הזה ושואבת הודעות — ולכן הקריאה הזו
+          // בכלל הגיעה אלינו.
+          if (session_end_flush_event_) {
+            SetEvent(session_end_flush_event_);
+          }
+          result->Success();
           return;
         }
         if (call.method_name() != "armForceExitWatchdog") {
@@ -403,6 +444,38 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         flutter_controller_->engine()->ReloadSystemFonts();
       }
       break;
+
+    case WM_QUERYENDSESSION: {
+      // ⚠️ ה-flush חייב לרוץ **כאן**, לפני ההחזרה. החזרת TRUE היא הבטחה
+      // מחייבת: מרגע שנתנו אותה המערכת רשאית להרוג אותנו בכל רגע, ולכן
+      // שטיפה מאוחרת ב-WM_ENDSESSION אינה מובטחת לרוץ. אומת במדידה —
+      // ראו LogSessionEndProbe.
+      LogSessionEndProbe(L"flush-begin", message, wparam, lparam);
+      const bool flushed = FlushBeforeSessionEnd();
+      LogSessionEndProbe(flushed ? L"flush-ok" : L"flush-timeout", message,
+                         wparam, lparam);
+      // תמיד מסכימים לסיום. עיכוב הכיבוי דורש ShutdownBlockReasonCreate,
+      // שמציג למשתמש שאנחנו מעכבים — החלטת UX שלא התקבלה.
+      if (is_session_end_probe) {
+        LogSessionEndProbe(L"reached-our-case", message, wparam, lparam);
+      }
+      return TRUE;
+    }
+
+    case WM_ENDSESSION:
+      // wparam=TRUE: הסשן באמת מסתיים ואין מה לעשות מעבר לרישום.
+      // wparam=FALSE: בוטל (למשל `shutdown /a`) — מאפסים את הסימון כדי
+      // שכיבוי עתידי ישטוף מחדש את מה שנכתב בינתיים.
+      if (wparam == FALSE) {
+        if (session_end_flush_event_) {
+          ResetEvent(session_end_flush_event_);
+        }
+        if (process_control_channel_) {
+          process_control_channel_->InvokeMethod("sessionEndCancelled",
+                                                 nullptr);
+        }
+      }
+      break;
   }
 
   if (is_session_end_probe) {
@@ -410,6 +483,62 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+}
+
+bool FlutterWindow::FlushBeforeSessionEnd() {
+  if (!process_control_channel_ || !flutter_controller_) {
+    return false;
+  }
+
+  if (!session_end_flush_event_) {
+    // manual-reset: הסימון נשאר דלוק גם אם ההודעה תגיע שוב.
+    session_end_flush_event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!session_end_flush_event_) {
+      return false;
+    }
+  }
+  if (WaitForSingleObject(session_end_flush_event_, 0) == WAIT_OBJECT_0) {
+    // כבר נשטף בהודעה קודמת — WM_QUERYENDSESSION מגיע לא פעם יותר מפעם אחת.
+    return true;
+  }
+
+  process_control_channel_->InvokeMethod("prepareForSessionEnd", nullptr);
+
+  const HWND task_runner = FindFlutterTaskRunnerWindow();
+  const ULONGLONG deadline = GetTickCount64() + kSessionEndFlushTimeoutMs;
+  while (true) {
+    const ULONGLONG now = GetTickCount64();
+    if (now >= deadline) {
+      break;
+    }
+    // QS_POSTMESSAGE|QS_TIMER בלבד: אלה הערוצים שבהם תור המשימות של Flutter
+    // מתעורר. מסכה רחבה יותר הייתה מעירה אותנו על כל תזוזת עכבר וגורמת
+    // ללולאה עמוסה שסתם שורפת את שלוש השניות.
+    const DWORD wait = MsgWaitForMultipleObjects(
+        1, &session_end_flush_event_, FALSE,
+        static_cast<DWORD>(deadline - now), QS_POSTMESSAGE | QS_TIMER);
+    if (wait == WAIT_OBJECT_0) {
+      return true;
+    }
+    if (wait != WAIT_OBJECT_0 + 1) {
+      break;  // WAIT_TIMEOUT או כשל
+    }
+
+    MSG msg;
+    if (task_runner != nullptr) {
+      while (PeekMessageW(&msg, task_runner, 0, 0, PM_REMOVE)) {
+        DispatchMessageW(&msg);
+      }
+    } else {
+      // נפילה חזרה: אותו סוג הודעות, בלי הגבלה לחלון מסוים.
+      while (PeekMessageW(&msg, nullptr, 0, 0,
+                          PM_REMOVE | PM_QS_POSTMESSAGE | PM_QS_SENDMESSAGE)) {
+        DispatchMessageW(&msg);
+      }
+    }
+  }
+
+  return WaitForSingleObject(session_end_flush_event_, 0) == WAIT_OBJECT_0;
 }
 
 void FlutterWindow::ArmForceExitWatchdog(uint32_t timeout_ms) {

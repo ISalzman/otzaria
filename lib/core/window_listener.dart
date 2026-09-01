@@ -26,7 +26,66 @@ class AppWindowListener extends WindowListener {
   AppWindowListener({
     this.windowId = AppWindowId.primary,
     AppWindowController? window,
-  }) : _window = window ?? const WindowManagerAppWindowController();
+  }) : _window = window ?? const WindowManagerAppWindowController() {
+    // הערוץ היה חד-כיווני (Dart → נייטיב) עד כאן. כיבוי מערכת הוא המקרה
+    // הראשון שבו הנייטיב צריך לקרוא **לנו**.
+    _processControlChannel.setMethodCallHandler(_handleProcessControlCall);
+  }
+
+  /// האם שטיפת סיום הסשן כבר רצה. `WM_QUERYENDSESSION` מגיע לא פעם יותר
+  /// מפעם אחת (המערכת שואלת כל אפליקציה, ולעיתים חוזרת), והשטיפה כבדה.
+  bool _sessionEndFlushStarted = false;
+
+  Future<Object?> _handleProcessControlCall(MethodCall call) async {
+    switch (call.method) {
+      case 'prepareForSessionEnd':
+        await _flushForSessionEnd();
+        return null;
+      case 'sessionEndCancelled':
+        // הכיבוי בוטל (`shutdown /a`) — כתיבות חדשות שיצטברו מכאן ואילך
+        // חייבות להישטף בפעם הבאה.
+        _sessionEndFlushStarted = false;
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  /// שוטפת את הכתיבות התלויות כשהמערכת שואלת אם מותר לסיים את הסשן.
+  ///
+  /// ⚠️ הנייטיב **חוסם** את ה-platform thread עד שנקרא ל-`sessionEndFlushDone`
+  /// או עד פקיעת זמן. לכן החוזה כאן: לסמן תמיד, גם בכשל — אחרת המשתמש
+  /// מקבל שלוש שניות של תקיעה בכל כיבוי.
+  Future<void> _flushForSessionEnd() async {
+    try {
+      if (!_sessionEndFlushStarted) {
+        _sessionEndFlushStarted = true;
+        final flushFailure = await _closeWindowScoped();
+        if (flushFailure != null) {
+          // אותו טיפול כמו במסלול הסגירה הרגיל: הכשל הוא האות היחיד
+          // לכך שכתיבות תלויות לא נשמרו.
+          try {
+            await Sentry.captureException(
+              flushFailure,
+              stackTrace: StackTrace.current,
+            );
+          } catch (_) {
+            // דיווח הוא best-effort ולעולם אינו חוסם את הכיבוי.
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Session-end flush failed: $e');
+      }
+    } finally {
+      try {
+        await _processControlChannel.invokeMethod('sessionEndFlushDone');
+      } catch (_) {
+        // אם הערוץ מת, הנייטיב ישתחרר בפקיעת הזמן שלו.
+      }
+    }
+  }
 
   /// החלון שה-listener סוגר. מוזרק ולא נשלף מעץ ה-widgets: הסגירה רצה
   /// כשהעץ כבר מתפרק.

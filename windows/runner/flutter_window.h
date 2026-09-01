@@ -33,6 +33,16 @@ class FlutterWindow : public Win32Window {
  private:
   void ArmForceExitWatchdog(uint32_t timeout_ms);
 
+  // שוטף את הכתיבות התלויות של Dart לפני שאנחנו מאשרים סיום סשן.
+  //
+  // חוסם את ה-platform thread עד שה-Dart מסמן סיום או עד פקיעת הזמן, תוך
+  // הרצת לולאת הודעות מצומצמת — בלעדיה ה-Dart לא ירוץ כלל, כי ה-platform
+  // thread וה-UI thread ממוזגים. מחזיר true אם ה-flush הושלם.
+  bool FlushBeforeSessionEnd();
+
+  // אירוע שה-Dart מסמן דרך "sessionEndFlushDone". manual-reset.
+  HANDLE session_end_flush_event_ = nullptr;
+
   // The project to run.
   flutter::DartProject project_;
 
