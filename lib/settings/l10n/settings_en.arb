@@ -729,6 +729,7 @@
   "נדרש איפוס ואינדוקס מחדש באישור המשתמש": "A reset and re-index is needed — waiting for user approval",
   "התקדמות האינדקס: {processed}/{total}": "Indexing: {processed}/{total}",
   "מסיים ומאחד את קבצי האינדקס": "Finishing up and merging the index files",
+  "מסיים ומאחד את קבצי האינדקס: {percent}": "Finishing up and merging the index files: {percent}",
   "האינדוקס הושלם עם {count} בעיות; הפרטים נשמרו ביומן השגיאות": "Indexing finished with {count} issues; details were saved to the error log",
   "האינדוקס נעצר לפני שהושלם": "Indexing stopped before it finished",
   "האינדקס מעודכן": "The index is up to date",
