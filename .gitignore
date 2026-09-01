@@ -73,7 +73,9 @@ app.*.map.json
 
 
 .git/
-.vscode/
+.vscode/*
+# תצורת ההרצה משותפת לכל המפתחים (טוענת את מפתחות הבנייה המקומיים)
+!.vscode/launch.json
 .kiro/
 android/.gradle/
 android/.idea/
