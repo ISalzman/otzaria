@@ -3,6 +3,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -44,7 +45,10 @@ void main() {
     await bloc.close();
   });
 
-  TextBookLoaded seed({required String searchText}) => TextBookLoaded(
+  TextBookLoaded seed({
+    required String searchText,
+    SearchMode searchMode = SearchMode.exact,
+  }) => TextBookLoaded(
     book: book,
     content: const ['שורה א', 'שורה ב'],
     fontSize: 20,
@@ -62,8 +66,14 @@ void main() {
     searchText: searchText,
     scrollController: ItemScrollController(),
     positionsListener: ItemPositionsListener.create(),
+    searchMode: searchMode,
     highlightText: 'ויאמר',
     permanentHighlightLine: 1,
+    // שורות שהמנוע החזיר, והדגשה ממוקדת מקישור עומק — שניהם נמחקו קודם
+    // בכל `UpdateSearchText`, גם כשהבקשה לא השתנתה כלל.
+    searchResultLines: const {3, 7},
+    pinpointHighlightText: 'אור',
+    pinpointHighlightIndex: 4,
   );
 
   blocTest<TextBookBloc, TextBookState>(
@@ -81,7 +91,50 @@ void main() {
       expect(state.highlightText, 'ויאמר');
       expect(state.permanentHighlightLine, 1);
       expect(state.isHighlightYellowBackground(1), isTrue);
+      // ⚠️ הליבה של הבאג: שורות התוצאה של המנוע וההדגשה הממוקדת נמחקו
+      // בכל UpdateSearchText, גם בסנכרון שלא שינה דבר. פירוש הדבר שעצם
+      // פתיחת חלונית החיפוש מחקה את תוצאות החיפוש הגלובלי שהמשתמש הגיע
+      // מהן — ובמדיניות התאמה שאינה ברירת המחדל, גם את ההדגשה כולה.
+      expect(state.searchResultLines, {3, 7});
+      expect(state.lineParticipatesInSearchHighlight(3), isTrue);
+      expect(state.pinpointHighlightText, 'אור');
+      expect(state.pinpointHighlightIndex, 4);
     },
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'שינוי תצורה בלי שינוי טקסט — תוצאות המנוע כן נמחקות',
+    build: () => bloc,
+    seed: () => seed(searchText: 'בראשית'),
+    // אותה שאילתה, מדיניות אחרת: השורות שהמנוע החזיר תקפות לצירוף
+    // (שאילתה + תצורה), ולכן שינוי התצורה מבטל אותן בדיוק כמו שינוי הטקסט.
+    act: (bloc) => bloc.add(
+      const UpdateSearchText('בראשית', searchMode: SearchMode.fuzzy),
+    ),
+    expect: () => [
+      isA<TextBookLoaded>()
+          .having((s) => s.searchMode, 'searchMode', SearchMode.fuzzy)
+          .having((s) => s.searchResultLines, 'שורות התוצאה', isNull)
+          .having((s) => s.pinpointHighlightText, 'ההדגשה הממוקדת', isNull),
+    ],
+  );
+
+  blocTest<TextBookBloc, TextBookState>(
+    'שאילתה חדשה מנקה גם את שורות התוצאה וגם את ההדגשה הממוקדת',
+    build: () => bloc,
+    seed: () => seed(searchText: 'בראשית'),
+    act: (bloc) => bloc.add(const UpdateSearchText('שמות')),
+    expect: () => [
+      isA<TextBookLoaded>()
+          .having((s) => s.searchResultLines, 'שורות התוצאה', isNull)
+          .having(
+            (s) => s.lineParticipatesInSearchHighlight(3),
+            'שער ההדגשה',
+            isFalse,
+          )
+          .having((s) => s.pinpointHighlightText, 'ההדגשה הממוקדת', isNull)
+          .having((s) => s.pinpointHighlightIndex, 'אינדקס ההדגשה', isNull),
+    ],
   );
 
   blocTest<TextBookBloc, TextBookState>(

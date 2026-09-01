@@ -1982,11 +1982,39 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
       // ⚠️ חלונית החיפוש מסנכרנת את ה-bloc גם ב-`initState` שלה, עם
-      // `initialQuery: state.searchText` — כלומר עם אותו טקסט בדיוק. עצם
-      // בניית החלונית אינה "חיפוש ידני חדש", ולכן ניקוי הדגשת ה-`?mark`
-      // מותנה בשינוי אמיתי בשאילתה; בלי התנאי, פתיחת החלונית הייתה מוחקת
-      // הדגשת deep link לפני שהמשתמש הקליד תו.
-      final queryChanged = event.text != currentState.searchText;
+      // `initialQuery: state.searchText` והתצורה הקיימת — כלומר עם אותה
+      // בקשת חיפוש בדיוק. עצם בניית החלונית אינה "חיפוש ידני חדש", ולכן
+      // הניקוי מותנה בשינוי אמיתי בבקשה.
+      //
+      // ההשוואה כוללת גם את התצורה ולא רק את הטקסט: שורות התוצאה שהמנוע
+      // החזיר תקפות לצירוף (שאילתה + תצורה), ושינוי מדיניות ההתאמה מבטל
+      // אותן בדיוק כמו שינוי הטקסט.
+      //
+      // ⚠️ שדות התצורה באירוע הם nullable, ו-`null` פירושו **"אל תשנה"**
+      // (כך `copyWith` מפרש אותם) ולא "שנה ל-null". השוואה ישירה מול
+      // ה-state הייתה מסמנת כל אירוע שהושמטו בו שדות כשינוי — כלומר
+      // מבטלת את התנאי כולו.
+      //
+      // שמרני בכוונה — `mapEquals` על `alternativeWords` משווה רשימות
+      // לפי `==`, ולכן מופעים שונים בעלי תוכן זהה ייחשבו כשינוי וינקו.
+      // בספק מנקים, כמו קודם; רק המקרה המוכח של "כלום לא השתנה" מפסיק.
+      final requestChanged =
+          event.text != currentState.searchText ||
+          (event.searchMode != null &&
+              event.searchMode != currentState.searchMode) ||
+          (event.searchDistance != null &&
+              event.searchDistance != currentState.searchDistance) ||
+          (event.matchPolicy != null &&
+              event.matchPolicy != currentState.matchPolicy) ||
+          (event.searchOptions != null &&
+              !mapEquals(event.searchOptions, currentState.searchOptions)) ||
+          (event.spacingValues != null &&
+              !mapEquals(event.spacingValues, currentState.spacingValues)) ||
+          (event.alternativeWords != null &&
+              !mapEquals(
+                event.alternativeWords,
+                currentState.alternativeWords,
+              ));
       // חיפוש ידני חדש מנקה הדגשה ממוקדת קודמת מ‑deep link, אחרת ההדגשה
       // הממוקדת הייתה ממשיכה לחסום את החיפוש החדש בשאר הסעיפים.
       emit(
@@ -2000,17 +2028,23 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           matchPolicy: event.matchPolicy,
           searchWholeWord: event.searchWholeWord,
           selectedIndex: currentState.selectedIndex,
-          clearPinpointHighlight: true,
-          // שאילתה חדשה — תוצאות החיפוש הקודם אינן תקפות יותר.
-          clearSearchResultLines: true,
+          clearPinpointHighlight: requestChanged,
+          // בקשה חדשה — תוצאות החיפוש הקודם אינן תקפות יותר.
+          //
+          // ⚠️ זהו שער ההדגשה עצמו: `lineParticipatesInSearchHighlight`
+          // נשען עליו בארבעה אתרי רינדור, ובמדיניות התאמה שאינה ברירת
+          // המחדל איבוד הסט מכבה את ההדגשה לגמרי. ניקוי בלתי-מותנה כאן
+          // אִפשר לעצם פתיחת חלונית החיפוש למחוק את שורות התוצאה שהחיפוש
+          // הגלובלי מצא — בלי שהמשתמש שינה דבר.
+          clearSearchResultLines: requestChanged,
           // הדגשת ה-`?mark` מ-deep link נמחקת גם היא. שני הדגלים חייבים
           // לנקות יחד: [TextBookLoaded.isPermanentHighlight] מוגדר
           // `permanentHighlightLine == index && highlightText.isEmpty`, ולכן
           // ניקוי הטקסט לבדו היה הופך את ההדגשה הצהובה לרקע קבוע במקום
           // להעלים אותה. מאז שההדגשה נשמרת לדיסק, בלי הניקוי היא הייתה
           // שורדת לנצח.
-          clearHighlightText: queryChanged,
-          clearPermanentHighlight: queryChanged,
+          clearHighlightText: requestChanged,
+          clearPermanentHighlight: requestChanged,
         ),
       );
     }
