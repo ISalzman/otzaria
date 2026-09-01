@@ -12,6 +12,7 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "jump_list_manager.h"
 #include "splash_window.h"
+#include "utils.h"
 
 namespace {
 
@@ -38,6 +39,31 @@ void LogSessionEndProbe(const wchar_t* stage, UINT message, WPARAM wparam,
                static_cast<unsigned long long>(wparam),
                static_cast<unsigned long long>(lparam));
   OutputDebugStringW(buffer);
+
+  // גם לקובץ, ולא רק ל-OutputDebugStringW: קריאת הפלט של OutputDebugString
+  // מחייבת DebugView שרץ כמנהל, וזה חיכוך מיותר במדידה חד-פעמית. הדפוס
+  // זהה ל-`_logForceTerminateFailure` שכותב ל-%TEMP%. פתיחה ב-append וסגירה
+  // מיידית בכל שורה — המדידה עשויה לרוץ בזמן כיבוי, ואסור שנתון יישאר
+  // בבאפר שלא נשטף.
+  wchar_t temp_path[MAX_PATH];
+  const DWORD temp_len = GetTempPathW(MAX_PATH, temp_path);
+  if (temp_len == 0 || temp_len > MAX_PATH) {
+    return;
+  }
+  std::wstring log_path(temp_path);
+  log_path += L"otzaria_t09_probe.log";
+
+  const HANDLE file =
+      CreateFileW(log_path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr,
+                  OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return;
+  }
+  const std::string utf8 = Utf8FromUtf16(buffer);
+  DWORD written = 0;
+  WriteFile(file, utf8.data(), static_cast<DWORD>(utf8.size()), &written,
+            nullptr);
+  CloseHandle(file);
 }
 
 // מפעיל/מבטל DWM cloaking: החלון נשאר "מוצג" מבחינת המערכת (WS_VISIBLE,
