@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
@@ -755,8 +756,6 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
         );
         _keyboardColumns = columns;
         final groups = groupToolEntries(entries);
-        var runningIndex = 0;
-
         final theme = Theme.of(context);
         return Focus(
           autofocus: false,
@@ -771,66 +770,109 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
             onAcceptWithDetails: (details) => _dropAtEndOfGroup(details.data),
             builder: (context, _, _) => ScrollConfiguration(
               behavior: const EdgeScrollbarBehavior.right(),
-              child: ListView(
+              child: CustomScrollView(
                 controller: _gridScrollController,
-                // הרווח בימין שמור לפס הגלילה, כדי שלא יעלה על הקוביות.
-                padding: EdgeInsets.only(
-                  right: kToolGridScrollbarGutter,
-                  bottom: bottomInset,
+                slivers: _buildGridSlivers(
+                  groups: groups,
+                  columns: columns,
+                  openToolIds: openToolIds,
+                  bottomInset: bottomInset,
+                  theme: theme,
                 ),
-                children: [
-                  for (var i = 0; i < groups.length; i++) ...[
-                    // קבוצות עוקבות באותה תווית (תוספים לפני/אחרי הכלים המובנים)
-                    // נראות כמקטע אחד — הכותרת והמפריד מוצגים רק במעבר תווית.
-                    if (i > 0 && groups[i].label != groups[i - 1].label)
-                      const Padding(
-                        padding: EdgeInsets.only(
-                          top: AppTokens.spaceMD,
-                          bottom: AppTokens.spaceSM,
-                        ),
-                        child: Divider(height: 1),
-                      ),
-                    if (i == 0 || groups[i].label != groups[i - 1].label)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: AppTokens.spaceSM,
-                          bottom: AppTokens.spaceSM,
-                        ),
-                        child: Text(
-                          groups[i].label,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    GridView.count(
-                      crossAxisCount: columns,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: AppTokens.spaceSM,
-                      crossAxisSpacing: AppTokens.spaceSM,
-                      childAspectRatio: 1.0,
-                      children: [
-                        for (var j = 0; j < groups[i].entries.length; j++)
-                          _buildTile(
-                            group: groups[i].entries,
-                            indexInGroup: j,
-                            flatIndex: runningIndex++,
-                            openToolIds: openToolIds,
-                          ),
-                      ],
-                    ),
-                  ],
-                  SizedBox(key: _gridEndKey, height: 0),
-                  const SizedBox(height: AppTokens.spaceMD),
-                ],
               ),
             ),
           ),
         );
       },
     );
+  }
+
+  List<Widget> _buildGridSlivers({
+    required List<ToolGroup> groups,
+    required int columns,
+    required Set<String> openToolIds,
+    required double bottomInset,
+    required ThemeData theme,
+  }) {
+    final slivers = <Widget>[];
+    var runningIndex = 0;
+    for (var i = 0; i < groups.length; i++) {
+      final group = groups[i];
+      final isNewLabel = i == 0 || group.label != groups[i - 1].label;
+      if (i > 0 && isNewLabel) {
+        slivers.add(
+          const SliverPadding(
+            padding: EdgeInsets.only(
+              top: AppTokens.spaceMD,
+              right: kToolGridScrollbarGutter,
+              bottom: AppTokens.spaceSM,
+            ),
+            sliver: SliverToBoxAdapter(child: Divider(height: 1)),
+          ),
+        );
+      }
+      if (isNewLabel) {
+        slivers.add(
+          SliverPadding(
+            padding: const EdgeInsets.only(
+              top: AppTokens.spaceSM,
+              right: kToolGridScrollbarGutter,
+              bottom: AppTokens.spaceSM,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                group.label,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      final groupStartIndex = runningIndex;
+      runningIndex += group.entries.length;
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.only(right: kToolGridScrollbarGutter),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: AppTokens.spaceSM,
+              crossAxisSpacing: AppTokens.spaceSM,
+              childAspectRatio: 1.0,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _buildTile(
+                group: group.entries,
+                indexInGroup: index,
+                flatIndex: groupStartIndex + index,
+                openToolIds: openToolIds,
+              ),
+              childCount: group.entries.length,
+            ),
+          ),
+        ),
+      );
+    }
+    slivers.add(
+      SliverPadding(
+        padding: EdgeInsets.only(
+          right: kToolGridScrollbarGutter,
+          bottom: bottomInset,
+        ),
+        sliver: SliverToBoxAdapter(
+          child: Column(
+            children: [
+              SizedBox(key: _gridEndKey, height: 0),
+              const SizedBox(height: AppTokens.spaceMD),
+            ],
+          ),
+        ),
+      ),
+    );
+    return slivers;
   }
 
   Widget _buildTile({

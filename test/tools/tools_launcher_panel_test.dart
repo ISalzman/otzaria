@@ -1148,9 +1148,11 @@ void main() {
       tester,
     ) async {
       await pumpPanel(tester);
-      final listView = tester.widget<ListView>(find.byType(ListView));
+      final padding = tester.widget<SliverPadding>(
+        find.byType(SliverPadding).last,
+      );
       expect(
-        listView.padding,
+        padding.padding,
         EdgeInsets.only(
           right: kToolGridScrollbarGutter,
           bottom: AppInputTokens.height(false) + AppTokens.spaceMD,
@@ -1164,7 +1166,9 @@ void main() {
       await pumpPanel(tester, width: _kDefaultPanelContentWidth);
       expect(tester.takeException(), isNull);
 
-      for (final grid in tester.widgetList<GridView>(find.byType(GridView))) {
+      for (final grid in tester.widgetList<SliverGrid>(
+        find.byType(SliverGrid),
+      )) {
         final delegate =
             grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
         expect(delegate.crossAxisCount, 4);
@@ -1187,11 +1191,26 @@ void main() {
       );
     });
 
+    testWidgets('רשת ארוכה בונה רק קוביות באזור הנראה', (tester) async {
+      const pluginCount = 120;
+      await pumpPanel(
+        tester,
+        pluginState: PluginSystemLoaded([
+          for (var i = 0; i < pluginCount; i++)
+            _pluginEntry('com.example.p$i', 'תוסף מספר $i').plugin!,
+        ]),
+      );
+
+      expect(find.byType(ToolTile).evaluate().length, greaterThan(0));
+      expect(
+        find.byType(ToolTile).evaluate().length,
+        lessThan(kBuiltInToolsCatalog.length + pluginCount),
+      );
+    });
+
     testWidgets('פס הגלילה מוצמד לימין בשולחן העבודה', (tester) async {
       await _asDesktop(() async {
         await pumpPanel(tester);
-        // הרשת מכילה גם GridView-ים פנימיים, ולכל אחד נבנה פס משלו — כולם
-        // חייבים לשבת בימין, אחרת פס אחד היה מצטייר על הקוביות.
         final scrollbars = tester.widgetList<Scrollbar>(
           find.byType(Scrollbar),
         );
@@ -1606,13 +1625,11 @@ void main() {
 
     // ── issue #929: שחרור בשטח הריק וגלילת קצה ──────────────────────────────
 
-    /// ה-Scrollable של הרשת החיצונית. ה-GridView-ים הפנימיים בונים Scrollable
-    /// משלהם (מושבת), ולכן חייבים את הראשון ולא את כולם.
     ScrollPosition gridPosition(WidgetTester tester) => tester
         .state<ScrollableState>(
           find
               .descendant(
-                of: find.byType(ListView),
+                of: find.byType(CustomScrollView),
                 matching: find.byType(Scrollable),
               )
               .first,
@@ -1629,7 +1646,7 @@ void main() {
         kind: PointerDeviceKind.mouse,
       );
       await tester.pump(const Duration(milliseconds: 50));
-      final grid = tester.getRect(find.byType(ListView));
+      final grid = tester.getRect(find.byType(CustomScrollView));
       await gesture.moveTo(Offset(grid.center.dx, grid.bottom - 8));
       await tester.pump();
       return gesture;
@@ -1728,7 +1745,7 @@ void main() {
           kind: PointerDeviceKind.mouse,
         );
         await tester.pump(const Duration(milliseconds: 50));
-        final grid = tester.getRect(find.byType(ListView));
+        final grid = tester.getRect(find.byType(CustomScrollView));
         await gesture.moveTo(Offset(grid.center.dx, grid.bottom - 10));
         await tester.pump();
         for (var i = 0; i < 10; i++) {
@@ -1757,9 +1774,7 @@ void main() {
         position.jumpTo(200);
         await tester.pump();
 
-        final grid = tester.getRect(find.byType(ListView));
-        // הרשת בונה גם קוביות שמעל ה-viewport, ולכן הקובייה נבחרת לפי מיקומה
-        // בפועל: גרירה אל הקצה מקובייה סמוכה קצרה מסף ה-slop ואינה מזוהה.
+        final grid = tester.getRect(find.byType(CustomScrollView));
         final tiles = find.byType(ToolTile);
         final index = List.generate(tiles.evaluate().length, (i) => i)
             .firstWhere(
