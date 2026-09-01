@@ -215,6 +215,18 @@ void main() {
     expect(layout.printBackgrounds, isTrue);
   });
 
+  test('pageSize כמפה — מידות חופשיות במ"מ, למסמכים בגודל לא סטנדרטי', () async {
+    await adapter.execute('ui', 'exportPdf', {
+      'pageSize': {'widthMm': 210.02, 'heightMm': 297.03},
+      'marginMm': 0,
+    });
+
+    final layout = capturedLayouts.single!;
+    expect(layout.pageWidthMm, 210.02);
+    expect(layout.pageHeightMm, 297.03);
+    expect(layout.marginsMm!.top, 0);
+  });
+
   test('marginMm כמפה לפי צד; צד חסר הוא אפס', () async {
     await adapter.execute('ui', 'exportPdf', {
       'marginMm': {'top': 20, 'bottom': 15.5},
@@ -232,6 +244,16 @@ void main() {
   test('ערכי עימוד פסולים נדחים בלי לפתוח דיאלוג', () async {
     for (final args in [
       {'pageSize': 'a3'},
+      {'pageSize': 42},
+      {
+        'pageSize': {'widthMm': 210},
+      },
+      {
+        'pageSize': {'widthMm': 0, 'heightMm': 297},
+      },
+      {
+        'pageSize': {'widthMm': 210, 'heightMm': 99999},
+      },
       {'orientation': 'diagonal'},
       {'marginMm': -1},
       {'marginMm': 500},

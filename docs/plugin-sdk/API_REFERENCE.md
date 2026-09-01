@@ -2367,10 +2367,26 @@ const res = await Otzaria.call('ui.print', {
 **הנתיב המלא אינו מוחזר** — התוסף אינו מקבל גישה למה שנשמר; רק שם הקובץ.
 מ-`fileName` נלקח שם מוצע לדיאלוג בלבד (מפרידי נתיב מוסרים ממנו).
 
+**פרמטרי עימוד (אופציונליים):** שדה שלא סופק משאיר את ברירת המחדל של מנוע
+ההדפסה של ה-WebView.
+
+| שדה | ערך |
+|---|---|
+| `pageSize` | שם קבוע — `'a4'` / `'a5'` / `'letter'` / `'legal'` — או מפה `{ widthMm, heightMm }` למידות חופשיות (10–5080 מ"מ לכל מידה) |
+| `orientation` | `'portrait'` או `'landscape'` |
+| `marginMm` | מספר אחיד או מפה `{ top, right, bottom, left }`; 0–100 מ"מ, צד חסר במפה הוא 0 |
+| `printBackgrounds` | האם להדפיס רקעים של CSS (בוליאני) |
+
+ערך פסול מוחזר ב-`error.invalid_params` בלי לפתוח דיאלוג.
+
 ```javascript
 const res = await Otzaria.call('ui.exportPdf', {
   fileName: 'שני טורים',  // אופציונלי; שם מוצע בדיאלוג
-  title: 'ייצוא ל-PDF'    // אופציונלי; כותרת הדיאלוג
+  title: 'ייצוא ל-PDF',   // אופציונלי; כותרת הדיאלוג
+  pageSize: { widthMm: 210, heightMm: 297 },  // או 'a4'
+  orientation: 'portrait',
+  marginMm: 0,
+  printBackgrounds: true
 });
 // { saved: true, name: 'שני טורים.pdf' }
 ```

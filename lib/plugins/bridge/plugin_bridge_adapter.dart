@@ -3416,14 +3416,21 @@ class PluginBridgeAdapter {
     'legal': (215.9, 355.6),
   };
 
-  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize`, `orientation`,
-  /// `marginMm` (מספר או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
+  /// גבולות שפיות למידות דף חופשיות ב-`pageSize` (מ"מ). התחתון מתחת ל-0.5
+  /// אינץ' (12.7 מ"מ) והעליון מעל 200 אינץ' — מסמכי DOCX חוקיים לא ייחסמו,
+  /// ורק תשובה שאינה מידה (אפס, שלילי, אלפי מ"מ) נדחית.
+  static const _minPageMm = 10.0;
+  static const _maxPageMm = 5080.0;
+
+  /// מפרש את ארגומנטי העימוד של `ui.exportPdf`: `pageSize` (שם קבוע או מפה
+  /// `{widthMm, heightMm}` למידות חופשיות), `orientation`, `marginMm` (מספר
+  /// או מפה לפי צד) ו-`printBackgrounds`. null כשלא סופק דבר.
   PluginPdfLayout? _parsePdfLayout(Map<String, dynamic> args) {
-    final sizeName = (args['pageSize'] as String?)?.trim().toLowerCase();
+    final sizeArg = args['pageSize'];
     final orientation = (args['orientation'] as String?)?.trim().toLowerCase();
     final margin = args['marginMm'];
     final backgrounds = args['printBackgrounds'];
-    if (sizeName == null &&
+    if (sizeArg == null &&
         orientation == null &&
         margin == null &&
         backgrounds == null) {
@@ -3431,14 +3438,33 @@ class PluginBridgeAdapter {
     }
 
     (double, double)? size;
-    if (sizeName != null) {
-      size = _pdfPageSizesMm[sizeName];
+    if (sizeArg is String) {
+      size = _pdfPageSizesMm[sizeArg.trim().toLowerCase()];
       if (size == null) {
         throw Exception(
           'error.invalid_params: unknown pageSize (supported: '
-          '${_pdfPageSizesMm.keys.join(', ')})',
+          '${_pdfPageSizesMm.keys.join(', ')}, or {widthMm, heightMm})',
         );
       }
+    } else if (sizeArg is Map) {
+      double dimMm(Object? v, String name) {
+        if (v is! num || v.isNaN || v < _minPageMm || v > _maxPageMm) {
+          throw Exception(
+            'error.invalid_params: $name must be $_minPageMm-$_maxPageMm (mm)',
+          );
+        }
+        return v.toDouble();
+      }
+
+      size = (
+        dimMm(sizeArg['widthMm'], 'pageSize.widthMm'),
+        dimMm(sizeArg['heightMm'], 'pageSize.heightMm'),
+      );
+    } else if (sizeArg != null) {
+      throw Exception(
+        'error.invalid_params: pageSize must be a preset name or a '
+        '{widthMm, heightMm} map',
+      );
     }
 
     bool? landscape;
