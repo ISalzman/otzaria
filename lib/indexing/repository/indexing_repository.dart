@@ -232,6 +232,16 @@ class IndexingRepository {
     return _tantivyDataProvider.requiresManualReindex;
   }
 
+  /// האם קיימים ספרים בני-אינדוקס שאינם באינדקס. השוואה בזיכרון מול
+  /// הרשימה שנקראה מהאינדקס עצמו - זולה מספיק לרוץ בכל עלייה.
+  Future<bool> hasUnindexedBooks(Library library) async {
+    await _tantivyDataProvider.engine;
+    return library
+        .getAllBooks()
+        .where(isIndexableBook)
+        .any((book) => !isBookIndexed(book));
+  }
+
   /// Indexes all books in the provided library.
   ///
   /// [library] The library containing books to index

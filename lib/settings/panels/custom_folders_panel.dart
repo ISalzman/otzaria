@@ -9,6 +9,8 @@ import 'dart:io';
 
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -232,12 +234,61 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     }
   }
 
+  /// קובע אם התיקייה תמוזג לעץ הספרייה. `null` = לפי ההגדרה הגלובלית.
+  void _setMergeMode(CustomFolder folder, bool? value) {
+    if (folder.mergeIntoLibrary == value) return;
+    context.read<CustomFoldersBloc>().add(SetFolderMergeMode(folder, value));
+  }
+
   /// תפריט אפשרויות לתיקייה — פתיחה במנהל הקבצים, העתקת נתיב והסרה.
   Future<void> _showFolderMenu(
     BuildContext anchorContext,
     CustomFolder folder,
   ) async {
+    // נקרא בפתיחת התפריט ולא ב-build, כדי לשקף את המתג הגלובלי העדכני בלי
+    // לקשור את הפאנל ל-SettingsBloc.
+    final mergeDefault =
+        Settings.getValue<bool>(
+          SettingsRepository.keyMergeUserBooksIntoLibrary,
+          defaultValue: false,
+        ) ??
+        false;
+    final merge = folder.mergeIntoLibrary;
+    AppMenuEntry<_FolderMenuAction> mergeEntry(
+      _FolderMenuAction value,
+      String label,
+      bool isSelected,
+    ) {
+      return AppMenuEntry(
+        value: value,
+        label: label,
+        reserveTrailingGap: true,
+        trailing: isSelected
+            ? const Icon(FluentIcons.checkmark_24_regular, size: 16)
+            : null,
+      );
+    }
+
     final entries = <AppMenuEntry<_FolderMenuAction>>[
+      mergeEntry(
+        _FolderMenuAction.mergeDefault,
+        mergeDefault
+            ? context.settingsText('מיזוג לעץ הספרייה — כברירת המחדל (ממוזג)')
+            : context.settingsText(
+                'מיזוג לעץ הספרייה — כברירת המחדל (לא ממוזג)',
+              ),
+        merge == null,
+      ),
+      mergeEntry(
+        _FolderMenuAction.mergeAlways,
+        context.settingsText('תמיד למזג לעץ הספרייה'),
+        merge == true,
+      ),
+      mergeEntry(
+        _FolderMenuAction.mergeNever,
+        context.settingsText('להציג תחת "ספרים אישיים"'),
+        merge == false,
+      ),
       AppMenuEntry(
         value: _FolderMenuAction.openFolder,
         label: context.settingsText('פתח תיקייה'),
@@ -270,6 +321,12 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     if (selected == null || !mounted) return;
 
     switch (selected) {
+      case _FolderMenuAction.mergeDefault:
+        _setMergeMode(folder, null);
+      case _FolderMenuAction.mergeAlways:
+        _setMergeMode(folder, true);
+      case _FolderMenuAction.mergeNever:
+        _setMergeMode(folder, false);
       case _FolderMenuAction.openFolder:
         _openInFileManager(folder.path);
       case _FolderMenuAction.copyPath:
@@ -368,10 +425,20 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
     // קובץ שאינו טקסט נקרא תמיד מהדיסק — אין משמעות ל"עותק עצמאי".
     final binaryOnly = kind == _FolderContentKind.binaryOnly;
 
+    // תיקייה שנקבעה לה חריגה מתנהגת אחרת מהמתג הגלובלי — בלי סימון בשורה
+    // ההבדל אינו נראה בלי לפתוח את התפריט.
+    final mergeBadge = switch (folder.mergeIntoLibrary) {
+      true => context.settingsText('ממוזגת'),
+      false => context.settingsText('לא ממוזגת'),
+      null => null,
+    };
+
     return SettingsActionTile.path(
       icon: FluentIcons.folder_24_filled,
       iconColor: cs.primary,
-      title: folder.name,
+      title: mergeBadge == null
+          ? folder.name
+          : '${folder.name}  •  $mergeBadge',
       path: folder.path,
       placeholder: '',
       // הכפתור נשאר צמוד לטקסט תמיד — בניגוד ל-actions, לא גולש למטה במסך צר.
@@ -546,7 +613,14 @@ class _CustomFoldersPanelState extends State<CustomFoldersPanel> {
   }
 }
 
-enum _FolderMenuAction { openFolder, copyPath, remove }
+enum _FolderMenuAction {
+  mergeDefault,
+  mergeAlways,
+  mergeNever,
+  openFolder,
+  copyPath,
+  remove,
+}
 
 /// ייבוא ידני של דורות וקישורים מקבצי CSV/JSON שהמשתמש בוחר, ומחיקת כל
 /// המיובא. הייבוא קבוע (לא תלוי בנוכחות הקבצים) ומצטבר בדריסה.

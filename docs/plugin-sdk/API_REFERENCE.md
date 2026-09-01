@@ -728,7 +728,8 @@ const { data } = await Otzaria.call('library.refreshUserBooks');
 
 > 💡 **התחילו מ-`getLinkTargetsSummary`.** הוא מחזיר את כל ספרי היעד של הספר
 > בקריאה אחת וזולה, כולל `maxSourceLine` — ומאפשר לבחור אילו יעדים לבקש
-> ב-`getLinks`/`getRawLinks` (`targetTitles`) במקום לסרוק את כל הקישורים.
+> ב-`getLinks`/`getRawLinks` (`targetTitles`/`targetTitlePrefixes`) במקום
+> לסרוק את כל הקישורים.
 
 **`getLinks` או `getRawLinks`?** שתיהן בוחרות בדיוק את אותם קישורים ונבדלות
 רק בצורת הפלט. `getLinks` היא ברירת המחדל לכל שימוש תכנותי: 0-based כמו שאר
@@ -748,6 +749,9 @@ const { data } = await Otzaria.call('library.refreshUserBooks');
   טווח שורות. בקריאה זו `isRare` תמיד `false` — הנדירות מוגדרת ביחס לספר כולו.
 - `grouped: true` — במקום `commentators` מוחזר `groups`, המפרשים מקובצים לפי
   דורות באותו סדר שבו הממשק מציג אותם. קבוצות ריקות מושמטות.
+- `titlePrefixes` — סינון למפרשים ששמם פותח באחת התחיליות. שימושי לבחירת
+  ספרי הערות/הגהות בלבד (למשל `['הערות ', 'הגהות ', 'נוסחאות ']`) — במסד אין
+  סיווג "הערות" נפרד; ההבחנה היא לפי שם ספר היעד, והתוסף קובע את הרשימה.
 
 ```javascript
 const { data } = await Otzaria.call('library.getCommentators', {
@@ -779,6 +783,9 @@ const { data } = await Otzaria.call('library.getCommentators', {
 - `connectionTypes` — סינון לפי סוג חיבור (`"COMMENTARY"`, `"TARGUM"`,
   `"REFERENCE"` …). ההשוואה אינה תלוית רישיות.
 - `targetTitles` — סינון לספרי יעד מסוימים.
+- `targetTitlePrefixes` — סינון לספרי יעד ששמם פותח באחת התחיליות. כשהוא
+  ניתן יחד עם `targetTitles`, קישור עובר אם כותרת היעד מופיעה ברשימה **או**
+  פותחת באחת התחיליות (איחוד).
 - `includeAnchors` — כשהוא `true`, קישור בעל עוגן-מילה מקבל שדה `anchor`.
 
 ```javascript
@@ -788,6 +795,7 @@ const { data } = await Otzaria.call('library.getLinks', {
   endLine: 40,
   connectionTypes: ['COMMENTARY'],  // אופציונלי
   targetTitles: ['רש״י על בראשית'], // אופציונלי
+  targetTitlePrefixes: ['הערות '],  // אופציונלי — איחוד עם targetTitles
   includeAnchors: false             // אופציונלי, ברירת מחדל: false
 });
 // {
@@ -835,7 +843,8 @@ const { data } = await Otzaria.call('library.getLinks', {
 - `startLine`/`endLine` — אופציונליים, אך **חובה יחד** (0-based, כולל), כמו
   ב-`getCommentators`. בלעדיהם נסרקות 1000 השורות הראשונות. חלון גדול מ-**1000
   שורות** מוחזר כ-`error.invalid_params`. הטווח שנסרק בפועל חוזר בתשובה.
-- `targetTitles` / `connectionTypes` — סינון זהה לזה של `getLinks`.
+- `targetTitles` / `targetTitlePrefixes` / `connectionTypes` — סינון זהה לזה
+  של `getLinks`.
 - התשובה נחתכת אחרי **10,000** קישורים ומסומנת `truncated: true`.
 
 הפלט נושא בדיוק את המפתחות שהפורמט מגדיר. `targetCategoryId`, `isCommentary`,
@@ -903,9 +912,14 @@ while (line <= summary.maxSourceLine) {
 `maxSourceLine` הוא השורה הגבוהה ביותר שיש עליה קישור (0-based), או `-1`
 כשאין לספר קישורים כלל.
 
+- `targetTitles` / `targetTitlePrefixes` — סינון רשימת `targets` באותה
+  סמנטיקת איחוד של `getLinks`. `maxSourceLine` נשאר של הספר כולו, בלי קשר
+  לסינון.
+
 ```javascript
 const { data } = await Otzaria.call('library.getLinkTargetsSummary', {
-  bookId: 'בראשית'
+  bookId: 'בראשית',
+  targetTitlePrefixes: ['הערות ', 'הגהות ']  // אופציונלי
 });
 // {
 //   maxSourceLine: 1533,
