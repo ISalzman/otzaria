@@ -6,6 +6,8 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
@@ -2146,20 +2148,27 @@ Future<void> _pumpTitleBar(
   HistoryBloc? historyBloc,
 }) async {
   await tester.pumpWidget(
-    MultiBlocProvider(
-      providers: [
-        BlocProvider<TabsBloc>.value(value: tabsBloc),
-        BlocProvider<NavigationBloc>.value(value: navigationBloc),
-        BlocProvider<SettingsBloc>.value(value: settingsBloc),
-        if (historyBloc != null)
-          BlocProvider<HistoryBloc>.value(value: historyBloc),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 900,
-            child: CustomTitleBar(
-              onReadingSettingsPressed: () {},
+    // CustomTitleBar שולף את החלון מ-[AppWindowScope] (maximize בלחיצה
+    // כפולה, מזעור, סגירה, גרירת החלון). הבקר האמיתי מנתב לאותו
+    // MethodChannel שממוקם בבדיקה, ולכן ההנחות הקיימות נשארות בתוקף.
+    AppWindowScope(
+      controller: const WindowManagerAppWindowController(),
+      geometry: const WindowManagerAppWindowController(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<TabsBloc>.value(value: tabsBloc),
+          BlocProvider<NavigationBloc>.value(value: navigationBloc),
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          if (historyBloc != null)
+            BlocProvider<HistoryBloc>.value(value: historyBloc),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 900,
+              child: CustomTitleBar(
+                onReadingSettingsPressed: () {},
+              ),
             ),
           ),
         ),

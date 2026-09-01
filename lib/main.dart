@@ -117,6 +117,10 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 const int _latestReleasedBuildNumber = 90960;
 
 // Global reference to window listener for cleanup
+/// החלון היחיד של התהליך. מקור אמת אחד לכל מי שצריך אותו כאן: ה-listener,
+/// [WindowPersistence] ו-[AppWindowScope] מקבלים את אותו מופע.
+const _appWindow = WindowManagerAppWindowController();
+
 AppWindowListener? _appWindowListener;
 const ExternalActivationQueue _externalActivationQueue =
     ExternalActivationQueue();
@@ -468,10 +472,19 @@ Future<void> _runAppBootstrap() async {
 
   // הגדרת window_manager לפני runApp.
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    // נשאר על ה-singleton: אתחול ה-backend קודם לקיומו של כל חלון.
     await windowManager.ensureInitialized();
     WindowPersistence.splashMode = true;
+    // WindowPersistence היא static ואין לה BuildContext — היא מקבלת את
+    // אותו מופע שנכנס ל-AppWindowScope, כדי שיהיה מקור אמת אחד.
+    WindowPersistence.bindWindow(
+      controller: _appWindow,
+      geometry: _appWindow,
+    );
 
-    _appWindowListener = AppWindowListener();
+    _appWindowListener = AppWindowListener(window: _appWindow);
+    // TODO(T-1.3): רישום listener ו-setPreventClose הם מצב פר-חלון שמנוהל
+    // ב-AppWindowRegistry, שטרם קיים.
     windowManager.addListener(_appWindowListener!);
     await windowManager.setPreventClose(true);
 
@@ -482,11 +495,10 @@ Future<void> _runAppBootstrap() async {
   // ה-scope עוטף את כל העץ כדי שכל widget יוכל להגיע לחלון שהוא יושב בו
   // בלי לפנות ל-singleton גלובלי. היום יש חלון אחד, ולכן הבקר הוא של
   // החלון הראשי; ריבוי חלונות יזריק כאן בקר אחר לכל עץ.
-  const appWindow = WindowManagerAppWindowController();
   runApp(
     AppWindowScope(
-      controller: appWindow,
-      geometry: appWindow,
+      controller: _appWindow,
+      geometry: _appWindow,
       child: SentryWidget(
         child: RestartWidget(
           child: const AppBootstrap(),
@@ -523,15 +535,15 @@ Future<void> presentMainWindow() async {
   try {
     // show/maximize זורקים את ה-swapchain (חלון שקוף עד פריים חדש) — תחת cloak
     // זה בלתי-נראה; החשיפה היא ביטול ה-cloak הנייטיבי ב-flutter_window.cpp.
-    if (!kIsWeb && Platform.isWindows && !await windowManager.isVisible()) {
+    if (!kIsWeb && Platform.isWindows && !await _appWindow.isVisible()) {
       try {
         await _splashChannel.invokeMethod<void>('cloak');
       } catch (_) {
         // לא קריטי — בלי cloak נשארת ההתנהגות הקודמת (חשיפה לא-אטומית).
       }
     }
-    await windowManager.show();
-    await windowManager.focus();
+    await _appWindow.show();
+    await _appWindow.focus();
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
     // חייב אחרי show (setFullScreen על חלון מוסתר מאבד WS_VISIBLE) ואחרי
@@ -588,11 +600,11 @@ Future<void> _initializeProcessSingletons() async {
       // כל התוכן שכבר צויר. כשזה רץ ברגע החשיפה, show() הציג חלון ריק לשבריר
       // שנייה עד שפריים חדש הספיק להתרסטר. כאן השינוי קורה לפני שפריים התוכן
       // הראשון מצויר בכלל — והוא נצבע ישר במסגרת ובגודל הסופיים.
-      await windowManager.setMinimumSize(WindowPersistence.minSize);
+      await _appWindow.setMinimumSize(WindowPersistence.minSize);
       // windowButtonVisibility ברירת מחדל true — חובה false מפורש כדי להסתיר
       // את כפתורי המערכת של macOS (traffic lights) שאחרת יופיעו כפול לצד
       // הכפתורים המותאמים.
-      await windowManager.setTitleBarStyle(
+      await _appWindow.setTitleBarStyle(
         TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );

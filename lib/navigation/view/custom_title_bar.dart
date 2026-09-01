@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -183,11 +184,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
   /// maximize/restore בלחיצה כפולה על האזור הריק שבשורת הטאבים (כמו DragToMoveArea).
   Future<void> _onTabsAreaDoubleTap() async {
-    final isMaximized = await windowManager.isMaximized();
+    final window = AppWindowScope.controllerOf(context);
+    final isMaximized = await window.isMaximized();
     if (isMaximized) {
-      await windowManager.unmaximize();
+      await window.unmaximize();
     } else {
-      await windowManager.maximize();
+      await window.maximize();
     }
   }
 
@@ -290,11 +292,15 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                     tooltip: 'מזער',
                                     icon: FluentIcons.subtract_24_regular,
                                     onPressed: () async {
+                                      // נלקח לפני ה-await: אחריו ה-context
+                                      // עלול כבר לא להיות מותקן.
+                                      final window =
+                                          AppWindowScope.controllerOf(context);
                                       await FullscreenHelper.toggleFullscreen(
                                         context,
                                         false,
                                       );
-                                      await windowManager.minimize();
+                                      await window.minimize();
                                     },
                                   ),
                                 if (settingsState.isFullscreen)
@@ -302,7 +308,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                     brightness: Theme.of(context).brightness,
                                     tooltip: 'סגור',
                                     icon: FluentIcons.dismiss_24_regular,
-                                    onPressed: () => windowManager.close(),
+                                    // סגירה מנומסת — עוברת דרך ה-handshake
+                                    // של onWindowClose ולא הורגת מיד.
+                                    onPressed: () =>
+                                        AppWindowScope.controllerOf(
+                                          context,
+                                        ).close(),
                                   ),
                                 if (!settingsState.isFullscreen)
                                   SizedBox(
@@ -615,7 +626,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         // גרירה על טאב מסדרת אותו (reorder); רק גרירה על האזור הריק גוררת חלון.
         onPanStart: (details) {
           if (_hitTestTab(context, details.globalPosition)) return;
-          windowManager.startDragging();
+          // ⚠️ ב-Windows זהו no-op במסך מלא — `window_manager.startDragging`
+          // יוצא מוקדם כש-`isFullScreen()` מחזיר true. גרירת החלון מסרגל
+          // הכותרת פשוט לא תקרה שם, וזו התנהגות הספרייה ולא באג כאן.
+          AppWindowScope.controllerOf(context).startDragging();
         },
         child: RawGestureDetector(
           behavior: HitTestBehavior.translucent,

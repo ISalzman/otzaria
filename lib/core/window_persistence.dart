@@ -3,9 +3,10 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/windowing/app_window_controller.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:screen_retriever/screen_retriever.dart';
-import 'package:window_manager/window_manager.dart';
 
 class WindowPersistence {
   static const _kLeft = 'window_bounds_left';
@@ -46,6 +47,25 @@ class WindowPersistence {
   /// "שפיות" בשחזור (שפגע בחלונות קטנים חוקיים כמו 500x420).
   static bool _splashMode = false;
   static set splashMode(bool value) => _splashMode = value;
+
+  /// החלון שהמחלקה פועלת עליו.
+  ///
+  /// [WindowPersistence] היא מחלקה `static` ואין לה `BuildContext`, ולכן
+  /// החלון מוזרק פעם אחת מ-`main` במקום לעבור כפרמטר לכל מתודה. ברירת
+  /// המחדל היא החלון הראשי, כדי שקריאה מוקדמת ומהבדיקות תמשיך לעבוד בלי
+  /// הזרקה.
+  static AppWindowController _window = const WindowManagerAppWindowController();
+  static AppWindowGeometry _geometry = const WindowManagerAppWindowController();
+
+  /// קושר את המחלקה לחלון. נקרא פעם אחת מ-`main`, עם אותו מופע שנכנס
+  /// ל-[AppWindowScope] — כדי שיהיה מקור אמת אחד.
+  static void bindWindow({
+    required AppWindowController controller,
+    required AppWindowGeometry geometry,
+  }) {
+    _window = controller;
+    _geometry = geometry;
+  }
 
   static bool get isRestoring => _isRestoring;
 
@@ -118,20 +138,20 @@ class WindowPersistence {
       final currentDpr = _currentDevicePixelRatio();
       if (physicalBounds == null) {
         // אין גבולות שמורים (הפעלה ראשונה) — גודל ברירת מחדל ממורכז.
-        await windowManager.setSize(const Size(1280, 720));
-        await windowManager.center();
+        await _geometry.setSize(const Size(1280, 720));
+        await _window.center();
       } else if (await _isReachableOnConnectedDisplay(physicalBounds)) {
         // הגבולות כבר עברו clamp ל-minSize (420x400) ב-restoreIfAny, וגודל
         // ה-splash לעולם לא נשמר (splashMode) — לכן מכבדים כל גודל חוקי שנשמר,
         // כולל חלונות קטנים שהמשתמש בחר במכוון.
-        await windowManager.setBounds(
+        await _geometry.setBounds(
           _scaleRect(physicalBounds, 1 / currentDpr),
         );
       } else {
         // גבולות מחוץ לכל מסך (מסך שנותק, עיוות DPI בין מסכים) — החלון היה
         // נפתח "בלתי-נראה". משמרים את הגודל וממרכזים על מסך חי.
-        await windowManager.setSize(physicalBounds.size / currentDpr);
-        await windowManager.center();
+        await _geometry.setSize(physicalBounds.size / currentDpr);
+        await _window.center();
       }
     } catch (_) {
       // Ignore; window stays at its current bounds.
@@ -215,7 +235,7 @@ class WindowPersistence {
     _pendingMaximize = false;
     _isRestoring = true;
     try {
-      await windowManager.maximize();
+      await _window.maximize();
     } catch (_) {
       // Ignore; window stays at the restored bounds.
     } finally {
@@ -238,13 +258,13 @@ class WindowPersistence {
       // עדיף חלון רגיל גלוי ממסך מלא שייעלם ביציאה ממנו.
       var visible = false;
       for (var i = 0; i < 50 && !visible; i++) {
-        visible = await windowManager.isVisible();
+        visible = await _window.isVisible();
         if (!visible) {
           await Future<void>.delayed(const Duration(milliseconds: 16));
         }
       }
       if (visible) {
-        await windowManager.setFullScreen(true);
+        await _geometry.setFullScreen(true);
       }
     } catch (_) {
       // Ignore; window stays at the restored bounds.
@@ -278,10 +298,10 @@ class WindowPersistence {
   static Future<void> _saveNow() async {
     // חלון ממוזער "חונה" ב-(-32000,-32000) ו-isMaximized מחזיר בו false —
     // שמירה במצב הזה מרעילה גם את הגבולות וגם את דגל המיקסום. לא שומרים.
-    if (await windowManager.isMinimized()) return;
+    if (await _window.isMinimized()) return;
 
-    final isFullscreen = await windowManager.isFullScreen();
-    final isMaximized = await windowManager.isMaximized();
+    final isFullscreen = await _window.isFullScreen();
+    final isMaximized = await _window.isMaximized();
     await Settings.setValue(_kIsMaximized, isMaximized);
 
     // When fullscreen or maximized, don't overwrite the last "normal" bounds.
@@ -290,7 +310,7 @@ class WindowPersistence {
     // (setBounds to full-screen rect, then maximize).
     if (isFullscreen || isMaximized) return;
 
-    final bounds = await windowManager.getBounds();
+    final bounds = await _geometry.getBounds();
     await Settings.setValue(_kLeft, bounds.left);
     await Settings.setValue(_kTop, bounds.top);
     await Settings.setValue(_kWidth, bounds.width);

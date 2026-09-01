@@ -6,7 +6,9 @@ import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:otzaria/core/pre_close_registry.dart';
 import 'package:otzaria/core/window_persistence.dart';
+import 'package:otzaria/core/windowing/app_window_controller.dart';
 import 'package:otzaria/core/windowing/app_window_id.dart';
+import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/core/windowing/last_active_window.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
@@ -21,7 +23,14 @@ typedef FullscreenCallback = void Function(bool isFullscreen);
 
 /// Window listener that handles window events properly to prevent crashes
 class AppWindowListener extends WindowListener {
-  AppWindowListener({this.windowId = AppWindowId.primary});
+  AppWindowListener({
+    this.windowId = AppWindowId.primary,
+    AppWindowController? window,
+  }) : _window = window ?? const WindowManagerAppWindowController();
+
+  /// החלון שה-listener סוגר. מוזרק ולא נשלף מעץ ה-widgets: הסגירה רצה
+  /// כשהעץ כבר מתפרק.
+  final AppWindowController _window;
 
   static const MethodChannel _processControlChannel = MethodChannel(
     'otzaria/process_control',
@@ -297,9 +306,11 @@ class AppWindowListener extends WindowListener {
           exit(0);
         }
 
+        // TODO(T-1.3): setPreventClose הוא מצב פר-חלון שמנוהל ב-
+        // AppWindowRegistry, שטרם קיים.
         await windowManager.setPreventClose(false);
         // סגירה רגילה דרך ה-WindowManager
-        await windowManager.destroy();
+        await _window.destroy();
       }
     } catch (e) {
       if (kDebugMode) {
@@ -421,6 +432,7 @@ class AppWindowListener extends WindowListener {
     // Remove this listener from window manager
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // TODO(T-1.3): ביטול רישום listener שייך ל-AppWindowRegistry.
       windowManager.removeListener(this);
     }
   }
