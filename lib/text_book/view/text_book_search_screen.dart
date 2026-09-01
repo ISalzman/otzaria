@@ -94,6 +94,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     with AutomaticKeepAliveClientMixin<TextBookSearchView> {
   TextEditingController searchTextController = TextEditingController();
   List<TextSearchResult> searchResults = [];
+  bool _resultsTruncated = false;
   late ItemScrollController scrollControler;
   bool _isSearching = false;
 
@@ -430,16 +431,18 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         return;
       }
 
+      var truncated = false;
       final effectiveResults = widget.simpleSearchRunner != null
           ? await widget.simpleSearchRunner!(content, query)
           : await searchInContent(
               content: content,
               query: query,
               wholeWord: _wholeWord,
+              onTruncated: (t) => truncated = t,
             );
 
       if (mounted && requestId == _activeSearchRequestId) {
-        _applySearchResults(effectiveResults);
+        _applySearchResults(effectiveResults, truncated: truncated);
       }
       return;
     }
@@ -510,6 +513,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
         });
 
       final results = sorted.take(displayLimit).toList(growable: false);
+      final truncated = sorted.length > displayLimit;
 
       debugPrint(
         '📚 TextBookSearch: rawResults=${rawResults.length}, '
@@ -517,7 +521,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
       );
 
       if (mounted && requestId == _activeSearchRequestId) {
-        _applySearchResults(_convertSearchResults(results));
+        _applySearchResults(
+          _convertSearchResults(results),
+          truncated: truncated,
+        );
         // מספרי השורות מהמנוע הם הבסיס לגלילה ולהדגשה — דריפט תוכן מחטיא
         // בשקט, ולכן מוצגת אזהרה לא-חוסמת לצד התוצאות.
         final state = context.read<TextBookBloc>().state;
@@ -541,7 +548,10 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     }
   }
 
-  void _applySearchResults(List<TextSearchResult> results) {
+  void _applySearchResults(
+    List<TextSearchResult> results, {
+    bool truncated = false,
+  }) {
     // השורות שהתקבלו הן מקור האמת להדגשה במדיניות התאמה שאינה ברירת המחדל:
     // האפליקציה אינה מנחשת מה המנוע היה מחזיר (ראו TextBookLoaded).
     context.read<TextBookBloc>().add(
@@ -591,6 +601,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
 
     setState(() {
       searchResults = results;
+      _resultsTruncated = truncated;
       _isSearching = false;
       _selectedSearchResultIndex = selectedIndex;
       _selectedResultLine = selectedIndex != null
@@ -834,7 +845,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           ? _buildSearchResultNavigationBar()
           : null,
       resultCountString: searchResults.isNotEmpty
-          ? 'נמצאו ${searchResults.length} תוצאות'
+          ? (_resultsTruncated
+                ? 'מוצגות ${searchResults.length} התוצאות הראשונות'
+                : 'נמצאו ${searchResults.length} תוצאות')
           : null,
       // כשתבנית ההדגשה מבוססת-האינדקס מגיעה (אסינכרונית), ה-snippets מחושבים
       // מחדש כדי לכלול את הווריאנטים שה-fallback החמיץ.

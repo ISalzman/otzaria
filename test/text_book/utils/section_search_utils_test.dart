@@ -399,6 +399,75 @@ void main() {
     });
   });
 
+  group('searchInContent - תקרת התוצאות (issue #1053)', () {
+    test('מעל התקרה — מוחזרות 1000 ו-onTruncated מדווח true', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(1005, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(
+        truncated,
+        isTrue,
+        reason: 'החיפוש נעצר לפני סוף הספר — המסך חייב לדעת',
+      );
+    });
+
+    test('מתחת לתקרה — onTruncated מדווח false', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(5, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 5);
+      expect(truncated, isFalse);
+    });
+
+    test('בדיוק על התקרה — כל ההופעות נמצאו, לא מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: List.filled(1000, 'שמע ישראל'),
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isFalse);
+    });
+
+    test('בדיוק על התקרה ואחריה שורות בלי התאמות — לא מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: [...List.filled(1000, 'שמע ישראל'), 'שורה ללא התאמה'],
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isFalse);
+    });
+
+    test('הופעות עודפות באותה שורה אחרונה — מסומן כחתוך', () async {
+      bool? truncated;
+      final results = await searchInContent(
+        content: [
+          ...List.filled(999, 'שמע ישראל'),
+          'שמע ואחר כך שמע ושוב שמע',
+        ],
+        query: 'שמע',
+        patternSource: literalPatternSource('שמע'),
+        onTruncated: (t) => truncated = t,
+      );
+      expect(results.length, 1000);
+      expect(truncated, isTrue);
+    });
+  });
+
   group('matchFractionInLine', () {
     test('מילה בתחילת השורה — שבר 0', () {
       expect(
