@@ -16,24 +16,22 @@
 
 namespace {
 
-// ── ספייק T-0.9: האם הודעות סיום הסשן מגיעות אלינו בכלל? ──────────────────
+// ── דיאגנוסטיקה של סיום סשן (כיבוי / יציאת משתמש) ────────────────────────
 //
-// כיבוי/יציאת משתמש הורגים את אוצריא בלי ש-`PreCloseRegistry.runAll()` ירוץ,
-// כי `WM_QUERYENDSESSION` אינו מטופל ו-`DefWindowProc` מחזיר TRUE. לפני
-// שבונים על זה מנגנון flush חוסם — שהוא 🔴 בפני עצמו בגלל ה-message pump
-// שהוא מחייב — צריך לענות על שאלה מקדימה אחת: ההודעה בכלל מגיעה ל-case
-// שלנו, או ש-`flutter_controller_->HandleTopLevelWindowProc` בולע אותה
-// קודם? (`window_manager` מתקין שם top-level proc משלו.)
+// כותבת ל-`%TEMP%\otzaria_session_end.log`. המסלול הזה אינו ניתן לבדיקה
+// אוטומטית — מריצים אותו רק כיבוי אמיתי — ולכן שורת לוג היא האמצעי היחיד
+// לאבחון תלונה עתידית של "הכרטיסיות שלי לא נשמרו בכיבוי". השורות:
 //
-// המדידה כאן היא **קריאה בלבד ואינה משנה התנהגות**: היא רק כותבת ל-
-// OutputDebugStringW בשלוש נקודות ומחזירה את הזרימה כלשונה. הרצה: פותחים
-// DebugView כמנהל, מריצים `shutdown /s /t 60`, קוראים את הפלט ומבטלים
-// ב-`shutdown /a`.
-void LogSessionEndProbe(const wchar_t* stage, UINT message, WPARAM wparam,
-                        LPARAM lparam) {
+//   flush-begin / flush-ok / flush-timeout   מצב השטיפה
+//   session-ending / session-cancelled       מה המערכת החליטה בסוף
+//   swallowed-by-flutter                     גלאי רגרסיה, ראו MessageHandler
+//
+// כותבת גם ל-OutputDebugStringW, לניפוי חי ב-DebugView.
+void LogSessionEndDiagnostic(const wchar_t* stage, UINT message, WPARAM wparam,
+                             LPARAM lparam) {
   wchar_t buffer[200];
   _snwprintf_s(buffer, _TRUNCATE,
-               L"Otzaria[T-0.9] %ls msg=%ls wparam=%llu lparam=0x%llX\n", stage,
+               L"Otzaria[session-end] %ls msg=%ls wparam=%llu lparam=0x%llX\n", stage,
                message == WM_QUERYENDSESSION ? L"WM_QUERYENDSESSION"
                                              : L"WM_ENDSESSION",
                static_cast<unsigned long long>(wparam),
@@ -41,17 +39,19 @@ void LogSessionEndProbe(const wchar_t* stage, UINT message, WPARAM wparam,
   OutputDebugStringW(buffer);
 
   // גם לקובץ, ולא רק ל-OutputDebugStringW: קריאת הפלט של OutputDebugString
-  // מחייבת DebugView שרץ כמנהל, וזה חיכוך מיותר במדידה חד-פעמית. הדפוס
-  // זהה ל-`_logForceTerminateFailure` שכותב ל-%TEMP%. פתיחה ב-append וסגירה
-  // מיידית בכל שורה — המדידה עשויה לרוץ בזמן כיבוי, ואסור שנתון יישאר
-  // בבאפר שלא נשטף.
+  // מחייבת DebugView שרץ כמנהל, ומשתמש שמדווח על תקלה לא יעשה זאת. הדפוס
+  // זהה ל-`_logForceTerminateFailure` שכותב ל-%TEMP%.
+  //
+  // ⚠️ פתיחה וסגירה בכל שורה, ולא handle מתמשך: הקוד הזה רץ בזמן כיבוי,
+  // ובאפר שלא נשטף לפני שהמערכת הורגת אותנו הופך את הלוג לחסר ערך בדיוק
+  // במקרה שבגללו הוא קיים.
   wchar_t temp_path[MAX_PATH];
   const DWORD temp_len = GetTempPathW(MAX_PATH, temp_path);
   if (temp_len == 0 || temp_len > MAX_PATH) {
     return;
   }
   std::wstring log_path(temp_path);
-  log_path += L"otzaria_t09_probe.log";
+  log_path += L"otzaria_session_end.log";
 
   const HANDLE file =
       CreateFileW(log_path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr,
@@ -178,6 +178,10 @@ FlutterWindow::~FlutterWindow() {
     // the job alive until all members are reaped.
     CloseHandle(job_handle_);
     job_handle_ = nullptr;
+  }
+  if (session_end_flush_event_) {
+    CloseHandle(session_end_flush_event_);
+    session_end_flush_event_ = nullptr;
   }
 }
 
@@ -417,22 +421,18 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // ספייק T-0.9 — ראו ההערה מעל LogSessionEndProbe. שלוש הנקודות נדרשות
-  // כדי להבחין בין "ההודעה לא הגיעה כלל" לבין "הגיעה ונבלעה בדרך".
-  const bool is_session_end_probe =
-      message == WM_QUERYENDSESSION || message == WM_ENDSESSION;
-  if (is_session_end_probe) {
-    LogSessionEndProbe(L"arrived", message, wparam, lparam);
-  }
-
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
                                                       lparam);
     if (result) {
-      if (is_session_end_probe) {
-        LogSessionEndProbe(L"swallowed-by-flutter", message, wparam, lparam);
+      // גלאי רגרסיה: היום `window_manager` אינו בולע את הודעות סיום הסשן
+      // (נמדד), ולכן ה-flush שלנו רץ. אם שדרוג של המנוע או של התוסף ישנה
+      // זאת, השטיפה תפסיק לקרות **בשקט** — והשורה הזו תהיה הרמז היחיד.
+      if (message == WM_QUERYENDSESSION || message == WM_ENDSESSION) {
+        LogSessionEndDiagnostic(L"swallowed-by-flutter", message, wparam,
+                                lparam);
       }
       return *result;
     }
@@ -448,25 +448,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_QUERYENDSESSION: {
       // ⚠️ ה-flush חייב לרוץ **כאן**, לפני ההחזרה. החזרת TRUE היא הבטחה
       // מחייבת: מרגע שנתנו אותה המערכת רשאית להרוג אותנו בכל רגע, ולכן
-      // שטיפה מאוחרת ב-WM_ENDSESSION אינה מובטחת לרוץ. אומת במדידה —
-      // ראו LogSessionEndProbe.
-      LogSessionEndProbe(L"flush-begin", message, wparam, lparam);
+      // שטיפה מאוחרת ב-WM_ENDSESSION אינה מובטחת לרוץ. נמדד: לפני השינוי
+      // הזה `DefWindowProc` כבר החזיר TRUE.
+      LogSessionEndDiagnostic(L"flush-begin", message, wparam, lparam);
       const bool flushed = FlushBeforeSessionEnd();
-      LogSessionEndProbe(flushed ? L"flush-ok" : L"flush-timeout", message,
-                         wparam, lparam);
+      LogSessionEndDiagnostic(flushed ? L"flush-ok" : L"flush-timeout", message,
+                              wparam, lparam);
       // תמיד מסכימים לסיום. עיכוב הכיבוי דורש ShutdownBlockReasonCreate,
       // שמציג למשתמש שאנחנו מעכבים — החלטת UX שלא התקבלה.
-      if (is_session_end_probe) {
-        LogSessionEndProbe(L"reached-our-case", message, wparam, lparam);
-      }
       return TRUE;
     }
 
     case WM_ENDSESSION:
-      // wparam=TRUE: הסשן באמת מסתיים ואין מה לעשות מעבר לרישום.
-      // wparam=FALSE: בוטל (למשל `shutdown /a`) — מאפסים את הסימון כדי
-      // שכיבוי עתידי ישטוף מחדש את מה שנכתב בינתיים.
       if (wparam == FALSE) {
+        // בוטל (למשל `shutdown /a`). מאפסים כדי שכיבוי עתידי ישטוף מחדש
+        // את מה שנכתב בינתיים — בלי זה שטיפה אחת מחסנת את כל שאר הסשן.
+        LogSessionEndDiagnostic(L"session-cancelled", message, wparam, lparam);
         if (session_end_flush_event_) {
           ResetEvent(session_end_flush_event_);
         }
@@ -474,12 +471,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
           process_control_channel_->InvokeMethod("sessionEndCancelled",
                                                  nullptr);
         }
+      } else {
+        LogSessionEndDiagnostic(L"session-ending", message, wparam, lparam);
       }
       break;
-  }
-
-  if (is_session_end_probe) {
-    LogSessionEndProbe(L"reached-our-case", message, wparam, lparam);
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
