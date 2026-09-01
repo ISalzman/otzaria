@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -66,11 +67,17 @@ import 'package:otzaria/utils/text/global_search_helper.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
+
 import 'pdf_search_screen.dart';
+
 import 'package:url_launcher/url_launcher.dart';
+
 import 'pdf_outlines_screen.dart';
+
 import 'package:otzaria/widgets/dialogs/password_dialog.dart';
+
 import 'pdf_thumbnails_screen.dart';
+
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
@@ -82,7 +89,9 @@ import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/utils/plugin_toolbar_actions.dart';
 import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/widgets/navigation/book_view_actions.dart';
+
 import 'pdf_zoom_bar.dart';
+
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
@@ -2911,9 +2920,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       );
 
       if (_pageTurnTargetSnapshot != null) {
-        final navigationFuture = _goToPageWithSpreadLock(
-          targetPage,
-        ).catchError((Object _) {});
+        final navigationFuture = _goToPageWithSpreadLock(targetPage)
+            .catchError((Object _) {});
         await _pageTurnController.animateTo(
           1.0,
           duration: duration,
@@ -3433,9 +3441,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         // queued page-turn (if any) starts from the actual settled spread,
         // not a stale viewer mid-transition. The overlay stays visible (at
         // progress=1) until finally clears it, so the user sees no flash.
-        final navigationFuture = _goToPageWithSpreadLock(
-          targetPage,
-        ).catchError((Object _) {});
+        final navigationFuture = _goToPageWithSpreadLock(targetPage)
+            .catchError((Object _) {});
 
         await _pageTurnController.forward(from: 0);
         await navigationFuture;
@@ -4406,9 +4413,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 state.message,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -4436,10 +4443,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   listenable: widget.tab.pdfViewerController,
                   builder: (context, _) => LayoutBuilder(
                     builder: (context, constraints) =>
-                        _buildBookViewTurnButtons(
-                          context,
-                          constraints.biggest,
-                        ),
+                        _buildBookViewTurnButtons(context, constraints.biggest),
                   ),
                 ),
                 ValueListenableBuilder<List<PdfOutlineNode>?>(
@@ -4601,9 +4605,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                                 widget.tab.incomingSearchConfiguration,
                             onSearchResultNavigated: _ensureSearchTabIsActive,
                           )
-                        : const Center(
-                            child: CircularProgressIndicator(),
-                          ),
+                        : const Center(child: CircularProgressIndicator()),
                   ),
                 ),
                 NavPanelSearchSlot(

@@ -52,8 +52,7 @@ const List<ToolbarActionId> toolbarOverflowOrder = [
   ToolbarActionId.viewMode,
   ToolbarActionId.openCommentatorsTab,
   ToolbarActionId.parallelEdition,
-  // כרטיסיות מפרשים — תמיד גלויים (maxVisibleButtons: 999), אבל
-  // חייבים להיות ברשימה כדי ש-toolbarOverflowRankOf לא יזרוק StateError.
+  // כרטיסיות מפרשים
   ToolbarActionId.expandAll,
   ToolbarActionId.bookmarkAdd,
   ToolbarActionId.print,
@@ -169,9 +168,7 @@ partitionToolbarActionsForWidth({
   // Validation מפורש: כל action חייב actionId לפני כל לוגיקה. // validate
   for (final action in actions) {
     if (action.actionId == null) {
-      throw StateError(
-        'Every toolbar action must define an actionId.',
-      );
+      throw StateError('Every toolbar action must define an actionId.');
     }
   }
 
@@ -379,10 +376,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
         final visibleActions = partition.visible;
         final hiddenActions = partition.hidden;
 
-        final allHiddenActions = [
-          ...hiddenActions,
-          ...widget.alwaysInMenu!,
-        ];
+        final allHiddenActions = [...hiddenActions, ...widget.alwaysInMenu!];
 
         final visibleWidgets = visibleActions
             .map((action) => action.widget)
@@ -510,9 +504,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                 ),
               );
               if (hiddenActions.isNotEmpty) {
-                items.add(
-                  PopupMenuDivider(height: menuMetrics.dividerHeight),
-                );
+                items.add(PopupMenuDivider(height: menuMetrics.dividerHeight));
               }
             }
 
@@ -779,7 +771,4 @@ class ActionButtonData {
   int get hashCode => tooltip.hashCode;
 }
 
-enum ActionButtonVisual {
-  toolbar,
-  iconButton,
-}
+enum ActionButtonVisual { toolbar, iconButton }

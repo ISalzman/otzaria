@@ -181,9 +181,8 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   void _scrollNavToSelectedHeading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_navScrollController.isAttached) return;
-      final headingIdx = _navFilteredIndices(
-        _navSearchController.text,
-      ).indexOf(_selectedHeadingIdx);
+      final headingIdx = _navFilteredIndices(_navSearchController.text)
+          .indexOf(_selectedHeadingIdx);
       if (headingIdx < 0) return;
       _navScrollController.scrollTo(
         // +1: פריט 0 הוא הכותרת הראשית.
@@ -402,9 +401,10 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      final textBook =
-          library.getCompanionBook(widget.tab.sourceTab.book, TextBook)
-              as TextBook?;
+      final textBook = library.getCompanionBook(
+        widget.tab.sourceTab.book,
+        TextBook,
+      ) as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -776,8 +776,10 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   Widget _buildAppTopBar(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return AppTopBar(
+      minCenterWidth: ReaderNavCenter.minTitleWidth,
       leadingItems: [
         AppTopBarItem(
+          flexible: true,
           widget: NavPanelSearchBar(
             host: _searchHost,
             isOpen: _navPaneOpen || _pinLeftPane,
@@ -817,9 +819,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
       ),
       trailingItems: [
         AppTopBarItem(
+          flexible: true,
           widget: ResponsiveActionBar(
             overflowMenuOffset: const Offset(0, 8),
-            maxVisibleButtons: 999,
             actions: [
               // ניקוד
               ActionButtonData(
@@ -1054,9 +1056,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
           ),
           selectedTypeChips: effectiveTypes,
           typeChipLabelBuilder: LinkTypes.hebrewLabel,
-          commentatorsByType: CommentaryTypeFilter.commentatorsByType(
-            allLinks,
-          ),
+          commentatorsByType: CommentaryTypeFilter.commentatorsByType(allLinks),
           onTypeChipsChanged: (types) => _typeSelection.value = types,
           onSelectionChanged: (list) async {
             setState(() {
@@ -1089,9 +1089,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   Widget _buildNavPanel() {
     final headings = _sortedHeadings;
     if (headings == null || headings.isEmpty) {
-      return const Center(
-        child: Text('אין ניווט'),
-      );
+      return const Center(child: Text('אין ניווט'));
     }
 
     return ValueListenableBuilder<TextEditingValue>(

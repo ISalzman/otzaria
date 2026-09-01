@@ -1000,8 +1000,10 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     List<TocEntry> chapters,
   ) {
     return AppTopBar(
+      minCenterWidth: ReaderNavCenter.minTitleWidth,
       leadingItems: [
         AppTopBarItem(
+          flexible: true,
           widget: NavPanelSearchBar(
             host: _searchHost,
             isOpen: _navPaneOpen || _pinLeftPane,
@@ -1040,9 +1042,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       ),
       trailingItems: [
         AppTopBarItem(
+          flexible: true,
           widget: ResponsiveActionBar(
             overflowMenuOffset: const Offset(0, 8),
-            maxVisibleButtons: 999,
             actions: [
               // ניקוד
               ActionButtonData(
@@ -1436,9 +1438,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
     required String title,
   }) {
     if (chapters.isEmpty) {
-      return const Center(
-        child: Text('אין תוכן עניינים'),
-      );
+      return const Center(child: Text('אין תוכן עניינים'));
     }
 
     final delegate = NavPanelSearchDelegate(
