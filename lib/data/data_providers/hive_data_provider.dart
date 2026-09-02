@@ -3,6 +3,26 @@ import 'package:hive_ce/hive.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 
+String? _hiveRootOverride;
+
+/// מפנה את קובצי ה-Hive של החלון הזה לתיקייה נפרדת.
+///
+/// ⚠️ **רק Hive.** `hive_ce` נועל את קובצי ה-`.lock` בלעדית, והנעילה היא
+/// פר-handle: שני חלונות באותו תהליך נכשלים בדיוק כמו שני תהליכים. לכן
+/// לחלון משני יש קובצי Hive משלו.
+///
+/// אסור להפנות בשבילו את **שורש הנתונים כולו** — שם יושבים גם התוספים
+/// (`<dataRoot>/plugins`), תיקיית WebView2 ומסדי הנתונים של המשתמש.
+/// הפניה גורפת רוקנה את תפריט הכלים בחלונות משניים וגרמה לכרטיסיות תוסף
+/// להיעלם במקום לעבור.
+void configureHiveRootForWindow(String path) {
+  _hiveRootOverride = path;
+}
+
+/// שורש קובצי ה-Hive. זהה לשורש הנתונים, למעט חלונות משניים.
+Future<String> hiveRootPath() async =>
+    _hiveRootOverride ?? await AppPaths.getDataRootPath();
+
 /// A cache access provider class for shared preferences using Hive library
 class HiveCache extends CacheProvider {
   Box? _preferences;
@@ -11,7 +31,7 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> init() async {
     if (!kIsWeb) {
-      final defaultDirectory = await AppPaths.getDataRootPath();
+      final defaultDirectory = await hiveRootPath();
       _preferences = await Hive.openBox<dynamic>(
         keyName,
         path: defaultDirectory,

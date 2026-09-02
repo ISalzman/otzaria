@@ -238,7 +238,23 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // הראשי — זה היה סוגר את כל האפליקציה. היציאה מנוהלת ב-`OnDestroy` לפי
   // מספר החלונות החיים.
   window->SetQuitOnClose(false);
-  ::ShowWindow(window->GetHandle(), SW_SHOW);
+
+  // ⚠️ החלון **אינו** מוצג כאן.
+  //
+  // הצגה מיידית חושפת חלון ריק שמצטייר בהדרגה — ריצוד וקפיצות עד
+  // הייצוב. Dart חושף אותו ב-`presentMainWindow` כשהתוכן מוכן, בדיוק
+  // כמו החלון הראשון.
+  //
+  // רשת ביטחון: אם החשיפה מ-Dart נכשלה מסיבה כלשהי, חלון בלתי-נראה
+  // לתמיד גרוע מחלון מרצד. אחרי 20 שניות מציגים אותו בכוח.
+  const HWND handle = window->GetHandle();
+  std::thread([handle]() {
+    ::Sleep(20000);
+    if (::IsWindow(handle) && !::IsWindowVisible(handle)) {
+      ::ShowWindow(handle, SW_SHOW);
+    }
+  }).detach();
+
   windows.push_back(std::move(window));
   return true;
 }

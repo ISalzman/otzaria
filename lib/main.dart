@@ -594,7 +594,14 @@ Future<void> _initializeProcessSingletons() async {
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      await WindowPersistence.restoreIfAny();
+      // ⚠️ חלון משני אינו משחזר גבולות שמורים.
+      //
+      // הגבולות השמורים הם של החלון הראשי, ובדרך כלל ממוקסמים — ולכן כל
+      // חלון נוסף נפתח על מסך מלא ובאותו מקום בדיוק, ומכסה את הקודם.
+      // ה-runner כבר יצר אותו בגודל ובהיסט סבירים, וזה מה שצריך להישאר.
+      if (!isSecondaryWindow) {
+        await WindowPersistence.restoreIfAny();
+      }
       // מחילים את הגבולות הסופיים כאן — מוקדם, בזמן שה-splash הנייטיב מוצג
       // והחלון הראשי עדיין מוסתר — ולא ברגע החשיפה. החלון נוצר ב-(10,10) על
       // המסך הראשי; אם הגבולות השמורים נמצאים על מסך עם DPI שונה, ה-setBounds
@@ -602,7 +609,9 @@ Future<void> _initializeProcessSingletons() async {
       // המנוע מספיק לעבד את שינוי ה-DPI ולצייר מחדש ב-devicePixelRatio הנכון
       // הרבה לפני שהחלון נחשף — מונע מצב שבו כל הממשק מופיע "מוגדל" כי הוצג
       // לפני שה-DPR התעדכן.
-      await WindowPersistence.applyRestoredBounds();
+      if (!isSecondaryWindow) {
+        await WindowPersistence.applyRestoredBounds();
+      }
       // גם מסגרת החלון מוגדרת כאן — מוקדם, בעוד החלון מוסתר — ולא ברגע
       // החשיפה: הסתרת ה-title bar (החלון נוצר ב-runner עם WS_OVERLAPPEDWINDOW)
       // משנה את גודל אזור-הלקוח, מה שמאתחל את ה-swapchain של המנוע וזורק את
@@ -1367,7 +1376,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
 }
 
 Future<void> initHive() async {
-  Hive.init(await AppPaths.getDataRootPath());
+  // ⚠️ `hiveRootPath` ולא `getDataRootPath`: בחלון משני קובצי ה-Hive
+  // יושבים בתיקייה נפרדת, אבל שאר שורש הנתונים — תוספים, WebView2,
+  // מסדי נתונים — נשאר משותף. ראו `configureHiveRootForWindow`.
+  Hive.init(await hiveRootPath());
   // כל box הוא קובץ נפרד ועצמאי — הפתיחות רצות במקביל במקום בזו אחר זו.
   await Future.wait([
     Hive.openBox<dynamic>('tabs'),
@@ -1438,7 +1450,7 @@ void secondaryWindowMain(List<String> args) async {
   EditableText.debugDeterministicCursor = true;
 
   try {
-    // ⚠️ **רק** הפניית שורש הנתונים נעשית כאן.
+    // ⚠️ **רק** הפניית קובצי ה-Hive נעשית כאן.
     //
     // את כל שאר האתחול — `RustLib.init`, `Settings.init`, `initHive`,
     // `SqliteDataProvider`, `windowManager.ensureInitialized` — מבצע
@@ -1457,7 +1469,10 @@ void secondaryWindowMain(List<String> args) async {
       DateTime.now().microsecondsSinceEpoch.toRadixString(36),
     );
     await Directory(windowRoot).create(recursive: true);
-    AppPaths.configureDataRootPathForProcess(windowRoot);
+    // ⚠️ Hive בלבד, ולא `configureDataRootPathForProcess`. הפניית שורש
+    // הנתונים כולו רוקנה את `<dataRoot>/plugins` — תפריט הכלים בחלון
+    // משני היה ריק, וכרטיסיית תוסף נעלמה מהמקור במקום להיפתח ביעד.
+    configureHiveRootForWindow(windowRoot);
 
     // זריעת ההעדפות של החלון שפתח אותנו.
     //
