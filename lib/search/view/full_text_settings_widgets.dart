@@ -202,7 +202,7 @@ class _FuzzyDistanceState extends State<FuzzyDistance> {
                 ),
               ),
               min: 0,
-              max: 30,
+              max: isFuzzy ? kMaxFuzzyDistance.toDouble() : 30,
               value: state.distance.toDouble(),
               onChanged: isEnabled
                   ? (value) => context.read<SearchBloc>().add(

@@ -68,11 +68,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     int currentDistance,
   ) {
     final currentDefault = _defaultDistanceForMode(currentMode);
-    if (currentDistance != currentDefault) {
-      return currentDistance;
-    }
-
-    return _defaultDistanceForMode(newMode);
+    final distance = currentDistance != currentDefault
+        ? currentDistance
+        : _defaultDistanceForMode(newMode);
+    // מרווח מילים שנשמר ממצב אחר עלול לחרוג ממה שהמנוע המקורב מכבד.
+    return newMode == SearchMode.fuzzy
+        ? distance.clamp(0, kMaxFuzzyDistance)
+        : distance;
   }
 
   SearchBloc({

@@ -795,7 +795,7 @@ class RustSearchEngineOperations
   }
 
   static int _fuzzyDistance(int distance) {
-    return distance.clamp(0, 2).toInt();
+    return distance.clamp(0, kMaxFuzzyDistance).toInt();
   }
 
   /// מזין מראש את תבנית ההדגשה מבוססת-האינדקס (ראה

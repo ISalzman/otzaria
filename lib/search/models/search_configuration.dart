@@ -3,6 +3,9 @@ import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
 export 'package:otzaria/search/models/search_match_policy.dart';
 
+/// מרחק העריכה המרבי שמנוע החיפוש המקורב מכבד; ערך גדול יותר נחתך אליו.
+const int kMaxFuzzyDistance = 2;
+
 /// מצבי החיפוש השונים
 enum SearchMode {
   advanced, // חיפוש מתקדם (slop/word-distance)

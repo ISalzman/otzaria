@@ -135,10 +135,26 @@ Future<void> main() async {
           distance: 6,
         ),
       ),
+      act: (bloc) => bloc.add(SetSearchMode(SearchMode.advanced)),
+      verify: (bloc) {
+        expect(bloc.state.configuration.searchMode, SearchMode.advanced);
+        expect(bloc.state.configuration.distance, 6);
+      },
+    );
+
+    blocTest<SearchBloc, SearchState>(
+      'SetSearchMode למקורב מצמצם מרחק ידני לטווח שהמנוע מכבד (issue #1120)',
+      build: SearchBloc.new,
+      seed: () => const SearchState(
+        configuration: SearchConfiguration(
+          searchMode: SearchMode.exact,
+          distance: 6,
+        ),
+      ),
       act: (bloc) => bloc.add(SetSearchMode(SearchMode.fuzzy)),
       verify: (bloc) {
         expect(bloc.state.configuration.searchMode, SearchMode.fuzzy);
-        expect(bloc.state.configuration.distance, 6);
+        expect(bloc.state.configuration.distance, kMaxFuzzyDistance);
       },
     );
 
