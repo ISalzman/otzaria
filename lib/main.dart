@@ -500,6 +500,8 @@ Future<void> _runAppBootstrap() async {
   // ה-scope עוטף את כל העץ כדי שכל widget יוכל להגיע לחלון שהוא יושב בו
   // בלי לפנות ל-singleton גלובלי. היום יש חלון אחד, ולכן הבקר הוא של
   // החלון הראשי; ריבוי חלונות יזריק כאן בקר אחר לכל עץ.
+  _maybeScheduleDebugSecondWindow();
+
   runApp(
     AppWindowScope(
       controller: _appWindow,
@@ -1427,6 +1429,25 @@ void secondaryWindowMain(List<String> args) async {
     );
     await Directory(windowRoot).create(recursive: true);
     AppPaths.configureDataRootPathForProcess(windowRoot);
+
+    // זריעת ההעדפות של החלון שפתח אותנו.
+    //
+    // ⚠️ חייבת לקרות **לפני** ש-`AppBootstrap` מריץ את `Settings.init`,
+    // אחרת החלון יעלה בלי נתיב ספרייה ויציג את מסך ההתחלה כאילו זו התקנה
+    // חדשה. הכתיבה היא ל-box של שורש הנתונים הפרטי, ולכן אין התנגשות
+    // נעילה; `Settings.init` יפתח מאוחר יותר את אותו box הפתוח ויראה את
+    // הערכים.
+    final seed = MultiWindowService.decodePreferences(
+      args.isEmpty ? null : args.first,
+    );
+    if (seed.isNotEmpty) {
+      Hive.init(windowRoot);
+      final box = await Hive.openBox<dynamic>(
+        HiveCache.keyName,
+        path: windowRoot,
+      );
+      await box.putAll(seed);
+    }
   } catch (e, st) {
     debugPrint('secondaryWindowMain: data root setup failed: $e\n$st');
   }
@@ -1451,6 +1472,22 @@ void secondaryWindowMain(List<String> args) async {
       ),
     ),
   );
+}
+
+/// פותח חלון נוסף אחרי השהיה, לבדיקה מקצה לקצה בלי אינטראקציה ידנית.
+///
+/// עובר במסלול המלא — כולל צילום ההעדפות — ולכן הוא בודק את מה שהמשתמש
+/// יקבל, ולא רק את הצד הנייטיב. מופעל רק כאשר `OTZARIA_DEBUG_OPEN_WINDOW_MS`
+/// מוגדר.
+void _maybeScheduleDebugSecondWindow() {
+  final ms = int.tryParse(
+    Platform.environment['OTZARIA_DEBUG_OPEN_WINDOW_MS'] ?? '',
+  );
+  if (ms == null || ms <= 0) return;
+  Timer(Duration(milliseconds: ms), () async {
+    final opened = await const MultiWindowService().openWindow();
+    debugPrint('[debug] openWindow -> $opened');
+  });
 }
 
 /// המטען שאיתו נפתח החלון הנוכחי, אם נפתח כחלון משני. `null` בחלון הראשון.
