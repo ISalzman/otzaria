@@ -87,6 +87,7 @@ import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/window_bus_host.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
@@ -641,8 +642,13 @@ Future<void> _initializeProcessSingletons() async {
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
   // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
-  unawaited(_runDeferredNotificationService());
-  unawaited(_runDeferredErrorReportFlush());
+  // ⚠️ פר-תהליך, לא פר-חלון. שירות ההתראות רושם התראות מערכת, ושטיפת
+  // דיווחי השגיאות שולחת את אותו תור — חלון משני שמריץ אותם שוב מייצר
+  // התראות כפולות ודיווחים כפולים.
+  if (!isSecondaryWindow) {
+    unawaited(_runDeferredNotificationService());
+    unawaited(_runDeferredErrorReportFlush());
+  }
 }
 
 /// משחזר עדכון ספרייה שנקטע (marker+backup) לפני פתיחת ה-DB.
@@ -1289,11 +1295,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
               isOfflineMode: () =>
                   Settings.getValue<bool>(SettingsRepository.keyOfflineMode) ??
                   false,
+              // ⚠️ חלון משני לעולם אינו בודק עדכונים. עדכון ספרייה הוא
+              // פעולה פר-תהליך: שני חלונות ששאלו את GitHub במקביל קיבלו
+              // 403, והמשתמש ראה "שגיאה בקבלת רשימת ה-releases" בכל
+              // פתיחת חלון.
               areUpdatesEnabled: () =>
-                  Settings.getValue<bool>(
-                    SettingsRepository.keySoftwareAndBookUpdatesEnabled,
-                  ) ??
-                  true,
+                  !isSecondaryWindow &&
+                  (Settings.getValue<bool>(
+                        SettingsRepository.keySoftwareAndBookUpdatesEnabled,
+                      ) ??
+                      true),
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
@@ -1346,7 +1357,10 @@ class _AppBootstrapState extends State<AppBootstrap> {
             },
           ),
         ],
-        child: const App(),
+        // מתחת לכל ה-blocs: האפיק עונה על בקשות מחלונות אחרים, ושתי
+        // הבקשות הנתמכות — "תאר את עצמך" ו"קלוט כרטיסיה" — זקוקות
+        // ל-TabsBloc ול-NavigationBloc.
+        child: const WindowBusHost(child: App()),
       ),
     );
   }
@@ -1419,6 +1433,7 @@ void secondaryWindowMain(List<String> args) async {
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
+  isSecondaryWindow = true;
   SentryWidgetsFlutterBinding.ensureInitialized();
   EditableText.debugDeterministicCursor = true;
 
@@ -1522,6 +1537,14 @@ void _maybeScheduleDebugSecondWindow() {
     debugPrint('[debug] openWindow -> $opened');
   });
 }
+
+/// האם החלון הזה הוא חלון משני (נפתח מתוך חלון אחר).
+///
+/// ⚠️ משמש לחסימת שירותים שהם **פר-תהליך ולא פר-חלון**: בדיקת עדכוני
+/// ספרייה, שירות ההתראות ושטיפת דיווחי השגיאות. בלי החסימה כל חלון הריץ
+/// אותם בנפרד — שתי בקשות מקבילות ל-GitHub החזירו 403, והמשתמש קיבל
+/// "שגיאה בקבלת רשימת ה-releases" בכל פתיחת חלון.
+bool isSecondaryWindow = false;
 
 /// המטען הגולמי שאיתו נפתח החלון, אם נפתח כחלון משני.
 ///

@@ -10,6 +10,7 @@ import 'package:otzaria/core/windowing/app_window_controller.dart';
 import 'package:otzaria/core/windowing/app_window_id.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/core/windowing/last_active_window.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
@@ -160,9 +161,21 @@ class AppWindowListener extends WindowListener {
     onWindowStateChanged?.call();
   }
 
-  /// היום יש חלון יחיד, ולכן סגירתו היא תמיד סגירת התהליך.
-  /// T-G1.5 יחליף את זה בבדיקה מול ה-registry של החלונות.
-  bool _isLastWindowClosing() => true;
+  /// האם זה החלון האחרון, כלומר האם סגירתו היא סגירת התהליך.
+  ///
+  /// ⚠️ ה-runner הוא מקור האמת. ה-isolate של כל חלון רואה רק את עצמו,
+  /// ולכן חלון אינו יכול לדעת מ-Dart בלבד אם נותרו אחרים. כשהשאלה נכשלת
+  /// מניחים "כן" — התנהגות חלון יחיד, שהיא הבטוחה מבין השתיים: כיבוי
+  /// מלא ששוטף הכול, במקום תהליך שנשאר תלוי בלי חלונות.
+  Future<bool> _isLastWindowClosing() async {
+    try {
+      final info = await const MultiWindowService().windowCount();
+      return info.count <= 1;
+    } catch (e) {
+      debugPrint('windowCount failed during close, assuming last: $e');
+      return true;
+    }
+  }
 
   @override
   void onWindowClose() async {
@@ -181,12 +194,21 @@ class AppWindowListener extends WindowListener {
     // אחרי סגירת ה-DB ולפני הדיווח והריגת התהליך. לכן החלק הפר-תהליכי
     // מפוצל לשניים סביבו. **הסדר בין שלושת החלקים זהה לסדר המקורי של
     // הצעדים, ואסור לשנותו** — הרצת ה-flush ראשון תקדים אותו לסגירת ה-DB.
-    if (_isLastWindowClosing()) {
+    // ⚠️ נשאל **פעם אחת**, בתחילת הסגירה. שאלה חוזרת אחרי ה-flush עלולה
+    // לקבל תשובה אחרת אם חלון אחר נסגר בינתיים, והתוצאה תהיה חצי כיבוי:
+    // הצעדים שלפני ה-flush רצו והצעדים שאחריו לא, או להפך.
+    final isLast = await _isLastWindowClosing();
+
+    if (isLast) {
       await _shutdownProcessUpToFlush();
     }
     final flushFailure = await _closeWindowScoped();
-    if (_isLastWindowClosing()) {
+    if (isLast) {
       await _shutdownProcessAfterFlush(flushFailure);
+    } else {
+      // חלון אחד מתוך כמה: להרוס רק אותו. `setPreventClose(true)` מנע את
+      // הסגירה הרגילה, ובלי ההריסה המפורשת החלון היה נשאר פתוח.
+      await _window.destroy();
     }
   }
 

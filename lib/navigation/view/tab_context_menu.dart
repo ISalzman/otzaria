@@ -135,15 +135,10 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
         label: context.settingsText('העבר לחלון חדש'),
         onTap: () async {
           final tabsBloc = context.read<TabsBloc>();
-          final messenger = ScaffoldMessenger.maybeOf(context);
-          void notify(String message) {
-            messenger?.showSnackBar(SnackBar(content: Text(message)));
-          }
-
           // ⚠️ נבדק לפני ההעברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
           // נעלמת מכאן ולא נפתחת שם.
           if (!MultiWindowService.canTransfer(tab)) {
-            notify('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
+            UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
             return;
           }
           final opened = await const MultiWindowService().openWindow(tab: tab);
@@ -151,13 +146,45 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
             tabsBloc.add(RemoveTab(tab));
           } else {
             final info = await const MultiWindowService().windowCount();
-            notify(
-              info.count >= info.max
-                  ? 'הגעת למספר החלונות המרבי (${info.max})'
-                  : 'פתיחת החלון נכשלה',
-            );
+            if (info.count >= info.max) {
+              UiSnack.showWarning(
+                'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
+              );
+            } else {
+              UiSnack.showError('פתיחת החלון נכשלה');
+            }
           }
         },
+      ),
+    // תת-תפריט של החלונות הפתוחים האחרים, בדיוק כמו "הצג לצד". מופיע רק
+    // כשיש לאן להעביר — פריט מושבת לא היה מוסיף מידע.
+    if (MultiWindowService.isSupported &&
+        MultiWindowService.knownPeers.isNotEmpty)
+      AppContextMenuEntry(
+        label: context.settingsText('העבר לחלון קיים'),
+        children: [
+          for (final peer in MultiWindowService.knownPeers)
+            AppContextMenuEntry(
+              label: peer.tabCount > 1
+                  ? '${peer.title}  (${peer.tabCount} כרטיסיות)'
+                  : peer.title,
+              onTap: () async {
+                final tabsBloc = context.read<TabsBloc>();
+                // ⚠️ ההסרה רק אחרי אישור מהיעד. הרשימה עשויה להיות מעט
+                // לא-עדכנית, וחלון שנסגר בדיוק עכשיו לא יאשר — ואז
+                // הכרטיסיה נשארת כאן במקום להיעלם משני הצדדים.
+                final sent = await const MultiWindowService().sendTabToWindow(
+                  peer.slot,
+                  tab,
+                );
+                if (sent) {
+                  tabsBloc.add(RemoveTab(tab));
+                } else {
+                  UiSnack.showError('העברת הכרטיסיה לחלון נכשלה');
+                }
+              },
+            ),
+        ],
       ),
     const AppContextMenuEntry.divider(),
   ];

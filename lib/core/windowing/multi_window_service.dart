@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// פותח חלונות אוצריא נוספים.
@@ -130,6 +131,37 @@ class MultiWindowService {
       return const {};
     }
   }
+
+  /// סוג בקשה באפיק: קבלת כרטיסיה שהועברה מחלון אחר.
+  static const String requestReceiveTab = 'receiveTab';
+
+  /// סוג בקשה באפיק: תיאור החלון לתצוגה בתפריט.
+  static const String requestDescribe = 'describe';
+
+  /// מעביר [tab] לחלון קיים במשבצת [slot].
+  ///
+  /// מחזיר true רק אם החלון היעד **אישר** שקיבל את הכרטיסיה. זה חשוב:
+  /// המעביר מסיר את הכרטיסיה מעצמו רק אחרי אישור, אחרת כרטיסיה שנשלחה
+  /// לחלון שנסגר בדיוק אז הייתה נעלמת משני הצדדים.
+  Future<bool> sendTabToWindow(int slot, OpenedTab tab) async {
+    if (!canTransfer(tab)) return false;
+    final result = await WindowBus.instance.request(slot, {
+      'type': requestReceiveTab,
+      'tab': tab.toJson(),
+    });
+    return result == true;
+  }
+
+  /// החלונות האחרים הפתוחים, לתצוגה בתת-תפריט.
+  Future<List<WindowPeer>> otherWindows() => WindowBus.instance.peers();
+
+  /// הרשימה האחרונה שנסרקה, לשימוש מקוד **סינכרוני**.
+  ///
+  /// ⚠️ קיימת כי בניית תפריט ההקשר סינכרונית, וסריקת החלונות אינה יכולה
+  /// להיות. `WindowBusHost` מרענן אותה ברקע. רשימה מעט לא-עדכנית אינה
+  /// מסוכנת: שליחה לחלון שנסגר בינתיים נכשלת ומדווחת למשתמש, ולא מאבדת
+  /// את הכרטיסיה.
+  static List<WindowPeer> knownPeers = const [];
 
   /// האם המטען מכיל כרטיסיה, בלי לפענח אותה.
   ///
