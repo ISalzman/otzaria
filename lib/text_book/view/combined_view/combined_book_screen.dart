@@ -2606,13 +2606,19 @@ class _CombinedViewState extends State<CombinedView> {
                           primaryLineIndex,
                           context,
                         ),
-                    menuBuilder: (menuCtx, tapPos) => _buildContextMenuForIndex(
-                      state,
-                      primaryLineIndex,
-                      menuCtx,
-                      selectedText,
-                      tapPos,
-                    ),
+                    menuBuilder: (menuCtx, tapPos) => [
+                      ...ContextMenuUtils.buildInlineLinkContextMenuEntries(
+                        menuCtx,
+                        tapPos,
+                      ),
+                      ..._buildContextMenuForIndex(
+                        state,
+                        primaryLineIndex,
+                        menuCtx,
+                        selectedText,
+                        tapPos,
+                      ),
+                    ],
                     child: child!,
                   );
                 },
@@ -2688,6 +2694,8 @@ class _CombinedViewState extends State<CombinedView> {
           anchorActiveBackground: Theme.of(
             context,
           ).colorScheme.primaryContainer,
+          onMiddleClickUrl: (url) =>
+              HtmlLinkHandler.openLinkInBackground(context, url),
           onTapUrl: (url) async {
             if (url.startsWith('otzaria://anchor')) {
               return _handleAnchorTap(url);

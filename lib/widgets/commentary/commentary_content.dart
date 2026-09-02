@@ -9,6 +9,8 @@ import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/ui/context_menu_utils.dart';
+import 'package:otzaria/widgets/misc/middle_click_open.dart';
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
@@ -121,6 +123,14 @@ class _CommentaryContentState extends State<CommentaryContent> {
 
   @override
   Widget build(BuildContext context) {
+    return MiddleClickOpen(
+      onMiddleClick: () =>
+          ContextMenuUtils.openLinkTargetInBackground(context, widget.link),
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     return GestureDetector(
       onDoubleTap: () {
         widget.openBookCallback(

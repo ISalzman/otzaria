@@ -6,6 +6,8 @@ import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -119,6 +121,28 @@ class HtmlLinkHandler {
   /// - <a href="book://ברכות#דף ב">ברכות דף ב</a>
   /// - <a href="book://בית יוסף#אורח חיים#סימן א">בית יוסף או"ח סימן א</a>
   /// - <a href="#דף ג">דף ג</a>
+  /// האם [url] מפנה לספר אחר, כך ש"פתח בכרטיסייה חדשה" אפשרי עבורו
+  /// (עוגן בתוך אותו ספר אינו כזה).
+  static bool opensAnotherBook(String url) =>
+      url.startsWith('otzaria://inline-link') || url.startsWith('book://');
+
+  /// פותח את יעד הקישור בכרטיסייה חדשה ברקע, בלי לעזוב את הטאב הנוכחי.
+  static Future<void> openLinkInBackground(
+    BuildContext context,
+    String url,
+  ) async {
+    if (!opensAnotherBook(url)) return;
+    // ה-bloc נשלף לפני ההמתנה: ההקשר עשוי להתפרק עד שהיעד ייפתר.
+    final tabsBloc = context.read<TabsBloc>();
+    await handleLink(
+      context,
+      url,
+      (tab) => tabsBloc.add(
+        AddTab(tab, insertAdjacent: true, inBackground: true),
+      ),
+    );
+  }
+
   static Future<bool> handleLink(
     BuildContext context,
     String url,

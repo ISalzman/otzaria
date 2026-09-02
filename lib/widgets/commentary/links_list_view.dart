@@ -5,6 +5,7 @@ import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
+import 'package:otzaria/widgets/misc/middle_click_open.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/commentary_service.dart';
@@ -973,12 +974,16 @@ class _LinksListViewState extends State<LinksListView> {
                         removeNikud: true,
                       ),
                 ),
-            child: GestureDetector(
-              onTap: () => _navigateToLink(link),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12.0),
-                child: _buildHighlightedText(content, link),
+            child: MiddleClickOpen(
+              onMiddleClick: () =>
+                  ContextMenuUtils.openLinkTargetInBackground(context, link),
+              child: GestureDetector(
+                onTap: () => _navigateToLink(link),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12.0),
+                  child: _buildHighlightedText(content, link),
+                ),
               ),
             ),
           ),

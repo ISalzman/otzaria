@@ -9,7 +9,12 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/services/target_line_links_service.dart';
+import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
+import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/utils/text/html_link_handler.dart';
+import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
@@ -20,6 +25,9 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/direct_link_menu_entries.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
+
+/// תווית פריט תפריט ההקשר לפתיחה ברקע — משותפת לתוצאות חיפוש ולמפרשים.
+const kOpenInNewTabLabel = 'פתח בכרטיסייה חדשה';
 
 /// פונקציות עזר לתפריטי הקשר במפרשים
 /// האם להציג את "העתק בלי ניקוד" עבור הבחירה — רק כשיש בה בפועל ניקוד
@@ -158,6 +166,11 @@ class ContextMenuUtils {
           );
         },
       ),
+      AppContextMenuEntry(
+        label: kOpenInNewTabLabel,
+        icon: FluentIcons.tab_add_24_regular,
+        onTap: () => openLinkTargetInBackground(context, link),
+      ),
     ];
 
     // רק מזהה הספר במסד מתאים ל-otzaria://open/book/<id>; בלעדיו (למשל
@@ -179,6 +192,38 @@ class ContextMenuUtils {
     }
 
     return entries;
+  }
+
+  /// פותח את יעד [link] בכרטיסייה חדשה ברקע (טקסט או PDF, לפי תבנית הפתיחה).
+  static Future<void> openLinkTargetInBackground(
+    BuildContext context,
+    Link link,
+  ) async {
+    // ה-bloc נשלף לפני ההמתנה: הקשר התפריט מתפרק עם סגירתו.
+    final tabsBloc = context.read<TabsBloc>();
+    final tab = await buildLinkTargetTab(link);
+    tabsBloc.add(AddTab(tab, insertAdjacent: true, inBackground: true));
+  }
+
+  /// פריטי "פתח קישור בכרטיסייה חדשה" לתפריט הקשר של שורת טקסט, כשהלחיצה
+  /// הימנית נפלה על קישור לספר אחר; ריק כשאין שם קישור כזה.
+  static List<AppContextMenuEntry> buildInlineLinkContextMenuEntries(
+    BuildContext context,
+    Offset tapPosition,
+  ) {
+    final url = inlineLinkUrlAt(
+      tapPosition,
+      viewId: View.of(context).viewId,
+    );
+    if (url == null || !HtmlLinkHandler.opensAnotherBook(url)) return const [];
+    return [
+      AppContextMenuEntry(
+        label: 'פתח קישור בכרטיסייה חדשה',
+        icon: FluentIcons.tab_add_24_regular,
+        onTap: () => HtmlLinkHandler.openLinkInBackground(context, url),
+      ),
+      const AppContextMenuEntry.divider(),
+    ];
   }
 
   static Future<void> _createCommentaryNote({

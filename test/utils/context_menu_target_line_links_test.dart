@@ -84,6 +84,18 @@ void main() {
       expect(labels, contains('פתח ספר זה בחלון נפרד'));
     });
 
+    testWidgets('"פתח בכרטיסייה חדשה" מופיע מיד אחרי פתיחת הספר', (
+      tester,
+    ) async {
+      final labels = (await buildMenu(tester)).map((e) => e.label).toList();
+
+      expect(labels, contains(kOpenInNewTabLabel));
+      expect(
+        labels.indexOf(kOpenInNewTabLabel),
+        labels.indexOf('פתח ספר זה בחלון נפרד') + 1,
+      );
+    });
+
     testWidgets('עם onNavigateToLink נוספים שני הפריטים', (tester) async {
       TargetLineLinksService.resetInstanceForTesting(
         loader: (_, _, _) async => [],

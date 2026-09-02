@@ -42,7 +42,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/utils/text/copy_utils.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart'
-    show showCopyWithoutNikud;
+    show ContextMenuUtils, showCopyWithoutNikud;
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/utils/text/global_search_helper.dart';
@@ -2884,13 +2884,19 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                 : _savedSelectedText?.trim().isNotEmpty == true
                 ? _savedSelectedText
                 : savedTextAtBuild;
-            return _buildContextMenu(
-              state,
-              primaryLineIndex,
-              menuCtx,
-              tapPos,
-              currentSelectedText,
-            );
+            return [
+              ...ContextMenuUtils.buildInlineLinkContextMenuEntries(
+                menuCtx,
+                tapPos,
+              ),
+              ..._buildContextMenu(
+                state,
+                primaryLineIndex,
+                menuCtx,
+                tapPos,
+                currentSelectedText,
+              ),
+            ];
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -3118,6 +3124,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
             decoration: TextDecoration.underline,
           ),
           anchorActiveBackground: colorScheme.primaryContainer,
+          onMiddleClickUrl: (url) =>
+              HtmlLinkHandler.openLinkInBackground(context, url),
           onTapUrl: (url) async {
             if (url.startsWith('otzaria://anchor')) {
               return _handlePreviewTap(url);
