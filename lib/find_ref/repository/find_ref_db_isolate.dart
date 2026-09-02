@@ -25,6 +25,10 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 /// מצטבר בתוך ה-isolate בין הקלדות. בעת רענון/החלפת ספרייה יש לקרוא ל-
 /// [resetIfRunning] כדי לסגור את החיבור הישן ולנקות את הקאש.
 ///
+/// **צרכנים:** מלבד "איתור מקורות", ה-isolate משרת גם את הקאש המשותף של טבלת
+/// `book` ואת טעינת ה-TOC בפתיחת ספר — שאילתות ארוכות שאין להריץ על ה-isolate
+/// של ה-UI. כולן חולקות את חיבור ה-RO היחיד (50MB cache + 64MB mmap).
+///
 /// **תחום:** רק שאילתות `seforim.db` עוברות ל-isolate. ספרי המשתמש
 /// (`user_books.db`, מסלול אופציונלי "כלול ספרים אישיים") נשארים על ה-main
 /// isolate — הם מסלול opt-in על DB קטן, ופתיחת חיבור RW שני אליו מ-isolate
@@ -39,6 +43,10 @@ class FindRefDbIsolate {
   /// שה-isolate מוכן (ראה [instance]) — לפני כל בקשת חיפוש שכבר ממתינה ל-
   /// spawn, כך שה-worker לא יעבד אפילו שאילתה אחת מול נתיב DB ישן.
   static String? _pendingResetPath;
+
+  /// כתיבה חיצונית (עדכון ספרייה) מוחקת ומחליפה את קובץ ה-DB. ב-Windows
+  /// מחיקת קובץ עם handle פתוח נכשלת, ולכן ה-worker חייב להישאר בלי חיבור.
+  static bool _suspendedForExternalWrite = false;
 
   /// מחזיר את המופע הפעיל, ומאתחל (spawn) בעצלתיים בקריאה הראשונה.
   /// קריאות מקבילות שמגיעות בזמן ה-spawn חולקות את אותו Future.
@@ -57,6 +65,11 @@ class FindRefDbIsolate {
         _pendingResetPath = null;
         if (pendingPath != null) {
           service._request('reset', {'dbPath': pendingPath}).ignore();
+        }
+        // אותו סדר הזרקה: השהיה שהתבקשה תוך כדי spawn נכנסת לתור לפני כל
+        // שאילתה ממתינה, כך שה-worker לא יפתח חיבור בחלון הכתיבה החיצונית.
+        if (_suspendedForExternalWrite) {
+          service._request('suspend', const {}).ignore();
         }
         return service;
       },
@@ -225,6 +238,22 @@ class FindRefDbIsolate {
     );
   }
 
+  // ── Shared seforim.db queries (צרכנים מחוץ ל"איתור מקורות") ────────────────
+
+  /// כל הספרים המקומיים בהקרנה רזה (id/title/filePath/fileType/categoryId/
+  /// orderIndex) — סריקת טבלת `book` המלאה מקפיאה את ה-UI על ספרייה גדולה.
+  Future<List<Map<String, dynamic>>> getAllLocalBooksSlim() async {
+    final res = await _request('allLocalBooksSlim', const {});
+    return _castRows(res);
+  }
+
+  /// שורות ה-TOC של ספר מ-`seforim.db`. המיפוי ל-`TocEntry` נעשה בצד הקורא
+  /// דרך `TocEntry.fromMap`, כך שאין כפילות בלוגיקת ההמרה.
+  Future<List<Map<String, dynamic>>> getBookTocRows(int bookId) async {
+    final res = await _request('bookToc', {'bookId': bookId});
+    return _castRows(res);
+  }
+
   // ── Reset / lifecycle ───────────────────────────────────────────────────────
 
   /// מאפס את חיבור ה-DB והקאשים בתוך ה-isolate (בעת רענון/החלפת ספרייה).
@@ -247,6 +276,71 @@ class FindRefDbIsolate {
       _pendingResetPath = dbPath;
     }
   }
+
+  /// תקרת המתנה לפקודות ההשהיה/השחרור. הן נכנסות לתור הסדרתי של ה-worker
+  /// ועשויות להמתין לחימום AltToc (1-2 שניות); worker תקוע אינו זורק, ולכן
+  /// בלי תקרה `closeForExternalWrite` — שנקרא מחוץ ל-try של העדכון — היה
+  /// חוסם לנצח את שחרור ה-write session.
+  static const Duration _lifecycleCommandTimeout = Duration(seconds: 10);
+
+  /// משחרר את חיבור ה-RO של ה-worker לפני שכתיבה חיצונית מחליפה את קובץ
+  /// ה-DB, ומונע פתיחה מחדש עד [resumeAfterExternalWrite].
+  ///
+  /// מחזיר האם שחרור ה-handle **אומת**. `false` פירושו שהחיבור עשוי להיות
+  /// עוד פתוח, ולכן מחיקה/החלפה של קובץ ה-DB עלולה להיכשל.
+  static Future<bool> suspendForExternalWrite() async {
+    _suspendedForExternalWrite = true;
+    final service = _instance;
+    // אין מופע: אין חיבור פתוח, וה-spawn הבא יקבל את ההשהיה כפקודה ראשונה.
+    if (service == null || service._disposed) return true;
+    final request = service._request('suspend', const {});
+    try {
+      final released = await request.timeout(_lifecycleCommandTimeout);
+      if (released == true) return true;
+      debugPrint(
+        '[FindRef isolate] suspend: close failed in worker — '
+        'DB handle may still be open',
+      );
+      return false;
+    } on TimeoutException {
+      // תשובה מאוחרת לא תיפול כשגיאה לא-מטופלת.
+      request.ignore();
+      debugPrint(
+        '[FindRef isolate] suspend timed out — DB handle may still be open',
+      );
+      return false;
+    } catch (e) {
+      // ‏kill של isolate אינו מריץ finalizers, ולכן ה-handle הנייטיבי עשוי
+      // לשרוד את נפילת ה-worker עד סוף התהליך.
+      debugPrint(
+        '[FindRef isolate] suspend failed ($e) — DB handle may still be open',
+      );
+      return false;
+    }
+  }
+
+  /// מתיר ל-worker לפתוח מחדש חיבור, על נתיב ה-DB המעודכן.
+  static Future<void> resumeAfterExternalWrite() async {
+    _suspendedForExternalWrite = false;
+    final service = _instance;
+    if (service == null || service._disposed) return;
+    final request = service._request('resume', {
+      'dbPath': DatabaseConstants.getDatabasePath(),
+    });
+    try {
+      await request.timeout(_lifecycleCommandTimeout);
+    } on TimeoutException {
+      request.ignore();
+      debugPrint('[FindRef isolate] resume timed out');
+    } catch (e) {
+      debugPrint('[FindRef isolate] resume failed: $e');
+    }
+  }
+
+  /// בדיקות בלבד — סוגר את ה-isolate ומשחרר את ה-singleton, כדי שקובץ בדיקה
+  /// לא ישאיר worker חי אחרי סיומו.
+  @visibleForTesting
+  void disposeForTesting() => _tearDown();
 
   Future<dynamic> _request(String method, Map<String, Object?> args) async {
     if (_disposed) {
@@ -351,12 +445,14 @@ void _workerMain(_Bootstrap bootstrap) {
   // כך שפתיחת RO בטוחה. החיבור נוצר עצל בבקשה הראשונה.
   var dbPath = bootstrap.dbPath;
   SeforimRepository? repository;
+  var suspended = false;
 
   // קאש AltToc שטוח עם טוקנים מנורמלים מראש — נבנה פעם אחת ב-worker ומשרת
   // את פקודת searchAltTocFlat. חי עד reset (רענון/החלפת ספרייה).
   List<({Map<String, dynamic> row, List<String> refTokens})>? altTocFlatCache;
 
   Future<SeforimRepository?> ensureRepo() async {
+    if (suspended) return null;
     if (repository != null) return repository;
     try {
       final db = MyDatabase.withPath(dbPath, readOnly: true);
@@ -401,6 +497,26 @@ void _workerMain(_Bootstrap bootstrap) {
         final newPath = args['dbPath'] as String?;
         if (newPath != null && newPath.isNotEmpty) dbPath = newPath;
         return null;
+      case 'suspend':
+        // הדגל והאיפוס קודמים ל-close: גם אם הסגירה זורקת, ensureRepo לא
+        // יחזיר את החיבור הישן ולא ייצור handle נוסף.
+        suspended = true;
+        altTocFlatCache = null;
+        final closing = repository;
+        repository = null;
+        try {
+          closing?.database.close();
+          return true;
+        } catch (e) {
+          // מוחזר false כדי שהקורא לא ידווח על שחרור שלא אומת.
+          debugPrint('[FindRef isolate] close during suspend failed: $e');
+          return false;
+        }
+      case 'resume':
+        suspended = false;
+        final resumePath = args['dbPath'] as String?;
+        if (resumePath != null && resumePath.isNotEmpty) dbPath = resumePath;
+        return null;
       case 'toc':
         final repo = await ensureRepo();
         if (repo == null) return const <Map<String, dynamic>>[];
@@ -417,6 +533,18 @@ void _workerMain(_Bootstrap bootstrap) {
           args['bookTitle'] as String,
           queryTokens: (args['queryTokens'] as List?)?.cast<String>(),
         );
+      case 'allLocalBooksSlim':
+        final repo = await ensureRepo();
+        if (repo == null) {
+          throw StateError('seforim.db unavailable for allLocalBooksSlim');
+        }
+        return repo.database.bookDao.selectAllLocalBooksSlim();
+      case 'bookToc':
+        final repo = await ensureRepo();
+        if (repo == null) {
+          throw StateError('seforim.db unavailable for bookToc');
+        }
+        return repo.database.tocDao.selectRowsByBookId(args['bookId'] as int);
       case 'allAltTocFlat':
         final repo = await ensureRepo();
         if (repo == null) return const <Map<String, dynamic>>[];

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
+import 'package:otzaria/migration/models/book.dart' as db_models;
 
 /// Shared in-memory cache for the `book` table.
 ///
@@ -25,6 +27,9 @@ class BooksCache {
   final Map<int, BookCacheEntry> _booksById = <int, BookCacheEntry>{};
 
   bool get isLoaded => _isLoaded;
+
+  /// הדור הנוכחי, לצילום *לפני* קריאת נתונים שתיזרע ל-[seedFromBooks].
+  int get generation => _generation;
 
   /// Returns all cached books
   List<BookCacheEntry> get books => List.unmodifiable(_books);
@@ -59,7 +64,8 @@ class BooksCache {
     }
 
     try {
-      final allBooks = await repository.database.bookDao.getAllLocalBooks();
+      final rows = await (await FindRefDbIsolate.instance())
+          .getAllLocalBooksSlim();
       if (myGen != _generation) return; // הופסק על ידי clear()
 
       // בונים למבני ביניים מקומיים — ה-cache החי לא נוגע עד ה-swap בסוף.
@@ -69,17 +75,10 @@ class BooksCache {
       final localBooksById = <int, BookCacheEntry>{};
       const yieldBatch = 1000;
       var i = 0;
-      for (final b in allBooks) {
-        final entry = BookCacheEntry(
-          id: b.id,
-          title: b.title,
-          filePath: b.filePath,
-          fileType: b.fileType ?? 'txt',
-          categoryId: b.categoryId,
-          orderIndex: b.order,
-        );
+      for (final row in rows) {
+        final entry = _entryFromRow(row);
         localBooks.add(entry);
-        localBooksById[b.id] = entry;
+        localBooksById[entry.id] = entry;
         if (++i % yieldBatch == 0) {
           await Future<void>.delayed(Duration.zero);
           if (myGen != _generation) return; // הופסק על ידי clear()
@@ -108,6 +107,45 @@ class BooksCache {
       }
     }
   }
+
+  /// זורע את הקאש מרשימת הספרים שכבר נקראה לבניית הקטלוג, כדי שטבלת `book`
+  /// לא תיקרא פעם שנייה. no-op אם הקאש כבר טעון או שטעינה כבר רצה.
+  ///
+  /// [generation] הוא הערך שנקרא מ-[generation] לפני שליפת [books]; אם קרה
+  /// [clear] מאז, הנתונים שייכים לספרייה הקודמת והזריעה נדחית.
+  void seedFromBooks(
+    Iterable<db_models.Book> books, {
+    required int generation,
+  }) {
+    if (generation != _generation) return;
+    if (_isLoaded || _loadingFuture != null) return;
+    _books.clear();
+    _booksById.clear();
+    for (final b in books) {
+      final entry = BookCacheEntry(
+        id: b.id,
+        title: b.title,
+        filePath: b.filePath,
+        fileType: b.fileType ?? 'txt',
+        categoryId: b.categoryId,
+        orderIndex: b.order,
+      );
+      _books.add(entry);
+      _booksById[b.id] = entry;
+    }
+    _isLoaded = true;
+    debugPrint('[BooksCache] Seeded ${_books.length} books from catalog');
+  }
+
+  static BookCacheEntry _entryFromRow(Map<String, dynamic> row) =>
+      BookCacheEntry(
+        id: row['id'] as int,
+        title: row['title'] as String,
+        filePath: row['filePath'] as String?,
+        fileType: (row['fileType'] as String?) ?? 'txt',
+        categoryId: row['categoryId'] as int,
+        orderIndex: (row['orderIndex'] as num?)?.toDouble() ?? 999.0,
+      );
 
   void clear() {
     _generation++;

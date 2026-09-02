@@ -9,6 +9,8 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/models/model_adapters.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
+import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/data/sqlite/sqlite3_api.dart'
     show SqliteException, sqlite3;
@@ -263,6 +265,16 @@ class SqliteDataProvider {
     _externalWriteGate ??= Completer<void>();
     _activeWriteSessions++;
     await dispose();
+    // ל-worker של ה-isolate יש handle RO משלו על אותו קובץ; בלי סגירה
+    // *ממתינה* המחיקה/החלפה של ה-DB נכשלת (ב-Windows) או נתקעת על busy.
+    final released = await FindRefDbIsolate.suspendForExternalWrite();
+    if (!released) {
+      // השורה הזו היא מה שיאבחן בשדה כשל מחיקה/rename של seforim.db.
+      debugPrint(
+        '[SqliteDataProvider] external write starting while the find_ref '
+        'worker may still hold seforim.db open',
+      );
+    }
   }
 
   /// פותח מחדש את seforim.db read-only לאחר שאיזולייט חיצוני סיים לכתוב.
@@ -280,6 +292,9 @@ class SqliteDataProvider {
       // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
       await initialize();
     } finally {
+      // ב-finally: worker שנשאר מושהה אחרי כשל פתיחה יחזיר שגיאה לכל TOC
+      // וקטלוג עד סוף ה-session.
+      await FindRefDbIsolate.resumeAfterExternalWrite();
       // משחררים את הקוראים הממתינים. ה-finally מבטיח שחרור גם אם הפתיחה-מחדש
       // נכשלה (אחרת היו נתקעים לנצח).
       final gate = _externalWriteGate;
@@ -505,9 +520,18 @@ class SqliteDataProvider {
       if (resolvedBook == null) return null;
       final book = resolvedBook.book;
 
-      final migrationTocEntries = await resolvedBook.repository.getBookTocs(
-        book.id,
-      );
+      // ‏TOC של seforim.db יכול למנות אלפי שורות ולחסום את פתיחת הספר, ולכן
+      // נקרא ב-isolate. ספרי המשתמש נשארים על החיבור המקומי (DB קטן).
+      final List<db_models.TocEntry> migrationTocEntries;
+      if (resolvedBook.isUserBooks) {
+        migrationTocEntries = await resolvedBook.repository.getBookTocs(
+          book.id,
+        );
+      } else {
+        final isolate = await FindRefDbIsolate.instance();
+        final tocRows = await isolate.getBookTocRows(book.id);
+        migrationTocEntries = tocRows.map(db_models.TocEntry.fromMap).toList();
+      }
 
       // Convert migration TOC entries to otzaria TOC entries
       final Map<int, TocEntry> idToEntry = {};

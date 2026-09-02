@@ -3,6 +3,7 @@ import 'package:logging/logging.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'dart:convert';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/category.dart' as db_models;
 import 'package:otzaria/migration/models/book.dart' as db_models;
@@ -360,9 +361,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
 
     try {
       final repository = _sqliteDataProvider!.repository!;
-      final tocEntries = await repository.database.tocDao.selectByBookId(
-        bookId,
-      );
+      final isolate = await FindRefDbIsolate.instance();
+      final tocRows = await isolate.getBookTocRows(bookId);
+      final tocEntries = tocRows.map(db_models.TocEntry.fromMap).toList();
 
       if (tocEntries.isEmpty) {
         _tocCache[bookId] = [];
@@ -377,8 +378,9 @@ class ShamorZachorDataProvider with ChangeNotifier {
       _tocCache[bookId] = sections;
       return sections;
     } catch (e) {
+      // בלי צריבה בקאש: כשל זמני (worker שנפל, DB נעול) היה מקבע "אין
+      // פרקים" לספר עד ריענון, במקום להיות ניתן לניסיון חוזר.
       _logger.warning('Failed to load TOC for book $bookId', e);
-      _tocCache[bookId] = [];
       return [];
     }
   }

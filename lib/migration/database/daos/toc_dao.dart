@@ -38,14 +38,17 @@ class TocDao {
     return _resolvedQueries!;
   }
 
-  Future<List<TocEntry>> selectByBookId(int bookId) async {
+  /// שורות ה-TOC הגולמיות של הספר. מוחזרות כמפות כדי שיוכלו לחצות גבול
+  /// isolate; [selectByBookId] הוא העיטוף שממפה אותן ל-[TocEntry].
+  Future<List<Map<String, dynamic>>> selectRowsByBookId(int bookId) async {
     final db = await database;
     final queries = await _resolved();
-    return db
-        .select(queries['selectByBookId']!, [bookId])
-        .toMapList()
-        .map((row) => TocEntry.fromMap(row))
-        .toList();
+    return db.select(queries['selectByBookId']!, [bookId]).toMapList();
+  }
+
+  Future<List<TocEntry>> selectByBookId(int bookId) async {
+    final rows = await selectRowsByBookId(bookId);
+    return rows.map((row) => TocEntry.fromMap(row)).toList();
   }
 
   Future<TocEntry?> selectTocById(int id) async {
