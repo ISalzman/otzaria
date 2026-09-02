@@ -13,6 +13,7 @@ import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 enum ToolbarActionId {
   plugin,
   search,
+  handMode,
   zoomOut,
   zoomIn,
   continuousReading,
@@ -44,6 +45,7 @@ enum ToolbarActionId {
 const List<ToolbarActionId> toolbarOverflowOrder = [
   ToolbarActionId.plugin,
   ToolbarActionId.search,
+  ToolbarActionId.handMode,
   ToolbarActionId.zoomOut,
   ToolbarActionId.zoomIn,
   ToolbarActionId.continuousReading,

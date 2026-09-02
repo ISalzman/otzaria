@@ -5056,6 +5056,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           selected: _isHandMode,
           onPressed: () => setState(() => _isHandMode = !_isHandMode),
           compact: isCompact,
+          actionId: ToolbarActionId.handMode,
         ),
       ActionButtonData.simple(
         icon: FluentIcons.zoom_in_24_regular,
