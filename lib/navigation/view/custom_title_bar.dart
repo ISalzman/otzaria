@@ -26,6 +26,9 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/searching_tab.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
@@ -587,6 +590,9 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // תחילת גרירה אינה בוחרת כרטיסיה — בחירה מיידית הייתה מפצלת את הנגררת
       // עם עצמה בשחרור מעל אזור הקריאה; בסידור מחדש MoveTab בוחר את הנגררת.
       onDragStarted: () => _pendingTabSelection = null,
+      onDroppedOutside: MultiWindowService.isSupported
+          ? (tab) => _handleTabDroppedOutside(context, tab)
+          : null,
       onSpringOpen: (tab) {
         // ה-state שנתפס ב-build עלול להיות מיושן באמצע גרירה, ורק קריאה
         // ישירה מה-bloc משקפת מה מוצג עכשיו.
@@ -1259,6 +1265,55 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       },
       child: AutoScrollBarrier(child: child),
     );
+  }
+
+  /// כרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון.
+  ///
+  /// ⚠️ Flutter אינו יודע דבר מחוץ לחלון שלו, ולכן השאלה "לאן שוחררה"
+  /// נשאלת מ-Win32: מה נמצא תחת הסמן ברגע השחרור.
+  ///
+  /// שלוש תוצאות:
+  /// * מעל החלון הזה עצמו — שחרור בתוך החלון שלא פגע ביעד. אין לעשות דבר,
+  ///   אחרת כל גרירה שהתפספסה הייתה פותחת חלון.
+  /// * מעל חלון אוצריא אחר — הכרטיסיה עוברת אליו.
+  /// * מעל שולחן העבודה או תוכנה אחרת — נפתח חלון חדש, כמו בדפדפן.
+  Future<void> _handleTabDroppedOutside(
+    BuildContext context,
+    OpenedTab tab,
+  ) async {
+    final tabsBloc = context.read<TabsBloc>();
+    final service = const MultiWindowService();
+
+    final target = await service.windowAtCursor();
+    if (target.isSelf) return;
+
+    // ⚠️ נבדק לפני כל ניסיון העברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
+    // נעלמת מכאן ולא נפתחת שם.
+    if (!MultiWindowService.canTransfer(tab)) {
+      UiSnack.showError('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
+      return;
+    }
+
+    // כרטיסיה אחרונה בחלון: גרירתה החוצה הייתה משאירה חלון ריק ופותחת
+    // חדש — תזוזה בלי תועלת.
+    if (target.slot == null && tabsBloc.state.tabs.length <= 1) return;
+
+    final moved = target.slot != null
+        ? await service.sendTabToWindow(target.slot!, tab)
+        : await service.openWindow(tab: tab);
+
+    if (moved) {
+      tabsBloc.add(RemoveTab(tab));
+      return;
+    }
+    final info = await service.windowCount();
+    if (info.count >= info.max) {
+      UiSnack.show(
+        'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
+      );
+    } else {
+      UiSnack.showError('העברת הכרטיסיה נכשלה');
+    }
   }
 
   List<AppContextMenuEntry> _buildTabContextMenuEntries(

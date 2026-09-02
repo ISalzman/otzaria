@@ -73,6 +73,14 @@ class ReadingTabStrip extends StatefulWidget {
   /// את הנגררת לצדה באזור הקריאה בלי לוותר על הגרירה.
   final void Function(OpenedTab tab)? onSpringOpen;
 
+  /// נקרא כשכרטיסיה שוחררה מחוץ לכל יעד הפלה.
+  ///
+  /// ⚠️ זה כולל שחרור **מחוץ לחלון** — Flutter תופס את הסמן לכל אורך
+  /// הגרירה, ולכן האירוע מגיע גם כשהמשתמש שחרר מעל חלון אחר או מעל שולחן
+  /// העבודה. מי שמממש אחראי לברר לאן, כי Flutter אינו יודע דבר מחוץ
+  /// לחלון שלו.
+  final void Function(OpenedTab tab)? onDroppedOutside;
+
   const ReadingTabStrip({
     super.key,
     required this.tabs,
@@ -83,6 +91,7 @@ class ReadingTabStrip extends StatefulWidget {
     this.onExternalDrop,
     this.onDragStarted,
     this.onSpringOpen,
+    this.onDroppedOutside,
     this.requireLongPressToDrag = false,
     this.axis = Axis.horizontal,
     this.crossExtent,
@@ -364,6 +373,9 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                         crossExtent: widget.crossExtent,
                         requireLongPress: widget.requireLongPressToDrag,
                         onDragStarted: widget.onDragStarted,
+                        onDroppedOutside: widget.onDroppedOutside == null
+                            ? null
+                            : () => widget.onDroppedOutside!(widget.tabs[i]),
                         // גרירה שהסתיימה מחוץ לרצועה אינה מפעילה onLeave,
                         // ולכן קו החיווי מנוקה גם כאן.
                         onDragFinished: () {
@@ -460,6 +472,9 @@ class _DraggableTab extends StatelessWidget {
   final bool requireLongPress;
   final VoidCallback? onDragStarted;
   final VoidCallback onDragFinished;
+
+  /// נקרא כשהכרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון כולו.
+  final VoidCallback? onDroppedOutside;
   final Widget child;
 
   const _DraggableTab({
@@ -471,6 +486,7 @@ class _DraggableTab extends StatelessWidget {
     required this.requireLongPress,
     required this.onDragStarted,
     required this.onDragFinished,
+    required this.onDroppedOutside,
     required this.child,
   });
 
@@ -494,7 +510,10 @@ class _DraggableTab extends StatelessWidget {
         childWhenDragging: placeholder,
         onDragStarted: onDragStarted,
         onDragEnd: (_) => onDragFinished(),
-        onDraggableCanceled: (_, _) => onDragFinished(),
+        onDraggableCanceled: (_, _) {
+          onDragFinished();
+          onDroppedOutside?.call();
+        },
         child: child,
       );
     }
@@ -508,7 +527,10 @@ class _DraggableTab extends StatelessWidget {
       childWhenDragging: placeholder,
       onDragStarted: onDragStarted,
       onDragEnd: (_) => onDragFinished(),
-      onDraggableCanceled: (_, _) => onDragFinished(),
+      onDraggableCanceled: (_, _) {
+        onDragFinished();
+        onDroppedOutside?.call();
+      },
       child: child,
     );
   }

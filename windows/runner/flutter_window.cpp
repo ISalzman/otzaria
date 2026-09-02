@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -178,6 +179,16 @@ std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
 // תקרת חלונות. כל חלון הוא מנוע Flutter מלא (~340MB בבנייית debug), ולכן
 // זו הגבלת משאבים ולא העדפת ממשק.
 constexpr size_t kMaxWindows = 4;
+
+// מיפוי חלון → משבצת באפיק ההודעות של Dart.
+//
+// ⚠️ נדרש לגרירה בין חלונות. Win32 יודע איזה **חלון** נמצא תחת הסמן, אבל
+// Dart מזהה חלונות לפי משבצת באפיק. בלי המיפוי אי אפשר לתרגם "שוחרר מעל
+// החלון הזה" ל"שלח לחלון מספר N".
+std::map<HWND, int>& WindowSlots() {
+  static std::map<HWND, int> slots;
+  return slots;
+}
 
 // מספר חלונות אוצריא החיים בתהליך, כולל הראשי.
 //
@@ -524,6 +535,43 @@ bool FlutterWindow::OnCreate() {
           result->Success();
           return;
         }
+        // Dart מודיע איזו משבצת באפיק הוא תפס, כדי שנוכל לתרגם "החלון
+        // שתחת הסמן" למספר משבצת.
+        if (call.method_name() == "setBusSlot") {
+          if (const auto* slot = std::get_if<int>(call.arguments())) {
+            if (const HWND self = GetHandle()) WindowSlots()[self] = *slot;
+          }
+          result->Success();
+          return;
+        }
+
+        // איזה חלון אוצריא נמצא תחת הסמן, אם בכלל.
+        //
+        // ⚠️ `WindowFromPoint` מחזיר את החלון הפנימי ביותר — בדרך כלל
+        // ה-view של Flutter או חלון של WebView2 — ולכן חובה לעלות ל-root.
+        // בלי זה שחרור מעל תוכן הספר לא היה מזוהה כשחרור מעל החלון.
+        if (call.method_name() == "windowAtCursor") {
+          POINT cursor{};
+          ::GetCursorPos(&cursor);
+          const HWND under = ::GetAncestor(::WindowFromPoint(cursor), GA_ROOT);
+
+          flutter::EncodableMap info;
+          info[flutter::EncodableValue("x")] =
+              flutter::EncodableValue(static_cast<int>(cursor.x));
+          info[flutter::EncodableValue("y")] =
+              flutter::EncodableValue(static_cast<int>(cursor.y));
+          const auto& slots = WindowSlots();
+          const auto it = slots.find(under);
+          if (it != slots.end() && ::IsWindowVisible(under)) {
+            info[flutter::EncodableValue("slot")] =
+                flutter::EncodableValue(it->second);
+            info[flutter::EncodableValue("isSelf")] =
+                flutter::EncodableValue(under == GetHandle());
+          }
+          result->Success(flutter::EncodableValue(info));
+          return;
+        }
+
         if (call.method_name() == "raiseSelf") {
           const HWND self = GetHandle();
           if (self) {

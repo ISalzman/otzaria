@@ -37,8 +37,12 @@ class _WindowBusHostState extends State<WindowBusHost> {
   @override
   void initState() {
     super.initState();
-    WindowBus.instance.register();
+    final slot = WindowBus.instance.register();
     WindowBus.instance.onRequest = _handleRequest;
+    // ה-runner צריך את המיפוי כדי לתרגם "החלון שתחת הסמן" למשבצת בגרירה.
+    if (slot != null) {
+      unawaited(const MultiWindowService().setBusSlot(slot));
+    }
 
     // ⚠️ רענון ברקע ולא לפי דרישה: בניית תפריט ההקשר סינכרונית ואינה
     // יכולה להמתין לסריקה. בלי זה הלחיצה הימנית הראשונה אחרי פתיחת חלון

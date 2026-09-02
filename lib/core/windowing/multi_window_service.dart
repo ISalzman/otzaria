@@ -95,6 +95,43 @@ class MultiWindowService {
     }
   }
 
+  /// מודיע ל-runner באיזו משבצת באפיק החלון הזה יושב.
+  ///
+  /// ⚠️ בלי זה אי אפשר לגרור כרטיסיה בין חלונות: Win32 יודע איזה **חלון**
+  /// נמצא תחת הסמן, ו-Dart מזהה חלונות לפי משבצת. זה המתרגם.
+  Future<void> setBusSlot(int slot) async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('setBusSlot', slot);
+    } catch (e) {
+      debugPrint('setBusSlot failed: $e');
+    }
+  }
+
+  /// מה נמצא תחת סמן העכבר ברגע זה.
+  ///
+  /// [slot] הוא משבצת חלון אוצריא, או null כשהסמן מעל שולחן העבודה או מעל
+  /// תוכנה אחרת. [isSelf] מבדיל בין שחרור מעל החלון שממנו גוררים לבין
+  /// שחרור מעל חלון אחר.
+  Future<({int? slot, bool isSelf, int x, int y})> windowAtCursor() async {
+    if (!isSupported) return (slot: null, isSelf: false, x: 0, y: 0);
+    try {
+      final info = await _channel.invokeMapMethod<String, dynamic>(
+        'windowAtCursor',
+      );
+      if (info == null) return (slot: null, isSelf: false, x: 0, y: 0);
+      return (
+        slot: info['slot'] as int?,
+        isSelf: info['isSelf'] == true,
+        x: (info['x'] as int?) ?? 0,
+        y: (info['y'] as int?) ?? 0,
+      );
+    } catch (e) {
+      debugPrint('windowAtCursor failed: $e');
+      return (slot: null, isSelf: false, x: 0, y: 0);
+    }
+  }
+
   /// סוגר את החלון הנוכחי בלי לסיים את התהליך.
   ///
   /// ⚠️ ולא `windowManager.destroy()`: הוא קורא ל-`DestroyWindow` מתוך
