@@ -1097,6 +1097,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       ),
       icon: FluentIcons.arrow_sync_24_regular,
       tooltip: 'עדכון ספרייה',
+      actionId: ToolbarActionId.sync,
       onPressed: () {
         final b = context.read<LibraryUpdateBloc>();
         if (!b.state.isBusy) {
@@ -1124,6 +1125,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'חזרה לתיקיה הקודמת',
         icon: FluentIcons.arrow_up_24_regular,
+        actionId: ToolbarActionId.navigateUp,
         onPressed: isLibraryEmpty
             ? null
             : () => _handleNavigateUp(context, state, settingsState),
@@ -1132,6 +1134,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'חזרה לתיקיה הראשית',
         icon: FluentIcons.home_24_regular,
+        actionId: ToolbarActionId.navigateHome,
         onPressed: isLibraryEmpty
             ? null
             : () => _handleNavigateHome(context, state, settingsState),
@@ -1142,6 +1145,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'טעינה מחדש',
         icon: FluentIcons.arrow_clockwise_24_regular,
+        actionId: ToolbarActionId.refresh,
         onPressed: isLibraryEmpty ? null : _refreshWithPersonalFolders,
       ),
     ];
@@ -1159,6 +1163,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'חזרה לתיקיה הקודמת',
         icon: FluentIcons.arrow_up_24_regular,
+        actionId: ToolbarActionId.navigateUp,
         onPressed: isLibraryEmpty
             ? null
             : () => _handleNavigateUp(context, state, settingsState),
@@ -1169,6 +1174,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'חזרה לתיקיה הראשית',
         icon: FluentIcons.home_24_regular,
+        actionId: ToolbarActionId.navigateHome,
         onPressed: isLibraryEmpty
             ? null
             : () => _handleNavigateHome(context, state, settingsState),
@@ -1177,6 +1183,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         compact: compact,
         tooltip: 'טעינה מחדש',
         icon: FluentIcons.arrow_clockwise_24_regular,
+        actionId: ToolbarActionId.refresh,
         onPressed: isLibraryEmpty ? null : _refreshWithPersonalFolders,
       ),
     ];
