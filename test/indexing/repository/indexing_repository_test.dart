@@ -14,6 +14,8 @@ import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/utils/file/document_conversion_exceptions.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -1243,6 +1245,97 @@ void main() {
       expect(repository.extractedTitles.length, extractionsAfterFirstRun);
     });
 
+    test(
+      'docx מוצפן מסומן ככשל קבוע ואינו מפעיל אינדוקס מלא בכל עלייה',
+      () async {
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine);
+        final book = TextBook(id: 1009, title: 'הרב פינקוס', isUserBook: true);
+        final library = Library(categories: [])..books.add(book);
+        final repository = _FakeExtractionRepository(provider)
+          ..textFailureByTitle[book.title] = const EncryptedDocumentException(
+            format: DocumentFormat.docx,
+            cause: 'החבילה מוצפנת (מכולת OLE במקום ZIP)',
+          );
+
+        final firstRun = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+        final secondRun = await repository.indexAllBooks(
+          library,
+          onProgress: (_, _) {},
+        );
+
+        expect(
+          firstRun.failures.single.kind,
+          IndexingFailureKind.passwordProtected,
+        );
+        expect(firstRun.hasRetryableFailures, isFalse);
+        final filePath = IndexingRepository.buildIndexedBookFilePath(book);
+        expect(provider.indexedFilePaths, contains(filePath));
+        expect(
+          engine.addedDocuments,
+          contains(
+            isA<DocumentInput>()
+                .having((document) => document.filePath, 'filePath', filePath)
+                .having((document) => document.text, 'text', isEmpty),
+          ),
+        );
+        expect(secondRun.isClean, isTrue);
+        expect(await repository.hasUnindexedBooks(library), isFalse);
+      },
+    );
+
+    test('docx פגום (מעל מגבלת ה-ZIP) מסומן ככשל קבוע', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final book = TextBook(id: 536, title: 'שבת', isUserBook: true);
+      final library = Library(categories: [])..books.add(book);
+      final repository = _FakeExtractionRepository(provider)
+        ..textFailureByTitle[book.title] = const CorruptedDocumentException(
+          format: DocumentFormat.docx,
+          cause: 'הרשומה "word/document.xml" פרוסה ל-168141090 בתים',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(
+        result.failures.single.kind,
+        IndexingFailureKind.unreadableDocument,
+      );
+      expect(result.failures.single.isRetryable, isFalse);
+      expect(
+        provider.indexedFilePaths,
+        contains(IndexingRepository.buildIndexedBookFilePath(book)),
+      );
+      expect(await repository.hasUnindexedBooks(library), isFalse);
+    });
+
+    test('כשל טעינה לא מזוהה בספר טקסט נשאר לניסיון חוזר', () async {
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final book = TextBook(id: 7, title: 'ברכות', isUserBook: true);
+      final library = Library(categories: [])..books.add(book);
+      final repository = _FakeExtractionRepository(provider)
+        ..textFailureByTitle[book.title] = StateError('קריאה נכשלה');
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failures.single.kind, IndexingFailureKind.unknown);
+      expect(result.hasRetryableFailures, isTrue);
+      expect(
+        provider.indexedFilePaths,
+        isNot(contains(IndexingRepository.buildIndexedBookFilePath(book))),
+      );
+    });
+
     test('כשל rotation הקבוע מקבל סמן ריק ואינו מנוסה שוב', () async {
       final engine = _RecordingSearchEngine();
       final provider = _RecordingTantivyDataProvider(engine);
@@ -2049,11 +2142,23 @@ class _FakeExtractionRepository extends IndexingRepository {
   /// כותרות שחילוצן ייכשל — לבדיקת שחרור הסלוט והפצת השגיאה.
   final failingTitles = <String>{};
   final failureByTitle = <String, Object>{};
+
+  /// כותרות ספרי טקסט שטעינת התוכן שלהן תיכשל בחריגה הנתונה.
+  final textFailureByTitle = <String, Object>{};
   final guardedOpenErrorByTitle = <String, Object>{};
   final droppedPagesByTitle = <String, int>{};
 
   /// כותרות שחילוצן מחזיר אפס עמודים — PDF סרוק, או כל העמודים ב-timeout.
   final emptyPagesTitles = <String>{};
+
+  @override
+  Future<({Uint8List? bytes, String? text})> loadTextBookSource(
+    TextBook book,
+  ) async {
+    final failure = textFailureByTitle[book.title];
+    if (failure != null) throw failure;
+    return (bytes: null, text: 'תוכן');
+  }
 
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {

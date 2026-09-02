@@ -109,6 +109,9 @@ class IndexingRepository {
           when rangeError.invalidValue == -1 && rangeError.end == 3 =>
         IndexingFailureKind.pdfUnsupported,
       final TimeoutException _ => IndexingFailureKind.timeout,
+      EncryptedDocumentException _ => IndexingFailureKind.passwordProtected,
+      CorruptedDocumentException _ || UnsupportedDocumentFormatException _ =>
+        IndexingFailureKind.unreadableDocument,
       _
           when normalized.contains('no password supplied') ||
               normalized.contains('password required') ||
@@ -392,7 +395,7 @@ class IndexingRepository {
             errors++;
             final failure = _classifyFailure(readyBook, e, stackTrace);
             failures.add(failure);
-            final handled = await _markPermanentPdfFailure(
+            final handled = await _markPermanentFailure(
               readyBook,
               failure,
               catalogueOrder,
@@ -529,7 +532,7 @@ class IndexingRepository {
           failures.add(failure);
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          final handled = await _markPermanentPdfFailure(
+          final handled = await _markPermanentFailure(
             book,
             failure,
             catalogueOrder,
@@ -621,7 +624,7 @@ class IndexingRepository {
     // (UTF-8 כפי שמאוחסן ב-SQLite) ונמסר ל-addTextBookBytes — בלי פענוח
     // ל-String וקידוד חוזר על הגשר (~180ms/MB שנמדדו בלוגים).
     final loadStopwatch = Stopwatch()..start();
-    final source = await _loadTextBookSource(book);
+    final source = await loadTextBookSource(book);
     final bytes = source.bytes;
     final text = source.text;
     loadStopwatch.stop();
@@ -855,13 +858,15 @@ class IndexingRepository {
     );
   }
 
-  Future<bool> _markPermanentPdfFailure(
+  /// כשל קבוע מקבל סמן ריק באינדקס, אחרת הספר "חסר" לנצח ומפעיל ריצת
+  /// אינדוקס מלאה בכל עלייה.
+  Future<bool> _markPermanentFailure(
     Book book,
     IndexingFailure failure,
     CatalogueOrderResolver catalogueOrder,
     List<IndexingFailure> failures,
   ) async {
-    if (book is! PdfBook || failure.isRetryable) return false;
+    if (failure.isRetryable) return false;
     if (!_tantivyDataProvider.isIndexing.value) return false;
 
     try {
@@ -873,7 +878,7 @@ class IndexingRepository {
       failures.add(
         IndexingFailure(
           bookTitle: book.title,
-          bookPath: book.path,
+          bookPath: buildIndexedBookFilePath(book),
           kind: IndexingFailureKind.engineWrite,
           error: error.toString(),
           stackTrace: stackTrace.toString(),
@@ -1127,7 +1132,8 @@ class IndexingRepository {
   /// (בלי פענוח/קידוד על ה-UI isolate), וירידה לטקסט מפוענח ומנוקה רק
   /// כשחייבים (תמונות מוטמעות, פורמט מומר, ספר בלי categoryId). משותף
   /// לאינדוקס ולאימות הטריות — כך שתי החתימות מחושבות על אותו קלט בדיוק.
-  Future<({Uint8List? bytes, String? text})> _loadTextBookSource(
+  @visibleForTesting
+  Future<({Uint8List? bytes, String? text})> loadTextBookSource(
     TextBook book,
   ) async {
     Uint8List? bytes;
@@ -1373,7 +1379,7 @@ class IndexingRepository {
     // אותו מקור בדיוק שמסלול האינדוקס חתם: במקרה הנפוץ bytes גולמיים
     // מה-DB עוברים כמות שהם, וה-UI isolate לא מפענח, מקודד או מגבב דבר —
     // הגיבוב רץ על ה-thread pool של המנוע.
-    final source = await _loadTextBookSource(textBook);
+    final source = await loadTextBookSource(textBook);
     final text = source.text;
     final bytes =
         source.bytes ??
@@ -1512,7 +1518,7 @@ class IndexingRepository {
           failures.add(failure);
           processedBooks++;
           onProgress(processedBooks, totalBooks);
-          final handled = await _markPermanentPdfFailure(
+          final handled = await _markPermanentFailure(
             book,
             failure,
             catalogueOrder,

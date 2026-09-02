@@ -5,6 +5,8 @@ enum IndexingFailureKind {
   passwordProtected(isRetryable: false, preventedIndexing: true),
   pdfUnsupported(isRetryable: false, preventedIndexing: true),
   permissionDenied(isRetryable: false, preventedIndexing: true),
+  // מסמך שהמבנה שלו שבור או שהפורמט אינו נתמך — ניסיון חוזר לא יעזור.
+  unreadableDocument(isRetryable: false, preventedIndexing: true),
   // timeout חולף מטבעו (עומס רגעי, worker שנתקע). סימונו כקבוע היה מחשיב
   // ספר תקין כמאונדקס בלי תוכן, עד אינדוקס מלא ידני.
   timeout(isRetryable: true, preventedIndexing: true),
