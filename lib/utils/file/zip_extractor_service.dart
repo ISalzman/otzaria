@@ -1,5 +1,8 @@
 import 'dart:io';
+import 'dart:isolate';
+
 import 'package:archive/archive_io.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:path/path.dart' as path;
 import 'package:logging/logging.dart';
 
@@ -71,32 +74,15 @@ class ZipExtractorService {
 
         onProgress?.call(0.1, 'מתחיל חילוץ ($fileSizeMB MB)...');
 
-        // שימוש ב-extractFileToDisk - פונקציה אופטימלית שמטפלת ב-streaming אוטומטית
-        // זה מונע טעינת כל הקובץ לזיכרון ומתאים לקבצים גדולים
-        _log.info('משתמש ב-extractFileToDisk לחילוץ אופטימלי');
-
+        // חילוץ בזרימה מהקובץ, בלי לטעון את הארכיון כולו לזיכרון.
         try {
-          await extractFileToDisk(zipFile.path, targetDir);
+          await extractArchiveFileToDisk(zipFile.path, targetDir);
           _log.info('החילוץ הושלם בהצלחה');
           onProgress?.call(0.95, 'משלים חילוץ...');
         } catch (e) {
-          _log.severe('שגיאה בחילוץ עם extractFileToDisk, מנסה שיטה חלופית', e);
-          // אם נכשל, ננסה את השיטה הישנה
+          _log.severe('שגיאה בחילוץ בזרימה, מנסה שיטה חלופית', e);
           onProgress?.call(0.1, 'קורא קובץ דחוס ($fileSizeMB MB)...');
-          final bytes = await zipFile.readAsBytes();
-          _log.info('קובץ ZIP נקרא, גודל: ${bytes.length} bytes');
-
-          onProgress?.call(0.15, 'מפענח ארכיון ($fileSizeMB MB)...');
-          await Future.delayed(const Duration(milliseconds: 100));
-          final archive = ZipDecoder().decodeBytes(bytes);
-          _log.info('ארכיון פוענח, ${archive.length} קבצים');
-
-          // חילוץ ידני
-          await _extractArchiveManually(
-            archive,
-            targetDir,
-            onProgress,
-          );
+          await _extractManuallyInIsolate(zipFile.path, targetDir, onProgress);
         }
 
         onProgress?.call(0.95, 'משלים חילוץ...');
@@ -153,6 +139,44 @@ class ZipExtractorService {
     return extension == '.zip';
   }
 
+  /// המסלול החלופי במלואו — קריאה, פענוח ופרישה — ב-isolate נפרד. פענוח
+  /// ה-ZIP ופרישת הקבצים סינכרוניים, ועל isolate שיש בו UI הם מקפיאים אותו.
+  static Future<void> _extractManuallyInIsolate(
+    String zipPath,
+    String targetDir,
+    Function(double progress, String message)? onProgress,
+  ) async {
+    final progressPort = ReceivePort();
+    final sub = progressPort.listen((message) {
+      if (message is List && message.length == 2) {
+        onProgress?.call(message[0] as double, message[1] as String);
+      }
+    });
+    final sendPort = progressPort.sendPort;
+    try {
+      await Isolate.run(
+        () => _readDecodeAndExtract(zipPath, targetDir, sendPort),
+      );
+    } finally {
+      await sub.cancel();
+      progressPort.close();
+    }
+  }
+
+  static Future<void> _readDecodeAndExtract(
+    String zipPath,
+    String targetDir,
+    SendPort progressPort,
+  ) async {
+    final bytes = await File(zipPath).readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+    await _extractArchiveManually(
+      archive,
+      targetDir,
+      (progress, message) => progressPort.send([progress, message]),
+    );
+  }
+
   /// חילוץ ידני של ארכיון (fallback)
   static Future<void> _extractArchiveManually(
     Archive archive,
@@ -160,7 +184,6 @@ class ZipExtractorService {
     Function(double progress, String message)? onProgress,
   ) async {
     onProgress?.call(0.2, 'מתכונן לחילוץ ${archive.length} קבצים...');
-    await Future.delayed(const Duration(milliseconds: 100));
 
     final totalFiles = archive.length;
     var extractedFiles = 0;
@@ -176,7 +199,6 @@ class ZipExtractorService {
 
     final totalMB = (totalBytes / 1024 / 1024).toStringAsFixed(1);
     onProgress?.call(0.22, 'מחלץ $totalMB MB...');
-    await Future.delayed(const Duration(milliseconds: 100));
 
     for (final file in archive) {
       final filename = file.name;

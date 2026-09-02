@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:archive/archive_io.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 
 /// מחלץ ארכיון tar.zst לתיקיית היעד בזרימה נמוכת-זיכרון: חילוץ ה-zst לקובץ
-/// tar זמני, ואז `extractFileToDisk` שקורא בזרימה מהקובץ.
+/// tar זמני, ואז פריסת ה-tar בזרימה מהקובץ.
 Future<void> extractTarZstToDir(
   String archivePath,
   String outputDir, {
@@ -17,7 +17,7 @@ Future<void> extractTarZstToDir(
       tarPath,
       onProgress: onProgress,
     );
-    await extractFileToDisk(tarPath, outputDir);
+    await extractArchiveFileToDisk(tarPath, outputDir);
   } finally {
     // גם חילוץ zst שנכשל באמצע משאיר tar חלקי — מנקים תמיד.
     await File(tarPath).delete().catchError((_) => File(tarPath));

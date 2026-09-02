@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +11,7 @@ import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:updat/updat.dart';
@@ -1205,7 +1205,10 @@ Future<File> _downloadRelease(File file, String url, String appName) async {
         outDir.deleteSync(recursive: true);
       }
       outDir.createSync(recursive: true);
-      extractFileToDisk(file.absolute.path, outDir.absolute.path);
+      await extractArchiveFileToDisk(
+        file.absolute.path,
+        outDir.absolute.path,
+      );
     }
 
     return file;

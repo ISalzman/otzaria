@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
 import 'package:bloc/bloc.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
@@ -18,6 +17,7 @@ import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/download_sidecar.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/utils/file/tar_zst_extractor.dart';
 import 'package:otzaria/utils/move_directory.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
@@ -213,7 +213,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       ),
     );
     if (lowerPath.endsWith('.zip')) {
-      await extractFileToDisk(archivePath, target);
+      await extractArchiveFileToDisk(archivePath, target);
     } else {
       await _extractCompressedDatabase(
         archivePath,
