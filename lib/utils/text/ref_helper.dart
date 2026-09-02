@@ -109,7 +109,9 @@ String _normalizeReferenceForDisplay(String ref) {
 
   final dedupedParts = <String>[];
   for (final part in parts) {
-    if (dedupedParts.isNotEmpty && dedupedParts.last == part) {
+    if (dedupedParts.isNotEmpty &&
+        dedupedParts.last == part &&
+        _looksLikeHeadingSegment(part)) {
       continue;
     }
     dedupedParts.add(part);
@@ -117,6 +119,12 @@ String _normalizeReferenceForDisplay(String ref) {
 
   return dedupedParts.join(', ');
 }
+
+/// רכיב שנראה ככותרת TOC (מילים/טקסט ארוך) ולא כערך מיקום גימטרי קצר.
+/// "פרק א, פרק א" הוא כפל כותרות שיש לאחד; "א, א" הוא פרק א פסוק א — שתי
+/// רמות לגיטימיות שאסור למזג.
+bool _looksLikeHeadingSegment(String part) =>
+    part.contains(' ') || part.length > 3;
 
 String _chooseMoreSpecificReference({
   required String resolvedDisplay,

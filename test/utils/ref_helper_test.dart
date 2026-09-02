@@ -305,6 +305,16 @@ void main() {
       );
     });
 
+    test('ערכי מיקום קצרים זהים ("פרק א, פסוק א") אינם מתמזגים', () {
+      expect(
+        formatDisplayReference(
+          bookTitle: 'משנה תורה, הלכות שבת',
+          fallbackRef: 'משנה תורה, הלכות שבת, א, א',
+        ),
+        'משנה תורה, הלכות שבת, א, א',
+      );
+    });
+
     test('removes adjacent duplicate toc segments', () {
       expect(
         formatDisplayReference(
