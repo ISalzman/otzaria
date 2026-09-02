@@ -501,6 +501,20 @@ bool FlutterWindow::OnCreate() {
           result->Success(flutter::EncodableValue(info));
           return;
         }
+        // מביא את החלון הזה לחזית.
+        //
+        // ⚠️ נדרש כי חלון משני נוצר **מוסתר** (כדי שלא יראו אותו מצטייר),
+        // ו-`ShowWindow` על חלון מוסתר אינו מפעיל אותו — הוא נחשף מאחורי
+        // החלון שפתח אותו, וזה נראה כאילו הראשון "תמיד עליון".
+        if (call.method_name() == "raiseSelf") {
+          const HWND self = GetHandle();
+          if (self) {
+            ::BringWindowToTop(self);
+            ::SetForegroundWindow(self);
+          }
+          result->Success();
+          return;
+        }
         if (call.method_name() != "openWindow") {
           result->NotImplemented();
           return;

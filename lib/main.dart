@@ -553,6 +553,20 @@ Future<void> presentMainWindow() async {
     }
     await _appWindow.show();
     await _appWindow.focus();
+    // ⚠️ חלון משני נוצר מוסתר, ו-`show()` על חלון מוסתר אינו מפעיל אותו:
+    // הוא נחשף **מאחורי** החלון שפתח אותו, וזה נראה כאילו החלון הראשון
+    // "תמיד עליון". `focus()` לבדו לא הספיק, ולכן העלאה מפורשת בנייטיב.
+    if (isSecondaryWindow) {
+      await const MultiWindowService().raiseSelf();
+      final startup = _secondaryWindowStartup;
+      if (startup != null && startup.isRunning) {
+        startup.stop();
+        // נמדד ולא משוער: כל צעד שמדולג בחלון משני צריך להיראות כאן.
+        debugPrint(
+          '[window] חלון משני עלה תוך ${startup.elapsedMilliseconds}ms',
+        );
+      }
+    }
     // maximize חייב לקרות *אחרי* show (show מבצע restore לגודל הקודם).
     await WindowPersistence.applyPendingMaximize();
     // חייב אחרי show (setFullScreen על חלון מוסתר מאבד WS_VISIBLE) ואחרי
@@ -589,8 +603,13 @@ Future<void> _initializeProcessSingletons() async {
       await Settings.init(cacheProvider: SharePreferenceCache());
     }
 
-    _clearErrorLogOnVersionChange();
-    await AppInstallTimelineStore.recordLaunch(ErrorLogFile.appVersion);
+    // ⚠️ פר-תהליך, לא פר-חלון. ניקוי יומן השגיאות בשינוי גרסה ורישום
+    // ההפעלה מתארים את **התהליך**; חלון נוסף שרושם "הפעלה" מזייף את
+    // הנתונים, וניקוי היומן פעם שנייה עלול למחוק שגיאות שנרשמו בינתיים.
+    if (!isSecondaryWindow) {
+      _clearErrorLogOnVersionChange();
+      await AppInstallTimelineStore.recordLaunch(ErrorLogFile.appVersion);
+    }
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -642,7 +661,12 @@ Future<void> _initializeProcessSingletons() async {
   // האבסולוטיים השמורים משוכתבים לפני שכל קוד אחר צורך אותם. חייב לרוץ
   // אחרי Settings.init ואחרי initHive (ה-boxes פתוחים), ולפני
   // SqliteDataProvider ו-FileSystemData שקוראים את נתיב הספרייה.
-  await PortablePaths.migrateIfMoved();
+  // ⚠️ פר-תהליך. המיגרציה משכתבת נתיבים אבסולוטיים בהגדרות המשותפות;
+  // החלון הראשון כבר ביצע אותה, וחלון משני שיריץ אותה שוב יעבוד על
+  // ה-Hive הפרטי שלו ולא על המשותף — כלומר בזבוז במקרה הטוב.
+  if (!isSecondaryWindow) {
+    await PortablePaths.migrateIfMoved();
+  }
 
   // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
   // ב-Hive בינארי שאינו נגיש לו (issue #1020).
@@ -694,11 +718,11 @@ Future<void> _recoverOrphanedDbBackup() async {
 }
 
 Future<void> _initializeRestartableRuntime() async {
-  // שני השחזורים חייבים לרוץ לפני פתיחת ה-DB ולפני בדיקת "ספרייה ריקה".
-  // שחזור עדכון ספרייה שנקטע (marker+backup) קודם: הוא כותב DB משלו, ולהחזיר
-  // לפניו גיבוי יתום פירושו העתקת ~5.5GB שתידרס מיד.
-  await _recoverInterruptedLibraryUpdate();
-  await _recoverOrphanedDbBackup();
+  // השחזורים נוגעים בקובצי הספרייה המשותפים, ולכן רצים רק בחלון הראשי.
+  if (!isSecondaryWindow) {
+    await _recoverInterruptedLibraryUpdate();
+    await _recoverOrphanedDbBackup();
+  }
 
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
   // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
@@ -1446,6 +1470,7 @@ void secondaryWindowMain(List<String> args) async {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   isSecondaryWindow = true;
+  _secondaryWindowStartup = Stopwatch()..start();
   SentryWidgetsFlutterBinding.ensureInitialized();
   EditableText.debugDeterministicCursor = true;
 
@@ -1561,6 +1586,9 @@ void _maybeScheduleDebugSecondWindow() {
 /// "שגיאה בקבלת רשימת ה-releases" בכל פתיחת חלון.
 bool isSecondaryWindow = false;
 
+/// מודד את זמן העלייה של חלון משני, מנקודת הכניסה ועד החשיפה.
+Stopwatch? _secondaryWindowStartup;
+
 /// המטען הגולמי שאיתו נפתח החלון, אם נפתח כחלון משני.
 ///
 /// נצרך **פעם אחת** ביצירת `TabsBloc` ומתאפס שם, כדי ש-`RestartWidget`
@@ -1575,10 +1603,11 @@ bool _openedWithTransferredTab = false;
 
 int _probeThreadId() {
   try {
-    return DynamicLibrary.open('kernel32.dll')
-        .lookupFunction<Uint32 Function(), int Function()>(
-          'GetCurrentThreadId',
-        )();
+    return DynamicLibrary.open(
+      'kernel32.dll',
+    ).lookupFunction<Uint32 Function(), int Function()>(
+      'GetCurrentThreadId',
+    )();
   } catch (_) {
     return -1;
   }
@@ -1848,8 +1877,9 @@ void brokerMain(List<String> args) async {
   void flush() {
     try {
       final temp = Platform.environment['TEMP'] ?? r'C:\Users\Public';
-      File('$temp\\otzaria_broker_probe.log')
-          .writeAsStringSync(log.toString(), mode: FileMode.append);
+      File(
+        '$temp\\otzaria_broker_probe.log',
+      ).writeAsStringSync(log.toString(), mode: FileMode.append);
     } catch (_) {}
   }
 

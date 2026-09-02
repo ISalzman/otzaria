@@ -147,7 +147,7 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
           } else {
             final info = await const MultiWindowService().windowCount();
             if (info.count >= info.max) {
-              UiSnack.showWarning(
+              UiSnack.show(
                 'אפשר לפתוח עד ${info.max} חלונות. סגור חלון כדי לפתוח חדש.',
               );
             } else {

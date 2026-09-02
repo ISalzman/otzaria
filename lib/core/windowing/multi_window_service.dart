@@ -71,6 +71,19 @@ class MultiWindowService {
     }
   }
 
+  /// מביא את החלון הנוכחי לחזית.
+  ///
+  /// ⚠️ חלון משני נוצר מוסתר כדי שלא ייראה מצטייר, ו-`show()` על חלון
+  /// מוסתר אינו מפעיל אותו — הוא נחשף **מאחורי** החלון שפתח אותו.
+  Future<void> raiseSelf() async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('raiseSelf');
+    } catch (e) {
+      debugPrint('raiseSelf failed: $e');
+    }
+  }
+
   /// שם ה-box של ההעדפות. חייב להתאים ל-[HiveCache.keyName].
   static const String _preferencesBoxName = 'app_preferences';
 
