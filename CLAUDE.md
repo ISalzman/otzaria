@@ -431,9 +431,10 @@ flutter test test/settings/l10n/
    showDialog(context: context, builder: settingsDialogBuilder(context, (_) => const MyDialog()));
    ```
 
-Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. Two areas are the exception and **do** go through the same catalog:
+Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. The exceptions below **do** go through the same catalog (translated text, direction stays RTL — the app-wide `SettingsTextScope` in `lib/app.dart` makes `context.settingsText` work everywhere, dialogs included, with no `settingsDialogBuilder` needed outside settings):
 
 - **`lib/navigation/`** — the fixed navigation rail and the title-bar screen names, because the settings screen is reached from them.
+- **Interface chrome of the main screens (issue #1101)** — the library browser (`lib/library/view/library_browser.dart`), the Find Sources dialog (`lib/find_ref/view/find_ref_dialog.dart`), the library search dialog (`lib/search/view/search_dialog.dart` + `enhanced_search_field.dart`, `search_scope_menu.dart`, `full_text_settings_widgets.dart`), and the tools launcher panel (`lib/tools/view/tools_launcher_panel.dart`). Only UI chrome is wrapped — book/category titles, tab titles, plugin names, and BLoC-produced status messages stay Hebrew. Labels that reach `settingsText` through a variable (search mode/scope/word-match enums, word-option keys, tool-tile actions, built-in tool names, the library-update tooltip) are guarded by cases in `test/settings/l10n/settings_variable_labels_test.dart`.
 - **`lib/tour/`** — the guided tour and the live tips. **Every new tour step title/body and every live-tip title/description needs an ARB entry**, same as a settings string; see `docs/guided_tour_developer_guide.md`. Two rules specific to the tour: a step's `body` must stay a plain string literal (a variable value goes in as a placeholder — a keyboard shortcut via `shortcut:` filling `{shortcut}`), and coverage is guarded by `test/settings/l10n/settings_variable_labels_test.dart`, which builds the steps for real, so a step with no translation fails there rather than rendering Hebrew.
 
 ### 10. Navigation Side Panel — ONLY `NavSidePanel`

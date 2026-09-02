@@ -15,6 +15,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
 import 'package:otzaria/search/view/tantivy_full_text_search.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -547,8 +548,9 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                           }
                         },
                         child: Tooltip(
-                          message:
-                              'הקלד מילות חיפוש ולחץ Enter או על סמל החיפוש כדי לבצע חיפוש.',
+                          message: context.settingsText(
+                            'הקלד מילות חיפוש ולחץ Enter או על סמל החיפוש כדי לבצע חיפוש.',
+                          ),
                           child: RtlTextField(
                             focusNode: widget.tab.searchFieldFocusNode,
                             controller: widget.tab.queryController,
@@ -567,8 +569,10 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
                               filled: true,
                               fillColor: colorScheme.surfaceContainerHigh,
                               border: const OutlineInputBorder(),
-                              hintText: 'הקלד מילות חיפוש',
-                              labelText: 'חיפוש',
+                              hintText: context.settingsText(
+                                'הקלד מילות חיפוש',
+                              ),
+                              labelText: context.settingsText('חיפוש'),
                               prefixIcon: widget.showInlineSearchButton
                                   ? IconButton(
                                       onPressed: _performSearch,

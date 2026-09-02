@@ -24,6 +24,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart' show Screen;
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -394,7 +395,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
               iconSize: 18,
               visualDensity: VisualDensity.compact,
               icon: const Icon(FluentIcons.chevron_down_24_regular),
-              tooltip: 'גלול לסוף הרשימה',
+              tooltip: context.settingsText('גלול לסוף הרשימה'),
               onPressed: () {
                 _resultsScrollController.animateTo(
                   _resultsScrollController.position.maxScrollExtent,
@@ -750,7 +751,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'איתור מקורות',
+                    context.settingsText('איתור מקורות'),
                     style: TextStyle(
                       fontSize: isShort ? 17 : 20,
                       fontWeight: FontWeight.bold,
@@ -760,7 +761,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
                   if (!isShort) ...[
                     const SizedBox(height: 2),
                     Text(
-                      'הקלד מקור מדויק והספר ייפתח במקומו',
+                      context.settingsText(
+                        'הקלד מקור מדויק והספר ייפתח במקומו',
+                      ),
                       style: TextStyle(
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant,
@@ -774,7 +777,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
             IconButton(
               icon: const Icon(FluentIcons.dismiss_24_regular),
               onPressed: () => Navigator.of(context).pop(),
-              tooltip: 'סגור',
+              tooltip: context.settingsText('סגור'),
               // 48x48 של ברירת המחדל קובעים לבדם את גובה הכותרת בחלון נמוך.
               visualDensity: isShort ? VisualDensity.compact : null,
               constraints: isShort
@@ -804,7 +807,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!isShort) ...[
-            _sectionLabel('מה לאתר'),
+            _sectionLabel(context.settingsText('מה לאתר')),
             const SizedBox(height: 8),
           ],
           _buildQueryField(refs),
@@ -813,7 +816,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
             fieldFocusNode: context
                 .read<FocusRepository>()
                 .findRefSearchFocusNode,
-            hint: 'לחיצה תחליף את הטקסט שהוקלד',
+            hint: context.settingsText('לחיצה תחליף את הטקסט שהוקלד'),
             onApplied: (suggestion) {
               setState(() => _selectedIndex = 0);
               context.read<FindRefBloc>().add(
@@ -837,7 +840,12 @@ class _FindRefDialogState extends State<FindRefDialog> {
               _buildPersonalBooksToggle(),
               if (refs.isNotEmpty)
                 Text(
-                  refs.length == 1 ? 'מקור אחד' : '${refs.length} מקורות',
+                  refs.length == 1
+                      ? context.settingsText('מקור אחד')
+                      : context.settingsText(
+                          '{count} מקורות',
+                          args: {'count': refs.length},
+                        ),
                   style: TextStyle(
                     fontSize: 12,
                     color: colorScheme.onSurfaceVariant,
@@ -888,14 +896,14 @@ class _FindRefDialogState extends State<FindRefDialog> {
           filled: true,
           fillColor: colorScheme.surfaceContainerHigh,
           border: const OutlineInputBorder(),
-          labelText: 'מקור',
-          hintText: 'לדוגמה: בראשית פרק א',
+          labelText: context.settingsText('מקור'),
+          hintText: context.settingsText('לדוגמה: בראשית פרק א'),
           prefixIcon: const Icon(FluentIcons.search_24_regular),
           suffixIcon: controller.text.isEmpty
               ? null
               : IconButton(
                   icon: const Icon(FluentIcons.dismiss_24_regular),
-                  tooltip: 'נקה',
+                  tooltip: context.settingsText('נקה'),
                   onPressed: () {
                     controller.clear();
                     // קודם מבטלים חיפוש שעדיין רץ (restartable יקטוף
@@ -946,8 +954,8 @@ class _FindRefDialogState extends State<FindRefDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: _includePersonalBooks
-          ? 'האיתור כולל גם ספרים שהוספת בעצמך'
-          : 'הפעל כדי לאתר גם בספרים שהוספת בעצמך',
+          ? context.settingsText('האיתור כולל גם ספרים שהוספת בעצמך')
+          : context.settingsText('הפעל כדי לאתר גם בספרים שהוספת בעצמך'),
       child: Container(
         decoration: BoxDecoration(
           color: AppSurfaces.togglePill(
@@ -962,7 +970,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
           children: [
             Flexible(
               child: Text(
-                'כלול ספרים אישיים',
+                context.settingsText('כלול ספרים אישיים'),
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
@@ -1145,7 +1153,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
               ? IconButton(
                   key: menuButtonKey,
                   icon: const Icon(FluentIcons.library_24_regular),
-                  tooltip: 'הצג מפרשים זמינים',
+                  tooltip: context.settingsText('הצג מפרשים זמינים'),
                   onPressed: () => _showCommentatorsMenu(menuButtonKey, cached),
                 )
               : null,
@@ -1189,7 +1197,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
         ),
         const SizedBox(width: 4),
         Text(
-          _suggestionsAreRecent ? 'האיתורים האחרונים' : 'דוגמאות',
+          _suggestionsAreRecent
+              ? context.settingsText('האיתורים האחרונים')
+              : context.settingsText('דוגמאות'),
           style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
         ),
       ],
@@ -1219,7 +1229,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
           ),
           const SizedBox(height: 14),
           Text(
-            'איתור מקור מדויק',
+            context.settingsText('איתור מקור מדויק'),
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
@@ -1228,8 +1238,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
           ),
           const SizedBox(height: 6),
           Text(
-            'הקלד שם ספר ומיקום בתוכו. ראשי תיבות נתמכים, וגם קישור ישיר '
-            'שהודבק לשדה ייפתח מכאן.',
+            context.settingsText(
+              'הקלד שם ספר ומיקום בתוכו. ראשי תיבות נתמכים, וגם קישור ישיר '
+              'שהודבק לשדה ייפתח מכאן.',
+            ),
             style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
@@ -1265,19 +1277,24 @@ class _FindRefDialogState extends State<FindRefDialog> {
           : FluentIcons.document_search_24_regular,
       iconColor: colorScheme.onSurfaceVariant,
       title: isDeepLink
-          ? 'נראה שהכנסת קישור ישיר'
-          : 'לא הצלחנו לאתר את הספר "$query"',
+          ? context.settingsText('נראה שהכנסת קישור ישיר')
+          : context.settingsText(
+              'לא הצלחנו לאתר את הספר "{query}"',
+              args: {'query': query},
+            ),
       message: isDeepLink
-          ? 'לחץ על הכפתור לפתיחת הקישור'
-          : 'נסה טקסט אחר לאיתור הספר המבוקש, או חפש את הטקסט עצמו במאגר',
+          ? context.settingsText('לחץ על הכפתור לפתיחת הקישור')
+          : context.settingsText(
+              'נסה טקסט אחר לאיתור הספר המבוקש, או חפש את הטקסט עצמו במאגר',
+            ),
       action: isDeepLink
           ? ActionButton.recommended(
-              text: 'פתיחת קישור',
+              text: context.settingsText('פתיחת קישור'),
               onPressed: () => _tryHandleDeepLink(query),
               icon: FluentIcons.link_24_regular,
             )
           : ActionButton.recommended(
-              text: 'פתח חיפוש טקסט',
+              text: context.settingsText('פתח חיפוש טקסט'),
               onPressed: () => _openTextSearch(query),
               icon: FluentIcons.search_24_regular,
             ),
@@ -1289,10 +1306,10 @@ class _FindRefDialogState extends State<FindRefDialog> {
     return _buildCenteredState(
       icon: FluentIcons.library_24_regular,
       iconColor: colorScheme.onSurfaceVariant,
-      title: 'הספרייה עדיין נטענת',
-      message: 'האיתור יהיה זמין בעוד רגע',
+      title: context.settingsText('הספרייה עדיין נטענת'),
+      message: context.settingsText('האיתור יהיה זמין בעוד רגע'),
       action: ActionButton.recommended(
-        text: 'נסה שוב',
+        text: context.settingsText('נסה שוב'),
         onPressed: _retrySearch,
         icon: FluentIcons.arrow_clockwise_24_regular,
       ),
@@ -1303,7 +1320,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
     return _buildCenteredState(
       icon: FluentIcons.error_circle_24_regular,
       iconColor: Theme.of(context).colorScheme.error,
-      title: 'האיתור נכשל',
+      title: context.settingsText('האיתור נכשל'),
       message: message,
     );
   }
@@ -1360,7 +1377,9 @@ class _FindRefDialogState extends State<FindRefDialog> {
             if (showKeyboardHint)
               Expanded(
                 child: Text(
-                  'Enter פותח את המקור המסומן, מקשי החצים מנווטים בין התוצאות',
+                  context.settingsText(
+                    'Enter פותח את המקור המסומן, מקשי החצים מנווטים בין התוצאות',
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     color: colorScheme.onSurfaceVariant,
@@ -1373,7 +1392,7 @@ class _FindRefDialogState extends State<FindRefDialog> {
             _buildScrollToEndArrow(),
             const SizedBox(width: 8),
             ActionButton.neutral(
-              text: 'סגור',
+              text: context.settingsText('סגור'),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ],

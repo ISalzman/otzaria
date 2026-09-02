@@ -32,6 +32,7 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/search/view/enhanced_search_field.dart';
 import 'package:otzaria/search/view/advanced_search_controls.dart';
 import 'package:otzaria/search/view/full_text_settings_widgets.dart';
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -279,7 +280,7 @@ class _SearchDialogState extends State<SearchDialog> {
         children: [
           for (final key in SearchQueryBuilder.exactWordOptionKeys)
             FilterChip(
-              label: Text(key),
+              label: Text(context.settingsText(key)),
               visualDensity: VisualDensity.compact,
               selected: _searchTab.globalSearchOptions[key] ?? false,
               onSelected:
@@ -340,7 +341,7 @@ class _SearchDialogState extends State<SearchDialog> {
                           });
                           _searchTab.searchOptionsChanged.value++;
                         },
-                  child: Text(key),
+                  child: Text(context.settingsText(key)),
                 ),
               const Divider(height: 8),
               MenuItemButton(
@@ -354,15 +355,19 @@ class _SearchDialogState extends State<SearchDialog> {
                   );
                 },
                 child: Text(
-                  'קבע את המרווח הנוכחי (${state.distance}) כברירת מחדל',
+                  context.settingsText(
+                    'קבע את המרווח הנוכחי ({distance}) כברירת מחדל',
+                    args: {'distance': state.distance},
+                  ),
                 ),
               ),
             ],
             builder: (context, controller, _) => Tooltip(
-              message:
-                  'סמן אילו אפשרויות ואיזה מרווח יופעלו אוטומטית בכל חיפוש רגיל חדש',
+              message: context.settingsText(
+                'סמן אילו אפשרויות ואיזה מרווח יופעלו אוטומטית בכל חיפוש רגיל חדש',
+              ),
               child: ActionButton.ghost(
-                text: 'קביעת ברירת מחדל לחיפוש רגיל',
+                text: context.settingsText('קביעת ברירת מחדל לחיפוש רגיל'),
                 icon: FluentIcons.options_24_regular,
                 onPressed: () =>
                     controller.isOpen ? controller.close() : controller.open(),
@@ -370,10 +375,12 @@ class _SearchDialogState extends State<SearchDialog> {
             ),
           ),
           Tooltip(
-            message:
-                'החזרת האפשרויות והמרווח ($savedDistance) לברירת המחדל השמורה',
+            message: context.settingsText(
+              'החזרת האפשרויות והמרווח ({distance}) לברירת המחדל השמורה',
+              args: {'distance': savedDistance},
+            ),
             child: ActionButton.ghost(
-              text: 'חזרה לברירת מחדל',
+              text: context.settingsText('חזרה לברירת מחדל'),
               icon: FluentIcons.arrow_reset_24_regular,
               onPressed: () {
                 setState(() {
@@ -438,7 +445,7 @@ class _SearchDialogState extends State<SearchDialog> {
                     ),
                     trailing: IconButton(
                       icon: const Icon(FluentIcons.delete_24_regular, size: 18),
-                      tooltip: 'מחק מההיסטוריה',
+                      tooltip: context.settingsText('מחק מההיסטוריה'),
                       onPressed: () => context.read<HistoryBloc>().add(
                         RemoveHistory(originalIndex),
                       ),
@@ -996,15 +1003,18 @@ class _SearchDialogState extends State<SearchDialog> {
   Widget _buildHeader() {
     final colorScheme = Theme.of(context).colorScheme;
     final title = widget.editTab != null
-        ? 'עריכת חיפוש'
+        ? context.settingsText('עריכת חיפוש')
         : widget.bookTitle != null
-        ? 'חיפוש ב${widget.bookTitle}'
-        : 'חיפוש בספרייה';
+        ? context.settingsText(
+            'חיפוש ב{book}',
+            args: {'book': widget.bookTitle},
+          )
+        : context.settingsText('חיפוש בספרייה');
     final subtitle = widget.editTab != null
-        ? 'עדכן את השאילתה ואת אפשרויות החיפוש'
+        ? context.settingsText('עדכן את השאילתה ואת אפשרויות החיפוש')
         : widget.bookTitle != null
-        ? 'חיפוש ממוקד בתוך הספר הפתוח'
-        : 'בחר שאילתה, סוג חיפוש והיקף בספרייה';
+        ? context.settingsText('חיפוש ממוקד בתוך הספר הפתוח')
+        : context.settingsText('בחר שאילתה, סוג חיפוש והיקף בספרייה');
     return ColoredBox(
       color: AppSurfaces.card(context),
       child: Padding(
@@ -1051,7 +1061,7 @@ class _SearchDialogState extends State<SearchDialog> {
             IconButton(
               icon: const Icon(FluentIcons.dismiss_24_regular),
               onPressed: () => Navigator.of(context).pop(),
-              tooltip: 'סגור',
+              tooltip: context.settingsText('סגור'),
             ),
           ],
         ),
@@ -1072,7 +1082,7 @@ class _SearchDialogState extends State<SearchDialog> {
           : colorScheme.onSurfaceVariant;
       return Expanded(
         child: Tooltip(
-          message: mode.tooltip,
+          message: context.settingsText(mode.tooltip),
           waitDuration: const Duration(milliseconds: 400),
           child: InkWell(
             onTap: () {
@@ -1101,7 +1111,7 @@ class _SearchDialogState extends State<SearchDialog> {
                   Icon(icon, size: 18, color: foreground),
                   const SizedBox(width: 6),
                   Text(
-                    mode.shortLabel,
+                    context.settingsText(mode.shortLabel),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: isSelected
@@ -1150,7 +1160,7 @@ class _SearchDialogState extends State<SearchDialog> {
         ),
         const SizedBox(height: 6),
         Text(
-          currentMode.tooltip,
+          context.settingsText(currentMode.tooltip),
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -1198,7 +1208,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 : FluentIcons.history_24_regular,
             size: 24,
           ),
-          tooltip: 'היסטוריית חיפושים',
+          tooltip: context.settingsText('היסטוריית חיפושים'),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () =>
@@ -1269,11 +1279,11 @@ class _SearchDialogState extends State<SearchDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _sectionLabel('מה לחפש'),
+          _sectionLabel(context.settingsText('מה לחפש')),
           const SizedBox(height: 8),
           _buildQueryRow(),
           const SizedBox(height: 12),
-          _sectionLabel('סוג החיפוש'),
+          _sectionLabel(context.settingsText('סוג החיפוש')),
           const SizedBox(height: 8),
           _buildModeSelector(context, state),
         ],
@@ -1286,7 +1296,7 @@ class _SearchDialogState extends State<SearchDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _sectionLabel('החרגת תוצאות'),
+        _sectionLabel(context.settingsText('החרגת תוצאות')),
         const SizedBox(height: 8),
         RtlTextField(
           controller: _searchTab.negativeQueryController,
@@ -1294,8 +1304,10 @@ class _SearchDialogState extends State<SearchDialog> {
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
             border: const OutlineInputBorder(),
-            labelText: 'ללא',
-            hintText: 'תוצאות שמכילות מילים אלו לא יופיעו',
+            labelText: context.settingsText('ללא', context: 'searchExclude'),
+            hintText: context.settingsText(
+              'תוצאות שמכילות מילים אלו לא יופיעו',
+            ),
             prefixIcon: const Icon(FluentIcons.subtract_24_regular),
             suffixIcon: IconButton(
               icon: const Icon(FluentIcons.dismiss_24_regular),
@@ -1380,13 +1392,18 @@ class _SearchDialogState extends State<SearchDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'חיפוש מקורב',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                Text(
+                  context.settingsText('חיפוש מקורב'),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'מוצא גם כתיב שונה ושיבושי כתיב קלים. מרחק החיפוש קובע עד כמה התוצאה יכולה להיות שונה מהמילים שהוקלדו.',
+                  context.settingsText(
+                    'מוצא גם כתיב שונה ושיבושי כתיב קלים. מרחק החיפוש קובע עד כמה התוצאה יכולה להיות שונה מהמילים שהוקלדו.',
+                  ),
                   style: TextStyle(
                     fontSize: 13,
                     color: colorScheme.onSurfaceVariant,
@@ -1414,7 +1431,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 children: [
                   Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: _sectionLabel('אפשרויות מילה'),
+                    child: _sectionLabel(context.settingsText('אפשרויות מילה')),
                   ),
                   const SizedBox(height: 8),
                   _buildExactOptionsRow(disabledOptionIds),
@@ -1551,7 +1568,7 @@ class _SearchDialogState extends State<SearchDialog> {
             if (showKeyboardHint)
               Expanded(
                 child: Text(
-                  'Enter מפעיל את החיפוש',
+                  context.settingsText('Enter מפעיל את החיפוש'),
                   style: TextStyle(
                     fontSize: 12,
                     color: colorScheme.onSurfaceVariant,
@@ -1562,7 +1579,7 @@ class _SearchDialogState extends State<SearchDialog> {
             else
               const Spacer(),
             ActionButton.neutral(
-              text: 'ביטול',
+              text: context.settingsText('ביטול'),
               onPressed: () => Navigator.of(context).pop(),
             ),
             const SizedBox(width: 8),
@@ -1574,10 +1591,14 @@ class _SearchDialogState extends State<SearchDialog> {
                 );
                 return Tooltip(
                   message: blocked
-                      ? 'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס'
-                      : 'חפש',
+                      ? context.settingsText(
+                          'אינדקס לא קיים, לא ניתן לבצע חיפוש זה ללא אינדקס',
+                        )
+                      : context.settingsText('חפש'),
                   child: ActionButton.recommended(
-                    text: widget.editTab != null ? 'עדכן חיפוש' : 'חפש',
+                    text: widget.editTab != null
+                        ? context.settingsText('עדכן חיפוש')
+                        : context.settingsText('חפש'),
                     icon: FluentIcons.search_24_regular,
                     onPressed: blocked ? null : _performSearch,
                   ),
