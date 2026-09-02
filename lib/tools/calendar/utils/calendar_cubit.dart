@@ -10,6 +10,7 @@ import 'package:kosher_dart/kosher_dart.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
+import 'package:otzaria/tools/calendar/services/ics_calendar_service.dart';
 import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
     as zmanim_helpers;
 import 'package:otzaria/tools/calendar/models/calendar_location.dart'
@@ -110,6 +111,10 @@ class CalendarState extends Equatable {
   final int googleCalendarSyncPastDays;
   final int googleCalendarSyncFutureDays;
 
+  final List<IcsSubscription> icsSubscriptions;
+  final bool icsRefreshInProgress;
+  final String? icsSyncError;
+
   const CalendarState({
     required this.selectedJewishDate,
     required this.selectedGregorianDate,
@@ -140,6 +145,9 @@ class CalendarState extends Equatable {
     this.googleCalendarLastSync,
     this.googleCalendarSyncPastDays = 60,
     this.googleCalendarSyncFutureDays = 365,
+    this.icsSubscriptions = const [],
+    this.icsRefreshInProgress = false,
+    this.icsSyncError,
   });
 
   factory CalendarState.initial() {
@@ -201,6 +209,10 @@ class CalendarState extends Equatable {
     int? googleCalendarSyncPastDays,
     int? googleCalendarSyncFutureDays,
     bool clearGoogleCalendarSyncError = false,
+    List<IcsSubscription>? icsSubscriptions,
+    bool? icsRefreshInProgress,
+    String? icsSyncError,
+    bool clearIcsSyncError = false,
   }) {
     return CalendarState(
       selectedJewishDate: selectedJewishDate ?? this.selectedJewishDate,
@@ -245,6 +257,11 @@ class CalendarState extends Equatable {
           googleCalendarSyncPastDays ?? this.googleCalendarSyncPastDays,
       googleCalendarSyncFutureDays:
           googleCalendarSyncFutureDays ?? this.googleCalendarSyncFutureDays,
+      icsSubscriptions: icsSubscriptions ?? this.icsSubscriptions,
+      icsRefreshInProgress: icsRefreshInProgress ?? this.icsRefreshInProgress,
+      icsSyncError: clearIcsSyncError
+          ? null
+          : (icsSyncError ?? this.icsSyncError),
     );
   }
 
@@ -289,6 +306,9 @@ class CalendarState extends Equatable {
     googleCalendarLastSync,
     googleCalendarSyncPastDays,
     googleCalendarSyncFutureDays,
+    icsSubscriptions,
+    icsRefreshInProgress,
+    icsSyncError,
   ];
 }
 
@@ -328,6 +348,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
+  final IcsCalendarService _icsCalendarService;
   final CalendarPluginSource _pluginCalendarAdapter;
   final Completer<void> _initializationCompleter = Completer<void>();
   Timer? _todayRefreshTimer;
@@ -343,11 +364,13 @@ class CalendarCubit extends Cubit<CalendarState> {
     SettingsRepository? settingsRepository,
     NotificationService? notificationService,
     GoogleCalendarService? googleCalendarService,
+    IcsCalendarService? icsCalendarService,
     CalendarPluginSource? pluginCalendarAdapter,
   }) : _settingsRepository = settingsRepository ?? SettingsRepository(),
        _notificationService = notificationService ?? NotificationService(),
        _googleCalendarService =
            googleCalendarService ?? GoogleCalendarService(),
+       _icsCalendarService = icsCalendarService ?? IcsCalendarService(),
        _pluginCalendarAdapter =
            pluginCalendarAdapter ?? const _DefaultPluginSource(),
        super(CalendarState.initial()) {
@@ -406,6 +429,9 @@ class CalendarCubit extends Cubit<CalendarState> {
         settings['googleCalendarSyncFutureDays'] as int;
     final int googleCalendarLastSyncRaw =
         settings['googleCalendarLastSync'] as int;
+    final List<IcsSubscription> icsSubscriptions = IcsSubscription.listFromJson(
+      settings['calendarIcsSubscriptions'] as String? ?? '[]',
+    );
 
     final Map<String, ZmanAlertPreference> zmanAlerts =
         _parseZmanAlertPreferences(zmanAlertsJson);
@@ -457,6 +483,7 @@ class CalendarCubit extends Cubit<CalendarState> {
         googleCalendarLastSync: googleCalendarLastSyncRaw > 0
             ? DateTime.fromMillisecondsSinceEpoch(googleCalendarLastSyncRaw)
             : null,
+        icsSubscriptions: icsSubscriptions,
       ),
     );
     if (!_initializationCompleter.isCompleted) {
@@ -472,6 +499,10 @@ class CalendarCubit extends Cubit<CalendarState> {
     if (isClosed) return;
     if (googleCalendarEnabled) {
       await syncGoogleCalendar(interactive: false);
+    }
+    if (isClosed) return;
+    if (icsSubscriptions.isNotEmpty) {
+      await refreshIcsSubscriptions();
     }
     _scheduleTodayRefresh();
   }
@@ -1418,6 +1449,142 @@ class CalendarCubit extends Cubit<CalendarState> {
     }
   }
 
+  // --- ייבוא יומנים בפורמט ICS ---
+
+  /// ייבוא חד-פעמי של תוכן קובץ ICS. מחזיר את מספר האירועים שיובאו.
+  ///
+  /// המזהים נגזרים מה-UID שבקובץ, כך שייבוא חוזר של אותו קובץ מעדכן
+  /// אירועים קיימים במקום לשכפל אותם.
+  Future<int> importIcsContent(String content) async {
+    final parsed = IcsCalendarService.parseIcs(content);
+    if (parsed.isEmpty) return 0;
+    final newIds = parsed.map((e) => e.id).toSet();
+    final events = [
+      ...state.events.where((e) => !newIds.contains(e.id)),
+      ...parsed,
+    ];
+    emit(state.copyWith(events: events));
+    await _saveEventsToStorage(events);
+    return parsed.length;
+  }
+
+  /// מוסיף מנוי ליומן מקישור ICS ומייבא את האירועים ממנו.
+  /// מחזיר את מספר האירועים שיובאו, או null אם ההורדה נכשלה.
+  Future<int?> addIcsSubscription({
+    required String name,
+    required String url,
+  }) async {
+    emit(state.copyWith(icsRefreshInProgress: true, clearIcsSyncError: true));
+    try {
+      final body = await _icsCalendarService.fetchIcs(url);
+      final subscription = IcsSubscription(
+        id: 'icssub_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        url: url,
+        lastRefresh: DateTime.now(),
+      );
+      final parsed = IcsCalendarService.parseIcs(
+        body,
+        sourceId: subscription.id,
+      );
+      if (isClosed) return null;
+      final events = [...state.events, ...parsed];
+      final subscriptions = [...state.icsSubscriptions, subscription];
+      emit(
+        state.copyWith(
+          events: events,
+          icsSubscriptions: subscriptions,
+          icsRefreshInProgress: false,
+        ),
+      );
+      await _saveIcsSubscriptions(subscriptions);
+      await _saveEventsToStorage(events);
+      return parsed.length;
+    } catch (e) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            icsRefreshInProgress: false,
+            icsSyncError: _formatGoogleCalendarError(e),
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
+  /// מסיר מנוי יחד עם כל האירועים שיובאו ממנו.
+  Future<void> removeIcsSubscription(String subscriptionId) async {
+    final subscriptions = state.icsSubscriptions
+        .where((s) => s.id != subscriptionId)
+        .toList();
+    final events = state.events
+        .where((e) => e.icsSourceId != subscriptionId)
+        .toList();
+    emit(
+      state.copyWith(
+        icsSubscriptions: subscriptions,
+        events: events,
+        clearIcsSyncError: true,
+      ),
+    );
+    await _saveIcsSubscriptions(subscriptions);
+    await _saveEventsToStorage(events);
+  }
+
+  /// מרענן את אירועי המנויים מהקישורים. מנוי שנכשל שומר את אירועיו הקיימים.
+  ///
+  /// [onlyId] — רענון מנוי בודד; null = כל המנויים.
+  Future<void> refreshIcsSubscriptions({String? onlyId}) async {
+    final toRefresh = state.icsSubscriptions
+        .where((s) => onlyId == null || s.id == onlyId)
+        .toList();
+    if (toRefresh.isEmpty) return;
+
+    emit(state.copyWith(icsRefreshInProgress: true, clearIcsSyncError: true));
+    String? error;
+
+    for (final subscription in toRefresh) {
+      try {
+        final body = await _icsCalendarService.fetchIcs(subscription.url);
+        final parsed = IcsCalendarService.parseIcs(
+          body,
+          sourceId: subscription.id,
+        );
+        if (isClosed) return;
+        final events = [
+          ...state.events.where((e) => e.icsSourceId != subscription.id),
+          ...parsed,
+        ];
+        final subscriptions = state.icsSubscriptions
+            .map(
+              (s) => s.id == subscription.id
+                  ? s.copyWith(lastRefresh: DateTime.now())
+                  : s,
+            )
+            .toList();
+        emit(state.copyWith(events: events, icsSubscriptions: subscriptions));
+      } catch (e) {
+        error =
+            'רענון "${subscription.name}" נכשל: '
+            '${_formatGoogleCalendarError(e)}';
+      }
+      if (isClosed) return;
+    }
+
+    emit(state.copyWith(icsRefreshInProgress: false, icsSyncError: error));
+    await _saveIcsSubscriptions(state.icsSubscriptions);
+    await _saveEventsToStorage(state.events);
+  }
+
+  Future<void> _saveIcsSubscriptions(
+    List<IcsSubscription> subscriptions,
+  ) async {
+    await _settingsRepository.updateCalendarIcsSubscriptions(
+      jsonEncode(subscriptions.map((s) => s.toJson()).toList()),
+    );
+  }
+
   Future<Map<String, int>> _loadGoogleCalendarColorIndices(
     cal.CalendarApi api,
   ) async {
@@ -2295,6 +2462,9 @@ class CustomEvent extends Equatable {
   // דקות לפני האירוע להצגת ההתראה. null = השתמש בהגדרה הגלובלית.
   final int? notificationMinutes;
 
+  /// מזהה מנוי ה-ICS שממנו יובא האירוע; null = אירוע רגיל / ייבוא מקובץ.
+  final String? icsSourceId;
+
   bool get recurring => recurrenceType != RecurrenceType.none;
   bool get recurOnHebrew =>
       recurrenceType == RecurrenceType.annualHebrew ||
@@ -2380,6 +2550,7 @@ class CustomEvent extends Equatable {
     this.inheritedColorIndex,
     this.colorIndex,
     this.notificationMinutes,
+    this.icsSourceId,
   });
 
   // פונקציה שמאפשרת ליצור עותק של אירוע עם שינויים
@@ -2405,6 +2576,7 @@ class CustomEvent extends Equatable {
     // עטוף ב-ValueGetter כדי לאפשר איפוס מפורש ל-null (הסרת צבע)
     ValueGetter<int?>? colorIndex,
     int? notificationMinutes,
+    String? icsSourceId,
   }) {
     return CustomEvent(
       id: id ?? this.id,
@@ -2436,6 +2608,7 @@ class CustomEvent extends Equatable {
           : this.inheritedColorIndex,
       colorIndex: colorIndex != null ? colorIndex() : this.colorIndex,
       notificationMinutes: notificationMinutes ?? this.notificationMinutes,
+      icsSourceId: icsSourceId ?? this.icsSourceId,
     );
   }
 
@@ -2465,6 +2638,7 @@ class CustomEvent extends Equatable {
       'inheritedColorIndex': inheritedColorIndex,
       'colorIndex': colorIndex,
       'notificationMinutes': notificationMinutes,
+      'icsSourceId': icsSourceId,
     };
   }
 
@@ -2551,6 +2725,7 @@ class CustomEvent extends Equatable {
       inheritedColorIndex: json['inheritedColorIndex'] as int?,
       colorIndex: json['colorIndex'] as int?,
       notificationMinutes: json['notificationMinutes'] as int?,
+      icsSourceId: json['icsSourceId'] as String?,
     );
   }
 
@@ -2575,6 +2750,7 @@ class CustomEvent extends Equatable {
     inheritedColorIndex,
     colorIndex,
     notificationMinutes,
+    icsSourceId,
   ];
 }
 

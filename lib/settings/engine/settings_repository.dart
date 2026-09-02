@@ -166,6 +166,10 @@ class SettingsRepository {
       'key-google-calendar-sync-future-days';
   static const String keyGoogleCalendarLastSync =
       'key-google-calendar-last-sync';
+
+  // מנויים ליומנים חיצוניים בפורמט ICS (רשימת JSON)
+  static const String keyCalendarIcsSubscriptions =
+      'key-calendar-ics-subscriptions';
   static const String keySettingsLanguage = 'key-settings-language';
 
   /// כל מפתחות ההגדרות המוצהרים במחלקה זו.
@@ -264,6 +268,7 @@ class SettingsRepository {
     keyGoogleCalendarSyncPastDays,
     keyGoogleCalendarSyncFutureDays,
     keyGoogleCalendarLastSync,
+    keyCalendarIcsSubscriptions,
     keySettingsLanguage,
   ];
 
@@ -569,6 +574,12 @@ class SettingsRepository {
       'googleCalendarLastSync': _settings.getValue<int>(
         keyGoogleCalendarLastSync,
         defaultValue: 0,
+      ),
+
+      // מנויים ליומנים חיצוניים (ICS)
+      'calendarIcsSubscriptions': _settings.getValue<String>(
+        keyCalendarIcsSubscriptions,
+        defaultValue: '[]',
       ),
 
       // שפת מסך ההגדרות בלבד. משתמש קיים שאין לו את המפתח מקבל זיהוי אוטומטי.
@@ -970,6 +981,10 @@ class SettingsRepository {
     await _settings.setValue(keyGoogleCalendarLastSync, value);
   }
 
+  Future<void> updateCalendarIcsSubscriptions(String value) async {
+    await _settings.setValue(keyCalendarIcsSubscriptions, value);
+  }
+
   Future<Map<String, String>> getShortcuts() async {
     // Start with the default shortcuts
     final shortcuts = Map<String, String>.from(
@@ -1170,6 +1185,9 @@ class SettingsRepository {
     await _settings.setValue(keyGoogleCalendarSyncPastDays, 60);
     await _settings.setValue(keyGoogleCalendarSyncFutureDays, 365);
     await _settings.setValue(keyGoogleCalendarLastSync, 0);
+
+    // מנויים ליומנים חיצוניים (ICS)
+    await _settings.setValue(keyCalendarIcsSubscriptions, '[]');
 
     // Protected Mode defaults
     await _settings.setValue(keyProtectedModeEnabled, false);

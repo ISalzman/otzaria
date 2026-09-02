@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
+import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
@@ -109,6 +114,23 @@ class CalendarSettingsTab extends StatefulWidget {
         'בדיקה',
         'התראת בדיקה',
         'לא עובד',
+      ],
+    ),
+    SettingsSearchEntry(
+      id: 'tools.calendar.ics_import',
+      title: 'ייבוא יומן (ICS)',
+      subtitle: 'ייבוא אירועים מקובץ או מקישור ICS',
+      tab: SettingsTab.tools,
+      cardId: 'tools.calendar',
+      keywords: [
+        'ics',
+        'ייבוא',
+        'יומן',
+        'קובץ',
+        'קישור',
+        'גוגל',
+        'google',
+        'אירועים',
       ],
     ),
     SettingsSearchEntry(
@@ -529,11 +551,222 @@ class _CalendarSettingsTabState extends State<CalendarSettingsTab> {
                     ),
                   ),
                 ],
+
+                // ── ייבוא יומן ICS מקובץ ──
+                SettingsActionTile.text(
+                  icon: FluentIcons.calendar_arrow_down_24_regular,
+                  title: context.settingsText('ייבוא יומן מקובץ (ICS)'),
+                  subtitle: context.settingsText(
+                    'ייבוא חד פעמי של קובץ יומן שיוצא מ-Google Calendar או מכל תוכנת יומן אחרת',
+                  ),
+                  actions: [
+                    ActionButton.neutral(
+                      text: context.settingsText('בחר קובץ'),
+                      onPressed: () => _importIcsFile(context),
+                    ),
+                  ],
+                ),
+
+                // ── יומנים מקישור ICS ──
+                SettingsActionTile.text(
+                  icon: FluentIcons.link_24_regular,
+                  title: context.settingsText('יומן מקישור (ICS)'),
+                  subtitle: isOfflineMode
+                      ? context.settingsText('מושבת במצב מנותק')
+                      : context.settingsText(
+                          'הוספת קישור ליומן חיצוני — האירועים מתרעננים אוטומטית בכל הפעלה',
+                        ),
+                  enabled: !isOfflineMode,
+                  actions: [
+                    ActionButton.neutral(
+                      text: context.settingsText('הוסף קישור'),
+                      onPressed: () {
+                        if (isOfflineMode) return;
+                        _addIcsSubscription(context);
+                      },
+                    ),
+                  ],
+                ),
+                for (final subscription in state.icsSubscriptions)
+                  SettingsActionTile.text(
+                    icon: OtzariaIcons.calendar_24_regular,
+                    title: subscription.name,
+                    subtitle: subscription.lastRefresh != null
+                        ? context.settingsText(
+                            'רענון אחרון: {time}',
+                            args: {'time': subscription.lastRefresh},
+                          )
+                        : null,
+                    actions: [
+                      ActionButton.neutral(
+                        text: context.settingsText('רענן'),
+                        isLoading: state.icsRefreshInProgress,
+                        onPressed: () {
+                          if (isOfflineMode) return;
+                          context.read<CalendarCubit>().refreshIcsSubscriptions(
+                            onlyId: subscription.id,
+                          );
+                        },
+                      ),
+                      ActionButton.warning(
+                        text: context.settingsText('הסר'),
+                        onPressed: () async {
+                          await context
+                              .read<CalendarCubit>()
+                              .removeIcsSubscription(subscription.id);
+                          UiSnack.show(
+                            ToolsMessages.icsSubscriptionRemoved(
+                              subscription.name,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                if (state.icsSyncError != null &&
+                    state.icsSyncError!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    child: Text(
+                      state.icsSyncError!,
+                      style: TextStyle(
+                        fontSize: AppTokens.fontSM,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ],
         );
       },
+    );
+  }
+
+  Future<void> _importIcsFile(BuildContext context) async {
+    final cubit = context.read<CalendarCubit>();
+    final result = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['ics'],
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
+    );
+    final path = result?.path;
+    if (path == null) return;
+    try {
+      final content = await File(path).readAsString();
+      final count = await cubit.importIcsContent(content);
+      if (count == 0) {
+        UiSnack.show(ToolsMessages.icsNoEventsFound);
+      } else {
+        UiSnack.show(ToolsMessages.icsEventsImported(count));
+      }
+    } catch (e) {
+      UiSnack.showError(ToolsMessages.icsImportFailed(e));
+    }
+  }
+
+  Future<void> _addIcsSubscription(BuildContext context) async {
+    final cubit = context.read<CalendarCubit>();
+    final input = await showDialog<({String name, String url})>(
+      context: context,
+      builder: settingsDialogBuilder(
+        context,
+        (_) => const _IcsSubscriptionDialog(),
+      ),
+    );
+    if (input == null) return;
+    final count = await cubit.addIcsSubscription(
+      name: input.name,
+      url: input.url,
+    );
+    if (count != null) {
+      UiSnack.show(ToolsMessages.icsEventsImported(count));
+    }
+  }
+}
+
+/// דיאלוג הוספת מנוי יומן מקישור ICS — שם + כתובת.
+class _IcsSubscriptionDialog extends StatefulWidget {
+  const _IcsSubscriptionDialog();
+
+  @override
+  State<_IcsSubscriptionDialog> createState() => _IcsSubscriptionDialogState();
+}
+
+class _IcsSubscriptionDialogState extends State<_IcsSubscriptionDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _urlController = TextEditingController();
+  bool _urlValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlController.addListener(() {
+      final valid = _urlController.text.trim().isNotEmpty;
+      if (valid != _urlValid) setState(() => _urlValid = valid);
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+    var name = _nameController.text.trim();
+    if (name.isEmpty) {
+      name = Uri.tryParse(url)?.host ?? url;
+    }
+    Navigator.of(context).pop((name: name, url: url));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerHigh,
+      title: Text(context.settingsText('הוספת יומן מקישור')),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RtlTextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: context.settingsText('שם היומן'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            RtlTextField(
+              controller: _urlController,
+              decoration: InputDecoration(
+                labelText: context.settingsText('קישור (URL)'),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        ActionButton.ghost(
+          text: context.settingsText('ביטול'),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        ActionButton.recommended(
+          text: context.settingsText('אישור'),
+          onPressed: _urlValid ? _submit : () {},
+        ),
+      ],
     );
   }
 }

@@ -71,6 +71,11 @@ abstract class ToolsMessages {
       'תאריך הסיום חייב להיות שווה או מאוחר מתאריך ההתחלה.';
   static const String eventRangeLongerThanRecurrence =
       'טווח הימים של האירוע חייב להיות קצר מתדירות החזרה.';
+  static String icsEventsImported(int count) => 'יובאו $count אירועים מהיומן';
+  static const String icsNoEventsFound = 'לא נמצאו אירועים בקובץ שנבחר';
+  static String icsImportFailed(Object error) => 'ייבוא היומן נכשל: $error';
+  static String icsSubscriptionRemoved(String name) =>
+      'היומן "$name" הוסר יחד עם האירועים שלו';
 
   // ── דף יומי — ניווט ──
   static const String libraryStillLoading =
