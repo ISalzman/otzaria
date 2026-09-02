@@ -144,6 +144,7 @@ class WindowBus {
               slot: candidate,
               title: (result['title'] as String?) ?? 'חלון $candidate',
               tabCount: (result['tabCount'] as int?) ?? 0,
+              isOwner: result['isOwner'] == true,
             );
           },
         ),
@@ -161,6 +162,7 @@ class WindowPeer {
     required this.slot,
     required this.title,
     required this.tabCount,
+    this.isOwner = false,
   });
 
   final int slot;
@@ -170,13 +172,20 @@ class WindowPeer {
 
   final int tabCount;
 
+  /// האם זה החלון הראשון, שמחזיק את המאגרים המשותפים.
+  ///
+  /// ⚠️ נקבע לפי תשובת החלון עצמו ולא לפי מספר המשבצת: סדר תפיסת המשבצות
+  /// תלוי בסדר הפתיחה, ואין קשר מובטח בין "משבצת 1" ל"החלון הראשון".
+  final bool isOwner;
+
   @override
   bool operator ==(Object other) =>
       other is WindowPeer &&
       other.slot == slot &&
       other.title == title &&
-      other.tabCount == tabCount;
+      other.tabCount == tabCount &&
+      other.isOwner == isOwner;
 
   @override
-  int get hashCode => Object.hash(slot, title, tabCount);
+  int get hashCode => Object.hash(slot, title, tabCount, isOwner);
 }

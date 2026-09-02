@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/shared_list_store.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -73,7 +75,8 @@ class _WindowBusHostState extends State<WindowBusHost> {
       case MultiWindowService.requestReceiveTab:
         return _receiveTab(request['tab']);
       default:
-        return null;
+        // המאגרים המשותפים מנותבים לחלון הראשון; הבקשות שלהם מטופלות שם.
+        return SharedListStore.instance.handleRequest(request);
     }
   }
 
@@ -84,6 +87,8 @@ class _WindowBusHostState extends State<WindowBusHost> {
     return {
       'title': current?.title ?? 'חלון ריק',
       'tabCount': state.tabs.length,
+      // מאפשר לחלונות משניים לאתר את הבעלים של המאגרים המשותפים.
+      'isOwner': !WindowRole.isSecondary,
     };
   }
 

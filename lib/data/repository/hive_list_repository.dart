@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:hive_ce/hive.dart';
+import 'package:otzaria/core/windowing/shared_list_store.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
 /// Generic repository for managing lists of objects in Hive.
@@ -17,13 +17,18 @@ class HiveListRepository<T> {
     required this.toJson,
   });
 
-  Box<dynamic> get _box => Hive.box(boxName);
+  /// ⚠️ הגישה עוברת דרך [SharedListStore] ולא ישירות ל-`Hive.box`.
+  ///
+  /// היסטוריה, סימניות, שולחנות עבודה והערות אמורים להיות משותפים לכל
+  /// החלונות, אבל `hive_ce` נועל את קובצי ה-`.lock` בלעדית ולכן כל חלון
+  /// פותח קבצים משלו. ה-store מנתב את המאגרים האלה לחלון הראשון, שהוא
+  /// היחיד שפתח את הקבצים שבשורש הנתונים האמיתי. כל שאר ה-boxes נשארים
+  /// מקומיים ועוברים דרכו ללא שינוי.
 
   /// Load the list from Hive
   Future<List<T>> load() async {
     try {
-      final List<dynamic> raw =
-          _box.get(key, defaultValue: []) as List<dynamic>;
+      final raw = await SharedListStore.instance.read(boxName, key);
       return raw.map((e) => fromJson(castMap(e))).toList();
     } catch (e) {
       debugPrint('⚠️ HiveListRepository.load($boxName/$key) failed: $e');
@@ -35,12 +40,16 @@ class HiveListRepository<T> {
 
   /// Save the list to Hive
   Future<void> save(List<T> items) async {
-    await _box.put(key, items.map(toJson).toList());
+    await SharedListStore.instance.write(
+      boxName,
+      key,
+      items.map(toJson).toList(),
+    );
   }
 
   /// Clear the list
   Future<void> clear() async {
-    await _box.put(key, []);
+    await SharedListStore.instance.write(boxName, key, const []);
   }
 
   /// Add an item at the beginning of the list

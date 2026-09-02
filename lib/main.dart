@@ -88,6 +88,7 @@ import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_bus_host.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
@@ -1470,6 +1471,7 @@ void secondaryWindowMain(List<String> args) async {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   isSecondaryWindow = true;
+  WindowRole.isSecondary = true;
   _secondaryWindowStartup = Stopwatch()..start();
   SentryWidgetsFlutterBinding.ensureInitialized();
   EditableText.debugDeterministicCursor = true;
