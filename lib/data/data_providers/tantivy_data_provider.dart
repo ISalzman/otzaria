@@ -104,7 +104,7 @@ class TantivyDataProvider {
     isInitialized.value = false;
 
     final indexPath = await AppPaths.getIndexPath();
-    _indexCompatibility = _checkIndexCompatibility(indexPath);
+    _indexCompatibility = await _checkIndexCompatibility(indexPath);
 
     final engine = await _initEngine();
     final indexedFilePathsLoaded = await _loadIndexedFilePaths(engine);
@@ -121,9 +121,9 @@ class TantivyDataProvider {
 
   /// קורא את תוצאת בדיקת התאימות מהאינדקס עצמו. כשל בבדיקה אינו עוצר את
   /// האתחול — המנוע ייפתח כרגיל והסטטוס יישאר לא ידוע (null).
-  IndexCompatibility? _checkIndexCompatibility(String indexPath) {
+  Future<IndexCompatibility?> _checkIndexCompatibility(String indexPath) async {
     try {
-      final compatibility = checkIndexCompatibility(path: indexPath);
+      final compatibility = await checkIndexCompatibility(path: indexPath);
       debugPrint(
         '🔎 תאימות אינדקס: ${compatibility.status} '
         '(נמצא: ${compatibility.foundSchemaVersion}, '
@@ -421,7 +421,7 @@ class TantivyDataProvider {
       // Try to open engine
       // If this CRASHES the process, the sentinel remains for next run.
       // If it throws an Exception, we catch it below.
-      final engine = SearchEngine(path: indexPath);
+      final engine = await SearchEngine.newInstance(path: indexPath);
 
       // הפתיחה הנייטיבית הצליחה — האינדקס תקין, הסנטינל מוסר מיד.
       activeIndexPath = indexPath;
@@ -457,7 +457,7 @@ class TantivyDataProvider {
         final tempDir = Directory.systemTemp.createTempSync(
           'otzaria_temp_index_',
         );
-        final tempEngine = SearchEngine(path: tempDir.path);
+        final tempEngine = await SearchEngine.newInstance(path: tempDir.path);
         isTempFallback = true;
         activeIndexPath = tempDir.path;
         return tempEngine;
