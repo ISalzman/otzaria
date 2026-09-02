@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/history/bloc/history_event.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
@@ -125,6 +126,20 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
       AppContextMenuEntry(
         label: context.settingsText('שיכפול'),
         onTap: () => context.read<TabsBloc>().add(CloneTab(tab)),
+      ),
+    // הכרטיסיה עוברת לחלון חדש: היא נפתחת שם ונסגרת כאן. הסדר חשוב —
+    // פותחים תחילה, וסוגרים רק אחרי שהבקשה נמסרה ל-runner, כדי שכשל
+    // בפתיחה לא יאבד את הכרטיסיה.
+    if (MultiWindowService.isSupported)
+      AppContextMenuEntry(
+        label: context.settingsText('העבר לחלון חדש'),
+        onTap: () async {
+          final tabsBloc = context.read<TabsBloc>();
+          final opened = await const MultiWindowService().openWindow(tab: tab);
+          if (opened) {
+            tabsBloc.add(RemoveTab(tab));
+          }
+        },
       ),
     const AppContextMenuEntry.divider(),
   ];

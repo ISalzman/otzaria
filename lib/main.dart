@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -84,6 +85,7 @@ import 'package:otzaria/core/portable_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
@@ -1178,9 +1180,20 @@ class _AppBootstrapState extends State<AppBootstrap> {
             create: (_) => HistoryBloc(historyRepository),
           ),
           BlocProvider<TabsBloc>(
-            create: (_) => TabsBloc(
-              repository: TabsRepository(),
-            )..add(LoadTabs()),
+            create: (_) {
+              final bloc = TabsBloc(repository: TabsRepository())
+                ..add(LoadTabs());
+              // חלון שנפתח עם מטען מקבל את הכרטיסיה שהועברה אליו. `LoadTabs`
+              // נשלח קודם כדי שסדר האירועים יהיה זהה לחלון רגיל — הכרטיסיה
+              // המועברת נכנסת אחריו, ולכן היא זו שתהיה פעילה.
+              final transferred = MultiWindowService.decodePayload(
+                secondaryWindowPayload,
+              );
+              if (transferred != null) {
+                bloc.add(AddTab(transferred));
+              }
+              return bloc;
+            },
           ),
           BlocProvider<NavigationBloc>(
             create: (context) => NavigationBloc(
@@ -1368,6 +1381,82 @@ void cleanup() {
 // זו הליבה של מודל C1, וגם של ה-host במודל A (T-G2.0). המדידה כותבת
 // שורות ל-`%TEMP%\otzaria_broker_probe.log` ויוצאת; אין UI ואין ערוצים.
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// חלון אוצריא נוסף.
+//
+// רץ ב-isolate נפרד משלו, על thread ייעודי, באותו תהליך — מודל A
+// (docs/P-0-stage3-result.md). זו **אינה** `main()`: אין בדיקת מופע יחיד
+// (היא הייתה סוגרת את החלון מיד), אין splash נייטיב, ואין תור הפעלות
+// חיצוניות — כל אלה שייכים לתהליך, וכבר רצו בחלון הראשון.
+//
+// ⚠️ שורש נתונים פרטי. `hive_ce` נועל את קובצי ה-`.lock` בלעדית, ונמדד
+// שהנעילה היא פר-handle ולא פר-תהליך: שני isolates באותו תהליך נכשלים
+// באותו errno 33 כמו שני תהליכים (docs/P-0-stage3-result.md §7). עד
+// שפרק 3 ינתב את Hive ו-Settings ל-host, כל חלון מקבל תיקיית נתונים
+// משלו. הספרייה עצמה — הספרים, SQLite ואינדקס Tantivy — משותפת, כי
+// אלה **כן** נפתחים פעמיים בהצלחה.
+//
+// המשמעות היום: להעדפות ולהיסטוריה של חלון נוסף אין שיתוף עם הראשון.
+// זו הגבלה ידועה של ה-MVP, לא תכנון סופי.
+@pragma('vm:entry-point')
+void secondaryWindowMain(List<String> args) async {
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+  SentryWidgetsFlutterBinding.ensureInitialized();
+  EditableText.debugDeterministicCursor = true;
+
+  try {
+    // שורש הנתונים המשותף נפתר תחילה, ורק אז נגזרת ממנו תיקיית החלון.
+    final sharedRoot = await AppPaths.getDataRootPath();
+    final windowRoot = p.join(
+      sharedRoot,
+      'windows',
+      DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+    );
+    await Directory(windowRoot).create(recursive: true);
+    AppPaths.configureDataRootPathForProcess(windowRoot);
+
+    await Settings.init(cacheProvider: HiveCache());
+    await initHive();
+    await SqliteDataProvider.instance.initialize();
+    await RustLib.init();
+
+    Bloc.observer = AppBlocObserver();
+    unawaited(AppCursors.ensureInitialized());
+
+    // `window_manager` הוא סינגלטון ב-Dart, אבל כל חלון הוא isolate נפרד
+    // עם מנוע משלו — ולכן הערוץ שלו מגיע לחלון שלו. זו הסיבה שהוא עובד
+    // כאן בלי שינוי, בניגוד למה שנדרש היה במודל של isolate יחיד.
+    await windowManager.ensureInitialized();
+  } catch (e, st) {
+    debugPrint('secondaryWindowMain bootstrap failed: $e\n$st');
+  }
+
+  // המטען נשמר כדי שהחלון יפתח אותו ברגע שהאתחול מסתיים. שלב הגרירה
+  // ישלח כאן טאב מסוריאל; כרגע החלון פשוט עולה ריק אם אין מטען.
+  secondaryWindowPayload = args.isEmpty || args.first.isEmpty
+      ? null
+      : args.first;
+
+  runApp(
+    AppWindowScope(
+      controller: _appWindow,
+      geometry: _appWindow,
+      child: SentryWidget(
+        child: RestartWidget(
+          child: const AppBootstrap(),
+        ),
+      ),
+    ),
+  );
+}
+
+/// המטען שאיתו נפתח החלון הנוכחי, אם נפתח כחלון משני. `null` בחלון הראשון.
+///
+/// נקרא פעם אחת בסיום האתחול; ראו [secondaryWindowMain].
+String? secondaryWindowPayload;
+
 int _probeThreadId() {
   try {
     return DynamicLibrary.open('kernel32.dll')

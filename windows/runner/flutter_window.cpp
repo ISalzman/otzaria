@@ -164,6 +164,50 @@ bool ConfigureProcessJob(HANDLE job, std::string& failure) {
   return true;
 }
 
+// פותח חלון אוצריא נוסף על thread ייעודי משלו.
+//
+// **thread לכל חלון, ולא thread משותף.** ב-Flutter 3.47 ה-platform thread
+// וה-UI thread ממוזגים כברירת מחדל, ולכן כל המנועים שנוצרים על אותו thread
+// מתחרים על אותו isolate scheduler: נמדד שחלון עסוק מקפיא את השני ל-2092ms,
+// מול 102ms כשלכל מנוע thread משלו (docs/P-0-stage3-result.md §2).
+//
+// ה-thread מנותק (detach) ומחזיק לולאת `GetMessage` משלו עד שהחלון נסגר.
+// הריסת המנוע קורית בדסטרקטור של `FlutterWindow` על אותו thread.
+void SpawnSecondaryWindow(const flutter::DartProject& base,
+                          const std::string& payload) {
+  std::thread([base, payload]() {
+    flutter::DartProject project(base);
+    project.set_dart_entrypoint("secondaryWindowMain");
+    project.set_dart_entrypoint_arguments({payload});
+
+    {
+      FlutterWindow window(project);
+      // מיקום מוסט מעט, כדי שחלון חדש לא יכסה במדויק את הקודם.
+      static std::atomic<int> spawn_index{0};
+      const int offset = 40 + (spawn_index.fetch_add(1) % 6) * 32;
+      Win32Window::Point origin(offset, offset);
+      Win32Window::Size size(1100, 760);
+      if (!window.Create(L"אוצריא", origin, size)) {
+        return;
+      }
+      // ⚠️ `SetQuitOnClose(false)`: `PostQuitMessage` היה מסיים את הלולאה
+      // של ה-thread הזה בלבד — וזה מה שאנחנו רוצים — אבל `Win32Window`
+      // מפרסם אותו רק כשהדגל דלוק. כאן הלולאה מסתיימת דרך `WM_DESTROY`
+      // שמתפרסם ל-thread הזה, ולכן הדגל כן נדרש.
+      window.SetQuitOnClose(true);
+      ::ShowWindow(window.GetHandle(), SW_SHOW);
+
+      ::MSG msg;
+      while (::GetMessage(&msg, nullptr, 0, 0)) {
+        ::TranslateMessage(&msg);
+        ::DispatchMessage(&msg);
+      }
+    }
+    // כאן המנוע כבר נהרס. אין לגעת ב-`exit()` — תהליך שיוצא בעוד מנוע אחר
+    // חי קורס (docs/P-2-two-windows.md §3).
+  }).detach();
+}
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless,
@@ -380,6 +424,31 @@ bool FlutterWindow::OnCreate() {
                           kAllPluginsMask & ~kPrintingPluginBit);
   }
   KeepWebViewWindowClassesAlive();
+  // ── ריבוי חלונות ──
+  // Dart קורא `openWindow` עם מטען JSON (בדרך כלל טאב מסוריאל), וה-runner
+  // פותח חלון נוסף על thread ייעודי. המטען עובר כארגומנט לנקודת הכניסה
+  // `secondaryWindowMain`, ולא דרך ערוץ — החלון החדש עוד לא קיים בזמן
+  // הקריאה, ואין למי לשלוח.
+  multiwindow_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "otzaria/multiwindow",
+          &flutter::StandardMethodCodec::GetInstance());
+  multiwindow_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() != "openWindow") {
+          result->NotImplemented();
+          return;
+        }
+        std::string payload;
+        if (const auto* value = std::get_if<std::string>(call.arguments())) {
+          payload = *value;
+        }
+        SpawnSecondaryWindow(project_, payload);
+        result->Success();
+      });
+
   process_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -585,6 +654,7 @@ void FlutterWindow::OnDestroy() {
   // "otzaria/splash" channel when Dart reveals the main window (or its 8s
   // failsafe). On process exit the OS tears down the splash thread/window.
   splash_channel_.reset();
+  multiwindow_channel_.reset();
   jumplist_channel_.reset();
   process_control_channel_.reset();
   if (flutter_controller_) {
