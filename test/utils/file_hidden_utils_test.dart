@@ -18,6 +18,20 @@ void main() {
       );
     });
 
+    test(r'מזהה קובץ נעילה זמני של Word (~$) כמוסתר', () {
+      expect(
+        isHiddenOrSystem(path.join('books', r'~$מ נישואין מפילין.docx')),
+        isTrue,
+      );
+    });
+
+    test(r'לא מזהה קובץ שמכיל ~ באמצע השם כמוסתר', () {
+      expect(
+        isHiddenOrSystem(path.join('books', r'ספר~גרסה.docx')),
+        isFalse,
+      );
+    });
+
     test('לא מזהה קובץ txt רגיל כמוסתר', () {
       expect(isHiddenOrSystem(path.join('books', 'my_book.txt')), isFalse);
     });
