@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -43,6 +44,7 @@ import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 import 'package:otzaria/widgets/navigation/search_pane_base.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/navigation/reader_nav_center.dart';
+import 'package:otzaria/widgets/layout/reading_area_width.dart';
 
 /// ערך מיוחד ל-_selectedParagraphIdx שמשמעו "כל הכותרת" (כל המפרשים בקטע),
 /// במקביל ל-_kAllChapter בכרטסיית הטקסט.
@@ -104,6 +106,7 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   /// האם פאנל הצד פתוח, והאם הוא נעוץ (לא נסגר אוטומטית)
   bool _navPaneOpen = false;
   bool _pinLeftPane = false;
+  bool _navPaneAutoCloseQueued = false;
 
   /// קבוצות המפרשים ללשונית הבחירה (נטענות מתוך links של ה-sourceTab)
   List<CommentatorGroup> _commentatorGroups = [];
@@ -661,40 +664,21 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                   host: _searchHost,
                   child: _buildSidePane(context),
                 ),
-                mainContent: ValueListenableBuilder<bool>(
-                  valueListenable: widget.tab.sourceTab.linksLoadingNotifier,
-                  builder: (context, linksLoading, _) => PdfCommentaryPanel(
-                    key: _panelKey,
-                    tab: widget.tab.sourceTab,
-                    linksCount: widget.tab.sourceTab.links.length,
-                    linksLoading: linksLoading,
-                    isFullScreen: true,
-                    enableInternalFilter: false,
-                    onSelectCommentatorsRequested: _openCommentatorsTab,
-                    lineStartOverride: range.start,
-                    lineEndOverride: range.end,
-                    extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
-                    displayProfile: _profileFor(
-                      context,
-                      TextDisplaySlot.commentaryDisplay,
-                    ),
-                    copyDisplayProfile: _profileFor(
-                      context,
-                      TextDisplaySlot.commentaryDisplay.copyWith(
-                        channel: TextChannel.copy,
-                      ),
-                    ),
-                    openBookCallback: (tab) => openPreparedTab(context, tab),
-                    fontSize: context
-                        .watch<SettingsBloc>()
-                        .state
-                        .commentatorsFontSize,
-                    externalSearchController: _searchController,
-                    externalTotalResultsNotifier: _totalResultsNotifier,
-                    externalCurrentIndexNotifier: _currentIdxNotifier,
-                    externalSearchSnippetsNotifier: _searchSnippetsNotifier,
-                    typeSelection: _typeSelection,
-                    externalAllExpandedNotifier: _allExpandedInChild,
+                mainContent: NotificationListener<UserScrollNotification>(
+                  onNotification: _closeNavPaneOnScroll,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) =>
+                        ValueListenableBuilder<bool>(
+                          valueListenable:
+                              widget.tab.sourceTab.linksLoadingNotifier,
+                          builder: (context, linksLoading, _) =>
+                              _buildCommentaryPanel(
+                                context,
+                                range: range,
+                                linksLoading: linksLoading,
+                                availableWidth: constraints.maxWidth,
+                              ),
+                        ),
                   ),
                 ),
               ),
@@ -703,6 +687,68 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildCommentaryPanel(
+    BuildContext context, {
+    required ({int start, int end}) range,
+    required bool linksLoading,
+    required double availableWidth,
+  }) {
+    final textMaxWidth = textColumnMaxWidthOf(
+      context,
+      setting: context.watch<SettingsBloc>().state.textMaxWidth,
+      availableWidth: availableWidth,
+    );
+    // הרוחב עובר לתוך הרשימה ולא עוטף אותה מבחוץ, כדי שפס הגלילה יישאר
+    // צמוד לדופן החלון (כמו בכרטיסיית הטקסט).
+    return PdfCommentaryPanel(
+      key: _panelKey,
+      tab: widget.tab.sourceTab,
+      linksCount: widget.tab.sourceTab.links.length,
+      linksLoading: linksLoading,
+      contentMaxWidth: textMaxWidth > 0 ? textMaxWidth : null,
+      isFullScreen: true,
+      enableInternalFilter: false,
+      onSelectCommentatorsRequested: _openCommentatorsTab,
+      lineStartOverride: range.start,
+      lineEndOverride: range.end,
+      extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
+      displayProfile: _profileFor(
+        context,
+        TextDisplaySlot.commentaryDisplay,
+      ),
+      copyDisplayProfile: _profileFor(
+        context,
+        TextDisplaySlot.commentaryDisplay.copyWith(channel: TextChannel.copy),
+      ),
+      openBookCallback: (tab) => openPreparedTab(context, tab),
+      fontSize: context.watch<SettingsBloc>().state.commentatorsFontSize,
+      externalSearchController: _searchController,
+      externalTotalResultsNotifier: _totalResultsNotifier,
+      externalCurrentIndexNotifier: _currentIdxNotifier,
+      externalSearchSnippetsNotifier: _searchSnippetsNotifier,
+      typeSelection: _typeSelection,
+      externalAllExpandedNotifier: _allExpandedInChild,
+    );
+  }
+
+  /// חלונית ניווט לא-נעוצה נסגרת בגלילת המפרשים, כמו בכרטיסיית הטקסט.
+  bool _closeNavPaneOnScroll(UserScrollNotification notification) {
+    if (notification.direction == ScrollDirection.idle ||
+        !_navPaneOpen ||
+        _pinLeftPane ||
+        _navPaneAutoCloseQueued) {
+      return false;
+    }
+    _navPaneAutoCloseQueued = true;
+    Future.microtask(() {
+      _navPaneAutoCloseQueued = false;
+      if (mounted && _navPaneOpen && !_pinLeftPane) {
+        setState(() => _navPaneOpen = false);
+      }
+    });
+    return false;
   }
 
   /// מטפל בקיצור ההדפסה המוגדר — פעיל רק בכרטיסיית המפרשים.

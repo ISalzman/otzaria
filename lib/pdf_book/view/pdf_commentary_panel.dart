@@ -227,6 +227,9 @@ class PdfCommentaryPanel extends StatefulWidget {
   final double fontSize;
   final VoidCallback? onClose;
   final int? initialTabIndex;
+
+  /// רוחב מרבי לרשימת המפרשים (הגדרת רוחב הטקסט); null = ללא הגבלה.
+  final double? contentMaxWidth;
   final ValueChanged<int>? onTabChanged;
   final ValueListenable<int>? openFilterRequest;
   final ValueNotifier<int>? openFilterNotifier;
@@ -281,6 +284,7 @@ class PdfCommentaryPanel extends StatefulWidget {
     required this.tab,
     required this.linksCount,
     this.linksLoading = false,
+    this.contentMaxWidth,
     required this.openBookCallback,
     required this.fontSize,
     this.onClose,
@@ -1000,6 +1004,20 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     );
   }
 
+  /// מגביל את רוחב הרשימה ל-[PdfCommentaryPanel.contentMaxWidth]. יישור לראש
+  /// ולא מרכוז — אחרת הרשימה הייתה מתמרכזת אנכית.
+  Widget _constrainToContentWidth(Widget list) {
+    final maxWidth = widget.contentMaxWidth;
+    if (maxWidth == null || maxWidth <= 0) return list;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: list,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.isFullScreen) {
@@ -1465,20 +1483,22 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                     index >= 0 && index < sortedGroups.length
                     ? sortedGroups[index].bookTitle
                     : '',
-                child: ScrollablePositionedList.builder(
-                  key: PageStorageKey(
-                    pdfCommentaryListStorageKey(
-                      widget.tab.activeCommentators,
+                child: _constrainToContentWidth(
+                  ScrollablePositionedList.builder(
+                    key: PageStorageKey(
+                      pdfCommentaryListStorageKey(
+                        widget.tab.activeCommentators,
+                      ),
                     ),
+                    itemCount: sortedGroups.length,
+                    itemScrollController: _itemScrollController,
+                    itemPositionsListener: _itemPositionsListener,
+                    scrollOffsetController: _scrollOffsetController,
+                    itemBuilder: (context, index) {
+                      final group = sortedGroups[index];
+                      return _buildCommentaryGroupTile(group);
+                    },
                   ),
-                  itemCount: sortedGroups.length,
-                  itemScrollController: _itemScrollController,
-                  itemPositionsListener: _itemPositionsListener,
-                  scrollOffsetController: _scrollOffsetController,
-                  itemBuilder: (context, index) {
-                    final group = sortedGroups[index];
-                    return _buildCommentaryGroupTile(group);
-                  },
                 ),
               ),
             ),
