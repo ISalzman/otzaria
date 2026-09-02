@@ -31,6 +31,7 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "jump_list_manager.h"
+#include "drag_preview_window.h"
 #include "splash_window.h"
 #include "utils.h"
 
@@ -180,6 +181,12 @@ std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
 // זו הגבלת משאבים ולא העדפת ממשק.
 constexpr size_t kMaxWindows = 4;
 
+// מציג שוב את החלון האחרון שהוסתר, אם יש כזה.
+//
+// מחזיר true אם חלון שוחזר. מוגדר כאן ולא ב-`FlutterWindow` כי הוא סורק
+// את כל החלונות ולא פועל על אחד מסוים.
+bool RestoreLastHiddenWindow();
+
 // מיפוי חלון → משבצת באפיק ההודעות של Dart.
 //
 // ⚠️ נדרש לגרירה בין חלונות. Win32 יודע איזה **חלון** נמצא תחת הסמן, אבל
@@ -224,6 +231,18 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                        return w == nullptr || w->GetHandle() == nullptr;
                      }),
       windows.end());
+
+  // ⚠️ חלון סגור אינו נהרס אלא מוסתר (ראו `kMsgDeferredDestroy`), והמנוע
+  // שלו נשאר חם. שימוש חוזר בו במקום יצירת מנוע חדש חוסך את כל האתחול —
+  // זה ההבדל בין ~1800ms לפתיחה מיידית — **וגם** מונע גידול בזיכרון
+  // במחזורי פתיחה-סגירה, כי אין מנוע נוסף.
+  for (auto& existing : windows) {
+    if (existing == nullptr) continue;
+    const HWND handle = existing->GetHandle();
+    if (handle == nullptr || ::IsWindowVisible(handle)) continue;
+    existing->ReviveWith(payload, inherited_width, inherited_height);
+    return true;
+  }
 
   if (g_live_window_count.load() >= static_cast<int>(kMaxWindows)) {
     return false;
@@ -574,6 +593,30 @@ bool FlutterWindow::OnCreate() {
           return;
         }
 
+        // תצוגת הגרירה הנייטיבית — הכרטיסיה שנראית מחוץ לחלון.
+        if (call.method_name() == "beginTabDrag") {
+          if (const auto* title = std::get_if<std::string>(call.arguments())) {
+            drag_preview::Begin(drag_preview::Utf16FromUtf8(*title));
+          }
+          result->Success();
+          return;
+        }
+        if (call.method_name() == "endTabDrag") {
+          drag_preview::End();
+          result->Success();
+          return;
+        }
+
+        // משחזר את החלון האחרון שנסגר, כמו Ctrl+Shift+T בדפדפן.
+        //
+        // ⚠️ אפשרי **רק** מפני שחלון סגור מוסתר ולא נהרס: המנוע שלו עדיין
+        // חי עם הכרטיסיות שהיו בו, ולכן השחזור הוא הצגה בלבד.
+        if (call.method_name() == "restoreLastClosedWindow") {
+          result->Success(
+              flutter::EncodableValue(RestoreLastHiddenWindow()));
+          return;
+        }
+
         if (call.method_name() == "raiseSelf") {
           const HWND self = GetHandle();
           if (self) {
@@ -843,6 +886,50 @@ void FlutterWindow::OnDestroy() {
   }
 
   Win32Window::OnDestroy();
+}
+
+namespace {
+
+bool RestoreLastHiddenWindow() {
+  auto& windows = SecondaryWindowsOnThisThread();
+  // מהאחרון שנסגר לראשון — התנהגות Ctrl+Shift+T.
+  for (auto it = windows.rbegin(); it != windows.rend(); ++it) {
+    if (*it == nullptr) continue;
+    const HWND handle = (*it)->GetHandle();
+    if (handle == nullptr || ::IsWindowVisible(handle)) continue;
+    // מחזיר בלי מטען: הכרטיסיות שהיו בחלון עדיין שם, וזה בדיוק מה
+    // שהמשתמש מצפה לקבל בשחזור.
+    (*it)->ReviveWith(std::string(), 0, 0);
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+void FlutterWindow::ReviveWith(const std::string& payload, int width,
+                               int height) {
+  const HWND self = GetHandle();
+  if (!self) return;
+
+  counted_ = true;
+  g_live_window_count.fetch_add(1);
+
+  if (width > 400 && height > 300) {
+    ::SetWindowPos(self, nullptr, 0, 0, width, height,
+                   SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+  ::ShowWindow(self, SW_SHOW);
+  ::BringWindowToTop(self);
+  ::SetForegroundWindow(self);
+
+  // המטען מועבר ל-Dart בערוץ ולא כארגומנט לנקודת כניסה: המנוע כבר רץ,
+  // ונקודת הכניסה שלו הורצה מזמן.
+  if (multiwindow_channel_ && !payload.empty()) {
+    multiwindow_channel_->InvokeMethod(
+        "adoptPayload",
+        std::make_unique<flutter::EncodableValue>(payload));
+  }
 }
 
 void FlutterWindow::RevealOnFirstFrame() {

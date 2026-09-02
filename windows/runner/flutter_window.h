@@ -35,6 +35,13 @@ class FlutterWindow : public Win32Window {
   // הראשון הוא מסך הטעינה של האפליקציה, וזו התשובה הוויזואלית המיידית.
   void RevealOnFirstFrame();
 
+  // מחזיר לשימוש חלון שנסגר (הוסתר) עם מטען חדש.
+  //
+  // ⚠️ זה מה שהופך פתיחת חלון למיידית. המנוע כבר עלה, ה-blocs חיים,
+  // הספרייה טעונה — נשאר רק להציג ולשלוח את הכרטיסיה. בלי זה כל פתיחה
+  // משלמת שוב את מלוא האתחול, וכל מחזור פתיחה-סגירה מוסיף מנוע לזיכרון.
+  void ReviveWith(const std::string& payload, int width, int height);
+
  protected:
   // Win32Window:
   bool OnCreate() override;

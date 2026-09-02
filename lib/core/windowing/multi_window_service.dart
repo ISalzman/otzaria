@@ -20,7 +20,12 @@ import 'package:otzaria/tabs/models/tab.dart';
 class MultiWindowService {
   const MultiWindowService();
 
-  static const MethodChannel _channel = MethodChannel('otzaria/multiwindow');
+  /// הערוץ מול ה-runner.
+  ///
+  /// חשוף כי התקשורת דו-כיוונית: `adoptPayload` נשלחת מה-runner אל החלון
+  /// כשהוא מחזיר חלון מוסתר לשימוש עם כרטיסיה חדשה.
+  static const MethodChannel channel = MethodChannel('otzaria/multiwindow');
+  static const MethodChannel _channel = channel;
 
   /// האם ריבוי חלונות נתמך בפלטפורמה הנוכחית.
   ///
@@ -92,6 +97,47 @@ class MultiWindowService {
       await _channel.invokeMethod<void>('raiseSelf');
     } catch (e) {
       debugPrint('raiseSelf failed: $e');
+    }
+  }
+
+  /// מתחיל להציג את הכרטיסיה הנגררת **מחוץ** לחלון.
+  ///
+  /// ⚠️ ה-`feedback` של `Draggable` מצויר ב-Overlay של החלון ולכן נחתך
+  /// בגבולותיו: ברגע שהסמן יוצא, הכרטיסיה נעלמת. המשתמש אינו רואה שהוא
+  /// גורר משהו, ולכן גם אינו יכול לכוון לשורת המשימות או לחלון אחר.
+  /// ה-runner מציג חלון layered שעוקב אחרי הסמן ומופיע רק בחוץ.
+  Future<void> beginTabDrag(String title) async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('beginTabDrag', title);
+    } catch (e) {
+      debugPrint('beginTabDrag failed: $e');
+    }
+  }
+
+  /// מסיים את תצוגת הגרירה. חייב להיקרא בכל מסלולי הסיום — גם בביטול,
+  /// אחרת התצוגה נשארת תלויה על המסך.
+  Future<void> endTabDrag() async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('endTabDrag');
+    } catch (e) {
+      debugPrint('endTabDrag failed: $e');
+    }
+  }
+
+  /// משחזר את החלון האחרון שנסגר. מחזיר true אם היה כזה.
+  ///
+  /// ⚠️ אפשרי **רק** מפני שחלון סגור מוסתר ולא נהרס: המנוע שלו חי עם
+  /// הכרטיסיות שהיו בו, ולכן השחזור הוא הצגה בלבד ולא טעינה מחדש.
+  Future<bool> restoreLastClosedWindow() async {
+    if (!isSupported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('restoreLastClosedWindow') ??
+          false;
+    } catch (e) {
+      debugPrint('restoreLastClosedWindow failed: $e');
+      return false;
     }
   }
 

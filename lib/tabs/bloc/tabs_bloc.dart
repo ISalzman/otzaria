@@ -43,6 +43,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     _recentlyClosedTabs.reversed.map((entry) => entry.tab),
   );
 
+  /// האם יש כרטיסיה לשחזור.
+  ///
+  /// ⚠️ נדרש כדי ש-Ctrl+Shift+T יידע מתי ליפול לשחזור **חלון** שנסגר,
+  /// כמו בדפדפן. בלי הבדיקה הקיצור היה בולע את המקרה ולא עושה כלום.
+  bool get hasRecentlyClosedTabs => _recentlyClosedTabs.isNotEmpty;
+
   List<OpenedTab>? _pendingSaveTabs;
   int _pendingSaveIndex = 0;
   Future<void>? _saveDrain;

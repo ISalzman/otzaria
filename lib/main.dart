@@ -103,6 +103,8 @@ import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -684,6 +686,13 @@ Future<void> _initializeProcessSingletons() async {
   if (!isSecondaryWindow) {
     unawaited(_runDeferredNotificationService());
     unawaited(_runDeferredErrorReportFlush());
+  } else {
+    // ⚠️ אבל מסד אזורי הזמן **כן** נדרש, והוא פר-isolate.
+    //
+    // חסימת השירות כולו הפילה את לוח השנה בחלון משני עם "Tried to get
+    // location before initializing timezone database". מה שפר-תהליך הוא
+    // רישום ההתראות, לא בסיס הנתונים שמאחוריו.
+    unawaited(_initializeTimeZonesOnly());
   }
 }
 
@@ -788,6 +797,19 @@ Future<void> _logJobObjectContainmentFailure() async {
     );
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Job Object status', error, stackTrace);
+  }
+}
+
+/// מאתחל את מסד אזורי הזמן בלבד, בלי לרשום התראות מערכת.
+///
+/// חלון משני צריך את `tz.local` (לוח השנה, זמני היום) אבל אסור לו לרשום
+/// התראות — הן היו נשלחות פעמיים.
+Future<void> _initializeTimeZonesOnly() async {
+  try {
+    tz.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Asia/Jerusalem'));
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError('Timezone database', error, stackTrace);
   }
 }
 

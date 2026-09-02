@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:otzaria/core/windowing/app_window_scope.dart';
@@ -587,9 +588,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
         DetachPane(tab, insertIndex: insertIndex),
       ),
-      // תחילת גרירה אינה בוחרת כרטיסיה — בחירה מיידית הייתה מפצלת את הנגררת
-      // עם עצמה בשחרור מעל אזור הקריאה; בסידור מחדש MoveTab בוחר את הנגררת.
-      onDragStarted: () => _pendingTabSelection = null,
+      // גרירה אינה בוחרת כרטיסיה: התצוגה נשארת על הספר שהמשתמש קורא, ומשתנה
+      // רק אם הוא משתהה מעל כרטיסיה אחרת.
+      onDragStarted: (draggedTab) {
+        _pendingTabSelection = null;
+        // התצוגה הנייטיבית מתחילה כאן ומסתיימת בכל מסלולי הסיום — היא
+        // מוצגת רק כשהסמן יוצא מהחלון, ולכן אין כפילות מול ה-feedback.
+        unawaited(const MultiWindowService().beginTabDrag(draggedTab.title));
+      },
+      onDragFinishedAnywhere: () =>
+          unawaited(const MultiWindowService().endTabDrag()),
       onDroppedOutside: MultiWindowService.isSupported
           ? (tab) => _handleTabDroppedOutside(context, tab)
           : null,

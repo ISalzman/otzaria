@@ -66,8 +66,15 @@ class ReadingTabStrip extends StatefulWidget {
   /// נקרא בשחרור כרטיסיה חיצונית, עם מיקום הכנסה בטווח `0..tabs.length`.
   final void Function(OpenedTab tab, int insertIndex)? onExternalDrop;
 
-  /// נקרא כשמתחילה גרירת כרטיסיה.
-  final VoidCallback? onDragStarted;
+  /// נקרא כשמתחילה גרירת כרטיסיה, עם הכרטיסיה הנגררת.
+  final void Function(OpenedTab tab)? onDragStarted;
+
+  /// נקרא בסיום הגרירה בכל מסלול — הצלחה, ביטול, או שחרור בחוץ.
+  ///
+  /// ⚠️ נפרד מ-[onDroppedOutside]: תצוגת הגרירה הנייטיבית חייבת להיסגר
+  /// **תמיד**, אחרת היא נשארת תלויה על המסך אחרי גרירה שהסתיימה בתוך
+  /// החלון.
+  final VoidCallback? onDragFinishedAnywhere;
 
   /// נקרא כשגרירה משתהה מעל כרטיסיה — היא נפתחת, וכך אפשר להמשיך ולשחרר
   /// את הנגררת לצדה באזור הקריאה בלי לוותר על הגרירה.
@@ -90,6 +97,7 @@ class ReadingTabStrip extends StatefulWidget {
     this.acceptsExternal,
     this.onExternalDrop,
     this.onDragStarted,
+    this.onDragFinishedAnywhere,
     this.onSpringOpen,
     this.onDroppedOutside,
     this.requireLongPressToDrag = false,
@@ -372,7 +380,9 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                         extent: widget.widths[i],
                         crossExtent: widget.crossExtent,
                         requireLongPress: widget.requireLongPressToDrag,
-                        onDragStarted: widget.onDragStarted,
+                        onDragStarted: widget.onDragStarted == null
+                            ? null
+                            : () => widget.onDragStarted!(widget.tabs[i]),
                         onDroppedOutside: widget.onDroppedOutside == null
                             ? null
                             : () => widget.onDroppedOutside!(widget.tabs[i]),
@@ -384,6 +394,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                           if (_insertIndex != null) {
                             setState(() => _insertIndex = null);
                           }
+                          widget.onDragFinishedAnywhere?.call();
                         },
                         child: widget.tabBuilder(
                           widget.tabs[i],

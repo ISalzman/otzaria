@@ -55,6 +55,31 @@ class _WindowBusHostState extends State<WindowBusHost> {
       const Duration(seconds: 3),
       (_) => unawaited(_refreshPeers()),
     );
+
+    // ה-runner קורא לכאן כשהוא מחזיר חלון מוסתר לשימוש עם כרטיסיה חדשה.
+    MultiWindowService.channel.setMethodCallHandler((call) async {
+      if (call.method == 'adoptPayload' && call.arguments is String) {
+        await _adoptPayload(call.arguments as String);
+      }
+      return null;
+    });
+  }
+
+  /// קולט מטען שנשלח לחלון שהוחזר לשימוש.
+  ///
+  /// ⚠️ חלון סגור מוסתר ולא נהרס, ולכן הוא נפתח שוב עם הכרטיסיות הישנות
+  /// שלו. הן נסגרות כאן: המשתמש גרר כרטיסיה אחת החוצה וזה מה שהוא מצפה
+  /// לראות, לא שרידים מחלון שסגר קודם.
+  Future<void> _adoptPayload(String payload) async {
+    final tab = MultiWindowService.decodePayload(payload);
+    if (tab == null || !mounted) return;
+    final tabsBloc = context.read<TabsBloc>();
+    tabsBloc
+      ..add(CloseAllTabs())
+      ..add(AddTab(tab));
+    context.read<NavigationBloc>().add(
+      const NavigateToScreen(Screen.reading),
+    );
   }
 
   Future<void> _refreshPeers() async {
@@ -67,6 +92,7 @@ class _WindowBusHostState extends State<WindowBusHost> {
   void dispose() {
     _peerRefresh?.cancel();
     WindowBus.instance.onRequest = null;
+    MultiWindowService.channel.setMethodCallHandler(null);
     WindowBus.instance.unregister();
     MultiWindowService.knownPeers = const [];
     super.dispose();

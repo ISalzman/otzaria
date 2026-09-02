@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -362,7 +363,14 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
 
     if (isReadingScreen &&
         ShortcutHelper.matchesShortcut(event, restoreClosedTabShortcut)) {
-      context.read<TabsBloc>().add(const RestoreLastClosedTab());
+      // כמו בדפדפן: קודם כרטיסיה שנסגרה, ורק אם אין כזו — חלון שנסגר.
+      // הסדר חשוב, כי הכרטיסיה היא הפעולה השכיחה בהרבה.
+      final tabsBloc = context.read<TabsBloc>();
+      if (tabsBloc.hasRecentlyClosedTabs) {
+        tabsBloc.add(const RestoreLastClosedTab());
+      } else {
+        unawaited(const MultiWindowService().restoreLastClosedWindow());
+      }
       return KeyEventResult.handled;
     }
 
