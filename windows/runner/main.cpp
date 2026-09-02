@@ -589,7 +589,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     if (mutex) CloseHandle(mutex);
     return EXIT_FAILURE;
   }
-  window.SetQuitOnClose(true);
+  // ⚠️ `false` ולא `true`: עם ריבוי חלונות, סגירת החלון הראשי אינה
+  // מסיימת את התהליך כל עוד חלונות אחרים פתוחים. `FlutterWindow::OnDestroy`
+  // מפרסם `WM_QUIT` רק כשנסגר החלון האחרון.
+  window.SetQuitOnClose(false);
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

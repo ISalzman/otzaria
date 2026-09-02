@@ -33,14 +33,40 @@ class MultiWindowService {
   Future<bool> openWindow({OpenedTab? tab}) async {
     if (!isSupported) return false;
     try {
-      await _channel.invokeMethod<void>('openWindow', _encodePayload(tab));
-      return true;
+      final opened = await _channel.invokeMethod<bool>(
+        'openWindow',
+        _encodePayload(tab),
+      );
+      // false פירושו שהתקרה הושגה — ה-runner הוא מקור האמת למספר החלונות.
+      return opened ?? false;
     } on PlatformException catch (e) {
       debugPrint('openWindow failed: ${e.code} ${e.message}');
       return false;
     } on MissingPluginException {
       // ה-runner בגרסה זו אינו מכיר את הערוץ — למשל בבדיקות widget.
       return false;
+    }
+  }
+
+  /// מספר החלונות הפתוחים והתקרה.
+  ///
+  /// ה-runner הוא מקור האמת: ה-isolate של כל חלון רואה רק את עצמו.
+  Future<({int count, int max})> windowCount() async {
+    if (!isSupported) return (count: 1, max: 1);
+    try {
+      final info = await _channel.invokeMapMethod<String, dynamic>(
+        'windowCount',
+      );
+      if (info == null) return (count: 1, max: 1);
+      return (
+        count: (info['count'] as int?) ?? 1,
+        max: (info['max'] as int?) ?? 1,
+      );
+    } on PlatformException catch (e) {
+      debugPrint('windowCount failed: ${e.code} ${e.message}');
+      return (count: 1, max: 1);
+    } on MissingPluginException {
+      return (count: 1, max: 1);
     }
   }
 

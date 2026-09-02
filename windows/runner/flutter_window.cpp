@@ -175,6 +175,16 @@ std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
   return windows;
 }
 
+// תקרת חלונות. כל חלון הוא מנוע Flutter מלא (~340MB בבנייית debug), ולכן
+// זו הגבלת משאבים ולא העדפת ממשק.
+constexpr size_t kMaxWindows = 4;
+
+// מספר חלונות אוצריא החיים בתהליך, כולל הראשי.
+//
+// משמש לשני דברים: אכיפת [kMaxWindows], והחלטה מתי יציאה מהתהליך מוצדקת.
+// ⚠️ סגירת חלון בודד **אינה** מסיימת את התהליך — רק סגירת האחרון.
+std::atomic<int> g_live_window_count{0};
+
 // יוצר חלון אוצריא נוסף **על ה-thread הקורא**, ומשתמש בלולאת ההודעות
 // הקיימת שלו.
 //
@@ -191,7 +201,7 @@ std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
 // המחיר ידוע ומדוד: ה-platform thread וה-UI thread ממוזגים ב-3.47, ולכן
 // כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
 // (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
-void CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
+bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                                        const std::string& payload) {
   // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
   auto& windows = SecondaryWindowsOnThisThread();
@@ -201,6 +211,10 @@ void CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
                        return w == nullptr || w->GetHandle() == nullptr;
                      }),
       windows.end());
+
+  if (g_live_window_count.load() >= static_cast<int>(kMaxWindows)) {
+    return false;
+  }
 
   flutter::DartProject project(base);
   project.set_dart_entrypoint("secondaryWindowMain");
@@ -218,13 +232,15 @@ void CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   Win32Window::Point origin(offset, offset);
   Win32Window::Size size(1100, 760);
   if (!window->Create(L"אוצריא", origin, size)) {
-    return;
+    return false;
   }
   // ⚠️ `false` במפורש: סגירת חלון משני אסור לה לפרסם `WM_QUIT` ל-thread
-  // הראשי — זה היה סוגר את כל האפליקציה.
+  // הראשי — זה היה סוגר את כל האפליקציה. היציאה מנוהלת ב-`OnDestroy` לפי
+  // מספר החלונות החיים.
   window->SetQuitOnClose(false);
   ::ShowWindow(window->GetHandle(), SW_SHOW);
   windows.push_back(std::move(window));
+  return true;
 }
 
 
@@ -443,6 +459,7 @@ bool FlutterWindow::OnCreate() {
     RegisterPluginsMasked(flutter_controller_->engine(),
                           kAllPluginsMask & ~kPrintingPluginBit);
   }
+  g_live_window_count.fetch_add(1);
   KeepWebViewWindowClassesAlive();
   // ── ריבוי חלונות ──
   // Dart קורא `openWindow` עם מטען JSON (בדרך כלל טאב מסוריאל), וה-runner
@@ -457,8 +474,23 @@ bool FlutterWindow::OnCreate() {
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
+        // Dart שואל כמה חלונות פתוחים ומה התקרה, כדי להשבית את פריט
+        // התפריט כשאין מקום — עדיף מלחיצה שלא עושה כלום.
+        if (call.method_name() == "windowCount") {
+          flutter::EncodableMap info;
+          info[flutter::EncodableValue("count")] =
+              flutter::EncodableValue(g_live_window_count.load());
+          info[flutter::EncodableValue("max")] =
+              flutter::EncodableValue(static_cast<int>(kMaxWindows));
+          result->Success(flutter::EncodableValue(info));
+          return;
+        }
         if (call.method_name() != "openWindow") {
           result->NotImplemented();
+          return;
+        }
+        if (g_live_window_count.load() >= static_cast<int>(kMaxWindows)) {
+          result->Success(flutter::EncodableValue(false));
           return;
         }
         std::string payload;
@@ -472,11 +504,8 @@ bool FlutterWindow::OnCreate() {
         // הקריאה.
         pending_secondary_payloads_.push(payload);
         ::PostMessageW(GetHandle(), kMsgOpenSecondaryWindow, 0, 0);
-        result->Success();
+        result->Success(flutter::EncodableValue(true));
       });
-
-  // כלי בידוד זמני: פותח חלון שני אוטומטית אחרי N אלפיות, כדי שאפשר יהיה
-  // לשחזר את קריסת הפתיחה בלי אינטראקציה ידנית.
 
   process_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -692,6 +721,15 @@ void FlutterWindow::OnDestroy() {
     // חייבת להיות מסוריאלית. ראו docs/P-2-two-windows.md §9.
     flutter_controller_.reset();
     flutter_controller_ = nullptr;
+
+    // סגירת חלון בודד אינה מסיימת את התהליך; רק סגירת האחרון.
+    //
+    // ⚠️ המונה מופחת כאן ולא בדסטרקטור: הבעלות על חלונות משניים נשמרת
+    // בווקטור שמתנקה רק בפתיחה הבאה, ולכן הדסטרקטור עלול לרוץ הרבה אחרי
+    // שהחלון נעלם מהמסך — או לא לרוץ כלל.
+    if (g_live_window_count.fetch_sub(1) <= 1) {
+      ::PostQuitMessage(0);
+    }
   }
 
   Win32Window::OnDestroy();

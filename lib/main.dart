@@ -33,6 +33,7 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
+import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/navigation/navigation_repository.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
@@ -1188,9 +1189,8 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // חלון שנפתח עם מטען מקבל את הכרטיסיה שהועברה אליו. `LoadTabs`
               // נשלח קודם כדי שסדר האירועים יהיה זהה לחלון רגיל — הכרטיסיה
               // המועברת נכנסת אחריו, ולכן היא זו שתהיה פעילה.
-              final transferred = MultiWindowService.decodePayload(
-                secondaryWindowPayload,
-              );
+              final transferred = _pendingTransferredTab;
+              _pendingTransferredTab = null;
               if (transferred != null) {
                 bloc.add(AddTab(transferred));
               }
@@ -1198,17 +1198,28 @@ class _AppBootstrapState extends State<AppBootstrap> {
             },
           ),
           BlocProvider<NavigationBloc>(
-            create: (context) => NavigationBloc(
-              repository: NavigationRepository(),
-              tabsRepository: TabsRepository(),
-              // "חיפוש" ו"עיון" הם אותו עמוד טאבים; היישור לפי החלונית
-              // הפעילה שומר שהאייקון המודגש בסרגל יתאים למה שמוצג בפועל.
-              activePaneStream: context
-                  .read<TabsBloc>()
-                  .stream
-                  .map((tabsState) => tabsState.activePane)
-                  .distinct(),
-            )..add(const CheckLibrary()),
+            create: (context) {
+              final nav = NavigationBloc(
+                repository: NavigationRepository(),
+                tabsRepository: TabsRepository(),
+                // "חיפוש" ו"עיון" הם אותו עמוד טאבים; היישור לפי החלונית
+                // הפעילה שומר שהאייקון המודגש בסרגל יתאים למה שמוצג בפועל.
+                activePaneStream: context
+                    .read<TabsBloc>()
+                    .stream
+                    .map((tabsState) => tabsState.activePane)
+                    .distinct(),
+              )..add(const CheckLibrary());
+              // ⚠️ אחרי `CheckLibrary` ולא במקומו. `CheckLibrary` מחליט
+              // לאן לנווט לפי מצב הספרייה, ובחלון שנפתח עם כרטיסיה מועברת
+              // ההחלטה שגויה: הוא היה נשאר במסך הספרייה בעוד הכרטיסיה
+              // פתוחה מאחוריו — בדיוק מה שנצפה. הניווט נשלח אחריו ולכן
+              // גובר עליו.
+              if (_openedWithTransferredTab) {
+                nav.add(const NavigateToScreen(Screen.reading));
+              }
+              return nav;
+            },
           ),
           BlocProvider<FindRefBloc>(
             create: (_) => FindRefBloc(
@@ -1455,11 +1466,12 @@ void secondaryWindowMain(List<String> args) async {
   Bloc.observer = AppBlocObserver();
   unawaited(AppCursors.ensureInitialized());
 
-  // המטען נשמר כדי שהחלון יפתח אותו ברגע שהאתחול מסתיים. שלב הגרירה
-  // ישלח כאן טאב מסוריאל; כרגע החלון פשוט עולה ריק אם אין מטען.
-  secondaryWindowPayload = args.isEmpty || args.first.isEmpty
-      ? null
-      : args.first;
+  // הכרטיסיה שהועברה מפוענחת פעם אחת כאן, ולא בכל מקום שצריך אותה.
+  // `_pendingTransferredTab` נצרך על ידי `TabsBloc`; `_openedWithTransferredTab`
+  // נשאר דלוק כדי ש-`NavigationBloc`, שנוצר אחריו, יידע לעבור למסך הקריאה.
+  final payload = args.isEmpty || args.first.isEmpty ? null : args.first;
+  _pendingTransferredTab = MultiWindowService.decodePayload(payload);
+  _openedWithTransferredTab = _pendingTransferredTab != null;
 
   runApp(
     AppWindowScope(
@@ -1490,10 +1502,16 @@ void _maybeScheduleDebugSecondWindow() {
   });
 }
 
-/// המטען שאיתו נפתח החלון הנוכחי, אם נפתח כחלון משני. `null` בחלון הראשון.
+/// הכרטיסיה שהועברה לחלון הזה בפתיחתו, אם הועברה.
 ///
-/// נקרא פעם אחת בסיום האתחול; ראו [secondaryWindowMain].
-String? secondaryWindowPayload;
+/// נצרכת **פעם אחת** ביצירת `TabsBloc` ומתאפסת שם, כדי ש-`RestartWidget`
+/// לא יוסיף אותה שוב בהפעלה מחדש של העץ.
+OpenedTab? _pendingTransferredTab;
+
+/// האם החלון הזה נפתח עם כרטיסיה מועברת. בניגוד ל-[_pendingTransferredTab]
+/// אינו מתאפס — `NavigationBloc` נוצר אחרי `TabsBloc` וצריך לדעת שיש לעבור
+/// למסך הקריאה ולא להישאר בספרייה.
+bool _openedWithTransferredTab = false;
 
 int _probeThreadId() {
   try {
