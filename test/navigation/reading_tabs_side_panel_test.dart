@@ -453,6 +453,26 @@ void main() {
     expect(tabsBloc.addedEvents.whereType<CloseAllTabs>(), isNotEmpty);
   });
 
+  testWidgets('"סגור את האחרים" שומר את הכרטיסייה שנלחצה, לא את הפעילה', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+
+    await tester.tapAt(
+      tester.getCenter(find.text('ספר ג')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('סגור את האחרים'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tabsBloc.addedEvents.whereType<CloseOtherTabs>().single.keepTab,
+      same(tabs[2]),
+      reason: 'הכרטיסייה הפעילה היא "ספר א" — issue #1094',
+    );
+  });
+
   testWidgets('במגע הכרטיסיות נגררות בלחיצה ארוכה', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     await pumpPanel(tester);
