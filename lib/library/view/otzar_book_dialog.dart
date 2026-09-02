@@ -9,6 +9,7 @@ import '../../core/ui_snack.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/library/services/hebrew_books_download_service.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -235,6 +236,10 @@ class _HebrewBookDownloadButtonState extends State<_HebrewBookDownloadButton> {
   }
 
   Future<void> _download() async {
+    final hasFolder = HebrewBooksDownloadService.configuredFolder() != null;
+    if (!hasFolder && !await verifySaferModePassword(context)) return;
+    if (!mounted) return;
+
     setState(() {
       _isDownloading = true;
       _percent = null;
@@ -255,10 +260,12 @@ class _HebrewBookDownloadButtonState extends State<_HebrewBookDownloadButton> {
         widget.bookId,
         result.bytes,
       );
+      if (!mounted) return;
       savedPath ??= await saveFileWithExtension(
         fileName: result.fileName,
         extension: 'pdf',
         bytes: result.bytes,
+        context: context,
       );
 
       if (savedPath == null) {

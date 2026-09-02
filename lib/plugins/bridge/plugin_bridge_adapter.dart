@@ -28,6 +28,7 @@ import 'package:otzaria/migration/models/alt_toc_structure.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/models/personal_note.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:otzaria/core/connectivity_status_service.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/books.dart';
@@ -3266,6 +3267,10 @@ class PluginBridgeAdapter {
         _grantedFolders.add(p.normalize(p.absolute(path)));
         return {'path': path};
       case 'print':
+        final context = navigatorKey.currentContext;
+        if (context != null && !await verifySaferModePassword(context)) {
+          return {'printed': false};
+        }
         final printer = _dependencies.printPluginPage ?? _defaultPrintPage;
         final jobName = (args['jobName'] as String?)?.trim();
         return await _runUserGatedDialog(() async {
@@ -3350,12 +3355,17 @@ class PluginBridgeAdapter {
   }
 
   /// בורר התיקיות המוגדר כברירת מחדל — דיאלוג המערכת דרך [FilePicker].
-  Future<String?> _defaultPickFolder({String? title}) =>
-      FilePicker.getDirectoryPath(
-        windowsOptions: kModalWindowsOptions,
-        linuxOptions: kModalLinuxOptions,
-        dialogTitle: title,
-      );
+  Future<String?> _defaultPickFolder({String? title}) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
+    return FilePicker.getDirectoryPath(
+      windowsOptions: kModalWindowsOptions,
+      linuxOptions: kModalLinuxOptions,
+      dialogTitle: title,
+    );
+  }
 
   /// דיאלוג הדפסה/שמירה פתוח כרגע עבור המופע הזה. שער חד-בו-זמנית: בלעדיו
   /// לולאה בתוסף מערימה דיאלוגים מודאליים עד שהחלון אינו שמיש.
@@ -3766,6 +3776,10 @@ class PluginBridgeAdapter {
     List<String>? allowedExtensions,
     String? title,
   }) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
     final hasExtensions =
         allowedExtensions != null && allowedExtensions.isNotEmpty;
     final result = await FilePicker.pickFile(
@@ -3989,6 +4003,10 @@ class PluginBridgeAdapter {
     List<String>? allowedExtensions,
     String? title,
   }) async {
+    final context = navigatorKey.currentContext;
+    if (context != null && !await verifySaferModePassword(context)) {
+      return null;
+    }
     final folder = await FilePicker.getDirectoryPath(
       dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
       windowsOptions: kModalWindowsOptions,
@@ -3996,10 +4014,10 @@ class PluginBridgeAdapter {
     );
     if (folder == null) return null;
 
-    final context = navigatorKey.currentContext;
-    if (context == null || !context.mounted) return null;
+    final dialogContext = navigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return null;
     final typed = await showInputDialog(
-      context: context,
+      context: dialogContext,
       title: title ?? 'שמירת קובץ',
       labelText: 'שם הקובץ',
       initialValue: suggestedName,

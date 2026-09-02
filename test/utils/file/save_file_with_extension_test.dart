@@ -1,6 +1,15 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/settings/dialogs/safer_mode_password_dialog.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 
 void main() {
@@ -71,4 +80,74 @@ void main() {
       expect(await ensureFileExtension(missing, 'pdf'), missing);
     });
   });
+
+  group('saveFileWithExtension — הגנת מצב סייפר', () {
+    testWidgets('במצב סייפר פעיל — דורש סיסמה, וכשבוטל מחזיר null בלי לפתוח סייר', (
+      tester,
+    ) async {
+      final settingsBloc = _MockSettingsBloc();
+      final repository = _FakeSettingsRepo();
+
+      whenListen(
+        settingsBloc,
+        const Stream<SettingsState>.empty(),
+        initialState: SettingsState.initial().copyWith(
+          protectedModeEnabled: true,
+        ),
+      );
+
+      String? saveResult;
+      late BuildContext testContext;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepositoryProvider<SettingsRepository>.value(
+            value: repository,
+            child: BlocProvider<SettingsBloc>.value(
+              value: settingsBloc,
+              child: Builder(
+                builder: (context) {
+                  testContext = context;
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // הרצת saveFileWithExtension ברקע
+      final future = saveFileWithExtension(
+        fileName: 'test.pdf',
+        extension: 'pdf',
+        bytes: Uint8List.fromList([1, 2, 3]),
+        context: testContext,
+      ).then((res) => saveResult = res);
+
+      await tester.pump();
+      await tester.pump();
+
+      // מוודאים שדיאלוג הסיסמה נפתח
+      expect(find.byType(SaferModePasswordDialog), findsOneWidget);
+
+      // ביטול הדיאלוג
+      await tester.tap(find.text('ביטול'));
+      await tester.pumpAndSettle();
+
+      await future;
+      expect(saveResult, isNull);
+    });
+  });
 }
+
+class _MockSettingsBloc extends MockBloc<SettingsEvent, SettingsState>
+    implements SettingsBloc {}
+
+class _FakeSettingsRepo extends Fake implements SettingsRepository {
+  @override
+  bool hasProtectedModePassword() => true;
+
+  @override
+  bool verifyProtectedModePassword(String password) => password == '1234';
+}
+

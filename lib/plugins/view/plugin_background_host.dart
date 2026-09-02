@@ -38,6 +38,8 @@ import 'package:otzaria/plugins/services/plugin_lazy_activation_service.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/view/plugin_drop_guard_script.dart';
+import 'package:otzaria/plugins/view/plugin_file_input_guard_script.dart';
+import 'package:otzaria/plugins/bridge/plugin_save_target.dart';
 import 'package:otzaria/plugins/services/plugin_webview_failure_log.dart';
 import 'package:otzaria/plugins/services/plugin_network_gate.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
@@ -689,6 +691,32 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
         );
         return result?.path;
       },
+      pickSaveLocation: ({
+        required String suggestedName,
+        List<String>? allowedExtensions,
+        String? title,
+      }) async {
+        final ctx = navigatorKey.currentContext;
+        if (ctx == null) return null;
+        if (!await verifySaferModePassword(ctx)) return null;
+        final folder = await FilePicker.getDirectoryPath(
+          dialogTitle: title ?? 'בחירת תיקייה לשמירת הקובץ',
+          windowsOptions: kModalWindowsOptions,
+          linuxOptions: kModalLinuxOptions,
+        );
+        if (folder == null || !ctx.mounted) return null;
+        final typed = await showInputDialog(
+          context: ctx,
+          title: title ?? 'שמירת קובץ',
+          labelText: 'שם הקובץ',
+          initialValue: suggestedName,
+          confirmText: 'שמור',
+        );
+        if (typed == null) return null;
+        final fileName =
+            pluginSaveFileName(typed, allowedExtensions?.firstOrNull);
+        return pluginSaveTargetPath(folder: folder, fileName: fileName);
+      },
     );
 
     _pluginRegistryRepository = pluginRegistryRepository;
@@ -809,7 +837,25 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
         buildPluginDropGuardScript(),
+        buildPluginFileInputGuardScript(),
       ]),
+      onShowFileChooser: (controller, showFileChooserRequest) async {
+        final ctx = navigatorKey.currentContext;
+        if (ctx == null) {
+          return ShowFileChooserResponse(
+            handledByClient: true,
+            filePaths: null,
+          );
+        }
+        final verified = await verifySaferModePassword(ctx);
+        if (!verified) {
+          return ShowFileChooserResponse(
+            handledByClient: true,
+            filePaths: null,
+          );
+        }
+        return null;
+      },
       onDownloadStarting: PluginDownloadHandler.onDownloadStarting,
       onPermissionRequest: (controller, request) =>
           PluginWebViewPermissionGate.respond(
@@ -826,6 +872,14 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
             instanceId: PluginInstanceIds.background,
           );
           _bridge.register(controller);
+          controller.addJavaScriptHandler(
+            handlerName: 'otzaria_file_input_clicked',
+            callback: (_) async {
+              final ctx = navigatorKey.currentContext;
+              if (ctx == null) return;
+              await verifySaferModePassword(ctx);
+            },
+          );
         } catch (e) {
           PluginRuntimeDispatcher.instance.unregisterController(
             widget.plugin.pluginId,

@@ -55,6 +55,7 @@ import 'dart:async';
 import 'package:otzaria/update/my_update_widget.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/widgets/dialogs/ad_popup_dialog.dart';
+import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/main.dart' show appWindowListener, presentMainWindow;
 import 'package:otzaria/core/splash_screen.dart' show SplashIcon;
@@ -3539,7 +3540,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     context.read<NavigationBloc>().add(const NavigateToScreen(Screen.settings));
   }
 
-  void _openErrorLogFile() {
+  Future<void> _openErrorLogFile() async {
+    if (!await verifySaferModePassword(context)) return;
     ErrorLogFile.ensureExists();
     final path = ErrorLogFile.resolvePath();
     if (Platform.isWindows) {
