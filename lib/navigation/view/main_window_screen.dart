@@ -23,6 +23,7 @@ import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/indexing_work_status.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -563,6 +564,14 @@ class MainWindowScreenState extends State<MainWindowScreen>
     builtInToolsOrder: builtInToolsOrder,
   ).map((item) => item.toolId).toList();
 
+  /// האם לדלג על בניית קטלוג הספרייה בעלייה.
+  ///
+  /// ⚠️ רק בחלון משני שנפתח עם כרטיסיה: המשתמש רואה ספר, לא את הספרייה,
+  /// ובניית הקטלוג מעכבת את החשיפה בכ-700ms. `LibraryBrowser` טוען אותו
+  /// ב-`initState` שלו כשנכנסים אליו, ולכן שום דבר לא אובד.
+  bool get _skipsEagerLibraryLoad =>
+      WindowRole.isSecondary && WindowRole.openedWithTab;
+
   @override
   void initState() {
     super.initState();
@@ -583,7 +592,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_lastScreen != Screen.reading) {
       _initialContentReady = true;
       _splashOverlayVisible = false;
-      context.read<LibraryBloc>().add(LoadLibrary());
+      // ⚠️ חלון שנפתח עם כרטיסיה מדלג: המסך עוד לא התחלף לקריאה, אבל
+      // הוא בדרך לשם, ובניית הקטלוג כאן רק מעכבת את החשיפה בכ-700ms.
+      if (!_skipsEagerLibraryLoad) {
+        context.read<LibraryBloc>().add(LoadLibrary());
+      }
     }
 
     PluginPageLauncher.instance.navigator = (pluginId) {
@@ -774,7 +787,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _splashOverlayVisible = false;
         await presentMainWindow();
         await WidgetsBinding.instance.endOfFrame;
-        libraryBloc.add(LoadLibrary());
+        if (!_skipsEagerLibraryLoad) libraryBloc.add(LoadLibrary());
         return;
       }
       // במסך שאינו קריאה התוכן כבר נצבע מהפריים הראשון (ראה initState) ואין
@@ -788,7 +801,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       await WidgetsBinding.instance.endOfFrame;
       await presentMainWindow();
       await WidgetsBinding.instance.endOfFrame;
-      libraryBloc.add(LoadLibrary());
+      if (!_skipsEagerLibraryLoad) libraryBloc.add(LoadLibrary());
     }());
   }
 

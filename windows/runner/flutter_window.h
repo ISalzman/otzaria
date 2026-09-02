@@ -27,6 +27,14 @@ class FlutterWindow : public Win32Window {
                          bool headless = false, bool skip_plugins = false);
   virtual ~FlutterWindow();
 
+  // מציג את החלון ברגע שהפריים הראשון מצויר, ומביא אותו לחזית.
+  //
+  // ⚠️ נועד לחלונות משניים. החלון הראשון נחשף מ-Dart רק כשהתוכן מוכן, כי
+  // ה-splash הנייטיב מכסה את ההמתנה. לחלון משני אין splash, ולכן המתנה
+  // עד סיום האתחול נראית למשתמש כאילו הלחיצה לא עשתה כלום — הפריים
+  // הראשון הוא מסך הטעינה של האפליקציה, וזו התשובה הוויזואלית המיידית.
+  void RevealOnFirstFrame();
+
  protected:
   // Win32Window:
   bool OnCreate() override;

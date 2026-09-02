@@ -651,13 +651,15 @@ Future<void> _initializeProcessSingletons() async {
 
   // RustLib (טעינת FFI) ו-loadCerts (קריאת asset קטן) אינם תלויים בהגדרות
   // ולא זה בזה — רצים במקביל לשרשרת ההגדרות/חלון במקום בזה אחר זה.
-  await Future.wait([
-    RustLib.init(),
-    loadCerts(),
-    initSettingsAndWindow(),
-  ]);
+  await _timedPhase('rustlib+certs+settings', () async {
+    await Future.wait([
+      RustLib.init(),
+      loadCerts(),
+      initSettingsAndWindow(),
+    ]);
+  });
 
-  await initHive();
+  await _timedPhase('initHive', initHive);
   // מצב נייד: אם תיקיית הנתונים זזה (אות כונן אחרת / מיקום אחר), הנתיבים
   // האבסולוטיים השמורים משוכתבים לפני שכל קוד אחר צורך אותם. חייב לרוץ
   // אחרי Settings.init ואחרי initHive (ה-boxes פתוחים), ולפני
@@ -728,7 +730,7 @@ Future<void> _initializeRestartableRuntime() async {
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
   // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
   // בקריאה הראשונה. ב-restart אין צורך לפתוח שוב — boxes לא נסגרים.
-  await SqliteDataProvider.instance.initialize();
+  await _timedPhase('sqlite', SqliteDataProvider.instance.initialize);
 
   // הגדרת cache של pdfrx — לא חיונית להצגת המסך הראשי. PDF הראשון יקבל
   // cache ברירת מחדל אם זה עוד לא הוגדר.
@@ -738,7 +740,7 @@ Future<void> _initializeRestartableRuntime() async {
   // המקורות שהאפליקציה מציעה לתוספים. חייב לרוץ לפני שתוסף יקרא ל-
   // database.listSources — אחרת תוסף שנפתח מוקדם יראה את כל המקורות
   // כלא-זמינים (regression: ראה PluginDatabaseService._registry.getSource).
-  await initPluginDatabaseSources();
+  await _timedPhase('pluginDbSources', initPluginDatabaseSources);
 
   // PluginCrashGuard.ensureInitialized חייב להסתיים לפני שטעינת תוסף מתחילה.
   // PluginTabPage.markLoadAttemptSync דורש state אתחל (אחרת ה-canary לא נשמר
@@ -1258,7 +1260,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // ההחלטה שגויה: הוא היה נשאר במסך הספרייה בעוד הכרטיסיה
               // פתוחה מאחוריו — בדיוק מה שנצפה. הניווט נשלח אחריו ולכן
               // גובר עליו.
-              if (_openedWithTransferredTab) {
+              if (WindowRole.openedWithTab) {
                 nav.add(const NavigateToScreen(Screen.reading));
               }
               return nav;
@@ -1535,7 +1537,7 @@ void secondaryWindowMain(List<String> args) async {
   secondaryWindowPayload = args.isEmpty || args.first.isEmpty
       ? null
       : args.first;
-  _openedWithTransferredTab = MultiWindowService.payloadHasTab(
+  WindowRole.openedWithTab = MultiWindowService.payloadHasTab(
     secondaryWindowPayload,
   );
 
@@ -1591,17 +1593,26 @@ bool isSecondaryWindow = false;
 /// מודד את זמן העלייה של חלון משני, מנקודת הכניסה ועד החשיפה.
 Stopwatch? _secondaryWindowStartup;
 
+/// מריץ שלב אתחול ומודד אותו — בחלון משני בלבד.
+///
+/// ⚠️ אין למדוד בחלון הראשון: שם השלבים רצים תחת ה-splash הנייטיב וזמנם
+/// אינו מורגש, וההדפסות היו רק רעש בלוג.
+Future<T> _timedPhase<T>(String name, Future<T> Function() body) async {
+  if (!isSecondaryWindow) return body();
+  final sw = Stopwatch()..start();
+  try {
+    return await body();
+  } finally {
+    debugPrint('[window-phase] $name: ${sw.elapsedMilliseconds}ms');
+  }
+}
+
 /// המטען הגולמי שאיתו נפתח החלון, אם נפתח כחלון משני.
 ///
 /// נצרך **פעם אחת** ביצירת `TabsBloc` ומתאפס שם, כדי ש-`RestartWidget`
 /// לא יוסיף את הכרטיסיה שוב בהפעלה מחדש של העץ. הפענוח קורה שם ולא
 /// כאן — ראו ההערה ב-[secondaryWindowMain].
 String? secondaryWindowPayload;
-
-/// האם החלון הזה נפתח עם כרטיסיה מועברת. בניגוד ל-[_pendingTransferredTab]
-/// אינו מתאפס — `NavigationBloc` נוצר אחרי `TabsBloc` וצריך לדעת שיש לעבור
-/// למסך הקריאה ולא להישאר בספרייה.
-bool _openedWithTransferredTab = false;
 
 int _probeThreadId() {
   try {

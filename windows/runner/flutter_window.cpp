@@ -257,14 +257,16 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // מספר החלונות החיים.
   window->SetQuitOnClose(false);
 
-  // ⚠️ החלון **אינו** מוצג כאן.
+  // ⚠️ נחשף בפריים הראשון, ולא בסוף האתחול.
   //
-  // הצגה מיידית חושפת חלון ריק שמצטייר בהדרגה — ריצוד וקפיצות עד
-  // הייצוב. Dart חושף אותו ב-`presentMainWindow` כשהתוכן מוכן, בדיוק
-  // כמו החלון הראשון.
-  //
-  // רשת ביטחון: אם החשיפה מ-Dart נכשלה מסיבה כלשהי, חלון בלתי-נראה
-  // לתמיד גרוע מחלון מרצד. אחרי 20 שניות מציגים אותו בכוח.
+  // הצגה **מיידית** חושפת חלון ריק שמצטייר בהדרגה — ריצוד. המתנה עד סיום
+  // האתחול משאירה שניות שבהן לא קורה כלום על המסך, והמשתמש אינו יודע אם
+  // הלחיצה נקלטה. הפריים הראשון הוא מסך הטעינה של האפליקציה: מופיע כמעט
+  // מיד, ואינו ריק.
+  window->RevealOnFirstFrame();
+
+  // רשת ביטחון: אם הפריים הראשון לא הגיע, חלון בלתי-נראה לתמיד גרוע
+  // מחלון שמופיע מאוחר.
   const HWND handle = window->GetHandle();
   std::thread([handle]() {
     ::Sleep(20000);
@@ -841,6 +843,25 @@ void FlutterWindow::OnDestroy() {
   }
 
   Win32Window::OnDestroy();
+}
+
+void FlutterWindow::RevealOnFirstFrame() {
+  if (!flutter_controller_ || !flutter_controller_->engine()) {
+    ::ShowWindow(GetHandle(), SW_SHOW);
+    return;
+  }
+  const HWND hwnd = GetHandle();
+  const DWORD started = ::GetTickCount();
+  flutter_controller_->engine()->SetNextFrameCallback([hwnd, started]() {
+    if (!::IsWindow(hwnd)) return;
+    ::ShowWindow(hwnd, SW_SHOW);
+    ::BringWindowToTop(hwnd);
+    ::SetForegroundWindow(hwnd);
+    // הזמן שהמשתמש באמת מרגיש: מהלחיצה ועד שמשהו מופיע על המסך.
+    printf("[window] נראה למשתמש אחרי %lums\n", ::GetTickCount() - started);
+    fflush(stdout);
+  });
+  flutter_controller_->ForceRedraw();
 }
 
 void FlutterWindow::OnWindowHidden() {
