@@ -851,6 +851,7 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | ToolTab model (JSON, clone, dedupe) | `test/tabs/models/tool_tab_test.dart` |
+| כותרת מיקום לטאב טקסט שטרם נבנה (שאילתת DB יחידה, בלי טעינת תוכן) | `test/tabs/models/text_tab_location_title_test.dart` |
 | Tool catalog + availability reasons | `test/tools/tool_catalog_test.dart` |
 | Tools launcher panel (search, grouping, grid columns, tile layout) | `test/tools/tools_launcher_panel_test.dart` |
 | Tool tab focus (WebView regression) | `test/tools/tool_tab_focus_test.dart` |

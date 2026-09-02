@@ -1168,6 +1168,8 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         builder: (context, value, child) {
           // בכרטיסיית חיפוש הערך הוא הכותרת עצמה; בשאר הוא המיקום שמתווסף לה.
           if (tab is SearchingTab) return buildTabAppearance(value, value);
+          // טאב שטרם נבנה (שוחזר בעלייה) עוד לא קיבל מיקום מה-BLoC.
+          if (value.isEmpty && tab is TextBookTab) tab.ensureLocationTitle();
           return buildTabAppearance(
             tab.title,
             value.isEmpty ? tab.title : '${tab.title}, $value',
