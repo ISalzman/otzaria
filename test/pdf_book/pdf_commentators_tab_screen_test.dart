@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +21,8 @@ import '../helpers/memory_settings_cache.dart';
 
 class _FakeSettingsBloc extends Bloc<SettingsEvent, SettingsState>
     implements SettingsBloc {
-  _FakeSettingsBloc() : super(SettingsState.initial()) {
+  _FakeSettingsBloc([SettingsState? initial])
+    : super(initial ?? SettingsState.initial()) {
     on<SettingsEvent>((_, _) {});
   }
 
@@ -50,10 +52,10 @@ class _FakePersonalNotesBloc
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _wrap(Widget child) => MaterialApp(
+Widget _wrap(Widget child, {SettingsState? settings}) => MaterialApp(
   home: MultiBlocProvider(
     providers: [
-      BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc()),
+      BlocProvider<SettingsBloc>.value(value: _FakeSettingsBloc(settings)),
       BlocProvider<PersonalNotesBloc>.value(
         value: _FakePersonalNotesBloc(),
       ),
@@ -315,5 +317,96 @@ void main() {
     // שורות העץ בעיצוב הספרייה: כרטיס מקובץ + שורת ניווט.
     expect(find.byType(NavTreeGroupCard), findsWidgets);
     expect(find.widgetWithText(NavTreeTile, 'פרק א'), findsOneWidget);
+  });
+
+  // issue #1112 — פערים מול כרטיסיית המפרשים של ספר טקסט.
+  group('התאמה לכרטיסיית המפרשים של טקסט (issue #1112)', () {
+    PdfBookTab sourceTab() {
+      final tab = PdfBookTab(
+        book: PdfBook(title: 'PDF בדיקה', path: '/tmp/book.pdf'),
+        pageNumber: 1,
+      );
+      tab.pdfHeadings = PdfHeadings(
+        bookTitle: 'PDF בדיקה',
+        headingsMap: {'פרק א': 1, 'פרק ב': 10},
+      );
+      tab.currentTitle.value = 'פרק א';
+      return tab;
+    }
+
+    testWidgets('גלילה במפרשים סוגרת את חלונית הניווט כשאינה נעוצה', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = sourceTab();
+      addTearDown(source.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          PdfCommentatorsTabScreen(tab: PdfCommentatorsTab(sourceTab: source)),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byType(NavPanelToggleButton));
+      await tester.pumpAndSettle();
+      NavSidePanel panel() =>
+          tester.widget<NavSidePanel>(find.byType(NavSidePanel));
+      expect(panel().isOpen, isTrue);
+
+      // גלילת המשתמש ברשימת המפרשים, כפי שהיא עולה מהרשימה אל המסך.
+      final context = tester.element(find.byType(PdfCommentaryPanel));
+      UserScrollNotification(
+        metrics: FixedScrollMetrics(
+          minScrollExtent: 0,
+          maxScrollExtent: 1000,
+          pixels: 100,
+          viewportDimension: 500,
+          axisDirection: AxisDirection.down,
+          devicePixelRatio: 1,
+        ),
+        context: context,
+        direction: ScrollDirection.forward,
+      ).dispatch(context);
+      await tester.pumpAndSettle();
+
+      expect(
+        panel().isOpen,
+        isFalse,
+        reason: 'בכרטיסיית הטקסט חלונית לא-נעוצה נסגרת בגלילה — גם כאן',
+      );
+    });
+
+    testWidgets('הגדרת רוחב הטקסט חלה על רשימת המפרשים', (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = sourceTab();
+      addTearDown(source.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          PdfCommentatorsTabScreen(tab: PdfCommentatorsTab(sourceTab: source)),
+          settings: SettingsState.initial().copyWith(textMaxWidth: 600),
+        ),
+      );
+      await tester.pump();
+
+      final constrained = find.descendant(
+        of: find.byType(PdfCommentaryPanel),
+        matching: find.byWidgetPredicate(
+          (w) => w is ConstrainedBox && w.constraints.maxWidth == 600,
+        ),
+      );
+      expect(
+        constrained,
+        findsOneWidget,
+        reason: 'בכרטיסיית הטקסט הרשימה מוגבלת לרוחב הטקסט המוגדר — גם כאן',
+      );
+    });
   });
 }
