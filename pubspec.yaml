@@ -79,7 +79,7 @@ dependencies:
   seforim_library_updater:
     git:
       url: https://github.com/Otzaria/otzaria_library_updater
-      ref: 14c03cbff90234d43dd815717ae8a0da83041a1d
+      ref: a6fb3451d6f5be87df4f7bb5495f5ab90e9a1790
   window_manager: ^0.5.2
   screen_retriever: ^0.2.2
   flutter_spinbox: ^0.13.1
