@@ -5528,6 +5528,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       currentPage: currentPage,
       layoutMode: currentLayoutMode,
     );
+    // pdfrx מנהל worker יחיד: PdfViewer פעיל ורסטור התצוגה המקדימה תוקעים
+    // זה את זה, ולכן המציג מנותק כל עוד מסך ההדפסה פתוח.
     setState(() => _pdfViewerSuspended = true);
     await showDialog(
       context: context,
@@ -5542,25 +5544,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     );
     if (mounted) {
-      try {
-        // Always reset the pdfrx worker when leaving the print screen:
-        // - If printing happened: FPDF_DestroyLibrary() was called by the printing plugin,
-        //   corrupting the shared PDFium state that pdfrx depends on.
-        // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
-        // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
-        // worker is unresponsive.
-        await PdfrxEntryFunctions.instance.stopBackgroundWorker().timeout(
-          const Duration(seconds: 3),
-        );
-      } catch (_) {
-      } finally {
-        if (mounted) {
-          setState(() => _pdfViewerSuspended = false);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _pdfViewFocusNode.requestFocus();
-          });
-        }
-      }
+      setState(() => _pdfViewerSuspended = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pdfViewFocusNode.requestFocus();
+      });
     }
   }
 
