@@ -43,6 +43,15 @@ class SetFolderMergeMode extends CustomFoldersEvent {
   List<Object?> get props => [folder, value];
 }
 
+/// הסתרת תיקייה מעץ הספרייה או החזרתה. הספרים נשארים ב-DB.
+class SetFolderHidden extends CustomFoldersEvent {
+  const SetFolderHidden(this.folder, this.hidden);
+  final CustomFolder folder;
+  final bool hidden;
+  @override
+  List<Object> get props => [folder, hidden];
+}
+
 class RescanCustomFolders extends CustomFoldersEvent {
   const RescanCustomFolders({
     this.showNoChangesMessage = true,

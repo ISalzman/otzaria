@@ -80,6 +80,40 @@ void main() {
     expect(find.text('פתח תיקייה'), findsOneWidget);
     expect(find.text('העתק נתיב'), findsOneWidget);
     expect(find.text('הסר תיקייה'), findsOneWidget);
+    expect(find.text('הסתר מהספרייה'), findsOneWidget);
+  });
+
+  testWidgets('"הסתר מהספרייה" מסתיר, מסמן בשורה ומתחלף ל"הצג בספרייה"', (
+    tester,
+  ) async {
+    var folders = [
+      CustomFolder(path: folderPath, addedAt: DateTime(2026, 5, 7)),
+    ];
+    final bloc = CustomFoldersBloc(
+      addLibraryEvent: (_) {},
+      loadFolders: () => folders,
+      saveFolders: (saved) async => folders = saved,
+      syncFolders: (_, {String? onlyFolderPath}) async =>
+          const FileSyncResult(),
+      deleteFolderFromDb: (_) async {},
+    )..add(const LoadCustomFolders());
+    addTearDown(bloc.close);
+
+    await pumpTile(tester, bloc);
+    await openFolderMenu(tester);
+    await tester.tap(find.text('הסתר מהספרייה'));
+    await tester.pumpAndSettle();
+
+    expect(folders.single.hidden, isTrue);
+    expect(find.textContaining('מוסתרת'), findsOneWidget);
+
+    await openFolderMenu(tester);
+    expect(find.text('הצג בספרייה'), findsOneWidget);
+    await tester.tap(find.text('הצג בספרייה'));
+    await tester.pumpAndSettle();
+
+    expect(folders.single.hidden, isFalse);
+    expect(find.textContaining('מוסתרת'), findsNothing);
   });
 
   testWidgets('בחירת "העתק נתיב" מעתיקה את נתיב התיקייה ללוח', (tester) async {

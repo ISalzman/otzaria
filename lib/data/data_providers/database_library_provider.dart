@@ -2766,8 +2766,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
             defaultValue: false,
           ) ??
           false;
+      final configuredFolders = CustomFoldersManager.loadFolders(
+        Settings.getValue<String>(SettingsRepository.keyCustomFolders),
+      );
       final mergeOverridesByFolderName = _mergeOverridesByFolderName(
+        configuredFolders,
         mergeDefault,
+      );
+      final hiddenFolderNames = CustomFoldersManager.hiddenFolderNames(
+        configuredFolders,
       );
 
       // ילדים ישירים של "ספרים אישיים" — אלו התיקיות שהמשתמש בחר בדיאלוג
@@ -2836,6 +2843,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
       }
 
       for (final pickedFolder in pickedFolders) {
+        if (hiddenFolderNames.contains(pickedFolder.title)) continue;
         final merged =
             mergeOverridesByFolderName[pickedFolder.title] ?? mergeDefault;
 
@@ -2950,10 +2958,10 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
   /// מצב המיזוג לפי קטגוריית-השורש. תיקיות בעלות אותו שם חולקות קטגוריה,
   /// ולכן כשמצביהן האפקטיביים חלוקים חוזרים לברירת המחדל הגלובלית.
-  Map<String, bool> _mergeOverridesByFolderName(bool mergeDefault) {
-    final folders = CustomFoldersManager.loadFolders(
-      Settings.getValue<String>(SettingsRepository.keyCustomFolders),
-    );
+  Map<String, bool> _mergeOverridesByFolderName(
+    List<CustomFolder> folders,
+    bool mergeDefault,
+  ) {
     final result = <String, bool>{};
     final conflicting = <String>{};
     for (final folder in folders) {

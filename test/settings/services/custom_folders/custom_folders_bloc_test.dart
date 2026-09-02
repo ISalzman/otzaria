@@ -294,6 +294,44 @@ void main() {
         await bloc.close();
       },
     );
+
+    test(
+      'SetFolderHidden שומר את ההסתרה ומרענן את הספרייה בלי סריקה',
+      () async {
+        await _saveFolders([_folder('C:/personal-books')]);
+
+        final recordedEvents = <LibraryEvent>[];
+        var syncCalls = 0;
+        final bloc = CustomFoldersBloc(
+          addLibraryEvent: recordedEvents.add,
+          syncFolders: (folders, {String? onlyFolderPath}) async {
+            syncCalls++;
+            return const FileSyncResult();
+          },
+        )..add(const LoadCustomFolders());
+
+        await bloc.stream.firstWhere((state) => state.folders.isNotEmpty);
+
+        bloc.add(SetFolderHidden(bloc.state.folders.single, true));
+        await bloc.stream.firstWhere((state) => state.folders.single.hidden);
+
+        expect(
+          CustomFoldersManager.loadFolders(
+            Settings.getValue<String>(SettingsRepository.keyCustomFolders),
+          ).single.hidden,
+          isTrue,
+          reason: 'ההסתרה נשמרת להגדרות ולא רק ל-state',
+        );
+        expect(syncCalls, 0, reason: 'הסתרה אינה סורקת ואינה מוחקת מה-DB');
+        expect(recordedEvents.whereType<RefreshLibrary>(), hasLength(1));
+
+        bloc.add(SetFolderHidden(bloc.state.folders.single, false));
+        await bloc.stream.firstWhere((state) => !state.folders.single.hidden);
+        expect(recordedEvents.whereType<RefreshLibrary>(), hasLength(2));
+
+        await bloc.close();
+      },
+    );
   });
 }
 
