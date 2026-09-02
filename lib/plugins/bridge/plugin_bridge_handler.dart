@@ -404,6 +404,8 @@ class PluginBridgeHandler {
     'ui.print': noManifestPermission,
     // דיאלוג „שמור בשם” הוא שער ההסכמה; הנתיב אינו מגיע מה-JS.
     'ui.exportPdf': noManifestPermission,
+    // דגל בלבד — ההשפעה היחידה היא דיאלוג אישור לפני סגירת הכרטיסיה.
+    'ui.setUnsavedChanges': noManifestPermission,
     'storage.get': 'plugin.storage.read',
     'storage.list': 'plugin.storage.read',
     'storage.set': 'plugin.storage.write',

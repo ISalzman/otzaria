@@ -11,6 +11,7 @@ import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/messages/notes_messages.dart';
@@ -196,10 +197,14 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
       child: Stack(
         children: [
           InkWell(
-            onTap: () {
-              // Get current tab data from TabsBloc to save before switching
+            onTap: () async {
+              // הכרטיסיות נשמרות לשולחן, אך מצב ה-JS של תוסף אינו נשמר איתן.
               final tabsState = context.read<TabsBloc>().state;
-              context.read<WorkspaceBloc>().add(
+              final workspaceBloc = context.read<WorkspaceBloc>();
+              final navigationBloc = context.read<NavigationBloc>();
+              final navigator = Navigator.of(context);
+              if (!await confirmCloseTabs(context, tabsState.tabs)) return;
+              workspaceBloc.add(
                 SwitchToWorkspace(
                   targetWorkspaceId: workspace.id,
                   currentTabsToSave: tabsState.tabs,
@@ -210,10 +215,10 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
               final hasBooks = isActive
                   ? tabsState.tabs.isNotEmpty
                   : workspace.tabs.isNotEmpty;
-              context.read<NavigationBloc>().add(
+              navigationBloc.add(
                 NavigateToScreen(hasBooks ? Screen.reading : Screen.library),
               );
-              Navigator.of(context).pop();
+              navigator.pop();
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

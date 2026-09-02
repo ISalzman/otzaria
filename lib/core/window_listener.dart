@@ -11,6 +11,7 @@ import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
+import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Callback type for fullscreen state changes
@@ -89,6 +90,11 @@ class AppWindowListener extends WindowListener {
 
   @override
   void onWindowClose() async {
+    if (_isClosing) {
+      return;
+    }
+    // לפני _isClosing וכלב-השמירה: ביטול חייב להשאיר את התוכנה שלמה.
+    if (!await confirmAppCloseWithUnsavedChanges()) return;
     if (_isClosing) {
       return;
     }

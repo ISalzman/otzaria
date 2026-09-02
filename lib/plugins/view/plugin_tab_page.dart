@@ -19,6 +19,7 @@ import 'package:path/path.dart' as p;
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/services/plugin_unsaved_changes_registry.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -817,7 +818,10 @@ class _PluginTabPageState extends State<PluginTabPage> {
           if (uri.scheme == 'http' &&
               PluginFileServer.instance.isServerUri(uri)) {
             // גם נתיבי קבצים (/f/) וגם נתיב ההעלאה (/w/) של התוסף הזה.
-            return PluginFileServer.isUriForPlugin(uri, widget.plugin.pluginId) ||
+            return PluginFileServer.isUriForPlugin(
+                      uri,
+                      widget.plugin.pluginId,
+                    ) ||
                     PluginFileServer.instance.isUploadUriForPlugin(
                       uri,
                       widget.plugin.pluginId,
@@ -902,6 +906,11 @@ class _PluginTabPageState extends State<PluginTabPage> {
         }
       },
       onLoadStop: (controller, url) async {
+        // טעינה מחדש של הדף מאפסת את מצב ה-JS, ואיתו את הדגל שהוא הרים.
+        PluginUnsavedChangesRegistry.instance.removeInstance((
+          pluginId: widget.plugin.pluginId,
+          instanceId: widget.instanceId,
+        ));
         try {
           // לוכד theme לפני ה-await (context חייב להישמר synchronously)
           final theme = buildThemePayload(context);

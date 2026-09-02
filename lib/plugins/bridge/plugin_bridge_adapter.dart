@@ -47,6 +47,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/plugins/services/plugin_external_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_in_book_search_service.dart';
 import 'package:otzaria/plugins/services/plugin_reader_actions.dart';
@@ -89,6 +90,7 @@ import 'package:otzaria/plugins/models/plugin_toolbar_item.dart';
 import 'package:otzaria/plugins/models/plugin_when_condition.dart';
 import 'package:otzaria/plugins/services/context_menu_registry.dart';
 import 'package:otzaria/plugins/services/plugin_toolbar_registry.dart';
+import 'package:otzaria/plugins/services/plugin_unsaved_changes_registry.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:otzaria/plugins/services/plugin_print_service.dart';
@@ -712,6 +714,7 @@ class PluginBridgeAdapter {
     final key = (pluginId: plugin.pluginId, instanceId: instanceId);
     ContextMenuRegistry.instance.removeInstance(key);
     PluginToolbarRegistry.instance.removeInstance(key);
+    PluginUnsavedChangesRegistry.instance.removeInstance(key);
     _highlightRegistry.removeInstance(key);
     for (final cancel in _activeSearchStreams.values) {
       unawaited(cancel());
@@ -2331,8 +2334,20 @@ class PluginBridgeAdapter {
       case 'closeTab':
         // spec: closeTab({ index }) — האינדקס הוא ברשימה ש-getCurrentState
         // מחזיר, לא ב-TabsBloc. הטאב עצמו נמסר לאירוע, ולכן אין המרת אינדקס.
-        _dependencies.tabsBloc.add(RemoveTab(_pluginVisibleTabAt(args)));
-        return true;
+        {
+          final target = _pluginVisibleTabAt(args);
+          final unsaved = unsavedPluginTabs([target]);
+          if (unsaved.isNotEmpty) {
+            final confirmed = await _dependencies.showWarningDialog(
+              title: unsavedChangesDialogTitle,
+              content: unsavedChangesDialogContent(unsaved),
+              subtitle: unsavedChangesDialogSubtitle,
+            );
+            if (!confirmed) return false;
+          }
+          _dependencies.tabsBloc.add(RemoveTab(target));
+          return true;
+        }
       case 'activateTab':
         // spec: activateTab({ index }) — כאן דרוש דווקא האינדקס הגולמי, ולכן
         // הוא נגזר מזהות הטאב ולא מהאינדקס שהתוסף מסר.
@@ -3222,6 +3237,19 @@ class PluginBridgeAdapter {
           subtitle: args['subtitle'] as String? ?? '',
         );
         return {'confirmed': result};
+      case 'setUnsavedChanges':
+        // spec: setUnsavedChanges({ hasChanges, message? }) — סגירת הכרטיסיה
+        // תעבור דרך דיאלוג אישור כל עוד הדגל דלוק.
+        final hasChanges = args['hasChanges'];
+        if (hasChanges is! bool) {
+          throw Exception('error.invalid_params: hasChanges must be boolean');
+        }
+        PluginUnsavedChangesRegistry.instance.set(
+          (pluginId: plugin.pluginId, instanceId: instanceId),
+          hasChanges: hasChanges,
+          message: args['message'] as String?,
+        );
+        return true;
       case 'pickFolder':
         // פותח דיאלוג בחירת תיקייה. הנתיב שנבחר נרשם כתיקייה מאושרת לתוסף —
         // מכאן ואילך מותר לו לכתוב/למחוק בתוכה (download.destPath, fs.*).

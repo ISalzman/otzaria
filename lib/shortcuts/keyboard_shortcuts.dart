@@ -11,6 +11,7 @@ import 'package:otzaria/navigation/view/tab_search_menu.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/navigation/view/tab_context_menu.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
@@ -18,9 +19,6 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/history/bloc/history_bloc.dart';
-import 'package:otzaria/history/bloc/history_event.dart';
-import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/bookmarks/view/bookmark_screen.dart';
@@ -335,38 +333,28 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
     if (isReadingScreen &&
         ShortcutHelper.matchesShortcut(event, closeTabShortcut)) {
       final tabsBloc = context.read<TabsBloc>();
-      final historyBloc = context.read<HistoryBloc>();
       // הקיצור סוגר את כל הבחירה המרובה כשהכרטיסיה הפעילה חלק ממנה.
       final closeGroup = tabsBloc.state.currentCloseGroup;
       // בטאב מפוצל (שאינו חלק מבחירה מרובה) נסגרת רק החלונית הפעילה.
       if (closeGroup.length <= 1 && tabsBloc.state.currentTab is CombinedTab) {
         final pane = tabsBloc.state.activePane;
         if (pane != null) {
-          historyBloc.add(AddHistory(pane));
-          tabsBloc.add(ClosePane(pane));
+          closePaneWithHistory(context, pane);
           return KeyEventResult.handled;
         }
       }
       if (closeGroup.length > 1) {
-        historyBloc.add(AddHistoryForTabs(closeGroup));
+        closeSelectedTabsWithHistory(context);
       } else if (closeGroup.isNotEmpty) {
-        historyBloc.add(AddHistory(closeGroup.first));
+        closeTabWithHistory(context, closeGroup.first);
       }
-      tabsBloc.add(const CloseCurrentTab());
       return KeyEventResult.handled;
     }
 
     // סגור כל הטאבים
     if (isReadingScreen &&
         ShortcutHelper.matchesShortcut(event, closeAllTabsShortcut)) {
-      final tabsBloc = context.read<TabsBloc>();
-      final historyBloc = context.read<HistoryBloc>();
-      for (final tab in tabsBloc.state.tabs) {
-        if (tab is! SearchingTab) {
-          historyBloc.add(AddHistory(tab));
-        }
-      }
-      tabsBloc.add(CloseAllTabs());
+      closeAllTabsWithHistory(context);
       return KeyEventResult.handled;
     }
 
