@@ -1002,7 +1002,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
         readingSegments: readingSegments,
-        linksLoading: false,
+        // בלי בחירת מפרשים הקישורים נטענים רק אחרי שהבחירה נפתרה (ראה למטה),
+        // והחלונית מציגה "טוען" עד אז ולא "לא נמצאו" (issue #1130).
+        linksLoading: event.loadCommentators && commentators.isEmpty,
         visibleIndices: visibleIndices,
         pinLeftPane:
             preservedPinLeftPane ??
@@ -1068,7 +1070,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       _loadContentRangeInBackground(book, visibleIndices);
       _warmContentCacheInBackground(book);
 
-      _loadLinksInBackground(book, visibleIndices);
+      // טעינת קישורים לפני שבחירת המפרשים ידועה יוצאת בלי יעדים, וחלונית
+      // המפרשים מציגה לרגע "לא נמצאו מפרשים" עד לטעינה החוזרת (issue #1130).
+      if (!event.loadCommentators || commentators.isNotEmpty) {
+        _loadLinksInBackground(book, visibleIndices);
+      }
 
       if (event.loadCommentators) {
         _loadCommentatorsInBackground(book);
@@ -1264,7 +1270,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // בחירה אוטומטית (ברירת מחדל) ושחזור שמור גוברים על בחירה אוטומטית
       // קודמת (כגון אוטו-בחירת 'הערות'), כל עוד המשתמש לא בחר ידנית בסשן זה.
       if (!event.isUserAction) {
-        if (_userTouchedCommentators) return;
+        if (_userTouchedCommentators) {
+          _loadLinksAfterCommentatorsResolved(currentState.book);
+          return;
+        }
         // שחזור בחירה שמורה הוא בחירת המשתמש האמיתית — נועלים אותה מפני
         // אוטו-בחירה מאוחרת (כולל הוספת 'הערות' אוטומטית), גם כשהיא ריקה.
         if (event.isRestore) _userTouchedCommentators = true;
@@ -2966,10 +2975,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
       if (initialSelection.isNotEmpty && !isClosed) {
         add(UpdateCommentators(initialSelection, isUserAction: false));
+        return;
       }
+      _loadLinksAfterCommentatorsResolved(book);
     } catch (e) {
       debugPrint('⚠️ Failed to load commentators in background: $e');
+      _loadLinksAfterCommentatorsResolved(book);
     }
+  }
+
+  /// טעינת הקישורים שנדחתה ב-[_onLoadContent] עד לפתרון בחירת המפרשים,
+  /// במסלולים שבהם לא נשלח UpdateCommentators (ואיתו הטעינה).
+  void _loadLinksAfterCommentatorsResolved(TextBook book) {
+    final current = state;
+    if (isClosed || current is! TextBookLoaded) return;
+    if (current.book.title != book.title) return;
+    _loadLinksInBackground(book, current.visibleIndices);
   }
 
   /// שומר את בחירת המפרשים פר-ספר (תמיד, ללא תלות ב-enablePerBookSettings),
