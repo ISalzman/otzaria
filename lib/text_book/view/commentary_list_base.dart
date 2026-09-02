@@ -27,6 +27,7 @@ import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
 export 'package:otzaria/text_book/utils/commentary_search_utils.dart'
     show CommentarySearchSnippet;
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
+import 'package:otzaria/text_book/utils/commentary_title_visibility.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
@@ -38,6 +39,7 @@ import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/misc/smooth_wheel_scroll.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -1374,6 +1376,37 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     );
   }
 
+  // מטמון כתובות שורות המקור להכרעת הסתרת כותרת (issue #896); מתאפס עם ה-TOC.
+  Object? _sourceRefTocIdentity;
+  final Map<int, String> _sourceRefByIndex = {};
+
+  String _sourceRefFor(TextBookLoaded state, int index1) {
+    if (!identical(_sourceRefTocIdentity, state.tableOfContents)) {
+      _sourceRefTocIdentity = state.tableOfContents;
+      _sourceRefByIndex.clear();
+    }
+    return _sourceRefByIndex.putIfAbsent(
+      index1,
+      () => refFromTocList(index1 - 1, state.tableOfContents),
+    );
+  }
+
+  /// האם להציג את כותרת המקור של מקטע: מוסתרת רק כשכל מקטעי הקבוצה מאותה
+  /// שורת מקור והיעד הוא המקום הנקרא כעת — אחרת הכותרת נושאת מידע (issue #896).
+  bool _shouldShowItemTitle(
+    CommentaryGroup group,
+    TextBookLoaded state,
+    String displayTitle,
+  ) {
+    if (!groupSharesSingleSource(group.links)) return true;
+    return !commentaryTitleMatchesReadingLocation(
+      displayTitle: displayTitle,
+      targetBookTitle: group.bookTitle,
+      sourceBookTitle: state.book.title,
+      sourceRef: _sourceRefFor(state, group.links.first.index1),
+    );
+  }
+
   Widget _buildLinkItem(
     CommentaryGroup group,
     Link link,
@@ -1411,6 +1444,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
               .replaceAll(RegExp(r'\s+'), ' ')
               .trim(),
       onOpenPersonalNote: widget.onOpenPersonalNote,
+      shouldShowItemTitle: (title) => _shouldShowItemTitle(group, state, title),
       personalNotes: _personalNotesForGroup(group),
       onNoteSaved: () => _refreshGroupPersonalNotes(group.bookTitle),
       restoreLineBreaks: _restoreLineBreaks,
@@ -2321,6 +2355,10 @@ class _CommentaryLinkItem extends StatefulWidget {
   final ValueListenable<String>? highlightQueryListenable;
   final void Function(Link link, int lineNumber)? onOpenPersonalNote;
 
+  /// מכריע אם להציג את כותרת המקור (מקבל את הכותרת ללא אות העוגן).
+  /// null = הצג תמיד.
+  final bool Function(String displayTitle)? shouldShowItemTitle;
+
   const _CommentaryLinkItem({
     super.key,
     required this.link,
@@ -2347,6 +2385,7 @@ class _CommentaryLinkItem extends StatefulWidget {
     this.restoreLineBreaks,
     this.highlightQueryListenable,
     this.onOpenPersonalNote,
+    this.shouldShowItemTitle,
   });
 
   @override
@@ -2384,13 +2423,25 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                   builder: (context, snapshot) {
                     String displayTitle =
                         snapshot.data ?? link.fallbackDisplayReference;
-                    // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף
-                    // הטקסט מוצגת גם לפני כותרת ההערה.
-                    if (link.anchorStart != null) {
-                      final markerLetter = anchorMarkerLetter(link);
-                      if (markerLetter != null) {
-                        displayTitle = '($markerLetter) $displayTitle';
-                      }
+                    final showTitle =
+                        widget.shouldShowItemTitle?.call(displayTitle) ?? true;
+                    // קישור עם עוגן-מילה: אות הסימון שמופיעה בגוף הטקסט
+                    // נשמרת גם כשהכותרת מוסתרת — היא הקישור הוויזואלי להערה.
+                    final markerLetter = link.anchorStart != null
+                        ? anchorMarkerLetter(link)
+                        : null;
+                    if (!showTitle && markerLetter == null) {
+                      // דיווח ריק דורס כותרת שדווחה קודם — לשחזור העתקה נכון.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        widget.onLinkTitleRendered?.call(link, '');
+                      });
+                      return const SizedBox.shrink();
+                    }
+                    if (!showTitle) {
+                      displayTitle = '($markerLetter)';
+                    } else if (markerLetter != null) {
+                      displayTitle = '($markerLetter) $displayTitle';
                     }
                     if (settingsState.replaceHolyNames) {
                       displayTitle = utils.replaceHolyNames(
