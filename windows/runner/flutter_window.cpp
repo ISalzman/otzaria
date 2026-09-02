@@ -477,8 +477,12 @@ bool FlutterWindow::OnCreate() {
 
   // כלי בידוד זמני: פותח חלון שני אוטומטית אחרי N אלפיות, כדי שאפשר יהיה
   // לשחזר את קריסת הפתיחה בלי אינטראקציה ידנית.
+  // רק החלון הראשון מפעיל את הטריגר. בלי התנאי כל חלון משני היה פותח
+  // חלון נוסף בתורו, ונוצר מפל.
+  static std::atomic<bool> auto_spawn_armed{false};
   char auto_ms[16] = {};
-  if (::GetEnvironmentVariableA("OTZARIA_AUTO_SECOND_WINDOW_MS", auto_ms,
+  if (!auto_spawn_armed.exchange(true) &&
+      ::GetEnvironmentVariableA("OTZARIA_AUTO_SECOND_WINDOW_MS", auto_ms,
                                 sizeof(auto_ms)) > 0) {
     const unsigned long delay = std::strtoul(auto_ms, nullptr, 10);
     const HWND self = GetHandle();

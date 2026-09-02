@@ -1403,17 +1403,22 @@ void secondaryWindowMain(List<String> args) async {
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
-  if ((Platform.environment['OTZARIA_SECONDARY_SKIP'] ?? '').contains(
-    'sentry',
-  )) {
-    WidgetsFlutterBinding.ensureInitialized();
-  } else {
-    SentryWidgetsFlutterBinding.ensureInitialized();
-  }
+  SentryWidgetsFlutterBinding.ensureInitialized();
   EditableText.debugDeterministicCursor = true;
 
   try {
-    // שורש הנתונים המשותף נפתר תחילה, ורק אז נגזרת ממנו תיקיית החלון.
+    // ⚠️ **רק** הפניית שורש הנתונים נעשית כאן.
+    //
+    // את כל שאר האתחול — `RustLib.init`, `Settings.init`, `initHive`,
+    // `SqliteDataProvider`, `windowManager.ensureInitialized` — מבצע
+    // `AppBootstrap` דרך `_initializeProcessSingletons`, בדיוק כמו בחלון
+    // הראשון. שכפול שלהם כאן נכשל ב-"Should not initialize
+    // flutter_rust_bridge twice": `RustLib` שומר את מצבו על
+    // `RustLib.instance`, שהוא סטטי פר-isolate, ולכן שתי קריאות **באותו**
+    // isolate הן שגיאה — גם אם החלון חדש.
+    //
+    // הכלל: נקודת הכניסה של חלון משני קובעת רק מה **שונה** בו. כל השאר
+    // עובר במסלול היחיד והמשותף.
     final sharedRoot = await AppPaths.getDataRootPath();
     final windowRoot = p.join(
       sharedRoot,
@@ -1422,41 +1427,12 @@ void secondaryWindowMain(List<String> args) async {
     );
     await Directory(windowRoot).create(recursive: true);
     AppPaths.configureDataRootPathForProcess(windowRoot);
-
-    await Settings.init(cacheProvider: HiveCache());
-    await initHive();
-    await SqliteDataProvider.instance.initialize();
-
-    // ⚠️ `RustLib.init()` הוא פר-**תהליך**, לא פר-isolate.
-    //
-    // `search_engine.dll` נטענת פעם אחת לתהליך, ו-flutter_rust_bridge שומר
-    // בתוכה את ה-port שדרכו threads של Rust קוראים חזרה ל-Dart. קריאה
-    // שנייה מ-isolate אחר דורסת את הרישום, ואז thread נייטיב מנסה להיכנס
-    // ל-isolate הלא נכון. זה בדיוק מה שנצפה:
-    //
-    //   "Isolate main is already scheduled on mutator thread ...,
-    //    failed to schedule from os thread 0xef0"
-    //   isolate_group=(nil), isolate=(nil)   ← thread נייטיב, בלי isolate
-    //
-    // `OTZARIA_SECONDARY_SKIP` הוא כלי בידוד זמני; ראה docs/.
-    final skip = (Platform.environment['OTZARIA_SECONDARY_SKIP'] ?? '')
-        .split(',')
-        .map((s) => s.trim())
-        .toSet();
-    if (!skip.contains('rustlib')) {
-      await RustLib.init();
-    }
-
-    Bloc.observer = AppBlocObserver();
-    unawaited(AppCursors.ensureInitialized());
-
-    // `window_manager` הוא סינגלטון ב-Dart, אבל כל חלון הוא isolate נפרד
-    // עם מנוע משלו — ולכן הערוץ שלו מגיע לחלון שלו. זו הסיבה שהוא עובד
-    // כאן בלי שינוי, בניגוד למה שנדרש היה במודל של isolate יחיד.
-    await windowManager.ensureInitialized();
   } catch (e, st) {
-    debugPrint('secondaryWindowMain bootstrap failed: $e\n$st');
+    debugPrint('secondaryWindowMain: data root setup failed: $e\n$st');
   }
+
+  Bloc.observer = AppBlocObserver();
+  unawaited(AppCursors.ensureInitialized());
 
   // המטען נשמר כדי שהחלון יפתח אותו ברגע שהאתחול מסתיים. שלב הגרירה
   // ישלח כאן טאב מסוריאל; כרגע החלון פשוט עולה ריק אם אין מטען.
