@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -74,6 +75,9 @@ class IcsSubscription extends Equatable {
 /// תומך ב-VEVENT: תאריכים (יום שלם / עם שעה, UTC / TZID), טווח רב-יומי,
 /// חזרתיות בסיסית (RRULE שבועי/חודשי/שנתי + UNTIL) וטקסט עם escaping.
 class IcsCalendarService {
+  static const Duration _fetchTimeout = Duration(seconds: 20);
+  static const int _maxIcsBytes = 5 * 1024 * 1024;
+
   IcsCalendarService({Future<String> Function(Uri uri)? httpFetcher})
     : _httpFetcher = httpFetcher ?? _defaultFetch;
 
@@ -93,11 +97,30 @@ class IcsCalendarService {
   }
 
   static Future<String> _defaultFetch(Uri uri) async {
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      throw Exception('שגיאת רשת (HTTP ${response.statusCode})');
+    final client = http.Client();
+    try {
+      final response = await client
+          .send(http.Request('GET', uri))
+          .timeout(_fetchTimeout);
+      if (response.statusCode != 200) {
+        throw Exception('שגיאת רשת (HTTP ${response.statusCode})');
+      }
+      if (response.contentLength != null &&
+          response.contentLength! > _maxIcsBytes) {
+        throw const FormatException('קובץ היומן גדול מדי');
+      }
+
+      final bytes = BytesBuilder(copy: false);
+      await for (final chunk in response.stream.timeout(_fetchTimeout)) {
+        if (bytes.length + chunk.length > _maxIcsBytes) {
+          throw const FormatException('קובץ היומן גדול מדי');
+        }
+        bytes.add(chunk);
+      }
+      return utf8.decode(bytes.takeBytes(), allowMalformed: true);
+    } finally {
+      client.close();
     }
-    return utf8.decode(response.bodyBytes, allowMalformed: true);
   }
 
   /// מפענח תוכן ICS לאירועי לוח שנה.
@@ -155,27 +178,8 @@ class IcsCalendarService {
       if (inclusiveEnd.isAfter(date)) endDate = inclusiveEnd;
     }
 
-    var recurrenceType = RecurrenceType.none;
-    final rrule = props['RRULE']?.value ?? '';
-    if (rrule.contains('FREQ=WEEKLY')) {
-      recurrenceType = RecurrenceType.weekly;
-    } else if (rrule.contains('FREQ=MONTHLY')) {
-      recurrenceType = RecurrenceType.monthlyGregorian;
-    } else if (rrule.contains('FREQ=YEARLY')) {
-      recurrenceType = RecurrenceType.annualGregorian;
-    }
-    DateTime? recurrenceEndDate;
-    if (recurrenceType != RecurrenceType.none) {
-      final untilMatch = RegExp(r'(?:^|;)UNTIL=(\d{8})').firstMatch(rrule);
-      if (untilMatch != null) {
-        final until = untilMatch.group(1)!;
-        recurrenceEndDate = DateTime(
-          int.parse(until.substring(0, 4)),
-          int.parse(until.substring(4, 6)),
-          int.parse(until.substring(6, 8)),
-        );
-      }
-    }
+    final recurrence = _parseSupportedRecurrence(props['RRULE']?.value ?? '');
+    if (recurrence == null) return null;
 
     final summary = _unescapeText(props['SUMMARY']?.value ?? '');
     final uid = props['UID']?.value ?? '';
@@ -192,8 +196,8 @@ class IcsCalendarService {
       baseJewishYear: jewishDate.getJewishYear(),
       baseJewishMonth: jewishDate.getJewishMonth(),
       baseJewishDay: jewishDate.getJewishDayOfMonth(),
-      recurrenceType: recurrenceType,
-      recurrenceEndDate: recurrenceEndDate,
+      recurrenceType: recurrence.type,
+      recurrenceEndDate: recurrence.endDate,
       eventTime: start.dateOnly
           ? null
           : TimeOfDay(hour: start.value.hour, minute: start.value.minute),
@@ -279,6 +283,56 @@ class IcsCalendarService {
   static String _sanitizeIdPart(String value) {
     return value.replaceAll(RegExp(r'[^A-Za-z0-9_@.\-]'), '_');
   }
+
+  static _IcsRecurrence? _parseSupportedRecurrence(String raw) {
+    if (raw.trim().isEmpty) return const _IcsRecurrence(RecurrenceType.none);
+
+    final parts = <String, String>{};
+    for (final part in raw.split(';')) {
+      final separator = part.indexOf('=');
+      if (separator <= 0) return null;
+      final key = part.substring(0, separator).toUpperCase();
+      final value = part.substring(separator + 1).toUpperCase();
+      if (parts.containsKey(key)) return null;
+      parts[key] = value;
+    }
+
+    const supportedKeys = {'FREQ', 'UNTIL', 'INTERVAL', 'WKST'};
+    if (!parts.keys.every(supportedKeys.contains) ||
+        (parts['INTERVAL'] != null && parts['INTERVAL'] != '1')) {
+      return null;
+    }
+
+    final type = switch (parts['FREQ']) {
+      'WEEKLY' => RecurrenceType.weekly,
+      'MONTHLY' => RecurrenceType.monthlyGregorian,
+      'YEARLY' => RecurrenceType.annualGregorian,
+      _ => null,
+    };
+    if (type == null) return null;
+
+    final until = parts['UNTIL'];
+    if (until == null) return _IcsRecurrence(type);
+    final match = RegExp(
+      r'^(\d{4})(\d{2})(\d{2})(?:T\d{6}Z?)?$',
+    ).firstMatch(until);
+    if (match == null) return null;
+    return _IcsRecurrence(
+      type,
+      endDate: DateTime(
+        int.parse(match.group(1)!),
+        int.parse(match.group(2)!),
+        int.parse(match.group(3)!),
+      ),
+    );
+  }
+}
+
+class _IcsRecurrence {
+  final RecurrenceType type;
+  final DateTime? endDate;
+
+  const _IcsRecurrence(this.type, {this.endDate});
 }
 
 class _IcsDateTime {

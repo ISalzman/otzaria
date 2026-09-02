@@ -108,6 +108,27 @@ END:VCALENDAR
       expect(event.recurrenceEndDate, DateTime(2028, 1, 1));
     });
 
+    test('מדלג על RRULE שאינו ניתן לייצוג מדויק במודל', () {
+      const ics = '''
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:every-other-week
+DTSTART;VALUE=DATE:20260101
+RRULE:FREQ=WEEKLY;INTERVAL=2
+SUMMARY:כל שבועיים
+END:VEVENT
+BEGIN:VEVENT
+UID:multiple-days
+DTSTART;VALUE=DATE:20260101
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE
+SUMMARY:פעמיים בשבוע
+END:VEVENT
+END:VCALENDAR
+''';
+
+      expect(IcsCalendarService.parseIcs(ics), isEmpty);
+    });
+
     test('מאחה שורות מקופלות ומפענח escaping בטקסט', () {
       const ics =
           'BEGIN:VCALENDAR\r\n'

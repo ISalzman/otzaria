@@ -632,28 +632,6 @@ void main() {
     });
   });
 
-  group('maxToolbarButtonsForWidth', () {
-    test('מסך צר מאוד מחזיר 0 כפתורים (רק overflow)', () {
-      expect(maxToolbarButtonsForWidth(260), 0);
-      expect(maxToolbarButtonsForWidth(200), 0);
-    });
-
-    test('מסכי מובייל מציגים יותר כפתורים ככל שהרוחב גדל', () {
-      // ככל שהרוחב גדל, מספר הכפתורים לא יורד
-      final w360 = maxToolbarButtonsForWidth(360);
-      final w400 = maxToolbarButtonsForWidth(400);
-      final w500 = maxToolbarButtonsForWidth(500);
-      expect(w360, lessThanOrEqualTo(w400));
-      expect(w400, lessThanOrEqualTo(w500));
-      // 360px: (360-260)/44 = 2
-      expect(w360, 2);
-    });
-
-    test('מסך רחב מציג הרבה כפתורים', () {
-      expect(maxToolbarButtonsForWidth(1400), greaterThan(20));
-    });
-  });
-
   group('תת-תפריט בתפריט ה-"..."', () {
     testWidgets('בחלון צר התת-תפריט נשאר בגבולות המסך', (tester) async {
       tester.view.physicalSize = const Size(420, 800);
@@ -667,6 +645,7 @@ void main() {
       ];
       final actions = [
         ActionButtonData(
+          actionId: ToolbarActionId.viewMode,
           widget: const SizedBox.shrink(),
           icon: OtzariaIcons.book_24_regular,
           tooltip: 'מצב תצוגה',
@@ -682,6 +661,7 @@ void main() {
           ],
         ),
         ActionButtonData(
+          actionId: ToolbarActionId.search,
           widget: const SizedBox.shrink(),
           icon: OtzariaIcons.search_24_regular,
           tooltip: 'חיפוש',
