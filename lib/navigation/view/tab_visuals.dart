@@ -1,11 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 
@@ -115,6 +118,55 @@ double _measuredTitleWidth(
   }
   _titleWidthCache[key] = width;
   return width;
+}
+
+/// הכותרת שמתעדכנת תוך כדי קריאה (המיקום בספר, שאילתת החיפוש), או `null`
+/// לכרטיסיה שכותרתה סטטית.
+ValueListenable<String>? liveTabTitleOf(OpenedTab tab) {
+  if (tab is SearchingTab) return tab.titleNotifier;
+  if (tab is PdfBookTab) return tab.currentTitle;
+  if (tab is PdfCommentatorsTab) return tab.sourceTab.currentTitle;
+  if (tab is TextBookTab) return tab.currentTitle;
+  return null;
+}
+
+/// בונה את הזוג (כותרת מוצגת, הודעת tooltip) של כרטיסיה ומתעדכן עם הכותרת
+/// החיה; לכרטיסיה סטטית שניהם שם הכרטיסיה. משותף לפס העליון ולפס הצדדי.
+class LiveTabTitleBuilder extends StatelessWidget {
+  final OpenedTab tab;
+  final Widget Function(
+    BuildContext context,
+    String displayTitle,
+    String tooltipMessage,
+  )
+  builder;
+
+  const LiveTabTitleBuilder({
+    super.key,
+    required this.tab,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tab = this.tab;
+    final liveTitle = liveTabTitleOf(tab);
+    if (liveTitle == null) return builder(context, tab.title, tab.title);
+    return ValueListenableBuilder<String>(
+      valueListenable: liveTitle,
+      builder: (context, value, child) {
+        // בכרטיסיית חיפוש הערך הוא הכותרת עצמה; בשאר הוא המיקום שמתווסף לה.
+        if (tab is SearchingTab) return builder(context, value, value);
+        // טאב שטרם נבנה (שוחזר בעלייה) עוד לא קיבל מיקום מה-BLoC.
+        if (value.isEmpty && tab is TextBookTab) tab.ensureLocationTitle();
+        return builder(
+          context,
+          tab.title,
+          value.isEmpty ? tab.title : '${tab.title}, $value',
+        );
+      },
+    );
+  }
 }
 
 /// עוטף כותרת כרטיסיה ב-[Tooltip] רק כשיש בו ערך: הכותרת נחתכה ברוחב הזמין,
