@@ -183,13 +183,16 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_CLOSE:
-      // ⚠️ ההריסה אינה מותנית ב-`quit_on_close_`.
-      //
-      // הדגל אומר "סגירת החלון הזה מסיימת את התהליך", ולא "מותר לסגור את
-      // החלון הזה". כשהותנתה בו ההריסה, כיבוי הדגל בחלונות משניים — כדי
-      // שסגירתם לא תפיל את האפליקציה — גרם לכך שלחיצה על ה-X לא עשתה
-      // כלום. ההחלטה על סיום התהליך מתקבלת ב-WM_DESTROY.
-      DestroyWindow(hwnd);
+      // ⚠️ ההריסה אינה מותנית ב-`quit_on_close_` — הדגל אומר "סגירת החלון
+      // הזה מסיימת את התהליך", ולא "מותר לסגור אותו" — ואינה מיידית.
+      // ראו `kMsgDeferredDestroy`.
+      ::PostMessageW(hwnd, kMsgDeferredDestroy, 0, 0);
+      return 0;
+
+    case kMsgDeferredDestroy:
+      // מוסתר ולא נהרס — ראו ההערה ליד `kMsgDeferredDestroy`.
+      ShowWindow(hwnd, SW_HIDE);
+      OnWindowHidden();
       return 0;
       
     case WM_DESTROY:
@@ -299,3 +302,5 @@ void Win32Window::UpdateTheme(HWND const window) {
                           &enable_dark_mode, sizeof(enable_dark_mode));
   }
 }
+
+void Win32Window::OnWindowHidden() {}

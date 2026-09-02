@@ -202,7 +202,9 @@ std::atomic<int> g_live_window_count{0};
 // כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
 // (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
 bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
-                                       const std::string& payload) {
+                                       const std::string& payload,
+                                       int inherited_width,
+                                       int inherited_height) {
   // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
   auto& windows = SecondaryWindowsOnThisThread();
   windows.erase(
@@ -230,7 +232,12 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   static int spawn_index = 0;
   const int offset = 40 + (spawn_index++ % 6) * 32;
   Win32Window::Point origin(offset, offset);
-  Win32Window::Size size(1100, 760);
+  // ⚠️ יורש את מידות החלון שפתח אותו. חלון בגודל קבוע נראה שרירותי —
+  // המשתמש שהגדיל את החלון שלו מצפה שהחדש יהיה דומה. נופלים לברירת מחדל
+  // רק כשהמידות לא הגיעו (מסלול ישן, או קריאה בלי ארגומנטים).
+  Win32Window::Size size(
+      inherited_width > 400 ? inherited_width : 1100,
+      inherited_height > 300 ? inherited_height : 760);
   if (!window->Create(L"אוצריא", origin, size)) {
     return false;
   }
@@ -506,6 +513,17 @@ bool FlutterWindow::OnCreate() {
         // ⚠️ נדרש כי חלון משני נוצר **מוסתר** (כדי שלא יראו אותו מצטייר),
         // ו-`ShowWindow` על חלון מוסתר אינו מפעיל אותו — הוא נחשף מאחורי
         // החלון שפתח אותו, וזה נראה כאילו הראשון "תמיד עליון".
+        // סוגר את החלון הזה, בדחייה לאיטרציה הבאה של לולאת ההודעות.
+        //
+        // ⚠️ `windowManager.destroy()` קורא ל-`DestroyWindow` מתוך טיפול
+        // בערוץ, כלומר מתוך ריצת ה-Dart של החלון — הריסת המנוע משם היא
+        // ריאנטרנטית ומפילה את התהליך. ראו `kMsgDeferredDestroy`.
+        if (call.method_name() == "closeSelf") {
+          const HWND self = GetHandle();
+          if (self) ::PostMessageW(self, kMsgDeferredDestroy, 0, 0);
+          result->Success();
+          return;
+        }
         if (call.method_name() == "raiseSelf") {
           const HWND self = GetHandle();
           if (self) {
@@ -523,10 +541,31 @@ bool FlutterWindow::OnCreate() {
           result->Success(flutter::EncodableValue(false));
           return;
         }
+        // הארגומנט הוא מפה: המטען, ומידות שהחלון החדש יורש מהפותח.
         std::string payload;
-        if (const auto* value = std::get_if<std::string>(call.arguments())) {
-          payload = *value;
+        int width = 0;
+        int height = 0;
+        if (const auto* args =
+                std::get_if<flutter::EncodableMap>(call.arguments())) {
+          const auto payload_it =
+              args->find(flutter::EncodableValue("payload"));
+          if (payload_it != args->end()) {
+            if (const auto* value =
+                    std::get_if<std::string>(&payload_it->second)) {
+              payload = *value;
+            }
+          }
+          const auto w_it = args->find(flutter::EncodableValue("width"));
+          if (w_it != args->end()) {
+            if (const auto* v = std::get_if<int>(&w_it->second)) width = *v;
+          }
+          const auto h_it = args->find(flutter::EncodableValue("height"));
+          if (h_it != args->end()) {
+            if (const auto* v = std::get_if<int>(&h_it->second)) height = *v;
+          }
         }
+        pending_secondary_width_ = width;
+        pending_secondary_height_ = height;
         // ⚠️ הבקשה מתפרסמת ל-thread של החלון ואינה מבוצעת כאן ישירות.
         // הקריאה מגיעה מתוך טיפול בערוץ, כלומר מתוך ריצת ה-Dart של החלון
         // הזה; יצירת מנוע נוסף באמצע היא ריאנטרנטית. `PostMessage` דוחה
@@ -751,18 +790,23 @@ void FlutterWindow::OnDestroy() {
     // חייבת להיות מסוריאלית. ראו docs/P-2-two-windows.md §9.
     flutter_controller_.reset();
     flutter_controller_ = nullptr;
-
-    // סגירת חלון בודד אינה מסיימת את התהליך; רק סגירת האחרון.
-    //
-    // ⚠️ המונה מופחת כאן ולא בדסטרקטור: הבעלות על חלונות משניים נשמרת
-    // בווקטור שמתנקה רק בפתיחה הבאה, ולכן הדסטרקטור עלול לרוץ הרבה אחרי
-    // שהחלון נעלם מהמסך — או לא לרוץ כלל.
-    if (g_live_window_count.fetch_sub(1) <= 1) {
-      ::PostQuitMessage(0);
-    }
   }
 
   Win32Window::OnDestroy();
+}
+
+void FlutterWindow::OnWindowHidden() {
+  // ⚠️ הספירה יורדת כאן, בהסתרה, ולא ב-`OnDestroy`: החלון אינו נהרס
+  // (ראו `kMsgDeferredDestroy`), ולכן `OnDestroy` לא ירוץ עד יציאת
+  // התהליך — ומונה שלא יורד היה מונע לנצח פתיחת חלון חדש אחרי שהתקרה
+  // הושגה, וגם מונע מהתהליך לצאת כשנסגר החלון האחרון.
+  if (!counted_) {
+    return;
+  }
+  counted_ = false;
+  if (g_live_window_count.fetch_sub(1) <= 1) {
+    ::PostQuitMessage(0);
+  }
 }
 
 LRESULT
@@ -777,7 +821,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       payload = pending_secondary_payloads_.front();
       pending_secondary_payloads_.pop();
     }
-    CreateSecondaryWindowOnThisThread(project_, payload);
+    CreateSecondaryWindowOnThisThread(project_, payload,
+                                      pending_secondary_width_,
+                                      pending_secondary_height_);
     return 0;
   }
 

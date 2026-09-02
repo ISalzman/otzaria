@@ -10,6 +10,26 @@
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
 // inherited from by classes that wish to specialize with custom
 // rendering and input handling
+// בקשה לסגור את החלון.
+//
+// ⚠️ **החלון מוסתר, לא נהרס** — וזו החלטה שנכפתה על ידי מדידה.
+//
+// `DestroyWindow` הורס את מנוע ה-Flutter של החלון. כשכל המנועים חולקים
+// את ה-thread הראשי, הריסת אחד מהם בזמן שאחר חי מפילה את התהליך —
+// נמדד: **כל** סגירת חלון גרמה ל-segfault, בין אם הראשון ובין אם משני,
+// וגם כשההריסה נדחתה לאיטרציה הבאה של לולאת ההודעות. כלומר זו אינה
+// ריאנטרנטיות אלא אי-בטיחות של ההריסה עצמה בתצורה הזו.
+//
+// בספייק, כשלכל מנוע היה thread ייעודי, הריסה **כן** עבדה נקי
+// (docs/P-2-two-windows.md §9). אבל יצירת מנוע על thread ייעודי מפילה
+// את התהליך כשחלון אחר כבר רץ. שתי הדרישות סותרות, ולכן: יוצרים על
+// ה-thread הראשי, ולא הורסים עד ליציאת התהליך.
+//
+// **המחיר, במפורש:** המנוע של חלון סגור נשאר בזיכרון עד סגירת התוכנה.
+// עם תקרה של ארבעה חלונות זה חסום, אבל זהו חוב פתוח — הפתרון הנכון הוא
+// thread לכל מנוע, והוא חסום ביצירה.
+constexpr UINT kMsgDeferredDestroy = WM_APP + 0x102;
+
 class Win32Window {
  public:
   struct Point {
@@ -70,6 +90,9 @@ class Win32Window {
 
   // Called when Destroy is called.
   virtual void OnDestroy();
+
+  // נקרא כשהחלון הוסתר במקום להיהרס. ראו `kMsgDeferredDestroy`.
+  virtual void OnWindowHidden();
 
  private:
   friend class WindowClassRegistrar;

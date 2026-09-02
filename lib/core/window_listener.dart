@@ -206,9 +206,13 @@ class AppWindowListener extends WindowListener {
     if (isLast) {
       await _shutdownProcessAfterFlush(flushFailure);
     } else {
-      // חלון אחד מתוך כמה: להרוס רק אותו. `setPreventClose(true)` מנע את
-      // הסגירה הרגילה, ובלי ההריסה המפורשת החלון היה נשאר פתוח.
-      await _window.destroy();
+      // חלון אחד מתוך כמה: לסגור רק אותו. `setPreventClose(true)` מנע את
+      // הסגירה הרגילה, ובלי הסגירה המפורשת החלון היה נשאר פתוח.
+      //
+      // ⚠️ דרך ה-runner ולא `_window.destroy()`: זה האחרון הורס את החלון
+      // מתוך טיפול בערוץ, והריסת מנוע משם היא ריאנטרנטית ומפילה את
+      // התהליך. ה-runner דוחה את ההריסה לאיטרציה הבאה של לולאת ההודעות.
+      await const MultiWindowService().closeSelf();
     }
   }
 

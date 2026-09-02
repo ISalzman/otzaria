@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -34,10 +35,20 @@ class MultiWindowService {
   Future<bool> openWindow({OpenedTab? tab}) async {
     if (!isSupported) return false;
     try {
-      final opened = await _channel.invokeMethod<bool>(
-        'openWindow',
-        _encodePayload(tab),
-      );
+      // המידות נשלחות ל-runner כדי שייצור את החלון בגודל הנכון מלכתחילה.
+      // שינוי גודל אחרי היצירה היה מאתחל את ה-swapchain של המנוע וגורם
+      // להבהוב, בדיוק כמו שקורה בחלון הראשון (ראו initSettingsAndWindow).
+      Size? inherited;
+      try {
+        inherited = await windowManager.getSize();
+      } catch (_) {
+        // בלי מידות ה-runner ייצור בגודל ברירת מחדל.
+      }
+      final opened = await _channel.invokeMethod<bool>('openWindow', {
+        'payload': _encodePayload(tab),
+        if (inherited != null) 'width': inherited.width.round(),
+        if (inherited != null) 'height': inherited.height.round(),
+      });
       // false פירושו שהתקרה הושגה — ה-runner הוא מקור האמת למספר החלונות.
       return opened ?? false;
     } on PlatformException catch (e) {
@@ -81,6 +92,20 @@ class MultiWindowService {
       await _channel.invokeMethod<void>('raiseSelf');
     } catch (e) {
       debugPrint('raiseSelf failed: $e');
+    }
+  }
+
+  /// סוגר את החלון הנוכחי בלי לסיים את התהליך.
+  ///
+  /// ⚠️ ולא `windowManager.destroy()`: הוא קורא ל-`DestroyWindow` מתוך
+  /// טיפול בערוץ, כלומר מתוך ריצת ה-Dart של החלון. הריסת מנוע משם היא
+  /// ריאנטרנטית, ונמדד שהיא מפילה את התהליך כולו בכל סגירת חלון.
+  Future<void> closeSelf() async {
+    if (!isSupported) return;
+    try {
+      await _channel.invokeMethod<void>('closeSelf');
+    } catch (e) {
+      debugPrint('closeSelf failed: $e');
     }
   }
 

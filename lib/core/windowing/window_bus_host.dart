@@ -111,6 +111,9 @@ class _WindowBusHostState extends State<WindowBusHost> {
     context.read<NavigationBloc>().add(
       const NavigateToScreen(Screen.reading),
     );
+    // הכרטיסיה עברה לכאן — והמשתמש מצפה לעבור איתה. בלי זה הפוקוס נשאר
+    // בחלון המקור, והכרטיסיה "נעלמת" אל חלון שמאחור.
+    unawaited(const MultiWindowService().raiseSelf());
     return true;
   }
 

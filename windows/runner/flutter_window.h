@@ -31,6 +31,7 @@ class FlutterWindow : public Win32Window {
   // Win32Window:
   bool OnCreate() override;
   void OnDestroy() override;
+  void OnWindowHidden() override;
   LRESULT MessageHandler(HWND window, UINT const message, WPARAM const wparam,
                          LPARAM const lparam) noexcept override;
 
@@ -67,6 +68,10 @@ class FlutterWindow : public Win32Window {
   // מטענים שממתינים לפתיחת חלון. נכתבים בטיפול בערוץ ונקראים בלולאת
   // ההודעות של אותו thread, ולכן אין כאן גישה חוצת-threads.
   std::queue<std::string> pending_secondary_payloads_;
+  // מידות שהחלון הבא יורש מהחלון הזה. נכתבות בטיפול בערוץ ונקראות
+  // בלולאת ההודעות של אותו thread.
+  int pending_secondary_width_ = 0;
+  int pending_secondary_height_ = 0;
   // ערוץ לסגירת חלון ה-splash הנייטיב (otzaria/splash) — Dart קורא "close"
   // בעת חשיפת החלון הראשי.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
@@ -76,6 +81,9 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       jumplist_channel_;
   std::atomic_bool force_exit_watchdog_armed_ = false;
+  // האם החלון עדיין נספר ב-`g_live_window_count`. מונע הפחתה כפולה
+  // כשמגיעות שתי בקשות סגירה.
+  bool counted_ = true;
 
   // Win32 Job Object that contains this process plus any child processes
   // it spawns (notably WebView2's msedgewebview2.exe instances). Configured
