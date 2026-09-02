@@ -131,6 +131,35 @@ class MultiWindowService {
     }
   }
 
+  /// האם המטען מכיל כרטיסיה, בלי לפענח אותה.
+  ///
+  /// ⚠️ קיים כי הפענוח המלא תלוי ב-`Settings` ואינו אפשרי בנקודת הכניסה,
+  /// אבל הניווט למסך הקריאה צריך להיקבע עוד לפני `runApp`.
+  static bool payloadHasTab(String? payload) {
+    if (payload == null || payload.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(payload);
+      return decoded is Map && decoded['tab'] is Map;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// האם הכרטיסיה שורדת מסע הלוך-ושוב של סריאליזציה.
+  ///
+  /// ⚠️ נבדק **לפני** שמסירים אותה מהחלון המקורי. כרטיסיה שאינה ניתנת
+  /// לשחזור הייתה נעלמת מהמקור ולא נפתחת ביעד — כלומר אובדן מידע. עדיף
+  /// לא להעביר מאשר לאבד.
+  static bool canTransfer(OpenedTab tab) {
+    try {
+      OpenedTab.fromJson(Map<String, dynamic>.from(tab.toJson()));
+      return true;
+    } catch (e) {
+      debugPrint('canTransfer failed for ${tab.runtimeType}: $e');
+      return false;
+    }
+  }
+
   /// מפענח מטען שהתקבל בנקודת הכניסה של חלון משני.
   ///
   /// מחזיר null כשאין מטען או כשהוא פגום — חלון שנפתח בלי טאב תקין עולה

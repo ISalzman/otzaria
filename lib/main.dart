@@ -1189,8 +1189,11 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // חלון שנפתח עם מטען מקבל את הכרטיסיה שהועברה אליו. `LoadTabs`
               // נשלח קודם כדי שסדר האירועים יהיה זהה לחלון רגיל — הכרטיסיה
               // המועברת נכנסת אחריו, ולכן היא זו שתהיה פעילה.
-              final transferred = _pendingTransferredTab;
-              _pendingTransferredTab = null;
+              // הפענוח כאן ולא בנקודת הכניסה: בשלב הזה `Settings` כבר
+              // מאותחל, ו-`TextBookTab.fromJson` תלוי בו.
+              final payload = secondaryWindowPayload;
+              secondaryWindowPayload = null;
+              final transferred = MultiWindowService.decodePayload(payload);
               if (transferred != null) {
                 bloc.add(AddTab(transferred));
               }
@@ -1466,12 +1469,30 @@ void secondaryWindowMain(List<String> args) async {
   Bloc.observer = AppBlocObserver();
   unawaited(AppCursors.ensureInitialized());
 
-  // הכרטיסיה שהועברה מפוענחת פעם אחת כאן, ולא בכל מקום שצריך אותה.
-  // `_pendingTransferredTab` נצרך על ידי `TabsBloc`; `_openedWithTransferredTab`
-  // נשאר דלוק כדי ש-`NavigationBloc`, שנוצר אחריו, יידע לעבור למסך הקריאה.
-  final payload = args.isEmpty || args.first.isEmpty ? null : args.first;
-  _pendingTransferredTab = MultiWindowService.decodePayload(payload);
-  _openedWithTransferredTab = _pendingTransferredTab != null;
+  // ⚠️ המטען נשמר **גולמי** ומפוענח מאוחר יותר, ב-`TabsBloc`.
+  //
+  // `TextBookTab.fromJson` קורא ל-`Settings.getValue('key-splited-view')`,
+  // ו-`Settings` מאותחל רק בתוך `AppBootstrap`. פענוח כאן זרק, נתפס והחזיר
+  // null — הכרטיסיה נעלמה מהחלון המקורי ולא נפתחה בחדש. `ToolTab.fromJson`
+  // אינו נוגע ב-Settings, ולכן דווקא כלים עברו בהצלחה והבאג נראה אקראי.
+  secondaryWindowPayload = args.isEmpty || args.first.isEmpty
+      ? null
+      : args.first;
+  _openedWithTransferredTab = MultiWindowService.payloadHasTab(
+    secondaryWindowPayload,
+  );
+
+  // ⚠️ נדרש לפני `runApp`: בלעדיו `setTitleBarStyle(hidden)` שב-bootstrap
+  // אינו נתפס, והחלון עולה עם מסגרת Windows סטנדרטית **מעל** סרגל הכותרת
+  // המותאם של האפליקציה — "חלון בתוך חלון". החלון הראשון עושה זאת
+  // ב-`main()`, ולכן הבעיה לא נראתה בו.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    try {
+      await windowManager.ensureInitialized();
+    } catch (e) {
+      debugPrint('secondaryWindowMain: windowManager init failed: $e');
+    }
+  }
 
   runApp(
     AppWindowScope(
@@ -1502,11 +1523,12 @@ void _maybeScheduleDebugSecondWindow() {
   });
 }
 
-/// הכרטיסיה שהועברה לחלון הזה בפתיחתו, אם הועברה.
+/// המטען הגולמי שאיתו נפתח החלון, אם נפתח כחלון משני.
 ///
-/// נצרכת **פעם אחת** ביצירת `TabsBloc` ומתאפסת שם, כדי ש-`RestartWidget`
-/// לא יוסיף אותה שוב בהפעלה מחדש של העץ.
-OpenedTab? _pendingTransferredTab;
+/// נצרך **פעם אחת** ביצירת `TabsBloc` ומתאפס שם, כדי ש-`RestartWidget`
+/// לא יוסיף את הכרטיסיה שוב בהפעלה מחדש של העץ. הפענוח קורה שם ולא
+/// כאן — ראו ההערה ב-[secondaryWindowMain].
+String? secondaryWindowPayload;
 
 /// האם החלון הזה נפתח עם כרטיסיה מועברת. בניגוד ל-[_pendingTransferredTab]
 /// אינו מתאפס — `NavigationBloc` נוצר אחרי `TabsBloc` וצריך לדעת שיש לעבור

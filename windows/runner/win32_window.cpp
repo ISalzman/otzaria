@@ -183,10 +183,13 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_CLOSE:
-      // Handle window close request properly
-      if (quit_on_close_) {
-        DestroyWindow(hwnd);
-      }
+      // ⚠️ ההריסה אינה מותנית ב-`quit_on_close_`.
+      //
+      // הדגל אומר "סגירת החלון הזה מסיימת את התהליך", ולא "מותר לסגור את
+      // החלון הזה". כשהותנתה בו ההריסה, כיבוי הדגל בחלונות משניים — כדי
+      // שסגירתם לא תפיל את האפליקציה — גרם לכך שלחיצה על ה-X לא עשתה
+      // כלום. ההחלטה על סיום התהליך מתקבלת ב-WM_DESTROY.
+      DestroyWindow(hwnd);
       return 0;
       
     case WM_DESTROY:

@@ -1,0 +1,116 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/tool_tab.dart';
+
+void main() {
+  group('payloadHasTab', () {
+    test('מזהה מטען עם כרטיסיה בלי לפענח אותה', () {
+      // ⚠️ הנקודה: הזיהוי חייב לעבוד גם כש-`Settings` לא מאותחל, כי הוא
+      // נקרא בנקודת הכניסה של החלון — לפני `AppBootstrap`. פענוח מלא של
+      // `TextBookTab` היה זורק שם, וזה בדיוק הבאג שגרם לכרטיסיה להיעלם.
+      final payload = jsonEncode({
+        'version': 1,
+        'tab': {'type': 'TextBookTab', 'title': 'בראשית'},
+        'settings': {'key-library-path': r'C:\books'},
+      });
+      expect(MultiWindowService.payloadHasTab(payload), isTrue);
+    });
+
+    test('מטען בלי כרטיסיה — חלון חדש ריק', () {
+      final payload = jsonEncode({
+        'version': 1,
+        'settings': {'key-library-path': r'C:\books'},
+      });
+      expect(MultiWindowService.payloadHasTab(payload), isFalse);
+    });
+
+    test('null, ריק ופגום מוחזרים כ-false ולא זורקים', () {
+      expect(MultiWindowService.payloadHasTab(null), isFalse);
+      expect(MultiWindowService.payloadHasTab(''), isFalse);
+      expect(MultiWindowService.payloadHasTab('{not json'), isFalse);
+      expect(MultiWindowService.payloadHasTab('[]'), isFalse);
+    });
+
+    test('שדה tab שאינו אובייקט אינו נחשב כרטיסיה', () {
+      expect(
+        MultiWindowService.payloadHasTab(jsonEncode({'tab': 'בראשית'})),
+        isFalse,
+      );
+    });
+  });
+
+  group('decodePayload', () {
+    test('משחזר כרטיסיית כלי', () {
+      final payload = jsonEncode({
+        'version': 1,
+        'tab': ToolTab(toolId: 'acronyms', title: 'ראשי תיבות').toJson(),
+      });
+      final tab = MultiWindowService.decodePayload(payload);
+      expect(tab, isA<ToolTab>());
+      expect((tab! as ToolTab).toolId, 'acronyms');
+    });
+
+    test('מטען פגום מחזיר null ואינו זורק', () {
+      expect(MultiWindowService.decodePayload('{not json'), isNull);
+      expect(MultiWindowService.decodePayload(jsonEncode({'tab': 5})), isNull);
+      expect(
+        MultiWindowService.decodePayload(
+          jsonEncode({
+            'tab': {'type': 'NoSuchTab'},
+          }),
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('decodePreferences', () {
+    test('מחזיר את ההגדרות שנזרעו', () {
+      final payload = jsonEncode({
+        'version': 1,
+        'settings': {'key-library-path': r'C:\books', 'key-dark-mode': true},
+      });
+      final prefs = MultiWindowService.decodePreferences(payload);
+      expect(prefs['key-library-path'], r'C:\books');
+      expect(prefs['key-dark-mode'], true);
+    });
+
+    test('מטען בלי הגדרות מחזיר מפה ריקה', () {
+      expect(MultiWindowService.decodePreferences(null), isEmpty);
+      expect(MultiWindowService.decodePreferences('{not json'), isEmpty);
+      expect(MultiWindowService.decodePreferences(jsonEncode({})), isEmpty);
+    });
+  });
+
+  group('canTransfer', () {
+    test('כרטיסיית כלי ניתנת להעברה', () {
+      expect(
+        MultiWindowService.canTransfer(
+          ToolTab(toolId: 'acronyms', title: 'ראשי תיבות'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('כרטיסיה שאינה שורדת סריאליזציה נחסמת ואינה זורקת', () {
+      // ⚠️ זו ההגנה מפני אובדן: בלעדיה כרטיסיה שלא ניתנת לשחזור הייתה
+      // נעלמת מהחלון המקורי ולא נפתחת בחדש.
+      expect(MultiWindowService.canTransfer(_UnserializableTab()), isFalse);
+    });
+  });
+}
+
+/// כרטיסיה שה-JSON שלה אינו ניתן לשחזור — `type` שאינו מוכר ל-
+/// `OpenedTab.fromJson`.
+class _UnserializableTab extends OpenedTab {
+  _UnserializableTab() : super('כרטיסיה שבורה');
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'DefinitelyNotATabType'};
+
+  @override
+  OpenedTab clone() => _UnserializableTab();
+}

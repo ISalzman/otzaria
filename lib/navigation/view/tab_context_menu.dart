@@ -135,9 +135,27 @@ List<AppContextMenuEntry> buildTabContextMenuEntries(
         label: context.settingsText('העבר לחלון חדש'),
         onTap: () async {
           final tabsBloc = context.read<TabsBloc>();
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          void notify(String message) {
+            messenger?.showSnackBar(SnackBar(content: Text(message)));
+          }
+
+          // ⚠️ נבדק לפני ההעברה. כרטיסיה שאינה שורדת סריאליזציה הייתה
+          // נעלמת מכאן ולא נפתחת שם.
+          if (!MultiWindowService.canTransfer(tab)) {
+            notify('לא ניתן להעביר את הכרטיסיה הזו לחלון אחר');
+            return;
+          }
           final opened = await const MultiWindowService().openWindow(tab: tab);
           if (opened) {
             tabsBloc.add(RemoveTab(tab));
+          } else {
+            final info = await const MultiWindowService().windowCount();
+            notify(
+              info.count >= info.max
+                  ? 'הגעת למספר החלונות המרבי (${info.max})'
+                  : 'פתיחת החלון נכשלה',
+            );
           }
         },
       ),
