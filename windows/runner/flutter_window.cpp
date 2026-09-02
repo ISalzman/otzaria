@@ -3,8 +3,10 @@
 #include <dwmapi.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -125,6 +127,43 @@ void SetWindowCloaked(HWND hwnd, bool cloaked) {
   DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &value, sizeof(value));
 }
 
+// מגדיר את מגבלות ה-Job ומשייך אליו את התהליך. מחזיר true בהצלחה; במקרה
+// כשל ממלא |failure| וסוגר את ה-handle.
+bool ConfigureProcessJob(HANDLE job, std::string& failure) {
+  // BREAKAWAY_OK: ילד שנוצר עם CREATE_BREAKAWAY_FROM_JOB מתנתק מה-Job
+  // ושורד את סגירת אוצריא (מתקין העדכון); ילדים רגילים (WebView2) נשארים
+  // מוכלים ונהרגים בסגירה כרצוי.
+  JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
+  info.BasicLimitInformation.LimitFlags =
+      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+  if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info,
+                               sizeof(info))) {
+    failure = "SetInformationJobObject failed (error " +
+              std::to_string(GetLastError()) + ")";
+    OutputDebugStringW(L"Otzaria: SetInformationJobObject failed; not "
+                       L"honouring forceTerminate.\n");
+    CloseHandle(job);
+    return false;
+  }
+  if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
+    failure = "AssignProcessToJobObject failed (error " +
+              std::to_string(GetLastError()) +
+              "); likely already in a non-nestable job";
+    // The most common failure mode: the launching environment (debugger,
+    // sandbox, AppContainer, certain enterprise/MDM tooling) has already
+    // placed our process in a non-nestable job. We have no way to break
+    // out, so we discard the job we created and stay on the graceful
+    // close path — forceTerminate will report not-ready and Dart will
+    // fall back to windowManager.destroy() + exit(0).
+    OutputDebugStringW(L"Otzaria: AssignProcessToJobObject failed; likely "
+                       L"already in a non-nestable job. Falling back to "
+                       L"graceful shutdown on close.\n");
+    CloseHandle(job);
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless,
@@ -143,60 +182,46 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless,
   // instances persisting for days, holding the user data folder locked and
   // breaking subsequent WebView2 initialization with a silent blank-tab
   // failure).
-  job_handle_ = CreateJobObjectW(nullptr, nullptr);
-  if (!job_handle_) {
-    job_object_failure_ = "CreateJobObjectW failed (error " +
-                          std::to_string(GetLastError()) + ")";
-    OutputDebugStringW(L"Otzaria: CreateJobObjectW failed; Edge child "
-                       L"processes will not be contained on fast-exit.\n");
-    return;
-  }
-  // BREAKAWAY_OK: ילד שנוצר עם CREATE_BREAKAWAY_FROM_JOB מתנתק מה-Job
-  // ושורד את סגירת אוצריא (מתקין העדכון); ילדים רגילים (WebView2) נשארים
-  // מוכלים ונהרגים בסגירה כרצוי.
-  JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
-  info.BasicLimitInformation.LimitFlags =
-      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-  if (!SetInformationJobObject(job_handle_,
-                               JobObjectExtendedLimitInformation, &info,
-                               sizeof(info))) {
-    job_object_failure_ = "SetInformationJobObject failed (error " +
-                          std::to_string(GetLastError()) + ")";
-    OutputDebugStringW(L"Otzaria: SetInformationJobObject failed; not "
-                       L"honouring forceTerminate.\n");
-    CloseHandle(job_handle_);
-    job_handle_ = nullptr;
-    return;
-  }
-  if (!AssignProcessToJobObject(job_handle_, GetCurrentProcess())) {
-    job_object_failure_ = "AssignProcessToJobObject failed (error " +
-                          std::to_string(GetLastError()) +
-                          "); likely already in a non-nestable job";
-    // The most common failure mode: the launching environment (debugger,
-    // sandbox, AppContainer, certain enterprise/MDM tooling) has already
-    // placed our process in a non-nestable job. We have no way to break
-    // out, so we discard the job we created and stay on the graceful
-    // close path — forceTerminate will report not-ready and Dart will
-    // fall back to windowManager.destroy() + exit(0).
-    OutputDebugStringW(L"Otzaria: AssignProcessToJobObject failed; likely "
-                       L"already in a non-nestable job. Falling back to "
-                       L"graceful shutdown on close.\n");
-    CloseHandle(job_handle_);
-    job_handle_ = nullptr;
-    return;
-  }
-  job_object_ready_.store(true);
+  //
+  // ⚠️ ה-Job שייך ל**תהליך**, לא לחלון. במודל A יש `FlutterWindow` לכל
+  // חלון, וגרסה קודמת יצרה Job לכל אחד וסגרה אותו בדסטרקטור. עם
+  // `KILL_ON_JOB_CLOSE` והתהליך שלנו כחבר, סגירת ה-handle כשחלון **משני**
+  // נסגר מורה לגרעין להרוג את כל חברי ה-Job — כלומר אותנו. נמדד: הדסטרקטור
+  // של החלון המשני נכנס ל-`~FlutterWindow` ולעולם אינו חוזר
+  // (docs/P-2-two-windows.md §9). לכן: נוצר פעם אחת, ואינו נסגר לעולם —
+  // סגירת ה-handle בעת יציאת התהליך היא בדיוק הרגע שבו KILL_ON_JOB_CLOSE
+  // אמור לפעול.
+  static std::once_flag job_once;
+  static HANDLE process_job = nullptr;
+  static std::string process_job_failure;
+
+  std::call_once(job_once, [&]() {
+    process_job = CreateJobObjectW(nullptr, nullptr);
+    if (!process_job) {
+      process_job_failure = "CreateJobObjectW failed (error " +
+                            std::to_string(GetLastError()) + ")";
+      OutputDebugStringW(L"Otzaria: CreateJobObjectW failed; Edge child "
+                         L"processes will not be contained on fast-exit.\n");
+      return;
+    }
+    if (!ConfigureProcessJob(process_job, process_job_failure)) {
+      process_job = nullptr;
+    }
+  });
+
+  job_handle_ = process_job;
+  job_object_failure_ = process_job_failure;
+  job_object_ready_.store(process_job != nullptr &&
+                          process_job_failure.empty());
+  return;
 }
 
 FlutterWindow::~FlutterWindow() {
-  if (job_handle_) {
-    // Closing the job handle while our process is the only member triggers
-    // KILL_ON_JOB_CLOSE for every other member (the WebView2 children). For
-    // our own process, the handle close is a no-op since the kernel keeps
-    // the job alive until all members are reaped.
-    CloseHandle(job_handle_);
-    job_handle_ = nullptr;
-  }
+  // ⚠️ ה-Job **אינו** נסגר כאן. הוא משאב של התהליך, ולא של החלון: סגירתו
+  // מפעילה `KILL_ON_JOB_CLOSE` על כל החברים, והתהליך שלנו הוא אחד מהם.
+  // כשחלון משני נסגר, זה פירושו הריגה עצמית. ראו ההערה בקונסטרוקטור.
+  // יציאת התהליך סוגרת את ה-handle ממילא — וזה בדיוק העיתוי הנכון.
+  job_handle_ = nullptr;
   if (session_end_flush_event_) {
     CloseHandle(session_end_flush_event_);
     session_end_flush_event_ = nullptr;
@@ -204,6 +229,60 @@ FlutterWindow::~FlutterWindow() {
 }
 
 namespace {
+
+// האם כבר נרשמו תוספים למנוע כלשהו בתהליך. במודל A יש מנוע לכל חלון,
+// והחלון הראשון מקבל את מסלול היצור המלא בעוד הנוספים מקבלים תת-קבוצה.
+std::atomic<bool> g_first_engine_registered{false};
+
+// מסכת כל התוספים ב-`RegisterPluginsMasked`, וביט ה-`printing` בתוכה.
+constexpr unsigned long kAllPluginsMask = 0x3FF;  // עשרה תוספים
+constexpr unsigned long kPrintingPluginBit = 1UL << 3;
+
+// מונע מ-`flutter_inappwebview_windows` לבטל רישום של מחלקות חלון שחלונות
+// אחרים עדיין צריכים.
+//
+// הבעיה: `InAppWebViewManager` רושם את המחלקה `CustomPlatformView`
+// בקונסטרוקטור ומבטל אותה בדסטרקטור **ללא תנאי וללא מונה הפניות**
+// (in_app_webview_manager.cpp:259), ואותו דפוס חוזר עבור
+// `HeadlessInAppWebView` (headless_in_app_webview_manager.cpp:145). עם מנוע
+// לכל חלון נוצר manager לכל חלון: הרישום השני נכשל בשקט (ערך ההחזרה
+// מתעלם), וסגירת חלון אחד מסירה את המחלקה מתחת לרגליו של האחר. התוצאה
+// היא WebView שבור עד סוף הריצה — ורק כשאין חלון פתוח מאותה מחלקה, ולכן
+// בדיקה תמימה של "פתח WebView בחלון שני" תעבור ותחמיץ אותה.
+//
+// התיקון: מחזיקים חלון message-only יחיד מכל מחלקה לכל אורך חיי התהליך.
+// `UnregisterClass` נכשל כל עוד קיים חלון מהמחלקה, ולכן ביטול הרישום של
+// התוסף הופך ל-no-op. אומת ב-`--check2`: בלי חלון שומר ביטול הרישום
+// מצליח והמחלקה נעלמת; עם חלון שומר הוא נכשל והמחלקה שורדת.
+//
+// נדרש **אחרי** `RegisterPlugins`, כי המחלקה חייבת להיות רשומה כדי שאפשר
+// יהיה ליצור ממנה חלון.
+void KeepWebViewWindowClassesAlive() {
+  static std::once_flag once;
+  std::call_once(once, []() {
+    static const wchar_t* kClasses[] = {L"CustomPlatformView",
+                                        L"HeadlessInAppWebView"};
+    for (const wchar_t* cls : kClasses) {
+      // המחלקה נרשמת על ידי ה-DLL של התוסף, ולכן ה-hInstance שלה אינו
+      // בהכרח שלנו. מנסים את שתי האפשרויות ומדווחים.
+      HWND keeper = ::CreateWindowExW(0, cls, L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                      nullptr, nullptr, nullptr);
+      if (!keeper) {
+        keeper = ::CreateWindowExW(0, cls, L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                   nullptr, ::GetModuleHandle(nullptr),
+                                   nullptr);
+      }
+      if (keeper) {
+        // דולף בכוונה: אורך החיים הוא אורך חיי התהליך.
+        printf("[webview-class-keeper] %ls ok\n", cls);
+      } else {
+        printf("[webview-class-keeper] %ls FAILED err=%lu\n", cls,
+               ::GetLastError());
+      }
+    }
+    fflush(stdout);
+  });
+}
 
 // ספייק P-2 בלבד. רושם תת-קבוצה של התוספים לפי מסכת ביטים, בסדר של
 // `generated_plugin_registrant.cc`. משמש לחיפוש בינארי אחר התוסף ששובר
@@ -265,14 +344,42 @@ bool FlutterWindow::OnCreate() {
   // ספייק P-2: `OTZARIA_SPIKE_PLUGIN_MASK` רושם תת-קבוצה של התוספים,
   // ביט לכל אחד לפי הסדר ב-generated_plugin_registrant.cc. קיים כדי
   // לאתר בחיפוש בינארי איזה תוסף שובר שני חלונות.
+  // ⚠️ רישום התוספים מסוריאלי בין חלונות.
+  //
+  // רבים מה-registrar-ים כותבים למצב process-global (`printing_plugin.cpp:35`
+  // הוא הדוגמה המובהקת, אך לא היחידה). כששני חלונות נוצרים על שני threads
+  // בו-זמנית, שתי הכתיבות מתערבבות והתוצאה שנמדדה היא קריסה בשיעור ~1%:
+  // "Isolate main is owned by os thread X, failed to schedule from os
+  // thread Y" — thread אחד שמנסה להריץ Dart של ה-isolate של האחר.
+  // ראו docs/P-2-two-windows.md §3.
+  static std::mutex plugin_registration_mutex;
+  std::lock_guard<std::mutex> plugin_registration_lock(
+      plugin_registration_mutex);
+
   char mask_env[32] = {};
   if (::GetEnvironmentVariableA("OTZARIA_SPIKE_PLUGIN_MASK", mask_env,
                                 sizeof(mask_env)) > 0) {
     RegisterPluginsMasked(flutter_controller_->engine(),
                           std::strtoul(mask_env, nullptr, 0));
-  } else {
+  } else if (!g_first_engine_registered.exchange(true)) {
+    // החלון הראשון עובר במסלול היצור המדויק, ללא שינוי.
     RegisterPlugins(flutter_controller_->engine());
+  } else {
+    // ⚠️ חלון נוסף — `printing` מדולג.
+    //
+    // `printing_plugin.cpp:35` מחזיק `std::unique_ptr<MethodChannel> channel`
+    // יחיד ב-**namespace scope**, ומשייך אליו מחדש בכל `RegisterWithRegistrar`
+    // (:41). `printing.cpp:24` מכריז עליו `extern` ושולח דרכו את כל
+    // הקולבקים — `onLayout` (:102) ועוד שלושה (:43, :66, :137). עם מנוע לכל
+    // חלון, רישום המנוע השני דורס את הערוץ, וכל קולבק הדפסה — גם של החלון
+    // הראשון — מנותב ל-isolate שנרשם אחרון. התוצאה: הדפסה שנתקעת בשקט.
+    //
+    // עד שההדפסה תנותב ל-host (פרק 3), עדיף שהדפסה מחלון משני תיכשל מיד
+    // מאשר שתשבור את החלון הראשון.
+    RegisterPluginsMasked(flutter_controller_->engine(),
+                          kAllPluginsMask & ~kPrintingPluginBit);
   }
+  KeepWebViewWindowClassesAlive();
   process_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -481,7 +588,9 @@ void FlutterWindow::OnDestroy() {
   jumplist_channel_.reset();
   process_control_channel_.reset();
   if (flutter_controller_) {
-    // Reset the controller properly - no need to call Shutdown explicitly
+    // ⚠️ הריסת המנוע קורית **בתוך** ה-window proc של WM_DESTROY. נמדד
+    // שהריסת שני מנועים במקביל, משני threads, ננעלת — ולכן סגירת חלונות
+    // חייבת להיות מסוריאלית. ראו docs/P-2-two-windows.md §9.
     flutter_controller_.reset();
     flutter_controller_ = nullptr;
   }

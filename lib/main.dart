@@ -1444,6 +1444,20 @@ void windowBTest(List<String> args) => _runSpikeWindow('ב', Colors.teal);
 
 void _runSpikeWindow(String label, MaterialColor color) {
   WidgetsFlutterBinding.ensureInitialized();
+  // `OTZARIA_SPIKE_EXIT_MS` סוגר את התהליך אוטומטית. קיים כדי שמבחן
+  // העומס על הקריסה חוצת-ה-threads (docs/P-2-two-windows.md §3) יוכל
+  // להריץ מאות איטרציות — בלי זה כל איטרציה ממתינה ל-timeout.
+  //
+  // ⚠️ רק חלון ב' סוגר. בגרסה הראשונה **שני** החלונות קראו ל-`exit(0)`
+  // בו-זמנית, ואז נמדדו 2 קריסות ב-200 איטרציות — אבל שני isolates
+  // שסוגרים תהליך יחד הם תרחיש שההרנס יצר, לא האפליקציה. הפרדה זו היא
+  // מה שמבחין בין באג ארכיטקטוני לארטיפקט של המדידה.
+  final exitMs = int.tryParse(
+    Platform.environment['OTZARIA_SPIKE_EXIT_MS'] ?? '',
+  );
+  if (exitMs != null && exitMs > 0 && label == 'ב') {
+    Timer(Duration(milliseconds: exitMs), () => exit(0));
+  }
   runApp(_SpikeWindowApp(label: label, color: color));
 }
 

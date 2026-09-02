@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <atomic>
 #include <thread>
 #include <vector>
 
@@ -304,6 +305,63 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     // `RunOnSeparateThread` שהמנוע מכריז שיוסר. כל מנוע נוצר על thread
     // ייעודי עם לולאת `GetMessage` משלו, ולכן ה-platform thread הממוזג
     // שלו הוא thread אחר.
+    // ── ספייק P-2 בדיקה 2 ──
+    // `flutter_inappwebview_windows` רושם את מחלקת החלון `CustomPlatformView`
+    // בקונסטרוקטור של `InAppWebViewManager` ומבטל אותה בדסטרקטור **ללא
+    // תנאי וללא מונה הפניות** (in_app_webview_manager.cpp:259; אותו באג
+    // שוב ב-headless_in_app_webview_manager.cpp:145). עם מנוע לכל חלון
+    // נוצר manager לכל חלון, ולכן סגירת חלון אחד מבטלת מחלקה שהאחר עדיין
+    // צריך. המסמך מזהיר שבדיקה תמימה תחמיץ — כאן משחזרים את הרצף המדויק.
+    bool check_webview_class = false;
+    for (const auto& arg : early_args) {
+      if (arg == "--check2") check_webview_class = true;
+    }
+    if (check_webview_class) {
+      const wchar_t* kClass = L"CustomPlatformView";
+      auto is_registered = [&]() {
+        WNDCLASSW info{};
+        return ::GetClassInfoW(::GetModuleHandle(nullptr), kClass, &info) != 0;
+      };
+      auto do_register = [&]() {
+        WNDCLASSW wc{};
+        wc.lpszClassName = kClass;
+        wc.lpfnWndProc = ::DefWindowProc;
+        wc.style |= CS_NOCLOSE;
+        wc.hInstance = ::GetModuleHandle(nullptr);
+        return ::RegisterClassW(&wc);
+      };
+
+      printf("[check2] מצב התחלתי: רשומה=%d\n", is_registered());
+      printf("[check2] manager של חלון 1 נוצר -> RegisterClass = %u\n",
+             do_register());
+      printf("[check2] manager של חלון 2 נוצר -> RegisterClass = %u"
+             "  (0 = נכשל, כצפוי; ערך ההחזרה מתעלם בתוסף)\n",
+             do_register());
+      printf("[check2] רשומה אחרי שני הרישומים = %d\n", is_registered());
+
+      printf("\n[check2] --- תרחיש א': חלון 2 נסגר ואין חלון מהמחלקה ---\n");
+      printf("[check2] ~manager של חלון 2 -> UnregisterClass = %d\n",
+             ::UnregisterClassW(kClass, ::GetModuleHandle(nullptr)));
+      printf("[check2] רשומה אחרי הסגירה = %d   <<< 0 פירושו שחלון 1 "
+             "נשבר\n", is_registered());
+
+      printf("\n[check2] --- תרחיש ב': קיים חלון חי מהמחלקה ---\n");
+      do_register();
+      HWND keeper = ::CreateWindowExW(0, kClass, L"keeper", 0, 0, 0, 0, 0,
+                                      HWND_MESSAGE, nullptr,
+                                      ::GetModuleHandle(nullptr), nullptr);
+      printf("[check2] חלון שומר נוצר = %p\n", (void*)keeper);
+      printf("[check2] ~manager של חלון 2 -> UnregisterClass = %d"
+             "  (0 = נכשל, וזה הרצוי)\n",
+             ::UnregisterClassW(kClass, ::GetModuleHandle(nullptr)));
+      printf("[check2] רשומה אחרי הסגירה = %d   <<< 1 פירושו שהמחלקה "
+             "שרדה\n", is_registered());
+      if (keeper) ::DestroyWindow(keeper);
+      fflush(stdout);
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
+    }
+
     bool two_engines = false;
     bool two_engines_same_thread = false;
     bool two_windows_ui = false;
@@ -325,15 +383,42 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       for (const auto& arg : early_args) {
         if (arg == "--no-plugins") skip_plugins = true;
       }
+      // ── סגירה מסודרת מול exit() ──
+      // מבחן עומס הראה שקריאת `exit(0)` מ-isolate אחד בזמן שמנוע אחר חי
+      // מפילה את התהליך בשיעור ~1% ("Isolate main is owned by os thread
+      // X, failed to schedule from os thread Y"). `--shutdown-after-ms`
+      // בודק את החלופה: שולחים `WM_CLOSE` לכל חלון, כל thread מסיים את
+      // לולאת ההודעות שלו, וכל מנוע נהרס בדסטרקטור של החלון שלו.
+      unsigned long shutdown_ms = 0;
+      for (const auto& arg : early_args) {
+        const std::string prefix = "--shutdown-after-ms=";
+        if (arg.rfind(prefix, 0) == 0) {
+          shutdown_ms = std::strtoul(arg.c_str() + prefix.size(), nullptr, 10);
+        }
+      }
+      static std::atomic<HWND> g_spike_hwnd_a{nullptr};
+      static std::atomic<HWND> g_spike_hwnd_b{nullptr};
+      static std::atomic<bool> g_spike_b_finished{false};
+      static std::string g_shutdown_order = "b-then-a";
+      for (const auto& arg : early_args) {
+        const std::string prefix = "--shutdown-order=";
+        if (arg.rfind(prefix, 0) == 0) {
+          g_shutdown_order = arg.substr(prefix.size());
+        }
+      }
+
       auto run_window = [skip_plugins](const flutter::DartProject& base,
                                        const char* entrypoint,
-                                       const wchar_t* title, int x) {
+                                       const wchar_t* title, int x,
+                                       std::atomic<HWND>* publish) {
         flutter::DartProject p(base);
         p.set_dart_entrypoint(entrypoint);
+        {
         FlutterWindow window(p, /*headless=*/false, skip_plugins);
         Win32Window::Point origin(x, 80);
         Win32Window::Size size(560, 640);
         if (!window.Create(title, origin, size)) return;
+        if (publish) publish->store(window.GetHandle());
         // החלון נוצר מוסתר ומתגלה בדרך כלל על ידי Dart דרך window_manager.
         // בספייק אין את הרצף הזה, ולכן מציגים מפורשות.
         ::ShowWindow(window.GetHandle(), SW_SHOW);
@@ -343,18 +428,65 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
           ::TranslateMessage(&msg);
           ::DispatchMessage(&msg);
         }
+        }
       };
 
       std::thread window_b([&]() {
         printf("[B] window thread = %lu\n", ::GetCurrentThreadId());
         fflush(stdout);
-        run_window(project, "windowBTest", L"אוצריא — חלון ב'", 640);
+        run_window(project, "windowBTest", L"אוצריא — חלון ב'", 640,
+                   &g_spike_hwnd_b);
+        g_spike_b_finished.store(true);
       });
+
+      std::thread shutdown_timer;
+      if (shutdown_ms > 0) {
+        shutdown_timer = std::thread([shutdown_ms]() {
+          ::Sleep(shutdown_ms);
+          // סדר הסגירה: החלון המשני ואז הראשי. כל `WM_CLOSE` מגיע
+          // ל-thread הבעלים, ששולט בהריסת המנוע שלו.
+          HWND b = g_spike_hwnd_b.load();
+          HWND a = g_spike_hwnd_a.load();
+          // הריסת המנוע המשני נתקעה בסדר b→a. כאן בודקים אם זו שאלת סדר
+          // או שמנוע משני פשוט אינו ניתן להריסה.
+          const std::string& order = g_shutdown_order;
+          if (order == "b-only") {
+            if (b) ::PostMessageW(b, WM_CLOSE, 0, 0);
+          } else if (order == "a-only") {
+            if (a) ::PostMessageW(a, WM_CLOSE, 0, 0);
+          } else if (order == "a-then-b") {
+            if (a) ::PostMessageW(a, WM_CLOSE, 0, 0);
+            ::Sleep(1500);
+            if (b) ::PostMessageW(b, WM_CLOSE, 0, 0);
+          } else if (order == "serialized") {
+            // הכלל שנמדד: הריסת שני מנועים **במקביל** ננעלת. סוגרים את
+            // המשני, ממתינים שה-thread שלו יסיים באמת, ורק אז את הראשי.
+            // זה מה שמימוש אמיתי של פרק 5 חייב לעשות.
+            if (b) ::PostMessageW(b, WM_CLOSE, 0, 0);
+            const DWORD deadline = ::GetTickCount() + 10000;
+            while (!g_spike_b_finished.load() &&
+                   ::GetTickCount() < deadline) {
+              ::Sleep(10);
+            }
+            if (a) ::PostMessageW(a, WM_CLOSE, 0, 0);
+          } else if (order == "b-then-a-delayed") {
+            if (b) ::PostMessageW(b, WM_CLOSE, 0, 0);
+            ::Sleep(1500);
+            if (a) ::PostMessageW(a, WM_CLOSE, 0, 0);
+          } else {  // "b-then-a" — ההתנהגות שנמדדה כנתקעת
+            if (b) ::PostMessageW(b, WM_CLOSE, 0, 0);
+            if (a) ::PostMessageW(a, WM_CLOSE, 0, 0);
+          }
+          fflush(stdout);
+        });
+      }
 
       printf("[A] window thread = %lu\n", ::GetCurrentThreadId());
       fflush(stdout);
-      run_window(project, "windowATest", L"אוצריא — חלון א'", 40);
+      run_window(project, "windowATest", L"אוצריא — חלון א'", 40,
+                 &g_spike_hwnd_a);
 
+      if (shutdown_timer.joinable()) shutdown_timer.join();
       window_b.join();
       ::CoUninitialize();
       return EXIT_SUCCESS;
