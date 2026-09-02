@@ -1,0 +1,96 @@
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+
+/// עוטף פריט של רשימת גלילה ממורכזת (`ScrollablePositionedList`) כדי שאזור
+/// הבחירה ימיין אותו לפי מיקומו האמיתי ב-viewport.
+///
+/// הפריטים שלפני נקודת העיגון של הרשימה יושבים ב-sliver הפוך. כשה-sliver
+/// הזה נגלל כולו אל מעל החלון, Flutter מחשב לפריטיו (שעדיין חיים בתחום
+/// המטמון) טרנספורם שגוי — הם "נוחתים" בראש ה-viewport — ולכן נדחפים
+/// לאמצע סדר הבחירה, וגרירת בחירה כלפי מעלה נעצרת בהם במקום להמשיך
+/// לפסקה שמעל. כאן הטרנספורם מתוקן לפי היסט הגלילה האמיתי של הפריט.
+class ViewportAlignedSelectionContainer extends StatefulWidget {
+  const ViewportAlignedSelectionContainer({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<ViewportAlignedSelectionContainer> createState() =>
+      _ViewportAlignedSelectionContainerState();
+}
+
+class _ViewportAlignedSelectionContainerState
+    extends State<ViewportAlignedSelectionContainer> {
+  final _delegate = StaticSelectionContainerDelegate();
+
+  @override
+  void dispose() {
+    _delegate.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // SelectionContainer מדווח את מיקומו דרך אובייקט הרינדור הראשון שמתחתיו,
+    // ולכן התיקון חייב לשבת שם ולא ב-delegate.
+    return SelectionContainer(
+      delegate: _delegate,
+      child: _ViewportAlignedBox(child: widget.child),
+    );
+  }
+}
+
+class _ViewportAlignedBox extends SingleChildRenderObjectWidget {
+  const _ViewportAlignedBox({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderViewportAlignedBox();
+}
+
+/// תיבה שקופה שמדווחת טרנספורם לפי מיקומה האמיתי בתוך ה-viewport העוטף,
+/// גם כשה-sliver שלה נגלל כולו מחוץ לתצוגה. חשופה לצורכי בדיקות.
+class RenderViewportAlignedBox extends RenderProxyBox {
+  bool _resolving = false;
+
+  @override
+  Matrix4 getTransformTo(RenderObject? target) {
+    final transform = super.getTransformTo(target);
+    // getOffsetToReveal קורא בעצמו ל-getTransformTo של היעד — בלי השומר
+    // זו רקורסיה אינסופית.
+    if (_resolving || !hasSize) return transform;
+    final viewport = RenderAbstractViewport.maybeOf(this);
+    if (viewport is! RenderViewportBase || !_isAncestorOf(target, viewport)) {
+      return transform;
+    }
+    _resolving = true;
+    try {
+      final trueTop =
+          viewport.getOffsetToReveal(this, 0).offset - viewport.offset.pixels;
+      final toViewport = super.getTransformTo(viewport);
+      final reportedTop = MatrixUtils.transformPoint(
+        toViewport,
+        Offset.zero,
+      ).dy;
+      final dy = trueTop - reportedTop;
+      if (dy.abs() < 0.5) return transform;
+      return viewport.getTransformTo(target) *
+          Matrix4.translationValues(0, dy, 0) *
+          toViewport;
+    } finally {
+      _resolving = false;
+    }
+  }
+
+  static bool _isAncestorOf(RenderObject? ancestor, RenderObject node) {
+    if (ancestor == null) return true;
+    for (
+      RenderObject? current = node;
+      current != null;
+      current = current.parent
+    ) {
+      if (identical(current, ancestor)) return true;
+    }
+    return false;
+  }
+}
