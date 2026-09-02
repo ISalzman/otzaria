@@ -14,8 +14,8 @@
 
 #include <cstdlib>
 
-// ספייק P-2 בלבד — נדרשים ל-`RegisterPluginsMasked`. בקוד היצור רק
-// `generated_plugin_registrant.h` נכלל.
+// נדרשים ל-`RegisterPluginsMasked`, שרושם תת-קבוצה של התוספים לחלונות
+// משניים. `generated_plugin_registrant.h` לבדו רושם הכול או כלום.
 #include <file_selector_windows/file_selector_windows.h>
 #include <flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h>
 #include <irondash_engine_context/irondash_engine_context_plugin_c_api.h>
@@ -252,13 +252,7 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   project.set_dart_entrypoint("secondaryWindowMain");
   project.set_dart_entrypoint_arguments({payload});
 
-  char no_plugins[8] = {};
-  const bool skip_plugins =
-      ::GetEnvironmentVariableA("OTZARIA_SECONDARY_NO_PLUGINS", no_plugins,
-                                sizeof(no_plugins)) > 0;
-
-  auto window = std::make_unique<FlutterWindow>(project, /*headless=*/false,
-                                                skip_plugins);
+  auto window = std::make_unique<FlutterWindow>(project);
   static int spawn_index = 0;
   const int offset = 40 + (spawn_index++ % 6) * 32;
   Win32Window::Point origin(offset, offset);
@@ -301,9 +295,9 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
 
 }  // namespace
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool headless,
-                             bool skip_plugins)
-    : project_(project), headless_(headless), skip_plugins_(skip_plugins) {
+FlutterWindow::FlutterWindow(const flutter::DartProject& project,
+                             bool headless)
+    : project_(project), headless_(headless) {
   // Create a Job Object early — before any child processes can spawn. We
   // assign our own process to it with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
   // so that *any* child process created from this point onward (WebView2's
@@ -419,9 +413,11 @@ void KeepWebViewWindowClassesAlive() {
   });
 }
 
-// ספייק P-2 בלבד. רושם תת-קבוצה של התוספים לפי מסכת ביטים, בסדר של
-// `generated_plugin_registrant.cc`. משמש לחיפוש בינארי אחר התוסף ששובר
-// שני חלונות על שני threads.
+// רושם תת-קבוצה של התוספים לפי מסכת ביטים, בסדר של
+// `generated_plugin_registrant.cc`.
+//
+// ⚠️ נדרש כי תוספים מסוימים אינם בטוחים לרישום פעמיים באותו תהליך —
+// ראו ההערה על `printing` באתר הקריאה.
 void RegisterPluginsMasked(flutter::PluginRegistry* registry,
                            unsigned long mask) {
   struct Entry {
@@ -471,14 +467,6 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
-  // ספייק P-2 בדיקה 1: בלי תוספים ובלי ערוצי runner, כדי לבודד את מקור
-  // הכשל בשני חלונות. ראו docs/P-2-two-windows.md.
-  if (skip_plugins_) {
-    return true;
-  }
-  // ספייק P-2: `OTZARIA_SPIKE_PLUGIN_MASK` רושם תת-קבוצה של התוספים,
-  // ביט לכל אחד לפי הסדר ב-generated_plugin_registrant.cc. קיים כדי
-  // לאתר בחיפוש בינארי איזה תוסף שובר שני חלונות.
   // ⚠️ רישום התוספים מסוריאלי בין חלונות.
   //
   // רבים מה-registrar-ים כותבים למצב process-global (`printing_plugin.cpp:35`
@@ -491,12 +479,7 @@ bool FlutterWindow::OnCreate() {
   std::lock_guard<std::mutex> plugin_registration_lock(
       plugin_registration_mutex);
 
-  char mask_env[32] = {};
-  if (::GetEnvironmentVariableA("OTZARIA_SPIKE_PLUGIN_MASK", mask_env,
-                                sizeof(mask_env)) > 0) {
-    RegisterPluginsMasked(flutter_controller_->engine(),
-                          std::strtoul(mask_env, nullptr, 0));
-  } else if (!g_first_engine_registered.exchange(true)) {
+  if (!g_first_engine_registered.exchange(true)) {
     // החלון הראשון עובר במסלול היצור המדויק, ללא שינוי.
     RegisterPlugins(flutter_controller_->engine());
   } else {
@@ -614,6 +597,34 @@ bool FlutterWindow::OnCreate() {
         if (call.method_name() == "restoreLastClosedWindow") {
           result->Success(
               flutter::EncodableValue(RestoreLastHiddenWindow()));
+          return;
+        }
+
+        // ממיר נקודת מסך לקואורדינטות אזור-הלקוח של החלון הזה.
+        //
+        // ⚠️ ההמרה בנייטיב ולא ב-Dart: המיקום מגיע מחלון אחר, ו-Flutter
+        // אינו יודע היכן החלון שלו יושב על המסך. חישוב ידני עם DPI היה
+        // ניחוש; `ScreenToClient` הוא התשובה המדויקת.
+        if (call.method_name() == "screenToClient") {
+          POINT pt{};
+          if (const auto* args =
+                  std::get_if<flutter::EncodableMap>(call.arguments())) {
+            const auto x_it = args->find(flutter::EncodableValue("x"));
+            const auto y_it = args->find(flutter::EncodableValue("y"));
+            if (x_it != args->end()) {
+              if (const auto* v = std::get_if<int>(&x_it->second)) pt.x = *v;
+            }
+            if (y_it != args->end()) {
+              if (const auto* v = std::get_if<int>(&y_it->second)) pt.y = *v;
+            }
+          }
+          if (const HWND self = GetHandle()) ::ScreenToClient(self, &pt);
+          flutter::EncodableMap out;
+          out[flutter::EncodableValue("x")] =
+              flutter::EncodableValue(static_cast<int>(pt.x));
+          out[flutter::EncodableValue("y")] =
+              flutter::EncodableValue(static_cast<int>(pt.y));
+          result->Success(flutter::EncodableValue(out));
           return;
         }
 

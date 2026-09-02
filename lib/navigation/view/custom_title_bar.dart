@@ -592,12 +592,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
       onDragStarted: (draggedTab) {
         _pendingTabSelection = null;
+        _draggedTabTitle = draggedTab.title;
         // התצוגה הנייטיבית מתחילה כאן ומסתיימת בכל מסלולי הסיום — היא
         // מוצגת רק כשהסמן יוצא מהחלון, ולכן אין כפילות מול ה-feedback.
         unawaited(const MultiWindowService().beginTabDrag(draggedTab.title));
+        _startCrossWindowDragTracking();
       },
-      onDragFinishedAnywhere: () =>
-          unawaited(const MultiWindowService().endTabDrag()),
+      onDragFinishedAnywhere: () {
+        _stopCrossWindowDragTracking();
+        unawaited(const MultiWindowService().endTabDrag());
+      },
       onDroppedOutside: MultiWindowService.isSupported
           ? (tab) => _handleTabDroppedOutside(context, tab)
           : null,
@@ -1275,6 +1279,73 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     );
   }
 
+  @override
+  void dispose() {
+    // ⚠️ הטיימר חייב להיעצר: הוא שולח בקשות אפיק כל 60ms, ולולאה שנשארה
+    // אחרי שהחלון נסגר מציפה חלונות אחרים בהודעות גרירה על גרירה שאיננה.
+    _crossWindowDragTimer?.cancel();
+    super.dispose();
+  }
+
+  /// כותרת הכרטיסיה הנגררת כרגע, לשליחה לחלון היעד.
+  String? _draggedTabTitle;
+
+  /// עוקב אחרי הגרירה ומודיע לחלון שמתחת לסמן.
+  Timer? _crossWindowDragTimer;
+
+  /// החלון שקיבל את ההודעה האחרונה, כדי לנקות את החיווי כשעוזבים אותו.
+  int? _lastDragOverSlot;
+
+  /// מיקום ההכנסה שהחלון היעד דיווח עליו, לשימוש בשחרור.
+  int? _remoteDropIndex;
+
+  /// מתחיל להודיע לחלונות אחרים על גרירה שעוברת מעליהם.
+  ///
+  /// ⚠️ קצב קבוע ולא `onDragUpdate`: `Draggable` מדווח עשרות עדכונים
+  /// בשנייה, וכל אחד היה קריאת ערוץ ובקשת אפיק. 60ms מספיקים כדי שהחיווי
+  /// ירגיש רציף, ומורידים את התעבורה בסדר גודל.
+  void _startCrossWindowDragTracking() {
+    if (!MultiWindowService.isSupported) return;
+    _crossWindowDragTimer?.cancel();
+    _crossWindowDragTimer = Timer.periodic(
+      const Duration(milliseconds: 60),
+      (_) => unawaited(_reportDragPosition()),
+    );
+  }
+
+  void _stopCrossWindowDragTracking() {
+    _crossWindowDragTimer?.cancel();
+    _crossWindowDragTimer = null;
+    final last = _lastDragOverSlot;
+    if (last != null) const MultiWindowService().notifyDragLeave(last);
+    _lastDragOverSlot = null;
+    _draggedTabTitle = null;
+    // ⚠️ `_remoteDropIndex` **אינו** מתאפס כאן: `onDragFinishedAnywhere`
+    // יורה לפני `onDroppedOutside`, וזה האחרון צריך את המיקום.
+  }
+
+  Future<void> _reportDragPosition() async {
+    final title = _draggedTabTitle;
+    if (title == null) return;
+    final service = const MultiWindowService();
+    final target = await service.windowAtCursor();
+    final slot = target.isSelf ? null : target.slot;
+
+    if (_lastDragOverSlot != null && _lastDragOverSlot != slot) {
+      service.notifyDragLeave(_lastDragOverSlot!);
+      _remoteDropIndex = null;
+    }
+    _lastDragOverSlot = slot;
+    if (slot == null) return;
+
+    _remoteDropIndex = await service.notifyDragOver(
+      slot,
+      target.x,
+      target.y,
+      title,
+    );
+  }
+
   /// כרטיסיה שוחררה מחוץ לכל יעד הפלה — ייתכן מחוץ לחלון.
   ///
   /// ⚠️ Flutter אינו יודע דבר מחוץ לחלון שלו, ולכן השאלה "לאן שוחררה"
@@ -1306,8 +1377,13 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     // חדש — תזוזה בלי תועלת.
     if (target.slot == null && tabsBloc.state.tabs.length <= 1) return;
 
+    // מיקום ההכנסה שהחלון היעד דיווח עליו בזמן הגרירה — כך השחרור על
+    // רצועת הכרטיסיות שלו ממזג למקום מדויק ולא רק מוסיף בסוף.
+    final dropIndex = _remoteDropIndex;
+    _remoteDropIndex = null;
+
     final moved = target.slot != null
-        ? await service.sendTabToWindow(target.slot!, tab)
+        ? await service.sendTabToWindow(target.slot!, tab, index: dropIndex)
         : await service.openWindow(tab: tab);
 
     if (moved) {

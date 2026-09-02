@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -141,6 +142,29 @@ class MultiWindowService {
     }
   }
 
+  /// ממיר נקודת מסך לקואורדינטות אזור-הלקוח של החלון הזה, בפיקסלים
+  /// לוגיים.
+  ///
+  /// ⚠️ ההמרה ב-runner ולא כאן: המיקום מגיע מחלון אחר, ו-Flutter אינו
+  /// יודע היכן החלון שלו יושב על המסך.
+  Future<Offset?> screenToClient(int x, int y, double devicePixelRatio) async {
+    if (!isSupported) return null;
+    try {
+      final p = await _channel.invokeMapMethod<String, dynamic>(
+        'screenToClient',
+        {'x': x, 'y': y},
+      );
+      if (p == null) return null;
+      return Offset(
+        ((p['x'] as int?) ?? 0) / devicePixelRatio,
+        ((p['y'] as int?) ?? 0) / devicePixelRatio,
+      );
+    } catch (e) {
+      debugPrint('screenToClient failed: $e');
+      return null;
+    }
+  }
+
   /// מודיע ל-runner באיזו משבצת באפיק החלון הזה יושב.
   ///
   /// ⚠️ בלי זה אי אפשר לגרור כרטיסיה בין חלונות: Win32 יודע איזה **חלון**
@@ -259,16 +283,51 @@ class MultiWindowService {
   /// סוג בקשה באפיק: תיאור החלון לתצוגה בתפריט.
   static const String requestDescribe = 'describe';
 
+  /// סוג בקשה באפיק: כרטיסיה נגררת מעל החלון הזה כרגע.
+  ///
+  /// ⚠️ החלון היעד אינו יודע דבר על גרירה שמתרחשת בחלון אחר — הם isolates
+  /// נפרדים, ומחוות העכבר נתפסת אצל המקור. בלי ההודעה הזו אין דרך להציג
+  /// קו חיווי או להדגיש את היעד.
+  static const String requestDragOver = 'dragOver';
+
+  /// סוג בקשה באפיק: הגרירה עזבה את החלון הזה או הסתיימה.
+  static const String requestDragLeave = 'dragLeave';
+
+  /// מודיע לחלון [slot] שכרטיסיה נגררת מעליו, בנקודה גלובלית נתונה.
+  ///
+  /// מחזיר את מיקום ההכנסה ברצועת הכרטיסיות שלו, או null כשהסמן אינו מעל
+  /// הרצועה — כך המקור יודע אם השחרור ימזג למקום מדויק או רק יעביר.
+  Future<int?> notifyDragOver(int slot, int x, int y, String title) async {
+    final result = await WindowBus.instance.request(slot, {
+      'type': requestDragOver,
+      'x': x,
+      'y': y,
+      'title': title,
+    }, timeout: const Duration(milliseconds: 400));
+    return result is int ? result : null;
+  }
+
+  /// מודיע לחלון [slot] שהגרירה עזבה אותו. fire-and-forget: אם לא נמסר,
+  /// החיווי ייעלם ממילא בסיום הגרירה.
+  void notifyDragLeave(int slot) {
+    unawaited(
+      WindowBus.instance.request(slot, {'type': requestDragLeave}),
+    );
+  }
+
   /// מעביר [tab] לחלון קיים במשבצת [slot].
   ///
   /// מחזיר true רק אם החלון היעד **אישר** שקיבל את הכרטיסיה. זה חשוב:
   /// המעביר מסיר את הכרטיסיה מעצמו רק אחרי אישור, אחרת כרטיסיה שנשלחה
   /// לחלון שנסגר בדיוק אז הייתה נעלמת משני הצדדים.
-  Future<bool> sendTabToWindow(int slot, OpenedTab tab) async {
+  /// [index] הוא מיקום ההכנסה ברצועת היעד, כשהשחרור היה מעליה. `null`
+  /// מוסיף בסוף — התנהגות "העבר לחלון קיים" מהתפריט.
+  Future<bool> sendTabToWindow(int slot, OpenedTab tab, {int? index}) async {
     if (!canTransfer(tab)) return false;
     final result = await WindowBus.instance.request(slot, {
       'type': requestReceiveTab,
       'tab': tab.toJson(),
+      'index': ?index,
     });
     return result == true;
   }

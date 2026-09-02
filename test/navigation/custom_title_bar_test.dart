@@ -871,9 +871,14 @@ void main() {
         tester.getCenter(find.text('ספר ב')),
       );
       await tester.pump();
-      tester
-          .widget<ReadingTabStrip>(find.byType(ReadingTabStrip))
-          .onDragStarted!();
+      // ⚠️ `onDragStarted` מקבל את הכרטיסיה הנגררת מאז שהיא נדרשת לתצוגת
+      // הגרירה הנייטיבית; הבדיקה מזמנת אותו ידנית עם הכרטיסיה שנלחצה.
+      final strip = tester.widget<ReadingTabStrip>(
+        find.byType(ReadingTabStrip),
+      );
+      strip.onDragStarted!(
+        strip.tabs.firstWhere((tab) => tab.title == 'ספר ב'),
+      );
       await gesture.up();
       await tester.pumpAndSettle();
 

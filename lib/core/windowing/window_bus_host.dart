@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/shared_list_store.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
@@ -103,11 +104,38 @@ class _WindowBusHostState extends State<WindowBusHost> {
       case MultiWindowService.requestDescribe:
         return _describe();
       case MultiWindowService.requestReceiveTab:
-        return _receiveTab(request['tab']);
+        return _receiveTab(request['tab'], request['index']);
+      case MultiWindowService.requestDragOver:
+        return _dragOver(request);
+      case MultiWindowService.requestDragLeave:
+        externalTabDrag.value = null;
+        return true;
       default:
         // המאגרים המשותפים מנותבים לחלון הראשון; הבקשות שלהם מטופלות שם.
         return SharedListStore.instance.handleRequest(request);
     }
+  }
+
+  /// כרטיסיה מחלון אחר נגררת מעל החלון הזה.
+  ///
+  /// מחזיר את מיקום ההכנסה שחושב ברצועת הכרטיסיות, או null כשהסמן אינו
+  /// מעליה — כך המקור יודע אם השחרור ימזג למקום מדויק או רק יעביר לסוף.
+  Future<Object?> _dragOver(Map<String, dynamic> request) async {
+    final x = request['x'];
+    final y = request['y'];
+    if (x is! int || y is! int || !mounted) return null;
+    final local = await const MultiWindowService().screenToClient(
+      x,
+      y,
+      View.of(context).devicePixelRatio,
+    );
+    if (local == null || !mounted) return null;
+    externalTabDrag.value = ExternalTabDrag(
+      title: (request['title'] as String?) ?? '',
+      local: local,
+    );
+    // הרצועה מחשבת את מיקום ההכנסה בתגובה לעדכון, ולכן הערך נקרא אחריו.
+    return externalTabDropIndex.value;
   }
 
   /// תיאור לתצוגה בתת-תפריט של חלון אחר.
@@ -127,7 +155,7 @@ class _WindowBusHostState extends State<WindowBusHost> {
   /// מחזיר true רק אחרי שהכרטיסיה **פוענחה בהצלחה** ונוספה. השולח מסיר
   /// אותה מעצמו רק על סמך התשובה הזו, ולכן כישלון כאן חייב להיות false
   /// ולא חריגה — אחרת הכרטיסיה נעלמת משני הצדדים.
-  bool _receiveTab(Object? tabJson) {
+  bool _receiveTab(Object? tabJson, Object? index) {
     if (tabJson is! Map) return false;
     final OpenedTab tab;
     try {
@@ -137,7 +165,14 @@ class _WindowBusHostState extends State<WindowBusHost> {
       return false;
     }
     if (!mounted) return false;
-    context.read<TabsBloc>().add(AddTab(tab));
+    // החיווי נעלם ברגע שהכרטיסיה התקבלה, ולא בטיימר של השולח.
+    externalTabDrag.value = null;
+    final tabsBloc = context.read<TabsBloc>();
+    tabsBloc.add(AddTab(tab));
+    // שוחררה על רצועת הכרטיסיות — נכנסת למקום המדויק ולא לסוף.
+    if (index is int) {
+      tabsBloc.add(MoveTab(tab, index));
+    }
     context.read<NavigationBloc>().add(
       const NavigateToScreen(Screen.reading),
     );

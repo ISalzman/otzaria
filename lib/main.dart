@@ -6,13 +6,11 @@
 library;
 
 import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show FrameCallback;
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_single_instance/flutter_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
@@ -52,7 +50,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
@@ -63,7 +60,6 @@ import 'package:otzaria/library_update/services/startup_recovery_check.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 import 'package:zstandard/zstandard.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
-import 'package:otzaria/printing/export_restriction_service.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
 import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
 import 'package:otzaria/plugins/bloc/plugin_updates_cubit.dart';
@@ -75,10 +71,8 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/core/data_root_writability_warning.dart';
 import 'package:otzaria/core/cli_command.dart';
 import 'package:otzaria/core/error_log_file.dart';
-import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/info/app_info_cli.dart';
 import 'package:otzaria/core/info/app_install_timeline.dart';
 import 'package:otzaria/core/external_activation_queue.dart';
@@ -338,9 +332,9 @@ void main(List<String> args) async {
     }
 
     // Skip HardwareKeyboard assertion error - happens when window loses focus while
-    // a key is held down; onWindowFocus releases stuck keys but filter as fallback
+    // a key is held down; fixed by clearState() in onWindowFocus but filter as fallback
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
-      return; // Silently ignore - stuck keys are released on window focus
+      return; // Silently ignore - handled by HardwareKeyboard.instance.clearState() on focus
     }
 
     // Log all other errors normally
@@ -365,7 +359,7 @@ void main(List<String> args) async {
       return true; // Silently ignore these errors
     }
 
-    // Skip HardwareKeyboard assertion error - stuck keys are released on window focus
+    // Skip HardwareKeyboard assertion error - handled by clearState() on window focus
     if (_isIgnorableHardwareKeyboardAssertion(errorString)) {
       return true; // Silently ignore
     }
@@ -673,10 +667,6 @@ Future<void> _initializeProcessSingletons() async {
     await PortablePaths.migrateIfMoved();
   }
 
-  // נתיב הספרייה נרשם לקובץ טקסט שה-uninstaller קורא; ההגדרות עצמן
-  // ב-Hive בינארי שאינו נגיש לו (issue #1020).
-  unawaited(AppPaths.recordLibraryPathForUninstaller());
-
   // שירות ההתראות (לוח השנה) ושירות דיווחי השגיאות אינם חיוניים להצגת
   // המסך הראשי. tz.initializeTimeZones + plugin init של flutter_local_notifications
   // יכולים לקחת מאות מילי-שניות ב-Windows, ודיווחי השגיאות הם רק Timer.periodic.
@@ -709,8 +699,6 @@ Future<void> _recoverInterruptedLibraryUpdate() {
   ).run(DatabaseConstants.getDatabasePath());
 }
 
-/// seforim.db שהוזז לגיבוי זמני בעדכון ספרייה שנהרג באמצע חוזר לספרייה —
-/// אחרת היא נראית ריקה והמשתמש מוריד הכול מחדש, על גבי הגיבוי שנשאר.
 Future<void> _recoverOrphanedDbBackup() async {
   final libraryPath = Settings.getValue<String>(
     SettingsRepository.keyLibraryPath,
@@ -730,7 +718,11 @@ Future<void> _recoverOrphanedDbBackup() async {
 }
 
 Future<void> _initializeRestartableRuntime() async {
-  // השחזורים נוגעים בקובצי הספרייה המשותפים, ולכן רצים רק בחלון הראשי.
+  // שחזור עדכון ספרייה שנקטע (marker+backup) חייב לרוץ לפני פתיחת ה-DB.
+  //
+  // ⚠️ פר-תהליך. השחזור נוגע בקובצי הספרייה המשותפים, ושני חלונות
+  // שמריצים אותו במקביל היו מתנגשים על אותם קבצים. החלון הראשון כבר
+  // ביצע אותו לפני שהחלון הזה בכלל נוצר.
   if (!isSecondaryWindow) {
     await _recoverInterruptedLibraryUpdate();
     await _recoverOrphanedDbBackup();
@@ -774,7 +766,6 @@ Future<void> _initializeRestartableRuntime() async {
   unawaited(_runDeferredAutoBackup());
   unawaited(_runDeferredProtocolRegistration());
   unawaited(_logJobObjectContainmentFailure());
-  unawaited(_runDeferredDataRootWritabilityWarning());
 
   // מסלול התאימות הישן זקוק ל-WebView מיד; החימום רץ ברקע ואינו מעכב bootstrap.
   unawaited(_preWarmWebViewEnvironment());
@@ -861,19 +852,6 @@ Future<void> _runDeferredAutoBackup() async {
   }
 }
 
-/// אזהרה על שורש נתונים חסום-לכתיבה. ממתינה לחשיפת החלון — דיאלוג לפניה
-/// אינו מוצג כי עדיין אין Navigator.
-Future<void> _runDeferredDataRootWritabilityWarning() async {
-  try {
-    await _mainWindowRevealedCompleter.future.timeout(
-      const Duration(seconds: 15),
-    );
-  } on TimeoutException {
-    // ממשיכים בכל זאת — אם ה-Navigator עדיין חסר, ההצגה תדולג בשקט.
-  }
-  await DataRootWritabilityWarning.showIfNeeded();
-}
-
 Future<void> _runDeferredProtocolRegistration() async {
   try {
     await PluginProtocolRegistrationService().ensureRegistered();
@@ -913,11 +891,6 @@ Future<void> _runDeferredCacheWarmups() async {
   unawaited(
     DictionaryLookupRepository.instance.ensureLoaded().catchError((e) {
       if (kDebugMode) debugPrint('Failed to warm up dictionary: $e');
-    }),
-  );
-  unawaited(
-    ExportRestrictionService.ensureLoaded().catchError((e) {
-      if (kDebugMode) debugPrint('Failed to load export restrictions: $e');
     }),
   );
   unawaited(
@@ -1309,12 +1282,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
                       List<OpenedTab> tabs,
                       int activeIndex,
                       String? activePane,
-                    ) async {
-                      final replaced = tabsBloc.stream.firstWhere(
-                        (state) =>
-                            identical(state.tabs, tabs) &&
-                            state.currentTabIndex == activeIndex,
-                      );
+                    ) {
                       tabsBloc.add(
                         ReplaceAllTabs(
                           tabs,
@@ -1322,7 +1290,6 @@ class _AppBootstrapState extends State<AppBootstrap> {
                           activePane: activePane,
                         ),
                       );
-                      await replaced;
                     },
               )..add(LoadWorkspaces());
             },
@@ -1366,9 +1333,6 @@ class _AppBootstrapState extends State<AppBootstrap> {
               // עדכוני ספרייה תמיד ליציב בלבד — מנותק מערוץ הפיתוח, שמשפיע רק
               // על עדכוני התוכנה.
               allowPrerelease: () => false,
-              onCheckSucceeded: () => recordSuccessfulUpdateCheck(
-                SettingsRepository.keyLastLibraryUpdateCheck,
-              ),
             ),
           ),
           BlocProvider<PluginUpdatesCubit>(
@@ -1405,13 +1369,11 @@ class _AppBootstrapState extends State<AppBootstrap> {
                 ),
               );
               return PluginSystemBloc(
-                  repository: repository,
-                  declarativeHost: host,
-                  readerStates: tabsBloc.stream,
-                  initialReaderState: tabsBloc.state,
-                )
-                ..add(const SeedBundledPlugins())
-                ..add(LoadPlugins());
+                repository: repository,
+                declarativeHost: host,
+                readerStates: tabsBloc.stream,
+                initialReaderState: tabsBloc.state,
+              )..add(LoadPlugins());
             },
           ),
         ],
@@ -1635,394 +1597,3 @@ Future<T> _timedPhase<T>(String name, Future<T> Function() body) async {
 /// לא יוסיף את הכרטיסיה שוב בהפעלה מחדש של העץ. הפענוח קורה שם ולא
 /// כאן — ראו ההערה ב-[secondaryWindowMain].
 String? secondaryWindowPayload;
-
-int _probeThreadId() {
-  try {
-    return DynamicLibrary.open(
-      'kernel32.dll',
-    ).lookupFunction<Uint32 Function(), int Function()>(
-      'GetCurrentThreadId',
-    )();
-  } catch (_) {
-    return -1;
-  }
-}
-
-void _probeLog(String tag, String step, Object? outcome) {
-  debugPrint('[$tag] $step = $outcome');
-}
-
-int _probeRssMb() => (ProcessInfo.currentRss / (1024 * 1024)).round();
-
-/// פותח את מחסנית הנתונים ומדווח על כל מאגר בנפרד.
-///
-/// זו **בדיקה 3 של P-2** ולב **בדיקה 9**. במודל A כל חלון הוא isolate נפרד
-/// באותו תהליך, ולכן לכל אחד סינגלטון `TantivyDataProvider` משלו — כלומר
-/// שתי פתיחות של אותו אינדקס. השאלה איזה מאגר סובל פתיחה שנייה ואיזה
-/// דורש RPC ל-host היא בדיוק מה שקובע את היקף פרק 3.
-Future<void> _probeOpenStack(String tag) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  Future<void> step(String name, Future<void> Function() body) async {
-    try {
-      await body();
-      _probeLog(tag, name, 'ok');
-    } catch (e) {
-      _probeLog(tag, name, 'FAILED: $e');
-    }
-  }
-
-  await step('settings', () => Settings.init(cacheProvider: HiveCache()));
-  await step('hive', () => initHive());
-  await step('sqlite', () => SqliteDataProvider.instance.initialize());
-  await step('rustlib', () => RustLib.init());
-  try {
-    final provider = TantivyDataProvider.instance;
-    await provider.engine;
-    final hits = await provider.countTexts('בראשית', const [], const []);
-    _probeLog(tag, 'tantivy', 'ok ($hits hits)');
-  } catch (e) {
-    _probeLog(tag, 'tantivy', 'FAILED: $e');
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// ספייק P-0 שלב 3 — האם מודל A נפגע מתחרות thread?
-//
-// נמדד קודם ש-`Default` **כן** ממזג platform ו-UI thread (בניגוד למה
-// שה-header של Flutter מרמז), ושהדגל `RunOnSeparateThread` עובד אך
-// המנוע מכריז שיוסר. השאלה שנשארה: אפשר להימנע מהתחרות **בלי** הדגל,
-// פשוט ביצירת כל מנוע על thread ייעודי משלו עם לולאת הודעות משלו?
-//
-// המדידה: מנוע A על ה-thread הראשי שורף CPU 2 שניות ברצף, בזמן שמנוע B
-// על thread אחר מתקתק טיימר כל 100ms. הפער המרבי בין תקתוקים הוא
-// התשובה — ~100ms פירושו threads עצמאיים, ~2000ms פירושו תחרות.
-// ═══════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════
-// ספייק P-2 — שני חלונות אמיתיים עם view, כל אחד על thread משלו.
-//
-// המדידות הקודמות היו חסרות-view והוכיחו שאין תחרות בין ה-isolates
-// (102ms מול 2092ms בבקרה). כאן אותו דבר, אבל **גלוי לעין**: כפתור
-// "הקפא" בחלון אחד חוסם את ה-isolate שלו לשלוש שניות, והשעון בחלון
-// השני ממשיך לרוץ. זו ההכרעה של מודל A על המסך.
-// ═══════════════════════════════════════════════════════════════════════
-@pragma('vm:entry-point')
-void windowATest(List<String> args) => _runSpikeWindow('א', Colors.indigo);
-
-@pragma('vm:entry-point')
-void windowBTest(List<String> args) => _runSpikeWindow('ב', Colors.teal);
-
-void _runSpikeWindow(String label, MaterialColor color) {
-  WidgetsFlutterBinding.ensureInitialized();
-  // `OTZARIA_SPIKE_EXIT_MS` סוגר את התהליך אוטומטית. קיים כדי שמבחן
-  // העומס על הקריסה חוצת-ה-threads (docs/P-2-two-windows.md §3) יוכל
-  // להריץ מאות איטרציות — בלי זה כל איטרציה ממתינה ל-timeout.
-  //
-  // ⚠️ רק חלון ב' סוגר. בגרסה הראשונה **שני** החלונות קראו ל-`exit(0)`
-  // בו-זמנית, ואז נמדדו 2 קריסות ב-200 איטרציות — אבל שני isolates
-  // שסוגרים תהליך יחד הם תרחיש שההרנס יצר, לא האפליקציה. הפרדה זו היא
-  // מה שמבחין בין באג ארכיטקטוני לארטיפקט של המדידה.
-  final exitMs = int.tryParse(
-    Platform.environment['OTZARIA_SPIKE_EXIT_MS'] ?? '',
-  );
-  if (exitMs != null && exitMs > 0 && label == 'ב') {
-    Timer(Duration(milliseconds: exitMs), () => exit(0));
-  }
-  runApp(_SpikeWindowApp(label: label, color: color));
-}
-
-class _SpikeWindowApp extends StatelessWidget {
-  const _SpikeWindowApp({required this.label, required this.color});
-
-  final String label;
-  final MaterialColor color;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: color, useMaterial3: true),
-      // בדיקה 6 של P-2: RTL אינו nice-to-have.
-      locale: const Locale('he'),
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      supportedLocales: const [Locale('he'), Locale('en')],
-      home: Directionality(
-        textDirection: TextDirection.rtl,
-        child: _SpikeWindowBody(label: label),
-      ),
-    );
-  }
-}
-
-class _SpikeWindowBody extends StatefulWidget {
-  const _SpikeWindowBody({required this.label});
-
-  final String label;
-
-  @override
-  State<_SpikeWindowBody> createState() => _SpikeWindowBodyState();
-}
-
-class _SpikeWindowBodyState extends State<_SpikeWindowBody> {
-  late final Timer _clock;
-  int _tenths = 0;
-  bool _frozen = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // שעון עשיריות שנייה. אם ה-isolate של החלון הזה נחסם — הוא ייעצר,
-    // וזה בדיוק מה שאמורים לראות בחלון האחר.
-    _clock = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (mounted) setState(() => _tenths++);
-    });
-  }
-
-  @override
-  void dispose() {
-    _clock.cancel();
-    super.dispose();
-  }
-
-  void _freeze() {
-    setState(() => _frozen = true);
-    // חסימה סינכרונית מכוונת של ה-UI isolate של החלון הזה בלבד.
-    final end = DateTime.now().add(const Duration(seconds: 3));
-    while (DateTime.now().isBefore(end)) {}
-    if (mounted) setState(() => _frozen = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('חלון ${widget.label}'),
-        backgroundColor: theme.colorScheme.primaryContainer,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              (_tenths / 10).toStringAsFixed(1),
-              style: theme.textTheme.displayLarge?.copyWith(
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text('שניות מאז פתיחת החלון', style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 32),
-            Text(
-              'thread ${_probeThreadId()}',
-              style: theme.textTheme.labelLarge,
-            ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: _frozen ? null : _freeze,
-              icon: const Icon(Icons.ac_unit),
-              label: const Text('הקפא חלון זה ל-3 שניות'),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: 320,
-              child: Text(
-                'לחיצה תחסום את ה-isolate של החלון הזה בלבד. השעון כאן '
-                'ייעצר — והשעון בחלון השני ימשיך לרוץ. זו ההוכחה '
-                'שמנוע לכל thread מבטל את תחרות §3.3.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-@pragma('vm:entry-point')
-void engineATest(List<String> args) async {
-  _probeLog('A', 'dart-thread-id', _probeThreadId());
-  _probeLog('A', 'rss-mb-one-engine', _probeRssMb());
-
-  // מנוע A הוא "החלון הראשון": פותח את המאגרים ראשון ותופס מה שנתפס.
-  await _probeOpenStack('A');
-  _probeLog('A', 'rss-mb-after-stack', _probeRssMb());
-
-  // נותנים למנוע B להיטען לפני שמתחילים לשרוף.
-  await Future<void>.delayed(const Duration(milliseconds: 1500));
-
-  _probeLog('A', 'burn', 'start (2000ms sync)');
-  final end = DateTime.now().add(const Duration(milliseconds: 2000));
-  while (DateTime.now().isBefore(end)) {
-    // חסימה סינכרונית מכוונת של ה-UI isolate.
-  }
-  _probeLog('A', 'burn', 'done');
-}
-
-@pragma('vm:entry-point')
-void engineBTest(List<String> args) async {
-  _probeLog('B', 'dart-thread-id', _probeThreadId());
-  _probeLog('B', 'rss-mb-two-engines', _probeRssMb());
-
-  // ⚠️ הלב של בדיקה 3. מנוע B הוא "החלון השני": מנסה לפתוח את אותם
-  // מאגרים בזמן שמנוע A כבר מחזיק אותם, באותו תהליך. כל FAILED כאן הוא
-  // מאגר שיחייב RPC ל-host בפרק 3, וכל ok הוא מאגר שאפשר לפתוח פר-חלון.
-  // ממתינים די והותר כדי שמנוע A יסיים לפתוח הכול. התרחיש הנבדק הוא
-  // "חלון ראשון עומד, המשתמש פותח שני" — לא מרוץ פתיחה מקבילי.
-  await Future<void>.delayed(const Duration(seconds: 10));
-  await _probeOpenStack('B');
-  _probeLog('B', 'rss-mb-after-stack', _probeRssMb());
-
-  var ticks = 0;
-  var maxGapMs = 0;
-  var last = DateTime.now();
-  final done = Completer<void>();
-
-  Timer.periodic(const Duration(milliseconds: 100), (timer) {
-    final now = DateTime.now();
-    final gap = now.difference(last).inMilliseconds;
-    if (gap > maxGapMs) maxGapMs = gap;
-    last = now;
-    ticks++;
-    if (ticks >= 45) {
-      timer.cancel();
-      done.complete();
-    }
-  });
-
-  await done.future;
-  _probeLog('B', 'ticks', ticks);
-  // ⚠️ המספר המכריע. ~100-150ms ⇒ ה-threads עצמאיים ומודל A שריד בלי
-  // הדגל המיושן. ~2000ms ⇒ מנוע A חסם את מנוע B והתחרות אמיתית.
-  _probeLog('B', 'max-gap-ms', maxGapMs);
-  _probeLog('B', 'rss-mb-final', _probeRssMb());
-  exit(0);
-}
-
-@pragma('vm:entry-point')
-void brokerMain(List<String> args) async {
-  final log = StringBuffer();
-  void record(String step, Object? outcome) {
-    final line = '[broker] $step = $outcome';
-    log.writeln(line);
-    debugPrint(line);
-  }
-
-  void flush() {
-    try {
-      final temp = Platform.environment['TEMP'] ?? r'C:\Users\Public';
-      File(
-        '$temp\\otzaria_broker_probe.log',
-      ).writeAsStringSync(log.toString(), mode: FileMode.append);
-    } catch (_) {}
-  }
-
-  try {
-    record('engine-alive', 'yes');
-
-    // ⚠️ המדידה החשובה ביותר כאן. §3.3 של מפת הדרכים — הטיעון המרכזי נגד
-    // מודל A — מבוסס על כך שב-3.44 ה-platform thread וה-UI thread ממוזגים,
-    // ולכן N מנועים בתהליך אחד מתחרים על thread יחיד. ה-header של 3.47
-    // אומר שברירת המחדל היא כבר thread נפרד. במקום להאמין לאחד מהם,
-    // שואלים את מערכת ההפעלה: אם מזהה ה-thread של ה-Dart שונה מזה של
-    // ה-thread שיצר את המנוע — הם אינם ממוזגים.
-    try {
-      final getCurrentThreadId = DynamicLibrary.open('kernel32.dll')
-          .lookupFunction<Uint32 Function(), int Function()>(
-            'GetCurrentThreadId',
-          );
-      record('dart-thread-id', getCurrentThreadId());
-    } catch (e) {
-      record('dart-thread-id', 'FAILED: $e');
-    }
-
-    // עלות המנוע לבדו, לפני שנפתח ולו מאגר אחד. ההפרש מול `rss-mb` בסוף
-    // הוא עלות הנתונים. שני המספרים האלה הם מה שמכריע בין A ל-C1: ב-A
-    // כל חלון נוסף עולה "מנוע", וב-C1 כל חלון נוסף עולה "תהליך".
-    record(
-      'rss-mb-engine-only',
-      (ProcessInfo.currentRss / (1024 * 1024)).toStringAsFixed(0),
-    );
-
-    // 1. האם לולאת האירועים רצה בכלל בלי view.
-    final timerDone = Completer<void>();
-    Timer(const Duration(milliseconds: 50), () => timerDone.complete());
-    await timerDone.future.timeout(const Duration(seconds: 5));
-    record('timer', 'fired');
-
-    await Future<void>.microtask(() {});
-    record('microtask', 'ran');
-
-    // 2. I/O — האם קריאת קובץ מסתיימת.
-    final self = File(Platform.resolvedExecutable);
-    record('file-io', '${await self.length()} bytes');
-
-    // 3. rootBundle — ההכרעה בין C1 ל-C2. `tantivy_data_provider` תלוי בו,
-    //    והוא זמין רק בתוך מנוע Flutter.
-    WidgetsFlutterBinding.ensureInitialized();
-    // שני נכסים: מניפסט בינארי שקיים בכל חבילה, ונכס אמיתי של האפליקציה.
-    // שם נכס שגוי נכשל בדיוק כמו bundle שבור — ולכן בודקים שניים.
-    try {
-      final bin = await rootBundle.load('AssetManifest.bin');
-      record('rootBundle:AssetManifest.bin', 'ok (${bin.lengthInBytes} bytes)');
-    } catch (e) {
-      record('rootBundle:AssetManifest.bin', 'FAILED: $e');
-    }
-    try {
-      final changelog = await rootBundle.loadString('assets/יומן שינויים.md');
-      record('rootBundle:app-asset', 'ok (${changelog.length} chars)');
-    } catch (e) {
-      record('rootBundle:app-asset', 'FAILED: $e');
-    }
-
-    // 4. מאגרי הנתונים — מה שה-broker אמור להחזיק בפועל.
-    try {
-      await Settings.init(cacheProvider: HiveCache());
-      record('settings-init', 'ok');
-    } catch (e) {
-      record('settings-init', 'FAILED: $e');
-    }
-    try {
-      await initHive();
-      record('hive', 'ok');
-    } catch (e) {
-      record('hive', 'FAILED: $e');
-    }
-    try {
-      await SqliteDataProvider.instance.initialize();
-      record('sqlite', 'ok');
-    } catch (e) {
-      record('sqlite', 'FAILED: $e');
-    }
-    // מנוע החיפוש מגיע דרך FFI ודורש אתחול מפורש — `main()` עושה זאת
-    // ב-`RustLib.init()`. בלעדיו הגישה לאינדקס נכשלת בהודעה שנראית כמו
-    // כשל של המנוע חסר-view, ואינה כזו.
-    try {
-      await RustLib.init();
-      record('rustlib-init', 'ok');
-    } catch (e) {
-      record('rustlib-init', 'FAILED: $e');
-    }
-    // אינדקס Tantivy — הרכיב האחרון שה-broker אמור להחזיק. הקונסטרוקטור
-    // של TantivyDataProvider פותח את המנוע, ולכן עצם הגישה ל-`instance`
-    // היא המדידה.
-    try {
-      final provider = TantivyDataProvider.instance;
-      await provider.engine;
-      final hits = await provider.countTexts('בראשית', const [], const []);
-      record('tantivy', 'ok (engine open, $hits hits)');
-    } catch (e) {
-      record('tantivy', 'FAILED: $e');
-    }
-    record(
-      'rss-mb',
-      (ProcessInfo.currentRss / (1024 * 1024)).toStringAsFixed(0),
-    );
-  } catch (e, st) {
-    record('fatal', '$e\n$st');
-  } finally {
-    flush();
-    exit(0);
-  }
-}

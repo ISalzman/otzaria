@@ -20,11 +20,8 @@ class FlutterWindow : public Win32Window {
   // When |headless| is true, the window will not be shown after the first
   // frame — used for CLI commands (e.g. pack-plugin) that expect the Dart
   // entrypoint to call exit() before any UI is rendered.
-  // ספייק P-2 בלבד: |skip_plugins| מדלג על `RegisterPlugins` ועל ערוצי
-  // ה-runner. קיים כדי לבודד את בדיקה 1 — האם הכשל בשני חלונות נובע
-  // מהתוספים (ערוץ ב-namespace scope שנדרס) או מה-views עצמם.
   explicit FlutterWindow(const flutter::DartProject& project,
-                         bool headless = false, bool skip_plugins = false);
+                         bool headless = false);
   virtual ~FlutterWindow();
 
   // מציג את החלון ברגע שהפריים הראשון מצויר, ומביא אותו לחזית.
@@ -68,9 +65,6 @@ class FlutterWindow : public Win32Window {
 
   // When true, skip Show() in the first-frame callback. Used by CLI commands.
   bool headless_ = false;
-
-  // ספייק P-2 בלבד. ראו הקונסטרוקטור.
-  bool skip_plugins_ = false;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 
@@ -135,6 +136,40 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
   void initState() {
     super.initState();
     _geometry = _TabStripGeometry.fromWidths(widget.widths);
+    externalTabDrag.addListener(_onExternalDrag);
+  }
+
+  /// כרטיסיה מחלון אחר נגררת מעל החלון הזה.
+  ///
+  /// ⚠️ המיקום מגיע בקואורדינטות **מסך**, כי הוא נמדד בחלון אחר. רק כאן
+  /// אפשר לתרגם אותו למיקום הכנסה, ולכן התוצאה נכתבת ל-
+  /// [externalTabDropIndex] שה-host מחזיר לשולח.
+  void _onExternalDrag() {
+    final drag = externalTabDrag.value;
+    if (drag == null) {
+      externalTabDropIndex.value = null;
+      if (_insertIndex != null) setState(() => _insertIndex = null);
+      return;
+    }
+    final box = _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+
+    // המיקום כבר בקואורדינטות החלון (הומר ב-runner), ונשאר להמיר לרצועה.
+    final local = box.globalToLocal(drag.local);
+
+    // מחוץ לגובה הרצועה — הכרטיסיה תתקבל, אבל לא למקום מדויק.
+    final cross = widget.isVertical ? local.dx : local.dy;
+    final crossExtent =
+        widget.isVertical ? box.size.width : box.size.height;
+    if (cross < -12 || cross > crossExtent + 12) {
+      externalTabDropIndex.value = null;
+      if (_insertIndex != null) setState(() => _insertIndex = null);
+      return;
+    }
+
+    final next = _insertIndexFor(widget.isVertical ? local.dy : local.dx);
+    externalTabDropIndex.value = next;
+    if (next != _insertIndex) setState(() => _insertIndex = next);
   }
 
   @override
@@ -147,6 +182,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
 
   @override
   void dispose() {
+    externalTabDrag.removeListener(_onExternalDrag);
     _springTimer?.cancel();
     _autoScrollTimer?.cancel();
     _scrollController.dispose();
