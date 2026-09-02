@@ -1403,7 +1403,13 @@ void secondaryWindowMain(List<String> args) async {
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
-  SentryWidgetsFlutterBinding.ensureInitialized();
+  if ((Platform.environment['OTZARIA_SECONDARY_SKIP'] ?? '').contains(
+    'sentry',
+  )) {
+    WidgetsFlutterBinding.ensureInitialized();
+  } else {
+    SentryWidgetsFlutterBinding.ensureInitialized();
+  }
   EditableText.debugDeterministicCursor = true;
 
   try {
@@ -1420,7 +1426,26 @@ void secondaryWindowMain(List<String> args) async {
     await Settings.init(cacheProvider: HiveCache());
     await initHive();
     await SqliteDataProvider.instance.initialize();
-    await RustLib.init();
+
+    // ⚠️ `RustLib.init()` הוא פר-**תהליך**, לא פר-isolate.
+    //
+    // `search_engine.dll` נטענת פעם אחת לתהליך, ו-flutter_rust_bridge שומר
+    // בתוכה את ה-port שדרכו threads של Rust קוראים חזרה ל-Dart. קריאה
+    // שנייה מ-isolate אחר דורסת את הרישום, ואז thread נייטיב מנסה להיכנס
+    // ל-isolate הלא נכון. זה בדיוק מה שנצפה:
+    //
+    //   "Isolate main is already scheduled on mutator thread ...,
+    //    failed to schedule from os thread 0xef0"
+    //   isolate_group=(nil), isolate=(nil)   ← thread נייטיב, בלי isolate
+    //
+    // `OTZARIA_SECONDARY_SKIP` הוא כלי בידוד זמני; ראה docs/.
+    final skip = (Platform.environment['OTZARIA_SECONDARY_SKIP'] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .toSet();
+    if (!skip.contains('rustlib')) {
+      await RustLib.init();
+    }
 
     Bloc.observer = AppBlocObserver();
     unawaited(AppCursors.ensureInitialized());

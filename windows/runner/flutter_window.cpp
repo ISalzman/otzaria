@@ -164,49 +164,69 @@ bool ConfigureProcessJob(HANDLE job, std::string& failure) {
   return true;
 }
 
-// פותח חלון אוצריא נוסף על thread ייעודי משלו.
-//
-// **thread לכל חלון, ולא thread משותף.** ב-Flutter 3.47 ה-platform thread
-// וה-UI thread ממוזגים כברירת מחדל, ולכן כל המנועים שנוצרים על אותו thread
-// מתחרים על אותו isolate scheduler: נמדד שחלון עסוק מקפיא את השני ל-2092ms,
-// מול 102ms כשלכל מנוע thread משלו (docs/P-0-stage3-result.md §2).
-//
-// ה-thread מנותק (detach) ומחזיק לולאת `GetMessage` משלו עד שהחלון נסגר.
-// הריסת המנוע קורית בדסטרקטור של `FlutterWindow` על אותו thread.
-void SpawnSecondaryWindow(const flutter::DartProject& base,
-                          const std::string& payload) {
-  std::thread([base, payload]() {
-    flutter::DartProject project(base);
-    project.set_dart_entrypoint("secondaryWindowMain");
-    project.set_dart_entrypoint_arguments({payload});
+// הודעה פרטית שמבקשת מה-thread של החלון לפתוח חלון אוצריא נוסף **על
+// עצמו**. ראו `CreateSecondaryWindowOnThisThread`.
+constexpr UINT kMsgOpenSecondaryWindow = WM_APP + 0x101;
 
-    {
-      FlutterWindow window(project);
-      // מיקום מוסט מעט, כדי שחלון חדש לא יכסה במדויק את הקודם.
-      static std::atomic<int> spawn_index{0};
-      const int offset = 40 + (spawn_index.fetch_add(1) % 6) * 32;
-      Win32Window::Point origin(offset, offset);
-      Win32Window::Size size(1100, 760);
-      if (!window.Create(L"אוצריא", origin, size)) {
-        return;
-      }
-      // ⚠️ `SetQuitOnClose(false)`: `PostQuitMessage` היה מסיים את הלולאה
-      // של ה-thread הזה בלבד — וזה מה שאנחנו רוצים — אבל `Win32Window`
-      // מפרסם אותו רק כשהדגל דלוק. כאן הלולאה מסתיימת דרך `WM_DESTROY`
-      // שמתפרסם ל-thread הזה, ולכן הדגל כן נדרש.
-      window.SetQuitOnClose(true);
-      ::ShowWindow(window.GetHandle(), SW_SHOW);
-
-      ::MSG msg;
-      while (::GetMessage(&msg, nullptr, 0, 0)) {
-        ::TranslateMessage(&msg);
-        ::DispatchMessage(&msg);
-      }
-    }
-    // כאן המנוע כבר נהרס. אין לגעת ב-`exit()` — תהליך שיוצא בעוד מנוע אחר
-    // חי קורס (docs/P-2-two-windows.md §3).
-  }).detach();
+// החלונות המשניים שנוצרו על ה-thread הזה. `FlutterWindow` חייב לחיות כל
+// עוד החלון שלו קיים, ולכן הבעלות נשמרת כאן ולא במחסנית.
+std::vector<std::unique_ptr<FlutterWindow>>& SecondaryWindowsOnThisThread() {
+  static thread_local std::vector<std::unique_ptr<FlutterWindow>> windows;
+  return windows;
 }
+
+// יוצר חלון אוצריא נוסף **על ה-thread הקורא**, ומשתמש בלולאת ההודעות
+// הקיימת שלו.
+//
+// ⚠️ ה-thread אינו שרירותי. ניסיון ליצור את המנוע על thread ייעודי חדש
+// קרס באופן עקבי ברגע שהחלון הראשון כבר רץ:
+//
+//   "Isolate main is already scheduled on mutator thread ...,
+//    failed to schedule from os thread ..."   isolate=(nil)
+//
+// הכשל אינו תלוי בתוספים (נבדק בלי `RegisterPlugins` כלל) ולא ב-
+// `RustLib.init` — כלומר הוא ביצירת המנוע עצמה. זהו גם מה שעושה
+// `desktop_multi_window`, מימוש ההתייחסות: כל המנועים על ה-thread הראשי.
+//
+// המחיר ידוע ומדוד: ה-platform thread וה-UI thread ממוזגים ב-3.47, ולכן
+// כל המנועים חולקים scheduler אחד — חלון עסוק מקפיא את השני
+// (docs/P-0-stage3-result.md §2). זה חוב פתוח, לא פתרון סופי.
+void CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
+                                       const std::string& payload) {
+  // ניקוי חלונות שנסגרו, כדי שהרשימה לא תגדל בלי גבול.
+  auto& windows = SecondaryWindowsOnThisThread();
+  windows.erase(
+      std::remove_if(windows.begin(), windows.end(),
+                     [](const std::unique_ptr<FlutterWindow>& w) {
+                       return w == nullptr || w->GetHandle() == nullptr;
+                     }),
+      windows.end());
+
+  flutter::DartProject project(base);
+  project.set_dart_entrypoint("secondaryWindowMain");
+  project.set_dart_entrypoint_arguments({payload});
+
+  char no_plugins[8] = {};
+  const bool skip_plugins =
+      ::GetEnvironmentVariableA("OTZARIA_SECONDARY_NO_PLUGINS", no_plugins,
+                                sizeof(no_plugins)) > 0;
+
+  auto window = std::make_unique<FlutterWindow>(project, /*headless=*/false,
+                                                skip_plugins);
+  static int spawn_index = 0;
+  const int offset = 40 + (spawn_index++ % 6) * 32;
+  Win32Window::Point origin(offset, offset);
+  Win32Window::Size size(1100, 760);
+  if (!window->Create(L"אוצריא", origin, size)) {
+    return;
+  }
+  // ⚠️ `false` במפורש: סגירת חלון משני אסור לה לפרסם `WM_QUIT` ל-thread
+  // הראשי — זה היה סוגר את כל האפליקציה.
+  window->SetQuitOnClose(false);
+  ::ShowWindow(window->GetHandle(), SW_SHOW);
+  windows.push_back(std::move(window));
+}
+
 
 }  // namespace
 
@@ -445,9 +465,28 @@ bool FlutterWindow::OnCreate() {
         if (const auto* value = std::get_if<std::string>(call.arguments())) {
           payload = *value;
         }
-        SpawnSecondaryWindow(project_, payload);
+        // ⚠️ הבקשה מתפרסמת ל-thread של החלון ואינה מבוצעת כאן ישירות.
+        // הקריאה מגיעה מתוך טיפול בערוץ, כלומר מתוך ריצת ה-Dart של החלון
+        // הזה; יצירת מנוע נוסף באמצע היא ריאנטרנטית. `PostMessage` דוחה
+        // אותה לאיטרציה הבאה של לולאת ההודעות, כשה-isolate כבר לא בתוך
+        // הקריאה.
+        pending_secondary_payloads_.push(payload);
+        ::PostMessageW(GetHandle(), kMsgOpenSecondaryWindow, 0, 0);
         result->Success();
       });
+
+  // כלי בידוד זמני: פותח חלון שני אוטומטית אחרי N אלפיות, כדי שאפשר יהיה
+  // לשחזר את קריסת הפתיחה בלי אינטראקציה ידנית.
+  char auto_ms[16] = {};
+  if (::GetEnvironmentVariableA("OTZARIA_AUTO_SECOND_WINDOW_MS", auto_ms,
+                                sizeof(auto_ms)) > 0) {
+    const unsigned long delay = std::strtoul(auto_ms, nullptr, 10);
+    const HWND self = GetHandle();
+    std::thread([self, delay]() {
+      ::Sleep(delay);
+      ::PostMessageW(self, kMsgOpenSecondaryWindow, 0, 0);
+    }).detach();
+  }
 
   process_control_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -672,6 +711,18 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // נפתח לפני שמעבירים ל-Flutter: זו הודעה פרטית שלנו, ואין לתוספים מה
+  // לעשות איתה.
+  if (message == kMsgOpenSecondaryWindow) {
+    std::string payload;
+    if (!pending_secondary_payloads_.empty()) {
+      payload = pending_secondary_payloads_.front();
+      pending_secondary_payloads_.pop();
+    }
+    CreateSecondaryWindowOnThisThread(project_, payload);
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

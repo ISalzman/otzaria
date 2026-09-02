@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <memory>
+#include <queue>
 #include <string>
 
 #include "win32_window.h"
@@ -63,6 +64,9 @@ class FlutterWindow : public Win32Window {
   // מטען JSON, וה-runner פותח חלון נוסף על thread ייעודי משלו.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       multiwindow_channel_;
+  // מטענים שממתינים לפתיחת חלון. נכתבים בטיפול בערוץ ונקראים בלולאת
+  // ההודעות של אותו thread, ולכן אין כאן גישה חוצת-threads.
+  std::queue<std::string> pending_secondary_payloads_;
   // ערוץ לסגירת חלון ה-splash הנייטיב (otzaria/splash) — Dart קורא "close"
   // בעת חשיפת החלון הראשי.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
