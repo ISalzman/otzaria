@@ -46,6 +46,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/core/external_uri_router.dart';
 import 'package:otzaria/utils/ui/book_format_icon.dart';
+import 'package:otzaria/utils/ui/editable_focus.dart';
 
 // ── קבועים ────────────────────────────────────────────────────────────────────
 
@@ -1242,9 +1243,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     final repo = context.read<FocusRepository>();
-    final focusedWidget = FocusManager.instance.primaryFocus?.context?.widget;
-    final isEditableTextFocused =
-        focusedWidget is EditableText || focusedWidget is TextField;
+    final isEditableTextFocused = isEditableTextFocusTarget();
 
     if (_arrowKeys.contains(event.logicalKey)) {
       if (isEditableTextFocused) return KeyEventResult.ignored;
