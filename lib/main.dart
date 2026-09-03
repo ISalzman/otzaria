@@ -50,6 +50,7 @@ import 'package:otzaria/data/data_providers/hive_data_provider.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
 import 'package:otzaria/library_update/repository/library_update_repository.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
@@ -626,9 +627,32 @@ Future<void> _recoverInterruptedLibraryUpdate() {
   ).run(DatabaseConstants.getDatabasePath());
 }
 
+/// seforim.db שהוזז לגיבוי זמני בעדכון ספרייה שנהרג באמצע חוזר לספרייה —
+/// אחרת היא נראית ריקה והמשתמש מוריד הכול מחדש, על גבי הגיבוי שנשאר.
+Future<void> _recoverOrphanedDbBackup() async {
+  final libraryPath = Settings.getValue<String>(
+    SettingsRepository.keyLibraryPath,
+  );
+  if (libraryPath == null || libraryPath.isEmpty) return;
+  try {
+    await EmptyLibraryBloc.recoverOrphanedDbBackup(
+      DatabaseConstants.getDatabaseDirectoryPath(),
+    );
+  } catch (error, stackTrace) {
+    _logNonFatalInitializationError(
+      'Orphaned DB backup recovery',
+      error,
+      stackTrace,
+    );
+  }
+}
+
 Future<void> _initializeRestartableRuntime() async {
-  // שחזור עדכון ספרייה שנקטע (marker+backup) חייב לרוץ לפני פתיחת ה-DB.
+  // שני השחזורים חייבים לרוץ לפני פתיחת ה-DB ולפני בדיקת "ספרייה ריקה".
+  // שחזור עדכון ספרייה שנקטע (marker+backup) קודם: הוא כותב DB משלו, ולהחזיר
+  // לפניו גיבוי יתום פירושו העתקת ~5.5GB שתידרס מיד.
   await _recoverInterruptedLibraryUpdate();
+  await _recoverOrphanedDbBackup();
 
   // initHive נקרא כבר ב-_initializeProcessSingletons. הקריאה הכפולה כאן
   // הייתה no-op (Hive.openBox מחזיר box קיים), אבל בכל זאת חוסכת קצת זמן
