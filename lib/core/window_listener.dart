@@ -169,7 +169,13 @@ class AppWindowListener extends WindowListener {
   /// מלא ששוטף הכול, במקום תהליך שנשאר תלוי בלי חלונות.
   Future<bool> _isLastWindowClosing() async {
     try {
-      final info = await const MultiWindowService().windowCount();
+      // ⚠️ timeout חובה. השאלה הזו יושבת **לפני** חימוש שעון היציאה הכפויה
+      // (הצעד הראשון ב-`_shutdownProcessUpToFlush`), ולכן ערוץ שלא עונה
+      // היה משאיר את החלון פתוח ואת התהליך חי בלי שום רשת ביטחון —
+      // המשתמש לוחץ X ושום דבר לא קורה, לנצח.
+      final info = await const MultiWindowService().windowCount().timeout(
+        const Duration(seconds: 2),
+      );
       return info.count <= 1;
     } catch (e) {
       debugPrint('windowCount failed during close, assuming last: $e');

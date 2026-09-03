@@ -160,6 +160,16 @@ void main() {
     });
   });
 
+  test('כשל כתיבה בחלון הראשון מתפשט ואינו נבלע', () async {
+    WindowRole.isSecondary = false;
+    // ⚠️ ה-box אינו נפתח בכוונה. בליעת הכשל כאן הפכה שלוש שכבות לקוד
+    // מת: ההודעה למשתמש, הניסיון החוזר, ודיווח הכשל ל-Sentry.
+    await expectLater(
+      SharedListStore.instance.write('history', 'history', const []),
+      throwsA(anything),
+    );
+  });
+
   test('isShared מכסה בדיוק את ארבעת המאגרים שהמשתמש מצפה שישותפו', () {
     expect(SharedListStore.isShared('history'), isTrue);
     expect(SharedListStore.isShared('bookmarks'), isTrue);

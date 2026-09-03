@@ -121,18 +121,28 @@ class SharedListStore {
         debugPrint('SharedListStore: write to owner failed for $boxName');
       }
     }
-    await _writeLocal(boxName, key, value);
+    // עותק מראה בלבד — הכתיבה הקובעת כבר נעשתה אצל הבעלים.
+    await _writeLocal(boxName, key, value, tolerateFailure: true);
   }
 
+  /// ⚠️ [tolerateFailure] רק עבור עותק המראה של חלון משני.
+  ///
+  /// בחלון הראשון זו **הכתיבה האמיתית**, וכשל בה חייב להתפשט: שלוש שכבות
+  /// למעלה תלויות בו — ההודעה למשתמש שסימנייה לא נשמרה, הניסיון החוזר
+  /// ב-`PreCloseRegistry`, ודיווח `PreCloseFlushFailure` ל-Sentry. בליעה
+  /// כאן הפכה את שלושתן לקוד מת, ומשתמש עם דיסק מלא היה רואה סימנייה
+  /// שנשמרה ומגלה למחרת שאיננה.
   Future<void> _writeLocal(
     String boxName,
     String key,
-    List<dynamic> value,
-  ) async {
+    List<dynamic> value, {
+    bool tolerateFailure = false,
+  }) async {
     try {
       await _localBox(boxName).put(key, value);
     } catch (e) {
       debugPrint('SharedListStore: local write of $boxName/$key failed: $e');
+      if (!tolerateFailure) rethrow;
     }
   }
 
