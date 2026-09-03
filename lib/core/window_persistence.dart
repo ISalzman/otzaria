@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/windowing/app_window_controller.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 
@@ -273,7 +274,23 @@ class WindowPersistence {
     }
   }
 
+  /// ⚠️ **חלון משני אינו שומר גבולות.**
+  ///
+  /// המפתחות גלובליים, והשחזור מגודר ב-`!isSecondaryWindow` מזמן — אבל
+  /// השמירה לא הייתה. התוצאה: הזזה או שינוי גודל של חלון שני דרסו את
+  /// הגבולות של החלון **הראשי**, ובהפעלה הבאה הוא נפתח במקום ובגודל של
+  /// החלון המשני.
+  ///
+  /// גידור כאן ולא באתרי הקריאה: `onWindowMoved`, `onWindowResized`,
+  /// `onWindowMaximize` ו-`onWindowUnmaximize` כולם קוראים לכאן, וגידור פר
+  /// אתר היה משאיר את הבא בתור חשוף.
+  ///
+  /// אין מה לשחזר בשבילו ממילא: בהפעלה קרה נפתח חלון אחד, וה-runner יוצר
+  /// כל חלון נוסף בגודל שהוא יורש מהפותח ובהיסט מדורג.
+  static bool get _persistsBounds => !WindowRole.isSecondary;
+
   static void scheduleSave() {
+    if (!_persistsBounds) return;
     // אין לשמור את גודל חלון ה-splash הקטן.
     if (_splashMode) return;
     _debounce?.cancel();
@@ -284,6 +301,7 @@ class WindowPersistence {
   }
 
   static Future<void> saveNow() async {
+    if (!_persistsBounds) return;
     if (_splashMode) return;
     _debounce?.cancel();
     _debounce = null;

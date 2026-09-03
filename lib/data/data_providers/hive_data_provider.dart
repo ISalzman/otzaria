@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/windowing/settings_sync.dart';
 
 String? _hiveRootOverride;
 
@@ -37,6 +38,15 @@ class HiveCache extends CacheProvider {
         path: defaultDirectory,
       );
     }
+    // ⚠️ החלת שינוי מרוחק כותבת ל-box **ישירות** ולא דרך ה-setters, כדי
+    // שהיא לא תשודר בחזרה לחלון שממנו באה. ראו [SettingsSync].
+    SettingsSync.instance.applyLocally = (key, value) async {
+      if (value == null) {
+        await _preferences?.delete(key);
+      } else {
+        await _preferences?.put(key, value);
+      }
+    };
   }
 
   Set get keys => getKeys();
@@ -64,26 +74,31 @@ class HiveCache extends CacheProvider {
   @override
   Future<void> setBool(String key, bool? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setDouble(String key, double? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setInt(String key, int? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setString(String key, String? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
   Future<void> setObject<T>(String key, T? value) async {
     await _preferences?.put(key, value);
+    SettingsSync.instance.broadcastChange(key, value);
   }
 
   @override
@@ -100,6 +115,7 @@ class HiveCache extends CacheProvider {
   Future<void> remove(String key) async {
     if (containsKey(key)) {
       await _preferences?.delete(key);
+      SettingsSync.instance.broadcastChange(key, null);
     }
   }
 

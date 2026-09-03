@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/settings_sync.dart';
 import 'package:otzaria/core/windowing/shared_hive_store.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
+import 'package:otzaria/settings/engine/settings_bloc.dart';
+import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -67,7 +70,16 @@ class _WindowBusHostState extends State<WindowBusHost> {
       }
       return null;
     });
+
+    // ⚠️ הגדרה שהשתנתה בחלון אחר כבר נכתבה ל-box המקומי, אבל ה-state
+    // שנגזר ממנה עוד לא. בלי הטעינה מחדש המשתמש היה מחליף ערכת נושא
+    // בחלון אחד ורואה שני חלונות של אותה תוכנה נראים שונה.
+    _settingsChanged = SettingsSync.instance.changes.listen((_) {
+      if (mounted) context.read<SettingsBloc>().add(LoadSettings());
+    });
   }
+
+  StreamSubscription<String>? _settingsChanged;
 
   /// קולט מטען שנשלח לחלון שהוחזר לשימוש.
   ///
@@ -95,6 +107,8 @@ class _WindowBusHostState extends State<WindowBusHost> {
   @override
   void dispose() {
     _peerRefresh?.cancel();
+    unawaited(_settingsChanged?.cancel());
+    SettingsSync.instance.dispose();
     WindowBus.instance.onRequest = null;
     MultiWindowService.channel.setMethodCallHandler(null);
     WindowBus.instance.unregister();
@@ -113,6 +127,9 @@ class _WindowBusHostState extends State<WindowBusHost> {
       case MultiWindowService.requestDragLeave:
         externalTabDrag.value = null;
         return true;
+      case SettingsSync.requestChanged:
+        // הגדרה שונתה בחלון אחר — מוחלת על ה-box המקומי ומרעננת את ה-state.
+        return SettingsSync.instance.handleRequest(request);
       default:
         // המאגרים המשותפים מנותבים לחלון הראשון; הבקשות שלהם מטופלות שם.
         return SharedHiveStore.instance.handleRequest(request);
