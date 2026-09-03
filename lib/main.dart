@@ -82,6 +82,7 @@ import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_bus_host.dart';
+import 'package:otzaria/core/windowing/thread_contention_probe.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
@@ -1542,6 +1543,8 @@ void secondaryWindowMain(List<String> args) async {
     }
   }
 
+  _maybeMeasureThreadContention();
+
   runApp(
     AppWindowScope(
       controller: _appWindow,
@@ -1569,6 +1572,27 @@ void _maybeScheduleDebugSecondWindow() {
     final opened = await const MultiWindowService().openWindow();
     debugPrint('[debug] openWindow -> $opened');
   });
+}
+
+/// מריץ את בדיקה 10 של P-2 — תחרות thread בין חלונות.
+///
+/// ⚠️ **מהחלון המשני**, ולא מהראשון. המדידה צריכה חלון שאינו עסוק בזמן
+/// שהאחר שורף CPU, והחלון הראשון הוא זה שנשרף. ההשהיה נותנת לאתחול
+/// להסתיים — מדידת בסיס בזמן שהחלון עוד עולה מודדת את האתחול, לא את
+/// התחרות.
+///
+/// ראו [ThreadContentionProbe] לנוהל ההרצה.
+void _maybeMeasureThreadContention() {
+  if (!ThreadContentionProbe.isEnabled || !isSecondaryWindow) return;
+  Timer(const Duration(seconds: 5), () => unawaited(_runContentionProbe()));
+}
+
+Future<void> _runContentionProbe() async {
+  try {
+    await ThreadContentionProbe.run();
+  } catch (e, st) {
+    debugPrint('[contention] probe failed: $e\n$st');
+  }
 }
 
 /// האם החלון הזה הוא חלון משני (נפתח מתוך חלון אחר).

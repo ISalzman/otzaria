@@ -6,6 +6,7 @@ import 'package:otzaria/core/windowing/external_tab_drag.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/settings_sync.dart';
 import 'package:otzaria/core/windowing/shared_hive_store.dart';
+import 'package:otzaria/core/windowing/thread_contention_probe.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
 import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -130,6 +131,12 @@ class _WindowBusHostState extends State<WindowBusHost> {
       case SettingsSync.requestChanged:
         // הגדרה שונתה בחלון אחר — מוחלת על ה-box המקומי ומרעננת את ה-state.
         return SettingsSync.instance.handleRequest(request);
+      case ThreadContentionProbe.requestBurn:
+        // ⚠️ מגודר במשתנה סביבה. בקשה שמקפיאה חלון אחר אסור שתהיה נגישה
+        // בבנייה רגילה — זו בדיקה 10 של P-2 ולא יכולת של המוצר.
+        if (!ThreadContentionProbe.isEnabled) return null;
+        ThreadContentionProbe.burnCpu((request['ms'] as int?) ?? 2000);
+        return true;
       default:
         // המאגרים המשותפים מנותבים לחלון הראשון; הבקשות שלהם מטופלות שם.
         return SharedHiveStore.instance.handleRequest(request);
