@@ -227,6 +227,10 @@ const aboutAdditionalSources = <Map<String, String>>[
     'logo': 'assets/logo_books/machonso_logo.svg',
   },
   {
+    'name': 'מכון פי ישרים',
+    'logo': 'assets/logo_books/pi_yesharim_logo.svg',
+  },
+  {
     'name': 'פרויקט בן י.',
     'url': 'https://github.com/projectbenyehuda/public_domain_dump',
   },
