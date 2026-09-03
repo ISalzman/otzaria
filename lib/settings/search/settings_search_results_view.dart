@@ -6,6 +6,7 @@ import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/theme/layout_tokens.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 /// תצוגת תוצאות חיפוש בהגדרות — מוצגת באזור התוכן כאשר השאילתה אינה ריקה.
@@ -51,7 +52,6 @@ class SettingsSearchResultsView extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     // עוטפים ב-CustomScrollView/SliverFillRemaining כדי שה-PrimaryScrollController
     // העוטף יקבל ScrollPosition פעיל גם כשאין תוצאות (אחרת ה-Scrollbar
     // החיצוני זורק "no ScrollPosition attached").
@@ -59,34 +59,10 @@ class SettingsSearchResultsView extends StatelessWidget {
       slivers: [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    FluentIcons.search_info_24_regular,
-                    size: 48,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    context.settingsText('לא נמצאו הגדרות תואמות'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.settingsText('נסה לחפש מילים אחרות'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: OtzariaEmptyState(
+            icon: OtzariaIcons.search_in_the_settings_24_regular,
+            title: context.settingsText('לא נמצאו הגדרות תואמות'),
+            message: context.settingsText('נסה לחפש מילים אחרות'),
           ),
         ),
       ],

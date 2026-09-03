@@ -504,10 +504,9 @@ class _ItemsListViewState extends State<ItemsListView> {
         ? widget.items.isNotEmpty
         : widget.items.any(additionalFilter);
     if (!hasAnyMatching) {
-      return Center(
-        child: Text(
-          widget.emptyText,
-        ),
+      return OtzariaEmptyState(
+        icon: widget.searchIcon,
+        title: widget.emptyText,
       );
     }
 
@@ -583,10 +582,10 @@ class _ItemsListViewState extends State<ItemsListView> {
           ),
           Expanded(
             child: displayEntries.isEmpty
-                ? Center(
-                    child: Text(
-                      widget.notFoundText,
-                    ),
+                ? OtzariaEmptyState(
+                    isCompact: true,
+                    icon: widget.searchIcon,
+                    title: widget.notFoundText,
                   )
                 : _buildRowsList(context, _displayRows),
           ),

@@ -37,6 +37,7 @@ import 'package:otzaria/text_book/view/commentators_list_screen.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
 import 'package:otzaria/widgets/layout/commentators_filter_screen.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/widgets/misc/smooth_wheel_scroll.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
@@ -1670,18 +1671,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     selectionSyncController: widget.selectionSyncController,
                   );
                 } else if (selectedCommentators.isEmpty) {
-                  notesWidget = Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'אין הערות לקטע זה',
-                        style: TextStyle(
-                          fontSize: widget.fontSize * 0.7,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  notesWidget = const OtzariaEmptyState(
+                    isCompact: true,
+                    icon: FluentIcons.note_24_regular,
+                    title: 'אין הערות לקטע זה',
                   );
                 }
               }
@@ -1745,20 +1738,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                 }
 
                 // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      hasAnyCommentaryLinks
-                          ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
-                          : 'לא נמצאו מפרשים לקטע הנבחר',
-                      style: TextStyle(
-                        fontSize: widget.fontSize * 0.7,
-                        color: Colors.grey,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                return OtzariaEmptyState(
+                  isCompact: true,
+                  icon: OtzariaIcons.link_24_regular,
+                  title: hasAnyCommentaryLinks
+                      ? 'לא נמצאו מפרשים מהנבחרים לקטע זה'
+                      : 'לא נמצאו מפרשים לקטע הנבחר',
                 );
               }
 
@@ -1778,20 +1763,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                     // רשימה ריקה כאן נובעת מסינון הסוגים בלבד (יש קישורים
                     // רלוונטיים), ולכן מסבירים במקום להציג ריק בלי הסבר.
                     if (effectiveTypes.isEmpty) return const SizedBox.shrink();
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'לא נמצאו מפרשים מהסוגים שנבחרו',
-                          style: TextStyle(
-                            fontSize: widget.fontSize * 0.7,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                    return const OtzariaEmptyState(
+                      isCompact: true,
+                      icon: OtzariaIcons.link_24_regular,
+                      title: 'לא נמצאו מפרשים מהסוגים שנבחרו',
                     );
                   }
                   final data = thisLinksSnapshot.data!;

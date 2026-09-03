@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
@@ -569,7 +571,11 @@ class _CommentatorsSelectionPanelState
       onClear: _update,
     );
     final hasVisibleCommentators = _commentatorsList.isNotEmpty;
-    final leadingItemCount = hasVisibleCommentators ? 2 : 1;
+    final isSearchEmpty =
+        !hasVisibleCommentators && _searchController.text.trim().isNotEmpty;
+    final leadingItemCount = hasVisibleCommentators
+        ? 2
+        : (isSearchEmpty ? 2 : 1);
 
     return NavPanelSearchPublisher(
       delegate: delegate,
@@ -585,13 +591,24 @@ class _CommentatorsSelectionPanelState
                   child: NavTreeFocusGroup(
                     child: ListView.builder(
                       padding: kNavTreeListPadding,
-                      // הכותרת תמיד נגללת; "הצג את כל" נוסף רק כשיש תוצאות.
+                      // הכותרת תמיד נגללת; "הצג את כל" או מצב ריק נוסף כשיש צורך.
                       itemCount: _commentatorsList.length + leadingItemCount,
                       itemBuilder: (context, listIndex) {
                         if (listIndex == 0) {
                           return NavTreeHeader(
                             title: 'מפרשים על ${widget.bookTitle}',
                             trailing: _buildCategoryDefaultsButton(context),
+                          );
+                        }
+                        if (isSearchEmpty && listIndex == 1) {
+                          return const Padding(
+                            padding: EdgeInsets.only(top: 24.0),
+                            child: OtzariaEmptyState(
+                              isCompact: true,
+                              icon:
+                                  OtzariaIcons.search_in_the_library_24_regular,
+                              title: 'לא נמצאו מפרשים תואמים',
+                            ),
                           );
                         }
                         if (hasVisibleCommentators && listIndex == 1) {

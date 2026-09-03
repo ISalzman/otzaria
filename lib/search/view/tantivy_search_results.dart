@@ -38,6 +38,7 @@ import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/middle_click_open.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/layout/adaptive_side_pane.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart'
     show MergedSibling;
@@ -99,46 +100,17 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     required String message,
     bool showEditButton = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          // הרכיב מוצג גם כשורה קומפקטית בתוך sliver (גובה לא חסום) —
-          // בלי min ה-Column היה דורש גובה אינסופי.
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (showEditButton && widget.onEditSearch != null) ...[
-              const SizedBox(height: 16),
-              ActionButton.neutral(
-                text: 'ערוך חיפוש',
-                onPressed: widget.onEditSearch!,
-                icon: FluentIcons.edit_24_regular,
-              ),
-            ],
-          ],
-        ),
-      ),
+    return OtzariaEmptyState(
+      icon: icon,
+      title: title,
+      message: message,
+      action: (showEditButton && widget.onEditSearch != null)
+          ? ActionButton.recommended(
+              text: 'ערוך חיפוש',
+              onPressed: widget.onEditSearch!,
+              icon: FluentIcons.edit_24_regular,
+            )
+          : null,
     );
   }
 

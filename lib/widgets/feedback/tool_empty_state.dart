@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 
-/// מצב ריק סטנדרטי למסכי כלים.
+/// מצב ריק סטנדרטי למסכי כלים — תאימות לאחור מעל [OtzariaEmptyState].
 class ToolEmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -17,39 +16,10 @@ class ToolEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return CenteredScrollableState(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: cs.onSurface.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: AppTokens.spaceMD),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: AppTokens.fontXL,
-              color: cs.onSurface.withValues(alpha: 0.6),
-            ),
-            textAlign: TextAlign.center,
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              subtitle!,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ],
-      ),
+    return OtzariaEmptyState(
+      icon: icon,
+      title: message,
+      message: subtitle,
     );
   }
 }

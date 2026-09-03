@@ -22,6 +22,8 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/widgets/commentary/commentary_content.dart';
+import 'package:otzaria/widgets/controls/action_buttons.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
@@ -1342,24 +1344,14 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
 
       // אין מפרשים בכלל לקטע הזה, או שיש מפרשים נבחרים אבל הם לא רלוונטיים לדף
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                hasCommentaryLinks
-                    ? 'לא נמצאו מפרשים מהנבחרים לדף זה'
-                    : 'לא נמצאו מפרשים לקטע הנבחר',
-                style: TextStyle(
-                  fontSize: widget.fontSize * 0.9,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (hasCommentaryLinks) ...[
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
+        child: OtzariaEmptyState(
+          isCompact: true,
+          icon: OtzariaIcons.link_24_regular,
+          title: hasCommentaryLinks
+              ? 'לא נמצאו מפרשים מהנבחרים לדף זה'
+              : 'לא נמצאו מפרשים לקטע הנבחר',
+          action: hasCommentaryLinks
+              ? ActionButton.recommended(
                   onPressed: () {
                     if (widget.enableInternalFilter) {
                       setState(() {
@@ -1369,18 +1361,10 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
                       widget.onSelectCommentatorsRequested?.call();
                     }
                   },
-                  icon: const Icon(OtzariaIcons.apps_list_24_regular),
-                  label: const Text('בחר מפרשים'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+                  icon: OtzariaIcons.apps_list_24_regular,
+                  text: 'בחר מפרשים',
+                )
+              : null,
         ),
       );
     }

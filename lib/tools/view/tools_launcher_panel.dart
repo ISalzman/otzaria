@@ -33,6 +33,7 @@ import 'package:otzaria/tools/tool_order.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
 import 'package:otzaria/widgets/feedback/edge_scrollbar_behavior.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/layout/app_card.dart';
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
@@ -739,16 +740,18 @@ class _ToolsLauncherPanelState extends State<ToolsLauncherPanel> {
   }
 
   Widget _buildEmptyState(bool isOfflineMode, List<ToolCatalogEntry> all) {
-    final message = _query.trim().isNotEmpty
+    final hasQuery = _query.trim().isNotEmpty;
+    final message = hasQuery
         ? context.settingsText('לא נמצאו כלים התואמים לחיפוש')
         : (isOfflineMode
               ? context.settingsText('אין כלים זמינים במצב מנותק')
               : context.settingsText('לא נמצאו כלים זמינים'));
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.spaceLG),
-        child: Text(message, textAlign: TextAlign.center),
-      ),
+    return OtzariaEmptyState(
+      icon: hasQuery
+          ? OtzariaIcons.search_in_the_library_24_regular
+          : FluentIcons.toolbox_24_regular,
+      title: message,
+      message: hasQuery ? context.settingsText('נסה לחפש מילים אחרות') : null,
     );
   }
 

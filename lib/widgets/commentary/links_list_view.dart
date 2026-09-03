@@ -15,6 +15,7 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/utils/link_anchor_markers.dart';
 import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/text_display/models/text_display_profile.dart';
@@ -653,18 +654,10 @@ class _LinksListViewState extends State<LinksListView> {
   }
 
   Widget _buildEmptyMessage(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
+    return OtzariaEmptyState(
+      isCompact: true,
+      icon: OtzariaIcons.link_24_regular,
+      title: message,
     );
   }
 

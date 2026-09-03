@@ -27,6 +27,7 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/widgets/dialogs/dialogs_exports.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -511,18 +512,10 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
                 ? 'לא נמצאו הערות התואמות לחיפוש'
                 : 'אין עדיין הערות על ספר זה');
       items.add(
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Center(
-            child: Text(
-              message,
-              style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
+        OtzariaEmptyState(
+          isCompact: true,
+          icon: FluentIcons.note_24_regular,
+          title: message,
         ),
       );
     }

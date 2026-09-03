@@ -15,6 +15,7 @@ import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/toc_filter.dart';
 import 'package:otzaria/text_book/view/toc_navigator_internals.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 
 class TocViewer extends StatefulWidget {
@@ -672,63 +673,71 @@ class _TocViewerState extends State<TocViewer>
               children: [
                 if (!hoisted) NavPanelLocalSearchField(delegate: delegate),
                 Expanded(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification is ScrollStartNotification &&
-                          notification.dragDetails != null) {
-                        setState(() {
-                          _isManuallyScrolling = true;
-                        });
-                      } else if (notification is ScrollEndNotification) {
-                        setState(() {
-                          _isManuallyScrolling = false;
-                        });
-                      }
-                      return false;
-                    },
-                    child: NavTreeFocusGroup(
-                      child: useFlat
-                          ? _buildVirtualizedTocList(
-                              _flatItemsFor(display),
-                              activeIndex,
-                              isSearching: display.isSearching,
-                              title: state.book.title,
-                            )
-                          : SingleChildScrollView(
-                              controller: _tocScrollController,
-                              padding: kNavTreeListPadding,
-                              child: Column(
-                                children: [
-                                  NavTreeHeader(title: state.book.title),
-                                  ListView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: display.entries.length,
-                                    itemBuilder: (context, index) =>
-                                        _buildTocItem(
-                                          display.entries[index],
-                                          isFirstChild: index == 0,
-                                          isGroupStart: index == 0,
-                                          isGroupEnd:
-                                              index ==
-                                              display.entries.length - 1,
-                                          showFullText: display.isSearching,
-                                          defaultExpanded: display.isSearching
-                                              ? shouldExpandInSearch(
-                                                  _expanded[display
-                                                      .entries[index]
-                                                      .index],
-                                                )
-                                              : null,
-                                          activeIndex: activeIndex,
+                  child: display.isSearching && display.entries.isEmpty
+                      ? const OtzariaEmptyState(
+                          isCompact: true,
+                          icon: OtzariaIcons.search_in_titles_24_regular,
+                          title: 'לא נמצאו תוצאות',
+                        )
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollStartNotification &&
+                                notification.dragDetails != null) {
+                              setState(() {
+                                _isManuallyScrolling = true;
+                              });
+                            } else if (notification is ScrollEndNotification) {
+                              setState(() {
+                                _isManuallyScrolling = false;
+                              });
+                            }
+                            return false;
+                          },
+                          child: NavTreeFocusGroup(
+                            child: useFlat
+                                ? _buildVirtualizedTocList(
+                                    _flatItemsFor(display),
+                                    activeIndex,
+                                    isSearching: display.isSearching,
+                                    title: state.book.title,
+                                  )
+                                : SingleChildScrollView(
+                                    controller: _tocScrollController,
+                                    padding: kNavTreeListPadding,
+                                    child: Column(
+                                      children: [
+                                        NavTreeHeader(title: state.book.title),
+                                        ListView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: display.entries.length,
+                                          itemBuilder: (context, index) =>
+                                              _buildTocItem(
+                                                display.entries[index],
+                                                isFirstChild: index == 0,
+                                                isGroupStart: index == 0,
+                                                isGroupEnd:
+                                                    index ==
+                                                    display.entries.length - 1,
+                                                showFullText:
+                                                    display.isSearching,
+                                                defaultExpanded:
+                                                    display.isSearching
+                                                    ? shouldExpandInSearch(
+                                                        _expanded[display
+                                                            .entries[index]
+                                                            .index],
+                                                      )
+                                                    : null,
+                                                activeIndex: activeIndex,
+                                              ),
                                         ),
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ),
-                            ),
-                    ),
-                  ),
+                          ),
+                        ),
                 ),
               ],
             ),

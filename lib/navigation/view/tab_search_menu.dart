@@ -11,6 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/theme/app_tokens.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 
 const double _kMenuWidth = 320;
@@ -215,11 +216,10 @@ class _TabSearchPanelState extends State<TabSearchPanel> {
               ),
               Expanded(
                 child: openTabs.isEmpty && closedTabs.isEmpty
-                    ? Center(
-                        child: Text(
-                          context.settingsText('אין כרטיסיות תואמות'),
-                          style: TextStyle(color: cs.onSurfaceVariant),
-                        ),
+                    ? OtzariaEmptyState(
+                        isCompact: true,
+                        icon: FluentIcons.tab_desktop_multiple_24_regular,
+                        title: context.settingsText('אין כרטיסיות תואמות'),
                       )
                     : ListView(
                         padding: const EdgeInsets.only(top: 2, bottom: 8),

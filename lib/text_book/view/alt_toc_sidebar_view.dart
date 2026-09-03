@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:otzaria/widgets/feedback/otzaria_empty_state.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
@@ -658,10 +659,10 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     final matches = _getMatchingEntries(_searchController.text);
 
     if (matches.isEmpty) {
-      return const Center(
-        child: Text(
-          'לא נמצאו תוצאות',
-        ),
+      return const OtzariaEmptyState(
+        isCompact: true,
+        icon: OtzariaIcons.search_in_titles_24_regular,
+        title: 'לא נמצאו תוצאות',
       );
     }
 
