@@ -636,21 +636,6 @@ class _FontSizeSliderState extends State<_FontSizeSlider> {
   }
 }
 
-/// מחרוזת הדוגמה המוצגת בכל גופן ברשימה (כמו תצוגת גופנים בוורד).
-const String _kFontSampleText = 'אבגד הוזח';
-
-/// אייקון המבחין בין גופן עם תגיות (serif) לגופן חלק (sans-serif).
-IconData? _fontCategoryIcon(FontCategory category) {
-  switch (category) {
-    case FontCategory.serif:
-      return OtzariaIcons.alef_behind_alef_24_regular;
-    case FontCategory.sansSerif:
-      return OtzariaIcons.alef_behind_alef_24_regular;
-    case FontCategory.unknown:
-      return null;
-  }
-}
-
 // Widget עזר לדרופדאון גופן
 class _FontDropdown extends StatelessWidget {
   final IconData icon;
@@ -673,69 +658,6 @@ class _FontDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final all = AppFonts.availableFonts;
-
-    // O(n) lookup במקום O(n²) — מחושב פעם אחת לכל build.
-    final serifValues = {
-      for (final f in all)
-        if (f.category == FontCategory.serif) f.value,
-    };
-    final sansValues = {
-      for (final f in all)
-        if (f.category == FontCategory.sansSerif) f.value,
-    };
-
-    final fontEntries = all
-        .map(
-          (font) => AppMenuEntry<String>(
-            value: font.value,
-            label: font.label,
-            icon: _fontCategoryIcon(font.category),
-            reserveTrailingGap: true,
-            trailingReservedWidth: 72,
-            labelWidget: _FontEntryLabel(
-              preview: _FontPreviewText(
-                fontFamily: font.value,
-                name: font.label,
-                isBundled: AppFonts.fontPaths.containsKey(font.value),
-              ),
-              supportsTaamim: font.supportsTaamim,
-            ),
-            trailing: SizedBox(
-              width: 72,
-              child: Opacity(
-                opacity: 0.6,
-                child: _FontPreviewText(
-                  fontFamily: font.value,
-                  name: _kFontSampleText,
-                  isBundled: AppFonts.fontPaths.containsKey(font.value),
-                ),
-              ),
-            ),
-          ),
-        )
-        .toList();
-
-    // גופן נבחר שאינו מותקן כלל במחשב — מסומן בתווית מיוחדת.
-    final hasSelectedFont =
-        value.isEmpty || fontEntries.any((entry) => entry.value == value);
-    if (!hasSelectedFont) {
-      // ערך שמור מגרסה ישנה (שם קובץ) מוצג בשם המשפחה שלו, לא כ"לא זמין".
-      final legacyName = AppFonts.legacySystemFontDisplayName(value);
-      fontEntries.insert(
-        0,
-        AppMenuEntry(
-          value: value,
-          label:
-              legacyName ??
-              context.settingsText(
-                '{font} (לא זמין במחשב זה)',
-                args: {'font': value},
-              ),
-        ),
-      );
-    }
-
     return Row(
       children: [
         RtlIcon(icon),
@@ -749,37 +671,9 @@ class _FontDropdown extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: AppDropdownField<String>(
+          child: FontDropdownField(
             value: value,
-            enableSearch: true,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-            ),
-            entries: fontEntries,
-            filterLabels: [context.settingsText('הכל'), 'Serif', 'Sans'],
-            filterPredicates: [
-              null,
-              (e) => serifValues.contains(e.value),
-              (e) => sansValues.contains(e.value),
-            ],
-            menuMinWidth: 260,
-            selectedBuilder: (context, selectedValue) {
-              final v = selectedValue ?? '';
-              final matchingFont = all.firstWhere(
-                (font) => font.value == v,
-                orElse: () => FontInfo(value: v, label: v),
-              );
-              // בשדה הסגור מציגים את שם הגופן (מרונדר בגופן עצמו לזיהוי).
-              return _FontEntryLabel(
-                preview: _FontPreviewText(
-                  fontFamily: v,
-                  name: matchingFont.label,
-                  isBundled: AppFonts.fontPaths.containsKey(v),
-                ),
-                supportsTaamim: AppFonts.familySupportsTaamim(v),
-              );
-            },
-            onSelected: onChanged,
+            onChanged: onChanged,
           ),
         ),
         const SizedBox(width: 8),
@@ -793,97 +687,6 @@ class _FontDropdown extends StatelessWidget {
           selectedIcon: const Icon(FluentIcons.text_bold_24_filled),
         ),
       ],
-    );
-  }
-}
-
-/// שם הגופן, ולצידו סימן אזהרה כשהגופן אינו ממפה את טעמי המקרא.
-class _FontEntryLabel extends StatelessWidget {
-  final Widget preview;
-  final bool supportsTaamim;
-
-  const _FontEntryLabel({required this.preview, required this.supportsTaamim});
-
-  @override
-  Widget build(BuildContext context) {
-    if (supportsTaamim) return preview;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(child: preview),
-        const SizedBox(width: 6),
-        Tooltip(
-          message: context.settingsText(
-            'הגופן אינו תומך בטעמי המקרא; בטקסט עם טעמים יוצג גופן ברירת המחדל',
-          ),
-          child: Icon(
-            FluentIcons.warning_24_regular,
-            size: 16,
-            color: Theme.of(context).colorScheme.error,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// מציג את שם הגופן (ובאופן אופציונלי מחרוזת דוגמה) מרונדרים בגופן עצמו.
-/// עבור גופני מערכת טוען את הגופן ל-engine ברקע, ומציג ברירת-מחדל עד הטעינה.
-class _FontPreviewText extends StatefulWidget {
-  final String fontFamily;
-  final String name;
-  final bool isBundled;
-
-  const _FontPreviewText({
-    required this.fontFamily,
-    required this.name,
-    required this.isBundled,
-  });
-
-  @override
-  State<_FontPreviewText> createState() => _FontPreviewTextState();
-}
-
-class _FontPreviewTextState extends State<_FontPreviewText> {
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _resolveFont();
-  }
-
-  @override
-  void didUpdateWidget(covariant _FontPreviewText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.fontFamily != widget.fontFamily ||
-        oldWidget.isBundled != widget.isBundled) {
-      _resolveFont();
-    }
-  }
-
-  void _resolveFont() {
-    if (widget.isBundled) {
-      _loaded = true;
-      return;
-    }
-    _loaded = false;
-    final family = widget.fontFamily;
-    AppFonts.ensureFontLoaded(family).then((_) {
-      if (mounted && widget.fontFamily == family) {
-        setState(() => _loaded = true);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final family = _loaded ? widget.fontFamily : null;
-    return Text(
-      widget.name,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontFamily: family),
     );
   }
 }
