@@ -194,10 +194,20 @@ class NavPanelSearchScope extends InheritedWidget {
       oldWidget.host != host;
 }
 
+/// רוחב המסך המזערי להרמת שדה החיפוש לסרגל העליון. מתחתיו הסרגל מחלק את
+/// רוחבו עם הכותרת והפעולות, והשדה נותר צר מכדי להראות את הטקסט שהוקלד.
+const double kNavPanelSearchHoistMinWidth = 600.0;
+
 /// עזר לזיהוי המצב: בתוך חלונית ניווט שדה החיפוש עולה לסרגל שמעליה, ולכן
 /// הלשונית אינה מציירת שדה מקומי. מחוץ לחלונית (דיאלוג, מסך אחר) היא כן.
 abstract final class NavPanelSearch {
+  /// האם המסך רחב דיו כדי ששדה החיפוש יעלה לסרגל העליון. במסך צר הוא נשאר
+  /// בתוך החלונית, ששם יש לו את מלוא רוחבה.
+  static bool canHoist(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= kNavPanelSearchHoistMinWidth;
+
   static bool isHoisted(BuildContext context) =>
+      canHoist(context) &&
       NavPanelSearchScope.hostOf(context) != null &&
       NavPanelSearchSlot.indexOf(context) != null;
 }
@@ -375,6 +385,9 @@ class _NavPanelSearchBarState extends State<NavPanelSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    // במסך צר השדה נשאר בתוך החלונית (ראה [NavPanelSearch.isHoisted]), ולכן
+    // הסרגל כאן ריק — אחרת היו שני שדות, והעליון צר מכדי להקליד בו.
+    if (!NavPanelSearch.canHoist(context)) return const SizedBox.shrink();
     // כמו ב-OtzariaSearchField: קריאה סובלנית, כדי שהסרגל יעבוד גם בהקשר
     // שאין בו SettingsBloc.
     final isCompact =
