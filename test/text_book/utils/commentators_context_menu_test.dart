@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentators_context_menu.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
@@ -22,23 +23,26 @@ void main() {
 
   List<AppContextMenuEntry> build({
     List<String> active = const [],
+    List<String> availableCommentators = available,
+    bool linksLoading = false,
     void Function(List<String> commentators, {required bool isAdding})?
     onChange,
     void Function()? onOpenPane,
     void Function()? onSelectMultiple,
   }) => buildCommentatorsContextMenuChildren(
     activeCommentators: active,
-    availableCommentators: available,
+    availableCommentators: availableCommentators,
     commentatorGroups: groups,
     onCommentatorsChanged: onChange ?? (_, {required isAdding}) {},
     onOpenPane: onOpenPane,
     onSelectMultiple: onSelectMultiple,
+    linksLoading: linksLoading,
   );
 
   group('buildCommentatorsContextMenuChildren', () {
     test('מציג את כל הקבוצות והמפרשים בסדר הדורות', () {
       expect(labelsOf(build()), [
-        'הצג את כל המפרשים',
+        'הצג את כל המפרשים על פסקה זו',
         'הצג את כל ראשונים',
         'רש"י',
         'רמב"ן',
@@ -65,7 +69,10 @@ void main() {
       expect(entryNamed(entries, 'רש"י').isSelected, isTrue);
       expect(entryNamed(entries, 'רמב"ן').isSelected, isFalse);
       expect(entryNamed(entries, 'הצג את כל ראשונים').isSelected, isFalse);
-      expect(entryNamed(entries, 'הצג את כל המפרשים').isSelected, isFalse);
+      expect(
+        entryNamed(entries, 'הצג את כל המפרשים על פסקה זו').isSelected,
+        isFalse,
+      );
     });
 
     test('כשכל המפרשים פעילים — "הצג את כל המפרשים" מסומן ומכבה את הבחירה', () {
@@ -79,7 +86,7 @@ void main() {
         },
       );
 
-      final showAll = entryNamed(entries, 'הצג את כל המפרשים');
+      final showAll = entryNamed(entries, 'הצג את כל המפרשים על פסקה זו');
       expect(showAll.isSelected, isTrue);
       showAll.onTap!();
       expect(updated, isEmpty);
@@ -140,12 +147,109 @@ void main() {
     test('קבוצה ריקה אינה יוצרת פריטים או מפריד', () {
       final entries = buildCommentatorsContextMenuChildren(
         activeCommentators: const [],
-        availableCommentators: const [],
+        availableCommentators: const ['רש"י'],
         commentatorGroups: const [],
         onCommentatorsChanged: (_, {required isAdding}) {},
       );
-      expect(labelsOf(entries), ['הצג את כל המפרשים']);
+      expect(labelsOf(entries), ['הצג את כל המפרשים על פסקה זו']);
       expect(entries.where((e) => e.isDivider), isEmpty);
+    });
+
+    test('הקבוצות מסוננות למפרשי הפסקה בלבד, וקבוצה שהתרוקנה נעלמת', () {
+      final entries = build(availableCommentators: const ['רמב"ן']);
+      expect(labelsOf(entries), [
+        'הצג את כל המפרשים על פסקה זו',
+        'הצג את כל ראשונים',
+        'רמב"ן',
+      ]);
+    });
+
+    test('"הצג את כל [קבוצה]" מוסיף ומסיר רק את מפרשי הפסקה מהקבוצה', () {
+      List<String>? updated;
+      final entries = build(
+        availableCommentators: const ['רמב"ן'],
+        active: const ['רש"י'],
+        onChange: (commentators, {required isAdding}) => updated = commentators,
+      );
+      entryNamed(entries, 'הצג את כל ראשונים').onTap!();
+      expect(updated, ['רש"י', 'רמב"ן']);
+    });
+
+    test('בלי מפרשים לפסקה — רק פריטי הפתיחה', () {
+      final entries = build(
+        availableCommentators: const [],
+        onOpenPane: () {},
+        onSelectMultiple: () {},
+      );
+      expect(labelsOf(entries), ['פתח את חלונית המפרשים', 'בחר מפרשים מרובים']);
+    });
+
+    test('בזמן טעינת הקישורים מוצג פריט "טוען" מושבת', () {
+      final entries = build(
+        availableCommentators: const [],
+        linksLoading: true,
+      );
+      expect(labelsOf(entries), ['טוען מפרשים…']);
+      expect(entries.single.enabled, isFalse);
+    });
+  });
+
+  group('paragraphCommentators', () {
+    Link commentaryLink(int line, String path) => Link(
+      heRef: '',
+      index1: line,
+      path2: path,
+      index2: 1,
+      connectionType: 'commentary',
+    );
+
+    test('מחזיר רק מפרשים עם קישור-מפרש על הפסקה, בסדר הרשימה הכללית', () {
+      final result = paragraphCommentators(
+        availableCommentators: const ['רש"י', 'רמב"ן', 'מלבי"ם'],
+        content: const ['א', 'ב'],
+        paragraphIndex: 1,
+        linksByLine: {
+          1: [commentaryLink(1, r'מפרשים\רש"י.txt')],
+          2: [
+            commentaryLink(2, r'מפרשים\מלבי"ם.txt'),
+            commentaryLink(2, r'מפרשים\רמב"ן.txt'),
+            Link(
+              heRef: '',
+              index1: 2,
+              path2: r'תנ"ך\בראשית.txt',
+              index2: 1,
+              connectionType: 'reference',
+            ),
+          ],
+        },
+      );
+      expect(result, ['רמב"ן', 'מלבי"ם']);
+    });
+
+    test('"הערות" נכלל רק כשיש הערות inline בפסקה', () {
+      const available = ['רש"י', kNotesCommentatorTitle];
+      const content = [
+        'בלי הערות',
+        'עם <sup>1</sup><i class="footnote">הערה</i>',
+      ];
+      expect(
+        paragraphCommentators(
+          availableCommentators: available,
+          content: content,
+          paragraphIndex: 0,
+          linksByLine: const {},
+        ),
+        isEmpty,
+      );
+      expect(
+        paragraphCommentators(
+          availableCommentators: available,
+          content: content,
+          paragraphIndex: 1,
+          linksByLine: const {},
+        ),
+        [kNotesCommentatorTitle],
+      );
     });
   });
 

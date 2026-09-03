@@ -177,6 +177,48 @@ class NavTreeTile extends StatelessWidget {
     );
   }
 
+  /// שורת כותרת בתוכן עניינים (TOC) של ספר (טקסט או PDF).
+  ///
+  /// אינה משתמשת באייקון תיקייה (כותרות ספר אינן תיקיות) ואינה מוסיפה
+  /// הזחה עודפת לפי קיום ילדים — ההזחה נקבעת אך ורק לפי [level],
+  /// כדי שכל הכותרות באותה רמה ייושרו תמיד לאותו קו.
+  factory NavTreeTile.heading({
+    Key? key,
+    required String title,
+    required int level,
+    String? subtitle,
+    bool isSelected = false,
+    bool isExpanded = false,
+    bool hasChildren = false,
+    int? count,
+    IconData icon = OtzariaIcons.text_bullet_list_24_regular,
+    Widget? leading,
+    Widget? trailing,
+    VoidCallback? onTap,
+    VoidCallback? onToggleExpand,
+  }) {
+    return NavTreeTile(
+      key: key,
+      title: title,
+      level: level,
+      subtitle: subtitle,
+      isSelected: isSelected,
+      isExpanded: isExpanded,
+      hasChildren: hasChildren,
+      count: count,
+      icon: icon,
+      useFolderIcon: false,
+      leading: leading,
+      trailing: trailing,
+      onTap: onTap,
+      onToggleExpand: onToggleExpand,
+      extraIndent: 0,
+      fontWeight: level == 0
+          ? FontWeight.w700
+          : (level == 1 ? FontWeight.w600 : FontWeight.w500),
+    );
+  }
+
   static const double iconBoxSize = 26;
   static const double iconContentSize = 14;
 

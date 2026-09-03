@@ -99,6 +99,7 @@ void main() {
             ),
           ],
           activeCommentators: const ['רש"י'],
+          linksByLine: _commentaryLinks(const ['רש"י', 'רמב"ן']),
         ),
       );
       addTearDown(bloc.close);
@@ -119,14 +120,14 @@ void main() {
       );
 
       await openContextMenu(tester);
-      expect(find.text('מפרשים'), findsOneWidget);
+      expect(find.text('מפרשים על פסקה זו'), findsOneWidget);
 
-      await tester.tap(find.text('מפרשים'));
+      await tester.tap(find.text('מפרשים על פסקה זו'));
       await tester.pumpAndSettle();
 
       expect(find.text('פתח את חלונית המפרשים'), findsOneWidget);
       expect(find.text('בחר מפרשים מרובים'), findsOneWidget);
-      expect(find.text('הצג את כל המפרשים'), findsOneWidget);
+      expect(find.text('הצג את כל המפרשים על פסקה זו'), findsOneWidget);
       expect(find.text('רמב"ן'), findsOneWidget);
 
       await tester.tap(find.text('רמב"ן'));
@@ -152,6 +153,7 @@ void main() {
           commentatorGroups: const [
             CommentatorGroup(title: 'ראשונים', commentators: ['רש"י']),
           ],
+          linksByLine: _commentaryLinks(const ['רש"י']),
         ),
       );
       addTearDown(bloc.close);
@@ -168,12 +170,12 @@ void main() {
       );
 
       await openContextMenu(tester);
-      await tester.tap(find.text('מפרשים'));
+      await tester.tap(find.text('מפרשים על פסקה זו'));
       await tester.pumpAndSettle();
 
       expect(find.text('פתח את חלונית המפרשים'), findsNothing);
       expect(find.text('בחר מפרשים מרובים'), findsNothing);
-      expect(find.text('הצג את כל המפרשים'), findsOneWidget);
+      expect(find.text('הצג את כל המפרשים על פסקה זו'), findsOneWidget);
     });
 
     testWidgets('בחירת מפרש מסנכרנת את הקטע לשורה שנלחצה בכפתור הימני', (
@@ -187,6 +189,7 @@ void main() {
           commentatorGroups: const [
             CommentatorGroup(title: 'ראשונים', commentators: ['רש"י']),
           ],
+          linksByLine: _commentaryLinks(const ['רש"י'], lines: 3),
         ),
       );
       addTearDown(bloc.close);
@@ -204,7 +207,7 @@ void main() {
       );
 
       await openContextMenu(tester, lineIndex: 2);
-      await tester.tap(find.text('מפרשים'));
+      await tester.tap(find.text('מפרשים על פסקה זו'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('רש"י'));
       await tester.pumpAndSettle();
@@ -263,6 +266,7 @@ void main() {
           commentatorGroups: const [
             CommentatorGroup(title: 'ראשונים', commentators: ['רש"י']),
           ],
+          linksByLine: _commentaryLinks(const ['רש"י']),
         ),
       );
       addTearDown(bloc.close);
@@ -282,12 +286,12 @@ void main() {
       );
 
       await openContextMenu(tester);
-      await tester.tap(find.text('מפרשים'));
+      await tester.tap(find.text('מפרשים על פסקה זו'));
       await tester.pumpAndSettle();
 
       expect(find.text('פתח את חלונית המפרשים'), findsNothing);
       expect(find.text('בחר מפרשים מרובים'), findsNothing);
-      expect(find.text('הצג את כל המפרשים'), findsOneWidget);
+      expect(find.text('הצג את כל המפרשים על פסקה זו'), findsOneWidget);
     });
   });
 
@@ -380,7 +384,7 @@ void main() {
       );
 
       await openContextMenu(tester);
-      expect(find.text('מפרשים'), findsNothing);
+      expect(find.text('מפרשים על פסקה זו'), findsNothing);
       expect(find.text('קישורים'), findsNothing);
       expect(loaderCalls, 0);
     });
@@ -402,12 +406,30 @@ void main() {
       );
 
       await openContextMenu(tester);
-      expect(find.text('מפרשים'), findsNothing);
+      expect(find.text('מפרשים על פסקה זו'), findsNothing);
       expect(find.text('קישורים'), findsNothing);
       expect(find.textContaining('הוסף הערה אישית'), findsOneWidget);
     });
   });
 }
+
+/// קישורי-מפרש לכל אחת מ-[lines] השורות, כדי שהמפרשים ייחשבו "על הפסקה".
+Map<int, List<Link>> _commentaryLinks(
+  List<String> commentators, {
+  int lines = 1,
+}) => {
+  for (var line = 1; line <= lines; line++)
+    line: [
+      for (final title in commentators)
+        Link(
+          heRef: '',
+          index1: line,
+          path2: 'מפרשים/$title.txt',
+          index2: 1,
+          connectionType: 'commentary',
+        ),
+    ],
+};
 
 TextBookLoaded _loadedState({
   List<String> availableCommentators = const [],

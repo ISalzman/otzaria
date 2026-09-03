@@ -13,6 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
+import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reader_build_policy.dart';
@@ -134,7 +135,7 @@ Map<String, dynamic> buildPageShapePluginSelectionPayload({
 }
 
 /// הפעולה שיש לבצע על אירוע מקלדת בחלונית מפרש (בצורת הדף).
-enum CommentaryKeyAction { none, copy, addNote }
+enum CommentaryKeyAction { none, copy, addNote, reportError }
 
 /// מחליטה איזו פעולה לבצע על אירוע מקלדת בחלונית מפרש, ללא תופעות לוואי.
 ///
@@ -151,6 +152,8 @@ CommentaryKeyAction resolveCommentaryKeyAction({
   required bool hasSelection,
   required bool hasSelectedIndex,
   required String addNoteShortcut,
+  String reportErrorShortcut = '',
+  bool isReportBookUserBook = false,
   bool? isControlPressed,
   bool? isShiftPressed,
   bool? isAltPressed,
@@ -177,6 +180,19 @@ CommentaryKeyAction resolveCommentaryKeyAction({
   );
   if (matchesAddNote && hasSelectedIndex) {
     return CommentaryKeyAction.addNote;
+  }
+
+  if (!isReportBookUserBook &&
+      reportErrorShortcut.isNotEmpty &&
+      ShortcutHelper.matchesShortcut(
+        event,
+        reportErrorShortcut,
+        isControlPressed: isControlPressed,
+        isShiftPressed: isShiftPressed,
+        isAltPressed: isAltPressed,
+        isMetaPressed: isMetaPressed,
+      )) {
+    return CommentaryKeyAction.reportError;
   }
 
   return CommentaryKeyAction.none;
@@ -414,6 +430,10 @@ class SimpleTextViewer extends StatefulWidget {
   static bool get commentaryNoteHandledRecently =>
       _SimpleTextViewerState._commentaryNoteHandled;
 
+  /// כמו [commentaryNoteHandledRecently], עבור קיצור "דווח על טעות בספר".
+  static bool get commentaryReportHandledRecently =>
+      _SimpleTextViewerState._commentaryReportHandled;
+
   @override
   State<SimpleTextViewer> createState() => _SimpleTextViewerState();
 }
@@ -423,6 +443,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   static bool _commentaryCopyHandled = false;
   // דגל סטטי: מונע מהטקסט הראשי לפתוח הערה כפולה אחרי שמפרש טיפל בקיצור
   static bool _commentaryNoteHandled = false;
+  // דגל סטטי: מונע מהטקסט הראשי לפתוח דיווח כפול אחרי שמפרש טיפל בקיצור
+  static bool _commentaryReportHandled = false;
   // מצביע סטטי: רק הפרשן האחרון שנבחר בו טקסט מטפל ב-Ctrl+C
   static _SimpleTextViewerState? _lastActiveCommentary;
 
@@ -961,6 +983,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
   bool _handleCommentaryKeyEvent(KeyEvent event) {
     final addNoteShortcut =
         Settings.getValue<String>('key-shortcut-add-note') ?? 'ctrl+n';
+    final reportErrorShortcut =
+        ShortcutValidator.getShortcutValue(ShortcutValidator.reportErrorKey) ??
+        '';
+    final state = context.read<TextBookBloc>().state;
+    final isReportBookUserBook =
+        widget.reportBook?.isUserBook ??
+        (state is TextBookLoaded && state.book.isUserBook);
     final action = resolveCommentaryKeyAction(
       event: event,
       isActiveCommentary: _lastActiveCommentary == this,
@@ -968,7 +997,15 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           _savedSelectedText != null && _savedSelectedText!.trim().isNotEmpty,
       hasSelectedIndex: _savedSelectedIndex != null,
       addNoteShortcut: addNoteShortcut,
+      reportErrorShortcut: reportErrorShortcut,
+      isReportBookUserBook: isReportBookUserBook,
     );
+
+    if (isReportBookUserBook &&
+        reportErrorShortcut.isNotEmpty &&
+        ShortcutHelper.matchesShortcut(event, reportErrorShortcut)) {
+      return true;
+    }
 
     switch (action) {
       case CommentaryKeyAction.copy:
@@ -991,6 +1028,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           _commentaryNoteHandled = false;
         });
         _createNoteForCurrentLine(_savedSelectedIndex!);
+        return true;
+      case CommentaryKeyAction.reportError:
+        _commentaryReportHandled = true;
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _commentaryReportHandled = false;
+        });
+        _openErrorReportDialog(_savedSelectedText ?? '');
         return true;
       case CommentaryKeyAction.none:
         return false;
@@ -1804,7 +1848,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     if (widget.isMainText) {
       entries.add(
         AppContextMenuEntry(
-          label: 'מפרשים',
+          label: kParagraphCommentatorsMenuLabel,
           icon: OtzariaIcons.book_24_regular,
           enabled: state.availableCommentators.isNotEmpty,
           childrenBuilder: () => _buildCommentatorsMenuItems(state, index),
@@ -2117,8 +2161,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     ];
   }
 
-  /// פריטי תת-התפריט "מפרשים" — זהים לתצוגה הרגילה, ומשנים את בחירת המפרשים
-  /// שמוצגת בלשונית המפרשים בחלונית הצד (לא את טורי צורת הדף).
+  /// פריטי תת-התפריט "מפרשים על פסקה זו" — זהים לתצוגה הרגילה, ומשנים את
+  /// בחירת המפרשים שבלשונית המפרשים בחלונית הצד (לא את טורי צורת הדף).
   List<AppContextMenuEntry> _buildCommentatorsMenuItems(
     TextBookLoaded state,
     int index,
@@ -2143,8 +2187,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
     return buildCommentatorsContextMenuChildren(
       activeCommentators: state.activeCommentators,
-      availableCommentators: state.availableCommentators,
+      availableCommentators: paragraphCommentators(
+        availableCommentators: state.availableCommentators,
+        content: widget.content,
+        paragraphIndex: index,
+        linksByLine: state.linksByLine,
+      ),
       commentatorGroups: state.commentatorGroups,
+      linksLoading: state.linksLoading,
       onOpenPane: showOpenPane && widget.onOpenCommentatorsPane != null
           ? () {
               selectClickedLine();

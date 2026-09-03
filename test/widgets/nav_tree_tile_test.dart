@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
@@ -95,6 +97,64 @@ void main() {
       await tester.pump();
       expect(tapped, isTrue);
     });
+
+    testWidgets(
+      'NavTreeTile.heading: אייקון רשימה (ללא תיקייה) והזחה זהה עם ובלי ילדים',
+      (tester) async {
+        var toggled = false;
+        await pump(
+          tester,
+          Column(
+            children: [
+              NavTreeTile.heading(
+                title: 'כותרת עם ילדים',
+                level: 0,
+                hasChildren: true,
+                onToggleExpand: () => toggled = true,
+              ),
+              NavTreeTile.heading(
+                title: 'כותרת בלי ילדים',
+                level: 0,
+                hasChildren: false,
+              ),
+              NavTreeTile.heading(
+                title: 'כותרת משנה',
+                level: 1,
+                hasChildren: false,
+              ),
+            ],
+          ),
+        );
+
+        // כל הכותרות משתמשות באייקון רשימה, ללא אייקון תיקייה
+        expect(find.byIcon(FluentIcons.folder_24_regular), findsNothing);
+        expect(find.byIcon(FluentIcons.folder_open_24_regular), findsNothing);
+        expect(
+          find.byIcon(OtzariaIcons.text_bullet_list_24_regular),
+          findsNWidgets(3),
+        );
+
+        // וידוא שהזחת start שווה בדיוק בין שתי כותרות רמה 0
+        final paddingContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) => c.padding is EdgeInsetsDirectional)
+            .toList();
+        final padding0WithChildren =
+            paddingContainers[0].padding as EdgeInsetsDirectional;
+        final padding0WithoutChildren =
+            paddingContainers[1].padding as EdgeInsetsDirectional;
+        final padding1 = paddingContainers[2].padding as EdgeInsetsDirectional;
+
+        expect(padding0WithChildren.start, equals(12.0));
+        expect(padding0WithoutChildren.start, equals(12.0));
+        expect(padding1.start, equals(24.0)); // 12 + 1 * 12
+
+        // בדיקת לחיצה על צ'ברון הרחבה
+        await tester.tap(find.byType(IconButton));
+        await tester.pump();
+        expect(toggled, isTrue);
+      },
+    );
   });
 
   group('NavTreeHeader', () {

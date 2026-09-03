@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'package:otzaria/personal_notes/models/personal_note.dart';
@@ -21,6 +22,7 @@ class InlineNoteEditor extends StatefulWidget {
   final List<PersonalNote> linkableNotes;
   final ValueChanged<PersonalNoteEditorResult> onSave;
   final VoidCallback onCancel;
+  final ValueListenable<int>? cancelRequest;
 
   const InlineNoteEditor({
     super.key,
@@ -35,6 +37,7 @@ class InlineNoteEditor extends StatefulWidget {
     required this.linkableNotes,
     required this.onSave,
     required this.onCancel,
+    this.cancelRequest,
   });
 
   @override
@@ -72,6 +75,7 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
     _initialResult = originalController.buildResult();
     originalController.quillController.dispose();
     _controller.quillController.addListener(_scheduleDraftSave);
+    widget.cancelRequest?.addListener(_handleCancelRequest);
     // QuillEditor.autoFocus לא תמיד תופס פוקוס כשהעורך נפתח בתוך פאנל
     // שנפתח דינמית. ה-post-frame הראשון יורה לפני שאנימציית פתיחת הפאנל
     // הסתיימה, ולפעמים ה-FocusNode עוד לא מחובר. ה-Timer מנסה שוב
@@ -86,10 +90,20 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   }
 
   @override
+  void didUpdateWidget(covariant InlineNoteEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cancelRequest != widget.cancelRequest) {
+      oldWidget.cancelRequest?.removeListener(_handleCancelRequest);
+      widget.cancelRequest?.addListener(_handleCancelRequest);
+    }
+  }
+
+  @override
   void dispose() {
     _draftSaveTimer?.cancel();
     _focusRetryTimer?.cancel();
     _controller.quillController.removeListener(_scheduleDraftSave);
+    widget.cancelRequest?.removeListener(_handleCancelRequest);
     unawaited(_persistDraft());
     _focusNode.dispose();
     _scrollController.dispose();
@@ -165,9 +179,14 @@ class _InlineNoteEditorState extends State<InlineNoteEditor> {
   }
 
   Future<void> _handleCancel() async {
+    if (_isDone) return;
     _isDone = true;
     await _clearDraft();
     widget.onCancel();
+  }
+
+  void _handleCancelRequest() {
+    unawaited(_handleCancel());
   }
 
   @override

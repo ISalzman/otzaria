@@ -53,6 +53,10 @@ class AppSurfaces {
   static Color panelSectionAccent(BuildContext context) =>
       _cs(context).primaryContainer.withValues(alpha: 0.3);
 
+  /// רקע כרטיס עריכת הערה אישית (הערה חדשה או עריכת הערה קיימת בחלונית).
+  static Color noteEditorBackground(BuildContext context) =>
+      _cs(context).primaryContainer.withValues(alpha: 0.3);
+
   /// גבול קטע-משנה מודגש בתוך חלונית הגדרות.
   static Color panelSectionAccentBorder(BuildContext context) =>
       _cs(context).primary.withValues(alpha: 0.3);

@@ -712,6 +712,18 @@ void main() {
               commentators: ['רש"י', 'רמב"ן'],
             ),
           ],
+          linksByLine: {
+            1: [
+              for (final title in const ['רש"י', 'רמב"ן'])
+                Link(
+                  heRef: '',
+                  index1: 1,
+                  path2: 'מפרשים/$title.txt',
+                  index2: 1,
+                  connectionType: 'commentary',
+                ),
+            ],
+          },
         ),
       );
       addTearDown(textBookBloc.close);
@@ -762,11 +774,11 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('מפרשים'));
+      await tester.tap(find.text('מפרשים על פסקה זו'));
       await tester.pumpAndSettle();
 
       expect(find.text('פתח את חלונית המפרשים'), findsOneWidget);
-      expect(find.text('הצג את כל המפרשים'), findsOneWidget);
+      expect(find.text('הצג את כל המפרשים על פסקה זו'), findsOneWidget);
       expect(find.text('הצג את כל ראשונים'), findsOneWidget);
 
       await tester.tap(find.text('רמב"ן'));

@@ -470,28 +470,23 @@ class _TocViewerState extends State<TocViewer>
     // רמות ה-TOC מתחילות ב-1, ורמת ההזחה של עץ הניווט מתחילה ב-0.
     final level = (entry.level - 1).clamp(0, 100);
 
-    final tile = entry.children.isEmpty
-        ? NavTreeTile.book(
-            title: title,
-            level: level,
-            isSelected: selected,
-            icon: OtzariaIcons.text_bullet_list_24_regular,
-            onTap: navigateToEntry,
-          )
-        : NavTreeTile.category(
-            title: title,
-            level: level,
-            isSelected: selected,
-            isExpanded: isExpanded,
-            hasChildren: true,
-            onTap: navigateToEntry,
-            onToggleExpand: () {
+    final hasChildren = entry.children.isNotEmpty;
+    final tile = NavTreeTile.heading(
+      title: title,
+      level: level,
+      isSelected: selected,
+      isExpanded: isExpanded,
+      hasChildren: hasChildren,
+      onTap: navigateToEntry,
+      onToggleExpand: hasChildren
+          ? () {
               setState(() {
                 _expanded[entry.index] = !isExpanded;
                 _expandedRevision++;
               });
-            },
-          );
+            }
+          : null,
+    );
 
     return NavTreeGroupCard(
       isGroupStart: isGroupStart,

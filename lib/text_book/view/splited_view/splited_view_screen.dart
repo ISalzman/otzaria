@@ -100,11 +100,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     });
   }
 
-  /// טוגל חכם של חלונית המפרשים מקיצור מקלדת:
-  /// - רק במצב split view (מפרשים בצד); במצב מפרשים למטה — המפרשים מוצגים
-  ///   inline ולכן הקיצור לא פועל.
-  /// - פאנל סגור או פתוח על טאב אחר → פתח על המפרשים.
-  /// - פאנל פתוח על המפרשים → סגור.
+  /// פתיחת חלונית ההערות מקיצור מקלדת.
   void _onOpenNotesTabRequest() {
     if (!mounted) return;
     setState(() {
@@ -113,10 +109,13 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     });
   }
 
+  /// טוגל חכם של חלונית המפרשים מקיצור מקלדת:
+  /// - במצב מפרשים בצד: פותח/סוגר את חלונית המפרשים.
+  /// - במצב מפרשים מתחת: פותח/סוגר את חלונית סינון/בחירת המפרשים (issue #1161).
+  /// - פאנל סגור או פתוח על טאב אחר → פתח על המפרשים (או סינון מפרשים).
+  /// - פאנל פתוח על המפרשים → סגור.
   void _onToggleCommentatorsPaneRequest() {
     if (!mounted) return;
-    // במצב מפרשים מתחת לטקסט הקיצור לא רלוונטי — המפרשים תמיד גלויים inline.
-    if (!widget.showSplitView) return;
     final isOnCommentary = _paneOpen && _currentTabIndex == kCommentaryTabIndex;
     if (isOnCommentary) {
       setState(() {

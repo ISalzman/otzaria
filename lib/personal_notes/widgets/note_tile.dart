@@ -6,6 +6,8 @@ import 'package:otzaria/personal_notes/services/personal_note_draft_service.dart
 import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor.dart';
 import 'package:otzaria/personal_notes/widgets/inline_note_editor.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
+import 'package:otzaria/theme/app_tokens.dart';
 
 class NoteTile extends StatefulWidget {
   final PersonalNote note;
@@ -52,6 +54,7 @@ class _NoteTileState extends State<NoteTile> {
   String? _draftContent;
   PersonalNoteContentFormat? _draftFormat;
   final PersonalNoteDraftService _draftService = PersonalNoteDraftService();
+  final ValueNotifier<int> _cancelRequest = ValueNotifier(0);
 
   @override
   void initState() {
@@ -110,6 +113,10 @@ class _NoteTileState extends State<NoteTile> {
     });
   }
 
+  void _requestInlineEditCancellation() {
+    _cancelRequest.value++;
+  }
+
   void _handleSave(PersonalNoteEditorResult result) {
     widget.onSave(result);
     _cancelInlineEdit();
@@ -117,6 +124,74 @@ class _NoteTileState extends State<NoteTile> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isInlineEditing) {
+      final titleText = widget.note.displayTitle != null &&
+              widget.note.displayTitle!.isNotEmpty
+          ? 'עריכת הערה - ${widget.note.displayTitle}'
+          : (widget.note.lineNumber != null
+              ? 'עריכת הערה - שורה ${widget.note.lineNumber}'
+              : 'עריכת הערה');
+
+      return Container(
+        margin: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppSurfaces.noteEditorBackground(context),
+          borderRadius: AppTokens.borderRadiusAll,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  FluentIcons.note_edit_24_regular,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    titleText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'ביטול',
+                  icon: const Icon(FluentIcons.dismiss_24_regular),
+                  onPressed: _requestInlineEditCancellation,
+                  iconSize: 20,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            InlineNoteEditor(
+              note: widget.note,
+              referenceText: widget.note.displayTitle,
+              bookId: widget.bookId,
+              categoryId: widget.categoryId,
+              initialContent: _draftContent ?? widget.note.content,
+              initialFormat: _draftFormat ?? widget.note.contentFormat,
+              draftNoteId: widget.note.id,
+              linkableNotes: widget.linkableNotes,
+              onSave: _handleSave,
+              onCancel: _cancelInlineEdit,
+              cancelRequest: _cancelRequest,
+            ),
+          ],
+        ),
+      );
+    }
+
     final bgColor =
         widget.backgroundColor ?? Theme.of(context).colorScheme.surface;
 
@@ -177,28 +252,13 @@ class _NoteTileState extends State<NoteTile> {
                     color: bgColor,
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: _isInlineEditing
-                          ? InlineNoteEditor(
-                              note: widget.note,
-                              referenceText: widget.note.displayTitle,
-                              bookId: widget.bookId,
-                              categoryId: widget.categoryId,
-                              initialContent:
-                                  _draftContent ?? widget.note.content,
-                              initialFormat:
-                                  _draftFormat ?? widget.note.contentFormat,
-                              draftNoteId: widget.note.id,
-                              linkableNotes: widget.linkableNotes,
-                              onSave: _handleSave,
-                              onCancel: _cancelInlineEdit,
-                            )
-                          : PersonalNoteContentView(
-                              note: widget.note,
-                              textStyle: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(height: 1.5),
-                              onLinkTap: widget.onLinkTap,
-                            ),
+                      child: PersonalNoteContentView(
+                        note: widget.note,
+                        textStyle: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(height: 1.5),
+                        onLinkTap: widget.onLinkTap,
+                      ),
                     ),
                   ),
                 )
@@ -211,6 +271,12 @@ class _NoteTileState extends State<NoteTile> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    _cancelRequest.dispose();
+    super.dispose();
   }
 }
 

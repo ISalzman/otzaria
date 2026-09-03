@@ -1163,8 +1163,14 @@ class _CombinedViewState extends State<CombinedView> {
 
     final commentatorChildren = buildCommentatorsContextMenuChildren(
       activeCommentators: state.activeCommentators,
-      availableCommentators: state.availableCommentators,
+      availableCommentators: paragraphCommentators(
+        availableCommentators: state.availableCommentators,
+        content: state.content,
+        paragraphIndex: paragraphIndex,
+        linksByLine: state.linksByLine,
+      ),
       commentatorGroups: state.commentatorGroups,
+      linksLoading: state.linksLoading,
       onOpenPane: shouldShowOpenPaneEntry
           ? () {
               _selectParagraphForContextMenu(paragraphIndex);
@@ -1272,7 +1278,7 @@ class _CombinedViewState extends State<CombinedView> {
             : () => widget.openLeftPaneTab(1),
       ),
       AppContextMenuEntry(
-        label: 'מפרשים',
+        label: kParagraphCommentatorsMenuLabel,
         icon: OtzariaIcons.book_24_regular,
         enabled: state.availableCommentators.isNotEmpty,
         children: commentatorChildren,

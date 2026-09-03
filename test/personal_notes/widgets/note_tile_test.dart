@@ -144,4 +144,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('תוכן ההערה'), findsOneWidget);
   });
+
+  testWidgets('לחיצה על עריכה מציגה כרטיס עריכה עם כותרת "עריכת הערה" ואייקון ביטול', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(NoteTile(
+      note: buildNote(),
+      defaultExpanded: true,
+      bookId: 'ספר מבחן',
+      linkableNotes: const [],
+      onSave: (_) {},
+      onDelete: () {},
+      onLinkTap: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    // בהתחלה מוצגת שורת ההערה הרגילה עם תוכן ההערה וכפתור עריכה
+    expect(find.text('עריכת הערה - שורה 7'), findsNothing);
+    expect(find.byTooltip('עריכה'), findsOneWidget);
+
+    // לחיצה על עריכה
+    await tester.tap(find.byTooltip('עריכה'));
+    await tester.pumpAndSettle();
+
+    // כעת מוצג כרטיס העריכה
+    expect(find.text('עריכת הערה - שורה 7'), findsOneWidget);
+    expect(find.text('שמור'), findsOneWidget);
+    expect(find.byTooltip('ביטול'), findsOneWidget);
+
+    // לחיצה על כפתור הביטול בכותרת סוגרת את העריכה ומחזירה לתצוגה רגילה
+    await tester.tap(find.byTooltip('ביטול'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('עריכת הערה - שורה 7'), findsNothing);
+    expect(find.byTooltip('עריכה'), findsOneWidget);
+  });
+
+  testWidgets('ביטול מכותרת העורך מוחק טיוטה קיימת', (tester) async {
+    final draftService = PersonalNoteDraftService();
+    final note = buildNote();
+    await draftService.saveDraft(
+      bookId: note.bookId,
+      noteId: note.id,
+      draft: PersonalNoteDraft(
+        content: 'טיוטה לביטול',
+        contentPlain: 'טיוטה לביטול',
+        contentFormat: PersonalNoteContentFormat.plain,
+        updatedAt: DateTime(2026, 1, 5),
+        noteId: note.id,
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        NoteTile(
+          note: note,
+          defaultExpanded: false,
+          bookId: note.bookId,
+          linkableNotes: const [],
+          onSave: (_) {},
+          onDelete: () {},
+          onLinkTap: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('ביטול'));
+    await tester.pumpAndSettle();
+
+    expect(
+      await draftService.loadDraft(bookId: note.bookId, noteId: note.id),
+      isNull,
+    );
+  });
 }
