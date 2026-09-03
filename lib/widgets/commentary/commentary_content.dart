@@ -8,6 +8,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/misc/middle_click_open.dart';
@@ -55,8 +56,7 @@ class CommentaryContent extends StatefulWidget {
     required this.link,
     required this.fontSize,
     required this.openBookCallback,
-    required this.removeNikud,
-    this.removePunctuation = false,
+    required this.displayProfile,
     this.searchQuery = '',
     this.currentSearchIndex = 0,
     this.onSearchResultsCountChanged,
@@ -65,8 +65,9 @@ class CommentaryContent extends StatefulWidget {
     this.personalNotes,
     this.onOpenPersonalNote,
   });
-  final bool removeNikud;
-  final bool removePunctuation;
+
+  /// פרופיל תצוגת המפרשים של הכרטיסייה — חל על כל המפרשים כפי שהוא.
+  final TextDisplayProfile displayProfile;
   final Link link;
   final double fontSize;
   final Function(TextBookTab) openBookCallback;
@@ -157,13 +158,11 @@ class _CommentaryContentState extends State<CommentaryContent> {
         builder: (context, data) {
           return BlocBuilder<SettingsBloc, SettingsState>(
             builder: (context, settingsState) {
-              // מצב הניקוד/פיסוק של הטאב חל על כל המפרשים כפי שהוא,
-              // ללא רזולוציה פר-ספר-יעד.
               if (widget.searchQuery.isNotEmpty) {
                 final searchCount = countCommentarySearchMatches(
                   content: data,
                   query: widget.searchQuery,
-                  removePunctuation: widget.removePunctuation,
+                  removePunctuation: widget.displayProfile.removePunctuation,
                   // כמו partialWordHighlight של הרינדור למטה — המונה חייב
                   // לספור את מה שנצבע (issue #1055).
                   partialWordMatch: true,
@@ -176,20 +175,15 @@ class _CommentaryContentState extends State<CommentaryContent> {
                       buildCommentarySearchSnippet(
                         content: data,
                         query: widget.searchQuery,
-                        removeNikud: widget.removeNikud,
-                        removePunctuation: widget.removePunctuation,
+                        displayProfile: widget.displayProfile,
                       ),
                     ]);
                   }
                 });
               }
 
-              final renderSettings = RenderSettings(
-                removeNikud: widget.removeNikud,
-                removePunctuation: widget.removePunctuation,
-                removeTeamim: !settingsState.showTeamim,
-                replaceHolyNames: settingsState.replaceHolyNames,
-                holyNameStyle: settingsState.holyNameStyle,
+              final renderSettings = RenderSettings.fromProfile(
+                widget.displayProfile,
                 searchText: widget.searchQuery,
                 currentSearchIndex: widget.currentSearchIndex,
                 fontSize: widget.fontSize,

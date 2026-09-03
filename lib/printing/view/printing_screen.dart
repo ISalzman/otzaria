@@ -34,6 +34,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/printing/view/widgets/printing_widgets.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 enum _AnchorKind { header, altHeader, line }
 
@@ -62,6 +63,10 @@ class PrintingScreen extends StatefulWidget {
   final List<String> activeCommentators;
   final bool removeNikud;
   final bool removeTaamim;
+
+  /// פרופיל ערוץ הייצוא של הספר. כשמסופק — קובע את ברירת המחדל של הניקוד
+  /// והטעמים ואת טיפול שם הוי"ה, במקום [removeNikud]/[removeTaamim] וההגדרות.
+  final TextDisplayProfile? displayProfile;
   final int startLine;
   final List<TocEntry> tableOfContents;
   final int? initialPage;
@@ -85,6 +90,7 @@ class PrintingScreen extends StatefulWidget {
     this.startLine = 0,
     this.removeNikud = false,
     this.removeTaamim = false,
+    this.displayProfile,
     this.tableOfContents = const [],
     this.initialPage,
     this.isBookView = false,
@@ -214,8 +220,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
 
     // אתחול הגדרות ניקוד וטעמים לפי תצוגת הספר
-    _removeNikud = widget.removeNikud;
-    _removeTaamim = widget.removeTaamim;
+    final profile = widget.displayProfile;
+    _removeNikud = profile?.removeNikud ?? widget.removeNikud;
+    _removeTaamim = profile?.removeTeamim ?? widget.removeTaamim;
 
     // במצב PDF חיצוני (כמו "צורת הדף") אין טווח שורות/כותרות.
     if (widget.createPdfOverride != null) {
@@ -668,7 +675,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     if (widget.createPdfOverride != null) {
       return 'override|${orientation.name}|${format.width}x${format.height}';
     }
-    final holyNames = Settings.getValue<bool>('key-replace-holy-names') ?? true;
+    final holyNames = _shouldReplaceHolyNames;
     return [
       orientation.name,
       format.width,
@@ -876,8 +883,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
       format = format.landscape;
     }
 
-    final shouldReplaceHolyNames =
-        Settings.getValue<bool>('key-replace-holy-names') ?? true;
+    final shouldReplaceHolyNames = _shouldReplaceHolyNames;
 
     // חלוקה גולמית לשורות בלבד. הטרנספורמציות היקרות (הסרת ניקוד/טעמים/HTML
     // והחלפת שמות קודש) מוחלות פר-שורה על הטווח הנבחר ב-_buildPrintBlocks —
@@ -927,9 +933,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
     );
   }
 
-  HolyNameStyle get _holyNameStyle => HolyNameStyle.fromStorage(
-    Settings.getValue<String>('key-holy-name-style'),
-  );
+  HolyNameStyle get _holyNameStyle =>
+      widget.displayProfile?.holyNameStyle ??
+      HolyNameStyle.fromStorage(
+        Settings.getValue<String>('key-holy-name-style'),
+      );
+
+  bool get _shouldReplaceHolyNames =>
+      widget.displayProfile?.replaceHolyNames ??
+      Settings.getValue<bool>('key-replace-holy-names') ??
+      true;
 
   /// מסיר ניקוד/טעמים ומחליף שמות קודש לפי בחירת המשתמש.
   String _applyTextTransforms(String input, bool shouldReplaceHolyNames) {
@@ -953,8 +966,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   /// ממיר בלוקים מוכנים לייצוג הפנימי, תוך החלת הסרת ניקוד/טעמים ושמות קודש.
   List<Map<String, String>> _mapPrebuiltBlocks(List<PrintBlock> source) {
-    final shouldReplaceHolyNames =
-        Settings.getValue<bool>('key-replace-holy-names') ?? true;
+    final shouldReplaceHolyNames = _shouldReplaceHolyNames;
     final result = <Map<String, String>>[];
     for (final block in source) {
       switch (block.kind) {
@@ -1373,8 +1385,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   Future<PreparedPrintDocument> _prepareWordDocument() async {
     if (widget.prebuiltBlocks != null) {
-      final shouldReplaceHolyNames =
-          Settings.getValue<bool>('key-replace-holy-names') ?? true;
+      final shouldReplaceHolyNames = _shouldReplaceHolyNames;
       final blocks = widget.prebuiltBlocks!
           .map((block) {
             switch (block.kind) {
@@ -1403,8 +1414,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     }
     String dataString = await _dataFuture;
 
-    final shouldReplaceHolyNames =
-        Settings.getValue<bool>('key-replace-holy-names') ?? true;
+    final shouldReplaceHolyNames = _shouldReplaceHolyNames;
     dataString = _applyTextTransforms(dataString, shouldReplaceHolyNames);
 
     // שומרים את תגיות ה-HTML — WordExportService ממיר אותן לעיצוב במסמך

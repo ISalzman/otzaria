@@ -30,9 +30,11 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/utils/book_versions_action.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
+import 'package:otzaria/text_display/view/text_display_bar_button.dart';
 import 'package:otzaria/text_book/utils/reader_build_policy.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -204,6 +206,10 @@ String _createTextBookTextExport(_TextExportRequest request) {
       )
       .join('\n');
 }
+
+/// פרופיל ערוץ הייצוא של גוף הספר — משותף להדפסה ולייצוא.
+TextDisplayProfile _exportProfile(TextBookLoaded state) =>
+    state.displayProfile(target: TextTarget.body, channel: TextChannel.export);
 
 final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'text_book_navigation_tour_target',
@@ -604,8 +610,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       final png = await _capturePageShapeViewPng();
       if (!mounted) return;
 
-      final settingsState = context.read<SettingsBloc>().state;
-
       if (png == null || png.isEmpty) {
         UiSnack.showError(TextBookMessages.cannotCapturePageShapeForPrint);
         return;
@@ -618,8 +622,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           // במצב זה ה-PDF נוצר מצילום המסך, ולכן אין צורך בנתוני הטקסט
           data: Future.value(''),
           bookId: state.book.title,
-          removeNikud: state.removeNikud,
-          removeTaamim: !settingsState.showTeamim,
+          displayProfile: _exportProfile(state),
           createPdfOverride: (PdfPageFormat format) async {
             final doc = pw.Document(compress: false);
             final img = pw.MemoryImage(png);
@@ -653,8 +656,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         links: state.links,
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
-        removeNikud: state.removeNikud,
-        removeTaamim: !context.read<SettingsBloc>().state.showTeamim,
+        displayProfile: _exportProfile(state),
         tableOfContents: state.tableOfContents,
       ),
     );
@@ -671,9 +673,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
       final extension = selectedFormat.extension;
       final settingsState = context.read<SettingsBloc>().state;
-      final removeTaamim = !settingsState.showTeamim;
-      final shouldReplaceHolyNames =
-          Settings.getValue<bool>('key-replace-holy-names') ?? true;
+      final profile = state.displayProfile(
+        target: TextTarget.body,
+        channel: TextChannel.export,
+      );
       final fullContent = await context
           .read<TextBookBloc>()
           .repository
@@ -687,10 +690,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _WordExportRequest(
             title: state.book.title,
             rawContent: fullContent,
-            removeNikud: state.removeNikud,
-            removeTaamim: removeTaamim,
-            shouldReplaceHolyNames: shouldReplaceHolyNames,
-            holyNameStyle: settingsState.holyNameStyle,
+            removeNikud: profile.removeNikud,
+            removeTaamim: profile.removeTeamim,
+            shouldReplaceHolyNames: profile.replaceHolyNames,
+            holyNameStyle: profile.holyNameStyle,
             fontFamily: settingsState.fontFamily,
             fontSize: state.fontSize,
           ),
@@ -701,10 +704,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _createTextBookTextExport,
           _TextExportRequest(
             rawContent: fullContent,
-            removeNikud: state.removeNikud,
-            removeTaamim: removeTaamim,
-            shouldReplaceHolyNames: shouldReplaceHolyNames,
-            holyNameStyle: settingsState.holyNameStyle,
+            removeNikud: profile.removeNikud,
+            removeTaamim: profile.removeTeamim,
+            shouldReplaceHolyNames: profile.replaceHolyNames,
+            holyNameStyle: profile.holyNameStyle,
           ),
         );
         bytes = Uint8List.fromList(utf8.encode(text));
@@ -1036,12 +1039,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         if (settings.commentatorsBelow != null) {
           textBookBloc.add(ToggleSplitView(!settings.commentatorsBelow!));
         }
-        if (settings.removeNikud != null) {
-          textBookBloc.add(ToggleNikud(settings.removeNikud!));
-        }
-        if (settings.removePunctuation != null) {
-          textBookBloc.add(TogglePunctuation(settings.removePunctuation!));
-        }
+        // ניקוד/פיסוק/טעמים נטענים כשכבת ספר בתוך LoadContent, לא כאן.
         if (settings.continuousReadingMode != null) {
           textBookBloc.add(
             ToggleContinuousReadingMode(settings.continuousReadingMode!),
@@ -1766,36 +1764,20 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         ],
       ),
 
-      // 3) Nikud Button
+      // 3) תצוגת הטקסט: לחיצה מחליפה ניקוד, החץ פותח את כל הפרופיל
       ActionButtonData(
-        widget: _buildNikudButton(context, state),
-        icon: state.removeNikud
-            ? OtzariaIcons.alef_with_score_24_regular
-            : OtzariaIcons.alef_deletion_24_regular,
-        tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-        actionId: ToolbarActionId.nikud,
-        onPressed: () async {
-          final newValue = !state.removeNikud;
-          context.read<TextBookBloc>().add(ToggleNikud(newValue));
-          await savePerBookDisplaySettings(
-            context,
-            state,
-            removeNikud: newValue,
-          );
-        },
-      ),
-
-      // 3b) Punctuation Button - מוסתר בספרי תנ"ך
-      if (!state.isTanach)
-        ActionButtonData(
-          widget: _buildPunctuationButton(context, state),
-          icon: state.removePunctuation
-              ? OtzariaIcons.alef_with_punctuation_24_regular
-              : OtzariaIcons.alef_with_eraser_24_regular,
-          tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-          actionId: ToolbarActionId.punctuation,
-          onPressed: () => _toggleAndSavePunctuation(context, state),
+        widget: TextDisplayBarButton(
+          state: state,
+          compact: context.read<SettingsBloc>().state.compactMenuMode,
         ),
+        icon: textDisplayBarIcon(state),
+        tooltip: textDisplayBarTooltip(state),
+        actionId: ToolbarActionId.textDisplay,
+        toolbarWidth: BarSplitButton.toolbarWidth(
+          context.read<SettingsBloc>().state.compactMenuMode,
+        ),
+        onPressed: () => toggleBodyNikud(context, state),
+      ),
 
       // 3c) Continuous Reading Mode Button - רק לספרים שתומכים (תנ"ך/תלמוד)
       if (state.supportsContinuousReadingMode)
@@ -2204,47 +2186,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     );
   }
 
-  Widget _buildNikudButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: state.removeNikud ? 'הצג ניקוד' : 'הסתר ניקוד',
-      icon: state.removeNikud
-          ? OtzariaIcons.alef_with_score_24_regular
-          : OtzariaIcons.alef_deletion_24_regular,
-      compact: isCompact,
-      onPressed: () async {
-        final newValue = !state.removeNikud;
-        context.read<TextBookBloc>().add(ToggleNikud(newValue));
-        await savePerBookDisplaySettings(context, state, removeNikud: newValue);
-      },
-    );
-  }
-
-  Future<void> _toggleAndSavePunctuation(
-    BuildContext context,
-    TextBookLoaded state,
-  ) async {
-    final newValue = !state.removePunctuation;
-    context.read<TextBookBloc>().add(TogglePunctuation(newValue));
-    await savePerBookDisplaySettings(
-      context,
-      state,
-      removePunctuation: newValue,
-    );
-  }
-
-  Widget _buildPunctuationButton(BuildContext context, TextBookLoaded state) {
-    final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return BarButton.icon(
-      tooltip: state.removePunctuation ? 'הצג פיסוק' : 'הסתר פיסוק',
-      icon: state.removePunctuation
-          ? OtzariaIcons.alef_with_punctuation_24_regular
-          : OtzariaIcons.alef_with_eraser_24_regular,
-      compact: isCompact,
-      onPressed: () => _toggleAndSavePunctuation(context, state),
-    );
-  }
-
   Future<void> _toggleAndSaveContinuousReading(
     BuildContext context,
     TextBookLoaded state,
@@ -2493,7 +2434,6 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         context.read<TourCubit>().recordInteraction(
           TourInteraction(type: TourInteractionType.printUsed),
         );
-        final settingsState = context.read<SettingsBloc>().state;
         // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור).
         // חובה לקרוא כאן: בתוך ה-builder ה-context הוא של הדיאלוג וחסר לו provider ל-TextBookBloc.
         final contentData = context
@@ -2510,8 +2450,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             links: state.links,
             activeCommentators: state.activeCommentators,
             startLine: _topmostVisibleSourceLine(state),
-            removeNikud: state.removeNikud,
-            removeTaamim: !settingsState.showTeamim,
+            displayProfile: _exportProfile(state),
             tableOfContents: state.tableOfContents,
           ),
         );
@@ -3182,7 +3121,6 @@ bool _handleGlobalKeyEvent(
     context.read<TourCubit>().recordInteraction(
       TourInteraction(type: TourInteractionType.printUsed),
     );
-    final settingsState = context.read<SettingsBloc>().state;
     // תוכן מלא מה-repository — state.content יכול להיות חלקי (חימום/שחרור).
     // חובה לקרוא כאן: בתוך ה-builder ה-context הוא של הדיאלוג וחסר לו provider ל-TextBookBloc.
     final contentData = context.read<TextBookBloc>().repository.getBookContent(
@@ -3198,8 +3136,7 @@ bool _handleGlobalKeyEvent(
         links: state.links,
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
-        removeNikud: state.removeNikud,
-        removeTaamim: !settingsState.showTeamim,
+        displayProfile: _exportProfile(state),
         tableOfContents: state.tableOfContents,
       ),
     );

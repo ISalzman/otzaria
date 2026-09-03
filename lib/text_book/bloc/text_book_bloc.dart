@@ -11,6 +11,7 @@ import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -22,8 +23,8 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_engine_gateway.dart';
 import 'package:otzaria/search/utils/in_book_search_routing.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
-import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_commentary_selection.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
@@ -186,6 +187,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateLinkTypeFilter>(_onUpdateLinkTypeFilter);
     on<ToggleNikud>(_onToggleNikud);
     on<TogglePunctuation>(_onTogglePunctuation);
+    on<ApplyDisplayPatch>(_onApplyDisplayPatch);
+    on<ClearDisplayOverrides>(_onClearDisplayOverrides);
     on<ResetCommentaryDisplayOverrides>(_onResetCommentaryDisplayOverrides);
     on<ToggleContinuousReadingMode>(_onToggleContinuousReadingMode);
     on<UpdateVisibleIndecies>(_onUpdateVisibleIndecies);
@@ -637,10 +640,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     List<String> existingAvailableCommentators = const [];
     List<CommentatorGroup> existingCommentatorGroups = const [];
-    bool? preservedRemoveNikud;
-    bool? preservedRemovePunctuation;
-    bool? preservedCommentaryRemoveNikudOverride;
-    bool? preservedCommentaryRemovePunctuationOverride;
+    TextDisplayLayer? preservedDisplayOverrides;
     bool? preservedPinLeftPane;
 
     if (state is TextBookLoaded && event.preserveState) {
@@ -662,12 +662,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       initialShowPageShapeView = currentState.showPageShapeView;
       existingAvailableCommentators = currentState.availableCommentators;
       existingCommentatorGroups = currentState.commentatorGroups;
-      preservedRemoveNikud = currentState.removeNikud;
-      preservedRemovePunctuation = currentState.removePunctuation;
-      preservedCommentaryRemoveNikudOverride =
-          currentState.commentaryRemoveNikudOverride;
-      preservedCommentaryRemovePunctuationOverride =
-          currentState.commentaryRemovePunctuationOverride;
+      preservedDisplayOverrides = currentState.displayOverrides;
       preservedPinLeftPane = currentState.pinLeftPane;
       pinpointHighlightIndex = currentState.pinpointHighlightIndex;
       pinpointHighlightText = currentState.pinpointHighlightText;
@@ -841,39 +836,40 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         }
       }
 
-      final defaultRemoveNikud =
-          Settings.getValue<bool>('key-default-nikud') ?? false;
-      final removeNikudFromTanach =
-          Settings.getValue<bool>('key-remove-nikud-tanach') ?? false;
+      final displayPolicy = SettingsRepository().loadTextDisplayPolicy();
       final isTanach = await FileSystemData.instance.isTanachBook(
         book.title,
         categoryId: book.categoryId,
         fileType: book.fileType,
       );
+      final perBookSettingsEnabled =
+          Settings.getValue<bool>(
+            SettingsRepository.keyEnablePerBookSettings,
+          ) ??
+          false;
+      final bookDisplayLayer = perBookSettingsEnabled
+          ? (await TextBookPerBookSettings.load(book))?.effectiveDisplayLayer ??
+                TextDisplayLayer.empty
+          : TextDisplayLayer.empty;
+      // שינוי הגדרות ניקוד/פיסוק גלובלי מפיל את העקיפה הזמנית של הגוף באותו
+      // שדה כדי שהערך החדש ייראה; שינוי גופן בלבד משמר את בחירת המשתמש.
+      // עקיפות כרטיסיית המפרשים נשמרות תמיד.
+      final displayOverrides =
+          (preservedDisplayOverrides ?? TextDisplayLayer.empty).mapPatches(
+            (slot, patch) => slot.target == TextTarget.body
+                ? patch.copyWith(
+                    clearNikud: !event.preserveRemoveNikud,
+                    clearTeamim: !event.preserveRemoveNikud,
+                    clearPunctuation: !event.preserveRemovePunctuation,
+                  )
+                : patch,
+          );
       final supportsContinuousReading = await FileSystemData.instance
           .supportsContinuousReadingMode(
             book.title,
             categoryId: book.categoryId,
             fileType: book.fileType,
           );
-      final removeNikud = shouldRemoveNikudForBook(
-        defaultRemoveNikud: defaultRemoveNikud,
-        removeNikudFromTanach: removeNikudFromTanach,
-        isTanach: isTanach,
-      );
-      final nikudExemptByTanach = isNikudExemptByTanach(
-        defaultRemoveNikud: defaultRemoveNikud,
-        removeNikudFromTanach: removeNikudFromTanach,
-        isTanach: isTanach,
-      );
-      // הסרת פיסוק אינה חלה על תנ"ך (הכפתור מוסתר שם).
-      final globalRemovePunctuation =
-          Settings.getValue<bool>('key-default-remove-punctuation') ?? false;
-      final defaultRemovePunctuation = !isTanach && globalRemovePunctuation;
-      final punctuationExemptByTanach = isPunctuationExemptByTanach(
-        defaultRemovePunctuation: globalRemovePunctuation,
-        isTanach: isTanach,
-      );
 
       // מצב הרצף שומר את הערך הנוכחי רק כש-preserveContinuousReadingMode=true.
       // הלוגיקה הזו מנופית ל-`resolvePreservedContinuousReadingMode` כדי
@@ -1002,20 +998,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         showPageShapeView: initialShowPageShapeView,
         activeCommentators: commentators,
         commentatorGroups: existingCommentatorGroups,
-        removeNikud: (event.preserveRemoveNikud && preservedRemoveNikud != null)
-            ? preservedRemoveNikud
-            : removeNikud,
-        removePunctuation:
-            (event.preserveRemovePunctuation &&
-                preservedRemovePunctuation != null)
-            ? preservedRemovePunctuation
-            : defaultRemovePunctuation,
         isTanach: isTanach,
-        nikudExemptByTanach: nikudExemptByTanach,
-        punctuationExemptByTanach: punctuationExemptByTanach,
-        commentaryRemoveNikudOverride: preservedCommentaryRemoveNikudOverride,
-        commentaryRemovePunctuationOverride:
-            preservedCommentaryRemovePunctuationOverride,
+        displayPolicy: displayPolicy,
+        bookDisplayLayer: bookDisplayLayer,
+        displayOverrides: displayOverrides,
         supportsContinuousReadingMode: supportsContinuousReading,
         continuousReadingMode: effectiveContinuousReading,
         readingSegments: readingSegments,
@@ -1400,6 +1386,55 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
               ),
       );
     }
+  }
+
+  void _onApplyDisplayPatch(
+    ApplyDisplayPatch event,
+    Emitter<TextBookState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! TextBookLoaded || event.patch.isEmpty) return;
+    final slot = TextDisplaySlot(
+      target: event.target,
+      view: currentState.activeView,
+      channel: TextChannel.display,
+    );
+    emit(
+      currentState.copyWith(
+        displayOverrides: currentState.displayOverrides.merged(
+          slot,
+          event.patch,
+        ),
+        selectedIndex: currentState.selectedIndex,
+      ),
+    );
+    if (event.persistToBook) {
+      unawaited(
+        persistPerBookDisplayPatch(
+          book: currentState.book,
+          isTanach: currentState.isTanach,
+          policy: currentState.displayPolicy,
+          slot: slot,
+          patch: event.patch,
+        ),
+      );
+    }
+  }
+
+  void _onClearDisplayOverrides(
+    ClearDisplayOverrides event,
+    Emitter<TextBookState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! TextBookLoaded) return;
+    emit(
+      currentState.copyWith(
+        displayOverrides: TextDisplayLayer.empty,
+        bookDisplayLayer: TextDisplayLayer.empty,
+        selectedIndex: currentState.selectedIndex,
+      ),
+    );
+    unawaited(clearPerBookDisplayLayer(currentState.book));
   }
 
   void _onResetCommentaryDisplayOverrides(

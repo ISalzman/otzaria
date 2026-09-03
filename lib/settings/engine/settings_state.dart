@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/theme/app_seed_colors.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
@@ -28,17 +29,18 @@ class SettingsState extends Equatable {
   final bool showOtzarHachochma;
   final bool showHebrewBooks;
   final bool showExternalBooks;
-  final bool showTeamim;
-  final bool replaceHolyNames;
 
-  /// סגנון החלפת שם הקודש כשההחלפה פעילה — ראה [HolyNameStyle].
-  final HolyNameStyle holyNameStyle;
+  /// המדיניות הגלובלית של תצוגת הטקסט (ניקוד, טעמים, פיסוק, שם הוי"ה,
+  /// ציונים) — מקור האמת היחיד. הגטרים שאחריה הם תאימות למפתחות הישנים.
+  final TextDisplayPolicy textDisplayPolicy;
+  bool get showTeamim => textDisplayPolicy.showTeamim;
+  bool get replaceHolyNames => textDisplayPolicy.replaceHolyNames;
+  HolyNameStyle get holyNameStyle => textDisplayPolicy.holyNameStyle;
+  bool get defaultRemoveNikud => textDisplayPolicy.defaultRemoveNikud;
+  bool get removeNikudFromTanach => textDisplayPolicy.removeNikudFromTanach;
+  bool get defaultRemovePunctuation =>
+      textDisplayPolicy.defaultRemovePunctuation;
   final bool autoUpdateIndex;
-  final bool defaultRemoveNikud;
-  final bool removeNikudFromTanach;
-
-  /// ברירת מחדל להסרת סימני פיסוק בפתיחת ספר (אינה חלה על ספרי תנ"ך).
-  final bool defaultRemovePunctuation;
 
   /// ברירת מחדל להצגת הטקסט ברצף (מצב "קריאה רציפה"). חלה בפתיחת ספר על
   /// ספרים שתומכים בכך בלבד (תנ"ך ותלמוד); בשאר הספרים אין לה השפעה.
@@ -95,7 +97,7 @@ class SettingsState extends Equatable {
   final String settingsLanguageCode;
   final bool? _softwareAndBookUpdatesEnabled;
 
-  const SettingsState({
+  SettingsState({
     required this.isDarkMode,
     required this.followSystemTheme,
     required this.seedColor,
@@ -111,13 +113,14 @@ class SettingsState extends Equatable {
     required this.showOtzarHachochma,
     required this.showHebrewBooks,
     required this.showExternalBooks,
-    required this.showTeamim,
-    required this.replaceHolyNames,
-    this.holyNameStyle = HolyNameStyle.kufKuf,
+    TextDisplayPolicy? textDisplayPolicy,
+    bool showTeamim = true,
+    bool replaceHolyNames = true,
+    HolyNameStyle holyNameStyle = HolyNameStyle.kufKuf,
     required this.autoUpdateIndex,
-    required this.defaultRemoveNikud,
-    required this.removeNikudFromTanach,
-    required this.defaultRemovePunctuation,
+    bool defaultRemoveNikud = false,
+    bool removeNikudFromTanach = false,
+    bool defaultRemovePunctuation = false,
     this.defaultContinuousReadingMode = false,
     required this.defaultSidebarOpen,
     required this.defaultCommentaryOpen,
@@ -152,10 +155,19 @@ class SettingsState extends Equatable {
     this.builtInToolsOrder = const <String>[],
     this.settingsLanguageCode = kDefaultSettingsLanguageCode,
     this._softwareAndBookUpdatesEnabled,
-  });
+  }) : textDisplayPolicy =
+           textDisplayPolicy ??
+           TextDisplayPolicy.fromLegacy(
+             defaultRemoveNikud: defaultRemoveNikud,
+             removeNikudFromTanach: removeNikudFromTanach,
+             defaultRemovePunctuation: defaultRemovePunctuation,
+             showTeamim: showTeamim,
+             replaceHolyNames: replaceHolyNames,
+             holyNameStyle: holyNameStyle,
+           );
 
   factory SettingsState.initial() {
-    return const SettingsState(
+    return SettingsState(
       isDarkMode: false,
       followSystemTheme: false,
       seedColor: AppSeedColors.defaultLight,
@@ -219,6 +231,7 @@ class SettingsState extends Equatable {
     bool? showOtzarHachochma,
     bool? showHebrewBooks,
     bool? showExternalBooks,
+    TextDisplayPolicy? textDisplayPolicy,
     bool? showTeamim,
     bool? replaceHolyNames,
     HolyNameStyle? holyNameStyle,
@@ -260,7 +273,29 @@ class SettingsState extends Equatable {
     String? settingsLanguageCode,
     bool? softwareAndBookUpdatesEnabled,
   }) {
+    var policy = textDisplayPolicy ?? this.textDisplayPolicy;
+    if (defaultRemoveNikud != null) {
+      policy = policy.withLegacyDefaultRemoveNikud(defaultRemoveNikud);
+    }
+    if (removeNikudFromTanach != null) {
+      policy = policy.withLegacyNikudFromTanach(
+        removeFromTanach: removeNikudFromTanach,
+      );
+    }
+    if (defaultRemovePunctuation != null) {
+      policy = policy.withLegacyPunctuation(defaultRemovePunctuation);
+    }
+    if (showTeamim != null) policy = policy.withLegacyShowTeamim(showTeamim);
+    if (replaceHolyNames != null || holyNameStyle != null) {
+      policy = policy.withLegacyHolyName(
+        HolyNameDisplay.fromLegacy(
+          replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
+          style: holyNameStyle ?? this.holyNameStyle,
+        ),
+      );
+    }
     return SettingsState(
+      textDisplayPolicy: policy,
       isDarkMode: isDarkMode ?? this.isDarkMode,
       followSystemTheme: followSystemTheme ?? this.followSystemTheme,
       seedColor: seedColor ?? this.seedColor,
@@ -277,15 +312,7 @@ class SettingsState extends Equatable {
       showOtzarHachochma: showOtzarHachochma ?? this.showOtzarHachochma,
       showHebrewBooks: showHebrewBooks ?? this.showHebrewBooks,
       showExternalBooks: showExternalBooks ?? this.showExternalBooks,
-      showTeamim: showTeamim ?? this.showTeamim,
-      replaceHolyNames: replaceHolyNames ?? this.replaceHolyNames,
-      holyNameStyle: holyNameStyle ?? this.holyNameStyle,
       autoUpdateIndex: autoUpdateIndex ?? this.autoUpdateIndex,
-      defaultRemoveNikud: defaultRemoveNikud ?? this.defaultRemoveNikud,
-      removeNikudFromTanach:
-          removeNikudFromTanach ?? this.removeNikudFromTanach,
-      defaultRemovePunctuation:
-          defaultRemovePunctuation ?? this.defaultRemovePunctuation,
       defaultContinuousReadingMode:
           defaultContinuousReadingMode ?? this.defaultContinuousReadingMode,
       defaultSidebarOpen: defaultSidebarOpen ?? this.defaultSidebarOpen,
@@ -361,13 +388,8 @@ class SettingsState extends Equatable {
     showOtzarHachochma,
     showHebrewBooks,
     showExternalBooks,
-    showTeamim,
-    replaceHolyNames,
-    holyNameStyle,
+    textDisplayPolicy,
     autoUpdateIndex,
-    defaultRemoveNikud,
-    removeNikudFromTanach,
-    defaultRemovePunctuation,
     defaultContinuousReadingMode,
     defaultSidebarOpen,
     defaultCommentaryOpen,

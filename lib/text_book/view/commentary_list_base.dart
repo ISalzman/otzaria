@@ -23,6 +23,8 @@ import 'package:otzaria/widgets/commentary/commentary_content.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 // מיוצא כאן כדי שצרכני כרטיסיית הטקסט יייבאו אותו מנקודה אחת.
 export 'package:otzaria/text_book/utils/commentary_search_utils.dart'
     show CommentarySearchSnippet;
@@ -688,7 +690,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     if (!mounted) return;
 
     final bookTitle = _bookTitle(blocState);
-    final removeTaamim = !context.read<SettingsBloc>().state.showTeamim;
+    final profile = blocState.commentaryDisplayProfile;
     await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -697,8 +699,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
         bookId: bookTitle,
         documentTitle: bookTitle,
         prebuiltBlocks: blocks,
-        removeNikud: blocState.commentaryRemoveNikud,
-        removeTaamim: removeTaamim,
+        removeNikud: profile.removeNikud,
+        removeTaamim: profile.removeTeamim,
       ),
     );
   }
@@ -1221,10 +1223,9 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     final gen = ++_searchComputeGen;
 
     final blocState = context.read<TextBookBloc>().state;
-    final removePunctuation =
-        blocState is TextBookLoaded && blocState.commentaryRemovePunctuation;
-    final removeNikud =
-        blocState is TextBookLoaded && blocState.commentaryRemoveNikud;
+    final profile = blocState is TextBookLoaded
+        ? blocState.commentaryDisplayProfile
+        : TextDisplayProfile.defaults;
     final wantSnippets = widget.externalSearchSnippetsNotifier != null;
 
     for (final link in links) {
@@ -1238,7 +1239,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       final count = countCommentarySearchMatches(
         content: data,
         query: query,
-        removePunctuation: removePunctuation,
+        removePunctuation: profile.removePunctuation,
         // התוכן מרונדר ב-CommentaryContent עם partialWordHighlight: true.
         partialWordMatch: true,
       );
@@ -1248,8 +1249,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
           buildCommentarySearchSnippet(
             content: data,
             query: query,
-            removeNikud: removeNikud,
-            removePunctuation: removePunctuation,
+            displayProfile: profile,
           ),
         ]);
       }
@@ -1407,6 +1407,12 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
     );
   }
 
+  static TextDisplayProfile _commentaryCopyProfile(TextBookLoaded state) =>
+      state.displayProfile(
+        target: TextTarget.commentary,
+        channel: TextChannel.copy,
+      );
+
   Widget _buildLinkItem(
     CommentaryGroup group,
     Link link,
@@ -1417,8 +1423,8 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
       link: link,
       fontSize: widget.fontSize,
       openBookCallback: widget.openBookCallback,
-      removeNikud: state.commentaryRemoveNikud,
-      removePunctuation: state.commentaryRemovePunctuation,
+      displayProfile: state.commentaryDisplayProfile,
+      copyDisplayProfile: _commentaryCopyProfile(state),
       showSearch: widget.showSearch,
       searchQueryListenable: _searchQueryNotifier,
       currentSearchIndexListenable: _currentSearchIndexNotifier,
@@ -1562,11 +1568,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
             previous.selectedIndex != current.selectedIndex ||
             !setEquals(previous.selectedIndices, current.selectedIndices) ||
             previous.fontSize != current.fontSize ||
-            previous.removeNikud != current.removeNikud ||
-            previous.commentaryRemoveNikud != current.commentaryRemoveNikud ||
-            previous.removePunctuation != current.removePunctuation ||
-            previous.commentaryRemovePunctuation !=
-                current.commentaryRemovePunctuation;
+            previous.bodyDisplayProfile != current.bodyDisplayProfile ||
+            previous.commentaryDisplayProfile !=
+                current.commentaryDisplayProfile ||
+            _commentaryCopyProfile(previous) != _commentaryCopyProfile(current);
       },
       loadingWidget: const Center(),
       builder: (context, state) {
@@ -1657,7 +1662,7 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                   notesWidget = _NotesCommentaryWidget(
                     notes: relevantNotes,
                     fontSize: widget.fontSize,
-                    removeNikud: state.removeNikud,
+                    displayProfile: state.commentaryDisplayProfile,
                     openBookCallback: widget.openBookCallback,
                     state: state,
                     reportLineIndex:
@@ -2319,8 +2324,8 @@ class _CommentaryLinkItem extends StatefulWidget {
   final Link link;
   final double fontSize;
   final Function(OpenedTab) openBookCallback;
-  final bool removeNikud;
-  final bool removePunctuation;
+  final TextDisplayProfile displayProfile;
+  final TextDisplayProfile copyDisplayProfile;
   final bool showSearch;
   final ValueListenable<String> searchQueryListenable;
   final ValueListenable<int> currentSearchIndexListenable;
@@ -2364,8 +2369,8 @@ class _CommentaryLinkItem extends StatefulWidget {
     required this.link,
     required this.fontSize,
     required this.openBookCallback,
-    required this.removeNikud,
-    required this.removePunctuation,
+    required this.displayProfile,
+    required this.copyDisplayProfile,
     required this.showSearch,
     required this.searchQueryListenable,
     required this.currentSearchIndexListenable,
@@ -2530,8 +2535,8 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                       link: link,
                       openBookCallback: widget.openBookCallback,
                       fontSize: widget.fontSize,
-                      removeNikud: widget.removeNikud,
-                      removePunctuation: widget.removePunctuation,
+                      displayProfile: widget.displayProfile,
+                      copyDisplayProfile: widget.copyDisplayProfile,
                       savedSelectedText: savedTextAtBuild,
                       onNavigateToLink: _navigateToLink,
                       onNoteSaved: widget.onNoteSaved,
@@ -2568,8 +2573,7 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                     link: link,
                     fontSize: widget.fontSize,
                     openBookCallback: widget.openBookCallback,
-                    removeNikud: widget.removeNikud,
-                    removePunctuation: widget.removePunctuation,
+                    displayProfile: widget.displayProfile,
                     searchQuery: searchQuery,
                     currentSearchIndex: currentSearchIndex,
                     onSearchResultsCountChanged:
@@ -2618,7 +2622,9 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
 class _NotesCommentaryWidget extends StatefulWidget {
   final List<String> notes;
   final double fontSize;
-  final bool removeNikud;
+
+  /// אותו פרופיל כמו טקסט המפרשים — ההערות מוצגות כמפרש.
+  final TextDisplayProfile displayProfile;
   final Function(OpenedTab) openBookCallback;
 
   /// מצב הספר הראשי — דרוש לדיווח על טעות (ההערות inline בתוכו).
@@ -2631,7 +2637,7 @@ class _NotesCommentaryWidget extends StatefulWidget {
   const _NotesCommentaryWidget({
     required this.notes,
     required this.fontSize,
-    required this.removeNikud,
+    required this.displayProfile,
     required this.openBookCallback,
     required this.state,
     required this.reportLineIndex,
@@ -2766,12 +2772,8 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                           ),
                           child: SmartTextWidget(
                             text: note,
-                            settings: RenderSettings(
-                              removeNikud: widget.removeNikud,
-                              removePunctuation: false,
-                              removeTeamim: false,
-                              replaceHolyNames: settingsState.replaceHolyNames,
-                              holyNameStyle: settingsState.holyNameStyle,
+                            settings: RenderSettings.fromProfile(
+                              widget.displayProfile,
                               searchText: '',
                               currentSearchIndex: -1,
                               fontSize: widget.fontSize * 0.85,

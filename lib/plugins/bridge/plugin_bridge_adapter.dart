@@ -63,6 +63,7 @@ import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/history/bloc/history_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
@@ -2778,19 +2779,7 @@ class PluginBridgeAdapter {
           : null;
       return (
         rawText: state.content[sectionIndex],
-        settings: RenderSettings(
-          removeNikud: state.removeNikud,
-          removePunctuation: state.removePunctuation,
-          removeTeamim:
-              !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                  true),
-          replaceHolyNames:
-              Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-              false,
-          holyNameStyle: HolyNameStyle.fromStorage(
-            Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
-          ),
-        ),
+        settings: RenderSettings.fromProfile(state.bodyDisplayProfile),
         currentRef: snapshot?.currentRef,
       );
     }
@@ -2823,15 +2812,9 @@ class PluginBridgeAdapter {
     }
     return (
       rawText: range.lines.first,
-      settings: RenderSettings(
-        removeTeamim:
-            !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                true),
-        replaceHolyNames:
-            Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-            false,
-        holyNameStyle: HolyNameStyle.fromStorage(
-          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
+      settings: RenderSettings.fromProfile(
+        SettingsRepository().loadTextDisplayPolicy().resolve(
+          TextDisplaySlot.root,
         ),
       ),
       currentRef: null,
@@ -5598,19 +5581,7 @@ class PluginBridgeAdapter {
       bookTitle: currentTab.title,
       sectionIndex: sectionIndex,
       rawText: state.content[sectionIndex],
-      settings: RenderSettings(
-        removeNikud: state.removeNikud,
-        removePunctuation: state.removePunctuation,
-        removeTeamim:
-            !(Settings.getValue<bool>(SettingsRepository.keyShowTeamim) ??
-                true),
-        replaceHolyNames:
-            Settings.getValue<bool>(SettingsRepository.keyReplaceHolyNames) ??
-            false,
-        holyNameStyle: HolyNameStyle.fromStorage(
-          Settings.getValue<String>(SettingsRepository.keyHolyNameStyle),
-        ),
-      ),
+      settings: RenderSettings.fromProfile(state.bodyDisplayProfile),
       renderedStartUtf16: start,
       renderedEndUtf16: end,
       currentRef: currentRef,

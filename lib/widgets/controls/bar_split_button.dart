@@ -39,6 +39,9 @@ class BarSplitButton<T> extends StatefulWidget {
   final List<AppMenuEntry<T>> entries;
   final ValueChanged<T>? onSelected;
 
+  /// כשמוגדר, החץ מפעיל אותו (עם ההקשר של העוגן) במקום לפתוח את [entries].
+  final void Function(BuildContext anchorContext)? onArrowPressed;
+
   /// הפריט המסומן בתפריט (✓).
   final T? initialValue;
   final String menuTooltip;
@@ -52,6 +55,7 @@ class BarSplitButton<T> extends StatefulWidget {
     required this.onPressed,
     required this.entries,
     required this.onSelected,
+    this.onArrowPressed,
     this.initialValue,
     this.menuTooltip = 'אפשרויות נוספות',
     this.compact = false,
@@ -68,6 +72,10 @@ class _BarSplitButtonState<T> extends State<BarSplitButton<T>> {
   Future<void> _openMenu() async {
     final anchorContext = _anchorKey.currentContext;
     if (anchorContext == null) return;
+    if (widget.onArrowPressed != null) {
+      widget.onArrowPressed!(anchorContext);
+      return;
+    }
     final selected = await showAnchoredAppMenu<T>(
       context: context,
       anchorContext: anchorContext,
@@ -91,7 +99,9 @@ class _BarSplitButtonState<T> extends State<BarSplitButton<T>> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final actionEnabled = widget.onPressed != null;
-    final menuEnabled = widget.entries.isNotEmpty && widget.onSelected != null;
+    final menuEnabled =
+        widget.onArrowPressed != null ||
+        (widget.entries.isNotEmpty && widget.onSelected != null);
 
     Color foreground(bool enabled) => !enabled
         ? theme.disabledColor

@@ -5,6 +5,8 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 import 'package:otzaria/widgets/commentary/links_list_view.dart';
@@ -52,9 +54,9 @@ class SelectedLineLinksView extends StatelessWidget {
             !identical(previous.links, current.links) ||
             previous.selectedLinkTypes != current.selectedLinkTypes ||
             previous.fontSize != current.fontSize ||
-            previous.commentaryRemoveNikud != current.commentaryRemoveNikud ||
-            previous.commentaryRemovePunctuation !=
-                current.commentaryRemovePunctuation;
+            previous.commentaryDisplayProfile !=
+                current.commentaryDisplayProfile ||
+            _copyProfile(previous) != _copyProfile(current);
       },
       builder: (context, state) {
         return LinksListView(
@@ -66,11 +68,17 @@ class SelectedLineLinksView extends StatelessWidget {
               context.read<TextBookBloc>().add(UpdateLinkTypeFilter(types)),
           openBookCallback: openBookCallback,
           fontSize: fontSize,
-          removeNikud: state.commentaryRemoveNikud,
-          removePunctuation: state.commentaryRemovePunctuation,
+          displayProfile: state.commentaryDisplayProfile,
+          copyDisplayProfile: _copyProfile(state),
           selectionSyncController: selectionSyncController,
         );
       },
     );
   }
+
+  static TextDisplayProfile _copyProfile(TextBookLoaded state) =>
+      state.displayProfile(
+        target: TextTarget.commentary,
+        channel: TextChannel.copy,
+      );
 }

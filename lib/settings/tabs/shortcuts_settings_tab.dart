@@ -14,6 +14,9 @@ import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
+import 'package:otzaria/settings/shortcuts/dynamic_shortcut_dialog.dart';
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut.dart';
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut_registry.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/view/custom_shortcut_dialog.dart';
 import 'package:otzaria/shortcuts/view/shortcut_dropdown_tile.dart';
@@ -469,7 +472,10 @@ class ShortcutsSettingsTab extends StatelessWidget {
         // עוטף ב-BlocBuilder כדי לרענן את רשימת הטיילים והכרטיס "הוסף קיצור"
         // מיד עם שינוי הקיצורים (פעולה זמינה -> מוגדרת ולהיפך).
         child: ListenableBuilder(
-          listenable: PluginShortcutRegistry.instance,
+          listenable: Listenable.merge([
+            PluginShortcutRegistry.instance,
+            DynamicShortcutRegistry.instance,
+          ]),
           builder: (context, _) => BlocBuilder<SettingsBloc, SettingsState>(
             buildWhen: (previous, current) =>
                 previous.shortcuts != current.shortcuts,
@@ -911,6 +917,52 @@ class ShortcutsSettingsTab extends StatelessWidget {
           ),
         ],
 
+        // ── קיצורים דינמיים: פעולה + פרמטרים שהמשתמש מגדיר ──────────────
+        kSettingsCardSpacing,
+        SettingsCard(
+          cardId: 'shortcuts.dynamic',
+          title: context.settingsText('קיצורים דינמיים'),
+          subtitle: context.settingsText(
+            'קיצור לפעולה שאתה מגדיר בעצמך: שינוי ניקוד/טעמים/פיסוק בכרטיסייה, '
+            'או העתקה עם תצוגה שונה',
+          ),
+          children: [
+            for (final shortcut in DynamicShortcutRegistry.instance.shortcuts)
+              SettingsActionTile.text(
+                icon: FluentIcons.flash_24_regular,
+                title: shortcut.describe(),
+                subtitle: shortcut.key.isEmpty
+                    ? context.settingsText('לא הוגדר')
+                    : ShortcutHelper.formatShortcutForDisplay(shortcut.key),
+                subtitleColor:
+                    ShortcutValidator.hasConflict(shortcut.settingKey)
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+                actions: [
+                  ActionButton.neutral(
+                    text: context.settingsText('ערוך'),
+                    onPressed: () => _editDynamicShortcut(context, shortcut),
+                  ),
+                  ActionButton.ghost(
+                    text: context.settingsText('מחק'),
+                    onPressed: () =>
+                        DynamicShortcutRegistry.instance.remove(shortcut.id),
+                  ),
+                ],
+              ),
+            SettingsActionTile.text(
+              icon: FluentIcons.add_24_regular,
+              title: context.settingsText('הוסף קיצור דינמי'),
+              actions: [
+                ActionButton.recommended(
+                  text: context.settingsText('הוסף'),
+                  onPressed: () => _editDynamicShortcut(context, null),
+                ),
+              ],
+            ),
+          ],
+        ),
+
         // ── פעולות זמינות להגדרת קיצור ────────────────────────────────
         if (unconfiguredKeys.isNotEmpty) ...[
           kSettingsCardSpacing,
@@ -939,6 +991,14 @@ class ShortcutsSettingsTab extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  Future<void> _editDynamicShortcut(
+    BuildContext context,
+    DynamicShortcut? existing,
+  ) async {
+    final saved = await showDynamicShortcutDialog(context, initial: existing);
+    if (saved != null) DynamicShortcutRegistry.instance.put(saved);
   }
 
   /// משאיר רק טיילים של קיצורים שכבר הוגדר להם ערך לא-ריק.

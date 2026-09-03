@@ -1,4 +1,5 @@
 import 'package:otzaria/search/utils/snippet_builder.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 
@@ -24,18 +25,18 @@ int countCommentarySearchMatches({
   );
 }
 
-/// קטע תצוגה סביב ההתאמה בתוכן מפרש, משמר את העדפת הניקוד של המשתמש.
+/// קטע תצוגה סביב ההתאמה בתוכן מפרש, משמר את פרופיל התצוגה של המפרשים.
 String buildCommentarySearchSnippet({
   required String content,
   required String query,
-  required bool removeNikud,
-  required bool removePunctuation,
+  required TextDisplayProfile displayProfile,
 }) {
-  var text = content;
-  if (removeNikud) {
-    text = utils.removeVolwels(text);
-  }
-  if (removePunctuation) {
+  var text = utils.removeMarks(
+    content,
+    nikud: displayProfile.removeNikud,
+    teamim: displayProfile.removeTeamim,
+  );
+  if (displayProfile.removePunctuation) {
     text = utils.removePunctuation(text);
   }
   return SnippetBuilder.buildExcerptText(

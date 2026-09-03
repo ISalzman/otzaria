@@ -674,11 +674,9 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
                     prev.tableOfContents != curr.tableOfContents ||
                     prev.links != curr.links ||
                     prev.availableCommentators != curr.availableCommentators ||
-                    prev.removeNikud != curr.removeNikud ||
-                    prev.commentaryRemoveNikud != curr.commentaryRemoveNikud ||
-                    prev.removePunctuation != curr.removePunctuation ||
-                    prev.commentaryRemovePunctuation !=
-                        curr.commentaryRemovePunctuation;
+                    prev.bodyDisplayProfile != curr.bodyDisplayProfile ||
+                    prev.commentaryDisplayProfile !=
+                        curr.commentaryDisplayProfile;
               }
               return true;
             },

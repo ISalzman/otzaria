@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentary_panel.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
@@ -94,8 +95,12 @@ Future<List<CommentaryContent>> _pumpPanel(
             linksLoading: false,
             openBookCallback: (_) {},
             fontSize: 16.0,
-            removeNikud: removeNikud,
-            removePunctuation: removePunctuation,
+            displayProfile: TextDisplayProfile(
+              nikud: removeNikud ? MarkVisibility.hide : MarkVisibility.show,
+              punctuation: removePunctuation
+                  ? MarkVisibility.hide
+                  : MarkVisibility.show,
+            ),
           ),
         ),
       ),
@@ -122,7 +127,7 @@ void main() {
         removePunctuation: false,
       );
       expect(contents, isNotEmpty, reason: 'צריך להיבנות לפחות מפרש אחד');
-      expect(contents.every((c) => c.removeNikud), isTrue);
+      expect(contents.every((c) => c.displayProfile.removeNikud), isTrue);
     });
 
     testWidgets('removeNikud=false מגיע אל CommentaryContent', (tester) async {
@@ -132,7 +137,7 @@ void main() {
         removePunctuation: false,
       );
       expect(contents, isNotEmpty);
-      expect(contents.every((c) => c.removeNikud), isFalse);
+      expect(contents.every((c) => c.displayProfile.removeNikud), isFalse);
     });
 
     testWidgets('removePunctuation=true מגיע אל CommentaryContent', (
@@ -144,7 +149,7 @@ void main() {
         removePunctuation: true,
       );
       expect(contents, isNotEmpty);
-      expect(contents.every((c) => c.removePunctuation), isTrue);
+      expect(contents.every((c) => c.displayProfile.removePunctuation), isTrue);
     });
 
     testWidgets('שני הדגלים עוברים יחד', (tester) async {
@@ -154,8 +159,8 @@ void main() {
         removePunctuation: true,
       );
       expect(contents, isNotEmpty);
-      expect(contents.every((c) => c.removeNikud), isTrue);
-      expect(contents.every((c) => c.removePunctuation), isTrue);
+      expect(contents.every((c) => c.displayProfile.removeNikud), isTrue);
+      expect(contents.every((c) => c.displayProfile.removePunctuation), isTrue);
     });
   });
 
@@ -169,8 +174,8 @@ void main() {
         openBookCallback: (_) {},
         fontSize: 16.0,
       );
-      expect(panel.removeNikud, isFalse);
-      expect(panel.removePunctuation, isFalse);
+      expect(panel.displayProfile.removeNikud, isFalse);
+      expect(panel.displayProfile.removePunctuation, isFalse);
     });
   });
 }

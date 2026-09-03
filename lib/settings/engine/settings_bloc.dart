@@ -5,6 +5,7 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
@@ -36,6 +37,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateDefaultRemoveNikud>(_onUpdateDefaultRemoveNikud);
     on<UpdateRemoveNikudFromTanach>(_onUpdateRemoveNikudFromTanach);
     on<UpdateDefaultRemovePunctuation>(_onUpdateDefaultRemovePunctuation);
+    on<UpdateTextDisplayPolicy>(_onUpdateTextDisplayPolicy);
     on<UpdateDefaultContinuousReadingMode>(
       _onUpdateDefaultContinuousReadingMode,
     );
@@ -124,6 +126,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         defaultRemoveNikud: settings['defaultRemoveNikud'],
         removeNikudFromTanach: settings['removeNikudFromTanach'],
         defaultRemovePunctuation: settings['defaultRemovePunctuation'],
+        textDisplayPolicy: settings['textDisplayPolicy'] as TextDisplayPolicy?,
         defaultContinuousReadingMode:
             settings['defaultContinuousReadingMode'] ?? false,
         defaultSidebarOpen: settings['defaultSidebarOpen'],
@@ -483,24 +486,27 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateShowTeamim event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateShowTeamim(event.showTeamim);
-    emit(state.copyWith(showTeamim: event.showTeamim));
+    await _emitPolicy(emit, state.copyWith(showTeamim: event.showTeamim));
   }
 
   Future<void> _onUpdateReplaceHolyNames(
     UpdateReplaceHolyNames event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateReplaceHolyNames(event.replaceHolyNames);
-    emit(state.copyWith(replaceHolyNames: event.replaceHolyNames));
+    await _emitPolicy(
+      emit,
+      state.copyWith(replaceHolyNames: event.replaceHolyNames),
+    );
   }
 
   Future<void> _onUpdateHolyNameStyle(
     UpdateHolyNameStyle event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateHolyNameStyle(event.holyNameStyle.storageKey);
-    emit(state.copyWith(holyNameStyle: event.holyNameStyle));
+    await _emitPolicy(
+      emit,
+      state.copyWith(holyNameStyle: event.holyNameStyle),
+    );
   }
 
   Future<void> _onUpdateAutoUpdateIndex(
@@ -515,8 +521,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateDefaultRemoveNikud event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateDefaultRemoveNikud(event.defaultRemoveNikud);
-    emit(state.copyWith(defaultRemoveNikud: event.defaultRemoveNikud));
+    await _emitPolicy(
+      emit,
+      state.copyWith(defaultRemoveNikud: event.defaultRemoveNikud),
+    );
 
     // ניקוי קבצי per_book_settings מיותרים
     _cleanupRedundantPerBookSettings();
@@ -543,18 +551,18 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     UpdateRemoveNikudFromTanach event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateRemoveNikudFromTanach(event.removeNikudFromTanach);
-    emit(state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach));
+    await _emitPolicy(
+      emit,
+      state.copyWith(removeNikudFromTanach: event.removeNikudFromTanach),
+    );
   }
 
   Future<void> _onUpdateDefaultRemovePunctuation(
     UpdateDefaultRemovePunctuation event,
     Emitter<SettingsState> emit,
   ) async {
-    await _repository.updateDefaultRemovePunctuation(
-      event.defaultRemovePunctuation,
-    );
-    emit(
+    await _emitPolicy(
+      emit,
       state.copyWith(defaultRemovePunctuation: event.defaultRemovePunctuation),
     );
 
@@ -701,6 +709,27 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         shortcuts: Map<String, String>.unmodifiable(shortcuts),
       ),
     );
+  }
+
+  Future<void> _onUpdateTextDisplayPolicy(
+    UpdateTextDisplayPolicy event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _emitPolicy(
+      emit,
+      state.copyWith(textDisplayPolicy: event.textDisplayPolicy),
+    );
+    _cleanupRedundantPerBookSettings();
+  }
+
+  /// שומר את המדיניות של [next] ומשדר אותו — כל אירועי תצוגת הטקסט, הישנים
+  /// והחדש, מסתיימים כאן.
+  Future<void> _emitPolicy(
+    Emitter<SettingsState> emit,
+    SettingsState next,
+  ) async {
+    await _repository.updateTextDisplayPolicy(next.textDisplayPolicy);
+    emit(next);
   }
 
   /// ניקוי קבצי per_book_settings שהפכו למיותרים

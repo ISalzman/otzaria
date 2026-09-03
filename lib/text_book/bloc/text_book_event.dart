@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 sealed class TextBookEvent extends Equatable {
   const TextBookEvent();
@@ -58,6 +59,29 @@ class LoadContent extends TextBookEvent {
 
 /// החלפת מצב קריאה רציף. **רינדור בלבד** — לא משנה content, search, links,
 /// selectedIndex, או visibleIndices (שנותרים ברמת שורות מקור).
+/// החלת טלאי תצוגה על [target] בתצוגה הפעילה — עקיפה זמנית של הכרטיסייה,
+/// ואופציונלית שמירה לקובץ הספר (כש"שמירת התאמות לכל ספר" מופעלת).
+class ApplyDisplayPatch extends TextBookEvent {
+  final TextTarget target;
+  final TextDisplayPatch patch;
+  final bool persistToBook;
+
+  const ApplyDisplayPatch({
+    required this.target,
+    required this.patch,
+    this.persistToBook = false,
+  });
+
+  @override
+  List<Object?> get props => [target, patch, persistToBook];
+}
+
+/// מנקה את כל העקיפות הזמניות של הכרטיסייה (גוף ומפרשים, כל התצוגות),
+/// וכשההתאמות פר-ספר פעילות — גם את טלאי התצוגה של הספר.
+class ClearDisplayOverrides extends TextBookEvent {
+  const ClearDisplayOverrides();
+}
+
 class ToggleContinuousReadingMode extends TextBookEvent {
   final bool enabled;
 

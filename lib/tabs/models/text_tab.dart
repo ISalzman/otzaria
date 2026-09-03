@@ -1,3 +1,4 @@
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut_dispatcher.dart';
 import 'dart:async';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
@@ -116,6 +117,10 @@ class TextBookTab extends OpenedTab {
   final ValueNotifier<int> navNextSegmentNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> navPreviousTocNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> navNextTocNotifier = ValueNotifier<int>(0);
+
+  /// בקשת העתקה מקיצור דינמי; המסך שמחזיק את הבחירה מבצע ומאפס ל-null.
+  final ValueNotifier<DynamicCopyRequest?> dynamicCopyRequestNotifier =
+      ValueNotifier<DynamicCopyRequest?>(null);
 
   List<String>? commentators;
   bool _lastSplitView = false;
@@ -236,6 +241,7 @@ class TextBookTab extends OpenedTab {
     navNextSegmentNotifier.dispose();
     navPreviousTocNotifier.dispose();
     navNextTocNotifier.dispose();
+    dynamicCopyRequestNotifier.dispose();
     bloc.close();
     super.dispose();
   }

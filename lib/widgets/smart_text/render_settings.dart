@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 bool _searchOptionsEquals(
@@ -192,6 +193,58 @@ class RenderSettings {
     this.highlightYellowBackground = false,
     this.partialWordHighlight = false,
   });
+
+  /// הגדרות רינדור מפרופיל תצוגה פתור — המסלול המועדף לכל צרכן חדש.
+  /// שאר הפרמטרים זהים לבנאי הרגיל.
+  factory RenderSettings.fromProfile(
+    TextDisplayProfile profile, {
+    String searchText = '',
+    int currentSearchIndex = -1,
+    Map<String, Map<String, bool>> searchOptions = const {},
+    Map<int, List<String>> alternativeWords = const {},
+    Map<String, String> spacingValues = const {},
+    bool isFuzzySearch = false,
+    SearchMode searchMode = SearchMode.exact,
+    int searchDistance = 0,
+    SearchMatchPolicy matchPolicy = SearchMatchPolicy.standard,
+    bool isSearchResultLine = false,
+    double fontSize = 18.0,
+    String? fontFamily,
+    FontWeight? fontWeight,
+    double lineHeight = 1.5,
+    bool enableInlineLinks = false,
+    bool formatParentheses = true,
+    bool justifyText = true,
+    bool highlightYellowBackground = false,
+    bool partialWordHighlight = false,
+  }) {
+    return RenderSettings(
+      removeNikud: profile.removeNikud,
+      removePunctuation: profile.removePunctuation,
+      removeTeamim: profile.removeTeamim,
+      replaceHolyNames: profile.replaceHolyNames,
+      holyNameStyle: profile.holyNameStyle,
+      searchText: searchText,
+      currentSearchIndex: currentSearchIndex,
+      searchOptions: searchOptions,
+      alternativeWords: alternativeWords,
+      spacingValues: spacingValues,
+      isFuzzySearch: isFuzzySearch,
+      searchMode: searchMode,
+      searchDistance: searchDistance,
+      matchPolicy: matchPolicy,
+      isSearchResultLine: isSearchResultLine,
+      fontSize: fontSize,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      lineHeight: lineHeight,
+      enableInlineLinks: enableInlineLinks,
+      formatParentheses: formatParentheses,
+      justifyText: justifyText,
+      highlightYellowBackground: highlightYellowBackground,
+      partialWordHighlight: partialWordHighlight,
+    );
+  }
 
   /// Stable signature for reader content snapshots.
   ///

@@ -30,6 +30,7 @@ import 'package:otzaria/text_book/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/default_commentators.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/text_book/utils/category_settings_utils.dart';
 import 'package:otzaria/widgets/lists/nav_tree_tile.dart';
@@ -126,15 +127,29 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     });
   }
 
+  /// הפרופיל הגלובלי של [slot] עם החלפות הניקוד/פיסוק של סרגל הכרטיסייה.
+  TextDisplayProfile _profileFor(BuildContext context, TextDisplaySlot slot) =>
+      context
+          .watch<SettingsBloc>()
+          .state
+          .textDisplayPolicy
+          .resolve(slot)
+          .copyWith(
+            nikud: visibilityOf(_removeNikud),
+            punctuation: visibilityOf(_removePunctuation),
+          );
+
   bool get _isNavigationReady =>
       _sortedHeadings != null && _sortedHeadings!.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    final settings = context.read<SettingsBloc>().state;
-    _removeNikud = settings.defaultRemoveNikud;
-    _removePunctuation = settings.defaultRemovePunctuation;
+    final base = context.read<SettingsBloc>().state.textDisplayPolicy.resolve(
+      TextDisplaySlot.commentaryDisplay,
+    );
+    _removeNikud = base.removeNikud;
+    _removePunctuation = base.removePunctuation;
     _navTabController = TabController(length: 3, vsync: this);
     _navTabController.addListener(_handleTabChanged);
     _initHeadings();
@@ -181,8 +196,9 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
   void _scrollNavToSelectedHeading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_navScrollController.isAttached) return;
-      final headingIdx = _navFilteredIndices(_navSearchController.text)
-          .indexOf(_selectedHeadingIdx);
+      final headingIdx = _navFilteredIndices(
+        _navSearchController.text,
+      ).indexOf(_selectedHeadingIdx);
       if (headingIdx < 0) return;
       _navScrollController.scrollTo(
         // +1: פריט 0 הוא הכותרת הראשית.
@@ -401,10 +417,12 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
     if (headings == null || headings.isEmpty) return;
     try {
       final library = await DataRepository.instance.library;
-      final textBook = library.getCompanionBook(
-        widget.tab.sourceTab.book,
-        TextBook,
-      ) as TextBook?;
+      final textBook =
+          library.getCompanionBook(
+                widget.tab.sourceTab.book,
+                TextBook,
+              )
+              as TextBook?;
       if (textBook == null) return;
 
       int lo = 0;
@@ -634,8 +652,16 @@ class _PdfCommentatorsTabScreenState extends State<PdfCommentatorsTabScreen>
                     lineStartOverride: range.start,
                     lineEndOverride: range.end,
                     extraLineIndices: _extraLines.isEmpty ? null : _extraLines,
-                    removeNikud: _removeNikud,
-                    removePunctuation: _removePunctuation,
+                    displayProfile: _profileFor(
+                      context,
+                      TextDisplaySlot.commentaryDisplay,
+                    ),
+                    copyDisplayProfile: _profileFor(
+                      context,
+                      TextDisplaySlot.commentaryDisplay.copyWith(
+                        channel: TextChannel.copy,
+                      ),
+                    ),
                     openBookCallback: (tab) => openPreparedTab(context, tab),
                     fontSize: context
                         .watch<SettingsBloc>()

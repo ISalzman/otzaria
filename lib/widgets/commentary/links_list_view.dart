@@ -17,6 +17,7 @@ import 'package:otzaria/tools/dictionary/widgets/laaz_commentary_subblock.dart';
 import 'package:otzaria/widgets/feedback/app_future_builder.dart';
 import 'package:otzaria/widgets/lists/filter_chips_widget.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -31,16 +32,11 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 @visibleForTesting
 RenderSettings buildSelectedLinkRenderSettings({
   required SettingsState settingsState,
-  required bool removeNikud,
+  required TextDisplayProfile displayProfile,
   required String searchText,
-  bool removePunctuation = false,
 }) {
-  return RenderSettings(
-    removeNikud: removeNikud,
-    removePunctuation: removePunctuation,
-    removeTeamim: !settingsState.showTeamim,
-    replaceHolyNames: settingsState.replaceHolyNames,
-    holyNameStyle: settingsState.holyNameStyle,
+  return RenderSettings.fromProfile(
+    displayProfile,
     searchText: searchText,
     fontSize: settingsState.commentatorsFontSize,
     fontFamily: settingsState.commentatorsFontFamily,
@@ -242,9 +238,11 @@ class LinksListView extends StatefulWidget {
   final Function(OpenedTab) openBookCallback;
   final double fontSize;
 
-  /// מצב התצוגה שחל על תוכן הקישורים.
-  final bool removeNikud;
-  final bool removePunctuation;
+  /// פרופיל התצוגה שחל על תוכן הקישורים.
+  final TextDisplayProfile displayProfile;
+
+  /// פרופיל ערוץ ההעתקה; null = כמו התצוגה.
+  final TextDisplayProfile? copyDisplayProfile;
 
   final SelectionSyncController? selectionSyncController;
 
@@ -263,8 +261,8 @@ class LinksListView extends StatefulWidget {
     required this.onSelectedLinkTypesChanged,
     required this.openBookCallback,
     required this.fontSize,
-    this.removeNikud = false,
-    this.removePunctuation = false,
+    required this.displayProfile,
+    this.copyDisplayProfile,
     this.selectionSyncController,
     this.contentScopeKey,
     this.emptyMessage = 'לא נמצאו קישורים לקטע הנבחר',
@@ -955,8 +953,8 @@ class _LinksListViewState extends State<LinksListView> {
                   link: link,
                   openBookCallback: widget.openBookCallback,
                   fontSize: widget.fontSize,
-                  removeNikud: widget.removeNikud,
-                  removePunctuation: widget.removePunctuation,
+                  displayProfile: widget.displayProfile,
+                  copyDisplayProfile: widget.copyDisplayProfile,
                   savedSelectedText: _savedSelectedText,
                   onNavigateToLink: _navigateToLink,
                   onCopySelected: () => ContextMenuUtils.copyFormattedText(
@@ -1013,8 +1011,7 @@ class _LinksListViewState extends State<LinksListView> {
               text: content,
               settings: buildSelectedLinkRenderSettings(
                 settingsState: settingsState,
-                removeNikud: widget.removeNikud,
-                removePunctuation: widget.removePunctuation,
+                displayProfile: widget.displayProfile,
                 searchText: searchText,
               ),
             ),

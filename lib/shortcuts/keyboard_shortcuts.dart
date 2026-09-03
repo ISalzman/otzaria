@@ -26,6 +26,8 @@ import 'package:otzaria/bookmarks/view/save_group_bookmark_dialog.dart';
 import 'package:otzaria/history/view/history_screen.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut_dispatcher.dart';
+import 'package:otzaria/shortcuts/dynamic/dynamic_shortcut_registry.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
@@ -489,6 +491,22 @@ class _KeyboardShortcutsState extends State<KeyboardShortcuts> {
           'otzaria://open/plugin/$pluginId',
         );
         return KeyEventResult.handled;
+      }
+    }
+
+    // קיצורים דינמיים (פעולה + פרמטרים שהמשתמש הגדיר) — על כרטיסיית טקסט.
+    if (isReadingScreen) {
+      final tab = context.read<TabsBloc>().state.currentTab;
+      if (tab is TextBookTab) {
+        for (final dynamicShortcut
+            in DynamicShortcutRegistry.instance.shortcuts) {
+          if (dynamicShortcut.key.isNotEmpty &&
+              ShortcutHelper.matchesShortcut(event, dynamicShortcut.key)) {
+            return DynamicShortcutDispatcher.run(dynamicShortcut, tab)
+                ? KeyEventResult.handled
+                : KeyEventResult.ignored;
+          }
+        }
       }
     }
 

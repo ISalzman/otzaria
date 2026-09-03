@@ -5,6 +5,7 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/commentary_service.dart';
+import 'package:otzaria/text_display/models/text_display_profile.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
@@ -56,10 +57,12 @@ class SiblingCommentariesController {
 
   /// בונה את פריט התפריט "מפרשים נוספים על <כתובת המקור>", או null כשאין מקור
   /// (השורה אינה בספר מפרש).
+  /// [removeNikud]/[removePunctuation] — מסלול תאימות; העדיפו [displayProfile].
   AppContextMenuEntry? buildEntry({
     required int lineIndex,
     required Link? sourceLink,
     required void Function(Link link) onNavigate,
+    TextDisplayProfile? displayProfile,
     bool? removeNikud,
     bool? removePunctuation,
   }) {
@@ -83,6 +86,7 @@ class SiblingCommentariesController {
         lineIndex,
         sourceLink,
         onNavigate,
+        displayProfile: displayProfile,
         removeNikud: removeNikud,
         removePunctuation: removePunctuation,
       ),
@@ -94,6 +98,7 @@ class SiblingCommentariesController {
     int lineIndex,
     Link sourceLink,
     void Function(Link link) onNavigate, {
+    TextDisplayProfile? displayProfile,
     bool? removeNikud,
     bool? removePunctuation,
   }) {
@@ -126,6 +131,7 @@ class SiblingCommentariesController {
       entries.add(
         buildLinkContextMenuEntry(
           link: link,
+          displayProfile: displayProfile,
           removeNikud: removeNikud,
           removePunctuation: removePunctuation,
           onTap: () => onNavigate(link),

@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 abstract class SettingsEvent extends Equatable {
   const SettingsEvent();
@@ -198,6 +199,16 @@ class UpdateRemoveNikudFromTanach extends SettingsEvent {
 
   @override
   List<Object?> get props => [removeNikudFromTanach];
+}
+
+/// עדכון מלא של מדיניות תצוגת הטקסט (עורך ההגדרות החדש).
+class UpdateTextDisplayPolicy extends SettingsEvent {
+  final TextDisplayPolicy textDisplayPolicy;
+
+  const UpdateTextDisplayPolicy(this.textDisplayPolicy);
+
+  @override
+  List<Object?> get props => [textDisplayPolicy];
 }
 
 class UpdateDefaultRemovePunctuation extends SettingsEvent {

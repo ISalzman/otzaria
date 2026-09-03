@@ -7,6 +7,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/services/nikud_display_service.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 /// מחלקה לניהול הגדרות פר-ספר
 class PerBookSettings {
@@ -408,6 +409,11 @@ class TextBookPerBookSettings {
   /// נשמר לצד [removePunctuation]: בתנ"ך ברירת המחדל האפקטיבית לפיסוק היא
   /// תמיד false, והניקוי (שרואה רק קובץ hash) זקוק לדגל כדי לחשב אותה.
   final bool? isTanach;
+
+  /// שכבת תצוגת הטקסט של הספר (ניקוד/טעמים/פיסוק/שם הוי"ה/ציונים לכל
+  /// חריץ). מחליפה את [removeNikud] ו-[removePunctuation], שנשמרים לקריאה
+  /// בלבד מקבצים ישנים.
+  final TextDisplayLayer? displayLayer;
   final bool? continuousReadingMode;
 
   /// המפרשים הנבחרים בספר זה. נשמר תמיד (לא תלוי ב-enablePerBookSettings) כדי
@@ -426,6 +432,7 @@ class TextBookPerBookSettings {
     this.removeNikud,
     this.removePunctuation,
     this.isTanach,
+    this.displayLayer,
     this.continuousReadingMode,
     this.activeCommentators,
     this.pageShapeLeftWidth,
@@ -440,6 +447,8 @@ class TextBookPerBookSettings {
     if (removeNikud != null) 'removeNikud': removeNikud,
     if (removePunctuation != null) 'removePunctuation': removePunctuation,
     if (isTanach != null) 'isTanach': isTanach,
+    if (displayLayer != null && displayLayer!.isNotEmpty)
+      'display': displayLayer!.toJson(),
     if (continuousReadingMode != null)
       'continuousReadingMode': continuousReadingMode,
     if (activeCommentators != null) 'activeCommentators': activeCommentators,
@@ -458,6 +467,11 @@ class TextBookPerBookSettings {
       removeNikud: json['removeNikud'] as bool?,
       removePunctuation: json['removePunctuation'] as bool?,
       isTanach: json['isTanach'] as bool?,
+      displayLayer: json['display'] is Map
+          ? TextDisplayLayer.fromJson(
+              Map<String, dynamic>.from(json['display'] as Map),
+            )
+          : null,
       continuousReadingMode: json['continuousReadingMode'] as bool?,
       activeCommentators: (json['activeCommentators'] as List<dynamic>?)
           ?.cast<String>(),
@@ -470,11 +484,20 @@ class TextBookPerBookSettings {
     );
   }
 
+  /// שכבת התצוגה האפקטיבית: החדשה, או תרגום השדות הישנים כשאין חדשה.
+  TextDisplayLayer get effectiveDisplayLayer =>
+      displayLayer ??
+      legacyBookDisplayLayer(
+        removeNikud: removeNikud,
+        removePunctuation: removePunctuation,
+      );
+
   TextBookPerBookSettings copyWith({
     double? fontSize,
     bool? commentatorsBelow,
     bool? removeNikud,
     bool? removePunctuation,
+    TextDisplayLayer? displayLayer,
     bool? continuousReadingMode,
     List<String>? activeCommentators,
     bool clearActiveCommentators = false,
@@ -489,6 +512,7 @@ class TextBookPerBookSettings {
       removeNikud: removeNikud ?? this.removeNikud,
       removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach,
+      displayLayer: displayLayer ?? this.displayLayer,
       continuousReadingMode:
           continuousReadingMode ?? this.continuousReadingMode,
       activeCommentators: clearActiveCommentators

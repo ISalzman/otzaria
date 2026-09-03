@@ -4,6 +4,8 @@ import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/settings/engine/settings_wrapper.dart';
 import 'package:otzaria/settings/l10n/settings_language.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -33,6 +35,10 @@ class SettingsRepository {
   static const String keyRemoveNikudFromTanach = 'key-remove-nikud-tanach';
   static const String keyDefaultRemovePunctuation =
       'key-default-remove-punctuation';
+
+  /// המדיניות המאוחדת של תצוגת הטקסט (JSON). מקור האמת; ששת המפתחות הישנים
+  /// (ניקוד/תנ"ך/פיסוק/טעמים/שם הוי"ה) משוקפים ממנה לתאימות.
+  static const String keyTextDisplayPolicy = 'key-text-display-policy';
   static const String keyContinuousReadingMode = 'key-continuous-reading-mode';
   static const String keyDefaultSidebarOpen = 'key-default-sidebar-open';
   static const String keyDefaultCommentaryOpen = 'key-default-commentary-open';
@@ -201,6 +207,7 @@ class SettingsRepository {
     keyDefaultNikud,
     keyRemoveNikudFromTanach,
     keyDefaultRemovePunctuation,
+    keyTextDisplayPolicy,
     keyContinuousReadingMode,
     keyDefaultSidebarOpen,
     keyDefaultCommentaryOpen,
@@ -370,6 +377,7 @@ class SettingsRepository {
         keyDefaultRemovePunctuation,
         defaultValue: false,
       ),
+      'textDisplayPolicy': loadTextDisplayPolicy(),
       'defaultContinuousReadingMode': _settings.getValue<bool>(
         keyContinuousReadingMode,
         defaultValue: false,
@@ -680,6 +688,73 @@ class SettingsRepository {
 
   Future<void> updateDefaultRemovePunctuation(bool value) async {
     await _settings.setValue(keyDefaultRemovePunctuation, value);
+  }
+
+  /// טוען את מדיניות תצוגת הטקסט; בהיעדרה נבנית מהמפתחות הישנים (מיגרציה
+  /// שקטה — נשמרת בכתיבה הראשונה דרך [updateTextDisplayPolicy]).
+  TextDisplayPolicy loadTextDisplayPolicy() {
+    final raw = _settings.getValue<String>(
+      keyTextDisplayPolicy,
+      defaultValue: '',
+    );
+    if (raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          return TextDisplayPolicy.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+      } catch (_) {
+        // JSON פגום — נופלים למפתחות הישנים.
+      }
+    }
+    return TextDisplayPolicy.fromLegacy(
+      defaultRemoveNikud: _settings.getValue<bool>(
+        keyDefaultNikud,
+        defaultValue: false,
+      ),
+      removeNikudFromTanach: _settings.getValue<bool>(
+        keyRemoveNikudFromTanach,
+        defaultValue: false,
+      ),
+      defaultRemovePunctuation: _settings.getValue<bool>(
+        keyDefaultRemovePunctuation,
+        defaultValue: false,
+      ),
+      showTeamim: _settings.getValue<bool>(keyShowTeamim, defaultValue: true),
+      replaceHolyNames: _settings.getValue<bool>(
+        keyReplaceHolyNames,
+        defaultValue: true,
+      ),
+      holyNameStyle: HolyNameStyle.fromStorage(
+        _settings.getValue<String>(keyHolyNameStyle, defaultValue: 'kuf'),
+      ),
+    );
+  }
+
+  /// שומר את המדיניות ומשקף אותה לששת המפתחות הישנים, שקוראים ישירים
+  /// (Settings.getValue) עדיין נשענים עליהם.
+  Future<void> updateTextDisplayPolicy(TextDisplayPolicy policy) async {
+    await _settings.setValue(
+      keyTextDisplayPolicy,
+      jsonEncode(policy.toJson()),
+    );
+    await _settings.setValue(keyDefaultNikud, policy.defaultRemoveNikud);
+    await _settings.setValue(
+      keyRemoveNikudFromTanach,
+      policy.removeNikudFromTanach,
+    );
+    await _settings.setValue(
+      keyDefaultRemovePunctuation,
+      policy.defaultRemovePunctuation,
+    );
+    await _settings.setValue(keyShowTeamim, policy.showTeamim);
+    await _settings.setValue(keyReplaceHolyNames, policy.replaceHolyNames);
+    await _settings.setValue(
+      keyHolyNameStyle,
+      policy.holyNameStyle.storageKey,
+    );
   }
 
   Future<void> updateDefaultContinuousReadingMode(bool value) async {

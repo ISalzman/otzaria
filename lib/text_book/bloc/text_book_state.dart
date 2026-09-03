@@ -6,6 +6,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 
 String _searchOptionsSignature(Map<String, Map<String, bool>> options) {
   if (options.isEmpty) return '';
@@ -188,23 +189,13 @@ class TextBookLoaded extends TextBookState {
   /// ריק = הכל מוצג. הסינון עצמו נעשה בשכבת ה-UI.
   final Set<String> selectedLinkTypes;
   final List<TocEntry> tableOfContents;
-  final bool removeNikud;
-  final bool removePunctuation;
   final bool isTanach;
 
-  /// האם הספר קיבל ניקוד רק בזכות היותו תנ"ך ("הצג ניקוד בתנ"ך").
-  /// ראה [commentaryRemoveNikud].
-  final bool nikudExemptByTanach;
-
-  /// האם הספר קיבל פיסוק רק בזכות היותו תנ"ך.
-  /// ראה [commentaryRemovePunctuation].
-  final bool punctuationExemptByTanach;
-
-  /// עקיפת ניקוד זמנית לכרטיסיית המפרשים בלבד.
-  final bool? commentaryRemoveNikudOverride;
-
-  /// עקיפת פיסוק זמנית לכרטיסיית המפרשים בלבד.
-  final bool? commentaryRemovePunctuationOverride;
+  /// שכבות תצוגת הטקסט, מהספציפי לכללי: עקיפות זמניות של הכרטיסייה, קובץ
+  /// ההגדרות של הספר, והמדיניות הגלובלית כפי שנטענה. ראה [displayProfile].
+  final TextDisplayLayer displayOverrides;
+  final TextDisplayLayer bookDisplayLayer;
+  final TextDisplayPolicy displayPolicy;
   final bool supportsContinuousReadingMode;
   final bool continuousReadingMode;
 
@@ -276,7 +267,7 @@ class TextBookLoaded extends TextBookState {
   /// מדגיש את רקע השורה בצבע secondaryContainer.
   final int? permanentHighlightLine;
 
-  const TextBookLoaded({
+  TextBookLoaded({
     required TextBook book,
     required bool showLeftPane,
     required this.content,
@@ -294,13 +285,16 @@ class TextBookLoaded extends TextBookState {
     this.selectedLinkTypes = const {},
     required this.linksByLine,
     required this.tableOfContents,
-    required this.removeNikud,
-    this.removePunctuation = false,
+    bool? removeNikud,
+    bool removePunctuation = false,
     this.isTanach = false,
-    this.nikudExemptByTanach = false,
-    this.punctuationExemptByTanach = false,
-    this.commentaryRemoveNikudOverride,
-    this.commentaryRemovePunctuationOverride,
+    bool nikudExemptByTanach = false,
+    bool punctuationExemptByTanach = false,
+    bool? commentaryRemoveNikudOverride,
+    bool? commentaryRemovePunctuationOverride,
+    TextDisplayLayer? displayOverrides,
+    TextDisplayLayer? bookDisplayLayer,
+    TextDisplayPolicy? displayPolicy,
     this.supportsContinuousReadingMode = false,
     this.continuousReadingMode = false,
     this.readingSegments = const [],
@@ -337,7 +331,23 @@ class TextBookLoaded extends TextBookState {
     this.hasLinksFile = false,
     this.highlightText = '',
     this.permanentHighlightLine,
-  }) : super(book, selectedIndex ?? 0, showLeftPane, activeCommentators);
+  }) : displayOverrides =
+           displayOverrides ??
+           legacyDisplayOverrides(
+             view: showPageShapeView ? TextView.pageShape : TextView.regular,
+             commentaryRemoveNikud: commentaryRemoveNikudOverride,
+             commentaryRemovePunctuation: commentaryRemovePunctuationOverride,
+           ),
+       bookDisplayLayer = bookDisplayLayer ?? TextDisplayLayer.empty,
+       displayPolicy =
+           displayPolicy ??
+           legacyDisplayPolicy(
+             removeNikud: removeNikud ?? false,
+             removePunctuation: removePunctuation,
+             nikudExemptByTanach: nikudExemptByTanach,
+             punctuationExemptByTanach: punctuationExemptByTanach,
+           ),
+       super(book, selectedIndex ?? 0, showLeftPane, activeCommentators);
 
   factory TextBookLoaded.initial({
     required TextBook book,
@@ -391,14 +401,72 @@ class TextBookLoaded extends TextBookState {
   bool lineParticipatesInSearchHighlight(int lineIndex) =>
       searchResultLines?.contains(lineIndex) ?? false;
 
-  /// מצב הניקוד שחל על המפרשים, הקישורים והתצוגות המקדימות.
-  bool get commentaryRemoveNikud =>
-      commentaryRemoveNikudOverride ?? (removeNikud || nikudExemptByTanach);
+  /// מצב התצוגה הפעיל — קובע מאיזה חריץ נפתרות ההגדרות.
+  TextView get activeView =>
+      showPageShapeView ? TextView.pageShape : TextView.regular;
 
-  /// מצב הפיסוק שחל על המפרשים, הקישורים והתצוגות המקדימות של הספר.
+  /// כל השכבות מהספציפי לכללי, בסדר שהרזולבר מצפה לו.
+  List<TextDisplayLayer> get displayLayers => [
+    displayOverrides,
+    bookDisplayLayer,
+    ...displayPolicy.layersFor(isTanach: isTanach),
+  ];
+
+  /// הפרופיל הפתור ליעד, לתצוגה ([view] ברירת מחדל: הפעילה) ולערוץ.
+  TextDisplayProfile displayProfile({
+    required TextTarget target,
+    TextView? view,
+    TextChannel channel = TextChannel.display,
+  }) => TextDisplayResolver.resolve(
+    slot: TextDisplaySlot(
+      target: target,
+      view: view ?? activeView,
+      channel: channel,
+    ),
+    layers: displayLayers,
+  );
+
+  TextDisplayProfile get bodyDisplayProfile =>
+      displayProfile(target: TextTarget.body);
+
+  /// חל על המפרשים, הקישורים והתצוגות המקדימות.
+  TextDisplayProfile get commentaryDisplayProfile =>
+      displayProfile(target: TextTarget.commentary);
+
+  bool get removeNikud => bodyDisplayProfile.removeNikud;
+  bool get removePunctuation => bodyDisplayProfile.removePunctuation;
+  bool get commentaryRemoveNikud => commentaryDisplayProfile.removeNikud;
   bool get commentaryRemovePunctuation =>
-      commentaryRemovePunctuationOverride ??
-      (removePunctuation || punctuationExemptByTanach);
+      commentaryDisplayProfile.removePunctuation;
+
+  TextDisplaySlot get _bodySlot => TextDisplaySlot(
+    target: TextTarget.body,
+    view: activeView,
+    channel: TextChannel.display,
+  );
+  TextDisplaySlot get _commentarySlot => TextDisplaySlot(
+    target: TextTarget.commentary,
+    view: activeView,
+    channel: TextChannel.display,
+  );
+
+  /// עקיפה זמנית של המפרשים בכרטיסייה, אם קיימת.
+  bool? get commentaryRemoveNikudOverride =>
+      removeFlagOf(displayOverrides.patchFor(_commentarySlot).nikud);
+  bool? get commentaryRemovePunctuationOverride =>
+      removeFlagOf(displayOverrides.patchFor(_commentarySlot).punctuation);
+
+  /// האם הספר קיבל ניקוד רק בזכות היותו תנ"ך: המדיניות מנקדת את גופו אך לא
+  /// את מפרשיו.
+  bool get nikudExemptByTanach =>
+      !displayPolicy.resolve(_bodySlot, isTanach: isTanach).removeNikud &&
+      displayPolicy.resolve(_commentarySlot, isTanach: isTanach).removeNikud;
+
+  bool get punctuationExemptByTanach =>
+      !displayPolicy.resolve(_bodySlot, isTanach: isTanach).removePunctuation &&
+      displayPolicy
+          .resolve(_commentarySlot, isTanach: isTanach)
+          .removePunctuation;
 
   TextBookLoaded copyWith({
     TextBook? book,
@@ -427,6 +495,9 @@ class TextBookLoaded extends TextBookState {
     bool? commentaryRemovePunctuationOverride,
     bool clearCommentaryRemoveNikudOverride = false,
     bool clearCommentaryRemovePunctuationOverride = false,
+    TextDisplayLayer? displayOverrides,
+    TextDisplayLayer? bookDisplayLayer,
+    TextDisplayPolicy? displayPolicy,
     bool? supportsContinuousReadingMode,
     bool? continuousReadingMode,
     List<ReadingSegment>? readingSegments,
@@ -472,6 +543,70 @@ class TextBookLoaded extends TextBookState {
     int? permanentHighlightLine,
     bool clearPermanentHighlight = false,
   }) {
+    final nextView = (showPageShapeView ?? this.showPageShapeView)
+        ? TextView.pageShape
+        : TextView.regular;
+    final bodySlot = TextDisplaySlot(
+      target: TextTarget.body,
+      view: nextView,
+      channel: TextChannel.display,
+    );
+    final commentarySlot = TextDisplaySlot(
+      target: TextTarget.commentary,
+      view: nextView,
+      channel: TextChannel.display,
+    );
+    var overrides = displayOverrides ?? this.displayOverrides;
+    if (removeNikud != null) {
+      overrides = overrides.merged(
+        bodySlot,
+        TextDisplayPatch(nikud: visibilityOf(removeNikud)),
+      );
+    }
+    if (removePunctuation != null) {
+      overrides = overrides.merged(
+        bodySlot,
+        TextDisplayPatch(punctuation: visibilityOf(removePunctuation)),
+      );
+    }
+    if (clearCommentaryRemoveNikudOverride) {
+      overrides = overrides.withSlot(
+        commentarySlot,
+        overrides.patchFor(commentarySlot).copyWith(clearNikud: true),
+      );
+    } else if (commentaryRemoveNikudOverride != null) {
+      overrides = overrides.merged(
+        commentarySlot,
+        TextDisplayPatch(nikud: visibilityOf(commentaryRemoveNikudOverride)),
+      );
+    }
+    if (clearCommentaryRemovePunctuationOverride) {
+      overrides = overrides.withSlot(
+        commentarySlot,
+        overrides.patchFor(commentarySlot).copyWith(clearPunctuation: true),
+      );
+    } else if (commentaryRemovePunctuationOverride != null) {
+      overrides = overrides.merged(
+        commentarySlot,
+        TextDisplayPatch(
+          punctuation: visibilityOf(commentaryRemovePunctuationOverride),
+        ),
+      );
+    }
+    var policy = displayPolicy ?? this.displayPolicy;
+    if (nikudExemptByTanach != null || punctuationExemptByTanach != null) {
+      final body = policy.resolve(
+        bodySlot,
+        isTanach: isTanach ?? this.isTanach,
+      );
+      policy = legacyDisplayPolicy(
+        removeNikud: body.removeNikud,
+        removePunctuation: body.removePunctuation,
+        nikudExemptByTanach: nikudExemptByTanach ?? this.nikudExemptByTanach,
+        punctuationExemptByTanach:
+            punctuationExemptByTanach ?? this.punctuationExemptByTanach,
+      );
+    }
     return TextBookLoaded(
       book: book ?? this.book,
       content: content ?? this.content,
@@ -491,21 +626,10 @@ class TextBookLoaded extends TextBookState {
       selectedLinkTypes: selectedLinkTypes ?? this.selectedLinkTypes,
       linksByLine: linksByLine ?? this.linksByLine,
       tableOfContents: tableOfContents ?? this.tableOfContents,
-      removeNikud: removeNikud ?? this.removeNikud,
-      removePunctuation: removePunctuation ?? this.removePunctuation,
       isTanach: isTanach ?? this.isTanach,
-      nikudExemptByTanach: nikudExemptByTanach ?? this.nikudExemptByTanach,
-      punctuationExemptByTanach:
-          punctuationExemptByTanach ?? this.punctuationExemptByTanach,
-      commentaryRemoveNikudOverride: clearCommentaryRemoveNikudOverride
-          ? null
-          : (commentaryRemoveNikudOverride ??
-                this.commentaryRemoveNikudOverride),
-      commentaryRemovePunctuationOverride:
-          clearCommentaryRemovePunctuationOverride
-          ? null
-          : (commentaryRemovePunctuationOverride ??
-                this.commentaryRemovePunctuationOverride),
+      displayOverrides: overrides,
+      bookDisplayLayer: bookDisplayLayer ?? this.bookDisplayLayer,
+      displayPolicy: policy,
       supportsContinuousReadingMode:
           supportsContinuousReadingMode ?? this.supportsContinuousReadingMode,
       continuousReadingMode:
@@ -613,13 +737,10 @@ class TextBookLoaded extends TextBookState {
     // בהשוואת ה-state, והסינון לא יתעדכן.
     selectedLinkTypes,
     tableOfContents.length,
-    removeNikud,
-    removePunctuation,
     isTanach,
-    nikudExemptByTanach,
-    punctuationExemptByTanach,
-    commentaryRemoveNikudOverride,
-    commentaryRemovePunctuationOverride,
+    displayOverrides,
+    bookDisplayLayer,
+    displayPolicy,
     supportsContinuousReadingMode,
     continuousReadingMode,
     readingSegments.length,

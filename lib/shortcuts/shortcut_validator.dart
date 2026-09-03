@@ -139,6 +139,18 @@ class ShortcutValidator {
   static Map<String, PluginShortcutTarget> get pluginShortcuts =>
       _pluginShortcuts;
 
+  /// קיצורים דינמיים (פעולה + פרמטרים שהמשתמש הגדיר) — מפתח סינתטי →
+  /// תווית וערך המקש. נדחף מ-DynamicShortcutRegistry.
+  static Map<String, ({String label, String key})> _dynamicShortcuts = const {};
+
+  static void registerDynamicShortcuts(
+    Map<String, ({String label, String key})> shortcuts,
+  ) {
+    _dynamicShortcuts = Map.unmodifiable(shortcuts);
+  }
+
+  static Iterable<String> get dynamicShortcutKeys => _dynamicShortcuts.keys;
+
   /// המפתחות של קיצורי המקלדת שהתוספים הצהירו עליהם כעת.
   static Iterable<String> get declaredPluginShortcutKeys =>
       _pluginShortcuts.keys;
@@ -148,6 +160,7 @@ class ShortcutValidator {
     ..._baseShortcutKeys,
     ..._pluginShortcutNames.keys,
     ..._pluginShortcuts.keys,
+    ..._dynamicShortcuts.keys,
   ];
 
   static const List<String> _baseShortcutKeys = [
@@ -259,6 +272,7 @@ class ShortcutValidator {
     ..._baseShortcutNames,
     ..._pluginShortcutNames,
     for (final entry in _pluginShortcuts.entries) entry.key: entry.value.label,
+    for (final entry in _dynamicShortcuts.entries) entry.key: entry.value.label,
   };
 
   static const Map<String, String> _baseShortcutNames = {
@@ -382,6 +396,12 @@ class ShortcutValidator {
   /// הוא מתנגש עם קיצור קיים (ואז התוסף מפנה את מקומו ונהיה לא-מוגדר).
   static String? getShortcutValue(String settingKey) {
     final normalizedKey = canonicalSettingKey(settingKey);
+    // קיצור דינמי שומר את המקש בתוך הרשומה שלו, לא במפתח הגדרות נפרד.
+    final dynamic = _dynamicShortcuts[normalizedKey];
+    if (dynamic != null) {
+      final value = _normalizedShortcutValue(dynamic.key);
+      return value.isEmpty ? null : value;
+    }
     final directValue = Settings.getValue<String>(normalizedKey);
     final declared = _pluginShortcuts[normalizedKey];
     if (directValue != null && directValue.isNotEmpty) {

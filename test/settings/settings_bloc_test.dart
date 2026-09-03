@@ -255,7 +255,7 @@ void main() {
           settingsBloc.state.copyWith(defaultRemoveNikud: true),
         ],
         verify: (_) {
-          verify(mockRepository.updateDefaultRemoveNikud(true)).called(1);
+          verify(mockRepository.updateTextDisplayPolicy(any)).called(1);
         },
       );
     });
@@ -269,7 +269,7 @@ void main() {
           settingsBloc.state.copyWith(removeNikudFromTanach: true),
         ],
         verify: (_) {
-          verify(mockRepository.updateRemoveNikudFromTanach(true)).called(1);
+          verify(mockRepository.updateTextDisplayPolicy(any)).called(1);
         },
       );
     });

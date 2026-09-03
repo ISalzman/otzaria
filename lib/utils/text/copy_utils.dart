@@ -5,6 +5,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/core/messages/common_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as text_utils;
 
 class CopyUtils {
@@ -18,8 +19,11 @@ class CopyUtils {
     required bool replaceHolyNames,
     text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
     bool removeNikud = false,
+    TextDisplayProfile? profile,
   }) {
     if (text.isEmpty) return text;
+    // פרופיל מלא (ערוץ ההעתקה / "העתק כ...") מחליף את הדגלים הבודדים.
+    if (profile != null) return applyTextDisplayProfile(text, profile);
     var result = text;
     if (removeNikud) {
       result = text_utils.removeVolwels(result);
@@ -39,15 +43,18 @@ class CopyUtils {
     required bool replaceHolyNames,
     text_utils.HolyNameStyle holyNameStyle = text_utils.HolyNameStyle.kufKuf,
     bool removeNikud = false,
+    TextDisplayProfile? profile,
   }) {
     final processedPlainText = applyCopyPreferences(
       text: plainText,
       replaceHolyNames: replaceHolyNames,
       holyNameStyle: holyNameStyle,
       removeNikud: removeNikud,
+      profile: profile,
     );
 
-    if ((!replaceHolyNames && !removeNikud) || htmlText.isEmpty) {
+    if ((!replaceHolyNames && !removeNikud && profile == null) ||
+        htmlText.isEmpty) {
       return (plainText: processedPlainText, htmlText: htmlText);
     }
 
@@ -56,6 +63,7 @@ class CopyUtils {
       replaceHolyNames: replaceHolyNames,
       holyNameStyle: holyNameStyle,
       removeNikud: removeNikud,
+      profile: profile,
     );
 
     final normalizedPlainText = _normalizeCopiedText(processedPlainText);
@@ -348,8 +356,10 @@ class CopyUtils {
     required bool replaceHolyNames,
     required text_utils.HolyNameStyle holyNameStyle,
     bool removeNikud = false,
+    TextDisplayProfile? profile,
   }) {
-    if (htmlText.isEmpty || (!replaceHolyNames && !removeNikud)) {
+    if (htmlText.isEmpty ||
+        (!replaceHolyNames && !removeNikud && profile == null)) {
       return htmlText;
     }
 
@@ -359,6 +369,7 @@ class CopyUtils {
       replaceHolyNames: replaceHolyNames,
       removeNikud: removeNikud,
       holyNameStyle: holyNameStyle,
+      profile: profile,
     );
     final container = html_dom.Element.tag('div')..nodes.addAll(fragment.nodes);
     return container.innerHtml;
@@ -369,6 +380,7 @@ class CopyUtils {
     required bool replaceHolyNames,
     required bool removeNikud,
     required text_utils.HolyNameStyle holyNameStyle,
+    TextDisplayProfile? profile,
   }) {
     for (final node in nodes) {
       if (node.nodeType == html_dom.Node.TEXT_NODE) {
@@ -379,6 +391,7 @@ class CopyUtils {
             replaceHolyNames: replaceHolyNames,
             holyNameStyle: holyNameStyle,
             removeNikud: removeNikud,
+            profile: profile,
           );
         }
         continue;
@@ -389,6 +402,7 @@ class CopyUtils {
         replaceHolyNames: replaceHolyNames,
         removeNikud: removeNikud,
         holyNameStyle: holyNameStyle,
+        profile: profile,
       );
     }
   }

@@ -93,6 +93,10 @@ abstract class SettingsMessages {
       'קיצור זה כבר בשימוש עבור: $conflictingNames';
 
   static const String shortcutsReset = 'קיצורי המקשים אופסו בהצלחה';
+  static const String dynamicShortcutMissingKey =
+      'יש להקליט צירוף מקשים לקיצור';
+  static const String dynamicShortcutMissingChange =
+      'יש לבחור לפחות שינוי אחד שהקיצור יבצע';
 
   // ── מערכת וגיבויים (system_settings_tab) ───────────────────────────────
 

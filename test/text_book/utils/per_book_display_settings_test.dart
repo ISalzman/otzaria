@@ -116,8 +116,8 @@ void main() {
       removeNikud: true,
     );
 
-    expect(json?['removeNikud'], isTrue);
-    expect(json?['isTanach'], isTrue, reason: 'דגל הלוויין נדרש לניקוי');
+    expect(json?['display']['body.regular.display']['nikud'], 'hide');
+    expect(json?['isTanach'], isNull, reason: 'ההחרגה חיה במדיניות, לא בקובץ');
   });
 
   testWidgets('הצגת ניקוד בתנ"ך שווה לברירה האפקטיבית ואינה נשמרת', (
@@ -146,7 +146,7 @@ void main() {
     expect(json, isNull, reason: 'true שווה לברירת המחדל בספר שאינו תנ"ך');
   });
 
-  testWidgets('override פיסוק בתנ"ך נשמר עם דגל הלוויין', (tester) async {
+  testWidgets('override פיסוק בתנ"ך נשמר כטלאי על חריץ הגוף', (tester) async {
     final settings = SettingsState.initial().copyWith(
       enablePerBookSettings: true,
       defaultRemovePunctuation: true,
@@ -159,8 +159,8 @@ void main() {
       removePunctuation: true,
     );
 
-    expect(json?['removePunctuation'], isTrue);
-    expect(json?['isTanach'], isTrue);
+    expect(json?['display']['body.regular.display']['punctuation'], 'hide');
+    expect(json?['isTanach'], isNull);
   });
 
   testWidgets('כשההתאמות פר-ספר כבויות לא נשמר דבר', (tester) async {

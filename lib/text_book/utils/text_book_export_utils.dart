@@ -1,6 +1,17 @@
 import 'dart:io';
 
+import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
+
+/// מחיל פרופיל תצוגה (ערוץ ייצוא) על שורת ספר, ומנקה HTML לפי [stripHtml].
+String applyTextBookExportProfile(
+  String input, {
+  required TextDisplayProfile profile,
+  required bool stripHtml,
+}) {
+  final text = applyTextDisplayProfile(input, profile);
+  return stripHtml ? stripHtmlIfNeeded(text) : text;
+}
 
 /// מחיל על שורת ספר את אותן טרנספורמציות טקסט שנדרשות לפני ייצוא.
 String applyTextBookExportTextTransforms(

@@ -18,6 +18,8 @@ import 'package:otzaria/widgets/misc/inline_link_targets.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
 import 'package:otzaria/core/messages/text_book_messages.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/text/copy_utils.dart';
@@ -55,6 +57,10 @@ class ContextMenuUtils {
   /// "מפרשים" ו"קישורים" של קטע היעד ([TargetLineLinksService]); בלעדיו התפריט
   /// מכיל רק את פעולות ההעתקה, הפתיחה והדיווח.
   ///
+  /// [displayProfile] — פרופיל תצוגת המפרשים; [copyDisplayProfile] — פרופיל
+  /// ערוץ ההעתקה (ברירת מחדל: כמו התצוגה). [removeNikud]/[removePunctuation]
+  /// הם מסלול תאימות שנפתר מול ההגדרות הגלובליות כשאין פרופיל.
+  ///
   /// דוגמה:
   /// ```dart
   /// AppContextMenuRegion(
@@ -63,8 +69,7 @@ class ContextMenuUtils {
   ///     link: link,
   ///     openBookCallback: ...,
   ///     fontSize: fontSize,
-  ///     removeNikud: removeNikud,
-  ///     removePunctuation: removePunctuation,
+  ///     displayProfile: state.commentaryDisplayProfile,
   ///     savedSelectedText: _savedText,
   ///     onCopySelected: _copy,
   ///     onNavigateToLink: _navigateToLink,
@@ -77,14 +82,24 @@ class ContextMenuUtils {
     required Link link,
     required Function(TextBookTab) openBookCallback,
     required double fontSize,
-    required bool removeNikud,
-    required bool removePunctuation,
+    TextDisplayProfile? displayProfile,
+    TextDisplayProfile? copyDisplayProfile,
+    bool? removeNikud,
+    bool? removePunctuation,
     String? savedSelectedText,
     required VoidCallback onCopySelected,
     VoidCallback? onCopySelectedWithoutNikud,
     void Function(Link link)? onNavigateToLink,
     VoidCallback? onNoteSaved,
   }) {
+    final profile =
+        displayProfile ??
+        commentaryProfileFromLegacyFlags(
+          context.read<SettingsBloc>().state,
+          removeNikud: removeNikud,
+          removePunctuation: removePunctuation,
+        );
+    final copyProfile = copyDisplayProfile ?? profile;
     final linksService = TargetLineLinksService.instance;
     final entries = <AppContextMenuEntry>[
       AppContextMenuEntry(
@@ -130,8 +145,7 @@ class ContextMenuUtils {
           context: context,
           link: link,
           fontSize: fontSize,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          displayProfile: copyProfile,
         ),
       ),
       if (onNavigateToLink != null) ...[
@@ -139,14 +153,14 @@ class ContextMenuUtils {
         linksService.buildCommentariesEntry(
           link: link,
           onNavigate: onNavigateToLink,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          removeNikud: profile.removeNikud,
+          removePunctuation: profile.removePunctuation,
         ),
         linksService.buildLinksEntry(
           link: link,
           onNavigate: onNavigateToLink,
-          removeNikud: removeNikud,
-          removePunctuation: removePunctuation,
+          removeNikud: profile.removeNikud,
+          removePunctuation: profile.removePunctuation,
         ),
       ],
       const AppContextMenuEntry.divider(),
@@ -345,13 +359,12 @@ class ContextMenuUtils {
     );
   }
 
-  /// העתקת פסקה שלמה של מפרש
+  /// העתקת פסקה שלמה של מפרש לפי [displayProfile] של ערוץ ההעתקה.
   static Future<void> copyCommentaryParagraph({
     required BuildContext context,
     required Link link,
     required double fontSize,
-    required bool removeNikud,
-    required bool removePunctuation,
+    required TextDisplayProfile displayProfile,
   }) async {
     try {
       final settingsState = context.read<SettingsBloc>().state;
@@ -364,8 +377,7 @@ class ContextMenuUtils {
 
       final processedContent = applyCommentaryDisplayFilters(
         content,
-        removeNikud: removeNikud,
-        removePunctuation: removePunctuation,
+        displayProfile,
       );
       final plainText = utils.stripHtmlIfNeeded(processedContent);
 
@@ -400,8 +412,8 @@ class ContextMenuUtils {
       final copyContent = CopyUtils.applyCopyPreferencesForClipboard(
         plainText: finalText,
         htmlText: finalHtmlText,
-        replaceHolyNames: settingsState.replaceHolyNames,
-        holyNameStyle: settingsState.holyNameStyle,
+        replaceHolyNames: displayProfile.replaceHolyNames,
+        holyNameStyle: displayProfile.holyNameStyle,
       );
 
       final htmlText = CopyUtils.buildStyledHtml(
@@ -424,17 +436,11 @@ class ContextMenuUtils {
     }
   }
 
+  /// מחיל את פרופיל התצוגה על תוכן מפרש גולמי (ניקוד, טעמים, פיסוק, שם הוי"ה).
   static String applyCommentaryDisplayFilters(
-    String content, {
-    required bool removeNikud,
-    required bool removePunctuation,
-  }) {
-    var processedContent = removeNikud ? utils.removeVolwels(content) : content;
-    if (removePunctuation) {
-      processedContent = utils.removePunctuation(processedContent);
-    }
-    return processedContent;
-  }
+    String content,
+    TextDisplayProfile displayProfile,
+  ) => applyTextDisplayProfile(content, displayProfile);
 
   /// העתקת טקסט מעוצב (HTML) ללוח
   /// [removeNikud] — "העתק בלי ניקוד" (issue #851): מסיר ניקוד וטעמים

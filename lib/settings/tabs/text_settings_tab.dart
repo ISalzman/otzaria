@@ -6,6 +6,7 @@ import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
 import 'package:otzaria/settings/services/per_book_settings_service.dart';
+import 'package:otzaria/settings/tabs/text_display_settings_section.dart';
 import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
@@ -15,7 +16,6 @@ import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 
 /// טאב הגדרות תצוגת ספרים
 /// ניתן להשתמש בו גם כתוכן בתוך דיאלוג וגם כטאב במסך הגדרות
@@ -100,8 +100,9 @@ class TextSettingsTab extends StatelessWidget {
     ),
     SettingsSearchEntry(
       id: 'text.nikud.display_mode',
-      title: 'הצגת הניקוד',
-      subtitle: 'הצג / הסתר ניקוד בתנ"ך ובכל הספרים',
+      title: 'תצוגת הטקסט',
+      subtitle:
+          'ניקוד, טעמים, פיסוק, שם הוי"ה וציוני המפרשים — בתצוגה, בהעתקה ובייצוא',
       tab: SettingsTab.text,
       cardId: 'text.nikud',
       keywords: [
@@ -395,135 +396,8 @@ class TextSettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildNikudSection(BuildContext context, SettingsState state) {
-    // קביעת הערך הנוכחי של הניקוד
-    String nikudValue;
-    if (!state.defaultRemoveNikud) {
-      nikudValue = 'show_always';
-    } else if (state.removeNikudFromTanach) {
-      nikudValue = 'hide_all';
-    } else {
-      nikudValue = 'show_tanach_only';
-    }
-
-    return SettingsCard(
-      cardId: 'text.nikud',
-      title: context.settingsText('כתרי אותיות'),
-      children: [
-        SettingsActionTile.segmentedTile<String>(
-          icon: OtzariaIcons.alef_with_score_24_regular,
-          title: context.settingsText('הצגת הניקוד'),
-          options: [
-            SegmentOption(
-              value: 'show_always',
-              label: context.settingsText('הצג תמיד'),
-              subtitle: context.settingsText('הניקוד יוצג בכל הספרים'),
-            ),
-            SegmentOption(
-              value: 'show_tanach_only',
-              label: context.settingsText('הצג בתנ"ך'),
-              subtitle: context.settingsText('הניקוד יוצג בספרי התנ"ך בלבד'),
-            ),
-            SegmentOption(
-              value: 'hide_all',
-              label: context.settingsText('אל תציג'),
-              subtitle: context.settingsText('הניקוד לא יוצג בכלל'),
-            ),
-          ],
-          currentValue: nikudValue,
-          onChanged: (value) {
-            switch (value) {
-              case 'show_always':
-                context.read<SettingsBloc>().add(
-                  const UpdateDefaultRemoveNikud(false),
-                );
-                break;
-              case 'show_tanach_only':
-                context.read<SettingsBloc>().add(
-                  const UpdateDefaultRemoveNikud(true),
-                );
-                context.read<SettingsBloc>().add(
-                  const UpdateRemoveNikudFromTanach(false),
-                );
-                break;
-              case 'hide_all':
-                context.read<SettingsBloc>().add(
-                  const UpdateDefaultRemoveNikud(true),
-                );
-                context.read<SettingsBloc>().add(
-                  const UpdateRemoveNikudFromTanach(true),
-                );
-                break;
-            }
-          },
-        ),
-        SettingsActionTile.switchTile(
-          icon: OtzariaIcons.alef_with_punctuation_24_regular,
-          title: context.settingsText('הצגת סימני פיסוק'),
-          subtitle: context.settingsText(
-            state.defaultRemovePunctuation
-                ? 'סימני הפיסוק לא יוצגו (למעט בתנ"ך)'
-                : 'סימני הפיסוק יוצגו בכל הספרים',
-          ),
-          value: !state.defaultRemovePunctuation,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(
-              UpdateDefaultRemovePunctuation(!value),
-            );
-          },
-        ),
-        SettingsActionTile.segmentedTile<String>(
-          icon: FluentIcons.shield_keyhole_24_regular,
-          title: context.settingsText('הצגת שם הקודש'),
-          options: [
-            SegmentOption(
-              value: 'show',
-              label: context.settingsText('הצג ככתבו'),
-              subtitle: context.settingsText('שם הוי"ה יוצג ככתבו'),
-            ),
-            SegmentOption(
-              value: 'kuf',
-              label: context.settingsText('יקוק'),
-              subtitle: context.settingsText('שם הוי"ה יוחלף ביקוק'),
-            ),
-            SegmentOption(
-              value: 'heh',
-              label: context.settingsText("ה'"),
-              subtitle: context.settingsText("שם הוי\"ה יוחלף בה'"),
-            ),
-          ],
-          currentValue: !state.replaceHolyNames
-              ? 'show'
-              : state.holyNameStyle.storageKey,
-          onChanged: (value) {
-            if (value == 'show') {
-              context.read<SettingsBloc>().add(
-                const UpdateReplaceHolyNames(false),
-              );
-              return;
-            }
-            context.read<SettingsBloc>().add(
-              const UpdateReplaceHolyNames(true),
-            );
-            context.read<SettingsBloc>().add(
-              UpdateHolyNameStyle(HolyNameStyle.fromStorage(value)),
-            );
-          },
-        ),
-        SettingsActionTile.switchTile(
-          icon: OtzariaIcons.alef_with_flavors_24_regular,
-          title: context.settingsText('הצגת טעמי המקרא'),
-          subtitle: context.settingsText(
-            state.showTeamim ? 'המקרא יוצג עם טעמים' : 'המקרא יוצג ללא טעמים',
-          ),
-          value: state.showTeamim,
-          onChanged: (value) {
-            context.read<SettingsBloc>().add(UpdateShowTeamim(value));
-          },
-        ),
-      ],
-    );
-  }
+  Widget _buildNikudSection(BuildContext context, SettingsState state) =>
+      const TextDisplaySettingsCard();
 
   Widget _buildCopySection(BuildContext context, SettingsState state) {
     return SettingsCard(
