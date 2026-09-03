@@ -22,7 +22,9 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -40,6 +42,10 @@ class _StubTab extends OpenedTab {
 }
 
 void main() {
+  setUpAll(() async {
+    await Settings.init(cacheProvider: MemorySettingsCache());
+  });
+
   late _TestTabsBloc tabsBloc;
   late _TestSettingsBloc settingsBloc;
   late _TestHistoryBloc historyBloc;
@@ -435,6 +441,31 @@ void main() {
     );
     expect(tabsBloc.addedEvents.whereType<SetCurrentTab>(), isEmpty);
   });
+
+  testWidgets(
+    'בכרטיסיית PDF מוצמדת הנעץ קודם לאייקון הסוג, כמו ברצועה העליונה',
+    (
+      tester,
+    ) async {
+      final pdfTab = PdfBookTab(
+        book: PdfBook(title: 'ספר PDF', path: '/tmp/book.pdf'),
+        pageNumber: 1,
+      )..isPinned = true;
+      addTearDown(pdfTab.dispose);
+      await pumpPanel(tester, withTabs: [pdfTab, _StubTab('ספר ב')]);
+
+      final pin = tester.getCenter(find.byIcon(FluentIcons.pin_24_filled));
+      final pdfIcon = tester.getCenter(
+        find.byIcon(FluentIcons.document_pdf_16_regular),
+      );
+      // RTL: הפריט הראשון בשורה הוא הימני ביותר.
+      expect(
+        pin.dx,
+        greaterThan(pdfIcon.dx),
+        reason: 'הנעץ צריך להופיע לפני אייקון ה-PDF (issue #1134)',
+      );
+    },
+  );
 
   testWidgets('לחיצה ימנית על כרטיסיה פותחת את תפריט ההקשר', (tester) async {
     await pumpPanel(tester);
