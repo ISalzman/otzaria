@@ -285,5 +285,5 @@ lib/navigation/view/    custom_title_bar · reading_tab_strip
 ```
 
 **בנייה:** אם `cargokit` נכשל עם errno 183 — מחק את
-`build/windows/x64/runner/Debug/search_engine.dll` בלבד (46 שניות),
+`build/windows/x64/plugins/otzaria_search_engine/Debug/search_engine.dll`,
 לא `flutter clean` (353 שניות).

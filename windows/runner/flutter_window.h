@@ -91,8 +91,28 @@ class FlutterWindow : public Win32Window {
       jumplist_channel_;
   std::atomic_bool force_exit_watchdog_armed_ = false;
   // האם החלון עדיין נספר ב-`g_live_window_count`. מונע הפחתה כפולה
-  // כשמגיעות שתי בקשות סגירה.
+  // כשמגיעות שתי בקשות סגירה, **וגם** ספירה כפולה בשימוש חוזר.
   bool counted_ = true;
+
+ public:
+  // האם החלון נסגר על ידי המשתמש (הוסתר), להבדיל מחלון חדש שטרם נחשף.
+  //
+  // ⚠️ אסור להסיק זאת מ-`IsWindowVisible`. חלון נוצר מוסתר ונחשף רק
+  // בפריים הראשון — כ-422ms אחר כך. בפער הזה הוא נראה בדיוק כמו חלון
+  // סגור, ולכן פתיחה שנייה "מיחזרה" חלון שעוד נטען: המונה נופח לצמיתות,
+  // התהליך לא יצא לעולם, והזומבי החזיק את מנעול המופע היחיד — כלומר
+  // התוכנה גם לא ניתנת להפעלה מחדש.
+  bool IsClosedByUser() const { return hidden_flag_->load(); }
+
+  // דגל משותף עם שעון-הביטחון של החשיפה, שרץ על thread מנותק ואינו יכול
+  // להחזיק מצביע לחלון.
+  std::shared_ptr<std::atomic<bool>> hidden_flag() const {
+    return hidden_flag_;
+  }
+
+ private:
+  std::shared_ptr<std::atomic<bool>> hidden_flag_ =
+      std::make_shared<std::atomic<bool>>(false);
 
   // Win32 Job Object that contains this process plus any child processes
   // it spawns (notably WebView2's msedgewebview2.exe instances). Configured

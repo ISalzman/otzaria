@@ -243,6 +243,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  // ⚠️ בלי זה `main(List<String> args)` מקבל רשימה ריקה תמיד, ואז:
+  // `IsCliInvocation` עוקף את המופע היחיד בנייטיב, אבל Dart אינו רואה את
+  // תת-הפקודה ומעלה ממשק מלא — שני מופעים על אותה ספרייה. בנוסף נבלעים
+  // קישורי `otzaria://` והתקנות תוספים בהפעלה קרה.
+  project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
+
 
   FlutterWindow window(project, /*headless=*/is_cli_invocation);
   Win32Window::Point origin(10, 10);

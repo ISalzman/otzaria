@@ -238,8 +238,10 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // במחזורי פתיחה-סגירה, כי אין מנוע נוסף.
   for (auto& existing : windows) {
     if (existing == nullptr) continue;
-    const HWND handle = existing->GetHandle();
-    if (handle == nullptr || ::IsWindowVisible(handle)) continue;
+    // ⚠️ `IsClosedByUser()` ולא `IsWindowVisible` — ראו ההערה שם.
+    if (existing->GetHandle() == nullptr || !existing->IsClosedByUser()) {
+      continue;
+    }
     existing->ReviveWith(payload, inherited_width, inherited_height);
     return true;
   }
@@ -281,9 +283,13 @@ bool CreateSecondaryWindowOnThisThread(const flutter::DartProject& base,
   // רשת ביטחון: אם הפריים הראשון לא הגיע, חלון בלתי-נראה לתמיד גרוע
   // מחלון שמופיע מאוחר.
   const HWND handle = window->GetHandle();
-  std::thread([handle]() {
+  auto hidden = window->hidden_flag();
+  std::thread([handle, hidden]() {
     ::Sleep(20000);
-    if (::IsWindow(handle) && !::IsWindowVisible(handle)) {
+    // ⚠️ רק אם המשתמש לא סגר אותו בינתיים: `IsWindowVisible` לבדו היה
+    // מחזיר לחיים חלון שנסגר לפני שהשעון פקע.
+    if (::IsWindow(handle) && !::IsWindowVisible(handle) &&
+        !hidden->load()) {
       ::ShowWindow(handle, SW_SHOW);
     }
   }).detach();
@@ -923,8 +929,13 @@ void FlutterWindow::ReviveWith(const std::string& payload, int width,
   const HWND self = GetHandle();
   if (!self) return;
 
-  counted_ = true;
-  g_live_window_count.fetch_add(1);
+  // ⚠️ מותנה. ספירה בלתי-מותנית ניפחה את המונה לצמיתות כשחלון שטרם נחשף
+  // "מוחזר לשימוש", והתהליך אז לא יוצא לעולם.
+  if (!counted_) {
+    counted_ = true;
+    g_live_window_count.fetch_add(1);
+  }
+  hidden_flag_->store(false);
 
   if (width > 400 && height > 300) {
     ::SetWindowPos(self, nullptr, 0, 0, width, height,
@@ -971,6 +982,7 @@ void FlutterWindow::OnWindowHidden() {
     return;
   }
   counted_ = false;
+  hidden_flag_->store(true);
   if (g_live_window_count.fetch_sub(1) <= 1) {
     ::PostQuitMessage(0);
   }
