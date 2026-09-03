@@ -334,7 +334,9 @@ class _HistoryViewState extends State<HistoryView> {
                             searchMode: searchMode,
                             distance:
                                 item.distance ??
-                                (searchMode == SearchMode.fuzzy ? 2 : 0),
+                                (searchMode == SearchMode.fuzzy
+                                    ? kMaxFuzzyDistance
+                                    : 0),
                             proximityScope:
                                 item.proximityScope ?? SearchScope.wordDistance,
                           );

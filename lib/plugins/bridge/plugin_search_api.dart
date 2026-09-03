@@ -22,7 +22,7 @@ class PluginSearchApi {
   static const int maxResultWindow = 10000;
 
   /// המרחק המרבי שנתמך בפועל בחיפוש מקורב.
-  static const int fuzzyMaxDistance = 2;
+  static const int fuzzyMaxDistance = kMaxFuzzyDistance;
 
   static const int defaultLimit = 50;
 

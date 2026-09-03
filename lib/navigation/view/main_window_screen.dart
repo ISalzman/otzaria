@@ -1369,7 +1369,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           : SearchDefaults.withResultPreferences(
               SearchConfiguration(
                 searchMode: mode,
-                distance: mode == SearchMode.fuzzy ? 2 : 0,
+                distance: mode == SearchMode.fuzzy ? kMaxFuzzyDistance : 0,
               ),
             ),
     );

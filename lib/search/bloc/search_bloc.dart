@@ -59,7 +59,18 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   String? get facetCountsSignatureForTesting => _facetCountsSignature;
 
   static int _defaultDistanceForMode(SearchMode mode) {
-    return mode == SearchMode.fuzzy ? 2 : 0;
+    return mode == SearchMode.fuzzy ? kMaxFuzzyDistance : 0;
+  }
+
+  static SearchConfiguration _normalizeInitialConfiguration(
+    SearchConfiguration configuration,
+  ) {
+    if (configuration.searchMode != SearchMode.fuzzy) return configuration;
+
+    final distance = configuration.distance.clamp(0, kMaxFuzzyDistance).toInt();
+    return distance == configuration.distance
+        ? configuration
+        : configuration.copyWith(distance: distance);
   }
 
   static int _resolveDistanceForModeChange(
@@ -68,11 +79,13 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     int currentDistance,
   ) {
     final currentDefault = _defaultDistanceForMode(currentMode);
-    if (currentDistance != currentDefault) {
-      return currentDistance;
-    }
-
-    return _defaultDistanceForMode(newMode);
+    final distance = currentDistance != currentDefault
+        ? currentDistance
+        : _defaultDistanceForMode(newMode);
+    // מרווח מילים שנשמר ממצב אחר עלול לחרוג ממה שהמנוע המקורב מכבד.
+    return newMode == SearchMode.fuzzy
+        ? distance.clamp(0, kMaxFuzzyDistance).toInt()
+        : distance;
   }
 
   SearchBloc({
@@ -80,7 +93,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     this._repository = const SearchRepository(),
   }) : super(
          SearchState(
-           configuration: initialConfiguration ?? const SearchConfiguration(),
+           configuration: _normalizeInitialConfiguration(
+             initialConfiguration ?? const SearchConfiguration(),
+           ),
          ),
        ) {
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
@@ -651,7 +666,10 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   }
 
   bool _updateDistanceConfiguration(int distance, Emitter<SearchState> emit) {
-    final newConfig = state.configuration.copyWith(distance: distance);
+    final effectiveDistance = state.configuration.searchMode == SearchMode.fuzzy
+        ? distance.clamp(0, kMaxFuzzyDistance).toInt()
+        : distance;
+    final newConfig = state.configuration.copyWith(distance: effectiveDistance);
     if (newConfig == state.configuration) {
       return false;
     }
