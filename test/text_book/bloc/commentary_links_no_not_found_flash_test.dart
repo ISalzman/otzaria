@@ -77,11 +77,8 @@ class _Repository extends TextBookRepository {
   }
 }
 
-/// התנאי שבו חלונית המפרשים מציגה "לא נמצאו מפרשים" (commentary_list_base):
-/// הטעינה הסתיימה ואין קישור מהמפרשים הפעילים לשורות הנראות.
-bool _panelSaysNotFound(TextBookLoaded state) {
-  if (state.linksLoading) return false;
-  final hasRelevant = state.visibleIndices.any((idx) {
+bool _hasRelevantCommentaryLinks(TextBookLoaded state) {
+  return state.visibleIndices.any((idx) {
     final lineLinks = state.linksByLine[idx + 1];
     if (lineLinks == null) return false;
     return lineLinks.any(
@@ -90,8 +87,12 @@ bool _panelSaysNotFound(TextBookLoaded state) {
       ),
     );
   });
-  return !hasRelevant;
 }
+
+/// התנאי שבו חלונית המפרשים מציגה "לא נמצאו מפרשים" (commentary_list_base):
+/// הטעינה הסתיימה ואין קישור מהמפרשים הפעילים לשורות הנראות.
+bool _panelSaysNotFound(TextBookLoaded state) =>
+    !state.linksLoading && !_hasRelevantCommentaryLinks(state);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -125,7 +126,8 @@ void main() {
         loadedStates.add(state);
         if (!done.isCompleted &&
             state.activeCommentators.isNotEmpty &&
-            !_panelSaysNotFound(state)) {
+            !state.linksLoading &&
+            _hasRelevantCommentaryLinks(state)) {
           done.complete();
         }
       });
