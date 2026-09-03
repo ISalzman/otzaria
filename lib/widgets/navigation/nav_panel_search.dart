@@ -210,6 +210,13 @@ abstract final class NavPanelSearch {
       canHoist(context) &&
       NavPanelSearchScope.hostOf(context) != null &&
       NavPanelSearchSlot.indexOf(context) != null;
+
+  /// האם לסמן ב-host לשונית שנבחרה כפעילה. לשונית שנבחרה אוטומטית (ספר שנפתח
+  /// מחיפוש) מסומנת רק כשהשדה מורם לסרגל — בחלונית הוא ממקד את עצמו.
+  static bool shouldMarkActiveTab(
+    BuildContext context, {
+    required bool autoSelected,
+  }) => !autoSelected || canHoist(context);
 }
 
 /// מסמן את אינדקס הלשונית שבתוכה יושב התוכן — כדי שהפרסום יגיע לסרגל רק
