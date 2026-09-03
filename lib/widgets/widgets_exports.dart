@@ -33,6 +33,7 @@ export 'package:otzaria/widgets/layout/centered_scrollable_state.dart';
 export 'package:otzaria/widgets/layout/expandable_card.dart';
 export 'package:otzaria/widgets/misc/expanding_chevron.dart';
 export 'package:otzaria/widgets/misc/tool_ui_helpers.dart';
+export 'package:otzaria/widgets/text/overflow_tooltip_text.dart';
 
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
