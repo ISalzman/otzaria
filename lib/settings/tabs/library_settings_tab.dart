@@ -547,7 +547,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                         cardId: 'library.personal_books_import',
                         title: context.settingsText('ספרים אישיים'),
                         subtitle: context.settingsText(
-                          'ייבוא ספרים משלך אל תוך הספרייה',
+                          'הוספת ספרים משלך לספרייה — TXT, PDF, Word, EPUB ועוד. כאן בוחרים קבצים, ולא תיקייה כמו במחשב',
                         ),
                         children: const [
                           PersonalBooksImportPanel(),

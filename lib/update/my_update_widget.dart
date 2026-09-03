@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +11,7 @@ import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/bloc/tour_state.dart';
 import 'package:updat/updat.dart';
@@ -38,7 +38,8 @@ const _githubOwner = 'Otzaria';
 const _githubRepository = 'otzaria';
 const _changelogAssetPath = 'assets/יומן שינויים.md';
 const _kGithubTimeout = Duration(seconds: 15);
-const _kDownloadTimeout = Duration(minutes: 3);
+const _kDownloadConnectTimeout = Duration(seconds: 20);
+const _kDownloadStallTimeout = Duration(seconds: 30);
 
 @visibleForTesting
 bool supportsManagedUpdatePlatform({
@@ -135,7 +136,7 @@ String? pickWindowsAssetUrl(
 /// בזמן ההחלפה) — מעדיפים את ה-zip של האפליקציה בלבד
 /// (`otzaria-macos.zip`), שמוחלף ברקע על ידי סקריפט העדכון. אחרת בוחרים
 /// **רק** DMG, שנפתח להתקנה ידנית בגרירה: zip ללא עדכון עצמי הוא נתיב
-/// שבור — הוא אינו מחולץ ב-Dart במאק (ראה `_downloadRelease`) ולכן
+/// שבור — הוא אינו מחולץ ב-Dart במאק (ראה `downloadReleaseFile`) ולכן
 /// `openInstaller` ייכשל עליו. קבצי `full` לעולם אינם נבחרים — הם חבילות
 /// ספרייה מלאות ולא עדכוני תוכנה.
 @visibleForTesting
@@ -964,11 +965,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
         version: _latestVersion!,
         extension: url.split('.').last,
       );
-      await _downloadRelease(
-        installerFile,
-        url,
-        'otzaria',
-      ).timeout(_kDownloadTimeout);
+      await downloadReleaseFile(installerFile, url, 'otzaria');
 
       if (!mounted) return;
       setState(() {
@@ -1061,7 +1058,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   /// מאתרת את קובץ ההרצה בתוך חבילת ה-zip שחולצה ליד קובץ ההורדה
-  /// (ראה [_downloadRelease]).
+  /// (ראה [downloadReleaseFile]).
   File _extractedWindowsExecutable(File zipFile) {
     final outDir = Directory(p.join(p.dirname(zipFile.path), 'otzaria'));
     final entry = outDir.listSync().firstWhere(
@@ -1177,12 +1174,24 @@ class _ManagedUpdateWindowListener extends WindowListener {
   }
 }
 
-Future<File> _downloadRelease(File file, String url, String appName) async {
+/// מוריד את קובץ העדכון מ-[url] אל [file] (ומחלץ zip מחוץ ל-macOS).
+///
+/// אין חסם על משך ההורדה הכולל — הורדה איטית שמתקדמת אינה נכשלת. הכשל הוא
+/// רק על חיבור שלא נענה תוך [connectTimeout] או על זרם שלא הזרים בייטים
+/// במשך [stallTimeout]; בשני המקרים החיבור נסגר ולא נשאר תלוי.
+@visibleForTesting
+Future<File> downloadReleaseFile(
+  File file,
+  String url,
+  String appName, {
+  Duration connectTimeout = _kDownloadConnectTimeout,
+  Duration stallTimeout = _kDownloadStallTimeout,
+}) async {
   final client = http.Client();
   IOSink? sink;
   try {
     final request = http.Request('GET', Uri.parse(url));
-    final response = await client.send(request).timeout(_kGithubTimeout);
+    final response = await client.send(request).timeout(connectTimeout);
     if (response.statusCode != 200) {
       throw Exception('Download failed with status ${response.statusCode}');
     }
@@ -1190,9 +1199,9 @@ Future<File> _downloadRelease(File file, String url, String appName) async {
     await file.parent.create(recursive: true);
     sink = file.openWrite();
 
-    await response.stream
-        .timeout(const Duration(seconds: 30))
-        .forEach(sink.add);
+    await for (final chunk in response.stream.timeout(stallTimeout)) {
+      sink.add(chunk);
+    }
     await sink.flush();
     await sink.close();
     sink = null;
@@ -1205,7 +1214,10 @@ Future<File> _downloadRelease(File file, String url, String appName) async {
         outDir.deleteSync(recursive: true);
       }
       outDir.createSync(recursive: true);
-      extractFileToDisk(file.absolute.path, outDir.absolute.path);
+      await extractArchiveFileToDisk(
+        file.absolute.path,
+        outDir.absolute.path,
+      );
     }
 
     return file;

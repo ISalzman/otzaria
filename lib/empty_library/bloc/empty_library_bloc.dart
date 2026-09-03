@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
 import 'package:bloc/bloc.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:otzaria/utils/text/byte_size_text.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -18,6 +18,7 @@ import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/download_sidecar.dart';
+import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/utils/file/tar_zst_extractor.dart';
 import 'package:otzaria/utils/move_directory.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
@@ -44,11 +45,14 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       void Function(double progress)? onProgress,
     )?
     extractTarArchive,
+    Future<void> Function(String archivePath, String outputDir)?
+    extractZipArchive,
     this._defaultLibraryPathOverride,
     this.downloadConnectTimeout = _defaultDownloadConnectTimeout,
   }) : _httpClient = httpClient ?? http.Client(),
        _extractCompressedDatabase = extractCompressedDatabase ?? _extractZst,
        _extractTarArchive = extractTarArchive ?? _extractTarZst,
+       _extractZipArchive = extractZipArchive ?? extractArchiveFileToDisk,
        super(
          const EmptyLibraryInitial(downloadDisabledReason: 'בודק מקום פנוי...'),
        ) {
@@ -80,6 +84,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     void Function(double progress)? onProgress,
   )
   _extractTarArchive;
+  final Future<void> Function(String archivePath, String outputDir)
+  _extractZipArchive;
 
   /// בונה callback שמ-emit-ת התקדמות חילוץ למסך.
   /// הקריאות מגיעות מתוך ה-isolet בזמן ה-await על פעולת החילוץ — עדיין
@@ -137,7 +143,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final backupPath = event.backupExistingPath;
     String? backupDir;
+    final closesWorker = backupPath != null;
+    var writeSessionStarted = false;
     try {
+      if (closesWorker) {
+        await SqliteDataProvider.instance.closeForExternalWrite();
+        writeSessionStarted = true;
+      }
       if (backupPath != null) {
         backupDir = await _backupDatabaseFiles(backupPath);
       }
@@ -159,6 +171,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           selectedPath: event.sourceFolder,
         ),
       );
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
     }
   }
 
@@ -170,7 +188,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final backupPath = event.backupExistingPath;
     String? backupDir;
+    final closesWorker = backupPath != null;
+    var writeSessionStarted = false;
     try {
+      if (closesWorker) {
+        await SqliteDataProvider.instance.closeForExternalWrite();
+        writeSessionStarted = true;
+      }
       if (backupPath != null) {
         backupDir = await _backupDatabaseFiles(backupPath);
       }
@@ -192,6 +216,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           selectedPath: event.archivePath,
         ),
       );
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
     }
   }
 
@@ -213,12 +243,22 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       ),
     );
     if (lowerPath.endsWith('.zip')) {
-      await extractFileToDisk(archivePath, target);
+      final staging = stagingDirFor(target);
+      await _deleteEntity(staging);
+      try {
+        await _extractZipArchive(archivePath, staging);
+        await promoteStagedImport(staging, target);
+      } finally {
+        await _deleteEntity(staging);
+      }
     } else {
-      await _extractCompressedDatabase(
-        archivePath,
+      await _writeDbAtomically(
         path.join(target, DatabaseConstants.databaseFileName),
-        _extractProgress(emit, archivePath, 'מחלץ את קובץ הספרייה...'),
+        (tempPath) => _extractCompressedDatabase(
+          archivePath,
+          tempPath,
+          _extractProgress(emit, archivePath, 'מחלץ את קובץ הספרייה...'),
+        ),
       );
     }
     emit(
@@ -257,13 +297,19 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       path.join(target, DatabaseConstants.databaseFileName),
     );
     if (await dbZst.exists()) {
-      await _extractCompressedDatabase(
-        dbZst.path,
+      await _writeDbAtomically(
         path.join(target, DatabaseConstants.databaseFileName),
-        _extractProgress(emit, source, 'מחלץ את ספריית הספרים...'),
+        (tempPath) => _extractCompressedDatabase(
+          dbZst.path,
+          tempPath,
+          _extractProgress(emit, source, 'מחלץ את ספריית הספרים...'),
+        ),
       );
     } else if (await dbPlain.exists()) {
-      await dbPlain.copy(path.join(target, DatabaseConstants.databaseFileName));
+      await _writeDbAtomically(
+        path.join(target, DatabaseConstants.databaseFileName),
+        (tempPath) => dbPlain.copy(tempPath),
+      );
     } else if (!await targetDb.exists()) {
       emit(
         _error(
@@ -345,7 +391,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   ) async {
     final target = event.targetPath;
     String? backupDir;
+    var writeSessionStarted = false;
     try {
+      await SqliteDataProvider.instance.closeForExternalWrite();
+      writeSessionStarted = true;
       backupDir = await _backupDatabaseFiles(event.existingLibraryPath);
       if (event.isDownload) {
         await _downloadLibrary(target, emit);
@@ -372,23 +421,183 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await _restoreDatabaseFiles(backupDir, event.existingLibraryPath);
       }
       emit(_error(errorMessage: 'שגיאה בעדכון הספרייה: $e'));
+    } finally {
+      if (writeSessionStarted) {
+        await SqliteDataProvider.instance.reopenAfterExternalWrite(
+          reopenDatabase: false,
+        );
+      }
+    }
+  }
+
+  /// שם הקובץ הזמני שאליו נכתב ה-DB לפני ההעברה לשם הסופי.
+  static String _dbTempPathFor(String finalPath) => '$finalPath.new';
+
+  /// מוחק את [dbPath] ואת לוואיו (shm/wal/journal), בשקט.
+  static Future<void> _deleteDbFamily(String dbPath) async {
+    for (final suffix in _dbFileSuffixes) {
+      final f = File('$dbPath$suffix');
+      if (await f.exists()) {
+        try {
+          await f.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// כותב את ה-DB דרך שם זמני באותה תיקייה ומעביר אותו לשם הסופי רק בסיום
+  /// מוצלח. הריגת התהליך באמצע משאירה שארית `.new` ולא DB חלקי בשם האמיתי —
+  /// שאחרת נראה תקין ומאבד את הגיבוי היחיד.
+  static Future<void> _writeDbAtomically(
+    String finalPath,
+    Future<void> Function(String tempPath) write,
+  ) async {
+    final tempPath = _dbTempPathFor(finalPath);
+    await _deleteDbFamily(tempPath);
+    try {
+      await write(tempPath);
+      await _deleteDbFamily(finalPath);
+      await File(tempPath).rename(finalPath);
+    } catch (_) {
+      await _deleteDbFamily(tempPath);
+      rethrow;
+    }
+  }
+
+  static String? _tempRootOverride;
+
+  /// בסיס התיקיות הזמניות של הגיבוי. הגיבוי הוא שם קבוע אחד, ולכן ריצת טסטים
+  /// שנהרגה הייתה דולפת לריצה הבאה — כל טסט מזריק תיקייה משלו.
+  @visibleForTesting
+  static set tempRootOverride(String? value) => _tempRootOverride = value;
+
+  static String get _tempRoot => _tempRootOverride ?? Directory.systemTemp.path;
+
+  /// תיקיית הביניים שאליה מחולץ ארכיון ZIP: אחות ליעד, ולכן על אותו התקן —
+  /// תנאי ל-rename אטומי בהעברה ממנה.
+  @visibleForTesting
+  static String stagingDirFor(String target) => '$target.import';
+
+  /// מוחק קובץ/תיקייה/קישור בנתיב, בשקט.
+  static Future<void> _deleteEntity(String entityPath) async {
+    for (final entity in [
+      Directory(entityPath),
+      File(entityPath),
+      Link(entityPath),
+    ]) {
+      try {
+        if (await entity.exists()) {
+          await entity.delete(recursive: true);
+          return;
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// מעביר את תוכן [from] אל [to] ב-rename (תיקיות אחיות ⇒ אותו התקן), דורס
+  /// פריטים מתנגשים; תיקייה שכבר קיימת ביעד ממוזגת רקורסיבית ולא נמחקת.
+  static Future<void> _renameEntriesOver(
+    String from,
+    String to, {
+    Set<String> skip = const {},
+  }) async {
+    await Directory(to).create(recursive: true);
+    await for (final entity in Directory(from).list(followLinks: false)) {
+      final name = path.basename(entity.path);
+      if (skip.contains(name)) continue;
+      final dest = path.join(to, name);
+      if (entity is Directory && await Directory(dest).exists()) {
+        await _renameEntriesOver(entity.path, dest);
+        await entity.delete(recursive: true);
+        continue;
+      }
+      await _deleteEntity(dest);
+      await entity.rename(dest);
+    }
+  }
+
+  /// מעביר ייבוא שחולץ ל-[staging] אל [target]. seforim.db עובר אחרון, ולכן
+  /// הופעתו ביעד משמעה שהייבוא הושלם.
+  @visibleForTesting
+  static Future<void> promoteStagedImport(
+    String staging,
+    String target,
+  ) async {
+    final dbName = DatabaseConstants.databaseFileName;
+    final family = {for (final s in _dbFileSuffixes) '$dbName$s'};
+    await _renameEntriesOver(staging, target, skip: family);
+    final stagedDb = File(path.join(staging, dbName));
+    if (!await stagedDb.exists()) return;
+    await _deleteDbFamily(path.join(target, dbName));
+    for (final suffix in _dbFileSuffixes.where((s) => s.isNotEmpty)) {
+      final sidecar = File(path.join(staging, '$dbName$suffix'));
+      if (await sidecar.exists()) {
+        await sidecar.rename(path.join(target, '$dbName$suffix'));
+      }
+    }
+    await stagedDb.rename(path.join(target, dbName));
+  }
+
+  /// תיקיית הגיבוי הזמני של ה-DB בזמן עדכון. שם קבוע: ריצה שנהרגה באמצע
+  /// משאירה גיבוי יתום (כל ה-DB), ושם ייחודי לכל ריצה היה מצבר עותק על עותק.
+  static String get dbBackupDirPath =>
+      path.join(_tempRoot, 'otzaria_db_backup');
+
+  /// מטפל בגיבויים יתומים מריצות שנהרגו (השם הקבוע וגם שמות ישנים עם
+  /// timestamp): אם בספרייה [dir] אין seforim.db — מחזיר אותו מהגיבוי שבו
+  /// הקובץ החדש ביותר; כל שאר הגיבויים נמחקים. נקרא בעלייה ולפני כל גיבוי חדש.
+  static Future<void> recoverOrphanedDbBackup(String dir) async {
+    final dbName = DatabaseConstants.databaseFileName;
+    // כתיבה שנהרגה באמצע משאירה `.new` בגודל ה-DB המלא; אין ממנו המשך,
+    // וכך גם תיקיית הביניים של ייבוא ZIP שנקטע.
+    await _deleteDbFamily(_dbTempPathFor(path.join(dir, dbName)));
+    await _deleteEntity(stagingDirFor(dir));
+    // list ולא listSync: הפונקציה רצה בעלייה לפני הפריים הראשון, וסריקה
+    // סינכרונית של כל תיקיית ה-temp (אלפי פריטים) חוסמת את ה-isolate הראשי.
+    final backups = await Directory(_tempRoot)
+        .list()
+        .where((e) => e is Directory)
+        .cast<Directory>()
+        .where((d) => path.basename(d.path).startsWith('otzaria_db_backup'))
+        .toList();
+    if (backups.isEmpty) return;
+    Directory? newest;
+    if (!await File(path.join(dir, dbName)).exists()) {
+      DateTime? newestTime;
+      for (final backup in backups) {
+        final db = File(path.join(backup.path, dbName));
+        if (!await db.exists()) continue;
+        final modified = await db.lastModified();
+        if (newestTime == null || modified.isAfter(newestTime)) {
+          newest = backup;
+          newestTime = modified;
+        }
+      }
+    }
+    // ההחזרה קודמת למחיקה: אם היא נכשלת (הספרייה על כונן שהוסר) הגיבויים
+    // נשארים על הדיסק במקום להימחק בלי שה-DB חזר.
+    if (newest != null) await _restoreDatabaseFiles(newest.path, dir);
+    for (final backup in backups) {
+      if (backup.path == newest?.path) continue;
+      // ב-Linux /tmp משותף לכל המשתמשים: גיבוי של משתמש אחר אינו שלנו למחוק,
+      // ובלי הדילוג הזה כשל ההרשאה היה מפיל כל עדכון ספרייה.
+      try {
+        await _discardBackupDir(backup.path);
+      } on FileSystemException catch (e) {
+        debugPrint(
+          '[EmptyLibrary] דילוג על גיבוי שאינו נגיש: ${backup.path} ($e)',
+        );
+      }
     }
   }
 
   /// מעביר את seforim.db (ולוואיו) מ-[dir] לתיקיית גיבוי זמנית. מחזיר את נתיב
   /// תיקיית הגיבוי, או null אם אין seforim.db לגבות.
   Future<String?> _backupDatabaseFiles(String dir) async {
+    await recoverOrphanedDbBackup(dir);
     final dbFile = File(path.join(dir, DatabaseConstants.databaseFileName));
     if (!await dbFile.exists()) return null;
-    // סגירת חיבור ה-RO משחררת את נעילת seforim.db לפני ההזזה — ב-Windows
-    // handle פתוח מונע rename/delete. החיבור ייפתח מחדש בקריאה הבאה.
-    await SqliteDataProvider.instance.dispose();
-    final backup = await Directory(
-      path.join(
-        Directory.systemTemp.path,
-        'otzaria_db_backup_${DateTime.now().millisecondsSinceEpoch}',
-      ),
-    ).create(recursive: true);
+    final backup = await Directory(dbBackupDirPath).create(recursive: true);
     // גיבוי אטומי: אם הזזת קובץ נכשלת באמצע (seforim.db כבר הוזז אך לוואי לא),
     // מחזירים את מה שכבר הוזז ואז זורקים — אחרת הספרייה נשארת בלי DB ראשי.
     try {
@@ -423,7 +632,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   }
 
   /// משחזר את קבצי ה-DB מתיקיית הגיבוי חזרה אל [dir] (דורס אם קיים).
-  Future<void> _restoreDatabaseFiles(String backupDir, String dir) async {
+  static Future<void> _restoreDatabaseFiles(
+    String backupDir,
+    String dir,
+  ) async {
     for (final suffix in _dbFileSuffixes) {
       final name = '${DatabaseConstants.databaseFileName}$suffix';
       final backupFile = File(path.join(backupDir, name));
@@ -436,7 +648,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     await _discardBackupDir(backupDir);
   }
 
-  Future<void> _discardBackupDir(String backupDir) async {
+  static Future<void> _discardBackupDir(String backupDir) async {
     final d = Directory(backupDir);
     if (await d.exists()) await d.delete(recursive: true);
   }
@@ -451,7 +663,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         'לא נמצא ${DatabaseConstants.databaseFileName} בתיקייה שנבחרה',
       );
     }
-    for (final suffix in _dbFileSuffixes) {
+    // ה-DB הראשי נכתב אטומית תחילה (ההעברה מוחקת גם לוואים ישנים), והלוואים
+    // מועתקים אחריו.
+    await _writeDbAtomically(
+      path.join(targetDir, DatabaseConstants.databaseFileName),
+      (tempPath) => sourceDb.copy(tempPath),
+    );
+    for (final suffix in _dbFileSuffixes.where((s) => s.isNotEmpty)) {
       final name = '${DatabaseConstants.databaseFileName}$suffix';
       final src = File(path.join(sourceDir, name));
       if (await src.exists()) {
@@ -508,13 +726,13 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         // בדיקת מקום פנוי לפני ניסיון ההעתקה
         // (גם "העבר" לא יעזור — הוא מעתיק לפנימי לפני מחיקת החיצוני)
         if (freeSpace > 0 && dbSize > freeSpace) {
-          final needed = (dbSize / 1024 / 1024).toStringAsFixed(1);
-          final free = (freeSpace / 1024 / 1024).toStringAsFixed(1);
+          final needed = formatMegabytesLtr(dbSize);
+          final free = formatMegabytesLtr(freeSpace);
           emit(
             _error(
               errorMessage:
                   'אין מספיק מקום פנוי באחסון הפנימי.\n'
-                  'נדרש: $needed MB, פנוי: $free MB.\n'
+                  'נדרש: $needed, פנוי: $free.\n'
                   'יש לפנות מקום ידנית ולנסות שוב.',
               selectedPath: directoryPath,
             ),
@@ -1152,23 +1370,21 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         return;
       }
       final cumulative = cumulativeBase + downloadedBytes;
-      final mb = (cumulative / 1024 / 1024).toStringAsFixed(1);
-      final totalMb = (grandTotal / 1024 / 1024).toStringAsFixed(1);
       final eta = estimator.update(
         downloadedBytes: cumulative,
         totalBytes: grandTotal,
         now: DateTime.now(),
       );
       final etaLine = eta != null ? '\n${formatRemainingTimeHebrew(eta)}' : '';
-      final resumeMb = (resumeFromBytes / 1024 / 1024).toStringAsFixed(1);
       final resumeLine = resumeFromBytes > 0
-          ? '\nממשיך הורדה מ-$resumeMb MB'
+          ? '\nממשיך הורדה מ-${formatMegabytesLtr(resumeFromBytes)}'
           : '';
       emit(
         EmptyLibraryDownloading(
           progress: (cumulative / grandTotal).clamp(0.0, 1.0),
           message:
-              '${asset.downloadTitle}$resumeLine\n$mb MB מתוך $totalMb MB$etaLine',
+              '${asset.downloadTitle}$resumeLine\n'
+              '${formatMegabytesProgressHebrew(cumulative, grandTotal)}$etaLine',
         ),
       );
     }
@@ -1276,25 +1492,17 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         final outputPath = path.join(outputDir, asset.outputFileName!);
 
         if (asset.isMainDb) {
-          // SqliteDataProvider פותח את seforim.db ב-WAL בעלייה אם הקובץ קיים —
-          // גם אם הוא חלקי/פגום משריד הורדה קודמת. הסגירה משחררת את ה-handle
-          // לדריסה, ומחיקת shm/wal מונעת מ-SQLite לקרוא WAL ישן ולבלבל את
-          // ה-DB החדש.
+          // הסגירה משחררת את ה-handle של seforim.db לפני מחיקתו והחלפתו;
+          // מחיקת shm/wal (בתוך ההעברה האטומית) מונעת מ-SQLite לקרוא WAL ישן.
           await SqliteDataProvider.instance.dispose();
-          for (final suffix in const ['', '-shm', '-wal', '-journal']) {
-            final f = File('$outputPath$suffix');
-            if (await f.exists()) {
-              try {
-                await f.delete();
-              } catch (_) {
-                // הסטרימינג יטפל בשארית — אם המחיקה כשלה גם כאן, השגיאה
-                // האמיתית תעלה משם עם הודעה ברורה יותר.
-              }
-            }
-          }
+          await _writeDbAtomically(
+            outputPath,
+            (dbTempPath) =>
+                _extractCompressedDatabase(tempPath, dbTempPath, report),
+          );
+        } else {
+          await _extractCompressedDatabase(tempPath, outputPath, report);
         }
-
-        await _extractCompressedDatabase(tempPath, outputPath, report);
       }
     } catch (_) {
       // חילוץ שנכשל על קובץ שלם (פגום/franken) משאיר temp שיגרום לדילוג על

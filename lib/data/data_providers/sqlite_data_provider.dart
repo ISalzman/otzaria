@@ -9,6 +9,8 @@ import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/models/model_adapters.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
+import 'package:otzaria/migration/models/toc_entry.dart' as db_models;
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/data/sqlite/sqlite3_api.dart'
     show SqliteException, sqlite3;
@@ -257,16 +259,30 @@ class SqliteDataProvider {
   /// מסמן כתיבה חיצונית פעילה כדי ש-[initialize] של קוראים מקבילים לא יפתח
   /// חיבור RO מתנגש בזמן שהאיזולייט כותב.
   /// יש לקרוא ל-[reopenAfterExternalWrite] לאחר שהאיזולייט סיים.
+  /// זורק [StateError] אם שחרור ה-handle של ה-worker לא אומת.
   Future<void> closeForExternalWrite() async {
     // נוצר *לפני* הגדלת המונה, כך שקורא מקביל שיראה _activeWriteSessions > 0
     // תמיד יראה גם gate להמתין עליו.
     _externalWriteGate ??= Completer<void>();
     _activeWriteSessions++;
     await dispose();
+    // ל-worker של ה-isolate יש handle RO משלו על אותו קובץ; בלי סגירה
+    // *ממתינה* המחיקה/החלפה של ה-DB נכשלת (ב-Windows) או נתקעת על busy.
+    final released = await FindRefDbIsolate.suspendForExternalWrite();
+    if (!released) {
+      // בלי handle סגור אסור להזיז את הקובץ, בייחוד ב-Windows.
+      await reopenAfterExternalWrite(reopenDatabase: false);
+      throw StateError(
+        'לא ניתן לשחרר את seforim.db לפני החלפת הספרייה',
+      );
+    }
   }
 
   /// פותח מחדש את seforim.db read-only לאחר שאיזולייט חיצוני סיים לכתוב.
-  Future<void> reopenAfterExternalWrite() async {
+  ///
+  /// [reopenDatabase] כבוי כאשר מסך הייבוא כבר קבע את נתיב/תקינות הספרייה;
+  /// החיבור ייפתח עצל בקריאה הבאה, אחרי שההחלפה הושלמה במלואה.
+  Future<void> reopenAfterExternalWrite({bool reopenDatabase = true}) async {
     if (_activeWriteSessions > 0) {
       _activeWriteSessions--;
     }
@@ -276,10 +292,15 @@ class SqliteDataProvider {
       return;
     }
     try {
-      // המונה כבר 0, ולכן initialize() לא ייכנס לבלוק ההמתנה ל-gate (אין
-      // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
-      await initialize();
+      if (reopenDatabase) {
+        // המונה כבר 0, ולכן initialize() לא ייכנס לבלוק ההמתנה ל-gate (אין
+        // deadlock), ומנגנון _initializationFuture מונע פתיחה כפולה מול קורא מקביל.
+        await initialize();
+      }
     } finally {
+      // ב-finally: worker שנשאר מושהה אחרי כשל פתיחה יחזיר שגיאה לכל TOC
+      // וקטלוג עד סוף ה-session.
+      await FindRefDbIsolate.resumeAfterExternalWrite();
       // משחררים את הקוראים הממתינים. ה-finally מבטיח שחרור גם אם הפתיחה-מחדש
       // נכשלה (אחרת היו נתקעים לנצח).
       final gate = _externalWriteGate;
@@ -505,9 +526,18 @@ class SqliteDataProvider {
       if (resolvedBook == null) return null;
       final book = resolvedBook.book;
 
-      final migrationTocEntries = await resolvedBook.repository.getBookTocs(
-        book.id,
-      );
+      // ‏TOC של seforim.db יכול למנות אלפי שורות ולחסום את פתיחת הספר, ולכן
+      // נקרא ב-isolate. ספרי המשתמש נשארים על החיבור המקומי (DB קטן).
+      final List<db_models.TocEntry> migrationTocEntries;
+      if (resolvedBook.isUserBooks) {
+        migrationTocEntries = await resolvedBook.repository.getBookTocs(
+          book.id,
+        );
+      } else {
+        final isolate = await FindRefDbIsolate.instance();
+        final tocRows = await isolate.getBookTocRows(book.id);
+        migrationTocEntries = tocRows.map(db_models.TocEntry.fromMap).toList();
+      }
 
       // Convert migration TOC entries to otzaria TOC entries
       final Map<int, TocEntry> idToEntry = {};

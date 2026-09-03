@@ -55,7 +55,7 @@ void main() {
   Future<SearchEngine> buildIndex() async {
     final indexDir = p.join(tmp.path, 'index');
     await Directory(indexDir).create(recursive: true);
-    final engine = SearchEngine(path: indexDir);
+    final engine = await SearchEngine.newInstance(path: indexDir);
     await engine.addDocument(
       id: BigInt.one,
       title: 'a',

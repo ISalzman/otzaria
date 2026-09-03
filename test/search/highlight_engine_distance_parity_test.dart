@@ -29,7 +29,7 @@ Future<void> main() async {
     setUpAll(() async {
       if (!engineReady) return;
       indexDir = Directory.systemTemp.createTempSync('highlight_parity');
-      engine = SearchEngine(path: indexDir.path);
+      engine = await SearchEngine.newInstance(path: indexDir.path);
       var id = 1;
       for (final entry in samples.entries) {
         await engine.addDocument(

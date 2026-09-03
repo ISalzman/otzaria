@@ -80,6 +80,25 @@ class BookDao {
     };
   }
 
+  /// השדות שהקאש המשותף של טבלת `book` צורך, כמפות. ההקרנה הרזה שומרת את
+  /// ההעתקה קטנה כשהשורות חוצות גבול isolate (~7,300 ספרים).
+  Future<List<Map<String, dynamic>>> selectAllLocalBooksSlim() async {
+    final db = await database;
+    return db
+        .select(_queries['selectAllIgnoreExternalCatalogs']!)
+        .map(
+          (row) => <String, dynamic>{
+            'id': row['id'],
+            'title': row['title'],
+            'filePath': row['filePath'],
+            'fileType': row['fileType'],
+            'categoryId': row['categoryId'],
+            'orderIndex': row['orderIndex'],
+          },
+        )
+        .toList();
+  }
+
   /// Gets all local books (excluding external catalog books).
   Future<List<Book>> getAllLocalBooks() async {
     final db = await database;

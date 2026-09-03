@@ -279,6 +279,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   // עוקב אחרי מצב הפאנל הצדדי כדי לבקש פוקוס לשדה החיפוש רק ברגע שהפאנל
   // נפתח (false→true) ולא בכל rebuild - אחרת היה גונב פוקוס מתוכן הספר.
   bool _wasLeftPaneShown = false;
+
+  /// לשונית החיפוש נבחרה בפתיחת הספר (מתוצאת חיפוש) ולא בהקשה של המשתמש.
+  bool _searchTabAutoSelected = false;
   FocusRepository? _focusRepository; // שמירת הפניה לשימוש ב-dispose
   String? _selectedTextForSearch;
   int?
@@ -827,6 +830,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     // אחרת, נתחיל בלשונית 'ניווט' (שנמצאת במקום ה-0)
     // highlightText לא פותח את חלונית החיפוש
     final int initialIndex = widget.tab.searchText.isNotEmpty ? 2 : 0;
+    _searchTabAutoSelected = initialIndex != 0;
 
     // יוצרים את בקר הלשוניות עם האינדקס ההתחלתי שקבענו
     tabController = TabController(
@@ -835,9 +839,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       initialIndex: initialIndex,
     );
     tabController.addListener(_handleTabChange);
-    // ה-listener נורה רק על שינוי — פתיחה ישירה ללשונית החיפוש (ספר שנפתח
-    // מתוצאת חיפוש) חייבת סנכרון מיידי, אחרת סרגל החיפוש מושבת (issue #1063).
-    _searchHost.activeTab = tabController.index;
+    // ה-listener נורה רק על שינוי, ובלי סימון מיידי סרגל החיפוש מושבת
+    // (issue #1063). לשונית אוטומטית נסמכת ב-didChangeDependencies, שם ידוע הרוחב.
+    if (!_searchTabAutoSelected) _searchHost.activeTab = tabController.index;
 
     // בדיקה האם יש כותרות חלופיות
     _checkAltTitles();
@@ -910,6 +914,24 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSearchHostActiveTab();
+  }
+
+  /// מסמן ב-host את הלשונית הנבחרת. לשונית שנבחרה אוטומטית (ספר שנפתח מחיפוש)
+  /// מסומנת רק כשהשדה מורם לסרגל — בחלונית הוא ממקד את עצמו ופותח מקלדת.
+  void _syncSearchHostActiveTab() {
+    if (!NavPanelSearch.shouldMarkActiveTab(
+      context,
+      autoSelected: _searchTabAutoSelected,
+    )) {
+      return;
+    }
+    _searchHost.activeTab = tabController.index;
+  }
+
   /// טעינת הגדרות פר-ספר
   Future<void> _checkAltTitles() async {
     try {
@@ -938,7 +960,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             initialIndex: newIndex,
           );
           tabController.addListener(_handleTabChange);
-          _searchHost.activeTab = tabController.index;
+          _syncSearchHostActiveTab();
         });
       }
     } catch (e) {
@@ -949,15 +971,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   /// מאזין למעבר בין לשוניות הפאנל הצדדי. מעביר פוקוס לשדה החיפוש של
   /// הלשונית החדשה רק לאחר שהמעבר הושלם (לא במהלך אנימציית המעבר).
   void _handleTabChange() {
+    // בחירה של המשתמש — מכאן והלאה השדה רשאי למקד את עצמו.
+    _searchTabAutoSelected = false;
     _searchHost.activeTab = tabController.index;
     if (tabController.indexIsChanging) return;
     _focusActiveTabSearchField();
   }
 
   /// מבקש פוקוס לשדה החיפוש של הלשונית הפעילה בפאנל הצדדי
-  /// ('ניווט' / 'כותרות' / 'חיפוש'). לא עושה דבר באנדרואיד או כשהפאנל סגור.
+  /// ('ניווט' / 'כותרות' / 'חיפוש'). לא עושה דבר כשהפאנל סגור.
   void _focusActiveTabSearchField() {
-    if (Platform.isAndroid) return;
+    // במסך צר השדה יושב בתוך החלונית ולא בסרגל שמעליה, ומיקוד יזום שלו פותח
+    // את מקלדת המערכת על ספר שהמשתמש רק רצה לקרוא.
+    if (!NavPanelSearch.canHoist(context)) return;
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded || !state.showLeftPane) return;
 

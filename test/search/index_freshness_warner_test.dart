@@ -395,10 +395,10 @@ Future<void> main() async {
     late SearchEngine engine;
     const bookText = '<h1>ספר</h1>\nשורה ראשונה של תוכן\nשורה שנייה';
 
-    setUp(() {
+    setUp(() async {
       if (!engineReady) return;
       indexDir = Directory.systemTemp.createTempSync('freshness_warner');
-      engine = SearchEngine(path: indexDir.path);
+      engine = await SearchEngine.newInstance(path: indexDir.path);
     });
 
     tearDown(() {

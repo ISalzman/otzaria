@@ -230,6 +230,19 @@ List<FlatLibraryRow> buildFlatLibraryRows({
   return rows;
 }
 
+/// רוחב המסך המזערי שבו יש מקום לחלונית התצוגה המקדימה לצד רשת הספרים.
+/// אותו סף שבו הספרייה מצמצמת את כפתורי הניווט שלה.
+const double kLibraryPreviewMinScreenWidth = 600.0;
+
+/// האם חלונית התצוגה המקדימה פעילה. מתחת ל-[kLibraryPreviewMinScreenWidth]
+/// היא הייתה נפרשת כשכבה שמכסה את הספרייה וחוסמת אותה, ולכן שם היא כבויה
+/// והקשה על ספר פותחת אותו לקריאה במקום לבחור אותו לתצוגה.
+@visibleForTesting
+bool libraryPreviewPaneEnabled({
+  required double screenWidth,
+  required bool preferenceEnabled,
+}) => preferenceEnabled && screenWidth >= kLibraryPreviewMinScreenWidth;
+
 /// מחשב רוחב תקין לחלונית התצוגה המקדימה לפי הרוחב הפנוי בספרייה.
 @visibleForTesting
 ({double paneWidth, double minPaneWidth, double maxPaneWidth})
@@ -344,7 +357,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   static int _normalizeOrder(int order) =>
       order >= 0 ? order : 1000 + order.abs();
 
-  bool _isPreviewPanelVisible(SettingsState s) => s.libraryShowPreview;
+  bool _isPreviewPanelVisible(SettingsState s) => libraryPreviewPaneEnabled(
+    screenWidth: MediaQuery.sizeOf(context).width,
+    preferenceEnabled: s.libraryShowPreview,
+  );
 
   void _openSettingsPanel() => _settingsPanelOpen.value = true;
 
@@ -624,23 +640,24 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     }
 
     trailingItems.addAll([
-      AppTopBarItem(
-        dividerBefore: true,
-        widget: BarButton.icon(
-          compact: isCompact,
-          tooltip: previewSelected
-              ? context.settingsText('הסתר תצוגה מקדימה')
-              : context.settingsText('הצג תצוגה מקדימה'),
-          icon: previewSelected
-              ? FluentIcons.eye_24_filled
-              : FluentIcons.eye_24_regular,
-          selected: previewSelected,
-          // אין ספרייה — אין תצוגה מקדימה, לכן הכפתור מושבת.
-          onPressed: isLibraryEmpty
+      if (MediaQuery.sizeOf(context).width >= kLibraryPreviewMinScreenWidth)
+        AppTopBarItem(
+          dividerBefore: true,
+          widget: BarButton.icon(
+            compact: isCompact,
+            tooltip: previewSelected
+                ? context.settingsText('הסתר תצוגה מקדימה')
+                : context.settingsText('הצג תצוגה מקדימה'),
+            icon: previewSelected
+                ? FluentIcons.eye_24_filled
+                : FluentIcons.eye_24_regular,
+            selected: previewSelected,
+            // אין ספרייה — אין תצוגה מקדימה, לכן הכפתור מושבת.
+            onPressed: isLibraryEmpty
               ? null
               : () => _togglePreviewPanel(context.read<SettingsBloc>().state),
+          ),
         ),
-      ),
       AppTopBarItem(
         widget: ValueListenableBuilder<bool>(
           valueListenable: _settingsPanelOpen,
@@ -1568,7 +1585,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               (p.previewBook == book || c.previewBook == book),
           builder: (ctx, libState) {
             final isSelected =
-                settingsState.libraryShowPreview &&
+                _isPreviewPanelVisible(settingsState) &&
                 libState.previewBook == book;
             return _withTalmudFormatMenu(
               book,
@@ -1582,7 +1599,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   isSelected: isSelected,
                   focusNode: focusNode,
                   onBookClickCallback: () {
-                    if (settingsState.libraryShowPreview) {
+                    if (_isPreviewPanelVisible(settingsState)) {
                       _showBookPreview(book);
                     } else {
                       _openBookInReader(book, book is PdfBook ? 1 : 0);
@@ -2250,7 +2267,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               (p.previewBook == book || c.previewBook == book),
           builder: (ctx, libState) {
             final isSelected =
-                settingsState.libraryShowPreview &&
+                _isPreviewPanelVisible(settingsState) &&
                 libState.previewBook == book;
             return _withTalmudFormatMenu(
               book,
@@ -2263,7 +2280,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 isSelected: isSelected,
                 focusNode: focusNode,
                 onTap: () {
-                  if (settingsState.libraryShowPreview) {
+                  if (_isPreviewPanelVisible(settingsState)) {
                     _showBookPreview(book);
                   } else {
                     _openBookInReader(book, book is PdfBook ? 1 : 0);

@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart'
     show ValueNotifier, debugPrint, visibleForTesting;
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:otzaria/data/cache/books_cache.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/book_database_resolver.dart';
 import 'package:otzaria/data/data_providers/book_composite_key.dart';
@@ -1741,7 +1742,15 @@ class DatabaseLibraryProvider implements LibraryProvider {
     try {
       final hasTalmudBavliDirectory =
           await _bundledTalmudBavliDirectoryExists();
+      // נצפה *לפני* השליפה: clear() שיקרה במהלכה פוסל את הזריעה.
+      final booksCacheGeneration = BooksCache.instance.generation;
       final dbBooks = await _sqliteProvider.repository!.getAllBooks();
+      // אותן שורות שהקאש המשותף צריך — זריעה כאן חוסכת סריקה שנייה של
+      // טבלת `book` (7,300+ ספרים).
+      BooksCache.instance.seedFromBooks(
+        dbBooks,
+        generation: booksCacheGeneration,
+      );
       final categories = await _sqliteProvider.repository!.getAllCategories();
       debugPrint('💾 Database found ${dbBooks.length} books');
 

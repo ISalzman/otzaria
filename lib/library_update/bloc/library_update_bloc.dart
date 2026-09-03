@@ -6,6 +6,7 @@ import 'package:otzaria/core/internet_connectivity.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/update_source_reachability.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
+import 'package:otzaria/utils/text/byte_size_text.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 
 import '../repository/library_update_repository.dart';
@@ -573,12 +574,12 @@ class LibraryUpdateBloc extends Bloc<LibraryUpdateEvent, LibraryUpdateState> {
 
   String _formatSize(int bytes) {
     if (bytes >= 1 << 30) {
-      return '${(bytes / (1 << 30)).toStringAsFixed(1)}GB';
+      return ltrIsolate('${(bytes / (1 << 30)).toStringAsFixed(1)}GB');
     }
     if (bytes >= 1 << 20) {
-      return '${(bytes / (1 << 20)).toStringAsFixed(0)}MB';
+      return ltrIsolate('${(bytes / (1 << 20)).toStringAsFixed(0)}MB');
     }
-    return '${(bytes / (1 << 10)).toStringAsFixed(0)}KB';
+    return ltrIsolate('${(bytes / (1 << 10)).toStringAsFixed(0)}KB');
   }
 
   // ה-UI מציג שגיאת עדכון גנרית בלבד; שומרים את הפרטים ל-errors.txt לאבחון.

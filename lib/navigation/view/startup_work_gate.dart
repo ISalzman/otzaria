@@ -41,12 +41,13 @@ class StartupWorkGate {
 
 /// מתחיל עבודות אתחול מושהות פעם אחת לאחר פתיחת [gate].
 ///
-/// עדכון הספרייה נשלח רק כשהסנכרון האוטומטי ועדכוני הרשת מותרים,
-/// ורק כשתדירות הבדיקה שנבחרה בהגדרות מתירה בדיקה בעלייה זו
-/// ([isLibraryUpdateCheckDue]).
+/// עדכון הספרייה נשלח רק כשקיימת ספרייה מותקנת ([isLibraryInstalled]),
+/// כשהסנכרון האוטומטי ועדכוני הרשת מותרים, ורק כשתדירות הבדיקה שנבחרה
+/// בהגדרות מתירה בדיקה בעלייה זו ([isLibraryUpdateCheckDue]).
 bool tryStartDeferredStartupWork({
   required StartupWorkGate gate,
   required VoidCallback startBackgroundSync,
+  required bool Function() isLibraryInstalled,
   required bool Function() isAutoSyncEnabled,
   required bool Function() canUseSoftwareAndBookUpdates,
   required bool Function() isLibraryUpdateCheckDue,
@@ -57,7 +58,10 @@ bool tryStartDeferredStartupWork({
   }
 
   startBackgroundSync();
-  if (isAutoSyncEnabled() &&
+  // בלי seforim.db הבדיקה נכשלת בפתיחת ה-DB (SqliteException 14) — אין מה
+  // להשוות מולו עד שהמשתמש יתקין ספרייה.
+  if (isLibraryInstalled() &&
+      isAutoSyncEnabled() &&
       canUseSoftwareAndBookUpdates() &&
       isLibraryUpdateCheckDue()) {
     try {

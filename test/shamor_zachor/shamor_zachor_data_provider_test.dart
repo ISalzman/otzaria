@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
+import 'package:otzaria/find_ref/repository/find_ref_db_isolate.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/migration/models/book.dart' as migration;
@@ -51,6 +52,29 @@ void main() {
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
+  });
+
+  test('כשל טעינת TOC אינו נצרב בקאש — ניסיון חוזר מצליח', () async {
+    await SqliteDataProvider.instance.initialize();
+    final provider = ShamorZachorDataProvider(
+      sqliteDataProvider: SqliteDataProvider.instance,
+    );
+    final bookId = fixtureBookIds['בראשית']!;
+
+    addTearDown(() async {
+      await FindRefDbIsolate.resumeAfterExternalWrite();
+      (await FindRefDbIsolate.instance()).disposeForTesting();
+    });
+
+    // ה-worker ללא חיבור מדמה כשל זמני (נפילה, או חלון כתיבה חיצונית).
+    await FindRefDbIsolate.suspendForExternalWrite();
+    expect(await provider.getTocForBook(bookId), isEmpty);
+
+    await FindRefDbIsolate.resumeAfterExternalWrite();
+    final sections = await provider.getTocForBook(bookId);
+
+    expect(sections, isNotEmpty, reason: 'הכשל נצרב בקאש במקום להתאפשר שוב');
+    expect(sections.first.title, 'פרק א');
   });
 
   test('loadAllData hydrates provider state from loader result', () async {

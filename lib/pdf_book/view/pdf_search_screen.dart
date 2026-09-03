@@ -143,6 +143,30 @@ class PdfBookSearchView extends StatefulWidget {
     return PdfMessages.bookNotInSearchIndex;
   }
 
+  /// אותיות עבריות ואנגליות — שכבת טקסט עם ספרות ופיסוק בלבד אינה שמישה.
+  static final RegExp _searchableLetter = RegExp(r'[A-Za-zא-ת]');
+
+  /// האם בטקסט שנדגם מהעמודים יש אות שאפשר לחפש בה.
+  @visibleForTesting
+  static bool hasSearchableText(Iterable<String> pageTexts) =>
+      pageTexts.any(_searchableLetter.hasMatch);
+
+  /// העמודים שנדגמים לבדיקת קיום טקסט: העמוד שהמשתמש רואה ועוד שניים
+  /// פרושׂים על הספר — עמוד בודד עלול להיות שער או לוח תמונות.
+  @visibleForTesting
+  static List<int> textLayerProbePages({
+    required int currentPage,
+    required int totalPages,
+  }) {
+    if (totalPages <= 0) return const [];
+    int clamped(int page) => page.clamp(1, totalPages);
+    return <int>{
+      clamped(currentPage),
+      clamped((totalPages / 3).ceil()),
+      clamped((totalPages * 2 / 3).ceil()),
+    }.toList();
+  }
+
   /// תקרת מונחים ייחודיים לתבנית ההדגשה, כדי שהרגקס לא יתנפח.
   static const int _maxHighlightTerms = 50;
 
@@ -163,6 +187,28 @@ class PdfBookSearchView extends StatefulWidget {
     }
     if (sources.isEmpty) return null;
     return RegExp(sources.join('|'), caseSensitive: false, unicode: true);
+  }
+
+  /// התבנית של החיפוש הפשוט. עם [reversed] היא נבנית על סדר המילים ההפוך —
+  /// מסלול הנסיגה לשכבת טקסט סרוקה ששומרת כל שורה בסדר ויזואלי.
+  ///
+  /// בסדר ההפוך מוחזר `null` כשאין מה להפוך: מילה אחת, או שאילתה שסדרה
+  /// ההפוך זהה לה.
+  @visibleForTesting
+  static LiteralSearchPattern? buildSimpleSearchPattern(
+    String query, {
+    bool wholeWord = true,
+    bool reversed = false,
+  }) {
+    if (!reversed) return buildLiteralPattern(query, wholeWord: wholeWord);
+
+    final normalized = normalizeLiteralQuery(query);
+    final words = normalized.split(' ');
+    if (words.length < 2) return null;
+    final reversedQuery = words.reversed.join(' ');
+    if (reversedQuery == normalized) return null;
+
+    return buildLiteralPattern(reversedQuery, wholeWord: wholeWord);
   }
 
   @override
@@ -192,6 +238,14 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
   Timer? _pdfHighlightDebounce;
   String _lastPdfHighlightSource = '';
   int _searchGeneration = 0;
+
+  /// הדור שעבורו כבר נבדק אם לספר יש טקסט — הסריקה מודיעה על כל עמוד,
+  /// והבדיקה צריכה לרוץ פעם אחת בסיומה. הוא גם מונע נסיגה חוזרת: חיפוש
+  /// הנסיגה אינו מקדם דור, ולכן אינו מפעיל נסיגה נוספת.
+  int _textLayerCheckedGeneration = -1;
+
+  /// האם התוצאות המוצגות הן של חיפוש הנסיגה בסדר המילים ההפוך.
+  bool _simpleSearchReversed = false;
 
   /// התבנית שנבנתה מהמונחים שהמנוע מצא בפועל — לשימוש חוזר בלחיצה על תוצאה.
   RegExp? _lastAdvancedHighlightPattern;
@@ -382,8 +436,70 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
             _scheduleScrollToCurrentPage();
           }
         }
+
+        if (!_isSearching &&
+            _searchResults.isEmpty &&
+            _searchErrorMessage == null &&
+            _textLayerCheckedGeneration != _searchGeneration &&
+            _searchableQuery(widget.searchController.text) != null) {
+          _textLayerCheckedGeneration = _searchGeneration;
+          unawaited(_onEmptySimpleSearch(_searchGeneration));
+        }
       }
     }
+  }
+
+  /// סריקה שהסתיימה בלי אף התאמה: קודם נבדק אם לספר יש טקסט לחפש בו,
+  /// ורק אם יש — נסיגה לסדר המילים ההפוך. בספר סרוק בלי טקסט אין מה
+  /// לחפש בשום סדר, ולכן שם מוצגת ההודעה בלבד.
+  Future<void> _onEmptySimpleSearch(int generation) async {
+    if (!await _checkTextLayer(generation)) return;
+    if (!mounted || generation != _searchGeneration) return;
+    _startReversedOrderSearch();
+  }
+
+  /// חיפוש חוזר בסדר המילים ההפוך. שכבת הטקסט של חלק מהספרים הסרוקים
+  /// שומרת כל שורה בסדר ויזואלי, ושם הסדר התקין מחזיר תמיד אפס.
+  void _startReversedOrderSearch() {
+    final query = _searchableQuery(widget.searchController.text);
+    if (query == null) return;
+    final reversed = PdfBookSearchView.buildSimpleSearchPattern(
+      query,
+      wholeWord: _wholeWord,
+      reversed: true,
+    );
+    if (reversed == null) return;
+
+    _simpleSearchReversed = true;
+    _lastPdfHighlightSource = reversed.source;
+    widget.textSearcher.startTextSearch(
+      reversed.regExp,
+      goToFirstMatch: false,
+      searchImmediately: true,
+    );
+  }
+
+  /// בודקת אם לספר בכלל יש טקסט לחפש בו, כדי שספר סרוק לא יציג
+  /// "אין תוצאות" מטעה על מילה שרואים על העמוד. מחזירה אם יש טקסט שמיש.
+  Future<bool> _checkTextLayer(int generation) async {
+    final pdfState = context.read<PdfBookBloc>().state;
+    final pages = PdfBookSearchView.textLayerProbePages(
+      currentPage: pdfState is PdfBookLoaded ? pdfState.currentPageNumber : 1,
+      totalPages: pdfState is PdfBookLoaded ? pdfState.totalPages : 1,
+    );
+
+    final texts = <String>[];
+    for (final page in pages) {
+      final pageText = await widget.textSearcher.loadText(pageNumber: page);
+      if (pageText != null) texts.add(pageText.fullText);
+    }
+
+    if (!mounted || generation != _searchGeneration) return false;
+    // בלי טקסט כלל אי אפשר להכריע (המסמך עדיין לא נטען) — נשארים ב"אין תוצאות".
+    if (texts.isEmpty) return false;
+    if (PdfBookSearchView.hasSearchableText(texts)) return true;
+    setState(() => _searchErrorMessage = PdfMessages.noTextLayer);
+    return false;
   }
 
   void _scheduleScrollToCurrentPage() {
@@ -497,6 +613,9 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     // כל שינוי בשאילתה/במצב החיפוש מבטל תוצאות אסינכרוניות ישנות. בלי מזהה
     // דור, חיפוש איטי קודם יכול להסתיים אחרי החדש ולדרוס תוצאות והדגשות.
     final generation = ++_searchGeneration;
+    // הדגל שייך לדור הקודם: כל מסלול יוצא מכאן בסדר השאילתה, והנסיגה
+    // תדליק אותו מחדש אם תרוץ.
+    _simpleSearchReversed = false;
     final searchable = _searchableQuery(widget.searchController.text);
 
     if (searchable == null || (!_isSimpleSearch && _bookPath == null)) {
@@ -534,7 +653,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       _pdfHighlightDebounce?.cancel();
       _pendingSimpleSearchScrollFor = query;
       // תבנית סובלנית-ניקוד מהמנוע, כדי שגם PDF ששכבת הטקסט שלו מנוקדת יודגש.
-      final literal = buildLiteralPattern(query, wholeWord: _wholeWord);
+      final literal = PdfBookSearchView.buildSimpleSearchPattern(
+        query,
+        wholeWord: _wholeWord,
+      );
       _lastPdfHighlightSource = literal?.source ?? query;
       widget.textSearcher.startTextSearch(
         literal?.regExp ?? query,
@@ -704,9 +826,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
 
                   _schedulePdfHighlight(
                     _isSimpleSearch
-                        ? buildLiteralPattern(
+                        ? PdfBookSearchView.buildSimpleSearchPattern(
                             widget.searchController.text,
                             wholeWord: _wholeWord,
+                            reversed: _simpleSearchReversed,
                           )?.regExp
                         : _lastAdvancedHighlightPattern,
                   );

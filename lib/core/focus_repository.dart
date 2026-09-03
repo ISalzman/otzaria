@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/widgets.dart';
 
 /// מייצג owner של הפוקוס שמסוגל לשחזר אותו לאחר אירועי חלון.
@@ -250,12 +252,19 @@ class FocusRepository {
 
   // ── Restore scheduling ─────────────────────────────────────────────────────
 
+  /// השחזור האוטומטי נועד לאירועי חלון של שולחני. במובייל אין אירועים כאלה,
+  /// והשחזור רק היה מחזיר פוקוס לשדה טקסט שהמשתמש עזב — ופותח שוב את המקלדת.
+  static bool get _autoRestoreEnabled =>
+      defaultTargetPlatform != TargetPlatform.android &&
+      defaultTargetPlatform != TargetPlatform.iOS;
+
   /// שחזור לאחר frame אחד — עבור אירועי חלון דיסקרטיים (maximize, fullscreen, restore).
   ///
   /// קריאות מרובות באותו frame מתאחדות לcallback אחד.
   /// השחזור מחשב את [_effectiveRestorer] **בזמן הריצה** (לא snapshot),
   /// כך שאם dialog נסגר לפני שה-callback ירה, הוא ישחזר לבעלי המסך.
   void scheduleRestore() {
+    if (!_autoRestoreEnabled) return;
     if (_hasScheduledRestore) return;
     if (_effectiveRestorer == null) return;
     _hasScheduledRestore = true;
@@ -271,6 +280,7 @@ class FocusRepository {
   /// מבטל את הטיימר הקודם בכל קריאה וממתין 150ms ללא resize נוסף.
   /// גם כאן [_effectiveRestorer] מחושב **בזמן ריצת הטיימר**, לא בזמן הקריאה.
   void scheduleRestoreDebounced() {
+    if (!_autoRestoreEnabled) return;
     _resizeDebounceTimer?.cancel();
     if (_effectiveRestorer == null) return;
     _resizeDebounceTimer = Timer(const Duration(milliseconds: 150), () {

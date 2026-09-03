@@ -483,6 +483,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   /// פעולות החיפוש של לשוניות החלונית — מוזנות לסרגל שבסרגל העליון.
   final NavPanelSearchHost _searchHost = NavPanelSearchHost();
   int _currentLeftPaneTabIndex = 0;
+
+  /// לשונית החיפוש נבחרה בפתיחת הספר (מתוצאת חיפוש) ולא בהקשה של המשתמש.
+  bool _searchTabAutoSelected = false;
+  bool _didResolveDependencies = false;
   final FocusNode _searchFieldFocusNode = FocusNode();
   final FocusNode _navigationFieldFocusNode = FocusNode();
   final FocusNode _pdfViewFocusNode = FocusNode();
@@ -633,6 +637,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   List<CommentatorGroup> _commentatorGroups = [];
 
   final ValueNotifier<int> _openPdfFilterNotifier = ValueNotifier<int>(0);
+
+  /// המקור היחיד שמדווח על החלפת עמוד. מאזיני ה-controller מקבלים רק שינוי
+  /// מטריצה, ו-pageNumber מתעדכן רק ב-build שאחריו — ולכן הם קוראים ערך ישן.
+  final ValueNotifier<int?> _pageNumberNotifier = ValueNotifier<int?>(null);
 
   // Named listeners for proper cleanup
   late final VoidCallback _leftPaneTabControllerListener;
@@ -919,6 +927,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     pdfController.addListener(_onPdfViewerControllerUpdate);
     if (widget.tab.searchText.isNotEmpty) {
       _currentLeftPaneTabIndex = 1;
+      _searchTabAutoSelected = true;
     } else {
       _currentLeftPaneTabIndex = 0;
     }
@@ -928,9 +937,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       vsync: this,
       initialIndex: _currentLeftPaneTabIndex,
     );
-    // ה-listener נורה רק על שינוי — פתיחה ישירה ללשונית החיפוש (ספר שנפתח
-    // מתוצאת חיפוש) חייבת סנכרון מיידי, אחרת סרגל החיפוש מושבת (issue #1063).
-    _searchHost.activeTab = _leftPaneTabController!.index;
+    // ה-listener נורה רק על שינוי, ובלי סימון מיידי סרגל החיפוש מושבת
+    // (issue #1063). לשונית אוטומטית נסמכת ב-didChangeDependencies, שם ידוע הרוחב.
+    if (!_searchTabAutoSelected) {
+      _searchHost.activeTab = _leftPaneTabController!.index;
+    }
 
     // טעינת headings וlinks
     _loadPdfHeadingsAndLinks();
@@ -955,14 +966,16 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       });
     }
 
-    if (_currentLeftPaneTabIndex == 1) {
-      _searchFieldFocusNode.requestFocus();
-    } else {
+    // לשונית החיפוש שנבחרה אוטומטית ממוקדת רק ב-didChangeDependencies, ורק
+    // כשהשדה מורם לסרגל שמעל החלונית.
+    if (!_searchTabAutoSelected) {
       _navigationFieldFocusNode.requestFocus();
     }
 
     // הגדרת listeners עם שמות לצורך הסרה נכונה ב-dispose
     _leftPaneTabControllerListener = () {
+      // בחירה של המשתמש — מכאן והלאה השדה רשאי למקד את עצמו.
+      _searchTabAutoSelected = false;
       _searchHost.activeTab = _leftPaneTabController!.index;
       if (_currentLeftPaneTabIndex != _leftPaneTabController!.index) {
         setState(() {
@@ -1035,6 +1048,25 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     // קיצור Ctrl+Shift+P: מעבר למהדורת הטקסט — אותה פעולה כמו כפתור הטקסט.
     _toggleTextViewListener = () => _handleTextButtonPress(context);
     widget.tab.toggleTextViewNotifier.addListener(_toggleTextViewListener);
+  }
+
+  /// מסמן ב-host את הלשונית הנבחרת. לשונית שנבחרה אוטומטית (ספר שנפתח מחיפוש)
+  /// ממוקדת רק אם המסך היה רחב מלכתחילה — אחרת המקלדת נפתחת בלי שביקשו.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isFirstResolution = !_didResolveDependencies;
+    _didResolveDependencies = true;
+    if (!NavPanelSearch.shouldMarkActiveTab(
+      context,
+      autoSelected: _searchTabAutoSelected,
+    )) {
+      return;
+    }
+    _searchHost.activeTab = _leftPaneTabController!.index;
+    if (_searchTabAutoSelected && isFirstResolution) {
+      _searchFieldFocusNode.requestFocus();
+    }
   }
 
   Future<void> _loadInitialLayoutMode() async {
@@ -1506,6 +1538,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     }
 
     return PdfViewerParams(
+      onPageChanged: (pageNumber) => _pageNumberNotifier.value = pageNumber,
       layoutPages: layoutMode.isBookView
           ? (pages, params) => buildBookViewPageLayout(
               pageSizes: [
@@ -3898,6 +3931,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     _leftPaneTabController?.dispose();
     _searchHost.dispose();
     _openFilterRequest.dispose();
+    _pageNumberNotifier.dispose();
     _searchFieldFocusNode.dispose();
     _navigationFieldFocusNode.dispose();
     _pdfViewFocusNode.dispose();
@@ -5289,7 +5323,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       onNextMinor: _goNextPage,
       onNextMajor: () =>
           _goToPageWithSpreadLock(widget.tab.pdfViewerController.pageCount),
-      afterTitle: PageNumberDisplay(controller: widget.tab.pdfViewerController),
+      afterTitle: PageNumberDisplay(
+        controller: widget.tab.pdfViewerController,
+        pageNumberNotifier: _pageNumberNotifier,
+      ),
     );
   }
 
@@ -5528,6 +5565,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       currentPage: currentPage,
       layoutMode: currentLayoutMode,
     );
+    // pdfrx מנהל worker יחיד: PdfViewer פעיל ורסטור התצוגה המקדימה תוקעים
+    // זה את זה, ולכן המציג מנותק כל עוד מסך ההדפסה פתוח.
     setState(() => _pdfViewerSuspended = true);
     await showDialog(
       context: context,
@@ -5542,25 +5581,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       ),
     );
     if (mounted) {
-      try {
-        // Always reset the pdfrx worker when leaving the print screen:
-        // - If printing happened: FPDF_DestroyLibrary() was called by the printing plugin,
-        //   corrupting the shared PDFium state that pdfrx depends on.
-        // - If preview loading was stuck: the worker may be blocked on PdfDocument.openData.
-        // A 3-second timeout ensures _pdfViewerSuspended is always cleared even if the
-        // worker is unresponsive.
-        await PdfrxEntryFunctions.instance.stopBackgroundWorker().timeout(
-          const Duration(seconds: 3),
-        );
-      } catch (_) {
-      } finally {
-        if (mounted) {
-          setState(() => _pdfViewerSuspended = false);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _pdfViewFocusNode.requestFocus();
-          });
-        }
-      }
+      setState(() => _pdfViewerSuspended = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pdfViewFocusNode.requestFocus();
+      });
     }
   }
 

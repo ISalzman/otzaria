@@ -490,6 +490,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
         if (status == null) {
           final text = Text(
             collapsed ? compactEngineLine : engineLine,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: muted,
           );
           return collapsed ? Tooltip(message: engineLine, child: text) : text;
@@ -723,6 +725,9 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
       trailingItems: hasQuery
           ? [
               AppTopBarItem(
+                // בלוק המונים מצטמצם עם ellipsis כשאין מקום לשאר הפקדים,
+                // במקום לדחוף אותם אל מחוץ לסרגל.
+                flexible: true,
                 widget: _buildResultCounts(
                   context,
                   state,

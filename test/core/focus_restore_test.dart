@@ -141,6 +141,8 @@ void main() {
   });
 
   group('scheduleRestore — ללא snapshot', () {
+    // ברירת המחדל של flutter_test היא אנדרואיד, ושם השחזור האוטומטי מבוטל —
+    // ומכאן ה-variant. איפוס ידני של ה-override היה דולף בכישלון expect.
     testWidgets('owner שמוחלף לפני fire — owner החדש משחזר', (tester) async {
       int old = 0, fresh = 0;
 
@@ -158,7 +160,7 @@ void main() {
 
       expect(fresh, 1, reason: 'Owner חדש אמור לשחזר, לא הישן');
       expect(old, 0, reason: 'Snapshot ישן לא אמור לשמש');
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
     testWidgets('dialog שנסגר לפני fire — screen owner משחזר', (tester) async {
       int screenCalls = 0, dialogCalls = 0;
@@ -182,7 +184,43 @@ void main() {
 
       expect(screenCalls, 1, reason: 'מסך שחזר כי dialog נסגר לפני ה-callback');
       expect(dialogCalls, 0, reason: 'Dialog לא אמור לשחזר לאחר ביטול');
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  });
+
+  /// רגרסיה: במובייל השחזור האוטומטי החזיר את הפוקוס לשדה החיפוש של הספרייה
+  /// אחרי סגירת דיאלוג החיפוש, והמקלדת נפתחה שוב מעל התוצאות.
+  group('שחזור אוטומטי במובייל', () {
+    testWidgets(
+      'scheduleRestore אינו מחזיר פוקוס',
+      (tester) async {
+        int calls = 0;
+
+        repo.setScreenRestorer(restore: () => calls++, canRestore: () => true);
+        repo.scheduleRestore();
+        repo.scheduleRestoreDebounced();
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(calls, 0);
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
+    );
+
+    testWidgets('שולחני — scheduleRestore עדיין משחזר', (tester) async {
+      int calls = 0;
+
+      repo.setScreenRestorer(restore: () => calls++, canRestore: () => true);
+      repo.scheduleRestore();
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+
+      expect(calls, 1);
+    }, variant: TargetPlatformVariant.desktop());
   });
 
   // ── בדיקות layout-aware restorer ──────────────────────────────────────────

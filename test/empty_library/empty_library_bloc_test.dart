@@ -256,9 +256,13 @@ void main() {
           final basename = path.basename(archivePath);
           if (basename == 'otzaria_seforim.db.zst') {
             expect(await File(archivePath).readAsBytes(), downloadedBytes);
+            // הכתיבה אטומית: לשם הסופי מגיעים רק ב-rename שבסיום.
             expect(
               outputPath,
-              path.join(tempDir.path, DatabaseConstants.databaseFileName),
+              path.join(
+                tempDir.path,
+                '${DatabaseConstants.databaseFileName}.new',
+              ),
             );
             await File(outputPath).writeAsBytes(const [1, 2, 3], flush: true);
           } else if (basename == 'otzaria_otzar-HB_catalog.db.zst') {
@@ -292,6 +296,12 @@ void main() {
       );
 
       expect(selectedState.selectedPath, tempDir.path);
+      expect(
+        File(
+          path.join(tempDir.path, DatabaseConstants.databaseFileName),
+        ).readAsBytesSync(),
+        const [1, 2, 3],
+      );
       expect(
         Settings.getValue<String>(SettingsRepository.keyLibraryPath),
         tempDir.path,
@@ -1677,15 +1687,466 @@ void main() {
           await File(path.join(libDir.path, dbName)).readAsString(),
           'new-db',
         );
-        final backups = Directory.systemTemp
-            .listSync()
-            .whereType<Directory>()
-            .where(
-              (d) => path.basename(d.path).startsWith('otzaria_db_backup_'),
-            );
-        expect(backups, isEmpty);
+        expect(
+          Directory(EmptyLibraryBloc.dbBackupDirPath).existsSync(),
+          isFalse,
+        );
       },
     );
+
+    test('כתיבת ה-DB אטומית: הריגה באמצע משאירה .new ולא seforim.db', () async {
+      final targetDir = await Directory.systemTemp.createTemp(
+        'otzaria-atomic-',
+      );
+      addTearDown(() => targetDir.delete(recursive: true));
+      final dbName = DatabaseConstants.databaseFileName;
+      final archivePath = path.join(targetDir.path, 'lib.zst');
+      await File(archivePath).writeAsBytes([1, 2, 3]);
+
+      String? writtenTo;
+      var finalExistedMidWrite = true;
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      final bloc = EmptyLibraryBloc(
+        extractCompressedDatabase: (archive, output, onProgress) async {
+          // התמונה בדיוק ברגע ההריגה: חצי DB על הדיסק, לפני סיום הכתיבה.
+          writtenTo = output;
+          await File(output).writeAsString('partial');
+          finalExistedMidWrite = File(
+            path.join(targetDir.path, dbName),
+          ).existsSync();
+          throw Exception('killed');
+        },
+      );
+      addTearDown(bloc.close);
+
+      final errorFuture = bloc.stream
+          .where((s) => s is EmptyLibraryError)
+          .first;
+      bloc.add(
+        ImportLibraryArchiveRequested(
+          archivePath: archivePath,
+          targetPath: targetDir.path,
+        ),
+      );
+      await errorFuture.timeout(const Duration(seconds: 5));
+
+      expect(writtenTo, path.join(targetDir.path, '$dbName.new'));
+      expect(finalExistedMidWrite, isFalse);
+      expect(File(path.join(targetDir.path, dbName)).existsSync(), isFalse);
+    });
+
+    test('ייבוא ZIP אטומי: הריגה באמצע החילוץ לא נוגעת ב-DB שביעד', () async {
+      final targetDir = await Directory.systemTemp.createTemp(
+        'otzaria-zip-atomic-',
+      );
+      addTearDown(() => targetDir.delete(recursive: true));
+      final dbName = DatabaseConstants.databaseFileName;
+      await File(
+        path.join(targetDir.path, dbName),
+      ).writeAsString('existing-db');
+      final archivePath = path.join(targetDir.path, 'lib.zip');
+      await File(archivePath).writeAsBytes([1, 2, 3]);
+
+      String? extractedInto;
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      final bloc = EmptyLibraryBloc(
+        extractZipArchive: (archive, outputDir) async {
+          // התמונה ברגע ההריגה: רשומות חלקיות על הדיסק, לפני סוף החילוץ.
+          extractedInto = outputDir;
+          await Directory(outputDir).create(recursive: true);
+          await File(path.join(outputDir, dbName)).writeAsString('partial');
+          throw Exception('killed');
+        },
+      );
+      addTearDown(bloc.close);
+
+      final errorFuture = bloc.stream
+          .where((s) => s is EmptyLibraryError)
+          .first;
+      bloc.add(
+        ImportLibraryArchiveRequested(
+          archivePath: archivePath,
+          targetPath: targetDir.path,
+        ),
+      );
+      await errorFuture.timeout(const Duration(seconds: 5));
+
+      expect(extractedInto, EmptyLibraryBloc.stagingDirFor(targetDir.path));
+      expect(
+        await File(path.join(targetDir.path, dbName)).readAsString(),
+        'existing-db',
+      );
+      expect(
+        Directory(EmptyLibraryBloc.stagingDirFor(targetDir.path)).existsSync(),
+        isFalse,
+      );
+    });
+
+    group('promoteStagedImport', () {
+      final dbName = DatabaseConstants.databaseFileName;
+      late Directory staging;
+      late Directory target;
+
+      setUp(() async {
+        staging = await Directory.systemTemp.createTemp('otzaria-staging-');
+        target = await Directory.systemTemp.createTemp('otzaria-target-');
+      });
+      tearDown(() async {
+        for (final d in [staging, target]) {
+          if (await d.exists()) await d.delete(recursive: true);
+        }
+      });
+
+      test(
+        'דורס התנגשות שם, ממזג תיקיות מקוננות ומשמר קבצים שרק ביעד',
+        () async {
+          await File(
+            path.join(staging.path, 'lexical.db'),
+          ).writeAsString('new');
+          await Directory(
+            path.join(staging.path, 'talmud', 'shas'),
+          ).create(recursive: true);
+          await File(
+            path.join(staging.path, 'talmud', 'shas', 'brachot.txt'),
+          ).writeAsString('new-brachot');
+          await File(path.join(staging.path, dbName)).writeAsString('new-db');
+
+          await File(path.join(target.path, 'lexical.db')).writeAsString('old');
+          await Directory(
+            path.join(target.path, 'talmud', 'shas'),
+          ).create(recursive: true);
+          await File(
+            path.join(target.path, 'talmud', 'shas', 'brachot.txt'),
+          ).writeAsString('old-brachot');
+          await File(
+            path.join(target.path, 'talmud', 'keep.txt'),
+          ).writeAsString('mine');
+          await File(path.join(target.path, dbName)).writeAsString('old-db');
+          await File(
+            path.join(target.path, '$dbName-wal'),
+          ).writeAsString('wal');
+
+          await EmptyLibraryBloc.promoteStagedImport(staging.path, target.path);
+
+          String read(List<String> parts) => File(
+            path.join(target.path, path.joinAll(parts)),
+          ).readAsStringSync();
+          expect(read(['lexical.db']), 'new');
+          expect(read(['talmud', 'shas', 'brachot.txt']), 'new-brachot');
+          expect(read(['talmud', 'keep.txt']), 'mine');
+          expect(read([dbName]), 'new-db');
+          // לוואי ישן של ה-DB שהוחלף היה מבלבל את SQLite — נמחק.
+          expect(
+            File(path.join(target.path, '$dbName-wal')).existsSync(),
+            isFalse,
+          );
+          expect(staging.listSync(), isEmpty);
+        },
+      );
+
+      test('בלי seforim.db בביניים — שאר הפריטים עוברים והיעד נשמר', () async {
+        await File(path.join(staging.path, 'lexical.db')).writeAsString('new');
+        await File(path.join(target.path, dbName)).writeAsString('old-db');
+
+        await EmptyLibraryBloc.promoteStagedImport(staging.path, target.path);
+
+        expect(
+          File(path.join(target.path, 'lexical.db')).readAsStringSync(),
+          'new',
+        );
+        expect(
+          File(path.join(target.path, dbName)).readAsStringSync(),
+          'old-db',
+        );
+      });
+
+      test('כשל בהעברת התוכן — ה-DB שביעד שלם, כי הוא עובר אחרון', () async {
+        if (Platform.isWindows) return;
+        await File(path.join(staging.path, dbName)).writeAsString('new-db');
+        await Directory(path.join(staging.path, 'talmud')).create();
+        await File(
+          path.join(staging.path, 'talmud', 'a.txt'),
+        ).writeAsString('new');
+        final blocked = await Directory(
+          path.join(target.path, 'talmud'),
+        ).create();
+        await File(path.join(target.path, dbName)).writeAsString('old-db');
+        await Process.run('chmod', ['555', blocked.path]);
+        addTearDown(() => Process.run('chmod', ['755', blocked.path]));
+        try {
+          File(path.join(blocked.path, 'probe')).writeAsStringSync('x');
+          return; // ההרשאות אינן נאכפות (root) — אין מה לבדוק
+        } catch (_) {}
+
+        await expectLater(
+          EmptyLibraryBloc.promoteStagedImport(staging.path, target.path),
+          throwsA(isA<FileSystemException>()),
+        );
+
+        expect(
+          File(path.join(target.path, dbName)).readAsStringSync(),
+          'old-db',
+        );
+        expect(File(path.join(staging.path, dbName)).existsSync(), isTrue);
+      });
+    });
+
+    group('גיבוי DB יתום מריצה שנהרגה', () {
+      final dbName = DatabaseConstants.databaseFileName;
+
+      // תיקיית temp פרטית לכל טסט: הגיבוי הוא שם קבוע אחד, וריצה שנהרגה
+      // הייתה מותירה אותו לריצה הבאה.
+      late Directory tempRoot;
+
+      /// תיקיות גיבוי בכל שם שהוא (גם עם timestamp) — כדי לתפוס הצטברות.
+      Iterable<Directory> backupDirs() => tempRoot
+          .listSync()
+          .whereType<Directory>()
+          .where((d) => path.basename(d.path).startsWith('otzaria_db_backup'));
+
+      Future<void> createOrphan(
+        String content, {
+        String? dirPath,
+        DateTime? modified,
+      }) async {
+        final orphan = Directory(dirPath ?? EmptyLibraryBloc.dbBackupDirPath);
+        await orphan.create(recursive: true);
+        final db = File(path.join(orphan.path, dbName));
+        await db.writeAsString(content);
+        if (modified != null) await db.setLastModified(modified);
+        await File(path.join(orphan.path, '$dbName-wal')).writeAsString('wal');
+      }
+
+      setUp(() async {
+        tempRoot = await Directory.systemTemp.createTemp('otzaria-temp-root-');
+        EmptyLibraryBloc.tempRootOverride = tempRoot.path;
+      });
+      tearDown(() async {
+        EmptyLibraryBloc.tempRootOverride = null;
+        if (await tempRoot.exists()) await tempRoot.delete(recursive: true);
+      });
+
+      test(
+        'בעלייה: ספרייה בלי DB + יתום עם DB → ה-DB חוזר והיתום נעלם',
+        () async {
+          final libDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-',
+          );
+          addTearDown(() => libDir.delete(recursive: true));
+          await createOrphan('orphaned-db');
+
+          await EmptyLibraryBloc.recoverOrphanedDbBackup(libDir.path);
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'orphaned-db',
+          );
+          expect(
+            File(path.join(libDir.path, '$dbName-wal')).existsSync(),
+            isTrue,
+          );
+          expect(backupDirs(), isEmpty);
+        },
+      );
+
+      test(
+        'בעלייה: גם תיקיות ישנות עם timestamp — ה-DB חוזר מהחדשה לפי mtime, '
+        'הכול נמחק',
+        () async {
+          final libDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-',
+          );
+          addTearDown(() => libDir.delete(recursive: true));
+          final tmp = tempRoot.path;
+          final now = DateTime.now();
+          // השם הנמוך ביותר מחזיק את הקובץ החדש ביותר — כדי לוודא שהבחירה
+          // היא לפי mtime ולא לפי סדר השמות.
+          await createOrphan(
+            'newest-db',
+            dirPath: path.join(tmp, 'otzaria_db_backup_100'),
+            modified: now,
+          );
+          await createOrphan(
+            'older-db',
+            dirPath: path.join(tmp, 'otzaria_db_backup_900'),
+            modified: now.subtract(const Duration(hours: 1)),
+          );
+          await createOrphan(
+            'oldest-db',
+            modified: now.subtract(const Duration(days: 1)),
+          );
+
+          await EmptyLibraryBloc.recoverOrphanedDbBackup(libDir.path);
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'newest-db',
+          );
+          expect(backupDirs(), isEmpty);
+        },
+      );
+
+      test(
+        'בעלייה: ההחזרה נכשלת (יעד לא קיים) → אף גיבוי לא נמחק',
+        () async {
+          final tmp = tempRoot.path;
+          final now = DateTime.now();
+          await createOrphan(
+            'newest-db',
+            modified: now,
+          );
+          await createOrphan(
+            'older-db',
+            dirPath: path.join(tmp, 'otzaria_db_backup_1'),
+            modified: now.subtract(const Duration(hours: 1)),
+          );
+          // תיקייה שאינה קיימת (כונן שהוסר) — ההזזה תזרוק.
+          final missing = path.join(tmp, 'otzaria-missing-lib', 'books');
+
+          await expectLater(
+            EmptyLibraryBloc.recoverOrphanedDbBackup(missing),
+            throwsA(isA<FileSystemException>()),
+          );
+
+          expect(backupDirs().length, 2);
+        },
+      );
+
+      test(
+        'בעלייה: `.new` חלקי אינו נחשב DB — היתום שורד וההחזרה מתבצעת',
+        () async {
+          final libDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-',
+          );
+          addTearDown(() => libDir.delete(recursive: true));
+          await File(
+            path.join(libDir.path, '$dbName.new'),
+          ).writeAsString('partial');
+          await createOrphan('orphaned-db');
+
+          await EmptyLibraryBloc.recoverOrphanedDbBackup(libDir.path);
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'orphaned-db',
+          );
+          expect(
+            File(path.join(libDir.path, '$dbName.new')).existsSync(),
+            isFalse,
+          );
+          expect(backupDirs(), isEmpty);
+        },
+      );
+
+      test('בעלייה: תיקיית `.import` יתומה מייבוא ZIP שנקטע נמחקת', () async {
+        final libDir = await Directory.systemTemp.createTemp('otzaria-orphan-');
+        addTearDown(() => libDir.delete(recursive: true));
+        await File(path.join(libDir.path, dbName)).writeAsString('good-db');
+        final staging = Directory(EmptyLibraryBloc.stagingDirFor(libDir.path));
+        addTearDown(() async {
+          if (await staging.exists()) await staging.delete(recursive: true);
+        });
+        await staging.create(recursive: true);
+        await File(path.join(staging.path, dbName)).writeAsString('partial');
+
+        await EmptyLibraryBloc.recoverOrphanedDbBackup(libDir.path);
+
+        expect(staging.existsSync(), isFalse);
+        expect(
+          await File(path.join(libDir.path, dbName)).readAsString(),
+          'good-db',
+        );
+      });
+
+      test(
+        'בעלייה: יתום כשיש DB תקין בספרייה → היתום נמחק וה-DB לא נדרס',
+        () async {
+          final libDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-',
+          );
+          addTearDown(() => libDir.delete(recursive: true));
+          await File(path.join(libDir.path, dbName)).writeAsString('good-db');
+          await createOrphan('stale-db');
+
+          await EmptyLibraryBloc.recoverOrphanedDbBackup(libDir.path);
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'good-db',
+          );
+          expect(backupDirs(), isEmpty);
+        },
+      );
+
+      test(
+        'עדכון אחרי ריצה שנהרגה: ה-DB היתום משוחזר, מגובה שוב, ולא מצטבר',
+        () async {
+          final libDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-',
+          );
+          final srcDir = await Directory.systemTemp.createTemp(
+            'otzaria-orphan-src-',
+          );
+          addTearDown(() async {
+            for (final d in [libDir, srcDir]) {
+              if (await d.exists()) await d.delete(recursive: true);
+            }
+          });
+          // הריצה הקודמת נהרגה אחרי ההזזה: הספרייה ריקה, ה-DB בגיבוי.
+          await createOrphan('old-db');
+          // srcDir ריק — ההעתקה תיכשל והגיבוי (שהוא ה-DB היתום) חייב לחזור.
+          await Settings.init(cacheProvider: _MemoryCacheProvider());
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath,
+            libDir.path,
+          );
+          final bloc = EmptyLibraryBloc();
+          addTearDown(bloc.close);
+          final errorFuture = bloc.stream
+              .where((s) => s is EmptyLibraryError)
+              .first;
+
+          bloc.add(
+            UpdateLibraryRequested(
+              isDownload: false,
+              sourceFolder: srcDir.path,
+              targetPath: libDir.path,
+              existingLibraryPath: libDir.path,
+            ),
+          );
+          await errorFuture.timeout(const Duration(seconds: 5));
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'old-db',
+          );
+          expect(backupDirs(), isEmpty);
+
+          // ריצה שנייה שנהרגה שוב (יתום לצד DB תקין) ואחריה עדכון מוצלח —
+          // לא נשארת אף תיקיית גיבוי, לא ישנה ולא חדשה.
+          await createOrphan('stale-db');
+          await File(path.join(srcDir.path, dbName)).writeAsString('new-db');
+          final selectedFuture = bloc.stream
+              .where((s) => s is EmptyLibraryDirectorySelected)
+              .first;
+          bloc.add(
+            UpdateLibraryRequested(
+              isDownload: false,
+              sourceFolder: srcDir.path,
+              targetPath: libDir.path,
+              existingLibraryPath: libDir.path,
+            ),
+          );
+          await selectedFuture.timeout(const Duration(seconds: 5));
+
+          expect(
+            await File(path.join(libDir.path, dbName)).readAsString(),
+            'new-db',
+          );
+          expect(backupDirs(), isEmpty);
+        },
+      );
+    });
 
     test(
       'UpdateLibraryRequested (ייבוא) משחזר את הגיבוי כשהמקור חסר seforim.db',
@@ -1736,13 +2197,10 @@ void main() {
           await File(path.join(libDir.path, dbName)).readAsString(),
           'old-db',
         );
-        final backups = Directory.systemTemp
-            .listSync()
-            .whereType<Directory>()
-            .where(
-              (d) => path.basename(d.path).startsWith('otzaria_db_backup_'),
-            );
-        expect(backups, isEmpty);
+        expect(
+          Directory(EmptyLibraryBloc.dbBackupDirPath).existsSync(),
+          isFalse,
+        );
       },
     );
 
@@ -1871,9 +2329,19 @@ void main() {
 
         await selectedFuture.timeout(const Duration(seconds: 5));
 
+        // נכתב לשם זמני, והועבר לשם הסופי רק בסיום מוצלח.
         expect(
           extractedTo,
-          path.join(targetDir.path, DatabaseConstants.databaseFileName),
+          path.join(
+            targetDir.path,
+            '${DatabaseConstants.databaseFileName}.new',
+          ),
+        );
+        expect(
+          File(
+            path.join(targetDir.path, DatabaseConstants.databaseFileName),
+          ).readAsStringSync(),
+          'db',
         );
       },
     );

@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
@@ -8,7 +9,16 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 class PageNumberDisplay extends StatefulWidget {
   final PdfViewerController controller;
 
-  const PageNumberDisplay({super.key, required this.controller});
+  /// מספר העמוד הנוכחי כפי שדווח ב-`PdfViewerParams.onPageChanged`. ה-controller
+  /// מודיע רק על שינוי מטריצה, ו-`pageNumber` שלו מתעדכן רק ב-build שאחריו —
+  /// בלי המאזין הזה המונה מפגר עמוד עד לאינטראקציה הבאה.
+  final ValueListenable<int?>? pageNumberNotifier;
+
+  const PageNumberDisplay({
+    super.key,
+    required this.controller,
+    this.pageNumberNotifier,
+  });
 
   @override
   State<PageNumberDisplay> createState() => _PageNumberDisplayState();
@@ -26,6 +36,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
     super.initState();
     _textController = TextEditingController();
     widget.controller.addListener(_handlePageChange);
+    widget.pageNumberNotifier?.addListener(_handlePageChange);
     _captureControllerState();
     _focusNode.addListener(() {
       if (!_focusNode.hasFocus && _isEditing) {
@@ -39,9 +50,18 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
   @override
   void didUpdateWidget(covariant PageNumberDisplay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller.removeListener(_handlePageChange);
-    widget.controller.addListener(_handlePageChange);
+    if (oldWidget.controller == widget.controller &&
+        oldWidget.pageNumberNotifier == widget.pageNumberNotifier) {
+      return;
+    }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handlePageChange);
+      widget.controller.addListener(_handlePageChange);
+    }
+    if (oldWidget.pageNumberNotifier != widget.pageNumberNotifier) {
+      oldWidget.pageNumberNotifier?.removeListener(_handlePageChange);
+      widget.pageNumberNotifier?.addListener(_handlePageChange);
+    }
     _captureControllerState();
   }
 
@@ -50,13 +70,14 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
     _textController.dispose();
     _focusNode.dispose();
     widget.controller.removeListener(_handlePageChange);
+    widget.pageNumberNotifier?.removeListener(_handlePageChange);
     super.dispose();
   }
 
   void _handlePageChange() {
     if (!mounted) return;
     final ready = widget.controller.isReady;
-    final page = ready ? widget.controller.pageNumber : null;
+    final page = ready ? _currentPage : null;
     final count = ready ? widget.controller.pageCount : null;
     if (page == _lastPage && count == _lastCount) return;
     _lastPage = page;
@@ -66,9 +87,14 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
 
   void _captureControllerState() {
     final ready = widget.controller.isReady;
-    _lastPage = ready ? widget.controller.pageNumber : null;
+    _lastPage = ready ? _currentPage : null;
     _lastCount = ready ? widget.controller.pageCount : null;
   }
+
+  /// ה-notifier מדויק יותר מה-controller ולכן קודם לו; לפני העמוד הראשון שדווח
+  /// עדיין אין לו ערך.
+  int? get _currentPage =>
+      widget.pageNumberNotifier?.value ?? widget.controller.pageNumber;
 
   void _handleSubmitted(String value) {
     final page = int.tryParse(value);
@@ -88,7 +114,7 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
       return SizedBox.shrink();
     }
 
-    final pageNumber = widget.controller.pageNumber ?? 1;
+    final pageNumber = _currentPage ?? 1;
     final pageCount = widget.controller.pageCount;
 
     return Center(
