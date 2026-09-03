@@ -144,6 +144,11 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
   Widget build(BuildContext context) {
     // בתוך חלונית ניווט השדה מצויר בסרגל שמעליה, ולכן מפרסמים ולא מציירים.
     final hoisted = NavPanelSearch.isHoisted(context);
+    // TabBarView בונה גם את הלשונית השכנה תוך כדי החלקה. autofocus בשכנה
+    // היה חוטף את הפוקוס ופותח את מקלדת המערכת בלי שהמשתמש ביקש.
+    final slot = NavPanelSearchSlot.indexOf(context);
+    final host = NavPanelSearchScope.hostOf(context);
+    final isActiveSlot = slot == null || host == null || host.activeTab == slot;
     final delegate = _delegate;
     final searchField = Padding(
       key: const ValueKey('searchField'),
@@ -154,7 +159,7 @@ class _SearchPaneBaseState extends State<SearchPaneBase> {
         child: OtzariaSearchField(
           controller: widget.searchController,
           focusNode: widget.focusNode,
-          autofocus: true,
+          autofocus: isActiveSlot,
           hintText: widget.hintText ?? '',
           onChanged: (value) =>
               _debounce(() => widget.onSearchTextChanged?.call(value)),
