@@ -477,6 +477,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
         return;
       }
 
+      final wasInError = _devErrorMessage != null;
       setState(() => _devErrorMessage = null);
 
       try {
@@ -487,11 +488,28 @@ class _PluginTabPageState extends State<PluginTabPage> {
         widget.plugin.resolvedRootPath,
         manifest.entrypoint,
       );
-      _entrypointMissing = !File(localHtmlPath).existsSync();
+      final exists = File(localHtmlPath).existsSync();
+      if (!exists) {
+        setState(
+          () => _devErrorMessage = 'קובץ נקודת הכניסה חסר בתיקייה: $localHtmlPath',
+        );
+        return;
+      }
+      _entrypointMissing = false;
+
+      if (wasInError || webViewController == null) {
+        // במסך שגיאה ה-WebView ירד מהעץ וה-controller מת — איפוס הדגל
+        // למעלה בונה WebView חדש שטוען מחדש את נקודת הכניסה, במקום
+        // לקרוא ל-loadUrl על controller מת שזורק MissingPluginException.
+        webViewController = null;
+        return;
+      }
+
       await webViewController?.loadUrl(
         urlRequest: URLRequest(url: WebUri.uri(Uri.file(localHtmlPath))),
       );
     } catch (e) {
+      webViewController = null;
       if (mounted) {
         setState(
           () => _devErrorMessage = 'שגיאה בלתי צפויה בריענון התוסף: $e',
