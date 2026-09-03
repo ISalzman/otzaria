@@ -65,6 +65,9 @@ Palette g_palette;
 std::vector<unsigned char> g_shot;
 int g_shot_w = 0;
 int g_shot_h = 0;
+// הגודל שבו התצוגה צריכה להופיע — ראו [SetImage].
+int g_target_w = 0;
+int g_target_h = 0;
 
 int DpiOf(HWND hwnd) {
   const UINT dpi = hwnd ? ::GetDpiForWindow(hwnd) : 96;
@@ -75,9 +78,9 @@ int DpiOf(HWND hwnd) {
 void PreviewSize(int* out_w, int* out_h) {
   {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_shot_w > 0 && g_shot_h > 0) {
-      *out_w = g_shot_w;
-      *out_h = g_shot_h;
+    if (g_target_w > 0 && g_target_h > 0) {
+      *out_w = g_target_w;
+      *out_h = g_target_h;
       return;
     }
   }
@@ -127,6 +130,44 @@ void DrawFallback(HDC hdc, int width, int height) {
   ::DeleteObject(font);
 }
 
+// מותח את הצילום מגודלו לגודל היעד, לתוך [dst_dc].
+//
+// ⚠️ נקרא **תחת** [g_mutex] — הוא קורא את [g_shot] ישירות במקום להעתיק
+// אותו. הצילום הוא מיליוני פיקסלים, והעתקה נוספת בכל הרכבה (16ms) הייתה
+// מכפילה את התעבורה בזיכרון בזמן שהמשתמש גורר.
+void StretchShot(HDC dst_dc, int target_w, int target_h) {
+  BITMAPINFO info{};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = g_shot_w;
+  info.bmiHeader.biHeight = -g_shot_h;
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 32;
+  info.bmiHeader.biCompression = BI_RGB;
+
+  const HDC screen = ::GetDC(nullptr);
+  void* bits = nullptr;
+  const HBITMAP src =
+      ::CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+  ::ReleaseDC(nullptr, screen);
+  if (!src || !bits) {
+    if (src) ::DeleteObject(src);
+    return;
+  }
+  ::memcpy(bits, g_shot.data(),
+           static_cast<size_t>(g_shot_w) * g_shot_h * 4);
+
+  const HDC src_dc = ::CreateCompatibleDC(dst_dc);
+  const HGDIOBJ old = ::SelectObject(src_dc, src);
+  // HALFTONE נותן דגימה מחדש ראויה בהקטנה; בלעדיו קווי טקסט נעלמים.
+  ::SetStretchBltMode(dst_dc, HALFTONE);
+  ::SetBrushOrgEx(dst_dc, 0, 0, nullptr);
+  ::StretchBlt(dst_dc, 0, 0, target_w, target_h, src_dc, 0, 0, g_shot_w,
+               g_shot_h, SRCCOPY);
+  ::SelectObject(src_dc, old);
+  ::DeleteDC(src_dc);
+  ::DeleteObject(src);
+}
+
 // מרכיב את התצוגה ומעביר אותה ל-Windows עם אלפא לכל פיקסל.
 //
 // ⚠️ `UpdateLayeredWindow` ולא `WM_PAINT` + `SetLayeredWindowAttributes`.
@@ -172,8 +213,19 @@ void Compose(const POINT* move_to) {
   bool have_shot = false;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_shot_w == width && g_shot_h == height && !g_shot.empty()) {
-      ::memcpy(dst, g_shot.data(), pixels * 4);
+    if (!g_shot.empty() && g_shot_w > 0 && g_shot_h > 0) {
+      if (g_shot_w == width && g_shot_h == height) {
+        ::memcpy(dst, g_shot.data(), pixels * 4);
+      } else {
+        StretchShot(mem, width, height);
+        // ⚠️ `StretchBlt` אינו כותב לערוץ האלפא. המוק שמגיע מ-Dart הוא
+        // אטום ממילא (רקע הרצועה נצבע מתחת לכרטיסיה בזמן ההרכבה), ולכן
+        // אלפא 255 גורף הוא נכון — ולא ניחוש.
+        ::GdiFlush();
+        for (size_t i = 0; i < pixels; ++i) {
+          dst[i * 4 + 3] = 255;
+        }
+      }
       have_shot = true;
     }
   }
@@ -346,6 +398,8 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
     g_shot.clear();
     g_shot_w = 0;
     g_shot_h = 0;
+    g_target_w = 0;
+    g_target_h = 0;
   }
   g_source.store(source);
   g_system_dragging.store(false);
@@ -381,8 +435,13 @@ void Begin(const std::wstring& title, HWND source, const Colors& colors) {
   MoveToCursor();
 }
 
-void SetImage(const unsigned char* rgba, int width, int height) {
+void SetImage(const unsigned char* rgba, int width, int height,
+              int target_width, int target_height) {
   if (!rgba || width <= 0 || height <= 0) return;
+  if (target_width <= 0 || target_height <= 0) {
+    target_width = width;
+    target_height = height;
+  }
 
   std::vector<unsigned char> bgra(static_cast<size_t>(width) * height * 4);
   // RGBA → BGRA. שני הפורמטים מוכפלים-מראש, ולכן די בהחלפת אדום וכחול.
@@ -399,6 +458,8 @@ void SetImage(const unsigned char* rgba, int width, int height) {
     g_shot = std::move(bgra);
     g_shot_w = width;
     g_shot_h = height;
+    g_target_w = target_width;
+    g_target_h = target_height;
   }
   // ⚠️ בלי מיקום מחדש: הסמן לא זז, והתצוגה גדלה לגודל הצילום סביב אותה
   // פינה. `Compose` מקבל nullptr ולכן שומר את המקום.

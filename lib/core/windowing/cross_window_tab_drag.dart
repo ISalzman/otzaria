@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/core/windowing/drag_preview_colors.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
+import 'package:otzaria/core/windowing/tab_drag_preview.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -78,15 +79,15 @@ class CrossWindowTabDrag {
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_poll()));
   }
 
-  /// מחליף את השרטוט בצילום הכרטיסיה. נקרא **אחרי** [begin], כשהצילום מוכן.
+  /// מחליף את השרטוט במוק של החלון. נקרא **אחרי** [begin], כשהוא מוכן.
   ///
-  /// ⚠️ הבעלות על [snapshot] עוברת לכאן — היא משוחררת גם בכשל.
-  void applySnapshot(ui.Image snapshot) {
+  /// ⚠️ הבעלות על התמונה שב-[preview] עוברת לכאן — היא משוחררת גם בכשל.
+  void applySnapshot(TabWindowPreview preview) {
     if (!MultiWindowService.isSupported) {
-      snapshot.dispose();
+      preview.image.dispose();
       return;
     }
-    unawaited(_sendSnapshot(snapshot));
+    unawaited(_sendSnapshot(preview));
   }
 
   /// שולח את צילום הכרטיסיה, אם הוא באמת מכיל משהו.
@@ -95,7 +96,8 @@ class CrossWindowTabDrag {
   /// השתמשה ב-`toImageSync`, קיבלה תמונה ריקה, והתצוגה הראתה כרטיסיה
   /// שקופה — גרוע מהשרטוט שהיא באה להחליף. כאן ההחלטה היא לפי הפיקסלים
   /// עצמם ולא לפי הנחה על ה-API: אם אין מה להציג, השרטוט נשאר.
-  Future<void> _sendSnapshot(ui.Image image) async {
+  Future<void> _sendSnapshot(TabWindowPreview preview) async {
+    final image = preview.image;
     try {
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (data == null) return;
@@ -107,7 +109,13 @@ class CrossWindowTabDrag {
         );
         return;
       }
-      await _service.setTabDragImage(rgba, image.width, image.height);
+      await _service.setTabDragImage(
+        rgba,
+        image.width,
+        image.height,
+        targetWidth: preview.targetWidth,
+        targetHeight: preview.targetHeight,
+      );
     } catch (e) {
       debugPrint('צילום הכרטיסיה לגרירה נכשל: $e');
     } finally {

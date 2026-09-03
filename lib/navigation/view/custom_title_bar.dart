@@ -619,6 +619,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
 
     // אותה גרירה מסדרת כרטיסיות ומוציאה אותן לחלונית קריאה.
     final tabStrip = ReadingTabStrip(
+      stripColor: AppSurfaces.readerBackground(context),
       tabs: state.tabs,
       widths: [
         for (var i = 0; i < state.tabs.length; i++)

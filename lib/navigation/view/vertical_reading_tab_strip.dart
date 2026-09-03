@@ -10,6 +10,7 @@ import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
 import 'package:otzaria/navigation/view/tab_visuals.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
+import 'package:otzaria/theme/app_surfaces.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -99,6 +100,7 @@ class _VerticalReadingTabStripState extends State<VerticalReadingTabStrip> {
             platform == TargetPlatform.macOS;
 
         return ReadingTabStrip(
+          stripColor: AppSurfaces.readerBackground(context),
           axis: Axis.vertical,
           scrollable: true,
           crossExtent: widget.width,

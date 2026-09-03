@@ -59,6 +59,7 @@ void main() {
                       key: const Key('strip'),
                       height: 40,
                       child: ReadingTabStrip(
+                        stripColor: const Color(0xFFF2EBE0),
                         tabs: state.tabs,
                         widths: [for (final _ in state.tabs) tabWidth],
                         onReorder: (tab, index) =>

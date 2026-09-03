@@ -236,17 +236,27 @@ class MultiWindowService {
   ///
   /// [rgba] הוא `ImageByteFormat.rawRgba`, שהוא **מוכפל-מראש** — בדיוק מה
   /// ש-`AlphaBlend` מצפה לו אחרי החלפת אדום וכחול.
-  /// ⚠️ אין כאן DPR. התצוגה נקבעת לגודל **הפיזי** של הצילום, ולכן היא
-  /// נכונה בכל מסך בלי לחשב סקאלה. גרסה קודמת חילקה ב-DPR וצמצמה את
-  /// התמונה לגודל לוגי — כלומר הקטינה אותה ואיבדה את החדות שהצילום נועד
-  /// לתת.
-  Future<void> setTabDragImage(Uint8List rgba, int width, int height) async {
+  /// ⚠️ **גודל היעד נפרד מגודל הצילום, ובמכוון.** מה שנגרר הוא מוק של
+  /// החלון שייפתח — כרטיסיה והתוכן שלה — כלומר בגודל חלון מלא. צילום כזה
+  /// בפיקסלים פיזיים הוא מיליוני פיקסלים, והעברתו בערוץ בתחילת כל גרירה
+  /// היא עשרות MB ולפניהם קריאת פיקסלים מה-GPU. לכן הצילום קטן יותר
+  /// (ראו `previewCaptureRatio`), ו-GDI מותח אותו ל-[targetWidth] ×
+  /// [targetHeight].
+  Future<void> setTabDragImage(
+    Uint8List rgba,
+    int width,
+    int height, {
+    int? targetWidth,
+    int? targetHeight,
+  }) async {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod<void>('setTabDragImage', {
         'bytes': rgba,
         'width': width,
         'height': height,
+        if (targetWidth != null) 'targetWidth': targetWidth,
+        if (targetHeight != null) 'targetHeight': targetHeight,
       });
     } catch (e) {
       debugPrint('setTabDragImage failed: $e');

@@ -3139,7 +3139,11 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                   ),
                                 ),
                               Expanded(
-                                child: OrientationBuilder(
+                                // גבול הציור מאפשר לצלם את התוכן בגרירת כרטיסייה
+                                // ומבודד את צביעתו מסרגל הכרטיסיות.
+                                child: RepaintBoundary(
+                                  key: windowContentBoundaryKey,
+                                  child: OrientationBuilder(
                                   builder: (context, orientation) {
                                     _handleOrientationChange(
                                       context,
@@ -3471,7 +3475,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                           ),
                                       ],
                                     );
-                                  },
+                                    },
+                                  ),
                                 ),
                               ),
                             ],

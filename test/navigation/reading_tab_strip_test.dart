@@ -62,6 +62,7 @@ void main() {
                     stripWidth ??
                     widths.fold<double>(0, (sum, width) => sum + width),
                 child: ReadingTabStrip(
+                  stripColor: const Color(0xFFF2EBE0),
                   tabs: tabs,
                   widths: widths,
                   requireLongPressToDrag: requireLongPress,
@@ -476,6 +477,7 @@ void main() {
                   width: 200,
                   height: stripHeight ?? tabs.length * itemHeight,
                   child: ReadingTabStrip(
+                    stripColor: const Color(0xFFF2EBE0),
                     axis: Axis.vertical,
                     scrollable: true,
                     crossExtent: 200,

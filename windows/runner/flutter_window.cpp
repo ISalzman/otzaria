@@ -761,8 +761,9 @@ bool FlutterWindow::OnCreate() {
             if (bytes_it != args->end()) {
               if (const auto* bytes =
                       std::get_if<std::vector<uint8_t>>(&bytes_it->second)) {
-                drag_preview::SetImage(bytes->data(), get_int("width", 0),
-                                       get_int("height", 0));
+                drag_preview::SetImage(
+                    bytes->data(), get_int("width", 0), get_int("height", 0),
+                    get_int("targetWidth", 0), get_int("targetHeight", 0));
               }
             }
           }
